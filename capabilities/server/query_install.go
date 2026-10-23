@@ -24,8 +24,8 @@ func checkQueryFields(q platform.NamedQuery, info platform.EntityInfo) error {
 	}
 	if q.By != "" {
 		f, ok := info.Field(q.By)
-		if !ok || f.Type != "reference" {
-			return fmt.Errorf("query parent input needs a readable reference")
+		if !ok || f.Type != "reference" && f.SourceType != "record" {
+			return fmt.Errorf("query parent input needs a readable reference or record source")
 		}
 	}
 	_, err := records.CompileOrder(info, q.Sort)

@@ -68,6 +68,15 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]co
 			if i < 0 { // the object's generated page has no second owner record
 				continue
 			}
+			if pages[i].Published == "" {
+				generated, err := generatedReleasePage(asset, assets, b.Manifest().Version)
+				if err != nil {
+					return nil, err
+				}
+				if generated {
+					continue // An object's default page does not publish a separate saved draft.
+				}
+			}
 			var pageDescriptor platform.Page
 			if err := json.Unmarshal(asset.Body, &pageDescriptor); err != nil || pageDescriptor.Name != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid saved page %s", asset.Ref)
@@ -147,6 +156,34 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]co
 	return publications, nil
 }
 
+func generatedReleasePage(page platform.ReleaseAsset, assets []platform.ReleaseAsset, version string) (bool, error) {
+	for _, asset := range assets {
+		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		var object construction.Object
+		if err := json.Unmarshal(asset.Body, &object); err != nil {
+			return false, err
+		}
+		if object.Name != page.Ref.Name {
+			continue
+		}
+		generated, err := platform.PageReleaseAsset(construction.ID, version, construction.CompileObjectPage(object))
+		if err != nil {
+			return false, err
+		}
+		var expected, actual any
+		if err := json.Unmarshal(generated.Body, &expected); err != nil {
+			return false, err
+		}
+		if err := json.Unmarshal(page.Body, &actual); err != nil {
+			return false, err
+		}
+		return reflect.DeepEqual(expected, actual), nil
+	}
+	return false, nil
+}
+
 func pageFunctionBindings(p platform.Page) map[string]string {
 	bindings := map[string]string{}
 	for _, section := range p.Sections {
@@ -209,12 +246,15 @@ type Draft struct {
 // and flows. Promotion into an environment that never authored them creates each
 // missing one through the builder's own create action.
 func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
-	generated := map[string]bool{}
-	for _, asset := range candidate.Assets {
-		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetObject {
-			var o construction.Object
-			if json.Unmarshal(asset.Body, &o) == nil {
-				generated[construction.CompileObjectPage(o).Name] = true
+	authored := map[string]bool{}
+	if b.host != nil {
+		pages, err := readDefinitionInventory[Page](b.host.Automation(platform.Caller{}, construction.ID))
+		if err != nil {
+			return nil, err
+		}
+		for _, page := range pages {
+			if !page.Archived {
+				authored[page.Name] = true
 			}
 		}
 	}
@@ -244,8 +284,14 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 				return nil, err
 			}
 		case platform.AssetPage:
-			if generated[asset.Ref.Name] {
-				continue
+			if !authored[asset.Ref.Name] {
+				generated, err := generatedReleasePage(asset, candidate.Assets, b.Manifest().Version)
+				if err != nil {
+					return nil, err
+				}
+				if generated {
+					continue // Only the identical generated page has no second owner.
+				}
 			}
 			var descriptor platform.Page
 			if err := json.Unmarshal(asset.Body, &descriptor); err != nil {

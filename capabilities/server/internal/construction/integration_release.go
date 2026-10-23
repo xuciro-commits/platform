@@ -89,6 +89,7 @@ type WritebackDefinition struct {
 	Object         string                       `json:"object"`
 	On             string                       `json:"on"`
 	Method         string                       `json:"method,omitempty"`
+	Transport      string                       `json:"transport,omitempty"`
 	Path           string                       `json:"path,omitempty"`
 	Mapping        []SourceField                `json:"mapping,omitempty"`
 	Result         []SourceField                `json:"result,omitempty"`
@@ -280,6 +281,9 @@ func ValueValidateIntegrationDescriptor(asset platform.ReleaseAsset) error {
 			return fmt.Errorf("invalid portable pipeline")
 		}
 	case *WritebackDefinition:
+		if err := CheckWritebackTransport(d.Transport, d.Method); err != nil {
+			return err
+		}
 		if d.Connection == "" || d.Object == "" || d.On == "" || strings.ContainsAny(d.On, "./ ") || strings.Contains(d.Path, "://") {
 			return fmt.Errorf("invalid portable writeback")
 		}

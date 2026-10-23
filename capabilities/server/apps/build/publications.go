@@ -352,11 +352,15 @@ func (b *Build) Reinstall() error {
 	if err != nil {
 		return err
 	}
+	beforeMode := b.jointMode
+	b.jointMode = true
+	defer func() { b.jointMode = beforeMode }()
 	for _, was := range ordered {
 		if err := b.install(platform.Caller{Replaying: true}, was); err != nil {
 			return fmt.Errorf("object %s: %v: %s", was.Name, err, err.Message)
 		}
 	}
+	b.jointMode = beforeMode
 	if err := restoreDefinitionPublications(b, b.linkTypeInventory, construction.SchemaLinkType); err != nil {
 		return err
 	}

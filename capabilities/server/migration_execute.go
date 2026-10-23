@@ -515,6 +515,27 @@ func (t *Tenant) validateMigratedRecordsLocked(trial *Tenant, member platform.Me
 			if err := authorizationRefusal(t.authorizeFrom(checks.records, c, request, at, false)); err != nil {
 				return err
 			}
+			// Decoding a target struct supplies scalar zero values. A newly
+			// required field must instead exist in the accepted migration image.
+			image, err := current.Image()
+			if err != nil {
+				return err
+			}
+			var values map[string]any
+			if err := json.Unmarshal(image, &values); err != nil {
+				return err
+			}
+			required := []platform.Field{}
+			for _, field := range et.info.Fields {
+				prior, exists := old.info.Field(field.Name)
+				if !field.Required || exists && prior.Required || field.When != nil && !field.Active(func(name string) string { return fmt.Sprint(values[name]) }) {
+					continue
+				}
+				required = append(required, platform.Field{Name: field.Name, Required: true})
+			}
+			if issues := platform.InputIssues(required, values); len(issues) > 0 {
+				return fmt.Errorf("migrated %s/%s lacks required target field %s", et.info.Type, id, issues[0].Path[0])
+			}
 			if err := checks.Check(c, current.Value.Interface()); err != nil {
 				return fmt.Errorf("migrated %s/%s does not satisfy its target declaration: %w", et.info.Type, id, err)
 			}

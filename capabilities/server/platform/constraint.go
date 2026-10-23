@@ -93,11 +93,11 @@ func CheckConstraints(info EntityInfo, lookup func(string) (EntityInfo, bool), t
 				return fmt.Errorf("constraint %s scope: %w", c.Name, err)
 			}
 		}
-		if c.Kind == "immutable" && (info.Lifecycle == nil || c.Level == "txn") {
+		if c.Kind == "immutable" && (c.Expr == nil && info.Lifecycle == nil || c.Level == "txn") {
 			return fmt.Errorf("immutable constraint %s needs a lifecycle and record level", c.Name)
 		}
 		needsExpr := slices.Contains([]string{"range", "pattern", "expression", "cardinality", "temporal"}, c.Kind)
-		if needsExpr != (c.Expr != nil) {
+		if c.Kind != "immutable" && needsExpr != (c.Expr != nil) {
 			return fmt.Errorf("constraint %s has an invalid expression shape", c.Name)
 		}
 		if c.Reads != nil {

@@ -79,3 +79,21 @@ test("refusal routes and audit expressions retain their references across rename
   assert.equal(renamed.steps[2].refusals[0].message, "step.create");
   assert.equal(renameTransactionStep(value, [1], "line").steps[2].refusals[0].route.id, "step.line");
 });
+
+test("renaming a query keeps interval bounds and conditional accounting lines connected", () => {
+  const bound = { op: "", kind: "integer", ref: "step.quantity" };
+  const condition = { op: ">", kind: "boolean", args: [bound, { op: "", kind: "integer", lit: { value: 0 } }] };
+  const value = { subject: "build.order", steps: [
+    { name: "quantity", kind: "call", call: { ref: { app: "build", kind: "query", name: "quantity" }, version: 1, view: "snapshot", inputs: [], resultType: { kind: "integer" } } },
+    { name: "items", kind: "for-each", forEach: { range: { from: { op: "", kind: "integer", lit: { value: 0 } }, until: bound, unit: "item", step: 1, limit: 20 }, steps: [] } },
+    { name: "books", kind: "journal", journal: { lines: [{ when: condition, account: { op: "", kind: "text", lit: { value: "cash" } }, debit: bound }] } },
+  ] };
+  const renamed = renameTransactionStep(value, [0], "count");
+  assert.equal(renamed.steps[1].forEach.range.until.ref, "step.count");
+  assert.equal(renamed.steps[2].journal.lines[0].when.args[0].ref, "step.count");
+  assert.deepEqual(transactionIssues(renamed), []);
+  assert.equal(value.steps[1].forEach.range.until.ref, "step.quantity");
+  const removed = { ...value, steps: value.steps.slice(1) };
+  assert.ok(transactionIssues(removed).some(issue => issue.step === "items" && issue.reason === "missing"));
+  assert.ok(transactionIssues(removed).some(issue => issue.step === "books" && issue.reason === "missing"));
+});

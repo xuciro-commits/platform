@@ -8,25 +8,47 @@ const value = (page: Page, text: string) =>
     .getByRole("definition")
     .filter({ hasText: new RegExp(`^${text}$`, "i") });
 
+// These are editable declarations, so the shared form checks have no native industry dependency.
+async function routeRecords(builder: Builder) {
+  const account = await builder.object({ title: "Account", fields: [{ name: "name", title: "Name", type: "text", required: true }, { name: "kind", title: "Kind", type: "text" }], access: [{ role: "user", read: "all", create: true, edit: true }] });
+  const task = await builder.object({ title: "Opportunity", fields: [
+    { name: "account", title: "Account", type: "reference", ref: account.type, required: true },
+    { name: "title", title: "What is being sold", type: "text", required: true },
+    { name: "margin", title: "Expected margin", type: "decimal", read: ["builder"], write: ["builder"] },
+  ], access: [{ role: "user", read: "all", create: true, edit: true }], states: [{ name: "open", title: "Open" }, { name: "won", title: "won" }], actions: [
+    { name: "close", title: "Close opportunity", from: ["open"], to: "won", inputs: [{ name: "outcome", title: "Outcome", type: "choice", choices: "won,lost", required: true }] },
+    { name: "plan", title: "Plan group stay", from: ["open"], inputs: [
+      { name: "rooms", title: "Rooms, 1 to 20", type: "integer", required: true, constraints: { min: 1, max: 20 } },
+      { name: "roomtype", title: "The provider's room type", type: "choice", choices: "standard,suite", required: true },
+      { name: "arrive", title: "First night", type: "date", required: true, range: { end: "depart" } },
+      { name: "depart", title: "Departure", type: "date", required: true, constraints: { after: "arrive" } },
+      { name: "cutoff", title: "The last day the rooms are held", type: "date", required: true, constraints: { before: "arrive" } },
+    ] },
+    { name: "book", title: "Book stay", from: ["open"] },
+  ] });
+  return { account, task };
+}
+
 test("route 17: every action has an entry, pages follow changes", async ({
   browser,
   page,
   request,
 }) => {
   test.setTimeout(90_000);
+  const model = await routeRecords(new Builder(request, "manager"));
   const account = fresh("ACC"),
     opp = fresh("OPP");
   await decide(
     request,
     "sales",
-    "crm",
-    "crm.account.create",
-    { type: "crm.account", id: account },
+    "build",
+    `${model.account.type}.create`,
+    { type: model.account.type, id: account },
     { name: "Acme " + account, kind: "company" },
   );
-  await open(page, "sales", "/page?app=crm&kind=page&name=opportunities");
+  await open(page, "sales", `/page?app=build&kind=page&name=${model.task.name}`);
   await page
-    .getByRole("button", { name: "Open opportunity", exact: true })
+    .getByRole("button", { name: "Create opportunity", exact: true })
     .click();
   const opening = page.getByRole("dialog");
   await opening.getByRole("textbox", { name: "ID *", exact: true }).fill(opp);
@@ -36,14 +58,14 @@ test("route 17: every action has an entry, pages follow changes", async ({
     .getByRole("textbox", { name: /^What is being sold/ })
     .fill("Board offsite");
   await opening
-    .getByRole("button", { name: "Open opportunity", exact: true })
+    .getByRole("button", { name: "Create", exact: true })
     .click();
   await expect(opening).toHaveCount(0);
-  await open(page, "sales", `/record?type=crm.opportunity&id=${opp}`);
+  await open(page, "sales", `/record?type=${model.task.type}&id=${opp}`);
   for (const action of ["Close opportunity", "Plan group stay", "Book stay"]) {
     await expect(page.getByRole("button", { name: action })).toBeVisible();
   }
-  await page.getByRole("button", { name: "Plan group stay" }).click();
+  await page.getByRole("button", { name: "Plan group stay", exact: true }).click();
   const plan = page.getByRole("dialog");
   await plan.getByLabel("Rooms, 1 to 20", { exact: false }).fill("1.5");
   await plan.getByLabel("Rooms, 1 to 20", { exact: false }).blur();
@@ -96,7 +118,7 @@ test("route 17: every action has an entry, pages follow changes", async ({
   await plan
     .getByLabel("The last day the rooms are held", { exact: false })
     .fill("2030-02-02");
-  await plan.getByRole("button", { name: "Plan group stay" }).click();
+  await plan.getByRole("button", { name: "Plan group stay", exact: true }).click();
   await expect(plan.getByRole("alert")).toContainText("before First night");
   await plan
     .getByLabel("The last day the rooms are held", { exact: false })
@@ -104,7 +126,7 @@ test("route 17: every action has an entry, pages follow changes", async ({
   const keys: string[] = [];
   await page.route("**/v1/submissions", async (route) => {
     const submission = route.request().postDataJSON();
-    if (submission.schema?.name !== "crm.opportunity.plan")
+    if (submission.schema?.name !== `${model.task.type}.plan`)
       return route.continue();
     keys.push(submission.idempotencyKey);
     if (keys.length === 1) return route.abort();
@@ -118,7 +140,7 @@ test("route 17: every action has an entry, pages follow changes", async ({
           issues: [
             {
               code: "availability",
-              path: ["roomType"],
+              path: ["roomtype"],
               message: "Choose another room type",
             },
           ],
@@ -126,7 +148,7 @@ test("route 17: every action has an entry, pages follow changes", async ({
       }),
     });
   });
-  await plan.getByRole("button", { name: "Plan group stay" }).click();
+  await plan.getByRole("button", { name: "Plan group stay", exact: true }).click();
   await expect(
     plan.getByRole("button", { name: "Retry confirmation" }),
   ).toBeVisible();
@@ -145,7 +167,7 @@ test("route 17: every action has an entry, pages follow changes", async ({
   ).toHaveValue("standard");
   await page.unroute("**/v1/submissions");
   await plan.getByRole("button", { name: "Cancel" }).click();
-  await page.getByRole("button", { name: "Close opportunity" }).click();
+  await page.getByRole("button", { name: "Close opportunity", exact: true }).click();
   await page
     .getByRole("dialog")
     .getByRole("combobox")
@@ -153,7 +175,7 @@ test("route 17: every action has an entry, pages follow changes", async ({
     .selectOption("won");
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Close opportunity" })
+    .getByRole("button", { name: "Close opportunity", exact: true })
     .click();
   await expect(value(page, "won")).toBeVisible();
   // Bound creation uses the shared capability route. A lost reply retains its
@@ -176,7 +198,7 @@ test("route 17: every action has an entry, pages follow changes", async ({
             name: "account",
             title: "Account",
             type: "reference",
-            ref: "crm.account",
+            ref: model.account.type,
             required: true,
           },
           {
@@ -216,12 +238,13 @@ test("route 17: every action has an entry, pages follow changes", async ({
       exact: true,
     });
     await structure.getByRole("button", { name: "Form", exact: true }).click();
+    await builderTab.getByRole("button", { name: "Visual", exact: true }).click();
     await builderTab
       .getByRole("button", { name: "Account", exact: true })
       .click();
     await inspector
       .getByRole("combobox", { name: "Reference object", exact: true })
-      .selectOption("crm.account");
+      .selectOption(model.account.type);
     await builderTab
       .getByRole("button", { name: "First night", exact: true })
       .click();
@@ -336,84 +359,41 @@ test("route 17: every action has an entry, pages follow changes", async ({
   }
 });
 
-test("route 4: an approval reaches the requester's page", async ({ page }) => {
-  const leave = fresh("LEA");
-  const day = (d: number) =>
-    new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
-  await open(page, "sales", "/definitions");
-  await page
-    .getByRole("textbox", { name: "Filter rows", exact: true })
-    .fill("hcm/page/leaves");
-  await page.getByRole("row").filter({ has: page.getByRole("cell", { name: "hcm/page/leaves", exact: true }) }).click();
-  await page.getByRole("button", { name: "Open page" }).click();
-  await page.getByRole("button", { name: /Draft leave request/ }).click();
-  const draft = page.getByRole("dialog");
-  await draft.getByRole("textbox").first().fill(leave);
-  await draft.getByRole("combobox").first().selectOption("vacation");
-  await draft.getByRole("button", { name: /^First day \*/ }).click();
-  await draft
-    .getByRole("textbox", { name: "First day", exact: true })
-    .fill(day(30));
-  await draft
-    .getByRole("textbox", { name: "Last day", exact: true })
-    .fill(day(32));
-  await draft
-    .getByRole("group", { name: "Choose a date range" })
-    .getByRole("button", { name: "Close", exact: true })
-    .click();
-  await expect(draft.getByText("3 days", { exact: true })).toBeVisible();
-  await draft.getByRole("button", { name: "Create" }).click();
-  await page.getByRole("textbox", { name: "Search" }).fill(leave);
-  const leaveRow = page.getByRole("row").filter({ hasText: leave });
-  await expect(leaveRow).toBeVisible();
-  await leaveRow.click();
-  await page.getByRole("button", { name: "Submit for approval" }).click();
-  await expect(value(page, "Pending approval")).toBeVisible();
-  await expect(page.getByText(/^waiting for Manager:/)).toBeVisible();
-  const chain = page.getByRole("figure", { name: "Approvals" }); // the chain drawn (#122)
-  await expect(chain.getByText("Manager", { exact: true })).toBeVisible();
-  await expect(chain.getByText("sales-1", { exact: true })).toBeVisible();
-  const managerPage = await page.context().newPage();
-  await open(managerPage, "manager", "/inbox");
-  const task = managerPage.getByRole("listitem").filter({ hasText: leave });
-  await expect(task).toBeVisible();
-  await task.getByRole("button").first().click();
-  await managerPage
-    .getByRole("button", { name: "Open related record" })
-    .click();
-  await managerPage.getByRole("dialog", { name: leave, exact: true })
-    .getByRole("button", { name: "Open record", exact: true }).click();
-  await managerPage
-    .getByRole("region", { name: "Approvals", exact: true })
-    .getByRole("button", { name: "Submit for approval", exact: true })
-    .click();
-  const approvalID = new URLSearchParams(
-    new URL(managerPage.url()).hash.split("?")[1],
-  ).get("id")!;
-  await managerPage
-    .getByRole("region", { name: approvalID, exact: true })
-    .getByRole("button", { name: "Approve", exact: true })
-    .click();
-  await managerPage
-    .getByRole("dialog")
-    .getByRole("button", { name: "Approve", exact: true })
-    .click();
-  await managerPage
-    .getByRole("region", { name: approvalID, exact: true })
-    .getByRole("button", { name: "Back to inbox", exact: true })
-    .click();
-  await expect(value(page, "Approved")).toBeVisible();
-  await managerPage.close();
+test("route 4: an approval reaches the requester's page", async ({ page, builder, operator }) => {
+  test.setTimeout(60_000);
+  const object=await builder.object({
+    title:"Review document",fields:[{name:"title",title:"Title",type:"text",required:true}],
+    states:[{name:"draft",title:"Draft"},{name:"pending",title:"Pending approval"},{name:"approved",title:"Approved"},{name:"rejected",title:"Rejected"}],
+    access:[{role:"user",read:"own",create:true}],
+    actions:[{name:"request",title:"Request review",from:["draft"],to:"approved",roles:["user"],approval:{pending:"pending",rejected:"rejected",levels:[{title:"Manager",role:"builder"}]}}],
+  });
+  const id=fresh("REVIEW");
+  await operator.decide(`${object.type}.create`,{type:object.type,id},{title:"Browser approval"});
+  await operator.open(page,`/record?type=${object.type}&id=${id}`);
+  await page.getByRole("button",{name:"Request review",exact:true}).click();
+  await expect(page.locator('li[aria-current="step"]')).toHaveText("Pending approval");
+  const chain=page.getByRole("figure",{name:"Approvals",exact:true});
+  await expect(chain.getByText("Manager",{exact:true})).toBeVisible();
+  const managerPage=await page.context().newPage();
+  try {
+    await builder.open(managerPage,"/inbox");
+    await managerPage.getByRole("button",{name:`Approve: Request review ${object.type}/${id}`,exact:true}).click();
+    await managerPage.getByRole("button",{name:"Approve",exact:true}).click();
+    await managerPage.getByRole("dialog").getByRole("button",{name:"Approve",exact:true}).click();
+    await managerPage.getByRole("button",{name:"Back to inbox",exact:true}).click();
+    await expect(page.locator('li[aria-current="step"]')).toHaveText("Approved");
+  } finally {await managerPage.close();}
 });
 
-test("route 28: preview cannot submit an action", async ({ page }) => {
+test("route 28: preview cannot submit an action", async ({ page, builder }) => {
+  const model = await routeRecords(builder);
   await open(page, "sales", "/definitions");
   await page
     .getByRole("textbox", { name: "Filter rows", exact: true })
-    .fill("crm/page/opportunities");
+    .fill(`build/page/${model.task.name}`);
   await page
     .getByRole("row")
-    .filter({ has: page.getByRole("cell", { name: "crm/page/opportunities", exact: true }) })
+    .filter({ has: page.getByRole("cell", { name: `build/page/${model.task.name}`, exact: true }) })
     .click();
   await page.getByRole("button", { name: "Preview page" }).click();
   await expect(
@@ -423,49 +403,50 @@ test("route 28: preview cannot submit an action", async ({ page }) => {
   page.on("request", (r) => {
     if (r.method() !== "GET" && r.url().includes("/v1/")) writes.push(r.url());
   });
-  await page.getByRole("button", { name: "Plan group stay" }).click();
+  await page.getByRole("button", { name: "Plan group stay", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Preview only")).toBeVisible();
   await expect(
-    dialog.getByRole("button", { name: "Plan group stay" }),
+    dialog.getByRole("button", { name: "Plan group stay", exact: true }),
   ).toBeDisabled();
   expect(writes).toEqual([]);
 });
 
 test("route 20: field security", async ({ page, request }) => {
+  const model = await routeRecords(new Builder(request, "manager"));
   const account = fresh("ACC"),
     opp = fresh("OPP");
   await decide(
     request,
     "sales",
-    "crm",
-    "crm.account.create",
-    { type: "crm.account", id: account },
+    "build",
+    `${model.account.type}.create`,
+    { type: model.account.type, id: account },
     { name: "Margin " + account, kind: "company" },
   );
   await decide(
     request,
     "sales",
-    "crm",
-    "crm.opportunity.open",
-    { type: "crm.opportunity", id: opp },
+    "build",
+    `${model.task.type}.create`,
+    { type: model.task.type, id: opp },
     { account, title: "Retreat" },
   );
   await decide(
     request,
     "manager",
-    "crm",
-    "crm.opportunity.edit",
-    { type: "crm.opportunity", id: opp },
+    "build",
+    `${model.task.type}.edit`,
+    { type: model.task.type, id: opp },
     { margin: 31.5 },
   );
-  await open(page, "manager", `/record?type=crm.opportunity&id=${opp}`);
+  await open(page, "manager", `/record?type=${model.task.type}&id=${opp}`);
   await expect(
     page.getByRole("term").filter({ hasText: "Expected margin" }),
   ).toBeVisible();
   await expect(value(page, "31.50")).toBeVisible();
   const salesPage = await page.context().newPage(); // another member: a page of its own
-  await open(salesPage, "sales", `/record?type=crm.opportunity&id=${opp}`);
+  await open(salesPage, "sales", `/record?type=${model.task.type}&id=${opp}`);
   await expect(salesPage.getByText("Retreat").first()).toBeVisible();
   await expect(salesPage.getByText("Expected margin")).toHaveCount(0);
 });

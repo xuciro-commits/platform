@@ -11,8 +11,8 @@
 | 应用 API | 应用唯一可见的表面：`Member`、`Caller`、`Manifest`、生命/动作/读取/流程/智能体/作业/设置/效果声明、`Ledger`、`Runtime` | `capabilities/server/platform/` | 应用需要宿主尚未提供的能力时 |
 | 平台应用 | 跨行业通用能力：`ai`、`build`、`core`、`enterprise`、`files`、`flow`、`knowledge`、`relations`、`work` | `capabilities/server/apps/<id>/` | 该能力所属的语义需要扩展时 |
 | 协议 | 应用之间唯一允许的耦合：版本化接口与一致性测试 | `protocols/` | 出现第二个提供方或消费方时 |
-| 参考应用 | 用行业规则验证平台；**不是产品形态** | `apps/<id>/server/`、`web/packages/<id>/` | 等价构建产物验证通过且历史责任安排后退出 |
-| 组合 | 每个宿主一个解决方案，装配租户、应用与协议 | `solutions/<name>/` | 交付形态变化时 |
+| 行业应用 | 通过平台声明验证行业任务；包内对象、动作、规则、流程与页面可由构建者修改 | `deploy/packages/` | 保留业务任务或通用构建能力变化时 |
+| 部署装配 | 同一平台工厂装配能力，两个实例由租户与包配置区分 | `capabilities/server/composition/`、`cmd/platform-server/`、`deploy/local/` | 平台能力组合或部署配置变化时 |
 | Web | 工作区、构建者应用、治理应用、共享 UI | `web/apps/`、`web/packages/` | 界面职责变化时 |
 
 ## 2. 代码地图
@@ -29,10 +29,9 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
   internal/          acceptance agents aistate construction enterprise host records rules
-  cmd/               api-types、new-app、check-boundaries、uaf-gen、webhook-sink
+  cmd/               platform-server、api-types、new-app、check-boundaries、uaf-gen、webhook-sink
+  composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 protocols/           lodging、production —— 跨应用协议
-apps/                crm csm erp hcm mes pms —— 参考应用，各自 go.mod
-solutions/           hospitality（8495）、manufacturing（8490）
 web/
   apps/workspace     唯一工作区：session host shell chrome
   apps/catalog       资产库与代码沙箱
@@ -41,7 +40,6 @@ web/
   packages/kernel    @platform/kernel 契约类型（src/gen/host.ts 生成）
   packages/build     统一构建台（Model/Logic/Interface/Integration/Release）
   packages/platform  治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
-  packages/<app>     各参考应用的界面
   e2e                Playwright 路线，spec 只经 tests/kit.ts
 scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples
@@ -60,6 +58,14 @@ openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 | `internal/enterprise` | 企业声明、元模型和纯关系规则；完整 UAF 原件保留，标准解析在生成阶段执行，运行加载生成数据 |
 | `internal/agents`、`internal/aistate` | 已授权上下文编排、预算及纯计量变换；真实模型调用和运行仍归原应用/宿主 |
 | `internal/host` | 宿主消费者所需的具名窄角色；不另存构建模型或复制应用执行器 |
+
+Build 的有界区间、完整明细记账与余额结果引用仍由 `apps/build/transaction*.go` 的原事务解释器执行；集合迭代可沿类型化引用读取同一归属记录的完整声明集合，保存实际读取顺序，仍使用原权限与预算。纯日期/小时运算归 `internal/rules`，关闭期间策略归 Core。原事务编辑器直接编辑这些声明，生成的宿主类型与浏览器规则模块由原工具产生。联合发布在隔离安装视图登记完整候选后检查跨对象引用，不要求构建者先发布临时对象。
+
+对象计算字段、业务约束与事务分别保存自己的集合读取绑定；原构建器可选择声明集合或查询的确切版本、主体记录键和完整/可见范围，表达式源码与可视化写同一草稿。查询主体键可以显式读取获权的 `$subject.field`；记录 `id` 是只读身份元数据，不伪装为可授权业务字段。Build 自己的原生确认记录仍由原权限投影，声明查询不赋予其他应用的内部读取权。已类型化草稿的正规化不要求依赖先发布，完整候选检查承担最终类型、集合和归属检查。
+
+完整子决定在返回调用者前检查延期业务约束；子拒绝回退到原私有保存点，未完成的外层事务仍在自己的完成边界检查。事务集合见证按实际子收据和步骤归属封存，旧接受结果继续按原格式验证，不将旧历史重写成新格式。
+
+每次实际授权仍执行原检查；封存时只合并请求、角色、决定及定义摘要完全相同的重复证据，不改变事务预算或省略不同结果。普通记录的空集合默认值不进入冻结的 `ReleaseAsset` 内容，确认与发布继续比较原描述的确切字节。
 
 ## 3. 写入路径
 
@@ -100,13 +106,18 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 - **每租户单写者**。`mu` 拥有决策通道、已安装定义、智能体运行捕获与接受结果应用；`opsMu` 保护队列、连接器、设置、通知与效果。`mu` 可短暂进入 `opsMu`，反向不允许。来源运行器用 `streamMu.TryLock` 先于 `mu`；决策通道从不等 `streamMu`。完整义务见 `capabilities/server/doc.go`。
 - **锁外 I/O**：只捕获固定定义、主体、来源与世代；回锁复核后再接受。没有统一的串行 I/O 执行器。
 - **结果未知**：外部效果不承诺跨系统 exactly-once。允许幂等重送的操作沿原键重试；危险设备动作未知时转入回读或人工处理，不能套用自动重发。请求已送达、设备已执行、业务已确认是不同状态，各自保存证据。
+- **确认完成**：声明可将完成动作限定为原 Confirmation 收据调用；普通目录不展示该动作，直接提交也不能伪造收据。原完成调用仍复核申请者的当前角色和记录权限，不提升为自动化身份。联合发布解析同一候选中的 Writeback/Source，运行使用原冻结请求及来源核对。
 - **历史兼容**：旧日志、定义版本、映像格式、拒绝答复、幂等冲突及在途实例保留读取责任，退役不等于删除。旧格式先按原规则验证原字节，再由映像归属方显式转换；未知格式拒绝，不关闭严格解码、不改写原历史。新格式切换不自动允许旧二进制回退。
 
 ## 6. 执行边界
 
 - 草稿可以修改；已发布的定义版本、已保存候选及其依赖闭包不可变，激活安装选定内容并更新当前指针，不改写候选。应用公共入口与租户发布声明仍交给原 owner 安装，不另建执行模型。审批绑定当时的动作/对象及发布版本，Flow 实例固定启动定义；定义升级不能悄悄把它们改成新版，迁移或重定向须经过原受控决定。包安装、发布、激活与卸载也不互相代替，退役保留依赖及历史责任。
+- 行业包的 `blueprint.setup` 是可审阅的初始化输入；`make initialize` 以操作者身份逐项调用原 owner 提交入口，不安装后台任务或自动授予角色。组织样本在 Enterprise、科目在 Core、业务样本在 Build 分别接受；中断后保持同一计划、身份和运行键接续，安装与重启不播种。
+- 候选试运行的显式合成组织由原 Enterprise owner 在隔离环境维护，成员仍使用当前角色；便携计划的空任职主体绑定选定试验成员。保留版本执行只保留业务定义，授权视图继续使用当前原组织目录，不冻结已过期任职或复制正式组织到试验环境。
 - 宿主不执行租户脚本。租户代码经受控编译（Go/TinyGo → WASIp1 command）与隔离执行（wazero worker，无网络、只读根、限额）进入，产物纳入同一候选/激活与接受结果。
 - 计算、长等待、状态变更、推断各有唯一 owner：状态变更归 Action/Lifecycle，长等待归 Flow/Work，计算归 Operation/Compute，推断归 AI；都复用 Work/Effect 与接受结果。
+- Flow 的绝对时间等待使用获权的时间戳绑定，在进入等待时固定截止时间；无法读取时间戳时走原错误分支，不把未知时间解释为立即到期。记录状态启动保持每条记录一次；可重复的业务申请使用独立申请记录保留每次原始意图。
+- Observation 的状态区间读取由 `platform/observation_intervals.go` 使用同一规则求值器处理有界窗口，返回来源修订、处理版本、开放边界与未知区段；原采样只存在于外部来源及读取期间的临时输入。读取沿原连接和权限复核，独立于业务接受；数值摘要继续使用原路径。原事务的 `intervals` 步骤将紧凑结果映射为声明对象，K1 校验连续及拆并，原关系保存前驱；Flow 从这些类型化对象继续工作。格式 10 保存依据和结果映像，恢复不读取外部采样。
 - AI 没有额外特权：使用与应用相同的 API、权限、预算与审批；模型输出在采纳前是草稿或证据。
 - 当前权限同样约束历史、字段、查询/导出、AI 来源、错误详情与派生数据；保留旧定义或旧证据不保留已经撤销的读取资格。自动执行在锁外等待后也要复核当前权限。
 - 新接受结果恢复只应用已保存映像与原答复，不重新执行业务规则、授权、模型或外部请求。`replay.go` 仍有旧 `submission`/原输入等历史分支，按原归属方代码和原语义读取；这是明确保留的兼容责任，不接受新普通业务，也不能将其宣称为已封存结果的纯应用或在恢复中重发外部请求。
@@ -114,6 +125,10 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 工作区为每个宿主提供一个 Web 入口，原生应用和租户发布的应用共用门户、导航、记录读取与动作权限。Build 在 Model、Logic、Interface、Integration、Release 五个工作域编辑受控草稿，`studio-model.ts` 的同一分类驱动菜单、应用资产树、创建和路由定位；Integrator 只进入原获权的 Integration 编辑范围。Data Connection 保留连接器与端点运维、观测和血缘，治理与运行状态仍在 Control Panel、Runs、Agents 和 Host Console。是否能读草稿、运行模型或历史内容仍由当前成员权限决定。
 
 可视化和源码编辑同一份草稿，保留撤销、未应用输入和保存冲突；简单自动化不能表示的合法流程转到原 Flow 编辑器，不通过简化保存丢失高级字段。对象编辑沿同一草稿分成结构、行为、规则与访问、数据与预览四个主区，旧区段链接定位原内容。页面公共属性、配置归属、端口模式与作用域、常见计划窗口及实体字段角色使用现有 Widget 清单，专用检查器保留真实的绑定和跨资产语义，不建立另一套 Schema 或画布。页面和应用复用使用原生定义与受控包；旧 Workshop 私有 JSON 迁入器已退出。
+
+`EdgeClient` 在宿主确认租户和主体后绑定该宿主的持久发件箱；会话切换终止旧发送。存储失败阻止报成功，恢复中的在发请求通过原 K5 超时转换为未知，以原键、原版本和原输入核对。发件箱不是离线内容缓存；应用内容准备和本地表单草稿另有各自生命周期。
+
+工作区的离线应用入口显式保存确切应用发布、可读任务及有限记录窗口，`kernel/prepared.ts` 按宿主、租户、主体保存快照与本地表单输入；时间和版本随内容展示。公共 Service Worker 只保存工作区静态资源，API 数据与凭据不进入其缓存。原登录会话仍承担身份，快照不授予新身份登录能力。表单重开恢复原目标、定义及预期修订；提交继续走同一 K5 发件箱，未知请求使用原输入核对。未准备内容明确需要联网；实际权限拒绝不能被缓存结果替代。
 
 ## 7. 职责归属
 

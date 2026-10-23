@@ -34,6 +34,7 @@ type Projection struct {
 	mu      sync.Mutex
 	dirty   map[string]map[string]bool // type → ids changed since the last flush
 	history map[string]int             // type/id → history prefix already written successfully
+	shapes  map[string]reflect.Type    // installed Go shapes include column and field-read tags
 }
 
 var unsafe = regexp.MustCompile(`[^a-z0-9_]+`)
@@ -84,45 +85,53 @@ func columns(info platform.EntityInfo) []column {
 		if len(f.Read) > 0 { // a field some roles may not read is not copied where no role applies
 			continue
 		}
-		read := func(v reflect.Value) reflect.Value { return v.FieldByIndex(f.Index) }
+		read := func(project func(reflect.Value) any) func(reflect.Value) any {
+			return func(row reflect.Value) any {
+				value := records.FieldValue(row, f.Index)
+				if !value.IsValid() {
+					return nil
+				}
+				return project(value)
+			}
+		}
 		name := ident(f.Name)
 		switch f.Type {
 		case "money":
 			out = append(out,
-				column{name + "_amount", "bigint", func(v reflect.Value) any { return read(v).Interface().(platform.Money).Amount }},
-				column{name + "_currency", "text", func(v reflect.Value) any { return read(v).Interface().(platform.Money).Currency }})
+				column{name + "_amount", "bigint", read(func(v reflect.Value) any { return v.Interface().(platform.Money).Amount })},
+				column{name + "_currency", "text", read(func(v reflect.Value) any { return v.Interface().(platform.Money).Currency })})
 		case "integer":
-			out = append(out, column{name, "bigint", func(v reflect.Value) any { x, _ := records.Comparable(read(v).Interface()).(float64); return int64(x) }})
+			out = append(out, column{name, "bigint", read(func(v reflect.Value) any { x, _ := records.Comparable(v.Interface()).(float64); return int64(x) })})
 		case "decimal":
-			out = append(out, column{name, "double precision", func(v reflect.Value) any { return records.Comparable(read(v).Interface()) }})
+			out = append(out, column{name, "double precision", read(func(v reflect.Value) any { return records.Comparable(v.Interface()) })})
 		case "boolean":
-			out = append(out, column{name, "boolean", func(v reflect.Value) any { return read(v).Bool() }})
+			out = append(out, column{name, "boolean", read(func(v reflect.Value) any { return v.Bool() })})
 		case "date":
-			out = append(out, column{name, "date", func(v reflect.Value) any {
-				if t, err := time.Parse(time.DateOnly, read(v).String()); err == nil {
+			out = append(out, column{name, "date", read(func(v reflect.Value) any {
+				if t, err := time.Parse(time.DateOnly, v.String()); err == nil {
 					return t
 				}
 				return nil
-			}})
+			})})
 		case "datetime":
-			out = append(out, column{name, "timestamptz", func(v reflect.Value) any {
-				if t, _ := read(v).Interface().(time.Time); !t.IsZero() {
+			out = append(out, column{name, "timestamptz", read(func(v reflect.Value) any {
+				if t, _ := v.Interface().(time.Time); !t.IsZero() {
 					return t
 				}
 				return nil
-			}})
+			})})
 		case "references", "tags":
-			out = append(out, column{name, "text[]", func(v reflect.Value) any {
+			out = append(out, column{name, "text[]", read(func(v reflect.Value) any {
 				list := []string{}
-				for i := range read(v).Len() {
-					list = append(list, read(v).Index(i).String())
+				for i := range v.Len() {
+					list = append(list, v.Index(i).String())
 				}
 				return list
-			}})
+			})})
 		case "lines":
-			out = append(out, column{name, "jsonb", func(v reflect.Value) any { raw, _ := json.Marshal(read(v).Interface()); return raw }})
+			out = append(out, column{name, "jsonb", read(func(v reflect.Value) any { raw, _ := json.Marshal(v.Interface()); return raw })})
 		default: // text, long text, choices, references: their text
-			out = append(out, column{name, "text", func(v reflect.Value) any { return fmt.Sprint(read(v).Interface()) }})
+			out = append(out, column{name, "text", read(func(v reflect.Value) any { return fmt.Sprint(v.Interface()) })})
 		}
 	}
 	return out
@@ -137,7 +146,18 @@ func q(parts ...string) string { return pgx.Identifier(parts).Sanitize() }
 // missing history. A restart preserves the schema and its reader grants.
 func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, error) {
 	p := &Projection{pool: pool, tenant: t, schema: ProjectionSchema(t.ID), dirty: map[string]map[string]bool{}, history: map[string]int{}}
-	s := t.records
+	if err := p.refresh(ctx); err != nil {
+		return nil, err
+	}
+	t.records.mu.Lock()
+	t.records.touched = p.touch
+	t.records.mu.Unlock()
+	return p, nil
+}
+
+// Startup and live declaration changes use the same table and history owner.
+func (p *Projection) refresh(ctx context.Context) error {
+	s := p.tenant.records
 	s.mu.Lock()
 	infos := []platform.EntityInfo{}
 	for _, et := range s.types {
@@ -145,13 +165,13 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 	}
 	s.mu.Unlock()
 	slices.SortFunc(infos, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
-	tx, err := pool.Begin(ctx)
+	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx, fmt.Sprintf(`create schema if not exists %s`, p.schema)); err != nil {
-		return nil, err
+		return err
 	}
 	history := map[string]int{}
 	for _, info := range infos {
@@ -165,14 +185,14 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 			create table if not exists %s (record_id text not null, seq integer not null, change text not null, schema text not null, "by" text not null,
 				at timestamptz not null, fields jsonb not null, primary key (record_id, seq))`,
 			q(p.schema, table), strings.Join(defs, ", "), q(p.schema, table+"_changes"))); err != nil {
-			return nil, err
+			return err
 		}
 		for _, c := range cols {
 			if c.name == "id" {
 				continue
 			}
 			if _, err := tx.Exec(ctx, fmt.Sprintf(`alter table %s add column if not exists %s %s`, q(p.schema, table), q(c.name), c.sqlType)); err != nil {
-				return nil, err
+				return err
 			}
 		}
 		// Reusing the projection must not retain a column whose declaration is
@@ -183,14 +203,14 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 		}
 		attributes, err := tx.Query(ctx, `select attname from pg_attribute where attrelid=$1::regclass and attnum>0 and not attisdropped`, q(p.schema, table))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		var removed []string
 		for attributes.Next() {
 			var name string
 			if err = attributes.Scan(&name); err != nil {
 				attributes.Close()
-				return nil, err
+				return err
 			}
 			if !retained[name] {
 				removed = append(removed, name)
@@ -199,34 +219,34 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 		err = attributes.Err()
 		attributes.Close()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, name := range removed {
 			if _, err := tx.Exec(ctx, fmt.Sprintf(`alter table %s drop column %s`, q(p.schema, table), q(name))); err != nil {
-				return nil, err
+				return err
 			}
 		}
 		existing, err := tx.Query(ctx, fmt.Sprintf(`select record_id, max(seq)+1 from %s group by record_id`, q(p.schema, table+"_changes")))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for existing.Next() {
 			var id string
 			var end int
 			if err = existing.Scan(&id, &end); err != nil {
 				existing.Close()
-				return nil, err
+				return err
 			}
 			p.history[info.Type+"/"+id] = end
 		}
 		err = existing.Err()
 		existing.Close()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		rows, changes, ends, err := p.rows(ctx, info.Type, nil)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for ref, end := range ends {
 			history[ref] = end
@@ -240,19 +260,20 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 			batch.Queue(change, r...)
 		}
 		if err := tx.SendBatch(ctx, batch).Close(); err != nil {
-			return nil, err
+			return err
 		}
 
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, err
+		return err
 	}
 	p.recordHistory(history)
 	p.grant(ctx)
-	s.mu.Lock()
-	s.touched = p.touch
-	s.mu.Unlock()
-	return p, nil
+	p.shapes = make(map[string]reflect.Type, len(infos))
+	for _, info := range infos {
+		p.shapes[info.Type] = info.Go
+	}
+	return nil
 }
 
 // grant lets the tenant's reader role read the schema. Creating the role needs
@@ -359,6 +380,21 @@ func (p *Projection) recordHistory(ends map[string]int) {
 // Flush writes the records changed since the last flush; the host calls it
 // every second, after the decisions that changed them are committed.
 func (p *Projection) Flush(ctx context.Context) (err error) {
+	s := p.tenant.records
+	s.mu.Lock()
+	changed := len(s.types) != len(p.shapes)
+	for typ, et := range s.types {
+		if p.shapes[typ] != et.info.Go {
+			changed = true
+			break
+		}
+	}
+	s.mu.Unlock()
+	if changed {
+		if err := p.refresh(ctx); err != nil {
+			return err
+		}
+	}
 	p.mu.Lock()
 	dirty := p.dirty
 	p.dirty = map[string]map[string]bool{}

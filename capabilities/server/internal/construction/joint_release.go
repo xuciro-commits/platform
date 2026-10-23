@@ -6,6 +6,8 @@ import (
 	"platformserver/platform"
 )
 
+const JointDraftLimit = 128
+
 // JointDraftRef names one saved draft in a joint candidate.
 type JointDraftRef struct {
 	Kind platform.AssetKind `json:"kind"`

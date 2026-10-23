@@ -137,7 +137,7 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         case "decimal": return number({ ...common, decimals: 2 });
         case "money": return money(common);
         case "date": return date(common);
-        case "datetime": return f.constraints?{...datetime(common),editor:({value,onChange})=><DateTimeInput value={value??""} title={f.title} offset="Z" onChange={onChange}/>} : datetime(common);
+        case "datetime": return {...datetime(common),editor:({value,onChange})=><DateTimeInput value={value??""} title={f.title} offset="Z" onChange={onChange}/>};
         case "boolean": return checkbox(common);
         case "choice": return info.lifecycle?.field === f.name ? lifecycleField(common, info.lifecycle)
           : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c })) });
@@ -560,7 +560,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   const tabIdentity=JSON.stringify([source.scope,type,id,recordTabs]);
   const [tabState,setTab]=useState<{identity:string;value:string}>();
   const info = source.entity(type);
-  const { view, error, refresh: load } = useRecordView(source, type, id, reload);
+  const { view, error, loading, refresh: load } = useRecordView(source, type, id, reload);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
   if (error) {
     return (
@@ -589,7 +589,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
 		{view.effective===false&&<Tag label={t("Expired")} />}
         {!!info.versionPins?.length&&(r.versionPins as Api.RecordVersionPin[]|undefined)?.map(pin=><Tag key={pin.reference} label={t("Pinned version: {version}",{version:String(pin.version)})} />)}
         {info.versioning?.validUntil&&Boolean(r[info.versioning.validUntil])&&<Tag label={t("Valid until: {date}",{date:String(r[info.versioning.validUntil])})} />}
-        {!detailOnly && <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>}
+        {loading&&<span role="status" className="text-xs text-muted">{t("Refreshing record…")}</span>}
+        {!detailOnly && <fieldset disabled={loading} className="ml-auto flex min-w-0 flex-wrap gap-1 border-0 p-0">{actions?.(r)}</fieldset>}
       </header>);
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
   // Extension records (A3): a type that extends this one pairs one record per base record; its
@@ -621,21 +622,21 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
     const tabs=recordTabs.filter(tab=>(pageUIManifest.runtime.recordView.tabs as readonly string[]).includes(tab));
     const titles:Record<string,string>={overview:t("Overview"),properties:t("Properties"),links:t("Links"),history:t("History")};
     const overview=<div className="grid gap-3">{info.lifecycle&&<StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field]??"")}/>}<PropertyList columns={2} items={info.fields.filter(f=>fields?.includes(f.name)&&["integer","decimal"].includes(f.type)).slice(0,4).map(f=>[f.title,entity.fields[f.name]!.display(r[f.name],r)])}/><PropertyList items={[...view.related,...(view.linked??[])].flatMap(rel=>{const target=source.entity(rel.type);return target?[[target.plural,String(rel.total)] as [string,ReactNode]]:[];})}/></div>;
-    const panels:Record<string,ReactNode>={overview,properties,links:related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>,history:<RecordHistory info={info} history={view.history}/>};
+    const panels:Record<string,ReactNode>={overview,properties,links:related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>,history:<><RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/><RecordHistory info={info} history={view.history}/></>};
     return <div className="grid min-w-0 gap-3">{header}<ContentTabs key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:tabs[0]} onChange={value=>setTab({identity:tabIdentity,value})} items={tabs.map(id=>({id,title:titles[id]!,content:panels[id]}))}/></div>;
   }
   return (
     <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">
       {header}
-      {!detailOnly && info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
+      {!detailOnly && info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={schema=>!loading&&(can?.(schema)??false)}
         onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
-      {!detailOnly && (view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0 || work) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
+      {!detailOnly && (view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
         <h2 className="text-sm font-semibold">{t("Work on this record")}</h2>
         {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
         {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} onOpen={onOpen} />}
         {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
-        {work?.(view)}
       </section>}
+      {!detailOnly && work?.(view)}
       {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       {properties}
       {!detailOnly && (view.files.length > 0 || files) && <Files key={JSON.stringify(["files",source.scope,type,id])} attached={view.files} files={files} />}
@@ -656,9 +657,16 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           </ol>
         </section>
       )}
+      {!detailOnly && <RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/>}
       {!detailOnly && <RecordHistory info={info} history={view.history} />}
     </div>
   );
+}
+
+/** Public delivery outcomes remain distinct from the accepted business action. */
+export function RecordDeliveries({deliveries,onOpen}:{deliveries?:Api.RecordDelivery[];onOpen?:(type:string,r:EntityRecord)=>void}){
+ if(!deliveries?.length)return null;
+ return <section className="grid gap-2" aria-label={t("Delivery results")}><h2 className="text-sm font-semibold">{t("Delivery results")}</h2><p className="text-xs text-muted">{t("Business acceptance and delivery are separate results.")}</p><ul className="grid gap-2">{deliveries.map(delivery=><li key={delivery.id} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border p-2 text-sm"><span>{delivery.event}</span><Tag label={t(delivery.state)} tone={delivery.state==="delivered"?"success":["rejected","failed"].includes(delivery.state)?"danger":"info"}/><time className="text-xs text-muted" dateTime={delivery.at}>{new Date(delivery.at).toLocaleString()}</time>{delivery.message&&<p className="w-full">{t(delivery.message)}</p>}{delivery.receipt&&onOpen&&<Button size="sm" onClick={()=>{const [type,...id]=delivery.receipt!.split("/");onOpen(type!,{id:id.join("/")} as EntityRecord);}}>{t("Open receipt")}</Button>}</li>)}</ul></section>;
 }
 
 /** A standalone projection of the same authorized record view and related windows. */

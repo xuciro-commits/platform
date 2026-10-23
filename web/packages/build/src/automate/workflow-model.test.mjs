@@ -83,3 +83,12 @@ test("local and server diagnostics share node locations while process issues sta
   assert.deepEqual(value, before);
   assert.deepEqual(workflowDiagnostics(draft()), {});
 });
+
+test("deadline bindings retain graph sockets, scope and producer renames", () => {
+  const value = draft();
+  value.steps[2] = {name:"deadline",kind:"wait",waitUntil:result(["expires"])};
+  const renamed = renameWorkflowStep(value,"calculate","deadlineinput");
+  assert.deepEqual(renamed.steps[2].waitUntil,{source:"step",step:"deadlineinput",path:["expires"]});
+  assert.ok(dataEdges(renamed).some(edge=>edge.target==="deadline"&&edge.targetPort==="binding:waitUntil"));
+  assert.equal(withWorkflowBinding(renamed.steps[2],"binding:waitUntil",undefined).waitUntil,undefined);
+});

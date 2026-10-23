@@ -11,12 +11,6 @@ export type Package = { serves: string[]; roles?: string[]; public?: boolean; lo
 export const packages: Package[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
   { serves: ["build"], roles: ["builder", "integrator", "publisher"], load: () => import("@pkg/build") },
-  { serves: ["crm"], load: () => import("@pkg/crm") },
-  { serves: ["pms"], load: () => import("@pkg/pms/app") },
-  { serves: ["hcm"], load: () => import("@pkg/hcm") },
-  { serves: ["csm"], load: () => import("@pkg/csm") },
-  { serves: ["mes"], load: () => import("@pkg/mes") },
-  { serves: ["erp"], load: () => import("@pkg/erp") },
   // Every member has an account in the Control Panel; each contribution still decides who sees it (`for`).
   { serves: ["platform", "enterprise", "core", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@pkg/platform") },
 ];

@@ -7,6 +7,7 @@ test("enterprise daily management preserves identity, usage history and source o
   const name = `Operations ${suffix}`, renamed = `Operations renamed ${suffix}`;
   const day = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  await builder.decide("enterprise.kind.add", { type: "enterprise.model", id: `management-${suffix}` }, { name: "Management", kind: "management" }, "enterprise");
   const model = () => builder.read<any>("enterprise");
   const me = await builder.read<any>("me");
   await builder.decide("platform.member.grant", { type: "platform.member", id: me.principalId }, { app: "core", role: "steward" }, "platform");
@@ -118,11 +119,12 @@ test("enterprise daily management preserves identity, usage history and source o
   await expect(nameInput).toBeDisabled();
   for (const label of ["Edit", "Close…", "Delete unused element", "Reopen element", "Reinstate element"]) await expect(inspector.getByRole("button", { name: label, exact: true })).toHaveCount(0);
   await expect(inspector.getByRole("button", { name: "Hide in this view", exact: true })).toBeEnabled();
+  await builder.decide("enterprise.relationship.add", { type: "enterprise.relationship", id: `current-${membership}` }, { stereotype: "ActualOrganizationRole", source: `member:${me.principalId}`, target: parent, role: "employee", from: day }, "enterprise");
   await builder.open(page, `/member?id=${me.principalId}`);
   await page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Unsaved changes", exact: true }) }).getByRole("button", { name: "Discard changes", exact: true }).click();
   const membershipPanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Organisation", exact: true }) });
-  await membershipPanel.getByRole("button", { name: "Hotel A", exact: true }).first().click();
-  await expect.poll(() => Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1]))).toMatchObject({ element: "hotel-a", section: "organization" });
+  await membershipPanel.getByRole("button", { name: renamed, exact: true }).first().click();
+  await expect.poll(() => Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1]))).toMatchObject({ element: parent, section: "organization" });
 
   // Configuring a tenant link requires explicit source identity and a connection.
   await builder.open(page, "/enterprise?section=tenant-links");

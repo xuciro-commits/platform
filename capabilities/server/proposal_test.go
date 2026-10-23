@@ -38,7 +38,7 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	}
 	allowed := true
 	excluded := false
-	fields := []construction.Field{{Name: "temperature", Title: "Temperature", Type: "integer", SourceType: "record", AIInput: &allowed}, {Name: "verdict", Title: "Verdict", Type: "choice", Choices: "pass,hold", SourceType: "generated"}, {Name: "number", Title: "Number", Type: "text", SourceType: "record"}, {Name: "secret", Title: "Secret", Type: "text", SourceType: "record", AIInput: &excluded}}
+	fields := []construction.Field{{Name: "temperature", Title: "Temperature", Type: "integer", SourceType: "record", AIInput: &allowed}, {Name: "verdict", Title: "Verdict", Type: "choice", Choices: "pass,hold", SourceType: "generated", ReadOnly: true}, {Name: "number", Title: "Number", Type: "text", SourceType: "record"}, {Name: "secret", Title: "Secret", Type: "text", SourceType: "record", AIInput: &excluded}}
 	txn := &platform.BusinessTxn{Subject: "build.inspection", Steps: []platform.TxnStep{{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "inspections", Pattern: "I-{n:4}"}}, {Name: "accept", Kind: "update", Target: platform.TxnRef{Type: "build.inspection", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "verdict", From: "verdict"}, {Field: "number", From: "step.number"}}}}}
 	adoption := &platform.ProposalAdoption{Function: platform.FunctionRef{App: construction.ID, Name: "inspect"}, Input: "proposal", Mapping: []platform.ProposalInput{{Output: "verdict", Input: "verdict"}}}
 	action := construction.Action{Name: "adopt", Title: "Adopt inspection", From: []string{"draft"}, Inputs: []construction.Input{{Name: "proposal", Title: "Proposal", Type: "reference", Ref: construction.FunctionCallType, Required: true}, {Name: "verdict", Title: "Verdict", Type: "choice", Choices: "pass,hold", Required: true}}, Transaction: txn, Adoption: adoption, Roles: []string{construction.User, "reviewer"}}
@@ -47,6 +47,17 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	checkpoint.Title = "Confirm inspection"
 	checkpoint.Approval = &construction.ActionApproval{Levels: []construction.ApproverLevel{{Title: "Supervisor", Role: "reviewer"}}}
 	object := map[string]any{"name": "inspection", "title": "Inspection", "fields": fields, "states": []construction.State{{Name: "draft", Title: "Draft"}}, "access": []construction.Access{{Role: construction.User, Read: "all", Create: true, Edit: true}, {Role: "reviewer", Read: "all", Edit: true}, {Role: "observer", Read: "all"}}, "actions": []construction.Action{action, checkpoint}}
+	// The adoption path cannot become a general transaction write grant.
+	uncontrolled := action
+	uncontrolled.Adoption = nil
+	uncontrolled.Name = "overwrite"
+	invalid := map[string]any{"name": "uncontrolled", "title": "Uncontrolled", "fields": fields, "states": []construction.State{{Name: "draft", Title: "Draft"}}, "actions": []construction.Action{uncontrolled}}
+	uncontrolled.Transaction = &platform.BusinessTxn{Subject: "build.uncontrolled", Steps: []platform.TxnStep{{Name: "overwrite", Kind: "update", Target: platform.TxnRef{Type: "build.uncontrolled", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "verdict", From: "verdict"}}}}}
+	invalid["actions"] = []construction.Action{uncontrolled}
+	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "UNCONTROLLED", invalid, at)
+	if got := refuse(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "UNCONTROLLED", map[string]any{}, at); !strings.Contains(got, "writable") {
+		t.Fatalf("an unrelated transaction gained generated-field writes: %s", got)
+	}
 	publishObject(t, tn, "builder", "OBJECT", object, at)
 	function := map[string]any{"name": "inspect", "title": "Inspect", "description": "Suggest a classification", "object": "build.inspection", "fields": []string{"temperature"}, "instructions": "Classify only supplied facts", "output": []platform.Field{{Name: "verdict", Type: "string", Required: true, Description: "Proposed classification", Choices: []string{"pass", "hold"}}, {Name: "confidence", Type: "decimal", Required: true, Description: "Confidence"}}, "maxInputBytes": 4096, "maxOutputBytes": 1024, "maxTokens": 256, "roles": []string{construction.Builder, construction.User, "reviewer"}, "model": "local/probe", "proposal": platform.ProposalPolicy{HandoffRole: "reviewer", ConfidenceField: "confidence", MinimumConfidence: 0.7, ExpiresAfterSeconds: 3600}}
 	decide(t, tn, "builder", construction.ID, "build.function.create", construction.FunctionType, "FUNCTION", function, at)
@@ -58,6 +69,9 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	decide(t, tn, "builder", construction.ID, "build.app.create", construction.AppType, "APP", map[string]any{"name": "quality", "title": "Quality", "resources": resources}, at)
 	decide(t, tn, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, "APP", map[string]any{}, at)
 	decide(t, tn, "operator", construction.ID, "build.inspection.create", "build.inspection", "I1", map[string]any{"temperature": 24, "secret": "NEVER-SEND-THIS"}, at)
+	if got := refuse(t, tn, "operator", construction.ID, "build.inspection.edit", "build.inspection", "I1", map[string]any{"verdict": "pass"}, at); got == "ok" {
+		t.Fatal("ordinary editing forged a generated review result")
+	}
 	call := func(id string, confidence float64) construction.FunctionRun {
 		t.Helper()
 		decide(t, tn, "operator", construction.ID, construction.SchemaFunctionCall, construction.FunctionCallType, id, map[string]any{"name": "inspect", "source": "I1"}, at)

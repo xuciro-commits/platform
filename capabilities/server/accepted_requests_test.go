@@ -98,9 +98,9 @@ func TestAcceptedProtocolRequestAndReplyShareCommit(t *testing.T) {
 		t.Fatalf("failed append was acknowledged: %v", refusal)
 	}
 	fail = false
-	first, refusal := tn.Submit(member, sub, at)
+	first, refusal, issues := tn.submitDiagnosed(member, sub, at)
 	if refusal != nil || len(entries) != 1 {
-		t.Fatalf("protocol transaction did not commit: %v, entries=%d", refusal, len(entries))
+		t.Fatalf("protocol transaction did not commit: %+v %s, entries=%d", refusal, platform.Raw(issues), len(entries))
 	}
 	saved, _, err := resultformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(saved.Decisions) != 3 || len(saved.Rows) != 2 {
@@ -332,7 +332,9 @@ func TestAcceptedModelDefaultIsPinnedBeforeDispatch(t *testing.T) {
 			for _, name := range []string{"echo", "busy"} {
 				submit(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/"+name, map[string]string{"access": "users"})
 			}
-			setting(tc.initial)
+			if tc.initial != "" {
+				setting(tc.initial)
+			}
 			submit("cart", "cart.line.ask", "cart.line", "L1", map[string]string{"item": "pen"})
 			setting("local/busy")
 			if tc.want == "" {

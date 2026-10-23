@@ -5,6 +5,9 @@
 // hands. Members are the development host's seats: a builder (`manager`) and
 // an operator (`desk`).
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import type * as Api from "../../packages/kernel/src/gen/host";
 import { decide, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision } from "./host";
 
 export { expect, fresh, pageUIProfile, retainActionCatalog, stableReadRevision };
@@ -40,6 +43,19 @@ const APP = "build";
 /** A short lowercase name usable as an object or page name. */
 export const slug = (prefix: string) => fresh(prefix).replace(/[^a-z0-9]/gi, "").toLowerCase();
 
+/** Sign in through the configured identity provider in delivery rehearsals. */
+export async function signInWithOIDC(page: Page, email: string, password: string) {
+  await page.goto("/");
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('button[type="submit"]').click();
+  await page.locator('input[type="password"]').fill(password);
+  await page.locator('button[type="submit"]').click();
+  await expect(page.getByRole("button", { name: "Applications", exact: true })).toBeVisible();
+  const token = await page.evaluate(() => (JSON.parse(sessionStorage.getItem("oidc:session") ?? "null") as { accessToken?: string } | null)?.accessToken);
+  if (!token) throw new Error("OIDC sign-in returned no browser session");
+  return token;
+}
+
 /** The host as one member: decisions over the API, records read back. */
 export class Member {
   constructor(readonly request: APIRequestContext, readonly token: string) {}
@@ -66,6 +82,40 @@ export type ObjectSpec = { name?: string; title: string; fields: unknown[]; stat
 
 /** The builder's hands: objects, records, pages, releases. */
 export class Builder extends Member {
+  /** Configures a local test provider through the normal administrator actions. */
+  async adviceModel(address: string, drafts: Api.PackageDraftResult): Promise<void> {
+    await this.decide("ai.provider.add", {type:"ai.provider",id:"fixture"}, {kind:"local",baseUrl:address,wire:"openai"}, "ai");
+    await this.decide("ai.model.enable", {type:"ai.model",id:"fixture/probe"}, {access:"users"}, "ai");
+    for (const id of ["ai/app-model","agent/model"]) await this.decide("platform.setting.set",{type:"platform.setting",id},{value:"fixture/probe"},"platform");
+    for (const draft of drafts.drafts.filter(draft=>draft.ref.kind==="evaluation-set")) await this.decide("build.testplan.edit",{type:"build.testplan",id:draft.id},{model:"fixture/probe"});
+  }
+  /** Runs the original measured evaluators; no fixture writes a passing report. */
+  async measureCandidate(candidateId: string): Promise<number> {
+    const review = await this.read<Api.SavedReleaseReview>(`releases/candidates/${candidateId}`);
+    const reports: {id:string;type:string;resource:string}[]=[];
+    for (const asset of review.assets) {
+      if (asset.ref.kind!=="evaluation-set"&&asset.ref.kind!=="agent") continue;
+      const response=await this.request.post("/v1/releases/evaluations",{headers:this.headers,data:{candidateId,key:fresh("MEASURE"),...(asset.ref.kind==="evaluation-set"?{planId:asset.ref.name}:{agent:`${asset.ref.app}.${asset.ref.name}`})}});
+      if (!response.ok()) throw Error(`Candidate evaluation: ${await response.text()}`);
+      reports.push({id:(await response.json()).id,type:asset.ref.kind==="agent"?"agent.evaluation":"build.evaluation",resource:asset.ref.name});
+    }
+    // Poll the original small reports. Rebuilding a complete release preview
+    // on every tick competes with the evaluator for the tenant's writer lane.
+    await expect.poll(async()=>{
+      const states=await Promise.all(reports.map(async report=>{
+        const row=await this.record(report.type,report.id);
+        const passed=row?.candidate===candidateId&&(report.type==="agent.evaluation"?row.state==="done"&&row.score===1&&row.fails===0&&row.differs===0:row.state==="passed");
+        return passed?[]:[`${report.resource}: ${row?.state??"no report"}`];
+      }));
+      return states.flat();
+    },{timeout:60_000}).toEqual([]);
+    const measured=await this.read<Api.SavedReleaseReview>(`releases/candidates/${candidateId}`);
+    expect(review.assets.filter(asset=>asset.ref.kind==="function"||asset.ref.kind==="agent").flatMap(asset=>{
+      const item=measured.ai?.find(item=>item.resource.ref.kind===asset.ref.kind&&item.resource.ref.name===asset.ref.name);
+      return item?.evaluations.some(report=>report.candidate===candidateId&&report.state==="passed")?[]:[`${asset.ref.kind}/${asset.ref.name}: missing passing candidate report`];
+    })).toEqual([]);
+    return review.assets.filter(asset=>asset.ref.kind==="function"||asset.ref.kind==="agent").length;
+  }
   /** Seals an existing object through its original release owner. */
   async candidate(id: string | { kind: string; id: string }[]): Promise<string> {
     const selection = typeof id === "string" ? { kind: "object", id } : { drafts: id };
@@ -117,6 +167,57 @@ export class Builder extends Member {
   }
 }
 
+/** This provider proves mechanics and human review, not real model quality. */
+export async function scriptedAdviceProvider() {
+  const server=createServer(async(request,response)=>{
+    let raw="";for await(const chunk of request)raw+=chunk;
+    const body=JSON.parse(raw);
+    const message=body.tools?.length
+      ? {tool_calls:[{id:"ask-target",type:"function",function:{name:"ask",arguments:JSON.stringify({question:"Which confirmed record and facts should I review?",answers:["Provide the target"],rationale:"A confirmed target is required before a business change."})}}]}
+      : {content:JSON.stringify({summary:"Review the actual record and confirm missing facts with the responsible person.",category:"review",review:true,confidence:0.9})};
+    response.setHeader("Content-Type","application/json");
+    response.end(JSON.stringify({choices:[{message}],usage:{prompt_tokens:10,completion_tokens:10,cost:0.001}}));
+  });
+  server.listen(0,"127.0.0.1");await once(server,"listening");
+  const address=server.address();if(!address||typeof address==="string")throw Error("Advice provider did not listen");
+  return {address:`http://127.0.0.1:${address.port}`,close:async()=>{server.closeAllConnections();await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}};
+}
+
+/** Reviews a proposal on the selected record's normal application page. */
+export async function adoptAdvice(page: Page, member: Member, type: string, id: string) {
+  const before=await member.record(type,id);
+  const requested=page.waitForResponse(response=>response.request().method()==="POST"&&response.url().endsWith("/v1/submissions")&&response.request().postDataJSON().schema?.name==="build.function-call.start");
+  await page.getByRole("button",{name:"Request original analysis",exact:true}).click();
+  const accepted=await requested;expect((await accepted.json()).error).toBeUndefined();
+  const callID=accepted.request().postDataJSON().target.id as string;
+  await expect.poll(async()=>(await member.record("build.function-call",callID)).state,{timeout:20_000}).toBe("ready");
+  expect(await member.record(type,id)).toEqual(before);
+  const review=page.getByRole("region",{name:"Proposal review",exact:true});
+  await review.getByRole("textbox",{name:"Review advice *",exact:true}).fill("Confirmed with the responsible person; review the remaining facts.");
+  await review.getByRole("button",{name:"Adopt proposal",exact:true}).click();
+  await expect.poll(async()=>(await member.record("build.function-call",callID)).decision).toBe("adopted");
+  expect(await member.record(type,id)).toMatchObject({state:before.state,advice:"Confirmed with the responsible person; review the remaining facts.",advicecategory:"review",advicereview:true});
+  await expect(review.getByText("adopted",{exact:true})).toBeVisible();
+}
+
+/** Starts a declared assistant through the shared workspace and opens its run. */
+export async function askAssistant(page: Page, member: Member, agent: string) {
+  await page.getByRole("button",{name:"Assistant",exact:true}).click();
+  await page.getByRole("combobox",{name:"Agent",exact:true}).selectOption(agent);
+  await page.getByRole("textbox",{name:"Goal",exact:true}).fill("Help me review a business task; ask for the confirmed target before changing it.");
+  const started=page.waitForResponse(response=>response.request().method()==="POST"&&response.url().endsWith("/v1/submissions")&&response.request().postDataJSON().schema?.name==="agent.run.start");
+  await page.getByRole("button",{name:"Ask",exact:true}).click();
+  const accepted=await started;expect((await accepted.json()).error).toBeUndefined();
+  const id=accepted.request().postDataJSON().target.id as string;
+  await expect.poll(async()=>(await member.record("agent.run",id)).state,{timeout:20_000}).toBe("waiting");
+  await member.open(page,`/run?id=${id}`);
+  const run=page.getByRole("region",{name:id,exact:true}).filter({has:page.getByRole("heading",{name:"Help me review a business task; ask for the confirmed target before changing it.",exact:true})});
+  await expect(run.getByText("asked: Which confirmed record and facts should I review?",{exact:true})).toBeVisible();
+  await run.getByRole("button",{name:"Stop",exact:true}).click();
+  await expect.poll(async()=>(await member.record("agent.run",id)).state).toBe("stopped");
+  await expect(run.getByText(/^Stopped: stopped by /)).toBeVisible();
+}
+
 /** The page editor within the current Workshop module workbench. */
 export class Editor {
   readonly tree; readonly inspector;
@@ -163,6 +264,25 @@ export async function runtime(page: Page, operator: Member, pageName: string, ap
   await stableReadRevision(tab);
   await operator.open(tab, `/page?app=${app}&kind=page&name=${pageName}`);
   return tab;
+}
+
+/** Saves the real built shell and this member's bounded application reads. */
+export async function prepareOffline(page:Page){
+  await page.getByRole("button",{name:"Offline applications",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"Offline applications",exact:true});
+  await dialog.getByRole("button",{name:"Prepare for offline",exact:true}).click();
+  await expect(dialog.getByRole("status").filter({hasText:/Prepared at/})).toBeVisible({timeout:60_000});
+  await page.keyboard.press("Escape");await expect(dialog).not.toBeVisible();
+  // Ordinary HTTP memory/disk cache must not impersonate a prepared shell.
+  const browser=await page.context().newCDPSession(page);await browser.send("Network.clearBrowserCache");await browser.detach();
+}
+
+/** Closes the old document and opens its known development identity again.
+ * The original sign-in hands supply that identity; no token enters snapshots. */
+export async function reopenPrepared(page:Page,member:Member,route:string){
+  const context=page.context();await page.close();
+  const reopened=await context.newPage();reopened.setDefaultTimeout(20_000);
+  await member.open(reopened,route);return reopened;
 }
 
 /** Screenshots a locator at desktop and phone widths when PLATFORM_SCREENSHOTS is set. */

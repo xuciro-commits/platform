@@ -82,15 +82,12 @@ test("system definitions are opt-in across lists and keep native references and 
     name: `flow${suffix}`, title: flowTitle, manual: true, steps: [{ name: "done", kind: "end" }],
   });
   const definitions = await builder.definitions();
-  expect(definitions.find(definition => definition.ref.app === "crm" && definition.ref.kind === "object" && definition.ref.name === "crm.opportunity")?.entity.fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "account", type: "reference", ref: "crm.account" })]));
-  expect(definitions.find(definition => definition.ref.app === "pms" && definition.ref.kind === "object" && definition.ref.name === "pms.reservation")?.entity.fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "roomType", type: "reference", ref: "pms.room-type" })]));
-  const nativeQuery = definitions.find(definition => definition.source === "code" && definition.ref.app === "crm" && definition.ref.kind === "query" && definition.ref.name === "open-opportunities");
-  const nativeFunction = definitions.find(definition => definition.source === "code" && definition.ref.app === "crm" && definition.ref.kind === "function" && definition.ref.name === "record-advice");
-  const nativeFlow = definitions.find(definition => definition.source === "code" && definition.ref.kind === "flow" && !!definition.flow);
+  expect(definitions.find(definition => definition.ref.app === "core" && definition.ref.name === "core.material")?.entity.fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "baseUom", type: "reference", ref: "core.uom" })]));
+  expect(definitions.find(definition => definition.ref.app === "core" && definition.ref.name === "core.location")?.entity.fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "site", type: "reference", ref: "core.site" })]));
+  // The retired applications supplied the former code queries, AI and flows.
+  // Their absence is intentional; tenant drafts still remain in every list.
+  expect(definitions.filter(definition => definition.source === "code" && ["query", "function", "flow"].includes(definition.ref.kind))).toEqual([]);
   const nativeAction = definitions.find(definition => definition.source === "code" && definition.ref.kind === "action" && !!definition.action);
-  expect(nativeQuery).toBeTruthy();
-  expect(nativeFunction).toBeTruthy();
-  expect(nativeFlow).toBeTruthy();
   expect(nativeAction).toBeTruthy();
 
   await builder.open(page, "/link-type");
@@ -101,21 +98,21 @@ test("system definitions are opt-in across lists and keep native references and 
   await expect(checkbox).not.toBeChecked();
   await expect(references).toHaveCount(0);
   await checkbox.check();
-  const crmReference = references.getByRole("treeitem", { name: /^Opportunity · Account/ });
-  const pmsReference = references.getByRole("treeitem", { name: /^Reservation · Room type/ });
-  await expect(crmReference).toContainText("account → Account");
-  await expect(pmsReference).toContainText("roomType → Room type");
+  const materialReference = references.getByRole("treeitem", { name: /^Material · Base unit/ });
+  const locationReference = references.getByRole("treeitem", { name: /^Location · Site/ });
+  await expect(materialReference).toContainText("baseUom → Unit of measure");
+  await expect(locationReference).toContainText("site → Site");
   await shots(page, page.locator("body"), "system-relationship-references", testInfo);
-  await crmReference.click();
-  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/object-type", object: "crm.opportunity", tab: "links" });
+  await materialReference.click();
+  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/object-type", object: "core.material", tab: "links" });
   await expect(page.getByRole("tablist", { name: "Object resource views", exact: true }).getByRole("tab", { name: "Relationships", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Native definitions are maintained by their code owner. This workbench provides read-only inspection.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit object", exact: true })).toHaveCount(0);
 
   await navigation.getByRole("button", { name: "Link types", exact: true }).click();
   await expect(checkbox).toBeChecked();
-  await pmsReference.click();
-  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/object-type", object: "pms.reservation", tab: "links" });
+  await locationReference.click();
+  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/object-type", object: "core.location", tab: "links" });
   await expect(page.getByRole("tablist", { name: "Object resource views", exact: true }).getByRole("tab", { name: "Relationships", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "Edit object", exact: true })).toHaveCount(0);
 
@@ -123,7 +120,7 @@ test("system definitions are opt-in across lists and keep native references and 
   const queries = page.getByRole("region", { name: "Queries", exact: true });
   await expect(queries.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
   const queryReferences = queries.getByRole("region", { name: "System definitions", exact: true });
-  await expect(queryReferences.getByRole("treeitem", { name: /^Open opportunities/ })).toBeVisible();
+  await expect(queryReferences.getByText("No system definitions are available in this category.", { exact: true })).toBeVisible();
   await expect(queries.getByRole("treeitem").filter({ hasText: queryTitle }).last()).toBeVisible();
   await queries.getByRole("button", { name: "Table", exact: true }).click();
   await expect(queryReferences).toBeVisible();
@@ -135,28 +132,22 @@ test("system definitions are opt-in across lists and keep native references and 
   const functionCheckbox = functions.getByRole("checkbox", { name: "Show system definitions", exact: true });
   await expect(functionCheckbox).toBeChecked();
   const functionReferences = functions.getByRole("region", { name: "System definitions", exact: true });
-  await functionReferences.getByRole("textbox", { name: "Search", exact: true }).fill("crm/function/record-advice");
-  const adviceReference = functionReferences.getByRole("treeitem", { name: /^Record summary and review advice/ });
-  await expect(adviceReference).toBeVisible();
-  await adviceReference.click();
-  await expect.poll(() => ({ route: new URL(page.url()).hash.split("?")[0], ...Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1])) })).toMatchObject({ route: "#/definition", app: "crm", kind: "function", name: "record-advice" });
-  await expect(page.getByRole("region", { name: "Published resource", exact: true })).toContainText("This published definition is read only.");
+  await expect(functionReferences.getByText("No system definitions are available in this category.", { exact: true })).toBeVisible();
 
   await navigation.getByRole("button", { name: "Logic flows", exact: true }).click();
   const flows = page.getByRole("region", { name: "Flows", exact: true });
   await expect(flows.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
   const flowReferences = flows.getByRole("region", { name: "System definitions", exact: true });
-  await flowReferences.getByRole("textbox", { name: "Search", exact: true }).fill(`${nativeFlow.ref.app}/flow/${nativeFlow.ref.name}`);
-  await expect(flowReferences.getByRole("treeitem", { name: /System definition/ }).last()).toBeVisible();
+  await expect(flowReferences.getByText("No system definitions are available in this category.", { exact: true })).toBeVisible();
   await expect(flows.getByRole("treeitem").filter({ hasText: flowTitle }).last()).toBeVisible();
 
   await navigation.getByRole("button", { name: "Object types", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Show system definitions", exact: true })).toBeChecked();
   const modelSearch = page.getByRole("textbox", { name: "Search model resources", exact: true });
-  await modelSearch.fill("crm.opportunity");
-  await expect(page.getByRole("row").filter({ hasText: "crm.opportunity" })).toBeVisible();
+  await modelSearch.fill("core.material");
+  await expect(page.getByRole("row").filter({ hasText: "core.material" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Show system definitions", exact: true }).uncheck();
-  await expect(page.getByRole("row").filter({ hasText: "crm.opportunity" })).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: "core.material" })).toHaveCount(0);
   await navigation.getByRole("button", { name: "Object behavior", exact: true }).click();
   const publishedActions = page.getByRole("region", { name: "Published action definitions", exact: true });
   const nativeActionKey = [nativeAction.ref.app, nativeAction.ref.kind, nativeAction.ref.name].join("/");
@@ -183,8 +174,12 @@ test("system definitions are opt-in across lists and keep native references and 
 
 test("platform apps expose their own primary functions and keep one menu owner", async ({ page, builder }, testInfo) => {
   test.setTimeout(90_000);
+  await builder.decide("enterprise.element.add", { type: "enterprise.element", id: fresh("navigationorg") }, { stereotype: "ActualOrganization", name: "Navigation organization", kind: "team" }, "enterprise");
+  const navigationPage = await builder.page({ title: "Navigation page", object: "core.material" });
+  const navigationApp = await builder.application({ title: "Navigation application", pages: [navigationPage.name] });
+  await builder.activate(await builder.candidate([{ kind: "page", id: navigationPage.id }, { kind: "app", id: navigationApp.id }]));
   const savedTitle = `Navigation saved view ${fresh("saved")}`, savedID = fresh("VIEW");
-  await builder.decide("work.view.save", { type: "work.view", id: savedID }, { title: savedTitle, entity: "crm.account", state: "{}" }, "work");
+  await builder.decide("work.view.save", { type: "work.view", id: savedID }, { title: savedTitle, entity: "core.material", state: "{}" }, "work");
   await builder.open(page, "/home");
   const switcher = page.getByRole("button", { name: "Switch application", exact: true });
   const menu = page.getByRole("menu");
@@ -240,7 +235,7 @@ test("platform apps expose their own primary functions and keep one menu owner",
   await expect(page.getByRole("combobox", { name: "Element status", exact: true })).toBeVisible();
   await choose("Master data");
   await entries(["Object Explorer", savedTitle]);
-  await expect(page).toHaveURL(/#\/explorer$/);
+  await expect(page).toHaveURL(/#\/master-data$/);
   await navigation.getByRole("button", { name: savedTitle, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#/saved\\?id=${savedID}$`));
   await expect(switcher).toContainText("Master data");
@@ -264,7 +259,7 @@ test("platform apps expose their own primary functions and keep one menu owner",
   await expect(page.getByRole("heading", { name: "My requests", exact: true })).toBeVisible();
 });
 
-test("task workspaces preserve native PMS and hand off a controlled receiving application", async ({ browser, page, builder, operator, editor }, testInfo) => {
+test("task workspaces preserve platform applications and hand off a controlled receiving application", async ({ browser, page, builder, operator, editor }, testInfo) => {
   test.setTimeout(120_000);
   const suffix = fresh("workspace").replace(/[^a-z0-9]/gi, "").toLowerCase();
   const appID = fresh("APP"), flowID = fresh("FLOW");
@@ -319,12 +314,13 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect.poll(async () => (await builder.record("build.app", appID)).groups ?? []).toEqual([]);
   await expect(page.getByRole("button", { name: "Reload current module", exact: true })).toBeEnabled();
 
-  // Native PMS and Knowledge remain task-owned, not builder-only aliases.
+  // Master data and Knowledge remain task-owned, not builder-only aliases.
   await builder.open(page, "/home");
-  await expect(page.getByRole("button", { name: /^PMS\b/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Master data\b/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Platform Catalog", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: /^PMS\b/ }).first().click();
-  await expect(page.getByRole("heading", { name: "Reservations", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^Master data\b/ }).first().click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Materials", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Materials", exact: true })).toBeVisible();
   await switchWorkspace(page, "Knowledge");
   await expect(page.getByRole("heading", { name: "Documents", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create document", exact: true })).toHaveCount(1);
@@ -336,7 +332,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await document.getByRole("textbox", { name: "Title *", exact: true }).fill(documentTitle);
   await document.getByRole("textbox", { name: "Text *", exact: true }).fill("Check the receipt number before accepting delivery.");
   await document.getByRole("textbox", { name: "Where it comes from", exact: true }).fill("Receiving desk");
-  await document.getByRole("textbox", { name: "Read by members of", exact: true }).fill("pms");
+  await document.getByRole("textbox", { name: "Read by members of", exact: true }).fill("build");
   await document.getByRole("textbox", { name: "Read by members of", exact: true }).press("Enter");
 
   // Losing an accepted reply retains this document's original request.
@@ -355,7 +351,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   });
   await document.getByRole("button", { name: "Create", exact: true }).click();
   await expect(document.getByRole("button", { name: "Retry confirmation", exact: true })).toBeVisible();
-  expect(await builder.record("knowledge.document", documentID)).toMatchObject({ title: documentTitle, text: "Check the receipt number before accepting delivery.", source: "Receiving desk", apps: ["pms"] });
+  expect(await builder.record("knowledge.document", documentID)).toMatchObject({ title: documentTitle, text: "Check the receipt number before accepting delivery.", source: "Receiving desk", apps: ["build"] });
   await expect(document.getByRole("textbox", { name: "Title *", exact: true })).toHaveValue(documentTitle);
   await expect(document.getByRole("textbox", { name: "Title *", exact: true })).toBeDisabled();
   await document.getByRole("button", { name: "Retry confirmation", exact: true }).click();
@@ -380,7 +376,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await term.getByRole("textbox", { name: "Meaning *", exact: true }).fill("Accepting an incoming delivery");
   await term.getByRole("textbox", { name: "Synonyms", exact: true }).fill("Goods receipt, delivery acceptance");
   await term.getByRole("textbox", { name: "Refers to", exact: true }).fill(missingDeclaration);
-  await term.getByRole("textbox", { name: "Read by members of", exact: true }).fill("pms");
+  await term.getByRole("textbox", { name: "Read by members of", exact: true }).fill("build");
   await term.getByRole("textbox", { name: "Read by members of", exact: true }).press("Enter");
   const termRequests: {
     body: { idempotencyKey: string; target: { type: string; id: string } };
@@ -400,7 +396,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   await expect(term.getByRole("textbox", { name: "Meaning *", exact: true })).toHaveValue("Accepting an incoming delivery");
   await expect(term.getByRole("textbox", { name: "Synonyms", exact: true })).toHaveValue("Goods receipt, delivery acceptance");
   await expect(term.getByRole("textbox", { name: "Refers to", exact: true })).toHaveValue(missingDeclaration);
-  await expect(term.getByRole("button", { name: "Remove pms", exact: true })).toBeVisible();
+  await expect(term.getByRole("button", { name: "Remove build", exact: true })).toBeVisible();
   expect(await builder.record("knowledge.term", termID)).toBeUndefined();
   await term.getByRole("textbox", { name: "Refers to", exact: true }).fill(object.type);
   await term.getByRole("button", { name: "Submit corrected inputs", exact: true }).click();
@@ -409,7 +405,7 @@ test("task workspaces preserve native PMS and hand off a controlled receiving ap
   expect(termRequests[1]!.body.target).toEqual(termRequests[0]!.body.target);
   expect(termRequests[1]!.body.idempotencyKey).not.toBe(termRequests[0]!.body.idempotencyKey);
   expect(termRequests[1]!.correction).toBe(termRequests[0]!.body.idempotencyKey);
-  expect(await builder.record("knowledge.term", termID)).toMatchObject({ term: termName, meaning: "Accepting an incoming delivery", synonyms: "Goods receipt, delivery acceptance", refersTo: object.type, apps: ["pms"] });
+  expect(await builder.record("knowledge.term", termID)).toMatchObject({ term: termName, meaning: "Accepting an incoming delivery", synonyms: "Goods receipt, delivery acceptance", refersTo: object.type, apps: ["build"] });
   await expect(page.getByRole("row").filter({ hasText: termName })).toBeVisible();
 
   await switchWorkspace(page, "Builder");

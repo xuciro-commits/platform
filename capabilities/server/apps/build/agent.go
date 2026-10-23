@@ -123,7 +123,7 @@ func (b *Build) checkAgent(a Agent) error {
 			roles = append(roles, role)
 		}
 		for _, standard := range model.Standard {
-			tools[model.Type+"."+standard] = true
+			tools[standard] = true
 		}
 		if model.Lifecycle != nil {
 			for _, transition := range model.Lifecycle.Transitions {
@@ -174,7 +174,7 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 			return fmt.Errorf("The checkpoint %s is not one of the agent's tools", cp)
 		}
 	}
-	if a.HandoffRole != "" && !slices.Contains(roles, a.HandoffRole) && !slices.Contains(b.Manifest().AllRoles(), a.HandoffRole) {
+	if a.HandoffRole != "" && !slices.Contains(roles, a.HandoffRole) && !b.declaresRole(a.HandoffRole) {
 		return fmt.Errorf("The role %s is not a role of this builder", a.HandoffRole)
 	}
 	for i, c := range a.Cases {
@@ -242,6 +242,9 @@ func (b *Build) AgentStamp() string {
 	names := make([]string, 0, len(b.agents))
 	for name, a := range b.agents {
 		names = append(names, fmt.Sprintf("%s@%d", name, a.Version))
+	}
+	for name, query := range b.queries {
+		names = append(names, fmt.Sprintf("query:%s@%d", name, query.Version))
 	}
 	slices.Sort(names)
 	return strings.Join(names, ",")

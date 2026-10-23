@@ -1,6 +1,6 @@
 import {useActionTrial} from "./trial";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
-import {type Api} from "@platform/kernel";
+import {OfflineReadError,type Api} from "@platform/kernel";
 // Every declared action has an entry in the generated views (F-33): an action
 // that makes a new record of a type is offered on the type's list; every other
 // action on the type, and a lifecycle transition that takes input (F-27), on
@@ -13,6 +13,9 @@ import { useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
 import {actionEntryInputs, actionInputSignature, ActionRefusal} from "./refusal";
 import type {Entry} from "@platform/kernel";
+import type {LocalFormDraft} from "@platform/kernel";
+import {actionDraftContext,actionDraftKey,actionDrafts,completedLocalDraft} from "./local-draft";
+import {LocalDraftControls} from "./LocalDraftControls";
 
 type Field = ActionDeclaration["payload"][number];
 
@@ -73,7 +76,7 @@ function ReadPicker({ id, field, app, value, onChange, onUnit }: { id: string; f
  const {client,source}=useHost();
  const path=app?`/v1/apps/${encodeURIComponent(app)}/reads/${encodeURIComponent(field.from!)}`:`/v1/${field.from}`;
  const query=useQuery({queryKey:[client.connection.token,client.connection.tenant,source.scope,"read",app,field.from],queryFn:()=>client.get<Record<string,unknown>[]|Api.InputOptions>(path)});
- if(query.isError)return <p role="alert">{t("The options could not be loaded. Try again.")} <Button size="sm" onClick={()=>void query.refetch()}>{t("Retry")}</Button></p>;
+ if(query.isError)return <p role="alert">{query.error instanceof OfflineReadError?t(query.error.message):t("The options could not be loaded. Try again.")} <Button size="sm" onClick={()=>void query.refetch()}>{t("Retry")}</Button></p>;
  if(query.isPending)return <p role="status">{t("Loading…")}</p>;
  if(!Array.isArray(query.data)&&query.data.manual&&field.manual)return <label className="grid gap-1">{t("Manual source: no room-type directory is connected.")}<Input id={id} value={value} onChange={e=>onChange(e.target.value)}/></label>;
  const items=(Array.isArray(query.data)?query.data:query.data.items) as unknown as Record<string,unknown>[];
@@ -111,7 +114,7 @@ export function SourceFieldInput({field,value,onChange,app,input,preview=false}:
 }
 export const sourceFieldInput=(field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=><SourceFieldInput field={field} value={value} onChange={onChange}/>;
 
-/** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */
+/** A short ID prefix from a type's name, never its translated title: "build.customer" → CUS, "build.request" → REQ. */
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** One submission state for generated record forms, declared payloads and inline hosts. */
@@ -119,8 +122,17 @@ export function DeclaredActionForm(props:Parameters<typeof DeclaredActionFormBod
  return <InputDraftProvider isolated scope={props.declared.schema+":"+props.target.id}><DeclaredActionFormBody {...props}/></InputDraftProvider>;
 }
 function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
- const {decide,catalog,source}=useHost(),lock=useRef(false),inputsDraft=useInputDrafts(),trial=useActionTrial();
- const [startingValues]=useState<Record<string,unknown>>(()=>({...Object.fromEntries(openedDeclaration.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial,...fixed}));
+ const host=useHost(),{decide,catalog,source}=host,lock=useRef(false),inputsDraft=useInputDrafts(),trial=useActionTrial();
+ const [local]=useState<{context?:ReturnType<typeof actionDraftContext>;saved?:LocalFormDraft;problem?:string}>(()=>{
+  if(preview)return {};
+  try{const context=actionDraftContext(host,openedDeclaration),saved=context?host.client.prepared?.form(actionDraftKey(context,openedDeclaration,target,fixed)):undefined;return {context,saved:saved&&!completedLocalDraft(host,saved)?saved:undefined};}
+  catch(problem){return {problem:problem instanceof Error?problem.message:String(problem)};}
+ });
+ const savedDraft=local.saved?.target.type===target.type&&local.saved.target.id===target.id?local.saved:undefined;
+ const [startingValues]=useState<Record<string,unknown>>(()=>{
+  const defaults={...Object.fromEntries(openedDeclaration.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial,...savedDraft?.values,...fixed};
+  return originalOutcome&&(originalOutcome.state==="SUBMISSION_STATE_PENDING"||originalOutcome.state==="SUBMISSION_STATE_UNKNOWN")?actionEntryInputs(originalOutcome,defaults):defaults;
+ });
  const [values,setValues]=useState<Record<string,unknown>>(startingValues),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN"),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>(originalOutcome?.issues??[]);
  const [attempt,setAttempt]=useState<{entry:Entry;values:Record<string,unknown>}|undefined>(()=>originalOutcome?{entry:originalOutcome,values:actionEntryInputs(originalOutcome,startingValues)}:undefined);
  const current=catalog.find(action=>action.schema===openedDeclaration.schema&&action.target===target.type);
@@ -147,11 +159,15 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
   inputs=structuredClone(same?attempt!.values:inputs);
   lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");
   try{
-   const accepted=await decide(declared.schema,requested,inputs,{expectedRevision:same?attempt!.entry.submission.expectedRevision:revision,quiet:true,originalKey:same?attempt?.entry.submission.idempotencyKey:undefined,correctionOf:!same&&sameTarget?attempt?.entry.submission.idempotencyKey:undefined,onRefused:setRefusal,onOutcome:entry=>{
+   const accepted=await decide(declared.schema,requested,inputs,{expectedRevision:same?attempt!.entry.submission.expectedRevision:!attempt?savedDraft?.expectedRevision??revision:revision,schemaVersion:same?attempt!.entry.schemaVersion:declared.schemaVersion,quiet:true,originalKey:same?attempt?.entry.submission.idempotencyKey:undefined,correctionOf:!same&&sameTarget?attempt?.entry.submission.idempotencyKey:undefined,onRefused:setRefusal,onOutcome:entry=>{
     setOwnerIssues(entry.issues??[]);setAttempt({entry,values:actionEntryInputs(entry,inputs)});
     const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);
    }});
-   if(accepted){setPending(false);onPending?.(false);onCompleted(requested);}return accepted;
+   if(accepted){
+    if(local.context)try{for(const key of new Set([savedDraft?.key,actionDraftKey(local.context,openedDeclaration,target,fixed),actionDraftKey(local.context,declared,target,fixed)]))if(key)host.client.prepared?.removeForm(key);}
+    catch{notify.error(t("The request was accepted, but its local draft could not be removed. Review it in Offline applications."));}
+    setPending(false);onPending?.(false);onCompleted(requested);
+   }return accepted;
   }catch{setPending(true);onPending?.(true);setRefusal(t("The action could not be completed. Try again."));return false;}
   finally{lock.current=false;setSubmitting(false);onBusy?.(false);}
  };
@@ -159,11 +175,13 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  const refusalView=refusal&&<ActionRefusal entry={attempt?.entry} message={refusal} original={!pending?attempt?.values:undefined}/>;
  const retry=attempt&&!pending&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
  const label=submitting?t("Executing…"):pending?t("Retry confirmation"):schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
- if(generated)return <div className="grid gap-3">{declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onTrial={preview?undefined:next=>trial(declared.schema,target,generatedInputs(next),revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await submit(generatedInputs(inputs as Record<string,unknown>))||undefined}/>{retry}</div>;
- return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
+ const localControls=<>{savedDraft&&<p role="status" className="text-xs text-muted">{t("Restored local draft from {time}.",{time:new Date(savedDraft.at).toLocaleString()})}</p>}{local.problem&&<p role="alert" className="text-sm text-danger">{t(local.problem)}</p>}<LocalDraftControls context={local.context} saved={savedDraft} action={declared} target={target} expectedRevision={!attempt?savedDraft?.expectedRevision??revision:revision} values={values} fixed={fixed} disabled={pending||submitting||preview||!enabled||inputsDraft?.invalid}/></>;
+ if(generated)return <div className="grid gap-3">{declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}{localControls}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onTrial={preview?undefined:next=>trial(declared.schema,target,generatedInputs(next),revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await(pending&&attempt?submit(attempt.values,true):submit(generatedInputs(inputs as Record<string,unknown>)))||undefined}/>{retry}</div>;
+ return <Form className="grid gap-3" noValidate onSubmit={()=>pending&&attempt?submit(attempt.values,true):submit()}>
  {declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusalView}
+ {localControls}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
  <StructuredEditor scope={declared.schema} value={Object.fromEntries(Object.entries(values).filter(([key])=>!Object.hasOwn(fixed,key)))} disabled={submitting||pending||!enabled} fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name)).map(field=>({name:field.name,title:field.description,type:({string:field.ref?"reference":"text",number:"decimal","string[]":field.ref?"references":"tags"} as Record<string,string>)[field.type]??field.type,required:field.required,choices:field.choices,constraints:field.constraints,ref:field.ref,stereotype:field.stereotype,stereotypes:field.stereotypes} as Api.FieldInfo))} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={declared.payload.find(input=>input.name===field.name)} app={declared.schema.split(".")[0]} preview={preview}/>} onChange={change} onTrial={preview?undefined:next=>trial(declared.schema,target,{...next,...fixed},revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`}>
  <fieldset disabled={submitting||pending||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name))} app={declared.schema.split(".")[0]} values={values} onChange={change} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
@@ -174,15 +192,21 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
 
 /** One action taken through the existing modal entry point. */
 function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, prefix }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; prefix?:string }) {
- const {source}=useHost(),info=source.entity(type);
+ const host=useHost(),{source}=host,info=source.entity(type);
  const [baseline]=useState(record);
- const [id,setId]=useState(()=>prefix===""?"":newId(prefix??declared.idPrefix??prefixOf(type))),[submitting,setSubmitting]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN");
+ const [local]=useState(()=>{try{return {drafts:actionDrafts(host,declared,type,record?.id)};}catch(problem){return {drafts:[],error:problem instanceof Error?problem.message:String(problem)};}});
+ const [id,setId]=useState(()=>originalOutcome?.submission.target?.id??(local.drafts.length===1?local.drafts[0]!.target.id:prefix===""?"":newId(prefix??declared.idPrefix??prefixOf(type)))),[round,setRound]=useState(0),[submitting,setSubmitting]=useState(false);
  const target={type,id:baseline?.id??id},generated=[`${type}.create`,`${type}.edit`].includes(declared.schema)&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
+ const saved=local.drafts.find(draft=>draft.target.id===target.id),entries=[...host.client.authorities.outbox].reverse().filter(entry=>entry.submission.schema?.name===declared.schema&&entry.submission.target?.type===type&&entry.submission.target.id===target.id);
+ const recovered=originalOutcome??entries.find(entry=>entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN")??(saved?entries.find(entry=>(entry.state==="SUBMISSION_STATE_REJECTED"||entry.state==="SUBMISSION_STATE_CONFLICT")&&(entry.submission.expectedRevision??0)===(saved.expectedRevision??0)):undefined);
+ const [pending,setPending]=useState(recovered?.state==="SUBMISSION_STATE_PENDING"||recovered?.state==="SUBMISSION_STATE_UNKNOWN");
  return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
+ {local.error&&<p role="alert" className="text-sm text-danger">{t(local.error)}</p>}
+ {!record&&local.drafts.length>1&&<div className="grid gap-2"><p className="text-xs text-muted">{t("Choose a local draft to continue its original record.")}</p>{local.drafts.map(draft=><Button key={draft.key} size="sm" disabled={submitting||pending} onClick={()=>{setId(draft.target.id);setRound(value=>value+1);}}>{t("Resume draft {id}",{id:draft.target.id})}</Button>)}</div>}
  {pending&&<p role="status" className="text-xs text-warning">{t("This operation is awaiting confirmation. Retry its original target and inputs.")}</p>}
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
- <DeclaredActionForm declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onClose();onCompleted?.(confirmed);}} onBusy={setSubmitting} onPending={setPending} initial={initial} originalOutcome={originalOutcome} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
+ <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onClose();onCompleted?.(confirmed);}} onBusy={setSubmitting} onPending={setPending} initial={initial} originalOutcome={recovered} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
  </div></Dialog>;
 }
 export {ActionDialog as DeclaredActionDialog};

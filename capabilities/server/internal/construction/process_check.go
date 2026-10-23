@@ -8,6 +8,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -127,6 +128,9 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 		if step.TimeoutSeconds < 0 || step.TimeoutSeconds > 30*86400 || step.UntilSeconds < 0 || step.UntilSeconds > 30*86400 {
 			return problem("wait/timeout exceeds its bound")
 		}
+		if step.WaitUntil != nil && step.Kind != "wait" {
+			return problem("a deadline belongs to a wait block")
+		}
 		if step.RetryAttempts < 0 || step.RetryAttempts > 20 || step.RetryBackoffMs < 0 || step.RetryBackoffMs > int((5*time.Minute)/time.Millisecond) {
 			return problem("retry attempts/backoff exceed their bounds")
 		}
@@ -137,7 +141,7 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 		if bindings == nil {
 			bindings = map[string]platform.Binding{}
 		}
-		for name, binding := range map[string]*platform.Binding{"value": step.Value, "target": step.Target, "collection": step.Collection} {
+		for name, binding := range map[string]*platform.Binding{"value": step.Value, "target": step.Target, "collection": step.Collection, "waitUntil": step.WaitUntil} {
 			if binding != nil {
 				bindings[name] = *binding
 			}
@@ -320,8 +324,33 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 				return problem("choose a retained subflow")
 			}
 		case "wait":
-			if step.UntilSeconds == 0 && step.Condition == nil {
-				return problem("choose a duration or wait predicate")
+			if step.WaitUntil != nil {
+				if step.UntilSeconds != 0 || step.Condition != nil {
+					return problem("choose one deadline, duration or wait predicate")
+				}
+				if step.WaitUntil.Source == "literal" {
+					var value string
+					if json.Unmarshal(step.WaitUntil.Value, &value) != nil {
+						return problem("a deadline must be a timestamp")
+					}
+					if at, err := time.Parse(time.RFC3339Nano, value); err != nil || at.Year() < 1 {
+						return problem("a deadline must be a timestamp")
+					}
+				}
+				if step.WaitUntil.Source == "subject" {
+					field, err := platform.RecordPathField(p.Object, step.WaitUntil.Path, func(typ string) (platform.EntityInfo, bool) {
+						if model, ok := actionModels[typ]; ok {
+							info, err := platform.Describe(ID, model, func(reflect.Type) string { return "" })
+							return info, err == nil
+						}
+						return lookup.Entity(typ)
+					})
+					if err != nil || field.Type != "datetime" {
+						return problem("a deadline must read a declared timestamp")
+					}
+				}
+			} else if step.UntilSeconds == 0 && step.Condition == nil {
+				return problem("choose a deadline, duration or wait predicate")
 			}
 		case "end", "join", "break", "continue":
 			if step.Next != "" || len(step.Cases) > 0 {

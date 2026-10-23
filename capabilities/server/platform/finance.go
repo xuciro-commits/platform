@@ -8,9 +8,10 @@ const (
 // Journal is one balanced entry: lines whose debits equal their credits.
 type Journal struct {
 	Record
-	Number string `json:"number,omitempty" field:"readonly,search" title:"Document number"`
-	Date   string `json:"date" field:"required" title:"Posting date" help:"YYYY-MM-DD"`
-	Period string `json:"period,omitempty" field:"readonly" title:"Period"`
+	Number       string `json:"number,omitempty" field:"readonly,search" title:"Document number"`
+	Date         string `json:"date" field:"required" title:"Posting date" help:"YYYY-MM-DD"`
+	Period       string `json:"period,omitempty" field:"readonly" title:"Period"`
+	ClosedPeriod string `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
 	// Shifted tells that the date's period was closed and the entry went to Period instead.
 	Shifted  bool          `json:"shifted,omitempty" field:"readonly" title:"Posted to a later period"`
 	Text     string        `json:"text,omitempty" field:"search"`

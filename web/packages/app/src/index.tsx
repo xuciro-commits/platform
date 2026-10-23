@@ -20,7 +20,7 @@ export {searchInputObjects} from "./widgets/search-input";
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
 import "./i18n";
-import { apiErrorMessage, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
+import { apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, Disclosure, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
@@ -52,6 +52,8 @@ export type Me = Api.MeView;
 /** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
 export type Decision = {
   evidence?: string[]; expectedRevision?: number; quiet?: boolean;
+  /** Definition opened by the form, retained across reconnects. */
+  schemaVersion?: Api.SchemaVersion;
   /** Repeat this exact saved intent, retaining its original idempotency key and answer. */
   originalKey?: string;
   /** A changed intent names the refused request whose inputs it corrects. */
@@ -130,7 +132,11 @@ export function useReadQuery<T>(path: string, refetchInterval?: number, enabled 
 }
 
 export function useRead<T>(path: string, refetchInterval?: number): T | undefined {
-  return useReadQuery<T>(path, refetchInterval).data;
+  const query=useReadQuery<T>(path, refetchInterval);
+  // Optional reads may render an empty state. Missing prepared context may
+  // not: the original view boundary reports why this task needs a connection.
+  if(query.error instanceof OfflineReadError)throw new OfflineReadError(t(query.error.message));
+  return query.data;
 }
 
 /** A bounded complete inventory, rather than a single record-list page. The

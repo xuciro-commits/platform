@@ -1,10 +1,11 @@
-import {Button,Panel,RecordHistory,Tasks,t,useRecordView,type EntityRecord,type RecordSource,type RecordView} from '@platform/ui';
+import {Button,Panel,RecordHistory,RecordDeliveries,Tasks,t,useRecordView,type EntityRecord,type RecordSource,type RecordView} from '@platform/ui';
 import {useHost,useOpenRecord} from '../index';
 export type HistoryProps={object:string;historyLimit?:number;selected?:EntityRecord;readSource?:RecordSource;confirmedRecord?:EntityRecord;recordStatus?:'empty'|'pending'|'value'|'error'};
 export type TasksProps={object:string;selected?:EntityRecord;live:boolean;readSource?:RecordSource};
 /** The timeline (16b): the selected record's history from the journal. */
 export function HistoryRenderer({object:type,historyLimit,selected,readSource,confirmedRecord,recordStatus}:HistoryProps) {
   const { source } = useHost();
+  const openRecord=useOpenRecord();
   const info = source.entity(type);
   const original=historyLimit?confirmedRecord:selected,reader=readSource??source;
   const result=useRecordView(reader,type,reader.scope===source.scope?original?.id:undefined);
@@ -13,7 +14,7 @@ export function HistoryRenderer({object:type,historyLimit,selected,readSource,co
   if (!original) return <p role="status" className="text-sm text-muted">{t("Select a record to see what happened to it.")}</p>;
   if(result?.error)return <Panel role="alert">{t("The original record history could not be read.")}</Panel>;
   if (result.loading || !result.view || !info) return <p role="status" className="text-sm text-muted">{t("Loading…")}</p>;
-  return <RecordHistory info={info} history={result.view.history} heading={false} limit={historyLimit||undefined} total={result.view.history.length} recordID={original.id} recordRevision={result.view.record.revision}/>;
+  return <div className="grid gap-3"><RecordDeliveries deliveries={result.view.deliveries} onOpen={(type,r)=>openRecord(type+"/"+r.id)}/><RecordHistory info={info} history={result.view.history} heading={false} limit={historyLimit||undefined} total={result.view.history.length} recordID={original.id} recordRevision={result.view.record.revision}/></div>;
 }
 
 /** The tasks (16b): what waits on the selected record for this member — approvals

@@ -121,11 +121,18 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if err != nil {
 		return answer, err
 	}
-	if len(drafts) == 0 || len(drafts) > 64 {
-		return answer, fmt.Errorf("an application package needs one to 64 owner drafts")
+	if len(drafts) == 0 || len(drafts) > construction.JointDraftLimit {
+		return answer, fmt.Errorf("an application package needs one to %d owner drafts", construction.JointDraftLimit)
 	}
 	edits := make([]CompositeEdit, 0, len(drafts))
 	answer = PackageDraftResult{Package: id, Version: version, Key: key, Drafts: make([]PackageDraft, 0, len(drafts))}
+	var primary platform.AssetRef
+	for _, root := range blueprint.Roots {
+		if root.Kind == platform.AssetApp {
+			primary = root
+			break
+		}
+	}
 	for _, draft := range drafts {
 		et := t.records.types[draft.Type]
 		if et == nil || et.info.App != construction.ID {
@@ -137,50 +144,62 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		}
 		edits = append(edits, CompositeEdit{Schema: draft.Schema, Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Payload: payload})
 		answer.Drafts = append(answer.Drafts, PackageDraft{Ref: draft.Ref, Type: draft.Type, ID: draft.Name})
-		for _, root := range blueprint.Roots {
-			if root == draft.Ref && root.Kind == platform.AssetApp {
-				if answer.ApplicationID != "" {
-					return PackageDraftResult{}, fmt.Errorf("an application package needs one root application")
-				}
-				answer.Application, answer.ApplicationID = root.Name, draft.Name
-			}
+		if draft.Ref == primary {
+			answer.Application, answer.ApplicationID = primary.Name, draft.Name
 		}
 	}
 	if answer.ApplicationID == "" {
-		return PackageDraftResult{}, fmt.Errorf("an application package needs one root application draft")
+		return PackageDraftResult{}, fmt.Errorf("an application package needs at least one root application draft")
 	}
 	commandKey := "package-drafts:" + m.ID + ":" + key
-	saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: construction.ID, Member: m.ID, Key: "composite:" + commandKey, At: at.UTC(), Edits: edits}
-	saved.RequestHash, err = compositeRequestHash(t.ID, m.ID, saved.Key, edits)
-	if err != nil {
-		return PackageDraftResult{}, err
-	}
-	if prior := t.committed.compositeAnswer(saved.Key); len(prior) > 0 {
-		accepted, err := decodeAcceptedComposite(prior)
-		if err != nil || accepted.RequestHash != saved.RequestHash {
-			return PackageDraftResult{}, fmt.Errorf("package draft key belongs to another request")
+	contextHash := ""
+	if len(edits) > 64 {
+		contextHash, err = compositeRequestHash(t.ID, m.ID, commandKey, edits)
+		if err != nil {
+			return answer, err
 		}
-		if _, err = compositeAnswer(accepted); err != nil {
+	}
+	for from := 0; from < len(edits); from += 64 {
+		until := min(from+64, len(edits))
+		batchKey := commandKey
+		if from > 0 {
+			batchKey = fmt.Sprintf("%s:%d", commandKey, from/64)
+		}
+		saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: construction.ID, Member: m.ID, Key: "composite:" + batchKey, Context: contextHash, At: at.UTC(), Edits: edits[from:until]}
+		if contextHash != "" {
+			saved.Version = 3
+		}
+		saved.RequestHash, err = compositeRequestHash(t.ID, m.ID, saved.Key, saved.Edits, saved.Context)
+		if err != nil {
+			return answer, err
+		}
+		if prior := t.committed.compositeAnswer(saved.Key); len(prior) > 0 {
+			accepted, err := decodeAcceptedComposite(prior)
+			if err != nil || accepted.RequestHash != saved.RequestHash {
+				return PackageDraftResult{}, fmt.Errorf("package draft key belongs to another request")
+			}
+			if _, err = compositeAnswer(accepted); err != nil {
+				return PackageDraftResult{}, err
+			}
+			continue
+		}
+		decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until})
+		if err != nil {
 			return PackageDraftResult{}, err
 		}
-		return answer, nil
-	}
-	decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: commandKey})
-	if err != nil {
-		return PackageDraftResult{}, err
-	}
-	saved.Changes = changes
-	raw, err := encodeAcceptedComposite(saved)
-	if err != nil {
-		return PackageDraftResult{}, err
-	}
-	principal, _ := json.Marshal(m)
-	committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
-	if err != nil {
-		return PackageDraftResult{}, err
-	}
-	if _, err = t.finishCommittedComposite(m, saved, committed); err != nil {
-		return PackageDraftResult{}, err
+		saved.Changes = changes
+		raw, err := encodeAcceptedComposite(saved)
+		if err != nil {
+			return PackageDraftResult{}, err
+		}
+		principal, _ := json.Marshal(m)
+		committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
+		if err != nil {
+			return PackageDraftResult{}, err
+		}
+		if _, err = t.finishCommittedComposite(m, saved, committed); err != nil {
+			return PackageDraftResult{}, err
+		}
 	}
 	return answer, nil
 }

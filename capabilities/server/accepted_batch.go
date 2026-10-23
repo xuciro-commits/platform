@@ -36,8 +36,12 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	result := resultformat.Batch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
 		App: app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
 		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
-		Deliveries: slices.Clone(d.deliveries), Authorizations: slices.Clone(d.authorizations)}
+		Deliveries: slices.Clone(d.deliveries)}
 	var err error
+	result.Authorizations, err = d.savedAuthorizations()
+	if err != nil {
+		return nil, err
+	}
 	result.Control, err = d.savedControl()
 	if err != nil {
 		return nil, err
@@ -133,6 +137,12 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		result.Version = 7
 	}
 	result.Version = 8
+	if len(result.Iterations) > 0 {
+		result.Version = 9
+	}
+	if d.observationInput != nil && d.observationInput.Intervals != nil {
+		result.Version = 10
+	}
 	result.Unique = d.savedUniqueChanges()
 	d.records.mu.Lock()
 	defer d.records.mu.Unlock()
@@ -318,7 +328,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := draft.validateChangedLinkConstraints(); err != nil {
 		return nil, err
 	}
-	if result.Version == 8 {
+	if result.Version >= 8 {
 		if err := validateUniqueReplacements(draft, result.Unique); err != nil {
 			return nil, err
 		}
@@ -430,7 +440,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result resultformat.Batch, l
 		}
 		before := ""
 		baseHistory, revision := 0, uint32(0)
-		if result.Version == 8 {
+		if result.Version >= 8 {
 			if err := records.CheckHistoryPredecessor(image.Image, prior); err != nil {
 				return err
 			}
@@ -525,7 +535,7 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result resultformat.Batch, l
 			return fmt.Errorf("record batch image differs from its decisions")
 		}
 		recovered := &records.Row{Value: value, Format: image.Format, History: records.CopyHistory(image.History), Projection: records.CloneProjection(image.Projection), Extraction: image.Extraction}
-		if result.Version == 8 {
+		if result.Version >= 8 {
 			if err := records.AppendRowHistory(recovered, prior, image.History); err != nil {
 				return err
 			}

@@ -26,21 +26,29 @@ func (b *Build) queryAssets() ([]platform.ReleaseAsset, error) {
 	})
 }
 
-// InstallQueryAsset installs one immutable candidate version into a fresh
-// test app. It does not invent a publication history or run a publish action.
-// The candidate constructor checks this declaration before snapshot restore.
-func (b *Build) InstallQueryAsset(asset platform.ReleaseAsset) error {
+func (b *Build) queryAsset(asset platform.ReleaseAsset) (Query, error) {
 	version := b.definitionAssetVersion(asset, platform.AssetQuery, "query")
 	var f Query
 	if version == 0 || asset.ContractVersion != 1 ||
 		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
 		f.Definition().Check() != nil {
-		return fmt.Errorf("invalid builder query asset %s", asset.Ref)
+		return Query{}, fmt.Errorf("invalid builder query asset %s", asset.Ref)
+	}
+	f.Version, f.State = version, "published"
+	return f, nil
+}
+
+// InstallQueryAsset installs one immutable candidate version into a fresh
+// test app. It does not invent a publication history or run a publish action.
+// The candidate constructor checks this declaration before snapshot restore.
+func (b *Build) InstallQueryAsset(asset platform.ReleaseAsset) error {
+	f, err := b.queryAsset(asset)
+	if err != nil {
+		return err
 	}
 	if _, exists := b.queries[f.Name]; exists {
 		return fmt.Errorf("query asset %s is already installed", asset.Ref)
 	}
-	f.Version, f.State = version, "published"
 	return b.installQuery(platform.Caller{Replaying: true}, f)
 }
 

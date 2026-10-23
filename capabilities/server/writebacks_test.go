@@ -22,12 +22,13 @@ import (
 
 func TestIntegratorSeesOnlyIntegrationDeliveryMetadata(t *testing.T) {
 	now := time.Now()
-	tn := &Tenant{ID: "metadata", apps: []platform.App{core.New("metadata")}, outbound: []*effect{
+	tn := composeTenant(t, "metadata", nil, core.New("metadata"))
+	tn.outbound = []*effect{
 		{Effect: platform.Effect{ID: "own", App: construction.ID, Endpoint: "connection:c", Event: "writeback:wrong", Body: "private"}},
 		{Effect: platform.Effect{ID: "allowed", App: construction.ID, Endpoint: "connection:c", Event: "writeback/orders", Body: "private-request", Error: "private-answer", State: "retrying"}},
 		{Effect: platform.Effect{ID: "book", App: construction.ID, Endpoint: construction.BooksEndpoint, Event: "journal/receipt.post", Body: "private-journal", Target: "private-record", Error: "No fiscal period is open private-period", State: "retrying"}},
 		{Effect: platform.Effect{ID: "other", App: "erp", Endpoint: "connection:c", Event: "writeback/orders", Body: "private-other"}},
-	}}
+	}
 	member := platform.Member{ID: "integrator", Tenant: tn.ID, Roles: map[string]string{construction.ID: construction.Integrator}}
 	rows, err := tn.integrationEffects(member, now)
 	if err != nil || len(rows) != 2 || rows[0].ID != "book" || rows[0].Error != "Waiting for an open fiscal period" || rows[1].ID != "allowed" {

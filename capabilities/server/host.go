@@ -41,6 +41,7 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
+	installingSet      bool // private owner images validate cross-references as one complete set
 	currentReadScopes  bool
 	recordReadError    error
 	startupSnapshot    *snapshotCompatibility
@@ -74,6 +75,7 @@ type Tenant struct {
 	flowArtifacts flowArtifactGC              // transient preparation/collection exclusion; no authoritative state
 	fault         atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
 	apps          []platform.App
+	appIndex      map[string]int          // immutable composition identity; private views replace owners in the same positions
 	committed     committed               // answers by idempotency key (committed.go)
 	releases      releaseStore            // release_store.go
 	console       hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
@@ -146,8 +148,14 @@ func (t *Tenant) Audit() []AuditEntry { return t.audit.all() }
 // NewTenant enables apps for a tenant; it refuses duplicate names, consumed
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, committed: committed{refusals: map[string]resultformat.Refusal{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
+	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, committed: committed{refusals: map[string]resultformat.Refusal{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
 		connectors: newConnectorRoster(), records: newRecordStore()}
+	for i, app := range apps {
+		id := app.Manifest().ID
+		if _, exists := t.appIndex[id]; !exists {
+			t.appIndex[id] = i
+		}
+	}
 	t.staged = stagedChannel{tenant: id, files: t.files}
 	t.i18n = translator{apps: func() []platform.App { return t.apps }, tenant: t.words.clone}
 	claim := func(name string, a platform.App) error {
@@ -305,8 +313,8 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 }
 
 func (t *Tenant) app(id string) platform.App {
-	i := slices.IndexFunc(t.apps, func(a platform.App) bool { return a.Manifest().ID == id })
-	if i < 0 {
+	i, found := t.appIndex[id]
+	if !found {
 		return nil
 	}
 	return t.apps[i]

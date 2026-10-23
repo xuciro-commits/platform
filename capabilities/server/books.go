@@ -85,7 +85,11 @@ func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 		out.Result, out.Detail = "rejected", "nothing to book"
 		return out
 	}
-	payload, _ := json.Marshal(map[string]any{"date": entry.Date, "text": entry.Text, "currency": entry.Currency, "lines": entry.Lines, "source": entry.Source})
+	values := map[string]any{"date": entry.Date, "text": entry.Text, "currency": entry.Currency, "lines": entry.Lines, "source": entry.Source}
+	if entry.ClosedPeriod != "" {
+		values["closedPeriod"] = entry.ClosedPeriod
+	}
+	payload, _ := json.Marshal(values)
 	sub := &pb.Submission{TenantId: t.ID, Authority: platform.BooksApp, IdempotencyKey: "books:" + x.Key,
 		Target: &pb.EntityRef{Type: platform.JournalType, Id: entry.ID}, Schema: &pb.SchemaRef{Name: platform.JournalType + ".create", Version: 1}, Payload: payload}
 	if reverse.ID != "" {

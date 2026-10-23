@@ -147,6 +147,16 @@ func (b *Build) checkFlowOn(p construction.Process, entity platform.Entity, obje
 	if b.host != nil {
 		lookup.Action, lookup.Function = b.host.Action, b.host.Function
 		lookup.Operation, lookup.ValidateQuery = b.host.Operation, b.host.ValidateInstallQuery
+		if b.jointMode {
+			lookup.ValidateQuery = func(query platform.NamedQuery) error {
+				if _, selected := b.jointEntities[query.Object]; selected {
+					// The same private candidate installation validates fields
+					// once its complete object set exists, as checkQuery does.
+					return query.Check()
+				}
+				return b.host.ValidateInstallQuery(query)
+			}
+		}
 	}
 	return construction.CheckProcess(p, entity, lookup, objects...)
 }

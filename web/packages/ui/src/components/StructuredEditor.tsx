@@ -18,7 +18,9 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
 }) {
   const [mode,setMode] = useState<'visual'|'source'>(children ? initialMode : 'source');
   const [format,setFormat] = useState<SourceFormat>('json');
-  const input = useDraftInput('source:'+scope,formatStructuredSource(value,format)), buffers=useInputDrafts();
+  // A complete bounded asset can exceed a scalar field's input budget once
+  // formatted. Keep its source within the original 512 KiB asset body limit.
+  const input = useDraftInput('source:'+scope,formatStructuredSource(value,format),false,512*1024), buffers=useInputDrafts();
   const [issues,setIssues]=useState<Api.FieldIssue[]>([]),[message,setMessage]=useState(''),[running,setRunning]=useState(false);
   const [trial,setTrial]=useState<{signature:string;result:Api.Simulation}>();
   const [fieldPath,setFieldPath]=useState('');
@@ -27,9 +29,10 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
   const signature=JSON.stringify([scope,typeof context==='string'?context:'',expectedRevision,value]), latest=useRef(signature); latest.current=signature;
   const check = (next: StructuredValue) => [...(fields ? structuredIssues(next,fields) : []), ...(validate?.(next) ?? [])].filter((issue,index,all)=>all.findIndex(other=>other.code===issue.code&&other.path.join('.')===issue.path.join('.')&&other.message===issue.message)===index);
   const parse = () => { try { const next=parseStructuredSource(input.text,format), found=check(next);setIssues(found);if(found.length) return;return next; } catch(error) { setMessage(error instanceof Error?error.message:String(error)); } };
-  const apply = () => {const next=parse();if(!next)return false;input.clear();onChange?.(next);setMessage(t('Source applied to this draft. Nothing has been saved.'));setTrial(undefined);return true;};
+  const apply = () => {if(input.problem&&input.problem!==t('Apply source before saving.'))return false;const next=parse();if(!next)return false;input.clear();onChange?.(next);setMessage(t('Source applied to this draft. Nothing has been saved.'));setTrial(undefined);return true;};
   const switchMode = (next:'visual'|'source') => {
     if(next===mode)return;
+    if(input.problem&&input.problem!==t('Apply source before saving.'))return;
     if(next==='source'&&buffers?.invalid){setMessage(t('Correct the input drafts before switching modes.'));return;}
     if(next==='visual'&&!readOnly&&input.text!==formatStructuredSource(value,format)&&!apply())return;
     input.clear();setIssues([]);setMessage('');setMode(next);

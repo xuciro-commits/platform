@@ -124,6 +124,7 @@ func compileLegacyTransaction(object construction.Object, action construction.Ac
 			txn.Steps = append(txn.Steps, platform.TxnStep{Name: "journal", Kind: "journal", Journal: j})
 			return txn, nil
 		}
+		j.ClosedPeriod = journal.ClosedPeriod
 		for _, field := range []struct {
 			source, kind string
 			value        **platform.Expr

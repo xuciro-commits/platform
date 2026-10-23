@@ -39,13 +39,12 @@ func (h hostView) AgentSearch(reader *platform.Member, q string, now time.Time) 
 	out.Body, _ = json.Marshal(found)
 	return out
 }
-func (h hostView) AgentQuery(reader platform.Member, app, name, of string, now time.Time) (host.AgentObservation, *kernel.Error) {
+func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, of string, now time.Time) (host.AgentObservation, *kernel.Error) {
 	reader.AIContext = true
-	page, err := h.t.queryRead(reader, app, name, of, now)
+	page, err := h.t.runDeclaredQueryFrom(h.t.records, reader, query, of, now)
 	if err != nil {
 		return host.AgentObservation{}, err
 	}
-	query, _ := h.t.namedQuery(app, name)
 	raw, _ := json.Marshal(page.Records)
 	var ids []struct{ ID string }
 	_ = json.Unmarshal(raw, &ids)

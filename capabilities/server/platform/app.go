@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 )
@@ -131,11 +133,27 @@ func (m Member) Today(now time.Time) string { return now.In(m.Location()).Format
 // answer), as member "app:<id>"; its manifest is its grant.
 type Caller struct {
 	Member
-	App          string
-	Replaying    bool
-	Automation   bool
-	inputRefused func(*kernel.Error, []FieldIssue)
-	rt           Runtime
+	App              string
+	Replaying        bool
+	Automation       bool
+	inputRefused     func(*kernel.Error, []FieldIssue)
+	rt               Runtime
+	creationDepth    int
+	transactionInput *pb.Submission
+}
+
+// TransactionInput is invocation context; writes retain their original receipt.
+func (c Caller) TransactionInput(receipt *pb.ChangeRecord) *pb.Submission {
+	input := c.transactionInput
+	if input == nil {
+		input = receipt.GetSubmission()
+	}
+	return proto.Clone(input).(*pb.Submission)
+}
+
+func (c Caller) WithTransactionInput(input *pb.Submission) Caller {
+	c.transactionInput = proto.Clone(input).(*pb.Submission)
+	return c
 }
 
 // WithInputDiagnostics observes only this call's refused input checks.

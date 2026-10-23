@@ -23,7 +23,7 @@ def run(arguments, **options):
 
 def main():
     go = os.environ.get("GO", "go")
-    version = os.environ.get("PROTOCOL_VERSION", "0.1.4")
+    version = os.environ.get("PROTOCOL_VERSION", "0.1.5")
     if not version or any(character not in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-+" for character in version):
         raise ValueError("PROTOCOL_VERSION must be a plain package version")
     target = json.loads(run([go, "env", "-json", "GOOS", "GOARCH"], capture_output=True, text=True).stdout)

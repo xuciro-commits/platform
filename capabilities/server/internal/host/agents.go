@@ -43,7 +43,7 @@ type AgentHost interface {
 	InvokeDecision(platform.Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)
 	AgentContext(*platform.Member, string, string, time.Time) (AgentObservation, *kernel.Error)
 	AgentSearch(*platform.Member, string, time.Time) AgentObservation
-	AgentQuery(platform.Member, string, string, string, time.Time) (AgentObservation, *kernel.Error)
+	AgentQuery(platform.Member, platform.NamedQuery, string, time.Time) (AgentObservation, *kernel.Error)
 	AgentRead(platform.Member, string) (AgentObservation, *kernel.Error)
 	AgentSources(any) []string
 	AgentKnowledge(*platform.Member, string, string, int, time.Time) json.RawMessage

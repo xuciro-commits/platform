@@ -56,7 +56,11 @@ func (s *recordStore) visitMatching(et *entityType, q platform.Query, visible fu
 		}
 		accept(v)
 	}
-	if s.historyStore != nil {
+	if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
+		for _, id := range ids {
+			visit(et.rows.Get(id))
+		}
+	} else if s.historyStore != nil {
 		var filters []journal.StateFilter
 		// SQL retains the original image, while the owner may have renamed or
 		// transformed its fields. Filter the converted values below instead.
@@ -106,10 +110,6 @@ func (s *recordStore) visitMatching(et *entityType, q platform.Query, visible fu
 		for id := range pending {
 			visit(et.rows.Get(id))
 		}
-	} else if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
-		for _, id := range ids {
-			visit(et.rows.Get(id))
-		}
 	} else {
 		for _, r := range et.rows.All() {
 			visit(r)
@@ -145,7 +145,12 @@ func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q pl
 // reuse the same masks and source checks without repeatedly sorting each page.
 // Public record reads still enter through the bounded recordsFrom above.
 func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	m = t.authorizationMember(m)
+	return t.recordSelectionForCallerFrom(s, platform.NewCaller(runtime{t}, m, "", false, false), typ, q, now)
+}
+
+func (t *Tenant) recordSelectionForCallerFrom(s *recordStore, c platform.Caller, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+	c.Member = t.authorizationMember(c.Member)
+	m := c.Member
 	if q.Traversal != nil {
 		if s != t.records {
 			return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Link traversal is unavailable in a staged read")
@@ -166,7 +171,7 @@ func (t *Tenant) recordSelectionFrom(s *recordStore, m platform.Member, typ stri
 	if et == nil {
 		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	visible, err := t.visibleIn(s, m, et, now)
+	visible, err := t.visibleForCallerIn(s, c, et, now)
 	if err != nil {
 		return RecordPage{}, err
 	}

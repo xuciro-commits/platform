@@ -126,20 +126,21 @@ func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 	}
 	for _, f := range fields {
 		v, ok := values[f.Name]
+		text, isText := v.(string)
+		empty := !ok || v == nil || isText && strings.TrimSpace(text) == ""
+		if empty && f.Required {
+			add(f, "required", "Enter a value.", "")
+			continue
+		}
 		c := f.Constraints
-		// Existing unannotated owner contracts keep their original checks.
+		// Unannotated inputs retain their original type and range checks.
 		if c == nil {
 			if !dependencies[f.Name] {
 				continue
 			}
 			c = &InputConstraints{}
 		}
-		text, isText := v.(string)
-		empty := !ok || v == nil || isText && strings.TrimSpace(text) == ""
 		if empty {
-			if f.Required {
-				add(f, "required", "Enter a value.", "")
-			}
 			continue
 		}
 		valid[f.Name] = true

@@ -3,10 +3,8 @@ import assert from "node:assert/strict";
 import { inspectImports, publicExports, readDictionary, validateOwner, professionalViewGate } from "./catalog-check.mjs";
 import {readFile} from 'node:fs/promises';
 
-test('professional view gate rejects the actual native MES page and invented independent authorship',async()=>{
- const source=await readFile(new URL('../web/packages/mes/src/index.tsx',import.meta.url),'utf8');
- const native=source.slice(source.indexOf('function RoutingFlow('),source.indexOf('\nfunction SFCDetail('));
- assert.ok(native.length>500);
+test('professional view gate rejects industry-specific code and invented independent authorship',async()=>{
+ const native='function RoutingFlow({ sfc, equipment, workCenter }) { return <div>{sfc.operation}</div>; }';
  assert.ok(professionalViewGate({source:native,owner:'@platform/ui',configurations:[{application:'one',author:'same'},{application:'two',author:'same'}]}).some(e=>e.includes('domain vocabulary')));
  assert.ok(professionalViewGate({source:'function Matrix({rows,columns}) {}',owner:'@platform/ui',configurations:[{application:'one',author:'same'},{application:'two',author:'same'}]}).some(e=>e.includes('independent authors')));
  for(const file of ['widgets/CompositeViews.tsx','widgets/composite-plugins.ts','runtime/PageComposite.ts'])assert.deepEqual(professionalViewGate({source:await readFile(new URL(`../web/packages/app/src/${file}`,import.meta.url),'utf8')}),[]);

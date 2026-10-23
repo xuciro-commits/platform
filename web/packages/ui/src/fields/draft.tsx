@@ -54,7 +54,7 @@ export function InputProblems() {
 }
 
 /** Unparsed text belongs to its document, even while its inspector is unmounted. */
-export function useDraftInput(key: string, source: string, retainOnRefresh = false) {
+export function useDraftInput(key: string, source: string, retainOnRefresh = false, maxLength = 65536) {
   const owner = useContext(DraftInputs), path = `${owner?.scope ?? ""}/${key}`;
   const [local, setLocal] = useState<InputDraft>();
   const stored = owner ? owner.values[path] : local;
@@ -63,8 +63,8 @@ export function useDraftInput(key: string, source: string, retainOnRefresh = fal
     if (!retainOnRefresh && stored && !stored.problem && stored.source !== source) { if (owner) owner.set(path); else setLocal(undefined); }
   }, [source, path, stored?.source, owner?.set,retainOnRefresh]);
   const write = (text: string, problem = "") => {
-    if (text.length > 65536) {
-      const next = {text: current?.text ?? source, source, problem: t("This input exceeds 65536 characters. The previous draft is retained."), reveal: owner?.reveal};
+    if (text.length > maxLength) {
+      const next = {text: current?.text ?? source, source, problem: t("This input exceeds {limit} characters. The previous draft is retained.", {limit:maxLength}), reveal: owner?.reveal};
       if (owner) owner.set(path, next); else setLocal(next); return false;
     }
     const next = text === source && !problem ? undefined : {text, source, problem, reveal: owner?.reveal};

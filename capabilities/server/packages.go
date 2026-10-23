@@ -66,6 +66,46 @@ type PackageBlueprint struct {
 	Roots  []platform.AssetRef     `json:"roots"`
 	Assets []platform.ReleaseAsset `json:"assets"`
 	Guide  string                  `json:"guide,omitempty"`
+	Setup  *PackageSetup           `json:"setup,omitempty"`
+}
+
+// PackageSetup is reviewed client input, not an installed action or worker.
+// Each request still needs the person's current authorization at its owner.
+type PackageSetup struct {
+	Roles []PackageSetupRole `json:"roles"`
+	Steps []PackageSetupStep `json:"steps"`
+}
+type PackageSetupRole struct {
+	App  string `json:"app"`
+	Role string `json:"role"`
+}
+type PackageSetupStep struct {
+	Name    string        `json:"name"`
+	App     string        `json:"app"`
+	Schema  string        `json:"schema"`
+	Target  *pb.EntityRef `json:"target"`
+	Payload string        `json:"payload"`
+}
+
+func (p PackageSetup) check() error {
+	if len(p.Steps) == 0 || len(p.Steps) > 128 || len(p.Roles) > 32 {
+		return fmt.Errorf("a setup plan needs 1–128 requests and at most 32 role requirements")
+	}
+	for _, role := range p.Roles {
+		if role.App == "" || role.Role == "" || len(role.App) > 128 || len(role.Role) > 128 {
+			return fmt.Errorf("setup role requirements need an app and role")
+		}
+	}
+	seen := map[string]bool{}
+	for _, step := range p.Steps {
+		if step.Name == "" || len(step.Name) > 128 || seen[step.Name] || step.App == "" ||
+			!strings.HasPrefix(step.Schema, step.App+".") || step.Target.GetType() == "" || step.Target.GetId() == "" ||
+			len(step.Payload) > 64<<10 || !json.Valid([]byte(step.Payload)) {
+			return fmt.Errorf("setup requests need unique names, an owner, schema, target and bounded JSON payload")
+		}
+		seen[step.Name] = true
+	}
+	return nil
 }
 
 // InstalledPackage is the tenant's state for one installed package.
@@ -232,6 +272,11 @@ func (p PackageDescriptor) validate() error {
 func (b PackageBlueprint) check() error {
 	if len(b.Roots) == 0 || len(b.Assets) == 0 || len(b.Assets) > 1000 {
 		return fmt.Errorf("a blueprint needs roots and at most 1000 owner definitions")
+	}
+	if b.Setup != nil {
+		if err := b.Setup.check(); err != nil {
+			return err
+		}
 	}
 	for _, root := range b.Roots {
 		if root.Check() != nil || root.App != "build" {

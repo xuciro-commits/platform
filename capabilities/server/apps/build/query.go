@@ -56,7 +56,8 @@ func (b *Build) checkQuery(f Query) error {
 		return fmt.Errorf("The query name %s must be lower-case letters and digits", f.Name)
 	}
 	shape, selected := b.jointEntities[f.Object]
-	if _, ok := b.installed[f.Object]; f.Interface == "" && !ok && (!selected || shape.App != construction.ID) {
+	declared, native := b.conditionLookup(f.Object)
+	if _, ok := b.installed[f.Object]; f.Interface == "" && !ok && (!selected || shape.App != construction.ID) && (!native || declared.App != construction.ID) {
 		return fmt.Errorf("Query %s needs a published object of this builder", f.Name)
 	}
 	var validation error
@@ -142,6 +143,14 @@ func (b *Build) installQuery(c platform.Caller, f Query) error {
 }
 
 func (b *Build) QueryDefinition(name string, version int) (platform.NamedQuery, int, bool) {
+	if asset, selected := b.jointDeclarations[platform.AssetRef{App: construction.ID, Kind: platform.AssetQuery, Name: name}]; selected {
+		ordinal := b.definitionAssetVersion(asset, platform.AssetQuery, "query")
+		if ordinal == version && version > 0 {
+			var query platform.NamedQuery
+			valid := asset.ContractVersion == 1 && json.Unmarshal(asset.Body, &query) == nil && query.Name == name && query.Check() == nil
+			return query, ordinal, valid
+		}
+	}
 	return retainedDefinition(b.queries, b.queryInventory, queryImage, name, version)
 }
 

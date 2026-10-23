@@ -177,6 +177,12 @@ func (g *DependencyGraph) walk(roots []AssetRef, installedPrerequisites bool) ([
 			return err
 		}
 		if visiting[ref] {
+			// Object collections and typed relationships describe a data model.
+			// A reciprocal model may include its own link type; no executable
+			// asset may participate in this allowance.
+			if start := slices.Index(path, ref); start >= 0 && slices.ContainsFunc(path[start:], func(node AssetRef) bool { return node.Kind == AssetLinkType }) && !slices.ContainsFunc(path[start:], func(node AssetRef) bool { return node.Kind != AssetObject && node.Kind != AssetLinkType }) {
+				return nil
+			}
 			if start := slices.Index(path, ref); start >= 0 && len(path)-start == 2 && g.containment[[2]AssetRef{from, ref}] {
 				return nil
 			}
@@ -218,6 +224,12 @@ func (g *DependencyGraph) walk(roots []AssetRef, installedPrerequisites bool) ([
 		visiting[ref] = true
 		path = append(path, ref)
 		for _, dependency := range node.Requires {
+			// Adoption retains a function in the closure, but its source model
+			// must exist before the function is installed. Installation visits
+			// every node as a root; closure traversal still follows this edge.
+			if installedPrerequisites && ref.Kind == AssetObject && dependency.Kind == AssetFunction && g.containment[[2]AssetRef{ref, dependency}] {
+				continue
+			}
 			if err := visit(dependency, ref); err != nil {
 				return err
 			}

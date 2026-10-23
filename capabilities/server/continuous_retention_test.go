@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	"platformkernel/kernel"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +24,9 @@ func (s *retentionWithDueSource) Manifest() platform.Manifest {
 	m.Flows = append(m.Flows, platform.Flow{Name: "due", Title: "Due ordinary flow", Version: 1,
 		Start: platform.Start{On: []string{"frames.source.start"}, Begin: func(platform.Caller, platform.Event) (string, any, bool) { return "source", nil, true }},
 		Steps: []platform.Step{
-			{Name: "wait", Next: "done", Wait: &platform.Wait{At: func(_ platform.Caller, run *platform.Run) time.Time { return run.Now.Add(time.Second) }}},
+			{Name: "wait", Next: "done", Wait: &platform.Wait{At: func(_ platform.Caller, run *platform.Run) (time.Time, *kernel.Error) {
+				return run.Now.Add(time.Second), nil
+			}}},
 			{Name: "done", End: true},
 		},
 	})

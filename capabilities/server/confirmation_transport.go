@@ -140,6 +140,13 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 	return nil
 }
 
+type confirmationCompletion struct{ Member, Subject, Action string }
+
+func (d *stagedDecision) ConfirmationCompletion(c platform.Caller, object, id, action string) bool {
+	proof := d.confirmationCompleting
+	return c.Staging() && !c.Replaying && c.Tenant == d.tenant.ID && proof != nil && proof.Member == c.ID && proof.Subject == object+"/"+id && proof.Action == action
+}
+
 func (h hostView) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, run platform.ConfirmationRun, action string, at time.Time) (string, *kernel.Error) {
 	if h.decision == nil || !c.Staging() {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Confirmation completion requires a private decision")
@@ -162,6 +169,9 @@ func (h hostView) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, ru
 	}
 	sub := &pb.Submission{TenantId: c.Tenant, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: "confirmation:" + run.ID + ":" + action, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: action, Version: 1}, Payload: []byte(`{}`), CorrelationId: run.ID}
 	receipt, refusal := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+		previous := h.decision.confirmationCompleting
+		h.decision.confirmationCompleting = &confirmationCompletion{Member: member.ID, Subject: run.Subject, Action: action}
+		defer func() { h.decision.confirmationCompleting = previous }()
 		return bound.Submit(bound.Caller(c, member, construction.ID), sub, at)
 	})
 	if refusal != nil {

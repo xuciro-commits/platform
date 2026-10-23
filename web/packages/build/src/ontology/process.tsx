@@ -1,5 +1,4 @@
 import { PropertyList, ContextHelp, StructuredEditor } from "@platform/ui";
-import {formulaText} from "../editor/rule-text";
 import { mixedNames } from "../editor/names";
 import { ObjectLineage } from "./lineage";
 import {actionDestinations,actionResultEdges,actionStateInput,setActionDestination} from "./process-rules";
@@ -20,12 +19,14 @@ import { Boxes, Link2, Plus, Trash2, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useObjectDraft } from "./object-draft";
 import { ConstraintsEditor } from "./constraints";
+import { RuleCollectionsEditor } from "./RuleCollectionsEditor";
+import type { Api } from "@platform/kernel";
 import { TransactionEditor } from "./TransactionEditor";
 import { RecordSetsEditor } from "./record-sets";
 import { ObjectProtocolsEditor } from "./object-protocols";
 import { BusinessVersionEditor } from "./business-version";
-import { useAuthoringModel } from "./authoring-model";
-import { ExpressionEditor } from "../editor/ExpressionEditor";
+import { authoringObject, useAuthoringModel } from "./authoring-model";
+import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 
 /** The objects of this organisation: open one to give it states and actions. */
 const objectGroups = [
@@ -87,7 +88,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const references = process.fields.filter((f) => f.type === "reference");
   const incoming = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent));
   const inspector = <div className="p-2">
-    {field && chosen && <FieldProperties field={field} others={process.fields.filter((_, at) => at !== chosen.at)} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
+    {field && chosen && <FieldProperties field={field} states={process.states} reads={process.reads} others={process.fields.filter((_, at) => at !== chosen.at)} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
     {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
     {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
       onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
@@ -128,6 +129,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
           { id: "required", header: t("Required"), accessorFn: ({ field }) => field.required ? "✓" : "" },
           { id: "property", header: t("Shared property"), accessorFn: ({ field }) => field.property ? assetBindingKey(field.property) : "" },
         ]} />
+      <RuleCollectionsEditor value={process.reads} subject={authoringObject({...process,name:object.name,title:object.title})} onChange={reads=>change({...process,reads})}/>
       <Disclosure summary={t("Creation transaction")}><div className="grid gap-3 pt-2"><ContextHelp title={t("Creation transaction")}><p className="text-xs text-muted">{t("The new subject exists in the private view. Use a sequence step and assign its result to the number field in an update step.")}</p></ContextHelp><Checkbox checked={!!process.createTransaction} onChange={enabled => change({...process,createTransaction:enabled?{subject:parent,steps:[{name:"update",kind:"update",target:{type:parent,id:"$subject"},changes:[]}]}:undefined})}>{t("Apply a transaction when creating records")}</Checkbox>{process.createTransaction&&<TransactionEditor value={process.createTransaction} onChange={createTransaction=>change({...process,createTransaction})} process={process} roles={[...new Set(["builder",...process.access.map(access=>access.role)])]}/>}</div></Disclosure>
     </div>,
     links: <div className="grid content-start gap-4 p-4">
@@ -155,7 +157,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
     </div>,
     protocols: <ObjectProtocolsEditor process={process} onChange={change} />,
     versions: <BusinessVersionEditor process={process} entities={entities} onChange={change} />,
-    constraints: <ConstraintsEditor process={process} onChange={change} />,
+    constraints: <ConstraintsEditor parent={parent} process={process} onChange={change} />,
     sets: <RecordSetsEditor process={process} parent={parent} entities={entities} onChange={change} />,
     permissions: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Who may do what")}</h2><Button size="sm" onClick={addAccess}><Plus />{t("Add a role")}</Button></div>
@@ -268,10 +270,12 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
 }
 
 
-function FieldProperties({ field, others, onChange, onRemove }: { field: Field; others: Field[]; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
+function FieldProperties({ field, others, reads, states, onChange, onRemove }: { states: State[]; reads?: Api.RuleReadSpec; field: Field; others: Field[]; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
   const {definitions}=useHost();
-  const { drafts } = useAuthoringModel();
+  const { drafts, entities } = useAuthoringModel();
   const objects = (drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => ({ name: `build.${draft.name}`, title: draft.title }));
+  const expressionType = field.type === "longtext" ? "text" : field.type;
+  const computedChoices: ExpressionChoice[] = [{ value: "id", label: t("Record ID"), type: "text" }, { value: "caller.id", label: t("The person taking it"), type: "text" }, ...others.map(other => ({ value: other.name, label: other.title, type: other.type === "longtext" ? "text" : other.type, ref: other.ref })), ...(states.length ? [{value:"state",label:t("State"),type:"choice"}] : [])];
   // "Only when" (#138): another unconditional choice or boolean field, and the values that make this one apply.
   const conditions = others.filter((f) => (f.type === "choice" || f.type === "boolean") && !f.when && f.name);
   const [whenField, whenValues] = (field.when ?? "").split("=") as [string, string | undefined];
@@ -290,8 +294,10 @@ function FieldProperties({ field, others, onChange, onRemove }: { field: Field; 
     {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect enterprise label={t("Reference object")} value={field.ref} drafts={objects} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined, stereotype:undefined, stereotypes:undefined })} /></Label>}
     {field.type === "reference" && field.ref === "enterprise.element" && <EnterpriseReferenceTypes value={field} onChange={onChange} />}
     {field.type === "reference" && field.ref !== "enterprise.element" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
-    {(field.type === "integer" || field.type === "decimal") && <Label text={t("Computed by formula")}><Input className="font-mono" placeholder="price * qty" value={field.formula ?? (field.formulaExpr?formulaText(field.formulaExpr):"")} onChange={(e) => onChange({ formula: e.target.value || undefined,formulaExpr:undefined })} /></Label>}
-    {(field.formula||field.formulaExpr) && <ContextHelp title={t("Calculated value")}><p className="text-xs text-muted">{t("Computed from the object's other number fields at every change; nobody sets it by hand.")}</p></ContextHelp>}
+    {field.formula && <Label text={t("Computed by formula")}><Input className="font-mono" value={field.formula} onChange={(e) => onChange({ formula: e.target.value || undefined, formulaExpr: undefined })} /></Label>}
+    {["text", "choice", "reference", "boolean", "integer", "decimal", "money", "date", "datetime"].includes(expressionType) && !field.formula && <Checkbox disabled={!!field.aliasOf} checked={!!field.formulaExpr} onChange={enabled => onChange({ formulaExpr: enabled ? literalExpression(expressionType) : undefined, formula: undefined })}>{t("Computed by expression")}</Checkbox>}
+    {field.formulaExpr && <ExpressionEditor draftKey={`field:${field.name}:formula`} collections={reads?.collections} value={field.formulaExpr} kind={expressionType} choices={computedChoices} lookup={type => entities.find(entity => entity.type === type)} onChange={formulaExpr => onChange({ formulaExpr, formula: undefined })} />}
+    {(field.formula||field.formulaExpr) && <ContextHelp title={t("Calculated value")}><p className="text-xs text-muted">{t("Computed by the declared expression at every change; nobody sets it by hand.")}</p></ContextHelp>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
     <Checkbox disabled={!!field.aliasOf} checked={!!field.readOnly || !!field.aliasOf} onChange={(readOnly) => onChange({ readOnly })}>{t("Read only")}</Checkbox>

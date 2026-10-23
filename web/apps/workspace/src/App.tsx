@@ -6,9 +6,9 @@
 // host (what they may read and decide) and the shell (where it is shown).
 import "./i18n";
 import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@platform/app";
-import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
+import { EdgeClient, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chromeViews, explorerApplication, personalWork } from "./chrome";
@@ -22,6 +22,7 @@ import { categories, portalEntry } from "./shell/registry";
 import { pageApplication, tenantApps } from "./tenantApps";
 import { routeApplication, sharedViewApplication } from "./shell/navigation";
 import { composeApplications, extendApplications, resolveApplicationRoute } from "./host/applications";
+import { OfflinePreparation } from "./offline/Preparation";
 
 export type { Identity } from "./session/identity";
 
@@ -32,6 +33,15 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const client = useMemo(() => new EdgeClient({ server: "", token, tenant, principal: "" }), [token, tenant]);
+  const queries=useQueryClient();
+  const [online,setOnline]=useState(navigator.onLine),[offlineOpen,setOfflineOpen]=useState(false);
+  useEffect(()=>{
+    const connected=()=>{setOnline(true);client.usingPrepared=false;client.refreshLiveReads();void queries.invalidateQueries();};
+    const disconnected=()=>setOnline(false);
+    window.addEventListener("online",connected);window.addEventListener("offline",disconnected);
+    return()=>{window.removeEventListener("online",connected);window.removeEventListener("offline",disconnected);};
+  },[client,queries]);
+  useEffect(() => () => client.close(), [client]);
   useEffect(() => signedIn && !signingOut ? keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; client.refreshLiveReads(); }) : undefined, [client, signedIn, signingOut]);
   const leaveSession = async () => {
     if (!signedIn || signingOut) return;
@@ -50,7 +60,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   };
 
   const meQuery = useQuery({ queryKey: [token, tenant, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
-  const connectionUnavailable = meQuery.isError && /live connection unavailable|HTTP (400|413)/.test(String(meQuery.error));
+  const connectionUnavailable = meQuery.isError && (meQuery.error instanceof OfflineReadError || /live connection unavailable/.test(String(meQuery.error)));
   const me = meQuery.isError && !connectionUnavailable ? undefined : meQuery.data;
   // A subject the host names an administrator may be a member of no tenant: the console still opens for them.
   const noMember = meQuery.isError && /HTTP 401/.test(String(meQuery.error));
@@ -66,7 +76,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser
     let live = true;
     setReady(false);
-    Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
+    client.bindIdentity(me.tenantId, me.principalId);
+    if(!signedIn)remember(IDENTITY_KEY,token);
+    const application=new URLSearchParams(location.hash.split("?")[1]).get("application")??remembered(`workspace:selection:${me.tenantId}:${me.principalId}`);
+    if(application)client.prepared?.activate(application);
     setCurrency(me.currency); // the default of amounts people enter
     client.refreshDeclarations().then(() => { if (live) setReady(true); }, () => { if (live) notify.error(t("Host unreachable")); });
     return () => { live = false; };
@@ -117,6 +130,17 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const registry = useRef(definitions); // tab titles read current definitions without replacing registered views
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
+  // Shared record renderers may be hosted by a platform application. Their
+  // explicit business context still selects the prepared application version.
+  const preparedApplication=activeRoute?.params?.application&&all.some(entry=>entry.id===activeRoute.params!.application)?activeRoute.params.application:app?.id;
+  useEffect(()=>{
+    if(!preparedApplication)return;
+    try{
+      const previous=client.prepared?.current()?.id;
+      client.prepared?.activate(preparedApplication);
+      if((!online||client.usingPrepared)&&previous!==preparedApplication&&client.prepared?.current())void client.refreshDeclarations().then(()=>host?.refresh?.()).catch(()=>undefined);
+    }catch{setOfflineOpen(true);}
+  },[client,preparedApplication,online]);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   // Navigation and the destructive-switch guard must agree on one owner,
   // including shared pages, diagnostics and old surface-qualified links.
@@ -186,7 +210,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (noMember && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
     const problem = /HTTP 401/.test(String(meQuery.error))
       ? signedIn ? t("{email} is not a member of this host.", { email: signedIn.session.email }) : t("This host does not accept this identity.")
-      : t("The host is unreachable.");
+      : meQuery.error instanceof OfflineReadError ? t(meQuery.error.message) : t("The host is unreachable.");
     return <SignInProblem problem={problem} email={signedIn?.session.email} signingOut={signingOut} error={signOutError} onSignOut={() => void leaveSession()} />;
   }
   if (!host || !apps || !ready || !metadataReady) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
@@ -210,6 +234,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const onSwitch = (id: string) => {
     if (id === "sign-out" && signedIn) void leaveSession();
     if (id.startsWith("tenant:") || id.startsWith("as:")) {
+      client.close();
       history.replaceState(null, "", "#/home");
       setActiveRoute(undefined);
       setCurrent(undefined);
@@ -220,6 +245,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (id.startsWith("as:")) { setToken(id.slice(3)); remember(IDENTITY_KEY, id.slice(3)); }
   };
   const decide = host.decide;
+  let preparedAt:string|undefined;
+  try{preparedAt=client.prepared?.current()?.at;}catch{/* The preparation dialog reports the original storage failure. */}
 
   return (
     <HostContext.Provider value={host}>
@@ -238,6 +265,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           ...(app?.id === "core" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
+          {id:"offline",label:t("Offline applications"),run:()=>setOfflineOpen(true)},
           { id: "inbox", label: t("Inbox"), group: t("My work"), run: () => { location.hash = "#/inbox"; } },
           { id: "requests", label: t("My requests"), group: t("My work"), run: () => { location.hash = "#/requests"; } },
           { id: "active-release", label: t("Last activated release"), run: () => setReleaseOpen(true) },
@@ -253,6 +281,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
             open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
         status={<div className="flex items-center gap-2 text-xs text-muted">
+          <Button size="sm" variant="ghost" aria-label={t("Offline applications")} className="max-w-64 truncate" onClick={()=>setOfflineOpen(true)}>{!online||client.usingPrepared?preparedAt?t("Saved {time}",{time:new Date(preparedAt).toLocaleString()}):t("Offline work"):t("Offline applications")}</Button>
           {connectionUnavailable && <span role="status" title={String(meQuery.error)}>{t("Live updates unavailable")}</span>}
           <span className="max-lg:hidden">{me!.tenantId}</span>
           <Button size="sm" variant="ghost" aria-label={t("Last activated release")} onClick={() => setReleaseOpen(true)}
@@ -264,7 +293,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         session={{ tenant: me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch,
           onAccount: all.some((a) => a.id === "platform") ? () => { chosen.current = { id: "platform", from: activeRoute && routeToHash(activeRoute) }; select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
-      <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} /></ApplicationSessionsProvider>
+      <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} />
+      <OfflinePreparation application={preparedApplication} release={release.data?.id} open={offlineOpen} onOpenChange={setOfflineOpen}/></ApplicationSessionsProvider>
     </HostContext.Provider>
   );
 }

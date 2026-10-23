@@ -124,6 +124,24 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		}
 		return Missing(e.Kind), nil
 	}
+	if e.Op == "if" {
+		condition, err := p.eval(e.Args[0], c, at+".args[0]", reasons)
+		if err != nil {
+			return Value{}, err
+		}
+		value, err := validateValue(condition, at+".args[0]")
+		if err != nil {
+			return Value{}, err
+		}
+		if value == nil {
+			return Value{}, fail("missing", at+".args[0]", "conditional test is missing or null")
+		}
+		branch := 2
+		if value.(bool) {
+			branch = 1
+		}
+		return p.eval(e.Args[branch], c, fmt.Sprintf("%s.args[%d]", at, branch), reasons)
+	}
 	if e.Op == "coalesce" {
 		for i, arg := range e.Args {
 			v, err := p.eval(arg, c, fmt.Sprintf("%s.args[%d]", at, i), reasons)
@@ -346,13 +364,24 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return out(utf8.RuneCountInString(values[0].(string)))
 	case "replace":
 		return out(strings.ReplaceAll(values[0].(string), values[1].(string), values[2].(string)))
-	case "add-days", "add-months":
+	case "start-of-day":
+		t := values[0].(time.Time).UTC()
+		return temporalValue("datetime", time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)), nil
+	case "start-of-hour":
+		t := values[0].(time.Time).UTC()
+		return temporalValue("datetime", time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)), nil
+	case "add-days", "add-months", "add-hours":
 		n, err := integerArg(values[1], at)
 		if err != nil {
 			return Value{}, err
 		}
 		t := values[0].(time.Time)
-		if e.Op == "add-days" {
+		if e.Op == "add-hours" {
+			if n < -24*366*9999 || n > 24*366*9999 {
+				return Value{}, fail("time", at, "result date is outside supported years")
+			}
+			t = t.AddDate(0, 0, n/24).Add(time.Duration(n%24) * time.Hour)
+		} else if e.Op == "add-days" {
 			t = t.AddDate(0, 0, n)
 		} else {
 			first := time.Date(t.Year(), t.Month()+time.Month(n), 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
@@ -366,6 +395,8 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return temporalValue(e.Kind, t), nil
 	case "diff-days":
 		return out((values[0].(time.Time).Unix() - values[1].(time.Time).Unix()) / 86400)
+	case "diff-hours":
+		return out((values[0].(time.Time).Unix() - values[1].(time.Time).Unix()) / 3600)
 	case "date-part":
 		t := values[0].(time.Time)
 		var n int
@@ -440,8 +471,9 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 		seen[item.ID] = true
 	}
 	quantifier := e.Op == "all" || e.Op == "any" || e.Op == "none"
+	var projected []json.RawMessage
 	var fold *NumericAggregate
-	if !quantifier {
+	if !quantifier && e.Op != "values" {
 		currency := ""
 		typ := decl.Element
 		for _, part := range e.Agg.Field {
@@ -490,6 +522,16 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 		if err != nil {
 			return Value{}, err
 		}
+		if e.Op == "values" {
+			if value.Status != "value" || string(value.Data) == "null" {
+				return Value{}, fail("missing", at, "collection projection needs a present value for every row")
+			}
+			if _, err := validateValue(value, at); err != nil {
+				return Value{}, err
+			}
+			projected = append(projected, value.Data)
+			continue
+		}
 		if !quantifier {
 			if err := fold.Add(value); err != nil {
 				return Value{}, err
@@ -520,6 +562,12 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 	}
 	if quantifier {
 		return Present("boolean", e.Op != "any"), nil
+	}
+	if e.Op == "values" {
+		if projected == nil {
+			projected = []json.RawMessage{}
+		}
+		return Present("set", projected), nil
 	}
 	return fold.Result()
 }

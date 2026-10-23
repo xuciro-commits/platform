@@ -16,9 +16,11 @@ import (
 	"platformserver/platform"
 )
 
-// The three release commands share the same complete 4 KiB request boundary.
+const releaseCommandBytes = construction.JointDraftLimit * 512
+
+// Release commands accept bounded metadata for the original application closure.
 func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
-	if err := decodeBodyLimit(r, into, 4096); err != nil {
+	if err := decodeBodyLimit(r, into, releaseCommandBytes); err != nil {
 		var large *http.MaxBytesError
 		if errors.As(err, &large) {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -200,8 +202,8 @@ func (h *Host) routesBuild(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.authorized(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
-		if readErr != nil || len(body) > 4096 {
+		body, readErr := io.ReadAll(io.LimitReader(r.Body, releaseCommandBytes+1))
+		if readErr != nil || len(body) > releaseCommandBytes {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -211,8 +213,8 @@ func (h *Host) routesBuild(rt *routes) {
 		if err := decoder.Decode(&request); err != nil ||
 			(request.ID == "" && len(request.Drafts) == 0) ||
 			(request.ID != "" && len(request.Drafts) > 0) ||
-			len(request.Drafts) > 32 {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "one draft kind and id, or up to 32 joint drafts, are required"})
+			len(request.Drafts) > construction.JointDraftLimit {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "one draft kind and id, or up to 128 joint drafts, are required"})
 			return
 		}
 		var trailing any
@@ -252,7 +254,7 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		if (request.ID == "" && len(request.Drafts) == 0) ||
-			(request.ID != "" && len(request.Drafts) > 0) || len(request.Drafts) > 32 ||
+			(request.ID != "" && len(request.Drafts) > 0) || len(request.Drafts) > construction.JointDraftLimit ||
 			request.CandidateID == "" || request.Key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return

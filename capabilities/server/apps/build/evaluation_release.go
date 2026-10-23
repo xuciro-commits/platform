@@ -20,7 +20,7 @@ func (b *Build) testPlanAsset(plan construction.TestPlan, version int) (platform
 	if len(plan.Evaluation) > 0 {
 		return b.evaluationSetAsset(plan, version)
 	}
-	descriptor := platform.TestPlanDescriptor{Name: plan.Name, Title: plan.Title, Roots: plan.Roots, At: plan.At, Samples: plan.Samples, Steps: plan.Steps}
+	descriptor := platform.TestPlanDescriptor{Name: plan.Name, Title: plan.Title, Roots: plan.Roots, At: plan.At, Organization: plan.Organization, Samples: plan.Samples, Steps: plan.Steps}
 	if err := descriptor.Check(); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
@@ -76,6 +76,9 @@ func (b *Build) evaluationSetAsset(plan construction.TestPlan, version int) (pla
 	}
 	descriptor := platform.EvaluationSetDescriptor{Name: plan.Name, Title: plan.Title, Function: platform.AssetBinding{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetFunction, Name: function.Name}, SourceVersion: b.Manifest().Version + ".function-" + strconv.Itoa(ordinal)}, Model: plan.Model, Policy: plan.Evaluation[0]}
 	if err := descriptor.Check(); err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	if err := definition.CheckEvaluationPolicy(descriptor.Policy); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
 	for _, test := range descriptor.Policy.Cases {
@@ -262,7 +265,7 @@ func (b *Build) prepareTestPlanPublications(assets []platform.ReleaseAsset) ([]c
 		}
 		plan.Title, plan.Model, plan.Evaluation, plan.Function, plan.FunctionVersion = frozen.Title, frozen.Model, frozen.Evaluation, frozen.Function, frozen.FunctionVersion
 		if asset.Ref.Kind == platform.AssetTestPlan {
-			plan.Roots, plan.At, plan.Samples, plan.Steps = frozen.Roots, frozen.At, frozen.Samples, frozen.Steps
+			plan.Roots, plan.At, plan.Organization, plan.Samples, plan.Steps = frozen.Roots, frozen.At, frozen.Organization, frozen.Samples, frozen.Steps
 			plan.Application, plan.CandidateID, plan.Object, plan.Process, plan.As, plan.Actors, plan.Sample = "", "", "", "", "", nil, ""
 		}
 		if _, err := b.testPlanPinned(asset.Ref, asset.SourceVersion); err == nil {
@@ -281,7 +284,7 @@ func (b *Build) testPlanDraft(asset platform.ReleaseAsset) (construction.TestPla
 		if err != nil {
 			return construction.TestPlan{}, err
 		}
-		return construction.TestPlan{Name: descriptor.Name, Title: descriptor.Title, Roots: descriptor.Roots, At: descriptor.At, Samples: descriptor.Samples, Steps: descriptor.Steps}, nil
+		return construction.TestPlan{Name: descriptor.Name, Title: descriptor.Title, Roots: descriptor.Roots, At: descriptor.At, Organization: descriptor.Organization, Samples: descriptor.Samples, Steps: descriptor.Steps}, nil
 	}
 	descriptor, err := platform.ReadEvaluationSet(asset.Body)
 	if err != nil {

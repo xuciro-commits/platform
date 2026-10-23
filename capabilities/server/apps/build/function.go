@@ -5,7 +5,6 @@ import "platformserver/internal/construction"
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -33,7 +32,7 @@ func (b *Build) checkFunction(f construction.Function) error {
 	if !installed && (!selected || shape.App != construction.ID) {
 		return fmt.Errorf("Function %s needs a published object of this builder", f.Name)
 	}
-	if f.Proposal != nil && f.Proposal.HandoffRole != "" && !slices.Contains(b.Manifest().AllRoles(), f.Proposal.HandoffRole) {
+	if f.Proposal != nil && f.Proposal.HandoffRole != "" && !b.declaresRole(f.Proposal.HandoffRole) {
 		return fmt.Errorf("The proposal reviewer must hold a declared role")
 	}
 	// The complete candidate installs and checks its source object before the

@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"reflect"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -98,7 +99,7 @@ func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q 
 
 func (t *Tenant) readRecordFrom(store *recordStore, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-	page, refusal := t.recordsFrom(store, c.Member, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)
+	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -108,6 +109,44 @@ func (t *Tenant) readRecordFrom(store *recordStore, c platform.Caller, typ, id s
 	raw, err := json.Marshal(page.Records[0])
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	store.mu.Lock()
+	et := store.types[typ]
+	store.mu.Unlock()
+	value := reflect.ValueOf(page.Records[0])
+	if et != nil && value.Type() == et.info.Go {
+		var fields map[string]json.RawMessage
+		changed := false
+		for _, field := range et.info.Fields {
+			if len(field.Index) == 0 || field.Index[0] == 0 || field.Aside {
+				continue
+			}
+			// omitempty is a transport choice. Owner rules and flows still
+			// read initialized scalar zero/false, while nil optional values
+			// and fields withheld by their actual sources remain absent.
+			original := value.FieldByIndex(field.Index)
+			switch original.Kind() {
+			case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+				if !original.IsZero() {
+					continue
+				}
+				if fields == nil {
+					_ = json.Unmarshal(raw, &fields)
+				}
+				if _, present := fields[field.Name]; present {
+					continue
+				}
+				decision := t.authorizeFrom(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id, Fields: []string{field.Name}}, now, false)
+				if decision.Allow && len(decision.Withheld) == 0 {
+					fields[field.Name], _ = json.Marshal(original.Interface())
+					changed = true
+				}
+			}
+		}
+		if changed {
+			raw, _ = json.Marshal(fields)
+		}
 	}
 	return raw, nil
 }
@@ -155,11 +194,15 @@ func readRecordPath(c platform.Caller, typ, id string, path []string, now time.T
 		if !known || !declared || !field.ReadsAny(c.RolesIn(info.App)) {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
 		}
-		if !visible {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input has no value")
+		permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id, Fields: []string{name}}, now)
+		if !permission.Allow || len(permission.Withheld) > 0 {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
 		}
 		ref := typ + "/" + id
 		sources = append(sources, ref, ref+"#"+name)
+		if !visible {
+			return nil, sources, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input has no value")
+		}
 		if i == len(path)-1 {
 			return value, sources, nil
 		}
@@ -173,7 +216,7 @@ func readRecordPath(c platform.Caller, typ, id string, path []string, now time.T
 			return result, sources, nil
 		}
 		if json.Unmarshal(value, &id) != nil || id == "" {
-			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input reference is empty")
+			return nil, sources, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input reference is empty")
 		}
 		typ = field.Ref
 	}

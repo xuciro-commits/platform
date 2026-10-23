@@ -24,18 +24,19 @@ type State struct {
 // New multi-record capabilities use Transaction exclusively; historical
 // definitions retain their original bytes and execution during migration.
 type Action struct {
-	Adoption    *platform.ProposalAdoption `json:"adoption,omitempty" type:"json" field:"aside"`
-	Name        string                     `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
-	Title       string                     `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
-	Description string                     `json:"description,omitempty" help:"What it does, for people and agents"`
-	From        []string                   `json:"from" title:"Taken from" help:"The states it takes a record from"`
-	ToInput     string                     `json:"toInput,omitempty" title:"State from input"`
-	To          string                     `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
-	Inputs      []Input                    `json:"inputs,omitempty" title:"What people give"`
-	Transaction *platform.BusinessTxn      `json:"transaction,omitempty"`
-	Reads       *platform.RuleReadSpec     `json:"reads,omitempty" type:"json" field:"aside"`
-	Sets        []Set                      `json:"sets,omitempty" title:"What it sets"`
-	Conditions  []Condition                `json:"conditions,omitempty" title:"What it needs"`
+	ConfirmationOnly bool                       `json:"confirmationOnly,omitempty" title:"Require original confirmation receipt"`
+	Adoption         *platform.ProposalAdoption `json:"adoption,omitempty" type:"json" field:"aside"`
+	Name             string                     `json:"name" field:"required" help:"Lower-case letters and digits" example:"return"`
+	Title            string                     `json:"title" field:"required" title:"What people call it" example:"Hand it back"`
+	Description      string                     `json:"description,omitempty" help:"What it does, for people and agents"`
+	From             []string                   `json:"from" title:"Taken from" help:"The states it takes a record from"`
+	ToInput          string                     `json:"toInput,omitempty" title:"State from input"`
+	To               string                     `json:"to,omitempty" title:"Leaves it in" help:"The state it leaves the record in; empty: where it was"`
+	Inputs           []Input                    `json:"inputs,omitempty" title:"What people give"`
+	Transaction      *platform.BusinessTxn      `json:"transaction,omitempty"`
+	Reads            *platform.RuleReadSpec     `json:"reads,omitempty" type:"json" field:"aside"`
+	Sets             []Set                      `json:"sets,omitempty" title:"What it sets"`
+	Conditions       []Condition                `json:"conditions,omitempty" title:"What it needs"`
 	// Roles are who may take it; empty: every role of the object.
 	Roles    []string        `json:"roles,omitempty" title:"Taken by"`
 	Approval *ActionApproval `json:"approval,omitempty" title:"Approval"`

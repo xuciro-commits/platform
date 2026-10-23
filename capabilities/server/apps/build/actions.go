@@ -388,7 +388,7 @@ func lifecycle(o construction.Object, roles []string, creates creator, lookup fu
 			}
 		}
 		criteria, _ := actionCriteria(o, a, lookup)
-		l.Transitions = append(l.Transitions, platform.Transition{Adoption: a.Adoption, Criteria: criteria, Name: a.Name, Title: a.Title, Description: a.Description,
+		l.Transitions = append(l.Transitions, platform.Transition{ConfirmationOnly: a.ConfirmationOnly, Adoption: a.Adoption, Criteria: criteria, Name: a.Name, Title: a.Title, Description: a.Description,
 			From: slices.Clone(a.From), To: reach, ToInput: a.ToInput, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval, DeferRequired: true,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now, creates, lookup)

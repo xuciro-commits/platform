@@ -30,7 +30,7 @@ type Post_ = { object: string; match: Set_[]; field: string; amount: string; sub
 /** One line of the journal entry an action books: an account (=code or a source), a debit or a credit source, and what it is about. */
 type JournalLine_ = { account: string; debit?: string; credit?: string; text?: string; object?: string; partner?: string };
 type Journal_ = { date?: string; text?: string; lines: JournalLine_[] };
-export type Action = {adoption?:Api.ProposalAdoption; name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[]; journal?: Journal_; reverses?: string; transaction?: Api.BusinessTxn; reads?: Api.RuleReadSpec };
+export type Action = {confirmationOnly?:boolean;adoption?:Api.ProposalAdoption; name: string; title: string; description?: string; from: string[]; to?: string;toInput?:string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval; creates?: Create_[]; posts?: Post_[]; journal?: Journal_; reverses?: string; transaction?: Api.BusinessTxn; reads?: Api.RuleReadSpec };
 /** Gapless document numbers for an object's records: prefix, optional year, zero-padded count. */
 type Numbering_ = { field: string; prefix?: string; yearly?: boolean; width?: number };
 /** What one role of the builder app may do with the object. */

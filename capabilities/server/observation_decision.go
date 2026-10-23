@@ -49,6 +49,10 @@ func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *resultf
 		return nil
 	}
 	copy := *evidence
+	if evidence.Intervals != nil {
+		intervals := evidence.Intervals.Clone()
+		copy.Intervals = &intervals
+	}
 	return &copy
 }
 
@@ -127,6 +131,10 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		return answer, refusal
 	}
 	read := ObservationRead{Record: q.Record, Since: q.Until.Add(-time.Duration(plan.info.Definition.WindowSeconds) * time.Second), Until: q.Until, Mode: "summary"}
+	if plan.info.Definition.Decision.Mode == "intervals" {
+		read.Mode = "intervals"
+		read.Limit = platform.ObservationMaxPoints
+	}
 	if err := checkObservationRead(&read, now); err != nil {
 		t.mu.Unlock()
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -150,11 +158,17 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		return answer, refusal
 	}
 	t.mu.Unlock()
-	result, err := t.fetchObservation(ctx, plan, read)
+	result, err := t.fetchObservation(ctx, plan, read, now)
 	if err != nil {
 		return answer, observationUnavailable(err)
 	}
-	matched, inputs, err := platform.EvaluateObservation(plan.info.Definition, plan.entity, plan.record, result.Window, now)
+	var matched bool
+	var inputs map[string]json.RawMessage
+	if result.Intervals != nil {
+		matched, inputs, err = platform.EvaluateObservationIntervals(plan.info.Definition, plan.entity, plan.record, *result.Intervals, now)
+	} else {
+		matched, inputs, err = platform.EvaluateObservation(plan.info.Definition, plan.entity, plan.record, result.Window, now)
+	}
 	if err != nil {
 		return answer, observationUnavailable(err)
 	}
@@ -194,7 +208,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		return answer, refusal
 	}
 	submission = t.currentSubmissionSchema(owner, submission)
-	evidence := &resultformat.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.info.Version}, Record: plan.entity.Type + "/" + q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Window: result.Window}
+	evidence := &resultformat.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.info.Version}, Record: plan.entity.Type + "/" + q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Window: result.Window, Intervals: result.Intervals}
 	receipt, refusal := t.submitAcceptedVersion(owner, m, submission, now, false, nil, nil, evidence)
 	if receipt != nil {
 		answer.Receipt = &SubmissionAnswer{Record: receipt}

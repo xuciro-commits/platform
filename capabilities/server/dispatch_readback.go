@@ -174,7 +174,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			problem = fmt.Errorf("No observation status exists after this command started")
 			break
 		}
-		result, err := t.fetchObservation(context.Background(), plan, ObservationRead{Record: subject, Since: since, Until: at, Mode: "summary"})
+		result, err := t.fetchObservation(context.Background(), plan, ObservationRead{Record: subject, Since: since, Until: at, Mode: "summary"}, at)
 		if err != nil {
 			problem = err
 		} else if result.Window.Count == 0 {

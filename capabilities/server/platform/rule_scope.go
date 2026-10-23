@@ -28,6 +28,24 @@ type RuleCollection struct {
 	Policy  string `json:"policy"` // visible: declared scoped set; complete: reject withheld fields
 }
 
+// $subject.field is an explicit query key from the current typed record.
+// Plain names keep their original input-binding interpretation.
+func RuleCollectionSubjectField(object, of string, lookup func(string) (EntityInfo, bool)) (FieldInfo, bool, error) {
+	name, selected := strings.CutPrefix(of, "$subject.")
+	if !selected {
+		return FieldInfo{}, false, nil
+	}
+	info, ok := lookup(object)
+	field, found := info.Field(name)
+	if name == "id" && ok {
+		field, found = FieldInfo{Name: "id", Type: "text", ReadOnly: true}, true
+	}
+	if !ok || !found || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, field.Type) {
+		return FieldInfo{}, true, fmt.Errorf("collection subject key must be a declared text or record-reference field")
+	}
+	return field, true, nil
+}
+
 func RuleFieldKind(kind string) string {
 	switch kind {
 	case "longtext", "text", "string":
@@ -43,7 +61,7 @@ func RuleFieldKind(kind string) string {
 // Only paths actually named in the immutable expression are expanded, so
 // cyclic object references do not create an unbounded schema tree.
 func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, bool)) (ExprSchema, error) {
-	schema := ExprSchema{Refs: map[string]ExprType{"caller.id": {Kind: "text"}}, Sets: map[string]ExprSetType{}}
+	schema := ExprSchema{Refs: map[string]ExprType{"caller.id": {Kind: "text"}, "caller.tenant": {Kind: "text"}, "observation.ready": {Kind: "boolean"}, "observation.source": {Kind: "text"}, "observation.object": {Kind: "text"}, "observation.subject": {Kind: "text"}}, Sets: map[string]ExprSetType{}}
 	for key, typ := range spec.Inputs {
 		name := "input." + key
 		if strings.HasPrefix(key, "step.") || strings.HasPrefix(key, "row.") {
@@ -64,8 +82,12 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 		for _, f := range record.Fields {
 			schema.Refs[f.Name] = ExprType{Kind: RuleFieldKind(f.Type), Object: f.Ref}
 		}
+		schema.Refs["id"] = ExprType{Kind: "text"}
 	}
 	for name, set := range spec.Collections {
+		if _, _, err := RuleCollectionSubjectField(spec.Object, set.Of, lookup); err != nil {
+			return schema, err
+		}
 		if set.App == "" || set.Query == "" && set.Set == "" || set.Set != "" && set.Query != "" || set.Version < 0 || set.Policy != "visible" && set.Policy != "complete" {
 			return schema, fmt.Errorf("rule collection %s needs a declared query/version and scope policy", name)
 		}
@@ -184,7 +206,10 @@ func mergeRuleTypes(dst, src ExprType) ExprType {
 // RuleContext captures caller-filtered, immutable read values inside the
 // existing private view. The evaluator itself neither reads nor writes state.
 func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, bool), record any, inputs map[string]any, now time.Time) (ExprContext, error) {
-	ctx := ExprContext{Refs: map[string]ExprValue{"caller.id": ExprPresent("text", c.ID)}, Sets: map[string]ExprCollection{}, Me: c.ID, Now: now.UTC(), Today: c.Today(now)}
+	ctx := ExprContext{Refs: map[string]ExprValue{"caller.id": ExprPresent("text", c.ID), "caller.tenant": ExprPresent("text", c.Tenant)}, Sets: map[string]ExprCollection{}, Me: c.ID, Now: now.UTC(), Today: c.Today(now)}
+	for name, fact := range c.observationRuleFacts() {
+		ctx.Refs[name] = fact
+	}
 	for name, typ := range spec.Inputs {
 		v, ok := inputs[name]
 		if ok {
@@ -255,13 +280,22 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 		}
 		ctx.Refs[field.Name] = value
 	}
+	if spec.Object != "" {
+		ctx.Refs["id"] = ExprValue{Kind: "text", Status: "missing"}
+		if raw, present := values["id"]; present {
+			ctx.Refs["id"] = ExprValue{Kind: "text", Status: "value", Data: raw}
+		}
+	}
 	var visit func(Expr) error
 	visit = func(e Expr) error {
-		if e.Ref != "" && !strings.HasPrefix(e.Ref, "item.") && !strings.HasPrefix(e.Ref, "input.") && e.Ref != "caller.id" && !strings.HasPrefix(e.Ref, "step.") && !strings.HasPrefix(e.Ref, "row.") {
+		if e.Ref != "" && !strings.HasPrefix(e.Ref, "item.") && !strings.HasPrefix(e.Ref, "input.") && e.Ref != "caller.id" && e.Ref != "caller.tenant" && !strings.HasPrefix(e.Ref, "step.") && !strings.HasPrefix(e.Ref, "row.") {
 			var id string
 			_ = json.Unmarshal(values["id"], &id)
 			if id != "" {
-				ctx.Sources = append(ctx.Sources, spec.Object+"/"+id, spec.Object+"/"+id+"#"+e.Ref)
+				ctx.Sources = append(ctx.Sources, spec.Object+"/"+id)
+				if e.Ref != "id" {
+					ctx.Sources = append(ctx.Sources, spec.Object+"/"+id+"#"+e.Ref)
+				}
 			}
 		}
 		if e.Op == "path" && len(e.Args) == 1 && !strings.HasPrefix(e.Args[0].Ref, "item.") {
@@ -284,7 +318,10 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 				if json.Unmarshal(base.Data, &id) == nil && id != "" {
 					raw, sources, err := c.ReadRecordPath(field.Ref, id, e.Path, now)
 					if err != nil {
-						value.Status = "withheld"
+						value.Status = rulePathStatus(err)
+						if value.Status == "missing" {
+							ctx.Sources = append(ctx.Sources, sources...)
+						}
 					} else {
 						value.Status = "value"
 						value.Data = raw
@@ -351,6 +388,22 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 				var id string
 				_ = json.Unmarshal(values["id"], &id)
 				of = id
+			} else if field, selected, err := RuleCollectionSubjectField(spec.Object, set.Of, lookup); selected {
+				if err != nil {
+					return ctx, err
+				}
+				value := ctx.Refs[field.Name]
+				if value.Status != "value" || json.Unmarshal(value.Data, &of) != nil || of == "" {
+					return ctx, fmt.Errorf("collection %s subject key is unavailable", name)
+				}
+				var id string
+				_ = json.Unmarshal(values["id"], &id)
+				if id != "" {
+					ctx.Sources = append(ctx.Sources, spec.Object+"/"+id)
+					if field.Name != "id" {
+						ctx.Sources = append(ctx.Sources, spec.Object+"/"+id+"#"+field.Name)
+					}
+				}
 			} else if value, ok := inputs[set.Of].(string); ok {
 				of = value
 			} else {
@@ -427,8 +480,11 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 					if json.Unmarshal(base.Data, &ref) == nil && ref != "" {
 						raw, sources, err := c.ReadRecordPath(field.Ref, ref, path.Path, now)
 						if err != nil {
-							v.Status = "withheld"
-							collection.Withheld = true
+							v.Status = rulePathStatus(err)
+							collection.Withheld = collection.Withheld || v.Status == "withheld"
+							if v.Status == "missing" {
+								ctx.Sources = append(ctx.Sources, sources...)
+							}
 						} else {
 							v.Status = "value"
 							v.Data = raw
@@ -447,6 +503,16 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 		}
 	}
 	return ctx, nil
+}
+
+// RuleSchema has already checked every typed path. The record reader uses
+// invalid argument for an unset value or empty intermediate reference after
+// checking field access. Denied or hidden records remain withheld.
+func rulePathStatus(err *kernel.Error) string {
+	if err.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		return "missing"
+	}
+	return "withheld"
 }
 
 // ExprGoValue converts one evaluated scalar for the existing record assignment

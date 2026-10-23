@@ -94,4 +94,35 @@ func TestPublishedBuilderPageReplacesTheGeneratedPage(t *testing.T) {
 	if !bytes.Contains(candidate.Bytes, []byte("Reception visits")) {
 		t.Fatal("explicit published page did not replace the generated page of the same name")
 	}
+	owner := New("page-bootstrap")
+	drafts, err := owner.releaseDraftsOf(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, draft := range drafts {
+		if draft.Type == construction.PageType && draft.Name == page.Name {
+			found = bytes.Contains(draft.Image, []byte("Reception visits"))
+		}
+	}
+	if !found {
+		t.Fatal("import discarded the authored page because its name matched an object")
+	}
+	automatic, err := releaseAssets([]construction.Object{object}, nil, nil, nil, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err := platform.Candidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "visit"}}, automatic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drafts, err = owner.releaseDraftsOf(generated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, draft := range drafts {
+		if draft.Type == construction.PageType {
+			t.Fatal("an identical generated page acquired another owner")
+		}
+	}
 }

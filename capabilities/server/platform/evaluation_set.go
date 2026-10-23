@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -13,6 +15,7 @@ import (
 // EvaluationPolicy is the original AI owner’s measured synthetic-case gate.
 // Reports and model execution stay with that owner; releases freeze this data.
 type EvaluationPolicy struct {
+	CompareFields    []string         `json:"compareFields,omitempty"`
 	MinQuality       float64          `json:"minQuality"`
 	MaxCostUSD       float64          `json:"maxCostUsd"`
 	MaxLatencyMillis int64            `json:"maxLatencyMillis"`
@@ -28,6 +31,14 @@ func (p EvaluationPolicy) Check() error {
 	if math.IsNaN(p.MinQuality) || p.MinQuality <= 0 || p.MinQuality > 1 || math.IsNaN(p.MaxCostUSD) || p.MaxCostUSD <= 0 || p.MaxCostUSD > 1000 || p.MaxLatencyMillis < 1 || p.MaxLatencyMillis > 300000 || len(p.Cases) < 1 || len(p.Cases) > 5 {
 		return fmt.Errorf("function evaluation needs bounded quality, cost, latency and cases")
 	}
+	if len(p.CompareFields) > 16 {
+		return fmt.Errorf("evaluation compares at most 16 output fields")
+	}
+	for i, name := range p.CompareFields {
+		if !functionFieldName.MatchString(name) || slices.Contains(p.CompareFields[:i], name) {
+			return fmt.Errorf("evaluation comparison fields need unique output names")
+		}
+	}
 	seen := map[string]bool{}
 	for _, test := range p.Cases {
 		var input, expected map[string]json.RawMessage
@@ -37,6 +48,45 @@ func (p EvaluationPolicy) Check() error {
 		seen[test.Name] = true
 	}
 	return nil
+}
+
+// CheckEvaluationPolicy resolves the criterion against the same typed output
+// declaration. It does not relax input or complete output validation.
+func (f AIFunction) CheckEvaluationPolicy(p EvaluationPolicy) error {
+	if err := p.Check(); err != nil {
+		return err
+	}
+	for _, name := range p.CompareFields {
+		if !slices.ContainsFunc(f.Output, func(field Field) bool { return field.Name == name }) {
+			return fmt.Errorf("evaluation comparison names an undeclared output field %s", name)
+		}
+	}
+	return nil
+}
+
+// Matches measures only the declared criterion after the original evaluator
+// checks the complete output schema. Empty keeps the historical full match.
+func (p EvaluationPolicy) Matches(actual, expected []byte) bool {
+	var left, right any
+	if json.Unmarshal(actual, &left) != nil || json.Unmarshal(expected, &right) != nil {
+		return false
+	}
+	if len(p.CompareFields) == 0 {
+		return reflect.DeepEqual(left, right)
+	}
+	a, aok := left.(map[string]any)
+	b, bok := right.(map[string]any)
+	if !aok || !bok {
+		return false
+	}
+	for _, name := range p.CompareFields {
+		av, aok := a[name]
+		bv, bok := b[name]
+		if !aok || !bok || !reflect.DeepEqual(av, bv) {
+			return false
+		}
+	}
+	return true
 }
 
 // EvaluationSetDescriptor is portable policy data; it contains no local

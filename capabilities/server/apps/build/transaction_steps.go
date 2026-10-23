@@ -46,6 +46,8 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 		return nil
 	}
 	switch step.Kind {
+	case "intervals":
+		return b.checkTxnIntervals(step, scope, lookup)
 	case "post":
 		p := step.Post
 		info, found := lookup(step.Target.Type)
@@ -82,13 +84,16 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 	case "journal":
 		j := step.Journal
 		if j != nil && j.Reverses != "" {
-			if !construction.Named(j.Reverses) || len(j.Lines) > 0 {
+			if !construction.Named(j.Reverses) || len(j.Lines) > 0 || j.Set != "" || j.ClosedPeriod != "" {
 				return fmt.Errorf("A journal reversal names one original action and declares no new lines")
 			}
 			return check(j.Date, "date", "text")
 		}
 		if j == nil || len(j.Lines) < 2 || len(j.Lines) > 256 {
 			return fmt.Errorf("Journal steps need two or more bounded accounting lines")
+		}
+		if j.ClosedPeriod != "" && j.ClosedPeriod != "reject" && j.ClosedPeriod != "next-open" {
+			return fmt.Errorf("Journal steps need a known closed period policy")
 		}
 		if err := check(j.Date, "date", "text"); err != nil {
 			return err
@@ -99,7 +104,27 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 		if err := check(j.Currency, "text"); err != nil {
 			return err
 		}
+		if j.Set != "" {
+			for name := range scope.Inputs {
+				if strings.HasPrefix(name, "row.") {
+					return fmt.Errorf("Journal collections cannot nest an iteration")
+				}
+			}
+			info, _ := lookup(scope.Object)
+			index := slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == j.Set })
+			if index < 0 {
+				return fmt.Errorf("Journal collection is undeclared")
+			}
+			item, found := lookup(info.Sets[index].Object)
+			if !found || item.App != construction.ID {
+				return fmt.Errorf("Journal collection must belong to its authority")
+			}
+			scope = withTxnRow(scope, item)
+		}
 		for _, line := range j.Lines {
+			if err := check(line.When, "boolean"); err != nil {
+				return err
+			}
 			if (line.Debit == nil) == (line.Credit == nil) {
 				return fmt.Errorf("Each accounting line needs exactly one debit or credit")
 			}
@@ -147,6 +172,12 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 		if w == nil || !w.Close && strings.TrimSpace(w.Title) == "" || (w.Role == "") == (w.Member == nil) && !w.Close {
 			return fmt.Errorf("Work steps need a title and one declared recipient")
 		}
+		if (w.Structure == "") != (w.Unit == nil) || w.Unit != nil && (w.Role == "" || w.Member != nil) {
+			return fmt.Errorf("Organizational work needs its original structure, unit and role")
+		}
+		if err := check(w.Unit, "text", "reference"); err != nil {
+			return err
+		}
 		if err := check(w.Body, "text"); err != nil {
 			return err
 		}
@@ -166,6 +197,13 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 		}
 		if err := parameters(call.Inputs); err != nil {
 			return err
+		}
+		if call.Ref.App == construction.ID && call.Version > 0 {
+			if _, selected := b.jointDeclarations[call.Ref]; selected {
+				if _, version, valid := b.QueryDefinition(call.Ref.Name, call.Version); valid && version == call.Version {
+					return nil
+				}
+			}
 		}
 		if b.host != nil {
 			owner, ok := b.host.(host.TransactionHost)
@@ -331,14 +369,14 @@ func (b *Build) txnParameters(c platform.Caller, sets []platform.TxnSet, scope p
 	return platform.Raw(values), nil
 }
 
-func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, spec platform.TxnJournal, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time) *kernel.Error {
+func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, spec platform.TxnJournal, scope platform.RuleReadSpec, subject any, inputs map[string]any, iterations *int, now time.Time) *kernel.Error {
 	eval := func(expr *platform.Expr) (any, *kernel.Error) {
 		if expr == nil {
 			return "", nil
 		}
 		return ruleAssignment(*expr, scope, c, subject, inputs, now, b.conditionLookup)
 	}
-	entry := platform.Journal{Record: platform.Record{ID: "jnl-" + r.GetChangeId() + "-" + key}, Date: c.Today(now), Source: construction.ID + "/" + r.GetChangeId()}
+	entry := platform.Journal{Record: platform.Record{ID: "jnl-" + r.GetChangeId() + "-" + key}, Date: c.Today(now), Source: construction.ID + "/" + r.GetChangeId(), ClosedPeriod: spec.ClosedPeriod}
 	if spec.Reverses != "" {
 		if spec.Date != nil {
 			value, err := eval(spec.Date)
@@ -364,58 +402,91 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 			}
 		}
 	}
-	debit, credit := platform.ExprPresent("decimal", 0), platform.ExprPresent("decimal", 0)
-	for _, line := range spec.Lines {
-		value := platform.JournalLine{}
-		account, err := eval(&line.Account)
-		if err != nil {
-			return err
+	rows := []map[string]any{inputs}
+	if spec.Set != "" {
+		id, _ := inputs["$subject"].(string)
+		set, info, _, failure := b.txnRecordRows(c, r, scope.Object, id, spec.Set, key, iterations, now)
+		if failure != nil {
+			return failure
 		}
-		value.Account = constructionText(account)
-		for _, item := range []struct {
-			expr  *platform.Expr
-			value *string
-		}{{line.Text, &value.Text}, {line.Object, &value.Object}, {line.Partner, &value.Partner}} {
-			if item.expr != nil {
-				v, err := eval(item.expr)
-				if err != nil {
-					return err
-				}
-				*item.value = constructionText(v)
+		rows = make([]map[string]any, len(set.Records))
+		for i, raw := range set.Records {
+			rows[i], failure = txnRowInputs(c, info, raw, inputs)
+			if failure != nil {
+				return failure
 			}
 		}
-		amountExpr := line.Debit
-		if amountExpr == nil {
-			amountExpr = line.Credit
+		scope = withTxnRow(scope, info)
+	}
+	debit, credit := platform.ExprPresent("decimal", 0), platform.ExprPresent("decimal", 0)
+	for _, inputs = range rows {
+		for _, line := range spec.Lines {
+			if line.When != nil {
+				value, failure := evalRule(*line.When, scope, c, subject, inputs, now, b.conditionLookup)
+				if failure != nil {
+					return failure
+				}
+				if string(value.Value.Data) != "true" {
+					continue
+				}
+			}
+			if len(entry.Lines) == 256 {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Journal lines exceed their declared limit")
+			}
+			value := platform.JournalLine{}
+			account, err := eval(&line.Account)
+			if err != nil {
+				return err
+			}
+			value.Account = constructionText(account)
+			for _, item := range []struct {
+				expr  *platform.Expr
+				value *string
+			}{{line.Text, &value.Text}, {line.Object, &value.Object}, {line.Partner, &value.Partner}} {
+				if item.expr != nil {
+					v, err := eval(item.expr)
+					if err != nil {
+						return err
+					}
+					*item.value = constructionText(v)
+				}
+			}
+			amountExpr := line.Debit
+			if amountExpr == nil {
+				amountExpr = line.Credit
+			}
+			amount, err := evalRule(*amountExpr, scope, c, subject, inputs, now, b.conditionLookup)
+			if err != nil {
+				return err
+			}
+			zero := platform.ExprPresent(amount.Value.Kind, 0)
+			cmp, compareErr := platform.CompareExprValues(amount.Value, zero)
+			if compareErr != nil || cmp < 0 {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Accounting amounts cannot be negative")
+			}
+			v, convertErr := platform.ExprGoValue(amount.Value)
+			if convertErr != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid accounting amount")
+			}
+			number, numberErr := json.Number(constructionText(v)).Float64()
+			if numberErr != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid accounting amount")
+			}
+			if line.Debit != nil {
+				value.Debit = number
+				debit, err = txnMath("decimal", "+", debit, amount.Value, now)
+			} else {
+				value.Credit = number
+				credit, err = txnMath("decimal", "+", credit, amount.Value, now)
+			}
+			if err != nil {
+				return err
+			}
+			entry.Lines = append(entry.Lines, value)
 		}
-		amount, err := evalRule(*amountExpr, scope, c, subject, inputs, now, b.conditionLookup)
-		if err != nil {
-			return err
-		}
-		zero := platform.ExprPresent(amount.Value.Kind, 0)
-		cmp, compareErr := platform.CompareExprValues(amount.Value, zero)
-		if compareErr != nil || cmp < 0 {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Accounting amounts cannot be negative")
-		}
-		v, convertErr := platform.ExprGoValue(amount.Value)
-		if convertErr != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid accounting amount")
-		}
-		number, numberErr := json.Number(constructionText(v)).Float64()
-		if numberErr != nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid accounting amount")
-		}
-		if line.Debit != nil {
-			value.Debit = number
-			debit, err = txnMath("decimal", "+", debit, amount.Value, now)
-		} else {
-			value.Credit = number
-			credit, err = txnMath("decimal", "+", credit, amount.Value, now)
-		}
-		if err != nil {
-			return err
-		}
-		entry.Lines = append(entry.Lines, value)
+	}
+	if len(entry.Lines) < 2 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A journal entry needs at least two accounting lines")
 	}
 	if cmp, err := platform.CompareExprValues(debit, credit); err != nil || cmp != 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Accounting debits and credits must balance")

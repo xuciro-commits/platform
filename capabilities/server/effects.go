@@ -347,7 +347,7 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 		return t.sendMail(ep, x, now)
 	}
 	if ep.Kind == "a2a" {
-		return t.sendA2A(ep, x)
+		return t.sendA2A(ep, x, false)
 	}
 	if ep.Kind == "connection" {
 		return t.sendWriteback(x)
@@ -538,7 +538,7 @@ func effectActions() []platform.Action {
 		{Schema: SchemaEndpointAdd, Target: EndpointType, Capability: "integrations", Title: "Add endpoint",
 			Description: "Send the chosen events and effects to a URL, signed with a named secret (Standard Webhooks); or mail the chosen apps' notifications to members through an SMTP server.",
 			Payload: []platform.Field{{Name: "url", Type: "string", Required: true, Description: "https URL of the receiver"},
-				{Name: "secret", Type: "string", Required: true, Description: "Name of the signing secret in the secret store"},
+				{Name: "secret", Type: "string", Description: "Name of the signing secret in the secret store"},
 				{Name: "events", Type: "string[]", Description: "Action schemas or <protocol id>#<event> to send as webhooks"},
 				{Name: "effects", Type: "string[]", Description: "Effect kinds apps emit, <app>/<kind>, to send here"},
 				{Name: "kind", Type: "string", Description: "webhook (default), email, or a2a (an external agent's A2A 1.0 JSON-RPC URL; the secret is its bearer token)"},

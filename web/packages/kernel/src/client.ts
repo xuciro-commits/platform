@@ -4,11 +4,13 @@ import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
 import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition, SchemaVersion } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
+import { PreparedWorkspace, preparedIdentity, rememberPreparedIdentity, preparedMetadataPaths, readPath, type PreparedApplication } from "./prepared";
 
 /** One action a server offers to this caller: render from it, never re-check roles. Generated from the host. */
 export type ActionDeclaration = Action;
 
-export type Connection = { server: string; token: string; tenant: string; principal: string };
+export type Connection = { readonly server: string; token: string; readonly tenant: string; readonly principal: string };
+export class OfflineReadError extends Error { readonly name="OfflineReadError"; }
 
 /** The HTTP edge accepts both the host's structured refusal and a plain
  * diagnostic. Callers render only text, never the error object itself. */
@@ -23,6 +25,28 @@ export function apiErrorMessage(body: unknown): string | undefined {
 
 export class EdgeClient {
   readonly authorities: Authorities;
+  prepared?: PreparedWorkspace;
+  usingPrepared = false;
+  preparePaths() { return [...new Set([...preparedMetadataPaths, ...this.live.paths().filter(readPath)])]; }
+  async prepareApplication(application:Omit<PreparedApplication,"at"|"reads">,paths:string[]=[]) {
+    if(!this.prepared)throw Error("The workspace identity is not ready.");
+    const generation=this.generation;
+    const current=()=>{if(this.closed||this.generation!==generation)throw Error("The workspace identity changed.");};
+    const selected=[...new Set([...this.preparePaths(),...paths])];
+    if(selected.length>128||selected.some(path=>!readPath(path)))throw Error("Choose at most 128 readable task inputs for preparation.");
+    const reads:Record<string,unknown>={};
+    for(const path of selected){current();reads[path]=await this.get(path,true);}
+    current();
+    const definitions=reads["/v1/definitions"] as Definition[],ref=application.binding.ref;
+    const definition=definitions.find(item=>item.ref.app===ref.app&&item.ref.kind===ref.kind&&item.ref.name===ref.name);
+    const release=await this.get<{id:string}>("/v1/releases/active",true);
+    current();
+    if(definition?.version!==application.binding.sourceVersion||(reads["/v1/releases/active"] as {id:string}).id!==application.release||release.id!==application.release)throw Error("The application release changed during preparation. Refresh it and prepare again.");
+    this.prepared.prepare({...application,at:new Date().toISOString(),reads});
+    await rememberPreparedIdentity(this.connection);
+    this.usingPrepared=false;
+    return this.prepared.current()!;
+  }
   private live = new LiveReads((paths, signal) => fetch(this.connection.server + "/v1/changes?" + new URLSearchParams({ watch: JSON.stringify(paths) }), { headers: this.headers(), signal }));
   enableLiveReads() { return this.live.enable(); }
   subscribeRead(path: string, changed: () => void) { return this.live.subscribe(path, changed); }
@@ -74,17 +98,64 @@ export class EdgeClient {
    * are projected for this member. Never fall back to another page version. */
   async pageContent(ref:AssetRef,contentVersion:string):Promise<Definition>{
     if(ref.kind!=="page"||!ref.app||!ref.name||!/^[A-Za-z0-9._:-]+$/.test(ref.app)||ref.app.length>256||ref.name.length>256||ref.name.includes("/")||!/^page\.sha256\.[0-9a-f]{64}$/.test(contentVersion))throw Error("Invalid page content identity");
-    const path=`/v1/pages/${encodeURIComponent(ref.app)}/${encodeURIComponent(ref.name)}/${encodeURIComponent(contentVersion)}`,response=await fetch(this.connection.server+path,{headers:this.headers()});if(!response.ok)throw Error(`${path}: HTTP ${response.status}`);
-    const result=await response.json() as Definition;if(!result?.page||result.ref?.app!==ref.app||result.ref.kind!==ref.kind||result.ref.name!==ref.name||result.contentVersion!==contentVersion)throw Error("Page content identity differs from its original binding");return result;
+    const path=`/v1/pages/${encodeURIComponent(ref.app)}/${encodeURIComponent(ref.name)}/${encodeURIComponent(contentVersion)}`;
+    const result=await this.get<Definition>(path);if(!result?.page||result.ref?.app!==ref.app||result.ref.kind!==ref.kind||result.ref.name!==ref.name||result.contentVersion!==contentVersion)throw Error("Page content identity differs from its original binding");return result;
   }
-  private readonly storageKey: string;
+  private storageKey?: string;
+  private storageLoadError?: Error;
+  private generation = 0;
+  private closed = false;
+  private sending = new AbortController();
+  private currentConnection: Connection;
+  get connection(): Connection { return this.currentConnection; }
 
-  constructor(readonly connection: Connection, edge = "browser") {
-    this.storageKey = `outbox:${connection.server}:${connection.tenant}:${connection.principal}`;
+  constructor(connection: Connection, edge = "browser") {
+    this.currentConnection = { ...connection };
     this.authorities = new Authorities(edge);
+    if (connection.tenant && connection.principal) this.bindIdentity(connection.tenant, connection.principal);
+  }
+
+  /** Discovery may start without a tenant or member. Persistence begins only
+   * after the authority has named both; an old scope never joins the new one. */
+  bindIdentity(tenant: string, principal: string): void {
+    if (!tenant || !principal) throw Error("The workspace identity is not ready.");
+    const server = this.connection.server || globalThis.location?.origin;
+    if (!server) throw Error("The workspace host is not ready.");
+    const key = `outbox:${server.replace(/\/$/, "")}:${tenant}:${principal}`;
+    if (this.storageKey && key !== this.storageKey) throw Error("Open a new client for another workspace identity.");
+    this.closed = false;
+    if (key === this.storageKey) return;
+    this.currentConnection = { ...this.connection, tenant, principal };
+    if(!this.prepared||this.prepared.scope.tenant!==tenant||this.prepared.scope.principal!==principal)this.prepared=new PreparedWorkspace(this.connection);
+    this.storageKey = key;
+    this.storageLoadError = undefined;
+    this.authorities.refresh([]);
+    this.authorities.outbox = [];
     try {
-      this.authorities.outbox = JSON.parse(localStorage.getItem(this.storageKey) ?? "[]") as Entry[];
-    } catch { /* unreadable storage starts empty; the server keeps what was confirmed */ }
+      const saved: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+      const states = ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN", "SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_CONFLICT", "SUBMISSION_STATE_REJECTED"];
+      if (!Array.isArray(saved) || saved.some(entry => !entry?.submission?.idempotencyKey || entry.submission.tenantId !== tenant || entry.submission.principalId !== principal || !states.includes(entry.state))
+        || new Set(saved.map(entry => entry.submission.idempotencyKey)).size !== saved.length) throw Error("Invalid saved requests");
+      this.authorities.outbox = saved as Entry[];
+      let interrupted = false;
+      for (const entry of this.authorities.outbox) if (entry.state === "SUBMISSION_STATE_SENDING") {
+        this.authorities.transition(tenant, entry.submission.idempotencyKey!, "timeout");
+        interrupted = true;
+      }
+      if (interrupted) this.save();
+    } catch {
+      this.storageLoadError = Error("Saved requests could not be opened. Local storage was not replaced.");
+    }
+  }
+
+  /** Cancel the previous identity's transport. Its persisted in-flight request
+   * will reopen as unknown and retain the exact original key and payload. */
+  close(): void {
+    this.closed = true;
+    this.generation++;
+    this.sending.abort();
+    this.sending = new AbortController();
+    this.live.dispose();
   }
 
   /** Why a read failed, for a status line: a host on its production path refuses development tokens. */
@@ -93,18 +164,31 @@ export class EdgeClient {
   }
 
   /** The bearer token, the tenant once known (a person may be a member of several on one host), and the page's language, in which the host serves declarations. */
-  private headers(json = false): Record<string, string> {
+  private headers(json = false, connection = this.connection): Record<string, string> {
     const lang = typeof document === "undefined" ? "" : document.documentElement.lang;
-    return { Authorization: `Bearer ${this.connection.token}`, ...(this.connection.tenant ? { "Platform-Tenant": this.connection.tenant } : {}),
+    return { Authorization: `Bearer ${connection.token}`, ...(connection.tenant ? { "Platform-Tenant": connection.tenant } : {}),
       ...(lang ? { "Accept-Language": lang } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
   }
 
   async get<T>(key: string, fresh = false): Promise<T> {
-    const cached = fresh ? undefined : this.live.read<T>(key); if (cached) return cached.value;
+    const prepared=async():Promise<T>=>{
+      try{
+        if(fresh)throw Error("Connect to prepare current application content.");
+        this.prepared??=await preparedIdentity(this.connection);
+        if(!this.prepared)throw Error("This task was not prepared for offline use. Connect to continue.");
+        const value=this.prepared.read<T>(key);this.usingPrepared=true;return value;
+      }catch(error){throw new OfflineReadError(error instanceof Error?error.message:String(error));}
+    };
+    if(typeof navigator!=="undefined"&&navigator.onLine===false)return prepared();
+    let cached:{value:T}|undefined;
+    try{cached=fresh?undefined:this.live.read<T>(key);}catch(error){if(String(error).includes("live connection unavailable"))return prepared();throw error;}
+    if(cached)return cached.value;
     const [path, body] = key.split("\n");
-    const response = await fetch(this.connection.server + path, { headers: this.headers(body !== undefined), ...(body !== undefined ? { method: "POST", body } : {}) });
-    const current = fresh ? undefined : this.live.read<T>(key); if (current) return current.value;
+    let response:Response;
+    try{response=await fetch(this.connection.server + path, { headers: this.headers(body !== undefined), ...(body !== undefined ? { method: "POST", body } : {}) });}
+    catch{return prepared();}
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+    const current = fresh ? undefined : this.live.read<T>(key); if (current) return current.value;
     const value = await response.json() as T;
     return fresh ? value : this.live.read<T>(key)?.value ?? value;
   }
@@ -267,12 +351,18 @@ export class EdgeClient {
   }
 
   private save(): void {
-    try { localStorage.setItem(this.storageKey, JSON.stringify(this.authorities.outbox)); } catch { /* storage unavailable */ }
+    if (this.closed) throw Error("The workspace identity changed.");
+    if (this.storageLoadError) throw this.storageLoadError;
+    if (!this.storageKey) throw Error("The workspace identity is not ready.");
+    try { localStorage.setItem(this.storageKey, JSON.stringify(this.authorities.outbox)); }
+    catch { throw Error("Local request storage is unavailable. Retry after storage is restored."); }
   }
 
   /** Builds and queues a decision about `target`; returns its idempotency key. `expectedRevision`
    *  is the target's revision the user saw (K4 C12): a stale screen is refused, not applied. */
   draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = [], expectedRevision?: number, schemaVersion?: SchemaVersion, correctionOf?: string): string {
+    if (this.storageLoadError) throw this.storageLoadError;
+    if (!this.storageKey) throw Error("The workspace identity is not ready.");
     const key = crypto.randomUUID();
     const submission: SubmissionJson = {
       tenantId: this.connection.tenant, principalId: this.connection.principal,
@@ -287,24 +377,32 @@ export class EdgeClient {
     const entry = this.authorities.outbox.find(entry => entry.submission.idempotencyKey === key);
     if (entry && schemaVersion) entry.schemaVersion = { ...schemaVersion };
     if (entry && correctionOf) entry.correctionOf = correctionOf;
-    this.save();
+    try { this.save(); }
+    catch (error) {
+      this.authorities.outbox = this.authorities.outbox.filter(item => item !== entry);
+      throw error;
+    }
     return key;
   }
 
   private async transmit(entry: Entry, timeoutMs: number) {
-    const response = await fetch(`${this.connection.server}/v1/submissions`, {
-      method: "POST", body: JSON.stringify(entry.submission), signal: AbortSignal.timeout(timeoutMs),
-      headers: { ...this.headers(true), ...(entry.schemaVersion ? { "Platform-Schema-Version": entry.schemaVersion.version } : {}), ...(entry.correctionOf ? { "Platform-Correction-Of": entry.correctionOf } : {}) },
+    const connection = this.connection;
+    const response = await fetch(`${connection.server}/v1/submissions`, {
+      method: "POST", body: JSON.stringify(entry.submission), signal: AbortSignal.any([this.sending.signal, AbortSignal.timeout(timeoutMs)]),
+      headers: { ...this.headers(true, connection), ...(entry.schemaVersion ? { "Platform-Schema-Version": entry.schemaVersion.version } : {}), ...(entry.correctionOf ? { "Platform-Correction-Of": entry.correctionOf } : {}) },
     });
     const body = await response.json().catch(() => ({})) as { record?: { changeId?: string }; error?: { code?: string; message?: string; issues?: import("./gen/host").FieldIssue[] } };
-    return response.ok || body.error?.code ? body : undefined;
+    return response.ok && body.record?.changeId || body.error?.code ? body : undefined;
   }
 
   /** Re-read a terminal answer with the exact original submission. K5's saved terminal state stays terminal. */
   async repeat(key: string, timeoutMs = 5000): Promise<Entry> {
+    this.save();
+    const generation = this.generation;
     const entry = this.authorities.outbox.find(item => item.submission.tenantId === this.connection.tenant && item.submission.principalId === this.connection.principal && item.submission.idempotencyKey === key);
     if (!entry || !["SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_REJECTED", "SUBMISSION_STATE_CONFLICT"].includes(entry.state)) throw Error("The original answered request is unavailable.");
     const body = await this.transmit(entry, timeoutMs);
+    if (generation !== this.generation) throw Error("The workspace identity changed.");
     if (!body) throw Error("The original answer could not be confirmed.");
     const outcome = body.error?.code ?? body.record?.changeId ?? "";
     if (outcome !== entry.outcome) throw Error("The repeated answer differs from the original request.");
@@ -316,14 +414,24 @@ export class EdgeClient {
 
   /** Sends pending entries and retries unknown ones with the same key; returns entries that got an answer. */
   async send(timeoutMs = 5000): Promise<Entry[]> {
+    this.save();
+    const generation = this.generation;
     const answered: Entry[] = [];
     for (const entry of this.authorities.outbox.filter((e) => e.state === "SUBMISSION_STATE_PENDING" || e.state === "SUBMISSION_STATE_UNKNOWN")) {
       const { tenantId = "", idempotencyKey = "" } = entry.submission;
-      if (entry.state === "SUBMISSION_STATE_PENDING" && !navigator.onLine) continue; // stays pending offline
+      if (generation !== this.generation) break;
+      if (!navigator.onLine) continue;
+      if (entry.submission.tenantId !== this.connection.tenant || entry.submission.principalId !== this.connection.principal) throw Error("Saved requests belong to another workspace identity.");
+      const previous = entry.state;
       this.authorities.transition(tenantId, idempotencyKey, entry.state === "SUBMISSION_STATE_PENDING" ? "send" : "retry");
-      this.save();
+      try { this.save(); }
+      catch (error) {
+        this.authorities.transition(tenantId, idempotencyKey, previous === "SUBMISSION_STATE_PENDING" ? "undelivered" : "timeout");
+        throw error;
+      }
       try {
         const body = await this.transmit(entry, timeoutMs);
+        if (generation !== this.generation) break;
         if (body) {
           this.authorities.answer(tenantId, idempotencyKey, body.error?.code);
           entry.outcome = body.error?.code ?? body.record?.changeId ?? "";
@@ -335,6 +443,7 @@ export class EdgeClient {
           this.authorities.transition(tenantId, idempotencyKey, "timeout");
         }
       } catch {
+        if (generation !== this.generation) break;
         // A browser cannot tell whether a failed request reached the server: unknown, retried with the same key.
         this.authorities.transition(tenantId, idempotencyKey, "timeout");
       }

@@ -553,7 +553,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if reader == nil {
 			return "refused: a query reads as a member", nil
 		}
-		view, err := h.AgentQuery(*reader, d.app, tool.schema, str("for"), now)
+		view, err := h.AgentQuery(*reader, tool.query, str("for"), now)
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}

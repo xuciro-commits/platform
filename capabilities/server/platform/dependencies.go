@@ -253,6 +253,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 				if step.Link != nil {
 					add(step.Link.Binding.Ref)
 				}
+				if step.Intervals != nil {
+					add(step.Intervals.Predecessors.Ref)
+				}
 				if step.ForEach != nil {
 					for _, nested := range step.ForEach.Steps {
 						visit(nested)
@@ -313,6 +316,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 					}
 					if s.Link != nil {
 						add(s.Link.Binding.Ref)
+					}
+					if s.Intervals != nil {
+						add(s.Intervals.Predecessors.Ref)
 					}
 					refusal(s.Refusals)
 					if s.ForEach != nil {
@@ -430,7 +436,11 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 		}
 		add(observation.Connection)
 		add(observation.Object)
-		capability("query", observation.Name, CapabilityPure, observation.Roles, ValueSchema{Type: "object", Properties: map[string]ValueSchema{"record": {Type: "string"}, "since": {Type: "string"}, "until": {Type: "string"}, "mode": {Type: "string", Enum: []string{"summary", "points"}}, "limit": {Type: "integer"}}, Required: []string{"record", "since", "until", "mode"}}, ValueSchema{}, nil)
+		modes := []string{"summary", "points"}
+		if observation.Intervals != nil {
+			modes = append(modes, "intervals")
+		}
+		capability("query", observation.Name, CapabilityPure, observation.Roles, ValueSchema{Type: "object", Properties: map[string]ValueSchema{"record": {Type: "string"}, "since": {Type: "string"}, "until": {Type: "string"}, "mode": {Type: "string", Enum: modes}, "limit": {Type: "integer"}}, Required: []string{"record", "since", "until", "mode"}}, ValueSchema{}, nil)
 		if observation.Decision != nil {
 			add(observation.Decision.Action)
 			capability("operation", observation.Name+".evaluate", CapabilityAuthoritative, observation.Roles, ValueSchema{Type: "object", Properties: map[string]ValueSchema{"record": {Type: "string"}, "until": {Type: "string"}, "key": {Type: "string"}}, Required: []string{"record", "until", "key"}}, ValueSchema{}, nil)

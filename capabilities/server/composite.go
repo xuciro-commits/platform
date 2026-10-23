@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -29,7 +30,8 @@ import (
 // accepted result: the fork is promoted in the same commit, so a refused edit
 // refuses the whole command and nothing half-applied becomes visible. The
 // committed result carries sealed record/state images; recovery applies those
-// images without deciding the edits again. Version 1 remains historical.
+// images without deciding the edits again. Version 3 also binds a package
+// batch to its complete draft plan; versions 1 and 2 keep their original hashes.
 
 // CompositeEdit is one asset edit of a composite command.
 type CompositeEdit struct {
@@ -53,6 +55,7 @@ type acceptedComposite struct {
 	App         string          `json:"app"`
 	Member      string          `json:"member"`
 	Key         string          `json:"key"`
+	Context     string          `json:"context,omitempty"`
 	At          time.Time       `json:"at"`
 	Edits       []CompositeEdit `json:"edits"`
 	Changes     json.RawMessage `json:"changes,omitempty"`
@@ -61,11 +64,15 @@ type acceptedComposite struct {
 	Digest      string          `json:"digest"`
 }
 
-func compositeRequestHash(tenant, member, key string, edits []CompositeEdit) (string, error) {
-	return acceptance.Digest(struct {
+func compositeRequestHash(tenant, member, key string, edits []CompositeEdit, context ...string) (string, error) {
+	hash, err := acceptance.Digest(struct {
 		Tenant, Member, Key string
 		Edits               []CompositeEdit
 	}{tenant, member, key, edits})
+	if err != nil || len(context) == 0 || context[0] == "" {
+		return hash, err
+	}
+	return acceptance.Digest([]string{hash, context[0]})
 }
 
 func encodeAcceptedComposite(saved acceptedComposite) ([]byte, error) {
@@ -114,8 +121,16 @@ func decodeAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return saved, fmt.Errorf("composite result has trailing data")
 	}
-	hash, err := compositeRequestHash(saved.Tenant, saved.Member, saved.Key, saved.Edits)
-	if err != nil || (saved.Version != 1 && saved.Version != 2) || saved.Kind != "composite-result" || saved.App != construction.ID ||
+	hash, err := compositeRequestHash(saved.Tenant, saved.Member, saved.Key, saved.Edits, saved.Context)
+	if saved.Version == 3 {
+		context, failure := hex.DecodeString(saved.Context)
+		if failure != nil || len(context) != 32 {
+			return saved, fmt.Errorf("composite batch context is invalid")
+		}
+	} else if saved.Context != "" {
+		return saved, fmt.Errorf("legacy composite contains a batch context")
+	}
+	if err != nil || (saved.Version != 1 && saved.Version != 2 && saved.Version != 3) || saved.Kind != "composite-result" || saved.App != construction.ID ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		len(saved.Edits) == 0 || len(saved.Edits) > 64 || saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid composite result identity")
@@ -129,10 +144,10 @@ func decodeAcceptedComposite(raw []byte) (acceptedComposite, error) {
 			return saved, fmt.Errorf("composite edit %d has no schema or target", i+1)
 		}
 	}
-	if saved.Version == 1 && (len(saved.Changes) != 0 || saved.Refusal != "") || saved.Version == 2 && (len(saved.Changes) == 0) == (saved.Refusal == "") {
+	if saved.Version == 1 && (len(saved.Changes) != 0 || saved.Refusal != "") || saved.Version >= 2 && (len(saved.Changes) == 0) == (saved.Refusal == "") {
 		return saved, fmt.Errorf("composite result has incompatible changes or refusal")
 	}
-	if saved.Version == 2 && saved.Refusal == "" {
+	if saved.Version >= 2 && saved.Refusal == "" {
 		batch, receipt, err := resultformat.DecodeBatch(saved.Changes)
 		if err != nil || batch.Tenant != saved.Tenant || batch.App != saved.App || !batch.At.Equal(saved.At) || receipt.GetSubmission().GetPrincipalId() != saved.Member {
 			return saved, fmt.Errorf("composite result changes differ: %v", err)
@@ -318,7 +333,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 		}
 		return saved, nil
 	}
-	if saved.Version == 2 {
+	if saved.Version >= 2 {
 		if saved.Refusal == "" {
 			batch, _, _ := resultformat.DecodeBatch(saved.Changes)
 			if _, err := t.applyAcceptedBatch(t.app(construction.ID).AcceptedLedger(), saved.Changes); err != nil {

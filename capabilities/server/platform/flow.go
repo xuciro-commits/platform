@@ -246,7 +246,7 @@ type Wait struct {
 	On    string
 	Match func(c Caller, r *Run, e Event) bool
 	Until func(c Caller, r *Run) bool
-	At    func(c Caller, r *Run) time.Time
+	At    func(c Caller, r *Run) (time.Time, *kernel.Error)
 }
 
 // Ask gives people a task. Its answer, one of Answers ("done"

@@ -295,11 +295,6 @@ func (b *Build) normalizeObjectRules(o *construction.Object) error {
 			}
 			*set = construction.Set{Field: set.Field, Expr: &e}
 		}
-		if a.Transaction != nil {
-			if err := b.normalizeTransaction(*o, a, lookup); err != nil {
-				return err
-			}
-		}
 	}
 	if err := b.migrateObjectTransactions(o); err != nil {
 		return err
@@ -318,7 +313,9 @@ func (b *Build) normalizeObjectRules(o *construction.Object) error {
 			return err
 		}
 	}
-	return b.checkObjectRules(*o)
+	// Draft lowering changes representation only. Cross-object rule checking
+	// belongs to Check, with the complete publication candidate available.
+	return nil
 }
 func (b *Build) checkObjectRules(o construction.Object) error {
 	if err := b.checkObjectProtocols(o); err != nil {
@@ -405,11 +402,20 @@ func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, look
 			return fmt.Errorf("%s collection %s is unavailable", where, name)
 		}
 		if set.Of != "" && set.Of != "$subject" {
-			if _, ok := s.Inputs[set.Of]; !ok {
+			_, selected, err := platform.RuleCollectionSubjectField(s.Object, set.Of, lookup)
+			if err != nil {
+				return err
+			}
+			if _, ok := s.Inputs[set.Of]; !ok && !selected {
 				return fmt.Errorf("%s collection %s needs a declared input", where, name)
 			}
 		}
 		q, version, ok := b.host.RuleQuery(set.App, set.Query, set.Version)
+		if set.App == construction.ID {
+			if _, selected := b.jointDeclarations[platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}]; selected {
+				q, version, ok = b.QueryDefinition(set.Query, set.Version)
+			}
+		}
 		if !ok || version != set.Version || q.Object != set.Object || (q.By == "") != (set.Of == "") {
 			return fmt.Errorf("%s collection %s does not bind its retained query/object/input", where, name)
 		}

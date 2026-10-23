@@ -29,6 +29,9 @@ const (
 	JournalType = "core.journal"
 	// Accountant keeps the chart and the periods, posts and reverses by hand; Steward may read.
 	Accountant = "accountant"
+	// ReferenceReader reads posting accounts and periods, without maintaining
+	// master data or accessing journals and their balances.
+	ReferenceReader = "reference-reader"
 	// ReadTrialBalance is the per-account debit and credit of a period.
 	ReadTrialBalance = "core.trial-balance"
 )
@@ -85,6 +88,9 @@ func bookEntities() []platform.Entity {
 	}
 	for i := range entities {
 		entities[i].Scope = platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Steward: platform.ScopeTenant, Accountant: platform.ScopeTenant}}
+		if entities[i].Type == AccountType || entities[i].Type == PeriodType {
+			entities[i].Scope.Levels[ReferenceReader] = platform.ScopeTenant
+		}
 	}
 	return entities
 }
@@ -188,6 +194,9 @@ func validateJournal(c platform.Caller, record any) *kernel.Error {
 
 func checkJournal(c platform.Caller, j *Journal) (platform.Outcome, *kernel.Error) {
 	outcome := platform.Outcome{Result: "rejected"}
+	if j.ClosedPeriod != "" && j.ClosedPeriod != "reject" && j.ClosedPeriod != "next-open" {
+		return outcome, refuse("Unknown closed period policy")
+	}
 	if len(j.Lines) < 2 {
 		return outcome, refuse("An entry has at least two lines")
 	}
@@ -229,6 +238,10 @@ func checkJournal(c platform.Caller, j *Journal) (platform.Outcome, *kernel.Erro
 		j.Number = nextNumber(c, j.Period)
 		return platform.Outcome{Result: "delivered"}, nil
 	}
+	if j.ClosedPeriod == "reject" {
+		outcome.PublicMessage = "The posting period is closed. The business document remains accepted."
+		return outcome, refuse("Period {period} is closed", periods[own].Code)
+	}
 	for _, p := range periods[own+1:] {
 		if p.State == "open" {
 			j.Period, j.Shifted = p.Code, true
@@ -265,7 +278,7 @@ func reversal(c platform.Caller, j *Journal, payload json.RawMessage, now time.T
 	if p.Date == "" {
 		p.Date = c.Today(now)
 	}
-	rev := Journal{Record: platform.Record{ID: j.ID + "-rev"}, Date: p.Date, Text: "Reversal of " + firstNonEmpty(j.Number, j.ID) + " " + j.Text, Currency: j.Currency, Reverses: j.ID, Source: j.Source}
+	rev := Journal{Record: platform.Record{ID: j.ID + "-rev"}, Date: p.Date, Text: "Reversal of " + firstNonEmpty(j.Number, j.ID) + " " + j.Text, Currency: j.Currency, Reverses: j.ID, Source: j.Source, ClosedPeriod: j.ClosedPeriod}
 	for _, l := range j.Lines {
 		rev.Lines = append(rev.Lines, JournalLine{Account: l.Account, Debit: l.Credit, Credit: l.Debit, Text: l.Text, Object: l.Object, Partner: l.Partner})
 	}
@@ -316,9 +329,22 @@ type TrialBalanceLine struct {
 	Sources       []string `json:"-"`
 }
 
-func trialBalance(c platform.Caller, period string) TrialBalance {
-	accounts, _, _ := platform.Find[Account](c, platform.Query{Limit: 2000})
-	entries, _, _ := platform.Find[Journal](c, platform.Query{Limit: 5000})
+func trialBalance(c platform.Caller, period string) (TrialBalance, *kernel.Error) {
+	// A tenant total requires the whole journal scope. An empty filtered
+	// journal list does not prove that its balance is zero.
+	for _, entity := range bookEntities() {
+		if entity.Type == JournalType && !c.Automation && entity.Scope.LevelFor(c.RolesIn(ID)) != platform.ScopeTenant {
+			return TrialBalance{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The trial balance requires access to all journals")
+		}
+	}
+	accounts, _, failure := platform.Find[Account](c, platform.Query{Limit: 2000})
+	if failure != nil {
+		return TrialBalance{}, failure
+	}
+	entries, _, failure := platform.Find[Journal](c, platform.Query{Limit: 5000})
+	if failure != nil {
+		return TrialBalance{}, failure
+	}
 	sums := map[string]*TrialBalanceLine{}
 	for _, j := range entries {
 		if j.Archived || period != "" && j.Period != period {
@@ -346,7 +372,7 @@ func trialBalance(c platform.Caller, period string) TrialBalance {
 		out.Debit, out.Credit = round2(out.Debit+row.Debit), round2(out.Credit+row.Credit)
 	}
 	sort.Slice(out.Rows, func(a, b int) bool { return out.Rows[a].Account < out.Rows[b].Account })
-	return out
+	return out, nil
 }
 
 // DefaultAccounts is a small chart a tenant can start from: enough for goods

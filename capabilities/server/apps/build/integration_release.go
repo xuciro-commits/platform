@@ -201,6 +201,11 @@ func (b *Build) integrationName(kind platform.AssetKind, id string) (string, err
 			return name, nil
 		}
 	}
+	for ref, planned := range b.releaseDraftIDs {
+		if ref.App == construction.ID && ref.Kind == kind && planned == id {
+			return ref.Name, nil
+		}
+	}
 	return "", fmt.Errorf("integration %s/%s is unavailable", kind, id)
 }
 func (b *Build) integrationID(kind platform.AssetKind, name string) (string, error) {
@@ -302,7 +307,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 		if err != nil {
 			return asset, err
 		}
-		body = construction.WritebackDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Object: r.Object, On: r.On, Method: r.Method, Path: r.Path, Mapping: r.Mapping, Result: r.Result}
+		body = construction.WritebackDefinition{ObjectBindings: objectBindings(r.Object), Name: r.Name, Title: r.Title, Connection: conn, Object: r.Object, On: r.On, Method: r.Method, Transport: r.Transport, Path: r.Path, Mapping: r.Mapping, Result: r.Result}
 	case construction.Observation:
 		d, err := b.observationDefinition(r)
 		if err != nil {
@@ -654,7 +659,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if err != nil {
 			return nil, err
 		}
-		record = construction.Writeback{Name: d.Name, Title: d.Title, Connection: conn, Object: d.Object, On: d.On, Method: d.Method, Path: d.Path, Mapping: d.Mapping, Result: d.Result}
+		record = construction.Writeback{Name: d.Name, Title: d.Title, Connection: conn, Object: d.Object, On: d.On, Method: d.Method, Transport: d.Transport, Path: d.Path, Mapping: d.Mapping, Result: d.Result}
 	case platform.AssetObservation:
 		var d platform.ObservationDefinition
 		if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -667,7 +672,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if err != nil {
 			return nil, err
 		}
-		record = construction.Observation{Name: d.Name, Title: d.Title, Description: d.Description, Connection: conn, Object: d.Object.Name, DeviceField: d.DeviceField, Signal: d.Signal, Unit: d.Unit, Path: d.Path, WindowSeconds: d.WindowSeconds, ExpectedRetentionSeconds: d.ExpectedRetentionSeconds, ExpectedGranularitySeconds: d.ExpectedGranularitySeconds, Roles: slices.Clone(d.Roles), Scheduled: d.Scheduled, Decision: d.Decision}
+		record = construction.Observation{Name: d.Name, Title: d.Title, Description: d.Description, Connection: conn, Object: d.Object.Name, DeviceField: d.DeviceField, Signal: d.Signal, Unit: d.Unit, Path: d.Path, WindowSeconds: d.WindowSeconds, ExpectedRetentionSeconds: d.ExpectedRetentionSeconds, ExpectedGranularitySeconds: d.ExpectedGranularitySeconds, Roles: slices.Clone(d.Roles), Scheduled: d.Scheduled, RequireComplete: d.RequireComplete, Decision: d.Decision, Intervals: d.Intervals}
 	case platform.AssetMatching:
 		var d construction.MatchingDefinition
 		if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {

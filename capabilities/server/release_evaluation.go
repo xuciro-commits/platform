@@ -109,6 +109,9 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if t.ai == nil {
 		return "", fmt.Errorf("the tenant has no model provider")
 	}
+	if err := definition.CheckEvaluationPolicy(plan.Evaluation[0]); err != nil {
+		return "", err
+	}
 	model, provider, refusal := t.ai.Model(plan.Model)
 	if refusal != nil {
 		return "", fmt.Errorf("the plan model is not enabled")

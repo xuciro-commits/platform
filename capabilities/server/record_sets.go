@@ -184,7 +184,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	if et == nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable")
 	}
-	visible, refusal := t.visibleIn(store, c.Member, et, at)
+	visible, refusal := t.visibleForCallerIn(store, c, et, at)
 	if refusal != nil {
 		return result, refusal
 	}

@@ -57,6 +57,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []resultformat.Rel
 	if err != nil {
 		return nil, err
 	}
+	draft.installingSet = true
 	for _, installation := range installations {
 		plan, err := draft.installationPlan(registry, installation)
 		if err != nil {
@@ -85,6 +86,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []resultformat.Rel
 		}
 
 	}
+	draft.installingSet = false
 	if err := draft.validateAssetSet(); err != nil {
 		return nil, err
 	}
@@ -171,6 +173,9 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool, reviewed ...p
 
 func (t *Tenant) validateAssetSet() error {
 	for _, et := range t.records.sortedTypes() {
+		if err := t.checkObjectProperties(et.info); err != nil {
+			return err
+		}
 		if err := t.checkRecordSetDeclarations(et.info); err != nil {
 			return err
 		}

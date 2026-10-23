@@ -3,7 +3,7 @@
 // record source, the decision path (K5 outbox, idempotent send) and the
 // `opens` map from record types to the view that shows them.
 import { confirmedDecision, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
-import { queryElements, resolveElements, type EnterpriseStereotype, type EdgeClient, type ActionDeclaration, type Entry, type Api } from "@platform/kernel";
+import { OfflineReadError, queryElements, resolveElements, type EnterpriseStereotype, type EdgeClient, type ActionDeclaration, type Entry, type Api } from "@platform/kernel";
 import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,7 +13,7 @@ type Notification = Api.Notification;
 type ProtocolInfo = Api.ProtocolInfo;
 
 const metadataPaths = ["/v1/actions", "/v1/entities", "/v1/definitions", "/v1/protocols", "/v1/views"];
-const offline = (error: unknown) => /live connection unavailable|HTTP (400|413)/.test(String(error));
+const offline = (error: unknown) => error instanceof OfflineReadError || /live connection unavailable/.test(String(error));
 
 // Remounts receive a new identity too, without reusing an older query key.
 let metadataRevision = 0;
@@ -57,11 +57,11 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   const hostMe = useQuery({ queryKey: [token, tenant, "/v1/host/me"], queryFn: () => client.get<{ subject: string; tenants: string[] }>("/v1/host/me"), enabled: ready, retry: false });
 
   const [outbox, setOutbox] = useState<Entry[]>([]);
-  useEffect(() => setOutbox([...client.authorities.outbox]), [client]);
+  useEffect(() => setOutbox([...client.authorities.outbox]), [client, ready]);
   // Moves with every change the host reports and every decision taken here: views that read through the source read again.
   const [revision, setRevision] = useState(0);
   useEffect(() => ready ? client.enableLiveReads() : undefined, [client, ready]);
-  const refresh = useCallback(async () => { client.refreshLiveReads(); await queries.invalidateQueries(); setRevision((r) => r + 1); }, [client, queries]);
+  const refresh = useCallback(async () => { client.usingPrepared = false; client.refreshLiveReads(); await queries.invalidateQueries(); setRevision((r) => r + 1); }, [client, queries]);
 
   const decide = useCallback<Host["decide"]>(async (schema, target, payload, options = {}) => {
     // A type this client has no authority for is one the tenant declared while
@@ -87,13 +87,15 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       if (options.onRefused) options.onRefused(reason); else notify.error(reason);
       return false;
     }
-    const key = original?.submission.idempotencyKey ?? pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision, actions?.find(action => action.schema === schema)?.schemaVersion, options.correctionOf);
+    let key: string | undefined;
     let answered: Entry[];
     try {
+      key = original?.submission.idempotencyKey ?? pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision, options.schemaVersion ?? actions?.find(action => action.schema === schema)?.schemaVersion, options.correctionOf);
       answered = original && ["SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_REJECTED", "SUBMISSION_STATE_CONFLICT"].includes(original.state) ? [await client.repeat(key!)] : await client.send();
-    } catch {
+    } catch (error) {
       if (original) options.onOutcome?.(original);
-      const reason = t("The original answer could not be refreshed. Its saved result and inputs are retained.");
+      setOutbox([...client.authorities.outbox]);
+      const reason = error instanceof Error ? t(error.message) : t("The original answer could not be refreshed. Its saved result and inputs are retained.");
       if (options.onRefused) options.onRefused(reason); else notify.error(reason);
       return false;
     }
@@ -168,7 +170,11 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
       catalog: actions ?? [],
-      resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await refresh(); },
+      resend: async () => {
+        try { await client.send(); await refresh(); }
+        catch (error) { notify.error(error instanceof Error ? t(error.message) : t("Host unreachable")); }
+        finally { setOutbox([...client.authorities.outbox]); }
+      },
     };
     host.applications = applicationUIInfo((apps ?? []).filter(app => app.id !== "host-console" || hostMe.isSuccess), host);
     return host;

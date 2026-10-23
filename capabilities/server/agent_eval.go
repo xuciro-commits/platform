@@ -544,7 +544,7 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 		out, _ := json.Marshal(m)
 		return string(out)
 	}
-	if tool.kind == "read" || tool.kind == "context" || tool.kind == "search" || tool.kind == "knowledge" {
+	if tool.kind == "read" || tool.kind == "query" || tool.kind == "context" || tool.kind == "search" || tool.kind == "knowledge" {
 		for _, s := range run.Steps {
 			if s.Tool == tool.tool.Name && strip(s.Arguments) == strip(string(raw)) {
 				return s.Outcome
@@ -558,7 +558,7 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 	endRead := h.BeginAgentRead()
 	defer endRead()
 	c := a.automation(AgentApp, true) // replaying: no decision is made
-	if tool.kind == "read" || tool.kind == "context" || tool.kind == "search" {
+	if tool.kind == "read" || tool.kind == "query" || tool.kind == "context" || tool.kind == "search" {
 		out, _ := a.use(c, d, &dry, tool, args, raw, &RunStep{}, now)
 		return out
 	}

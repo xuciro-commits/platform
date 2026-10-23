@@ -27,6 +27,15 @@ type ConfirmationTransport interface {
 
 type ConfirmationRuntime interface{ ConfirmationTransport() ConfirmationTransport }
 
+type ConfirmationCompletionRuntime interface {
+	ConfirmationCompletion(Caller, string, string, string) bool
+}
+
+func (c Caller) ConfirmationCompletion(object, id, action string) bool {
+	runtime, ok := c.rt.(ConfirmationCompletionRuntime)
+	return ok && runtime.ConfirmationCompletion(c, object, id, action)
+}
+
 func (c Caller) ConfirmationTransport() ConfirmationTransport {
 	rt, ok := c.rt.(ConfirmationRuntime)
 	if !ok || !c.Staging() || c.Replaying {

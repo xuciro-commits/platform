@@ -48,7 +48,8 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 }
 
 type ownerDraftRequest struct {
-	Key string
+	Key         string
+	From, Until int
 }
 
 func assetDraftPayload(info platform.EntityInfo, image json.RawMessage) (json.RawMessage, error) {
@@ -74,11 +75,19 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	if err != nil {
 		return nil, nil, err
 	}
+	if request != nil && request.Until != 0 {
+		if !context.DraftsOnly || request.From < 0 || request.Until > len(drafts) || request.From >= request.Until || request.Until-request.From > 64 {
+			return nil, nil, fmt.Errorf("draft batch must contain one to 64 selected owner drafts")
+		}
+		drafts = drafts[request.From:request.Until]
+	}
 	decision := t.newStagedDecision()
 	view, err := t.assetInstallationView(decision.records)
 	if err != nil {
 		return nil, nil, err
 	}
+	view.installingSet = true
+	defer func() { view.installingSet = false }()
 	if definitionOnly {
 		shapes, err := t.releaseAssetShapes(candidate.Assets)
 		if err != nil {
@@ -213,6 +222,12 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		// The decision fork reads these same installed declarations on its next
 		// create; the accepted owner ledger remains untouched.
 		decision.attachPrivateHosts()
+	}
+	if !context.DraftsOnly {
+		view.installingSet = false
+		if err := view.validateAssetSet(); err != nil {
+			return nil, nil, err
+		}
 	}
 	if receipt == nil {
 		return decision, nil, nil

@@ -85,7 +85,9 @@ func (a *cart) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 		line, known := platform.Get[Cart](c, id)
 		switch s.GetSchema().GetName() {
 		case "cart.line.add", "cart.line.ask":
-			var p struct{ Item string }
+			var p struct {
+				Item string `json:"item"`
+			}
 			json.Unmarshal(s.GetPayload(), &p)
 			if s.GetSchema().GetName() == "cart.line.add" {
 				if err := c.Probe(testProtocol().ID(), "hold", id, p, now); err != nil {

@@ -278,13 +278,13 @@ func checkObservationRead(q *ObservationRead, now time.Time) error {
 		}
 		return nil
 	}
-	if !slices.Contains([]string{"summary", "points"}, q.Mode) || q.Since.IsZero() || q.Until.IsZero() || !q.Since.Before(q.Until) || q.Until.Sub(q.Since) > time.Duration(platform.ObservationMaxWindowSeconds)*time.Second || q.Until.After(now.Add(time.Minute)) {
+	if !slices.Contains([]string{"summary", "points", "intervals"}, q.Mode) || q.Since.IsZero() || q.Until.IsZero() || !q.Since.Before(q.Until) || q.Until.Sub(q.Since) > time.Duration(platform.ObservationMaxWindowSeconds)*time.Second || q.Until.After(now.Add(time.Minute)) {
 		return fmt.Errorf("choose a bounded observation time window and summary or points")
 	}
 	if q.Mode == "summary" && q.Limit != 0 {
 		return fmt.Errorf("summary does not request raw points")
 	}
-	if q.Mode == "points" && q.Limit == 0 {
+	if (q.Mode == "points" || q.Mode == "intervals") && q.Limit == 0 {
 		q.Limit = 1000
 	}
 	if q.Limit < 0 || q.Limit > 5000 {
@@ -293,8 +293,11 @@ func checkObservationRead(q *ObservationRead, now time.Time) error {
 	return nil
 }
 
-func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan, q ObservationRead) (platform.ObservationResult, error) {
+func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan, q ObservationRead, now time.Time) (platform.ObservationResult, error) {
 	result := platform.ObservationResult{Ref: plan.info.Ref, Version: plan.info.Version, Object: plan.info.Definition.Object, Record: q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Sources: plan.sources}
+	if q.Mode == "intervals" && plan.info.Definition.Intervals == nil {
+		return result, fmt.Errorf("the observation has no declared state interval analysis")
+	}
 	if q.Mode == "latest" && plan.connection.Protocol == nil {
 		return result, fmt.Errorf("current device reads require a protocol connection")
 	}
@@ -338,10 +341,11 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		return result, fmt.Errorf("observation answer exceeds its read budget")
 	}
 	var answer struct {
-		Window   platform.ObservationWindow  `json:"window"`
-		Points   []platform.ObservationPoint `json:"points,omitempty"`
-		Coverage *platform.DriverCoverage    `json:"coverage,omitempty"`
-		Samples  []platform.DriverSample     `json:"samples,omitempty"`
+		Window    platform.ObservationWindow         `json:"window"`
+		Points    []platform.ObservationPoint        `json:"points,omitempty"`
+		Coverage  *platform.DriverCoverage           `json:"coverage,omitempty"`
+		Samples   []platform.DriverSample            `json:"samples,omitempty"`
+		Intervals *platform.ObservationIntervalInput `json:"intervals,omitempty"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -350,6 +354,20 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return result, fmt.Errorf("observation storage returned trailing data")
+	}
+	if q.Mode == "intervals" {
+		if answer.Intervals == nil || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) > 0 || len(answer.Samples) > 0 || answer.Coverage != nil || !answer.Intervals.Since.Equal(q.Since) || !answer.Intervals.Until.Equal(q.Until) || len(answer.Intervals.Points) > q.Limit {
+			return result, fmt.Errorf("state observations must match their requested window and bounded point shape")
+		}
+		analysis, err := platform.AnalyzeObservationIntervals(*plan.info.Definition.Intervals, *answer.Intervals, now)
+		if err != nil {
+			return result, err
+		}
+		result.Intervals = &analysis
+		return result, nil
+	}
+	if answer.Intervals != nil {
+		return result, fmt.Errorf("state intervals cannot replace a numeric observation window")
 	}
 	if q.Mode == "latest" {
 		if len(answer.Samples) != 1 || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) != 0 || answer.Coverage != nil {
@@ -405,7 +423,7 @@ func (t *Tenant) ReadObservation(ctx context.Context, m platform.Member, ref pla
 	if q.Until.Sub(q.Since) > time.Duration(plan.info.Definition.ExpectedRetentionSeconds)*time.Second {
 		return platform.ObservationResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Observation time window exceeds the declared retention")
 	}
-	result, err := t.fetchObservation(ctx, plan, q)
+	result, err := t.fetchObservation(ctx, plan, q, now)
 	if err != nil {
 		return platform.ObservationResult{}, observationUnavailable(err)
 	}

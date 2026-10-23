@@ -29,7 +29,7 @@ func TestScopedLoopRestoresCursorAndOrderedOutputs(t *testing.T) {
 		{Name: "map", Next: "hold", Evaluate: &platform.Evaluate{Run: func(_ platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
 			return r.Frames[len(r.Frames)-1].Item, nil
 		}}},
-		{Name: "hold", Next: "finish", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) time.Time { return r.Now.Add(time.Hour) }}},
+		{Name: "hold", Next: "finish", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) (time.Time, *kernel.Error) { return r.Now.Add(time.Hour), nil }}},
 		{Name: "finish", End: true},
 		{Name: "return", End: true},
 	}
@@ -154,7 +154,7 @@ func TestWhileReturnsSavedStateToItsNextIteration(t *testing.T) {
 		}
 		json.Unmarshal(r.Frames[len(r.Frames)-1].Item, &value)
 		return platform.Raw(map[string]int{"n": value.N + 1}), nil
-	}}}, {Name: "pause", Next: "return", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) time.Time { return r.Now.Add(time.Hour) }}}, {Name: "return", End: true, Output: func(_ platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
+	}}}, {Name: "pause", Next: "return", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) (time.Time, *kernel.Error) { return r.Now.Add(time.Hour), nil }}}, {Name: "return", End: true, Output: func(_ platform.Caller, r *platform.Run) (json.RawMessage, *kernel.Error) {
 		return r.Outputs["increment"], nil
 	}}, {Name: "done", End: true}}
 	f := New("while")

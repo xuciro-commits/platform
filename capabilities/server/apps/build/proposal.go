@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -159,18 +160,32 @@ func (b *Build) finishProposal(c platform.Caller, r *pb.ChangeRecord, p *proposa
 
 // Read provenance uses the original entity compute and derivation paths.
 // It is accepted with each business write, before its original validation.
-func proposalEntity(e platform.Entity, changed map[string]any, p *proposalConsumption, extra []string) platform.Entity {
+func proposalEntity(e platform.Entity, info platform.EntityInfo, changed map[string]any, p *proposalConsumption, extra []string) (platform.Entity, map[string]any) {
 	if p == nil {
-		return e
+		return e, changed
+	}
+	payload := maps.Clone(changed)
+	generated := map[string]any{}
+	for name, value := range changed {
+		if field, ok := info.Field(name); ok && field.ReadOnly && field.SourceType == "generated" {
+			generated[name] = value
+			delete(payload, name)
+		}
 	}
 	compute := e.ComputeAt
 	e.ComputeAt = func(c platform.Caller, record any, at time.Time) *kernel.Error {
+		rv := reflect.ValueOf(record).Elem()
+		for name, value := range generated {
+			field, _ := info.Field(name)
+			if err := assign(rv.FieldByIndex(field.Index), value); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+		}
 		if compute != nil {
 			if err := compute(c, record, at); err != nil {
 				return err
 			}
 		}
-		rv := reflect.ValueOf(record).Elem()
 		sources := append(slices.Clone(p.run.Sources), extra...)
 		sources = append(sources, construction.FunctionCallType+"/"+p.run.ID+"#output")
 		slices.Sort(sources)
@@ -183,7 +198,7 @@ func proposalEntity(e platform.Entity, changed map[string]any, p *proposalConsum
 		}
 		return nil
 	}
-	return e
+	return e, payload
 }
 
 func (b *Build) submitProposalReview(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {

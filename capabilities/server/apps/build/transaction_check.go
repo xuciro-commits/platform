@@ -72,7 +72,31 @@ func withTxnRow(spec platform.RuleReadSpec, info platform.EntityInfo) platform.R
 	for _, field := range platform.ConstraintEntity(info).Fields {
 		spec.Inputs["row."+field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 	}
+	spec.Inputs["row.$subject"] = platform.ExprType{Kind: "reference", Object: info.Type}
 	return spec
+}
+
+// Typed expressions already declare their result types. Only legacy row
+// sources need the collection schema while lowering a draft; publication
+// checks every typed collection against the complete selected candidate.
+func txnUsesLegacyRows(steps []platform.TxnStep) bool {
+	needed := false
+	walkTxnSteps(steps, func(step platform.TxnStep) {
+		sets := step.Changes
+		if step.Post != nil {
+			sets = append(slices.Clone(sets), step.Post.Match...)
+		}
+		if step.Effect != nil {
+			sets = append(slices.Clone(sets), step.Effect.Payload...)
+		}
+		if step.Call != nil {
+			sets = append(slices.Clone(sets), step.Call.Inputs...)
+		}
+		for _, set := range sets {
+			needed = needed || strings.HasPrefix(set.From, "row.")
+		}
+	})
+	return needed
 }
 
 func txnResult(spec *platform.RuleReadSpec, step platform.TxnStep) {
@@ -82,7 +106,7 @@ func txnResult(spec *platform.RuleReadSpec, step platform.TxnStep) {
 	if step.Kind == "sequence" {
 		spec.Inputs["step."+step.Name] = platform.ExprType{Kind: "text"}
 	}
-	if step.Kind == "create" {
+	if step.Kind == "create" || step.Kind == "post" {
 		spec.Inputs["step."+step.Name] = platform.ExprType{Kind: "reference", Object: step.Target.Type}
 	}
 }
@@ -97,11 +121,14 @@ func (b *Build) normalizeTransaction(object construction.Object, action *constru
 				step.Call.View = "snapshot"
 			}
 			if step.Post != nil {
-				info, ok := lookup(step.Target.Type)
-				if !ok {
-					return fmt.Errorf("Transaction balance object is unavailable")
-				}
 				for j, match := range step.Post.Match {
+					if match.Expr != nil && match.From == "" {
+						continue
+					}
+					info, ok := lookup(step.Target.Type)
+					if !ok {
+						return fmt.Errorf("Transaction balance object is unavailable")
+					}
 					field, ok := info.Field(match.Field)
 					if !ok {
 						return fmt.Errorf("Post match field is unavailable")
@@ -142,11 +169,27 @@ func (b *Build) normalizeTransaction(object construction.Object, action *constru
 				}
 			}
 			if step.ForEach != nil {
-				index := slices.IndexFunc(object.Sets, func(set platform.RecordSet) bool { return set.Name == step.ForEach.Set })
+				if step.ForEach.Range != nil {
+					if err := lower(step.ForEach.Steps, withTxnRange(scope, step.ForEach.Range.From.Kind)); err != nil {
+						return err
+					}
+					continue
+				}
+				if !txnUsesLegacyRows(step.ForEach.Steps) {
+					if err := lower(step.ForEach.Steps, scope); err != nil {
+						return err
+					}
+					continue
+				}
+				source, err := txnIterationSource(construction.TypeOf(object.Name), step.ForEach.Of, lookup)
+				if err != nil {
+					return err
+				}
+				index := slices.IndexFunc(source.Sets, func(set platform.RecordSet) bool { return set.Name == step.ForEach.Set })
 				if index < 0 {
 					return fmt.Errorf("iteration set %s is undeclared", step.ForEach.Set)
 				}
-				info, ok := lookup(object.Sets[index].Object)
+				info, ok := lookup(source.Sets[index].Object)
 				if !ok {
 					return fmt.Errorf("iteration object is unavailable")
 				}
@@ -211,6 +254,13 @@ func (b *Build) transactionLink(binding platform.AssetBinding) (platform.LinkTyp
 	version, err := strconv.Atoi(ordinal)
 	if !ok || err != nil || version < 1 || strconv.Itoa(version) != ordinal || binding.Ref.App != construction.ID || binding.Ref.Kind != platform.AssetLinkType {
 		return platform.LinkType{}, fmt.Errorf("transaction needs its owner's retained relationship")
+	}
+	if asset, selected := b.jointDeclarations[binding.Ref]; selected && asset.SourceVersion == binding.SourceVersion {
+		var link platform.LinkType
+		if b.definitionAssetVersion(asset, platform.AssetLinkType, "link") != version || json.Unmarshal(asset.Body, &link) != nil || link.Name != binding.Ref.Name || link.Check() != nil || asset.ContractVersion != link.Contract() {
+			return platform.LinkType{}, fmt.Errorf("transaction relationship candidate is invalid")
+		}
+		return link, nil
 	}
 	if declaration, retained, found := b.LinkTypeDefinition(binding.Ref.Name, version); found && retained == version {
 		return declaration, nil
@@ -299,6 +349,14 @@ func (b *Build) checkTransactions(object construction.Object) error {
 		txn := action.Transaction
 		if txn == nil {
 			continue
+		}
+		proposalFields := map[string]bool{}
+		if action.Adoption != nil {
+			for _, field := range object.Fields {
+				if field.ReadOnly && field.SourceType == "generated" && field.Formula == "" && field.FormulaExpr == nil && field.AliasOf == "" {
+					proposalFields[field.Name] = true
+				}
+			}
 		}
 		if err := b.checkConfirmation(txn.Confirmation, object); err != nil {
 			return err
@@ -411,14 +469,30 @@ func (b *Build) checkTransactions(object construction.Object) error {
 					return fmt.Errorf("%s: %w", where, err)
 				}
 				if step.Kind == "for-each" {
-					if row != "" || step.ForEach == nil || len(step.ForEach.Steps) == 0 || step.Link != nil || step.Sequence != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 {
+					if loop != "" || step.ForEach == nil || len(step.ForEach.Steps) == 0 || step.Link != nil || step.Sequence != nil || step.Intervals != nil || step.Post != nil || step.Journal != nil || step.Effect != nil || step.Work != nil || step.Call != nil || step.Target != (platform.TxnRef{}) || len(step.Changes) > 0 || (step.ForEach.Set == "") == (step.ForEach.Range == nil) {
 						return fmt.Errorf("%s needs one unnested declared iteration", where)
 					}
-					index := slices.IndexFunc(ownInfo.Sets, func(set platform.RecordSet) bool { return set.Name == step.ForEach.Set })
+					if step.ForEach.Range != nil {
+						if step.ForEach.Of != "" {
+							return fmt.Errorf("%s interval cannot name a collection record", where)
+						}
+						if err := checkTxnRange(*step.ForEach.Range, scope, lookup); err != nil {
+							return fmt.Errorf("%s: %w", where, err)
+						}
+						if err := check(step.ForEach.Steps, withTxnRange(scope, step.ForEach.Range.From.Kind), "", step.Name); err != nil {
+							return err
+						}
+						continue
+					}
+					source, err := txnIterationSource(subject, step.ForEach.Of, lookup)
+					if err != nil {
+						return fmt.Errorf("%s: %w", where, err)
+					}
+					index := slices.IndexFunc(source.Sets, func(set platform.RecordSet) bool { return set.Name == step.ForEach.Set })
 					if index < 0 {
 						return fmt.Errorf("%s set is undeclared", where)
 					}
-					set := ownInfo.Sets[index]
+					set := source.Sets[index]
 					if len(set.Order) == 0 {
 						return fmt.Errorf("%s needs stable iteration order", where)
 					}
@@ -434,19 +508,22 @@ func (b *Build) checkTransactions(object construction.Object) error {
 				if step.ForEach != nil {
 					return fmt.Errorf("%s has unexpected iteration fields", where)
 				}
-				typed := map[string]bool{"post": step.Post != nil, "journal": step.Journal != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil}
+				typed := map[string]bool{"post": step.Post != nil, "journal": step.Journal != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil, "intervals": step.Intervals != nil}
 				count := 0
 				for _, present := range typed {
 					if present {
 						count++
 					}
 				}
-				if count > 0 || slices.Contains([]string{"post", "journal", "effect", "work", "call"}, step.Kind) {
+				if count > 0 || slices.Contains([]string{"post", "journal", "effect", "work", "call", "intervals"}, step.Kind) {
 					if count != 1 || !typed[step.Kind] || step.Link != nil || step.Sequence != nil || len(step.Changes) > 0 {
 						return fmt.Errorf("%s needs exactly its typed payload", where)
 					}
 					if err := b.checkTypedTxnStep(step, scope, lookup); err != nil {
 						return fmt.Errorf("%s: %w", where, err)
+					}
+					if step.Intervals != nil && loop != "" {
+						return fmt.Errorf("%s interval projection cannot nest an iteration", where)
 					}
 					if step.Post != nil {
 						if err := reserve(platform.TxnRef{Type: step.Target.Type, ID: "post:" + string(platform.Raw(step.Post.Match))}, loop, step.When); err != nil {
@@ -543,7 +620,8 @@ func (b *Build) checkTransactions(object construction.Object) error {
 				used := map[string]bool{}
 				for _, assignment := range step.Changes {
 					field, found := info.Field(assignment.Field)
-					if !found || field.ReadOnly && !(field.Name == "state" && step.Target.Type == subject) || used[field.Name] || assignment.Expr == nil && assignment.From == "" {
+					proposalField := proposalFields[field.Name] && step.Kind == "update" && step.Target.Type == subject && step.Target.ID == "$subject" && step.Target.Via == "" && row == ""
+					if !found || field.ReadOnly && !(field.Name == "state" && step.Target.Type == subject) && !proposalField || used[field.Name] || assignment.Expr == nil && assignment.From == "" {
 						return fmt.Errorf("%s needs distinct writable Expr assignments", where)
 					}
 					used[field.Name] = true

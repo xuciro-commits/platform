@@ -19,20 +19,18 @@ cd "$(dirname "$0")/.."
 # including files excluded by the current OS/build tags.
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 
-known=$(cat <<'KNOWN'
-host	apps/mes/server/mes.go	1	#129 (6) the plant's own fact log beside the ledger (gateway states): judge whether the ledger owns it
-host	apps/pms/server/pms.go	1	#129 (6) the channel's own fact log beside the ledger: judge whether the ledger owns it
-KNOWN
-)
+known=''
 
 ui_pattern='<(button|input|select|textarea|table|dialog|form|section|details)[ >]|rounded-md border border-border bg-surface'
 host_pattern='"(net|net/http|net/url|database/sql|os|os/exec|io/fs|path/filepath)"|github.com/minio|kernel\.NewFactLog|sync\.Map'
+
+app_dirs=$(find apps -type d -name server 2>/dev/null || true)
 
 hits() {
   for f in $(find web/packages web/apps -path '*/src/*.tsx' -not -path 'web/packages/ui/*' -not -path 'web/packages/kernel/*' -not -name '*.test.tsx' | sort); do
     n=$(grep -cE "$ui_pattern" "$f" || true); [[ $n == 0 ]] || printf 'ui\t%s\t%s\n' "$f" "$n"
   done
-  for f in $(find apps/*/server protocols -name '*.go' -not -name '*_test.go' -not -path '*/cmd/*' | sort); do
+  for f in $(find ${app_dirs:+$app_dirs} protocols -name '*.go' -not -name '*_test.go' -not -path '*/cmd/*' | sort); do
     n=$(grep -cE "$host_pattern" "$f" || true); [[ $n == 0 ]] || printf 'host\t%s\t%s\n' "$f" "$n"
   done
 }

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "browser-secondary",
+    "settings": {
+      "language": "en",
+      "timezone": "UTC",
+      "currency": "USD"
+    },
+    "seats": [
+      {
+        "subjects": [
+          "supervisor"
+        ],
+        "id": "sup-1",
+        "roles": {
+          "platform": "admin",
+          "enterprise": "admin",
+          "build": "builder",
+          "core": "steward",
+          "flow": "admin",
+          "work": "admin",
+          "ai": "admin",
+          "agent": "admin",
+          "knowledge": "editor"
+        }
+      },
+      {
+        "subjects": [
+          "operator-l1"
+        ],
+        "id": "op-l1",
+        "roles": {
+          "build": "user"
+        }
+      },
+      {
+        "subjects": [
+          "operator-l2"
+        ],
+        "id": "op-l2",
+        "roles": {
+          "build": "user"
+        }
+      },
+      {
+        "subjects": [
+          "quality-1"
+        ],
+        "id": "qa-1",
+        "roles": {
+          "build": "user"
+        }
+      },
+      {
+        "subjects": [
+          "quality-2"
+        ],
+        "id": "qa-2",
+        "roles": {
+          "build": "user"
+        }
+      },
+      {
+        "subjects": [
+          "accountant"
+        ],
+        "id": "acc-1",
+        "roles": {
+          "core": "accountant"
+        }
+      }
+    ]
+  }
+]

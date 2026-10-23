@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"platformserver/apps/build"
 )
 
 func TestProjectionChangedIDsAndHistorySuffix(t *testing.T) {
@@ -68,7 +70,7 @@ func TestPostgresProjectionRetainsTablesAndAppendsHistory(t *testing.T) {
 		j.Pool().Exec(ctx, "drop schema if exists "+q(schema)+" cascade")
 		j.Pool().Exec(ctx, "drop role if exists "+q(ReaderRole(id)))
 	}()
-	tenant := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, newStock(id))
+	tenant := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk", "build:builder")}, newStock(id), build.New(id))
 	if _, err := j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -93,6 +95,42 @@ func TestPostgresProjectionRetainsTablesAndAppendsHistory(t *testing.T) {
 	decide(t, tenant, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": 2}, at.Add(time.Second))
 	if err := projection.Flush(ctx); err != nil {
 		t.Fatal(err)
+	}
+	// A common host starts before builders install business objects. Their
+	// reader tables must appear without restarting or replacing old tables.
+	typ := publishObject(t, tenant, "ana", "REPORT-O", map[string]any{"name": "reportprobe", "title": "Report probe", "fields": []map[string]any{
+		{"name": "note", "title": "Note", "type": "text"},
+		{"name": "flag", "title": "Flag", "type": "boolean"},
+		{"name": "count", "title": "Count", "type": "integer"},
+		{"name": "ratio", "title": "Ratio", "type": "decimal"},
+		{"name": "moment", "title": "Moment", "type": "datetime"},
+		{"name": "cost", "title": "Cost", "type": "money"},
+	}}, at)
+	decide(t, tenant, "ana", "build", typ+".create", typ, "R1", map[string]any{"note": "published live"}, at)
+	decide(t, tenant, "ana", "build", typ+".create", typ, "R2", map[string]any{"note": "explicit values", "flag": false, "count": 0, "ratio": 0, "moment": at.Format(time.RFC3339), "cost": map[string]any{"amount": 0, "currency": "EUR"}}, at)
+	if err := projection.Flush(ctx); err != nil {
+		t.Fatal("live object projection", err)
+	}
+	var note string
+	if err := j.Pool().QueryRow(ctx, "select note from "+q(schema, tableOf(typ))+" where id='R1'").Scan(&note); err != nil || note != "published live" {
+		t.Fatalf("new business table: %q %v", note, err)
+	}
+	for _, rowID := range []string{"R1", "R2"} {
+		var flag *bool
+		var count, amount *int64
+		var ratio *float64
+		var moment *time.Time
+		var currency *string
+		if err := j.Pool().QueryRow(ctx, "select flag,count,ratio,moment,cost_amount,cost_currency from "+q(schema, tableOf(typ))+" where id=$1", rowID).Scan(&flag, &count, &ratio, &moment, &amount, &currency); err != nil {
+			t.Fatal(err)
+		}
+		if rowID == "R1" {
+			if flag != nil || count != nil || ratio != nil || moment != nil || amount != nil || currency != nil {
+				t.Fatal("absent scalar values must remain SQL NULL")
+			}
+		} else if flag == nil || *flag || count == nil || *count != 0 || ratio == nil || *ratio != 0 || moment == nil || !moment.Equal(at) || amount == nil || *amount != 0 || currency == nil || *currency != "EUR" {
+			t.Fatal("explicit false, zero, timestamp or currency was lost")
+		}
 	}
 	projection, err = Project(ctx, j.Pool(), tenant)
 	if err != nil {

@@ -123,7 +123,7 @@ export {SearchAround,type SearchAroundProps,type SearchAroundPathEntry,type Sear
 export {RecordNeighborhood,type RecordNeighborhoodProps,type RecordNeighborhoodGroup} from "./records/RecordNeighborhood";
 export {RecordComparison} from "./records/RecordComparison";
 export {ApprovalInbox,type ApprovalInboxProps,type ApprovalInboxRow} from "./records/ApprovalInbox";
-export type {RecordHistoryProps} from "./records/Records";
+export {RecordDeliveries,type RecordHistoryProps} from "./records/Records";
 export {RecordComments,type RecordCommentsProps} from "./records/RecordComments";
 export {RecordUploader,type RecordUploaderProps} from "./records/RecordUploader";
 export {MediaPreview,type AttachmentPreviewProps} from "./records/MediaPreview";

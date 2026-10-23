@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,8 +37,9 @@ type Writeback struct {
 	On         string `json:"on" field:"required" title:"After action"`
 	// Method and Path form the request; Path is relative to the connection's address and may use
 	// {id} and {field} placeholders from the payload.
-	Method string `json:"method" title:"Method"`
-	Path   string `json:"path" title:"Path"`
+	Method    string `json:"method" title:"Method"`
+	Transport string `json:"transport,omitempty" choices:"http,a2a" title:"Transport"`
+	Path      string `json:"path" title:"Path"`
 	// Mapping is payload field → body key; empty sends the payload with its id.
 	Mapping []SourceField `json:"mapping,omitempty" title:"Body mapping"`
 	// Result is answer key → record field, written onto the record when the system answers.
@@ -84,6 +86,7 @@ type WritebackRequest struct {
 	Result            []SourceField                    `json:"result,omitempty"`
 	Writeback         string                           `json:"writeback"`
 	Method            string                           `json:"method"`
+	Transport         string                           `json:"transport,omitempty"`
 	Path              string                           `json:"path,omitempty"`
 	URL               string                           `json:"url"`
 	Secret            string                           `json:"secret,omitempty"`
@@ -98,6 +101,12 @@ type WritebackRequest struct {
 // Request freezes the request for one accepted decision: the payload mapped to
 // the body (or sent whole with its id), the path's placeholders filled.
 func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) (WritebackRequest, error) {
+	if err := CheckWritebackTransport(w.Transport, w.Method); err != nil {
+		return WritebackRequest{}, err
+	}
+	if w.Transport == "a2a" && (conn.Kind != "http" || conn.Protocol != nil) {
+		return WritebackRequest{}, fmt.Errorf("A2A uses an HTTP connection without a device protocol")
+	}
 	ValueDefinitionVersion := 0
 	if w.Published != "" {
 		var asset platform.ReleaseAsset
@@ -147,7 +156,7 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 	if method == "" {
 		method = "POST"
 	}
-	request := WritebackRequest{Connection: conn.ID, Version: 1, Object: w.Object, DefinitionVersion: ValueDefinitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, Path: path, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}
+	request := WritebackRequest{Connection: conn.ID, Version: 1, Object: w.Object, DefinitionVersion: ValueDefinitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, Transport: w.Transport, Path: path, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}
 	if conn.Protocol != nil {
 		if w.On != "dispatch" || method != "POST" || strings.Trim(path, "/") != "execute" {
 			return WritebackRequest{}, fmt.Errorf("protocol commands use a dispatch-only POST execute writeback")
@@ -155,6 +164,16 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 		request.Protocol, request.Gateway = conn.Protocol, conn.Address
 	}
 	return request, nil
+}
+
+func CheckWritebackTransport(transport, method string) error {
+	if transport != "" && transport != "http" && transport != "a2a" {
+		return fmt.Errorf("A writeback transport is HTTP or A2A")
+	}
+	if transport == "a2a" && method != "" && method != "POST" {
+		return fmt.Errorf("A2A uses POST SendMessage")
+	}
+	return nil
 }
 
 // Fields are what the answer writes onto the record, by the Result mapping.
@@ -189,11 +208,19 @@ func (w Writeback) Fields(answer []byte) map[string]any {
 func ValueLookupPath(in map[string]any, path string) (any, bool) {
 	var cur any = in
 	for _, part := range strings.Split(path, ".") {
-		m, ok := cur.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		if cur, ok = m[part]; !ok {
+		switch value := cur.(type) {
+		case map[string]any:
+			var ok bool
+			if cur, ok = value[part]; !ok {
+				return nil, false
+			}
+		case []any:
+			index, err := strconv.Atoi(part)
+			if err != nil || index < 0 || index >= len(value) {
+				return nil, false
+			}
+			cur = value[index]
+		default:
 			return nil, false
 		}
 	}

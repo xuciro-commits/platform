@@ -207,7 +207,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         else {
           const found = result.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
           const selection = merged(joint, [from, ...found]);
-          if (selection.length > 32) { setJointNote(t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")); return; }
+          if (selection.length > 128) { setJointNote(t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")); return; }
           setJoint(selection);
           setJointNote(found.length ? t("Added {count} dependent drafts.", { count: found.length }) : t("Nothing to add: every dependency is installed or already selected."));
         }
@@ -326,12 +326,12 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={!id || locked} onClick={() => {
           const selection = merged(joint, [{ kind, id }]);
-          if (selection.length > 32) { setJointNote(t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")); return; }
+          if (selection.length > 128) { setJointNote(t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")); return; }
           setJoint(selection); setJointNote("");
         }}>{t("Add selected draft")}</Button>
         <Button size="sm" disabled={!id || locked} onClick={() => void addReferenced({ kind, id })}>{t("Add the drafts it depends on")}</Button>
         {scopedApplication && <Button size="sm" disabled={locked} onClick={() => void addReferenced({ kind: "app", id: scopedApplication.id })}>{t("Add the drafts of {title}", { title: scopedApplication.title || scopedApplication.name })}</Button>}
-        <Button size="sm" disabled={!joint.length || joint.length > 32 || locked} onClick={() => { setJoint([]); setJointNote(""); }}>{t("Clear selection")}</Button>
+        <Button size="sm" disabled={!joint.length || joint.length > 128 || locked} onClick={() => { setJoint([]); setJointNote(""); }}>{t("Clear selection")}</Button>
       </div>
       {joint.length ? <ul className="grid gap-1" aria-label={t("Joint selection")}>
         {joint.map((choice) => <li className="flex items-center justify-between gap-2 text-xs" key={jointKey(choice)}>
@@ -339,9 +339,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           <Button size="sm" disabled={locked} onClick={() => setJoint((current) => current.filter((item) => jointKey(item) !== jointKey(choice)))}>{t("Remove")}</Button>
         </li>)}
       </ul> : <p className="text-xs text-muted">{t("No drafts selected yet.")}</p>}
-      {joint.length > 32 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")}</p>}
+      {joint.length > 128 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")}</p>}
       {jointNote && <p className="text-xs text-muted" role="status">{jointNote}</p>}
-      <Button disabled={!!selectionError || !joint.length || joint.length > 32 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
+      <Button disabled={!!selectionError || !joint.length || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
     </Card>
     </>}
     {error && <Card className="p-3 text-sm text-danger" role="alert">{error}</Card>}

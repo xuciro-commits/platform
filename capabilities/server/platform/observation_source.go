@@ -16,25 +16,27 @@ const ObservationMaxPoints = 5000
 // ObservationDefinition declares only the logical source and a bounded read.
 // Addresses, credentials, retention and original points stay with the source.
 type ObservationDefinition struct {
-	Name                       string               `json:"name"`
-	Title                      string               `json:"title"`
-	Description                string               `json:"description,omitempty"`
-	Connection                 AssetRef             `json:"connection"`
-	Object                     AssetRef             `json:"object"`
-	DeviceField                string               `json:"deviceField"`
-	Signal                     string               `json:"signal"`
-	Unit                       string               `json:"unit"`
-	Path                       string               `json:"path"`
-	WindowSeconds              int                  `json:"windowSeconds"`
-	ExpectedRetentionSeconds   int                  `json:"expectedRetentionSeconds"`
-	ExpectedGranularitySeconds int                  `json:"expectedGranularitySeconds"`
-	Roles                      []string             `json:"roles"`
-	Scheduled                  bool                 `json:"scheduled,omitempty"`
-	RequireComplete            bool                 `json:"requireComplete,omitempty"`
-	Decision                   *ObservationDecision `json:"decision,omitempty"`
+	Name                       string                `json:"name"`
+	Title                      string                `json:"title"`
+	Description                string                `json:"description,omitempty"`
+	Connection                 AssetRef              `json:"connection"`
+	Object                     AssetRef              `json:"object"`
+	DeviceField                string                `json:"deviceField"`
+	Signal                     string                `json:"signal"`
+	Unit                       string                `json:"unit"`
+	Path                       string                `json:"path"`
+	WindowSeconds              int                   `json:"windowSeconds"`
+	ExpectedRetentionSeconds   int                   `json:"expectedRetentionSeconds"`
+	ExpectedGranularitySeconds int                   `json:"expectedGranularitySeconds"`
+	Roles                      []string              `json:"roles"`
+	Scheduled                  bool                  `json:"scheduled,omitempty"`
+	RequireComplete            bool                  `json:"requireComplete,omitempty"`
+	Decision                   *ObservationDecision  `json:"decision,omitempty"`
+	Intervals                  *ObservationIntervals `json:"intervals,omitempty"`
 }
 
 type ObservationDecision struct {
+	Mode   string          `json:"mode,omitempty" enum:"summary,intervals"`
 	When   Expr            `json:"when"`
 	Action AssetRef        `json:"action"`
 	Inputs map[string]Expr `json:"inputs"`
@@ -48,18 +50,19 @@ type ObservationPoint struct {
 }
 
 type ObservationResult struct {
-	Ref      AssetRef           `json:"ref"`
-	Version  string             `json:"version"`
-	Object   AssetRef           `json:"object"`
-	Record   string             `json:"record"`
-	Device   string             `json:"device"`
-	Signal   string             `json:"signal"`
-	Window   ObservationWindow  `json:"window"`
-	Points   []ObservationPoint `json:"points,omitempty"`
-	Sources  []string           `json:"sources"`
-	Matched  *bool              `json:"matched,omitempty"`
-	Coverage *DriverCoverage    `json:"coverage,omitempty"`
-	Latest   *DriverSample      `json:"latest,omitempty"`
+	Ref       AssetRef                   `json:"ref"`
+	Version   string                     `json:"version"`
+	Object    AssetRef                   `json:"object"`
+	Record    string                     `json:"record"`
+	Device    string                     `json:"device"`
+	Signal    string                     `json:"signal"`
+	Window    ObservationWindow          `json:"window"`
+	Points    []ObservationPoint         `json:"points,omitempty"`
+	Sources   []string                   `json:"sources"`
+	Matched   *bool                      `json:"matched,omitempty"`
+	Coverage  *DriverCoverage            `json:"coverage,omitempty"`
+	Latest    *DriverSample              `json:"latest,omitempty"`
+	Intervals *ObservationIntervalResult `json:"intervals,omitempty"`
 }
 
 // A current reading carries its quality and time. It is never a window summary
@@ -134,10 +137,18 @@ func (d ObservationDefinition) Check() error {
 			return fmt.Errorf("observation roles must be named and unique")
 		}
 	}
+	if d.Intervals != nil {
+		if err := d.Intervals.Check(d.WindowSeconds); err != nil {
+			return err
+		}
+	}
 	if d.Scheduled && d.Decision == nil {
 		return fmt.Errorf("scheduled observation requires its declared business decision")
 	}
 	if d.Decision != nil {
+		if !slices.Contains([]string{"", "summary", "intervals"}, d.Decision.Mode) || d.Decision.Mode == "intervals" && d.Intervals == nil {
+			return fmt.Errorf("observation decision mode needs its declared source analysis")
+		}
 		if d.Decision.When.Kind != "boolean" || d.Decision.Action.Check() != nil || d.Decision.Action.Kind != AssetAction || d.Decision.Action.App != d.Object.App || len(d.Decision.Inputs) > 64 {
 			return fmt.Errorf("observation decision needs a boolean condition and the original object's authorized action")
 		}
@@ -182,6 +193,10 @@ func CheckObservationDefinition(def ObservationDefinition, lookup func(string) (
 
 func ObservationRuleSchema(def ObservationDefinition, entity EntityInfo) (ExprSchema, error) {
 	schema := ExprSchema{Refs: map[string]ExprType{"record.id": {Kind: "text"}, "observation.latest": {Kind: "decimal"}, "observation.lastat": {Kind: "datetime"}}, Windows: map[string]ExprWindowType{"observation": {Unit: def.Unit}}}
+	if def.Decision != nil && def.Decision.Mode == "intervals" {
+		schema.Refs = map[string]ExprType{"record.id": {Kind: "text"}, "intervals.count": {Kind: "integer"}, "intervals.since": {Kind: "datetime"}, "intervals.until": {Kind: "datetime"}}
+		schema.Windows = nil
+	}
 	if entity.Type != def.Object.Name || entity.App != def.Object.App {
 		return schema, fmt.Errorf("observation rule object differs from its declaration")
 	}
@@ -247,12 +262,26 @@ func ObservationRuleContext(def ObservationDefinition, record json.RawMessage, w
 }
 
 func EvaluateObservation(def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, at time.Time) (bool, map[string]json.RawMessage, error) {
+	return evaluateObservationResult(def, entity, record, window, nil, at)
+}
+
+func EvaluateObservationIntervals(def ObservationDefinition, entity EntityInfo, record json.RawMessage, result ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {
+	if err := result.Check(); err != nil {
+		return false, nil, err
+	}
+	return evaluateObservationResult(def, entity, record, ObservationWindow{Since: result.Since, Until: result.Until, Unit: def.Unit}, &result, at)
+}
+
+func evaluateObservationResult(def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, intervals *ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {
 	inputs := map[string]json.RawMessage{}
 	if err := CheckObservationDefinition(def, func(typ string) (EntityInfo, bool) { return entity, typ == entity.Type }); err != nil {
 		return false, inputs, err
 	}
 	if def.Decision == nil {
 		return false, inputs, fmt.Errorf("observation has no declared business decision")
+	}
+	if (def.Decision.Mode == "intervals") != (intervals != nil) {
+		return false, inputs, fmt.Errorf("observation decision result differs from its declared mode")
 	}
 	schema, err := ObservationRuleSchema(def, entity)
 	if err != nil {
@@ -264,6 +293,11 @@ func EvaluateObservation(def ObservationDefinition, entity EntityInfo, record js
 	}
 	context.Now = at.UTC()
 	context.Today = at.UTC().Format(time.DateOnly)
+	if intervals != nil {
+		context.Refs["intervals.count"] = ExprPresent("integer", len(intervals.Intervals))
+		context.Refs["intervals.since"] = ExprPresent("datetime", intervals.Since.UTC().Format(time.RFC3339Nano))
+		context.Refs["intervals.until"] = ExprPresent("datetime", intervals.Until.UTC().Format(time.RFC3339Nano))
+	}
 	condition, err := CompileExpr(def.Decision.When, schema)
 	if err != nil {
 		return false, inputs, err

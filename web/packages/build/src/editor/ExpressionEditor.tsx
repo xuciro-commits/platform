@@ -4,7 +4,14 @@ import { checkRule, initializeRules, type RuleSchema } from "@platform/app/rules
 import { Button, Checkbox, Input, Select, Textarea, t, useDraftInput, useInputDrafts, type EntityInfo } from "@platform/ui";
 import { ModelFieldPicker } from "../model-editor/ModelFieldPicker";
 
+type Collections = Record<string, {object:string;policy:string}>;
 export type ExpressionChoice = { value: string; label: string; type: string; ref?: string };
+export const observationContextChoices = (): ExpressionChoice[] => [
+  { value: "observation.ready", label: t("Accepted observation available"), type: "boolean" },
+  { value: "observation.source", label: t("Accepted observation source"), type: "text" },
+  { value: "observation.object", label: t("Observed object"), type: "text" },
+  { value: "observation.subject", label: t("Observed record ID"), type: "text" },
+];
 const scalarKinds = ["text", "choice", "reference", "boolean", "integer", "decimal", "number", "money", "date", "datetime"];
 const numericKinds = ["integer", "decimal", "number", "money"];
 const kindOf = (kind: string) => kind === "longtext" ? "text" : kind;
@@ -19,12 +26,14 @@ export const literalExpression = (kind: string): Api.Expr => ({
   },
 });
 
-function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: string) => EntityInfo | undefined, windows?: RuleSchema["windows"]): RuleSchema {
+function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: string) => EntityInfo | undefined, windows?: RuleSchema["windows"], collections?:Collections): RuleSchema {
   const refs: RuleSchema["refs"] = Object.fromEntries(choices.map(choice => [choice.value, { kind: kindOf(choice.type), object: choice.ref }]));
-  const visit = (expression: Api.Expr) => {
+  const sets:NonNullable<RuleSchema["sets"]>=Object.fromEntries(Object.entries(collections??{}).map(([name,set])=>[name,{element:{kind:"reference",object:set.object,fields:Object.fromEntries((lookup?.(set.object)?.fields??[]).map(field=>[field.name,{kind:kindOf(field.type),object:field.ref}]))},policy:set.policy as "complete"|"visible"}]));
+  const visit = (expression: Api.Expr, scope?:string) => {
+    if(expression.agg)scope=expression.agg.source;
     if (expression.op === "path" && expression.args?.[0]?.ref) {
-      const root = expression.args[0].ref, choice = choices.find(choice => choice.value === root);
-      let type = choice?.ref, node = refs[root];
+      const root = expression.args[0].ref, field=root.startsWith("item.")&&scope?lookup?.(collections?.[scope]?.object??"")?.fields.find(f=>f.name===root.slice(5)):undefined, choice = field?{ref:field.ref}:choices.find(choice => choice.value === root);
+      let type = choice?.ref, node = root.startsWith("item.")&&scope?sets[scope]?.element.fields?.[root.slice(5)]:refs[root];
       for (const name of expression.path ?? []) {
         const field = type ? lookup?.(type)?.fields.find(field => field.name === name) : undefined;
         if (!node || !field) break;
@@ -34,24 +43,27 @@ function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: 
         type = field.ref;
       }
     }
-    expression.args?.forEach(visit);
-    if (expression.in) visit(expression.in);
+    expression.args?.forEach(arg=>visit(arg,scope));
+    if (expression.in) visit(expression.in,scope);
   };
   visit(expr);
-  return { refs, windows };
+  return { refs, windows,sets };
 }
 
 /** Edits the  tree. Validation calls the original Go compiler in Wasm;
  * execution and record/collection authorization remain with original owners. */
-export function ExpressionEditor({ value, onChange, choices = [], lookup, windows, kind = "boolean", draftKey = "expression" }: {
+export function ExpressionEditor({ value, onChange, choices: suppliedChoices = [], lookup, windows, collections, kind = "boolean", draftKey = "expression" }: {
   value: Api.Expr;
   onChange: (expr: Api.Expr) => void;
   choices?: ExpressionChoice[];
   lookup?: (type: string) => EntityInfo | undefined;
   windows?: RuleSchema["windows"];
+  collections?:Collections;
   kind?: string;
   draftKey?: string;
 }) {
+  const choices = suppliedChoices.some(choice => choice.value === "caller.tenant") ? suppliedChoices : [...suppliedChoices, { value: "caller.tenant", label: t("Current tenant"), type: "text" }];
+  const schema = schemaFor(value, choices, lookup, windows, collections), schemaKey = JSON.stringify(schema);
   const source = JSON.stringify(value, null, 2), input = useDraftInput(draftKey, source, true), buffers = useInputDrafts();
   const latest = useRef({ text: input.text, source, path: input.path, onChange }); latest.current = { text: input.text, source, path: input.path, onChange };
   const mounted = useRef(true);
@@ -64,7 +76,7 @@ export function ExpressionEditor({ value, onChange, choices = [], lookup, window
     void initializeRules().then(() => {
       if (!active || latest.current.text !== source) return;
       try {
-        checkRule(value, schemaFor(value, choices, lookup, windows));
+        checkRule(value, schema);
         if (value.kind !== kind) throw Error(t("Expression result type differs."));
         input.clear();
       } catch (error) {
@@ -73,7 +85,7 @@ export function ExpressionEditor({ value, onChange, choices = [], lookup, window
     }, () => { if (active && latest.current.text === source) input.write(source, t("Rule runtime is unavailable.")); })
       .finally(() => buffers?.pending(-1));
     return () => { active = false; };
-  }, [source, JSON.stringify(choices), JSON.stringify(windows), kind]);
+  }, [source, schemaKey, kind]);
 
   const applySource = async () => {
     const raw = input.text, path = input.path;
@@ -82,7 +94,7 @@ export function ExpressionEditor({ value, onChange, choices = [], lookup, window
     try {
       await initializeRules();
       const expression = JSON.parse(raw) as Api.Expr;
-      checkRule(expression, schemaFor(expression, choices, lookup, windows));
+      checkRule(expression, schemaFor(expression, choices, lookup, windows,collections));
       if (expression.kind !== kind) throw Error(t("Expression result type differs."));
       if (!current()) return;
       input.clear(); latest.current.onChange(expression);
@@ -91,7 +103,7 @@ export function ExpressionEditor({ value, onChange, choices = [], lookup, window
     } finally { buffers?.pending(-1); }
   };
   return <div className="grid min-w-0 gap-2 text-xs" aria-label={t("Rule expression editor")}>
-    <fieldset disabled={unapplied} className="min-w-0 border-0 p-0"><ExpressionNode value={value} onChange={expression => { input.clear(); onChange(expression); }} choices={choices} lookup={lookup} windows={windows} kind={kind} depth={0} /></fieldset>
+    <fieldset disabled={unapplied} className="min-w-0 border-0 p-0"><ExpressionNode value={value} onChange={expression => { input.clear(); onChange(expression); }} choices={choices} lookup={lookup} windows={windows} collections={collections} kind={kind} depth={0} /></fieldset>
     {input.problem && <p role="alert" className="break-words text-danger">{input.problem}</p>}
     <Button size="sm" onClick={() => setAdvanced(!advanced)}>{t("Expression source")}</Button>
     {(advanced || unapplied) && <>
@@ -101,17 +113,18 @@ export function ExpressionEditor({ value, onChange, choices = [], lookup, window
   </div>;
 }
 
-function ExpressionNode({ value: expression, onChange, choices, lookup, windows, kind, depth }: {
+function ExpressionNode({ value: expression, onChange, choices, lookup, windows, collections, kind, depth }: {
   value: Api.Expr;
   onChange: (expr: Api.Expr) => void;
   choices: ExpressionChoice[];
   lookup?: (type: string) => EntityInfo | undefined;
   windows?: RuleSchema["windows"];
+  collections?:Collections;
   kind: string;
   depth: number;
 }) {
   if (depth >= 16) return <p role="alert">{t("Expression editor depth exceeded.")}</p>;
-  const selectedOp = expression.ref ? "ref" : expression.lit ? "lit" : expression.op;
+  const selectedOp = expression.agg ? `aggregate:${expression.op}` : expression.ref ? "ref" : expression.lit ? "lit" : expression.op;
   const logical = ["and", "or", "not"];
   const comparison = ["=", "!=", "<", "<=", ">", ">="];
   const unary = ["not", "empty", "not-empty", "is-null", "is-not-null", "lower", "upper", "trim", "negate", "abs", "round", "length", "parse-decimal", "parse-number"];
@@ -123,7 +136,7 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
   if (kind === "text" || kind === "string") operations.push("concat", "lower", "upper", "trim", "replace");
   if (numericKinds.includes(kind)) {
     operations.push("+", "-", "*", "/", "min", "max", "negate", "abs", "round");
-    if (kind === "integer") operations.push("length", "diff-days", "date-part");
+    if (kind === "integer") operations.push("length", "diff-days", "diff-hours", "date-part");
     if (kind === "decimal") operations.push("parse-decimal");
     if (kind === "number") operations.push("parse-number");
     if (kind !== "money" && windows && Object.keys(windows).length) {
@@ -131,10 +144,18 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
     }
   }
   if (kind === "date" || kind === "datetime") operations.push("add-days", "add-months", kind === "date" ? "$today" : "$now");
+  if (kind === "datetime") operations.push("add-hours", "start-of-day", "start-of-hour");
   if (kind === "reference") operations.push("$me");
-  if (kind !== "set") operations.push("coalesce");
+  if (kind !== "set") operations.push("coalesce", "if");
+
+  if(Object.keys(collections??{}).length)operations.push(...(kind==="boolean"?["any","all","none"]:kind==="set"?["values"]:numericKinds.includes(kind)?["sum","min","max",...(kind==="integer"?["count"]:["avg"])]:[]).map(op=>`aggregate:${op}`));
 
   const replace = (op: string) => {
+    if(op.startsWith("aggregate:")){
+      op=op.slice("aggregate:".length);
+      const source=Object.keys(collections!)[0]!,field=lookup?.(collections![source]!.object)?.fields[0];
+      onChange({op,kind,agg:{source},...(op==="count"?{}:{in:op==="values"?{op:"",kind:kindOf(field?.type??"text"),ref:"item."+(field?.name??"")}:literalExpression(kind)})});return;
+    }
     if (["rate", "delta", "over-window"].includes(op)) {
       onChange({
         op,
@@ -155,12 +176,15 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
       return;
     }
     if (["$me", "$now", "$today"].includes(op)) { onChange({ op, kind }); return; }
+    if (op === "if") { onChange({ op, kind, args: [literalExpression("boolean"), literalExpression(kind), literalExpression(kind)] }); return; }
     let operand = logical.includes(op) ? "boolean" : comparison.includes(op) ? windows ? "decimal" : "text" : kind;
     if (["empty", "not-empty", "is-null", "is-not-null", "contains", "starts-with", "ends-with", "matches", "length", "replace", "parse-decimal", "parse-number", "in"].includes(op)) operand = "text";
     if (["before", "after", "within-period", "diff-days", "date-part"].includes(op)) operand = "date";
+    if (op === "diff-hours") operand = "datetime";
+    if (op === "start-of-day") operand = "date";
     if (op === "range" || op === "round" && kind === "integer") operand = "decimal";
-    const args = Array.from({ length: ["replace", "within-period", "range"].includes(op) ? 3 : unary.includes(op) ? 1 : 2 }, () => literalExpression(operand));
-    if (op === "add-days" || op === "add-months") args[1] = literalExpression("integer");
+    const args = Array.from({ length: ["replace", "within-period", "range"].includes(op) ? 3 : unary.includes(op) || op === "start-of-day" || op === "start-of-hour" ? 1 : 2 }, () => literalExpression(operand));
+    if (["add-days", "add-months", "add-hours"].includes(op)) args[1] = literalExpression("integer");
     if (op === "date-part") args[1] = { op: "", kind: "text", lit: { value: "year" } };
     if (op === "in") args[1] = literalExpression("set");
     onChange({ op, kind, args });
@@ -171,13 +195,14 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
   const setValues = Array.isArray(expression.lit?.value) ? expression.lit.value : [];
   const setElement = expression.lit?.element ?? "text";
   const changeArgument = (index: number, value: Api.Expr) => onChange({ ...expression, args: args.map((arg, at) => at === index ? value : arg) });
+  const itemChoices=expression.agg?[...choices,...(lookup?.(collections?.[expression.agg.source]?.object??"")?.fields??[]).map(field=>({value:"item."+field.name,label:field.title,type:kindOf(field.type),ref:field.ref}))]:choices;
   const variadic = !expression.agg && ["and", "or", "concat", "min", "max", "coalesce"].includes(selectedOp);
 
   return <div className="grid min-w-0 gap-2 rounded border border-border p-2">
     <label className="grid gap-1">{t("Expression operation")}
       <Select value={selectedOp} onChange={event => replace(event.target.value)}>
         {!operations.includes(selectedOp) && <option value={selectedOp}>{expression.op}</option>}
-        {operations.map(op => <option key={op} value={op}>{op === "coalesce" ? t("First available value (coalesce)") : op === "round" ? t("Round number (round)") : op}</option>)}
+        {operations.map(op => <option key={op} value={op}>{op === "coalesce" ? t("First available value (coalesce)") : op === "if" ? t("Conditional value (if)") : op === "round" ? t("Round number (round)") : op}</option>)}
       </Select>
     </label>
     {selectedOp === "coalesce" && <p className="text-muted">{t("Use the first value that is present and not null. All values must have the same type.")}</p>}
@@ -237,7 +262,8 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
       <Checkbox checked={args.length > 1} onChange={checked => onChange({ ...expression, args: checked ? [args[0]!, literalExpression("integer")] : args.slice(0, 1) })}>{t("Specify decimal places")}</Checkbox>
       <p className="text-muted">{t("Round defaults to zero decimal places. Precision may be -18 to 18; an integer result must be a whole number.")}</p>
     </>}
-    {!["lit", "ref", "path"].includes(selectedOp) && args.map((arg, index) => {
+    {expression.agg&&<div className="grid gap-2"><label className="grid gap-1">{t("Declared collection")}<Select value={expression.agg.source} onChange={event=>onChange({...expression,agg:{...expression.agg!,source:event.target.value}})}>{Object.keys(collections??{}).map(name=><option key={name} value={name}>{name}</option>)}</Select></label>{expression.in?<><span>{t("Value or condition for each record")}</span>{expression.op==="values"&&<Select aria-label={t("Collection value type")} value={expression.in.kind} onChange={event=>onChange({...expression,in:literalExpression(event.target.value)})}>{scalarKinds.map(kind=><option key={kind}>{kind}</option>)}</Select>}<ExpressionNode value={expression.in} kind={expression.in.kind} choices={itemChoices} lookup={lookup} windows={windows} collections={collections} depth={depth+1} onChange={value=>onChange({...expression,in:value})}/></>:expression.agg.field&&<label className="grid gap-1">{t("Collection value field")}<Input value={expression.agg.field.join(".")} onChange={event=>onChange({...expression,agg:{...expression.agg!,field:event.target.value.split(".")}})}/></label>}</div>}
+    {!expression.agg&&!["lit", "ref", "path"].includes(selectedOp) && args.map((arg, index) => {
       if (selectedOp === "matches" && index === 1) return <label key={index} className="grid gap-1">{t("RE2 pattern")}
         <Input value={String(arg.lit?.value ?? "")} maxLength={256} onChange={event => changeArgument(index, { op: "", kind: "text", lit: { value: event.target.value } })} />
       </label>;
@@ -247,8 +273,9 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
         </Select>
       </label>;
       return <div key={index} className="grid min-w-0 gap-1">
+        {selectedOp === "if" && <span>{t(["Condition", "Value when true", "Value when false"][index]!)}</span>}
         {selectedOp === "round" && index === 1 && <span>{t("Decimal places")}</span>}
-        <ExpressionNode value={arg} kind={arg.kind} choices={choices} lookup={lookup} windows={windows} depth={depth + 1} onChange={next => changeArgument(index, next)} />
+        <ExpressionNode value={arg} kind={arg.kind} choices={choices} lookup={lookup} windows={windows} collections={collections} depth={depth + 1} onChange={next => changeArgument(index, next)} />
       </div>;
     })}
     {variadic && args.length < 32 && <Button size="sm" onClick={() => onChange({ ...expression, args: [...args, literalExpression(kind)] })}>{t("Add expression operand")}</Button>}

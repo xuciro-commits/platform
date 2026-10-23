@@ -29,9 +29,13 @@ LITE_HOST ?= 127.0.0.1
 GATEWAY_LISTEN ?= 127.0.0.1:8510
 GATEWAY_PACKAGES ?= $(ROOT)/.build/protocol/packages
 GATEWAY_STATE ?= $(ROOT)/.build/protocol/state
-PROTOCOL_VERSION ?= 0.1.4
+PROTOCOL_VERSION ?= 0.1.5
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
+
+.PHONY: initialize
+initialize: ## 按包内显式计划初始化新租户；凭据从 PLATFORM_INITIALIZE_TOKEN 取，安装/启动不执行
+	python3 deploy/local/initialize.py $(ARGS)
 
 .PHONY: help
 help: ## 显示命令帮助列表
@@ -64,6 +68,12 @@ dev: ## 基于容器 PostgreSQL 与 Rauthy，在 air 下热重载运行宿主（
 	@test -x "$(AIR)" || { echo 'run make setup to install air'; exit 1; }
 	mkdir -p .build/dev
 	SOLUTION=$(SOLUTION) "$(AIR)" -c deploy/dev/air.toml -- $(SOLUTION) $(PORT.$(SOLUTION))
+
+.PHONY: host
+host: ## 运行通用平台宿主；ARGS 传入租户、身份和部署参数，不编译原生行业应用
+	mkdir -p .build/host
+	cd capabilities/server && $(GO) build -o ../../.build/host/platform-server ./cmd/platform-server
+	.build/host/platform-server $(ARGS)
 
 .PHONY: lite
 lite: ## 一键启动轻量持久化宿主（无 Docker；LITE_HOST=0.0.0.0 可用于受信任网络预览）
@@ -139,8 +149,13 @@ test: ## 运行宿主与 Web 包单元测试（优先运行所修改模块的对
 	cd web && $(PNPM) -r run test
 
 .PHONY: test-go
-test-go: ## 仅运行宿主测试；可用 PKG=./platform 或 RUN=TestName 缩小范围
-	cd capabilities/server && $(GO) test -count=1 $(if $(RUN),-run '$(RUN)') $(or $(PKG),./...)
+test-go: MODULE ?= capabilities/server
+test-go: ## 运行 Go 测试；可用 MODULE=模块路径、PKG=./platform 或 RUN=TestName 缩小范围
+	cd $(MODULE) && $(GO) test -count=1 $(if $(RUN),-run '$(RUN)') $(or $(PKG),./...)
+
+.PHONY: test-web
+test-web: ## 运行 Web 单元测试；可用 PKG=@platform/ui 与 RUN=文件名 缩小范围
+	cd web && $(PNPM) $(if $(PKG),--filter '$(PKG)',-r) run test $(if $(RUN),'$(RUN)')
 
 .PHONY: e2e
 ifneq ($(if $(strip $(SPEC)),$(filter heating-application protocol-packages,$(SPEC)),all),)
@@ -148,27 +163,29 @@ e2e: packages
 e2e: export PLATFORM_PACKAGES_DIR ?= $(GATEWAY_PACKAGES)
 e2e: export PROTOCOL_VERSION := $(PROTOCOL_VERSION)
 endif
-ifneq ($(filter mes-actions,$(SPEC)),)
+ifneq ($(filter declared-hospitality declared-manufacturing,$(SPEC)),)
 e2e: export PLATFORM_PACKAGES_DIR ?= $(ROOT)/deploy/packages
 endif
 e2e: ## 在开发宿主上运行 web/e2e 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build
 	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts) $(E2E_ARGS)
+ifeq ($(strip $(SPEC)),)
+	cd web && PLATFORM_PACKAGES_DIR="$(ROOT)/deploy/packages" $(PNPM) --filter @platform/e2e e2e tests/declared-hospitality.spec.ts $(E2E_ARGS)
+	cd web && PLATFORM_PACKAGES_DIR="$(ROOT)/deploy/packages" $(PNPM) --filter @platform/e2e e2e tests/declared-manufacturing.spec.ts $(E2E_ARGS)
+endif
 
 ## release - 版本发布（完整证据链；CI 在 v* 标签上运行同一检查）
 
 .PHONY: verify
 verify: ## CI 全量验收证据：check + 全模块测试 + 契约校验 + 形式化证明 + Web 生产构建
-	scripts/verify.sh contract formal format capabilities composition web-check mes
+	scripts/verify.sh contract formal format capabilities composition web-check
 
 .PHONY: build
-build: ## 构建当前系统架构的工作区制品与两个行业宿主二进制，输出到 .build/release
+build: ## 构建当前系统架构的工作区制品与通用宿主二进制，输出到 .build/release
 	rm -rf $(DIST) && mkdir -p $(DIST)
 	cd web && $(PNPM) --dir apps/workspace build
 	tar -C web/apps/workspace -czf $(DIST)/workspace-$(VERSION).tar.gz dist
-	for s in hospitality manufacturing; do \
-	  (cd solutions/$$s && CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o $(ROOT)/$(DIST)/$$s-server-$(VERSION)-$$($(GO) env GOOS)-$$($(GO) env GOARCH) ./cmd/$$s-server) || exit $$?; \
-	done
+	cd capabilities/server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w" -o $(ROOT)/$(DIST)/platform-server-$(VERSION)-$$($(GO) env GOOS)-$$($(GO) env GOARCH) ./cmd/platform-server
 	ls -l $(DIST)
 
 .PHONY: images

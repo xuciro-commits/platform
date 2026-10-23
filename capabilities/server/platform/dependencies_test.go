@@ -8,6 +8,33 @@ import (
 	"testing"
 )
 
+func TestProposalFunctionClosureInstallsItsSourceModelFirst(t *testing.T) {
+	object := ReleaseAsset{Ref: AssetRef{App: "build", Kind: AssetObject, Name: "build.reviewitem"}, SourceVersion: "1", ContractVersion: 1, Body: json.RawMessage(`{"type":"build.reviewitem","name":"reviewitem","fields":[{"name":"note","title":"Note","type":"text"}],"actions":[{"name":"adopt","adoption":{"function":{"name":"review"},"input":"proposal","mapping":[{"output":"summary","input":"summary"}]}}]}`)}
+	definition := RecordAdviceFunction(object.Ref.Name, []string{"note"}, []string{"reader"})
+	definition.Name = "review"
+	function := ReleaseAsset{Ref: AssetRef{App: "build", Kind: AssetFunction, Name: "review"}, SourceVersion: "1.function-1", ContractVersion: 1, Body: Raw(definition)}
+	var assets []ReleaseAsset
+	for _, original := range []ReleaseAsset{object, function} {
+		bound, err := WithDependencies(original)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assets = append(assets, bound)
+	}
+	graph, err := NewReleaseDependencyGraph(assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closure, err := graph.Closure([]AssetRef{object.Ref})
+	if err != nil || !slices.Contains(closure, object.Ref) || !slices.Contains(closure, function.Ref) {
+		t.Fatalf("proposal closure lost an original dependency: %v %v", closure, err)
+	}
+	order, err := graph.InstallationOrder()
+	if err != nil || len(order) != 2 || slices.Index(order, object.Ref) >= slices.Index(order, function.Ref) {
+		t.Fatalf("the function was ordered before its source model: %v %v", order, err)
+	}
+}
+
 func TestEnterpriseReferencesAreNotRecordAssetDependencies(t *testing.T) {
 	object := ReleaseAsset{Ref: AssetRef{App: "build", Kind: AssetObject, Name: "build.assignment"}, SourceVersion: "1", ContractVersion: 1, Body: json.RawMessage(`{"type":"build.assignment","name":"assignment","fields":[{"name":"unit","title":"Unit","type":"reference","ref":"enterprise.element","stereotype":"ActualOrganization"}]}`)}
 	action := ReleaseAsset{Ref: AssetRef{App: "build", Kind: AssetAction, Name: "build.assignment.assign"}, SourceVersion: "1", ContractVersion: 1, Body: json.RawMessage(`{"schema":"build.assignment.assign","target":"build.assignment","payload":[{"name":"unit","type":"string","ref":"enterprise.element","stereotype":"ActualOrganization"}]}`)}
@@ -374,5 +401,29 @@ func TestAgentDescriptionRequiresDeclaredToolBindings(t *testing.T) {
 	asset.Body = Raw(agent)
 	if _, err := DescribeAsset(asset); err == nil {
 		t.Fatal("undeclared Build action tool accepted")
+	}
+}
+
+func TestDependencyClosureIncludesReciprocalTypedModelWithoutAllowingExecutionCycles(t *testing.T) {
+	object := AssetRef{App: "build", Kind: AssetObject, Name: "build.event"}
+	subject := AssetRef{App: "build", Kind: AssetObject, Name: "build.device"}
+	link := AssetRef{App: "build", Kind: AssetLinkType, Name: "predecessors"}
+	for _, middle := range []AssetKind{AssetObject, AssetQuery, AssetAction, AssetFlow, AssetObservation} {
+		t.Run(string(middle), func(t *testing.T) {
+			via := subject
+			via.Kind = middle
+			graph, err := NewDependencyGraph([]Dependencies{{Ref: object, Requires: []AssetRef{via}}, {Ref: via, Requires: []AssetRef{link}}, {Ref: link, Requires: []AssetRef{object}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			closure, err := graph.Closure([]AssetRef{object})
+			if middle == AssetObject {
+				if err != nil || len(closure) != 3 {
+					t.Fatalf("typed model omitted: %v %v", closure, err)
+				}
+			} else if err == nil {
+				t.Fatal("executable dependency cycle accepted")
+			}
+		})
 	}
 }

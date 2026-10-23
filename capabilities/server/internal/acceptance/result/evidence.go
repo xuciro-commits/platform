@@ -29,12 +29,13 @@ type DecisionDefinition struct {
 // ObservationDecisionEvidence retains the compact window and source identity;
 // raw points never enter the accepted result.
 type ObservationDecisionEvidence struct {
-	Key        string                     `json:"key"`
-	Definition platform.AssetBinding      `json:"definition"`
-	Record     string                     `json:"record"`
-	Device     string                     `json:"device"`
-	Signal     string                     `json:"signal"`
-	Window     platform.ObservationWindow `json:"window"`
+	Key        string                              `json:"key"`
+	Definition platform.AssetBinding               `json:"definition"`
+	Record     string                              `json:"record"`
+	Device     string                              `json:"device"`
+	Signal     string                              `json:"signal"`
+	Window     platform.ObservationWindow          `json:"window"`
+	Intervals  *platform.ObservationIntervalResult `json:"intervals,omitempty"`
 }
 
 // ValidateAuthorizationEvidence checks only the saved shape during recovery,
@@ -83,6 +84,12 @@ func (b DecisionDefinition) Check(app, schema string) error {
 func (e ObservationDecisionEvidence) Check() error {
 	if !strings.HasPrefix(e.Key, "observation:") || len(e.Key) > 200 || e.Definition.Ref.Kind != platform.AssetObservation || e.Definition.Ref.Check() != nil || e.Definition.SourceVersion == "" || e.Record == "" || e.Device == "" || e.Signal == "" {
 		return fmt.Errorf("observation decision evidence needs its original source and record")
+	}
+	if e.Intervals != nil {
+		if e.Window != (platform.ObservationWindow{}) {
+			return fmt.Errorf("state observation evidence cannot contain a numeric window")
+		}
+		return e.Intervals.Check()
 	}
 	return e.Window.Check()
 }

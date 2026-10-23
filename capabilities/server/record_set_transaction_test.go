@@ -91,8 +91,36 @@ func TestRecordSetTransactionSplitConstraintsAndRecovery(t *testing.T) {
 	}
 	receipt := decide(t, tn, "user", construction.ID, "build.batch.split", "build.batch", "root", nil, txnAt)
 	result, _, failure := resultformat.DecodeBatch(entries[len(entries)-1].Body)
-	if failure != nil || result.Version != 8 || len(result.Iterations) != 1 || !reflect.DeepEqual(result.Iterations[0].IDs, []string{"A", "B", "C", "D"}) {
+	if failure != nil || result.Version != 9 || len(result.Iterations) != 1 || result.Iterations[0].Decision != "build/"+receipt.GetChangeId() || !reflect.DeepEqual(result.Iterations[0].IDs, []string{"A", "B", "C", "D"}) {
 		t.Fatalf("ordered witness: %+v %v", result.Iterations, failure)
+	}
+	// Historical version 8 witnesses keep their original interpretation. This
+	// constructs old bytes only in the fixture; production history is not rewritten.
+	copyResult := func() resultformat.Batch {
+		var copied resultformat.Batch
+		if err := json.Unmarshal(platform.Raw(result), &copied); err != nil {
+			t.Fatal(err)
+		}
+		return copied
+	}
+	encode := func(value resultformat.Batch) []byte {
+		value.Digest, failure = resultformat.DigestBatch(value)
+		if failure != nil {
+			t.Fatal(failure)
+		}
+		return platform.Raw(value)
+	}
+	legacy := copyResult()
+	legacy.Version, legacy.Iterations[0].Decision = 8, ""
+	if _, _, err := resultformat.DecodeBatch(encode(legacy)); err != nil {
+		t.Fatalf("version 8 witness is no longer readable: %v", err)
+	}
+	for _, identity := range []string{"", "build/missing", "flow/" + receipt.GetChangeId()} {
+		forged := copyResult()
+		forged.Iterations[0].Decision = identity
+		if _, _, err := resultformat.DecodeBatch(encode(forged)); err == nil {
+			t.Fatalf("forged iteration decision %q was accepted", identity)
+		}
 	}
 	for _, side := range []struct {
 		step string
@@ -117,5 +145,48 @@ func TestRecordSetTransactionSplitConstraintsAndRecovery(t *testing.T) {
 	}
 	if snapshot(tn) != snapshot(restored) {
 		t.Fatal("recovery re-evaluated or changed the accepted split")
+	}
+}
+
+func TestTransactionIteratesReferencedRecordSetWithOriginalPermissions(t *testing.T) {
+	tn := builderTenant(t, "referenced-set-transaction")
+	var entries []Entry
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	setTxnSetup(t, tn)
+	access := []construction.Access{{Role: construction.User, Read: "all", Create: true, Edit: true}}
+	publishObject(t, tn, "builder", "COPY", map[string]any{"name": "setcopy", "title": "Copied line", "fields": []construction.Field{{Name: "source", Title: "Original line", Type: "reference", Ref: "build.line"}, {Name: "ordinal", Title: "Ordinal", Type: "integer"}}, "access": access}, txnAt)
+	copyTxn := &platform.BusinessTxn{Subject: "build.setconsumer", Steps: []platform.TxnStep{{Name: "copy", Kind: "for-each", ForEach: &platform.TxnForEach{Of: "source", Set: "lines", Steps: []platform.TxnStep{{Name: "line", Kind: "create", Target: platform.TxnRef{Type: "build.setcopy"}, Changes: []platform.TxnSet{{Field: "source", From: "row.$subject"}, {Field: "ordinal", From: "row.ordinal"}}}}}}}}
+	fields := []construction.Field{{Name: "source", Title: "Source batch", Type: "reference", Ref: "build.batch"}}
+	publishObject(t, tn, "builder", "CONSUMER", map[string]any{"name": "setconsumer", "title": "Consumer", "fields": fields, "access": access, "states": []construction.State{{Name: "draft", Title: "Draft"}}, "actions": []construction.Action{{Name: "freeze", Title: "Freeze referenced lines", From: []string{"draft"}, Roles: []string{construction.User}, Transaction: copyTxn}}}, txnAt)
+	for _, row := range []struct{ id, source string }{{"missing", ""}, {"consumer", "root"}} {
+		decide(t, tn, "user", "build", "build.setconsumer.create", "build.setconsumer", row.id, map[string]any{"source": row.source}, txnAt)
+	}
+	before := txnState(tn)
+	if got := refuse(t, tn, "user", "build", "build.setconsumer.freeze", "build.setconsumer", "missing", nil, txnAt); got == "ok" || txnState(tn) != before {
+		t.Fatal("a missing collection owner was accepted or left partial copied lines")
+	}
+	// Withholding the declared reference itself must not be bypassed by an internal ID lookup.
+	fields[0].Read = []string{"builder"}
+	decide(t, tn, "builder", "build", "build.object.edit", construction.ObjectType, "CONSUMER", map[string]any{"fields": fields}, txnAt)
+	decide(t, tn, "builder", "build", "build.object.publish", construction.ObjectType, "CONSUMER", nil, txnAt)
+	before = txnState(tn)
+	if got := refuse(t, tn, "user", "build", "build.setconsumer.freeze", "build.setconsumer", "consumer", nil, txnAt); got == "ok" || txnState(tn) != before {
+		t.Fatal("a withheld collection owner was used to copy its lines")
+	}
+	fields[0].Read = nil
+	decide(t, tn, "builder", "build", "build.object.edit", construction.ObjectType, "CONSUMER", map[string]any{"fields": fields}, txnAt)
+	decide(t, tn, "builder", "build", "build.object.publish", construction.ObjectType, "CONSUMER", nil, txnAt)
+	receipt := decide(t, tn, "user", "build", "build.setconsumer.freeze", "build.setconsumer", "consumer", nil, txnAt)
+	batch, _, failure := resultformat.DecodeBatch(entries[len(entries)-1].Body)
+	if failure != nil || len(batch.Iterations) != 1 || batch.Iterations[0].Decision != "build/"+receipt.GetChangeId() || !reflect.DeepEqual(batch.Iterations[0].IDs, []string{"A", "B", "C", "D"}) {
+		t.Fatalf("referenced-set witness: %+v %v", batch.Iterations, failure)
+	}
+	copies, err := tn.Records(memberOf(t, tn, "user"), "build.setcopy", platform.Query{Limit: 10}, txnAt)
+	if err != nil || copies.Total != 4 {
+		t.Fatalf("original referenced lines were not all copied: %+v %v", copies, err)
+	}
+	restored := builderTenant(t, tn.ID)
+	if e := restored.Replay(entries); e != nil || snapshot(tn) != snapshot(restored) {
+		t.Fatalf("referenced-set recovery changed the accepted rows: %v", e)
 	}
 }

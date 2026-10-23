@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The named verification steps the Makefile composes: each writes
 # its log to .build/verify/<step>.log and prints one line. Run steps by name:
-#   scripts/verify.sh contract formal format capabilities composition web-check mes
+#   scripts/verify.sh contract formal format capabilities composition web-check
 # `make check`, `make verify`, `make rehearse` choose the layer; this script is
 # the step bodies, not a second entry point.
 # Needs go, buf and protoc-gen-go; the web steps node and pnpm; deploy a running
@@ -29,7 +29,10 @@ vocabulary() {
 }
 
 check_module() {
-  (cd "$1" && go vet ./... && go test -count=1 ./...)
+  local dir=$1; shift
+  # These are functional checks. Allocation sampling becomes expensive across
+  # many independent model fixtures and is not used by these checks.
+  (cd "$dir" && go vet ./... && GODEBUG="${GODEBUG:+$GODEBUG,}memprofilerate=0" go test -count=1 "$@" ./...)
 }
 
 contract() {
@@ -62,7 +65,7 @@ web() {
   web_check
   # The web/e2e routes against development hosts (needs Go and Chrome or Playwright Chromium)
   if ((${#failed[@]} == web_failures)); then
-    step web-routes bash -c 'cd web && pnpm --filter @platform/e2e e2e'
+    step web-routes make e2e
   else
     echo 'web-routes skipped: build and component checks must pass first.'
   fi
@@ -74,7 +77,8 @@ format() {
 }
 
 capabilities() {
-  step capability-server check_module capabilities/server
+  # This package includes complete industry publication and recovery routes.
+  step capability-server check_module capabilities/server -timeout=45m
   step app-scaffold scaffold
 }
 
@@ -85,10 +89,6 @@ scaffold() {
   rm -rf "$root" && mkdir -p "$root" && ln -s ../../contract ../../capabilities "$root"/ &&
     (cd capabilities/server && go run ./cmd/new-app -root "../../$root" -id scaffolded -entity request -web=false) &&
     check_module "$root/apps/scaffolded/server"
-}
-
-mes() {
-  step mes-server check_module apps/mes/server
 }
 
 # Apps know no other app; they meet through protocols; and no
@@ -104,13 +104,8 @@ composition() {
   for dir in protocols/*; do
     [[ -f $dir/go.mod ]] && step "$(basename "$dir")-protocol" check_module "$dir"
   done
-  # Every other app, including a new one, is checked as soon as it exists.
   for dir in apps/*/server; do
-    [[ -f $dir/go.mod && $dir != apps/pms/* && $dir != apps/mes/* ]] || continue
-    step "$(basename "$(dirname "$dir")")-server" check_module "$dir"
-  done
-  for dir in solutions/*; do
-    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-solution" check_module "$dir"
+    [[ -f $dir/go.mod ]] && step "$(basename "$(dirname "$dir")")-server" check_module "$dir"
   done
 }
 
@@ -118,13 +113,7 @@ deploy() {
   step deploy-rehearsal deploy/local/rehearse.sh
 }
 
-pms() {
-  step pms-server check_module apps/pms/server
-  step pms-client-k5 cargo test --manifest-path apps/pms/client/src-tauri/Cargo.toml
-  step pms-flows apps/pms/flows.sh
-}
-
-(($#)) || { echo "usage: $0 step...   steps: contract formal format capabilities composition composition-static web-types web-check web pms mes deploy"; exit 2; }
+(($#)) || { echo "usage: $0 step...   steps: contract formal format capabilities composition composition-static web-types web-check web deploy"; exit 2; }
 for target in "$@"; do
 case "$target" in
   contract) contract ;;
@@ -132,10 +121,8 @@ case "$target" in
   web-types) web_types ;;
   web-check) web_check ;;
   web) web ;;
-  pms) web; pms ;;
   capabilities) capabilities ;;
   format) format ;;
-  mes) mes ;;
   composition) composition ;;
   composition-static) composition_static ;;
   deploy) deploy ;;

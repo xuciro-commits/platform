@@ -14,6 +14,18 @@ import (
 
 type RecordLookup interface{ HasRecord(typ, id string) bool }
 
+// Request schemas check presence. A stored zero or false remains a provided
+// scalar value; nil pointers and empty text still have their ordinary meaning.
+func requiredEmpty(value reflect.Value) bool {
+	switch value.Kind() {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+		return false
+	default:
+		return value.IsZero()
+	}
+}
+
 func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup) ([]platform.FieldIssue, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	// A conditional field (FieldInfo.When) follows its condition's value.
@@ -77,14 +89,14 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 		if f.When != nil {
 			on, _ := info.Field(f.When.Field)
 			switch active := f.Active(stringOf); {
-			case active && f.Required && f.Constraints == nil && fv.IsZero():
+			case active && f.Required && f.Constraints == nil && requiredEmpty(fv):
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is required when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
 			case !active && !fv.IsZero():
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} applies only when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
 			case !active:
 				continue
 			}
-		} else if f.Required && f.Constraints == nil && fv.IsZero() {
+		} else if f.Required && f.Constraints == nil && requiredEmpty(fv) {
 			return nil, invalid
 		}
 		if fv.Kind() == reflect.Pointer {

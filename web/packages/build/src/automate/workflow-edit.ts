@@ -4,7 +4,7 @@ import type { Binding, Predicate, WorkflowDraft, WorkflowStep } from "./workflow
 export function workflowBindings(step: WorkflowStep): { port: string; binding?: Binding }[] {
   const bindings: { port: string; binding?: Binding }[] = [
     ...Object.entries(step.inputs ?? {}).map(([name, binding]) => ({ port: `input:${name}`, binding })),
-    ...(["value", "target", "collection"] as const).flatMap((name) => step[name] ? [{ port: `binding:${name}`, binding: step[name] }] : []),
+    ...(["value", "target", "collection", "waitUntil"] as const).flatMap((name) => step[name] ? [{ port: `binding:${name}`, binding: step[name] }] : []),
   ];
   const visit = (predicate: Predicate, path: string) => {
     const logical = ["all", "any", "not"].includes(predicate.op);
@@ -23,7 +23,7 @@ export function withWorkflowBinding(step: WorkflowStep, port: string, binding: B
     if (binding) inputs[name] = binding; else delete inputs[name];
     return { ...step, inputs };
   }
-  if (["binding:value", "binding:target", "binding:collection"].includes(port)) return { ...step, [port.slice(8)]: binding };
+  if (["binding:value", "binding:target", "binding:collection", "binding:waitUntil"].includes(port)) return { ...step, [port.slice(8)]: binding };
   const match = /^binding:condition((?:\.terms\.\d+)*)\.(left|right)$/.exec(port);
   if (!match || !step.condition) return step;
   const indices = [...match[1]!.matchAll(/\.terms\.(\d+)/g)].map((item) => Number(item[1]));

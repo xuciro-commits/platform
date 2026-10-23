@@ -1,0 +1,229 @@
+[
+  {
+    "id": "plant-sz-build",
+    "name": "Shenzhen Plant · Platform",
+    "template": "manufacturing",
+    "settings": {
+      "name": "Shenzhen Plant",
+      "timezone": "Asia/Shanghai",
+      "language": "zh-CN",
+      "currency": "CNY",
+      "country": "CN"
+    },
+    "seats": [
+      {
+        "subjects": [
+          "user:sup@plant.test"
+        ],
+        "id": "sup-1",
+        "units": [
+          {
+            "unit": "sampleplant",
+            "role": "supervisor"
+          }
+        ],
+        "grants": [
+          {
+            "app": "agent",
+            "role": "admin"
+          },
+          {
+            "app": "ai",
+            "role": "admin"
+          },
+          {
+            "app": "build",
+            "role": "builder"
+          },
+          {
+            "app": "core",
+            "role": "steward"
+          },
+          {
+            "app": "enterprise",
+            "role": "admin"
+          },
+          {
+            "app": "flow",
+            "role": "admin"
+          },
+          {
+            "app": "knowledge",
+            "role": "editor"
+          },
+          {
+            "app": "platform",
+            "role": "admin"
+          },
+          {
+            "app": "work",
+            "role": "admin"
+          },
+          {
+            "app": "core",
+            "role": "accountant"
+          },
+          {
+            "app": "build",
+            "role": "supervisor"
+          },
+          {
+            "app": "build",
+            "role": "controller"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:op1@plant.test"
+        ],
+        "id": "op-l1",
+        "units": [
+          {
+            "unit": "L1",
+            "role": "operator"
+          }
+        ],
+        "grants": [
+          {
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "operator"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:op2@plant.test"
+        ],
+        "id": "op-l2",
+        "units": [
+          {
+            "unit": "L2",
+            "role": "operator"
+          }
+        ],
+        "grants": [
+          {
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "operator"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:qa1@plant.test"
+        ],
+        "id": "qa-1",
+        "grants": [
+          {
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "quality"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:qa2@plant.test"
+        ],
+        "id": "qa-2",
+        "grants": [
+          {
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "quality"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "client:mes-gateway"
+        ],
+        "id": "gateway-l1",
+        "grants": []
+      },
+      {
+        "subjects": [
+          "client:mes-assistant"
+        ],
+        "id": "agent-l1",
+        "agent": true,
+        "units": [
+          {
+            "unit": "L1",
+            "role": "assistant"
+          }
+        ],
+        "grants": []
+      },
+      {
+        "subjects": [
+          "user:buyer@plant.test"
+        ],
+        "id": "buyer-1",
+        "units": [
+          {
+            "unit": "sampleplant",
+            "role": "buyer",
+            "primary": true
+          }
+        ],
+        "grants": [
+          {
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "buyer"
+          },
+          {
+            "app": "core",
+            "role": "reference-reader"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:accountant@plant.test"
+        ],
+        "id": "acc-1",
+        "units": [
+          {
+            "unit": "sampleplant",
+            "role": "accountant",
+            "primary": true
+          }
+        ],
+        "grants": [
+          {
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "accountant"
+          },
+          {
+            "app": "core",
+            "role": "accountant"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -5,6 +5,7 @@ import "platformserver/internal/construction"
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -199,5 +200,137 @@ func TestPackageBlueprintExtendsInstalledCodeWithoutNativeDrafts(t *testing.T) {
 	preview, err := tn.PreviewReleaseDrafts(memberOf(t, tn, "builder"), []construction.JointDraftRef{{Kind: platform.AssetPage, ID: "materialdesk"}, {Kind: platform.AssetApp, ID: "materialworkspace"}})
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("native extension drafts do not form an ordinary candidate: %+v %v", preview, err)
+	}
+}
+
+func TestPackageBlueprintBatchesResumeFromAcceptedPrefix(t *testing.T) {
+	const id = "blueprint-batches"
+	var assets []platform.ReleaseAsset
+	var pages []string
+	for i := range 66 {
+		name := fmt.Sprintf("materials%02d", i)
+		page, err := platform.PageReleaseAsset(construction.ID, "1", platform.Page{Name: name, Title: name, Object: platform.AssetRef{App: core.ID, Kind: platform.AssetObject, Name: core.MaterialType}, Sections: []platform.Section{{ID: "table", Widget: "table", Fields: []string{"name"}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assets = append(assets, page)
+		pages = append(pages, name)
+	}
+	application, err := platform.ApplicationReleaseAsset(construction.ID, "1", platform.Application{Name: "materials", Title: "Materials", Pages: pages})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets = append(assets, application)
+	descriptor := PackageDescriptor{ID: "example.materials", Version: "1.0.0", Namespace: "example.materials", Blueprint: &PackageBlueprint{Roots: []platform.AssetRef{application.Ref}, Assets: assets}}
+	alternative := descriptor
+	alternative.ID, alternative.Namespace = "example.materials-alternative", "example.materials-alternative"
+	alternative.Blueprint = &PackageBlueprint{Roots: descriptor.Blueprint.Roots, Assets: append([]platform.ReleaseAsset(nil), assets...)}
+	var changedPage platform.Page
+	if err = json.Unmarshal(assets[65].Body, &changedPage); err != nil {
+		t.Fatal(err)
+	}
+	changedPage.Title = "A different final page"
+	alternative.Blueprint.Assets[65], err = platform.PageReleaseAsset(construction.ID, "1", changedPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	if err = os.WriteFile(filepath.Join(directory, "materials.json"), platform.Raw(descriptor), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(directory, "alternative.json"), platform.Raw(alternative), 0600); err != nil {
+		t.Fatal(err)
+	}
+	index, err := LoadPackageIndex(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compose := func() *Tenant {
+		tn := composeTenant(t, id, []Seat{seatOf("admin", "platform:admin"), seatOf("builder", "build:builder")}, build.New(id), core.New(id))
+		testConsoleOf(tn).BindPackageIndex(index)
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	var prefix acceptedComposite
+	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		if saved, err := decodeAcceptedComposite(entry.Body); err == nil {
+			if prefix.Key != "" {
+				return nil, errors.New("second append unavailable")
+			}
+			prefix = saved
+		}
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
+	decide(t, tn, "admin", PlatformApp, SchemaPackageInstall, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "version": descriptor.Version}, txnAt)
+	decide(t, tn, "admin", PlatformApp, SchemaPackageInstall, PackageType, alternative.ID, map[string]any{"id": alternative.ID, "version": alternative.Version}, txnAt)
+	if _, err = tn.CreatePackageDrafts(memberOf(t, tn, "builder"), descriptor.ID, descriptor.Version, "create", txnAt); err == nil || !strings.Contains(err.Error(), "second append unavailable") {
+		t.Fatalf("second batch did not encounter the append failure: %v", err)
+	}
+	if prefix.Version != 3 || len(prefix.Edits) != 64 || len(prefix.Context) != 64 || len(entries) != 3 {
+		t.Fatalf("unbounded or unsealed prefix: version=%d edits=%d entries=%d", prefix.Version, len(prefix.Edits), len(entries))
+	}
+	if tn.ActiveRelease() != "" {
+		t.Fatal("partial draft creation published an application")
+	}
+	// Recovery applies accepted images; it must not attempt the unaccepted tail.
+	recovered := compose()
+	recovered.Files = tn.files()
+	if err = recovered.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	CheckReplay(t, recovered, entries, compose)
+	for _, edit := range prefix.Edits {
+		if edit.Target.GetId() == changedPage.Name {
+			t.Fatal("the changed page must be in the unaccepted tail for this scenario")
+		}
+		if _, problem := recovered.RecordOf(memberOf(t, recovered, "builder"), edit.Target.GetType(), edit.Target.GetId(), txnAt); problem != nil {
+			t.Fatalf("accepted prefix was not restored: %v", problem)
+		}
+	}
+	var tail acceptedComposite
+	recovered.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		var err error
+		tail, err = decodeAcceptedComposite(entry.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
+	if _, err = recovered.CreatePackageDrafts(memberOf(t, recovered, "builder"), alternative.ID, alternative.Version, "create", txnAt.Add(time.Hour)); err == nil || !strings.Contains(err.Error(), "key belongs to another request") || len(entries) != 3 {
+		t.Fatalf("the same prefix allowed a different unaccepted tail: %v", err)
+	}
+	answer, err := recovered.CreatePackageDrafts(memberOf(t, recovered, "builder"), descriptor.ID, descriptor.Version, "create", txnAt.Add(time.Hour))
+	if err != nil || len(answer.Drafts) != 67 || tail.Version != 3 || len(tail.Edits) != 3 || tail.Context != prefix.Context || len(entries) != 4 {
+		t.Fatalf("retry did not append only the original tail: drafts=%d edits=%d entries=%d error=%v", len(answer.Drafts), len(tail.Edits), len(entries), err)
+	}
+	again, err := recovered.CreatePackageDrafts(memberOf(t, recovered, "builder"), descriptor.ID, descriptor.Version, "create", txnAt.Add(2*time.Hour))
+	if err != nil || !reflect.DeepEqual(again, answer) || len(entries) != 4 || recovered.ActiveRelease() != "" {
+		t.Fatalf("completed retry changed drafts or publication: %v", err)
+	}
+	for _, saved := range []acceptedComposite{prefix, tail} {
+		for _, mutate := range []func(*acceptedComposite){
+			func(value *acceptedComposite) { value.Context = "" },
+			func(value *acceptedComposite) { value.Context = "invalid" },
+			func(value *acceptedComposite) { value.Version = 2 },
+			func(value *acceptedComposite) { value.Context = strings.Repeat("0", 64) },
+		} {
+			changed := saved
+			mutate(&changed)
+			if _, err := encodeAcceptedComposite(changed); err == nil {
+				t.Fatal("changed batch context retained the original request identity")
+			}
+		}
+	}
+	final := compose()
+	final.Files = recovered.files()
+	if err = final.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	last, err := final.CreatePackageDrafts(memberOf(t, final, "builder"), descriptor.ID, descriptor.Version, "create", txnAt.Add(3*time.Hour))
+	if err != nil || !reflect.DeepEqual(last, answer) || final.ActiveRelease() != "" {
+		t.Fatalf("completed batches did not recover as unpublished drafts: %v", err)
 	}
 }

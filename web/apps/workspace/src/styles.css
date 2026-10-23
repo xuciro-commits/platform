@@ -1,5 +1,4 @@
 @import "@platform/ui/styles.css";
-@import "@pkg/pms/styles.css";
 /* Every app UI package composed here, by one glob: a package added
    later cannot be forgotten and lose its styles. */
 @source "../../../packages";

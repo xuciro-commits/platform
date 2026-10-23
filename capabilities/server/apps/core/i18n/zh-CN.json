@@ -174,5 +174,12 @@
   "supplier": "供应商",
   "carrier": "承运商",
   "manufacturer": "制造商",
-  "Person in the model": "模型中的人员"
+  "Person in the model": "模型中的人员",
+  "Closed period policy": "关闭期间策略",
+  "Unknown closed period policy": "未知的关闭期间策略",
+  "Period {period} is closed": "期间 {period} 已关闭",
+  "Closed period policy (reject, next-open)": "关闭期间策略（拒绝、转下一开放期间）",
+  "next-open": "转下一开放期间",
+  "reference-reader": "账务参照读取",
+  "The trial balance requires access to all journals": "试算平衡需要完整凭证读取资格"
 }

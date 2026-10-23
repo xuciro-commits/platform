@@ -35,6 +35,15 @@ func (b *Build) lookupEntity(typ string) (platform.EntityInfo, bool) {
 	return b.host.Entity(typ)
 }
 
+func (b *Build) declaresRole(role string) bool {
+	for _, model := range b.jointEntities {
+		if _, known := model.Scope.Levels[role]; known {
+			return true
+		}
+	}
+	return slices.Contains(b.Manifest().AllRoles(), role)
+}
+
 // jointObjectEntities declares what each selected draft object would be
 // installed as, using the same descriptor the publisher installs.
 func (b *Build) jointObjectEntities(objects []construction.Object, drafts []construction.JointDraftRef) map[string]platform.EntityInfo {
@@ -65,6 +74,9 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []construction.JointDraftRef, mem
 	var result construction.JointDraftAssets
 	if len(drafts) == 0 {
 		return result, fmt.Errorf("select at least one saved draft")
+	}
+	if len(drafts) > construction.JointDraftLimit {
+		return result, fmt.Errorf("a joint candidate accepts at most %d drafts", construction.JointDraftLimit)
 	}
 	seen := map[platform.AssetRef]bool{}
 	for _, draft := range drafts {
@@ -449,7 +461,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]construc
 	var result []construction.JointDraftRef
 	seen := map[construction.JointDraftRef]bool{{Kind: kind, ID: id}: true}
 	queue := []construction.JointDraftRef{{Kind: kind, ID: id}}
-	for len(queue) > 0 && len(result) < 64 {
+	for len(queue) > 0 {
 		next := queue[0]
 		queue = queue[1:]
 		dependencies := map[platform.AssetKind][]string{}
@@ -500,6 +512,9 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]construc
 				ref, ok := find(want, name)
 				if !ok || seen[ref] {
 					continue
+				}
+				if len(seen) >= construction.JointDraftLimit {
+					return nil, fmt.Errorf("a joint candidate accepts at most %d drafts", construction.JointDraftLimit)
 				}
 				seen[ref] = true
 				result = append(result, ref)

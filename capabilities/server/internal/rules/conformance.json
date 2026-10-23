@@ -6,13 +6,34 @@
         "op": "coalesce",
         "kind": "text",
         "args": [
-          { "kind": "text", "ref": "optional" },
-          { "kind": "text", "lit": { "value": null } },
-          { "kind": "text", "lit": { "value": "fallback" } }
+          {
+            "kind": "text",
+            "ref": "optional"
+          },
+          {
+            "kind": "text",
+            "lit": {
+              "value": null
+            }
+          },
+          {
+            "kind": "text",
+            "lit": {
+              "value": "fallback"
+            }
+          }
         ]
       },
-      "schema": { "refs": { "optional": { "kind": "text" } } },
-      "context": { "refs": {} }
+      "schema": {
+        "refs": {
+          "optional": {
+            "kind": "text"
+          }
+        }
+      },
+      "context": {
+        "refs": {}
+      }
     },
     "value": "fallback"
   },
@@ -23,12 +44,33 @@
         "op": "coalesce",
         "kind": "text",
         "args": [
-          { "kind": "text", "ref": "private" },
-          { "kind": "text", "lit": { "value": "fallback" } }
+          {
+            "kind": "text",
+            "ref": "private"
+          },
+          {
+            "kind": "text",
+            "lit": {
+              "value": "fallback"
+            }
+          }
         ]
       },
-      "schema": { "refs": { "private": { "kind": "text" } } },
-      "context": { "refs": { "private": { "kind": "text", "status": "withheld" } } }
+      "schema": {
+        "refs": {
+          "private": {
+            "kind": "text"
+          }
+        }
+      },
+      "context": {
+        "refs": {
+          "private": {
+            "kind": "text",
+            "status": "withheld"
+          }
+        }
+      }
     },
     "error": "withheld"
   },
@@ -39,19 +81,38 @@
         "op": "coalesce",
         "kind": "decimal",
         "args": [
-          { "kind": "decimal", "lit": { "value": "1" } },
+          {
+            "kind": "decimal",
+            "lit": {
+              "value": "1"
+            }
+          },
           {
             "op": "/",
             "kind": "decimal",
             "args": [
-              { "kind": "decimal", "lit": { "value": "1" } },
-              { "kind": "decimal", "lit": { "value": "0" } }
+              {
+                "kind": "decimal",
+                "lit": {
+                  "value": "1"
+                }
+              },
+              {
+                "kind": "decimal",
+                "lit": {
+                  "value": "0"
+                }
+              }
             ]
           }
         ]
       },
-      "schema": { "refs": {} },
-      "context": { "refs": {} }
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
     },
     "value": "1"
   },
@@ -523,28 +584,930 @@
   {
     "name": "bounded whole text pattern",
     "request": {
-      "expr": {"op":"matches","kind":"boolean","args":[{"kind":"text","lit":{"value":"AB-12"}},{"kind":"text","lit":{"value":"[A-Z]{2}-[0-9]{2}"}}]},
-      "schema": {"refs":{}},
-      "context": {"refs":{}}
+      "expr": {
+        "op": "matches",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "text",
+            "lit": {
+              "value": "AB-12"
+            }
+          },
+          {
+            "kind": "text",
+            "lit": {
+              "value": "[A-Z]{2}-[0-9]{2}"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
     },
     "value": true
   },
   {
     "name": "pattern does not accept a substring",
     "request": {
-      "expr": {"op":"matches","kind":"boolean","args":[{"kind":"text","lit":{"value":"xAB-12x"}},{"kind":"text","lit":{"value":"[A-Z]{2}-[0-9]{2}"}}]},
-      "schema": {"refs":{}},
-      "context": {"refs":{}}
+      "expr": {
+        "op": "matches",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "text",
+            "lit": {
+              "value": "xAB-12x"
+            }
+          },
+          {
+            "kind": "text",
+            "lit": {
+              "value": "[A-Z]{2}-[0-9]{2}"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
     },
     "value": false
   },
   {
     "name": "unsupported pattern rejected at compilation",
     "request": {
-      "expr": {"op":"matches","kind":"boolean","args":[{"kind":"text","lit":{"value":"AB"}},{"kind":"text","lit":{"value":"(?=AB)"}}]},
-      "schema": {"refs":{}},
-      "context": {"refs":{}}
+      "expr": {
+        "op": "matches",
+        "kind": "boolean",
+        "args": [
+          {
+            "kind": "text",
+            "lit": {
+              "value": "AB"
+            }
+          },
+          {
+            "kind": "text",
+            "lit": {
+              "value": "(?=AB)"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
     },
     "error": "pattern"
+  },
+  {
+    "name": "hours cross the date boundary",
+    "request": {
+      "expr": {
+        "op": "add-hours",
+        "kind": "datetime",
+        "args": [
+          {
+            "kind": "datetime",
+            "lit": {
+              "value": "2026-10-21T23:00:00Z"
+            }
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": 2
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "2026-10-22T01:00:00Z"
+  },
+  {
+    "name": "whole hours between instants",
+    "request": {
+      "expr": {
+        "op": "diff-hours",
+        "kind": "integer",
+        "args": [
+          {
+            "kind": "datetime",
+            "lit": {
+              "value": "2026-10-22T01:00:00Z"
+            }
+          },
+          {
+            "kind": "datetime",
+            "lit": {
+              "value": "2026-10-21T23:00:00Z"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": 2
+  },
+  {
+    "name": "start-of-day normalizes datetime to UTC boundaries",
+    "request": {
+      "expr": {
+        "op": "start-of-day",
+        "kind": "datetime",
+        "args": [
+          {
+            "kind": "datetime",
+            "lit": {
+              "value": "2026-10-21T23:41:09-04:00"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "2026-10-22T00:00:00Z"
+  },
+  {
+    "name": "start-of-hour normalizes datetime to UTC boundaries",
+    "request": {
+      "expr": {
+        "op": "start-of-hour",
+        "kind": "datetime",
+        "args": [
+          {
+            "kind": "datetime",
+            "lit": {
+              "value": "2026-10-21T23:41:09-04:00"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "2026-10-22T03:00:00Z"
+  },
+  {
+    "name": "start-of-day normalizes date to UTC boundaries",
+    "request": {
+      "expr": {
+        "op": "start-of-day",
+        "kind": "datetime",
+        "args": [
+          {
+            "kind": "date",
+            "lit": {
+              "value": "2026-10-21"
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {}
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "value": "2026-10-21T00:00:00Z"
+  },
+  {
+    "name": "conditional ignores an unavailable unchosen value",
+    "request": {
+      "expr": {
+        "op": "if",
+        "kind": "integer",
+        "args": [
+          {
+            "kind": "boolean",
+            "lit": {
+              "value": true
+            }
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": 4
+            }
+          },
+          {
+            "kind": "integer",
+            "ref": "secret"
+          }
+        ]
+      },
+      "schema": {
+        "refs": {
+          "secret": {
+            "kind": "integer"
+          }
+        }
+      },
+      "context": {
+        "refs": {
+          "secret": {
+            "kind": "integer",
+            "status": "withheld"
+          }
+        }
+      }
+    },
+    "value": 4
+  },
+  {
+    "name": "conditional does not treat missing as false",
+    "request": {
+      "expr": {
+        "op": "if",
+        "kind": "integer",
+        "args": [
+          {
+            "kind": "boolean",
+            "ref": "test"
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": 4
+            }
+          },
+          {
+            "kind": "integer",
+            "lit": {
+              "value": 2
+            }
+          }
+        ]
+      },
+      "schema": {
+        "refs": {
+          "test": {
+            "kind": "boolean"
+          }
+        }
+      },
+      "context": {
+        "refs": {}
+      }
+    },
+    "error": "missing"
+  },
+  {
+    "name": "declared collection values feed typed membership",
+    "request": {
+      "expr": {
+        "op": "all",
+        "kind": "boolean",
+        "agg": {
+          "source": "requirements"
+        },
+        "in": {
+          "op": "in",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "reference",
+              "ref": "item.capability"
+            },
+            {
+              "op": "values",
+              "kind": "set",
+              "agg": {
+                "source": "skills",
+                "field": [
+                  "capability"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "schema": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          },
+          "skills": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          }
+        }
+      },
+      "context": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              }
+            ]
+          },
+          "skills": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              },
+              {
+                "id": "2",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "torque"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": true
+  },
+  {
+    "name": "one missing capability",
+    "request": {
+      "expr": {
+        "op": "all",
+        "kind": "boolean",
+        "agg": {
+          "source": "requirements"
+        },
+        "in": {
+          "op": "in",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "reference",
+              "ref": "item.capability"
+            },
+            {
+              "op": "values",
+              "kind": "set",
+              "agg": {
+                "source": "skills",
+                "field": [
+                  "capability"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "schema": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          },
+          "skills": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          }
+        }
+      },
+      "context": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              }
+            ]
+          },
+          "skills": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "2",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "torque"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value": false
+  },
+  {
+    "name": "withheld capabilities cannot prove coverage",
+    "request": {
+      "expr": {
+        "op": "all",
+        "kind": "boolean",
+        "agg": {
+          "source": "requirements"
+        },
+        "in": {
+          "op": "in",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "reference",
+              "ref": "item.capability"
+            },
+            {
+              "op": "values",
+              "kind": "set",
+              "agg": {
+                "source": "skills",
+                "field": [
+                  "capability"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "schema": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          },
+          "skills": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          }
+        }
+      },
+      "context": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              }
+            ]
+          },
+          "skills": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              },
+              {
+                "id": "2",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "torque"
+                  }
+                }
+              }
+            ],
+            "withheld": true
+          }
+        }
+      }
+    },
+    "error": "withheld"
+  },
+  {
+    "name": "incomplete capabilities cannot prove coverage",
+    "request": {
+      "expr": {
+        "op": "all",
+        "kind": "boolean",
+        "agg": {
+          "source": "requirements"
+        },
+        "in": {
+          "op": "in",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "reference",
+              "ref": "item.capability"
+            },
+            {
+              "op": "values",
+              "kind": "set",
+              "agg": {
+                "source": "skills",
+                "field": [
+                  "capability"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "schema": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          },
+          "skills": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          }
+        }
+      },
+      "context": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              }
+            ]
+          },
+          "skills": {
+            "complete": false,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              },
+              {
+                "id": "2",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "torque"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "error": "incomplete"
+  },
+  {
+    "name": "missing capability cannot become a null member",
+    "request": {
+      "expr": {
+        "op": "all",
+        "kind": "boolean",
+        "agg": {
+          "source": "requirements"
+        },
+        "in": {
+          "op": "in",
+          "kind": "boolean",
+          "args": [
+            {
+              "kind": "reference",
+              "ref": "item.capability"
+            },
+            {
+              "op": "values",
+              "kind": "set",
+              "agg": {
+                "source": "skills",
+                "field": [
+                  "capability"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "schema": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          },
+          "skills": {
+            "element": {
+              "kind": "reference",
+              "fields": {
+                "capability": {
+                  "kind": "reference",
+                  "object": "skill"
+                }
+              }
+            },
+            "policy": "complete"
+          }
+        }
+      },
+      "context": {
+        "refs": {},
+        "sets": {
+          "requirements": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              }
+            ]
+          },
+          "skills": {
+            "complete": true,
+            "items": [
+              {
+                "id": "0",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "missing",
+                    "value": "cut"
+                  }
+                }
+              },
+              {
+                "id": "1",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "safety"
+                  }
+                }
+              },
+              {
+                "id": "2",
+                "fields": {
+                  "capability": {
+                    "kind": "reference",
+                    "status": "value",
+                    "value": "torque"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "error": "missing"
   }
 ]

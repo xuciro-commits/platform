@@ -249,3 +249,27 @@ func TestDerivedFreeTextRequiresDeclaredSourceType(t *testing.T) {
 		t.Fatal("declared original input was withheld")
 	}
 }
+
+func TestSealedAuthorizationEvidenceKeepsChangedOutcomesAndDefinitions(t *testing.T) {
+	tn := stockTenant(t)
+	decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Machine", "line": "L1", "note": "Inspection"}, txnAt)
+	draft := tn.newStagedDecision()
+	c := platform.NewCaller(draft, memberOf(t, tn, "lead"), "stock", false, false)
+	request := platform.AuthzRequest{Principal: c.ID, Tenant: tn.ID, Kind: "read", Type: "stock.item", Record: "I1", Fields: []string{"note"}}
+	for i := 0; i < 100; i++ {
+		if answer := c.Authorize(request, txnAt); !answer.Allow {
+			t.Fatal("ordinary authorized read was refused")
+		}
+	}
+	tn.app("stock").Manifest().Actions.UsePolicies(func() []authz.Policy { return []authz.Policy{{ID: "review-hold", Effect: "deny", Permission: "*"}} })
+	if answer := c.Authorize(request, txnAt); answer.Allow {
+		t.Fatal("a repeated question reused permission after its policy changed")
+	}
+	saved, err := draft.savedAuthorizations()
+	if err != nil || len(saved) != 2 || !saved[0].Decision.Allow || saved[1].Decision.Allow || saved[0].Decision.Definition == saved[1].Decision.Definition {
+		t.Fatalf("sealing lost a distinct authorization outcome or retained repeated copies: %+v %v", saved, err)
+	}
+	if len(draft.authorizations) != 101 {
+		t.Fatal("sealing changed the actual authorization checks")
+	}
+}

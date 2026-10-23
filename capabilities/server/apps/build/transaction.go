@@ -3,6 +3,7 @@ package build
 import "platformserver/internal/construction"
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -30,7 +31,7 @@ func decodeTxnValues(raw json.RawMessage) (map[string]any, error) {
 }
 
 func (b *Build) transact(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time) *kernel.Error {
-	return b.transactDepth(c, receipt, txn, now, 0, receipt.GetSubmission().GetSchema().GetName())
+	return b.transactDepth(c, receipt, txn, now, 0, c.TransactionInput(receipt).GetSchema().GetName())
 }
 
 func (b *Build) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, depth int, action string) *kernel.Error {
@@ -78,17 +79,28 @@ func (b *Build) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn *
 }
 
 func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn *platform.BusinessTxn, now time.Time, refused **txnRefusalResult, action string) *kernel.Error {
-	values, err := decodeTxnValues(receipt.GetSubmission().GetPayload())
+	transport := c.TxnTransport()
+	if transport == nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction transport is unavailable")
+	}
+	invocation := c.TransactionInput(receipt)
+	values, err := decodeTxnValues(invocation.GetPayload())
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
 	}
 	contextReceipt := proto.Clone(receipt).(*pb.ChangeRecord)
+	contextReceipt.Submission = invocation
 	contextReceipt.Submission.Schema.Name = action
 	proposal, refusal := b.prepareProposal(c, contextReceipt, txn, now)
 	if refusal != nil {
 		return refusal
 	}
-	subjectID := receipt.GetSubmission().GetTarget().GetId()
+	subjectID := invocation.GetTarget().GetId()
+	framePrefix := ""
+	if invocation.GetTarget().GetType() != receipt.GetSubmission().GetTarget().GetType() || subjectID != receipt.GetSubmission().GetTarget().GetId() {
+		digest := sha256.Sum256(platform.Raw([]string{txn.Subject, subjectID}))
+		framePrefix = fmt.Sprintf("create-%x", digest[:8])
+	}
 	readSubject := func() (map[string]any, *kernel.Error) {
 		raw, refusal := c.ReadRecord(txn.Subject, subjectID, now)
 		if refusal != nil {
@@ -131,7 +143,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 	for _, transition := range transitions {
 		if transition.Txn != nil && transition.Name == strings.TrimPrefix(action, txn.Subject+".") {
 			var submitted map[string]any
-			if json.Unmarshal(receipt.GetSubmission().GetPayload(), &submitted) != nil {
+			if json.Unmarshal(invocation.GetPayload(), &submitted) != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid transaction inputs / 事务输入无效")
 			}
 			if issues := platform.InputIssues(transition.Payload, submitted); len(issues) > 0 {
@@ -165,7 +177,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 			}
 		}
 	}
-	if receipt.GetSubmission().GetSchema().GetName() == txn.Subject+".create" {
+	if invocation.GetSchema().GetName() == txn.Subject+".create" {
 		info, _ := platform.Describe(construction.ID, b.installed[txn.Subject], func(reflect.Type) string { return "" })
 		for _, field := range info.Fields {
 			spec.Inputs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
@@ -275,6 +287,9 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 	var run func([]platform.TxnStep, platform.RuleReadSpec, map[string]any, string, string) *kernel.Error
 	run = func(steps []platform.TxnStep, scope platform.RuleReadSpec, facts map[string]any, rowID, frame string) *kernel.Error {
 		for _, step := range steps {
+			if err := transport.TakeTxnStep(); err != nil {
+				return err
+			}
 			c.Trace(platform.DecisionTrace{Kind: "transaction-step", Name: strings.TrimPrefix(frame+"/"+step.Name, "/"), Operation: step.Kind})
 			if step.When != nil {
 				result, err := evalRule(*step.When, scope, c, subject, facts, now, b.conditionLookup)
@@ -289,48 +304,49 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				return err
 			}
 			if step.ForEach != nil {
-				set, err := c.ReadRecordSet(txn.Subject, subjectID, step.ForEach.Set, now)
+				if span := step.ForEach.Range; span != nil {
+					rows, err := b.txnRangeRows(c, *span, scope, subject, facts, now)
+					if err != nil {
+						return err
+					}
+					iterations += len(rows)
+					if iterations > platform.TxnMaxIterations {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction iteration exceeds its limit / 事务迭代超出上限")
+					}
+					for i, row := range rows {
+						rowFacts := maps.Clone(facts)
+						maps.Copy(rowFacts, row)
+						if err := run(step.ForEach.Steps, withTxnRange(scope, span.From.Kind), rowFacts, "", strings.TrimPrefix(frame+"/"+step.Name, "/")+"-"+strconv.Itoa(i)); err != nil {
+							return err
+						}
+					}
+					continue
+				}
+				source, sourceErr := txnIterationSource(txn.Subject, step.ForEach.Of, b.conditionLookup)
+				if sourceErr != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", sourceErr.Error())
+				}
+				sourceID := subjectID
+				if step.ForEach.Of != "" {
+					raw, _, failure := c.ReadRecordPath(txn.Subject, subjectID, strings.Split(step.ForEach.Of, "."), now)
+					if failure != nil {
+						return failure
+					}
+					if json.Unmarshal(raw, &sourceID) != nil || sourceID == "" {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Iteration source reference is empty")
+					}
+				}
+				set, info, ids, err := b.txnRecordRows(c, receipt, source.Type, sourceID, step.ForEach.Set, strings.TrimPrefix(frame+"/"+step.Name, "/"), &iterations, now)
 				if err != nil {
 					return err
 				}
-				if set.Partial {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Iteration {step} contains withheld records / 迭代 {step} 含不可见记录", step.Name, step.Name)
-				}
-				iterations += len(set.Records)
-				if iterations > platform.TxnMaxIterations {
-					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Iteration {step} has {count} records; limit is {limit} / 迭代 {step} 超出上限", step.Name, iterations, platform.TxnMaxIterations, step.Name)
-				}
-				info, _ := b.conditionLookup(set.Object)
 				rowScope := withTxnRow(scope, info)
-				ids := make([]string, len(set.Records))
 				for i, raw := range set.Records {
-					var identity struct{ ID string }
-					_ = json.Unmarshal(raw, &identity)
-					ids[i] = identity.ID
-				}
-				if err := c.CaptureTxnIteration(receipt, platform.TxnIteration{Step: step.Name, Set: step.ForEach.Set, Object: set.Object, Definition: set.Definition, IDs: ids}); err != nil {
-					return err
-				}
-				for i, raw := range set.Records {
-					var fields map[string]json.RawMessage
-					if json.Unmarshal(raw, &fields) != nil {
-						return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Iteration row is invalid")
+					rowFacts, failure := txnRowInputs(c, info, raw, facts)
+					if failure != nil {
+						return failure
 					}
-					rowFacts := maps.Clone(facts)
-					rowFacts["row.object"] = set.Object
-					for _, field := range platform.ConstraintEntity(info).Fields {
-						fact := platform.ExprValue{Kind: platform.RuleFieldKind(field.Type), Status: "missing"}
-						if !field.ReadsAny(c.RolesIn(info.App)) {
-							fact.Status = "withheld"
-						} else if value, ok := fields[field.Name]; ok {
-							fact.Status, fact.Data = "value", value
-							if string(value) == "null" {
-								fact.Status = "null"
-							}
-						}
-						rowFacts["row."+field.Name] = fact
-					}
-					if err := run(step.ForEach.Steps, platform.RuleReadSpec{Object: rowScope.Object, Inputs: maps.Clone(rowScope.Inputs), Collections: rowScope.Collections}, rowFacts, ids[i], step.Name+"-"+strconv.Itoa(i)); err != nil {
+					if err := run(step.ForEach.Steps, platform.RuleReadSpec{Object: rowScope.Object, Inputs: maps.Clone(rowScope.Inputs), Collections: rowScope.Collections}, rowFacts, ids[i], strings.TrimPrefix(frame+"/"+step.Name, "/")+"-"+strconv.Itoa(i)); err != nil {
 						return err
 					}
 				}
@@ -393,10 +409,19 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				continue
 			}
 			stepKey := strings.TrimPrefix(frame+"/"+step.Name, "/")
-			if step.Post != nil {
-				if _, err := b.txnPost(c, receipt, step, scope, subject, facts, now, reserve); err != nil {
+			if step.Intervals != nil {
+				if err := b.txnIntervals(c, receipt, txn.Subject, subjectID, stepKey, *step.Intervals, &iterations, now, reserve); err != nil {
 					return err
 				}
+				continue
+			}
+			if step.Post != nil {
+				id, err := b.txnPost(c, receipt, step, scope, subject, facts, now, reserve)
+				if err != nil {
+					return err
+				}
+				facts["step."+step.Name] = id
+				txnResult(&scope, step)
 				continue
 			}
 			if step.Call != nil {
@@ -424,7 +449,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				if c.TxnTransport() == nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction journal transport is unavailable")
 				}
-				if err := b.txnJournal(c, receipt, stepKey, *step.Journal, scope, subject, facts, now); err != nil {
+				if err := b.txnJournal(c, receipt, stepKey, *step.Journal, scope, subject, facts, &iterations, now); err != nil {
 					return err
 				}
 				continue
@@ -483,6 +508,17 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				}
 				if w.Role != "" {
 					assignment.To = []platform.Recipient{{AppRole: w.Role}}
+				}
+				if w.Unit != nil {
+					value, err := ruleAssignment(*w.Unit, scope, c, subject, facts, now, b.conditionLookup)
+					if err != nil {
+						return err
+					}
+					unit := constructionText(value)
+					if unit == "" {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Organizational work needs a nonempty unit / 组织任务须指定单位")
+					}
+					assignment.To = []platform.Recipient{{Structure: w.Structure, Unit: unit, Role: w.Role}}
 				}
 				for _, item := range []struct {
 					expr   *platform.Expr
@@ -555,7 +591,8 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				}
 				patch[assignment.Field] = value
 			}
-			if err := b.ledger.ApplyTxnRecord(c, receipt, proposalEntity(entity, patch, proposal, sources), verb, id, platform.Raw(patch), now); err != nil {
+			entity, writable := proposalEntity(entity, info, patch, proposal, sources)
+			if err := b.ledger.ApplyTxnRecord(c, receipt, entity, verb, id, platform.Raw(writable), now); err != nil {
 				return err
 			}
 			if step.Kind == "create" {
@@ -575,7 +612,7 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 	if err := refusals(txn.Refusals, spec, values, "", ""); err != nil {
 		return err
 	}
-	if err := run(txn.Steps, spec, values, "", ""); err != nil {
+	if err := run(txn.Steps, spec, values, "", framePrefix); err != nil {
 		return err
 	}
 	// The subject carries this accepted command's revision and history even

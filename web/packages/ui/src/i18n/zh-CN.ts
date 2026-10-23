@@ -1,5 +1,13 @@
 // Simplified Chinese for the UI kit, keyed by the English source text.
 export default {
+ "Refreshing record…":"正在刷新记录…",
+ "Authorized delivery results":"受权交付结果",
+ "Show public delivery outcomes separately from accepted business actions, with independently authorized receipt links.":"分别呈现业务接受与公开交付结果，并按独立权限打开原收据。",
+ "The original record reader supplies public outcomes and authorized receipt references. Request bodies, answers, endpoint addresses and private diagnostics are never presentation inputs.":"原记录读取方提供公开结果和已获权的收据引用；请求正文、答复、端点地址与私有诊断不进入展示输入。",
+  "Delivery results": "交付结果",
+  "Business acceptance and delivery are separate results.": "业务接受与后续交付分别记录结果。",
+  "Open receipt": "打开收据",
+  "The posting period is closed. The business document remains accepted.": "记账期间已关闭，业务单据仍保留已接受的事实。",
   "Enterprise elements could not be loaded.": "无法加载企业模型节点。",
   "Inactive": "已停用",
   "Workspace menu": "工作区菜单",
@@ -14,7 +22,6 @@ export default {
  "Scoped input drafts": "会话内输入草稿",
  "Keep unparsed number and JSON text in its original document and block unsafe submissions.": "把未解析的数字和 JSON 原文保留在原文档中，并阻止无效提交。",
  "The input draft limit was reached. Correct or discard an existing draft first.": "输入草稿已达到上限，请先修正或放弃已有草稿。",
- "This input exceeds 65536 characters. The previous draft is retained.": "此输入超过 65536 个字符，已保留此前的草稿。",
  "Enter valid JSON. The original draft is retained.": "请输入有效的 JSON，原文草稿已保留。",
  "Correct the input drafts before submitting.": "请先修正输入草稿再提交。",
 
@@ -1560,4 +1567,5 @@ export default {
   "View help": "说明",
   "Field reference": "字段参考",
   "Operation details": "操作详情",
+  "This input exceeds {limit} characters. The previous draft is retained.": "输入超过 {limit} 个字符，已保留原草稿。",
 } as Record<string, string>;

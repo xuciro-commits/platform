@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:cdbd1ec586f3cb12",
+  "revision": "sha256:c16259375e049569",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -8591,6 +8591,59 @@
       ]
     },
     {
+      "id": "ui/record-deliveries",
+      "owner": "@platform/ui",
+      "name": "Authorized delivery results",
+      "summary": "Show public delivery outcomes separately from accepted business actions, with independently authorized receipt links.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/Records.tsx",
+      "exports": [
+        "RecordDeliveries"
+      ],
+      "example": "RecordDeliveriesExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "delivery",
+        "receipt"
+      ],
+      "constraints": [
+        "The original record reader supplies public outcomes and authorized receipt references. Request bodies, answers, endpoint addresses and private diagnostics are never presentation inputs."
+      ],
+      "props": [
+        {
+          "name": "deliveries",
+          "type": "Api.RecordDelivery[]",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onOpen",
+          "type": "(type:string,r:EntityRecord)=>void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        }
+      ],
+      "composed": [
+        "ui/button",
+        "ui/status"
+      ],
+      "relatedTypes": [
+        {
+          "name": "EntityRecord",
+          "kind": "type",
+          "signature": "export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;"
+        }
+      ]
+    },
+    {
       "id": "ui/record-events",
       "owner": "@platform/ui",
       "name": "Authorized event list",
@@ -12217,6 +12270,7 @@
       "Authorized PDF pages": "已授权PDF页面",
       "Authorized calculation run": "获权计算运行",
       "Authorized cross-application search": "受权跨应用搜索",
+      "Authorized delivery results": "受权交付结果",
       "Authorized event list": "受权事件列表",
       "Authorized lifecycle board": "授权生命周期看板",
       "Authorized numeric gauge": "授权数值仪表",
@@ -12509,6 +12563,7 @@
       "Show a complete authorized average and explicit SLO beside original business-time samples.": "在原业务时间样本旁显示完整受权平均值与明确的 SLO。",
       "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
       "Show exact authorized scalar values with a bounded progress ratio.": "以有界进度比例显示精确授权标量。",
+      "Show public delivery outcomes separately from accepted business actions, with independently authorized receipt links.": "分别呈现业务接受与公开交付结果，并按独立权限打开原收据。",
       "Show the original first six people records as initials with their stable identities and complete authorized total.": "以姓名首字显示原前六条人员记录，同时保留稳定身份及完整已授权总数。",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
       "Single choice input": "单选输入",
@@ -12604,6 +12659,7 @@
       "The original host owns matching membership, time order, numeric semantics and the atomic read. The reader validates exact request echoes and discards old scopes, revisions or attempts without downloading records or retrying another mode.": "原宿主管理匹配成员、时间顺序、数值语义和原子读取。读者校验精确请求回显并丢弃旧作用域、版本或请求，不下载记录或切换模式重试。",
       "The original host owns numeric and missing-value semantics. Empty averages remain empty and the explicit unit grants no business conversion.": "原宿主拥有数值及缺值语义；空平均值保持为空，显式单位不授予业务换算。",
       "The original inbox offers tasks; request IDs and revisions authorize approval decisions. Retiring a view never cancels a queued decision.": "原收件箱提供任务；审批决策使用请求身份与版本。视图退役不会取消已排队的决策。",
+      "The original record reader supplies public outcomes and authorized receipt references. Request bodies, answers, endpoint addresses and private diagnostics are never presentation inputs.": "原记录读取方提供公开结果和已获权的收据引用；请求正文、答复、端点地址与私有诊断不进入展示输入。",
       "The original summary and record window share their query scope and total. No synthetic 24-hour points, live heartbeat, signal stream or availability promise is created.": "原摘要与记录窗口共享查询作用域和总数。不生成合成的二十四小时点、实时心跳、信号流或可用率承诺。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The project's module: its pages, header and navigation, with the page editor inside and a live preview.": "项目的模块：其页面、页头与导航，内含页面编辑器和实时预览。",
@@ -12654,18 +12710,8 @@
     }
   },
   "consumers": {
-    "ui/command-menu": [
-      "web/packages/app/src/actions/OpenIn.tsx",
-      "web/packages/app/src/observations/Observations.tsx",
-      "web/packages/build/src/automate/automation.tsx",
-      "web/packages/build/src/automate/workflow.tsx",
-      "web/packages/build/src/editor/workbench.tsx",
-      "web/packages/build/src/projects/project.tsx",
-      "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/build/src/workshop/page-editor/LayoutTree.tsx",
-      "web/packages/ui/src/layout/CanvasSelectionToolbar.tsx"
-    ],
     "ui/button": [
+      "web/packages/app/src/actions/LocalDraftControls.tsx",
       "web/packages/app/src/actions/RefusalHistory.tsx",
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/automation/agents.tsx",
@@ -12708,6 +12754,7 @@
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
       "web/packages/build/src/ontology/RefusalEditor.tsx",
+      "web/packages/build/src/ontology/RuleCollectionsEditor.tsx",
       "web/packages/build/src/ontology/TransactionEditor.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -12765,9 +12812,6 @@
       "web/packages/build/src/workshop/page-editor/widgets/SpatialInspectors.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
-      "web/packages/csm/src/index.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
@@ -12837,15 +12881,26 @@
       "web/apps/catalog/src/Inspector.tsx",
       "web/apps/catalog/src/Preview.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
-      "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/session/Problems.tsx",
       "web/apps/workspace/src/session/ReleaseInformation.tsx",
       "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Home.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
+    ],
+    "ui/command-menu": [
+      "web/packages/app/src/actions/OpenIn.tsx",
+      "web/packages/app/src/observations/Observations.tsx",
+      "web/packages/build/src/automate/automation.tsx",
+      "web/packages/build/src/automate/workflow.tsx",
+      "web/packages/build/src/editor/workbench.tsx",
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/build/src/workshop/editor.tsx",
+      "web/packages/build/src/workshop/page-editor/LayoutTree.tsx",
+      "web/packages/ui/src/layout/CanvasSelectionToolbar.tsx"
     ],
     "ui/panels": [
       "web/packages/app/src/actions/RefusalHistory.tsx",
@@ -12955,7 +13010,6 @@
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/InspectorFrame.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
@@ -12973,6 +13027,7 @@
       "web/packages/ui/src/components/ExternalFrame.tsx",
       "web/packages/ui/src/components/Notice.tsx",
       "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/session/Problems.tsx",
       "web/apps/workspace/src/shell/Home.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
@@ -12994,7 +13049,9 @@
       "web/packages/build/src/functions/code.tsx",
       "web/packages/build/src/ontology/DispatchEditor.tsx",
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
+      "web/packages/build/src/ontology/RuleCollectionsEditor.tsx",
       "web/packages/build/src/ontology/TransactionEditor.tsx",
+      "web/packages/build/src/ontology/constraints.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/InstalledApplicationHome.tsx",
       "web/packages/build/src/projects/studio-navigation.tsx",
@@ -13012,6 +13069,7 @@
       "web/packages/platform/src/operations.tsx",
       "web/packages/ui/src/components/StructuredEditor.tsx",
       "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/status": [
@@ -13039,7 +13097,6 @@
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
@@ -13052,7 +13109,6 @@
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
       "web/packages/platform/src/words.tsx",
-      "web/packages/pms/src/index.tsx",
       "web/packages/ui/src/fields/types.tsx",
       "web/packages/ui/src/graph/flow/FlowProcess.tsx",
       "web/packages/ui/src/records/ApprovalInbox.tsx",
@@ -13064,7 +13120,6 @@
       "web/packages/ui/src/records/Records.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Inspector.tsx",
-      "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
     "ui/context-help": [
@@ -13208,6 +13263,7 @@
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/ProtocolBindingEditor.tsx",
       "web/packages/build/src/ontology/RefusalEditor.tsx",
+      "web/packages/build/src/ontology/RuleCollectionsEditor.tsx",
       "web/packages/build/src/ontology/TransactionEditor.tsx",
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
@@ -13303,8 +13359,6 @@
       "web/packages/build/src/workshop/page-editor/widgets/TreemapInspector.tsx",
       "web/packages/build/src/workshop/page-editor/widgets/WorkViewsInspector.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
@@ -13345,8 +13399,8 @@
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Inspector.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
-      "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
@@ -13371,6 +13425,7 @@
       "web/packages/build/src/ontology/action-type.tsx",
       "web/packages/build/src/ontology/business-version.tsx",
       "web/packages/build/src/ontology/connection.tsx",
+      "web/packages/build/src/ontology/constraints.tsx",
       "web/packages/build/src/ontology/data-source.tsx",
       "web/packages/build/src/ontology/link-type.tsx",
       "web/packages/build/src/ontology/observation.tsx",
@@ -13433,8 +13488,7 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
-      "web/packages/platform/src/words.tsx",
-      "web/apps/pms-desk/src/App.tsx"
+      "web/packages/platform/src/words.tsx"
     ],
     "ui/dialog": [
       "web/packages/app/src/actions/actions.tsx",
@@ -13443,8 +13497,6 @@
       "web/packages/app/src/pages/sections.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
-      "web/packages/csm/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/enterprise/TenantLinks.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
@@ -13455,7 +13507,7 @@
       "web/packages/platform/src/permissions.tsx",
       "web/packages/ui/src/records/EditableRecordGrid.tsx",
       "web/packages/ui/src/shell/Workspace.tsx",
-      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/session/ReleaseInformation.tsx"
     ],
     "ui/field-types": [
@@ -13548,8 +13600,6 @@
       "web/packages/build/src/releases/samples.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/account.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
@@ -13561,9 +13611,7 @@
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
       "web/packages/platform/src/words.tsx",
-      "web/packages/pms/src/app.tsx",
       "web/packages/ui/src/records/RecordWorkspace.tsx",
-      "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
@@ -13590,7 +13638,6 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/apps.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
@@ -13598,7 +13645,6 @@
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
-      "web/packages/pms/src/index.tsx",
       "web/packages/ui/src/records/RecordCard.tsx",
       "web/packages/ui/src/records/RecordCards.tsx",
       "web/packages/ui/src/records/RecordKanban.tsx",
@@ -13607,7 +13653,6 @@
     "ui/flow-steps": [
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/widgets/CompositeViews.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/ui/src/graph/flow/FlowProcess.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],
@@ -13645,8 +13690,6 @@
       "web/packages/build/src/session/definition-draft.ts",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/operations.tsx"
     ],
     "ui/data-table": [
@@ -13667,8 +13710,6 @@
       "web/packages/build/src/projects/project-roles.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/workshop/editor.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/enterprise/TenantLinks.tsx",
       "web/packages/platform/src/enterprise/index.tsx",
@@ -13677,11 +13718,9 @@
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
       "web/packages/platform/src/processes.tsx",
-      "web/packages/pms/src/index.tsx",
       "web/packages/ui/src/records/EditableRecordGrid.tsx",
       "web/packages/ui/src/records/ObservationTable.tsx",
       "web/packages/ui/src/records/Records.tsx",
-      "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
@@ -13705,22 +13744,14 @@
     ],
     "app/records": [
       "web/packages/app/src/catalog.examples.tsx",
-      "web/packages/crm/src/index.tsx",
-      "web/packages/csm/src/index.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/hcm/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/index.tsx",
       "web/packages/platform/src/knowledge.tsx",
       "web/packages/platform/src/processes.tsx",
-      "web/packages/pms/src/app.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
     "app/record-detail": [
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/pages/pages.tsx",
-      "web/packages/crm/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx"
     ],
@@ -13807,8 +13838,7 @@
     ],
     "ui/sheet": [
       "web/packages/app/src/pages/sections.tsx",
-      "web/packages/ui/src/shell/Workspace.tsx",
-      "web/apps/pms-desk/src/App.tsx"
+      "web/packages/ui/src/shell/Workspace.tsx"
     ],
     "ui/application-header": [
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
@@ -13926,6 +13956,9 @@
     "ui/range-input": [
       "web/packages/app/src/widgets/Range.tsx",
       "web/packages/build/src/workshop/page-editor/diagnostics.ts"
+    ],
+    "ui/record-deliveries": [
+      "web/packages/app/src/widgets/RecordActivity.tsx"
     ],
     "ui/record-history": [
       "web/packages/app/src/widgets/RecordActivity.tsx"
@@ -14132,7 +14165,8 @@
       "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/page-editor/LayoutProperties.tsx",
       "web/packages/ui/src/catalog.examples.tsx",
-      "web/apps/catalog/src/Inspector.tsx"
+      "web/apps/catalog/src/Inspector.tsx",
+      "web/apps/workspace/src/offline/Preparation.tsx"
     ],
     "ui/canvas-editor": [
       "web/packages/build/src/workshop/editor.tsx",
@@ -14140,14 +14174,11 @@
       "web/packages/build/src/workshop/page-editor/WidgetLibrary.tsx",
       "web/packages/ui/src/catalog.examples.tsx"
     ],
-    "ui/entity-form": [
-      "web/packages/csm/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
-      "web/packages/platform/src/people.tsx",
-      "web/apps/pms-desk/src/App.tsx"
-    ],
     "ui/tree": [
       "web/packages/platform/src/enterprise/index.tsx"
+    ],
+    "ui/entity-form": [
+      "web/packages/platform/src/people.tsx"
     ],
     "ui/count-matrix": [
       "web/packages/ui/src/charts/Pivot.tsx"
@@ -14157,7 +14188,6 @@
     ],
     "pattern/workspace": [
       "web/apps/catalog/src/main.tsx",
-      "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/HostOnly.tsx"
     ],

@@ -1,6 +1,5 @@
 # The platform host's two deployments on their production path, locally (#87, #92):
-# manufacturing-server (the manufacturing solution: the MES and the ERP)
-# and hospitality-server (the hospitality solution: CRM, PMS, HCM, CSM). PostgreSQL
+# Two instances of the same platform-server, configured with industry packages. PostgreSQL
 # keeps the journal, Rauthy issues identities, each host replays the journal on start. Each host serves the workspace, built first:
 # `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
@@ -54,7 +53,7 @@ services:
     group_add: ["${TENANTS_GID:-20}"]
     build:
       context: ../..
-      dockerfile: solutions/manufacturing/Dockerfile
+      dockerfile: capabilities/server/cmd/platform-server/Dockerfile
       args: { PLATFORM_REVISION: "${PLATFORM_REVISION:-}" }
     command:
       - -addr=0.0.0.0:8490
@@ -62,14 +61,16 @@ services:
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/manufacturing/tenants.json
+      - -packages=/etc/packages
       - -templates=/etc/templates
       - -host-admins=user:sup@plant.test
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${MANUFACTURING_PORT:-8490}:8490"]
-    volumes: [./manufacturing/tenants.json:/etc/manufacturing/tenants.json, ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
+    volumes: ["${MANUFACTURING_TENANTS_FILE:-./manufacturing/tenants-next.json}:/etc/manufacturing/tenants.json", ../templates:/etc/templates:ro, ../packages:/etc/packages:ro, compute-sockets:/run/platform-compute]
     environment: { PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
+      PLATFORM_SECRET_PRODUCTION_UPSTREAM: "${PLATFORM_SECRET_PRODUCTION_UPSTREAM:-}",
       PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
       PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
     depends_on:
@@ -84,7 +85,7 @@ services:
     group_add: ["${TENANTS_GID:-20}"]
     build:
       context: ../..
-      dockerfile: solutions/hospitality/Dockerfile
+      dockerfile: capabilities/server/cmd/platform-server/Dockerfile
       args: { PLATFORM_REVISION: "${PLATFORM_REVISION:-}" }
     command:
       - -addr=0.0.0.0:8495
@@ -92,15 +93,17 @@ services:
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/hospitality/tenants.json
+      - -packages=/etc/packages
       - -templates=/etc/templates
       - -host-admins=user:manager@hotel.test
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
-    volumes: [./hospitality/tenants.json:/etc/hospitality/tenants.json, ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
+    volumes: ["${HOSPITALITY_TENANTS_FILE:-./hospitality/tenants-next.json}:/etc/hospitality/tenants.json", ../templates:/etc/templates:ro, ../packages:/etc/packages:ro, compute-sockets:/run/platform-compute]
     # Webhook signing secrets, referenced by name from endpoints; local-only.
     environment: { PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
+      PLATFORM_SECRET_LODGING_UPSTREAM: "${PLATFORM_SECRET_LODGING_UPSTREAM:-}",
       PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
       PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
     depends_on:

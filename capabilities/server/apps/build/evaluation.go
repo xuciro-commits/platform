@@ -6,7 +6,6 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -30,8 +29,7 @@ func evaluationActions() []platform.Action {
 }
 
 func evalEqual(a, b []byte) bool {
-	var left, right any
-	return json.Unmarshal(a, &left) == nil && json.Unmarshal(b, &right) == nil && reflect.DeepEqual(left, right)
+	return (platform.EvaluationPolicy{}).Matches(a, b)
 }
 
 func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -54,7 +52,7 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The evaluated function version changed")
 			}
 			plan, ok := platform.Get[construction.TestPlan](c, start.Plan)
-			if start.Policy.Check() != nil || start.Set == nil && (!ok || plan.Revision != start.PlanRevision || plan.Function == "" || len(plan.Evaluation) != 1 || !evalEqual(platform.Raw(plan.Evaluation[0]), platform.Raw(start.Policy))) || start.Set != nil && (start.Set.Ref.App != construction.ID || start.Set.Ref.Kind != platform.AssetEvaluation || start.Set.Ref.Check() != nil || start.Set.SourceVersion == "") {
+			if start.Definition.CheckEvaluationPolicy(start.Policy) != nil || start.Set == nil && (!ok || plan.Revision != start.PlanRevision || plan.Function == "" || len(plan.Evaluation) != 1 || !evalEqual(platform.Raw(plan.Evaluation[0]), platform.Raw(start.Policy))) || start.Set != nil && (start.Set.Ref.App != construction.ID || start.Set.Ref.Kind != platform.AssetEvaluation || start.Set.Ref.Check() != nil || start.Set.SourceVersion == "") {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved evaluation plan changed")
 			}
 			run = construction.Evaluation{Set: start.Set, Record: platform.Record{ID: id}, Candidate: start.Candidate, Function: start.Function,
@@ -112,7 +110,7 @@ func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.T
 			} else {
 				a.Answer = answer.Text
 				if definition.ValidateOutput([]byte(answer.Text)) == nil {
-					a.Matched = evalEqual([]byte(answer.Text), run.Policy[0].Cases[index/construction.EvaluationRepeats].Expected)
+					a.Matched = run.Policy[0].Matches([]byte(answer.Text), run.Policy[0].Cases[index/construction.EvaluationRepeats].Expected)
 				} else {
 					a.Reason = "The model answer failed the function output schema"
 				}

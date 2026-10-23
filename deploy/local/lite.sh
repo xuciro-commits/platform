@@ -31,8 +31,8 @@ echo "==> Building the workspace / 构建工作台..."
 (cd web && "${pnpm[@]}" --dir apps/workspace build)
 
 echo "==> Building $solution / 编译行业宿主..."
-# Each solution is its own Go module; the repository root is not one.
-(cd "solutions/$solution" && "$go" build -o "$root/$bin" "./cmd/$solution-server")
+# Both deployments use the same platform module.
+(cd capabilities/server && "$go" build -o "$root/$bin" ./cmd/platform-server)
 
 if [[ ! -f "$data_dir/idp.key" ]]; then
   echo "==> Creating the local signing key / 初始化本地签名密钥..."
@@ -57,6 +57,8 @@ fi
 exec "$bin" \
   -profile lightweight \
   -data "$data_dir" \
+  -tenants "deploy/local/$solution/tenants-next.json" \
+  -packages deploy/packages \
   -templates deploy/templates \
   -addr "$bind:$port" \
   -web "$web_dist"

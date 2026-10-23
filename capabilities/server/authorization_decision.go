@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	resultformat "platformserver/internal/acceptance/result"
 
 	"platformserver/internal/acceptance"
@@ -15,6 +16,25 @@ import (
 	"platformserver/platform"
 	"platformserver/platform/authz"
 )
+
+// Sealing retains each distinct authorization basis and outcome in first-use
+// order. Repeated reads still evaluate current permissions at every call.
+func (d *stagedDecision) savedAuthorizations() ([]resultformat.AuthorizationEvidence, error) {
+	var saved []resultformat.AuthorizationEvidence
+	seen := map[string]bool{}
+	for _, item := range d.authorizations {
+		raw, err := json.Marshal(item)
+		if err != nil {
+			return nil, err
+		}
+		key := string(raw)
+		if !seen[key] {
+			seen[key] = true
+			saved = append(saved, item)
+		}
+	}
+	return saved, nil
+}
 
 func authorizationPass(reason string) authz.Gate { return authz.Gate{Allowed: true, Reason: reason} }
 
@@ -474,8 +494,11 @@ func (t *Tenant) sourceWithheld(store *recordStore, c platform.Caller, et *entit
 
 // visibleIn supplies the original query engine with a per-record decision.
 func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	c := platform.NewCaller(runtime{t}, m, et.info.App, false, false)
-	question := platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "read", Type: et.info.Type}
+	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t}, m, et.info.App, false, false), et, at)
+}
+
+func (t *Tenant) visibleForCallerIn(store *recordStore, c platform.Caller, et *entityType, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
+	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.info.Type}
 	if refusal := authorizationRefusal(t.authorizeFrom(store, c, question, at, true)); refusal != nil {
 		return nil, refusal
 	}

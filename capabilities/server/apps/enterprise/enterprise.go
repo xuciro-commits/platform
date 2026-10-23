@@ -154,6 +154,10 @@ func New(tenant string, seed platform.OrgSeed) *Enterprise {
 	return &Enterprise{tenant: tenant, model: enterprisemodel.FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
 }
 
+func (*Enterprise) NewSimulationOrganization(tenant string, seed platform.OrgSeed) platform.App {
+	return New(tenant, seed)
+}
+
 // Snapshot and Restore: the model as decisions left it.
 func (e *Enterprise) SnapshotFormat() string { return "enterprise.model.v1" }
 

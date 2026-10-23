@@ -69,14 +69,27 @@ func ValidateBusinessFact(app string, f platform.BusinessRefusalFact) error {
 	return nil
 }
 
+// An explicit app reads the historical single-authority witness. New batches
+// bind each witness to its own accepted child; DecodeBatch verifies that receipt.
 func ValidateTxnIterations(app string, iterations []platform.TxnIteration) error {
 	total, steps := 0, map[string]bool{}
 	for _, iteration := range iterations {
+		owner, key := app, iteration.Step
+		if app == "" {
+			var change string
+			owner, change, _ = strings.Cut(iteration.Decision, "/")
+			if owner == "" || change == "" || strings.Contains(change, "/") {
+				return fmt.Errorf("transaction iteration has no decision identity")
+			}
+			key = iteration.Decision + "/" + iteration.Step
+		} else if iteration.Decision != "" {
+			return fmt.Errorf("legacy transaction iteration carries a decision identity")
+		}
 		hash, err := hex.DecodeString(iteration.Definition)
-		if err != nil || len(hash) != 32 || iteration.Step == "" || iteration.Set == "" || steps[iteration.Step] || !strings.HasPrefix(iteration.Object, app+".") {
+		if err != nil || len(hash) != 32 || iteration.Step == "" || iteration.Set == "" || steps[key] || !strings.HasPrefix(iteration.Object, owner+".") {
 			return fmt.Errorf("transaction iteration witness is invalid")
 		}
-		steps[iteration.Step] = true
+		steps[key] = true
 		ids := map[string]bool{}
 		for _, id := range iteration.IDs {
 			if id == "" || ids[id] {

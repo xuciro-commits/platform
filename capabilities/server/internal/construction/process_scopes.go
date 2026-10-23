@@ -110,7 +110,7 @@ func CheckProcessScopes(p Process) error {
 			return fmt.Errorf("Node %s: loop control requires an enclosing iteration scope", node.Name)
 		}
 		bindings := slices.Collect(maps.Values(node.Inputs))
-		for _, binding := range []*platform.Binding{node.Value, node.Target, node.Collection} {
+		for _, binding := range []*platform.Binding{node.Value, node.Target, node.Collection, node.WaitUntil} {
 			if binding != nil {
 				bindings = append(bindings, *binding)
 			}

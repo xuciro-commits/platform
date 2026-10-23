@@ -540,7 +540,12 @@ func (ss *session) take(x *FlowInstance, token int) {
 			return
 		}
 		if w.At != nil {
-			at := w.At(app, run)
+			at, err := w.At(app, run)
+			if err != nil {
+				ss.failed(x, token, step, err.Error())
+				return
+			}
+			ss.sources(x, run.Sources)
 			if !at.After(ss.now) {
 				ss.trace(x, tok.Step, "time", "already reached", "")
 				ss.next(x, token, "")

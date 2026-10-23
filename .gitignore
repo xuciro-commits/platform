@@ -3,14 +3,12 @@
 contract/lean/.lake/
 .DS_Store
 target/
-apps/pms/client/src-tauri/gen/
 # Build outputs of `go build` and `go test -c` in a module directory
 *.test
-# every app's and solution's development host, and the local tools
+# app development hosts and local tools
 apps/*/server/cmd/*/*-server
 apps/*/server/cmd/*/*-sim
 apps/*/server/cmd/*/*-agent
-solutions/*/cmd/*/*-server
 capabilities/server/cmd/webhook-sink/webhook-sink
 node_modules/
 # Playwright's results of the route tests

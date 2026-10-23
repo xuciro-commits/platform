@@ -41,7 +41,11 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 		var check func(Expr) *kernel.Error
 		check = func(value Expr) *kernel.Error {
 			if value.Ref != "" && !strings.Contains(value.Ref, ".") && subject.ID != "" {
-				decision := caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: "read", Type: reads.Object, Record: subject.ID, Fields: []string{value.Ref}}, at)
+				fields := []string{value.Ref}
+				if value.Ref == "id" {
+					fields = nil // identity belongs to the authorized record header
+				}
+				decision := caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: "read", Type: reads.Object, Record: subject.ID, Fields: fields}, at)
 				if !decision.Allow || len(decision.Withheld) > 0 {
 					return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule field is outside the caller's permissions")
 				}

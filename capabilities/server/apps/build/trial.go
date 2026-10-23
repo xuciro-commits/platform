@@ -128,8 +128,8 @@ func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, erro
 			continue
 		} // immutable native dependency
 		if !selected[draft] {
-			if len(out) >= 128 {
-				return nil, fmt.Errorf("Application trial exceeds 128 saved drafts")
+			if len(out) >= construction.JointDraftLimit {
+				return nil, fmt.Errorf("Application trial exceeds %d saved drafts", construction.JointDraftLimit)
 			}
 			selected[draft] = true
 			out = append(out, draft)

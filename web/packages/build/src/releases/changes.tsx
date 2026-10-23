@@ -31,7 +31,7 @@ export function Changes({ initialKind, initialID }: { initialKind?: string; init
   const selected = rows.filter(row => checked.includes(changeKey(row)));
   const review = (selection: Api.DraftChange[]) => {
     const drafts: JointChoice[] = selection.map(change => ({ kind: draftChangeKind(change), id: change.id }));
-    if (!drafts.length || drafts.length > 32) return;
+    if (!drafts.length || drafts.length > 128) return;
     open({ view: "release-review", params: { kind: drafts[0]!.kind, id: drafts[0]!.id, drafts: releaseDraftsValue(drafts) } });
   };
   const columns: ColumnDef<Api.DraftChange, any>[] = [
@@ -46,9 +46,9 @@ export function Changes({ initialKind, initialID }: { initialKind?: string; init
   return <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
     <PageHeader title={t("Changes")} help={t("Saved changes compared with retained publications. Unsaved editor input is not included.")} />
     <div className="flex flex-wrap items-center gap-2">
-      <Button variant="primary" disabled={!selected.length || selected.length > 32 || query.isError} onClick={() => review(selected)}>{t("Review selected changes")}</Button>
+      <Button variant="primary" disabled={!selected.length || selected.length > 128 || query.isError} onClick={() => review(selected)}>{t("Review selected changes")}</Button>
       <Button variant="ghost" onClick={() => open({ view: "release-history" })}>{t("Release history")}</Button>
-      {selected.length > 32 && <p role="alert" className="text-sm text-warning">{t("A joint candidate accepts at most 32 drafts. Select a supported application closure.")}</p>}
+      {selected.length > 128 && <p role="alert" className="text-sm text-warning">{t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")}</p>}
     </div>
     {query.isError ? <p role="alert">{t("Saved changes could not be loaded.")}</p> : <DataTable data={rows} columns={columns} getRowId={changeKey} selectedId={current && changeKey(current)} loading={query.isPending}
       height={280} empty={t("No saved changes. Unsaved editor input is not included.")} onRowClick={row => confirmDiscard(() => setPicked({ kind: draftChangeKind(row), id: row.id }))} />}

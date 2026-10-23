@@ -291,7 +291,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 // sendA2A sends an effect to an external agent: a SendMessage whose message ID
 // is the effect's, so a resend is the same message; the task it answers with
 // is the effect's answer, journaled with the outcome.
-func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect) platform.Outcome {
+func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect, authorizationHeader bool) platform.Outcome {
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
 	var body struct {
@@ -315,7 +315,11 @@ func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect) platform.Outcome {
 			out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
 			return out
 		}
-		req.Header.Set("Authorization", "Bearer "+string(secret))
+		value := string(secret)
+		if !authorizationHeader {
+			value = "Bearer " + value
+		}
+		req.Header.Set("Authorization", strings.TrimSpace(value))
 	}
 	send := t.Outbound
 	if send == nil {
@@ -326,8 +330,12 @@ func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect) platform.Outcome {
 		out.Result, out.Detail = "retry", "no answer (resent as the same message): "+err.Error()
 		return out
 	}
-	answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	answer, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
 	resp.Body.Close()
+	if readErr != nil || len(answer) > 64<<10 {
+		out.Result, out.Detail = "unknown", "The A2A answer is incomplete or exceeds its retained evidence budget"
+		return out
+	}
 	var rpc struct {
 		Result struct {
 			Task    *a2aTask        `json:"task"`

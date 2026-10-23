@@ -100,6 +100,7 @@ export type Action = {
   new?: boolean;
   idPrefix?: string;
   automation?: boolean;
+  confirmationOnly?: boolean;
 };
 
 export type AgentInfo = {
@@ -752,6 +753,7 @@ export type CandidateSimulation = {
 };
 
 export type CandidateSimulationRequest = {
+  organization?: OrgSeed;
   roots?: AssetRef[];
   applicationId?: string;
   candidateId?: string;
@@ -1700,6 +1702,7 @@ export type EvaluationCase = {
 };
 
 export type EvaluationPolicy = {
+  compareFields?: string[];
   minQuality: number;
   maxCostUsd: number;
   maxLatencyMillis: number;
@@ -2475,6 +2478,7 @@ export type Notification = {
 };
 
 export type ObservationDecision = {
+  mode?: "summary" | "intervals";
   when: Expr;
   action: AssetRef;
   inputs: Record<string, Expr>;
@@ -2487,6 +2491,7 @@ export type ObservationDecisionEvidence = {
   device: string;
   signal: string;
   window: WindowSummary;
+  intervals?: ObservationIntervalResult;
 };
 
 export type ObservationDefinition = {
@@ -2506,6 +2511,7 @@ export type ObservationDefinition = {
   scheduled?: boolean;
   requireComplete?: boolean;
   decision?: ObservationDecision;
+  intervals?: ObservationIntervals;
 };
 
 export type ObservationEvaluate = {
@@ -2526,6 +2532,33 @@ export type ObservationInfo = {
   version: string;
   definition: ObservationDefinition;
   supportsLatest?: boolean;
+};
+
+export type ObservationInterval = {
+  since: string;
+  until: string;
+  openStart?: boolean;
+  openEnd?: boolean;
+};
+
+export type ObservationIntervalResult = {
+  version: string;
+  revision: string;
+  since: string;
+  until: string;
+  ready: boolean;
+  count: number;
+  intervals: ObservationInterval[];
+  unknown: ObservationUnknown[];
+};
+
+export type ObservationIntervals = {
+  valueKind: "decimal" | "choice" | "boolean";
+  when: Expr;
+  maxGapSeconds: number;
+  latePolicy: "reject" | "correct";
+  latenessSeconds: number;
+  maxIntervals: number;
 };
 
 export type ObservationPoint = {
@@ -2554,6 +2587,13 @@ export type ObservationResult = {
   matched?: boolean;
   coverage?: DriverCoverage;
   latest?: DriverSample;
+  intervals?: ObservationIntervalResult;
+};
+
+export type ObservationUnknown = {
+  since: string;
+  until: string;
+  reason: "coverage" | "gap" | "bad" | "uncertain" | "stale" | "late" | "rule";
 };
 
 export type Operation = {
@@ -2622,6 +2662,7 @@ export type PackageBlueprint = {
   roots: AssetRef[];
   assets: ReleaseAsset[];
   guide?: string;
+  setup?: PackageSetup;
 };
 
 export type PackageContribution = {
@@ -2664,6 +2705,24 @@ export type PackageDraftResult = {
   application: string;
   applicationID: string;
   drafts: PackageDraft[];
+};
+
+export type PackageSetup = {
+  roles: PackageSetupRole[];
+  steps: PackageSetupStep[];
+};
+
+export type PackageSetupRole = {
+  app: string;
+  role: string;
+};
+
+export type PackageSetupStep = {
+  name: string;
+  app: string;
+  schema: string;
+  target: EntityRef;
+  payload: string;
 };
 
 export type PackageView = {
@@ -3546,6 +3605,7 @@ export type ProcessStep = {
   target?: Binding;
   condition?: Predicate;
   collection?: Binding;
+  waitUntil?: Binding;
   cases?: Record<string, string>;
   branches?: string[];
   next?: string;
@@ -3756,6 +3816,15 @@ export type RecordChange = {
   fields: FieldChange[];
 };
 
+export type RecordDelivery = {
+  id: string;
+  event: string;
+  state: string;
+  at: string;
+  message?: string;
+  receipt?: string;
+};
+
 export type RecordPage = {
   records: unknown[];
   total: number;
@@ -3824,6 +3893,7 @@ export type RecordView = {
   following: boolean;
   linked: Related[];
   activity: unknown[];
+  deliveries?: RecordDelivery[];
 };
 
 export type Refusal = {
@@ -4666,6 +4736,7 @@ export type TenantTemplate = {
 };
 
 export type TestPlanDescriptor = {
+  organization?: OrgSeed;
   name: string;
   title: string;
   roots: AssetRef[];
@@ -4788,12 +4859,37 @@ export type TxnEffect = {
 };
 
 export type TxnForEach = {
-  set: string;
+  of?: string;
+  set?: string;
+  range?: TxnRange;
   steps: TxnStep[];
+};
+
+export type TxnIntervalFields = {
+  subject: string;
+  source: string;
+  sourceVersion: string;
+  sourceRevision: string;
+  processingVersion: string;
+  since: string;
+  until: string;
+  openStart: string;
+  openEnd: string;
+  retired: string;
+  review: string;
+};
+
+export type TxnIntervals = {
+  source: string;
+  set: string;
+  predecessors: AssetBinding;
+  fields: TxnIntervalFields;
 };
 
 export type TxnJournal = {
   reverses?: string;
+  set?: string;
+  closedPeriod?: "reject" | "next-open";
   date?: Expr;
   text?: Expr;
   currency?: Expr;
@@ -4801,6 +4897,7 @@ export type TxnJournal = {
 };
 
 export type TxnJournalLine = {
+  when?: Expr;
   account: Expr;
   debit?: Expr;
   credit?: Expr;
@@ -4821,6 +4918,14 @@ export type TxnPost = {
   amount: Expr;
   subtract?: boolean;
   floor?: boolean;
+};
+
+export type TxnRange = {
+  from: Expr;
+  until: Expr;
+  unit: "day" | "hour" | "item";
+  step: number;
+  limit: number;
 };
 
 export type TxnRef = {
@@ -4850,6 +4955,7 @@ export type TxnStep = {
   work?: TxnWork;
   call?: TxnCall;
   forEach?: TxnForEach;
+  intervals?: TxnIntervals;
   refusals?: Refusal[];
 };
 
@@ -4857,6 +4963,8 @@ export type TxnWork = {
   title: string;
   body?: Expr;
   role?: string;
+  structure?: string;
+  unit?: Expr;
   member?: Expr;
   due?: Expr;
   answers?: string[];

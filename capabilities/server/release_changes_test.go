@@ -69,3 +69,52 @@ func TestSavedDraftChangesRetainPublicationsAndIncludeApplication(t *testing.T) 
 		t.Fatalf("a renamed draft disappeared from its original application: %+v %v", renamed, err)
 	}
 }
+
+func TestSavedReleaseLeavesUnselectedSameNamePageDraft(t *testing.T) {
+	compose := func() *Tenant {
+		return composeTenant(t, "unselected-page", []Seat{seatOf("builder", "build:builder")}, build.New("unselected-page"))
+	}
+	tn := compose()
+	var entries []Entry
+	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		entries = append(entries, entry)
+		return entry.Body, nil
+	}
+	at := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
+	decide(t, tn, "builder", "build", "build.object.create", construction.ObjectType, "O", map[string]any{"name": "visit", "title": "Visit", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, tn, "builder", "build", "build.page.create", construction.PageType, "P", map[string]any{"name": "visit", "title": "Unpublished reception", "object": "build.visit", "list": []string{"note"}, "detail": []string{"note"}}, at)
+	before, _ := platform.Get[build.Page](tn.automation("build", false), "P")
+	activate := func(kind platform.AssetKind, id string) {
+		t.Helper()
+		member := memberOf(t, tn, "builder")
+		preview, err := tn.PreviewRelease(member, kind, id)
+		if err != nil || preview.Diagnostic != "" {
+			t.Fatalf("preview: %+v %v", preview, err)
+		}
+		candidate, err := tn.SaveReleaseCandidate(member, kind, id, preview.CandidateID, "save-"+preview.CandidateID, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tn.ActivateRelease(member, candidate, "activate-"+candidate, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	activate(platform.AssetObject, "O")
+	for _, tenant := range []*Tenant{tn, func() *Tenant {
+		recovered := compose()
+		if err := recovered.Replay(entries); err != nil {
+			t.Fatal(err)
+		}
+		return recovered
+	}()} {
+		after, _ := platform.Get[build.Page](tenant.automation("build", false), "P")
+		if !reflect.DeepEqual(before, after) {
+			t.Fatal("publishing an object changed its separately saved page draft")
+		}
+	}
+	activate(platform.AssetPage, "P")
+	after, _ := platform.Get[build.Page](tn.automation("build", false), "P")
+	if after.Published == "" || after.State != "published" || after.Title != before.Title {
+		t.Fatal("explicitly selecting the page did not publish its authored contents")
+	}
+}

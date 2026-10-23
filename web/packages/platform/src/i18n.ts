@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Initialization plan": "初始化计划",
+  "Required roles": "所需角色",
+  "Run this plan explicitly after publishing. Each request uses your current access; installation and restart do not run it or grant roles.": "发布后显式执行此计划。每项请求均检查当前权限；安装和重启不会执行计划或授予角色。",
   "Role grant": "角色授权",
   "Tenant link": "租户关联",
   "Organisation management": "组织管理",
@@ -211,7 +214,6 @@ register("zh-CN", {
   "default": "默认",
   "Limits": "限额",
   "A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.": "某个成员、智能体或应用单独的限额，替代应用设置 → AI（人）和智能体（智能体）里的默认值。超过限额的调用在到达模型之前就被拒绝。",
-  "Member ID, e.g. sales-1 or agent:csm.triage": "成员 ID，例如 sales-1 或 agent:csm.triage",
   "Set limit": "设定限额",
   "Everyone takes the defaults": "所有人都使用默认值",
   "Nobody read personal data yet": "还没有人读取个人数据",

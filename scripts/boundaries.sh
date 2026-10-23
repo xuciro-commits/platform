@@ -24,11 +24,11 @@ fail() { echo "boundary: $*" >&2; exit 1; }
 
 # Every Go module under apps/ and protocols/, named by its module path.
 modules() { for m in "$@"; do [[ ! -f $m/go.mod ]] || echo "$m:$(awk '/^module /{print $2}' "$m/go.mod")"; done; }
-apps=($(modules apps/*/server))   # macOS bash 3.2 has no mapfile
-protocols=($(modules protocols/*))
-names=$(for x in "${apps[@]}"; do echo "${x#*:}"; done)
+apps=$(modules apps/*/server)
+protocols=$(modules protocols/*)
+names=$(for x in $apps; do echo "${x#*:}"; done)
 
-for x in "${apps[@]}" "${protocols[@]}"; do
+for x in $apps $protocols; do
   dir=${x%%:*} self=${x#*:}
   deps=$(cd "$dir" && go list -deps ./... 2>/dev/null)
   for other in $names; do
@@ -38,7 +38,7 @@ for x in "${apps[@]}" "${protocols[@]}"; do
   hits=$(cd "$dir" && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... | grep -vE '/cmd/|test:' | grep -E ' platformserver( |$)' || true)
   [[ -z $hits ]] || fail "app code imports the host runtime, not the app API:"$'\n'"$hits"
 done
-for x in "${apps[@]}"; do
+for x in $apps; do
   dir=${x%%:*} id=${x#*:}
   [[ $dir == apps/$id/server ]] || fail "$dir holds the module $id: an app's directory, module and ID share one name"
   for f in "$id.go" "${id}_test.go" i18n/zh-CN.json "cmd/$id-server/main.go"; do
@@ -50,7 +50,8 @@ done
 hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./apps/... 2>/dev/null | grep -E ' platformserver( |$)' || true)
 [[ -z $hits ]] || fail "a platform app imports the host runtime, not the app API and internal/host:"$'\n'"$hits"
 
-leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" apps/ protocols/ capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
+app_dirs=$(find apps -type d -name server 2>/dev/null || true)
+leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" ${app_dirs:+$app_dirs} protocols/ capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
 [[ -z $leaks ]] || fail "code outside platform touches change log directly without ledger lock:"$'\n'"$leaks"
 
 # probing is a private decision mode, never a tenant-wide switch.
@@ -64,4 +65,4 @@ selection=$(grep -nE 'type (ResultApp|AcceptedActionApp|AcceptedWorker) interfac
 [[ -z $selection ]] || fail "submission admission has optional legacy selectors:"$'\n'"$selection"
 
 platformapps=$(cd capabilities/server && go list ./apps/... 2>/dev/null | wc -l | tr -d ' ')
-echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols, $platformapps platform apps as packages"
+echo "boundaries ok: $(printf '%s\n' "$apps" | awk 'NF { n++ } END { print n+0 }') apps, $(printf '%s\n' "$protocols" | awk 'NF { n++ } END { print n+0 }') protocols, $platformapps platform apps as packages"

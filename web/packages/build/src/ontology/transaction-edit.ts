@@ -1,7 +1,7 @@
 import type { Api } from "@platform/kernel";
 
 export type TransactionIssue = { path: number[]; step: string; ref: string; reason: "missing" | "forward" | "unavailable" | "name" };
-const producesResult = (step: Api.TxnStep) => step.kind === "create" || step.kind === "sequence" || !!step.call;
+const producesResult = (step: Api.TxnStep) => step.kind === "create" || step.kind === "post" || step.kind === "sequence" || !!step.call;
 
 /** Visit typed reference slots only. Literal JSON, prose and capability names are data. */
 function references(step: Api.TxnStep, change: (ref: string) => string) {
@@ -20,10 +20,11 @@ function references(step: Api.TxnStep, change: (ref: string) => string) {
   if (step.post) { assignments(step.post.match); expression(step.post.amount); }
   if (step.journal) {
     expression(step.journal.date); expression(step.journal.text); expression(step.journal.currency);
-    step.journal.lines.forEach(line => { expression(line.account); expression(line.debit); expression(line.credit); expression(line.text); expression(line.object); expression(line.partner); });
+    step.journal.lines.forEach(line => { expression(line.when); expression(line.account); expression(line.debit); expression(line.credit); expression(line.text); expression(line.object); expression(line.partner); });
   }
+  expression(step.forEach?.range?.from); expression(step.forEach?.range?.until);
   assignments(step.effect?.payload); assignments(step.call?.inputs);
-  if (step.work) { expression(step.work.body); expression(step.work.member); expression(step.work.due); expression(step.work.key); }
+  if (step.work) { expression(step.work.unit); expression(step.work.body); expression(step.work.member); expression(step.work.due); expression(step.work.key); }
   refusals(step.refusals);
 }
 

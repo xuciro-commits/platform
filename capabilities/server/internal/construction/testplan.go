@@ -11,6 +11,7 @@ const TestPlanType = "build.testplan"
 // TestPlan stores fixed inputs, not test state or a claim about the next draft.
 type TestPlan struct {
 	platform.Record
+	Organization      *platform.OrgSeed      `json:"organization,omitempty" type:"json" field:"aside" title:"Synthetic organization"`
 	Roots             []platform.AssetRef    `json:"roots,omitempty" type:"json" title:"Portable definition roots"`
 	Application       string                 `json:"application,omitempty" ref:"build.app" title:"Saved application draft"`
 	CandidateID       string                 `json:"candidateId,omitempty" title:"Fixed candidate version"`

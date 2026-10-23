@@ -147,6 +147,27 @@ func TestMigrationIncompleteScopeCannotActivateRequiredTarget(t *testing.T) {
 	decide(t, tn, "user", construction.ID, "build.asset.edit", "build.asset", "A", map[string]any{"name": "Source remains usable"}, txnAt)
 }
 
+func TestMigrationRequiredFalseIsAnAcceptedTargetValue(t *testing.T) {
+	tn, plan, _ := migrationFixture(t, "migration-required-false", []string{"Old"})
+	literal := platform.ExprLiteralValue("boolean", false)
+	plan.Steps[0].Fields[0].Expr = &literal
+	builder := memberOf(t, tn, "builder")
+	review, err := tn.ReviewMigrationPlan(builder, plan, txnAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decide(t, tn, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": review.ID, "reviewedAt": review.At}, txnAt)
+	decide(t, tn, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
+	if _, err := tn.ActivateRelease(builder, plan.To, "false-target", txnAt); err != nil {
+		t.Fatal("explicit false must satisfy the required target", err)
+	}
+	image, err := tn.records.types["build.asset"].rows.Get("A").Image()
+	var values map[string]json.RawMessage
+	if err != nil || json.Unmarshal(image, &values) != nil || string(values["enabled"]) != "false" {
+		t.Fatalf("activation lost the accepted false value: %s %v", image, err)
+	}
+}
+
 func migrationRun(t *testing.T, tn *Tenant, id string) platform.MigrationRun {
 	t.Helper()
 	c := tn.caller(memberOf(t, tn, "builder"), tn.app(construction.ID), false)

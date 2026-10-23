@@ -295,7 +295,17 @@ func (b *Build) checkPage(p Page) error {
 		}
 	}
 	for _, schema := range p.Actions {
-		_, action, ok := b.host.Action(schema)
+		var action platform.Action
+		var ok bool
+		if model, selected := b.jointEntities[p.Object]; selected && strings.HasPrefix(schema, p.Object+".") {
+			ok = slices.Contains(model.Standard, schema)
+			if model.Lifecycle != nil {
+				ok = ok || slices.ContainsFunc(model.Lifecycle.Transitions, func(transition platform.TransitionInfo) bool { return transition.Schema == schema })
+			}
+			action.Target = model.Type
+		} else {
+			_, action, ok = b.host.Action(schema)
+		}
 		if !ok {
 			return fmt.Errorf("this tenant has no action %q", schema)
 		}

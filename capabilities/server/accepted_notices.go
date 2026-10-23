@@ -23,7 +23,7 @@ import (
 // Reuse the tenant recipient resolver over private directory owners. This
 // read view has no runtime lane, storage hooks or mutable host components.
 func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
-	view := &Tenant{apps: slices.Clone(d.tenant.apps), directory: d.directoryView()}
+	view := &Tenant{apps: slices.Clone(d.tenant.apps), appIndex: d.tenant.appIndex, directory: d.directoryView()}
 	for i, app := range view.apps {
 		if app.Manifest().ID == PlatformApp {
 			view.apps[i] = d.stateApp(app)
@@ -173,6 +173,7 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 	defer func() {
 		if p := recover(); p != nil {
 			*d = saved
+			d.attachPrivateHosts()
 			// An unsupported effect is not a business refusal from the child.
 			// It invalidates the entire top-level attempt; inventing a refused
 			// provider answer would turn a supported business operation into a
@@ -181,8 +182,17 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 		}
 	}()
 	r, err = decide()
+	if err == nil && r != nil && len(d.events) > len(saved.events) && slices.ContainsFunc(d.events[len(saved.events):], func(event platform.Event) bool {
+		return event.App == r.GetSubmission().GetAuthority() && event.Record.GetChangeId() == r.GetChangeId()
+	}) {
+		// A completed child decision must report its deferred business refusal
+		// before its caller chooses a success/error path. An in-progress parent
+		// transaction has no published receipt yet and keeps its final boundary.
+		err = d.checkFinalConstraints()
+	}
 	if err != nil {
 		*d = saved
+		d.attachPrivateHosts()
 	}
 	return r, err
 }

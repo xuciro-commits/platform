@@ -77,6 +77,7 @@ type ProcessStep struct {
 	Target         *platform.Binding           `json:"target,omitempty" type:"json"`
 	Condition      *platform.Predicate         `json:"condition,omitempty" type:"json"`
 	Collection     *platform.Binding           `json:"collection,omitempty" type:"json"`
+	WaitUntil      *platform.Binding           `json:"waitUntil,omitempty" type:"json" title:"Wait until timestamp"`
 	Cases          map[string]string           `json:"cases,omitempty" type:"json"`
 	Branches       []string                    `json:"branches,omitempty"`
 	Next           string                      `json:"next,omitempty"`

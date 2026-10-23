@@ -19,6 +19,17 @@ func (d *stagedDecision) TxnTransport() platform.TxnTransport {
 	return hostView{t: d.tenant, app: d.tenant.app(construction.ID), decision: d}
 }
 
+func (h hostView) TakeTxnStep() *kernel.Error {
+	if h.decision != nil && h.decision.failure != nil {
+		return h.decision.failure
+	}
+	if h.decision == nil || h.decision.transactionSteps >= platform.TxnMaxExecutionSteps {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction execution exceeds its step budget")
+	}
+	h.decision.transactionSteps++
+	return nil
+}
+
 type txnCalls struct {
 	decision *stagedDecision
 	caller   platform.Caller

@@ -2,12 +2,6 @@
   "dependencies": {
     "@platform/catalog-app": "workspace:*",
     "@pkg/build": "workspace:*",
-    "@pkg/crm": "workspace:*",
-    "@pkg/erp": "workspace:*",
-    "@pkg/csm": "workspace:*",
-    "@pkg/pms": "workspace:*",
-    "@pkg/hcm": "workspace:*",
-    "@pkg/mes": "workspace:*",
     "@pkg/platform": "workspace:*",
     "@platform/app": "workspace:*",
     "@platform/kernel": "workspace:*",

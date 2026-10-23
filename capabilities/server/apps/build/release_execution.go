@@ -50,9 +50,17 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	}
 	bound := app.(*Build)
 	bound.installed = map[string]platform.Entity{}
+	bound.queries = map[string]Query{}
 	bound.jointEntities = map[string]platform.EntityInfo{}
 	bound.jointMode = true
 	for _, asset := range assets {
+		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetQuery {
+			query, err := bound.queryAsset(asset)
+			if err != nil {
+				return nil, err
+			}
+			bound.queries[query.Name] = query
+		}
 		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetAgent {
 			agent, err := decodeAgentAsset(asset)
 			if err != nil {

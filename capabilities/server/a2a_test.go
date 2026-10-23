@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -183,14 +184,19 @@ answered: {"product":"P-200","leadTimeDays":12}`)
 
 	// An endpoint whose tasks cannot be recalled holds what an agent sends;
 	// discarded, the run goes on with that.
-	do("ana", PlatformApp, SchemaEndpointRemove, EndpointType, "partner", map[string]any{})
-	do("ana", PlatformApp, SchemaEndpointAdd, EndpointType, "partner-2",
-		map[string]any{"kind": "a2a", "url": partner.URL, "effects": []string{"desk/lookup"}, "allowPrivate": true, "irreversible": true})
-	do("ana", AgentApp, SchemaRunStart, RunType, "S2", map[string]any{"agent": "desk.scout", "goal": "scout again"})
+	expect("remove partner", do("ana", PlatformApp, SchemaEndpointRemove, EndpointType, "partner", map[string]any{}), "ok")
+	expect("public partner", do("ana", PlatformApp, SchemaEndpointAdd, EndpointType, "partner-2",
+		map[string]any{"kind": "a2a", "url": partner.URL, "effects": []string{"desk/lookup"}, "allowPrivate": true, "irreversible": true}), "ok")
+	expect("second scout", do("ana", AgentApp, SchemaRunStart, RunType, "S2", map[string]any{"agent": "desk.scout", "goal": "scout again"}), "ok")
 	think(2)
 	effects := tn.Effects(now)
-	expect("held", effects[0].State+" "+effects[0].Run, "held S2")
-	do("ana", PlatformApp, SchemaEffectDiscard, EffectType, effects[0].ID, map[string]any{})
+	held := slices.IndexFunc(effects, func(effect platform.Effect) bool { return effect.Run == "S2" })
+	if held < 0 {
+		run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "S2")
+		t.Fatalf("the second run has no held inquiry: %s", platform.Raw(run))
+	}
+	expect("held", effects[held].State+" "+effects[held].Run, "held S2")
+	do("ana", PlatformApp, SchemaEffectDiscard, EffectType, effects[held].ID, map[string]any{})
 	think(2)
 	run, _ = platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "S2")
 	expect("discarded", fmt.Sprint(run.State, " ", strings.HasSuffix(run.Result, "discarded by ana"), " ", run.Signals[0].Kind, " ", len(heard)), "done true discarded 1")

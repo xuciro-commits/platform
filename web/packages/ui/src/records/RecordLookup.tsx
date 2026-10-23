@@ -21,23 +21,23 @@ function Lookup<T>({ id, scope, target, revision, read, watch, value, valueLabel
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<{records:T[];total:number}>();
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string>();
   const ports = useRef({read, watch}); ports.current = {read, watch};
-  useEffect(() => { setPage(undefined); setError(false); setOpen(false); }, [scope, target]);
+  useEffect(() => { setPage(undefined); setError(undefined); setOpen(false); }, [scope, target]);
   useEffect(() => {
     if (!open || window) return;
     let active = true, epoch = 0;
     const load = () => {
       const request = ++epoch;
       void ports.current.read(query, offset).then(
-        (result) => { if (active && epoch === request) { setPage(result); setError(false); } },
-        () => { if (active && epoch === request) { setPage(undefined); setError(true); } },
+        (result) => { if (active && epoch === request) { setPage(result); setError(undefined); } },
+        (problem) => { if (active && epoch === request) { setPage(undefined); setError(problem instanceof Error?problem.message:t("Records could not be loaded.")); } },
       );
     };
     const stop = ports.current.watch?.(query,offset,load), timer = setTimeout(load,150);
     return () => { active = false; stop?.(); clearTimeout(timer); };
   }, [scope,target,revision,open,query,offset,window]);
-  const listId = `${id ?? unique}-options`,currentPage=window?window.page:page,currentError=window?!!window.error:error;
+  const listId = `${id ?? unique}-options`,currentPage=window?window.page:page,currentError=window?window.error:error;
   return <div className="relative" data-platform-escape-boundary={open||undefined} onKeyDown={e=>{if(e.key==="Escape"&&open){e.preventDefault();e.stopPropagation();e.currentTarget.querySelector<HTMLInputElement>("[role=combobox]")?.focus();setOpen(false);}}} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
     <Input id={id} role="combobox" aria-label={ariaLabel} aria-autocomplete="list" aria-expanded={open} aria-controls={listId} disabled={disabled}
       readOnly={!!window?.searchLocked}
@@ -52,7 +52,7 @@ function Lookup<T>({ id, scope, target, revision, read, watch, value, valueLabel
         }
       }} />
     {open && !disabled && <div className="absolute z-30 mt-1 max-h-56 w-full min-w-0 overflow-auto rounded-md border border-border bg-surface p-1 shadow-lg">
-      <div id={listId} role="listbox">{currentError ? <p role="alert" className="px-2 py-1 text-xs text-[var(--tone-danger)]">{t("Records could not be loaded.")}</p>
+      <div id={listId} role="listbox">{currentError ? <p role="alert" className="px-2 py-1 text-xs text-[var(--tone-danger)]">{t(currentError)}</p>
         : !currentPage ? <p className="px-2 py-1 text-xs text-muted">{t("Loading…")}</p>
           : currentPage.records.length === 0 ? <p className="px-2 py-1 text-xs text-muted">{t("No matching records.")}</p>
             : currentPage.records.map((record) => <button key={keyOf(record)} type="button" role="option" aria-selected={keyOf(record) === value}

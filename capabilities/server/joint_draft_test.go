@@ -43,10 +43,12 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	// draft object and a new native flow. Preview/save must not publish the flow.
 	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{
 		"name": "jointvisit", "title": "Joint visit", "plural": "Joint visits",
-		"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+		"states":  []construction.State{{Name: "open", Title: "Open"}, {Name: "closed", Title: "Closed"}},
+		"actions": []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "closed", Roles: []string{construction.User}}},
+		"fields":  []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
 	decide(t, tn, "builder", construction.ID, construction.PageType+".create", construction.PageType, "PAGE", map[string]any{
 		"name": "jointvisits", "title": "Joint visits", "object": "build.jointvisit",
-		"sections": []build.Section{{Widget: "table", Fields: []string{"note"}}}}, at)
+		"list": []string{"note"}, "detail": []string{"note"}, "actions": []string{"build.jointvisit.create", "build.jointvisit.close"}}, at)
 	decide(t, tn, "builder", construction.ID, construction.ProcessType+".create", construction.ProcessType, "FLOW", map[string]any{
 		"name": "jointarrival", "title": "Joint arrival", "manual": true, "steps": []construction.ProcessStep{{Name: "done", Kind: "end"}}}, at)
 	decide(t, tn, "builder", construction.ID, construction.AppType+".create", construction.AppType, "APP", map[string]any{
@@ -148,6 +150,11 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 	if !sawObject || !sawPage || !sawApplication {
 		t.Fatalf("joint delivery did not install its drafts: object=%v page=%v application=%v", sawObject, sawPage, sawApplication)
 	}
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "O", map[string]any{"actions": []construction.Action{}}, at)
+	removedAction, err := tn.PreviewReleaseDrafts(member, []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetPage, ID: "PAGE"}})
+	if err == nil && !strings.Contains(removedAction.Diagnostic, "build.jointvisit.close") {
+		t.Fatalf("the page reused an installed action removed from its selected draft: %+v", removedAction)
+	}
 	CheckReplay(t, tn, entries, compose)
 }
 
@@ -202,14 +209,12 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	var entries []Entry
 	source.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	decide(t, source, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{"name": "case", "title": "Case", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-	decide(t, source, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "O", map[string]any{}, at)
 	decide(t, source, "builder", construction.ID, build.AgentType+".create", build.AgentType, "AG", map[string]any{"name": "assist", "title": "Assist", "description": "Prepare case updates", "instructions": "Prepare a note update", "tools": []string{"build.case.edit"}, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Expect: "Ready"}}}, at)
-	decide(t, source, "builder", construction.ID, build.SchemaAgentPublish, build.AgentType, "AG", map[string]any{}, at)
 	decide(t, source, "builder", construction.ID, construction.ProcessType+".create", construction.ProcessType, "FLOW", map[string]any{"name": "closecase", "title": "Close case", "manual": true, "steps": []construction.ProcessStep{{Name: "done", Kind: "end"}}}, at)
 	resources := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.case"}, {App: construction.ID, Kind: platform.AssetAction, Name: "build.case.edit"}, {App: construction.ID, Kind: platform.AssetAgent, Name: "assist"}, {App: construction.ID, Kind: platform.AssetFlow, Name: "build.closecase"}}
 	decide(t, source, "builder", construction.ID, construction.AppType+".create", construction.AppType, "APP", map[string]any{"name": "cases", "title": "Cases", "resources": resources, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.case": 1}, ExpectedRuns: 1, Retention: map[string]string{"runs": "24h"}}}, at)
 	member := memberOf(t, source, "builder")
-	selection := []construction.JointDraftRef{{Kind: platform.AssetFlow, ID: "FLOW"}, {Kind: platform.AssetApp, ID: "APP"}}
+	selection := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetAgent, ID: "AG"}, {Kind: platform.AssetFlow, ID: "FLOW"}, {Kind: platform.AssetApp, ID: "APP"}}
 	preview, err := source.PreviewReleaseDrafts(member, selection)
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("agent/application preview: %+v %v", preview, err)
@@ -288,6 +293,11 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	if !ok {
 		t.Fatal("original flow instance is unavailable")
 	}
+	beforeScale, refusal := source.ApplicationRuns(member, root, 0, 50, at.Add(time.Second))
+	if refusal != nil || beforeScale.Total < 1 {
+		t.Fatalf("original application run inventory is unavailable: %+v %v", beforeScale, refusal)
+	}
+	expectedRuns := beforeScale.Total + 10001
 	source.records.mu.Lock()
 	for i := 0; i < 10001; i++ {
 		copy := instance
@@ -298,8 +308,8 @@ func TestApplicationArtifactAgentDeliveryAndRuntime(t *testing.T) {
 	}
 	source.records.mu.Unlock()
 	scale, refusal := source.ApplicationRuntimeOf(member, root, at.Add(time.Second))
-	if refusal != nil || scale.Runs != 10002 || !slices.ContainsFunc(scale.Warnings, func(warning ApplicationWarning) bool {
-		return warning.Kind == "runs" && warning.Actual == 10002 && warning.Expected == 1
+	if refusal != nil || scale.Runs != expectedRuns || !slices.ContainsFunc(scale.Warnings, func(warning ApplicationWarning) bool {
+		return warning.Kind == "runs" && warning.Actual == int64(expectedRuns) && warning.Expected == 1
 	}) {
 		t.Fatalf("run inventory silently lost its scale warning: %+v %v", scale, refusal)
 	}

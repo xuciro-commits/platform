@@ -198,6 +198,11 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 			}
 		}
 		switch e.Op {
+		case "values":
+			if e.Kind != "set" || value.Kind == "set" || e.In == nil && len(e.Agg.Field) == 0 {
+				return Type{}, fail("type", at, "values needs one declared scalar field and returns a set")
+			}
+			return Type{Kind: "set", Element: &value}, nil
 		case "any", "all", "none":
 			if e.In == nil || value.Kind != "boolean" || e.Kind != "boolean" {
 				return Type{}, fail("type", at, "quantifier needs a boolean predicate and result")
@@ -263,6 +268,18 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		good = arity(2, 32) && all("boolean") && e.Kind == "boolean"
 	case "not":
 		good = arity(1, 1) && all("boolean") && e.Kind == "boolean"
+	case "if":
+		good = arity(3, 3) && args[0].Kind == "boolean" && same(args[1].Kind, e.Kind) && same(args[2].Kind, e.Kind) && e.Kind != "set"
+		if good {
+			if args[1].Object != "" && args[2].Object != "" && args[1].Object != args[2].Object {
+				return Type{}, fail("reference", at, "conditional reference objects differ")
+			}
+			object := args[1].Object
+			if object == "" {
+				object = args[2].Object
+			}
+			return Type{Kind: e.Kind, Object: object, Currency: currency}, nil
+		}
 	case "coalesce":
 		good = arity(2, 32) && all(e.Kind) && e.Kind != "set"
 		object := ""
@@ -338,10 +355,16 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		good = arity(3, 3) && all("text") && same(e.Kind, "text")
 	case "parse-decimal", "parse-number":
 		good = arity(1, 1) && all("text") && (e.Op == "parse-decimal" && e.Kind == "decimal" || e.Op == "parse-number" && e.Kind == "number")
-	case "add-days", "add-months":
+	case "start-of-day":
+		good = arity(1, 1) && (args[0].Kind == "date" || args[0].Kind == "datetime") && e.Kind == "datetime"
+	case "start-of-hour":
+		good = arity(1, 1) && args[0].Kind == "datetime" && e.Kind == "datetime"
+	case "add-days", "add-months", "add-hours":
 		good = arity(2, 2) && (args[0].Kind == "date" || args[0].Kind == "datetime") && args[1].Kind == "integer" && same(e.Kind, args[0].Kind)
-	case "diff-days":
+		good = good && (e.Op != "add-hours" || args[0].Kind == "datetime")
+	case "diff-days", "diff-hours":
 		good = arity(2, 2) && same(args[0].Kind, args[1].Kind) && (args[0].Kind == "date" || args[0].Kind == "datetime") && e.Kind == "integer"
+		good = good && (e.Op != "diff-hours" || args[0].Kind == "datetime")
 	case "before", "after":
 		good = arity(2, 2) && same(args[0].Kind, args[1].Kind) && (args[0].Kind == "date" || args[0].Kind == "datetime") && e.Kind == "boolean"
 	case "within-period":

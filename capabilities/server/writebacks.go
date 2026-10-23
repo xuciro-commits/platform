@@ -145,6 +145,10 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		out.Result, out.Detail = "rejected", "the request is unreadable"
 		return out
 	}
+	if err := construction.CheckWritebackTransport(req.Transport, req.Method); err != nil {
+		out.Result, out.Detail = "rejected", err.Error()
+		return out
+	}
 	defer func() {
 		if req.Dispatch != "" && !req.SafeRetry && out.Result == "retry" {
 			out.Result, out.Detail = "unknown", "This command cannot be resent automatically: "+out.Detail
@@ -154,6 +158,17 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && req.AllowPrivate) {
 		out.Result, out.Detail = "rejected", "only https addresses (http when private addresses are allowed)"
 		return out
+	}
+	if req.Transport == "a2a" {
+		if req.Protocol != nil {
+			out.Result, out.Detail = "rejected", "A2A cannot send a device protocol command"
+			return out
+		}
+		message := x
+		message.Body = string(platform.Raw(map[string]any{"data": req.Body}))
+		answer := t.sendA2A(Endpoint{URL: req.URL, Secret: req.Secret, AllowPrivate: req.AllowPrivate}, message, true)
+		answer.Digest = out.Digest
+		return answer
 	}
 	var requestBody any = req.Body
 	if req.Protocol != nil {

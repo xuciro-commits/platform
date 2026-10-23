@@ -13,7 +13,7 @@ import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 // confirmations and device dispatches decide when to send and whether to retry.
 type Field = { from: string; to: string; convert?: string };
 type Answer = { at: string; effect: string; target: string; result: string; detail?: string; answer?: string };
-type Draft = { id: string; revision: number; name: string; title: string; connection: string; object: string; on: string; method?: string; path?: string; mapping: Field[]; result: Field[]; state: string; sent?: number; rejected?: number; failed?: number; answers?: Answer[] };
+type Draft = { id: string; revision: number; name: string; title: string; connection: string; object: string; on: string; method?: string; transport?: string; path?: string; mapping: Field[]; result: Field[]; state: string; sent?: number; rejected?: number; failed?: number; answers?: Answer[] };
 type ConnectionRow = { id: string; title: string; kind: string; state: string };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", connection: "", object: "", on: "create", method: "POST", path: "", mapping: [], result: [], state: "draft" });
 const conversions = ["", "string", "number", "boolean", "date"];
@@ -40,8 +40,8 @@ export function WritebackEditor({ id }: { id: string }) {
     id, type: "build.writeback", kind: "writeback", view: "writeback", empty, normalize: record => ({ ...record, mapping: record.mapping ?? [], result: record.result ?? [] }),
     failure: t("The writeback could not be saved or loaded. Your draft is still here."),
     payload: draft => {
-      const { name, title, connection, object, on, method, path, mapping, result } = draft;
-      return { name, title, connection, object, on, method: method ?? "POST", path: path ?? "", mapping, result };
+      const { name, title, connection, object, on, method, transport, path, mapping, result } = draft;
+      return { name, title, connection, object, on, method: method ?? "POST", transport: transport ?? "", path: path ?? "", mapping, result };
     },
   });
   if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
@@ -84,10 +84,12 @@ export function WritebackEditor({ id }: { id: string }) {
           <span className="text-[11px] text-muted">{t("The decision's payload is what gets sent; create and edit carry the fields, a declared action carries its own payload.")}</span></label>
       </Panel>
       <Panel title={t("Request")} className="grid min-w-0 content-start gap-3">
+        <label className={fieldClass}>{t("Transport")}<Select value={draft.transport === "a2a" ? "a2a" : ""} onChange={event => patch({ transport: event.target.value, ...(event.target.value === "a2a" ? { method: "POST" } : {}) })}><option value="">HTTP</option><option value="a2a">A2A</option></Select>
+          <span className="text-[11px] text-muted">{t("A2A sends the mapped payload as one message with the original effect identity. The connection secret remains the complete Authorization header.")}</span></label>
         <label className={fieldClass}>{t("Connection")}<Select value={draft.connection} onChange={(e) => patch({ connection: e.target.value })}><option value="">{t("Choose a connection")}</option>{connections.map((c) => <option key={c.id} value={c.id}>{c.title} · {c.kind}</option>)}</Select>
           <span className="text-[11px] text-muted">{t("Saved http or OData connections can be configured here; publishing still requires a ready connection. Credentials stay with the connection.")}</span></label>
         <div className="grid grid-cols-[auto_1fr] gap-2">
-          <label className={fieldClass}>{t("Method")}<Select value={draft.method ?? "POST"} onChange={(e) => patch({ method: e.target.value })}>{["POST", "PUT", "PATCH"].map((m) => <option key={m} value={m}>{m}</option>)}</Select></label>
+          <label className={fieldClass}>{t("Method")}<Select disabled={draft.transport === "a2a"} value={draft.method ?? "POST"} onChange={(e) => patch({ method: e.target.value })}>{["POST", "PUT", "PATCH"].map((m) => <option key={m} value={m}>{m}</option>)}</Select></label>
           <label className={fieldClass}>{t("Path")}<Input value={draft.path ?? ""} placeholder="A_MaterialDocumentHeader" onChange={(e) => patch({ path: e.target.value })} /><span className="text-[11px] text-muted">{t("Relative to the connection's address; {id} and {field} are filled from the payload.")}</span></label>
         </div>
       </Panel>

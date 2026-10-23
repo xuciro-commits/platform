@@ -40,6 +40,9 @@ func (b *Build) checkJournal(o construction.Object) error {
 			continue
 		}
 		where := fmt.Sprintf("the action %q books", a.Name)
+		if a.Journal.ClosedPeriod != "" && a.Journal.ClosedPeriod != "reject" && a.Journal.ClosedPeriod != "next-open" {
+			return fmt.Errorf("%s with an unknown closed period policy", where)
+		}
 		if len(a.Journal.Lines) < 2 {
 			return fmt.Errorf("%s fewer than two lines", where)
 		}

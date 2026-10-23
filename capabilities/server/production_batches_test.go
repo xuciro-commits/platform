@@ -404,7 +404,8 @@ func TestDeclarativeProtocolPublicationAndRecovery(t *testing.T) {
 	}
 	badPayload := map[string]any{"name": declared.Name, "title": declared.Title, "fields": declared.Fields, "access": declared.Access, "states": declared.States, "actions": declared.Actions, "protocols": declared.Protocols}
 	bad := builderTenant(t, "bad-production-protocol")
-	if got := refuse(t, bad, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "bad", badPayload, at); !strings.Contains(got, "incompatible payload") {
+	decide(t, bad, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "bad", badPayload, at)
+	if got := refuse(t, bad, "builder", construction.ID, construction.ObjectType+".publish", construction.ObjectType, "bad", map[string]any{}, at); !strings.Contains(got, "incompatible payload") {
 		t.Fatalf("production contract must reject confirm without batch/final: %s", got)
 	}
 }

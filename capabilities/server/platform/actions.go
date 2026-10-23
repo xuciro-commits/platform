@@ -45,6 +45,9 @@ type Action struct {
 	// Automation marks an action only the platform's own apps take, as
 	// automation: it has no roles and is in no member's catalog.
 	Automation bool `json:"automation,omitempty"`
+	// ConfirmationOnly hides a receipt transition from ordinary catalogs.
+	// It still runs as the initiating member with current permissions.
+	ConfirmationOnly bool `json:"confirmationOnly,omitempty"`
 	// DeferRequired lets a lifecycle owner return its own business-language
 	// message for missing required inputs after the generic type checks.
 	DeferRequired bool `json:"-"`
@@ -389,6 +392,10 @@ func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (au
 	if !ok || !c.Enabled(schema) {
 		return authz.Request{}, nil, false
 	}
+	_, id, _ := strings.Cut(target, "/")
+	if a.ConfirmationOnly && !caller.Replaying && !caller.ConfirmationCompletion(a.Target, id, schema) {
+		return authz.Request{}, nil, false
+	}
 	allowed := slices.Clone(a.Roles)
 	for i, r := range allowed {
 		if r == AnyMember {
@@ -427,7 +434,7 @@ func (c *Catalog) ForRoles(roles []string) []Action {
 	defer c.mu.RUnlock()
 	out := []Action{}
 	for _, a := range c.actions {
-		if c.disabled[a.Capability] {
+		if c.disabled[a.Capability] || a.ConfirmationOnly {
 			continue
 		}
 		if slices.Contains(a.Roles, AnyMember) || slices.ContainsFunc(roles, func(r string) bool {

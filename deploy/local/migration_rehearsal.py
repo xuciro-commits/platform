@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""'s shared HTTP route; invoked by make rehearse, never an executor."""
+"""Exercise the shared migration HTTP route; invoked by make rehearse."""
 import argparse
 import base64
 import json
@@ -24,7 +24,7 @@ def require(value, reason):
         raise RuntimeError(reason)
 
 
-def request(url, token="", tenant="", body=None, headers=None):
+def request(url, token="", tenant="", body=None, headers=None, timeout=15):
     metadata = {"Accept-Language": "en", **(headers or {})}
     if token:
         metadata["Authorization"] = "Bearer " + token
@@ -36,7 +36,7 @@ def request(url, token="", tenant="", body=None, headers=None):
         data = json.dumps(body).encode()
     call = urllib.request.Request(url, data=data, headers=metadata)
     try:
-        with urllib.request.urlopen(call, timeout=15) as response:
+        with urllib.request.urlopen(call, timeout=timeout) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
         return json.loads(error.read())
@@ -61,8 +61,8 @@ class Member:
         self.server, self.tenant, self.token = server, tenant, token
         self.artifacts = set()
 
-    def call(self, path, body=None, headers=None):
-        return request(self.server + "/v1/" + path, self.token, self.tenant, body, headers)
+    def call(self, path, body=None, headers=None, timeout=15):
+        return request(self.server + "/v1/" + path, self.token, self.tenant, body, headers, timeout)
 
     def record(self, typ, identity):
         path = "records/" + urllib.parse.quote(typ, safe="") + "/" + urllib.parse.quote(identity, safe="")
@@ -89,17 +89,18 @@ class Member:
         require("record" in answer, schema + ": " + str(answer.get("error")))
         return answer["record"]
 
-    def candidate(self):
-        selection = {"drafts": [{"kind": "object", "id": "MIGRATION-O"}, {"kind": "flow", "id": "MIGRATION-P"}]}
-        preview = self.call("releases/preview", selection)
+    def candidate(self, drafts=None):
+        selection = {"drafts": drafts if drafts is not None else [{"kind": "object", "id": "MIGRATION-O"}, {"kind": "flow", "id": "MIGRATION-P"}]}
+        # Complete package compilation runs on the deliberately limited CPU.
+        preview = self.call("releases/preview", selection, timeout=60)
         require(preview.get("candidateId") and not preview.get("diagnostic"), "Candidate: " + str(preview))
         self.artifacts.add("releases/" + self.tenant + "/" + preview["candidateId"].removeprefix("sha256-v1:").replace(":", "-") + ".json")
-        saved = self.call("releases/candidates", {**selection, "candidateId": preview["candidateId"], "key": str(uuid.uuid4())})
+        saved = self.call("releases/candidates", {**selection, "candidateId": preview["candidateId"], "key": str(uuid.uuid4())}, timeout=60)
         require(saved.get("id") == preview["candidateId"], "Candidate save failed")
         return saved["id"]
 
     def activate(self, candidate):
-        answer = self.call("releases/active", {"candidateId": candidate, "key": str(uuid.uuid4())})
+        answer = self.call("releases/active", {"candidateId": candidate, "key": str(uuid.uuid4())}, timeout=60)
         require(answer.get("id") == candidate, "Activation: " + str(answer))
 
 
@@ -214,7 +215,7 @@ def resume(builder, operator, saved, suffix):
 
 
 def oidc_token(user, issuer):
-    data = urllib.parse.urlencode({"grant_type": "password", "client_id": "platform-cli",
+    data = urllib.parse.urlencode({"grant_type": "password", "scope": "openid email profile", "client_id": "platform-cli",
                                   "client_secret": "cliLocalOnly" + "0" * 52, "username": user, "password": "Plant-Local-1"}).encode()
     with urllib.request.urlopen(issuer.rstrip("/") + "/oidc/token", data=data, timeout=15) as response:
         return json.load(response)["access_token"]
@@ -252,10 +253,6 @@ def native():
             ]:
                 tenant = "migration-" + suffix + "-" + nonce[-10:]
                 roles = {"build": "builder", "platform": "admin", "work": "admin", "flow": "admin", "core": "steward"}
-                if suffix == "plant":
-                    roles.update({"erp": "controller", "mes": "supervisor"})
-                else:
-                    roles.update({"crm": "sales-manager", "pms": "manager"})
                 spec = [{"id": tenant, "seats": [
                     {"subjects": ["user:" + builder_user], "id": builder_id, "roles": roles},
                     {"subjects": ["user:" + operator_user], "id": operator_id, "roles": {"build": "user", "work": "worker"}},

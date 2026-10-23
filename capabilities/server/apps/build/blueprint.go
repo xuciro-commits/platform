@@ -97,8 +97,8 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]construction.JointDraft
 			}
 		}
 	}
-	if len(out) == 0 || len(out) > 64 {
-		return nil, fmt.Errorf("test roots need one to 64 saved drafts")
+	if len(out) == 0 || len(out) > construction.JointDraftLimit {
+		return nil, fmt.Errorf("test roots need one to %d saved drafts", construction.JointDraftLimit)
 	}
 	return out, nil
 }

@@ -8,10 +8,12 @@ type LiveConnection = { paths: string[]; controller: AbortController };
 export class LiveReads {
   private readers = new Map<string, Set<() => void>>();
   private snapshots = new Map<string, LiveQueryResult>();
+  paths() { return [...this.readers.keys()]; }
   private connections = new Set<LiveConnection>();
   private timer?: ReturnType<typeof setTimeout>;
   private running = false;
   constructor(private connect: (paths: string[], signal: AbortSignal) => Promise<Response>) {}
+  dispose() { this.running = false; this.stop(); this.snapshots.clear(); }
   enable() { this.running = true; this.restart(); return () => { this.running = false; this.stop(); this.snapshots.clear(); }; }
   subscribe(path: string, changed: () => void) {
     let listeners = this.readers.get(path);

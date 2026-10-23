@@ -12,3 +12,9 @@ type SimulationFactory interface {
 type SimulationIdentityFactory interface {
 	NewSimulationIdentity(tenant string, members []Member) App
 }
+
+// SimulationOrganizationFactory installs only explicit synthetic organization
+// input in a fresh owner. It never copies the active enterprise model.
+type SimulationOrganizationFactory interface {
+	NewSimulationOrganization(tenant string, seed OrgSeed) App
+}

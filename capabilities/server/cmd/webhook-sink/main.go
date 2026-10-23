@@ -11,11 +11,12 @@
 //	                OpenAI wire: model "echo" repeats the last message;
 //	                given tools (an agent), it calls a read tool first,
 //	                then finishes proposing the first item read whose ID the goal
-//	                does not name and whose product it does; the helpdesk's
-//	                triage agent searches knowledge, triages a ticket as normal and
-//	                replies citing what it found; model "embed" embeds hashed words;
+//	                does not name and whose product it does;
+//	                model "embed" embeds hashed words;
 //	                the plant's planner asks the supplier's agent, then answers
 //	                bounded record-advice requests get a fixed typed fixture
+//	                model "review" returns fixed review/ask samples, not model quality
+//	GET /messages, POST /observations   empty channel and fixed state-window samples
 //	POST /a2a       a supplier's agent over A2A 1.0 (card at /a2a/.well-known/agent-card.json):
 //	                every SendMessage gets a completed task with a lead time of 12 days
 package main
@@ -41,6 +42,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -99,8 +101,34 @@ func main() {
 		defer mu.Unlock()
 		json.NewEncoder(w).Encode(map[string]any{"calls": calls, "kept": kept})
 	})
+	http.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	})
 	http.HandleFunc("GET /v1/models", func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "echo", "name": "Echo", "context_length": 4096}, {"id": "embed", "name": "Hashed words", "context_length": 8192}}})
+		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "echo", "name": "Echo", "context_length": 4096}, {"id": "embed", "name": "Hashed words", "context_length": 8192}, {"id": "review", "name": "Fixed review fixture", "context_length": 4096}}})
+	})
+	http.HandleFunc("GET /messages", func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"messages": []any{}})
+	})
+	http.HandleFunc("POST /observations", func(w http.ResponseWriter, r *http.Request) {
+		var query struct {
+			Mode         string `json:"mode"`
+			Since, Until time.Time
+		}
+		if json.NewDecoder(r.Body).Decode(&query) != nil || query.Mode != "intervals" || query.Since.IsZero() || !query.Since.Before(query.Until) || query.Until.Sub(query.Since) > 5*time.Minute {
+			http.Error(w, "fixed interval fixture supports windows up to five minutes", http.StatusBadRequest)
+			return
+		}
+		points := []map[string]any{}
+		for at := query.Since; at.Before(query.Until); at = at.Add(10 * time.Second) {
+			value := "run"
+			if offset := at.Sub(query.Since); offset >= 20*time.Second && offset < 100*time.Second {
+				value = "down"
+			}
+			points = append(points, map[string]any{"at": at, "receivedAt": at, "quality": "good", "value": value})
+		}
+		json.NewEncoder(w).Encode(map[string]any{"intervals": map[string]any{"since": query.Since, "until": query.Until, "revision": "local-fixture-1",
+			"coverage": map[string]any{"availableSince": query.Since, "completeUntil": query.Until, "good": len(points)}, "points": points}})
 	})
 	// A supplier's agent over A2A 1.0: it answers every SendMessage
 	// with a completed task, the lead time of the product the message names.
@@ -110,7 +138,7 @@ func main() {
 			"capabilities":        map[string]bool{"streaming": false}, "defaultInputModes": []string{"text/plain"}, "defaultOutputModes": []string{"application/json"},
 			"skills": []map[string]any{{"id": "lead-time", "name": "Lead time", "description": "How many days until a product can be delivered.", "tags": []string{"supply"}}}})
 	})
-	http.HandleFunc("POST /a2a", func(w http.ResponseWriter, r *http.Request) {
+	supplierReply := func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID     json.RawMessage
 			Method string
@@ -127,11 +155,17 @@ func main() {
 			text += p.Text
 		}
 		product := cmpOr(regexp.MustCompile(`P-\d+`).FindString(text), "unknown")
+		parts := []map[string]any{{"data": map[string]any{"supplier": "Harbour Metals", "product": product, "leadTimeDays": 12}}}
+		if r.URL.Path == "/rpc" {
+			parts = []map[string]any{{"text": "Local supplier fixture: delivery in 12 days; confirm the actual order separately."}}
+		}
 		json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": map[string]any{"task": map[string]any{
 			"id": "task-" + req.Params.Message.MessageID, "contextId": req.Params.Message.MessageID, "status": map[string]string{"state": "TASK_STATE_COMPLETED"},
 			"artifacts": []map[string]any{{"artifactId": "lead-time", "name": "lead time",
-				"parts": []map[string]any{{"data": map[string]any{"supplier": "Harbour Metals", "product": product, "leadTimeDays": 12}}}}}}}})
-	})
+				"parts": parts}}}}})
+	}
+	http.HandleFunc("POST /a2a", supplierReply)
+	http.HandleFunc("POST /rpc", supplierReply)
 	http.HandleFunc("POST /v1/embeddings", func(w http.ResponseWriter, r *http.Request) { // "embed": each word hashed into 64 dimensions
 		var req struct{ Input []string }
 		json.NewDecoder(r.Body).Decode(&req)
@@ -156,9 +190,21 @@ func main() {
 				Function struct{ Name string }
 			}
 		}
-		if json.NewDecoder(r.Body).Decode(&req) != nil || req.Model != "echo" || len(req.Messages) == 0 {
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.Model != "echo" && req.Model != "review" || len(req.Messages) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"message": "model echo only"}})
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"message": "model echo or review only"}})
+			return
+		}
+		if req.Model == "review" {
+			message := map[string]any{}
+			if len(req.Tools) > 0 {
+				args, _ := json.Marshal(map[string]any{"question": "Which confirmed record and facts should I review?", "answers": []string{"Provide the target"}, "rationale": "A confirmed target is required before a business change."})
+				message["tool_calls"] = []map[string]any{{"id": "ask-target", "type": "function", "function": map[string]string{"name": "ask", "arguments": string(args)}}}
+			} else {
+				content, _ := json.Marshal(map[string]any{"summary": "Review the actual record and confirm missing facts with the responsible person.", "category": "review", "review": true, "confidence": 0.9})
+				message["content"] = string(content)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"model": "review", "choices": []map[string]any{{"message": message}}, "usage": map[string]any{"prompt_tokens": 10, "completion_tokens": 10, "cost": 0.001}})
 			return
 		}
 		last := req.Messages[len(req.Messages)-1].Content
@@ -186,40 +232,6 @@ func main() {
 				}
 				_, answer, _ := strings.Cut(last, "answered: ")
 				call("finish", map[string]string{"result": cmpOr(answer, last), "rationale": "The supplier's agent answered."})
-				return
-			}
-			// The helpdesk's triage agent: triage as normal, reply, finish.
-			if slices.ContainsFunc(req.Tools, func(t struct{ Function struct{ Name string } }) bool {
-				return t.Function.Name == "csm_ticket_triage"
-			}) {
-				ticket := regexp.MustCompile(`ticket (\S+) from`).FindStringSubmatch(req.Messages[1].Content)
-				done := 0
-				for _, m := range req.Messages {
-					if m.Role == "tool" {
-						done++
-					}
-				}
-				switch {
-				case ticket == nil || done >= 3:
-					call("finish", map[string]string{"result": "triaged and answered", "rationale": "The steps are done."})
-				case done == 0:
-					subject := regexp.MustCompile(`Subject: (.*)`).FindStringSubmatch(req.Messages[1].Content)
-					call("knowledge", map[string]string{"query": subject[len(subject)-1], "rationale": "See what the house says about it."})
-				case done == 1:
-					call("csm_ticket_triage", map[string]string{"target": ticket[1], "category": "other", "priority": "normal", "rationale": "Nothing marks it urgent."})
-				default:
-					var passages []struct{ Title string }
-					for _, m := range req.Messages {
-						if m.Role == "tool" && strings.HasPrefix(m.Content, "[") && json.Unmarshal([]byte(m.Content), &passages) == nil {
-							break
-						}
-					}
-					reply := "Thank you for writing. A colleague will follow up today."
-					if len(passages) > 0 {
-						reply = "Thank you for writing; see our " + passages[0].Title + ". A colleague will follow up today."
-					}
-					call("csm_ticket_reply", map[string]string{"target": ticket[1], "reply": reply, "rationale": "Acknowledge, cite, and hand it on."})
-				}
 				return
 			}
 			if req.Messages[len(req.Messages)-1].Role != "tool" {

@@ -23,6 +23,7 @@ import (
 // CandidateSimulationRequest fixes all business inputs of an isolated run.
 // Create actions establish its sample data; nothing is copied from live rows.
 type CandidateSimulationRequest struct {
+	Organization  *platform.OrgSeed   `json:"organization,omitempty"`
 	Roots         []platform.AssetRef `json:"roots,omitempty"`
 	ApplicationID string              `json:"applicationId,omitempty"`
 	CandidateID   string              `json:"candidateId,omitempty"`
@@ -240,6 +241,10 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		err = fmt.Errorf("%s", diagnostic)
 	}
 	environment, environmentErr := t.simulationEnvironment(candidate, request.Samples)
+	if environmentErr == nil {
+		environmentErr = platform.CheckSimulationOrganization(request.Organization)
+		environment.Organization = request.Organization
+	}
 	if err == nil {
 		err = environmentErr
 	}
@@ -657,6 +662,19 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		return nil, fmt.Errorf("candidate identity factory changed its owner")
 	}
 	apps := []platform.App{identity}
+	if environment.Organization != nil {
+		if environment.OrganizationFactory == nil {
+			return nil, fmt.Errorf("the synthetic organization owner is unavailable")
+		}
+		seed := *environment.Organization
+		seed.Memberships = slices.Clone(seed.Memberships)
+		for i := range seed.Memberships {
+			if seed.Memberships[i].Party == "" {
+				seed.Memberships[i].Party = "member:" + member.ID
+			}
+		}
+		apps = append(apps, environment.OrganizationFactory.NewSimulationOrganization(member.Tenant, seed))
+	}
 	var journalSteps func([]platform.TxnStep) bool
 	journalSteps = func(steps []platform.TxnStep) bool {
 		return slices.ContainsFunc(steps, func(step platform.TxnStep) bool {
@@ -740,6 +758,12 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		return nil, err
 	}
 	sandbox.simulation = true
+	endBootstrap, err := b.BeginAssetBootstrap(candidate.Assets)
+	if err != nil {
+		return nil, err
+	}
+	defer endBootstrap()
+	sandbox.installingSet = true
 	// Trials execute these exact frozen definitions. Passive integrations have
 	// no live connections to reconstruct their release descriptors from.
 	if err := sandbox.releases.put(candidate.ID, candidate.Bytes); err != nil {
@@ -906,6 +930,10 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 				return nil, err
 			}
 		}
+	}
+	sandbox.installingSet = false
+	if err := sandbox.validateAssetSet(); err != nil {
+		return nil, err
 	}
 	rows := map[string][]recordState{}
 	for _, sample := range environment.Samples {

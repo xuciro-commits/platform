@@ -1,5 +1,6 @@
 export { Authorities, KernelError, type Entry, type Event, type State } from "./outbox";
-export { EdgeClient, apiErrorMessage, type ActionDeclaration, type Connection } from "./client";
+export { EdgeClient, OfflineReadError, apiErrorMessage, type ActionDeclaration, type Connection } from "./client";
+export type { PreparedApplication, LocalFormDraft } from "./prepared";
 export type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
 export type { AuthorityDeclarationJson, SubmissionStateJson } from "./gen/platform/kernel/v1alpha1/authority_pb";
 export type { ErrorCodeJson } from "./gen/platform/kernel/v1alpha1/error_pb";

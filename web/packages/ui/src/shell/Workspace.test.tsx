@@ -119,11 +119,11 @@ test("a called editor keeps its caller's application and confirms its own unsave
   expect(observed.dock!.panels).toHaveLength(2);
   expect(screen.queryByText("Discard changes")).toBeNull();
   fireEvent.change(target, { target: { value: "unsaved target" } });
-  fireEvent.click(screen.getByRole("button", { name: "Return to caller" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Return to caller" }));
   fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
   expect(returned).not.toHaveBeenCalled();
   expect((target as HTMLInputElement).value).toBe("unsaved target");
-  fireEvent.click(screen.getByRole("button", { name: "Return to caller" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Return to caller" }));
   fireEvent.click(await screen.findByRole("button", { name: "Discard changes" }));
   await waitFor(() => expect(observed.dock!.panels).toHaveLength(1));
   expect(returned).toHaveBeenCalledWith("done");

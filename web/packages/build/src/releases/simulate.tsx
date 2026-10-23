@@ -18,11 +18,11 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 type ObjectDraft = WorkflowObject & { revision: number };
-type FunctionDraft = { id: string; revision: number; name: string; title: string; object: string; conversation?:boolean };
+type FunctionDraft = { id: string; revision: number; name: string; title: string; object: string; conversation?:boolean; output?:{name:string}[] };
 type Step = Omit<Api.SimulationStep, "payload" | "expect"> & { payload: string; expect: "accepted" | "refused" };
 type EvaluationCase = { name: string; input: string; expected: string };
-type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
-type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; roots?:Api.AssetRef[];application?:string;candidateId?:string;actors?:string[];sample?:string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
+type EvaluationPolicy = { compareFields?:string[]; minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
+type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; roots?:Api.AssetRef[];application?:string;candidateId?:string;actors?:string[];sample?:string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; organization?: Api.OrgSeed; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
 export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
@@ -57,6 +57,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const [at, setAt] = useState("2026-01-01T09:00:00Z");
   const [steps, setSteps] = useState<Step[]>([]);
   const [samples, setSamples] = useState("[]");
+  const [organization, setOrganization] = useState("null");
   const [sampleOverride, setSampleOverride] = useState(true);
   const [sampleInvalid, setSampleInvalid] = useState(false);
  const [sample,setSample]=useState("");
@@ -67,6 +68,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const planRoots = kind === "app" && includeInReleases ? roots.length ? roots : applicationRoots : [];
   const [evaluationEnabled, setEvaluationEnabled] = useState(evaluationSet);
   const [minQuality, setMinQuality] = useState(1);
+	const [compareFields,setCompareFields]=useState<string[]>([]);
   const [maxCostUsd, setMaxCostUsd] = useState(0.1);
   const [maxLatencyMillis, setMaxLatencyMillis] = useState(30000);
   const [cases, setCases] = useState<EvaluationCase[]>([{ name: "synthetic", input: "{}", expected: "{}" }]);
@@ -131,7 +133,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     clear(); setKind(nextKind); setID(nextID); setSteps([]); setRoots([]); setIncludeInReleases(nextKind === "app");
     // A new root gets a new plan identity; Save must never move the previous
     // asset's plan simply because the user selected a different draft.
-    setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");setSampleOverride(true);setSample("");setMembers("");setCandidateID("");
+    setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");setOrganization("null");setSampleOverride(true);setSample("");setMembers("");setCandidateID("");
     setModel("fixture/probe"); setEvaluationEnabled(evaluationSet && nextKind === "function");
     setMinQuality(1); setMaxCostUsd(0.1); setMaxLatencyMillis(30000);
     setCases([{ name: "synthetic", input: "{}", expected: "{}" }]);
@@ -152,10 +154,11 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     clear(); inputDrafts?.clear(); if (!sourceApply) acceptedPlan.current = plan; setFunctionVersion(plan.functionVersion); setPlanID(plan.id); setRevision(plan.revision);
     setTitle(plan.title);setSetName(plan.name??""); setRoots(plan.roots ?? []); setIncludeInReleases(!!plan.roots?.length); setKind(plan.roots?.length || plan.application ? "app" : plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.application || plan.function || plan.process || plan.object || (plan.roots?.length ? applicationId : "")); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
     setSample(plan.sample??"");setMembers((plan.actors??[]).join(", "));setCandidateID(plan.candidateId??"");
-    setSteps(plan.steps); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setSampleOverride(plan.samples !== undefined); setDirty(false);
+    setSteps(plan.steps); setOrganization(JSON.stringify(plan.organization ?? null, null, 2)); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setSampleOverride(plan.samples !== undefined); setDirty(false);
     const policy = plan.evaluation?.[0];
     setEvaluationEnabled(Boolean(policy));
     setMinQuality(policy?.minQuality ?? 1); setMaxCostUsd(policy?.maxCostUsd ?? 0.1); setMaxLatencyMillis(policy?.maxLatencyMillis ?? 30000);
+	setCompareFields(policy?.compareFields??[]);
     setCases(policy?.cases.map((item) => ({ name: item.name, input: JSON.stringify(item.input, null, 2), expected: JSON.stringify(item.expected, null, 2) })) ?? [{ name: "synthetic", input: "{}", expected: "{}" }]);
   };
   useEffect(() => {
@@ -197,9 +200,9 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     ...(planRoots.length ? {roots:planRoots}:kind==="app" ? candidateID?{candidateId:candidateID}:{applicationId:id}:kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
       ...step, payload: JSON.parse(step.payload),
     })),...(kind==="app"?{actors:members.split(",").map(id=>id.trim()).filter(Boolean),sample:planRoots.length?undefined:sample}:{}),
-    ...(planRoots.length || sampleOverride || !sample ? { samples: JSON.parse(samples) as Api.SimulationSample[] } : {}),
+    organization: JSON.parse(organization), ...(planRoots.length || sampleOverride || !sample ? { samples: JSON.parse(samples) as Api.SimulationSample[] } : {}),
   });
-  const definitionValue = () => ({ ...declarationValue(acceptedPlan.current ?? {}, declarationFields), functionVersion, name:setName.trim()||undefined,title, roots:planRoots, application:!planRoots.length&&kind==="app"?id:"",candidateId:!planRoots.length&&kind==="app"?candidateID:"",actors:!planRoots.length&&kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:!planRoots.length&&kind==="app"?sample:"", object: !planRoots.length&&kind === "object" ? id : "", process: !planRoots.length&&kind === "flow" ? id : "", function: !planRoots.length&&kind === "function" ? id : "", model: !planRoots.length&&kind !== "object" ? model : "", as: planRoots.length?"":member, at, steps:planRoots.length?steps.map(step=>({...step,as:undefined})):steps, ...(planRoots.length || sampleOverride || !sample ? { samples: (() => { try { return JSON.parse(samples); } catch { return undefined; } })() } : {}), evaluation: kind === "function" && evaluationEnabled ? [{minQuality,maxCostUsd,maxLatencyMillis,cases:cases.map(item => ({...item,input:(() => {try{return JSON.parse(item.input);}catch{return undefined;}})(),expected:(() => {try{return JSON.parse(item.expected);}catch{return undefined;}})()}))}] : null });
+  const definitionValue = () => ({ ...declarationValue(acceptedPlan.current ?? {}, declarationFields), functionVersion, name:setName.trim()||undefined,title, roots:planRoots, application:!planRoots.length&&kind==="app"?id:"",candidateId:!planRoots.length&&kind==="app"?candidateID:"",actors:!planRoots.length&&kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:!planRoots.length&&kind==="app"?sample:"", object: !planRoots.length&&kind === "object" ? id : "", process: !planRoots.length&&kind === "flow" ? id : "", function: !planRoots.length&&kind === "function" ? id : "", model: !planRoots.length&&kind !== "object" ? model : "", as: planRoots.length?"":member, at, steps:planRoots.length?steps.map(step=>({...step,as:undefined})):steps, organization: (() => { try { return JSON.parse(organization); } catch { return null; } })(), ...(planRoots.length || sampleOverride || !sample ? { samples: (() => { try { return JSON.parse(samples); } catch { return undefined; } })() } : {}), evaluation: kind === "function" && evaluationEnabled ? [{...(compareFields.length?{compareFields}:{}),minQuality,maxCostUsd,maxLatencyMillis,cases:cases.map(item => ({...item,input:(() => {try{return JSON.parse(item.input);}catch{return undefined;}})(),expected:(() => {try{return JSON.parse(item.expected);}catch{return undefined;}})()}))}] : null });
   const save = async () => {
     if (lock.current || blocked || inputDrafts?.invalid || sampleInvalid) return;
     setError(""); setSaved(false);
@@ -213,7 +216,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           !Number.isInteger(maxLatencyMillis) || maxLatencyMillis < 1 || parsed.length < 1 || parsed.length > 5 ||
           parsed.some((item) => !item.name || !item.input || Array.isArray(item.input) || typeof item.input !== "object" ||
             !item.expected || Array.isArray(item.expected) || typeof item.expected !== "object")) throw new Error("invalid evaluation");
-        evaluation = [{ minQuality, maxCostUsd, maxLatencyMillis, cases: parsed }];
+        evaluation = [{ ...(compareFields.length?{compareFields}:{}), minQuality, maxCostUsd, maxLatencyMillis, cases: parsed }];
       } catch { setError(t("Use bounded thresholds and JSON objects for every evaluation case.")); return; }
     }
     const target = planID || createID;
@@ -221,7 +224,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     try {
       if (!planID || dirty) {
         const definition = { ...declarationValue(acceptedPlan.current ?? {}, declarationFields), functionVersion, name:setName.trim()||undefined,title, roots:planRoots, application:!planRoots.length&&kind==="app"?id:"",candidateId:!planRoots.length&&kind==="app"?candidateID:"",actors:!planRoots.length&&kind==="app"?members.split(",").map(id=>id.trim()).filter(Boolean):[],sample:!planRoots.length&&kind==="app"?sample:"", object: !planRoots.length&&kind === "object" ? id : "", process: !planRoots.length&&kind === "flow" ? id : "", function: !planRoots.length&&kind === "function" ? id : "", model: !planRoots.length&&kind !== "object" ? model : "", as: planRoots.length?"":member, at: new Date(at).toISOString(), steps:planRoots.length?steps.map(step=>({...step,as:undefined})):steps,
-          ...(planRoots.length || sampleOverride || !sample ? { samples: JSON.parse(samples) as Api.SimulationSample[] } : {}), evaluation };
+          organization: JSON.parse(organization), ...(planRoots.length || sampleOverride || !sample ? { samples: JSON.parse(samples) as Api.SimulationSample[] } : {}), evaluation };
         if (!await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target }, definition,
           { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) return;
         const savedRevision = revision + 1;
@@ -363,6 +366,13 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           <ContextHelp title={t("Synthetic query samples")}>{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</ContextHelp>
           <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); setSampleOverride(true); clear(); }} />
         </div></Disclosure>}
+        {kind !== "function" && <Disclosure summary={t("Synthetic organization")}>
+          <div className="grid gap-2">
+            <p className="text-xs text-muted">{t("Declare synthetic units, structures, edges and memberships for this isolated trial. Current member roles still apply; live organization data is never copied.")}</p>
+            <p className="text-xs text-muted">{t("Leave membership party empty to use the member selected for this trial.")}</p>
+            <Textarea parse="json" aria-label={t("Synthetic organization (JSON)")} rows={5} className="font-mono text-xs" value={organization} onChange={event => { setOrganization(event.target.value); clear(); }} />
+          </div>
+        </Disclosure>}
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
         {!embedded && <label className="grid gap-1 text-xs">{t("Candidate kind")}
           <Select value={kind} onChange={(e) => switchAsset(e.target.value as typeof kind, "")}>
@@ -405,6 +415,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           <Checkbox checked={evaluationEnabled} onChange={(enabled) => { setEvaluationEnabled(enabled); clear(); }}>{t("Require a measured release evaluation")}</Checkbox>
           {evaluationEnabled && <>
             <ContextHelp title={t("Require a measured release evaluation")}>{t("These synthetic cases run three times each against the enabled model. Reported USD cost and per-call latency must stay within the limits.")}</ContextHelp>
+			<div className="grid gap-1 text-xs"><span>{t("Quality comparison fields")}</span><p className="text-muted">{t("Empty compares the complete JSON answer. Selected fields measure only those outputs; every output still has to satisfy the complete schema. Unselected explanations are not quality-verified.")}</p><div className="flex flex-wrap gap-3">{[...new Set([...(fn?.output??[]).map(field=>field.name),...compareFields])].map(name=><Checkbox key={name} checked={compareFields.includes(name)} onChange={checked=>{setCompareFields(previous=>checked?[...previous,name]:previous.filter(field=>field!==name));clear();}}>{name}</Checkbox>)}</div></div>
             <div className="grid gap-2 sm:grid-cols-3">
               <label className="grid gap-1 text-xs">{t("Minimum exact-match quality")}<Input draftKey="minimum-exact-match-quality" type="number" min={0.01} max={1} step={0.01} value={minQuality} onChange={(e) => { setMinQuality(Number(e.target.value)); clear(); }} /></label>
               <label className="grid gap-1 text-xs">{t("Maximum total USD cost")}<Input draftKey="maximum-total-usd-cost" type="number" min={0.000001} step={0.01} value={maxCostUsd} onChange={(e) => { setMaxCostUsd(Number(e.target.value)); clear(); }} /></label>

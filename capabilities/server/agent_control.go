@@ -35,7 +35,7 @@ func switchActions() []platform.Action {
 	admin := []string{AgentAdmin}
 	return []platform.Action{
 		{Schema: SchemaSuspend, Target: SwitchType, New: true, Capability: "switch", Title: "Suspend agent", Roles: admin,
-			Description: "Stop an agent (target its member ID, such as agent:csm.triage): its runs stop at their next step, new ones are refused, and an outside agent's decisions and model calls are refused.",
+			Description: "Stop an agent (target its member ID, such as agent:assistant): its runs stop at their next step, new ones are refused, and an outside agent's decisions and model calls are refused.",
 			Payload:     []platform.Field{{Name: "reason", Type: "string", Description: "Why, for the audit and whom its runs were for"}}},
 		{Schema: SchemaResume, Target: SwitchType, Capability: "switch", Title: "Resume agent", Roles: admin,
 			Description: "Let a suspended agent work again.", Payload: []platform.Field{}},

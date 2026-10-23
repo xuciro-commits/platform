@@ -32,14 +32,16 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 	if err != nil {
 		return err
 	}
-	if err := t.checkObjectProperties(info); err != nil {
-		return err
-	}
-	if err := t.checkRecordSetDeclarations(info); err != nil {
-		return err
-	}
-	if err := platform.CheckConstraints(info, t.entity, true); err != nil {
-		return err
+	if !t.installingSet {
+		if err := t.checkObjectProperties(info); err != nil {
+			return err
+		}
+		if err := t.checkRecordSetDeclarations(info); err != nil {
+			return err
+		}
+		if err := platform.CheckConstraints(info, t.entity, true); err != nil {
+			return err
+		}
 	}
 	if err := t.records.install(info); err != nil {
 		return err
@@ -219,6 +221,11 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 // reinstall asks every app that installs its own definitions to install them
 // again: after a restore, before the records of the types they define (D4).
 func (t *Tenant) reinstall() error {
+	// Restore the complete saved model before checking reciprocal references,
+	// just as an accepted release installs one complete definition set.
+	before := t.installingSet
+	t.installingSet = true
+	defer func() { t.installingSet = before }()
 	if err := t.registerOwnedAssetMetadata(); err != nil {
 		return err
 	}
@@ -231,7 +238,11 @@ func (t *Tenant) reinstall() error {
 			return fmt.Errorf("tenant %s: %s: %v", t.ID, a.Manifest().ID, err)
 		}
 	}
-	return t.registerOwnedAssetMetadata()
+	if err := t.registerOwnedAssetMetadata(); err != nil {
+		return err
+	}
+	t.installingSet = before
+	return t.validateAssetSet()
 }
 
 // InstallPage offers a page an app composed at runtime: it must name an object

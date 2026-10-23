@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/construction"
 	"platformserver/internal/records"
 	"platformserver/platform"
 	"reflect"
@@ -30,6 +31,18 @@ type RecordView struct {
 	Following   bool                   `json:"following"` // the member follows it
 	Linked      []Related              `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
 	Activity    []any                  `json:"activity"`  // what apps told about it through protocols (platform.RelationNote), oldest first
+	Deliveries  []RecordDelivery       `json:"deliveries,omitempty"`
+}
+
+// RecordDelivery exposes only the owner's public outcome, never a request,
+// answer, endpoint or diagnostic. A financial receipt keeps its own read gate.
+type RecordDelivery struct {
+	ID      string    `json:"id"`
+	Event   string    `json:"event"`
+	State   string    `json:"state"`
+	At      time.Time `json:"at"`
+	Message string    `json:"message,omitempty"`
+	Receipt string    `json:"receipt,omitempty"`
 }
 
 type Related struct {
@@ -78,6 +91,7 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	values, valueErrors := propertyValues(seen.info, record)
 	view := RecordView{Values: values, ValueErrors: valueErrors, Record: record, History: []records.RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
+	view.Deliveries = t.recordDeliveries(m, typ+"/"+id, now)
 	if versioning := et.info.Versioning; versioning != nil {
 		field, _ := et.info.Field(versioning.ValidFrom)
 		clock := businessQuery(et.info, platform.Query{}, m, now).BusinessTime.At
@@ -154,6 +168,32 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		}
 	}
 	return view, nil
+}
+
+func (t *Tenant) recordDeliveries(m platform.Member, target string, now time.Time) []RecordDelivery {
+	t.opsMu.Lock()
+	var effects []platform.Effect
+	for i := len(t.outbound) - 1; i >= 0; i-- {
+		if t.outbound[i].Target == target {
+			effects = append(effects, t.outbound[i].Effect)
+		}
+	}
+	t.opsMu.Unlock()
+	out := make([]RecordDelivery, 0, len(effects))
+	for _, effect := range effects {
+		delivery := RecordDelivery{ID: effect.ID, Event: effect.Event, State: effect.State, At: effect.At, Message: effect.PublicMessage}
+		if effect.Endpoint == construction.BooksEndpoint && effect.State == "delivered" {
+			var journal platform.Journal
+			if json.Unmarshal([]byte(effect.Body), &journal) == nil && journal.ID != "" {
+				domain, _ := json.Marshal([]any{[]any{"id", "=", journal.ID}})
+				if page, err := t.recordsRead(m, platform.JournalType, platform.Query{Domain: domain, Limit: 1}, now); err == nil && len(page.Records) == 1 {
+					delivery.Receipt = platform.JournalType + "/" + journal.ID
+				}
+			}
+		}
+		out = append(out, delivery)
+	}
+	return out
 }
 
 // linked are the records linked to entity that m may read, grouped by type in

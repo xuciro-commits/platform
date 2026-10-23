@@ -58,7 +58,7 @@
 | 内核规范 / 向量 / 实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘 |
 | Lean 模型 | `scripts/verify.sh formal` |
 | Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改应用 API 或组合时加 `scripts/verify.sh composition` |
-| 应用 / 协议 | `scripts/verify.sh composition`；MES 规则加 `mes`，PMS 桌面链加 `pms` |
+| 应用 / 协议 | `scripts/verify.sh composition`；声明式行业包运行对应 owner 场景与酒店/制造浏览器路线 |
 | Web | `make check-web`（生成一致性、Catalog、全部包 tsc）；只在对应包运行受影响的单元测试，`make test` 是完整测试入口 |
 | 成组交付或发布节点 | 选一条浏览器路线 `make e2e SPEC=<name>`；完整浏览器任务用 `make e2e`，发布构建与契约检查用 `make verify` |
 | 结构整理（搬文件、拆函数） | 整块完成后按受影响语言运行构建、类型与原边界检查；有实际行为影响时再选对应测试，不默认跑整个宿主测试、不为搬迁新增测试 |

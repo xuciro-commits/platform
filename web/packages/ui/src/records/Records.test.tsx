@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { RecordList, RecordPage, RecordLinks, RecordStatus, useRecordView, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
+import { entityFrom, RecordList, RecordPage, RecordLinks, RecordStatus, RecordDeliveries, useRecordView, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
-import { EnterpriseElementLookup } from "./RecordLookup";
+import { EnterpriseElementLookup,RecordLookup } from "./RecordLookup";
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
 import { RecordWorkspace } from "./RecordWorkspace";
 afterEach(cleanup);
@@ -11,6 +11,35 @@ for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as cons
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+
+test("an unprepared reference search reports its connection requirement without clearing the selected input",async()=>{
+ const message="This task was not prepared for offline use. Connect to continue.",change=vi.fn();
+ const source:RecordSource={entity:()=>entity,list:async()=>{throw Error(message);},get:vi.fn()};
+ render(<RecordLookup source={source} type={entity.type} value="ORIGINAL" onChange={change} ariaLabel="Related record"/>);
+ fireEvent.focus(screen.getByRole("combobox",{name:"Related record"}));
+ await waitFor(()=>expect(screen.getByRole("alert").textContent).toBe(message));
+ expect(screen.queryByText("No matching records.")).toBeNull();expect(change).not.toHaveBeenCalled();
+ fireEvent.keyDown(screen.getByRole("combobox",{name:"Related record"}),{key:"Escape"});
+ expect((screen.getByRole("combobox",{name:"Related record"}) as HTMLInputElement).value).toBe("ORIGINAL");
+});
+
+test("public deliveries distinguish financial acceptance and expose only an authorized receipt link",()=>{
+ const open=vi.fn();
+ render(<RecordDeliveries deliveries={[{id:"waiting",event:"build/journal",state:"pending",at:"2026-10-22T10:00:00Z"},{id:"posted",event:"build/journal",state:"delivered",at:"2026-10-22T10:01:00Z",receipt:"core.journal/original"},{id:"refused",event:"build/journal",state:"rejected",at:"2026-10-22T10:02:00Z",message:"The posting period is closed. The business document remains accepted."}]} onOpen={open}/>);
+ expect(screen.getByText("Business acceptance and delivery are separate results.")).toBeTruthy();
+ expect(screen.getAllByRole("button",{name:"Open receipt"})).toHaveLength(1);
+ fireEvent.click(screen.getByRole("button",{name:"Open receipt"}));
+ expect(open).toHaveBeenCalledWith("core.journal",{id:"original"});
+ expect(screen.getByText("The posting period is closed. The business document remains accepted.")).toBeTruthy();
+});
+
+test("an unconstrained model timestamp retains its offset and precision when its civil time changes", () => {
+  const input = entityFrom({...entity,fields:[{name:"at",title:"At",type:"datetime"}]}).fields.at!.editor!;
+  const change = vi.fn();
+  render(input({id:"at",value:"2028-02-29T08:30:45.123456789+08:00",onChange:change}));
+  fireEvent.change(screen.getByLabelText("At",{exact:true}),{target:{value:"2028-02-29T09:30:45"}});
+  expect(change).toHaveBeenCalledWith("2028-02-29T09:30:45.123456789+08:00");
+});
 
 test("record workspace marks the row whose details are open and clears it on return", async () => {
   const data = [record("A"), record("B")];
@@ -327,4 +356,17 @@ test("enterprise picker updates names live and retains an inactive existing refe
   expect(onChange).not.toHaveBeenCalled();
   view.unmount();
   expect(stop).toHaveBeenCalledOnce();
+});
+
+test("record actions wait for the refreshed original revision after an accepted change",async()=>{
+ const next=pending<RecordView>();let changed=()=>{};
+ const view={record:record("A"),history:[],related:[],linked:[],activity:[],processes:[],approvals:[],tasks:[],files:[],comments:[],following:false} as RecordView;
+ const source:RecordSource={scope:"same-member",entity:()=>entity,list:vi.fn(),get:vi.fn().mockResolvedValueOnce(view).mockImplementation(()=>next.promise),watchRecord:(_type,_id,notify)=>{changed=notify;return()=>{};}};
+ render(<RecordPage source={source} type={entity.type} id="A" actions={r=><button>{`Act on revision ${r.revision}`}</button>}/>);
+ await waitFor(()=>expect((screen.getByRole("button",{name:"Act on revision 1"}) as HTMLButtonElement).disabled).toBe(false));
+ act(()=>changed());
+ expect(screen.getByText("Refreshing record…")).toBeTruthy();
+ expect(screen.getByRole("button",{name:"Act on revision 1"}).closest("fieldset")?.disabled).toBe(true);
+ await act(async()=>next.resolve({...view,record:{...view.record,revision:2}}));
+ expect(screen.getByRole("button",{name:"Act on revision 2"}).closest("fieldset")?.disabled).toBe(false);
 });

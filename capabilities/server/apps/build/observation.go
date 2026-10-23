@@ -3,6 +3,8 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"reflect"
 	"slices"
 	"time"
 
@@ -71,7 +73,7 @@ func (b *Build) observationDefinition(record construction.Observation) (platform
 		Connection: platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: connection}, Object: platform.AssetRef{App: object.App, Kind: platform.AssetObject, Name: record.Object},
 		DeviceField: record.DeviceField, Signal: record.Signal, Unit: record.Unit, Path: record.Path, WindowSeconds: record.WindowSeconds,
 		ExpectedRetentionSeconds: record.ExpectedRetentionSeconds, ExpectedGranularitySeconds: record.ExpectedGranularitySeconds,
-		Roles: slices.Clone(record.Roles), Scheduled: record.Scheduled, RequireComplete: record.RequireComplete, Decision: record.Decision}, nil
+		Roles: slices.Clone(record.Roles), Scheduled: record.Scheduled, RequireComplete: record.RequireComplete, Decision: record.Decision, Intervals: record.Intervals}, nil
 }
 
 func (b *Build) checkObservation(c platform.Caller, record construction.Observation) error {
@@ -79,6 +81,34 @@ func (b *Build) checkObservation(c platform.Caller, record construction.Observat
 }
 
 func (b *Build) checkObservationDefinition(c platform.Caller, record construction.Observation, ready bool) error {
+	// Authoring may reference a saved model before its joint publication.
+	// This private shape is used only for draft validation; execution still
+	// resolves the exact installed or selected candidate definition.
+	if !ready && !b.jointMode {
+		if _, selected := b.jointEntities[record.Object]; !selected {
+			objects, err := readDefinitionInventory[construction.Object](b.host.Automation(platform.Caller{}, construction.ID))
+			if err != nil {
+				return err
+			}
+			for _, object := range objects {
+				if object.Archived || construction.TypeOf(object.Name) != record.Object {
+					continue
+				}
+				shape, err := platform.Describe(construction.ID, Entity(object), func(reflect.Type) string { return "" })
+				if err != nil {
+					return err
+				}
+				view := *b
+				view.jointEntities = maps.Clone(b.jointEntities)
+				if view.jointEntities == nil {
+					view.jointEntities = map[string]platform.EntityInfo{}
+				}
+				view.jointEntities[record.Object] = shape
+				b = &view
+				break
+			}
+		}
+	}
 	if err := b.checkName(record.Name, record.ID); err != nil {
 		return err
 	}
@@ -106,7 +136,12 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record constructio
 		}
 	}
 	for _, role := range record.Roles {
-		if !slices.Contains(b.Manifest().AllRoles(), role) && role != platform.AnyMember {
+		declared := slices.Contains(b.Manifest().AllRoles(), role) || role == platform.AnyMember
+		for _, model := range b.jointEntities {
+			_, selected := model.Scope.Levels[role]
+			declared = declared || selected
+		}
+		if !declared {
 			return fmt.Errorf("The observation role is not declared by its owner")
 		}
 	}

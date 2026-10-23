@@ -552,3 +552,43 @@ func TestBusinessConfirmationEscalationAndExplicitLateCompletion(t *testing.T) {
 		t.Fatal("reviewed late completion did not resume")
 	}
 }
+
+func TestConfirmationOnlyActionNeedsItsOriginalReceiptAndMember(t *testing.T) {
+	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+	tn := confirmationTenant(t, "confirmation-proof")
+	tn.Outbound = func(_ *http.Request, _ bool) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"state":"confirmed"}`))}, nil
+	}
+	spec := businessConfirmationSpec("hold", "hold")
+	prepareBusinessConfirmation(t, tn, at, spec)
+	object, found := platform.Get[construction.Object](tn.automation("build", false), "O")
+	if !found {
+		t.Fatal("receipt definition missing")
+	}
+	for i := range object.Actions {
+		if object.Actions[i].Name == "complete" || object.Actions[i].Name == "partial" {
+			object.Actions[i].ConfirmationOnly = true
+		}
+	}
+	decide(t, tn, "builder", "build", "build.object.edit", construction.ObjectType, "O", map[string]any{"actions": object.Actions}, at)
+	decide(t, tn, "builder", "build", construction.SchemaPublish, construction.ObjectType, "O", nil, at)
+	for _, action := range tn.Catalog(memberOf(t, tn, "operator")) {
+		if action.Schema == "build.receipt.complete" || action.Schema == "build.receipt.partial" {
+			t.Fatal("receipt-only action leaked into an ordinary business catalog")
+		}
+	}
+	decide(t, tn, "operator", "build", "build.receipt.create", "build.receipt", "R1", map[string]any{"status": "new"}, at)
+	if got := refuse(t, tn, "operator", "build", "build.receipt.complete", "build.receipt", "R1", nil, at); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("operator forged a provider receipt: %s", got)
+	}
+	decide(t, tn, "operator", "build", "build.receipt.start", "build.receipt", "R1", nil, at)
+	tn.Dispatch(at.Add(time.Second))
+	runJob(t, tn, "build", "confirmations", at.Add(2*time.Second))
+	view, refusal := tn.RecordOf(memberOf(t, tn, "operator"), "build.receipt", "R1", at.Add(2*time.Second))
+	if refusal != nil || !strings.Contains(string(platform.Raw(view.Record)), `"status":"complete"`) {
+		t.Fatalf("original receipt did not authorize its guarded action: %s %v", platform.Raw(view.Record), refusal)
+	}
+	if got := refuse(t, tn, "operator", "build", "build.receipt.partial", "build.receipt", "R1", nil, at.Add(3*time.Second)); !strings.Contains(got, "POLICY_DENIED") {
+		t.Fatalf("completion scope survived after its original call: %s", got)
+	}
+}

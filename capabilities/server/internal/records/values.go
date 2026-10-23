@@ -24,7 +24,10 @@ func Copy(t reflect.Type, v any) reflect.Value {
 func EmptyLists(v reflect.Value) {
 	switch v.Kind() {
 	case reflect.Struct:
-		if _, ok := v.Interface().(time.Time); ok {
+		switch v.Interface().(type) {
+		case time.Time, platform.ReleaseAsset:
+			// Owner-produced immutable descriptors keep their exact contents.
+			// A record's display defaults must not change a frozen contract.
 			return
 		}
 		for i := range v.NumField() {

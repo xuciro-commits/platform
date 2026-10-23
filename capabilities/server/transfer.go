@@ -101,9 +101,9 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			r.Outcome = "ERROR_CODE_INVALID_ARGUMENT"
 		}
 		if r.Outcome == "" {
-			// The row's create first, under the file's key: a file sent again
-			// answers with what its rows decided the first time. A record that
-			// already existed is edited instead.
+			// Preserve the original file receipt before inspecting today's
+			// record. A fresh partial edit must not run a create's required
+			// input checks just to discover that its record already exists.
 			raw, _ := json.Marshal(payload)
 			try := func(verb, key string) *kernel.Error {
 				r.Error = nil
@@ -127,8 +127,24 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 				return err
 			}
 			key := fmt.Sprintf("import:%s:%d", file, r.Row)
-			err := try(".create", key)
-			if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT {
+			verb := func() string {
+				t.mu.Lock()
+				defer t.mu.Unlock()
+				ledger := t.app(view.info.App).AcceptedLedger()
+				if ledger.AcceptedFor(t.ID, key) != nil {
+					return ".create"
+				}
+				if ledger.AcceptedFor(t.ID, key+":edit") != nil || t.readable(m, typ+"/"+r.ID, now) {
+					return ".edit"
+				}
+				return ".create"
+			}()
+			requestKey := key
+			if verb == ".edit" {
+				requestKey += ":edit"
+			}
+			err := try(verb, requestKey)
+			if verb == ".create" && err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT {
 				err = try(".edit", key+":edit")
 			}
 			r.Outcome = outcomeOf(err)

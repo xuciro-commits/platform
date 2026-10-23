@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Rebuild and verify the two owner-facing solution hosts without clearing data.
+# Rebuild and verify the two configured platform hosts without clearing data.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
-if [[ -n $(git status --porcelain -- capabilities/server apps solutions protocols contract web) ]]; then
+if [[ -n $(git status --porcelain -- capabilities/server protocols contract web deploy scripts Makefile) ]]; then
   echo 'Commit source changes before updating the local hosts, so their revision is unambiguous.' >&2
   exit 1
 fi

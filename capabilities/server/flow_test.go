@@ -1023,8 +1023,8 @@ func fulfil(version int) platform.Flow {
 var bill = platform.Flow{Name: "bill", Title: "Bill", Version: 1,
 	Start: platform.Start{On: []string{"shop.order.bill"}, Begin: func(platform.Caller, platform.Event) (string, any, bool) { return "", nil, false }},
 	Steps: []platform.Step{
-		{Name: "later", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) time.Time {
-			return time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
+		{Name: "later", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) (time.Time, *kernel.Error) {
+			return time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC), nil
 		}}, Next: "bill"},
 		{Name: "bill", Act: &platform.Act{Action: "shop.order.bill", Target: func(c platform.Caller, r *platform.Run) string {
 			id, _, _ := strings.Cut(r.Key, "/") // the caller's key, "<flow>:<order>/<n>"

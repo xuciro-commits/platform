@@ -34,7 +34,13 @@ func TestAcceptedRelationGraphIsPrivateUntilCommit(t *testing.T) {
 	baseline := len(tn.app(relations.ID).(*relations.Relations).AcceptedLedger().RecordsFor(tn.ID))
 	fail := true
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-		links, _ := tn.Read(ana, "links")
+		// Append already holds the tenant lane. Inspect the committed owner
+		// here; public coordinated reads cannot re-enter that same lane.
+		owner := tn.app(relations.ID)
+		links, refusal := readApp(owner, tn.caller(ana, owner, false), "links")
+		if refusal != nil {
+			t.Fatal(refusal)
+		}
 		if len(links.([]relations.Link)) != 0 ||
 			len(tn.app(relations.ID).(*relations.Relations).AcceptedLedger().RecordsFor(tn.ID)) != baseline {
 			t.Fatal("link or ledger became visible before append")

@@ -45,6 +45,7 @@ type ConstructionSandbox interface {
 	platform.App
 	AssetDefinitionReader
 	Reinstall() error
+	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)
 	ProcessFromAsset(platform.ReleaseAsset) (construction.Process, error)
 	InstallPropertyTypeAsset(platform.ReleaseAsset) error
 	InstallFunctionAsset(platform.ReleaseAsset) error

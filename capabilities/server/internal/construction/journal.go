@@ -14,6 +14,7 @@ import (
 // host lands the entry through core, which puts it in the open period of its
 // date or the next one, and refuses nothing silently.
 type JournalPost struct {
+	ClosedPeriod string `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
 	// Date is where the posting date comes from; empty: the decision's time.
 	Date  string            `json:"date,omitempty" example:"record.receivedOn"`
 	Text  string            `json:"text,omitempty" help:"A literal or a source for the entry's text"`
@@ -41,7 +42,7 @@ func (a Action) Reversal(of Action) ([]Post, *JournalPost) {
 	}
 	var journal *JournalPost
 	if of.Journal != nil {
-		journal = &JournalPost{Text: "Reversal: " + of.Journal.Text}
+		journal = &JournalPost{Text: "Reversal: " + of.Journal.Text, ClosedPeriod: of.Journal.ClosedPeriod}
 		for _, l := range of.Journal.Lines {
 			journal.Lines = append(journal.Lines, JournalPostLine{Account: l.Account, Debit: l.Credit, Credit: l.Debit, Text: l.Text, Object: l.Object, Partner: l.Partner})
 		}
@@ -71,6 +72,9 @@ func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[st
 		return record[from]
 	}
 	entry := map[string]any{"id": "jnl-" + changeID, "date": today, "source": ID + "/" + changeID}
+	if j.ClosedPeriod != "" {
+		entry["closedPeriod"] = j.ClosedPeriod
+	}
 	if j.Date != "" {
 		if d := ValueTextOf(source(j.Date)); len(d) >= 10 {
 			entry["date"] = d[:10]

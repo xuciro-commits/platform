@@ -2,7 +2,7 @@ import { expect, selectObjectSection, slug, test, shots } from "./kit";
 
 test("installed native applications open without drafts and accept an explicitly published extension", async ({ page, builder }, info) => {
   const definitions = await builder.definitions<any>();
-  const native = definitions.find(item => item.source === "code" && item.ref.kind === "app" && item.ref.app === "pms");
+  const native = definitions.find(item => item.source === "code" && item.ref.kind === "app" && item.ref.app === "core");
   expect(native).toBeDefined();
   const before = await builder.read<{ records: unknown[] }>("records/build.app?limit=1000");
   await builder.open(page, "/projects");
@@ -15,12 +15,12 @@ test("installed native applications open without drafts and accept an explicitly
   await shots(page, page.locator("body"), "native-application-studio", info);
 
   const baseObject = definitions.find(item => item.ref.app === native.ref.app && item.entity);
-  const extensionPage = await builder.page({ title: "Front desk extension", object: baseObject.ref.name });
+  const extensionPage = await builder.page({ title: "Master data extension", object: baseObject.ref.name });
   await page.getByRole("button", { name: "Create extension", exact: true }).click();
   const creation = page.getByRole("dialog");
   const extension = { id: await creation.getByRole("textbox", { name: "ID *", exact: true }).inputValue(), name: slug("nativeextension") };
   await creation.getByRole("textbox", { name: /^Name \*$/ }).fill(extension.name);
-  await creation.getByRole("textbox", { name: /^What people call it \*$/ }).fill("Front desk extension");
+  await creation.getByRole("textbox", { name: /^What people call it \*$/ }).fill("Master data extension");
   await creation.getByRole("button", { name: "Create", exact: true }).click();
   await expect(creation).toHaveCount(0);
   expect((await builder.record("build.app", extension.id)).extends).toEqual(native.ref);
@@ -31,7 +31,7 @@ test("installed native applications open without drafts and accept an explicitly
   await builder.activate(await builder.candidate([{ kind: "page", id: extensionPage.id }, { kind: "app", id: extension.id }]));
   const delivered = (await builder.definitions<any>()).find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === extension.name);
   expect(delivered.application.extends).toEqual(native.ref);
-  expect((await builder.definitions<any>()).find(item => item.ref.app === "pms" && item.ref.kind === "app")).toEqual(native);
+  expect((await builder.definitions<any>()).find(item => item.ref.app === "core" && item.ref.kind === "app")).toEqual(native);
 
   // Large code applications expose workspaces, then objects with their actions.
   const builderApp = definitions.find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === "build");

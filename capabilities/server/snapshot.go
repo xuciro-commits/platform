@@ -679,7 +679,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 	}
 	for key, raw := range s.CompositeAnswers {
 		r, err := decodeAcceptedComposite(raw)
-		if err != nil || r.Version != 2 || r.Tenant != t.ID || r.Key != key || s.Composites[key] != r.Digest {
+		if err != nil || r.Version < 2 || r.Tenant != t.ID || r.Key != key || s.Composites[key] != r.Digest {
 			return fmt.Errorf("tenant %s: composite answer snapshot %s is incompatible", t.ID, key)
 		}
 		if r.Refusal == "" {

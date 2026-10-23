@@ -253,14 +253,28 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			}
 		case "wait":
 			step.Wait = &platform.Wait{}
-			if s.Condition != nil {
+			if s.WaitUntil != nil {
+				step.Wait.At = func(c platform.Caller, r *platform.Run) (time.Time, *kernel.Error) {
+					raw, err := resolve(c, r, *s.WaitUntil)
+					if err != nil {
+						return time.Time{}, err
+					}
+					var value string
+					_ = json.Unmarshal(raw, &value)
+					at, parseErr := time.Parse(time.RFC3339Nano, value)
+					if parseErr != nil || at.Year() < 1 {
+						return time.Time{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Wait deadline must be a readable timestamp")
+					}
+					return at.UTC(), nil
+				}
+			} else if s.Condition != nil {
 				step.Wait.Until = func(c platform.Caller, r *platform.Run) bool {
 					holds, err := predicate(c, r)
 					return err == nil && holds
 				}
 			} else {
-				step.Wait.At = func(_ platform.Caller, r *platform.Run) time.Time {
-					return r.Now.Add(time.Duration(s.UntilSeconds) * time.Second)
+				step.Wait.At = func(_ platform.Caller, r *platform.Run) (time.Time, *kernel.Error) {
+					return r.Now.Add(time.Duration(s.UntilSeconds) * time.Second), nil
 				}
 			}
 		case "subflow":

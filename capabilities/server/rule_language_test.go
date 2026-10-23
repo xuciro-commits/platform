@@ -258,3 +258,48 @@ func TestTransactionRulesUseCapturedInputsAndRollback(t *testing.T) {
 		t.Fatalf("assignment bypassed Expr: %s", raw)
 	}
 }
+
+func TestRulePathsDistinguishUnsetValuesFromWithheldFields(t *testing.T) {
+	tn := builderTenant(t, "optional-rule-path")
+	publishObject(t, tn, "builder", "SOURCE", map[string]any{"name": "optionalsource", "title": "Optional source", "fields": []construction.Field{{Name: "optional", Title: "Optional value", Type: "text"}, {Name: "optionalnumber", Title: "Optional number", Type: "integer"}, {Name: "private", Title: "Private value", Type: "text", Read: []string{"builder"}}, {Name: "privatecount", Title: "Private count", Type: "integer", Required: true, Read: []string{"builder"}}}}, txnAt)
+	publishObject(t, tn, "builder", "READER", map[string]any{"name": "optionalreader", "title": "Optional reader", "fields": []construction.Field{{Name: "source", Title: "Source", Type: "reference", Ref: "build.optionalsource"}}}, txnAt)
+	decide(t, tn, "builder", "build", "build.optionalsource.create", "build.optionalsource", "source", map[string]any{"privatecount": 0}, txnAt)
+	caller := tn.caller(memberOf(t, tn, "user"), tn.app(construction.ID), false)
+	raw, failure := caller.ReadRecord("build.optionalsource", "source", txnAt)
+	var values map[string]json.RawMessage
+	if failure != nil || json.Unmarshal(raw, &values) != nil {
+		t.Fatal("the scoped source could not be read")
+	}
+	for _, name := range []string{"privatecount", "optionalnumber"} {
+		if _, exists := values[name]; exists {
+			t.Fatalf("%s was fabricated from a withheld or unset scalar", name)
+		}
+	}
+	for _, field := range []string{"optional", "private"} {
+		expr := platform.Expr{Op: "empty", Kind: "boolean", Args: []platform.Expr{{Op: "coalesce", Kind: "text", Args: []platform.Expr{{Op: "path", Kind: "text", Args: []platform.Expr{platform.ExprReference("reference", "source")}, Path: []string{field}}, platform.ExprLiteralValue("text", "")}}}}
+		spec := platform.RuleReadSpec{Object: "build.optionalreader"}
+		schema, err := platform.RuleSchema(expr, spec, tn.entity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		program, err := platform.CompileExpr(expr, schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		captured, err := caller.RuleContext(expr, spec, tn.entity, map[string]any{"id": "reader", "source": "source"}, nil, txnAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := program.Eval(captured)
+		if field == "optional" {
+			if err != nil || string(result.Value.Data) != "true" {
+				t.Fatalf("readable unset field became a permission refusal: %+v %v", result, err)
+			}
+			if !strings.Contains(strings.Join(captured.Sources, ","), "build.optionalsource/source#optional") {
+				t.Fatal("an explicit default lost the provenance of its unset source")
+			}
+		} else if err == nil || !strings.Contains(err.Error(), "withheld") {
+			t.Fatalf("hidden field was interpreted as unset: %+v %v", result, err)
+		}
+	}
+}

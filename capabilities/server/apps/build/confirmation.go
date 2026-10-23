@@ -121,18 +121,38 @@ func (b *Build) bindConfirmation(spec *platform.Confirmation, subject string) (c
 			if item.id == "" {
 				continue
 			}
-			record, ok := b.host.Record(construction.WritebackType + "/" + item.id)
-			w, valid := record.(construction.Writeback)
-			if !ok || !valid {
-				return out, fmt.Errorf("Confirmation writeback is unavailable")
+			prospective, selected, err := b.prospectiveIntegration(platform.AssetWriteback, item.id)
+			if err != nil {
+				return out, err
+			}
+			var w construction.Writeback
+			if selected {
+				w = prospective.(construction.Writeback)
+			} else {
+				record, ok := b.host.Record(construction.WritebackType + "/" + item.id)
+				var valid bool
+				w, valid = record.(construction.Writeback)
+				if !ok || !valid {
+					return out, fmt.Errorf("Confirmation writeback is unavailable")
+				}
 			}
 			*item.ref = &platform.AssetRef{App: construction.ID, Kind: platform.AssetWriteback, Name: w.Name}
 		}
 		if party.Reconcile != nil {
-			record, ok := b.host.Record(construction.SourceType + "/" + party.Reconcile.Source)
-			s, valid := record.(construction.Source)
-			if !ok || !valid {
-				return out, fmt.Errorf("Reconciliation source is unavailable")
+			prospective, selected, err := b.prospectiveIntegration(platform.AssetSource, party.Reconcile.Source)
+			if err != nil {
+				return out, err
+			}
+			var s construction.Source
+			if selected {
+				s = prospective.(construction.Source)
+			} else {
+				record, ok := b.host.Record(construction.SourceType + "/" + party.Reconcile.Source)
+				var valid bool
+				s, valid = record.(construction.Source)
+				if !ok || !valid {
+					return out, fmt.Errorf("Reconciliation source is unavailable")
+				}
 			}
 			binding.Source = &platform.AssetRef{App: construction.ID, Kind: platform.AssetSource, Name: s.Name}
 		}

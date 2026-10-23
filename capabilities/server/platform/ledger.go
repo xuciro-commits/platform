@@ -546,7 +546,13 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 	return func(r *pb.ChangeRecord) {
 		c.rt.Put(c, r, value)
 		if verb == "create" && e.CreateTxn != nil && e.ApplyCreateTxn != nil && !c.Replaying {
-			if err := e.ApplyCreateTxn(c, r, now); err != nil {
+			if c.creationDepth >= 16 {
+				c.FailDecision(Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Creation transactions exceed their depth limit"))
+				return
+			}
+			created := c.WithTransactionInput(s)
+			created.creationDepth++
+			if err := e.ApplyCreateTxn(created, r, now); err != nil {
 				c.FailDecision(err)
 				return
 			}

@@ -16,6 +16,7 @@ import (
 
 const TxnMaxSteps = 256
 const TxnMaxIterations = 1000
+const TxnMaxExecutionSteps = TxnMaxSteps * TxnMaxIterations
 
 // BusinessTxn is a bounded, single-authority decision. Guards, assignments and
 // iteration predicates all use the original  evaluator.
@@ -31,20 +32,49 @@ type BusinessTxn struct {
 }
 
 type TxnStep struct {
-	Name     string      `json:"name"`
-	Kind     string      `json:"kind"`
-	Target   TxnRef      `json:"target,omitempty"`
-	Changes  []TxnSet    `json:"changes,omitempty"`
-	Sequence *Sequence   `json:"sequence,omitempty"`
-	When     *Expr       `json:"when,omitempty"`
-	Link     *TxnLink    `json:"link,omitempty"`
-	Post     *TxnPost    `json:"post,omitempty"`
-	Journal  *TxnJournal `json:"journal,omitempty"`
-	Effect   *TxnEffect  `json:"effect,omitempty"`
-	Work     *TxnWork    `json:"work,omitempty"`
-	Call     *TxnCall    `json:"call,omitempty"`
-	ForEach  *TxnForEach `json:"forEach,omitempty"`
-	Refusals []Refusal   `json:"refusals,omitempty"`
+	Name      string        `json:"name"`
+	Kind      string        `json:"kind"`
+	Target    TxnRef        `json:"target,omitempty"`
+	Changes   []TxnSet      `json:"changes,omitempty"`
+	Sequence  *Sequence     `json:"sequence,omitempty"`
+	When      *Expr         `json:"when,omitempty"`
+	Link      *TxnLink      `json:"link,omitempty"`
+	Post      *TxnPost      `json:"post,omitempty"`
+	Journal   *TxnJournal   `json:"journal,omitempty"`
+	Effect    *TxnEffect    `json:"effect,omitempty"`
+	Work      *TxnWork      `json:"work,omitempty"`
+	Call      *TxnCall      `json:"call,omitempty"`
+	ForEach   *TxnForEach   `json:"forEach,omitempty"`
+	Intervals *TxnIntervals `json:"intervals,omitempty"`
+	Refusals  []Refusal     `json:"refusals,omitempty"`
+}
+
+// TxnIntervals projects the accepted, typed observation context into an
+// ordinary declared object. Its original collection and relation own history.
+type TxnIntervals struct {
+	Source       string            `json:"source"`
+	Set          string            `json:"set"`
+	Predecessors AssetBinding      `json:"predecessors"`
+	Fields       TxnIntervalFields `json:"fields"`
+}
+
+type TxnIntervalFields struct {
+	Subject           string `json:"subject"`
+	Source            string `json:"source"`
+	SourceVersion     string `json:"sourceVersion"`
+	SourceRevision    string `json:"sourceRevision"`
+	ProcessingVersion string `json:"processingVersion"`
+	Since             string `json:"since"`
+	Until             string `json:"until"`
+	OpenStart         string `json:"openStart"`
+	OpenEnd           string `json:"openEnd"`
+	Retired           string `json:"retired"`
+	Review            string `json:"review"`
+}
+
+func (t *TxnIntervals) UnmarshalJSON(raw []byte) error {
+	type plain TxnIntervals
+	return strictTxn(raw, (*plain)(t))
 }
 
 type TxnPost struct {
@@ -58,14 +88,19 @@ type TxnPost struct {
 // Journal records the intent inside Build's accepted result. Core keeps its
 // independent authority and decides whether the balanced entry can be posted.
 type TxnJournal struct {
-	Reverses string           `json:"reverses,omitempty"`
-	Date     *Expr            `json:"date,omitempty"`
-	Text     *Expr            `json:"text,omitempty"`
-	Currency *Expr            `json:"currency,omitempty"`
-	Lines    []TxnJournalLine `json:"lines"`
+	Reverses string `json:"reverses,omitempty"`
+	// Set applies the line templates to the subject's complete, ordered collection.
+	Set          string           `json:"set,omitempty"`
+	ClosedPeriod string           `json:"closedPeriod,omitempty" enum:"reject,next-open"`
+	Date         *Expr            `json:"date,omitempty"`
+	Text         *Expr            `json:"text,omitempty"`
+	Currency     *Expr            `json:"currency,omitempty"`
+	Lines        []TxnJournalLine `json:"lines"`
 }
 
 type TxnJournalLine struct {
+	// When selects a line using the same typed rule context as its amounts.
+	When    *Expr `json:"when,omitempty"`
 	Account Expr  `json:"account"`
 	Debit   *Expr `json:"debit,omitempty"`
 	Credit  *Expr `json:"credit,omitempty"`
@@ -80,14 +115,16 @@ type TxnEffect struct {
 }
 
 type TxnWork struct {
-	Title   string   `json:"title"`
-	Body    *Expr    `json:"body,omitempty"`
-	Role    string   `json:"role,omitempty"`
-	Member  *Expr    `json:"member,omitempty"`
-	Due     *Expr    `json:"due,omitempty"`
-	Answers []string `json:"answers,omitempty"`
-	Key     *Expr    `json:"key,omitempty"`
-	Close   bool     `json:"close,omitempty"`
+	Title     string   `json:"title"`
+	Body      *Expr    `json:"body,omitempty"`
+	Role      string   `json:"role,omitempty"`
+	Structure string   `json:"structure,omitempty"`
+	Unit      *Expr    `json:"unit,omitempty"`
+	Member    *Expr    `json:"member,omitempty"`
+	Due       *Expr    `json:"due,omitempty"`
+	Answers   []string `json:"answers,omitempty"`
+	Key       *Expr    `json:"key,omitempty"`
+	Close     bool     `json:"close,omitempty"`
 }
 
 // Call selects the existing synchronous pure query owner. Snapshot reads the
@@ -106,6 +143,7 @@ type TxnCalls interface {
 }
 
 type TxnTransport interface {
+	TakeTxnStep() *kernel.Error
 	BeginTxnCalls(Caller, time.Time) (TxnCalls, *kernel.Error)
 	QueueTxnEffect(Caller, *pb.ChangeRecord, string, TxnRef, json.RawMessage, time.Time) *kernel.Error
 	QueueTxnJournal(Caller, *pb.ChangeRecord, string, Journal, string, time.Time) *kernel.Error
@@ -122,13 +160,26 @@ func (c Caller) TxnTransport() TxnTransport {
 }
 
 type TxnForEach struct {
-	Set   string    `json:"set"`
+	Of    string    `json:"of,omitempty"` // declared reference path from the transaction subject
+	Set   string    `json:"set,omitempty"`
+	Range *TxnRange `json:"range,omitempty"`
 	Steps []TxnStep `json:"steps"`
+}
+
+// TxnRange supplies bounded integer or temporal [start, end) values to the original iterator.
+// Generated values expose row.start, row.end and row.index, never a record ID.
+type TxnRange struct {
+	From  Expr   `json:"from"`
+	Until Expr   `json:"until"`
+	Unit  string `json:"unit" enum:"day,hour,item"`
+	Step  int    `json:"step"`
+	Limit int    `json:"limit"`
 }
 
 // TxnIteration is a captured ordered read, saved with the decision's rows.
 // Recovery validates this witness without re-reading or re-running the set.
 type TxnIteration struct {
+	Decision   string   `json:"decision,omitempty"` // authority/change ID of the captured child receipt
 	Step       string   `json:"step"`
 	Set        string   `json:"set"`
 	Object     string   `json:"object"`
@@ -232,14 +283,15 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	}
 	c.Automation = false
 	authorization := s
-	if verb == "edit" && e.Type == r.GetSubmission().GetTarget().GetType() && id == r.GetSubmission().GetTarget().GetId() {
-		original := r.GetSubmission().GetSchema().GetName()
+	invocation := c.TransactionInput(r)
+	if verb == "edit" && e.Type == invocation.GetTarget().GetType() && id == invocation.GetTarget().GetId() {
+		original := invocation.GetSchema().GetName()
 		declared := original == e.Type+".create" && e.CreateTxn != nil
 		if e.Lifecycle != nil {
 			declared = declared || slices.ContainsFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Txn != nil && original == e.Type+"."+t.Name })
 		}
 		if declared {
-			authorization = proto.Clone(r.GetSubmission()).(*pb.Submission)
+			authorization = invocation
 		}
 	}
 	decision := catalog.DecideSubmission(c, authorization, now)
@@ -270,7 +322,7 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	}
 	if raw, exists := given["state"]; exists {
 		var state string
-		if e.Type != r.GetSubmission().GetTarget().GetType() || id != r.GetSubmission().GetTarget().GetId() || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s State) bool { return s.Name == state }) {
+		if e.Type != invocation.GetTarget().GetType() || id != invocation.GetTarget().GetId() || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s State) bool { return s.Name == state }) {
 			return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction state must be a declared state of its subject")
 		}
 		delete(given, "state")
@@ -318,7 +370,7 @@ func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target Tx
 	}
 	var failure *kernel.Error
 	tr.ApplyTxn = func(c Caller, receipt *pb.ChangeRecord, at time.Time) *kernel.Error {
-		failure = run(c, r, tr.Txn, at)
+		failure = run(c.WithTransactionInput(routed.Submission), r, tr.Txn, at)
 		return failure
 	}
 	apply, err := l.checked(c, routed.Submission, now, catalog, func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -327,6 +379,6 @@ func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target Tx
 	if err != nil {
 		return err
 	}
-	apply(routed)
+	apply(r)
 	return failure
 }

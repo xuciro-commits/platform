@@ -12,15 +12,26 @@ import (
 // TestPlanDescriptor is a portable business scenario. Roots identify owner
 // definitions, never local editor rows, application IDs or tenant members.
 type TestPlanDescriptor struct {
-	Name    string          `json:"name"`
-	Title   string          `json:"title"`
-	Roots   []AssetRef      `json:"roots"`
-	At      time.Time       `json:"at"`
-	Samples []SampleRecords `json:"samples,omitempty"`
-	Steps   []TestStep      `json:"steps"`
+	Organization *OrgSeed        `json:"organization,omitempty"`
+	Name         string          `json:"name"`
+	Title        string          `json:"title"`
+	Roots        []AssetRef      `json:"roots"`
+	At           time.Time       `json:"at"`
+	Samples      []SampleRecords `json:"samples,omitempty"`
+	Steps        []TestStep      `json:"steps"`
 }
 
 func (p TestPlanDescriptor) Check() error {
+	if err := CheckSimulationOrganization(p.Organization); err != nil {
+		return err
+	}
+	if p.Organization != nil {
+		for _, membership := range p.Organization.Memberships {
+			if membership.Party != "" {
+				return fmt.Errorf("Portable organization memberships use the member chosen for the run; leave party empty")
+			}
+		}
+	}
 	if !sampleSetName.MatchString(p.Name) || p.Title == "" || len(p.Title) > 256 || p.At.IsZero() || len(p.Roots) < 1 || len(p.Roots) > 16 || len(p.Steps) < 1 || len(p.Steps) > 20 {
 		return fmt.Errorf("a test plan needs a name, title, definition roots, fixed time and 1–20 steps")
 	}
@@ -45,6 +56,17 @@ func (p TestPlanDescriptor) Check() error {
 	raw, err := json.Marshal(p)
 	if err != nil || len(raw) > 512<<10 {
 		return fmt.Errorf("test plan exceeds its byte budget")
+	}
+	return nil
+}
+
+func CheckSimulationOrganization(seed *OrgSeed) error {
+	if seed == nil {
+		return nil
+	}
+	raw, err := json.Marshal(seed)
+	if err != nil || len(raw) > 64<<10 || len(seed.Units) > 100 || len(seed.Structures) > 16 || len(seed.Edges) > 200 || len(seed.Memberships) > 100 {
+		return fmt.Errorf("Synthetic organization exceeds its bounded fixture size")
 	}
 	return nil
 }

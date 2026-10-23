@@ -80,7 +80,7 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version < 1 || result.Version > 8 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > 10 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
@@ -106,7 +106,14 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 			return result, nil, err
 		}
 	}
-	if err := ValidateTxnIterations(result.App, result.Iterations); err != nil {
+	iterationOwner := result.App
+	if result.Version >= 9 {
+		if result.Version == 9 && len(result.Iterations) == 0 {
+			return result, nil, fmt.Errorf("record batch omits its decision-bound iterations")
+		}
+		iterationOwner = ""
+	}
+	if err := ValidateTxnIterations(iterationOwner, result.Iterations); err != nil {
 		return result, nil, err
 	}
 	if err := ValidateSubmissionSchemaVersion(sub, result.SchemaVersion); err != nil {
@@ -119,6 +126,7 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	changes := map[string]*pb.ChangeRecord{}
 	written := map[string]bool{}
 	top := false
+	hasIntervals := false
 	for _, decision := range result.Decisions {
 		r := new(pb.ChangeRecord)
 		if err := protojson.Unmarshal(decision.Receipt, r); err != nil {
@@ -127,6 +135,15 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 		s, e := r.GetSubmission(), decision.Event
 		key := e.App + "/" + r.GetChangeId()
 		if decision.Definition != nil {
+			if observation := decision.Definition.Observation; observation != nil && observation.Intervals != nil {
+				hasIntervals = true
+				if result.Version < 10 {
+					return result, nil, fmt.Errorf("legacy record batch contains state interval evidence")
+				}
+				if observation.Definition.Ref.App != e.App || observation.Record != s.GetTarget().GetType()+"/"+s.GetTarget().GetId() {
+					return result, nil, fmt.Errorf("state interval evidence differs from its accepted subject")
+				}
+			}
 			if err := decision.Definition.Check(e.App, s.GetSchema().GetName()); err != nil {
 				return result, nil, err
 			}
@@ -163,6 +180,13 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 			}
 		}
 	}
+	if result.Version >= 9 {
+		for _, iteration := range result.Iterations {
+			if changes[iteration.Decision] == nil {
+				return result, nil, fmt.Errorf("transaction iteration has no matching accepted decision")
+			}
+		}
+	}
 	for _, fact := range result.Business {
 		matched := false
 		for _, decision := range result.Decisions {
@@ -176,13 +200,16 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 			return result, nil, fmt.Errorf("business evidence has no matching accepted decision")
 		}
 	}
+	if result.Version == 10 && !hasIntervals {
+		return result, nil, fmt.Errorf("record batch omits its state interval evidence")
+	}
 	if !top || len(written) != len(result.Rows) {
 		return result, nil, fmt.Errorf("record batch omits the top-level receipt or a written row")
 	}
 	seen := map[string]bool{}
 	for _, row := range result.Rows {
 		ref := row.Type + "/" + row.ID
-		if result.Version == 8 {
+		if result.Version >= 8 {
 			if row.HistoryRef == nil || row.HistoryBase != row.HistoryRef.Base {
 				return result, nil, fmt.Errorf("record batch has no versioned history")
 			}
@@ -211,7 +238,7 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	}
 	for _, direct := range result.DirectRows {
 		row := direct.Row
-		if result.Version == 8 {
+		if result.Version >= 8 {
 			if err := records.ValidateHistoryRef(row.Image); err != nil {
 				return result, nil, err
 			}

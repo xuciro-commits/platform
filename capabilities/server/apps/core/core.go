@@ -211,7 +211,7 @@ func New(tenant string) *Core {
 
 func (c *Core) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "Master data", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(),
-		Interfaces: Interfaces(), Roles: []string{Steward, Accountant}, Reads: []string{ReadTrialBalance}}
+		Interfaces: Interfaces(), Roles: []string{Steward, Accountant, ReferenceReader}, Reads: []string{ReadTrialBalance}}
 }
 
 func (c *Core) AcceptedLedger() *platform.Ledger         { return c.ledger }
@@ -222,7 +222,7 @@ func (c *Core) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() 
 func (c *Core) Restore(raw json.RawMessage) error  { return c.ledger.Restore(raw) }
 func (c *Core) Read(caller platform.Caller, name string) (any, *kernel.Error) {
 	if period, ok := strings.CutPrefix(name, ReadTrialBalance); ok {
-		return trialBalance(caller, strings.TrimPrefix(period, "/")), nil
+		return trialBalance(caller, strings.TrimPrefix(period, "/"))
 	}
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }

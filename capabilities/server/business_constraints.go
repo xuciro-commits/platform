@@ -228,6 +228,33 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 		}
 		return c.RefuseConstraint(rule, info.Type+"/"+records.Header(after.Value).ID, visible, reason)
 	}
+	evaluate := func(subject map[string]any) (bool, *kernel.Error) {
+		spec := platform.ConstraintSpec(info, rule)
+		lookup := func(typ string) (platform.EntityInfo, bool) {
+			other, ok := d.constraintLookup(typ)
+			return other, ok && other.App == info.App
+		}
+		schema, err := platform.RuleSchema(*rule.Expr, spec, lookup)
+		if err != nil {
+			return false, fail("definition_unavailable")
+		}
+		context, err := c.RuleContext(*rule.Expr, spec, lookup, subject, nil, d.at)
+		if err != nil {
+			return false, fail("input_unavailable")
+		}
+		program, err := platform.CompileExpr(*rule.Expr, schema)
+		if err != nil {
+			return false, fail("definition_unavailable")
+		}
+		result, err := program.Eval(context)
+		if err != nil {
+			if issue, ok := err.(*platform.ExprIssue); ok {
+				return false, fail(issue.Code)
+			}
+			return false, fail("input_unavailable")
+		}
+		return string(result.Value.Data) == "true", nil
+	}
 	switch rule.Kind {
 	case "required":
 		if life := info.Lifecycle; life != nil && values[life.Field] == life.Initial {
@@ -256,7 +283,15 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 			return fail("unique")
 		}
 	case "immutable":
-		if constraintLocked(info, before) {
+		locked := constraintLocked(info, before)
+		if before != nil && rule.Expr != nil {
+			var err *kernel.Error
+			locked, err = evaluate(constraintValues(info, before.Value))
+			if err != nil {
+				return err
+			}
+		}
+		if locked {
 			old := constraintValues(info, before.Value)
 			for _, field := range rule.Fields {
 				if string(platform.Raw(old[field])) != string(platform.Raw(values[field])) {
@@ -268,31 +303,11 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 		if rule.Expr == nil {
 			return fail("definition_unavailable")
 		}
-		spec := platform.ConstraintSpec(info, rule)
-		lookup := func(typ string) (platform.EntityInfo, bool) {
-			other, ok := d.constraintLookup(typ)
-			return other, ok && other.App == info.App
-		}
-		schema, err := platform.RuleSchema(*rule.Expr, spec, lookup)
+		matched, err := evaluate(values)
 		if err != nil {
-			return fail("definition_unavailable")
+			return err
 		}
-		context, err := c.RuleContext(*rule.Expr, spec, lookup, values, nil, d.at)
-		if err != nil {
-			return fail("input_unavailable")
-		}
-		program, err := platform.CompileExpr(*rule.Expr, schema)
-		if err != nil {
-			return fail("definition_unavailable")
-		}
-		result, err := program.Eval(context)
-		if err != nil {
-			if issue, ok := err.(*platform.ExprIssue); ok {
-				return fail(issue.Code)
-			}
-			return fail("input_unavailable")
-		}
-		if string(result.Value.Data) != "true" {
+		if !matched {
 			return fail(rule.Kind)
 		}
 	}

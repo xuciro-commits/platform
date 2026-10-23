@@ -65,7 +65,6 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
     try {
       const response = await client.call<Api.PackageDraftResult>("POST", `/v1/packages/${encodeURIComponent(id)}/drafts`, { version, key });
       if (!response.ok) {
-        if (response.status < 500) delete creationKeys.current[identity];
         setRefused(current => ({ ...current, [id]: apiErrorMessage(response.body) ?? t("Application drafts could not be created.") }));
         return;
       }
@@ -118,6 +117,15 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
             {d.blueprint && <div className="grid gap-2 text-xs">
               <p className="text-muted">{t("{count} definitions in the blueprint", { count: d.blueprint.assets.length })}</p>
               {d.blueprint.guide && <Disclosure summary={t("Build guide")}><p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{d.blueprint.guide}</p></Disclosure>}
+              {d.blueprint.setup && <Disclosure summary={t("Initialization plan")}>
+                <div className="grid min-w-0 gap-2">
+                  <p>{t("Run this plan explicitly after publishing. Each request uses your current access; installation and restart do not run it or grant roles.")}</p>
+                  <PropertyList items={[[t("Required roles"), d.blueprint.setup.roles.map(role => `${role.app}:${role.role}`).join(", ")]]} />
+                  <ol className="grid min-w-0 list-inside list-decimal gap-1">{d.blueprint.setup.steps.map(step => <li key={step.name}>
+                    <Disclosure summary={`${step.schema} · ${step.target?.id}`}><pre className="whitespace-pre-wrap break-all text-xs">{step.payload}</pre></Disclosure>
+                  </li>)}</ol>
+                </div>
+              </Disclosure>}
               {can("build.app.create") && <div><Button size="sm" variant="primary" disabled={busy === id || state !== "active" || held?.version !== d.version || !chosen} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
             </div>}
             {(next === "install" || different || source === "installed") && <div className="flex flex-wrap items-center gap-2 text-xs">

@@ -170,8 +170,9 @@ type State struct {
 // status among To (the first is the default). It runs inside the decision, so
 // replay runs it again; an error refuses the transition.
 type Transition struct {
-	LegacyReplay *Transition       `json:"-"`
-	Adoption     *ProposalAdoption `json:"-"`
+	ConfirmationOnly bool
+	LegacyReplay     *Transition       `json:"-"`
+	Adoption         *ProposalAdoption `json:"-"`
 	// Criteria is the owner's pure rule plan, shared with model-bound reads.
 	// It is not serialized into legacy action descriptors or accepted images.
 	Criteria    *RuleCriteria `json:"-"`
@@ -543,8 +544,10 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	}
 	for _, x := range [][2]string{{"owner", e.Scope.Owner}, {"unit", e.Scope.Unit}} {
 		if x[1] != "" && !(x[0] == "owner" && x[1] == OwnerCreated) {
-			if f, ok := info.Field(x[1]); !ok || f.Type != "text" {
-				return EntityInfo{}, fmt.Errorf("entity %s: the scope's %s field %q is not a text field", e.Type, x[0], x[1])
+			f, ok := info.Field(x[1])
+			unitReference := x[0] == "unit" && f.Type == "reference" && f.Ref == "enterprise.element"
+			if !ok || f.Type != "text" && !unitReference {
+				return EntityInfo{}, fmt.Errorf("entity %s: the scope's %s field %q needs text or the unit's enterprise reference", e.Type, x[0], x[1])
 			}
 		}
 	}
@@ -730,7 +733,7 @@ func EntityActions(e Entity) []Action {
 				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
 			}
 			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
-				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired})
+				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly})
 			if t.Approval != nil && t.Approval.Pending != "" { // the work app's alone: no role holds them
 				for _, m := range [][2]string{{ApprovalHeld, "Hold for approval"}, {ApprovalRejected, "Mark rejected"}, {ApprovalReturned, "Return from approval"}} {
 					suffix, title := m[0], m[1]

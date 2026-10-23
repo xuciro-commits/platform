@@ -72,6 +72,24 @@ test('invalid raw input remains visible and prevents mode, format and submission
   expect(buffer()).toEqual({dirty:false,invalid:false});
 });
 
+test('a complete asset source can be edited above the scalar limit without applying an oversized replacement',()=>{
+  const changes=vi.fn(),initial={name:'Saved',steps:'x'.repeat(70_000)};
+  render(<Editor initial={initial} initialMode="source" onChange={changes}/>);
+  const next={...initial,name:'Edited'};
+  fireEvent.change(source(),{target:{value:JSON.stringify(next,null,2)}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply source'}));
+  expect(JSON.parse(screen.getByTestId('value').textContent!)).toEqual(next);
+  expect(changes).toHaveBeenCalledTimes(1);
+  fireEvent.change(source(),{target:{value:JSON.stringify({name:'Too large',steps:'x'.repeat(512*1024)})}});
+  expect(JSON.parse(source().value)).toEqual(next);
+  expect(screen.getByRole('alert').textContent).toContain('524288');
+  fireEvent.click(screen.getByRole('button',{name:'Apply source'}));
+  fireEvent.click(screen.getByRole('button',{name:'Visual'}));
+  expect(changes).toHaveBeenCalledTimes(1);
+  expect(buffer()).toEqual({dirty:true,invalid:true});
+  expect(JSON.parse(screen.getByTestId('value').textContent!)).toEqual(next);
+});
+
 test('unchanged formatting does not dirty the draft or call its update function',()=>{
   const changes=vi.fn();render(<Editor initial={{count:0,active:false}} onChange={changes}/>);
   fireEvent.click(screen.getByRole('button',{name:'Source editor'}));

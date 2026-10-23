@@ -20,11 +20,13 @@ type SimulationSample struct {
 }
 
 type simulationEnvironment struct {
-	Factories map[string]platform.SimulationFactory
-	Identity  platform.SimulationIdentityFactory
-	Modules   map[string][]byte
-	Manifests []platform.Manifest
-	Samples   []SimulationSample
+	Organization        *platform.OrgSeed
+	OrganizationFactory platform.SimulationOrganizationFactory
+	Factories           map[string]platform.SimulationFactory
+	Identity            platform.SimulationIdentityFactory
+	Modules             map[string][]byte
+	Manifests           []platform.Manifest
+	Samples             []SimulationSample
 }
 
 // sampleOwner exposes only selected immutable metadata and read scopes. It
@@ -52,6 +54,9 @@ func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.Ch
 func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samples []SimulationSample) (simulationEnvironment, error) {
 	environment := simulationEnvironment{Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
 	for _, app := range t.apps {
+		if factory, ok := app.(platform.SimulationOrganizationFactory); ok {
+			environment.OrganizationFactory = factory
+		}
 		if factory, ok := app.(platform.SimulationIdentityFactory); ok {
 			environment.Identity = factory
 		}

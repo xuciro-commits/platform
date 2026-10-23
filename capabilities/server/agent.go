@@ -126,7 +126,8 @@ type RunStep struct {
 }
 
 type agentTool struct {
-	kind   string // action, protocol, read, context, search, ask, finish
+	query  platform.NamedQuery
+	kind   string // action, protocol, query, read, context, search, ask, finish
 	schema string // the action, "<protocol>#<action>" or the read's name
 	target string // the action's target type
 	platform.Field
@@ -186,6 +187,8 @@ func NewAgents(tenant string) *Agents {
 	actions = append(actions, switchActions()...)
 	return &Agents{tenant: tenant, ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType, SwitchType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
+
+func (a *Agents) NewSimulationApp(tenant string) platform.App { return NewAgents(tenant) }
 
 func agentEntities() []platform.Entity {
 	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title",
@@ -327,7 +330,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 					props["for"] = map[string]any{"type": "string", "description": "The ID of the record it is run for"}
 					required = append(required, "for")
 				}
-				tool = agentTool{kind: "query", schema: query, tool: Tool{Description: q.Title + ": " + q.Description, Properties: props, Required: required}}
+				tool = agentTool{kind: "query", schema: query, query: q, tool: Tool{Description: q.Title + ": " + q.Description, Properties: props, Required: required}}
 			case strings.HasPrefix(name, "read:"):
 				read := strings.TrimPrefix(name, "read:")
 				if !slices.Contains(m.Reads, read) {
@@ -678,6 +681,14 @@ func (a *Agents) definitionVersion(d *agentDef) string {
 	}
 	if len(d.Checkpoints) > 0 {
 		parts = append(parts, d.Checkpoints)
+	}
+	// A query's predicate is part of the agent's effective tool definition.
+	// Refreshing that definition stops an existing run through the same
+	// handover path as a changed agent; it must not silently change its reads.
+	for _, name := range d.Tools {
+		if query, ok := d.tools[agentToolName(name)]; ok && query.kind == "query" {
+			parts = append(parts, query.query)
+		}
 	}
 	digest, _ := acceptance.Digest(parts)
 	return "agent.sha256." + digest

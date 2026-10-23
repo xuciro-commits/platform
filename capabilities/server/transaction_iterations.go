@@ -21,8 +21,9 @@ func (d *stagedDecision) CaptureTxnIteration(c platform.Caller, receipt *pb.Chan
 	if !c.Staging() || c.Replaying || receipt.GetChangeId() == "" || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || receipt.GetSubmission().GetTenantId() != d.tenant.ID {
 		return fail("Iteration capture is outside its private authority")
 	}
+	iteration.Decision = c.App + "/" + receipt.GetChangeId()
 	all := append(slices.Clone(d.iterations), iteration)
-	if err := resultformat.ValidateTxnIterations(c.App, all); err != nil {
+	if err := resultformat.ValidateTxnIterations("", all); err != nil {
 		return fail(err.Error())
 	}
 	for _, id := range iteration.IDs {
