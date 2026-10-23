@@ -90,7 +90,7 @@ web: ## 在 Vite 下热重载运行工作区（HMR），将 /v1 反向代理到�
 	cd web && PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
 
 .PHONY: packages
-packages: ## 构建独立网关与本机协议包，并加入受控行业定义包
+packages: ## 构建独立网关与本机协议能力包，并加入受控应用包
 	GO="$(GO)" PROTOCOL_VERSION="$(PROTOCOL_VERSION)" GATEWAY_PACKAGES="$(GATEWAY_PACKAGES)" python3 scripts/package-artifacts.py
 
 .PHONY: gateway

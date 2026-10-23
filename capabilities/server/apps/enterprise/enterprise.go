@@ -134,8 +134,8 @@ func declarations() []platform.Action {
 	return append(actions, change)
 }
 
-// New is a tenant's enterprise app, starting from an  seed (which an
-// industry package or the development seats give) lifted into the model. Its
+// New is a tenant's enterprise app, starting from a deployment seed
+// lifted into the model. Its
 // ledger is declared from declarations(), the single source of the write
 // contract the generated SDK also reads.
 func New(tenant string, seed platform.OrgSeed) *Enterprise {

@@ -101,7 +101,7 @@ type Membership struct {
 	Until   Date     `json:"until,omitempty"`
 }
 
-// OrgSeed is an organisation's starting shape (an industry package's, or a deployment's).
+// OrgSeed is an organisation's starting shape supplied by an application or deployment.
 type OrgSeed struct {
 	Calendars   []Calendar   `json:"calendars,omitempty"`
 	Structures  []Structure  `json:"structures"`

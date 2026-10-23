@@ -1,5 +1,5 @@
 # The platform host's two deployments on their production path, locally (#87, #92):
-# Two instances of the same platform-server, configured with industry packages. PostgreSQL
+# Two instances of the same platform-server, configured with application packages. PostgreSQL
 # keeps the journal, Rauthy issues identities, each host replays the journal on start. Each host serves the workspace, built first:
 # `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.

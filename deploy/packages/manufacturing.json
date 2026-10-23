@@ -1,7 +1,7 @@
 {
-  "id": "industry.manufacturing",
+  "id": "application.manufacturing",
   "version": "0.1.0",
-  "namespace": "industry.manufacturing",
+  "namespace": "application.manufacturing",
   "title": "Manufacturing",
   "description": "Editable business documents and production declarations; the shared Core owns the general ledger.",
   "blueprint": {

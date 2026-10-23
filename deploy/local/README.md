@@ -85,24 +85,26 @@ OPENROUTER_API_KEY=sk-or-...
 
 主机按名字取密钥：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
 
-## 声明式行业包初始化
+## 声明式应用包初始化
 
 通用宿主的本地与容器启动入口分别使用 `hospitality/tenants-next.json` 与 `manufacturing/tenants-next.json`，在原基础设施上启用新的测试范围；原 `tenants.json` 保留用于旧二进制回退。切换日常运行实例前先完成下述资产移交，再执行 `deploy/local/update.sh`。新范围不复用旧探针租户 ID：
 
 | 原测试范围 | 新测试范围 | 处理 |
 |---|---|---|
-| `hotel-a` | `hotel-a-build` | 从行业包重建 CRM、PMS |
+| `hotel-a` | `hotel-a-build` | 从应用包重建 CRM、PMS |
 | `hotel-test` | `hotel-test-build` | 独立空白酒店验证范围 |
-| `plant-sz` | `plant-sz-build` | 从行业包重建 MES、ERP |
+| `plant-sz` | `plant-sz-build` | 从应用包重建 MES、ERP |
 | `acme` | 不自动映射 | 保留原范围，移交前不切换或重建 |
 
 新配置保留对应成员的 ID、登录 subject 和平台设置。旧 CRM/PMS/MES/ERP 的有效业务角色明确映射到 Build 的 sales、salesmanager、desk、hotelmanager、supervisor、operator、quality、buyer、controller、accountant；管理员显式配置 Builder 与初始化所需 Core accountant，会计成员显式配置 Core accountant；采购成员仅配置 Core reference-reader，以读取科目和期间，不授予主数据维护、凭证或试算读取及账务写入。HCM/CSM、原 gateway/assistant 的角色不产生新业务授权，其身份仍保留。酒店旧组织任职不自动复制；制造 L1/L2 任职保留，`plant-sz` 的组织任职显式映射到初始化计划的 `sampleplant`，其他任职仍须在 Enterprise 受权配置。包安装本身不执行这些角色配置。
 
-切换前必须沿原资产入口移交 `hotel-a` 的 WMS 应用 `wms`、对象 `employee`、`partitem`、`order`、`goodsreceipt`、`partimports`、页面 `item`/`goodsreceipt`、数据集 `hrstaff`、`hrclean`、`partimports`、`mesmat`、`sapmat`、`sapom`，以及管道 `hrtoent`、`hrtoemployee`、`pipehrclean`、`mesparts`、`omtoorg`、`sapmaterials`，保留构建定义和有效草稿。负责人已允许 WMS 测试数据和结构重建，不要求复制旧业务记录、状态或历史；原日志与数据卷仍归档保留。现有 `plant-sz` 的 `mesworkspace`/`mesorders` 依赖原生 MES，随替代验收退出，不能作为新 MES 的输入。`industry.heating` 及范围外构建内容仍保留。原数据库卷、日志、文件、身份与部署密钥均不清理；移交未验证前不启用新配置替换日常入口。
+切换前必须沿原资产入口移交 `hotel-a` 的 WMS 应用 `wms`、对象 `employee`、`partitem`、`order`、`goodsreceipt`、`partimports`、页面 `item`/`goodsreceipt`、数据集 `hrstaff`、`hrclean`、`partimports`、`mesmat`、`sapmat`、`sapom`，以及管道 `hrtoent`、`hrtoemployee`、`pipehrclean`、`mesparts`、`omtoorg`、`sapmaterials`，保留构建定义和有效草稿。负责人已允许 WMS 测试数据和结构重建，不要求复制旧业务记录、状态或历史；原日志与数据卷仍归档保留。现有 `plant-sz` 的 `mesworkspace`/`mesorders` 依赖原生 MES，随替代验收退出，不能作为新 MES 的输入。`application.heating` 及范围外构建内容仍保留。原数据库卷、日志、文件、身份与部署密钥均不清理；移交未验证前不启用新配置替换日常入口。
 
 旧客户端继续携带原租户标识、请求键、schema 及回调关联，不能重定向到新租户或重签为新请求。切换前停止旧测试范围写入并保留原二进制、`tenants.json` 和环境；回退恢复这组原输入，不将新租户日志交给旧二进制，也不承诺反向转换新模型数据。
 
-新的通用宿主不在启动时创建行业组织、业务样本或业务角色。先在 Packages 选择并安装 `industry.hospitality` 或 `industry.manufacturing` 的确切版本，生成应用草稿，在 Application Studio 完成候选检查及发布。包卡片的“初始化计划”可逐项查看所需角色、目标与数据；“构建说明”列出后续业务角色和环境绑定。
+新的通用宿主不在启动时创建行业组织、业务样本或业务角色。先在 Packages 选择并安装 `application.hospitality` 或 `application.manufacturing` 的确切版本，生成应用草稿，在 Application Studio 完成候选检查及发布。包卡片的“初始化计划”可逐项查看所需角色、目标与数据；“构建说明”列出后续业务角色和环境绑定。
+
+当前分发包统一使用 `application.*` 标识。旧名称退出分发目录，已安装版本仍按原 ID、版本和封存内容保留，不重命名、不自动安装新包，也不重新生成或初始化已有应用。旧计划中途失败时，必须使用原封存描述符、原身份和运行键接续；新包 ID 会产生不同请求键，不能拿它重试旧初始化。维护已有包镜像时，将撤下的描述符原样归档到索引目录之外，不能改写封存内容或保留名称别名。
 
 确认目标是本次显式重建的新测试租户后，用该租户已授权成员的 token 执行对应计划。凭据从环境变量读取，不写入命令参数或包文件：
 
@@ -151,8 +153,8 @@ TOKEN=$(/tmp/platform-server -profile lightweight -data /var/lib/platform -mint-
 | 服务 | 地址 | 说明 |
 |---|---|---|
 | 身份认证 Rauthy | http://localhost:8480/auth/v1/ | OIDC 签发方；管理后台是 http://localhost:8480/auth/v1/admin |
-| **工作台（酒店配置 hospitality-server，租户 `hotel-a-build`）** | http://localhost:8495 | 按角色打开行业包发布的 CRM、PMS，以及已移交的 WMS 和平台入口 |
-| **工作台（制造配置 manufacturing-server，租户 `plant-sz-build`）** | http://localhost:8490 | 同一通用宿主运行行业包发布的 MES、ERP；科目、期间和业务样本由显式初始化计划创建 |
+| **工作台（酒店配置 hospitality-server，租户 `hotel-a-build`）** | http://localhost:8495 | 按角色打开应用包发布的 CRM、PMS，以及已移交的 WMS 和平台入口 |
+| **工作台（制造配置 manufacturing-server，租户 `plant-sz-build`）** | http://localhost:8490 | 同一通用宿主运行应用包发布的 MES、ERP；科目、期间和业务样本由显式初始化计划创建 |
 | webhook-sink | http://localhost:8497 | 本地 webhook、邮件、固定模型与状态窗口样本 |
 | PostgreSQL | `localhost:5433`，库 `platform`，用户 `platform`，密码 `platform-local-only` | 两个租户的日志表 `journal` |
 
@@ -223,9 +225,9 @@ WMS 是工作台中保存并发布的 `build.app` 与对象/页面/流程/代码
 
 每次更新 main 后运行 `deploy/local/update.sh`：构建工作区、重建两台宿主、校验 Git 版本标记、健康及实际提供的页面资源。原数据卷和租户配置保留。
 
-### 从行业包构建供暖应用
+### 从应用包构建供暖应用
 
-1. 运行 `make packages`，在 Packages 明确安装协议包与 `industry.heating`，选择 **Create application drafts**。安装本身不发布应用、不授予成员权限、不导入业务记录。
+1. 运行 `make packages`，在 Packages 明确安装协议包与 `application.heating`，选择 **Create application drafts**。安装本身不发布应用、不授予成员权限、不导入业务记录。
 2. 在应用的 Integrations 配置 `heatingfield` 的网关地址、密钥引用和设备点表，再 Check；模拟配置见 `deploy/examples/heating/harbin.json` 与 `jinan.json`。`propertyfeed` 配置独立 HTTP 接收方并 Check，告警路径为 `alarms`。
 3. 配置并启用 AI 提供方的 `heating/health` 模型；在发布审阅运行 `heatingadvicequality` 评估，查看合成样本与业务测试计划后保存候选并激活。未配置模型时不把合成结果当成真实诊断。
 4. 普通成员从应用门户进入楼宇、设备、告警、门禁与健康页面。阀位申请需原审批；投递成功不代表设备完成，必须由匹配的新鲜观测或授权人工证据确认。通行证独立于平台角色，设备 profile 未开放的开门操作不会出现。
@@ -236,7 +238,7 @@ WMS 是工作台中保存并发布的 `build.app` 与对象/页面/流程/代码
 
 需要从头走查时，停止当前 Compose（`docker compose -f deploy/local/compose.yaml down`，**不加 `-v`**），在 `deploy/local/.env` 设置一个新的 `PLATFORM_DATA_NAMESPACE`（如 `platform-review-20261007`）。四个数据卷会使用这个前缀；旧卷保留，`.env` 中的签名密钥和供应商密钥保留。默认未设置前缀时仍使用 Compose 项目名，独立排演项目的数据不会混用。
 
-先构建工作区，带 `PLATFORM_REVISION=$(git rev-parse HEAD)` 运行 `docker compose -f deploy/local/compose.yaml up -d --build`，再按行业包章节显式发布与初始化，运行 `deploy/local/update.sh` 检查实际版本。新命名空间不包含旧数据；已有 WMS 定义与有效草稿必须从原 owner 移交，不能因为重建测试业务而丢弃构建内容。旧日志、数据卷、身份、密钥与配置均保留。
+先构建工作区，带 `PLATFORM_REVISION=$(git rev-parse HEAD)` 运行 `docker compose -f deploy/local/compose.yaml up -d --build`，再按应用包章节显式发布与初始化，运行 `deploy/local/update.sh` 检查实际版本。新命名空间不包含旧数据；已有 WMS 定义与有效草稿必须从原 owner 移交，不能因为重建测试业务而丢弃构建内容。旧日志、数据卷、身份、密钥与配置均保留。
 
 酒店宿主内的 `hotel-test-build` 是晋级目标，与 `hotel-a-build` 共用 `8495` 入口；租户之间隔离记录与权限。用 `manager@hotel.test` 的 Host Console 开目标成员支持会话后晋级；更改存储的 v2 先不激活地晋级，再在目标租户发布工作台审阅其升级计划。`8490` 制造宿主是另一进程，不是这条同宿主晋级路线的目标。在目标 Host Console 选择源环境与原候选，晋级后切到目标租户的发布工作台检查封存内容和升级计划，再显式激活。晋级不会把源租户的业务记录或成员授权一并复制；需要搬迁记录时使用原迁移任务并核对原行结果。
 

@@ -1,7 +1,7 @@
 {
-  "id": "industry.hospitality",
+  "id": "application.hospitality",
   "version": "0.1.0",
-  "namespace": "industry.hospitality",
+  "namespace": "application.hospitality",
   "title": "Hospitality",
   "description": "Editable reservations and sales building blocks. Installation creates drafts; publish and grant business roles separately. / 可编辑的预订与销售构建资产。安装只创建草稿，发布与业务授权分别完成。",
   "blueprint": {

@@ -1,7 +1,7 @@
 {
-  "id": "industry.production-consumer",
+  "id": "application.production-consumer",
   "version": "0.1.0",
-  "namespace": "industry.production-consumer",
+  "namespace": "application.production-consumer",
   "title": "Production batch consumer",
   "description": "Declarative production batches. Provider and consumer are installed into separate tenants. Quantities are local facts; cross-system receipts remain independent. Configure the consumer connection before publishing.",
   "blueprint": {
