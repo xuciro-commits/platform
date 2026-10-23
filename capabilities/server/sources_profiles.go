@@ -47,7 +47,7 @@ func (t *Tenant) readOData(s construction.Source, c construction.Connection) ([]
 	next := c.Resolve(s.Entity) + "?" + q.Encode()
 	var rows []map[string]any
 	for page := 0; next != "" && page < odataPages && len(rows) <= 5000; page++ {
-		body, err := t.fetchSource(next, t.authorization(c), c.AllowPrivate, false)
+		body, err := t.fetchSource(next, t.authorization(c), c.AllowPrivate, "application/json")
 		if err != nil {
 			return nil, err
 		}
@@ -314,7 +314,7 @@ func (t *Tenant) checkConnection(c construction.Connection) (string, error) {
 		}
 		return version, nil
 	case "odata":
-		body, err := t.fetchSource(c.Resolve("")+"?$format=json", t.authorization(c), c.AllowPrivate, false)
+		body, err := t.fetchSource(c.Resolve("")+"?$format=json", t.authorization(c), c.AllowPrivate, "application/json")
 		if err != nil {
 			return "", err
 		}
@@ -330,7 +330,7 @@ func (t *Tenant) checkConnection(c construction.Connection) (string, error) {
 		}
 		return "OData v2", nil
 	default:
-		if _, err := t.fetchSource(c.Resolve(""), t.authorization(c), c.AllowPrivate, false); err != nil {
+		if _, err := t.fetchSource(c.Resolve(""), t.authorization(c), c.AllowPrivate, "*/*"); err != nil {
 			return "", err
 		}
 		return "answered", nil

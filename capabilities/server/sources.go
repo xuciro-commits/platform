@@ -429,7 +429,11 @@ func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construct
 		url, private = conn.Resolve(s.URL), conn.AllowPrivate
 		header = t.authorization(*conn)
 	}
-	body, err := t.fetchSource(url, header, private, s.Profile == "csv")
+	accept := "application/json"
+	if s.Profile == "csv" {
+		accept = "text/csv, text/plain"
+	}
+	body, err := t.fetchSource(url, header, private, accept)
 	if err != nil {
 		return nil, err
 	}
@@ -449,12 +453,12 @@ func (t *Tenant) authorization(c construction.Connection) string {
 
 // fetchSource reads an answer with the guarded outbound sender: private
 // addresses only when allowed, one bounded body.
-func (t *Tenant) fetchSource(url, header string, allowPrivate, csv bool) ([]byte, error) {
+func (t *Tenant) fetchSource(url, header string, allowPrivate bool, accept string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("the URL is not valid")
 	}
-	req.Header.Set("Accept", map[bool]string{false: "application/json", true: "text/csv, text/plain"}[csv])
+	req.Header.Set("Accept", accept)
 	if name, value, ok := strings.Cut(header, ":"); ok && strings.TrimSpace(name) != "" {
 		req.Header.Set(strings.TrimSpace(name), strings.TrimSpace(value))
 	}

@@ -328,6 +328,10 @@ func TestConnectionChecksPersistAndReplay(t *testing.T) {
 		}
 		tn.Outbound = func(req *http.Request, _ bool) (*http.Response, error) {
 			status := 200
+			// This service root serves HTML, while its data routes serve JSON.
+			if req.URL.Host == "good.example" && req.Header.Get("Accept") == "application/json" {
+				status = 404
+			}
 			if req.URL.Host == "failed.example" {
 				status = 503
 			}
