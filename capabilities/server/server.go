@@ -199,6 +199,7 @@ func (h *Host) Handler() http.Handler {
 	h.routesRecords(rt)
 	h.routesBuild(rt)
 	h.routesAI(rt)
+	h.routesCredentials(rt)
 	h.routesIntegration(rt)
 	h.routes = append(h.routes, namedReads...) // served by GET /v1/{read}
 	rt.metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {

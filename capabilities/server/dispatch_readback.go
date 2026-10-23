@@ -152,7 +152,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			}
 		}
 		if connection.Secret != "" {
-			credential, found := t.secret(connection.Secret)
+			credential, found := t.credentialHeader(connection.Secret, "connection/"+connection.ID, connection.Address)
 			if !found || strings.TrimSpace(string(credential)) == "" {
 				problem = fmt.Errorf("The dispatch observation credential is unavailable in this environment")
 				break

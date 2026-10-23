@@ -47,7 +47,7 @@ func (t *Tenant) readOData(s construction.Source, c construction.Connection) ([]
 	next := c.Resolve(s.Entity) + "?" + q.Encode()
 	var rows []map[string]any
 	for page := 0; next != "" && page < odataPages && len(rows) <= 5000; page++ {
-		body, err := t.fetchSource(next, t.authorization(c), c.AllowPrivate, "application/json")
+		body, err := t.fetchSource(next, t.authorization(c, next), c.AllowPrivate, "application/json")
 		if err != nil {
 			return nil, err
 		}
@@ -241,8 +241,10 @@ func (t *Tenant) openPostgres(ctx context.Context, c construction.Connection) (*
 		return nil, fmt.Errorf("the address is not a postgres URL")
 	}
 	if c.Secret != "" {
-		if v, ok := t.secret(c.Secret); ok {
+		if v, ok := t.credentialValue(c.Secret, "connection/"+c.ID, c.Address); ok {
 			cfg.Password = strings.TrimSpace(string(v))
+		} else {
+			return nil, fmt.Errorf("The database credential is unavailable or not authorized for this target")
 		}
 	}
 	cfg.RuntimeParams["default_transaction_read_only"] = "on"
@@ -295,7 +297,7 @@ func (t *Tenant) CheckConnections(now time.Time) {
 
 func (t *Tenant) checkConnection(c construction.Connection) (string, error) {
 	if c.Secret != "" {
-		if value, ok := t.secret(c.Secret); !ok || len(strings.TrimSpace(string(value))) == 0 {
+		if value, ok := t.credentialValue(c.Secret, "connection/"+c.ID, c.Address); !ok || len(strings.TrimSpace(string(value))) == 0 {
 			return "", fmt.Errorf("the named connection secret is unavailable")
 		}
 	}

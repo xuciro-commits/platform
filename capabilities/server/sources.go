@@ -403,7 +403,7 @@ func (t *Tenant) readSource(s construction.Source) ([]map[string]any, error) {
 		}
 		conn = &c
 		if c.Secret != "" {
-			if value, ok := t.secret(c.Secret); !ok || len(strings.TrimSpace(string(value))) == 0 {
+			if value, ok := t.credentialHeader(c.Secret, "connection/"+c.ID, c.Address); !ok || len(strings.TrimSpace(string(value))) == 0 {
 				return nil, fmt.Errorf("the named connection secret is unavailable")
 			}
 		}
@@ -427,7 +427,10 @@ func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construct
 	url, header, private := s.URL, s.Header, s.AllowPrivate
 	if conn != nil {
 		url, private = conn.Resolve(s.URL), conn.AllowPrivate
-		header = t.authorization(*conn)
+		header = t.authorization(*conn, url)
+		if conn.Secret != "" && header == "" {
+			return nil, fmt.Errorf("The connection credential is not authorized for this target")
+		}
 	}
 	accept := "application/json"
 	if s.Profile == "csv" {
@@ -441,11 +444,15 @@ func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construct
 }
 
 // authorization is the Authorization header a connection's secret gives, or none.
-func (t *Tenant) authorization(c construction.Connection) string {
+func (t *Tenant) authorization(c construction.Connection, target ...string) string {
+	address := c.Address
+	if len(target) > 0 {
+		address = target[0]
+	}
 	if c.Secret == "" {
 		return ""
 	}
-	if v, ok := t.secret(c.Secret); ok && len(strings.TrimSpace(string(v))) > 0 {
+	if v, ok := t.credentialHeader(c.Secret, "connection/"+c.ID, address); ok && len(strings.TrimSpace(string(v))) > 0 {
 		return "Authorization: " + strings.TrimSpace(string(v))
 	}
 	return ""

@@ -1166,6 +1166,52 @@ export type CreateTenantRequest = {
   settings?: Record<string, string>;
 };
 
+export type CredentialBinding = {
+  consumer: string;
+  origin: string;
+};
+
+export type CredentialCatalog = {
+  credentials: CredentialInfo[];
+  managedAvailable: boolean;
+};
+
+export type CredentialInfo = {
+  id: string;
+  title: string;
+  kind: string;
+  source: string;
+  reference?: string;
+  bindings: CredentialBinding[];
+  version: number;
+  state: string;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+export type CredentialSealRequest = {
+  id: string;
+  title: string;
+  kind: string;
+  source: string;
+  reference?: string;
+  bindings: CredentialBinding[];
+  expectedVersion: number;
+  sealed?: string;
+  value: string;
+};
+
+export type CredentialWrite = {
+  id: string;
+  title: string;
+  kind: string;
+  source: string;
+  reference?: string;
+  bindings: CredentialBinding[];
+  expectedVersion: number;
+  sealed?: string;
+};
+
 export type CustomRole = {
   id: string;
   app: string;

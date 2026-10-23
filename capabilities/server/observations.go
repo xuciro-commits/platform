@@ -202,7 +202,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 		}
 	}
 	if plan.connection.Secret != "" {
-		credential, found := t.secret(plan.connection.Secret)
+		credential, found := t.credentialHeader(plan.connection.Secret, "connection/"+plan.connection.ID, plan.connection.Address)
 		if !found || len(bytes.TrimSpace(credential)) == 0 {
 			return plan, observationUnavailable(fmt.Errorf("observation credential is unavailable"))
 		}

@@ -26,6 +26,7 @@ const (
 	ProviderType         = platform.AIProviderType
 	ModelType            = platform.AIModelType
 	SchemaProviderAdd    = platform.AISchemaProviderAdd
+	SchemaProviderEdit   = platform.AISchemaProviderEdit
 	SchemaProviderRemove = platform.AISchemaProviderRemove
 	SchemaModelEnable    = platform.AISchemaModelEnable
 	SchemaModelDisable   = platform.AISchemaModelDisable
@@ -88,6 +89,11 @@ func New(tenant string) *AI {
 	return &AI{limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, inflight: map[string][]time.Time{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
+			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
+				f("baseUrl", "string", "For compatible and local: the API's base URL, e.g. http://host.docker.internal:1234/v1", false),
+				f("secret", "string", "Name of the API key in the secret store (optional for local)", false)}},
+		platform.Action{Schema: SchemaProviderEdit, Target: ProviderType, Capability: "providers", Title: "Edit AI provider", Roles: admin,
+			Description: "Update provider configuration while retaining its identity, enabled models and usage history.",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
 				f("baseUrl", "string", "For compatible and local: the API's base URL, e.g. http://host.docker.internal:1234/v1", false),
 				f("secret", "string", "Name of the API key in the secret store (optional for local)", false)}},
@@ -182,9 +188,13 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 			return nil, invalid
 		}
 		switch s.GetSchema().GetName() {
-		case SchemaProviderAdd:
-			if _, known := a.provider(id); known {
+		case SchemaProviderAdd, SchemaProviderEdit:
+			_, known := a.provider(id)
+			if s.GetSchema().GetName() == SchemaProviderAdd && known {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			}
+			if s.GetSchema().GetName() == SchemaProviderEdit && !known {
+				return nil, notFound
 			}
 			if id == "" || strings.Contains(id, "/") {
 				return nil, invalid
@@ -199,14 +209,21 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 				pv.Vendor, pv.BaseURL, pv.Wire = p.Vendor, Vendors[i].BaseURL, Vendors[i].Wire
 			case "compatible", "local":
 				u, err := url.Parse(p.BaseURL)
-				if err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && p.Kind == "local") || p.Kind == "compatible" && p.Secret == "" {
+				if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Scheme != "https" && !(u.Scheme == "http" && p.Kind == "local") || p.Kind == "compatible" && p.Secret == "" {
 					return nil, invalid
 				}
 				pv.BaseURL = strings.TrimRight(p.BaseURL, "/")
 			default:
 				return nil, invalid
 			}
-			return func(*pb.ChangeRecord) { a.providers = append(a.providers, pv) }, nil
+			return func(*pb.ChangeRecord) {
+				index := slices.IndexFunc(a.providers, func(value Provider) bool { return value.ID == id })
+				if index >= 0 {
+					a.providers[index] = pv
+				} else {
+					a.providers = append(a.providers, pv)
+				}
+			}, nil
 		case SchemaProviderRemove:
 			if _, known := a.provider(id); !known {
 				return nil, notFound

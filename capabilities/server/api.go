@@ -69,6 +69,7 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/ai-limits", Summary: "Members', agents' and apps' own AI limits", Answer: []platform.AILimit{}},
 	{Pattern: "GET /v1/runs", Summary: "Agent runs on the caller's behalf", Answer: []AgentRunRecord{}},
 	{Pattern: "GET /v1/memories", Summary: "What agents remember about the caller", Answer: []Memory{}},
+	{Pattern: "GET /v1/credentials", Summary: "Credential metadata for administrators; never values", Answer: CredentialCatalog{}},
 	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []platform.AIProvider{}},
 	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []platform.AIModel{}},
 	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: platform.AIUsageReport{}},

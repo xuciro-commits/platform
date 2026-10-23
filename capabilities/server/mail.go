@@ -78,7 +78,7 @@ func (t *Tenant) sendMail(ep Endpoint, x platform.Effect, now time.Time) platfor
 	}
 	var auth smtp.Auth
 	if u.User != nil {
-		secret, ok := t.secret(ep.Secret)
+		secret, ok := t.credentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL)
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
 			return out

@@ -549,7 +549,7 @@ func (t *Tenant) aiSend(ctx context.Context, pv platform.AIProvider, method, pat
 	req, _ := http.NewRequestWithContext(ctx, method, pv.BaseURL+path, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if pv.Secret != "" {
-		key, ok := t.secret(pv.Secret)
+		key, ok := t.credentialValue(pv.Secret, "ai/"+pv.ID, pv.BaseURL)
 		if !ok {
 			return nil, &AIError{Detail: "secret " + pv.Secret + " missing"}
 		}
@@ -570,12 +570,16 @@ func (t *Tenant) aiSend(ctx context.Context, pv platform.AIProvider, method, pat
 func (t *Tenant) aiHTTP(pv platform.AIProvider) interface {
 	Do(*http.Request) (*http.Response, error)
 } {
-	if t.AIClient != nil {
-		return doer(t.AIClient)
+	send := t.AIClient
+	if send == nil {
+		dialer := guardedDialer(pv.Kind == "local")
+		client := &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		send = client.Do
 	}
-	dialer := guardedDialer(pv.Kind == "local")
-	return &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return doer(func(request *http.Request) (*http.Response, error) {
+		response, err := send(request)
+		return redactCredentialFailure(response, request), err
+	})
 }
 
 type doer func(*http.Request) (*http.Response, error)

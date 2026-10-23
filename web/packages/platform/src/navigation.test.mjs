@@ -35,6 +35,7 @@ vi.mock("./people", () => ({
   MemberDetail: () => null,
 }));
 vi.mock("./permissions", () => ({ Permissions: () => null }));
+vi.mock("./credentials",()=>({Credentials:()=>null,CredentialEditor:()=>null}));
 vi.mock("./account", () => ({ MyAccount: () => null }));
 vi.mock("./organisation", () => ({ Organisation: () => null }));
 vi.mock("./enterprise", () => ({ Enterprise: () => null }));

@@ -53,24 +53,26 @@ func Memberships(seats []Seat) []platform.Membership {
 }
 
 type Console struct {
-	mu       sync.Mutex
-	tenant   string
-	members  map[string]*platform.Member
-	subjects map[string]string    // subject → member ID
-	then     func()               // what the decision being applied says once the lock is released
-	profiles map[string]*Profile  // member ID → profile
-	tokens   map[string]*Token    // hashed personal tokens
-	minted   map[string]bool      // token secrets already handed out
-	lastSeen map[string]time.Time // the host's memory, not decided state
-	sessions sessionTable
-	roles    map[string]*CustomRole
-	policies map[string]*PolicyRecord
-	teams    map[string]*Team
-	projects map[string]*BuildProject
-	packages map[string]*InstalledPackage
-	index    *PackageIndex
-	ledger   *platform.Ledger
-	host     host.ConsoleHost // only governance capabilities, attached at composition
+	mu           sync.Mutex
+	credentialMu sync.RWMutex // acquired after mu for writes; outbound readers take only this lock
+	credentials  map[string]credentialRecord
+	tenant       string
+	members      map[string]*platform.Member
+	subjects     map[string]string    // subject → member ID
+	then         func()               // what the decision being applied says once the lock is released
+	profiles     map[string]*Profile  // member ID → profile
+	tokens       map[string]*Token    // hashed personal tokens
+	minted       map[string]bool      // token secrets already handed out
+	lastSeen     map[string]time.Time // the host's memory, not decided state
+	sessions     sessionTable
+	roles        map[string]*CustomRole
+	policies     map[string]*PolicyRecord
+	teams        map[string]*Team
+	projects     map[string]*BuildProject
+	packages     map[string]*InstalledPackage
+	index        *PackageIndex
+	ledger       *platform.Ledger
+	host         host.ConsoleHost // only governance capabilities, attached at composition
 }
 
 func ConsoleActions() *platform.Catalog {
@@ -103,6 +105,7 @@ func ConsoleActions() *platform.Catalog {
 	actions = append(actions, operationActions()...)
 	actions = append(actions, ProjectActions()...)
 	actions = append(actions, PackageActions()...)
+	actions = append(actions, credentialActions()...)
 	return platform.NewCatalog(actions...)
 }
 
@@ -111,10 +114,11 @@ func NewConsole(tenant string, seats ...Seat) *Console {
 	d := &Console{tenant: tenant, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*Profile{},
 		roles: map[string]*CustomRole{}, policies: map[string]*PolicyRecord{}, teams: map[string]*Team{},
 		tokens: map[string]*Token{}, minted: map[string]bool{}, lastSeen: map[string]time.Time{}, sessions: sessionTable{seen: map[string]map[string]*Session{}, revoked: map[string]bool{}},
-		projects: map[string]*BuildProject{},
-		packages: map[string]*InstalledPackage{},
-		index:    &PackageIndex{},
-		ledger:   platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, RoleType, PolicyType, TeamType, TokenType, ProjectType, PackageType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
+		projects:    map[string]*BuildProject{},
+		packages:    map[string]*InstalledPackage{},
+		credentials: map[string]credentialRecord{},
+		index:       &PackageIndex{},
+		ledger:      platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ProfileType, RoleType, PolicyType, TeamType, TokenType, ProjectType, PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
 	if err := d.ledger.HistoricalSchemas(&pb.SchemaRef{Name: legacyMemberLanguage, Version: 1}); err != nil {
 		panic(err)
 	}
@@ -157,20 +161,21 @@ func (d *Console) Identities() []Identity {
 
 // Snapshot and Restore: the members, how they sign in, and the decisions.
 type consoleState struct {
-	Members  map[string]*platform.Member  `json:"members"`
-	Subjects map[string]string            `json:"subjects"`
-	Profiles map[string]*Profile          `json:"profiles,omitempty"`
-	Projects map[string]*BuildProject     `json:"projects,omitempty"`
-	Packages map[string]*InstalledPackage `json:"packages,omitempty"`
-	Roles    map[string]*CustomRole       `json:"roles,omitempty"`
-	Policies map[string]*PolicyRecord     `json:"policies,omitempty"`
-	Teams    map[string]*Team             `json:"teams,omitempty"`
-	Tokens   map[string]*Token            `json:"tokens,omitempty"`
+	Credentials map[string]credentialRecord  `json:"credentials,omitempty"`
+	Members     map[string]*platform.Member  `json:"members"`
+	Subjects    map[string]string            `json:"subjects"`
+	Profiles    map[string]*Profile          `json:"profiles,omitempty"`
+	Projects    map[string]*BuildProject     `json:"projects,omitempty"`
+	Packages    map[string]*InstalledPackage `json:"packages,omitempty"`
+	Roles       map[string]*CustomRole       `json:"roles,omitempty"`
+	Policies    map[string]*PolicyRecord     `json:"policies,omitempty"`
+	Teams       map[string]*Team             `json:"teams,omitempty"`
+	Tokens      map[string]*Token            `json:"tokens,omitempty"`
 }
 
 // state is the directory as snapshots and accepted-state digests see it.
 func (d *Console) state() consoleState {
-	s := consoleState{Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages}
+	s := consoleState{Credentials: d.credentials, Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages}
 	if len(d.roles) > 0 {
 		s.Roles = d.roles
 	}
@@ -211,6 +216,12 @@ func (d *Console) Restore(raw json.RawMessage) error {
 
 // restoreAccess takes the access configuration and tokens of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
+	d.credentialMu.Lock()
+	d.credentials = s.Credentials
+	if d.credentials == nil {
+		d.credentials = map[string]credentialRecord{}
+	}
+	d.credentialMu.Unlock()
 	d.projects, d.packages = s.Projects, s.Packages
 	if d.projects == nil {
 		d.projects = map[string]*BuildProject{}
@@ -297,8 +308,8 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog, Roles: []string{Admin, Auditor},
-		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "projects", "packages", "contributions"},
-		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "projects": "record", "packages": "record", "contributions": "record"},
+		Reads:       []string{"members", "tenant", "account", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health", "personal-reads", "permissions", "access", "projects", "packages", "contributions", "credentials"},
+		ReadSources: map[string]string{"members": "record", "tenant": "record", "account": "record", "audit": "record", "deliveries": "record", "connectors": "record", "settings": "record", "endpoints": "record", "health": "record", "personal-reads": "record", "permissions": "record", "access": "record", "projects": "record", "packages": "record", "credentials": "record", "contributions": "record"},
 		Everyone:    []string{"notifications", "tenant", "account"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: tenantSettings()}
 }
@@ -325,6 +336,9 @@ func (d *Console) ForkAcceptedState() (platform.App, error) {
 	fork := NewConsole(d.tenant)
 	fork.ledger, fork.index, fork.host = d.ledger, d.index, d.host
 	fork.members, fork.subjects = state.Members, state.Subjects
+	if state.Credentials != nil {
+		fork.credentials = state.Credentials
+	}
 	if state.Profiles != nil {
 		fork.profiles = state.Profiles
 	}
@@ -452,6 +466,13 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				}
 			}, err
 		}
+		if declared.Target == CredentialType {
+			apply, err := d.decideCredential(c, s, now)
+			if apply == nil {
+				return nil, err
+			}
+			return func(r *pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); apply(r) }, err
+		}
 		if declared.Target == PackageType {
 			apply, err := d.decidePackage(c, s)
 			if apply == nil {
@@ -574,6 +595,12 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	}
 	if name == "account" {
 		return d.Account(c.ID), nil
+	}
+	if name == "credentials" {
+		if !c.Holds(PlatformApp, Admin) && !c.Holds("ai", "admin") {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Credential metadata requires platform or AI administration")
+		}
+		return d.credentialCatalog(), nil
 	}
 	if name == "packages" && !c.Holds(PlatformApp, Admin) && !c.Holds(PlatformApp, Auditor) && c.Member.InScope("build.app.create") && c.May("build", "build.app.create", []string{"builder"}).Allow {
 		return d.blueprintViews(), nil

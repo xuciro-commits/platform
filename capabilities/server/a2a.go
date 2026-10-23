@@ -310,7 +310,14 @@ func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect, authorizationHeader boo
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("A2A-Version", A2AVersion)
 	if ep.Secret != "" {
-		secret, ok := t.secret(ep.Secret)
+		consumer := "endpoint/" + ep.ID
+		if authorizationHeader {
+			consumer = ep.ID
+		}
+		secret, ok := t.credentialValue(ep.Secret, consumer, ep.URL)
+		if authorizationHeader {
+			secret, ok = t.credentialHeader(ep.Secret, consumer, ep.URL)
+		}
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
 			return out

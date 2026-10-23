@@ -32,7 +32,14 @@ func (t *Tenant) assetReleaseContextLocked(registry *platform.AssetRegistry, ass
 			return context, err
 		}
 		if requirement.Credential {
-			if _, ok := t.secret(target.Credential); !ok {
+			connection, found := platform.Get[construction.Connection](t.automation(requirement.Ref.App, false), target.TargetRecord)
+			valid := false
+			if found {
+				_, valid = t.credentialValue(target.Credential, "connection/"+connection.ID, connection.Address)
+			} else {
+				_, valid = t.secret(target.Credential)
+			}
+			if !valid {
 				return context, fmt.Errorf("target environment binding %s has no credential", requirement.Ref)
 			}
 		}

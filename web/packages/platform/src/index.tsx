@@ -17,6 +17,7 @@ import { Apps, Matrix, Protocols } from "./apps";
 import { Words } from "./words";
 import { Automation, Deliveries, SystemHealth, Integrations, Endpoints, OutboundEffects, AppSettingsView, Audit } from "./operations";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
+import { Credentials } from "./credentials";
 import { Flows, Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
 import { Glossary, Knowledge } from "./knowledge";
 import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host";
@@ -40,7 +41,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
       ...(admin(host) ? [item(t("Capability matrix"), <Grid3x3 />, "matrix"), item(t("Protocols"), <Cable />, "protocols")] : []),
     ] },
     { label: t("Settings and audit"), items: [
-      ...(admin(host) ? [item(t("App settings"), <SlidersHorizontal />, "app-settings"), item(t("Languages and words"), <Languages />, "words")] : []),
+      ...(admin(host) ? [item(t("Credentials"), <KeyRound />, "credentials"), item(t("App settings"), <SlidersHorizontal />, "app-settings"), item(t("Languages and words"), <Languages />, "words")] : []),
       ...(admin(host) || auditor(host) ? [item(t("Audit trail"), <History />, "audit")] : []),
     ] },
   ];
@@ -65,6 +66,7 @@ function ControlPanelOverview() {
 }
 
 const controlPanelViews: View[] = [
+ { id:"credentials", title:()=>t("Credentials"),render:()=> <Credentials /> },
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
   { id: "account", title: () => t("My account"), render: () => <MyAccount /> },
   { id: "organisation", title: () => t("Organisation"), render: () => <Organisation /> },

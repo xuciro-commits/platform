@@ -85,6 +85,23 @@ OPENROUTER_API_KEY=sk-or-...
 
 主机按名字取密钥：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `manufacturing-server` / `hospitality-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
 
+## 平台凭据
+
+Control Panel 的 Credentials 管理 API key、Bearer token 和密码。平台管理员可录入、替换、调整允许用途或停用；AI 管理员可选择凭据但不能读取原值。AI 提供方可直接编辑并保留启用模型，Check connection 使用当前绑定检查模型目录。
+
+托管值使用独立的 `PLATFORM_CREDENTIAL_KEY`：32 字节、64 位十六进制。首次在已忽略的 `deploy/local/.env` 配置，原本地启动脚本和 Compose 共用它；不要在已有托管凭据后重新生成或覆盖。未配置时仍可使用 Deployment reference 指向原 `PLATFORM_SECRET_<NAME>` 或 `PLATFORM_SECRETS_DIR` 文件。
+
+```bash
+if ! rg -q '^PLATFORM_CREDENTIAL_KEY=' deploy/local/.env; then
+  printf 'PLATFORM_CREDENTIAL_KEY=%s\n' "$(openssl rand -hex 32)" >> deploy/local/.env
+fi
+chmod 600 deploy/local/.env
+```
+
+凭据用途绑定 `ai/<提供方 ID>`、`connection/<连接记录 ID>` 或 `endpoint/<端点 ID>`，并指定目标源，例如 `https://api.example.com`；路径可变化，协议、主机和端口不得静默改变。API key 保持原值，Bearer 类型用于 HTTP 连接时自动添加 Bearer 前缀，数据库密码不加前缀。实际连接检查仍从原 AI 或 Connection 入口执行；不提供任意地址的密钥试送接口。
+
+保存后不回显秘密，编辑时留空可保留当前值。网络答复不确定时重试原密文提交，不重录或换请求键；停用不会删除历史或自动删除使用方。备份同时保留数据库、对象字节和独立主密钥；主密钥遗失后仅有数据库不能解密。当前不提供主密钥轮换、OAuth 或企业外部凭据库适配。
+
 ## 声明式应用包初始化
 
 通用宿主的本地与容器启动入口分别使用 `hospitality/tenants-next.json` 与 `manufacturing/tenants-next.json`，在原基础设施上启用新的测试范围；原 `tenants.json` 保留用于旧二进制回退。切换日常运行实例前先完成下述资产移交，再执行 `deploy/local/update.sh`。新范围不复用旧探针租户 ID：

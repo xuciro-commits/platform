@@ -341,6 +341,7 @@ func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.T
 }
 
 func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue), contentVersion ...string) (record *pb.ChangeRecord, err *kernel.Error) {
+
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
@@ -461,6 +462,13 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		answer := prior.Error
 		return nil, &answer
 	}
+	// Reject plaintext or invalid envelopes before a durable refusal captures input.
+	if s.GetSchema().GetName() == SchemaCredentialSave {
+		if _, failure := decodeCredentialWrite(t.ID, s.GetPayload()); failure != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid credential configuration or encrypted value")
+		}
+	}
+
 	if err := t.checkBusinessCorrection(m, s, binding); err != nil {
 		return nil, err
 	}

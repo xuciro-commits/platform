@@ -126,7 +126,7 @@ func (t *Tenant) protocolHTTP(ctx context.Context, connection construction.Conne
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	if connection.Secret != "" {
-		credential, found := t.secret(connection.Secret)
+		credential, found := t.credentialHeader(connection.Secret, "connection/"+connection.ID, connection.Resolve(path))
 		if !found || strings.TrimSpace(string(credential)) == "" {
 			return fmt.Errorf("the named protocol gateway secret is unavailable")
 		}

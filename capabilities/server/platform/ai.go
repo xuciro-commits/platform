@@ -112,6 +112,7 @@ const AIProviderType = "ai.provider"
 const AIModelType = "ai.model"
 
 const AISchemaProviderAdd = "ai.provider.add"
+const AISchemaProviderEdit = "ai.provider.edit"
 
 const AISchemaProviderRemove = "ai.provider.remove"
 

@@ -22,6 +22,7 @@ export default defineConfig({
     timeout: 180_000,
     reuseExistingServer: false,
     env: {
+      PLATFORM_CREDENTIAL_KEY: "3737373737373737373737373737373737373737373737373737373737373737",
       ...(protocolServices ? {
       PLATFORM_SECRET_PROTOCOL_GATEWAY: process.env.PLATFORM_SECRET_PROTOCOL_GATEWAY ?? "Bearer protocol-browser-only",
       } : {}),

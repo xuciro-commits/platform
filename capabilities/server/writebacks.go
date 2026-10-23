@@ -166,7 +166,7 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		}
 		message := x
 		message.Body = string(platform.Raw(map[string]any{"data": req.Body}))
-		answer := t.sendA2A(Endpoint{URL: req.URL, Secret: req.Secret, AllowPrivate: req.AllowPrivate}, message, true)
+		answer := t.sendA2A(Endpoint{ID: "connection/" + req.Connection, URL: req.URL, Secret: req.Secret, AllowPrivate: req.AllowPrivate}, message, true)
 		answer.Digest = out.Digest
 		return answer
 	}
@@ -196,7 +196,7 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		r.Header.Set("Idempotency-Key", req.DispatchKey)
 	}
 	if req.Secret != "" {
-		v, ok := t.secret(req.Secret)
+		v, ok := t.credentialHeader(req.Secret, "connection/"+req.Connection, req.URL)
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
 			return out

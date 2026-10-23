@@ -240,7 +240,7 @@ func (t *Tenant) Endpoints() []EndpointView {
 				}
 			}
 		}
-		if _, ok := t.secret(ep.Secret); !ok && ep.Secret != "" {
+		if _, ok := t.credentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL); !ok && ep.Secret != "" {
 			v.Health = "secret missing"
 		}
 		out = append(out, v)
@@ -357,7 +357,7 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 	}
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
-	secret, ok := t.secret(ep.Secret)
+	secret, ok := t.credentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL)
 	if !ok {
 		out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
 		return out
@@ -415,7 +415,8 @@ func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	// Client.Timeout covers reading the body too. Cancelling a derived context
 	// here would close a streamed response before its caller can read it.
-	return client.Do(req)
+	response, err := client.Do(req)
+	return redactCredentialFailure(response, req), err
 }
 
 func guardedDialer(allowPrivate bool) *net.Dialer {

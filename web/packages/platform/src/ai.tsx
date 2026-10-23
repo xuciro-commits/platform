@@ -3,6 +3,8 @@ import { useHost, MemberSelect, useReadQuery as useRead } from "@platform/app";
 import { PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import type { Api } from "@platform/kernel";
+import { CredentialEditor } from "./credentials";
 import { when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
 
 // AI providers: providers and models are decisions of the ai app;
@@ -23,8 +25,18 @@ export function AIProviders() {
   const providers = useRead<Provider[]>("/v1/ai-providers");
   const enabled = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const vendors = useRead<Vendor[]>("/v1/ai/vendors").data ?? [];
-  const { client, decide } = useHost();
+  const { client, decide, can } = useHost();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<string>();
+  const credentials = useRead<Api.CredentialCatalog>("/v1/credentials").data;
+  const [credential, setCredential] = useState<Api.CredentialWrite>();
+  const [checks, setChecks] = useState<Record<string,string>>({});
+  const check = async (provider: string) => {
+    setChecks(current=>({...current,[provider]:t("Checking…")}));
+    const result=await client.call<CatalogModel[] & {error?:{detail?:string}}>("GET",`/v1/ai/providers/${provider}/models?refresh=true`);
+    setChecks(current=>({...current,[provider]:result.ok?t("Connection verified"):result.body?.error?.detail??t("Connection failed")}));
+  };
+  const add = () => {setEditing(undefined);setDraft({kind:"vendor",id:"",vendor:"openrouter",baseUrl:"",secret:""});setAdding(true);};
   const [draft, setDraft] = useState({ kind: "vendor", id: "", vendor: "openrouter", baseUrl: "", secret: "" });
   const [open, setOpen] = useState<string>();
   const [catalog, setCatalog] = useState<{ models?: CatalogModel[]; error?: string }>({});
@@ -52,7 +64,7 @@ export function AIProviders() {
   return (
     <>
       <PageHeader title={t("AI providers and models")} help={t("Sources of models: vendors, third-party OpenAI-compatible APIs, and local model servers. A model can be called only once enabled: for everyone in the tenant, or for members holding a role in the ai app. Keys are named here and kept in the secret store.")}
-        actions={<Button variant="primary" onClick={() => setAdding(true)}>{t("Add provider")}</Button>} />
+        actions={<Button variant="primary" onClick={add}>{t("Add provider")}</Button>} />
       {providers.error ? <p className="text-sm text-[var(--tone-danger)]">{String(providers.error)} {t("— ai administrators only.")}</p> : (
         <div className="grid gap-2">
           {providers.data?.length === 0 && <p className="text-sm text-muted">{t("No providers.")}</p>}
@@ -62,9 +74,12 @@ export function AIProviders() {
               <span className="font-mono text-xs">{p.baseUrl}</span>
               <span className="flex flex-wrap items-center gap-2 text-xs text-muted"><span>{t("Key name")}: {p.secret || "—"}</span><span>{t("Enabled")}: {enabled.filter((m) => m.provider === p.id).length}</span></span>
               <span className="ml-auto flex gap-1">
+                <Button size="sm" onClick={() => {setEditing(p.id);setDraft({kind:p.kind,id:p.id,vendor:p.vendor??"openrouter",baseUrl:p.baseUrl,secret:p.secret??""});setAdding(true);}}>{t("Edit")}</Button>
+                <Button size="sm" onClick={() => void check(p.id)}>{t("Check connection")}</Button>
                 <Button size="sm" onClick={() => void load(p.id)}>{t("Models")}</Button>
                 <Button size="sm" variant="danger" onClick={() => void decide("ai.provider.remove", { type: "ai.provider", id: p.id }, {})}>{t("Remove")}</Button>
               </span>
+              {checks[p.id] && <p role="status" className="w-full text-xs text-muted">{checks[p.id]}</p>}
             </Card>
           ))}
         </div>
@@ -81,14 +96,14 @@ export function AIProviders() {
           <DataTable data={shown} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 380px)" empty={catalog.error ?? t("No models")} />
         </div>
       )}
-      <Dialog open={adding} onOpenChange={setAdding} title={t("Add AI provider")}>
+      <Dialog open={adding} onOpenChange={setAdding} title={t(editing ? "Edit AI provider" : "Add AI provider")}>
         <div className="grid gap-2 text-sm">
           <Select aria-label={t("Kind")} value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })}>
             <option value="vendor">{t("Vendor")}</option>
             <option value="compatible">{t("Third-party OpenAI-compatible API")}</option>
             <option value="local">{t("Local model server")}</option>
           </Select>
-          <Input aria-label="ID" placeholder={t("ID (lower case, dashes), e.g. openrouter")} value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
+          <Input disabled={!!editing} aria-label="ID" placeholder={t("ID (lower case, dashes), e.g. openrouter")} value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
           {draft.kind === "vendor" ? (
             <Select aria-label={t("Vendor")} value={draft.vendor} onChange={(e) => setDraft({ ...draft, vendor: e.target.value })}>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.baseUrl}</option>)}
@@ -99,19 +114,35 @@ export function AIProviders() {
             {draft.kind === "local" && <span className="flex flex-wrap gap-1">{locals.map((l) =>
               <Button key={l.label} size="sm" onClick={() => setDraft({ ...draft, baseUrl: l.url })}>{l.label}</Button>)}</span>}
           </>)}
-          <Input aria-label={t("Key name")} placeholder={draft.kind === "local" ? t("Key name in the secret store (optional)") : t("Key name in the secret store, e.g. openrouter")}
-            value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} />
-          <ContextHelp title={t("Key name")}>{t("The host reads the key from PLATFORM_SECRET_&lt;NAME&gt; or a file named after it in PLATFORM_SECRETS_DIR.")}</ContextHelp>
+          <label className="grid gap-1">{t("Credential")}
+            <Select aria-label={t("Credential")} value={draft.secret} onChange={event=>setDraft({...draft,secret:event.target.value})}>
+              <option value="">{t("No credential")}</option>
+              {draft.secret && !credentials?.credentials.some(item=>item.id===draft.secret) && <option value={draft.secret}>{draft.secret} · {t("Deployment reference")}</option>}
+              {credentials?.credentials.filter(item=>item.state==="active"||item.id===draft.secret).map(item=><option key={item.id} value={item.id}>{item.title} · {item.id}{item.state!=="active"?` · ${t(item.state)}`:""}</option>)}
+            </Select>
+          </label>
+          <label className="grid gap-1 text-xs text-muted">{t("Deployment secret name")}<Input aria-label={t("Deployment secret name")} value={draft.secret} onChange={event=>setDraft({...draft,secret:event.target.value})} /></label>
+          {can("platform.credential.save") && <Button disabled={!draft.id || (draft.kind!=="vendor"&&!draft.baseUrl)} onClick={()=>{
+            const selected=credentials?.credentials.find(item=>item.id===draft.secret);
+            if(selected){setCredential({id:selected.id,title:selected.title,kind:selected.kind,source:selected.source,reference:selected.reference,bindings:selected.bindings,expectedVersion:selected.version});return;}
+            const address=draft.kind==="vendor"?vendors.find(vendor=>vendor.id===draft.vendor)?.baseUrl:draft.baseUrl;
+            try {
+              const origin=new URL(address??"").origin;
+              setCredential({id:`${draft.id}-key`,title:`${draft.id} API key`,kind:"api-key",source:"managed",bindings:[{consumer:`ai/${draft.id}`,origin}],expectedVersion:0});
+            } catch {setChecks(current=>({...current,[draft.id]:t("Enter a valid provider address first.")}));}
+          }}>{t(credentials?.credentials.some(item=>item.id===draft.secret)?"Edit credential":"Create credential")}</Button>}
+          <ContextHelp title={t("Credential")}>{t("Choose a platform credential authorized for this provider and origin, or reference a deployment secret. Saved values are never displayed.")}</ContextHelp>
           <span className="mt-2 flex justify-end gap-2">
             <Button onClick={() => setAdding(false)}>{t("Cancel")}</Button>
             <Button variant="primary" disabled={!draft.id || (draft.kind !== "vendor" && !draft.baseUrl) || (draft.kind !== "local" && !draft.secret)}
               onClick={async () => {
                 const { id, ...payload } = draft;
-                if (await decide("ai.provider.add", { type: "ai.provider", id }, payload)) setAdding(false);
-              }}>{t("Add")}</Button>
+                if (await decide(editing ? "ai.provider.edit" : "ai.provider.add", { type: "ai.provider", id }, payload)) setAdding(false);
+              }}>{t(editing ? "Save" : "Add")}</Button>
           </span>
         </div>
       </Dialog>
+      <CredentialEditor open={!!credential} initial={credential} onClose={()=>setCredential(undefined)} onSaved={name=>setDraft(current=>({...current,secret:name}))} />
     </>
   );
 }
