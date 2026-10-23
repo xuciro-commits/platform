@@ -11,12 +11,6 @@ const (
 	SchemaSliceSync = "enterprise.slice.sync"
 )
 
-type PatternInfo struct {
-	Pattern
-	LevelName string  `json:"levelName"`
-	Preview   Preview `json:"preview"`
-}
-
 type Metamodel struct {
 	Version      string                      `json:"version"`
 	URI          string                      `json:"uri"`

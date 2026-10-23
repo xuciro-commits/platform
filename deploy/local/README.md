@@ -74,7 +74,7 @@ cd deploy/local && docker compose ps
 - **更新 8495/8490 的代码**：在根目录运行 `deploy/local/update.sh`，沿用当前本地或容器模式，更新两台宿主并校验实际版本、健康和页面资源，报告位于 `.build/local-update/<revision>.json`。保留原数据卷、密钥与租户配置。临时浏览器宿主 `18496/18497` 的测试不会更新这两个日常入口；视觉检查以实际使用的入口为准。
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
 - 行业样本由包内显式初始化计划提供，按下节执行 `make initialize`；启动与安装不自动播种。
-- 完整演练：在仓库根目录运行 `make rehearse`（即 `scripts/verify.sh deploy`）。它使用另一组端口、独立 Compose 项目和全新数据卷，验证真实 OIDC 身份、声明式行业包的评估/发布/业务结果、在途迁移与 Flow、原离线请求键、已接受观测、七节点遥测原版本接续、快照重启、PostgreSQL 备份恢复及单租户隔离恢复。AI 和观测来源为固定模拟，只验证机制。需 Docker、Node/pnpm、Python 3 与 Google Chrome（或 `CI=1` 下已安装的 Playwright Chromium）；结束只移除本次项目的容器、镜像标签和数据卷，诊断保存在 `.build/retirement/rehearsal-*`，恢复后的浏览器截图保存在 `web/e2e/test-results/deploy-recovery`。酒店与制造的浏览器任务另由 `make e2e SPEC=declared-hospitality` 和 `make e2e SPEC=declared-manufacturing` 执行。
+- 完整演练：在仓库根目录运行 `make rehearse`（即 `scripts/verify.sh deploy`）。它使用独立 Compose 项目、另一组端口和全新卷，验证真实 OIDC 身份、通用声明发布、在途迁移与 Flow、原离线请求键、七节点遥测原版本接续、快照重启、PostgreSQL 备份恢复及单租户隔离恢复，不安装酒店、制造或供暖应用。环境身份映射在 `rehearsal-fixtures.json`；应用业务验收由构建者在原应用测试与发布入口执行。需 Docker、Node/pnpm、Python 3 与 Google Chrome（或 `CI=1` 下已安装的 Playwright Chromium）；结束只移除本次项目资源，诊断保存在 `.build/retirement/rehearsal-*`，恢复后的浏览器截图在 `web/e2e/test-results/deploy-recovery`。
 - 数据/定义迁移演练：本地 Air/Vite 与基础设施运行后，在根目录执行 `make rehearse PROFILE=migration`。使用当前 HEAD 的通用宿主二进制、两个配置实例及真实 OIDC/PostgreSQL/RustFS，创建独立临时数据库与进程，验证首批暂停、快照重启、备份恢复、全日志重建、原键续接/激活与旧/新 Flow；结束清理本次资源。不会重建镜像或更改 8495/8490 与现有租户数据；完整容器演练仍走上面的入口。
 
 真实供应商的密钥放在 `deploy/local/.env`，compose 启动时自动读取。一行一个：
@@ -230,7 +230,7 @@ WMS 是工作台中保存并发布的 `build.app` 与对象/页面/流程/代码
 3. 配置并启用 AI 提供方的 `heating/health` 模型；在发布审阅运行 `heatingadvicequality` 评估，查看合成样本与业务测试计划后保存候选并激活。未配置模型时不把合成结果当成真实诊断。
 4. 普通成员从应用门户进入楼宇、设备、告警、门禁与健康页面。阀位申请需原审批；投递成功不代表设备完成，必须由匹配的新鲜观测或授权人工证据确认。通行证独立于平台角色，设备 profile 未开放的开门操作不会出现。
 
-原模拟构建任务为 `make e2e SPEC=heating-application`，协议安装与同版重装任务为 `make e2e SPEC=protocol-packages`。包卸载前先准备并等待在途工作结束，卸载保留应用、业务数据与历史；原版本内容一致才可重新安装。真实地址、现场参数、设备兼容性、模型质量与生产容量仍需在目标环境验证。
+供暖业务用例在包内 TestPlan 与发布评估入口维护；协议安装与同版重装的机制任务为 `make e2e SPEC=protocol-packages`。包卸载前先准备并等待在途工作结束，卸载保留应用、业务数据与历史；原版本内容一致才可重新安装。真实地址、现场参数、设备兼容性、模型质量与生产容量仍需在目标环境验证。
 
 ### 从干净数据开始
 

@@ -1,15 +1,13 @@
 import process from "node:process";
+import { readFileSync } from "node:fs";
 import { expect, test, signInWithOIDC } from "../tests/kit";
 
 const password = process.env.PLATFORM_DEPLOY_PASSWORD;
 if (!password) throw new Error("PLATFORM_DEPLOY_PASSWORD is required");
-const fixtures = [
-  {baseURL:"http://localhost:58495", builder:"manager@hotel.test", suffix:"hospitality"},
-  {baseURL:"http://localhost:58490", builder:"sup@plant.test", suffix:"manufacturing"},
-];
+const fixtures = JSON.parse(readFileSync(new URL("../../../deploy/local/rehearsal-fixtures.json", import.meta.url), "utf8")) as {suffix:string;port:number;builder:string}[];
 for (const fixture of fixtures) {
  test.describe(fixture.suffix, () => {
-  test.use({baseURL:fixture.baseURL});
+  test.use({baseURL:`http://localhost:${fixture.port}`});
 	  test("builder reads the original versioned telemetry output in Workshop after recovery", async ({ page, request }, testInfo) => {
 	    const token = await signInWithOIDC(page, fixture.builder, password);
 	    const headers = { Authorization: `Bearer ${token}` };

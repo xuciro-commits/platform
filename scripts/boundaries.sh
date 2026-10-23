@@ -51,7 +51,7 @@ hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " 
 [[ -z $hits ]] || fail "a platform app imports the host runtime, not the app API and internal/host:"$'\n'"$hits"
 
 app_dirs=$(find apps -type d -name server 2>/dev/null || true)
-leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" ${app_dirs:+$app_dirs} protocols/ capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
+leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" ${app_dirs:+$app_dirs} capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
 [[ -z $leaks ]] || fail "code outside platform touches change log directly without ledger lock:"$'\n'"$leaks"
 
 # probing is a private decision mode, never a tenant-wide switch.

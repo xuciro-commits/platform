@@ -136,11 +136,3 @@ export async function autoLayout(m: Model, shown: string[], kind: string, day: s
   for (const [id, p] of Object.entries(await relationLayout("down", missing.map((id) => ({ id })), edges))) out[id] = [p.x + 40, p.y + below];
   return out;
 }
-
-// A reusable piece of enterprise on the four-level backbone:
-// 1 Enterprise, 2 Site, 3 Function, 4 Team. Grafted under any organisation.
-export type PatternInfo = {
-  id: string; title: string; description: string; level: number; industry?: string; levelName: string;
-  params: { name: string; type: string; description: string }[];
-  preview: { elements: number; relationships: number; organisations: number; posts: number; locations: number; resources: number; outline: string[] };
-};

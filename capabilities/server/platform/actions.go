@@ -135,7 +135,7 @@ type InputConstraints struct {
 	Before       string   `json:"before,omitempty"`
 	After        string   `json:"after,omitempty"`
 	Inclusive    bool     `json:"inclusive,omitempty"`
-	// DateTime retains the original lodging date-or-local-time input contract.
+	// DateTime allows either a date or a local date-time in a date input.
 	DateTime bool `json:"dateTime,omitempty"`
 }
 

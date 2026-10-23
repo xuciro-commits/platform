@@ -77,7 +77,7 @@ format() {
 }
 
 capabilities() {
-  # This package includes complete industry publication and recovery routes.
+  # Platform mechanisms are checked independently of industry application packages.
   step capability-server check_module capabilities/server -timeout=45m
   step app-scaffold scaffold
 }
@@ -99,14 +99,7 @@ composition_static() {
 }
 
 composition() {
-  local dir
   composition_static
-  for dir in protocols/*; do
-    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-protocol" check_module "$dir"
-  done
-  for dir in apps/*/server; do
-    [[ -f $dir/go.mod ]] && step "$(basename "$(dirname "$dir")")-server" check_module "$dir"
-  done
 }
 
 deploy() {

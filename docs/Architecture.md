@@ -10,7 +10,7 @@
 | 宿主运行时 | 租户组合、提交管线、持久化与重放、快照、记录存储、受属工作、效果分发、模型调用 | `capabilities/server/`（包 `platformserver`） | 平台需要新机制时 |
 | 应用 API | 应用唯一可见的表面：`Member`、`Caller`、`Manifest`、生命/动作/读取/流程/智能体/作业/设置/效果声明、`Ledger`、`Runtime` | `capabilities/server/platform/` | 应用需要宿主尚未提供的能力时 |
 | 平台应用 | 跨行业通用能力：`ai`、`build`、`core`、`enterprise`、`files`、`flow`、`knowledge`、`relations`、`work` | `capabilities/server/apps/<id>/` | 该能力所属的语义需要扩展时 |
-| 协议 | 应用之间唯一允许的耦合：版本化接口与一致性测试 | `protocols/` | 出现第二个提供方或消费方时 |
+| 协议 | 应用之间唯一允许的耦合：由资产声明版本化接口，平台检查契约和映射 | 应用包中的协议声明；`capabilities/server/platform/protocol.go` | 提供方或消费方的受控接口变化时 |
 | 行业应用 | 通过平台声明验证行业任务；包内对象、动作、规则、流程与页面可由构建者修改 | `deploy/packages/` | 保留业务任务或通用构建能力变化时 |
 | 部署装配 | 同一平台工厂装配能力，两个实例由租户与包配置区分 | `capabilities/server/composition/`、`cmd/platform-server/`、`deploy/local/` | 平台能力组合或部署配置变化时 |
 | Web | 工作区、构建者应用、治理应用、共享 UI | `web/apps/`、`web/packages/` | 界面职责变化时 |
@@ -31,7 +31,6 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   internal/          acceptance agents aistate construction enterprise host records rules
   cmd/               platform-server、api-types、new-app、check-boundaries、uaf-gen、webhook-sink
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
-protocols/           lodging、production —— 跨应用协议
 web/
   apps/workspace     唯一工作区：session host shell chrome
   apps/catalog       资产库与代码沙箱
@@ -134,7 +133,7 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 
 一个定义放在哪，由四个问题裁决：换一个行业是否仍成立；同行业转型后是否仍成立；是"必须如此"还是"若干实现之一"；谁有权写、谁有权发布、哪条不变量约束它、哪项能力执行它。
 
-应用公共表面是 `platformserver/platform`，跨应用耦合在 `protocols/`，客户端公共表面是 `@platform/ui` 与 `@platform/app`。宿主、平台应用与参考应用保留各自权威；共享声明和纯编译不另建执行入口。具体行为按下面的模块规范维护，不通过文件搬迁改变职责。
+平台扩展的公共表面是 `platformserver/platform`，应用间耦合由原版本化协议声明表达，客户端公共表面是 `@platform/ui` 与 `@platform/app`。行业定义、组织初始化样本和业务验收属于可编辑应用资产，不在宿主、测试或启动工具中另写行业实现。平台测试以独立最小声明验证通用机制，不加载某个行业包作为平台正确性的前提。共享声明和纯编译不另建执行入口。
 
 ## 8. 规范导航
 

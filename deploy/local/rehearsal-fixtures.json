@@ -1,0 +1,21 @@
+[
+  {
+    "suffix": "primary",
+    "portEnv": "HOSPITALITY_PORT",
+    "port": 58495,
+    "tenant": "hotel-a-build",
+    "neighbor": "hotel-test-build",
+    "builder": "manager@hotel.test",
+    "operator": "desk@hotel.test",
+    "member": "desk-1"
+  },
+  {
+    "suffix": "secondary",
+    "portEnv": "MANUFACTURING_PORT",
+    "port": 58490,
+    "tenant": "plant-sz-build",
+    "builder": "sup@plant.test",
+    "operator": "op1@plant.test",
+    "member": "op-l1"
+  }
+]

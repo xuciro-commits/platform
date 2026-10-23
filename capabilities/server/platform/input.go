@@ -31,7 +31,7 @@ func CheckInputs(fields []Field) error {
 		c := f.Constraints
 		if c != nil {
 			if c.DateTime && f.Type != "date" {
-				return fmt.Errorf("%s does not take a lodging date or local time", f.Name)
+				return fmt.Errorf("%s does not take a date or local date-time", f.Name)
 			}
 			numeric := f.Type == "integer" || f.Type == "number"
 			if (c.Min != nil || c.Max != nil) && !numeric {

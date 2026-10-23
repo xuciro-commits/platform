@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Recover the common platform and its declared applications in an owned,
+# Recover platform mechanisms in an owned,
 # disposable deployment. Daily tenants, configurations and volumes stay intact.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -42,8 +42,8 @@ trap cleanup EXIT
 pnpm --dir web/apps/workspace build >"$scratch/web.log" 2>&1
 compose --progress plain build >"$scratch/build.log" 2>&1
 compose up -d --quiet-pull >"$scratch/up.log" 2>&1
-python3 deploy/local/declared_rehearsal.py "$scratch"
+python3 deploy/local/platform_rehearsal.py "$scratch"
 compose exec -T postgres createdb -U platform rehearsal_test
 PLATFORM_TEST_DATABASE="postgres://platform:platform-local-only@127.0.0.1:$PG_PORT/rehearsal_test" \
-  make test-go PKG=. RUN='TestJournal|TestPostgresTableProfilePullAndReplay|TestPostgresApplicationRuntimeAndDiagnosticReadScopes|TestPostgresDeclaredHourlyCapacityInitialization|TestPostgresRetainedFlowAliasQueryUsesConvertedRows|TestPostgresBusinessUniqueKeysSurvivePrivateFailureAndRestart' >"$scratch/postgres.log" 2>&1
+  make test-go PKG=. RUN='TestJournal|TestObservationIntervalProjectionFlowIdentityAndPureRecovery|TestPostgresTableProfilePullAndReplay|TestPostgresApplicationRuntimeAndDiagnosticReadScopes|TestPostgresRetainedFlowAliasQueryUsesConvertedRows|TestPostgresBusinessUniqueKeysSurvivePrivateFailureAndRestart' >"$scratch/postgres.log" 2>&1
 printf 'Common host recovery and declared application rehearsal passed. Diagnostics: %s\n' "$scratch"

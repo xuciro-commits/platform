@@ -12,8 +12,7 @@ type ProfileEntry struct {
 	Stereotype string   `json:"stereotype"`
 	Title      string   `json:"title"`
 	Plural     string   `json:"plural"`
-	Kinds      []string `json:"kinds,omitempty"`  // suggested Element.Kind values
-	Scales     []string `json:"scales,omitempty"` // from which scale on it is offered; empty: always
+	Kinds      []string `json:"kinds,omitempty"` // suggested Element.Kind values
 	Icon       string   `json:"icon,omitempty"`
 }
 
@@ -38,21 +37,21 @@ func Profile() []ProfileEntry {
 		{Stereotype: Organization, Title: "Organisation", Plural: "Organisations", Icon: "building", Kinds: []string{"group", "company", "subsidiary", "division", "business unit", "factory", "plant", "department", "line", "shift", "team", "committee", "partner"}},
 		{Stereotype: Post, Title: "Post", Plural: "Posts", Icon: "badge", Kinds: []string{"executive", "manager", "supervisor", "specialist", "operator", "staff"}},
 		{Stereotype: Person, Title: "Person", Plural: "People", Icon: "user"},
-		{Stereotype: "Responsibility", Title: "Responsibility", Plural: "Responsibilities", Icon: "clipboard", Scales: []string{"M", "L", "XL"}},
+		{Stereotype: "Responsibility", Title: "Responsibility", Plural: "Responsibilities", Icon: "clipboard"},
 		{Stereotype: Capability, Title: "Capability", Plural: "Capabilities", Icon: "target", Kinds: []string{"business", "operational", "technical", "support"}},
 		{Stereotype: Goal, Title: "Goal", Plural: "Goals", Icon: "flag"},
-		{Stereotype: "EnterpriseObjective", Title: "Objective", Plural: "Objectives", Icon: "flag", Scales: []string{"L", "XL"}},
-		{Stereotype: "Opportunity", Title: "Opportunity", Plural: "Opportunities", Icon: "sparkles", Scales: []string{"L", "XL"}},
+		{Stereotype: "EnterpriseObjective", Title: "Objective", Plural: "Objectives", Icon: "flag"},
+		{Stereotype: "Opportunity", Title: "Opportunity", Plural: "Opportunities", Icon: "sparkles"},
 		{Stereotype: Location, Title: "Location", Plural: "Locations", Icon: "map-pin", Kinds: []string{"site", "plant", "building", "warehouse", "workshop", "zone", "line", "workcenter", "station", "bin", "dock", "office"}},
 		{Stereotype: Resource, Title: "Resource", Plural: "Resources", Icon: "wrench", Kinds: []string{"machine", "equipment", "tool", "vehicle", "fixture", "instrument"}},
-		{Stereotype: "System", Title: "System", Plural: "Systems", Icon: "server", Kinds: []string{"ERP", "MES", "WMS", "PLM", "CRM", "custom"}, Scales: []string{"M", "L", "XL"}},
-		{Stereotype: "Service", Title: "Service", Plural: "Services", Icon: "handshake", Scales: []string{"L", "XL"}},
-		{Stereotype: "OperationalActivity", Title: "Process", Plural: "Processes", Icon: "workflow", Scales: []string{"M", "L", "XL"}},
+		{Stereotype: "System", Title: "System", Plural: "Systems", Icon: "server", Kinds: []string{"ERP", "MES", "WMS", "PLM", "CRM", "custom"}},
+		{Stereotype: "Service", Title: "Service", Plural: "Services", Icon: "handshake"},
+		{Stereotype: "OperationalActivity", Title: "Process", Plural: "Processes", Icon: "workflow"},
 		{Stereotype: Project, Title: "Project", Plural: "Projects", Icon: "calendar", Kinds: []string{"improvement", "investment", "product", "compliance"}},
-		{Stereotype: "ActualProjectMilestone", Title: "Milestone", Plural: "Milestones", Icon: "milestone", Scales: []string{"L", "XL"}},
-		{Stereotype: "Standard", Title: "Standard", Plural: "Standards", Icon: "book", Scales: []string{"L", "XL"}},
-		{Stereotype: "Risk", Title: "Risk", Plural: "Risks", Icon: "alert", Scales: []string{"L", "XL"}},
-		{Stereotype: "InformationElement", Title: "Information", Plural: "Information", Icon: "database", Scales: []string{"M", "L", "XL"}},
+		{Stereotype: "ActualProjectMilestone", Title: "Milestone", Plural: "Milestones", Icon: "milestone"},
+		{Stereotype: "Standard", Title: "Standard", Plural: "Standards", Icon: "book"},
+		{Stereotype: "Risk", Title: "Risk", Plural: "Risks", Icon: "alert"},
+		{Stereotype: "InformationElement", Title: "Information", Plural: "Information", Icon: "database"},
 	}
 }
 

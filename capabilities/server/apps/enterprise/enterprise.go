@@ -44,16 +44,13 @@ const (
 	TenantLinkType           = "enterprise.tenant-link"
 	SchemaViewSave           = "enterprise.view.save"
 	SchemaViewDelete         = "enterprise.view.delete"
-	SchemaSeed               = "enterprise.model.seed"
 
-	ReadOrganization   = "organization"
-	ReadModel          = "enterprise"
-	ReadMetamodel      = "enterprise-metamodel"
-	ReadPublished      = "enterprise-published" // the slice this tenant shares with the tenants it federates with
-	ReadPatterns       = "enterprise-patterns"  // the pattern catalogue with previews
-	SchemaPatternApply = "enterprise.pattern.apply"
-	SchemaSliceImport  = "enterprise.slice.import"
-	SchemaSliceSync    = enterprisemodel.SchemaSliceSync // a pipeline lands an external system's slice, diffed
+	ReadOrganization  = "organization"
+	ReadModel         = "enterprise"
+	ReadMetamodel     = "enterprise-metamodel"
+	ReadPublished     = "enterprise-published" // the slice this tenant shares with the tenants it federates with
+	SchemaSliceImport = "enterprise.slice.import"
+	SchemaSliceSync   = enterprisemodel.SchemaSliceSync // a pipeline lands an external system's slice, diffed
 
 	// Admin stewards the model (the org app's role, kept so seats carry over).
 	Admin = "admin"
@@ -122,14 +119,6 @@ func declarations() []platform.Action {
 		platform.Action{Schema: SchemaSliceSync, Target: ModelType, Capability: "federation", Title: "Sync a system's slice", Roles: admin, Automation: true,
 			Description: "Land what an external system holds about the enterprise - organisational units, posts, locations, equipment - as elements and relationships owned on its behalf. Repeated syncs diff: new ids start today, missing ids close today, history stays.",
 			Payload:     []platform.Field{f("source", "string", "The system's name, e.g. sap-hr", true), f("elements", "json", "Elements with ids stable across syncs", true), f("relationships", "json", "Relationships between them, or to the tenant's own elements", false)}},
-		platform.Action{Schema: SchemaPatternApply, Target: ModelType, Capability: "seed", Title: "Add from a pattern", Roles: admin,
-			Description: "Graft a ready-made piece of enterprise — a company, plant, hotel, warehouse, department, line — under an organisation, or at the top. Rename and reshape it afterwards like anything else.",
-			Payload: []platform.Field{f("pattern", "string", "Pattern id: group, company, plant, hotel, warehouse, office, department, shared-services, line, team", true), f("name", "string", "The new root's name", true),
-				f("under", "string", "The organisation it sits under; empty: the top", false), f("params", "json", "Integer knobs by name, e.g. {\"workshops\": 3}", false)}},
-		platform.Action{Schema: SchemaSeed, Target: ModelType, Capability: "seed", Title: "Seed from a template", Roles: admin,
-			Description: "Give an empty model its first shape for the enterprise's scale: S (≤100 people), M (≤1,000: a plant), L (≤10,000: divisions), XL (≤100,000: a group).",
-			Payload: []platform.Field{f("scale", "string", "S, M, L or XL; empty: from headcount", false), f("name", "string", "The enterprise's name", true), f("headcount", "number", "People, roughly", false),
-				f("sites", "number", "Sites or plants", false), f("legalEntities", "number", "Legal entities", false), f("industry", "string", "manufacturing, hospitality, services …", false)}},
 	}
 	// relationship.change is relationship.add that replaces atomically: the
 	// same payload plus the new id, declared last as the catalog always did.
@@ -176,8 +165,8 @@ func (e *Enterprise) Restore(raw json.RawMessage) error {
 
 func (e *Enterprise) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: "Enterprise", Version: "1", Actions: e.ledger.Catalog,
-		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished, ReadPatterns}, Everyone: []string{ReadModel, ReadMetamodel, ReadPatterns},
-		ReadSources: map[string]string{ReadOrganization: "record", ReadModel: "record", ReadMetamodel: "record", ReadPublished: "record", ReadPatterns: "record"}}
+		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished}, Everyone: []string{ReadModel, ReadMetamodel},
+		ReadSources: map[string]string{ReadOrganization: "record", ReadModel: "record", ReadMetamodel: "record", ReadPublished: "record"}}
 }
 
 // memberOffboard is the console's decision that a member left:
@@ -234,24 +223,21 @@ func copyModel(m enterprisemodel.Model) enterprisemodel.Model {
 }
 
 type payload struct {
-	Stereotype, Name, Kind, ShortName, Reason, Source, Target, Role, Relation, Viewpoint, Scale, Industry string
-	Legal, External, Matrix, Primary                                                                      bool
-	Share                                                                                                 float64
-	Headcount, Sites, LegalEntities                                                                       int
-	From, Until, AsOf                                                                                     platform.Date
-	Properties                                                                                            map[string]any
-	Elements                                                                                              []string
-	Layout                                                                                                map[string][2]float64
-	Pins                                                                                                  []enterprisemodel.Pin
-	Calendar                                                                                              string
-	Published                                                                                             *bool
-	Slice                                                                                                 *enterprisemodel.Slice
-	Pattern, Under                                                                                        string
-	Replacement                                                                                           string
-	Context                                                                                               []string
-	Params                                                                                                enterprisemodel.Params
-	Link, Content, Base, Organization, Tenant, Root, Connection                                           string
-	ConnectionRevision                                                                                    uint32
+	Stereotype, Name, Kind, ShortName, Reason, Source, Target, Role, Relation, Viewpoint string
+	Legal, External, Matrix, Primary                                                     bool
+	Share                                                                                float64
+	From, Until, AsOf                                                                    platform.Date
+	Properties                                                                           map[string]any
+	Elements                                                                             []string
+	Layout                                                                               map[string][2]float64
+	Pins                                                                                 []enterprisemodel.Pin
+	Calendar                                                                             string
+	Published                                                                            *bool
+	Slice                                                                                *enterprisemodel.Slice
+	Replacement                                                                          string
+	Context                                                                              []string
+	Link, Content, Base, Organization, Tenant, Root, Connection                          string
+	ConnectionRevision                                                                   uint32
 }
 
 func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -392,27 +378,6 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			return func(*pb.ChangeRecord) {
 				m.TenantLinks = slices.DeleteFunc(m.TenantLinks, func(link enterprisemodel.TenantLink) bool { return link.ID == id })
 			}, nil
-		case SchemaSeed:
-			if len(m.Elements) > 0 {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "the model already has {n} elements; a template seeds only an empty model", len(m.Elements))
-			}
-			if p.Name == "" {
-				return nil, invalid("the enterprise needs a name")
-			}
-			seeded, err := enterprisemodel.Template(enterprisemodel.SeedParams{Scale: p.Scale, Name: p.Name, Headcount: p.Headcount, Sites: p.Sites, LegalEntities: p.LegalEntities, Industry: p.Industry, Day: today})
-			if err != nil {
-				return nil, invalid(err.Error())
-			}
-			return func(*pb.ChangeRecord) {
-				seeded.Calendars = m.Calendars
-				*m = seeded
-			}, nil
-		case SchemaPatternApply:
-			probe := copyModel(*m)
-			if _, err := probe.Apply(p.Pattern, p.Under, p.Name, p.Params, today); err != nil {
-				return nil, invalid(err.Error())
-			}
-			return func(*pb.ChangeRecord) { m.Apply(p.Pattern, p.Under, p.Name, p.Params, today) }, nil
 		case SchemaSliceSync:
 			if p.Source == "" || strings.ContainsAny(p.Source, " :/") {
 				return nil, invalid("a sync names its source system")
@@ -904,9 +869,6 @@ func (e *Enterprise) Calendar(party string, day platform.Date) platform.Calendar
 
 // Metamodel is what the client draws palettes from: the current release's
 // stereotypes in the Enterprise Core enterprisemodel.Profile, with the whole registry behind.
-// PatternInfo is a pattern with what it adds by default.
-type PatternInfo = enterprisemodel.PatternInfo
-
 type Metamodel = enterprisemodel.Metamodel
 
 // Element and Related serve host.Directory for the apps.
@@ -937,13 +899,6 @@ func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return e.model.OrgSeed(), nil
 	case ReadPublished:
 		return e.model.Published(e.tenant), nil
-	case ReadPatterns:
-		out := []enterprisemodel.PatternInfo{}
-		for _, p := range enterprisemodel.Patterns() {
-			pv, _ := enterprisemodel.PatternPreview(p.ID, "", nil)
-			out = append(out, enterprisemodel.PatternInfo{Pattern: p, Preview: pv, LevelName: enterprisemodel.LevelNames[p.Level]})
-		}
-		return out, nil
 	case ReadMetamodel:
 		mm := uaf.Current()
 		return enterprisemodel.Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: enterprisemodel.Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,

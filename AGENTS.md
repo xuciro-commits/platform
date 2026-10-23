@@ -28,7 +28,7 @@
 ## 硬规则
 
 1. **内核是契约。** `contract/` 不含领域词汇。内核语义变更先改规范与向量，再改 Go 与 Rust/TypeScript 边缘；三端跑同一套向量。`v1` 语义变更在提交信息里写清理由。
-2. **一项决策只改一个权威。** 跨应用只走 `protocols/`，用请求—应答与补偿，不做跨权威原子性。
+2. **一项决策只改一个权威。** 跨应用只走版本化协议声明，用请求—应答与补偿，不做跨权威原子性。
 3. **写入只走一条路径。** 权威状态的新写入必须经接受结果；新封存结果恢复只应用已保存映像，不重跑规则、不重新授权、不发起外部调用；旧输入的兼容读取责任见 Architecture。历史字节永不重写。
 4. **单一归属，先复用。** 应用只导入 `platformserver/platform`；客户端只用 `@platform/ui` 与 `@platform/app`。缺的能力在归属方扩展；`scripts/boundaries.sh`、`scripts/escapes.sh` 的已知逃逸只减不增。UI 变更前先 `node scripts/catalog.mjs search <关键词>`。
 5. **生成文件不手改。** `contract/go/gen`、`web/packages/kernel/src/gen/host.ts`（宿主 API 类型变了就在 `capabilities/server` 跑 `go run ./cmd/api-types`）、`web/apps/catalog/src/gen`（`node scripts/catalog.mjs generate`）。
@@ -58,7 +58,7 @@
 | 内核规范 / 向量 / 实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘 |
 | Lean 模型 | `scripts/verify.sh formal` |
 | Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改应用 API 或组合时加 `scripts/verify.sh composition` |
-| 应用 / 协议 | `scripts/verify.sh composition`；声明式行业包运行对应 owner 场景与酒店/制造浏览器路线 |
+| 应用 / 协议 | 应用通过原包内验收计划维护；平台机制修改运行对应 owner 检查与适用的通用浏览器路线，另跑 `scripts/verify.sh composition` |
 | Web | `make check-web`（生成一致性、Catalog、全部包 tsc）；只在对应包运行受影响的单元测试，`make test` 是完整测试入口 |
 | 成组交付或发布节点 | 选一条浏览器路线 `make e2e SPEC=<name>`；完整浏览器任务用 `make e2e`，发布构建与契约检查用 `make verify` |
 | 结构整理（搬文件、拆函数） | 整块完成后按受影响语言运行构建、类型与原边界检查；有实际行为影响时再选对应测试，不默认跑整个宿主测试、不为搬迁新增测试 |

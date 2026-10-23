@@ -73,7 +73,6 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []platform.AIModel{}},
 	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: platform.AIUsageReport{}},
 	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships (a projection of the enterprise model)", Answer: platform.OrgSeed{}},
-	{Pattern: "GET /v1/enterprise-patterns", Summary: "Reusable pieces of enterprise on the four-level backbone, with previews", Answer: []enterprisemodel.PatternInfo{}},
 	{Pattern: "GET /v1/enterprise", Summary: "The tenant's enterprise model: kinds, elements, relationships and views", Answer: enterprisemodel.Model{}},
 	{Pattern: "GET /v1/enterprise-metamodel", Summary: "The UAF metamodel, Enterprise Core profile and grid cells the modeler draws from", Answer: enterprisemodel.Metamodel{}},
 	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []platform.FlowDefinition{}},

@@ -51,8 +51,6 @@ export const enterpriseWrites = [
 	"enterprise.view.delete",
 	"enterprise.slice.import",
 	"enterprise.slice.sync",
-	"enterprise.pattern.apply",
-	"enterprise.model.seed",
 	"enterprise.relationship.change",
 ] as const;
 
@@ -221,32 +219,6 @@ export type EnterpriseSliceSyncPayload = {
 	relationships?: unknown;
 };
 
-export type EnterprisePatternApplyPayload = {
-	// Pattern id: group, company, plant, hotel, warehouse, office, department, shared-services, line, team
-	pattern: string;
-	// The new root's name
-	name: string;
-	// The organisation it sits under; empty: the top
-	under?: string;
-	// Integer knobs by name, e.g. {"workshops": 3}
-	params?: unknown;
-};
-
-export type EnterpriseModelSeedPayload = {
-	// S, M, L or XL; empty: from headcount
-	scale?: string;
-	// The enterprise's name
-	name: string;
-	// People, roughly
-	headcount?: number;
-	// Sites or plants
-	sites?: number;
-	// Legal entities
-	legalEntities?: number;
-	// manufacturing, hospitality, services …
-	industry?: string;
-};
-
 export type EnterpriseRelationshipChangePayload = {
 	// UAF relationship stereotype, e.g. ActualResourceRelationship, ActualOrganizationRole, FillsPost, IsCapableToPerform, ResponsibleFor
 	stereotype: string;
@@ -290,8 +262,6 @@ export type EnterpriseWritePayloads = {
 	"enterprise.view.delete": EnterpriseViewDeletePayload;
 	"enterprise.slice.import": EnterpriseSliceImportPayload;
 	"enterprise.slice.sync": EnterpriseSliceSyncPayload;
-	"enterprise.pattern.apply": EnterprisePatternApplyPayload;
-	"enterprise.model.seed": EnterpriseModelSeedPayload;
 	"enterprise.relationship.change": EnterpriseRelationshipChangePayload;
 };
 

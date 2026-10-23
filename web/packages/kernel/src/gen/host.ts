@@ -3414,17 +3414,6 @@ export type Passage = {
   score: number;
 };
 
-export type PatternInfo = {
-  id: string;
-  title: string;
-  description: string;
-  level: number;
-  industry?: string;
-  params: Field[];
-  levelName: string;
-  preview: Preview;
-};
-
 export type Period = {
   from?: string;
   until?: string;
@@ -3542,16 +3531,6 @@ export type Predicate = {
   terms?: Predicate[];
 };
 
-export type Preview = {
-  elements: number;
-  relationships: number;
-  organisations: number;
-  posts: number;
-  locations: number;
-  resources: number;
-  outline: string[];
-};
-
 export type Process = {
   id: string;
   revision: number;
@@ -3661,7 +3640,6 @@ export type ProfileEntry = {
   title: string;
   plural: string;
   kinds?: string[];
-  scales?: string[];
   icon?: string;
 };
 

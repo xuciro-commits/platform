@@ -158,21 +158,14 @@ test-web: ## 运行 Web 单元测试；可用 PKG=@platform/ui 与 RUN=文件名
 	cd web && $(PNPM) $(if $(PKG),--filter '$(PKG)',-r) run test $(if $(RUN),'$(RUN)')
 
 .PHONY: e2e
-ifneq ($(if $(strip $(SPEC)),$(filter heating-application protocol-packages,$(SPEC)),all),)
+ifneq ($(if $(strip $(SPEC)),$(filter protocol-packages,$(SPEC)),all),)
 e2e: packages
 e2e: export PLATFORM_PACKAGES_DIR ?= $(GATEWAY_PACKAGES)
 e2e: export PROTOCOL_VERSION := $(PROTOCOL_VERSION)
 endif
-ifneq ($(filter declared-hospitality declared-manufacturing,$(SPEC)),)
-e2e: export PLATFORM_PACKAGES_DIR ?= $(ROOT)/deploy/packages
-endif
 e2e: ## 在开发宿主上运行 web/e2e 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build
 	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts) $(E2E_ARGS)
-ifeq ($(strip $(SPEC)),)
-	cd web && PLATFORM_PACKAGES_DIR="$(ROOT)/deploy/packages" $(PNPM) --filter @platform/e2e e2e tests/declared-hospitality.spec.ts $(E2E_ARGS)
-	cd web && PLATFORM_PACKAGES_DIR="$(ROOT)/deploy/packages" $(PNPM) --filter @platform/e2e e2e tests/declared-manufacturing.spec.ts $(E2E_ARGS)
-endif
 
 ## release - 版本发布（完整证据链；CI 在 v* 标签上运行同一检查）
 
@@ -195,13 +188,8 @@ images: ## 构建解决方案 Docker 镜像并打上 VERSION 标签（需先构�
 	docker tag platform-manufacturing-server platform/manufacturing-server:$(VERSION)
 
 .PHONY: rehearse
-rehearse: ## 交付检查（默认临时容器；PROFILE=migration 检查演进；PROFILE=heating 检查模拟行业包）
-ifeq ($(PROFILE),heating)
-	$(MAKE) packages
-	PLATFORM_PROTOCOL_PACKAGES="$(GATEWAY_PACKAGES)" $(MAKE) test-go PKG=. RUN=TestHeatingIndustryPackageTwoCitiesAndRetainedRepair
-else
+rehearse: ## 交付检查（默认隔离容器；PROFILE=migration 检查演进）
 	$(if $(filter migration,$(PROFILE)),python3 deploy/local/migration_rehearsal.py,scripts/verify.sh deploy)
-endif
 
 .PHONY: tag
 tag: ## 标记正式版本：make tag VERSION=v0.12.0（推送标签将触发发布流水线）

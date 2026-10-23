@@ -3,7 +3,8 @@ import { expect, fresh, shots, test } from "./kit";
 test("enterprise daily management preserves identity, usage history and source ownership", async ({ page, builder }, info) => {
   test.setTimeout(120_000);
   const suffix = fresh("enterprise").toLowerCase();
-  const parent = `org-${suffix}`, child = `child-${suffix}`, mistake = `mistake-${suffix}`, external = `source-${suffix}`;
+  let parent = "";
+  const child = `child-${suffix}`, mistake = `mistake-${suffix}`, external = `source-${suffix}`;
   const name = `Operations ${suffix}`, renamed = `Operations renamed ${suffix}`;
   const day = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
@@ -11,8 +12,21 @@ test("enterprise daily management preserves identity, usage history and source o
   const model = () => builder.read<any>("enterprise");
   const me = await builder.read<any>("me");
   await builder.decide("platform.member.grant", { type: "platform.member", id: me.principalId }, { app: "core", role: "steward" }, "platform");
-  await builder.decide("enterprise.element.add", { type: "enterprise.element", id: parent }, { stereotype: "ActualOrganization", name, kind: "team", shortName: "OPS", from: "2026-01-01" }, "enterprise");
-  await builder.decide("enterprise.element.edit", { type: "enterprise.element", id: parent }, { calendar: "office" }, "enterprise");
+  await builder.open(page, "/enterprise");
+  await page.getByLabel("As of", { exact: true }).fill("2026-01-01");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button").filter({ hasText: "ActualOrganization" }).click();
+  const creation = page.getByRole("dialog", { name: "New Organisation", exact: true });
+  await creation.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+  await creation.getByRole("combobox", { name: "Kind", exact: true }).fill("team");
+  await creation.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(creation).toHaveCount(0);
+  await expect.poll(async () => {
+    parent = (await model()).elements.find((element: any) => element.name === name)?.id ?? "";
+    return parent;
+  }).not.toBe("");
+  await page.getByLabel("As of", { exact: true }).fill(day);
+  await builder.decide("enterprise.element.edit", { type: "enterprise.element", id: parent }, { shortName: "OPS", calendar: "office" }, "enterprise");
   await builder.open(page, `/enterprise?element=${parent}&section=organization`);
   const inspector = page.getByRole("region", { name: "Inspector", exact: true });
   const nameInput = inspector.getByRole("textbox", { name: "Name", exact: true });
