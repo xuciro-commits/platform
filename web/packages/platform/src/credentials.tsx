@@ -66,17 +66,17 @@ export function CredentialEditor({ open, onClose, initial, onSaved }: { open: bo
 }
 
 export function Credentials() {
-  const { decide } = useHost();
+  const { decide, can } = useHost();
   const catalog = useRead<Api.CredentialCatalog>("/v1/credentials");
   const [editing, setEditing] = useState<Api.CredentialWrite>();
   return <>
-    <PageHeader title={t("Credentials")} help={t("Manage encrypted credentials and deployment references. Applications use authorized bindings; saved values are never displayed.")} actions={<Button variant="primary" onClick={() => setEditing(blank())}>{t("Add credential")}</Button>} />
+    <PageHeader title={t("Credentials")} help={t("Manage encrypted credentials and deployment references. Applications use authorized bindings; saved values are never displayed.")} actions={can("platform.credential.save") ? <Button variant="primary" onClick={() => setEditing(blank())}>{t("Add credential")}</Button> : undefined} />
     {catalog.error && <p role="alert">{String(catalog.error)}</p>}
     {catalog.data && !catalog.data.managedAvailable && <p className="mb-3 text-sm text-muted">{t("Platform encryption is not configured. Deployment references remain available.")}</p>}
     <div className="grid gap-2">{catalog.data?.credentials.map(credential => <Card key={credential.id} className="grid gap-2 p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2"><strong>{credential.title}</strong><span className="font-mono text-xs">{credential.id}</span><Tag label={t(credential.state)} tone={credential.state === "active" ? "success" : "neutral"} /><Tag label={credential.kind} tone="info" /><span className="text-xs text-muted">{t(credential.source === "managed" ? "Platform managed" : "Deployment reference")} · {t("Version")} {credential.version}</span></div>
       <div className="grid gap-1 font-mono text-xs text-muted">{credential.bindings.map((binding, index) => <span key={index}>{binding.consumer} · {binding.origin}</span>)}</div>
-      <div className="flex gap-2"><Button size="sm" onClick={() => setEditing({ id: credential.id, title: credential.title, kind: credential.kind, source: credential.source, reference: credential.reference, bindings: credential.bindings, expectedVersion: credential.version })}>{t("Edit")}</Button>{credential.state === "active" && <Button size="sm" variant="danger" onClick={() => void decide("platform.credential.disable", { type: "platform.credential", id: credential.id }, { expectedVersion: credential.version })}>{t("Disable")}</Button>}</div>
+      <div className="flex gap-2">{can("platform.credential.save") && <Button size="sm" onClick={() => setEditing({ id: credential.id, title: credential.title, kind: credential.kind, source: credential.source, reference: credential.reference, bindings: credential.bindings, expectedVersion: credential.version })}>{t("Edit")}</Button>}{credential.state === "active" && can("platform.credential.disable") && <Button size="sm" variant="danger" onClick={() => void decide("platform.credential.disable", { type: "platform.credential", id: credential.id }, { expectedVersion: credential.version })}>{t("Disable")}</Button>}</div>
     </Card>)}</div>
     {!catalog.data?.credentials.length && !catalog.error && <p className="text-sm text-muted">{t("No credentials.")}</p>}
     <CredentialEditor open={!!editing} initial={editing} onClose={() => setEditing(undefined)} />
