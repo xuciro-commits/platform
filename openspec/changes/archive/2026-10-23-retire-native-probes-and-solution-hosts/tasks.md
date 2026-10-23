@@ -63,7 +63,7 @@
 - [x] 9.1 在纯平台构建上集中执行 `make verify`，复用其已覆盖的构建、类型、owner、契约和生成检查；另补其未覆盖的 `scripts/verify.sh composition`，确认没有通过删断言、放宽规则或保留原生依赖取得通过。
 - [x] 9.2 按 `kit.ts` 各提供一条酒店和制造浏览器业务路线，运行 `make e2e SPEC=declared-hospitality` 与 `make e2e SPEC=declared-manufacturing`；观察四应用的构建/发布/业务任务及通用离线，服务端已证明的规则不在浏览器逐项重测。
 - [x] 9.3 运行更新后的 `make rehearse` 检查新发布内容、在途工作、离线请求关联和已接受观测的重启接续；需要 PostgreSQL 的 owner 检查明确使用 `PLATFORM_TEST_DATABASE`，跳过或未完成不报通过，并确认供暖回归范围。
-- [ ] 9.4 按本次提交/部署授权完成交付；代码更新 main 后使用原 `deploy/local/update.sh` 更新酒店/制造两实例，核对实际 Git 版本、租户健康和页面资源，分别报告自动检查、浏览器观察、负责人确认及未验证项。
+- [x] 9.4 按本次提交/部署授权完成交付；代码更新 main 后使用原 `deploy/local/update.sh` 更新酒店/制造两实例，核对实际 Git 版本、租户健康和页面资源，分别报告自动检查、浏览器观察、负责人确认及未验证项。
 
 ## Workflow follow-up
 
