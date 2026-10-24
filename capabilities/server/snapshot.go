@@ -472,7 +472,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 		entries := make([]records.Entry[*records.Row], 0, len(rows))
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
-			decode, err := records.DecodeFormattedImage(et.info, r.Value, r.Projection, t.records.readRelease, r.Format)
+			decode, err := decodeRowImage(et.info, r.Value, r.Projection, t.records.readRelease, r.Format)
 			if err != nil {
 				return nil, err
 			}

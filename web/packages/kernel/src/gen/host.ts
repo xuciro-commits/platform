@@ -3043,6 +3043,18 @@ export type ReleaseAsset = {
   body: unknown;
 };
 
+export type ReleaseCandidateRequest = {
+  candidateId: string;
+  key: string;
+  kind?: string;
+  draftId?: string;
+  drafts?: JointDraftRef[];
+};
+
+export type ReleaseCandidateSaved = {
+  id: string;
+};
+
 export type ReleaseDraftChanges = {
   changes: DraftChange[];
 };

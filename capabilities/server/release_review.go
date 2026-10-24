@@ -67,6 +67,11 @@ type ReleasePage struct {
 	ActiveID   string           `json:"activeId"`
 }
 
+// ReleaseCandidateSaved is the candidate a tenant just froze.
+type ReleaseCandidateSaved struct {
+	ID string `json:"id"`
+}
+
 type SavedReleaseReview struct {
 	AI                   []ApplicationAI          `json:"ai,omitempty"`
 	Preview              ReleasePreview           `json:"preview"`

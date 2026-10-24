@@ -80,6 +80,22 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 	return t.installDefinitions(id, info, actions, pages, e.Protocols...)
 }
 
+// decodeRowImage reads one saved row into the current declaration. A type
+// declared again may name fewer fields than the row carries: the ones it
+// dropped are left out and the rest keep their value, so a re-declared type
+// never refuses the rows it already holds.
+func decodeRowImage(info platform.EntityInfo, raw json.RawMessage, projection *records.Projection, release, format string) (json.RawMessage, error) {
+	decode, err := records.DecodeFormattedImage(info, raw, projection, release, format)
+	if err == nil {
+		return decode, nil
+	}
+	pruned, pruneErr := records.PruneImage(info, raw)
+	if pruneErr != nil {
+		return nil, err
+	}
+	return records.DecodeFormattedImage(info, pruned, projection, release, format)
+}
+
 // install declares a type, or declares it again: the rows are carried into the
 // new Go type through their JSON, so a record keeps the value of every field
 // that is still there.
@@ -114,17 +130,9 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 				return err
 			}
 			v := reflect.New(info.Go).Elem()
-			decode, err := records.DecodeFormattedImage(info, raw, r.Projection, s.readRelease, r.Format)
+			decode, err := decodeRowImage(info, raw, r.Projection, s.readRelease, r.Format)
 			if err != nil {
-				// The declaration may name fewer fields than the row carries:
-				// the ones it dropped are left out, the rest keep their value.
-				pruned, pruneErr := records.PruneImage(info, raw)
-				if pruneErr != nil {
-					return err
-				}
-				if decode, err = records.DecodeFormattedImage(info, pruned, r.Projection, s.readRelease, r.Format); err != nil {
-					return err
-				}
+				return err
 			}
 			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
 				return err

@@ -83,6 +83,26 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, h.withPromotions(t.ID, answer))
 	})
+	rt.authorized(Route{Pattern: "POST /v1/releases/candidates", Summary: "Builder and publisher freeze one or several saved drafts as one immutable release candidate", Body: ReleaseSaveRequest{}, Answer: ReleaseCandidateSaved{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request ReleaseSaveRequest
+		if !decodeReleaseBody(w, r, &request) {
+			return
+		}
+		drafts := request.Drafts
+		if len(drafts) == 0 && request.Kind != "" && request.ID != "" {
+			drafts = []construction.JointDraftRef{{Kind: request.Kind, ID: request.ID}}
+		}
+		if request.CandidateID == "" || request.Key == "" || len(drafts) == 0 || len(drafts) > construction.JointDraftLimit {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		id, err := t.SaveReleaseCandidates(m, drafts, request.CandidateID, request.Key, Now())
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusCreated, ReleaseCandidateSaved{ID: id})
+	})
 	rt.authorized(Route{Pattern: "POST /v1/releases/migrations/review", Summary: "Review explicit migration steps between sealed releases without changing data", Body: platform.MigrationPlan{}, Answer: MigrationReview{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
 		if err != nil || len(body) > 1<<20 {
