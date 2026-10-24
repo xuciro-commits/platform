@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ee66989da6c3e74f",
+  "revision": "sha256:6ced5a6f5100d41f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -6695,62 +6695,6 @@
       ]
     },
     {
-      "id": "ui/metal-button",
-      "owner": "@platform/ui",
-      "name": "Metal button",
-      "summary": "Tactile metallic and liquid glass styled buttons for prominent actions.",
-      "layer": 1,
-      "source": "web/packages/ui/src/primitives/metalButton.tsx",
-      "exports": [
-        "MetalButton",
-        "LiquidButton"
-      ],
-      "example": "MetalButtons",
-      "authority": "api",
-      "maturity": "recommended",
-      "scope": "platform",
-      "uses": [
-        "code"
-      ],
-      "tags": [
-        "button",
-        "metal",
-        "tactile",
-        "liquid",
-        "variants"
-      ],
-      "states": [
-        "Pressed",
-        "Hover",
-        "Touch"
-      ],
-      "snippet": "import { MetalButton, LiquidButton } from \"@platform/ui\";\n<MetalButton variant=\"gold\">Confirm</MetalButton>",
-      "props": [
-        {
-          "name": "asChild",
-          "type": "boolean",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
-        },
-        {
-          "name": "variant",
-          "type": "\"default\" | \"destructive\" | \"outline\" | \"secondary\" | \"ghost\" | \"link\"",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        },
-        {
-          "name": "size",
-          "type": "\"default\" | \"sm\" | \"lg\" | \"xl\" | \"xxl\" | \"icon\"",
-          "optional": true,
-          "isCallback": false,
-          "isSlot": false
-        }
-      ]
-    },
-    {
       "id": "ui/multiple-choice-input",
       "owner": "@platform/ui",
       "name": "Set choice input",
@@ -10817,38 +10761,6 @@
       ]
     },
     {
-      "id": "ui/retro-button",
-      "owner": "@platform/ui",
-      "name": "Retro button",
-      "summary": "Tactile mechanical keycap buttons styled after industrial equipment.",
-      "layer": 1,
-      "source": "web/packages/ui/src/primitives/retroButton.tsx",
-      "exports": [
-        "RetroButton"
-      ],
-      "example": "RetroButtons",
-      "authority": "api",
-      "maturity": "experimental",
-      "scope": "platform",
-      "uses": [
-        "code"
-      ],
-      "tags": [
-        "button",
-        "retro",
-        "tactile",
-        "keycap",
-        "variants"
-      ],
-      "states": [
-        "Enabled",
-        "Pressed",
-        "Disabled",
-        "Keyboard focus"
-      ],
-      "snippet": "import { RetroButton } from \"@platform/ui\";\n<RetroButton variant=\"default\">RUN</RetroButton>"
-    },
-    {
       "id": "ui/scene-3d",
       "owner": "@platform/ui",
       "name": "3D scene",
@@ -12384,7 +12296,6 @@
       "Group related content with a shared heading, description and action area.": "通过统一的标题、说明和动作区域组织相关内容。",
       "Grouped resource list": "分组资源列表",
       "Hierarchy selection": "层级选择",
-      "Hover": "悬停",
       "Icon picker": "图标选择器",
       "Image annotation": "图片标注",
       "Input controls": "输入控件",
@@ -12418,7 +12329,6 @@
       "Master-detail interaction": "列表详情交互",
       "Match one decision's confirmation to its original tenant and idempotency key.": "按原租户和幂等键匹配一次决策的确认。",
       "Member-scoped assistant": "成员范围内的助手",
-      "Metal button": "金属与流体按钮",
       "Modal dialog": "模态对话框",
       "Model-bound expression matrix": "模型绑定表达式矩阵",
       "Model-bound layered graph": "模型绑定分层图",
@@ -12492,7 +12402,6 @@
       "Present original persisted comments and a caller-owned draft whose confirmation belongs to the host.": "呈现原持久化评论及调用方持有的草稿，提交确认由宿主负责。",
       "Present the original complete-set count and numeric average without recomputing a loaded window.": "呈现原完整集合数量及数值平均值，不重新计算加载窗口。",
       "Present twelve original record rows with their real titles, statuses and caller-owned selection.": "展示十二条原记录的真实标题、状态及调用方控制的选择。",
-      "Pressed": "按下",
       "Process canvas": "流程画布",
       "Process steps, read only": "流程步骤（只读）",
       "Published code function call": "已发布代码函数调用",
@@ -12535,7 +12444,6 @@
       "Results come from the current member’s host. The offline example searches synthetic records only.": "结果来自当前成员的宿主。离线示例只搜索合成记录。",
       "Retained asset directory": "保留版本资源目录",
       "Retired": "已退役",
-      "Retro button": "复古实体按键",
       "Reusable query workbench": "复用查询设计台",
       "Reveal supporting details while keeping the summary visible.": "显示补充详情，同时保留摘要。",
       "Rows are always expanded; collapse and full tree keyboard navigation are not implemented.": "所有行始终展开；尚未实现折叠与完整的树键盘导航。",
@@ -12579,8 +12487,6 @@
       "Submitting": "提交中",
       "Switch several named choices on or off without a custom control.": "开启或关闭多项命名选项，无需另写控件。",
       "Switch stable named panels with keyboard navigation and retain visited content.": "使用键盘切换具有稳定标识的面板，并保留已访问的内容。",
-      "Tactile mechanical keycap buttons styled after industrial equipment.": "仿工业仪器和机械键帽质感的复古实体按键。",
-      "Tactile metallic and liquid glass styled buttons for prominent actions.": "用于重点操作的拟物金属与流体玻璃质感按钮。",
       "Tasks and inbox": "任务与收件箱",
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Tenant reference selection": "租户引用选择",
@@ -12671,7 +12577,6 @@
       "This pattern recommends a composition; it does not grant widget eligibility or permissions.": "此模式推荐一种组合，不授予区块资格或权限。",
       "This search currently has no dedicated error or pending feedback; callers must not claim otherwise.": "当前搜索没有专门的错误或等待反馈；调用方须如实说明。",
       "Toggle one caller-owned boolean with explicit checked and disabled states.": "切换调用方拥有的单个布尔值，显式呈现选中与禁用状态。",
-      "Touch": "触摸",
       "Traverse retained original relationships, confirm every record and preserve authorized window totals.": "遍历保留版本的原关系，确认每条记录并保留已授权窗口总数。",
       "Typed field vocabulary": "类型化字段词汇",
       "Typed filters": "类型化筛选",
@@ -14435,7 +14340,6 @@
         "RelationLayout",
         "RelationNode",
         "ResourceStatusTone",
-        "RetroButtonProps",
         "Route",
         "Scene3DProps",
         "SceneConfig",

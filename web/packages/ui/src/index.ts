@@ -10,8 +10,6 @@ export {SearchInput} from "./components/SearchInput";
 export { t, language, languages, setLanguage, register, type Dictionary } from "./i18n";
 export { cn } from "./lib/cn";
 export { Button, type ButtonProps } from "./primitives/button";
-export { MetalButton, LiquidButton } from "./primitives/metalButton";
-export { RetroButton, type RetroButtonProps } from "./primitives/retroButton";
 export { Input, Select, Textarea } from "./primitives/input";
 export { Card, Panel } from "./primitives/card";
 export { EditorWorkbench } from "./layout/EditorWorkbench";

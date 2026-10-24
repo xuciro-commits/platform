@@ -12,6 +12,8 @@
 
 ## Decisions
 
+0. **【2026-10-24 负责人授权代拍板，已实施】** 拟物 industrial 皮肤（`themes/industrial.css` 766 行：螺丝、机械键帽、LCD、金属/复古按钮）整体退役，MetalButton / LiquidButton / RetroButton 组件同批删除；`theme.ts` 移除 Skin 概念，工作区外观菜单只保留浅色 / 深色 / 跟随系统。令牌系统（`themes/tokens.css`）成为唯一视觉体系——两套皮肤并存本身就是「一个语义两个实现」的债务，且拟物风格与「Linear 精致 + Foundry 密度」基准直接冲突。Tailwind 类型 / 圆角 / 字体键改由令牌层映射（`--type-*` / `--r-*` / `--stack-*`），密度默认 compact，comfortable 供操作台使用。
+
 1. **令牌三层架构。** `styles.css` 拆为 primitives（OKLCH 原始值）、semantic（background/surface/border/foreground/tone-* 等）、component（按钮、表格、弹窗等组件级变量）三层；密度（compact/comfortable）与主题（light/dark）各为语义层的一个正交维度，用 `data-density` 与 `data-theme` 属性驱动。工坊与治理挂 compact，操作台挂 comfortable；两主题×两密度共四种组合全部走查验收。
 2. **气质基准落到可验收项。** Linear 的精致 = 1px 边框 + 克制阴影 + 120–180ms 动效令牌 + 精确的焦点环与 hover 层级；Foundry 的密度 = 紧凑行高、数据优先的表格与表单对齐。写成 ui-system 组件质感标准的验收清单，不写抽象形容词。
 3. **三区映射初案（走查定版）。** 构建：工坊、模板与示例包、资产库（Catalog）、代码沙箱。运营：业务应用操作台、首页任务与待办、Runs 运行观测。系统：Control Panel、Host Console、凭据、包管理、数据连接、Agents 与 AI/Knowledge 治理、组织 / 人 / 权限。跨区能力（如数据连接既是构建资源又是运维对象）按主消费者定区，另一区只放链接。

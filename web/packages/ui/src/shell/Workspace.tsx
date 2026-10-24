@@ -256,13 +256,13 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         const root = document.documentElement, target = child.document.documentElement;
         const mirror = () => {
           target.lang = root.lang; target.dir = root.dir; target.className = root.className;
-          for (const key of ["theme", "skin"]) {
+          for (const key of ["theme"]) {
             if (root.dataset[key]) target.dataset[key] = root.dataset[key]; else delete target.dataset[key];
           }
         };
         mirror();
         const observer = new MutationObserver(mirror);
-        observer.observe(root, { attributes: true, attributeFilter: ["lang", "dir", "class", "data-theme", "data-skin"] });
+        observer.observe(root, { attributes: true, attributeFilter: ["lang", "dir", "class", "data-theme"] });
         child.addEventListener("unload", () => observer.disconnect(), { once: true });
       }, { once: true });
     } }).then((opened) => { if (!opened) toast.error(t("Could not open a new window. Allow pop-ups and try again.")); })
@@ -626,7 +626,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     { label: t("Appearance"), items: [
       // A checkmark is the "shortcut" slot: the menu stays one shape.
       ...([["system", t("Follow system")], ["light", t("Light")], ["dark", t("Dark")]] as const).map(([scheme, label]) => ({ label, shortcut: appearance.scheme === scheme ? "✓" : undefined, onSelect: () => appearance.setScheme(scheme) })),
-      ...([["default", t("Standard look")], ["industrial", t("Industrial look")]] as const).map(([skin, label]) => ({ label, shortcut: appearance.skin === skin ? "✓" : undefined, onSelect: () => appearance.setSkin(skin) })),
     ] },
     { label: t("Window"), items: [
       { label: t("Open beside"), disabled: !canBeside(active), onSelect: () => { const p = activePanel(); if (p) beside(p.id); } },

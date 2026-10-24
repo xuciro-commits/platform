@@ -1,10 +1,11 @@
-/* @platform/ui design tokens: dense, data-first (Palantir-like density on shadcn/Radix).
-   Apps import this file once; Tailwind scans the package through @source. */
+/* @platform/ui design tokens: dense, data-first (Linear precision at Foundry
+   density on shadcn/Radix). Apps import this file once; Tailwind scans the
+   package through @source. All visual values live in themes/tokens.css. */
 @import "tailwindcss";
 @import "dockview-react/dist/styles/dockview.css";
 @import "@xyflow/react/dist/style.css";
 @source "./";
-@import "./themes/industrial.css";
+@import "./themes/tokens.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -79,7 +80,7 @@
 .platform-flow-port-label-input { left: 0; }
 .platform-flow-port-label-output { right: 0; text-align: right; }
 .platform-flow-port-label span, .platform-flow-port-label code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.platform-flow-port-label code { font-family: var(--font-mono); font-size: 8px; opacity: 0.7; }
+.platform-flow-port-label code { font-family: var(--stack-mono); font-size: 8px; opacity: 0.7; }
 .platform-flow-status { position: absolute; inset: auto 10px 4px 13px; display: flex; align-items: center; font-size: 9px; }
 .platform-flow-status span { display: inline-flex; align-items: center; gap: 4px; }
 .platform-flow-status svg { width: 10px; height: 10px; }
@@ -126,61 +127,6 @@
 .platform-relation-badge-selected { box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 60%); }
 @media (prefers-reduced-motion: reduce) { .platform-flow-node, .platform-flow-port, .platform-flow-edge-add, .platform-relation-node { transition: none; } }
 
-:root {
-  --background: oklch(0.99 0 0);
-  --surface: oklch(1 0 0);
-  --foreground: oklch(0.22 0.01 260);
-  --muted: oklch(0.55 0.01 260);
-  --border: oklch(0.9 0.005 260);
-  --ring: oklch(0.6 0.15 255);
-  --primary: oklch(0.55 0.17 255);
-  --primary-foreground: oklch(0.99 0 0);
-  --row-hover: oklch(0.97 0.005 260);
-  --row-selected: oklch(0.94 0.03 255);
-  --tone-neutral: oklch(0.55 0.01 260);
-  --tone-info: oklch(0.55 0.15 255);
-  --tone-success: oklch(0.55 0.14 150);
-  --tone-warning: oklch(0.62 0.15 70);
-  --tone-danger: oklch(0.56 0.19 25);
-  /* Series colours after the tones (charts). */
-  --chart-5: oklch(0.55 0.15 300);
-  --chart-6: oklch(0.6 0.1 195);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --background: oklch(0.17 0.01 260);
-    --surface: oklch(0.21 0.01 260);
-    --foreground: oklch(0.93 0.005 260);
-    --muted: oklch(0.68 0.01 260);
-    --border: oklch(0.3 0.01 260);
-    --row-hover: oklch(0.25 0.01 260);
-    --row-selected: oklch(0.3 0.04 255);
-    --tone-info: oklch(0.72 0.13 255);
-    --tone-success: oklch(0.74 0.14 150);
-    --tone-warning: oklch(0.8 0.13 75);
-    --tone-danger: oklch(0.7 0.17 25);
-    --chart-5: oklch(0.72 0.13 300);
-    --chart-6: oklch(0.76 0.1 195);
-  }
-}
-
-:root[data-theme="dark"] {
-  --background: oklch(0.17 0.01 260);
-  --surface: oklch(0.21 0.01 260);
-  --foreground: oklch(0.93 0.005 260);
-  --muted: oklch(0.68 0.01 260);
-  --border: oklch(0.3 0.01 260);
-  --row-hover: oklch(0.25 0.01 260);
-  --row-selected: oklch(0.3 0.04 255);
-  --tone-info: oklch(0.72 0.13 255);
-  --tone-success: oklch(0.74 0.14 150);
-  --tone-warning: oklch(0.8 0.13 75);
-  --tone-danger: oklch(0.7 0.17 25);
-  --chart-5: oklch(0.72 0.13 300);
-  --chart-6: oklch(0.76 0.1 195);
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
@@ -192,20 +138,21 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-row-hover: var(--row-hover);
   --color-row-selected: var(--row-selected);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --radius-sm: 3px;
-  --radius-md: 4px;
+  --font-sans: var(--stack-sans);
+  --font-mono: var(--stack-mono);
+  --text-xs: var(--type-xs);
+  --text-sm: var(--type-sm);
+  --text-base: var(--type-base);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
-  font-size: 13px;
+  font-family: var(--stack-sans);
+  font-size: var(--type-base);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -241,7 +188,7 @@ body {
   --dv-drag-over-border-color: var(--primary);
   --dv-floating-box-shadow: 0 2px 6px rgb(0 0 0 / 0.08), 0 18px 48px rgb(0 0 0 / 0.22);
   --dv-icon-hover-background-color: var(--row-hover);
-  font-family: var(--font-sans);
+  font-family: var(--stack-sans);
 }
 
 /* A floating window (a record opened above the page) is a rounded card that floats. */

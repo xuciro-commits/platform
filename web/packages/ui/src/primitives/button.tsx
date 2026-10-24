@@ -16,7 +16,7 @@ const button = cva(
         /** One row of a list that opens what it names. */
         row: "w-full justify-start border-transparent font-normal hover:bg-row-hover",
       },
-      size: { sm: "h-6 px-2", md: "h-7 px-2.5", icon: "size-7" },
+      size: { sm: "h-[var(--ctrl-h-xs)] px-[var(--ctrl-px-xs)]", md: "h-[var(--ctrl-h-sm)] px-[var(--ctrl-px-sm)]", icon: "size-[var(--ctrl-h-sm)]" },
     },
     compoundVariants: [{ variant: "link", class: "h-auto px-0" }, { variant: "row", class: "h-auto px-2 py-1 text-left" }],
     defaultVariants: { variant: "default", size: "md" },
@@ -26,6 +26,6 @@ const button = cva(
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>;
 
 export function Button({ className, variant, size, type = "button", ...props }: ButtonProps) {
-  // `data-ui`/`data-variant` are the skin hooks (themes/industrial.css); they carry no behaviour.
+  // `data-ui`/`data-variant` are semantic hooks (handheld styles, component CSS); they carry no behaviour.
   return <button type={type} data-ui="button" data-variant={variant ?? "default"} className={cn(button({ variant, size }), className)} {...props} />;
 }

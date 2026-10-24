@@ -5,7 +5,7 @@ import type { ComponentProps, SelectHTMLAttributes, TextareaHTMLAttributes } fro
 import { cn } from "../lib/cn";
 
 const field =
-  "h-7 w-full rounded-md border border-border bg-surface px-2 text-sm outline-none focus-visible:border-ring focus-visible:outline-1 focus-visible:outline-ring aria-invalid:border-[var(--tone-danger)]";
+  "h-[var(--ctrl-h-sm)] w-full rounded-md border border-border bg-surface px-[var(--ctrl-px-xs)] text-sm outline-none focus-visible:border-ring focus-visible:outline-1 focus-visible:outline-ring aria-invalid:border-[var(--tone-danger)]";
 
 export function Input(props:ComponentProps<"input">&{draftKey?:string;optional?:boolean}){
  if(props.type==="number")return <NumericInput {...props}/>;
