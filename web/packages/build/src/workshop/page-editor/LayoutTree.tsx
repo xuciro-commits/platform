@@ -44,7 +44,7 @@ export function LayoutTree({document,sections,chosen,container,title,widgetTitle
        >
         <Button size="sm" variant="ghost" aria-label={t("Expand or collapse layout group")} aria-expanded={expanded[id] !== false} onClick={() => setExpanded((old) => ({ ...old, [id]: old[id] === false }))}>{expanded[id] === false ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>
         <Button size="sm" variant="ghost" aria-pressed={container === id && chosen === -2} className={cn("min-w-0 w-0 flex-1 justify-start", container === id && chosen === -2 && "bg-row-selected text-primary")} onClick={() => onContainer(id)} style={{touchAction:'none',cursor:'grab'}} onPointerDown={event=>canvas?.start({kind:'move',id,label:layoutTitle||kindTitle},event)}>
-          <LayoutGlyph kind={node.kind}/><span className="truncate">{kindTitle}{layoutTitle&&` · ${layoutTitle}`}</span><span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
+          <LayoutGlyph kind={node.kind}/><span className="truncate">{kindTitle}{layoutTitle&&` · ${layoutTitle}`}</span><span className="ml-auto text-2xs text-muted">{node.children?.length ?? 0}</span>
         </Button>
       </div></CommandMenu>
       {expanded[id] !== false && <ul className="ml-3 grid min-w-0 gap-0.5 border-l border-border pl-2">{node.children?.map((child) => renderNode(child, next))}</ul>}
@@ -53,7 +53,7 @@ export function LayoutTree({document,sections,chosen,container,title,widgetTitle
   return <div className="grid content-start gap-3 p-3">
     <Button variant="ghost" size="sm" aria-pressed={chosen === -1} aria-label={t("Page settings")} onClick={() => onChoose(-1)}
       className={cn("justify-start border", chosen === -1 ? "border-primary bg-row-selected" : "border-border")}>
-      <Settings2 className="size-3" /><span className="truncate">{t("Page settings")}</span><span aria-hidden className="ml-auto truncate text-[10px] text-muted">{title}</span>
+      <Settings2 className="size-3" /><span className="truncate">{t("Page settings")}</span><span aria-hidden className="ml-auto truncate text-2xs text-muted">{title}</span>
     </Button>
     <div className="grid min-w-0 gap-2 border-t border-border pt-3">
       <div className="text-xs font-semibold text-muted">{t("Layout")}</div>

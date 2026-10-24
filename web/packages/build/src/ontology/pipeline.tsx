@@ -115,7 +115,7 @@ export function PipelineEditor({ id }: { id: string }) {
   const ent = draft.outputEnterprise ?? EMPTY_ENTERPRISE;
   const patchEnterprise = (change: Partial<EnterpriseTarget>) => patch({ outputEnterprise: { ...ent, ...change } });
   const column = (label: string, field: "id" | "name" | "shortName" | "kind" | "parent" | "at" | "from" | "until", placeholder: string, help?: string) =>
-    <label className={fieldClass}>{label}<Input value={ent[field] ?? ""} placeholder={placeholder} list="pipeline-columns" onChange={(e) => patchEnterprise({ [field]: e.target.value })} />{help && <span className="text-[11px] text-muted">{help}</span>}</label>;
+    <label className={fieldClass}>{label}<Input value={ent[field] ?? ""} placeholder={placeholder} list="pipeline-columns" onChange={(e) => patchEnterprise({ [field]: e.target.value })} />{help && <span className="text-xs text-muted">{help}</span>}</label>;
   const target = entities.find((entity) => entity.type === draft.outputObject);
   // The sequence is the truth and the canvas reads it: positions follow the order,
   // so nothing about a drawing has to be stored beside the steps.
@@ -160,7 +160,7 @@ export function PipelineEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Pipeline name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="cleanmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Pipeline title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Input dataset")}<Select value={draft.input} onChange={(e) => patch({ input: e.target.value })}><option value="">{t("Choose a dataset")}</option>{datasets.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select>
-          {columns.length > 0 && <span className="text-[11px] text-muted">{t("Columns")}: <span className="font-mono">{columns.join(", ")}</span></span>}</label>
+          {columns.length > 0 && <span className="text-xs text-muted">{t("Columns")}: <span className="font-mono">{columns.join(", ")}</span></span>}</label>
         <label className={fieldClass}>{t("Run every")}<Select value={draft.every ?? ""} onChange={(e) => patch({ every: e.target.value })}><option value="">{t("When the input gains a version, or when asked")}</option>{PERIODS.map((period) => <option key={period} value={period}>{periodLabel(period)}</option>)}</Select></label>
       </Panel>
       <Panel title={t("Output")} className="grid min-w-0 content-start gap-3">
@@ -168,8 +168,8 @@ export function PipelineEditor({ id }: { id: string }) {
           <option value="dataset">{t("A dataset (next version)")}</option><option value="object">{t("An object (one record per row)")}</option><option value="enterprise">{t("The enterprise model (one element per row)")}</option></Select></label>
         <datalist id="pipeline-columns">{columns.map((c) => <option key={c} value={c} />)}</datalist>
         {out === "enterprise" ? <>
-          <p className="text-[11px] text-muted">{t("Each run syncs the system's slice of the enterprise model: new ids start today, ids no longer sent close today, history stays. Name a column, or write =value for a constant. The publisher needs the Enterprise admin role.")}</p>
-          <label className={fieldClass}>{t("Source system")}<Input value={ent.source} placeholder="sap-om" onChange={(e) => patchEnterprise({ source: e.target.value })} /><span className="text-[11px] text-muted">{t("Element ids become source:id; the system owns them.")}</span></label>
+          <p className="text-xs text-muted">{t("Each run syncs the system's slice of the enterprise model: new ids start today, ids no longer sent close today, history stays. Name a column, or write =value for a constant. The publisher needs the Enterprise admin role.")}</p>
+          <label className={fieldClass}>{t("Source system")}<Input value={ent.source} placeholder="sap-om" onChange={(e) => patchEnterprise({ source: e.target.value })} /><span className="text-xs text-muted">{t("Element ids become source:id; the system owns them.")}</span></label>
           <label className={fieldClass}>{t("Stereotype")}<Select value={ent.stereotype} onChange={(e) => patchEnterprise({ stereotype: e.target.value })}>{STEREOTYPES.map((st) => <option key={st} value={st}>{st}</option>)}</Select></label>
           {column(t("Id column"), "id", "objid")}
           {column(t("Name column"), "name", "stext")}
@@ -185,17 +185,17 @@ export function PipelineEditor({ id }: { id: string }) {
             <option value="">{t("Choose a relationship kind")}</option>
             {ent.in && !enterprise.kinds.some((k) => k.id === ent.in) && <option value={ent.in}>{ent.in}</option>}
             {enterprise.kinds.map((k) => <option key={k.id} value={k.id}>{k.name} · {k.id}</option>)}
-          </Select><span className="text-[11px] text-muted">{t("A relationship kind of the enterprise model, e.g. management or legal.")}</span></label>
+          </Select><span className="text-xs text-muted">{t("A relationship kind of the enterprise model, e.g. management or legal.")}</span></label>
           <label className={fieldClass}>{t("Relation word")}<Input value={ent.relation ?? ""} placeholder="part of" onChange={(e) => patchEnterprise({ relation: e.target.value })} /></label>
           {column(t("At column"), "at", "plant", t("Places the element at another: the owner of a resource, the post a person fills."))}
           <label className={fieldClass}>{t("At relationship")}<Select value={ent.atKind ?? ""} onChange={(e) => patchEnterprise({ atKind: e.target.value })}><option value="">ResponsibleFor</option>{AT_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</Select></label>
           {column(t("From column"), "from", "begda")}
           {column(t("Until column"), "until", "endda")}
-          <label className={fieldClass}>{t("Attribute columns")}<Input value={(ent.properties ?? []).join(", ")} placeholder="costcenter, bukrs" onChange={(e) => patchEnterprise({ properties: e.target.value.split(",").map((c) => c.trim()).filter(Boolean) })} /><span className="text-[11px] text-muted">{t("Kept on the element under the system's name.")}</span></label>
+          <label className={fieldClass}>{t("Attribute columns")}<Input value={(ent.properties ?? []).join(", ")} placeholder="costcenter, bukrs" onChange={(e) => patchEnterprise({ properties: e.target.value.split(",").map((c) => c.trim()).filter(Boolean) })} /><span className="text-xs text-muted">{t("Kept on the element under the system's name.")}</span></label>
         </> : out === "dataset" ? <label className={fieldClass}>{t("Output dataset")}<Select value={draft.outputDataset ?? ""} onChange={(e) => patch({ outputDataset: e.target.value })}><option value="">{t("Choose a dataset")}</option>{datasets.filter((d) => d.id !== draft.input).map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select></label> : <>
           <label className={fieldClass}>{t("Output object")}<Select value={draft.outputObject ?? ""} onChange={(e) => patch({ outputObject: e.target.value })}>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select>
-            <span className="text-[11px] text-muted">{t("Columns are written to the object's fields of the same name; unknown columns are dropped.")}{target ? ` ${t("Fields")}: ${target.fields.filter((f) => !f.readOnly).map((f) => f.name).join(", ")}` : ""}</span></label>
-          <label className={fieldClass}>{t("Record id column")}<Input value={draft.key ?? ""} placeholder="matnr" onChange={(e) => patch({ key: e.target.value })} /><span className="text-[11px] text-muted">{t("The same id edits the existing record.")}</span></label>
+            <span className="text-xs text-muted">{t("Columns are written to the object's fields of the same name; unknown columns are dropped.")}{target ? ` ${t("Fields")}: ${target.fields.filter((f) => !f.readOnly).map((f) => f.name).join(", ")}` : ""}</span></label>
+          <label className={fieldClass}>{t("Record id column")}<Input value={draft.key ?? ""} placeholder="matnr" onChange={(e) => patch({ key: e.target.value })} /><span className="text-xs text-muted">{t("The same id edits the existing record.")}</span></label>
         </>}
       </Panel>
       <Panel title={t("Steps")} className="grid min-w-0 content-start gap-2 lg:col-span-2"
@@ -209,7 +209,7 @@ export function PipelineEditor({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="w-6 text-xs text-muted">{Number(picked.slice(1)) + 1}.</span>
             <Select aria-label={t("Step kind")} value={(draft.steps ?? [])[Number(picked.slice(1))]!.kind} onChange={(e) => setStep(Number(picked.slice(1)), { kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{t(k)}</option>)}</Select>
-            <span className="text-[11px] text-muted">{kindHelp((draft.steps ?? [])[Number(picked.slice(1))]!.kind)}</span>
+            <span className="text-xs text-muted">{kindHelp((draft.steps ?? [])[Number(picked.slice(1))]!.kind)}</span>
             <span className="ml-auto flex gap-1">
               <Button size="sm" variant="ghost" aria-label={t("Move up")} disabled={picked === "s0"} onClick={() => move(Number(picked.slice(1)), -1)}><ArrowUp className="size-3" /></Button>
               <Button size="sm" variant="ghost" aria-label={t("Move down")} disabled={Number(picked.slice(1)) === (draft.steps ?? []).length - 1} onClick={() => move(Number(picked.slice(1)), 1)}><ArrowDown className="size-3" /></Button>
@@ -257,7 +257,7 @@ function StepFields({ step: s, datasets, onChange }: { step: Step; datasets: Dat
     case "rename": return <div className={row}>{text("From", "from", "MaterialNumber")}{text("To", "to", "matnr")}</div>;
     case "cast": return <div className={row}>{text("Column", "column", "qty")}<label className={fieldClass}>{t("Type")}<Select value={s.type ?? ""} onChange={(e) => onChange({ type: e.target.value })}><option value="">{t("Choose a type")}</option>{TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></label></div>;
     case "filter": return <div className={row}>{text("Column", "column", "plant")}<label className={fieldClass}>{t("Condition")}<Select value={s.op ?? "="} onChange={(e) => onChange({ op: e.target.value })}>{OPS.map((x) => <option key={x} value={x}>{x}</option>)}</Select></label>{s.op !== "empty" && s.op !== "notempty" && text("Value", "value", "1000")}</div>;
-    case "compute": return <div className={row}>{text("New column", "to", "value")}<label className={`${fieldClass} md:col-span-3`}>{t("Formula")}<Input value={s.formula ?? (s.formulaExpr?formulaText(s.formulaExpr):"")} placeholder="qty * price" onChange={(e) => onChange({ formula: e.target.value,formulaExpr:undefined })} /><span className="text-[11px] text-muted">{t("Arithmetic over number columns: + - * / and parentheses.")}</span></label></div>;
+    case "compute": return <div className={row}>{text("New column", "to", "value")}<label className={`${fieldClass} md:col-span-3`}>{t("Formula")}<Input value={s.formula ?? (s.formulaExpr?formulaText(s.formulaExpr):"")} placeholder="qty * price" onChange={(e) => onChange({ formula: e.target.value,formulaExpr:undefined })} /><span className="text-xs text-muted">{t("Arithmetic over number columns: + - * / and parentheses.")}</span></label></div>;
     case "lookup": case "join": return <div className={row}>{other}{text("Column here", "column", "plant")}{text("Column there", "match", "werks")}{text("Prefix", "as", "plant_")}
       {s.kind === "lookup" ? <label className={`${fieldClass} md:col-span-4`}>{t("Columns to take")}<Input value={list(s.columns)} placeholder="name, region" onChange={(e) => onChange({ columns: parse(e.target.value) })} /></label>
         : <Checkbox checked={!!s.outer} onChange={(outer) => onChange({ outer })}>{t("Keep rows without a match")}</Checkbox>}</div>;

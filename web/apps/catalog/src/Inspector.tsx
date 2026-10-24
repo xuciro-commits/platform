@@ -47,7 +47,7 @@ export function StructureTab({ entry, index, onSelect }: Pick<AssetInspectorProp
   const slots = entry.slots ?? [];
   return <div className="grid content-start text-xs">
     <InspectorSection title={t("Component identity")}>
-      <dl className="grid gap-1.5 font-mono text-[11px]">
+      <dl className="grid gap-1.5 font-mono text-xs">
         {[[t("ID"), entry.id], [t("Owner"), entry.owner], [t("Source"), entry.source],
         ...(entry.type ? [[t("Source type reference"), entry.type]] : [])].map(([label, value]) =>
           <div key={label} className="grid min-w-0 gap-0.5">
@@ -56,7 +56,7 @@ export function StructureTab({ entry, index, onSelect }: Pick<AssetInspectorProp
           </div>)}
       </dl>
     </InspectorSection>
-    <InspectorSection title={t("Composition slots")} actions={<span className="font-mono text-[10px] text-muted">{slots.length}</span>}>
+    <InspectorSection title={t("Composition slots")} actions={<span className="font-mono text-2xs text-muted">{slots.length}</span>}>
       {slots.length ? <div className="grid gap-1.5">{slots.map((slot) =>
         <div key={slot.name} className="grid gap-1 rounded border border-border bg-background/50 p-2">
           <div className="flex items-center justify-between gap-2">
@@ -67,11 +67,11 @@ export function StructureTab({ entry, index, onSelect }: Pick<AssetInspectorProp
         </div>)}</div>
         : <p className="text-muted">{t("No dedicated structural slots. Component accepts standard React children or direct props.")}</p>}
     </InspectorSection>
-    <InspectorSection title={t("Direct composition")} actions={<span className="font-mono text-[10px] text-muted">{entry.composed?.length ?? 0}</span>}>
+    <InspectorSection title={t("Direct composition")} actions={<span className="font-mono text-2xs text-muted">{entry.composed?.length ?? 0}</span>}>
       <AssetLinks ids={entry.composed ?? []} kind="composition" index={index} onSelect={onSelect}
         empty={t("No internal catalog components confirmed in template.")} />
     </InspectorSection>
-    <InspectorSection title={t("Declared dependencies")} actions={<span className="font-mono text-[10px] text-muted">{entry.dependencies?.length ?? 0}</span>}>
+    <InspectorSection title={t("Declared dependencies")} actions={<span className="font-mono text-2xs text-muted">{entry.dependencies?.length ?? 0}</span>}>
       <AssetLinks ids={entry.dependencies ?? []} kind="declared" index={index} onSelect={onSelect}
         empty={t("No declared catalog dependencies.")} />
     </InspectorSection>
@@ -89,9 +89,9 @@ export function ApiTab({ entry, index }: Pick<AssetInspectorProps, "entry" | "in
   return <div className="grid content-start text-xs">
     {!!entry.exports?.length && <InspectorSection title={t("Public exports")}>
       <div className="flex flex-wrap gap-1">{entry.exports.map((name) =>
-        <code key={name} className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px]">{name}</code>)}</div>
+        <code key={name} className="rounded border border-border bg-background px-1.5 py-0.5 text-xs">{name}</code>)}</div>
     </InspectorSection>}
-    <InspectorSection title={t("Props & Interface")} actions={<span className="font-mono text-[10px] text-muted">{props.length}</span>}>
+    <InspectorSection title={t("Props & Interface")} actions={<span className="font-mono text-2xs text-muted">{props.length}</span>}>
       {props.length > 4 && <div className="relative mb-1">
         <Search className="absolute left-2 top-2 size-3 text-muted" />
         <Input type="search" aria-label={t("Filter props")} placeholder={t("Filter props…")}
@@ -105,28 +105,28 @@ export function ApiTab({ entry, index }: Pick<AssetInspectorProps, "entry" | "in
             {prop.isSlot && <Tag label={t("Slot")} tone="neutral" />}
             <Tag label={prop.optional ? t("Optional") : t("Required")} tone={prop.optional ? "neutral" : "warning"} />
           </div>
-          <code className="break-all text-[11px] text-muted">{prop.type}</code>
-          {prop.defaultValue !== undefined && <p className="text-[10px] text-muted">{t("Default")}: <code>{prop.defaultValue}</code></p>}
+          <code className="break-all text-xs text-muted">{prop.type}</code>
+          {prop.defaultValue !== undefined && <p className="text-2xs text-muted">{t("Default")}: <code>{prop.defaultValue}</code></p>}
         </div>)}</div>
         : props.length ? <p className="text-muted">{t("No matching props found.")}</p>
           : <div className="grid gap-1 text-muted">
             <p>{t("No dedicated props interface found.")}</p>
             {entry.type && <p>{t("Declared type reference")}: <code>{entry.type}</code></p>}
-            <p className="text-[11px]">{t("Props may inherit native HTML element attributes or context.")}</p>
+            <p className="text-xs">{t("Props may inherit native HTML element attributes or context.")}</p>
           </div>}
     </InspectorSection>
     {!!entry.relatedTypes?.length && <InspectorSection title={t("Related types")}
-      actions={<span className="font-mono text-[10px] text-muted">{entry.relatedTypes.length}</span>}>
+      actions={<span className="font-mono text-2xs text-muted">{entry.relatedTypes.length}</span>}>
       <div className="grid gap-1.5">{entry.relatedTypes.map((type) =>
         <div key={type.name} className="rounded border border-border bg-background/40">
-          <Button type="button" variant="row" className="flex w-full items-center justify-between gap-0 rounded-none border-0 p-2 text-left font-mono text-[11px] whitespace-normal hover:bg-row-hover [&_svg]:size-3"
+          <Button type="button" variant="row" className="flex w-full items-center justify-between gap-0 rounded-none border-0 p-2 text-left font-mono text-xs whitespace-normal hover:bg-row-hover [&_svg]:size-3"
             aria-expanded={expandedType === type.name} onClick={() => setExpandedType(expandedType === type.name ? undefined : type.name)}>
             <span className="font-medium">{type.name}</span>
             <span className="flex items-center gap-1 text-muted">{type.kind}
               {expandedType === type.name ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
             </span>
           </Button>
-          {expandedType === type.name && type.signature && <pre className="max-h-40 overflow-auto border-t border-border p-2 font-mono text-[10px] text-muted"><code>{type.signature}</code></pre>}
+          {expandedType === type.name && type.signature && <pre className="max-h-40 overflow-auto border-t border-border p-2 font-mono text-2xs text-muted"><code>{type.signature}</code></pre>}
         </div>)}</div>
     </InspectorSection>}
     {packageApi && <InspectorSection title={t("Owner package API")}
@@ -134,9 +134,9 @@ export function ApiTab({ entry, index }: Pick<AssetInspectorProps, "entry" | "in
         onClick={() => setShowPackageApi(!showPackageApi)}>
         {showPackageApi ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
       </Button>}>
-      <p className="text-[11px] text-muted">{t("Package export barrel reference; not specific to this component.")}</p>
-      <code className="break-all font-mono text-[10px] text-muted">{packageApi.source}</code>
-      {showPackageApi && <p className="mt-1 max-h-48 overflow-auto break-all font-mono text-[11px]">{packageApi.symbols.join(" · ")}</p>}
+      <p className="text-xs text-muted">{t("Package export barrel reference; not specific to this component.")}</p>
+      <code className="break-all font-mono text-2xs text-muted">{packageApi.source}</code>
+      {showPackageApi && <p className="mt-1 max-h-48 overflow-auto break-all font-mono text-xs">{packageApi.symbols.join(" · ")}</p>}
     </InspectorSection>}
   </div>;
 }
@@ -148,7 +148,7 @@ export function RelationsTab({ entry, index, onSelect }: Pick<AssetInspectorProp
   const files = index.consumers?.[entry.id] ?? [];
   return <div className="grid content-start text-xs">
     <InspectorSection title={t("Upstream (Used by)")}
-      actions={<span className="font-mono text-[10px] text-muted">{composing.length + referring.length + files.length}</span>}>
+      actions={<span className="font-mono text-2xs text-muted">{composing.length + referring.length + files.length}</span>}>
       <div className="grid gap-2">
         {!!composing.length && <div className="grid gap-1">
           <span className="font-medium text-muted">{t("Composed by assets")}</span>
@@ -160,17 +160,17 @@ export function RelationsTab({ entry, index, onSelect }: Pick<AssetInspectorProp
         </div>}
         {files.length ? <div className="grid gap-1">
           <div className="flex justify-between font-medium text-muted"><span>{t("Static consumers")}</span><span>{files.length}</span></div>
-          <ul className="max-h-48 overflow-auto rounded border border-border bg-background p-1.5 font-mono text-[11px] text-muted">
+          <ul className="max-h-48 overflow-auto rounded border border-border bg-background p-1.5 font-mono text-xs text-muted">
             {files.map((file) => <li key={file} className="flex items-start gap-1 break-all py-0.5">
               <FileCode className="mt-0.5 size-3 shrink-0" />{file}
             </li>)}
           </ul>
         </div> : <p className="text-muted">{t("No static consumer files found in workspace.")}</p>}
-        <p className="text-[10px] text-muted">{t("Analysis covers declared dependencies and static imports across workspace packages. Dynamic imports and external consumers are not tracked.")}</p>
+        <p className="text-2xs text-muted">{t("Analysis covers declared dependencies and static imports across workspace packages. Dynamic imports and external consumers are not tracked.")}</p>
       </div>
     </InspectorSection>
     <InspectorSection title={t("Downstream (Uses)")}
-      actions={<span className="font-mono text-[10px] text-muted">{(entry.composed?.length ?? 0) + (entry.dependencies?.length ?? 0)}</span>}>
+      actions={<span className="font-mono text-2xs text-muted">{(entry.composed?.length ?? 0) + (entry.dependencies?.length ?? 0)}</span>}>
       <div className="grid gap-2">
         {!!entry.composed?.length && <div className="grid gap-1">
           <span className="font-medium text-muted">{t("Composed internal assets")}</span>
@@ -205,12 +205,12 @@ export function UsageTab({ entry, shown, canBuild, builderOnly, onOpenBuilder }:
           title={builderOnly ? t("Only builders can open Projects.") : undefined}>
           <Hammer />{t(entry.template ? "Create in Builder" : "Open in Builder")}
         </Button>
-        <span className="text-[11px] text-muted">{t("Creates or edits a controlled draft; nothing is published automatically.")}</span>
+        <span className="text-xs text-muted">{t("Creates or edits a controlled draft; nothing is published automatically.")}</span>
       </div>
     </InspectorSection>}
     {snippet && <InspectorSection title={t("Import snippet")}
       actions={<Button size="sm" variant="ghost" onClick={() => void copy()}><Copy className="size-3" />{t("Copy")}</Button>}>
-      <pre className="max-h-48 overflow-auto rounded border border-border bg-background p-2 font-mono text-[11px]"><code>{snippet}</code></pre>
+      <pre className="max-h-48 overflow-auto rounded border border-border bg-background p-2 font-mono text-xs"><code>{snippet}</code></pre>
       {copied && <p role="status" className="text-muted">{copied}</p>}
     </InspectorSection>}
     <InspectorSection title={t("Usage recommendations")}>

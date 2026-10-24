@@ -31,7 +31,7 @@ export function ScanInput({value,onChange,disabled,label}:{value:string;onChange
    {value&&<Button variant="ghost" size="sm" disabled={disabled} onClick={()=>{commit('');field.current?.focus();}}>{t('Clear')}</Button>}
    {detectorOf()&&<Button variant={camera?'primary':'ghost'} size="sm" disabled={disabled} onClick={()=>{setFailure('');setCamera(on=>!on);}}>{t(camera?'Stop':'Camera')}</Button>}
   </div>
-  {camera&&<video ref={video} muted playsInline className="aspect-video w-full rounded-md bg-black object-cover"/>}
+  {camera&&<video ref={video} muted playsInline className="aspect-video w-full rounded-md bg-[var(--letterbox)] object-cover"/>}
   {failure&&<p role="alert" className="text-xs text-danger">{failure}</p>}
  </div>;
 }

@@ -11,8 +11,8 @@ const bindingMime = "application/platform-binding";
 export function JSONEditor({ value, onChange, label, rows = 4, schema, draftKey = label }: { value: unknown; onChange: (value: unknown) => void; label: string; rows?: number; schema?: ValueSchema; draftKey?: string }) {
   const source = JSON.stringify(value ?? null, null, 2);
   const input = useDraftInput(draftKey, source), { text, problem } = input;
-  return <label className="grid gap-1 text-xs"><span className="flex items-center justify-between">{label}{schema && <code className="text-[10px] text-muted">{schema.type}</code>}</span>
-    <Textarea data-draft-key={input.path} aria-invalid={!!problem} rows={rows} spellCheck={false} className="font-mono text-[11px]" value={text} onChange={(event) => {
+  return <label className="grid gap-1 text-xs"><span className="flex items-center justify-between">{label}{schema && <code className="text-2xs text-muted">{schema.type}</code>}</span>
+    <Textarea data-draft-key={input.path} aria-invalid={!!problem} rows={rows} spellCheck={false} className="font-mono text-xs" value={text} onChange={(event) => {
       const next = event.target.value;
       try { const parsed: unknown = JSON.parse(next); const issue = schema && schemaIssue(schema, parsed); if (issue) { input.write(next, issue); return; } input.clear(); onChange(parsed); }
       catch { input.write(next, t("Enter valid JSON before saving.")); }
@@ -57,7 +57,7 @@ export function BindingEditor({ label, value, onChange, steps, schema, optional 
           : <JSONEditor label={label} draftKey={`binding:${draftKey}`} value={binding.value} onChange={(value) => onChange({ source: "literal", value })} schema={schema} rows={schema?.type === "object" || schema?.type === "array" ? 3 : 1} />
         : <Input aria-label={t("Field path")} placeholder={t("Whole value, or field.path")} value={(binding.path ?? []).join(".")} onChange={(event) => onChange({ ...binding, path: event.target.value ? event.target.value.split(".") : [] })} />}
     </>}
-    <p className="text-[10px] leading-4 text-muted">{schema?.description ?? t("Drag a field from available data, or choose a typed source.")}</p>
+    <p className="text-2xs leading-4 text-muted">{schema?.description ?? t("Drag a field from available data, or choose a typed source.")}</p>
   </div>;
 }
 
@@ -107,12 +107,12 @@ export function SchemaEditor({ schema, onChange, depth = 0, fixedObject = false,
           const discriminator = schema.discriminator ?? "kind";
           onChange({ ...schema, variants: { ...schema.variants, [newName]: { type: "object", properties: { [discriminator]: { type: "string", enum: [newName] } }, required: [discriminator] } } }); setNewName("");
         }}><Plus className="size-3" /></Button></div>
-      <ContextHelp title={t("Variants")}><p className="text-[10px] leading-4 text-muted">{t("Each variant is a closed object with a required literal tag. Nullability is independent of required fields.")}</p></ContextHelp>
+      <ContextHelp title={t("Variants")}><p className="text-2xs leading-4 text-muted">{t("Each variant is a closed object with a required literal tag. Nullability is independent of required fields.")}</p></ContextHelp>
     </>}
     {schema.type === "object" && <>
-      {Object.entries(schema.properties ?? {}).map(([name, property]) => <Disclosure key={name} className="rounded border border-border p-2" summary={<span className="text-xs font-medium">{name} <code className="ml-1 text-[10px] text-muted">{property.type}</code></span>}>
+      {Object.entries(schema.properties ?? {}).map(([name, property]) => <Disclosure key={name} className="rounded border border-border p-2" summary={<span className="text-xs font-medium">{name} <code className="ml-1 text-2xs text-muted">{property.type}</code></span>}>
         <div className="mt-2 grid gap-2"><Checkbox disabled={lockedFields.includes(name)} checked={schema.required?.includes(name) ?? false} onChange={(required) => onChange({ ...schema, required: required ? [...(schema.required ?? []), name] : schema.required?.filter((field) => field !== name) })}>{t("Required")}</Checkbox>
-          {lockedFields.includes(name) ? <code className="text-[10px] text-muted">{JSON.stringify(property.enum)}</code> : depth < 12 && <InputDraftProvider scope={`property:${name}`}><SchemaEditor schema={property} onChange={(next) => onChange({ ...schema, properties: { ...schema.properties, [name]: next } })} depth={depth + 1} /></InputDraftProvider>}
+          {lockedFields.includes(name) ? <code className="text-2xs text-muted">{JSON.stringify(property.enum)}</code> : depth < 12 && <InputDraftProvider scope={`property:${name}`}><SchemaEditor schema={property} onChange={(next) => onChange({ ...schema, properties: { ...schema.properties, [name]: next } })} depth={depth + 1} /></InputDraftProvider>}
           {!lockedFields.includes(name) && <Button variant="ghost" onClick={() => onChange({ ...schema, properties: Object.fromEntries(Object.entries(schema.properties ?? {}).filter(([field]) => field !== name)), required: schema.required?.filter((field) => field !== name) })}>{t("Remove field")}</Button>}</div>
       </Disclosure>)}
       <div className="flex gap-1"><Input aria-label={t("New schema field")} placeholder={t("Field name")} value={newName} onChange={(event) => setNewName(event.target.value)} />
@@ -134,7 +134,7 @@ export function DataField({ title, schema, binding, path = [] }: { title: string
       onDragStart={(event) => { event.dataTransfer.setData(bindingMime, JSON.stringify({ ...binding, path })); event.dataTransfer.effectAllowed = "copy"; }}
       title={t("Drag this value into a binding")}>
       {entries.length > 0 ? <Button variant="ghost" type="button" onClick={() => setExpanded(!expanded)} aria-label={t(expanded ? "Collapse fields" : "Expand fields")}>{expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}</Button> : <Braces className="size-3 text-muted" />}
-      <span className="min-w-0 flex-1 truncate text-[11px]">{title}</span><code className="text-[9px] text-muted">{schema?.type ?? "value"}{schema?.nullable ? "?" : ""}</code><GripVertical className="size-3 text-muted" />
+      <span className="min-w-0 flex-1 truncate text-xs">{title}</span><code className="text-[9px] text-muted">{schema?.type ?? "value"}{schema?.nullable ? "?" : ""}</code><GripVertical className="size-3 text-muted" />
     </div>
     {expanded && entries.length > 0 && <div className="ml-2 border-l border-border pl-2">{entries.map(([name, field]) => <DataField key={name} title={name} schema={field} binding={binding} path={[...path, name]} />)}</div>}
   </div>;

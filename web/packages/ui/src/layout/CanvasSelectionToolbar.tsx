@@ -31,7 +31,7 @@ export function CanvasSelectionToolbar({label,icon,bounds,viewport,horizontal,ca
   }}>
   <Button variant="ghost" size="sm" className="h-5 w-5 rounded-sm p-0 text-inherit hover:bg-white/15" aria-label={t('Drag selected region')} title={t('Drag selected region')} disabled={!canMove} style={{touchAction:'none',cursor:'grab'}} onPointerDown={onDrag}><GripVertical/></Button>
   {icon&&<span aria-hidden className="flex shrink-0">{icon}</span>}
-  <span className="mx-1 min-w-0 flex-1 truncate text-[10px] font-medium" title={label}>{label}</span>
+  <span className="mx-1 min-w-0 flex-1 truncate text-2xs font-medium" title={label}>{label}</span>
   <Button variant="ghost" size="sm" className="h-5 w-5 rounded-sm p-0 text-inherit hover:bg-white/15" disabled={!canPrevious} aria-label={t(horizontal?'Move left':'Move up')} title={t(horizontal?'Move left':'Move up')} onClick={()=>onMove(-1)}>{horizontal?<ArrowLeft/>:<ArrowUp/>}</Button>
   <Button variant="ghost" size="sm" className="h-5 w-5 rounded-sm p-0 text-inherit hover:bg-white/15" disabled={!canNext} aria-label={t(horizontal?'Move right':'Move down')} title={t(horizontal?'Move right':'Move down')} onClick={()=>onMove(1)}>{horizontal?<ArrowRight/>:<ArrowDown/>}</Button>
   {direct.map(command=><Button key={command.id} variant="ghost" size="sm" className="h-5 w-5 rounded-sm p-0 text-inherit hover:bg-white/15" disabled={command.disabled} title={`${command.label}${command.shortcut?' · '+command.shortcut:''}`} aria-label={command.label} onClick={command.run}>{command.icon??command.label}</Button>)}

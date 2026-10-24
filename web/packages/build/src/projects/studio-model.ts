@@ -38,6 +38,7 @@ const areaForKind = (kind?: string): StudioArea => kind === "action" ? "logic" :
 /** Retired domain names are accepted only on incoming links. */
 export function studioArea(value?: string, kind?: string): StudioArea {
   if (value === "behavior") return "logic";
+  if (value === "connections") return "integration";
   if (value === "verify") return "release";
   if (value === "assemble") return kind ? areaForKind(kind) : "integration";
   return studioAreas.find(area => area.id === value)?.id ?? "model";

@@ -76,7 +76,7 @@ export function IconPicker({ value, onChange, disabled, label, id }: {
   return <div ref={box} className="relative">
     <button type="button" id={id} disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={label}
       onClick={() => setOpen(!open)} className={cn("flex h-8 w-full items-center gap-2 rounded-md border border-border bg-surface px-2 text-left text-sm", disabled && "opacity-60")}>
-      {value ? <><IconGlyph name={value} /><span className="truncate">{t(value)}</span><span className="ml-auto font-mono text-[10px] text-muted">{value}</span></>
+      {value ? <><IconGlyph name={value} /><span className="truncate">{t(value)}</span><span className="ml-auto font-mono text-2xs text-muted">{value}</span></>
         : <span className="text-muted">{t("No icon")}</span>}
     </button>
     {open && <div role="dialog" aria-label={t("Choose an icon")} className="absolute left-0 top-full z-30 mt-1 w-80 rounded-md border border-border bg-surface p-2 shadow-lg">
@@ -84,7 +84,7 @@ export function IconPicker({ value, onChange, disabled, label, id }: {
         className="mb-2 h-8 w-full rounded-md border border-border bg-background px-2 text-sm" />
       <div className="max-h-64 overflow-auto">
         {groups.map((g) => <div key={g.id} className="mb-2">
-          <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">{t(g.title)}</p>
+          <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted">{t(g.title)}</p>
           <div className="grid grid-cols-6 gap-1">{g.names.map((n) => <button key={n} type="button" title={t(n)} aria-label={t(n)} aria-pressed={n === value}
             onClick={() => { onChange(n); setOpen(false); setQuery(""); }}
             className={cn("flex h-8 items-center justify-center rounded-md border border-transparent text-muted hover:border-border hover:bg-row-hover hover:text-foreground", n === value && "border-border bg-row-selected text-foreground")}>

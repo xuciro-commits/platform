@@ -147,8 +147,8 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{process.actions.map((a, at) => <Button variant="row" key={`${a.name}:${at}`} type="button" aria-pressed={chosen?.kind === "action" && chosen.at === at} onClick={() => choose({ kind: "action", at })}
         className={cn("grid gap-1 rounded-md border p-3 text-left hover:border-primary", chosen?.kind === "action" && chosen.at === at ? "border-primary bg-row-selected" : "border-border")}>
         <span className="flex items-center gap-2 text-sm font-medium"><Zap className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate">{a.title || a.name}</span></span>
-        <span className="text-[11px] text-muted">{a.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || t("any state")} → {actionResultEdges(a).map(name=>process.states.find(state=>state.name===name)?.title??name).join(", ") || t("same state")}</span>
-        <span className="text-[11px] text-muted">{t("{inputs} parameters · {steps} transaction steps", {inputs:a.inputs?.length??0,steps:a.transaction?.steps.length??0})}</span>
+        <span className="text-xs text-muted">{a.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || t("any state")} → {actionResultEdges(a).map(name=>process.states.find(state=>state.name===name)?.title??name).join(", ") || t("same state")}</span>
+        <span className="text-xs text-muted">{t("{inputs} parameters · {steps} transaction steps", {inputs:a.inputs?.length??0,steps:a.transaction?.steps.length??0})}</span>
       </Button>)}</div>
     </div>,
     lifecycle: <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3">

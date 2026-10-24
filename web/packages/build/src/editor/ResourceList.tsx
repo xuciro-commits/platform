@@ -45,7 +45,7 @@ export function ResourceList({ source, type, fields = [], onOpen }: { source: Re
     onSelect={onOpen} groupings={groupings} toolbar={toggle}
     row={(r) => <>
       <span className="min-w-0 flex-1 truncate">{r.title || r.name || r.id}</span>
-      {r.name && <span className="hidden shrink-0 font-mono text-[10px] text-muted lg:inline">{r.name}</span>}
+      {r.name && <span className="hidden shrink-0 font-mono text-2xs text-muted lg:inline">{r.name}</span>}
       {extras.map((f) => { const v = (r as Record<string, unknown>)[f]; return v === undefined || v === null || v === "" ? null : <span key={f} className="hidden shrink-0 text-muted md:inline">{title(f)}: {String(v)}</span>; })}
       {r.version !== undefined && <span className="shrink-0 text-muted">v{r.version}</span>}
       {stateOf(r) && (["draft", "published", "archived"].includes(stateOf(r)!) ? <DraftStatus state={stateOf(r)} /> : <Tag label={t(stateOf(r)!)} tone={stateOf(r) === "active" ? "success" : "neutral"} />)}

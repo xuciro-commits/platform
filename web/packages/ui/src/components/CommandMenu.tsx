@@ -8,7 +8,7 @@ const panel='z-[100] max-h-80 min-w-44 overflow-auto rounded-md border border-bo
 const item='flex cursor-default items-center rounded px-2 py-1 outline-none data-[highlighted]:bg-row-selected data-[disabled]:pointer-events-none data-[disabled]:opacity-40';
 const commandClass=(command:ContextCommand)=>`${item} ${command.danger?'text-[var(--tone-danger)]':''} ${command.separatorBefore?'mt-1 border-t border-border pt-2':''}`;
 function CommandLabel({command}:{command:ContextCommand}){
- return <>{command.icon&&<span className="mr-2 [&_svg]:size-3.5">{command.icon}</span>}<span className="flex-1">{command.label}</span>{command.shortcut&&<span className="ml-4 text-[10px] text-muted">{command.shortcut}</span>}</>;
+ return <>{command.icon&&<span className="mr-2 [&_svg]:size-3.5">{command.icon}</span>}<span className="flex-1">{command.label}</span>{command.shortcut&&<span className="ml-4 text-2xs text-muted">{command.shortcut}</span>}</>;
 }
 /** Pointer menus and an explicit keyboard/touch trigger share caller-owned commands. */
 export function CommandMenu({children,label,commands,focusKey,compact=false}:{children:ReactNode;label:string;commands:ContextCommand[];focusKey?:string;compact?:boolean}){

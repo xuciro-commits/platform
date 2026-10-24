@@ -42,7 +42,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
     {showAssets && <>
     <Input type="search" aria-label={t("Filter assets in this workspace")} placeholder={t("Filter assets in this workspace")} value={filter} onChange={event => setFilter(event.target.value)} className="h-7 text-xs" />
     {unavailable && <p role="alert" className="p-2 text-xs text-danger">{t("Some application assets are unreadable.")}</p>}
-    <p className="px-2 pb-1 pt-3 text-[11px] text-muted">{t("{count} assets in this workspace", { count: matching.length })}</p>
+    <p className="px-2 pb-1 pt-3 text-xs text-muted">{t("{count} assets in this workspace", { count: matching.length })}</p>
 
     {groups.map((group, index) => {
       const actions = studioActionGroups(group.items, host.definitions);
@@ -61,7 +61,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
 function AssetGroup({ title, count, active, containsActive, searching, initiallyOpen, children }: { title: string; count: number; active?: string; containsActive: boolean; searching: boolean; initiallyOpen: boolean; children: ReactNode }) {
   const [expanded, setExpanded] = useState(initiallyOpen);
   useEffect(() => { if (containsActive) setExpanded(true); }, [active, containsActive]);
-  return <Disclosure open={searching || expanded} onToggle={setExpanded} className="mt-2" summary={<span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 text-xs font-semibold"><span className="break-words">{title}</span><span className="shrink-0 text-[11px] font-normal tabular-nums text-muted">{count}</span></span>}>{children}</Disclosure>;
+  return <Disclosure open={searching || expanded} onToggle={setExpanded} className="mt-2" summary={<span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 text-xs font-semibold"><span className="break-words">{title}</span><span className="shrink-0 text-xs font-normal tabular-nums text-muted">{count}</span></span>}>{children}</Disclosure>;
 }
 
 function ObjectActions({ object, actions, active, searching, row }: { object: OwnedResource; actions: OwnedResource[]; active?: string; searching: boolean; row: (item: OwnedResource) => ReactNode }) {
@@ -70,7 +70,7 @@ function ObjectActions({ object, actions, active, searching, row }: { object: Ow
   useEffect(() => { if (selected) setExpanded(true); }, [active, selected]);
   const shown = searching || expanded;
   return <div>
-    <div className="flex items-center gap-1"><div className="min-w-0 flex-1">{row(object)}</div><Button size="sm" variant="ghost" aria-label={t("Actions for {name}", { name: object.title })} aria-expanded={shown} className="h-6 shrink-0 gap-1 px-1 text-[11px] text-muted" onClick={() => setExpanded(!shown)}>{actions.length}{shown ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}</Button></div>
+    <div className="flex items-center gap-1"><div className="min-w-0 flex-1">{row(object)}</div><Button size="sm" variant="ghost" aria-label={t("Actions for {name}", { name: object.title })} aria-expanded={shown} className="h-6 shrink-0 gap-1 px-1 text-xs text-muted" onClick={() => setExpanded(!shown)}>{actions.length}{shown ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}</Button></div>
     {shown && <div className="ml-3 grid gap-0.5 border-l border-border pl-1">{actions.map(row)}</div>}
   </div>;
 }

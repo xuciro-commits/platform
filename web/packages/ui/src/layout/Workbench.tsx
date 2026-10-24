@@ -239,7 +239,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
 }
 
 function tabItems(tabs: WorkbenchTab[]) {
-  return tabs.map(tab => ({ ...tab, title: <>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{tab.badge}</span>}</> }));
+  return tabs.map(tab => ({ ...tab, title: <>{tab.title}{tab.badge !== undefined && tab.badge !== 0 && <span className="rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{tab.badge}</span>}</> }));
 }
 
 function PanelBody({ panel }: { panel: WorkbenchPanel }) {
@@ -259,7 +259,7 @@ export function ProblemList({ problems, empty }: { problems: WorkbenchProblem[];
       <button type="button" disabled={!problem.locate} onClick={problem.locate} className="flex w-full items-start gap-2 px-3 py-1.5 text-left hover:bg-row-hover disabled:cursor-default disabled:hover:bg-transparent">
         <span aria-hidden className={cn("mt-1 size-2 shrink-0 rounded-full", problem.severity === "warning" ? "bg-warning" : problem.severity === "info" ? "bg-primary" : "bg-danger")} />
         <span className="min-w-0 flex-1">{problem.text}</span>
-        {problem.subject && <span className="shrink-0 font-mono text-[10px] text-muted">{problem.subject}</span>}
+        {problem.subject && <span className="shrink-0 font-mono text-2xs text-muted">{problem.subject}</span>}
       </button>
     </li>)}
   </ul>;
@@ -273,7 +273,7 @@ export function StructureRow({ icon, label, meta, selected, depth = 0, onClick, 
     <button type="button" aria-pressed={selected} onClick={onClick} className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-xs">
       {icon && <span className="flex size-4 shrink-0 items-center justify-center text-muted [&>svg]:size-3.5">{icon}</span>}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {meta && <span className="shrink-0 text-[10px] text-muted">{meta}</span>}
+      {meta && <span className="shrink-0 text-2xs text-muted">{meta}</span>}
     </button>
     {actions && <span className="flex shrink-0 items-center opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">{actions}</span>}
   </div>;
@@ -282,7 +282,7 @@ export function StructureRow({ icon, label, meta, selected, depth = 0, onClick, 
 /** Section heading inside a structure or inspector panel. */
 export function PanelSection({ title, actions, children, className }: { title: ReactNode; actions?: ReactNode; children?: ReactNode; className?: string }) {
   return <section className={cn("grid min-w-0 gap-1 px-2 py-2", className)}>
-    <div className="flex items-center gap-1 px-1"><h3 className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-muted">{title}</h3>{actions}</div>
+    <div className="flex items-center gap-1 px-1"><h3 className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>{actions}</div>
     {children}
   </section>;
 }

@@ -12,7 +12,7 @@ export function MarkingTag({ marking }: { marking?: string }) {
 export function MarkingField({ value, onChange, help }: { value: string; onChange: (marking: string) => void; help?: string }) {
   return <label className="grid min-w-0 gap-1 text-xs">{t("Marking")}
     <Select value={value} onChange={(e) => onChange(e.target.value)}>{MARKINGS.map((m) => <option key={m} value={m}>{m ? t(m) : t("Unmarked")}</option>)}</Select>
-    {help && <span className="text-[11px] text-muted">{help}</span>}
+    {help && <span className="text-xs text-muted">{help}</span>}
   </label>;
 }
 

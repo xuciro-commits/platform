@@ -141,7 +141,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
               </label>
               {type.help&&<ContextHelp title={type.label}>{type.help}</ContextHelp>}
               {type.readOnly && (
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted/70">{t("Read only")}</span>
+                <span className="text-2xs font-medium uppercase tracking-wider text-muted/70">{t("Read only")}</span>
               )}
             </div>
             {type.help && <span id={helpId} className="sr-only">{type.help}</span>}

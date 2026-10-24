@@ -54,15 +54,15 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
     {inventory.isError && <p role="alert" className="text-xs text-danger">{t("Run history could not be loaded for this member.")}</p>}
     <DataTable data={runs} columns={columns} getRowId={(run) => run.id} height={160} searchable={false} selectedId={shown?.id} onRowClick={(run) => { setSelected(run.id); setStep(""); }} loading={inventory.isLoading} empty={t("No runs of this workflow yet.")} />
     {shown && <>
-      <div className="flex flex-wrap items-center gap-2 text-[11px]"><StatusTag status={shown.state} registry={flowStates} /><code>{shown.id}</code><span className="text-muted">v{shown.version}</span>
+      <div className="flex flex-wrap items-center gap-2 text-xs"><StatusTag status={shown.state} registry={flowStates} /><code>{shown.id}</code><span className="text-muted">v{shown.version}</span>
         <Button onClick={() => open({ view: "flow-instance", params: { id: shown.id, ...(project ? { project } : {}) } }, { window: "beside" })}>{t("Open run")}</Button>
       </div>
       <FlowReleaseBinding dependencies={shown.dependencies} release={shown.release} />
       {shown.withheld ? <p className="text-xs text-muted">{t("Run data is withheld by the current source permissions.")}</p> : <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <FlowCanvas mode="view" label={t("Execution map")} catalog={catalog} nodes={nodes} edges={edges} height={300} selected={step} onSelect={inspect} storeKey={`workflow-runs:${name}`} />
         <div className="grid content-start gap-2 rounded-lg border border-border p-3"><h4 className="text-xs font-medium">{step ? t("Accepted output: {step}", { step }) : t("Workflow input")}</h4>
-          <pre className="max-h-52 overflow-auto rounded bg-background p-2 text-[10px]">{step ? output === undefined ? t("No accepted output for this step yet.") : JSON.stringify(output, null, 2) : shown.data || "{}"}</pre>
-          {token && <><h4 className="text-xs font-medium">{t("Current token")}</h4><pre className="max-h-40 overflow-auto rounded bg-background p-2 text-[10px]">{JSON.stringify(token, null, 2)}</pre></>}
+          <pre className="max-h-52 overflow-auto rounded bg-background p-2 text-2xs">{step ? output === undefined ? t("No accepted output for this step yet.") : JSON.stringify(output, null, 2) : shown.data || "{}"}</pre>
+          {token && <><h4 className="text-xs font-medium">{t("Current token")}</h4><pre className="max-h-40 overflow-auto rounded bg-background p-2 text-2xs">{JSON.stringify(token, null, 2)}</pre></>}
         </div>
       </div>}
       <Disclosure summary={<span className="text-xs font-medium">{t("Decision trace")}</span>}><DataTable data={(shown.trace ?? []).map((line, index) => ({ ...line, id: String(index) }))} columns={traceColumns} getRowId={(line) => line.id} height={200} searchable={false} /></Disclosure>

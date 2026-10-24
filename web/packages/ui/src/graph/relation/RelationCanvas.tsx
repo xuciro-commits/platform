@@ -194,7 +194,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
           </div>}
         </div>
         <CanvasTool label={t("Fit canvas")} icon={<Maximize />} onClick={() => void fitView({ ...fitting, duration: 220 })} />
-        {linking && <span className="px-2 text-[11px] text-[var(--tone-warning)]">{t("Drag from one element to another to relate them.")}</span>}
+        {linking && <span className="px-2 text-xs text-[var(--tone-warning)]">{t("Drag from one element to another to relate them.")}</span>}
         <CanvasHelpTool open={help} onToggle={() => setHelp(!help)} />
       </CanvasToolbar>
 

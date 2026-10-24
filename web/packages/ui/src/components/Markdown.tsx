@@ -164,7 +164,7 @@ export function MarkdownEditor({
     <div className="flex flex-col rounded-md border border-border bg-surface text-sm">
       <ContentTabs label={t("Editor tabs")} compact value={tab} onChange={(next) => setTab(next as "write" | "preview")}
         className="flex-none [&>div:first-child]:bg-muted/10"
-        actions={<span className="pr-2 text-[11px] text-muted">{(value ?? "").length} {t("characters")}</span>}
+        actions={<span className="pr-2 text-xs text-muted">{(value ?? "").length} {t("characters")}</span>}
         items={[{ id: "write", title: t("Write"), content: tab === "write" ? (
         <textarea
           id={id}

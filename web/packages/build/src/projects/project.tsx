@@ -8,7 +8,7 @@ import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, Dialog, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
@@ -67,7 +67,7 @@ export function ProjectsList() {
           <div className="flex items-center gap-2"><FolderKanban className="size-4 text-primary" /><span className="min-w-0 flex-1 truncate font-semibold">{item.title}</span><DraftStatus state={item.project?.state} /></div>
           {item.description && <p className="line-clamp-2 text-xs text-muted">{item.description}</p>}
           <p className="text-xs text-muted">{item.project ? t(item.project.extends ? "Application extension" : "Build application") : t(item.definition?.source === "code" || item.ref.app !== "build" ? "Native code" : "Published application")} · {item.ref.app}</p>
-          <p className="text-[11px] text-muted">{t("{pages} pages · {resources} resources", { pages: (item.project ?? item.definition?.application)?.pages?.length ?? 0, resources: (item.project ?? item.definition?.application)?.resources?.length ?? 0 })}</p>
+          <p className="text-xs text-muted">{t("{pages} pages · {resources} resources", { pages: (item.project ?? item.definition?.application)?.pages?.length ?? 0, resources: (item.project ?? item.definition?.application)?.resources?.length ?? 0 })}</p>
         </Button>
       </li>)}
     </ul>
@@ -79,6 +79,7 @@ export function ProjectsList() {
             <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="min-w-0 flex-1 truncate font-semibold">{t(template.title)}</span><Tag label={`r${template.revision}`} /></div>
             <p className="break-words text-xs text-muted">{t(template.summary)}</p>
             <p className="break-words text-xs text-muted">{t("Needs")}: {[...template.bindings, ...(template.child ? [t("Child object")] : [])].map(bound => t(bound)).join(" · ")}</p>
+            <p className="break-words text-xs text-muted">{t("Initialization")}: {[t("Bind the object and fields"), t("Review the page draft"), t("Publish through the release gate")].join(" → ")}</p>
             <Button size="sm" className="w-fit" onClick={() => { chosenTemplate.current = template.id; setChoosing(false); create.take(); }}>{t("Start with this template")}</Button>
           </li>)}
         </ul>
@@ -281,7 +282,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{unpublished.length}</span>}</Button>}
+        {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{unpublished.length}</span>}</Button>}
         {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={saving || dirty || !!pendingPatch || !!createdResource} onChange={(event) => {
           let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
           try { choice = JSON.parse(event.target.value); } catch { return; }
@@ -341,12 +342,12 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
                 {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
               </div>
             </div> : <div role="region" aria-label={t("Workspace resources")} className="grid gap-2 divide-y divide-border">
-              {studioResourceGroups(project, activeArea, visible).map(group => <section key={group.id} className="py-3">
+              {studioResourceGroups(project, activeArea, visible).map(group => <Panel variant="plain" key={group.id} className="py-3">
                 <h2 className="mb-2 text-sm font-semibold">{t(group.title)}</h2>
                 {group.items.map(item => <Button key={refKey(item.ref)} variant="row" className="gap-3 py-3" onClick={() => item.missing ? setSelected(refKey(item.ref)) : open(assetRoute(item.ref, owned, definitions, id))}>
                   <span className="text-muted [&>svg]:size-4">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{statusOf(item)}</span>
                 </Button>)}
-              </section>)}
+              </Panel>)}
               {!visible.length && <p className="py-6 text-sm text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
             </div>}
             <div className="grid gap-2">

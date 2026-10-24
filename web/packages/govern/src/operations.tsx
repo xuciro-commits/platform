@@ -289,7 +289,7 @@ export function Audit() {
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
     { accessorKey: "app", header: t("App"), meta: { width: 120 }, cell: (c) => appTitle(c.getValue() as string) },
-    { accessorKey: "action", header: t("Action"), cell: (c) => { const schema = c.getValue() as string, title = titles.get(schema); return <span className="flex min-w-0 items-baseline gap-2"><span className="truncate">{title ?? schema}</span>{title && <span className="truncate font-mono text-[10px] text-muted">{schema}</span>}</span>; } },
+    { accessorKey: "action", header: t("Action"), cell: (c) => { const schema = c.getValue() as string, title = titles.get(schema); return <span className="flex min-w-0 items-baseline gap-2"><span className="truncate">{title ?? schema}</span>{title && <span className="truncate font-mono text-2xs text-muted">{schema}</span>}</span>; } },
     { accessorKey: "target", header: t("Target"), cell: (c) => <span className="font-mono text-xs">{c.getValue() ?? ""}</span> },
   ];
   return (

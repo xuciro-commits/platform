@@ -27,10 +27,10 @@ export function ObjectExplorer({ type: requested }: { type?: string }) {
       <Input type="search" aria-label={t("Filter object types")} placeholder={t("Filter…")} value={filter} onChange={(e) => setFilter(e.target.value)} />
       <nav aria-label={t("Object types")} className="grid gap-2 overflow-auto">
         {[...groups.entries()].map(([app, list]) => <div key={app} className="grid gap-0.5">
-          <div className="px-2 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted">{app}</div>
+          <div className="px-2 pt-1 text-xs font-medium uppercase tracking-wide text-muted">{app}</div>
           {list.map((e) => <Button key={e.type} variant="row" aria-current={e.type === chosen ? "true" : undefined}
             className={cn("grid", e.type === chosen && "bg-row-selected font-medium")} onClick={() => setPicked(e.type)}>
-            <span className="truncate">{e.title}</span><span className="truncate font-mono text-[11px] text-muted">{e.type}</span>
+            <span className="truncate">{e.title}</span><span className="truncate font-mono text-xs text-muted">{e.type}</span>
           </Button>)}
         </div>)}
       </nav>

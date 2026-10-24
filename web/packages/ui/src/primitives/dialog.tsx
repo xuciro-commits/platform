@@ -42,7 +42,7 @@ export function OverlayFrame({ open, onOpenChange, title, children, wide, return
   return (
     <D.Root modal={backdrop} open={open && !suspended} onOpenChange={(next) => { change(next); }}>
       <D.Portal>
-        {backdrop&&<D.Overlay onClick={(event) => { if (event.target === event.currentTarget && event.button === 0 && !event.ctrlKey && closeOnBackdrop) change(false); }} className={sheet ? "fixed inset-0 z-40 bg-black/30" : "fixed inset-0 z-50 bg-black/40"} />}
+        {backdrop&&<D.Overlay onClick={(event) => { if (event.target === event.currentTarget && event.button === 0 && !event.ctrlKey && closeOnBackdrop) change(false); }} className={sheet ? "fixed inset-0 z-40 bg-overlay" : "fixed inset-0 z-50 bg-overlay"} />}
         {/* A dialog never grows past the screen: its title stays, its content
             scrolls, and what it asks for is always reachable. */}
         <D.Content data-frame={sheet ? "sheet" : "modal"} {...focus} {...policy} onEscapeKeyDown={event=>{focus.onEscapeKeyDown(event);policy.onEscapeKeyDown(event);}} onCloseAutoFocus={(event) => { if (suspended) event.preventDefault(); else focus.onCloseAutoFocus(event); }}

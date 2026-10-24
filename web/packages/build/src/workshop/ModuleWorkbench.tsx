@@ -240,7 +240,7 @@ function ModulePreviewBody({ context, ungrouped, groups, onHeader }: { context: 
   const card = (page: ModuleContext["pages"][number]) => <Button variant="row" key={page.name} type="button" disabled={!page.id} onClick={() => page.id && context.openPage(page.id)}
     className="grid gap-1 rounded-md border border-border p-3 text-left hover:border-primary disabled:opacity-60">
     <span className="flex items-center gap-2 text-sm font-medium"><LayoutTemplate className="size-4 text-muted" /><span className="min-w-0 flex-1 truncate">{page.title}</span><DraftStatus state={page.state} /></span>
-    <span className="text-[11px] text-muted">{page.id ? t("Open in the canvas") : t("No saved draft")}</span>
+    <span className="text-xs text-muted">{page.id ? t("Open in the canvas") : t("No saved draft")}</span>
   </Button>;
   return <div className="grid gap-4 p-4">
     {!context.pages.length && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted">

@@ -52,7 +52,7 @@ export function WritebackEditor({ id }: { id: string }) {
   const verbs = ["confirmation", "dispatch", "transaction", "create", "edit", ...(target?.lifecycle?.transitions ?? []).map((a) => a.name)];
   const queue = effects.filter((x) => x.event === `writeback/${draft.name}` && (x.state === "pending" || x.state === "retrying" || x.state === "held"));
   const rows = (key: "mapping" | "result", list: Field[], fromOptions: string[] | undefined, toOptions: string[] | undefined, fromLabel: string, toLabel: string) => <div className="grid gap-2">
-    <div className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2 text-[11px] font-medium text-muted"><span>{fromLabel}</span><span>{toLabel}</span><span>{t("Convert")}</span><span /></div>
+    <div className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2 text-xs font-medium text-muted"><span>{fromLabel}</span><span>{toLabel}</span><span>{t("Convert")}</span><span /></div>
     {list.map((m, i) => <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2">
       {fromOptions ? <Select aria-label={fromLabel} value={m.from} onChange={(e) => patch({ [key]: list.map((x, j) => j === i ? { ...x, from: e.target.value } : x) })}><option value="">{t("Choose a field")}</option>{fromOptions.map((f) => <option key={f} value={f}>{f}</option>)}</Select> : <Input aria-label={fromLabel} value={m.from} placeholder="d.MaterialDocument" onChange={(e) => patch({ [key]: list.map((x, j) => j === i ? { ...x, from: e.target.value } : x) })} />}
       {toOptions ? <Select aria-label={toLabel} value={m.to} onChange={(e) => patch({ [key]: list.map((x, j) => j === i ? { ...x, to: e.target.value } : x) })}><option value="">{t("Choose a field")}</option>{toOptions.map((f) => <option key={f} value={f}>{f}</option>)}</Select> : <Input aria-label={toLabel} value={m.to} placeholder="Material" onChange={(e) => patch({ [key]: list.map((x, j) => j === i ? { ...x, to: e.target.value } : x) })} />}
@@ -81,24 +81,24 @@ export function WritebackEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Writeback title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, on: "create", mapping: [], result: [] })}><option value="">{t("Choose an object type")}</option>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
         <label className={fieldClass}>{t("After action")}<Select value={draft.on} onChange={(e) => patch({ on: e.target.value })}>{verbs.map((v) => <option key={v} value={v}>{v==="confirmation"?t("Only explicit business confirmations"):v==="dispatch"?t("Only declared device dispatches"):v==="transaction"?t("Only explicit transaction effects"):v}</option>)}</Select>
-          <span className="text-[11px] text-muted">{t("The decision's payload is what gets sent; create and edit carry the fields, a declared action carries its own payload.")}</span></label>
+          <span className="text-xs text-muted">{t("The decision's payload is what gets sent; create and edit carry the fields, a declared action carries its own payload.")}</span></label>
       </Panel>
       <Panel title={t("Request")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Transport")}<Select value={draft.transport === "a2a" ? "a2a" : ""} onChange={event => patch({ transport: event.target.value, ...(event.target.value === "a2a" ? { method: "POST" } : {}) })}><option value="">HTTP</option><option value="a2a">A2A</option></Select>
-          <span className="text-[11px] text-muted">{t("A2A sends the mapped payload as one message with the original effect identity. The connection secret remains the complete Authorization header.")}</span></label>
+          <span className="text-xs text-muted">{t("A2A sends the mapped payload as one message with the original effect identity. The connection secret remains the complete Authorization header.")}</span></label>
         <label className={fieldClass}>{t("Connection")}<Select value={draft.connection} onChange={(e) => patch({ connection: e.target.value })}><option value="">{t("Choose a connection")}</option>{connections.map((c) => <option key={c.id} value={c.id}>{c.title} · {c.kind}</option>)}</Select>
-          <span className="text-[11px] text-muted">{t("Saved http or OData connections can be configured here; publishing still requires a ready connection. Credentials stay with the connection.")}</span></label>
+          <span className="text-xs text-muted">{t("Saved http or OData connections can be configured here; publishing still requires a ready connection. Credentials stay with the connection.")}</span></label>
         <div className="grid grid-cols-[auto_1fr] gap-2">
           <label className={fieldClass}>{t("Method")}<Select disabled={draft.transport === "a2a"} value={draft.method ?? "POST"} onChange={(e) => patch({ method: e.target.value })}>{["POST", "PUT", "PATCH"].map((m) => <option key={m} value={m}>{m}</option>)}</Select></label>
-          <label className={fieldClass}>{t("Path")}<Input value={draft.path ?? ""} placeholder="A_MaterialDocumentHeader" onChange={(e) => patch({ path: e.target.value })} /><span className="text-[11px] text-muted">{t("Relative to the connection's address; {id} and {field} are filled from the payload.")}</span></label>
+          <label className={fieldClass}>{t("Path")}<Input value={draft.path ?? ""} placeholder="A_MaterialDocumentHeader" onChange={(e) => patch({ path: e.target.value })} /><span className="text-xs text-muted">{t("Relative to the connection's address; {id} and {field} are filled from the payload.")}</span></label>
         </div>
       </Panel>
       <Panel title={t("Body")} className="grid min-w-0 content-start gap-2">
-        <p className="text-[11px] text-muted">{t("Payload field → key in the request body. Empty sends the whole payload with its id.")}</p>
+        <p className="text-xs text-muted">{t("Payload field → key in the request body. Empty sends the whole payload with its id.")}</p>
         {rows("mapping", draft.mapping ?? [], ["id", ...fields.map((f) => f.name)], undefined, t("Payload field"), t("Body key"))}
       </Panel>
       <Panel title={t("Answer")} className="grid min-w-0 content-start gap-2">
-        <p className="text-[11px] text-muted">{t("Key in the answer (dotted; OData's d is unwrapped) → field written onto the record once delivered.")}</p>
+        <p className="text-xs text-muted">{t("Key in the answer (dotted; OData's d is unwrapped) → field written onto the record once delivered.")}</p>
         {rows("result", draft.result ?? [], undefined, writable.map((f) => f.name), t("Answer key"), t("Record field"))}
       </Panel>
       <Panel title={t("Deliveries")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
@@ -106,7 +106,7 @@ export function WritebackEditor({ id }: { id: string }) {
           <Tag label={t("{n} delivered", { n: draft.sent ?? 0 })} tone="success" /><Tag label={t("{n} rejected", { n: draft.rejected ?? 0 })} tone={draft.rejected ? "danger" : undefined} /><Tag label={t("{n} failed", { n: draft.failed ?? 0 })} tone={draft.failed ? "danger" : undefined} />
           {queue.length > 0 && <Tag label={t("{n} queued", { n: queue.length })} tone="warning" />}{queue[0]?.error && <span className="text-warning">{t(queue[0].error)}</span>}
         </p>
-        {queue.length > 0 && <p className="text-[11px] text-muted">{t("Queued decisions go in order once the system answers; Settings → Integrations shows every attempt.")}</p>}
+        {queue.length > 0 && <p className="text-xs text-muted">{t("Queued decisions go in order once the system answers; Settings → Integrations shows every attempt.")}</p>}
         {draft.answers?.length ? <ul className="grid gap-1 text-xs">{draft.answers.map((a, i) => <li key={i} className="flex flex-wrap items-center gap-2 font-mono break-all">
           <Tag label={a.result} tone={a.result === "delivered" ? "success" : "danger"} /><span>{new Date(a.at).toLocaleString()}</span><span>{a.target}</span>{a.detail && <span className="text-danger">{a.detail}</span>}{a.answer && <span className="text-muted">{a.answer.slice(0, 160)}</span>}
         </li>)}</ul> : <p className="text-xs text-muted">{t("Nothing sent yet.")}</p>}

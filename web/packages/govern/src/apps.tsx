@@ -64,7 +64,7 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
   const shown = ids.filter(id => items.some(item => (item.descriptor.id || item.installed?.id) === id && `${id} ${item.descriptor.title ?? item.installed?.title ?? ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
   return (
     <div className="grid min-w-0 items-start gap-5 md:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
-      <section aria-label={t("Package library")} className={selected ? "hidden min-w-0 md:block" : "min-w-0"}>
+      <Panel variant="plain" aria-label={t("Package library")} className={selected ? "hidden min-w-0 md:block" : "min-w-0"}>
         <Input type="search" aria-label={t("Find a package")} placeholder={t("Find a package")} value={search} onChange={event => setSearch(event.target.value)} className="mb-3 w-full" />
         <div className="grid gap-1">{shown.map(id => {
           const entries = items.filter(item => (item.descriptor.id || item.installed?.id) === id);
@@ -74,8 +74,8 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
           </Button>;
         })}</div>
         {!shown.length && <p role="status" className="py-4 text-sm text-muted">{t("No package matches your search.")}</p>}
-      </section>
-      <section aria-label={t("Package details")} className={selected ? "min-w-0" : "hidden md:block"}>
+      </Panel>
+      <Panel variant="plain" aria-label={t("Package details")} className={selected ? "min-w-0" : "hidden md:block"}>
       {selected ? <Button size="sm" variant="ghost" className="mb-3 md:hidden" onClick={() => setSelection("")}>{t("Back to packages")}</Button> : <p className="py-8 text-sm text-muted">{t("Select a package to review its version and next step.")}</p>}
       {(selected ? [selected] : []).map(packageID => {
         const available = items.filter(item => (item.descriptor.id || item.installed?.id) === packageID);
@@ -156,7 +156,7 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
           </Panel>
         );
       })}
-      </section>
+      </Panel>
     </div>
   );
 }
@@ -182,7 +182,7 @@ function Facts({ items }: { items: [label: string, value: React.ReactNode][] }) 
   if (!shown.length) return <p className="text-xs text-muted">{t("Nothing")}</p>;
   return <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1 text-xs">{shown.map(([k, v]) => <Fragment key={k}><dt className="text-muted">{k}</dt><dd className="min-w-0 break-words">{v}</dd></Fragment>)}</dl>;
 }
-const Mono = ({ items }: { items: string[] }) => items.length ? <span className="font-mono text-[11px] leading-5">{items.join(", ")}</span> : null;
+const Mono = ({ items }: { items: string[] }) => items.length ? <span className="font-mono text-xs leading-5">{items.join(", ")}</span> : null;
 const Chips = ({ items }: { items: string[] }) => items.length ? <span className="flex flex-wrap gap-1">{items.map((x) => <Tag key={x} label={x} />)}</span> : null;
 
 /** One module of the matrix: what it provides on the left, what it uses on the right. */
@@ -203,7 +203,7 @@ function ModuleCard({ app: a }: { app: AppInfo }) {
       </div>
       <div className="grid content-start gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Uses")}</h3>
-        <Facts items={[[t("Consumes"), <Mono items={a.consumes} />], [t("Protocol actions"), a.uses.length ? <ul className="grid gap-0.5 font-mono text-[11px]">{a.uses.map((u) => <li key={u}>{u}</li>)}</ul> : null],
+        <Facts items={[[t("Consumes"), <Mono items={a.consumes} />], [t("Protocol actions"), a.uses.length ? <ul className="grid gap-0.5 font-mono text-xs">{a.uses.map((u) => <li key={u}>{u}</li>)}</ul> : null],
           [t("Subscribes to"), <Mono items={a.subscribes} />], [t("Connector inputs"), <Mono items={a.inputs} />]]} />
       </div>
     </div>

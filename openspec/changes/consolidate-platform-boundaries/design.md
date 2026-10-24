@@ -80,3 +80,9 @@ workspace 壳 → ui/app/kernel
 
 - 按 B1.3 实测结论执行：区层唯一结构动作 = `packages/platform` → `packages/govern`（`@platform/govern`，系统区归位）；基础层 `kernel/catalog/ui/app` 名称与公共面稳定；不为运营区新建包（运营界面由 `@platform/app` 运行时 + workspace 壳承担，build 不成为跨区依赖方）。design 决策 5 中「运营界面归属整理」的模糊表述由 B1.3 结论替代，未额外搬移。
 - 一次性迁移：引用面仅 4 文件 + Architecture 代码地图；lockfile 更新；catalog consumers 重生成（旧路径清零）；check-web 全绿；无新旧双轨。
+
+## 收尾审计（2026-10-24，走查通过后）
+
+- B4 结论复核：`@platform/platform` 全仓引用为零（lockfile 历史条目随重生成消失）；基础层公共面未动；无新旧双轨。
+- 依赖冻结承诺复核：`git diff main..HEAD -- go.mod go.sum` 为空；pnpm-lock 无版本变更（仅 govern 改名结构）——5.2 冻结巡检据此勾选。
+- deployment 差量逐条对照 B2 实现：三运行服务拓扑、进程内可选接收能力（声明启用/未声明不监听/端口与签名语义不变）、compute 与驱动隔离保留——无打折实现。剩余 3.1/3.2（目录化搬迁）、6.1/6.2/6.3（宿主验证与升级轮）如实留待代理可用环境，change 保持活动。

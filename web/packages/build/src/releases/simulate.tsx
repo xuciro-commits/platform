@@ -313,7 +313,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     <SimulationExplanation step={step}/>
     {step.flows?.map(flow => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
       <FlowRun instance={{ ...flow, title: processes.data?.records.find(record => `build.${record.name}` === flow.flow)?.title ?? process?.title ?? flow.flow, key: flow.id, undo: null }} onStepSelect={onStepSelect} />
-      {flow.outputs && <Disclosure summary={<span className="text-xs font-medium">{t("Accepted block outputs")}</span>}><pre className="mt-2 overflow-auto rounded bg-background p-2 text-[11px]">{JSON.stringify(flow.outputs, null, 2)}</pre></Disclosure>}
+      {flow.outputs && <Disclosure summary={<span className="text-xs font-medium">{t("Accepted block outputs")}</span>}><pre className="mt-2 overflow-auto rounded bg-background p-2 text-xs">{JSON.stringify(flow.outputs, null, 2)}</pre></Disclosure>}
     </Card>)}
     {step.tasks?.map(task => <p key={task.id} className="text-xs">{t("Human task")}: {task.title}</p>)}
     <Disclosure summary={`${t("Record changes")} · ${step.changes.length}`} defaultOpen={!comparison && !step.accepted}>{changes}</Disclosure>
@@ -364,7 +364,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
         </div>}
         {kind === "flow" && <Disclosure summary={<span className="text-xs font-medium">{t("Synthetic query samples")}</span>}><div className="mt-2 grid gap-2">
           <ContextHelp title={t("Synthetic query samples")}>{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</ContextHelp>
-          <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); setSampleOverride(true); clear(); }} />
+          <Textarea parse="json" aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-xs" value={samples} onChange={(event) => { setSamples(event.target.value); setSampleOverride(true); clear(); }} />
         </div></Disclosure>}
         {kind !== "function" && <Disclosure summary={t("Synthetic organization")}>
           <div className="grid gap-2">

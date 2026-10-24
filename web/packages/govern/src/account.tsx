@@ -82,7 +82,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
     <label className="grid content-start gap-1 text-sm">
       <span className="text-xs text-muted">{label}</span>
       <Input type={type} value={value(k)} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
-      {hint && <span className="text-[11px] text-muted">{hint}</span>}
+      {hint && <span className="text-xs text-muted">{hint}</span>}
     </label>
   );
   const choice = (k: keyof Profile, label: string, options: string[], render: (o: string) => string, hint?: string) => (
@@ -92,7 +92,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
         <option value="">{t("— tenant default")}</option>
         {options.map((o) => <option key={o} value={o}>{render(o)}</option>)}
       </Select>
-      {hint && <span className="text-[11px] text-muted">{hint}</span>}
+      {hint && <span className="text-xs text-muted">{hint}</span>}
     </label>
   );
   const zone = value("timezone") || account.effective.timezone || "UTC";
@@ -116,7 +116,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
             <span className="text-xs text-muted">{t("Timezone")}</span>
             <Input list="platform-timezones" value={value("timezone")} placeholder={t("— tenant default")} onChange={(e) => setDraft({ ...draft, timezone: e.target.value })} />
             <datalist id="platform-timezones">{zones.map((z) => <option key={z} value={z} />)}</datalist>
-            <span className="text-[11px] text-muted">{inherit("timezone", "UTC")} · {t("Now")}: {clock(zone, value("dateFormat") || account.effective.dateFormat)}</span>
+            <span className="text-xs text-muted">{inherit("timezone", "UTC")} · {t("Now")}: {clock(zone, value("dateFormat") || account.effective.dateFormat)}</span>
           </label>
           {choice("dateFormat", t("Date format"), DATE_FORMATS, (o) => ({ ymd: "2026-10-06", dmy: "06.10.2026", mdy: "10/06/2026" })[o] ?? o, inherit("dateFormat", "ymd"))}
           {choice("numberFormat", t("Number format"), NUMBER_FORMATS, (o) => o, inherit("numberFormat", "1,234.56"))}
@@ -143,7 +143,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
               {openable.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
               {value("homePage") && !openable.some((a) => a.id === value("homePage")) && <option value={value("homePage")}>{value("homePage")}</option>}
             </Select>
-            <span className="text-[11px] text-muted">{t("The app the workspace opens on; only apps this member holds a role in are offered.")}</span>
+            <span className="text-xs text-muted">{t("The app the workspace opens on; only apps this member holds a role in are offered.")}</span>
           </label>
           {choice("theme", t("Appearance"), THEMES, (o) => t(o))}
           {choice("density", t("Density"), DENSITIES, (o) => t(o))}

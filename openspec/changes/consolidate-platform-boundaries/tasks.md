@@ -31,7 +31,8 @@
 
 - [x] 5.1 新增 `scripts/restore-deps.sh`：Go 模块 `GOPROXY=direct` 从 GitHub 逐个还原 + Web 按 lockfile 还原；恢复顺序写入 AGENTS 沙箱小节并在沙箱实测一条龙还原。
   - 注：脚本按 go.sum 逐 entry 哈希校验，56 个模块中 46 个从 GitHub tag 字节级还原成功；余 10 个（otel 家族 7 + genproto api/rpc 2 + proto/otlp 1）的 tag 内容与当年代理记录不符（tag 被重指或 monorepo 子 tag 共用 commit），历史 100 帧提交狩猎无果，须有可达 Go 代理环境完成全量校验还原。纯 stdlib 包（`internal/sink`、`cmd/webhook-sink`）在沙箱已 build+vet 通过。
-- [ ] 5.2 冻结期巡检：确认重构差量不含依赖版本变更；安全公告跟踪记录到 WorkQueue 备注项。
+- [x] 5.2 冻结期巡检：确认重构差量不含依赖版本变更；安全公告跟踪记录到 WorkQueue 备注项。
+  - 注：实测 `git diff main..HEAD -- go.mod go.sum` 为空；pnpm-lock 仅含 `@platform/govern` 改名结构变化，无版本变更。安全公告跟踪已登记 WorkQueue 备注项（升级轮前复查）。
 
 ## 6. 集中验证与升级轮
 

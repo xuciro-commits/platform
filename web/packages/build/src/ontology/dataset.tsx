@@ -90,7 +90,7 @@ export function DatasetEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Dataset name")}<Input disabled={!!draft.producer} value={draft.name} placeholder="sapmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Dataset title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Versions kept")}<Input draftKey="versions-kept" type="number" min={1} max={50} value={draft.keep ?? ""} placeholder="3" onChange={(e) => patch({ keep: Number(e.target.value) })} />
-          <span className="text-[11px] text-muted">{t("Older versions keep their row count but lose their rows.")}</span></label>
+          <span className="text-xs text-muted">{t("Older versions keep their row count but lose their rows.")}</span></label>
         <MarkingField value={draft.marking ?? ""} onChange={(marking) => patch({ marking })} help={t("Raised by what loads it - the connection, the pipeline's input; lowered only here. Confidential and restricted data only reaches object fields that name their readers; restricted never leaves as CSV.")} />
         {draft.producer && <p className="text-xs text-muted">{t("Loaded by")}: <span className="font-mono">{draft.producer}</span></p>}
       </Panel>
@@ -107,7 +107,7 @@ export function DatasetEditor({ id }: { id: string }) {
           versionQuery.data?.record?.archived ? <p className="text-xs text-muted">{t("This version is no longer kept.")}</p> :
           <div className="overflow-auto">
             <DataTable data={rows.slice(0, PREVIEW)} getRowId={(row) => String(rows.indexOf(row))} searchable={false} height={Math.min(420, 40 + rows.length * 28)} columns={columns.map((name): ColumnDef<Record<string, unknown>, unknown> => ({ id: name, header: name, accessorFn: (row) => row[name], cell: (context) => <span className="font-mono">{cell(context.getValue())}</span> }))} />
-            {rows.length > PREVIEW && <p className="px-2 py-1 text-[11px] text-muted">{t("First {n} of {rows} rows", { n: PREVIEW, rows: rows.length })}</p>}
+            {rows.length > PREVIEW && <p className="px-2 py-1 text-xs text-muted">{t("First {n} of {rows} rows", { n: PREVIEW, rows: rows.length })}</p>}
           </div>}
       </Panel>
     </fieldset></StructuredEditor>

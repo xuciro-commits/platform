@@ -33,7 +33,7 @@ export function ProjectRoles({ owned }: { owned: OwnedResource[] }) {
       const { item, record } = row.original;
       return <div>
         <Button variant="row" type="button" className="font-medium hover:underline" onClick={() => open({ view: "object-type", params: { id: record.id, tab: "permissions", access: "true" } })}>{item.title}</Button>
-        <div className="text-[11px] text-muted">{record.scope?.unit ? t("unit: {field} · {structure}", { field: record.scope.unit, structure: record.scope.structure ?? "—" }) : (record.access ?? []).some((a) => a.read === "unit" || a.read === "below") ? <span className="text-danger">{t("needs scope fields")}</span> : ""}</div>
+        <div className="text-xs text-muted">{record.scope?.unit ? t("unit: {field} · {structure}", { field: record.scope.unit, structure: record.scope.structure ?? "—" }) : (record.access ?? []).some((a) => a.read === "unit" || a.read === "below") ? <span className="text-danger">{t("needs scope fields")}</span> : ""}</div>
       </div>;
     } },
     ...roles.map((role): ColumnDef<(typeof objects)[number]> => ({ id: `role:${role}`, header: role, meta: { width: 240 }, cell: ({ row }) => {
@@ -43,7 +43,7 @@ export function ProjectRoles({ owned }: { owned: OwnedResource[] }) {
         <Select aria-label={`${row.original.item.title} · ${role} · ${t("Read")}`} value={access?.read ?? ""} disabled={!can} onChange={(event) => event.target.value && setLevel(record, role, event.target.value as Access["read"])}>
           <option value="">{(record.access ?? []).length ? t("none") : t("open")}</option>{levels.map((level) => <option key={level} value={level}>{t(level)}</option>)}
         </Select>
-        {access && access.read !== "none" && <div className="flex gap-2 text-[11px]">{(["create", "edit", "archive"] as const).map((key) =>
+        {access && access.read !== "none" && <div className="flex gap-2 text-xs">{(["create", "edit", "archive"] as const).map((key) =>
           <Checkbox key={key} checked={!!access[key]} disabled={!can} onChange={(on) => setVerb(record, role, key, on)}>{t(key)}</Checkbox>)}</div>}
       </div>;
     } })),

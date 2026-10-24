@@ -419,7 +419,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
                 wrapLayout={preview ? undefined : (id, _node, body) => <CanvasRegion key={id} id={id}>{body}</CanvasRegion>} /></ApplicationPage>
             </div>
           </div>
-          <div className="flex items-center gap-2 border-t border-border px-3 py-1 text-[11px] text-muted" role="status">{preview ? t("Preview: your records as they are; actions run for real.") : t("Design: your records as they are. Actions do not run while you compose.")}</div>
+          <div className="flex items-center gap-2 border-t border-border px-3 py-1 text-xs text-muted" role="status">{preview ? t("Preview: your records as they are; actions run for real.") : t("Design: your records as they are. Actions do not run while you compose.")}</div>
         </CanvasEditor>
       </fieldset></StructuredEditor>
     </Workbench>

@@ -57,7 +57,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/context-help": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContextHelpExample })),
   "ui/count-matrix": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.CountMatrixExample })),
   "ui/count-treemap": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.CountTreemapExample })),
-  "ui/data-table": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Tables })),
+  "ui/data-table": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DensityMatrixExample })),
   "ui/date-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DateInputExample })),
   "ui/datetime-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DateTimeInputExample })),
   "ui/derived-mean": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DerivedMeanExample })),

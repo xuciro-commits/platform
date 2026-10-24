@@ -657,7 +657,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const railButton = (item: RailItem) => (
     <button key={item.id} type="button" title={item.label} aria-label={item.label} aria-current={item.active ? "page" : undefined} onClick={item.run}
       className={cn("relative grid size-9 place-items-center rounded-md text-muted hover:bg-row-hover hover:text-foreground [&_svg]:size-4", item.active && "bg-row-selected text-foreground")}>
-      {item.icon}{item.badge ? <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">{item.badge > 99 ? "99+" : item.badge}</span> : null}
+      {item.icon}{item.badge ? <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-2xs font-semibold leading-4 text-primary-foreground">{item.badge > 99 ? "99+" : item.badge}</span> : null}
     </button>
   );
   const sessionMenu = session && <SessionMenu compact={!!rail && !compact} session={{ ...session, onAccount: session.onAccount ? () => leaveViews(() => session.onAccount?.()) : undefined, onSwitch: (id) => leaveViews(() => session.onSwitch(id)) }}
@@ -740,7 +740,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           </div>
         </header>
         <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen && (nav.length > 0 || navigation) ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
-          {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-x-0 bottom-0 top-9 z-20 bg-black/25" onClick={() => setMobileNavOpen(false)} />}
+          {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-x-0 bottom-0 top-9 z-20 bg-overlay" onClick={() => setMobileNavOpen(false)} />}
           {(nav.length > 0 || navigation) && (!compact && navOpen || compact && mobileNavOpen) && (
             <nav aria-label={t("Main")} className={cn("overflow-auto border-r border-border bg-surface p-2",
               compact && "fixed inset-y-9 left-0 z-30 w-[min(19rem,85vw)] shadow-lg")}>
@@ -769,7 +769,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         )}
       </div>
       <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
-        overlayClassName="fixed inset-0 z-40 bg-black/30"
+        overlayClassName="fixed inset-0 z-40 bg-overlay"
         contentClassName="fixed left-1/2 top-[15%] z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-border bg-surface shadow-2xl">
         <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search records, go to, open, run…")} className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
         <Command.List className="max-h-80 overflow-auto p-1">

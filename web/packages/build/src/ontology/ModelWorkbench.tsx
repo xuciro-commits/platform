@@ -115,7 +115,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
             { id: "status", label: t("Status"), of: (item) => item.installed ? { id: "published", label: t("Published") } : { id: "draft", label: t("Draft"), order: 1 } },
           ]}
           row={(item) => <><Database className="size-3 shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{item.title}</span>
-            {!item.installed && <span className="shrink-0 text-[10px] text-muted">{t("Draft")}</span>}</>}
+            {!item.installed && <span className="shrink-0 text-2xs text-muted">{t("Draft")}</span>}</>}
           empty={t("No matching objects.")} />
       </div>}
       right={<div className="grid content-start gap-3 p-3">
@@ -173,10 +173,10 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
           {tab === "links" && <div className="grid gap-2">{related.map((relation) => {
             const inbound = relation.target.name === current;
             return <Button key={relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`} variant="row" onClick={() => select({ kind: "relation", relation, inbound })}>
-              <Link2 /><span className="min-w-0 flex-1 text-left"><span className="block text-xs font-medium">{inbound ? relation.inverse ?? relation.title : relation.title}</span><span className="block truncate font-mono text-[10px] text-muted">{relation.ref.object.name}.{relation.ref.field} → {relation.target.name}</span></span><Tag label={t(inbound ? "Incoming reference" : "Outgoing reference")} />
+              <Link2 /><span className="min-w-0 flex-1 text-left"><span className="block text-xs font-medium">{inbound ? relation.inverse ?? relation.title : relation.title}</span><span className="block truncate font-mono text-2xs text-muted">{relation.ref.object.name}.{relation.ref.field} → {relation.target.name}</span></span><Tag label={t(inbound ? "Incoming reference" : "Outgoing reference")} />
             </Button>;
           })}{!related.length && <p className="text-xs text-muted">{t("No visible reference relationships.")}</p>}</div>}
-          {tab === "actions" && <div className="grid gap-2">{actions.map((definition) => <Button key={definition.ref.name} variant="row" onClick={() => select({ kind: "action", definition })}>{definition.action!.title}<span className="ml-auto font-mono text-[10px] text-muted">{definition.ref.name}</span></Button>)}
+          {tab === "actions" && <div className="grid gap-2">{actions.map((definition) => <Button key={definition.ref.name} variant="row" onClick={() => select({ kind: "action", definition })}>{definition.action!.title}<span className="ml-auto font-mono text-2xs text-muted">{definition.ref.name}</span></Button>)}
             {!actions.length && <p className="text-xs text-muted">{t("No action of this object is offered to you.")}</p>}{resource.draft && <div className="flex flex-wrap gap-2">{(resource.draft.actions ?? []).map((a) => <Button key={a.name} size="sm" onClick={() => host.can("build.object.edit") && open({ view: "action-type", params: { id: resource.draft!.id, action: a.name } })}>{a.title || a.name}</Button>)}<Button size="sm" variant="primary" onClick={() => edit(resource, { tab: "lifecycle" })}>{t("Edit the lifecycle")}</Button></div>}</div>}
           {tab === "data" && (resource.installed ? <RecordList source={host.source} type={resource.ref.name} fields={resource.fields.filter((field) => field.type !== "lines" && !("aside" in field && field.aside)).slice(0, 5).map((field) => field.name)} height={420} /> : <Panel>{t("Publish this object before reading its business records.")}</Panel>)}
           {tab === "usage" && <div className="grid gap-2"><ContextHelp title={t("Usage")}><p className="text-xs text-muted">{t("Usage follows declared dependencies visible to the current member.")}</p></ContextHelp>{dependencies.isError && <p role="alert" className="text-xs text-danger">{t("Asset dependencies could not be loaded.")}</p>}{used.map(({ owner }) => <Button key={`${owner.ref.app}/${owner.ref.kind}/${owner.ref.name}`} variant="row" onClick={() => owner.page ? open({ view: "page", params: owner.ref }) : open({ view: "definition", params: owner.ref })}>

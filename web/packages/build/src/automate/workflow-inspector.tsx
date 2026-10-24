@@ -16,7 +16,7 @@ function IdentifierInput({ value, label, onCommit, invalid }: { value: string; l
   const problem = invalid?.(text) ? t("Choose a unique, valid identifier.") : "";
   const commit = () => { if (!problem) { input.clear(); if (text !== value) onCommit(text); } };
   return <><Input data-draft-key={input.path} aria-label={label} aria-invalid={!!problem} value={text} onChange={(event) => input.write(event.target.value, invalid?.(event.target.value) ? t("Choose a unique, valid identifier.") : event.target.value !== value ? t("Finish editing this identifier before saving.") : "")} onBlur={commit}
-    onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); commit(); } }} />{problem && <span className="text-[10px] text-danger">{problem}</span>}</>;
+    onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); commit(); } }} />{problem && <span className="text-2xs text-danger">{problem}</span>}</>;
 }
 
 function NamedInputs({ inputs = {}, schema, parameters = [], steps, onChange, editableNames = false }: { inputs?: Record<string, Binding>; schema?: ValueSchema; parameters?: Api.Field[]; steps: WorkflowStep[]; onChange: (inputs: Record<string, Binding>) => void; editableNames?: boolean }) {
@@ -58,14 +58,14 @@ export function WorkflowSettings({ draft, onChange, objects }: { draft: Workflow
               onClick={() => onChange({ lanes: (draft.lanes ?? []).filter((_, index) => index !== at), steps: draft.steps.map((step) => step.lane === lane.name ? { ...step, lane: undefined } : step) })}>{t("Remove lane")}</Button>
           </div>)}
           <Button size="sm" type="button" onClick={() => { let name = "lane"; while ((draft.lanes ?? []).some((lane) => lane.name === name)) name += "2"; onChange({ lanes: [...(draft.lanes ?? []), { name }] }); }}>{t("Add lane")}</Button>
-          <ContextHelp title={t("Lanes")}><p className="text-[11px] leading-5 text-muted">{t("A lane says who does a step; it never changes the order steps run in.")}</p></ContextHelp>
+          <ContextHelp title={t("Lanes")}><p className="text-xs leading-5 text-muted">{t("A lane says who does a step; it never changes the order steps run in.")}</p></ContextHelp>
         </div>
       </Disclosure>
       <Disclosure defaultOpen summary={<span className="text-xs font-medium">{t("Workflow input schema")}</span>}>
         <SchemaEditor schema={draft.inputSchema ?? { type: "object", properties: {} }} onChange={(inputSchema) => onChange({ inputSchema })} /></Disclosure>
       <JSONEditor label={t("Default workflow input")} value={draft.input ?? {}} schema={draft.inputSchema} onChange={(input) => onChange({ input })} />
       <JSONEditor label={t("Continuous source intake")} value={draft.continuous ?? null} onChange={(continuous) => onChange({ continuous: continuous as Api.Continuous | undefined })} />
-      <ContextHelp title={t("Entry")}><p className="text-[11px] leading-5 text-muted">{t("The entry is the first declared block. Use Make entry on a selected block to change it.")}</p></ContextHelp>
+      <ContextHelp title={t("Entry")}><p className="text-xs leading-5 text-muted">{t("The entry is the first declared block. Use Make entry on a selected block to change it.")}</p></ContextHelp>
     </div>
   </div>;
 }
@@ -100,7 +100,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
         {lanes.length > 0 && field("Lane", <Select value={step.lane ?? ""} onChange={(event) => onChange({ lane: event.target.value || undefined })}>
           <option value="">{t("No lane")}</option>{lanes.map((lane) => <option key={lane.name} value={lane.name}>{lane.title || lane.name}</option>)}</Select>)}
         <div className="flex items-center gap-1"><Tag label={t(capability?.group ?? step.kind)} /><Tag label={capability?.source ?? "platform"} /></div>
-        {capability && <><p className="text-[11px] leading-5 text-muted">{t(capability.description)}</p><code className="break-all text-[10px] text-muted">{capability.ref.app}/{capability.ref.kind}/{capability.ref.name}@{capability.version}</code></>}
+        {capability && <><p className="text-xs leading-5 text-muted">{t(capability.description)}</p><code className="break-all text-2xs text-muted">{capability.ref.app}/{capability.ref.kind}/{capability.ref.name}@{capability.version}</code></>}
         {!linear && steps[0]?.name !== step.name && <Button onClick={onMakeEntry}><ArrowDownToLine className="mr-1 size-3" />{t("Make entry")}</Button>}
         {field("Timeout (seconds)", <Input type="number" min={0} max={2592000} value={step.timeoutSeconds ?? 0} onChange={(event) => onChange({ timeoutSeconds: Number(event.target.value) })} />)}
         <Disclosure summary={<span className="text-xs font-medium">{t("Control paths")}</span>}><div className="mt-2">{paths}</div></Disclosure>
@@ -127,7 +127,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
           {field("Maximum iterations", <Input type="number" min={1} max={10000} value={step.maxIterations ?? 100} onChange={(event) => onChange({ maxIterations: Number(event.target.value) })} />)}
           {field("Concurrency", <Input type="number" min={1} max={step.kind === "while" ? 1 : 32} value={step.concurrency ?? 1} onChange={(event) => onChange({ concurrency: Number(event.target.value) })} />)}
           {field("Loop body", <Select value={step.body ?? ""} onChange={(event) => onChange({ body: event.target.value || undefined })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
-          <ContextHelp title={t("Loop body")}><p className="text-[11px] leading-5 text-muted">{t("End the body with Return. Item and index bindings are available only inside this scope.")}</p></ContextHelp>
+          <ContextHelp title={t("Loop body")}><p className="text-xs leading-5 text-muted">{t("End the body with Return. Item and index bindings are available only inside this scope.")}</p></ContextHelp>
         </>}
         {step.kind === "fork" && <>{field("Join mode", <Select value={step.mode ?? "all"} onChange={(event) => onChange({ mode: event.target.value as "all" | "any" })}><option value="all">{t("All paths")}</option><option value="any">{t("First successful path")}</option></Select>)}
           <div className="grid gap-2">{(step.branches ?? []).map((target, i) => <Select key={i} aria-label={t("Parallel path {n}", { n: i + 1 })} value={target} onChange={(event) => onChange({ branches: step.branches!.map((old, index) => index === i ? event.target.value : old) })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
@@ -135,7 +135,7 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
         {step.kind === "ask" && <>{field("Recipient role", <RoleSelect app="build" value={step.ask ?? "user"} onChange={(ask) => onChange({ ask })} />)}
           {field("Answers, one per line", <Textarea rows={3} value={(step.answers ?? []).join("\n")} onChange={(event) => {
             const answers = event.target.value.split("\n"); onChange({ answers, cases: Object.fromEntries(answers.map((answer) => [answer, step.cases?.[answer] ?? ""])) });
-          }} />)}{paths}<ContextHelp title={t("Human task")}><p className="text-[11px] text-muted">{t("People answer in the existing inbox; this block suspends without occupying a worker.")}</p></ContextHelp></>}
+          }} />)}{paths}<ContextHelp title={t("Human task")}><p className="text-xs text-muted">{t("People answer in the existing inbox; this block suspends without occupying a worker.")}</p></ContextHelp></>}
         {step.kind === "wait" && <>
           {field("Wait for", <Select value={step.waitUntil ? "deadline" : step.condition ? "condition" : "duration"} onChange={event => onChange(event.target.value === "deadline" ? { waitUntil: { source: "literal", value: '""' }, condition: undefined, untilSeconds: undefined } : event.target.value === "condition" ? { waitUntil: undefined, condition: emptyPredicate(), untilSeconds: undefined } : { waitUntil: undefined, condition: undefined, untilSeconds: 60 })}><option value="duration">{t("Duration")}</option><option value="deadline">{t("Declared deadline")}</option><option value="condition">{t("Condition")}</option></Select>)}
           {step.waitUntil ? <>{binding("Deadline timestamp", "waitUntil", textSchema)}<p className="text-xs text-muted">{t("The workflow saves this exact timestamp when entering the wait. Unreadable or invalid deadlines follow the original error path.")}</p></> : step.condition ? condition : field("Wait duration (seconds)", <Input type="number" min={0} max={2592000} value={step.untilSeconds ?? 60} onChange={event => onChange({ untilSeconds: Number(event.target.value) })} />)}
@@ -143,12 +143,12 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
         {step.kind === "subflow" && <>{field("Workflow", <Select value={step.flow ?? ""} onChange={(event) => onChange({ flow: event.target.value, flowVersion: flows.find((flow) => flow.id === event.target.value)?.version ?? 1 })}><option value="">{t("Choose a workflow")}</option>{flows.map((flow) => <option key={`${flow.id}:${flow.version}`} value={flow.id}>{flow.title} · v{flow.version}</option>)}</Select>)}
           {field("Retained workflow version", <Input type="number" min={1} value={step.flowVersion ?? 1} onChange={(event) => onChange({ flowVersion: Number(event.target.value) })} />)}<NamedInputs inputs={step.inputs} steps={others} editableNames onChange={(inputs) => onChange({ inputs })} /></>}
         {["end", "join", "continue"].includes(step.kind) && binding("Return value", "value", undefined, true)}
-        {["break", "continue"].includes(step.kind) && <ContextHelp title={t("Loop control")}><p className="text-[11px] leading-5 text-muted">{t("This control exits or continues the innermost loop scope. Accepted actions remain accepted.")}</p></ContextHelp>}
+        {["break", "continue"].includes(step.kind) && <ContextHelp title={t("Loop control")}><p className="text-xs leading-5 text-muted">{t("This control exits or continues the innermost loop scope. Accepted actions remain accepted.")}</p></ContextHelp>}
         {step.kind === "fail" && <p className="text-xs text-muted">{t("The block title becomes the explicit failure message.")}</p>}
       </div> },
       { id: "output", title: t("Output"), content: <div className="grid content-start gap-3 p-3">
-        <h4 className="text-xs font-medium">{t("Output schema")}</h4><pre className="max-h-60 overflow-auto rounded bg-background p-2 text-[10px]">{JSON.stringify(capability?.output ?? { type: "value", description: t("Derived from this block's bindings.") }, null, 2)}</pre>
-        <h4 className="text-xs font-medium">{t("Last accepted output")}</h4>{output !== undefined ? <pre className="max-h-72 overflow-auto rounded bg-background p-2 text-[11px]">{JSON.stringify(output, null, 2)}</pre> : <p className="text-[11px] text-muted">{t("Select a run to inspect this block's accepted output.")}</p>}
+        <h4 className="text-xs font-medium">{t("Output schema")}</h4><pre className="max-h-60 overflow-auto rounded bg-background p-2 text-2xs">{JSON.stringify(capability?.output ?? { type: "value", description: t("Derived from this block's bindings.") }, null, 2)}</pre>
+        <h4 className="text-xs font-medium">{t("Last accepted output")}</h4>{output !== undefined ? <pre className="max-h-72 overflow-auto rounded bg-background p-2 text-xs">{JSON.stringify(output, null, 2)}</pre> : <p className="text-xs text-muted">{t("Select a run to inspect this block's accepted output.")}</p>}
       </div> },
     ]} />
   </div>;

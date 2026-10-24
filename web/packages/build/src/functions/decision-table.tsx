@@ -97,7 +97,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
       <Panel title={t("Rules")} className="grid min-w-0 gap-2 overflow-auto">
         <DataTable data={[...(draft.rows ?? []).map((_, i) => i), -1]} columns={columns} getRowId={r => r < 0 ? "default" : String(r)} height={Math.min(480, 124 + ((draft.rows ?? []).length + 1) * 40)} rowHeight={40} searchable={false} resizable={false} />
         <div><Button size="sm" onClick={() => patch({ rows: [...(draft.rows ?? []), { when: (draft.inputs ?? []).map(() => ""), then: (draft.outputs ?? []).map(() => "") }] })}>{t("Add row")}</Button></div>
-        <p className="text-[11px] text-muted">{t("Leave the default empty to refuse a call no row matches; fill it to answer anyway.")}</p>
+        <p className="text-xs text-muted">{t("Leave the default empty to refuse a call no row matches; fill it to answer anyway.")}</p>
       </Panel>
     </fieldset></StructuredEditor>
   </div>;

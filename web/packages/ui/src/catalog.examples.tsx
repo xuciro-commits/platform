@@ -176,11 +176,6 @@ export function Sheets() {
 export function Statuses() {
   return <div className="flex flex-wrap gap-2">{Object.keys(submissionStatuses).map((status) => <StatusTag key={status} status={status} registry={submissionStatuses} />)}<StatusTag status="demo-unmapped" registry={submissionStatuses} /></div>;
 }
-export function Tables() {
-  const [rows, setRows] = useState(tableRows);
-  return <DataTable data={rows} columns={columnsFor(demoEntity)} getRowId={(row) => row.id} height={230}
-    onCellEdit={(row, key, value) => setRows(rows.map((item) => item.id === row.id ? { ...item, [key]: value } : item))} />;
-}
 export function MarkdownContent() {
   const [value, setValue] = useState<string | undefined>("## Sample notes\n\nA **shared** editor with a [reference](https://example.com).\n\n- Read\n- Edit");
   return <div className="grid gap-3 sm:grid-cols-2"><Markdown content={value ?? ""} /><MarkdownEditor value={value} onChange={setValue} /></div>;
@@ -413,6 +408,22 @@ export function DateInputExample(){const [value,setValue]=useState("2028-02-29")
 export function DateTimeInputExample(){const [value,setValue]=useState("2028-02-29T08:30:45.123456789+08:00");return <DateTimeInput value={value} offset="Z" title="Business time" label="Date and time" onChange={setValue}/>;}
 
 export function NoticeExample(){return <Notice title={t("Alert banner")} message={t("Review the affected records before continuing.")} tone="warning"/>;}
+
+export function DensityMatrixExample(){
+  const rows=[{id:"P-1",name:t("Name"),state:"running"},{id:"P-2",name:t("Name"),state:"idle"}];
+  const columns=[{id:"id",header:"ID",accessorKey:"id"},{id:"name",header:t("Name"),accessorKey:"name"},{id:"state",header:t("State"),accessorKey:"state"}];
+  return <div className="grid gap-4">
+    <div className="grid gap-1" style={{"--table-row-h":"36px","--ctrl-h":"var(--ctrl-h-lg)"} as never}>
+      <p className="text-xs font-medium">{t("Comfortable — the operations console")}</p>
+      <DataTable data={rows} columns={columns as never} getRowId={(row:{id:string})=>row.id} height={130} rowHeight={36} searchable={false} resizable={false}/>
+    </div>
+    <div className="grid gap-1" style={{"--table-row-h":"28px","--ctrl-h":"var(--ctrl-h-sm)"} as never}>
+      <p className="text-xs font-medium">{t("Compact — the workshop and governance")}</p>
+      <DataTable data={rows} columns={columns as never} getRowId={(row:{id:string})=>row.id} height={110} rowHeight={28} searchable={false} resizable={false}/>
+    </div>
+    <p className="text-xs text-muted">{t("One component, two token sets: rows, controls and type come from the density tokens; no parallel styles exist.")}</p>
+  </div>;
+}
 
 export function RejectionExample(){return <Rejection title={t("Access refused")} message={t("You do not hold the role this action requires.")} advice={t("Ask an administrator to review access before trying again.")} code="ERROR_CODE_POLICY_DENIED" requestKey="act-12" trail={<p>{t("The authority kept each fact of the decision; the trail lists them.")}</p>}/>;}
 

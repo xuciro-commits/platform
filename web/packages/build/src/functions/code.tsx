@@ -134,7 +134,7 @@ export function CodeEditor({ id }: { id: string }) {
           <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Output schema")}</legend><InputDraftProvider scope="output-schema"><SchemaEditor schema={draft.output} onChange={(output) => change({ output })} /></InputDraftProvider></fieldset>
         </div>}
         {tab === "sdk" && <><Button disabled={busy || invalid} onClick={() => void perform(previewSDK)}>{t("Generate SDK")}</Button>
-          {sdk && <pre className="max-h-[36rem] overflow-auto rounded-lg bg-background p-3 text-[11px]" aria-label={t("Generated SDK")}>{sdk}</pre>}</>}
+          {sdk && <pre className="max-h-[36rem] overflow-auto rounded-lg bg-background p-3 text-xs" aria-label={t("Generated SDK")}>{sdk}</pre>}</>}
         {tab === "test" && <>
           <p className="text-xs text-muted">{t("This calls the installed version with the current member and saves its accepted result.")}</p>
           <DraftInputs.Provider value={{...testInputs,scope:"test"}}>

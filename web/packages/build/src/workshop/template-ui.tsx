@@ -73,7 +73,7 @@ ${t("Created from template {template} (revision {revision}).", { template: templ
     {!host.can("build.page.create") ? <Panel role="status" className="text-sm text-muted">{t("Creating a page draft requires the original build.page.create permission.")}</Panel> : <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{pageTemplates.map((item) => <div key={item.id} role="button" tabIndex={0} onClick={() => { if (!locked) setTemplateId(item.id); }} onKeyDown={(e) => { if (!locked && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setTemplateId(item.id); } }} aria-pressed={item.id === template.id} aria-disabled={locked}
         className={`grid cursor-pointer gap-1 rounded-lg border p-3 text-left ${item.id === template.id ? "border-accent bg-accent/5" : "border-border hover:bg-surface-raised"}`}>
-        <span className="text-sm font-semibold">{t(item.title)}</span><span className="text-xs text-muted">{t(item.summary)}</span><span className="font-mono text-[10px] text-muted">{item.id} · {item.revision}</span></div>)}</div>
+        <span className="text-sm font-semibold">{t(item.title)}</span><span className="text-xs text-muted">{t(item.summary)}</span><span className="font-mono text-2xs text-muted">{item.id} · {item.revision}</span></div>)}</div>
       <Form className="grid gap-4" onSubmit={() => create()}>
         <Panel className="grid gap-3 p-4">
           <h3 className="text-sm font-semibold">{t("Required bindings")}</h3>

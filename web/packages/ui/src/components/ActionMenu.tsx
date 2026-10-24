@@ -18,7 +18,7 @@ export function ActionMenu({ label, commands, icon, size = 'sm', variant = 'ghos
       {commands.map((command) => <DropdownMenu.Item key={command.id} disabled={command.disabled} onSelect={command.run}
         className={`${item} ${command.danger ? 'text-[var(--tone-danger)]' : ''} ${command.separatorBefore ? 'mt-1 border-t border-border pt-2' : ''}`}>
         {command.icon && <span className="mr-2 [&_svg]:size-3.5">{command.icon}</span>}<span className="flex-1">{command.label}</span>
-        {command.shortcut && <span className="ml-4 text-[10px] text-muted">{command.shortcut}</span>}
+        {command.shortcut && <span className="ml-4 text-2xs text-muted">{command.shortcut}</span>}
       </DropdownMenu.Item>)}
     </DropdownMenu.Content></DropdownMenu.Portal>
   </DropdownMenu.Root>;

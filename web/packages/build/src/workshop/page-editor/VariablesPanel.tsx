@@ -44,7 +44,7 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
     }}>{t("Add variable")}</Button>
     {variable && <>
       <label className="grid gap-1 text-xs">{t("Variable label")}<Input value={variable.title ?? ""} onChange={(event) => patch({ title: event.target.value })} /></label>
-      <p className="break-all font-mono text-[10px] text-muted">{id}</p>
+      <p className="break-all font-mono text-2xs text-muted">{id}</p>
       <label className="grid gap-1 text-xs">{t("Variable scope")}<Select value={variable.scope === "page" || variable.scope === "application" ? variable.scope : `${variable.scope}:${variable.owner}`} disabled={application || variable.source?.kind === "item" || variable.mode === "input" || variable.mode === "shared" || variable.mode==="property"} onChange={(event) => {
         const value = event.target.value, at = value.indexOf(":");
         const scope = value === "page" ? "page" : value.slice(0, at), owner = value === "page" ? undefined : value.slice(at + 1);

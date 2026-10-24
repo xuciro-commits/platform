@@ -57,3 +57,13 @@
 - 细节质感：全局统一 accent 焦点环（`:focus-visible` + `--focus-ring-width`）、令牌化细滚动条、`::selection`、`prefers-reduced-motion` 全局动画降级；hover 层级由既有 dock z-index 规则承担；窄屏沿用容器断点/Sheet 全宽/handheld 大目标约定。
 - 模板起步入口：项目页「从模板新建…」列出六个页面模板包并逐包标注 bindings 能力边界与版本；选定后沿用原 `build.app` 创建动作与原 `build.page.create` 模板门禁（落地预选该模板），无向导。
 - 集中验证：check-web 全绿、ui 214 测试全过、catalog 一致；e2e 浏览器路线在沙箱不可运行（浏览器二进制缺失 + 宿主服务器受依赖还原余量阻塞），未在浏览器观察，待宿主补验。归档以负责人截图走查（5.2）为门禁。
+
+## 收尾审计（2026-10-24，走查通过后）
+
+逐条对照本 change 规范差量核查实现，发现并当场修复三处打折/临时实现：
+
+1. **五域旧链接重定向不完整**（workspace「构建任务共享五个工作域」MUST）：`studioArea` 此前只接受 `behavior`/`assemble`，新显示名 `connections` 落到 model 兜底 → 已补 `connections→integration` 重定向；`behavior→logic` 原有。
+2. **「设计令牌是唯一视觉权威」违反**（ui-system MUST）：173 处 `text-[10px]/[11px]` 字号字面量 → 按规范路径扩展令牌层（新增 `--type-2xs:10px` 原始值 + `--text-2xs` 映射），`text-[10px]→text-2xs`、`text-[11px]→text-xs` 全量替换（62 文件）；遮罩 `bg-black/25–40` 六处 → 既有 `--overlay` 令牌补 `--color-overlay` 映射后改 `bg-overlay`；扫码摄像头底色 → 新增 `--letterbox` 原始值；dockview 浮窗阴影/圆角字面量 → `--shadow-md,--shadow-lg` 与 `--r-lg`。
+3. **模板起步缺「初始化步骤」**（workspace「新项目从模板包起步」）：选择器逐包补初始化三步（绑定对象与字段 → 审阅页面草稿 → 经发布门禁发布）。
+
+留档的例外（非打折）：打印样式保留纸张物理色（`#fff/#000`，介质约定并已注释）；Gauge SVG 图内文字 `text-[16px]` 属图形几何（随 viewBox 缩放，非界面字号阶梯）；flow 面板 `Logic` 分组标签为能力种类名，与五域导航无关。清理确认：`@platform/platform`、拟物皮肤、旧首页三分类引用全仓为零；`webhook-sink` 仅存 cmd/README 登记的独立调试入口（B1 审计决定保留）。

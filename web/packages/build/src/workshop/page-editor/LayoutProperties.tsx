@@ -77,7 +77,7 @@ export function LayoutSizing({document,id,onPatch}:{document:Api.PageDocument;id
   <Disclosure key={id} summary={<span className="text-xs">{t("Size constraints and weight")}</span>} defaultOpen={constrained}>
    <div className="grid grid-cols-2 gap-2 pt-2">{dimension('minWidth','Minimum width (px)','W≥')}{dimension('minHeight','Minimum height (px)','H≥')}{dimension('maxWidth','Maximum width (px)','W≤')}{dimension('maxHeight','Maximum height (px)','H≤')}</div>
    <div className="mt-2"><NumberProperty id={id} path="size.weight" label={t("Layout weight")} prefix="×" min={1} max={limits.maxWeight} value={node.size?.weight} optional placeholder={t("Automatic")} onChange={value=>update("weight",value)}/></div>
-   <p className="mt-2 text-[11px] text-muted">{t("Weights share the parent axis; row weights need a definite parent height. Narrow columns stack.")}</p>
+   <p className="mt-2 text-xs text-muted">{t("Weights share the parent axis; row weights need a definite parent height. Narrow columns stack.")}</p>
   </Disclosure>
  </InspectorSection></div>;
 }

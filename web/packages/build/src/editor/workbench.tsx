@@ -30,7 +30,7 @@ export const savingState = (dirty: boolean, saving: boolean, error?: string): Wo
 export function DraftStatus({ state, problems = 0, archived }: { state?: string; problems?: number; archived?: boolean }) {
   return <>
     {state && <StatusTag status={archived ? "archived" : state} registry={draftStates} />}
-    {problems > 0 && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] text-danger" role="status">{t("{n} problems", { n: problems })}</span>}
+    {problems > 0 && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger" role="status">{t("{n} problems", { n: problems })}</span>}
   </>;
 }
 

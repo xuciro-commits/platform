@@ -1,7 +1,7 @@
 // Task entry points use the same authorized application directory as the portal.
 import { useHost, useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { Button, routeKey, useWorkspace, t, type InboxTask } from "@platform/ui";
+import { Button, routeKey, useWorkspace, t, type InboxTask, Panel} from "@platform/ui";
 import { ArrowRight, Bell, Clock, Inbox, Send, Star } from "lucide-react";
 import { ApplicationTile } from "./Applications";
 import { projections } from "./registry";
@@ -38,22 +38,22 @@ export function Home() {
       {can("agent.run.start") && <Button variant="ghost" size="sm" onClick={() => open({ view: "assistant" })}>{t("Assistant")}</Button>}
     </nav>
 
-    {business.length > 0 && <section aria-labelledby="home-apps">
-      <h2 id="home-apps" className="mb-3 text-base font-semibold">{t("Business applications")}</h2>
+    {business.length > 0 && <Panel variant="plain" aria-label={t("Business applications")}>
+      <h2 className="mb-3 text-base font-semibold">{t("Business applications")}</h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{business.map(app => <ApplicationTile key={app.id} app={app} role={me.apps.find(entry => entry.id === app.id)?.role} />)}</div>
-    </section>}
+    </Panel>}
 
     {(recent.length > 0 || starred.length > 0) && <div className="grid gap-8 lg:grid-cols-2">
-      {recent.length > 0 && <section aria-labelledby="home-recent">
+      {recent.length > 0 && <Panel variant="plain" aria-label={t("Continue working")}>
         <h2 id="home-recent" className="mb-3 flex items-center gap-2 text-base font-semibold"><Clock className="size-4" />{t("Continue working")}</h2>
         <div className="divide-y divide-border">{recent.slice(0, 6).map(item => <Button key={routeKey(item.route)} variant="row" className="w-full justify-between gap-3 py-3" onClick={() => open(item.route)}>
           <span className="truncate">{item.title}</span><span className="truncate text-xs text-muted">{apps.find(app => app.id === item.app)?.title}</span>
         </Button>)}</div>
-      </section>}
-      {starred.length > 0 && <section aria-labelledby="home-favorites">
+      </Panel>}
+      {starred.length > 0 && <Panel variant="plain" aria-label={t("Favorites")}>
         <h2 id="home-favorites" className="mb-3 flex items-center gap-2 text-base font-semibold"><Star className="size-4" />{t("Favorites")}</h2>
         <div className="grid gap-2">{starred.map(app => <ApplicationTile key={app.id} app={app} compact />)}</div>
-      </section>}
+      </Panel>}
     </div>}
   </div>;
 }

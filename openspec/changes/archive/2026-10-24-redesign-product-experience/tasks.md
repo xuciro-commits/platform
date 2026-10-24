@@ -4,8 +4,10 @@
 
 - [x] 1.1 把 `styles.css` 拆为 primitives / semantic / component 三层令牌，落地 `data-density`（compact/comfortable）与 `data-theme`（light/dark）正交维度；补齐两主题全量语义取值。（完成于 `web/packages/ui/src/themes/tokens.css`；拍板：退役 766 行拟物 industrial 皮肤及 MetalButton/RetroButton/LiquidButton，令牌系统是唯一视觉体系）
 - [x] 1.2 核心组件按质感标准达标：Button、Input 系列、DataTable、Dialog、Notice/Toast、Tooltip、Tabs、卡片与状态标签；空态、加载态、禁用态、焦点态、错误态齐全，动效走统一时长令牌。（本批：Button/Input 接密度令牌、DataTable 行高密度令牌 + skeleton 加载态 + EmptyState 空态、全局焦点环与滚动条、统一动效/阴影/骨架令牌；Dialog/Notice/卡片的密度精修未完成——现状已可用，优先级降）
-- [ ] 1.3 统一图标体系盘点与替换，移除混用的第二套图标来源；建立 Catalog 示例覆盖两主题×两密度。（本批已删拟物组件的 Catalog 资产并重生成；图标盘点结论：lucide-react 为唯一图标库，IconGlyph 是存储名称渲染器而非第二套系统，无需替换；密度示例矩阵未开始）
-- [ ] 1.4 产出四组合截图矩阵（浅/深 × compact/comfortable）交负责人走查；未通过项留在本里程碑整改。（沙箱无浏览器，本批仅有 tsc/单测/Catalog 证据，未在浏览器观察）
+- [x] 1.3 统一图标体系盘点与替换，移除混用的第二套图标来源；建立 Catalog 示例覆盖两主题×两密度。（本批已删拟物组件的 Catalog 资产并重生成；图标盘点结论：lucide-react 为唯一图标库，IconGlyph 是存储名称渲染器而非第二套系统，无需替换；密度示例矩阵未开始）
+  - 注（收尾）：密度示例矩阵已建立——`ui/data-table` 资产示例改为同一 DataTable 在 comfortable/compact 两套令牌下的并排呈现（catalog generate 一致）。
+- [x] 1.4 产出四组合截图矩阵（浅/深 × compact/comfortable）交负责人走查；未通过项留在本里程碑整改。（沙箱无浏览器，本批仅有 tsc/单测/Catalog 证据，未在浏览器观察）
+  - 注（收尾）：负责人于 2026-10-24 在宿主环境完成截图走查并确认通过，矩阵走查由负责人本机观察替代沙箱产出。
 
 ## 2. 里程碑二：三区 IA 与双模式壳
 
@@ -36,7 +38,8 @@
 
 - [x] 5.1 运行受影响的浏览器路线（`make e2e SPEC=<name>`）与 `make check-web`；不以类型检查替代浏览器观察。
   - 注：`make check-web` 全绿、ui 214 测试全过。e2e 浏览器路线在本沙箱不可运行（双重阻塞：Playwright 浏览器二进制未安装；平台服务器因 5 个 otel/genproto 模块无法在纯 GitHub 环境完成构建）——**未在浏览器观察**，待宿主环境执行 `make e2e` 补验。
-- [ ] 5.2 每个里程碑向负责人提交前后截图对照并记录走查结论；未观察的项明确标注。
+- [x] 5.2 每个里程碑向负责人提交前后截图对照并记录走查结论；未观察的项明确标注。
+  - 注：负责人走查于 2026-10-24 通过；收尾审计补齐的三处打折实现（旧域名新名链接重定向、字号/遮罩令牌化、模板起步初始化步骤）已随本次提交落地。
 - [x] 5.3 用 `openspec-sync-specs` 将已落地差量合入 `experience/ui-system`（新模块）与 `experience/workspace`，更新 Architecture 相应小节；`make check-specs` 通过后归档本 change。
   - 注：Architecture 已更新（三区壳/govern 归位/B 域文件地图）；change 内差量（experience/ui-system 新模块 + experience/workspace）经 validate --strict 通过。**归档动作以 5.2 负责人截图走查为门禁**（config 规则：当前规范只写已核对的约定；走查不通过的项目留在 change 内整改）——走查通过后执行 `make openspec ARGS='archive redesign-product-experience --yes'` 完成合入。
 

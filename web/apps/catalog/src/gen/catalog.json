@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:725ed44147147c8a",
+  "revision": "sha256:711bfa17b5913db6",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4027,13 +4027,13 @@
       "id": "ui/data-table",
       "owner": "@platform/ui",
       "name": "Data table",
-      "summary": "Browse, sort and edit typed rows in a shared virtualized table.",
+      "summary": "Browse, sort and edit typed rows in a shared virtualized table, shown under both density token sets.",
       "layer": 2,
       "source": "web/packages/ui/src/components/DataTable.tsx",
       "exports": [
         "DataTable"
       ],
-      "example": "Tables",
+      "example": "DensityMatrixExample",
       "authority": "api",
       "maturity": "recommended",
       "scope": "platform",
@@ -12432,7 +12432,7 @@
       "Browse original business dates by month and day and select original records.": "按月日浏览原业务日期并选择原记录。",
       "Browse records, choose a record and save a list view through the member’s host.": "通过当前成员的宿主浏览和选择记录，并保存列表视图。",
       "Browse wide original observation windows with virtual rows and columns, pinned metadata and signal visibility.": "浏览原观测宽窗口，支持行列虚拟化、固定元数据和信号显示选择。",
-      "Browse, sort and edit typed rows in a shared virtualized table.": "在共享虚拟化表格中浏览、排序和编辑类型化行。",
+      "Browse, sort and edit typed rows in a shared virtualized table, shown under both density token sets.": "在共享虚拟化表格中浏览、排序与编辑类型化行，含两档密度令牌下的呈现。",
       "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
       "Button": "按钮",
       "Button group": "按钮组",
@@ -13137,6 +13137,7 @@
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/record-sets.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
+      "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
@@ -13172,6 +13173,7 @@
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/session/Problems.tsx",
+      "web/apps/workspace/src/shell/Home.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/disclosure": [

@@ -84,15 +84,15 @@ export function AgentEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Instructions")}<Textarea rows={8} value={draft.instructions} placeholder={t("The job, the order of work, what to check first, when to ask a person.")} onChange={(e) => change({ instructions: e.target.value })} /></label>
         <label className={fieldClass}>{t("Hands over to")}<Select value={draft.handoffRole ?? ""} onChange={(e) => change({ handoffRole: e.target.value || undefined })}>
           <option value="">{t("The builder")}</option>{roles.filter((r) => r !== "builder").map((r) => <option key={r} value={r}>{r}</option>)}</Select>
-          <span className="text-[11px] text-muted">{t("Who takes the goal when a run stops, and who its questions go to when it runs for no one.")}</span></label>
+          <span className="text-xs text-muted">{t("Who takes the goal when a run stops, and who its questions go to when it runs for no one.")}</span></label>
       </Panel>
       <Panel title={t("Tools and budget")} className="grid content-start gap-3">
         <fieldset className={fieldClass}><legend className="mb-1">{t("Actions and queries it may use")}</legend>
           {tools.length ? <Toggles options={tools} value={(draft.tools ?? [])} onChange={(next) => change({ tools: next, checkpoints: (draft.checkpoints ?? []).filter((c) => next.includes(c)) })} /> : <p className="text-muted">{t("No actions or queries yet.")}</p>}
-          <span className="text-[11px] text-muted">{t("It also always has: context, search, knowledge, remember, ask and finish.")}</span></fieldset>
+          <span className="text-xs text-muted">{t("It also always has: context, search, knowledge, remember, ask and finish.")}</span></fieldset>
         {(draft.tools ?? []).length > 0 && <fieldset className={fieldClass}><legend className="mb-1">{t("Checkpoints")}</legend>
           <Toggles options={tools.filter((x) => (draft.tools ?? []).includes(x.value))} value={draft.checkpoints ?? []} onChange={(checkpoints) => change({ checkpoints })} />
-          <span className="text-[11px] text-muted">{t("Tools that always wait for a person to confirm, even when the agent runs on its own: the irreversible ones.")}</span></fieldset>}
+          <span className="text-xs text-muted">{t("Tools that always wait for a person to confirm, even when the agent runs on its own: the irreversible ones.")}</span></fieldset>}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <label className={fieldClass}>{t("Model turns")}<Input draftKey="model-turns" type="number" min={1} value={draft.steps ?? ""} placeholder="10" onChange={(e) => change({ steps: Number(e.target.value) || undefined })} /></label>
           <label className={fieldClass}>{t("Tokens")}<Input draftKey="tokens" type="number" min={1} value={draft.tokens ?? ""} placeholder="40000" onChange={(e) => change({ tokens: Number(e.target.value) || undefined })} /></label>

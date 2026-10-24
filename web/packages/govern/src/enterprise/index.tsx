@@ -254,14 +254,14 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
       {meta.views.map((v) => <Button key={v.id} variant="row" aria-pressed={working.viewpoint === v.id}
         onClick={() => changeViewpoint(v.id)} className={working.viewpoint === v.id ? "bg-row-selected" : ""} title={t(v.note)}>
         <span className="grid min-w-0 flex-1 text-left"><span className="truncate text-xs font-medium">{t(v.title)}</span>
-          <span className="truncate text-[10px] text-muted">{t(v.note)}</span></span>
-        <span className="text-[10px] text-muted">{viewpointElements(m, v, day).length}</span>
+          <span className="truncate text-2xs text-muted">{t(v.note)}</span></span>
+        <span className="text-2xs text-muted">{viewpointElements(m, v, day).length}</span>
       </Button>)}
       {m.views.map((v) => <div key={v.id} className={activeId === v.id ? "grid gap-1 rounded bg-row-selected p-1" : "grid gap-1 p-1"}>
         <Button variant="row" aria-pressed={activeId === v.id} onClick={() => openView(v.id)}>
           <span className="truncate">{v.name}</span>
           {drafts[v.id]?.dirty && <Tag label={t("unsaved")} tone="warning" />}
-          <span className="ml-auto text-[10px] text-muted">{t(meta.views.find((g) => g.id === v.viewpoint)?.title ?? v.viewpoint)}</span></Button>
+          <span className="ml-auto text-2xs text-muted">{t(meta.views.find((g) => g.id === v.viewpoint)?.title ?? v.viewpoint)}</span></Button>
         {host.can("enterprise.view.save") && <div className="flex flex-wrap gap-1 pl-1">
             <Button size="sm" variant="ghost" title={t("Open this view")} onClick={() => openView(v.id)}>{t("Open view")}</Button>
           <Button size="sm" variant="ghost" title={t("Change the name; the drawing stays")} onClick={() => setDialog({ kind: "rename", id: v.id, name: v.name })}><Pencil />{t("Rename…")}</Button>
@@ -278,7 +278,7 @@ function Modeler({ model: m, meta, decide, admin, initialElement, initialSection
         const shown = shownIds.has(e.id);
         return <Button key={e.id} variant="row" aria-pressed={selected === e.id} onClick={() => { setSelected(e.id); if (!shown) setWorking({ elements: Array.from(new Set([...working.elements, e.id])), context: scope.has(e.id) ? working.context : Array.from(new Set([...working.context, e.id])), layout: working.layout }); }}
           className={selected === e.id ? "bg-row-selected" : ""}>
-          <span className="truncate">{e.name}</span><Tag label={e.kind ? t(e.kind) : title(e.stereotype)} />{working.context.includes(e.id) && <Tag label={t("Context")} tone="info" />}{shown && <span className="ml-auto text-[10px] text-muted">{t("shown")}</span>}
+          <span className="truncate">{e.name}</span><Tag label={e.kind ? t(e.kind) : title(e.stereotype)} />{working.context.includes(e.id) && <Tag label={t("Context")} tone="info" />}{shown && <span className="ml-auto text-2xs text-muted">{t("shown")}</span>}
         </Button>;
       })}
     </div> },
@@ -417,19 +417,19 @@ function AddPane({ meta, viewpoint, admin, onAdd }: {
     <span className="flex min-w-0 items-center gap-2 [&_svg]:size-4 [&_svg]:text-muted">
       <IconGlyph name={r.p.icon} />
       <span className="min-w-0"><span className="block truncate">{t(r.p.title)}</span>
-        {r.p.kinds?.length ? <span className="block truncate text-[10px] text-muted">{r.p.kinds.map((k) => t(k)).join(" · ")}</span> : null}</span>
+        {r.p.kinds?.length ? <span className="block truncate text-2xs text-muted">{r.p.kinds.map((k) => t(k)).join(" · ")}</span> : null}</span>
     </span>
-    <span className="font-mono text-[10px] text-muted">{r.p.stereotype}</span>
+    <span className="font-mono text-2xs text-muted">{r.p.stereotype}</span>
   </Button>;
   return <div className="grid gap-2 p-2">
     <div className="flex justify-end"><ContextHelp title={t("Elements")}>{t("Elements the model can hold, from the UAF metamodel. Drag one onto the canvas, or click to add it. One drawing may hold any of them: the viewpoint says where it starts, not a fence.")}</ContextHelp></div>
     <Input placeholder={t("Find an element type…")} aria-label={t("Find an element type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
-    <p className="px-1 text-[11px] text-muted">{viewpoint ? <>{t(viewpoint.title)}</> : null} · {t("UAF {version}, {n} types here, {all} in the whole profile.", { version: meta.version, n: here.length, all: usable.length })}</p>
+    <p className="px-1 text-xs text-muted">{viewpoint ? <>{t(viewpoint.title)}</> : null} · {t("UAF {version}, {n} types here, {all} in the whole profile.", { version: meta.version, n: here.length, all: usable.length })}</p>
     <div className="grid gap-1">
-      <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted">{t("In this viewpoint")}</p>
+      <p className="px-1 pt-1 text-2xs font-semibold uppercase tracking-wide text-muted">{t("In this viewpoint")}</p>
       {here.map(line)}
     </div>
-    {!!elsewhere.length && <Disclosure summary={<span className="px-1 text-[11px] text-muted">{t("Also drawable here ({n})", { n: elsewhere.length })}</span>}>
+    {!!elsewhere.length && <Disclosure summary={<span className="px-1 text-xs text-muted">{t("Also drawable here ({n})", { n: elsewhere.length })}</span>}>
       <div className="mt-1 grid gap-1">{elsewhere.map(line)}</div>
     </Disclosure>}
     {!usable.length && <p className="p-2 text-xs text-muted">{t("Nothing matches.")}</p>}
@@ -448,12 +448,12 @@ function RegistryPane({ meta }: { meta: Metamodel }) {
   const shown = registry.filter((st) => !needle || `${st.name} ${st.domain} ${st.aspect} ${st.description ?? ""}`.toLowerCase().includes(needle)).slice(0, 80);
   return <Disclosure summary={t("Every UAF type this build carries")}>
     <div className="grid gap-2 pt-1 text-xs">
-      <p className="text-[11px] text-muted">{t("{offered} of the release's {total} UAF 1.3 types are offered by this tenant's profile; the rest stay loadable and storable.", { offered: offered.size, total: registry.length })}</p>
+      <p className="text-xs text-muted">{t("{offered} of the release's {total} UAF 1.3 types are offered by this tenant's profile; the rest stay loadable and storable.", { offered: offered.size, total: registry.length })}</p>
       <Input placeholder={t("Find a UAF type…")} aria-label={t("Find a UAF type…")} value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="grid gap-0.5">
         {shown.map((st) => <div key={st.name} className="flex items-baseline gap-2 rounded px-1 py-0.5">
           <span className="min-w-0 flex-1 truncate" title={st.description}>{st.name}</span>
-          <span className="text-[10px] text-muted">{t(st.domain)}{st.aspect ? ` · ${t(st.aspect)}` : ""}</span>
+          <span className="text-2xs text-muted">{t(st.domain)}{st.aspect ? ` · ${t(st.aspect)}` : ""}</span>
           <Tag label={offered.has(st.name) ? t("offered") : t("loadable")} tone={offered.has(st.name) ? "info" : "neutral"} />
         </div>)}
         {!shown.length && <p className="p-1 text-muted">{t("Nothing matches.")}</p>}
@@ -553,12 +553,12 @@ function UsedBy({ element: el, onPin }: { element: Element; onPin?: (ref: string
   const total = groups.reduce((n, g) => n + g.total, 0);
   return <div className="grid gap-1">
     <p className="text-xs font-semibold text-muted">{t("Used by")} {used.isFetching ? t("…") : `(${rows}/${total})`}</p>
-    {used.error && <p className="text-[11px] text-[var(--tone-danger)]">{t("The records that name it could not be read: {why}", { why: String(used.error) })}
+    {used.error && <p className="text-xs text-[var(--tone-danger)]">{t("The records that name it could not be read: {why}", { why: String(used.error) })}
       <Button size="sm" variant="ghost" onClick={() => void used.refetch()}>{t("Try again")}</Button></p>}
     {groups.map((g) => <div key={`${g.type}.${g.field}`} className="grid gap-0.5">
-      <p className="text-[11px] text-muted">{t(g.title)} · <span className="font-mono">{g.field}</span> · {t(g.fieldTitle)}</p>
+      <p className="text-xs text-muted">{t(g.title)} · <span className="font-mono">{g.field}</span> · {t(g.fieldTitle)}</p>
       {g.records.map((r) => <p key={`${g.type}:${r.id}`} className="flex items-baseline gap-2 text-xs">
-        <Button size="sm" variant="ghost" className="min-w-0 truncate px-0" onClick={() => openRecord({ type: r.type, id: r.id })}>{r.name}</Button><span className="font-mono text-[10px] text-muted">{r.id}</span>
+        <Button size="sm" variant="ghost" className="min-w-0 truncate px-0" onClick={() => openRecord({ type: r.type, id: r.id })}>{r.name}</Button><span className="font-mono text-2xs text-muted">{r.id}</span>
         {onPin && <Button size="sm" variant="ghost" className="ml-auto" title={t("Draw this record on the current view, beside {element}", { element: el.name })}
           onClick={() => onPin(`record:${r.type}/${r.id}`, r.name)}><PinIcon />{t("Pin")}</Button>}
       </p>)}
@@ -569,7 +569,7 @@ function UsedBy({ element: el, onPin }: { element: Element; onPin?: (ref: string
       <span>{t("Page {n}", { n: offset / 50 + 1 })}</span>
       <Button size="sm" variant="ghost" disabled={used.isFetching || !groups.some((g) => offset + g.records.length < g.total)} onClick={() => setPaging({ element: el.id, offset: offset + 50 })}>{t("Next page")}</Button>
     </div>}
-    {!used.isFetching && !used.error && total === 0 && <p className="text-[11px] text-muted">{t("No record in the apps points here yet. A site, an order or a posting that names this element appears here, and its reference reads the element's name.")}</p>}
+    {!used.isFetching && !used.error && total === 0 && <p className="text-xs text-muted">{t("No record in the apps points here yet. A site, an order or a posting that names this element appears here, and its reference reads the element's name.")}</p>}
   </div>;
 }
 
@@ -582,7 +582,7 @@ function PinnedRecords({ element: el, view, onUnpin }: { element: Element; view:
   return <div className="grid gap-1">
     <p className="text-xs font-semibold text-muted">{t("Pinned on this view")} ({pins.length})</p>
     {pins.map((p) => <p key={p.ref} className="flex items-baseline gap-2 text-xs">
-      <span className="truncate">{p.label || p.ref}</span><span className="font-mono text-[10px] text-muted">{p.ref}</span>
+      <span className="truncate">{p.label || p.ref}</span><span className="font-mono text-2xs text-muted">{p.ref}</span>
       {onUnpin && <Button size="sm" variant="ghost" className="ml-auto" title={t("Take it off this drawing; the record stays")} onClick={() => onUnpin(p.ref)}><PinOff />{t("Unpin")}</Button>}
     </p>)}
   </div>;
@@ -664,7 +664,7 @@ function LinkDialog({ source, target, meta, kinds, defaultKind, title, existing,
     </div> :
     <Form className="grid gap-3" onSubmit={() => onSubmit({ stereotype: v.stereotype, kind: v.stereotype === PLACEMENT ? v.kind : undefined, role: v.role || undefined, relation: v.stereotype === PLACEMENT ? v.relation : undefined, share: v.share ? +v.share : undefined })}>
       {field(t("Relationship"), <><Select value={v.stereotype} onChange={(e) => setV({ ...v, stereotype: e.target.value })}>{allowed.map((st) => <option key={st} value={st}>{title(st)} · {st}</option>)}</Select>
-        {contractNote(meta, v.stereotype) && <span className="text-[10px] text-muted">{t(contractNote(meta, v.stereotype))}</span>}</>)}
+        {contractNote(meta, v.stereotype) && <span className="text-2xs text-muted">{t(contractNote(meta, v.stereotype))}</span>}</>)}
       {v.stereotype === PLACEMENT && field(t("Kind"), <Select value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value })}>{kinds.map((k) => <option key={k.id} value={k.id}>{t(k.name)}</option>)}</Select>)}
       {v.stereotype === PLACEMENT && field(t("Relation"), <Input value={v.relation} onChange={(e) => setV({ ...v, relation: e.target.value })} />)}
       {v.stereotype === PLACEMENT && field(t("Ownership share (0–1, optional)"), <Input type="number" step="0.01" min="0" max="1" value={v.share} onChange={(e) => setV({ ...v, share: e.target.value })} />)}
@@ -743,8 +743,8 @@ function Inspector({ element: el, model: m, view, meta, day, admin, decide, titl
   const e: ElementEdit = edit ?? { name: el.name, kind: el.kind ?? "", shortName: el.shortName ?? "", calendar: el.calendar ?? "", properties: el.properties ?? {} };
   return <div className="grid gap-3 p-3 text-sm">
     <div><p className="text-xs text-muted">{title(el.stereotype)} · <span className="font-mono">{el.stereotype}</span></p>
-      <p className="text-[11px] text-muted">{t(st?.domain ?? "Enterprise")}{st?.aspect ? ` · ${t(st.aspect)}` : ""}</p>
-      <p className="font-mono text-[10px] text-muted">{el.id}</p></div>
+      <p className="text-xs text-muted">{t(st?.domain ?? "Enterprise")}{st?.aspect ? ` · ${t(st.aspect)}` : ""}</p>
+      <p className="font-mono text-2xs text-muted">{el.id}</p></div>
     {field(t("Name"), <Input value={e.name} disabled={!editable} onChange={(x) => setEdit({ ...e, name: x.target.value })} />)}
     {field(t("Kind"), <><Input list={`kinds-${el.stereotype}`} value={e.kind} disabled={!editable} onChange={(x) => setEdit({ ...e, kind: x.target.value })} />
       <datalist id={`kinds-${el.stereotype}`}>{(meta.profile.find((p) => p.stereotype === el.stereotype)?.kinds ?? []).map((k) => <option key={k} value={k} />)}</datalist></>)}
