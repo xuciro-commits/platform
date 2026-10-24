@@ -4,9 +4,8 @@ import { register } from "@platform/ui";
 register("zh-CN", {
   "Open an application or continue your work.": "打开应用，或继续之前的工作。",
   "Workspace tasks": "工作入口",
-  "Use applications": "使用应用",
-  "Build applications": "构建应用",
-  "Manage platform": "管理平台",
+  "Operate": "运营",
+  "System": "系统",
   "Continue working": "继续工作",
  "Tenant maintenance": "租户维护",
  "This tenant is paused for maintenance. A host administrator can restore its required implementations and resume access in Host Console. Your saved records and history remain.": "此租户正在暂停维护。宿主管理员可在宿主控制台恢复所需实现并恢复访问。已保存的记录和历史仍然保留。",

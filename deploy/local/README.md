@@ -69,7 +69,7 @@ cd deploy/local && docker compose ps
 ```
 
 - 停止：`docker compose stop`。数据保存在 Docker 卷 `pgdata` 和 `rauthy` 里，下次启动会重放日志，数据还在。
-- 只重建主机：`docker compose up -d --build manufacturing-server hospitality-server webhook-sink`。改了前端要先重新构建工作台。
+- 只重建主机：`docker compose up -d --build manufacturing-server hospitality-server`。改了前端要先重新构建工作台。
 - 计算能力：`wasm-worker` 与 `code-builder` 共用私有 `compute-sockets` 卷，没有公开端口、业务数据库或自有队列。主机通过 `PLATFORM_WASM_WORKER_SOCKET` / `PLATFORM_CODE_BUILDER_SOCKET` 委托执行与编译。只有固定命令的构建 driver 持有 Docker daemon socket；业务主机、Wasm worker、租户编译容器均不挂载它。worker 无网络、只读根、2 GiB RSS/2 CPU 限额；编译容器无网络、只读根、65534 用户及 CPU/RSS/进程限额。源码经内存 tar 输入，Wasm 与构建元数据走现有制品存储和发布。
 - **更新 8495/8490 的代码**：在根目录运行 `deploy/local/update.sh`，沿用当前本地或容器模式，更新两台宿主并校验实际版本、健康和页面资源，报告位于 `.build/local-update/<revision>.json`。保留原数据卷、密钥与租户配置。临时浏览器宿主 `18496/18497` 的测试不会更新这两个日常入口；视觉检查以实际使用的入口为准。
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
@@ -195,7 +195,8 @@ TOKEN=$(/tmp/platform-server -profile lightweight -data /var/lib/platform -mint-
 | 身份认证 Rauthy | http://localhost:8480/auth/v1/ | OIDC 签发方；管理后台是 http://localhost:8480/auth/v1/admin |
 | **工作台（酒店配置 hospitality-server，租户 `hotel-a-build`）** | http://localhost:8495 | 按角色打开应用包发布的 CRM、PMS，以及已移交的 WMS 和平台入口 |
 | **工作台（制造配置 manufacturing-server，租户 `plant-sz-build`）** | http://localhost:8490 | 同一通用宿主运行应用包发布的 MES、ERP；科目、期间和业务样本由显式初始化计划创建 |
-| webhook-sink | http://localhost:8497 | 本地 webhook、邮件、固定模型与状态窗口样本 |
+| 制造宿主（内嵌本地替身） | http://localhost:8497 | 本地 webhook、邮件、固定模型与状态窗口样本（制造栈） |
+| 酒店宿主（内嵌本地替身） | http://localhost:8499 | 同上（酒店栈） |
 | PostgreSQL | `localhost:5433`，库 `platform`，用户 `platform`，密码 `platform-local-only` | 两个租户的日志表 `journal` |
 
 主机的接口也在同一个地址下（`/v1/...`）。`make local` 下 Vite 占用对外入口（酒店 8495、制造 8490）并把 API 代理到内部 Go 端口（`environment.py` 的 `SOLUTIONS`：18495、18490）；容器模式由 Go 宿主直接提供同一入口。单独跑 `make web SOLUTION=<solution>` 时 Vite 在 5176（制造 5175）。浏览器任务用另一组临时宿主 18496/18497（`web/e2e/playwright.config.ts`），不更新这两个日常入口。
@@ -326,17 +327,18 @@ WMS 是工作台中保存并发布的 `build.app` 与对象/页面/流程/代码
 
 | 用途 | URL | 密钥名 | 勾选 |
 |---|---|---|---|
-| 通用 webhook | `http://webhook-sink:8080/hook` | `sink` | 勾"内部地址"；事件任选，如 `orders.confirm/1#canceled` |
+| 通用 webhook（制造） | `http://manufacturing-server:8497/hook` | `sink` |
+| 通用 webhook（酒店） | `http://hospitality-server:8497/hook` | `sink` | 勾"内部地址"；事件任选，如 `orders.confirm/1#canceled` |
 
-sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址。外部 ERP 通过 Connection、Writeback 和 Confirmation 声明请求、回读与结果映射；HTTP 成功不等于业务确认。原失败恢复任务为 `make e2e SPEC=business-confirmation`，完整来源到业务应用任务为 `make e2e SPEC=integration-fabric`。
+sink 收到的 webhook 在 `http://localhost:8497/received`（制造，酒店为 8499）查看。`POST …/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址。外部 ERP 通过 Connection、Writeback 和 Confirmation 声明请求、回读与结果映射；HTTP 成功不等于业务确认。原失败恢复任务为 `make e2e SPEC=business-confirmation`，完整来源到业务应用任务为 `make e2e SPEC=integration-fabric`。
 
 **邮件接收地址**（Integrations → Add endpoint → Email）
 
 | URL | 发件人 | 密钥名 | 勾选 |
 |---|---|---|---|
-| `smtp://webhook-sink:2525` | 任意，如 `plant@plant.test` | 留空 | 勾"内部地址"；应用勾 `build`、`platform` |
+| `smtp://manufacturing-server:2525`（酒店用 `hospitality-server:2525`） | 任意，如 `plant@plant.test` | 留空 | 勾"内部地址"；应用勾 `build`、`platform` |
 
-收到的邮件在 http://localhost:8497/mail 查看。只有以邮箱登录的成员会收到邮件，服务账号和 AI 代理不会。真实 SMTP 服务器的写法是 `smtp://用户名@smtp.example.com:587`，密码放在密钥里（密钥名填在"密钥名"一栏）。
+收到的邮件在 `http://localhost:8497/mail`（酒店为 8499）查看。只有以邮箱登录的成员会收到邮件，服务账号和 AI 代理不会。真实 SMTP 服务器的写法是 `smtp://用户名@smtp.example.com:587`，密码放在密钥里（密钥名填在"密钥名"一栏）。
 
 **AI 供应商**（AI → Providers and models → Add provider）
 
@@ -346,7 +348,7 @@ sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://
 | 供应商 OpenAI / Gemini / Moonshot / DeepSeek / Qwen / 智谱 | 选对应供应商 | 自定义名字，并按"启动与停止"一节加上对应的环境变量 |
 | 第三方兼容接口 | Base URL `https://…/v1` | 必填 |
 | 本地模型：LM Studio / Ollama / llama.cpp | `http://host.docker.internal:1234/v1`、`:11434/v1`、`:8080/v1` | 可留空 |
-| 本地替身（无需安装） | 容器宿主用 `http://webhook-sink:8080/v1`，Air 宿主用 `http://127.0.0.1:8497/v1` | 留空 |
+| 本地替身（无需安装） | 容器宿主用 `http://manufacturing-server:8497/v1`，Air 宿主用 `http://127.0.0.1:8497/v1` | 留空 |
 
 - 添加后点 Models 读取模型目录。勾 "free only" 只看免费模型：可用模型与限流由上游实时返回；遇到 429 时按实际答复重试或选择其他已授权模型。
 - 选 everyone 或 ai users 启用，然后在 Playground 调用，在 Usage 看用量。
@@ -362,7 +364,7 @@ CRM 的 `lodgingupstream`、MES 的 `productionupstream` 应连接实际提供�
 
 | URL | 密钥名 | 勾选 |
 |---|---|---|
-| `http://webhook-sink:8080/a2a`（供应商智能体替身） | 可留空（真实对方填存放其令牌的密钥名） | 勾"内部地址"；外发类型 已发布的供应方查询类型 |
+| `http://manufacturing-server:8497/a2a`（供应商智能体替身；酒店栈为 `hospitality-server:8497/a2a`） | 可留空（真实对方填存放其令牌的密钥名） | 勾"内部地址"；外发类型 已发布的供应方查询类型 |
 
 发布我们自己的智能体：App settings → Agents → "Published over A2A" 填已发布的 `build.salesassistant`；卡片在 `http://localhost:8495/a2a/hotel-a-build/build.salesassistant/.well-known/agent-card.json`，调用方用成员令牌按 A2A 1.0 JSON-RPC 发 `SendMessage`（请求头 `A2A-Version: 1.0`）。
 

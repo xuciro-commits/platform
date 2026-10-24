@@ -443,6 +443,11 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         {!builder && (functionNames.length > 0 || agentNames.length > 0) && !evaluated && <p role="status" className="text-sm text-warning">{t("Required AI evaluations are missing. Ask a builder to complete them before activation.")}</p>}
         {savedID && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !evaluated || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
+        {activeID === savedID && savedID && !runningMatches && (function () {
+          const application = applications.data?.records.find((item) => joint.some((choice) => choice.kind === "app" && choice.id === item.id));
+          return application ? <Button size="sm" onClick={() => open({ view: "application-runs", params: { app: "build", name: application.name, application: `build:${application.name}` } })}>{t("Verify as an operator")}</Button>
+            : <p className="text-xs text-muted">{t("Verify the release from the business application in the operations zone.")}</p>;
+        })()}
       </div>}
     </Card>}
   </div>;

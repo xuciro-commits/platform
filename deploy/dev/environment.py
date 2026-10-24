@@ -163,7 +163,7 @@ def prepare_docker():
     write_state({'mode': 'docker', 'status': 'starting'})
     run(COMPOSE + ['-p', 'platform-dev-compute', '-f', 'deploy/dev/compose.compute.yaml', 'stop',
                    'wasm-worker', 'code-builder'])
-    run(COMPOSE + ['up', '-d', 'postgres', 'rauthy', 'rustfs', 'webhook-sink', 'wasm-worker', 'code-builder'])
+    run(COMPOSE + ['up', '-d', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
 
 
 def docker():

@@ -85,6 +85,7 @@ CI 只在 `v*` 标签上运行，不要依赖它发现问题。
 ## 沙箱（无外网、Go 代理被封时）
 
 1. `bash scripts/sandbox-go.sh`，执行它打印的 `export`（`PATH`、`GOTOOLCHAIN=local`、`GOWORK`、`GOPROXY=direct`）。Go 工具链从 PyPI 取，外部工具从 GitHub Releases 或 npm/PyPI 按需取，不入库。新增模块后重跑脚本。
-2. Web：`cd web && corepack pnpm install --frozen-lockfile`，再从根目录 `npm_config_workspace_concurrency=1 make check PNPM="corepack pnpm"`。没装浏览器时写明"未在浏览器观察"，不能拿 tsc 当浏览器证据。
-3. 轻量验证：`go build ./... && go vet ./...`；`go test ./apps/<包>/... ./platform/...`；根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`。
-4. 沙箱会被重置：每个整块做完立即 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再回到第 1 步。
+2. Go 模块依赖：`bash scripts/restore-deps.sh go` 从 GitHub tag 字节级还原 vendor 并按 go.sum 逐 entry 校验（约 1.5 分钟；重跑前 `rm -rf ~/.gopath/pkg/mod/cache/download`）。已知余量：otel 家族 / genproto / proto-otlp 共 10 个模块的 tag 字节与当年代理记录不符，无法在纯 GitHub 环境校验还原——这些模块参与编译的宿主程序在沙箱内不可完整构建；纯 stdlib 包（如 `internal/sink`、`cmd/webhook-sink`）不受影响。有可达 Go 代理的环境直接 `go mod vendor` 即可。
+3. Web：`cd web && corepack pnpm install --frozen-lockfile`，再从根目录 `npm_config_workspace_concurrency=1 make check PNPM="corepack pnpm"`。没装浏览器时写明"未在浏览器观察"，不能拿 tsc 当浏览器证据。
+4. 轻量验证：`go build ./... && go vet ./...`（受第 2 条余量限制时只验证受影响包）；`go test ./apps/<包>/... ./platform/...`；根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`。
+5. 沙箱会被重置：每个整块做完立即 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再回到第 1 步。

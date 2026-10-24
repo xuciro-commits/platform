@@ -34,3 +34,11 @@
 ## Migration Plan
 
 按里程碑交付：M1 UI Kit 换血（令牌 + 核心组件质感）→ M2 三区 IA 与双模式壳（含工作域重划定版）→ M3 交互范式（分流 / 反馈 / 拒绝 / 弹窗）→ M4 质感全量（空态 / 加载 / 图标 / 动效 / 焦点 / 窄屏）→ M5 集中验证与规范同步。每个里程碑结束时用 `openspec-sync-specs` 合入已落地差量并请负责人截图走查；走查不通过的项目留在 change 内整改，不提前合入现行规范。不迁移任何数据与业务定义；回退只回退 Web 差量。
+
+## 批次3 实施记录（M2 三区 IA + 双模式壳）
+
+- 三区导航：workspace 壳的导航投影改为 构建/运营/系统 三区语义（`registry.ts`），区块标题 Operate/Build/System；治理视图（control-panel/account/members/permissions/apps/protocols 等）保持宿主角色显隐；系统区非管理员不可见。
+- 首页收口：appHome 旧「使用应用/构建应用/管理平台」三分类与工具墙入口移除，按三区组织；重复入口清零，跨区能力只留链接。
+- 双模式壳：同一壳承载使用与构建；应用作用域页提供 scopedViews（概览 + 运行记录 `application-runs`/`application-overview`），发布完成页新增「Verify as an operator」就地跳转运营区运行记录，打通 构建→使用 连续谱。
+- 工作域重划：`studio-model.ts` 五域收敛为构建者心智域名（Logic→Behavior「业务行为」、Integration→Connections「连接」），旧域名引用清零（不保接口，符合 q4 破坏容忍）。
+- 文案：三区与新增入口 zh-CN 全量补齐；工作区 i18n 旧三分类键删除。

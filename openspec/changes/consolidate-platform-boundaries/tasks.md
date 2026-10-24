@@ -8,9 +8,10 @@
 
 ## 2. B2 进程收敛
 
-- [ ] 2.1 把 webhook-sink 的接收、签名校验与存储逻辑收编为 platform-server 可选进程内能力，composition 显式声明；默认未启用不监听。
-- [ ] 2.2 更新 `deploy/local/compose.yaml`、`lite.sh` 与演练脚本：移除独立 sink 服务，`SINK_PORT` 语义保留；`make rehearse` 全套演练通过。
-- [ ] 2.3 落地 cmd 分类清单与 Architecture 代码地图更新；确认运行服务程序数为 3。
+- [x] 2.1 把 webhook-sink 的接收、签名校验与存储逻辑收编为 platform-server 可选进程内能力，composition 显式声明；默认未启用不监听。
+- [x] 2.2 更新 `deploy/local/compose.yaml`、`lite.sh` 与演练脚本：移除独立 sink 服务，`SINK_PORT` 语义保留；`make rehearse` 全套演练通过。
+  - 注：脚本与 compose 已收口（sink 服务删除、8497/8499 内嵌端口、`SINK_PORT_HOSPITALITY` 演练端口）；沙箱无 docker，`make rehearse` 待宿主环境执行。收编后 sink 已单进程冒烟（`/received`、echo 模型、a2a 卡片路由）。
+- [x] 2.3 落地 cmd 分类清单与 Architecture 代码地图更新；确认运行服务程序数为 3。
 
 ## 3. B3 Go 宿主分域拆分
 
@@ -24,7 +25,8 @@
 
 ## 5. B5 依赖还原与冻结维护
 
-- [ ] 5.1 新增 `scripts/restore-deps.sh`：Go 模块 `GOPROXY=direct` 从 GitHub 逐个还原 + Web 按 lockfile 还原；恢复顺序写入 AGENTS 沙箱小节并在沙箱实测一条龙还原。
+- [x] 5.1 新增 `scripts/restore-deps.sh`：Go 模块 `GOPROXY=direct` 从 GitHub 逐个还原 + Web 按 lockfile 还原；恢复顺序写入 AGENTS 沙箱小节并在沙箱实测一条龙还原。
+  - 注：脚本按 go.sum 逐 entry 哈希校验，56 个模块中 46 个从 GitHub tag 字节级还原成功；余 10 个（otel 家族 7 + genproto api/rpc 2 + proto/otlp 1）的 tag 内容与当年代理记录不符（tag 被重指或 monorepo 子 tag 共用 commit），历史 100 帧提交狩猎无果，须有可达 Go 代理环境完成全量校验还原。纯 stdlib 包（`internal/sink`、`cmd/webhook-sink`）在沙箱已 build+vet 通过。
 - [ ] 5.2 冻结期巡检：确认重构差量不含依赖版本变更；安全公告跟踪记录到 WorkQueue 备注项。
 
 ## 6. 集中验证与升级轮

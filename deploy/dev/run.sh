@@ -22,6 +22,8 @@ if [[ -n ${PLATFORM_DEV_LIGHT:-} ]]; then
   exec "$bin" -addr "127.0.0.1:$port" -tenants "deploy/local/$solution/tenants.json" -packages deploy/packages -templates deploy/templates
 fi
 export PLATFORM_S3_ACCESS_KEY=platform PLATFORM_S3_SECRET_KEY=platform-files-local-only
+# The local sink stand-in (webhooks, mail, model fixtures) runs in the host process.
+export PLATFORM_SINK_ADDRESS="0.0.0.0:${SINK_PORT:-8497}" PLATFORM_SINK_SMTP_ADDRESS="0.0.0.0:${SINK_SMTP_PORT:-2525}"
 export PLATFORM_SECRET_SINK=sinkLocalOnly0000000000000000000000000000000000000000000000000000
 export PLATFORM_SECRET_OPENROUTER=${OPENROUTER_API_KEY:-}
 compute=.build/dev/compute

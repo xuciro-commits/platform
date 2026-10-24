@@ -6,7 +6,7 @@
 
 | 程序 | 职责 | 部署归属 |
 |---|---|---|
-| `platform-server/` | 通用宿主：租户装配、提交管线、Web API；webhook 接收端点将作为其可选进程内能力（B2 收编） | compose 双实例 8490/8495 |
+| `platform-server/` | 通用宿主：租户装配、提交管线、Web API；`PLATFORM_SINK_ADDRESS` 声明时内嵌本地替身（webhook/邮件/模型样本，`internal/sink`） | compose 双实例 8490/8495 |
 | `gateway/` | 设备网关：会话与共享驱动子进程的托管、引用计数回收 | compose 独立服务；驱动子进程是崩溃隔离边界，有意不合并 |
 | `compute/` | Dockerfile 构建受控执行隔离对：`wasm-worker`（最小特权 Wasm 执行）+ `code-builder`（唯一允许创建离线编译 guest 的固定命令驱动） | compose worker + builder 两服务；合并即削弱受控执行边界，有意保留 |
 
@@ -16,7 +16,7 @@
 |---|---|
 | `storage-files/` | 停机状态下校验整个文件存储（恢复核验） |
 | `rule-browser/` | 以与宿主同一受信规则实现浏览规则求值（诊断） |
-| `webhook-sink/` | 本地栈与演练的 webhook/SMTP 接收端；B2 收编为 platform-server 可选能力后，独立部署退役 |
+| `webhook-sink/` | 本地替身的独立调试入口（部署内已由 platform-server 内嵌，见 `internal/sink`） |
 
 ## 代码生成与检查工具（开发机）
 

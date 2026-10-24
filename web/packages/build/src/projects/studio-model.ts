@@ -14,7 +14,7 @@ const domains = [
     { id: "relationships", title: "Relationships and shared properties", kinds: ["link-type", "property-type", "interface"] },
     { id: "queries", title: "Queries", kinds: ["query"] },
   ] },
-  { id: "logic", title: "Logic", description: "States, actions, flows, computation and intelligence", groups: [
+  { id: "logic", title: "Behavior", description: "States, actions, flows, computation and intelligence", groups: [
     { id: "actions", title: "Object behavior", kinds: ["action"], contextKinds: ["object"], links: [{ title: "Object behavior", view: "action-type" }] },
     { id: "automation", title: "Flows and automation", kinds: ["flow"] },
     { id: "computation", title: "Functions and decisions", kinds: ["compute", "function", "agent", "alert"] },
@@ -22,7 +22,7 @@ const domains = [
   { id: "interface", title: "Interface", description: "Pages, templates, application header and navigation", groups: [
     { id: "pages", title: "Pages", kinds: ["page"], links: [{ title: "Templates", view: "studio-templates" }] },
   ] },
-  { id: "integration", title: "Integration", description: "Connections, sources, observations and data delivery", groups: [
+  { id: "integration", title: "Connections", description: "Connections, sources, observations and data delivery", groups: [
     { id: "data", title: "Connections and data", kinds: ["connection", "source", "dataset", "pipeline", "matching", "writeback"] },
     { id: "observations", title: "Observations and protocols", kinds: ["observation", "protocol"], links: [{ title: "Integration health", view: "integration-health" }] },
   ] },
