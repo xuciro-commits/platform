@@ -1,3 +1,8 @@
+// Package construction is the one home of the builder's declarations: their
+// shape, normalization, pure compilation and pure transforms. It holds no
+// tenant, no network and no live business state — cmd/check-boundaries refuses
+// an import of internal/host from here — so publishing, authorization and
+// execution stay with the host and the platform apps that consume these values.
 package construction
 
 import (
@@ -73,7 +78,7 @@ type Field struct {
 	Title       string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
 	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
 	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
-	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`
 	Stereotype  string                 `json:"stereotype,omitempty" title:"Enterprise element type"`
 	Stereotypes []string               `json:"stereotypes,omitempty" title:"Enterprise element types"`
 	// Inverse names the relation seen from the referenced record.

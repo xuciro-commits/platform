@@ -20,27 +20,10 @@ import (
 func main() {
 	root := flag.String("root", "../..", "repository root")
 	flag.Parse()
-	var appModules []string
-	modules, err := filepath.Glob(filepath.Join(*root, "apps", "*", "server", "go.mod"))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "boundary:", err)
-		os.Exit(1)
-	}
-	for _, module := range modules {
-		raw, err := os.ReadFile(module)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "boundary:", err)
-			os.Exit(1)
-		}
-		for _, line := range strings.Split(string(raw), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) == 2 && fields[0] == "module" {
-				appModules = append(appModules, fields[1])
-			}
-		}
-	}
 	var failures []string
-	for _, area := range []string{"capabilities/server", "apps", "protocols"} {
+	// The host module is the only Go app tree: the external app and protocol
+	// modules are retired, and business applications are declarative packages.
+	for _, area := range []string{"capabilities/server"} {
 		err := filepath.WalkDir(filepath.Join(*root, area), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -63,7 +46,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			for _, finding := range checkFile(filepath.ToSlash(rel), file, set, appModules...) {
+			for _, finding := range checkFile(filepath.ToSlash(rel), file, set) {
 				failures = append(failures, finding)
 			}
 			return nil
@@ -83,19 +66,13 @@ func main() {
 	fmt.Println("source boundaries ok: every production Go file checked")
 }
 
-func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...string) []string {
+func checkFile(path string, file *ast.File, set *token.FileSet) []string {
 	if strings.Contains(path, "/cmd/") {
 		return nil // binaries and generators compose compiled implementations
 	}
 	root := strings.HasPrefix(path, "capabilities/server/") && !strings.Contains(strings.TrimPrefix(path, "capabilities/server/"), "/")
 	public := strings.HasPrefix(path, "capabilities/server/platform/")
 	internal := strings.HasPrefix(path, "capabilities/server/internal/")
-	external := strings.HasPrefix(path, "apps/") || strings.HasPrefix(path, "protocols/")
-	harness := external && strings.HasSuffix(file.Name.Name, "test")
-	self := ""
-	if rest, ok := strings.CutPrefix(path, "apps/"); ok {
-		self, _, _ = strings.Cut(rest, "/")
-	}
 	app := ""
 	if rest, ok := strings.CutPrefix(path, "capabilities/server/apps/"); ok {
 		app, _, _ = strings.Cut(rest, "/")
@@ -131,16 +108,6 @@ func checkFile(path string, file *ast.File, set *token.FileSet, appModules ...st
 		}
 		if strings.HasPrefix(path, "capabilities/server/internal/enterprise/uaf/") && name == "encoding/xml" {
 			report(imported, "UAF runtime model depends on XML parsing")
-		}
-		if external && !harness {
-			if name == "platformserver" || strings.HasPrefix(name, "platformserver/apps/") || strings.HasPrefix(name, "platformserver/internal/") {
-				report(imported, "business owner imports runtime or private host implementation "+name)
-			}
-			for _, other := range appModules {
-				if other != self && (name == other || strings.HasPrefix(name, other+"/")) {
-					report(imported, "business owner or protocol imports app "+name)
-				}
-			}
 		}
 		if app != "" {
 			if name == "platformserver" {

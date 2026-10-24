@@ -77,14 +77,14 @@ type Entity struct {
 	// ValidateAt supplies the accepted input's clock to time-dependent rules.
 	ValidateAt func(c Caller, record any, now time.Time) *kernel.Error
 
-	Type   string // a data class the app is authority for, e.g. "crm.opportunity"
-	Title  string // "Opportunity"
-	Plural string // "Opportunities"; default: Title with the English plural rule
+	Type   string // a data class the app is authority for, e.g. "core.partner"
+	Title  string // "Partner"
+	Plural string // "Partners"; default: Title with the English plural rule
 	// Description says what a record of this type is, for people and agents;
 	// Synonyms are other names people use for it, comma-separated.
 	Description string
 	Synonyms    string
-	Model       any // the struct's zero value, e.g. Opportunity{}
+	Model       any // the struct's zero value, e.g. Partner{}
 	// RecordFormat names the current persisted record shape. Empty is the
 	// original unversioned shape; it is independent of action and snapshot formats.
 	RecordFormat string

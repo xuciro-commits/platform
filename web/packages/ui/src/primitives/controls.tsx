@@ -6,7 +6,7 @@ import { cn } from "../lib/cn";
 import { Button, type ButtonProps } from "./button";
 
 /** A row of values a person switches on and off: the fields a widget shows, the
- *  actions it offers, the tags of a record. One owner for the pattern (rule 11). */
+ *  actions it offers, the tags of a record. One owner for the pattern (AGENTS.md rule 4). */
 export function Toggles({ options, value = [], onChange, empty, className, disabled, isDisabled }: {
   options: { value: string; label: string }[];
   value?: string[];

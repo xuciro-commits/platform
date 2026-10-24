@@ -3,7 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 export const owners = ["ui", "app", "build"];
-export const ownerPackage = (owner) => owner.startsWith("@") ? owner : owner === "build" ? "@pkg/build" : `@platform/${owner}`;
+export const ownerPackage = (owner) => owner.startsWith("@") ? owner : `@platform/${owner}`;
 export const ownerDirectory = (owner) => `web/packages/${owner}`;
 export const dictionaryFile = (owner) => `${ownerDirectory(owner)}/src/${owner === "ui" ? "i18n/zh-CN.ts" : "i18n.ts"}`;
 

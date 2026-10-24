@@ -28,10 +28,10 @@ type Page struct {
 	Name        string   `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visits"`
 	Title       string   `json:"title" field:"required,search" title:"What people call it" example:"Visits"`
 	Description string   `json:"description,omitempty" type:"longtext" help:"What people do on this page"`
-	Object      string   `json:"object" field:"required" title:"Object it shows" help:"An object this tenant has: one it defined, or an app's own" example:"crm.opportunity"`
+	Object      string   `json:"object" field:"required" title:"Object it shows" help:"An object this tenant has: one it defined, or an app's own" example:"build.visits"`
 	List        []string `json:"list" title:"Fields in the list" help:"The object's field names, in the order the list shows them"`
 	Detail      []string `json:"detail" title:"Fields in the detail" help:"The object's field names, in the order one record shows them"`
-	Actions     []string `json:"actions,omitempty" title:"Actions it offers" help:"Actions of that object, by their schema" example:"crm.opportunity.close"`
+	Actions     []string `json:"actions,omitempty" title:"Actions it offers" help:"Actions of that object, by their schema" example:"build.visits.close"`
 	// Sections are what the page is laid out from when someone composes it in
 	// the editor; with none, the page is the list and detail above.
 	Sections   []Section                    `json:"sections,omitempty" field:"aside" title:"What is on the page"`
@@ -70,7 +70,7 @@ type Section struct {
 	// Relation follows the typed parent selection, or the page's shared record.
 	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
 	// Query is a named query "<app>.<name>" the section lists.
-	Query        string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like crm.open-opportunities"`
+	Query        string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like build.open-visits"`
 	Fields       []string                    `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
 	Actions      []string                    `json:"actions,omitempty" help:"For actions: the schemas it offers"`
 	Group        string                      `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`

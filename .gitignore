@@ -5,10 +5,7 @@ contract/lean/.lake/
 target/
 # Build outputs of `go build` and `go test -c` in a module directory
 *.test
-# app development hosts and local tools
-apps/*/server/cmd/*/*-server
-apps/*/server/cmd/*/*-sim
-apps/*/server/cmd/*/*-agent
+# local tool binaries
 capabilities/server/cmd/webhook-sink/webhook-sink
 node_modules/
 # Playwright's results of the route tests
@@ -21,6 +18,10 @@ dist/
 
 # Generated trusted rule runtime (scripts/rule-browser.mjs)
 web/public/rules/
+
+# Python bytecode: `make check-local` and the deploy rehearsal scripts write it
+# under deploy/ and scripts/, which update.sh's committed-source gate watches.
+__pycache__/
 
 # Toolchains and vendored dependencies
 tools/

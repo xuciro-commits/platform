@@ -10,7 +10,7 @@ test("pie variants show original values and rounded percentages while a donut re
 
 test("a spec over records asks the host for groups and measures", () => {
   const spec: ChartSpec = {
-    data: { entity: "pms.reservation", domain: [["canceled", "=", false]] }, mark: "bar",
+    data: { entity: "core.partner", domain: [["canceled", "=", false]] }, mark: "bar",
     encoding: { x: { field: "checkIn", timeUnit: "month", type: "temporal" }, y: { aggregate: "count", type: "quantitative" }, color: { field: "roomType", type: "nominal" } },
   };
   expect(aggregateQuery(spec)).toEqual({ domain: [["canceled", "=", false]], groups: ["checkIn:month", "roomType"], measures: ["count"], search: undefined, archived: undefined });
@@ -30,7 +30,7 @@ test("inline values aggregate into the same columns as the host's", () => {
 
 test("the renderer draws one series per colour, categories in time order", () => {
   const spec: ChartSpec = {
-    data: { entity: "crm.opportunity" }, mark: { type: "bar", stack: true },
+    data: { entity: "core.material" }, mark: { type: "bar", stack: true },
     encoding: { x: { field: "created", timeUnit: "month", type: "temporal" }, y: { aggregate: "count", type: "quantitative" }, color: { field: "stage", type: "nominal" } },
   };
   const columns: AggregateColumn[] = [{ name: "created:month", title: "Created (month)", kind: "group", type: "temporal" },
@@ -42,7 +42,7 @@ test("the renderer draws one series per colour, categories in time order", () =>
 });
 
 test("money sums split by currency and are shown in major units", () => {
-  const spec: ChartSpec = { data: { entity: "crm.opportunity" }, mark: "arc", encoding: { theta: { field: "amount", aggregate: "sum", type: "quantitative" }, color: { field: "stage", type: "nominal" } } };
+  const spec: ChartSpec = { data: { entity: "core.material" }, mark: "arc", encoding: { theta: { field: "amount", aggregate: "sum", type: "quantitative" }, color: { field: "stage", type: "nominal" } } };
   const columns: AggregateColumn[] = [{ name: "stage", title: "Stage", kind: "group", type: "nominal" },
     { name: "amount.currency", title: "Amount currency", kind: "group", type: "nominal", field: "amount" },
     { name: "sum:amount", title: "Amount (sum)", kind: "measure", type: "quantitative", field: "amount", money: true }];

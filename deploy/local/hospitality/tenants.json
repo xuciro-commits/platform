@@ -1,7 +1,7 @@
 [
   {
-    "id": "hotel-a",
-    "name": "Hotel A",
+    "id": "hotel-a-build",
+    "name": "Hotel A · Platform",
     "template": "hospitality",
     "seats": [
       {
@@ -10,24 +10,18 @@
         ],
         "id": "sales-1",
         "tenant": "",
-        "roles": {
-          "ai": "user",
-          "crm": "sales",
-          "hcm": "employee",
-          "memstay": "keeper",
-          "pms": "front-desk"
-        },
-        "units": [
+        "grants": [
           {
-            "party": "",
-            "unit": "sales-team",
-            "role": "account executive",
-            "primary": true
+            "app": "ai",
+            "role": "user"
           },
           {
-            "party": "",
-            "unit": "offsite-2026",
-            "role": "project lead"
+            "app": "build",
+            "role": "sales"
+          },
+          {
+            "app": "build",
+            "role": "desk"
           }
         ]
       },
@@ -37,48 +31,54 @@
         ],
         "id": "manager-1",
         "tenant": "",
-        "roles": {
-          "agent": "admin",
-          "ai": "admin",
-          "build": "builder",
-          "core": "steward",
-          "crm": "sales-manager",
-          "csm": "lead",
-          "enterprise": "admin",
-          "flow": "admin",
-          "hcm": "employee",
-          "knowledge": "editor",
-          "memstay": "keeper",
-          "platform": "admin",
-          "pms": "manager",
-          "work": "admin"
-        },
-        "units": [
+        "grants": [
           {
-            "party": "",
-            "unit": "hotel-a",
-            "role": "general manager",
-            "primary": true
+            "app": "agent",
+            "role": "admin"
           },
           {
-            "party": "",
-            "unit": "hotel-a-co",
-            "role": "director"
+            "app": "ai",
+            "role": "admin"
           },
           {
-            "party": "",
-            "unit": "guest-committee",
-            "role": "chair"
+            "app": "build",
+            "role": "builder"
           },
           {
-            "party": "",
-            "unit": "hotel-a",
-            "role": "manager"
+            "app": "core",
+            "role": "steward"
           },
           {
-            "party": "",
-            "unit": "hospitality",
-            "role": "head"
+            "app": "enterprise",
+            "role": "admin"
+          },
+          {
+            "app": "flow",
+            "role": "admin"
+          },
+          {
+            "app": "knowledge",
+            "role": "editor"
+          },
+          {
+            "app": "platform",
+            "role": "admin"
+          },
+          {
+            "app": "work",
+            "role": "admin"
+          },
+          {
+            "app": "core",
+            "role": "accountant"
+          },
+          {
+            "app": "build",
+            "role": "salesmanager"
+          },
+          {
+            "app": "build",
+            "role": "hotelmanager"
           }
         ]
       },
@@ -88,16 +88,10 @@
         ],
         "id": "hr-1",
         "tenant": "",
-        "roles": {
-          "ai": "user",
-          "hcm": "hr"
-        },
-        "units": [
+        "grants": [
           {
-            "party": "",
-            "unit": "hotel-a",
-            "role": "hr officer",
-            "primary": true
+            "app": "ai",
+            "role": "user"
           }
         ]
       },
@@ -107,19 +101,18 @@
         ],
         "id": "desk-1",
         "tenant": "",
-        "roles": {
-          "ai": "user",
-          "build": "user",
-          "csm": "desk",
-          "hcm": "employee",
-          "pms": "front-desk"
-        },
-        "units": [
+        "grants": [
           {
-            "party": "",
-            "unit": "front-office",
-            "role": "receptionist",
-            "primary": true
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "desk"
           }
         ]
       },
@@ -129,18 +122,14 @@
         ],
         "id": "deputy-1",
         "tenant": "",
-        "roles": {
-          "ai": "user",
-          "crm": "sales-manager",
-          "csm": "lead",
-          "hcm": "employee"
-        },
-        "units": [
+        "grants": [
           {
-            "party": "",
-            "unit": "hotel-a",
-            "role": "deputy manager",
-            "primary": true
+            "app": "ai",
+            "role": "user"
+          },
+          {
+            "app": "build",
+            "role": "salesmanager"
           }
         ]
       }
@@ -154,8 +143,8 @@
     "created": "0001-01-01T00:00:00Z"
   },
   {
-    "id": "hotel-test",
-    "name": "Hotel Test",
+    "id": "hotel-test-build",
+    "name": "Hotel Test · Platform",
     "template": "hospitality",
     "seats": [
       {
@@ -164,16 +153,44 @@
         ],
         "id": "manager-test",
         "tenant": "",
-        "roles": {
-          "agent": "admin",
-          "ai": "admin",
-          "build": "builder",
-          "core": "steward",
-          "enterprise": "admin",
-          "flow": "admin",
-          "platform": "admin",
-          "work": "admin"
-        }
+        "grants": [
+          {
+            "app": "agent",
+            "role": "admin"
+          },
+          {
+            "app": "ai",
+            "role": "admin"
+          },
+          {
+            "app": "build",
+            "role": "builder"
+          },
+          {
+            "app": "core",
+            "role": "steward"
+          },
+          {
+            "app": "enterprise",
+            "role": "admin"
+          },
+          {
+            "app": "flow",
+            "role": "admin"
+          },
+          {
+            "app": "platform",
+            "role": "admin"
+          },
+          {
+            "app": "work",
+            "role": "admin"
+          },
+          {
+            "app": "core",
+            "role": "accountant"
+          }
+        ]
       }
     ],
     "settings": {
@@ -183,32 +200,5 @@
       "timezone": "Europe/Berlin"
     },
     "created": "0001-01-01T00:00:00Z"
-  },
-  {
-    "id": "acme",
-    "name": "Acme Corp",
-    "template": "manufacturing",
-    "seats": [
-      {
-        "subjects": [
-          "user:buyer@plant.test"
-        ],
-        "id": "buyer",
-        "tenant": "",
-        "roles": {
-          "platform": "admin"
-        }
-      }
-    ],
-    "settings": {
-      "currency": "CNY",
-      "dateFormat": "ymd",
-      "language": "zh-CN",
-      "name": "Acme Corp",
-      "timezone": "Asia/Shanghai",
-      "weekStart": "monday"
-    },
-    "created": "2026-10-08T10:16:41.004222Z",
-    "by": "user:manager@hotel.test"
   }
 ]

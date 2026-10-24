@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:fcc7f750b2cc2f14",
+  "revision": "sha256:ee66989da6c3e74f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1990,7 +1990,7 @@
     },
     {
       "id": "pattern/master-detail",
-      "owner": "@pkg/build",
+      "owner": "@platform/build",
       "name": "Master-detail interaction",
       "layer": 4,
       "authority": "recommendation",
@@ -2253,7 +2253,7 @@
     },
     {
       "id": "scenario/application-studio",
-      "owner": "@pkg/build",
+      "owner": "@platform/build",
       "name": "Workshop module workbench",
       "summary": "The project's module: its pages, header and navigation, with the page editor inside and a live preview.",
       "layer": 5,
@@ -2283,7 +2283,7 @@
     },
     {
       "id": "scenario/logic-studio",
-      "owner": "@pkg/build",
+      "owner": "@platform/build",
       "name": "Logic design workbench",
       "summary": "Compose typed platform blocks with the existing native workflow editor and shared canvas.",
       "layer": 5,
@@ -2314,7 +2314,7 @@
     },
     {
       "id": "scenario/object-studio",
-      "owner": "@pkg/build",
+      "owner": "@platform/build",
       "name": "Object design workbench",
       "summary": "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.",
       "layer": 5,
@@ -2345,7 +2345,7 @@
     },
     {
       "id": "scenario/page-studio",
-      "owner": "@pkg/build",
+      "owner": "@platform/build",
       "name": "Page design workbench",
       "summary": "Edit the original page draft with layout gestures, scoped commands, inspectors and undo history.",
       "layer": 5,
@@ -2372,7 +2372,7 @@
     },
     {
       "id": "scenario/query-studio",
-      "owner": "@pkg/build",
+      "owner": "@platform/build",
       "name": "Reusable query workbench",
       "summary": "Author fixed record conditions and retain explicit query versions for shared page plans.",
       "layer": 5,
@@ -2401,7 +2401,7 @@
     },
     {
       "id": "scenario/record-handling",
-      "owner": "@pkg/build",
+      "owner": "@platform/build",
       "name": "Record handling workspace",
       "summary": "Select a record, inspect its details and use the original object actions.",
       "layer": 5,
@@ -14561,7 +14561,7 @@
         "WorkspaceSurface"
       ]
     },
-    "@pkg/build": {
+    "@platform/build": {
       "source": "web/packages/build/src/index.tsx",
       "symbols": [
         "default"

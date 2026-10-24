@@ -91,7 +91,7 @@ func CheckProtocol(contract, actual Protocol) error {
 	return nil
 }
 
-// ID is "<name>/<version>", e.g. "lodging.booking/1".
+// ID is "<name>/<version>", e.g. "orders.confirm/1".
 func (p Protocol) ID() string { return fmt.Sprintf("%s/%d", p.Name, p.Version) }
 
 // Provision maps a protocol onto the provider's own actions, reads and events
@@ -116,7 +116,7 @@ func ProtocolAction(protocol, action string) string { return protocol + "#" + ac
 // the entities it holds, so consumers match their links exactly.
 type ProviderResult struct {
 	Provider string
-	Type     string // e.g. "pms.reservation"
+	Type     string // e.g. "build.orders"
 	Result   any
 }
 

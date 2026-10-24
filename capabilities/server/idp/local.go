@@ -1,3 +1,7 @@
+// Package idp is the host's identity provider: Authenticate and Attest are its
+// two answers, as server.go consumes them. Two implementations stand behind
+// them — locally signed tokens (the lightweight profile and the workspace's
+// signed role cards) and OIDC against the deployment's issuer.
 package idp
 
 import (

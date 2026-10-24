@@ -168,12 +168,12 @@ importers:
 
   apps/catalog:
     dependencies:
-      '@pkg/build':
-        specifier: workspace:*
-        version: link:../../packages/build
       '@platform/app':
         specifier: workspace:*
         version: link:../../packages/app
+      '@platform/build':
+        specifier: workspace:*
+        version: link:../../packages/build
       '@platform/catalog':
         specifier: workspace:*
         version: link:../../packages/catalog
@@ -223,21 +223,21 @@ importers:
 
   apps/workspace:
     dependencies:
-      '@pkg/build':
-        specifier: workspace:*
-        version: link:../../packages/build
-      '@pkg/platform':
-        specifier: workspace:*
-        version: link:../../packages/platform
       '@platform/app':
         specifier: workspace:*
         version: link:../../packages/app
+      '@platform/build':
+        specifier: workspace:*
+        version: link:../../packages/build
       '@platform/catalog-app':
         specifier: workspace:*
         version: link:../catalog
       '@platform/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
+      '@platform/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
       '@platform/ui':
         specifier: workspace:*
         version: link:../../packages/ui

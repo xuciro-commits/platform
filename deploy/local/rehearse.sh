@@ -8,8 +8,8 @@ export COMPOSE_PARALLEL_LIMIT=1
 export PLATFORM_DATA_NAMESPACE="$COMPOSE_PROJECT_NAME"
 export PLATFORM_PERSONAL_TOKEN_KEY="$(openssl rand -hex 32)"
 export PG_PORT=55433 IDP_PORT=58480 MANUFACTURING_PORT=58490 HOSPITALITY_PORT=58495 SINK_PORT=58497 FILES_PORT=59000 FILES_CONSOLE_PORT=59001
-mkdir -p .build/retirement
-scratch=$(mktemp -d "$PWD/.build/retirement/rehearsal-XXXXXX")
+mkdir -p .build/rehearse
+scratch=$(mktemp -d "$PWD/.build/rehearse/rehearsal-XXXXXX")
 export PLATFORM_REHEARSAL_LIMITS_FILE="$scratch/runtime-limits.yaml"
 cat >"$PLATFORM_REHEARSAL_LIMITS_FILE" <<'EOF'
 services:
@@ -22,8 +22,8 @@ services:
 EOF
 export HOSPITALITY_TENANTS_FILE="$scratch/hospitality.json"
 export MANUFACTURING_TENANTS_FILE="$scratch/manufacturing.json"
-cp deploy/local/hospitality/tenants-next.json "$HOSPITALITY_TENANTS_FILE"
-cp deploy/local/manufacturing/tenants-next.json "$MANUFACTURING_TENANTS_FILE"
+cp deploy/local/hospitality/tenants.json "$HOSPITALITY_TENANTS_FILE"
+cp deploy/local/manufacturing/tenants.json "$MANUFACTURING_TENANTS_FILE"
 chmod g+w "$HOSPITALITY_TENANTS_FILE" "$MANUFACTURING_TENANTS_FILE"
 compose() { docker compose -f deploy/local/compose.yaml -f "$PLATFORM_REHEARSAL_LIMITS_FILE" "$@"; }
 cleanup() {

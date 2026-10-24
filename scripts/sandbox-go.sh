@@ -12,7 +12,7 @@ if [ ! -x /home/user/.go-toolchain/go/bin/go ]; then
     pip download go-bin==$V --no-deps -d /tmp/gob -q && unzip -q -o /tmp/gob/*.whl -d /home/user/.go-toolchain
   fi
 fi
-# An isolated workspace lets platform, app and protocol modules share dependencies without modifying go.mod or go.sum.
+# An isolated workspace lets the host and the kernel contract share dependencies without modifying go.mod or go.sum.
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import json
@@ -22,9 +22,7 @@ import sys
 root = Path(sys.argv[1])
 work = root / '.build/sandbox-go'
 work.mkdir(parents=True, exist_ok=True)
-modules = [root / 'capabilities/server', root / 'contract/go',
-           *sorted((root / 'apps').glob('*/server')),
-           *sorted((root / 'protocols').glob('*'))]
+modules = [root / 'capabilities/server', root / 'contract/go']
 modules = [path for path in modules if (path / 'go.mod').is_file()]
 version = re.search(r'^go (\S+)', (root / 'capabilities/server/go.mod').read_text(), re.M)[1]
 (work / 'go.work').write_text(f'go {version}\n\nuse (\n' +

@@ -186,10 +186,9 @@ build: ## 构建当前系统架构的工作区制品与通用宿主二进制，�
 	ls -l $(DIST)
 
 .PHONY: images
-images: ## 构建解决方案 Docker 镜像并打上 VERSION 标签（需先构建工作区制品）
+images: ## 构建通用宿主 Docker 镜像并打上 VERSION 标签（两个配置实例共用同一镜像）
 	PLATFORM_REVISION=$$(git rev-parse HEAD) $(COMPOSE) build hospitality-server manufacturing-server
-	docker tag platform-hospitality-server platform/hospitality-server:$(VERSION)
-	docker tag platform-manufacturing-server platform/manufacturing-server:$(VERSION)
+	docker tag platform-hospitality-server platform/platform-server:$(VERSION)
 
 .PHONY: rehearse
 rehearse: ## 交付检查（默认隔离容器；PROFILE=migration 检查演进）

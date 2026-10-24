@@ -403,7 +403,7 @@ export function HostMigrations({ tenant }: { tenant?: string }) {
         <label className="grid gap-1 text-sm">{t("Support session on the source")}<Select value={chosenSource} onChange={(e) => setSourceGrant(e.target.value)}>{grantOptions(availableSource)}</Select></label>
         <label className="grid gap-1 text-sm">{t("Support session on the target")}<Select value={chosenTarget} onChange={(e) => setTargetGrant(e.target.value)}>{grantOptions(availableTarget)}</Select></label>
       </div>
-      <label className="grid gap-1 text-sm">{t("Record types")}<Input required value={types} onChange={(e) => setTypes(e.target.value)} placeholder="crm.account, crm.contact" /></label>
+      <label className="grid gap-1 text-sm">{t("Record types")}<Input required value={types} onChange={(e) => setTypes(e.target.value)} placeholder="core.partner, core.person" /></label>
       </fieldset>
       <div><Button type="submit" variant="primary" disabled={locked || overview.isError || sourceGrants.isError || targetGrants.isError || !source || !target || source === target || !list.length || !chosenSource || !chosenTarget}>{busy ? t("Migrating…") : t("Migrate")}</Button></div>
     </Form>

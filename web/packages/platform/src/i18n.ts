@@ -829,7 +829,7 @@ register("zh-CN", {
   "Label": "名称",
   "CI, a notebook, …": "CI、笔记本……",
   "Scopes": "权限范围",
-  "Permission patterns, such as mes.order.* ; empty: everything you may do": "权限模式，如 mes.order.*；留空表示你能做的一切",
+  "Permission patterns, such as core.material.* ; empty: everything you may do": "权限模式，如 core.material.*；留空表示你能做的一切",
   "Issue personal token": "签发个人令牌",
   "No personal tokens.": "暂无个人令牌。",
   "until {day}": "至 {day}",

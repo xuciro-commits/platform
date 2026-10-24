@@ -237,7 +237,7 @@ function Tokens() {
       </div>}
       <Form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={issue}>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Label")}</span><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t("CI, a notebook, …")} /></label>
-        <label className="grid gap-1"><span className="text-xs text-muted">{t("Scopes")}</span><Input value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder={t("Permission patterns, such as mes.order.* ; empty: everything you may do")} className="w-80" /></label>
+        <label className="grid gap-1"><span className="text-xs text-muted">{t("Scopes")}</span><Input value={scopes} onChange={(e) => setScopes(e.target.value)} placeholder={t("Permission patterns, such as core.material.* ; empty: everything you may do")} className="w-80" /></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("Until")}</span><Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} /></label>
         <Button type="submit" variant="primary" disabled={!label}>{t("Issue personal token")}</Button>
       </Form>

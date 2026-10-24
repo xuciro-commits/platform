@@ -1,3 +1,9 @@
+// Package journal is the durable storage a tenant runs on: the ordered entry
+// log, the formal SQL state beside it, snapshots and checkpoints, and the fixed
+// read views. The two delivery shapes — PostgreSQL and one local file — keep the
+// same semantics, and the derived store (vectors and transcripts) lives wherever
+// the journal lives. What each shape actually promises, and what the deployment
+// refuses, is on Journals and Store.
 package journal
 
 import (

@@ -34,7 +34,7 @@
 5. **生成文件不手改。** `contract/go/gen`、`web/packages/kernel/src/gen/host.ts`（宿主 API 类型变了就在 `capabilities/server` 跑 `go run ./cmd/api-types`）、`web/apps/catalog/src/gen`（`node scripts/catalog.mjs generate`）。
 6. **一个语义一个实现。** 规则求值、约束检查、授权判定、依赖解析各一份。替换不是增量：同批删除被替代的路径，不保留两套规则。
 7. **租户扩展只走受控路径。** 受控编译、隔离执行、版本化制品；不在宿主直接执行租户脚本。
-8. **参考应用是验证载体。** `apps/*` 不定义平台真理；行业规则在用或已承诺的能力由构建者声明替代后才退出。撞墙时登记为通用缺口并在归属方补齐，不在探针里绕过。
+8. **业务验证走声明式应用包。** 原生参考应用与专用 Solution 宿主已退役：业务任务由 `deploy/packages` 的声明式包表达，不定义平台真理，也不把行业规则写进宿主、平台应用或共享 UI。撞墙时登记为通用缺口并在归属方补齐，不在应用包里绕过。
 9. **双语文案。** 产品界面英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web 用 `t()` + 包内 `i18n.ts`。业务数据不翻译。
 10. **提交信息**单句祈使句；提交与推送按负责人授权。
 11. **安全。** 不提交密钥与凭据；应用和包只保存凭据引用，实际秘密走平台受控加密托管或部署注入，加密主密钥留在部署环境。
@@ -81,7 +81,6 @@ CI 只在 `v*` 标签上运行，不要依赖它发现问题。
 
 - 支持 Go 1.27.1、Node ≥ 22.18.0；Web 固定 pnpm 12.5.1。
 - `make lite` 无 Docker 运行（酒店 8495、制造 8490，数据在 `.build/lite/<solution>/`）；`make local` 热更新；`make docker` 切回容器宿主。账号、地址、密钥与存储的完整说明只在 [deploy/local/README.md](deploy/local/README.md)。
-- 应用骨架：`cd capabilities/server && go run ./cmd/new-app -id <id> -entity <name>`。
 
 ## 沙箱（无外网、Go 代理被封时）
 

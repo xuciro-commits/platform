@@ -29,17 +29,18 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
   internal/          acceptance agents aistate construction enterprise host records rules
-  cmd/               platform-server、api-types、new-app、check-boundaries、uaf-gen、webhook-sink
+  cmd/               platform-server、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink、gateway、compute、code-builder、wasm-worker、storage-files、driver-{modbus,s7,simulator}
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 web/
-  apps/workspace     唯一工作区：session host shell chrome
-  apps/catalog       资产库与代码沙箱
-  packages/ui        @platform/ui    共享 UI Kit
-  packages/app       @platform/app   前端应用 API
-  packages/kernel    @platform/kernel 契约类型（src/gen/host.ts 生成）
-  packages/build     统一构建台（Model/Logic/Interface/Integration/Release）
-  packages/platform  治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
-  e2e                Playwright 路线，spec 只经 tests/kit.ts
+  apps/workspace     @platform/workspace   唯一工作区：session host shell chrome
+  apps/catalog       @platform/catalog-app 资产库与代码沙箱
+  packages/ui        @platform/ui          共享 UI Kit
+  packages/app       @platform/app         前端应用 API
+  packages/kernel    @platform/kernel      契约类型（src/gen/host.ts 生成）
+  packages/catalog   @platform/catalog     资产目录查询与 owner 校验（scripts/catalog.mjs 与三包 ./catalog 导出的归属方）
+  packages/build     @platform/build       统一构建台（Model/Logic/Interface/Integration/Release）
+  packages/platform  @platform/platform    治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
+  e2e                @platform/e2e         Playwright 路线，spec 只经 tests/kit.ts
 scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples
 docs/                Intent Architecture WorkQueue standards/uaf
