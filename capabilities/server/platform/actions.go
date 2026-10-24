@@ -103,6 +103,9 @@ type Field struct {
 	// a picker of the records the member may read (F-36).
 	Choices []string `json:"choices,omitempty"`
 	Ref     string   `json:"ref,omitempty"`
+	// Fields are the columns of a "lines" field: a child table the form edits
+	// row by row. Empty for every other type.
+	Fields []Field `json:"fields,omitempty"`
 	// Stereotype narrows a reference to the enterprise model (Ref
 	// "enterprise.element") to one UAF stereotype.
 	Stereotype string `json:"stereotype,omitempty"`

@@ -12,6 +12,7 @@ export type InputField = {
   ref?: string;
   help?: string;
   readOnly?: boolean;
+  fields?: InputField[];
 };
 
 export function Loading({ what = "the host" }: { what?: string }) {
@@ -58,6 +59,9 @@ export function FieldInput({ field, value, onChange }: { field: InputField; valu
   const id = `field-${field.name}`;
   const label = field.title || field.name;
   if (field.readOnly) return null;
+  if (field.type === "lines") {
+    return <Lines field={field} rows={rowsOf(value)} onChange={onChange} />;
+  }
   if (!scalar(field.type) || structured(field.type)) {
     const text = typeof value === "string" ? value : value === undefined ? "" : JSON.stringify(value, null, 2);
     return (
@@ -108,6 +112,41 @@ export function FieldInput({ field, value, onChange }: { field: InputField; valu
   );
 }
 
+/** A child table: the columns the declaration names, one row per record it
+ * holds. Cells are the same inputs as any other field, so a new column type is
+ * still a declaration. */
+function Lines({ field, rows, onChange }: { field: InputField; rows: Record<string, unknown>[]; onChange: (next: unknown) => void }) {
+  const columns = (field.fields ?? []).filter((column) => !column.readOnly);
+  const change = (index: number, name: string, cell: unknown) => onChange(rows.map((row, at) => (at === index ? { ...row, [name]: cell } : row)));
+  return (
+    <div className="field lines">
+      <span>{field.title || field.name}{field.required ? " *" : ""}</span>
+      <div className="lines-scroll">
+        <table className="grid lines-grid">
+          <thead><tr>{columns.map((column) => <th key={column.name}>{column.title || column.name}</th>)}<th /></tr></thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={index}>
+                {columns.map((column) => (
+                  <td key={column.name}><FieldInput field={column} value={row[column.name]} onChange={(cell) => change(index, column.name, cell)} /></td>
+                ))}
+                <td className="right"><button type="button" className="link" onClick={() => onChange(rows.filter((_, at) => at !== index))}>remove</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="row">
+        <button type="button" className="link" onClick={() => onChange([...rows, {}])}>add row</button>
+        <span className="muted small">{rows.length} {rows.length === 1 ? "row" : "rows"}</span>
+      </div>
+      {field.help ? <small>{field.help}</small> : null}
+    </div>
+  );
+}
+
+const rowsOf = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter((row): row is Record<string, unknown> => !!row && typeof row === "object" && !Array.isArray(row)) : []);
+
 function readScalar(type: string, text: string): unknown {
   if (text === "") return "";
   if (type === "integer") return Number.parseInt(text, 10);
@@ -129,9 +168,10 @@ function parseStructured(type: string, text: string): unknown {
 }
 
 /** A form over a declaration: the action says which fields it takes. */
-export function Form({ fields, onSend, sending, error }: { fields: InputField[]; sending: boolean; error?: string; onSend: (values: Record<string, unknown>) => void }) {
-  const [values, setValues] = useState<Record<string, unknown>>({});
-  useEffect(() => { setValues({}); }, [fields]);
+export function Form({ fields, onSend, sending, error, initial }: { fields: InputField[]; sending: boolean; error?: string; initial?: Record<string, unknown>; onSend: (values: Record<string, unknown>) => void }) {
+  const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...initial }));
+  const seed = JSON.stringify(initial ?? {});
+  useEffect(() => { setValues({ ...initial }); }, [fields, seed]);
   const missing = useMemo(() => fields.filter((field) => field.required && !field.readOnly && (values[field.name] === undefined || values[field.name] === "")).map((field) => field.title || field.name), [fields, values]);
   return (
     <form className="form" onSubmit={(event) => {

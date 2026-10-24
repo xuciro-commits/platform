@@ -116,7 +116,15 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			v := reflect.New(info.Go).Elem()
 			decode, err := records.DecodeFormattedImage(info, raw, r.Projection, s.readRelease, r.Format)
 			if err != nil {
-				return err
+				// The declaration may name fewer fields than the row carries:
+				// the ones it dropped are left out, the rest keep their value.
+				pruned, pruneErr := records.PruneImage(info, raw)
+				if pruneErr != nil {
+					return err
+				}
+				if decode, err = records.DecodeFormattedImage(info, pruned, r.Projection, s.readRelease, r.Format); err != nil {
+					return err
+				}
 			}
 			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
 				return err
@@ -182,8 +190,14 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 		if describeErr != nil {
 			return
 		}
+		// A definition read again replaces the one installed before it: a
+		// published object takes its new fields. The generation moves with it,
+		// so every cached catalog, entity view and encoded answer is rebuilt
+		// rather than serving the declaration this one replaced.
 		if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
-			t.definitions[i] = def
+			next := slices.Clone(t.definitions)
+			next[i] = def
+			t.setDefinitions(next)
 			return
 		}
 		t.setDefinitions(append(t.definitions, def))

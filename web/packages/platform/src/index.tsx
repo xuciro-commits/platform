@@ -7,6 +7,7 @@ import type { EdgeClient as Client } from "@platform/kernel";
 import * as api from "./api";
 import { HostProvider, useHost } from "./host";
 import { Definitions, Records, RecordView, Releases, SystemConsole, CreateView } from "./views";
+import { ApplicationPage, useApplications } from "./runtime";
 import { Operate } from "./operate";
 import { HostConsole, HostLink } from "./hostconsole";
 import { Empty, Loading, Note, Panel, Problem } from "./ui";
@@ -15,6 +16,7 @@ export type Identity = { token: string; label: string };
 
 type Route =
   | { kind: "home" }
+  | { kind: "app"; app: string; page: string; id?: string }
   | { kind: "records"; type: string; search: string }
   | { kind: "record"; type: string; id: string }
   | { kind: "new"; type: string }
@@ -29,7 +31,8 @@ function routeOf(hash: string): Route {
   const path = hash.replace(/^#\/?/, "").split("?")[0] ?? "";
   const search = new URLSearchParams(hash.split("?")[1] ?? "").get("q") ?? "";
   const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
-  const [head, second, third] = parts;
+  const [head, second, third, fourth] = parts;
+  if (head === "a" && second && third) return { kind: "app", app: second, page: third, id: fourth };
   if (head === "r" && second && third) return { kind: "record", type: second, id: third };
   if (head === "r" && second) return { kind: "records", type: second, search };
   if (head === "new" && second) return { kind: "new", type: second };
@@ -86,7 +89,7 @@ export function PlatformApp() {
     setBusy(true);
     try {
       const identity = await api.identify(token, tenant);
-      const connection = api.connect(identity, token);
+      const connection = await api.connect(identity, token);
       const active = await api.activeRelease(connection).catch(() => "");
       setMe(identity);
       setClient(connection);
@@ -125,6 +128,7 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
   const route = useRoute();
   const apps = me.apps ?? [];
   const entities = host.entities;
+  const { apps: applications } = useApplications();
   return (
     <main className="app">
       <aside className="side">
@@ -134,6 +138,16 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
         </div>
         <nav>
           <a href="#/" className={route.kind === "home" ? "active" : ""}>Overview</a>
+          <p className="label">Applications</p>
+          {applications.length === 0 ? <p className="muted small">No application is offered to you yet.</p> : applications.map((application) => (
+            <div key={application.app} className="group">
+              <span className="group-title">{application.title}</span>
+              {application.pages.map((page) => (
+                <a key={`${application.app}/${page.name}`} href={`#/a/${encodeURIComponent(application.app)}/${encodeURIComponent(page.name)}`}
+                  className={route.kind === "app" && route.app === application.app && route.page === page.name ? "active" : ""}>{page.title}</a>
+              ))}
+            </div>
+          ))}
           <p className="label">Records</p>
           {entities.length === 0 ? <p className="muted small">Nothing published to you yet.</p> : entities.map((entity) => (
             <a key={entity.type} href={`#/r/${encodeURIComponent(entity.type)}`} className={route.kind !== "home" && "type" in route && route.type === entity.type && route.kind !== "record" ? "active" : ""}>
@@ -173,6 +187,8 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
           <span className="muted small">release {host.release || "—"} · {entities.length} types</span>
         </header>
         {route.kind === "home" ? <Home /> : null}
+        {route.kind === "app" ? <ApplicationPage app={route.app} page={route.page} id={route.id}
+          onOpen={(id) => { window.location.hash = `#/a/${encodeURIComponent(route.app)}/${encodeURIComponent(route.page)}/${encodeURIComponent(id)}`; }} /> : null}
         {route.kind === "records" ? <Records type={route.type} search={route.search} /> : null}
         {route.kind === "record" ? <RecordView type={route.type} id={route.id} /> : null}
         {route.kind === "new" ? <CreateView type={route.type} /> : null}
@@ -189,9 +205,25 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
 
 function Home() {
   const host = useHost();
+  const { apps: applications } = useApplications();
   const createable = host.entities.filter((entity) => host.actions.some((action) => action.target === entity.type && /\.create$/.test(action.schema)));
   return (
     <>
+      <Panel title="Applications">
+        {applications.length === 0 ? <Empty>Nothing has been built for you yet. An application appears here once its definition is published.</Empty> : (
+          <div className="cards">
+            {applications.map((application) => (
+              <div key={application.app} className="card">
+                <strong>{application.title}</strong>
+                {application.description ? <p className="muted small">{application.description}</p> : null}
+                <div className="row wrap">
+                  {application.pages.map((page) => <a key={page.name} className="button" href={`#/a/${encodeURIComponent(application.app)}/${encodeURIComponent(page.name)}`}>{page.title}</a>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
       <Panel title="Start here">
         <Note>Everything on this page comes from the host's own declarations. A definition installed from a release appears in the sidebar; an action appears on the record it targets.</Note>
         <div className="row wrap">

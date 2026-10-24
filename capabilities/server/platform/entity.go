@@ -630,6 +630,32 @@ func (info EntityInfo) HasReadSources() bool {
 	return len(info.Derived) > 0 || slices.ContainsFunc(info.Fields, func(field FieldInfo) bool { return field.AliasOf != "" })
 }
 
+// payloadColumns renders a child table's columns the way a flat payload lists
+// them: the same name, type and choices the form edits each cell with.
+func payloadColumns(columns []FieldInfo) []Field {
+	if len(columns) == 0 {
+		return nil
+	}
+	out := make([]Field, 0, len(columns))
+	for _, column := range columns {
+		if column.ReadOnly {
+			continue
+		}
+		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
+			"references": "string[]", "tags": "string[]", "money": "money", "json": "json", "lines": "lines"}[column.Type]
+		if typ == "" {
+			typ = "string"
+		}
+		field := Field{Name: column.Name, Type: typ, Required: column.Required && column.When == nil, Description: column.Title,
+			Choices: column.Choices, Constraints: column.Constraints, Range: column.Range, Fields: payloadColumns(column.Fields)}
+		if column.Ref == "enterprise.element" {
+			field.Ref, field.Stereotype, field.Stereotypes = column.Ref, column.Stereotype, slices.Clone(column.Stereotypes)
+		}
+		out = append(out, field)
+	}
+	return out
+}
+
 // EntityActions are the catalog entries an entity type's declaration
 // generates: its standard create, edit and archive, and its transitions.
 func EntityActions(e Entity) []Action {
@@ -643,7 +669,7 @@ func EntityActions(e Entity) []Action {
 			continue
 		}
 		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
-			"references": "string[]", "tags": "string[]", "money": "money", "json": "json"}[f.Type]
+			"references": "string[]", "tags": "string[]", "money": "money", "json": "json", "lines": "lines"}[f.Type]
 		if typ == "" {
 			typ = "string"
 		}
@@ -657,7 +683,8 @@ func EntityActions(e Entity) []Action {
 		if f.Example != "" {
 			description += ", e.g. " + f.Example
 		}
-		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, Range: f.Range, Group: f.Group}
+		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, Range: f.Range, Group: f.Group,
+			Fields: payloadColumns(f.Fields)}
 		if f.Ref == "enterprise.element" {
 			field.Ref, field.Stereotype, field.Stereotypes = f.Ref, f.Stereotype, slices.Clone(f.Stereotypes)
 		}

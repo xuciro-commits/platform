@@ -433,6 +433,13 @@ export type ApplicationMonitoring = {
   agentBudgets: ApplicationAgentBudget[];
 };
 
+export type ApplicationPage = {
+  name: string;
+  title: string;
+  description?: string;
+  object?: string;
+};
+
 export type ApplicationPageReplacement = {
   view: string;
   page: string;
@@ -497,6 +504,16 @@ export type ApplicationVersion = {
   release?: string;
   at?: string;
   active: boolean;
+};
+
+export type ApplicationView = {
+  app: string;
+  name: string;
+  title: string;
+  description?: string;
+  icon?: string;
+  source: string;
+  pages: ApplicationPage[];
 };
 
 export type ApplicationWarning = {
@@ -1214,6 +1231,7 @@ export type Field = {
   description: string;
   choices?: string[];
   ref?: string;
+  fields?: Field[];
   stereotype?: string;
   stereotypes?: string[];
   default?: unknown;
@@ -2532,6 +2550,12 @@ export type PageRegionPresentation = {
   defaultCollapsed?: boolean;
 };
 
+export type PageRequest = {
+  app: string;
+  owner?: string;
+  page: string;
+};
+
 export type PageResourceList = {
   labelField: string;
   statusField: string;
@@ -2654,6 +2678,13 @@ export type PageVariable = {
 
 export type PageVertexGraph = {
   groups: PageNeighborhoodGroup[];
+};
+
+export type PageView = {
+  application: ApplicationView;
+  page: Page;
+  entity?: EntityInfo;
+  actions: Action[];
 };
 
 export type Passage = {

@@ -25,7 +25,8 @@ const json = (path: string) => fetch(path, { headers: { Accept: "application/jso
 /** The id a page gives a new record: its own prefix, then six characters. The
  * host names the record in the submission, so the page must choose it before
  * the decision and keep it across retries. */
-export const newId = (prefix: string): string => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+export const newId = (prefix: string): string =>
+  `${prefix}-${crypto.randomUUID().replace(/-/g, "").slice(0, 20).toUpperCase()}`;
 
 /** The development identities a host without an identity provider offers. */
 export async function signInOptions(): Promise<Api.SignIn> {
@@ -40,8 +41,19 @@ export async function identify(token: string, tenant: string): Promise<Me> {
   return await response.json() as Me;
 }
 
-export function connect(me: Me, token: string): EdgeClient {
-  return new EdgeClient({ server: "", token, tenant: me.tenantId, principal: me.principalId });
+/** Opens the tenant's authority: the host declares which authority owns each
+ * data class (K5 A9), and until those declarations are read a decision has no
+ * authority to name. Every client is opened through here. */
+export async function connect(me: Me, token: string): Promise<EdgeClient> {
+  const client = new EdgeClient({ server: "", token, tenant: me.tenantId, principal: me.principalId });
+  await client.refreshDeclarations();
+  return client;
+}
+
+/** The host's refusal as one line: it answers `{error:{code,message}}`. */
+export function errorOf(body: unknown): string | undefined {
+  const error = (body as { error?: { code?: string; message?: string } } | undefined)?.error;
+  return error ? [error.code, error.message].filter(Boolean).join(": ") : undefined;
 }
 
 export async function catalog(client: EdgeClient): Promise<{ entities: EntityInfo[]; actions: CatalogAction[] }> {

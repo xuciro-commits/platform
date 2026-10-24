@@ -103,3 +103,27 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .search { margin: 0 0 12px; max-width: 420px; }
 .search input { width: 100%; }
 .pager { justify-content: space-between; margin-top: 10px; }
+
+/* The application runtime: a list beside its record, or one column when the
+   page carries only one of them. */
+.split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .split { grid-template-columns: 1fr; } }
+
+/* The navigation groups an application's pages under its name. */
+.group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
+.group-title { padding: 4px 8px 2px; font-size: 13px; font-weight: 600; }
+.group a { padding-left: 16px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.card p { margin: 0; }
+
+/* A child table: a form's cell keeps its input, not its label, and the table
+   scrolls sideways rather than squeezing its columns. */
+.lines-scroll { overflow-x: auto; }
+.lines-grid { min-width: 100%; }
+.lines-grid th { white-space: nowrap; }
+.lines-grid td { padding: 4px; vertical-align: middle; }
+.lines-grid .field > span, .lines-grid .field > small { display: none; }
+.lines-grid .field { gap: 0; }
+.lines-grid input, .lines-grid select { width: 100%; min-width: 90px; padding: 4px 6px; }

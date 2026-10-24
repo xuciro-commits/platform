@@ -218,6 +218,7 @@ func (h *Host) Handler() http.Handler {
 	h.routes = nil
 	h.routesCore(rt)
 	h.routesDiscovery(rt)
+	h.routesApplications(rt)
 	h.routesRecords(rt)
 	h.routesBuild(rt)
 	h.routesAI(rt)

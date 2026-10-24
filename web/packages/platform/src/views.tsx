@@ -136,19 +136,16 @@ export function RecordView({ type, id }: { type: string; id: string }) {
   );
 }
 
-export function Decision({ host, action, targetId, expectedRevision, onDone }: { host: ReturnType<typeof useHost>; action?: api.CatalogAction; targetId: string; expectedRevision?: number; onDone: (key?: string) => void }) {
+export function Decision({ host, action, targetId, expectedRevision, initial, onDone }: { host: ReturnType<typeof useHost>; action?: api.CatalogAction; targetId: string; expectedRevision?: number; initial?: Record<string, unknown>; onDone: (key?: string) => void }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [done, setDone] = useState<string | undefined>(undefined);
   if (!action) return null;
-  const fields: InputField[] = action.payload.map((field) => ({
-    name: field.name, title: field.label || field.name, type: field.type, required: field.required,
-    choices: field.choices, ref: field.ref, help: field.description,
-  }));
+  const fields = inputFields(action.payload);
   return (
     <div className="decision">
       {action.description ? <Note>{action.description}</Note> : null}
-      <Form fields={fields} sending={sending} error={error} onSend={(values) => {
+      <Form fields={fields} initial={initial} sending={sending} error={error} onSend={(values) => {
         setSending(true);
         setError(undefined);
         api.decide(host.client, action, targetId, values, expectedRevision).then((outcome) => {
@@ -159,6 +156,25 @@ export function Decision({ host, action, targetId, expectedRevision, onDone }: {
       {done ? <Note>Accepted. {action.title} was recorded.</Note> : null}
     </div>
   );
+}
+
+/** The catalog's payload as form fields: nested child-table columns carry on. */
+export function inputFields(payload: api.CatalogAction["payload"]): InputField[] {
+  return payload.map((field) => ({
+    name: field.name, title: field.label || field.name, type: field.type, required: field.required,
+    choices: field.choices, ref: field.ref, help: field.description, fields: field.fields ? inputFields(field.fields) : undefined,
+  }));
+}
+
+/** The values an edit form starts from: what the record already holds, for the
+ * fields this action takes. A field the action does not take is never sent. */
+export function seedOf(payload: api.CatalogAction["payload"], row: Row): Record<string, unknown> {
+  const seed: Record<string, unknown> = {};
+  for (const field of payload) {
+    const value = row[field.name];
+    if (value !== undefined && value !== null && value !== "") seed[field.name] = value;
+  }
+  return seed;
 }
 
 export function CreateView({ type }: { type: string }) {
@@ -174,7 +190,7 @@ export function CreateView({ type }: { type: string }) {
   return (
     <Panel title={`New ${entity.title}`} actions={<a href={`#/r/${encodeURIComponent(type)}`}>cancel</a>}>
       {done ? <Note>Created. <a href={`#/r/${encodeURIComponent(type)}/${encodeURIComponent(done)}`}>Open the record</a>.</Note> : (
-        <Decision host={host} action={create} targetId={id} onDone={(key) => { setDone(key); host.reload(); }} />
+        <Decision host={host} action={create} targetId={id} onDone={() => { setDone(id); host.reload(); }} />
       )}
     </Panel>
   );
