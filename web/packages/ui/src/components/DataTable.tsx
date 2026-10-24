@@ -8,6 +8,7 @@ import { useCallback,useEffect, useId, useRef, useState, type ReactNode } from "
 import { cn } from "../lib/cn";
 import type { FieldType } from "../fields/types";
 import { Input } from "../primitives/input";
+import { EmptyState } from "./EmptyState";
 import { t } from "../i18n";
 
 declare module "@tanstack/react-table" {
@@ -73,7 +74,10 @@ export function DataTable<T>({
   const scroller = useRef<HTMLDivElement>(null);
   const browse = typeof onRowClick === "function";
   const grid = !browse && typeof onCellEdit === "function";
-  const rh = Number.isFinite(rowHeight) && rowHeight > 0 ? rowHeight : 28;
+  // Default row height follows the density token; an explicit prop wins.
+  const rh = Number.isFinite(rowHeight) && rowHeight > 0
+    ? rowHeight
+    : Number.parseFloat(typeof document === "undefined" ? "" : getComputedStyle(document.documentElement).getPropertyValue("--table-row-h")) || 28;
 
   // Like a spreadsheet: opening an editor selects the value, so typing replaces it.
   const selectOnOpen = useCallback((el: HTMLDivElement | null) => {
@@ -211,9 +215,12 @@ export function DataTable<T>({
           );})}
         </div>
         {loading && rows.length === 0 ? (
-          <div role="status" className="p-6 text-center text-sm text-muted">{loadingText ?? t("Loading…")}</div>
+          <div role="status" className="grid gap-2.5 p-6">
+            <span className="sr-only">{loadingText ?? t("Loading…")}</span>
+            {[0, 1, 2, 3, 4].map((i) => <div key={i} className="platform-skeleton h-5" style={{ width: `${88 - i * 15}%`, animationDelay: `${i * 90}ms` }} />)}
+          </div>
         ) : rows.length === 0 ? (
-          <div className="p-6 text-center text-sm text-muted">{empty}</div>
+          <EmptyState title={empty} className="p-6" />
         ) : (
           <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize(), minWidth }}>
             {virtualizer.getVirtualItems().map((item) => {

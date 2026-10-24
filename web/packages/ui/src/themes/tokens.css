@@ -135,6 +135,8 @@
   --cell-px: 10px;
   --field-gap: 8px;
   --touch-target: 32px;
+  /* Virtualized tables need a number; both scopes restate it. */
+  --table-row-h: 28px;
 
   /* Chrome. */
   --scrollbar-thumb: var(--gray-300);
@@ -218,6 +220,7 @@
   --cell-px: 14px;
   --field-gap: 12px;
   --touch-target: 44px;
+  --table-row-h: 36px;
   --type-base: 14px;
 }
 

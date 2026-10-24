@@ -18,7 +18,7 @@ export function StructuredEditorExample(){
  return <InputDraftProvider scope="catalog-source"><StructuredEditor scope="catalog-source" value={value} onChange={setValue} fields={[{name:"name",title:t("Name"),type:"text",required:true,example:"example"},{name:"enabled",title:t("Enabled"),type:"boolean"},{name:"quantity",title:t("Quantity"),type:"integer",constraints:{min:0}}]}><Input aria-label={t("Name")} value={String(value.name??"")} onChange={event=>setValue({...value,name:event.target.value})}/></StructuredEditor></InputDraftProvider>;
 }
 import {
-  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, EmptyState, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordDeliveries, RecordLookup, InterfaceRecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -330,6 +330,13 @@ export function WorkspaceShell() {
     applications={{ apps, categories, current, onSelect: setCurrent }}
     session={{ tenant: "demo", principal: "ada", options: [{ id: "ada", label: "ada · demo" }], current: "ada", onSwitch: () => {} }}
     nav={[{ label: current === "records" ? t("Records") : t("Steps"), items: current === "records" ? [{ label: t("Records"), route: { view: "catalog-records" } }] : [{ label: t("Steps"), route: { view: "catalog-graph" } }] }]} />;
+}
+
+export function EmptyStateExample() {
+  return <div className="grid gap-4">
+    <EmptyState title={t("No records yet")} hint={t("Records appear here after they are created or imported.")} />
+    <EmptyState title={t("No records yet")} action={<Button variant="primary" onClick={() => {}}>{t("Create the first record")}</Button>} />
+  </div>;
 }
 
 export function ContentTabsExample() {

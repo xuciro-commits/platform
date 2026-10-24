@@ -64,6 +64,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/dialog": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Dialogs })),
   "ui/disclosure": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Disclosures })),
   "ui/editor-workbench": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.EditorPanels })),
+  "ui/empty-state": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.EmptyStateExample })),
   "ui/entity-card": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordSummaries })),
   "ui/entity-form": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SchemaForms })),
   "ui/external-frame": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ExternalFrameExample })),

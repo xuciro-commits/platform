@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:6ced5a6f5100d41f",
+  "revision": "sha256:d36a080244761ce2",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4209,6 +4209,7 @@
         }
       ],
       "composed": [
+        "ui/empty-state",
         "ui/input"
       ],
       "relatedTypes": [
@@ -4706,6 +4707,89 @@
         },
         {
           "name": "right",
+          "type": "ReactNode",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "id": "ui/empty-state",
+      "owner": "@platform/ui",
+      "name": "Empty state",
+      "summary": "What an empty collection says: a calm line, an optional hint and the next action.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/EmptyState.tsx",
+      "exports": [
+        "EmptyState"
+      ],
+      "example": "EmptyStateExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "empty",
+        "placeholder",
+        "states"
+      ],
+      "snippet": "import { EmptyState, Button } from \"@platform/ui\";\n<EmptyState title=\"No records yet\" action={<Button variant=\"primary\">Create the first record</Button>} />",
+      "props": [
+        {
+          "name": "title",
+          "type": "ReactNode",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "hint",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "action",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "icon",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "className",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        }
+      ],
+      "slots": [
+        {
+          "name": "title",
+          "type": "ReactNode",
+          "optional": false
+        },
+        {
+          "name": "hint",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
+          "name": "action",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
+          "name": "icon",
           "type": "ReactNode",
           "optional": true
         }
@@ -12272,6 +12356,7 @@
       "Editing": "编辑中",
       "Editor workbench": "编辑工作台",
       "Empty": "空状态",
+      "Empty state": "空状态",
       "Enabled": "启用",
       "Entity form": "实体表单",
       "Error": "错误",
@@ -12591,6 +12676,7 @@
       "Visibility and allowed actions come from the scoped source and caller.": "可见范围与允许的动作来自限定范围的数据源和调用方。",
       "Visual and source editor": "可视化与源码编辑器",
       "WebGL2 is required. The caller supplies a confirmed asset and attachment; sample mappings require the actual asset reference. No simulation, default asset or external model resource is used.": "需要WebGL2。调用方提供确认资产和附件；样本映射需要实际资产引用。不使用模拟数据、默认资产或外部模型资源。",
+      "What an empty collection says: a calm line, an optional hint and the next action.": "空集合该说的话：一句平静的说明、可选提示与下一步动作。",
       "Workbench": "工作台",
       "Workshop module workbench": "Workshop 模块工作台",
       "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
@@ -14097,6 +14183,9 @@
     ],
     "ui/indexed-choices": [
       "web/packages/ui/src/components/ChoiceInput.tsx"
+    ],
+    "ui/empty-state": [
+      "web/packages/ui/src/components/DataTable.tsx"
     ],
     "pattern/workspace": [
       "web/apps/catalog/src/main.tsx",

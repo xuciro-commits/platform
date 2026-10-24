@@ -156,6 +156,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Loading placeholder: a quiet shimmer block, no layout promise. */
+.platform-skeleton {
+  border-radius: var(--r-sm);
+  background: linear-gradient(100deg, var(--row-hover) 30%, color-mix(in oklch, var(--row-hover), var(--foreground) 6%) 50%, var(--row-hover) 70%);
+  background-size: 220% 100%;
+  animation: platform-skeleton-wave 1.4s var(--ease-standard) infinite;
+}
+@keyframes platform-skeleton-wave {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
 /* Floating windows stay below every dialog, sheet, menu and palette (z-40/50),
    so a dialog opened from a float shows above it. Set on the floating elements
    themselves: dockview declares the variable there in terms of itself, which

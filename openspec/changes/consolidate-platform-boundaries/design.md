@@ -10,6 +10,37 @@
 
 **Non-Goals:** 不合并 wasm-worker / code-builder 隔离对与 driver 子进程（安全与崩溃边界，有意保留）；不改提交管线、接受结果、存储与授权语义；不升级任何依赖版本（升级是完成后的独立一轮）；不动内核契约与向量；不引入新的进程管理器或服务发现机制。
 
+## B1 审计结论（2026-10-24，任务 1.1–1.3 的产出）
+
+**B1.1 cmd 分类**：见 `capabilities/server/cmd/README.md`。运行服务 3 个程序（platform-server、gateway、compute 隔离对）；运维工具 storage-files / rule-browser / webhook-sink；生成检查工具 api-types / check-boundaries / uaf-gen；驱动入口 driver-* 由 gateway 托管，不计部署服务。
+
+**B1.2 webhook-sink 接线点全量清单**（B2 改动面）：
+1. `deploy/local/compose.yaml:161-164` — 服务定义（build + SINK_PORT 8497）
+2. `Makefile:21` — `INFRA := postgres rauthy rustfs webhook-sink`
+3. `deploy/dev/environment.py:166` — dev compose up 清单
+4. `deploy/local/rehearse.sh:10` — `SINK_PORT=58497` 演练隔离
+5. `deploy/local/README.md` — 服务表（8497）、重建命令、webhook/smtp/a2a/模型替身四类使用说明（`http://webhook-sink:8080/*` 内部地址、`http://localhost:8497/*` 查看/故障注入）
+   收编后 B2 需给出等价的网络内地址语义（演练与 `business-confirmation`、`integration-fabric` 两条 e2e 路线依赖它），并同步更新上述五处。
+
+**B1.3 Go 宿主域映射草案**（B3 拆分顺序的输入；`routes_*` 已一区一文件，主要工作在 `accepted_*` 按结果族归档）：
+- 提交核心：`accepted_result/refusal/input/state/store`（信封、拒绝、输入、状态、存储）
+- 记录与事务：`accepted_rows/batch/unique/callback_rows/plan/intents`
+- 工作与智能体：`accepted_work/agent/usage`
+- 效果与集成：`accepted_effect/notices/observation/connectors`
+- 审批：`accepted_approval/requests`
+- 发布：`accepted_release`
+- 治理控制：`accepted_control/host_control`
+- 共同格式在 `internal/acceptance/result`；`routes_{records,build,core,discovery,integration,observations,ai}` 保持区域命名迁入目录；`host.go`（1016 行）收缩为装配壳，锁义务地图随域迁移。
+- 边界基线：`boundaries.sh` 无计数豁免（AST 级检查），`escapes.sh` 已知逃逸清单当前为空——B3 期间该基线只减不增即保持为零。
+
+**B1.3 Web 依赖图**（实测 import 计数，B4 的输入）：
+```text
+kernel(基础) ← ui(46) ← app(88/88) ← build(171/137/102)
+catalog(独立查询库，零依赖)      ↖ platform/治理(23/17/15)
+workspace 壳 → ui/app/kernel
+```
+分层严格无环、无越界：`kernel → catalog → ui → app → {build, platform, workspace}`。含义：`@platform/app` 实为运行时组件层（build 与治理都重度依赖它），不是「运营区专属包」。B4 的正确切法是：基础层（kernel/catalog/ui/app）名称与公共面稳定；区层只重命名归位 `@platform/platform → @platform/govern`（系统区），构建区即 `@platform/build`；运营区界面由 app 的运行时部分 + workspace 壳承担，**不**为运营区新建包（那会把 build 变成跨区依赖方）。此结论替代原 design 第 5 条中「运营界面归属整理」的模糊表述。
+
 ## Decisions
 
 1. **cmd 分类清单。** `cmd/` 增加 README 表（或等价的 doc.go 段落）：运行服务 platform-server / gateway / compute；运维工具 storage-files（停机校验）、rule-browser（规则浏览）；代码生成与检查 api-types / check-boundaries / uaf-gen；webhook-sink 收编后降级为平台能力代码 + 其 `main.go` 保留为独立调试入口或删除（按 B1 审计决定，倾向删除独立部署）。分类同步 Architecture 代码地图。

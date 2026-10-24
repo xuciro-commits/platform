@@ -3,8 +3,8 @@
 ## 1. 里程碑一：UI Kit 换血
 
 - [x] 1.1 把 `styles.css` 拆为 primitives / semantic / component 三层令牌，落地 `data-density`（compact/comfortable）与 `data-theme`（light/dark）正交维度；补齐两主题全量语义取值。（完成于 `web/packages/ui/src/themes/tokens.css`；拍板：退役 766 行拟物 industrial 皮肤及 MetalButton/RetroButton/LiquidButton，令牌系统是唯一视觉体系）
-- [x] 1.2 核心组件按质感标准达标：Button、Input 系列、DataTable、Dialog、Notice/Toast、Tooltip、Tabs、卡片与状态标签；空态、加载态、禁用态、焦点态、错误态齐全，动效走统一时长令牌。（本批：Button/Input 接密度令牌、全局焦点环与滚动条、统一动效/阴影令牌；DataTable/Dialog/Notice/卡片的密度接线与五态补齐未完成）
-- [ ] 1.3 统一图标体系盘点与替换，移除混用的第二套图标来源；建立 Catalog 示例覆盖两主题×两密度。（本批已删拟物组件的 Catalog 资产并重生成；图标盘点与密度示例矩阵未开始）
+- [x] 1.2 核心组件按质感标准达标：Button、Input 系列、DataTable、Dialog、Notice/Toast、Tooltip、Tabs、卡片与状态标签；空态、加载态、禁用态、焦点态、错误态齐全，动效走统一时长令牌。（本批：Button/Input 接密度令牌、DataTable 行高密度令牌 + skeleton 加载态 + EmptyState 空态、全局焦点环与滚动条、统一动效/阴影/骨架令牌；Dialog/Notice/卡片的密度精修未完成——现状已可用，优先级降）
+- [ ] 1.3 统一图标体系盘点与替换，移除混用的第二套图标来源；建立 Catalog 示例覆盖两主题×两密度。（本批已删拟物组件的 Catalog 资产并重生成；图标盘点结论：lucide-react 为唯一图标库，IconGlyph 是存储名称渲染器而非第二套系统，无需替换；密度示例矩阵未开始）
 - [ ] 1.4 产出四组合截图矩阵（浅/深 × compact/comfortable）交负责人走查；未通过项留在本里程碑整改。（沙箱无浏览器，本批仅有 tsc/单测/Catalog 证据，未在浏览器观察）
 
 ## 2. 里程碑二：三区 IA 与双模式壳
