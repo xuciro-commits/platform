@@ -40,7 +40,7 @@ test("every translated text of every package reads in Chinese", () => {
     .filter((src) => src === "packages/ui/src" || existsSync(join(web, src, "i18n.ts")));
   expect(sources).toEqual(expect.arrayContaining([
     "packages/ui/src", "packages/app/src", "packages/build/src",
-    "packages/platform/src", "apps/workspace/src", "apps/catalog/src",
+    "packages/govern/src", "apps/workspace/src", "apps/catalog/src",
   ]));
   for (const src of sources) {
     const pkg = packages.find(pkg => join(pkg.dir, "src") === join(web, src))!;

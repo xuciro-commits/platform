@@ -1,5 +1,5 @@
 {
-  "name": "@platform/platform",
+  "name": "@platform/govern",
   "private": true,
   "type": "module",
   "exports": {
@@ -7,7 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "pnpm --filter @platform/ui exec vitest run --root ../platform --config ../ui/vitest.config.ts",
+    "test": "pnpm --filter @platform/ui exec vitest run --root ../govern --config ../ui/vitest.config.ts",
     "build": "true"
   },
   "dependencies": {

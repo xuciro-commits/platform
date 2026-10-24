@@ -75,3 +75,8 @@ workspace 壳 → ui/app/kernel
 - `host.go` 1016→约 350 行装配壳（Tenant 身份、能力组装 `NewTenant[WithCapabilities]`、app/caller 接线、审计类型）；提交管线（Submit→submitAccepted→decideAccepted→explained/outcomeOf）→`submit.go`；成员读取与连接器输入→`reads.go`；接受事件计划/发布/投递→`events.go`；成员门面（Catalog/Declarations/Apps/AppsOf/Member）→`facade.go`。
 - 验证：纯同包文本搬移——顶级声明清单 40/40 前后一致、gofmt 全清、逐文件 import 双向核查（用即导入、导入即用）；`boundaries.sh` 全过；`escapes.sh` 已知逃逸 2 项无新增；`platformserver/platform` 导入面不变。
 - 目录化包（internal/<域>）与逐域 `make check`/`test-go` 需可达 Go 代理的环境编译验证后进行（沙箱缺 otel 家族模块）。
+
+## 批次5 实施记录（B4 Web 包重划）
+
+- 按 B1.3 实测结论执行：区层唯一结构动作 = `packages/platform` → `packages/govern`（`@platform/govern`，系统区归位）；基础层 `kernel/catalog/ui/app` 名称与公共面稳定；不为运营区新建包（运营界面由 `@platform/app` 运行时 + workspace 壳承担，build 不成为跨区依赖方）。design 决策 5 中「运营界面归属整理」的模糊表述由 B1.3 结论替代，未额外搬移。
+- 一次性迁移：引用面仅 4 文件 + Architecture 代码地图；lockfile 更新；catalog consumers 重生成（旧路径清零）；check-web 全绿；无新旧双轨。

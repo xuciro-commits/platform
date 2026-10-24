@@ -12,7 +12,7 @@ export const packages: Package[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
   { serves: ["build"], roles: ["builder", "integrator", "publisher"], load: () => import("@platform/build") },
   // Every member has an account in the Control Panel; each contribution still decides who sees it (`for`).
-  { serves: ["platform", "enterprise", "core", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@platform/platform") },
+  { serves: ["platform", "enterprise", "core", "ai", "flow", "agent", "knowledge"], public: true, load: () => import("@platform/govern") },
 ];
 
 /** Package availability, rather than every role value, determines loading. */

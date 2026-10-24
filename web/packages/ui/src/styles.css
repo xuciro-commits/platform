@@ -156,6 +156,24 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Focus is always visible and always the accent ring; the browser default
+   never leaks through. Pointer hovers never become the only affordance on
+   touch surfaces, and reduced motion silences every platform transition. */
+:focus-visible { outline: var(--focus-ring-width, 2px) solid var(--ring); outline-offset: 1px; }
+:focus:not(:focus-visible) { outline: none; }
+::selection { background: color-mix(in oklch, var(--primary) 22%, transparent); }
+
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--foreground) 22%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: color-mix(in oklch, var(--foreground) 20%, transparent); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklch, var(--foreground) 34%, transparent); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
 /* Loading placeholder: a quiet shimmer block, no layout promise. */
 .platform-skeleton {
   border-radius: var(--r-sm);

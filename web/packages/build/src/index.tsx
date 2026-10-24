@@ -43,7 +43,7 @@ const builder = (host: Host) => host.role("build") === "builder";
 const integrator = (host: Host) => host.role("build") === "integrator";
 const editorViews: View[] = [
   { id: "projects", title: () => t("Applications"), render: () => <StudioHome /> },
-  { id: "project", documentKey: p => p.id ?? "", title: () => t("Application Studio"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} /> },
+  { id: "project", documentKey: p => p.id ?? "", title: () => t("Application Studio"), render: p => <ProjectHome key={p.id} id={p.id ?? ""} area={p.area} initialSelected={p.asset} initialSection={p.section} initialPlan={p.plan} initialTemplate={p.template} /> },
   { id: "object-type", documentKey: p => p.id ?? p.object ?? "catalog", title: p => p.id ? t("Object type") : t("Model"), render: p => p.id ? <ObjectTypeEditor key={p.id} id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} initialTab={p.tab} /> : <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /> },
   { id: "action-type", title: () => t("Action type"), render: p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} /> : <ActionTypes /> },
   { id: "link-type", title: () => t("Relationships"), render: p => p.id ? <LinkTypeEditor key={p.id} id={p.id} parent={p.parent} child={p.child} via={p.via} /> : <LinkTypes /> },

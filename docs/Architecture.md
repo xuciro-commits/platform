@@ -20,26 +20,28 @@
 ```text
 contract/            proto/ spec/ vectors/ go/ lean/       内核契约与参考实现
 capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
-  doc.go             组件地图、锁义务、管道入口（改宿主前先读）
-  host.go            Tenant：身份 + 提交管线 + 各组件持有者
+  doc.go             组件地图、包方向规则、锁义务、管道入口（改宿主前先读）
+  host.go            Tenant 装配壳：身份、能力组装、app/caller 接线、审计类型
+  submit.go          提交管线：Submit → submitAccepted → decideAccepted
+  reads.go events.go facade.go   读取与连接器输入 / 事件计划与投递 / 成员门面
   accepted_*.go      一种接受结果一个文件
-  routes_*.go        一个 API 区域一个文件
+  routes_*.go        一个 API 区域一个文件（壳的 API 面，域不反向调用）
   platform/          应用唯一可导入的 API
   apps/<id>/         平台应用
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
   internal/          acceptance agents aistate construction enterprise host records rules
-  cmd/               platform-server、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink、gateway、compute、code-builder、wasm-worker、storage-files、driver-{modbus,s7,simulator}
+  cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink（独立调试薄壳）、gateway、compute、code-builder、wasm-worker、storage-files、driver-{modbus,s7,simulator}
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 web/
-  apps/workspace     @platform/workspace   唯一工作区：session host shell chrome
+  apps/workspace     @platform/workspace   唯一工作区：构建/运营/系统三区共用壳（session host shell chrome，角色显隐）
   apps/catalog       @platform/catalog-app 资产库与代码沙箱
   packages/ui        @platform/ui          共享 UI Kit
   packages/app       @platform/app         前端应用 API
   packages/kernel    @platform/kernel      契约类型（src/gen/host.ts 生成）
   packages/catalog   @platform/catalog     资产目录查询与 owner 校验（scripts/catalog.mjs 与三包 ./catalog 导出的归属方）
-  packages/build     @platform/build       统一构建台（Model/Logic/Interface/Integration/Release）
-  packages/platform  @platform/platform    治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
+  packages/build     @platform/build       统一构建台（Model/Behavior/Interface/Connections/Release；三区中的构建区）
+  packages/govern    @platform/govern      系统区：治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
   e2e                @platform/e2e         Playwright 路线，spec 只经 tests/kit.ts
 scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples

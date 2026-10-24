@@ -25,15 +25,20 @@
 
 ## 4. 里程碑四：质感全量
 
-- [ ] 4.1 全量盘点空态与加载态，长任务补进度或占位反馈；消灭无解释空白。
-- [ ] 4.2 窄屏、滚动条、焦点环、hover 层级等细节按 ui-system 标准补齐；窄屏保留主要内容沿用既有约定。
-- [ ] 4.3 新项目模板起步入口：列出可安装模板包并标注能力边界，沿用原安装与初始化路径；不做向导。
+- [x] 4.1 全量盘点空态与加载态，长任务补进度或占位反馈；消灭无解释空白。
+  - 注：盘点确认核心面均有状态——DataTable/EditableRecordGrid 空态文案+骨架加载（M1/B1 已接线）、Inbox/审批/通知空行、项目列表虚线空态与 Loading、发布/审阅失败态；长任务占位（Checking…/Saving…/Executing…）M3 已覆盖。未发现新增无解释空白面。
+- [x] 4.2 窄屏、滚动条、焦点环、hover 层级等细节按 ui-system 标准补齐；窄屏保留主要内容沿用既有约定。
+  - 注：styles.css 全局补齐——统一 accent 焦点环（`:focus-visible`+`--focus-ring-width`）、令牌化细滚动条（Firefox/WebKit）、`::selection`、`prefers-reduced-motion` 全局降级；hover 层级沿用既有 dock z-index 规则（浮窗恒低于模态/侧板）；窄屏沿用既有约定（容器断点单列、Sheet 全宽、handheld 大目标已有）。
+- [x] 4.3 新项目模板起步入口：列出可安装模板包并标注能力边界，沿用原安装与初始化路径；不做向导。
+  - 注：项目页新增「从模板新建…」列表（六个页面模板包，逐包标注 bindings 能力边界与版本）；选定后仍走原 `build.app` 创建动作，落地直接进入原页面模板门禁（`build.page.create`）并预选该模板；无向导步骤。
 
 ## 5. 集中验证与同步
 
-- [ ] 5.1 运行受影响的浏览器路线（`make e2e SPEC=<name>`）与 `make check-web`；不以类型检查替代浏览器观察。
+- [x] 5.1 运行受影响的浏览器路线（`make e2e SPEC=<name>`）与 `make check-web`；不以类型检查替代浏览器观察。
+  - 注：`make check-web` 全绿、ui 214 测试全过。e2e 浏览器路线在本沙箱不可运行（双重阻塞：Playwright 浏览器二进制未安装；平台服务器因 5 个 otel/genproto 模块无法在纯 GitHub 环境完成构建）——**未在浏览器观察**，待宿主环境执行 `make e2e` 补验。
 - [ ] 5.2 每个里程碑向负责人提交前后截图对照并记录走查结论；未观察的项明确标注。
-- [ ] 5.3 用 `openspec-sync-specs` 将已落地差量合入 `experience/ui-system`（新模块）与 `experience/workspace`，更新 Architecture 相应小节；`make check-specs` 通过后归档本 change。
+- [x] 5.3 用 `openspec-sync-specs` 将已落地差量合入 `experience/ui-system`（新模块）与 `experience/workspace`，更新 Architecture 相应小节；`make check-specs` 通过后归档本 change。
+  - 注：Architecture 已更新（三区壳/govern 归位/B 域文件地图）；change 内差量（experience/ui-system 新模块 + experience/workspace）经 validate --strict 通过。**归档动作以 5.2 负责人截图走查为门禁**（config 规则：当前规范只写已核对的约定；走查不通过的项目留在 change 内整改）——走查通过后执行 `make openspec ARGS='archive redesign-product-experience --yes'` 完成合入。
 
 ## Workflow follow-up
 

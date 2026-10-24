@@ -22,8 +22,10 @@
 
 ## 4. B4 Web 包重划（等体验线 M2 三区定版后启动）
 
-- [ ] 4.1 按 design 映射迁移区层包（`@platform/govern` 归位、运营界面归属整理），基础包 `@platform/ui` / `@platform/kernel` / `@platform/app` 名称与公共面稳定。
-- [ ] 4.2 一次性完成 import 路径更新与 `node scripts/catalog.mjs generate` 重生成；`make check-web` 与受影响包测试通过；不保留新旧双轨。
+- [x] 4.1 按 design 映射迁移区层包（`@platform/govern` 归位、运营界面归属整理），基础包 `@platform/ui` / `@platform/kernel` / `@platform/app` 名称与公共面稳定。
+  - 注：按 B1.3 实测结论执行——仅 `packages/platform` 目录与包名改为 `packages/govern`（`@platform/govern`，系统区）；基础层名称与公共面未动；不为运营区新建包（app 运行时 + workspace 壳承担）。
+- [x] 4.2 一次性完成 import 路径更新与 `node scripts/catalog.mjs generate` 重生成；`make check-web` 与受影响包测试通过；不保留新旧双轨。
+  - 注：引用面仅 4 文件（workspace 包依赖 + HostOnly + host/packages + 包自身）+ Architecture 代码地图；lockfile 随 `pnpm install` 更新；catalog consumers 路径重生成（govern 150 处、旧路径 0 处）；check-web 全绿，无新旧双轨。
 
 ## 5. B5 依赖还原与冻结维护
 

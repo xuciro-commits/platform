@@ -6,8 +6,8 @@
 
 负责人判定现状「视觉是原型、交互反智、边界不清」，批准两条 change 并行推进，验收由负责人截图走查：
 
-- `openspec/changes/redesign-product-experience`（体验线）：里程碑顺序 UI Kit 换血 → 三区 IA 与双模式壳 → 交互范式 → 质感全量 → 集中验证。M1 已开工：令牌系统落地、拟物皮肤退役。
-- `openspec/changes/consolidate-platform-boundaries`（边界线）：B1 边界审计 → B2 进程收敛 → B3 Go 宿主分域拆分 → B4 Web 包重划（等体验线三区定版）→ B5 依赖还原与冻结，完成后独立升级轮。期间依赖版本冻结；`scripts/restore-deps.sh` 补齐。
+- `openspec/changes/redesign-product-experience`（体验线）：里程碑顺序 UI Kit 换血 → 三区 IA 与双模式壳 → 交互范式 → 质感全量 → 集中验证。M1–M4 代码全部落地（令牌/三区壳/交互范式/质感与模板起步）；M5 集中验证完成沙箱可做部分，归档待负责人截图走查（5.2 门禁）。
+- `openspec/changes/consolidate-platform-boundaries`（边界线）：B1 边界审计 → B2 进程收敛 → B3 Go 宿主分域拆分 → B4 Web 包重划 → B5 依赖还原与冻结，完成后独立升级轮。B1/B2/B4/B5.1 完成；B3 完成 doc.go 方向规则与同包分域（目录化搬迁需可达 Go 代理环境编译验证）；期间依赖版本冻结。
 - 双线里程碑完成一批同步一批规范（sync-specs）；供暖交付（下节）中被重构直接修复的阻碍并入对应里程碑，不双线重复排。
 
 ## 2. 楼宇供暖与既有平台整理

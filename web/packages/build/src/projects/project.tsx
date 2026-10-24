@@ -8,7 +8,7 @@ import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Dialog, IconPicker, Input, Notice, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
@@ -24,6 +24,7 @@ import { useProjectResources, type OwnedResource } from "./resource-inventory";
 export type { OwnedResource } from "./resource-inventory";
 import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioResourceGroups, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
+import { pageTemplates } from "../workshop/templates";
 import { StudioGuide } from "./studio-guide";
 import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
 import { InstalledApplicationHome } from "./InstalledApplicationHome";
@@ -39,7 +40,14 @@ export function ProjectsList() {
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
-  const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));
+  // Starting from a template keeps the original paths: the blank application
+  // is created through the same declared action, and the chosen template is
+  // installed later through the original page-template gate. No wizard.
+  const chosenTemplate = useRef<string | undefined>(undefined);
+  const create = useNewRecord("build.app", (target) => open(chosenTemplate.current
+    ? { view: "project", params: { id: target.id, area: "interface", section: "templates", template: chosenTemplate.current } }
+    : { view: "project", params: { id: target.id } }));
+  const [choosing, setChoosing] = useState(false);
   const builder = role("build") === "builder";
   const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
     .filter(item => `${item.title} ${item.ref.app} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
@@ -47,6 +55,7 @@ export function ProjectsList() {
     <PageHeader title={t("Applications")} help={t("Inspect installed applications and extend them through the same drafts and releases.")} actions={<div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 basis-56 sm:w-56 sm:flex-none" />
         {builder && create.available && <Button className="shrink-0" variant="primary" onClick={() => create.take()}><Plus />{t("New application")}</Button>}
+        {builder && create.available && <Button className="shrink-0" variant="ghost" onClick={() => setChoosing(true)}>{t("New from template…")}</Button>}
       </div>} />
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
     {(projects.isLoading || installedApps.isLoading) && <p className="text-sm text-muted">{t("Loading…")}</p>}
@@ -62,6 +71,19 @@ export function ProjectsList() {
         </Button>
       </li>)}
     </ul>
+    {builder && create.available && <Dialog open={choosing} onOpenChange={setChoosing} title={t("Start from a template")}>
+      <div className="grid gap-3">
+        <p className="text-xs text-muted">{t("A template drafts the page; you bind the object and fields it needs. The application starts through the original create action, and publishing stays with the release gate.")}</p>
+        <ul className="grid gap-2" aria-label={t("Start from a template")}>
+          {pageTemplates.map((template) => <li key={template.id} className="grid min-w-0 gap-1.5 rounded-md border border-border p-3 text-sm">
+            <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="min-w-0 flex-1 truncate font-semibold">{t(template.title)}</span><Tag label={`r${template.revision}`} /></div>
+            <p className="break-words text-xs text-muted">{t(template.summary)}</p>
+            <p className="break-words text-xs text-muted">{t("Needs")}: {[...template.bindings, ...(template.child ? [t("Child object")] : [])].map(bound => t(bound)).join(" · ")}</p>
+            <Button size="sm" className="w-fit" onClick={() => { chosenTemplate.current = template.id; setChoosing(false); create.take(); }}>{t("Start with this template")}</Button>
+          </li>)}
+        </ul>
+      </div>
+    </Dialog>}
     {create.dialog}
   </div>;
 }
@@ -88,12 +110,12 @@ function NewResourceMenu({ application, onCreated, children, disabled, area }: {
 }
 
 /** The project home: resource tree, what changed, settings. */
-export function ProjectHome({ id, area, initialSelected, initialSection, initialPlan }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string }) {
+export function ProjectHome({ id, area, initialSelected, initialSection, initialPlan, initialTemplate }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string; initialTemplate?: string }) {
   return installedStudioRef(id) ? <InstalledApplicationHome id={id} area={area} selected={initialSelected} />
-    : <BuildProjectHome id={id} area={area} initialSelected={initialSelected} initialSection={initialSection} initialPlan={initialPlan} />;
+    : <BuildProjectHome id={id} area={area} initialSelected={initialSelected} initialSection={initialSection} initialPlan={initialPlan} initialTemplate={initialTemplate} />;
 }
 
-function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string }) {
+function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan, initialTemplate }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string; initialTemplate?: string }) {
   const activeArea = studioArea(area, initialSelected?.split("/")[1]);
   const { client, decide, role, definitions } = useHost();
   const { open } = useWorkspace();
@@ -359,7 +381,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           </Select></label>}
         </div>}
         {visited.includes("guide") && <div hidden={tab !== "guide"}><ViewVisibilityContext.Provider value={visibleView && tab === "guide"}><StudioGuide project={project} owned={owned} disabled={saving || !!pendingPatch || !!createdResource} intent={settings?.description ?? project.description ?? ""} onIntent={description => settings && editSettings({ ...settings, description })} onCreated={(kind, target) => void addCreated(kind, target)} /></ViewVisibilityContext.Provider></div>}
-        {visited.includes("templates") && <div hidden={tab !== "templates"} className="p-4"><ViewVisibilityContext.Provider value={visibleView && tab === "templates"}><StudioTemplates onCreated={target => void addCreated(resourceKinds.find(kind => kind.kind === "page")!, target)} /></ViewVisibilityContext.Provider></div>}
+        {visited.includes("templates") && <div hidden={tab !== "templates"} className="p-4"><ViewVisibilityContext.Provider value={visibleView && tab === "templates"}><StudioTemplates initial={initialTemplate} onCreated={target => void addCreated(resourceKinds.find(kind => kind.kind === "page")!, target)} /></ViewVisibilityContext.Provider></div>}
         {visited.includes("release") && <div hidden={tab !== "release"}><ViewVisibilityContext.Provider value={visibleView && tab === "release"}><div className="grid gap-4 p-4" role="region" aria-label={t("Verification and delivery")}>
           <CandidateTest applicationId={id} planId={initialPlan} embedded />
  {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
