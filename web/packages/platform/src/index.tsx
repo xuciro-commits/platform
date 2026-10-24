@@ -153,6 +153,7 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
           <a href="#/o/ops" className={active(route, "ops")}>Operations</a>
           <a href="#/o/ai" className={active(route, "ai")}>AI</a>
           <a href="#/o/data" className={active(route, "data")}>Data</a>
+          <a href="#/o/decisions" className={active(route, "decisions")}>Decisions</a>
           <HostLink />
         </nav>
         <div className="side-foot">

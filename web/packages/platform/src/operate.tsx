@@ -227,7 +227,18 @@ function Sessions() {
   );
 }
 
-const SECTIONS: Record<string, () => ReactElement> = { people: People, inbox: Inbox, settings: Settings, ops: Operations, security: Security, ai: AI, data: Data };
+/** Every decision the catalog carries for a target that is not a record type:
+ * members, roles, settings, tokens, packages, effects — whatever this host
+ * declares. A new console action appears here without new code. */
+function Decisions() {
+  const host = useHost();
+  const types = new Set(host.entities.map((entity) => entity.type));
+  const targets = [...new Set(host.actions.map((action) => action.target))].filter((target) => target && !types.has(target)).sort();
+  if (targets.length === 0) return <Empty>No decision of this kind is available to you.</Empty>;
+  return <>{targets.map((target) => <Actions key={target} target={target} idLabel={`${target} id`} />)}</>;
+}
+
+const SECTIONS: Record<string, () => ReactElement> = { people: People, inbox: Inbox, settings: Settings, ops: Operations, security: Security, ai: AI, data: Data, decisions: Decisions };
 
 export function Operate({ section }: { section: string }) {
   const View = SECTIONS[section];
