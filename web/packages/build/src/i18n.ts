@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Workspace resources": "当前分区资源",
   "Synthetic organization": "合成组织样本",
   "Synthetic organization (JSON)": "合成组织样本（JSON）",
   "Leave membership party empty to use the member selected for this trial.": "任职 party 留空，表示本次试运行选定的成员。",
@@ -776,10 +777,8 @@ register("zh-CN", {
   "Actions and rules": "动作与规则",
   "Record samples": "记录样本",
   "Draft dependencies are checked by the release owner. Published links use declared dependencies.": "草稿依赖由发布归属方检查；已发布的关联入口来自声明依赖。",
-  "Application progress": "应用进度",
   "{models} models · {pages} pages · {drafts} saved changes": "{models} 个模型 · {pages} 个页面 · {drafts} 项已保存变更",
   "{count} missing assets": "{count} 个缺失资产",
-  "The release owner checks model completeness, rules and page bindings before delivery.": "发布归属方在交付前检查模型完整性、规则和页面绑定。",
   "Verify application": "验证应用",
   "Name groups in your business vocabulary. Moving an asset changes navigation only.": "用业务词汇命名分组；移动资产只改变导航。",
   "Business concept title": "业务概念名称",
@@ -3552,8 +3551,6 @@ register("zh-CN", {
   "Unpublished changes": "未发布的变更",
   "Nothing to publish yet: the project has no resources.": "还没有可发布的内容：项目里还没有资源。",
   "Contents": "内容",
-  "A published version is in the Applications portal. Saved edits remain drafts until the next release.": "已发布版本在应用门户中。保存的编辑在下次发布前仍为草稿。",
-  "Not published yet. Publish reviews every draft in this project and activates them together.": "尚未发布。发布会审查此项目中的每个草稿并一起激活。",
   "Changes save automatically.": "更改会自动保存。",
   "{n} problems": "{n} 个问题",
   "Review and publish…": "审查并发布…",
@@ -3696,7 +3693,6 @@ register("zh-CN", {
   "Only a builder can edit action types.": "只有构建者才能编辑动作类型。",
   "Transition": "状态流转",
   "From input": "由输入决定",
-  "Choose a resource on the left, create one with New, or bring one in with Add existing.": "在左侧选择一个资源，用“新建”创建，或用“添加已有”引入。",
   "{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.": "{title} 已列入项目，但没有可读的草稿或已发布定义。请检查其归属与访问权限，或移除此引用。",
   "An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one.": "动作类型定义人们如何改变一个对象：它的参数、规则、条件与副作用。每个动作属于一个对象类型；打开对象类型即可添加。",
   "No action types yet. Add a lifecycle state and an action to an object type.": "还没有动作类型。先给对象类型添加生命周期状态和动作。",

@@ -9,6 +9,7 @@ test("an installed protocol binary configures devices, previews points and publi
   const packageID = "protocol.simulator", version = protocolVersion();
   const gateway = process.env.PROTOCOL_GATEWAY_URL ?? "http://127.0.0.1:18510";
   await builder.open(page, "/apps?surface=tenant");
+  await page.getByRole("region", { name: "Package library", exact: true }).getByRole("button").filter({ hasText: packageID }).click();
   const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
   await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);
   const prior = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID)?.installed;
@@ -17,6 +18,7 @@ test("an installed protocol binary configures devices, previews points and publi
   if (prior?.state === "active") expect(prior.version).toBe(version);
   else await card.getByRole("button", { name: prior?.state === "retired" ? "Reinstall" : "Install", exact: true }).click();
   await expect(card.getByText("active", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Technical details", exact: true }).click();
   await expect(card.getByText("Deployment index", { exact: true })).toBeVisible();
   await expect(card.getByText("precheck failed", { exact: true })).toHaveCount(0);
   const installed = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID && item.descriptor.version === version)!.installed!;
@@ -100,6 +102,7 @@ test("a third protocol imports documented HVAC points and exposes current readin
   const packageID = "protocol.modbus-tcp", version = protocolVersion();
   const configuration: Api.DriverConfiguration = JSON.parse(readFileSync(new URL("../../../deploy/examples/hvac/modbus.json", import.meta.url), "utf8"));
   await builder.open(page, "/apps?surface=tenant");
+  await page.getByRole("region", { name: "Package library", exact: true }).getByRole("button").filter({ hasText: packageID }).click();
   const card = page.getByRole("region", { name: `Package ${packageID}`, exact: true });
   await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption(version);
   const prior = (await builder.read<Api.PackageView[]>("packages")).find(item => item.descriptor.id === packageID)?.installed;

@@ -155,7 +155,7 @@ export function PipelineEditor({ id }: { id: string }) {
         ]} />
       </div>}
     </Panel>}
-    <StructuredEditor initialMode="source" {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Input")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Pipeline name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="cleanmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Pipeline title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>

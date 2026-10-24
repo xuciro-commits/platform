@@ -20,6 +20,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
   if (host.role("build") !== "builder" || !id) return null;
   if (!project) return <p role={query.isError ? "alert" : "status"} className="p-2 text-xs text-muted">{installed ? t("Application structure is not available with your current access.") : query.isError ? t("The project could not be loaded.") : t("Loading…")}</p>;
   const { selected, ref, area } = studioContext(route, owned, host.definitions);
+  const showAssets = route?.view !== "project" || !!route.params?.asset;
   const active = ref ? refKey(ref) : selected ? refKey(selected.ref) : undefined;
   const candidates = owned.filter(item => resourceInArea(item, area));
   const search = filter.trim().toLocaleLowerCase();
@@ -36,8 +37,9 @@ export function StudioNavigation({ route }: { route?: Route }) {
   return <div role="region" aria-label={t("Application assets")} className="pb-3">
     <h2 className="break-words px-2 pb-3 pt-1 text-sm font-semibold">{project.title || project.name}</h2>
     <div role="navigation" aria-label={t("Application workspaces")} className="mb-3 grid gap-1">
-      {studioAreas.map(item => <Button key={item.id} aria-current={area === item.id ? "page" : undefined} variant="ghost" size="sm" className={area === item.id ? "justify-start bg-row-selected font-semibold max-sm:min-h-10" : "justify-start max-sm:min-h-10"} onClick={() => open(studioRoute(id, item.id, selected ? refKey(selected.ref) : undefined))}>{t(item.title)}</Button>)}
+      {studioAreas.map(item => <Button key={item.id} aria-current={area === item.id ? "page" : undefined} variant="ghost" size="sm" className={area === item.id ? "justify-start bg-row-selected font-semibold max-sm:min-h-10" : "justify-start max-sm:min-h-10"} onClick={() => open(studioRoute(id, item.id))}>{t(item.title)}</Button>)}
     </div>
+    {showAssets && <>
     <Input type="search" aria-label={t("Filter assets in this workspace")} placeholder={t("Filter assets in this workspace")} value={filter} onChange={event => setFilter(event.target.value)} className="h-7 text-xs" />
     {unavailable && <p role="alert" className="p-2 text-xs text-danger">{t("Some application assets are unreadable.")}</p>}
     <p className="px-2 pb-1 pt-3 text-[11px] text-muted">{t("{count} assets in this workspace", { count: matching.length })}</p>
@@ -52,6 +54,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
     })}
     {!groups.length && <p role="status" className="px-2 py-3 text-xs text-muted">{search ? t("No assets match your search in this workspace.") : t("No assets in this workspace.")}</p>}
     {!installed && <Button variant="ghost" size="sm" className="mt-3 w-full justify-start whitespace-normal text-left" onClick={() => open({ view: "project", params: { id, section: "concepts", ...(selected ? { asset: refKey(selected.ref) } : {}) } })}>{t("Organize business concepts")}</Button>}
+    </>}
   </div>;
 }
 

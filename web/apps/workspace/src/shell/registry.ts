@@ -15,9 +15,9 @@ export const categories: { id: PlatformAppCategory; label: () => string }[] = [
 /** A projection: which categories lead the portal, and the id remembered per member. */
 export type Projection = "operations" | "build" | "admin";
 export const projections: { id: Projection; title: () => string; categories: PlatformAppCategory[] }[] = [
-  { id: "operations", title: () => t("Operations"), categories: ["business", "ontology"] },
-  { id: "build", title: () => t("Build"), categories: ["ontology", "build", "operate"] },
-  { id: "admin", title: () => t("Admin"), categories: ["operate"] },
+  { id: "operations", title: () => t("Use applications"), categories: ["business", "ontology"] },
+  { id: "build", title: () => t("Build applications"), categories: ["ontology", "build"] },
+  { id: "admin", title: () => t("Manage platform"), categories: ["operate"] },
 ];
 
 /** The portal entry of an app the workspace loaded. */

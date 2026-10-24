@@ -25,8 +25,12 @@ test("a new administrator reviews a local package, installs it, uninstalls and r
   expect((await builder.read<any[]>("packages")).some(item => item.descriptor.id === id)).toBe(false);
   await shots(page, page.locator("body"), "package-source-review", info);
   await page.getByRole("button", { name: "Add reviewed version to library", exact: true }).click();
+  await page.getByRole("region", { name: "Package library", exact: true }).getByRole("button").filter({ hasText: id }).click();
   const card = page.getByLabel(`Package ${id}`, { exact: true });
   await expect(card).toBeVisible();
+  await expect(card.getByText("precheck ok", { exact: true })).toHaveCount(0);
+  await card.getByRole("combobox", { name: "Exact package version", exact: true }).selectOption("1.0.0");
+  await card.getByRole("button", { name: "Technical details", exact: true }).click();
   await expect(card.getByText("Imported package", { exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Install", exact: true }).click();
   await expect(card.getByText("active", { exact: true })).toBeVisible();

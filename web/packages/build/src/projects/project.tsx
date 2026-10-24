@@ -1,5 +1,5 @@
 import { sourceFieldInput } from "@platform/app";
-import { ContextHelp, PageHeader, PropertyList, StructuredEditor } from "@platform/ui";
+import { ContextHelp, PageHeader, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
@@ -116,7 +116,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const setTab = (tab: Section) => { selectTab(tab); setVisited(old => old.includes(tab) ? old : [...old, tab]); };
   useEffect(() => {
     setTab(initialTab);
-    if (initialSelected !== undefined) setSelected(initialSelected);
+    setSelected(initialSelected);
   }, [activeArea, initialSection, initialSelected, initialPlan, initialTab]);
   const trial = useActionTrial(), declarationHost = useHost();
   const declarationFields = declarationHost.source.entity("build.app")?.fields ?? [];
@@ -292,11 +292,13 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {(["resources", ...(activeArea === "release" ? ["release"] as const : []), "concepts", "guide", "roles", "runs", "settings"] as const).map(item => <Button variant="ghost" size="sm" key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{t(item === "resources" ? "Overview" : item === "release" ? "Verification and delivery" : item === "concepts" ? "Business concepts" : item === "guide" ? "Guided start" : item === "runs" ? "Runs" : item === "roles" ? "Roles" : "Settings")}</Button>)}
         </div>
         {tab === "resources" && <div className="flex flex-wrap items-center gap-2 px-4 pt-3 text-xs">
-          <strong>{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
+          <strong className="mr-auto">{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
+          {!current && <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} className="w-full sm:w-56" value={filter} onChange={event => setFilter(event.target.value)} />}
+          <Button size="sm" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
           {activeArea === "model" && <Button size="sm" onClick={() => open({ view: "object-type", params: { application: id } })}>{t("Open business model")}</Button>}
           {activeArea === "interface" && <><Button size="sm" onClick={() => open({ view: "module", params: { id, application: id } })}>{t("Navigation and header")}</Button><Button size="sm" disabled={locked} onClick={() => setTab("templates")}>{t("New page from template…")}</Button></>}
         </div>}
-        {tab === "resources" && <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        {tab === "resources" && <div className="grid gap-5 p-4">
           <div className="grid content-start gap-4">
             {current ? <div className="rounded-md border border-border p-4">
               <div className="flex items-center gap-2">{kindIcon[current.kind.kind]}<h2 className="min-w-0 flex-1 truncate font-semibold">{current.title}</h2><DraftStatus state={current.record?.state} /></div>
@@ -316,8 +318,14 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
                 {builder && current.missing && current.kind !== publishedResourceKind && <NewResourceMenu application={id} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
                 {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
               </div>
-            </div> : <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted">
-              {project.description || t("Choose a resource on the left, create one with New, or bring one in with Add existing.")}
+            </div> : <div role="region" aria-label={t("Workspace resources")} className="grid gap-2 divide-y divide-border">
+              {studioResourceGroups(project, activeArea, visible).map(group => <section key={group.id} className="py-3">
+                <h2 className="mb-2 text-sm font-semibold">{t(group.title)}</h2>
+                {group.items.map(item => <Button key={refKey(item.ref)} variant="row" className="gap-3 py-3" onClick={() => item.missing ? setSelected(refKey(item.ref)) : open(assetRoute(item.ref, owned, definitions, id))}>
+                  <span className="text-muted [&>svg]:size-4">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{statusOf(item)}</span>
+                </Button>)}
+              </section>)}
+              {!visible.length && <p className="py-6 text-sm text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
             </div>}
             <div className="grid gap-2">
               <h2 className="text-sm font-semibold">{t("Unpublished changes")} <span className="text-muted">({unpublished.length})</span></h2>
@@ -332,23 +340,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
               </ul>
             </div>
           </div>
-          <aside className="grid content-start gap-3 text-sm">
-            <div className="rounded-md border border-border p-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Contents")}</h3>
-              <dl className="mt-2 grid grid-cols-2 gap-1 text-xs">
-                {[...resourceKinds, publishedResourceKind].map((kind) => { const n = owned.filter((item) => item.kind === kind).length; return n ? <div key={kind.kind} className="contents"><dt className="text-muted">{t(kind.plural)}</dt><dd className="text-right">{n}</dd></div> : null; })}
-              </dl>
-            </div>
-            <div role="region" aria-label={t("Application progress")} className="rounded-md border border-border p-3 text-xs">
-              <div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-semibold">{t("Application progress")}</h3><ContextHelp title={t("Application progress")}>{t("The release owner checks model completeness, rules and page bindings before delivery.")}</ContextHelp></div>
-              <PropertyList columns={2} items={[[t("Models"), owned.filter(item => item.ref.kind === "object").length], [t("Pages"), owned.filter(item => item.ref.kind === "page").length], [t("Saved changes"), unpublished.length], [t("Missing assets"), problems.length]]} />
-              <Button size="sm" className="mt-2" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
-            </div>
-            <div className="rounded-md border border-border p-3 text-xs text-muted">
-              <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-semibold text-muted">{t("Release")}</h3><ContextHelp title={t("Release")}>{installed ? t("A published version is in the Applications portal. Saved edits remain drafts until the next release.") : t("Not published yet. Publish reviews every draft in this project and activates them together.")}</ContextHelp></div>
-              <p className="mt-2">{t(installed ? "Published" : "Draft")}</p>
-            </div>
-          </aside>
+
         </div>}
         {tab === "concepts" && <div className="grid gap-3 p-4" role="region" aria-label={t("Business concepts")}>
           <div className="flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Business concepts")}</h2><ContextHelp title={t("Business concepts")}>{t("Name groups in your business vocabulary. Moving an asset changes navigation only.")}</ContextHelp></div>
@@ -375,7 +367,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         </div></ViewVisibilityContext.Provider></div>}
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
         {tab === "roles" && <ProjectRoles owned={owned} />}
-        {tab === "settings" && settings && <StructuredEditor initialMode="source" expectedRevision={baseline.current?.revision ?? project.revision} fieldInput={sourceFieldInput} value={declarationValue(settings, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${declarationHost.source.scope}`} readOnly={!builder} disabled={saving || !!pendingPatch || !!createdResource} onChange={next => { editSettings({ ...next, title: next.title as string, name: next.name as string, description: next.description as string ?? "", icon: next.icon as string ?? "boxes", profile: next.profile as Api.ApplicationProfile ?? {}, entry: next.entry as string ?? "", replacements: next.replacements as NonNullable<Api.Application["replacements"]> ?? [] }); setSourceApplied(true); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, baseline.current?.values ?? {}), baseline.current?.revision ?? project.revision)}><fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
+        {tab === "settings" && settings && <StructuredEditor expectedRevision={baseline.current?.revision ?? project.revision} fieldInput={sourceFieldInput} value={declarationValue(settings, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${declarationHost.source.scope}`} readOnly={!builder} disabled={saving || !!pendingPatch || !!createdResource} onChange={next => { editSettings({ ...next, title: next.title as string, name: next.name as string, description: next.description as string ?? "", icon: next.icon as string ?? "boxes", profile: next.profile as Api.ApplicationProfile ?? {}, entry: next.entry as string ?? "", replacements: next.replacements as NonNullable<Api.Application["replacements"]> ?? [] }); setSourceApplied(true); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, baseline.current?.values ?? {}), baseline.current?.revision ?? project.revision)}><fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <ExtensionSettings value={settings} pages={project.pages ?? []} disabled={!builder} onChange={extension => editSettings({ ...settings, ...extension, entry: extension.entry ?? "", replacements: extension.replacements ?? [] })} />
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>

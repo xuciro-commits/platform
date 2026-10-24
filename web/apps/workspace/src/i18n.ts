@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Open an application or continue your work.": "打开应用，或继续之前的工作。",
+  "Workspace tasks": "工作入口",
+  "Use applications": "使用应用",
+  "Build applications": "构建应用",
+  "Manage platform": "管理平台",
+  "Continue working": "继续工作",
  "Tenant maintenance": "租户维护",
  "This tenant is paused for maintenance. A host administrator can restore its required implementations and resume access in Host Console. Your saved records and history remain.": "此租户正在暂停维护。宿主管理员可在宿主控制台恢复所需实现并恢复访问。已保存的记录和历史仍然保留。",
   "Master data": "主数据",
@@ -66,7 +72,6 @@ register("zh-CN", {
  "Deliver and operate": "交付与运维",
  "Governance": "治理",
  "Developer": "开发者",
- "Platform tools": "平台工具",
  "Every application you may open in {tenant}: the ones your organisation runs, and the platform's own tools your role allows.": "你在 {tenant} 可以打开的全部应用：组织运行的业务应用，以及你的角色允许使用的平台工具。",
  "Find an application…": "查找应用…",
  "No application matches.": "没有匹配的应用。",
@@ -74,11 +79,7 @@ register("zh-CN", {
  "Good afternoon, {name}": "下午好，{name}",
  "Good evening, {name}": "晚上好，{name}",
  "Search records, applications and commands…": "搜索记录、应用与命令…",
- "Approvals and tasks waiting for you": "等待你处理的审批与任务",
- "Pending what you asked for": "你发起的待处理申请",
  "Unread": "未读",
- "Ask about your records and tasks": "询问你的记录与任务",
- "Nothing opened yet. What you open shows up here.": "尚未打开任何内容。你打开的内容会出现在这里。",
  "Star an application to keep it here.": "收藏一个应用，它会留在这里。",
  "Pending": "待处理",
   "Live updates unavailable": "实时更新暂不可用",

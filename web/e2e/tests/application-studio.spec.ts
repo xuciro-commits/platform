@@ -39,7 +39,13 @@ test("installed native applications open without drafts and accept an explicitly
   const target = definitions.find(item => item.ref.app === action.ref.app && item.ref.kind === "object" && item.ref.name === action.action.target);
   await builder.open(page, "/project?id=installed/build/build&area=logic");
   const assets = page.getByRole("region", { name: "Application assets", exact: true });
+  await expect(assets.getByRole("searchbox")).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Filter resources", exact: true }).fill(action.ref.name);
+  await page.getByRole("row").filter({ hasText: `${action.ref.app}/${action.ref.kind}/${action.ref.name}` }).click();
+  await page.getByRole("button", { name: "Open declaration", exact: true }).click();
   const actionGroup = assets.getByRole("button", { name: "Actions for " + target.entity.title, exact: true });
+  await expect(actionGroup).toHaveAttribute("aria-expanded", "true");
+  await actionGroup.click();
   await expect(actionGroup).toHaveAttribute("aria-expanded", "false");
   const group = assets.getByRole("button", { name: /^Object behavior/ });
   await group.click();
@@ -118,7 +124,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   await navigation.getByRole("button", { name: "Interface", exact: true }).click();
   await expect(navigation.getByRole("button", { name: "Interface", exact: true })).toHaveAttribute("aria-current", "page");
   await navigation.getByRole("button", { name: "Model", exact: true }).click();
-  await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: /^Service case/ }).click();
+  await page.getByRole("region", { name: "Workspace resources", exact: true }).getByRole("button", { name: /^Service case/ }).click();
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await expect(inspector.getByRole("textbox", { name: "What people call it", exact: true })).toHaveValue("Service note");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
@@ -192,14 +198,16 @@ test("one application retains drafts across five workspaces and delivers grouped
   await concepts.getByRole("combobox", { name: "Business concept for selected asset", exact: true }).selectOption(savedApp.concepts[0].id);
   await expect.poll(async () => (await builder.record("build.app", application.id)).concepts?.[0]?.assets.length).toBe(2);
 
-  // The sidebar shows the active workspace; the concept editor keeps all members together.
+  // Workspace overviews have one resource directory; editors retain the contextual tree.
   const assets = navigation.getByRole("region", { name: "Application assets", exact: true });
+  const resources = page.getByRole("region", { name: "Workspace resources", exact: true });
   await navigation.getByRole("button", { name: "Model", exact: true }).click();
-  await expect(assets.getByRole("button", { name: /^Service case/ })).toBeVisible();
-  await expect(assets.getByRole("button", { name: /^Service desk/ })).toHaveCount(0);
-  await navigation.getByRole("button", { name: "Interface", exact: true }).click();
+  await expect(resources.getByRole("button", { name: /^Service case/ })).toBeVisible();
   await expect(assets.getByRole("button", { name: /^Service case/ })).toHaveCount(0);
-  await assets.getByRole("button", { name: /^Service desk/ }).click();
+  await expect(resources.getByRole("button", { name: /^Service desk/ })).toHaveCount(0);
+  await navigation.getByRole("button", { name: "Interface", exact: true }).click();
+  await expect(resources.getByRole("button", { name: /^Service case/ })).toHaveCount(0);
+  await resources.getByRole("button", { name: /^Service desk/ }).click();
   await expect(navigation.getByRole("button", { name: "Interface", exact: true })).toHaveAttribute("aria-current", "page");
   await context.getByRole("button", { name: "Service application", exact: true }).click();
   await expect(assets.getByRole("button", { name: /^Service desk/ })).toHaveAttribute("aria-pressed", "true");
@@ -218,7 +226,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   expect(delivered.some(definition => definition.ref.name === `build.${objectName}.${beforeMove.actions[0].name}`)).toBe(true);
 
   await navigation.getByRole("button", { name: "Model", exact: true }).click();
-  await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: /^Service case/ }).click();
+  await resources.getByRole("button", { name: /^Service case/ }).click();
   await page.getByRole("combobox", { name: "Related assets", exact: true }).selectOption(`build/action/build.${objectName}.${beforeMove.actions[0].name}`);
   await expect(page.getByRole("heading", { name: beforeMove.actions[0].title, exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Related assets", exact: true }).selectOption(`build/object/build.${objectName}`);
@@ -251,9 +259,9 @@ test("one application retains drafts across five workspaces and delivers grouped
   await existing.selectOption(automaticChoice);
   await navigation.getByRole("button", { name: "Logic", exact: true }).click();
   const inventoryAssets = navigation.getByRole("region", { name: "Application assets", exact: true });
-  await expect(inventoryAssets.getByRole("button", { name: /^Inventory manual flow/ })).toHaveCount(1);
-  await expect(inventoryAssets.getByRole("button", { name: /^Inventory automation/ })).toHaveCount(1);
-  await inventoryAssets.getByRole("button", { name: /^Inventory manual flow/ }).click();
+  await expect(resources.getByRole("button", { name: /^Inventory manual flow/ })).toHaveCount(1);
+  await expect(resources.getByRole("button", { name: /^Inventory automation/ })).toHaveCount(1);
+  await resources.getByRole("button", { name: /^Inventory manual flow/ }).click();
   await expect.poll(() => new URL(page.url()).hash.startsWith("#/flow?")).toBe(true);
   await inventoryAssets.getByRole("button", { name: /^Inventory automation/ }).click();
   await expect.poll(() => new URL(page.url()).hash.startsWith("#/automation?")).toBe(true);

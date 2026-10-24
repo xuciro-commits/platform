@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:7a5d0a083af302be",
+  "revision": "sha256:fcc7f750b2cc2f14",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13032,7 +13032,6 @@
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/session/Problems.tsx",
-      "web/apps/workspace/src/shell/Home.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/disclosure": [
@@ -13641,7 +13640,6 @@
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/build/src/projects/InstalledApplicationHome.tsx",
-      "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",

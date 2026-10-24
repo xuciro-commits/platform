@@ -44,7 +44,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  {!directInstall && <p className="text-xs text-muted">{t("This tenant delivers through a saved release candidate: review the draft and activate it.")}</p>}
  {error&&<Panel role="alert" className="text-danger">{error}</Panel>}
  {dirty&&<Panel role="status">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
- <StructuredEditor initialMode="source" {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+ <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
  <Panel title={t("Relationship settings")} className="grid min-w-0 grid-cols-1 content-start gap-3">
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship name")}<Input disabled={!!draft.published} value={draft.name} onChange={e=>patch({name:e.target.value})}/></label>
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Relationship title")}<Input value={draft.title} onChange={e=>patch({title:e.target.value})}/></label>

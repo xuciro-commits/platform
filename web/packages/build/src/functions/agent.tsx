@@ -76,7 +76,7 @@ export function AgentEditor({ id }: { id: string }) {
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed as build.{name}, version {version}. A changed definition stops existing runs.", { name: draft.name, version: draft.version })}</Panel> : null}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {(model.drafts.isError || queries.isError) && <Panel role="alert">{t("The capability library could not be loaded.")}</Panel>}
-    <StructuredEditor initialMode="source" {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-2">
       <Panel title={t("Agent")} className="grid content-start gap-3">
         <label className={fieldClass}>{t("Agent name")}<Input disabled={!!draft.published} value={draft.name} placeholder="expediter" onChange={(e) => change({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Agent title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>

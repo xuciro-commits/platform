@@ -85,7 +85,7 @@ export function DatasetEditor({ id }: { id: string }) {
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    <StructuredEditor initialMode="source" {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Dataset")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Dataset name")}<Input disabled={!!draft.producer} value={draft.name} placeholder="sapmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Dataset title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>

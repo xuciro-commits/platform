@@ -13,16 +13,14 @@ export function RecordWorkspace({ title, description, source, type, listFields, 
   return <>
     <PageHeader title={title} description={description} actions={actions} />
     {notice}
-    <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(20rem,45%)_minmax(0,1fr)]">
+    <div className={selected ? "grid min-w-0 gap-4 lg:grid-cols-[minmax(20rem,45%)_minmax(0,1fr)]" : "grid min-w-0"}>
       <section aria-label={t("Records in this page")} className={selected ? "hidden min-w-0 lg:block" : "min-w-0"}>
         <RecordList source={source} type={type} fields={listFields} selectedId={selected} onOpen={(r) => onSelect(r.id)} height="calc(100dvh - 255px)" />
       </section>
-      <section aria-label={t("Selected record")} className={!selected ? "hidden min-w-0 lg:block" : "min-w-0"}>
-        {selected ? <>
-          <Button size="sm" variant="ghost" className="mb-2 lg:hidden" onClick={() => onSelect(undefined)}>{t("Back to list")}</Button>
+      {selected && <section aria-label={t("Selected record")} className="min-w-0">
+          <Button size="sm" variant="ghost" className="mb-2" onClick={() => onSelect(undefined)}>{t("Back to list")}</Button>
           {detail(selected)}
-        </> : <p className="rounded-md border border-border bg-surface p-6 text-sm text-muted">{t("Select a record to see its details.")}</p>}
-      </section>
+      </section>}
     </div>
   </>;
 }

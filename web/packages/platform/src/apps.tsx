@@ -6,53 +6,28 @@ import { Fragment, useRef, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";
 import { PackageSources } from "./package-sources";
 
-// Tiers of the protocol graph: an app sits one column right of the providers of
-// the protocols it consumes (providers are enabled before their consumers).
-function tiers(apps: AppInfo[]): AppInfo[][] {
-  const depth = new Map<string, number>();
-  for (const a of apps) {
-    const providers = a.consumes.map((c) => c.replace(" (optional)", "")).flatMap((p) => apps.filter((x) => x.provides.includes(p)));
-    depth.set(a.id, Math.max(0, ...providers.map((x) => (depth.get(x.id) ?? 0) + 1)));
-  }
-  const out: AppInfo[][] = [];
-  for (const a of apps) (out[depth.get(a.id)!] ??= []).push(a);
-  return out;
-}
-
 export function Apps() {
-  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
-  const { role } = useHost();
+  const { role } = useHost(), { open } = useWorkspace();
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   return (
     <>
       <PageHeader title={t("Packages")} help={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
       <PackageSources items={packages.data ?? []} />
       {packages.isError ? <div role="alert"><p>{t("Package inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading packages…")}</p> : <PackageList items={packages.data ?? []} refresh={() => packages.refetch()} />}
-      {role("platform") === "admin" && <><div className="mb-3 mt-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Built-in application modules")}</h2><ContextHelp title={t("Built-in application modules")}>{t("Built-in modules use Host Console maintenance to stop and restart their services. The Capability matrix describes their contracts and dependencies.")}</ContextHelp></div><div className="flex gap-6 overflow-x-auto">
-        {tiers(apps).map((tier, i) => (
-          <div key={i} className="grid content-start gap-3">
-            <h2 className="text-xs uppercase text-muted">{i === 0 ? t("Platform and business modules") : i === 1 ? t("Consumers of their protocols") : t("Tier {n}", { n: i + 1 })}</h2>
-            {tier.map((a) => (
-              <Panel key={a.id} className="w-64">
-                <div className="flex flex-wrap items-baseline gap-2"><span className="font-semibold">{a.title || a.id}</span><span className="font-mono text-xs text-muted">{a.id} · v{a.version}</span></div>
-                {a.consumes.length > 0 && <p className="mt-1 text-xs text-muted">{t("Consumes")} {a.consumes.join(", ")}</p>}
-                <div className="mt-2 flex flex-wrap gap-1">{a.capabilities.map((c) => <Tag key={c.name} label={capabilityTitle(c.name)} />)}</div>
-              </Panel>
-            ))}
-          </div>
-        ))}
-      </div></>}
+      {role("platform") === "admin" && <Button variant="link" className="mt-4" onClick={() => open({ view: "matrix" })}>{t("Inspect built-in modules in the capability matrix")}</Button>}
     </>
   );
 }
 
 const stateTone = (state?: string): "neutral" | "success" | "warning" => state === "active" ? "success" : state === "draining" ? "warning" : "neutral";
 
-/** One card per package: what the index offers, what is installed, the precheck, and the decision that applies next. */
+/** The library selects one package; decisions stay on its original owner. */
 function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: () => Promise<unknown> }) {
   const { can, client, decide } = useHost(), { open } = useWorkspace();
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
+  const [selection, setSelection] = useState("");
+  const [search, setSearch] = useState("");
   const [versions, setVersions] = useState<Record<string, string>>({});
   const creationKeys = useRef<Record<string, string>>({});
   const cleanup = async (id: string) => {
@@ -84,13 +59,28 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
     } catch (error) { setRefused(current => ({ ...current, [id]: apiErrorMessage(error) ?? t("The draft request is unconfirmed. Retry to check the same request.") })); }
     finally { setBusy(""); }
   };
+  const ids = [...new Set(items.map(item => item.descriptor.id || item.installed?.id || ""))];
+  const selected = ids.includes(selection) ? selection : undefined;
+  const shown = ids.filter(id => items.some(item => (item.descriptor.id || item.installed?.id) === id && `${id} ${item.descriptor.title ?? item.installed?.title ?? ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {[...new Set(items.map(item => item.descriptor.id || item.installed?.id || ""))].map(packageID => {
+    <div className="grid min-w-0 items-start gap-5 md:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
+      <section aria-label={t("Package library")} className={selected ? "hidden min-w-0 md:block" : "min-w-0"}>
+        <Input type="search" aria-label={t("Find a package")} placeholder={t("Find a package")} value={search} onChange={event => setSearch(event.target.value)} className="mb-3 w-full" />
+        <div className="grid gap-1">{shown.map(id => {
+          const entries = items.filter(item => (item.descriptor.id || item.installed?.id) === id);
+          const held = entries.find(item => item.installed)?.installed;
+          return <Button key={id} variant="row" aria-current={selected === id ? "true" : undefined} className={`h-auto w-full items-start justify-between gap-2 whitespace-normal rounded-md p-3 text-left ${selected === id ? "bg-row-selected" : ""}`} onClick={() => setSelection(id)}>
+            <span className="grid min-w-0 gap-1"><span className="break-words font-medium">{entries[0]!.descriptor.title || held?.title || id}</span><span className="break-all text-xs text-muted">{id}</span></span><Tag label={held?.state && held.state !== "retired" ? t(held.state) : t("not installed")} tone={stateTone(held?.state)} />
+          </Button>;
+        })}</div>
+        {!shown.length && <p role="status" className="py-4 text-sm text-muted">{t("No package matches your search.")}</p>}
+      </section>
+      <section aria-label={t("Package details")} className={selected ? "min-w-0" : "hidden md:block"}>
+      {selected ? <Button size="sm" variant="ghost" className="mb-3 md:hidden" onClick={() => setSelection("")}>{t("Back to packages")}</Button> : <p className="py-8 text-sm text-muted">{t("Select a package to review its version and next step.")}</p>}
+      {(selected ? [selected] : []).map(packageID => {
         const available = items.filter(item => (item.descriptor.id || item.installed?.id) === packageID);
         const held = available.find(item => item.installed)?.installed;
-        const protocol = available.some(item => item.descriptor.runtime), blueprint = available.some(item => item.descriptor.blueprint);
-        const version = versions[packageID] ?? held?.version ?? (protocol || blueprint ? "" : available[0]!.descriptor.version);
+        const version = versions[packageID] ?? held?.version ?? "";
         const chosen = available.find(item => item.descriptor.version === version);
         const { descriptor: d, precheck, source, sourceDigest, removal } = chosen ?? available[0]!;
         const id = d.id || held?.id || "";
@@ -107,10 +97,13 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
               {d.blueprint && <Tag label={t("Application blueprint")} tone="info" />}
             </div>
             {(d.description || d.runtime || d.blueprint) && <div className="flex justify-end"><ContextHelp title={d.title || held?.title || id}>{d.description && <p>{d.description}</p>}{d.runtime && <p>{t("Installing makes this exact version available to Connections. Configure and check a connection before publishing it; installation does not enable device writes.")}</p>}{d.blueprint && <p>{t("Install this version, then create editable application drafts from its blueprint. Review and publish those drafts in Application Studio. Creating drafts does not create business records or grant access.")}</p>}</ContextHelp></div>}
-            {(protocol || blueprint || available.length > 1) && <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select value={version} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
+            <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select value={version} disabled={busy === id} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
               <option value="">{t("Choose an exact version")}</option>{available.map(item => <option key={item.descriptor.version} value={item.descriptor.version}>{item.descriptor.version}{item.descriptor.version === held?.version ? ` · ${t(state === "retired" ? "Last installed" : "Installed")}` : ""}</option>)}
-            </Select></label>}
-            <dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
+            </Select></label>
+            {!chosen && <p role="status" className="text-sm text-muted">{t("Choose an exact version to review installation.")}</p>}
+            {state === "active" && chosen && held?.version === d.version && <p className="text-sm text-muted">{t(d.blueprint ? "Installed. Create application drafts, then review and publish them in Application Studio." : d.runtime ? "Installed. Configure a connection to start using this protocol." : "Installed. Available features can be opened from Applications.")}</p>}
+            {state === "active" && d.runtime && can("build.connection.create") && <div><Button size="sm" onClick={() => open({ view: "connection" })}>{t("Configure a connection")}</Button></div>}
+            <Disclosure summary={t("Technical details")}><dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
               <dt className="text-muted">{t("Namespace")}</dt><dd className="break-all font-mono">{d.namespace || held?.namespace}</dd>
               <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : source === "imported" ? "Imported package" : "Deployment index")}</dd>
               <dt className="text-muted">{t("Offered")}</dt><dd>{source === "installed" ? "—" : d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
@@ -125,7 +118,7 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
                 <dt className="text-muted">{t("Driver profiles")}</dt><dd className="grid gap-1">{d.runtime.profiles.map(profile => <span key={profile.id}>{t(profile.title)} · {profile.operations.map(operation => t(operation)).join(", ")}</span>)}</dd>
               </>}
             </dl>
-            <Disclosure summary={t("Inspect all package contents")}><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(d, null, 2)}</pre></Disclosure>
+            <Disclosure summary={t("Inspect all package contents")}><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(d, null, 2)}</pre></Disclosure></Disclosure>
             {d.blueprint && <div className="grid gap-2 text-xs">
               <p className="text-muted">{t("{count} definitions in the blueprint", { count: d.blueprint.assets.length })}</p>
               {d.blueprint.guide && <Disclosure summary={t("Build guide")}><p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{d.blueprint.guide}</p></Disclosure>}
@@ -138,9 +131,9 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
                   </li>)}</ol>
                 </div>
               </Disclosure>}
-              {can("build.app.create") && <div><Button size="sm" variant="primary" disabled={busy === id || state !== "active" || held?.version !== d.version || !chosen} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
+              {can("build.app.create") && state === "active" && held?.version === d.version && chosen && <div><Button size="sm" variant="primary" disabled={busy === id} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
             </div>}
-            {(next === "install" || different || source === "installed") && <div className="flex flex-wrap items-center gap-2 text-xs">
+            {chosen && (next === "install" || different) && <div className="flex flex-wrap items-center gap-2 text-xs">
               <Tag label={precheck.ok ? t("precheck ok") : t("precheck failed")} tone={precheck.ok ? "success" : "danger"} />
               {!!precheck.missing?.length && <span className="text-[var(--tone-danger)]">{t("needs {packages} installed first", { packages: precheck.missing.join(", ") })}</span>}
               {precheck.problems?.map((x) => <span key={x} className="text-[var(--tone-danger)]">{t(x)}</span>)}
@@ -163,6 +156,7 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
           </Panel>
         );
       })}
+      </section>
     </div>
   );
 }
@@ -217,8 +211,8 @@ function ModuleCard({ app: a }: { app: AppInfo }) {
 }
 
 export function Matrix() {
- const { role } = useHost();
   const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
+ const { role } = useHost();
   const [q, setQ] = useState("");
   const needle = q.trim().toLocaleLowerCase();
   const shown = apps.filter((a) => !needle || [a.id, a.title, ...a.capabilities.map((c) => c.name + " " + capabilityTitle(c.name)), ...a.provides, ...a.consumes, ...a.roles].join(" ").toLocaleLowerCase().includes(needle));

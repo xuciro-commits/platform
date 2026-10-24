@@ -93,7 +93,7 @@ export function FunctionEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {dirty && issues.length > 0 && <Panel aria-live="polite" className="text-xs text-muted">{issues.join(" ")}</Panel>}
     {inventory.isError && <Panel role="alert">{t("The function sources could not be loaded.")}</Panel>}
-    <StructuredEditor initialMode="source" {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 xl:grid-cols-[12rem_minmax(0,1fr)_22rem]">
+    <StructuredEditor {...editor.structured}><fieldset disabled={busy} className="grid min-w-0 gap-3 xl:grid-cols-[12rem_minmax(0,1fr)_22rem]">
       <Panel role="region" aria-label={t("Function stages")} className="grid content-start gap-2 p-3">
         {stages.map((stage) => <Button key={stage.id} aria-pressed={chosen === stage.id} variant={chosen === stage.id ? "primary" : "ghost"} onClick={() => setChosen(stage.id)}>{stage.title}</Button>)}
         <ContextHelp title={t("Function stages")}><p className="text-xs text-muted">{t("Select a stage or use these buttons to edit its properties. Source permissions are checked on every call.")}</p></ContextHelp>

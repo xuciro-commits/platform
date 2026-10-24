@@ -229,6 +229,37 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 
 然后在工具里填：主机 `localhost`，端口 `5433`，库 `platform`，用户 `tenant_hotel_a_build_reader`，密码 `reader-local-only`。它只能读自己租户的 schema。注意：记录级权限不会带到外部工具里，谁拿到这个角色就能看到整个租户的数据，所以这是管理员的授权。
 
+## 批量界面截图与评估包
+
+在当前 Vite 开发工作区运行 `make ui-capture`，从工作区原 UI 包、实际菜单、已发布定义及现有记录发现页面。工具不启动宿主、不跑 Go 测试、不创建测试业务数据；浏览器对业务 API 限制为读取。默认截图桌面与窄屏，较长的工作区文档补截底部，并生成离线 HTML 索引、总览图、覆盖清单及评估说明；同时输出完整 ZIP 和较小的 `-overview.zip` 总览包。
+
+把登录范围写在不入库的本地配置，例如 `.build/ui-capture-profiles.json`；实际密码只从环境变量读取，开发令牌可改用 `tokenEnv`。可为不同宿主和角色添加多项，不把密码、令牌或浏览器登录状态写进评估包。
+
+```json
+{
+  "profiles": [
+    {
+      "name": "workspace-admin",
+      "url": "http://localhost:8495",
+      "email": "your-local-account@example.test",
+      "passwordEnv": "PLATFORM_CAPTURE_PASSWORD"
+    }
+  ]
+}
+```
+
+```bash
+read -s PLATFORM_CAPTURE_PASSWORD
+export PLATFORM_CAPTURE_PASSWORD
+make ui-capture CONFIG=.build/ui-capture-profiles.json
+# 先验证少量页面：
+make ui-capture CONFIG=.build/ui-capture-profiles.json ARGS='--limit 8 --desktop-only'
+```
+
+需要运行中的开发工作区和已安装的 Web/Playwright 依赖；默认使用本机 Chrome，`PLATFORM_CAPTURE_BROWSER=chromium` 可选择已安装的 Chromium。`OUT` 必须是新目录，默认写入 `.build/ui-review/`。`--samples 2` 调整每类现有详情样本数；`--match 'apps|project'` 可按路由或标题筛选。筛选及 `--limit` 只限制本次截图，完整发现清单和未选择数量仍保留。
+
+此包是界面证据，不是完整交互录像：没有数据、没有权限或需要额外上下文的页面会单列；不穷举所有记录、弹窗、标签页组合和中间滚动位置。截图使用当前身份实际可见的数据，失败图和接口错误不会伪装成成功覆盖。工具遮盖密码输入框，但页面其他位置已经显示的业务或敏感信息仍会出现在截图中，分享前须核查并脱敏。
+
 ## 人员账号（登录用）
 
 所有人的密码都是 **`Plant-Local-1`**。

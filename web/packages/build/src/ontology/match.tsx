@@ -64,7 +64,7 @@ export function MatchEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {(pipelineQuery.isError || sourceQuery.isError) && <Panel role="alert" className="text-danger">{t("The pipelines or data sources could not be loaded.")}</Panel>}
     {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
-    <StructuredEditor initialMode="source" {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Object")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Rule name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="samematerial" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Rule title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>

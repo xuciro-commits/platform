@@ -316,6 +316,7 @@ test("task workspaces preserve platform applications and hand off a controlled r
 
   // Master data and Knowledge remain task-owned, not builder-only aliases.
   await builder.open(page, "/home");
+  await page.getByRole("button", { name: "Use applications", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Master data\b/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Platform Catalog", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /^Master data\b/ }).first().click();

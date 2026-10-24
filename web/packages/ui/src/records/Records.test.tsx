@@ -47,11 +47,18 @@ test("record workspace marks the row whose details are open and clears it on ret
   const props = { title: "Items", source, type: entity.type, onSelect: vi.fn(), detail: (id: string) => <p>Details for {id}</p> };
   const view = render(<RecordWorkspace {...props} selected="A" />);
   await waitFor(() => expect(screen.getByRole("row", { name: "A", selected: true })).toBeTruthy());
+  const search = screen.getByRole("textbox", { name: "Search" });
+  fireEvent.change(search, { target: { value: "original filter" } });
+  fireEvent.click(screen.getByRole("button", { name: "Back to list" }));
+  expect(props.onSelect).toHaveBeenCalledWith(undefined);
   view.rerender(<RecordWorkspace {...props} selected="B" />);
-  expect(screen.getByRole("row", { name: "B", selected: true })).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole("row", { name: "B", selected: true })).toBeTruthy());
   expect(screen.getByRole("row", { name: "A" }).getAttribute("aria-selected")).toBe("false");
   view.rerender(<RecordWorkspace {...props} />);
   expect(screen.queryByRole("row", { selected: true })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Selected record" })).toBeNull();
+  expect(screen.getByRole("textbox", { name: "Search" })).toBe(search);
+  expect((search as HTMLInputElement).value).toBe("original filter");
 });
 
 test("record view refresh retains its current value while revisions and reloads ignore older replies", async () => {
