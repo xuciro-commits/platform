@@ -15,7 +15,7 @@ import (
 	"platformserver/platform"
 )
 
-func (b *Build) checkRefusalDeclarations(object construction.Object, action construction.Action, declarations []platform.Refusal, scope platform.RuleReadSpec, row string, lookup func(string) (platform.EntityInfo, bool)) error {
+func (b *Build) checkRefusalDeclarations(object construction.Object, action construction.Action, declarations []platform.Refusal, scope platform.RuleReadSpec, row string, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
 	if len(declarations) > 16 {
 		return fmt.Errorf("transaction refusals exceed their limit")
 	}
@@ -33,7 +33,7 @@ func (b *Build) checkRefusalDeclarations(object construction.Object, action cons
 				return fmt.Errorf("Refusal escalation reviewer role must be declared on the original object")
 			}
 		}
-		if _, err := platform.RuleSchema(*declaration.When, scope, lookup); err != nil {
+		if _, err := platform.RuleSchema(*declaration.When, scope, lookup, engines...); err != nil {
 			return err
 		}
 		switch declaration.Level {
@@ -126,7 +126,7 @@ func (b *Build) checkRefusalDeclarations(object construction.Object, action cons
 				if err != nil {
 					return err
 				}
-				if _, err := platform.RuleSchema(expr, recordScope, lookup); err != nil {
+				if _, err := platform.RuleSchema(expr, recordScope, lookup, engines...); err != nil {
 					return err
 				}
 				linked = linked || field.Type == "reference" && field.Ref == scope.Object && expr.Kind == "reference" && expr.Ref == "input.$subject"

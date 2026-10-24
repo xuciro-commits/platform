@@ -753,7 +753,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		apps = append(apps, newSampleOwner(member.Tenant, manifest))
 	}
 	apps = append(apps, b)
-	sandbox, err := NewTenant(member.Tenant, apps...)
+	sandbox, err := NewTenantWithCapabilities(member.Tenant, environment.Services, apps...)
 	if err != nil {
 		return nil, err
 	}
@@ -932,7 +932,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		}
 	}
 	sandbox.installingSet = false
-	if err := sandbox.validateAssetSet(); err != nil {
+	if err := sandbox.validateAssetSet(sandbox.services.Rules); err != nil {
 		return nil, err
 	}
 	rows := map[string][]recordState{}

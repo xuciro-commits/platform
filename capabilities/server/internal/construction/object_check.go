@@ -12,7 +12,7 @@ import (
 // BaseField is the required record reference of an extension object.
 const BaseField = "base"
 
-func CheckEnterpriseUse(o Object) error {
+func CheckEnterpriseUse(o Object, engines ...platform.RuleEngine) error {
 	if o.EnterpriseUse == nil {
 		return nil
 	}
@@ -27,7 +27,11 @@ func CheckEnterpriseUse(o Object) error {
 		refs["state"] = platform.ExprType{Kind: "choice"}
 	}
 	refs["archived"] = platform.ExprType{Kind: "boolean"}
-	_, err := platform.CompileExpr(*o.EnterpriseUse, platform.ExprSchema{Refs: refs})
+	var engine platform.RuleEngine = platform.NativeRules{}
+	if len(engines) != 0 {
+		engine = engines[0]
+	}
+	_, err := engine.CompileExpr(*o.EnterpriseUse, platform.ExprSchema{Refs: refs})
 	return err
 }
 

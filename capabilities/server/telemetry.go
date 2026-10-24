@@ -88,13 +88,13 @@ func counted(t *Tenant, kind, app, outcome string) {
 	}
 }
 
-func observeFrom(current func() []*Tenant) {
+func observeFrom(current func() []*Tenant) func() error {
 	m := otel.Meter("platformserver")
 	depth, _ := m.Int64ObservableGauge("platform.queue.depth", metric.WithDescription("Owned work waiting, per tenant and app"))
 	oldest, _ := m.Float64ObservableGauge("platform.queue.oldest", metric.WithUnit("s"), metric.WithDescription("Age of the oldest waiting item, per tenant and app"))
 	failed, _ := m.Int64ObservableGauge("platform.work.failed", metric.WithDescription("Owned work that gave up and waits for a person"))
 	open, _ := m.Int64ObservableGauge("platform.breakers.open", metric.WithDescription("Destinations whose breaker is open"))
-	m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+	registration, err := m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
 		now := time.Now()
 		for _, t := range current() {
 			h := t.Health(now)
@@ -109,6 +109,10 @@ func observeFrom(current func() []*Tenant) {
 		}
 		return nil
 	}, depth, oldest, failed, open)
+	if err != nil {
+		return func() error { return err }
+	}
+	return registration.Unregister
 }
 
 // exportTelemetry sends traces and metrics to the OTLP endpoint the standard

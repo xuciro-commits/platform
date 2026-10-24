@@ -64,7 +64,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const me = meQuery.isError && !connectionUnavailable ? undefined : meQuery.data;
   // A subject the host names an administrator may be a member of no tenant: the console still opens for them.
   const noMember = meQuery.isError && /HTTP 401/.test(String(meQuery.error));
-  const hostAdminQuery = useQuery({ queryKey: [token, "host-only"], queryFn: () => client.get<HostAdmin>("/v1/host/me"), enabled: noMember, retry: false });
+  const needsHostConsole = noMember || meQuery.isError && /HTTP 503/.test(String(meQuery.error));
+  const hostAdminQuery = useQuery({ queryKey: [token, "host-only"], queryFn: () => client.get<HostAdmin>("/v1/host/me"), enabled: needsHostConsole, retry: false });
   const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
   useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
@@ -103,7 +104,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   // --- Host: reads, decisions and the record source every view shares.
   const { host, metadataReady, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
-  const apps = useMemo(() => loadedApps ? composeApplications(loadedApps) : undefined, [loadedApps]);
+  const apps = useMemo(() => loadedApps && host ? composeApplications(loadedApps.filter(app => !app.for || app.for(host))) : undefined, [loadedApps, host]);
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
   const definitions = host?.definitions ?? [];
@@ -119,12 +120,13 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // applications this tenant handed to its people. The Host
   // Console is a host-level application: it appears only for host administrators.
   const [activeRoute, setActiveRoute] = useState<Route>();
+  const activeContributions = useMemo(() => (apps ?? []).filter(app => (!app.for || !!host && app.for(host)) && (app.id !== "host-console" || hostAdmin)), [apps, host, hostAdmin]);
   const all = useMemo(() => {
     const context = { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance };
-    const native = (apps ?? []).filter(app => (!app.for || !!host && app.for(host)) && (app.id !== "host-console" || hostAdmin))
+    const native = activeContributions
       .map(app => ({ ...app, home: host ? app.homeFor(host) : app.home }));
     return [...extendApplications(native, definitions, host?.applications ?? [], context), ...tenantApps(definitions, context)];
-  }, [apps, definitions, host, hostAdmin, activeRoute?.params?.application, activeRoute?.params?.instance]);
+  }, [activeContributions, definitions, host, activeRoute?.params?.application, activeRoute?.params?.instance]);
   const entries = useRef(all);
   entries.current = all;
   const registry = useRef(definitions); // tab titles read current definitions without replacing registered views
@@ -195,19 +197,19 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     return resolved instanceof Promise ? resolved.then(take) : take(resolved);
   }, [client, definitions, host?.applications, owner]);
   const views = useMemo(() => {
-    const views = [...chromeViews(() => entries.current, () => registry.current), ...(apps ?? []).flatMap((a) => a.views)];
+    const views = [...chromeViews(() => entries.current, () => registry.current), ...activeContributions.flatMap((a) => a.views)];
     const seen = new Set<string>();
     for (const v of views) {
       if (seen.has(v.id)) console.error(`view ${v.id} is declared twice; view ids are unique across the workspace`);
       seen.add(v.id);
     }
     return views;
-  }, [apps, select]);
+  }, [activeContributions]);
 
   if (meQuery.error && !(connectionUnavailable && me)) {
+    if (needsHostConsole && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+    if (needsHostConsole && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
     if (/HTTP 503/.test(String(meQuery.error))) return <Recovery client={client} token={token} tenant={tenant} />;
-    if (noMember && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
-    if (noMember && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
     const problem = /HTTP 401/.test(String(meQuery.error))
       ? signedIn ? t("{email} is not a member of this host.", { email: signedIn.session.email }) : t("This host does not accept this identity.")
       : meQuery.error instanceof OfflineReadError ? t(meQuery.error.message) : t("The host is unreachable.");

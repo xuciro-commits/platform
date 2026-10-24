@@ -19,12 +19,12 @@ func withTxnRange(scope platform.RuleReadSpec, kind string) platform.RuleReadSpe
 	return scope
 }
 
-func checkTxnRange(span platform.TxnRange, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool)) error {
+func checkTxnRange(span platform.TxnRange, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
 	if span.From.Kind != "date" && span.From.Kind != "datetime" && span.From.Kind != "integer" || span.Until.Kind != span.From.Kind || span.Unit != "day" && span.Unit != "hour" && span.Unit != "item" || (span.From.Kind == "integer") != (span.Unit == "item") || span.Unit == "hour" && span.From.Kind != "datetime" || span.Step < 1 || span.Step > platform.TxnMaxIterations || span.Limit < 1 || span.Limit > platform.TxnMaxIterations {
 		return fmt.Errorf("Range iteration needs matching integers, dates or timestamps, a compatible step and a bounded limit")
 	}
 	for _, expr := range []platform.Expr{span.From, span.Until} {
-		if _, err := platform.RuleSchema(expr, scope, lookup); err != nil {
+		if _, err := platform.RuleSchema(expr, scope, lookup, engines...); err != nil {
 			return err
 		}
 	}

@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +26,96 @@ type protocolSampleSink func([]byte) (int, error)
 
 func (f protocolSampleSink) Write(raw []byte) (int, error) { return f(raw) }
 
-func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
+func TestPackageCleanupRealDriverRetiresOnlyItsResourcesAndReplaysReceipt(t *testing.T) {
+	directory, index, descriptor, target := realProtocolFixture(t)
+	peer := descriptor
+	peer.ID, peer.Namespace, peer.Version = "test.peerdriver", "test.peerdriver", "1"
+	if err := os.WriteFile(filepath.Join(directory, "peer.json"), platform.Raw(peer), 0600); err != nil {
+		t.Fatal(err)
+	}
+	const id = "package-cleanup"
+	compose := func() *Tenant {
+		return composeTenant(t, id, []Seat{seatOf("builder", "platform:admin", "build:builder")}, build.New(id))
+	}
+	tenant := compose()
+	console := testConsoleOf(tenant)
+	console.BindPackageIndex(index)
+	var entries []Entry
+	tenant.Record = func(entry Entry) { entries = append(entries, entry) }
+	at := time.Now().UTC()
+	for _, p := range []PackageDescriptor{descriptor, peer} {
+		decide(t, tenant, "builder", PlatformApp, SchemaPackageInstall, PackageType, p.ID, map[string]any{"id": p.ID, "version": p.Version}, at)
+	}
+	service, err := gateway.New(gateway.Config{Directory: directory, StateDir: t.TempDir(), Token: "cleanup-test", Resolve: func(binding platform.DriverBinding) (platform.DriverRuntime, error) {
+		return console.ResolveDriver(binding.Package, binding.Version, binding.Digest, binding.Profile)
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	server := httptest.NewServer(service)
+	defer server.Close()
+	tenant.Secrets = func(name string) ([]byte, bool) { return []byte("Bearer cleanup-test"), name == "gateway" }
+	for _, p := range []PackageDescriptor{descriptor, peer} {
+		binding := platform.DriverBinding{Package: p.ID, Version: p.Version, Digest: target.Artifact, Profile: "simulator", Configuration: platform.DriverConfiguration{Devices: []platform.DriverDevice{{ID: "unit", Title: "Unit"}}, Points: []platform.DriverPoint{{ID: "value", Device: "unit", Address: "20", Type: "decimal", IntervalMS: 1000}}}}
+		decide(t, tenant, "builder", construction.ID, "build.connection.create", construction.ConnectionType, p.ID, map[string]any{"name": strings.ReplaceAll(p.ID, ".", ""), "title": p.ID, "kind": "http", "address": server.URL, "secret": "gateway", "allowPrivate": true, "protocol": binding}, at)
+		decide(t, tenant, "builder", construction.ID, "build.connection.check", construction.ConnectionType, p.ID, map[string]any{}, at)
+	}
+	tenant.CheckConnections(at)
+	connection, _ := platform.Get[construction.Connection](tenant.automation(construction.ID, false), descriptor.ID)
+	peerConnection, _ := platform.Get[construction.Connection](tenant.automation(construction.ID, false), peer.ID)
+	if connection.Last == nil || !connection.Last.OK || peerConnection.Last == nil || !peerConnection.Last.OK {
+		t.Fatal("real processes did not start", connection.Last, peerConnection.Last)
+	}
+	decide(t, tenant, "builder", PlatformApp, SchemaPackageDrain, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID}, at)
+	if result := refuse(t, tenant, "builder", PlatformApp, SchemaPackageRetire, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID}, at); result == "ok" {
+		t.Fatal("retirement skipped actual resource cleanup")
+	}
+	host := NewHost(func(token string) (string, bool) { return token, token != "" }, tenant)
+	handler := host.Handler()
+	cleanup := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/v1/packages/"+descriptor.ID+"/cleanup", bytes.NewReader([]byte("{}")))
+		r.Header.Set("Authorization", "Bearer builder")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	tenant.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("cleanup receipt append failed") }
+	if w := cleanup(); w.Code == 200 || len(console.cleanupProofs(descriptor.ID)) != 0 {
+		t.Fatal("failed append installed cleanup evidence", w.Body.String())
+	}
+	tenant.AcceptResult = nil
+	if w := cleanup(); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if len(console.cleanupProofs(descriptor.ID)) == 0 {
+		t.Fatal("verified cleanup was not accepted")
+	}
+	acceptedCleanup := console.packageCleanups[descriptor.ID]
+	decide(t, tenant, "builder", PlatformApp, SchemaPackageRetire, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID}, at)
+	if err = tenant.protocolHTTP(context.Background(), connection, "GET", "check", nil, nil); err == nil {
+		t.Fatal("retired connection reopened its process")
+	}
+	if err = tenant.protocolHTTP(context.Background(), peerConnection, "GET", "check", nil, nil); err != nil {
+		t.Fatal("uninstall changed another package", err)
+	}
+	server.Close()
+	recovered := compose()
+	testConsoleOf(recovered).BindPackageIndex(index)
+	recovered.Files = tenant.Files
+	if err = recovered.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(testConsoleOf(recovered).packageCleanups[descriptor.ID], acceptedCleanup) || testConsoleOf(recovered).packagesOf()[descriptor.ID].State != "retired" {
+		t.Fatal("recovery lost accepted cleanup evidence")
+	}
+	if removal := testConsoleOf(recovered).packageRemoval(descriptor.ID); !removal.OK || removal.NeedsCleanup || len(removal.Blockers) != 0 {
+		t.Fatalf("retired package required cleanup again: %+v", removal)
+	}
+}
+
+func realProtocolFixture(t *testing.T) (string, *PackageIndex, PackageDescriptor, platform.DriverTarget) {
+	t.Helper()
 	directory := os.Getenv("PLATFORM_PROTOCOL_PACKAGES")
 	if directory == "" {
 		t.Skip("set PLATFORM_PROTOCOL_PACKAGES to the real output of make packages")
@@ -33,9 +124,9 @@ func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	descriptor, found := index.find("protocol.simulator", "0.1.3")
+	descriptor, found := index.latest("protocol.simulator")
 	if !found || descriptor.Runtime == nil {
-		t.Fatal("make packages must provide protocol.simulator@0.1.3")
+		t.Fatal("make packages must provide protocol.simulator")
 	}
 	binary, err := descriptor.Runtime.Target()
 	if err != nil {
@@ -54,13 +145,18 @@ func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "artifacts", strings.TrimPrefix(binary.Artifact, "sha256:")), executable, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(directory, "simulator-0.1.3.json"), platform.Raw(descriptor), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "simulator-"+descriptor.Version+".json"), platform.Raw(descriptor), 0600); err != nil {
 		t.Fatal(err)
 	}
 	index, err = LoadPackageIndex(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return directory, index, descriptor, binary
+}
+
+func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
+	directory, index, descriptor, binary := realProtocolFixture(t)
 	tn := composeTenant(t, "protocol-connections", []Seat{seatOf("builder", "build:builder", "platform:admin"), seatOf("operator", "build:user"), seatOf("reviewer", "build:reviewer")}, build.New("protocol-connections"), work.New("protocol-connections"))
 	console := testConsoleOf(tn)
 	console.index = index
@@ -106,7 +202,7 @@ func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 	decide(t, tn, "operator", construction.ID, typ+".create", typ, "A", map[string]any{"device": "device-a", "limit": 35}, at)
 	decide(t, tn, "operator", construction.ID, typ+".create", typ, "B", map[string]any{"device": "device-b", "limit": 35}, at)
 	binding := func(device, scenario, initial string) platform.DriverBinding {
-		return platform.DriverBinding{Package: descriptor.ID, Version: descriptor.Version, Digest: binary.Artifact, Profile: "simulator", Configuration: platform.DriverConfiguration{Scenario: scenario, Seed: 42,
+		return platform.DriverBinding{Scope: platform.DriverScope(tn.ID), Package: descriptor.ID, Version: descriptor.Version, Digest: binary.Artifact, Profile: "simulator", Configuration: platform.DriverConfiguration{Scenario: scenario, Seed: 42,
 			Devices: []platform.DriverDevice{{ID: device, Title: device}}, Points: []platform.DriverPoint{{ID: "temperature", Device: device, Address: initial, Type: "decimal", Unit: "C", IntervalMS: 1000}, {ID: "position", Device: device, Address: "0", Type: "decimal", Unit: "code", IntervalMS: 1000}}, Commands: []platform.DriverCommand{{ID: "setposition", Point: "position", Min: "0", Max: "100"}}}}
 	}
 	for _, test := range []struct {
@@ -129,7 +225,7 @@ func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 		for {
 			select {
 			case sample := <-samples:
-				if sample.Source.Connection == "SECOND" && sample.Source.Revision == revision && sample.Signal == "temperature" {
+				if sample.Source.Connection == binding("device-b", "normal", "24").ConnectionID("SECOND") && sample.Source.Revision == revision && sample.Signal == "temperature" {
 					return sample
 				}
 			case <-timeout.C:
@@ -185,7 +281,7 @@ func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 	if current.Protocol.Revision() != currentBinding.Revision() || current.Last == nil || !current.Last.OK {
 		t.Fatal("retained read altered the current published binding")
 	}
-	oldCommand := platform.DriverExecute{Dispatch: platform.DriverDispatchIdentity{RunID: "retained-run", AttemptID: "new-attempt", BusinessKey: "B", Deadline: time.Now().Add(time.Minute), BindingRevision: old.Protocol.Revision(), PackageDigest: old.Protocol.Digest}, Command: platform.DriverCommandValue{Name: "setposition", Value: "99"}}
+	oldCommand := platform.DriverExecute{Dispatch: platform.DriverDispatchIdentity{Scope: old.Protocol.Scope, RunID: "retained-run", AttemptID: "new-attempt", BusinessKey: "B", Deadline: time.Now().Add(time.Minute), BindingRevision: old.Protocol.Revision(), PackageDigest: old.Protocol.Digest}, Command: platform.DriverCommandValue{Name: "setposition", Value: "99"}}
 	if err := tn.protocolHTTP(context.Background(), old, http.MethodPost, "execute", oldCommand, nil); err == nil || !strings.Contains(err.Error(), "409") || !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("retained package revision accepted a new write: %v", err)
 	}
@@ -246,5 +342,32 @@ func TestProtocolConnectionsRealDriversObservationAndDispatch(t *testing.T) {
 	var window platform.ObservationWindow
 	if json.Unmarshal(run.Readback[0].Observed, &window) != nil || !window.LastAt.After(run.StartedAt) {
 		t.Fatal("dispatch completion used a value older than the command")
+	}
+}
+
+func TestPackageArchiveRealDriverRequiresDeploymentApproval(t *testing.T) {
+	directory, index, descriptor, target := realProtocolFixture(t)
+	binary, err := os.ReadFile(filepath.Join(directory, "artifacts", strings.TrimPrefix(target.Artifact, "sha256:")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenant := composeTenant(t, "driver-archive", []Seat{seatOf("admin", "platform:admin")})
+	console := testConsoleOf(tenant)
+	archive := PackageArchive{Format: "platform.package.v1", Descriptor: descriptor, Artifacts: []PackageArchiveArtifact{{Digest: target.Artifact, MediaType: "application/octet-stream", Bytes: binary}}}
+	preview, err := tenant.inspectPackage(context.Background(), PackageInspectRequest{Content: platform.Raw(archive)})
+	if err != nil || preview.Precheck.OK {
+		t.Fatal("upload authorized a native program", preview, err)
+	}
+	console.BindPackageIndex(index)
+	preview, err = tenant.inspectPackage(context.Background(), PackageInspectRequest{Content: platform.Raw(archive)})
+	if err != nil || !preview.Precheck.OK || len(preview.Artifacts) != 1 || preview.Artifacts[0].Size != len(binary) {
+		t.Fatal(preview, err)
+	}
+	at := time.Now().UTC()
+	decide(t, tenant, "admin", PlatformApp, SchemaPackageImport, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "digest": preview.Digest}, at)
+	decide(t, tenant, "admin", PlatformApp, SchemaPackageInstall, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "version": descriptor.Version}, at)
+	retained, err := console.host.GetPackageArtifact(packageBinaryKey(tenant.ID, descriptor.ID, descriptor.Version, target.Artifact))
+	if err != nil || !bytes.Equal(retained, binary) {
+		t.Fatal("installation did not seal the reviewed driver bytes", err)
 	}
 }

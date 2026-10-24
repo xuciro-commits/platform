@@ -116,7 +116,7 @@ func (d *ObservationDecision) UnmarshalJSON(raw []byte) error {
 	return strictTxn(raw, (*plain)(d))
 }
 
-func (d ObservationDefinition) Check() error {
+func (d ObservationDefinition) Check(engines ...RuleEngine) error {
 	if !functionName.MatchString(d.Name) || strings.TrimSpace(d.Title) == "" || len(d.Title) > 256 || len(d.Description) > 4096 || d.Connection.Check() != nil || d.Connection.Kind != AssetConnection || d.Object.Check() != nil || d.Object.Kind != AssetObject || !functionFieldName.MatchString(d.DeviceField) || strings.TrimSpace(d.Signal) == "" || len(d.Signal) > 128 || strings.TrimSpace(d.Unit) == "" || len(d.Unit) > 64 || d.WindowSeconds < 1 || d.WindowSeconds > ObservationMaxWindowSeconds || d.ExpectedRetentionSeconds < d.WindowSeconds || d.ExpectedRetentionSeconds > 10*ObservationMaxWindowSeconds || d.ExpectedGranularitySeconds < 1 || d.ExpectedGranularitySeconds > d.WindowSeconds || len(d.Roles) == 0 || len(d.Roles) > 64 {
 		return fmt.Errorf("observation needs a logical connection, object/device field, signal/unit, bounded window/retention/granularity and roles")
 	}
@@ -138,7 +138,7 @@ func (d ObservationDefinition) Check() error {
 		}
 	}
 	if d.Intervals != nil {
-		if err := d.Intervals.Check(d.WindowSeconds); err != nil {
+		if err := d.Intervals.Check(d.WindowSeconds, engines...); err != nil {
 			return err
 		}
 	}
@@ -161,8 +161,8 @@ func (d ObservationDefinition) Check() error {
 	return nil
 }
 
-func CheckObservationDefinition(def ObservationDefinition, lookup func(string) (EntityInfo, bool)) error {
-	if err := def.Check(); err != nil {
+func CheckObservationDefinition(def ObservationDefinition, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
+	if err := def.Check(engines...); err != nil {
 		return err
 	}
 	entity, found := lookup(def.Object.Name)
@@ -180,11 +180,11 @@ func CheckObservationDefinition(def ObservationDefinition, lookup func(string) (
 	if def.Decision == nil {
 		return nil
 	}
-	if _, err := CompileExpr(def.Decision.When, schema); err != nil {
+	if _, err := ruleEngineOf(engines).CompileExpr(def.Decision.When, schema); err != nil {
 		return fmt.Errorf("observation decision condition: %w", err)
 	}
 	for name, expr := range def.Decision.Inputs {
-		if _, err := CompileExpr(expr, schema); err != nil {
+		if _, err := ruleEngineOf(engines).CompileExpr(expr, schema); err != nil {
 			return fmt.Errorf("observation decision input %s: %w", name, err)
 		}
 	}
@@ -261,20 +261,20 @@ func ObservationRuleContext(def ObservationDefinition, record json.RawMessage, w
 	return context, nil
 }
 
-func EvaluateObservation(def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, at time.Time) (bool, map[string]json.RawMessage, error) {
-	return evaluateObservationResult(def, entity, record, window, nil, at)
+func EvaluateObservation(def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, at time.Time, engines ...RuleEngine) (bool, map[string]json.RawMessage, error) {
+	return evaluateObservationResult(ruleEngineOf(engines), def, entity, record, window, nil, at)
 }
 
-func EvaluateObservationIntervals(def ObservationDefinition, entity EntityInfo, record json.RawMessage, result ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {
+func EvaluateObservationIntervals(def ObservationDefinition, entity EntityInfo, record json.RawMessage, result ObservationIntervalResult, at time.Time, engines ...RuleEngine) (bool, map[string]json.RawMessage, error) {
 	if err := result.Check(); err != nil {
 		return false, nil, err
 	}
-	return evaluateObservationResult(def, entity, record, ObservationWindow{Since: result.Since, Until: result.Until, Unit: def.Unit}, &result, at)
+	return evaluateObservationResult(ruleEngineOf(engines), def, entity, record, ObservationWindow{Since: result.Since, Until: result.Until, Unit: def.Unit}, &result, at)
 }
 
-func evaluateObservationResult(def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, intervals *ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {
+func evaluateObservationResult(engine RuleEngine, def ObservationDefinition, entity EntityInfo, record json.RawMessage, window ObservationWindow, intervals *ObservationIntervalResult, at time.Time) (bool, map[string]json.RawMessage, error) {
 	inputs := map[string]json.RawMessage{}
-	if err := CheckObservationDefinition(def, func(typ string) (EntityInfo, bool) { return entity, typ == entity.Type }); err != nil {
+	if err := CheckObservationDefinition(def, func(typ string) (EntityInfo, bool) { return entity, typ == entity.Type }, engine); err != nil {
 		return false, inputs, err
 	}
 	if def.Decision == nil {
@@ -298,7 +298,7 @@ func evaluateObservationResult(def ObservationDefinition, entity EntityInfo, rec
 		context.Refs["intervals.since"] = ExprPresent("datetime", intervals.Since.UTC().Format(time.RFC3339Nano))
 		context.Refs["intervals.until"] = ExprPresent("datetime", intervals.Until.UTC().Format(time.RFC3339Nano))
 	}
-	condition, err := CompileExpr(def.Decision.When, schema)
+	condition, err := engine.CompileExpr(def.Decision.When, schema)
 	if err != nil {
 		return false, inputs, err
 	}
@@ -310,7 +310,7 @@ func evaluateObservationResult(def ObservationDefinition, entity EntityInfo, rec
 		return false, inputs, nil
 	}
 	for name, expr := range def.Decision.Inputs {
-		program, err := CompileExpr(expr, schema)
+		program, err := engine.CompileExpr(expr, schema)
 		if err != nil {
 			return false, inputs, err
 		}

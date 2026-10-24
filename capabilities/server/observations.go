@@ -70,7 +70,7 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 	if refusal := t.admits(m); refusal != nil {
 		return nil, refusal
 	}
-	definitions, err := t.definitionsFor(m)
+	definitions, err := t.observationDefinitions(m)
 	if err != nil {
 		return nil, observationUnavailable(err)
 	}
@@ -101,6 +101,17 @@ func observationUnavailable(err error) *kernel.Error {
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Observation read is unavailable: {reason}", err.Error())
 }
 
+func (t *Tenant) observationDefinitions(m platform.Member) ([]platform.Definition, error) {
+	definitions, err := t.ownedAssetDefinitions(t.definitions)
+	if err != nil {
+		return nil, err
+	}
+	// Observation reads need the original permission projection, without
+	// describing every unrelated action, page and capability in the catalogue.
+	definitions = slices.DeleteFunc(definitions, func(def platform.Definition) bool { return def.Observation == nil })
+	return t.definitionsFrom(m, definitions), nil
+}
+
 func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, record string, at time.Time, evaluate bool) (observationReadPlan, *kernel.Error) {
 	var plan observationReadPlan
 	m = t.authorizationMember(m)
@@ -110,7 +121,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if ref.Kind != platform.AssetObservation || ref.Check() != nil || record == "" || len(record) > 200 || strings.ContainsAny(record, "/\x00\r\n") {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose a declared observation and original record")
 	}
-	definitions, err := t.definitionsFor(m)
+	definitions, err := t.observationDefinitions(m)
 	if err != nil {
 		return plan, observationUnavailable(err)
 	}
@@ -359,7 +370,7 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		if answer.Intervals == nil || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) > 0 || len(answer.Samples) > 0 || answer.Coverage != nil || !answer.Intervals.Since.Equal(q.Since) || !answer.Intervals.Until.Equal(q.Until) || len(answer.Intervals.Points) > q.Limit {
 			return result, fmt.Errorf("state observations must match their requested window and bounded point shape")
 		}
-		analysis, err := platform.AnalyzeObservationIntervals(*plan.info.Definition.Intervals, *answer.Intervals, now)
+		analysis, err := platform.AnalyzeObservationIntervals(*plan.info.Definition.Intervals, *answer.Intervals, now, t.services.Rules)
 		if err != nil {
 			return result, err
 		}
@@ -377,7 +388,7 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		if err := platform.CheckObservationLatest(sample, plan.device, plan.info.Definition.Signal, plan.info.Definition.Unit); err != nil {
 			return result, err
 		}
-		if sample.Source.Connection != plan.connection.ID || sample.Source.Revision != plan.connection.Protocol.Revision() || sample.Source.Generation == "" {
+		if sample.Source.Connection != plan.connection.Protocol.ConnectionID(plan.connection.ID) || sample.Source.Revision != plan.connection.Protocol.Revision() || sample.Source.Generation == "" {
 			return result, fmt.Errorf("current observation has another connection or configuration revision")
 		}
 		result.Latest = &sample

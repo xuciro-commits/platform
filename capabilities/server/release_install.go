@@ -87,7 +87,11 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []resultformat.Rel
 
 	}
 	draft.installingSet = false
-	if err := draft.validateAssetSet(); err != nil {
+	var engines []platform.RuleEngine
+	if validate {
+		engines = append(engines, t.services.Rules)
+	}
+	if err := draft.validateAssetSet(engines...); err != nil {
 		return nil, err
 	}
 	return draft, nil
@@ -171,15 +175,15 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool, reviewed ...p
 	return nil
 }
 
-func (t *Tenant) validateAssetSet() error {
+func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 	for _, et := range t.records.sortedTypes() {
 		if err := t.checkObjectProperties(et.info); err != nil {
 			return err
 		}
-		if err := t.checkRecordSetDeclarations(et.info); err != nil {
+		if err := t.checkRecordSetDeclarations(et.info, engines...); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(et.info, t.entity, true); err != nil {
+		if err := platform.CheckConstraints(et.info, t.entity, true, engines...); err != nil {
 			return err
 		}
 	}

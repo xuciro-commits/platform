@@ -49,10 +49,10 @@ func (t *Tenant) ownedAssetDefinition(plan platform.AssetInstallation) (platform
 func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.Definition, error) {
 	base = slices.Clone(base)
 	base = slices.DeleteFunc(base, func(definition platform.Definition) bool {
-		return definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
+		return !t.ownerActive(definition.Ref.App) || definition.Ref.Kind == platform.AssetAgent && definition.Source != "code"
 	})
 	datasets := map[platform.AssetRef]platform.ReleaseAsset{}
-	for _, owner := range t.apps {
+	for _, owner := range t.liveApps() {
 		provider, ok := owner.(platform.AssetLifecycleOwner)
 		if !ok {
 			continue
@@ -162,7 +162,16 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 		return out, nil
 	}
-	registry, err := t.assetRegistryLocked()
+	// Decoding accepted metadata needs only its original lifecycle owners.
+	// Building code release assets here would serialize the entire native
+	// catalogue on every discovery read, even for a single publication.
+	var owners []platform.AssetLifecycleOwner
+	for _, app := range t.liveApps() {
+		if owner, ok := app.(platform.AssetLifecycleOwner); ok {
+			owners = append(owners, owner)
+		}
+	}
+	registry, err := platform.NewAssetRegistry(owners...)
 	if err != nil {
 		return nil, err
 	}

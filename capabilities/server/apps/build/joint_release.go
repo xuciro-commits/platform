@@ -309,8 +309,8 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 		if err = b.captureObjectSchema(&record); err != nil {
 			return prior, next, hadPrior, err
 		}
-		if err = b.Check(record, record.ID); err == nil {
-			err = b.validateObjectInstallation(record)
+		if err = b.Check(record, record.ID, b.host.Caller(platform.Caller{}, member, construction.ID).Rules()); err == nil {
+			err = b.validateObjectInstallation(b.host.Caller(platform.Caller{}, member, construction.ID), record)
 		}
 		if err == nil {
 			inv.objects[i].Published = published(record)

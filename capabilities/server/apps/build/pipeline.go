@@ -203,7 +203,7 @@ func checkStep(c platform.Caller, s construction.Step) error {
 			}
 		}
 		refs(*s.FormulaExpr)
-		_, err := platform.CompileExpr(*s.FormulaExpr, schema)
+		_, err := c.Rules().CompileExpr(*s.FormulaExpr, schema)
 		return err
 	case "lookup", "join":
 		if s.Dataset == "" || s.Column == "" || s.Match == "" {

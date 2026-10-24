@@ -22,6 +22,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"platformserver/platform/authz"
 )
 
 // Authenticate and Attest are the identity provider's two answers (package idp).
@@ -60,7 +61,9 @@ type Host struct {
 	// development ones, the subject itself.
 	Mint func(subject string) string
 	// HostAdmins are the subjects that may open the host console: an independent scope, not a tenant's administrators.
-	HostAdmins map[string]bool
+	HostAdmins          map[string]bool
+	RuntimeProviders    RuntimeProviders
+	AuthorizationEngine authz.Engine
 	// Templates and CreateTenant are how the host console adds a tenant;
 	// a host without a Rebuild leaves CreateTenant nil.
 	Templates    func() []TenantTemplate
@@ -88,7 +91,7 @@ func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 
 // NewHost serves tenants; a tenant's members come from its console (the platform app).
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
-	return &Host{tenants: tenants, authenticate: authenticate, Now: Now}
+	return &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: DefaultRuntimeProviders(), AuthorizationEngine: authz.Standard{}}
 }
 
 func (h *Host) currentTenants() []*Tenant {

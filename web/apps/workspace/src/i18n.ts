@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Tenant maintenance": "租户维护",
+ "This tenant is paused for maintenance. A host administrator can restore its required implementations and resume access in Host Console. Your saved records and history remain.": "此租户正在暂停维护。宿主管理员可在宿主控制台恢复所需实现并恢复访问。已保存的记录和历史仍然保留。",
   "Master data": "主数据",
   "Knowledge and data": "知识与数据",
   "Build and intelligence": "构建与智能",

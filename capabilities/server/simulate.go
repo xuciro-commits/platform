@@ -118,7 +118,7 @@ func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, n
 	// Use the member-facing read contract on the private records, so scope,
 	// field masks and source-derived restrictions all apply to the requester.
 	// Privacy read auditing is private to this view and is discarded too.
-	view := &Tenant{ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, records: draft.records, directory: t.directory}
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, records: draft.records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
 		for k := range draft.records.writes {
 			if !yield(k) {

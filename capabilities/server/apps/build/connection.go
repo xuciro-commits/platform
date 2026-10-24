@@ -20,6 +20,14 @@ func (b *Build) connectionEntity() platform.Entity {
 	return platform.Entity{Type: construction.ConnectionType, Title: "Connection", Plural: "Connections", Model: construction.Connection{}, Display: "title",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			next := record.(*construction.Connection)
+			if !c.Replaying && next.Protocol != nil {
+				old, found := platform.Get[construction.Connection](c, next.ID)
+				if !found || !reflect.DeepEqual(old.Protocol, next.Protocol) {
+					binding := *next.Protocol
+					binding.Scope = platform.DriverScope(c.Tenant)
+					next.Protocol = &binding
+				}
+			}
 			if err := b.validConnection(*next); err != nil {
 				return err
 			}

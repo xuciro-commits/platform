@@ -49,6 +49,9 @@ func (t *Tenant) bound(protocol string) (binding, bool) {
 	if !ok {
 		return binding{}, false
 	}
+	if !t.ownerActive(b.provider.Manifest().ID) {
+		return binding{provider: b.provider}, true
+	}
 	for _, current := range b.provider.Manifest().Provides {
 		if current.Protocol.ID() == protocol {
 			return binding{provider: b.provider, provision: current}, true
@@ -62,7 +65,7 @@ func (t *Tenant) bound(protocol string) (binding, bool) {
 // providers are every enabled provision of protocol, in the tenant's app order.
 func (t *Tenant) providers(protocol string) []binding {
 	var out []binding
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, pv := range a.Manifest().Provides {
 			if pv.Protocol.ID() == protocol {
 				out = append(out, binding{a, pv})
@@ -78,7 +81,7 @@ func (t *Tenant) resolve(protocol string) (binding, bool) {
 	if b, ok := t.bound(protocol); ok {
 		return b, true
 	}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, pv := range a.Manifest().Provides {
 			if pv.Protocol.ID() == protocol {
 				return binding{a, pv}, true
@@ -313,7 +316,7 @@ func (t *Tenant) protocolEvents(e platform.Event) []string {
 // protocolEvent finds a protocol event's declaration by "<protocol id>#<event>".
 func (t *Tenant) protocolEvent(name string) (platform.ProtocolEvent, bool) {
 	protocol, event, _ := strings.Cut(name, "#")
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, pv := range a.Manifest().Provides {
 			if pv.Protocol.ID() == protocol {
 				for _, e := range pv.Protocol.Events {
@@ -352,13 +355,13 @@ func (t *Tenant) Protocols() []ProtocolInfo {
 		}
 		return byID[p.ID()]
 	}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, pv := range a.Manifest().Provides {
 			i := info(pv.Protocol)
 			i.Providers = append(i.Providers, a.Manifest().ID)
 		}
 	}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, c := range a.Manifest().Consumes {
 			if byID[c.Protocol] == nil {
 				byID[c.Protocol], order = &ProtocolInfo{ID: c.Protocol, Providers: []string{}}, append(order, c.Protocol)

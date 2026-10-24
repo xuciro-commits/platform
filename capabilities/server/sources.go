@@ -31,7 +31,7 @@ import (
 // PullSources pulls every due source of the tenant once; it runs on the
 // five-second outside loop beside evaluations and embeddings.
 func (t *Tenant) PullSources(now time.Time) {
-	if t.quarantined() {
+	if t.businessStopped() || !t.ownerActive(construction.ID) {
 		return
 	}
 	sources, refusal := coordinatedRecordRead(t, context.Background(), func() ([]construction.Source, *kernel.Error) {

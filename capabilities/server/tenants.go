@@ -303,8 +303,8 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 // Run is a host binary's whole main after its flags and Rebuild: compose
 // every configured tenant (the -tenants file, or development) and serve.
 func (d *Deployment) Run(development TenantSpec) error {
-	if d.Rebuild == nil {
-		return fmt.Errorf("run: no Rebuild")
+	if d.Rebuild == nil && d.RebuildWithCapabilities == nil {
+		return fmt.Errorf("run: no tenant factory")
 	}
 	var tenants []*Tenant
 	for _, spec := range d.Tenants(development) {

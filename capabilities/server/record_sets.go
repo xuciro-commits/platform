@@ -45,7 +45,7 @@ func (h hostView) ValidateRecordSet(info platform.EntityInfo, set platform.Recor
 }
 func mustEntity(t *Tenant, typ string) platform.EntityInfo { info, _ := t.entity(typ); return info }
 
-func (t *Tenant) checkRecordSetDeclarations(info platform.EntityInfo) error {
+func (t *Tenant) checkRecordSetDeclarations(info platform.EntityInfo, engines ...platform.RuleEngine) error {
 	lookup := func(typ string) (platform.EntityInfo, bool) {
 		if typ == info.Type {
 			return info, true
@@ -55,7 +55,7 @@ func (t *Tenant) checkRecordSetDeclarations(info platform.EntityInfo) error {
 	if err := platform.CheckVersioning(info, lookup); err != nil {
 		return err
 	}
-	if err := platform.CheckRecordSets(info, lookup); err != nil {
+	if err := platform.CheckRecordSets(info, lookup, engines...); err != nil {
 		return err
 	}
 	for _, set := range info.Sets {
@@ -240,10 +240,10 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 		keys []platform.ExprValue
 	}
 	selectedRows := []selected{}
-	programs := map[string]*platform.ExprProgram{}
+	programs := map[string]platform.ExprProgram{}
 	predicates := make([]platform.Expr, len(set.Where))
 	for i, where := range set.Where {
-		lowered, err := platform.LowerRecordSetPredicate(set, where, lookup)
+		lowered, err := platform.LowerRecordSetPredicate(set, where, lookup, c.Rules())
 		if err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
@@ -253,11 +253,11 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 		key := string(platform.Raw(expr))
 		program := programs[key]
 		if program == nil {
-			schema, err := platform.RuleSchema(expr, spec, ruleLookup)
+			schema, err := platform.RuleSchema(expr, spec, ruleLookup, c.Rules())
 			if err != nil {
 				return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			program, err = platform.CompileExpr(expr, schema)
+			program, err = c.Rules().CompileExpr(expr, schema)
 			if err != nil {
 				return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
@@ -308,7 +308,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	var orderErr error
 	slices.SortStableFunc(selectedRows, func(a, b selected) int {
 		for i, key := range a.keys {
-			comparison, err := platform.CompareExprValues(key, b.keys[i])
+			comparison, err := c.Rules().CompareExprValues(key, b.keys[i])
 			if err != nil {
 				orderErr = err
 				return 0

@@ -15,11 +15,13 @@ import (
 // it moved in or out. The lifecycle is read without any lock (health, the
 // tenant record); the rest has its own.
 type hostControl struct {
-	lifecycle  atomic.Pointer[string]
-	mu         sync.Mutex
-	support    []SupportGrant
-	migrations []MigrationManifest
-	requests   map[string]hostControlReceipt
+	lifecycle        atomic.Pointer[string]
+	mu               sync.Mutex
+	support          []SupportGrant
+	migrations       []MigrationManifest
+	requests         map[string]hostControlReceipt
+	runtimeSelection map[string]string
+	disabledOwners   []string
 }
 
 func (h *hostControl) state() string {
@@ -36,6 +38,8 @@ func (h *hostControl) suspended() bool {
 	l := h.state()
 	return l != "" && l != "open"
 }
+
+func (t *Tenant) businessStopped() bool { return t.quarantined() || t.console.suspended() }
 
 // supportGrants are the sessions, newest first.
 func (h *hostControl) supportGrants() []SupportGrant {
@@ -71,6 +75,8 @@ func (h *hostControl) snapshot(s *tenantState) {
 	defer h.mu.Unlock()
 	s.HostLifecycle, s.Support, s.Migrations = h.state(), slices.Clone(h.support), slices.Clone(h.migrations)
 	s.HostRequests = maps.Clone(h.requests)
+	s.RuntimeSelection = maps.Clone(h.runtimeSelection)
+	s.DisabledOwners = slices.Clone(h.disabledOwners)
 }
 
 func (h *hostControl) restore(s *tenantState) {
@@ -79,4 +85,6 @@ func (h *hostControl) restore(s *tenantState) {
 	defer h.mu.Unlock()
 	h.support, h.migrations = slices.Clone(s.Support), slices.Clone(s.Migrations)
 	h.requests = maps.Clone(s.HostRequests)
+	h.runtimeSelection = maps.Clone(s.RuntimeSelection)
+	h.disabledOwners = slices.Clone(s.DisabledOwners)
 }

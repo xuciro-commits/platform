@@ -624,7 +624,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 
 // CompileEnterpriseUse permits only this record's fields, using the same pure
 // expression compiler as other owner rules.
-func (info EntityInfo) CompileEnterpriseUse() (*ExprProgram, error) {
+func (info EntityInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram, error) {
 	if info.EnterpriseUse == nil {
 		return nil, nil
 	}
@@ -635,7 +635,7 @@ func (info EntityInfo) CompileEnterpriseUse() (*ExprProgram, error) {
 	for _, field := range info.Fields {
 		refs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
 	}
-	return CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
+	return ruleEngineOf(engines).CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
 }
 
 // ApplyFieldAliases copies only declared compatible fields. Owners use the

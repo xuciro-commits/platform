@@ -259,7 +259,7 @@ func (t *Tenant) openPostgres(ctx context.Context, c construction.Connection) (*
 // CheckConnections reaches every connection whose check was asked for, once,
 // and keeps the outcome on it. It runs beside PullSources.
 func (t *Tenant) CheckConnections(now time.Time) {
-	if t.quarantined() {
+	if t.businessStopped() || !t.ownerActive(construction.ID) {
 		return
 	}
 	t.mu.Lock()

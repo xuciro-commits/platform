@@ -16,10 +16,12 @@ import (
 // The host console owns lifecycle, bounded support authority and migration
 // manifests. These images contain no ordinary tenant records or execution state.
 type hostControlImage struct {
-	Lifecycle  string                        `json:"lifecycle"`
-	Support    []SupportGrant                `json:"support"`
-	Migrations []MigrationManifest           `json:"migrations"`
-	Requests   map[string]hostControlReceipt `json:"requests"`
+	Lifecycle        string                        `json:"lifecycle"`
+	Support          []SupportGrant                `json:"support"`
+	Migrations       []MigrationManifest           `json:"migrations"`
+	Requests         map[string]hostControlReceipt `json:"requests"`
+	RuntimeSelection map[string]string             `json:"runtimeSelection,omitempty"`
+	DisabledOwners   []string                      `json:"disabledOwners,omitempty"`
 }
 type hostControlReceipt struct {
 	RequestHash string       `json:"requestHash"`
@@ -49,7 +51,7 @@ func (h *hostControl) image() (hostControlImage, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	// Encode the complete owned shape to isolate nested migration row diagnostics.
-	raw, err := json.Marshal(hostControlImage{h.state(), h.support, h.migrations, h.requests})
+	raw, err := json.Marshal(hostControlImage{Lifecycle: h.state(), Support: h.support, Migrations: h.migrations, Requests: h.requests, RuntimeSelection: h.runtimeSelection, DisabledOwners: h.disabledOwners})
 	var image hostControlImage
 	if err == nil {
 		err = json.Unmarshal(raw, &image)
@@ -57,6 +59,23 @@ func (h *hostControl) image() (hostControlImage, error) {
 	return image, err
 }
 func validateHostImage(tenant string, image hostControlImage) error {
+	owners := map[string]bool{}
+	for _, id := range image.DisabledOwners {
+		if id == "" || len(id) > 128 || owners[id] {
+			return fmt.Errorf("invalid inactive owner")
+		}
+		owners[id] = true
+	}
+	if image.RuntimeSelection != nil {
+		if len(image.RuntimeSelection) != 3 {
+			return fmt.Errorf("invalid runtime selection")
+		}
+		for _, id := range []string{"platform.rules", "platform.authorization", "platform.kernel"} {
+			if _, found := image.RuntimeSelection[id]; !found {
+				return fmt.Errorf("missing runtime contract %s", id)
+			}
+		}
+	}
 	if !slices.Contains([]string{"", "open", "suspend", "decommission", "suspended", "decommissioned"}, image.Lifecycle) {
 		return fmt.Errorf("invalid host lifecycle")
 	}
@@ -79,7 +98,7 @@ func validateHostImage(tenant string, image hostControlImage) error {
 	}
 	for key, receipt := range image.Requests {
 		tag, _, found := strings.Cut(strings.TrimPrefix(key, "host:"), ":")
-		if !strings.HasPrefix(key, "host:") || !found || !slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration"}, tag) || len(receipt.RequestHash) != 64 || !strings.HasSuffix(key, ":"+receipt.RequestHash) {
+		if !strings.HasPrefix(key, "host:") || !found || !slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration", "composition"}, tag) || len(receipt.RequestHash) != 64 || !strings.HasSuffix(key, ":"+receipt.RequestHash) {
 			return fmt.Errorf("invalid host receipt")
 		}
 		if tag == "support.open" || tag == "support.use" {
@@ -122,7 +141,7 @@ func decodeAcceptedHostControl(raw []byte) (acceptedHostControl, error) {
 	hash, hashErr := hostRequestHash(r)
 	digest, digestErr := hostResultDigest(r)
 	if hashErr != nil || digestErr != nil || r.Version != 1 || r.Kind != "host-result" || r.Tenant == "" || r.App != PlatformApp || r.Member == "" || r.At.IsZero() ||
-		!slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration"}, r.Action) || r.Key != "host:"+r.Action+":"+hash || r.RequestHash != hash || r.Digest != digest || r.Before == "" || r.AuditBefore == "" ||
+		!slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration", "composition"}, r.Action) || r.Key != "host:"+r.Action+":"+hash || r.RequestHash != hash || r.Digest != digest || r.Before == "" || r.AuditBefore == "" ||
 		r.Audit.Member != r.Member || r.Audit.App != PlatformApp || !r.Audit.At.Equal(r.At) || r.Audit.Action == "" {
 		return r, fmt.Errorf("host result identity differs")
 	}
@@ -235,6 +254,8 @@ func (t *Tenant) applyAcceptedHostControl(raw []byte) (acceptedHostControl, erro
 	t.console.mu.Lock()
 	t.console.setState(r.Image.Lifecycle)
 	t.console.support, t.console.migrations, t.console.requests = r.Image.Support, r.Image.Migrations, maps.Clone(r.Image.Requests)
+	t.console.runtimeSelection = maps.Clone(r.Image.RuntimeSelection)
+	t.console.disabledOwners = slices.Clone(r.Image.DisabledOwners)
 	t.console.mu.Unlock()
 	t.audit.remember(r.Audit)
 	return r, nil
@@ -254,6 +275,18 @@ func validateHostTransition(current hostControlImage, r acceptedHostControl) err
 	var answer SupportGrant
 	audit := AuditEntry{At: r.At, Member: r.Member, App: PlatformApp}
 	switch r.Action {
+	case "composition":
+		var body CompositionRequest
+		if err := decodeControl(r.Request, &body); err != nil {
+			return err
+		}
+		if body.Reason == "" || body.At.IsZero() || !body.At.Equal(r.At) || !strings.HasPrefix(r.Member, "host:") {
+			return fmt.Errorf("invalid runtime maintenance request")
+		}
+		expected.RuntimeSelection = maps.Clone(body.Selection)
+		expected.DisabledOwners = slices.Clone(body.DisabledOwners)
+		expected.Lifecycle = "suspend"
+		audit.Action, audit.Target = "host.composition", r.Tenant+":"+body.Reason
 	case "lifecycle":
 		var body struct{ Action, Reason string }
 		if err := decodeControl(r.Request, &body); err != nil {

@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"time"
 
@@ -10,6 +11,17 @@ import (
 )
 
 func (s *Server) startSampling(ctx context.Context, live *session) error {
+	s.mu.Lock()
+	allowed := !live.draining && s.active[live.open.Connection] == live.open.Revision
+	s.mu.Unlock()
+	if !allowed {
+		return fmt.Errorf("the retained binding supports readback only; new sampling is stopped")
+	}
+	release, err := live.resources.Acquire()
+	if err != nil {
+		return err
+	}
+	defer release()
 	if !slices.Contains(live.profile.Operations, "sample") {
 		return nil
 	}
@@ -29,7 +41,9 @@ func (s *Server) startSampling(ctx context.Context, live *session) error {
 	}
 	sampling, cancel := context.WithCancel(s.ctx)
 	live.stop, live.sampling = cancel, true
-	go s.sample(sampling, live)
+	live.done = make(chan struct{})
+	done := live.done
+	go func() { defer close(done); s.sample(sampling, live) }()
 	return nil
 }
 
@@ -47,6 +61,12 @@ func (s *Server) sample(ctx context.Context, live *session) {
 		case <-ctx.Done():
 			return
 		case at := <-ticker.C:
+			s.mu.Lock()
+			draining := live.draining || s.active[live.open.Connection] != live.open.Revision
+			s.mu.Unlock()
+			if draining {
+				return
+			}
 			var due []string
 			for _, point := range live.binding.Configuration.Points {
 				if !at.Before(next[point.ID]) {
@@ -57,7 +77,7 @@ func (s *Server) sample(ctx context.Context, live *session) {
 			if len(due) == 0 {
 				continue
 			}
-			readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			readCtx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 			result, err := s.read(readCtx, live, platform.DriverRead{Session: live.open.Session, Signals: due, Mode: "latest"})
 			cancel()
 			if err != nil {

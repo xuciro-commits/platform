@@ -11,7 +11,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -119,7 +118,7 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.quarantined() {
+	if t.businessStopped() {
 		return platform.Effect{}, false
 	}
 	t.opsMu.Lock()
@@ -201,7 +200,7 @@ func (t *Tenant) operationDispatches(now time.Time) []func() {
 	}
 	return runs
 }
-func (t *Tenant) prepareOperationFinish(before platform.Effect, out platform.Outcome) (*kernel.Works, json.RawMessage, json.RawMessage, error) {
+func (t *Tenant) prepareOperationFinish(before platform.Effect, out platform.Outcome) (platform.Works, json.RawMessage, json.RawMessage, error) {
 	if before.Endpoint != resultformat.OperationEndpoint {
 		return nil, nil, nil, nil
 	}

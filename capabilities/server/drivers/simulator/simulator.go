@@ -284,7 +284,7 @@ func (s *session) window(ctx context.Context, in platform.DriverRead, point plat
 	if in.Until.Sub(start)/step > 100000 {
 		return result, fmt.Errorf("simulated window exceeds the generated sample budget")
 	}
-	folds := map[string]*platform.ExprNumericAggregate{}
+	folds := map[string]platform.ExprNumericAggregate{}
 	for _, op := range []string{"min", "max", "sum", "avg"} {
 		folds[op], _ = platform.NewExprNumericAggregate(op, "decimal", "")
 	}

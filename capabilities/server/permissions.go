@@ -39,7 +39,7 @@ type AppPermissions struct {
 func (t *Tenant) Permissions() []AppPermissions {
 	d, _ := t.app(PlatformApp).(host.IdentityDirectory)
 	out := []AppPermissions{}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		m := a.Manifest()
 		ap := AppPermissions{App: m.ID, Title: m.Title, Reads: append([]string{}, m.Reads...), Everyone: append([]string{}, m.Everyone...), Roles: []RolePermissions{}}
 		if ap.Title == "" {
@@ -119,7 +119,7 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 		out.Verdict = t.authorizeEntry(m, app, name, "read", Now())
 		return out, nil
 	}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		mf := a.Manifest()
 		if action, own := mf.Actions.Action(permission); own {
 			out.App, out.Roles, out.Allowed = mf.ID, nonNil(m.RolesIn(mf.ID)), nonNil(action.Roles)

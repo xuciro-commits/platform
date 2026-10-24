@@ -43,6 +43,8 @@ pnpm --dir web/apps/workspace build >"$scratch/web.log" 2>&1
 compose --progress plain build >"$scratch/build.log" 2>&1
 compose up -d --quiet-pull >"$scratch/up.log" 2>&1
 python3 deploy/local/platform_rehearsal.py "$scratch"
+(cd capabilities/server && go build -o ../../.build/storage-files ./cmd/storage-files)
+python3 deploy/local/storage_handover_rehearsal.py "$scratch"
 compose exec -T postgres createdb -U platform rehearsal_test
 PLATFORM_TEST_DATABASE="postgres://platform:platform-local-only@127.0.0.1:$PG_PORT/rehearsal_test" \
   make test-go PKG=. RUN='TestJournal|TestObservationIntervalProjectionFlowIdentityAndPureRecovery|TestPostgresTableProfilePullAndReplay|TestPostgresApplicationRuntimeAndDiagnosticReadScopes|TestPostgresRetainedFlowAliasQueryUsesConvertedRows|TestPostgresBusinessUniqueKeysSurvivePrivateFailureAndRestart' >"$scratch/postgres.log" 2>&1

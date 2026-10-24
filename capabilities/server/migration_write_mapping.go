@@ -88,7 +88,7 @@ func (r *flowExecutionRuntime) mapRetainedWrite(me, typ string, before, after ma
 				return nil, nil, nil, fmt.Errorf("retained write target shape differs from its accepted migration")
 			}
 		}
-		program, err := platform.CompileMigrationPlan(selected.Plan, sources, targets)
+		program, err := platform.CompileMigrationPlan(selected.Plan, sources, targets, r.tenant.services.Rules)
 		if err != nil {
 			return nil, nil, nil, err
 		}

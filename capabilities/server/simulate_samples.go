@@ -20,6 +20,7 @@ type SimulationSample struct {
 }
 
 type simulationEnvironment struct {
+	Services            RuntimeCapabilities
 	Organization        *platform.OrgSeed
 	OrganizationFactory platform.SimulationOrganizationFactory
 	Factories           map[string]platform.SimulationFactory
@@ -52,7 +53,7 @@ func (a *sampleOwner) Submit(platform.Caller, *pb.Submission, time.Time) (*pb.Ch
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Native business actions require an isolated owner test fixture")
 }
 func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samples []SimulationSample) (simulationEnvironment, error) {
-	environment := simulationEnvironment{Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
+	environment := simulationEnvironment{Services: t.services, Modules: map[string][]byte{}, Samples: samples, Factories: map[string]platform.SimulationFactory{}}
 	for _, app := range t.apps {
 		if factory, ok := app.(platform.SimulationOrganizationFactory); ok {
 			environment.OrganizationFactory = factory

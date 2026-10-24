@@ -255,7 +255,7 @@ func (t *Tenant) assetRegistryLocked() (*platform.AssetRegistry, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, app := range t.apps {
+	for _, app := range t.liveApps() {
 		code, err := t.codeReleaseAssetsLocked(app)
 		if err != nil {
 			return nil, err

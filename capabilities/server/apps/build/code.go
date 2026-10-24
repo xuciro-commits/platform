@@ -180,7 +180,7 @@ func (b *Build) checkCode(code Code) error {
 	if code.Module == "" || code.SourceHash != code.sourceHash() || code.BuildHash != code.buildHash() || code.Language != "go" && code.Language != "tinygo" || code.Toolchain == "" {
 		return fmt.Errorf("code %s needs an unchanged isolated build", code.Name)
 	}
-	if err := b.host.ValidateInstallOperation(code.Definition()); err != nil {
+	if err := b.host.ValidateInstallOperation(platform.Caller{}, code.Definition()); err != nil {
 		return err
 	}
 	list, err := b.codeInventory()

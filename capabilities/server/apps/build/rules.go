@@ -317,7 +317,7 @@ func (b *Build) normalizeObjectRules(o *construction.Object) error {
 	// belongs to Check, with the complete publication candidate available.
 	return nil
 }
-func (b *Build) checkObjectRules(o construction.Object) error {
+func (b *Build) checkObjectRules(o construction.Object, engines ...platform.RuleEngine) error {
 	if err := b.checkObjectProtocols(o); err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func (b *Build) checkObjectRules(o construction.Object) error {
 		if err := b.checkRuleCollections(s, where, lookup); err != nil {
 			return err
 		}
-		_, err := platform.RuleSchema(e, s, lookup)
+		_, err := platform.RuleSchema(e, s, lookup, engines...)
 		if err != nil {
 			return fmt.Errorf("%s: %w", where, err)
 		}

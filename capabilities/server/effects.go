@@ -272,7 +272,7 @@ func (t *Tenant) Dispatch(now time.Time) { onLane(t.dispatches(now)) }
 // side by side, each in its order; an endpoint whose breaker is open waits,
 // spending no attempts.
 func (t *Tenant) dispatches(now time.Time) []func() {
-	if t.quarantined() {
+	if t.businessStopped() {
 		return nil
 	}
 	type job struct {
@@ -282,6 +282,10 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	}
 	var jobs []job
 	t.mu.Lock()
+	if t.businessStopped() {
+		t.mu.Unlock()
+		return nil
+	}
 	t.opsMu.Lock()
 	// Apps' model requests go to the built-in model destination;
 	// the model door keeps each provider's own breaker.
@@ -306,7 +310,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	var sends []func()
 	for _, j := range jobs {
 		sends = append(sends, func() {
-			if t.quarantined() {
+			if t.businessStopped() {
 				return
 			}
 			if !t.beginDispatchAttempt(j.effect, now) {

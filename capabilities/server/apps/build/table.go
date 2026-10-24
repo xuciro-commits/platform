@@ -40,7 +40,7 @@ func (b *Build) tableEntity() platform.Entity {
 			if err := tb.NormalizeRules(); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
-			if err := b.checkTableShape(*tb); err != nil {
+			if err := b.checkTableShape(*tb, c.Rules()); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			return nil
@@ -61,7 +61,7 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 	}
-	if err := b.checkTable(*tb); err != nil {
+	if err := b.checkTable(*tb, c.Rules()); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if tb.Version >= 64 {
@@ -72,7 +72,7 @@ func (b *Build) publishTable(c platform.Caller, record any, _ json.RawMessage, _
 	frozen.Published = ""
 	frozen.Versions = nil
 	if c.Staging() {
-		if err := b.host.ValidateInstallOperation(frozen.Definition()); err != nil {
+		if err := b.host.ValidateInstallOperation(c, frozen.Definition()); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 	} else if err := b.installTable(c, frozen); err != nil {
@@ -119,15 +119,15 @@ func (b *Build) installTables() error {
 
 var columnName = regexp.MustCompile(`^[a-z][a-z0-9]{0,31}$`)
 
-func (b *Build) checkTable(tb construction.Table) error {
+func (b *Build) checkTable(tb construction.Table, engines ...platform.RuleEngine) error {
 	if err := b.checkName(tb.Name, tb.ID); err != nil {
 		return err
 	}
-	return b.checkTableShape(tb)
+	return b.checkTableShape(tb, engines...)
 }
 
 // checkTableShape checks everything but the name's uniqueness.
-func (b *Build) checkTableShape(tb construction.Table) error {
+func (b *Build) checkTableShape(tb construction.Table, engines ...platform.RuleEngine) error {
 	if strings.TrimSpace(tb.Title) == "" || len(tb.Inputs) == 0 || len(tb.Outputs) == 0 || len(tb.Inputs)+len(tb.Outputs) > tableCols || len(tb.Rows) == 0 || len(tb.Rows) > tableRows {
 		return fmt.Errorf("a table needs a title, 1 to %d columns and 1 to %d rows", tableCols, tableRows)
 	}
@@ -149,7 +149,7 @@ func (b *Build) checkTableShape(tb construction.Table) error {
 		if row.Condition.Kind != "boolean" {
 			return fmt.Errorf("row %d needs boolean", i+1)
 		}
-		if _, err := platform.RuleSchema(row.Condition, plan.Reads, b.conditionLookup); err != nil {
+		if _, err := platform.RuleSchema(row.Condition, plan.Reads, b.conditionLookup, engines...); err != nil {
 			return fmt.Errorf("row %d: %w", i+1, err)
 		}
 	}

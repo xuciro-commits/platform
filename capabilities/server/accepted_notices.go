@@ -251,7 +251,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	fork.records = d.records.forkRecords()
 	fork.records.parent, fork.records.baseGeneration = d.records.parent, d.records.baseGeneration
 	fork.records.writes = maps.Clone(d.records.writes)
-	fork.logs = map[*platform.Ledger]*kernel.ChangeLog{}
+	fork.logs = map[*platform.Ledger]platform.ChangeLog{}
 	for ledger, log := range d.logs {
 		suspended := d.receiving[ledger]
 		for id := range d.active {
@@ -266,7 +266,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 			// child. The parent's live stack already holds this private log.
 			fork.logs[ledger] = log
 		} else {
-			fork.logs[ledger] = log.Fork()
+			fork.logs[ledger] = log.ForkLog()
 		}
 	}
 	fork.events, fork.notices = slices.Clone(d.events), slices.Clone(d.notices)
@@ -285,7 +285,7 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for i, descriptor := range descriptors {
 		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
 	}
-	fork.connectors = kernel.NewConnectors()
+	fork.connectors = d.tenant.services.Kernel.Connectors()
 	fork.connectors.Restore(descriptors, marks)
 	fork.deliveries = slices.Clone(d.deliveries)
 	fork.privateApps = map[string]platform.App{}

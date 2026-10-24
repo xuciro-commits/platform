@@ -10,6 +10,15 @@ import (
 // AnyMember as an allowed role lets every member of the tenant through.
 const AnyMember = "*"
 
+// Engine consumes owner-resolved facts, without live state or external I/O.
+type Engine interface {
+	Decide(Request, ...Policy) Verdict
+}
+
+type Standard struct{}
+
+func (Standard) Decide(r Request, policies ...Policy) Verdict { return Decide(r, policies...) }
+
 // Subject is who asks: a member with the roles they hold in the app the
 // permission belongs to, today.
 type Subject struct {

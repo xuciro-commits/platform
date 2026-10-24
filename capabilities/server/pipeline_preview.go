@@ -107,7 +107,7 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		return out, problem
 	}
 	out.SampledRows = len(inputs[p.Input])
-	rows, quarantine, err := p.Execute(inputs[p.Input], func(id string) ([]map[string]any, error) {
+	rows, quarantine, err := p.ExecuteWithRules(t.services.Rules, inputs[p.Input], func(id string) ([]map[string]any, error) {
 		rows, exists := inputs[id]
 		if !exists {
 			return nil, fmt.Errorf("The trial dataset was not captured")

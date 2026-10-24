@@ -24,7 +24,7 @@ func (t *Tenant) beginDispatchAttempt(x platform.Effect, at time.Time) bool {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.quarantined() {
+	if t.businessStopped() {
 		return false
 	}
 	const reason = "Dispatch attempt started; awaiting delivery evidence"

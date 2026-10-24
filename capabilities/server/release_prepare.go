@@ -232,7 +232,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	}
 	if !context.DraftsOnly {
 		view.installingSet = false
-		if err := view.validateAssetSet(); err != nil {
+		if err := view.validateAssetSet(view.services.Rules); err != nil {
 			return nil, nil, err
 		}
 	}

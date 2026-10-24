@@ -26,7 +26,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if old == nil || !old.quarantined() {
 		return fmt.Errorf("tenant %s is not quarantined", id)
 	}
-	if d.Rebuild == nil {
+	if d.Rebuild == nil && d.RebuildWithCapabilities == nil {
 		return fmt.Errorf("tenant %s has no recovery factory", id)
 	}
 	defer func() {
@@ -35,7 +35,11 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		}
 	}()
 	recoveryStarted := time.Now().UTC()
-	fresh, err := d.rebuildTenant(id)
+	selection := old.desiredRuntime()
+	if missingRuntime(selection) {
+		return fmt.Errorf("tenant %s needs a compatible provider selection before recovery", id)
+	}
+	fresh, err := d.composeRuntime(id, selection)
 	if err != nil {
 		return fmt.Errorf("compose tenant %s: %w", id, err)
 	}
@@ -47,7 +51,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		return fmt.Errorf("tenant %s original composition: %w", id, err)
 	}
 	after, err := fresh.snapshotCompatibility()
-	if err != nil || !reflect.DeepEqual(before, after) {
+	if err != nil || !reflect.DeepEqual(before, after) || old.services.KernelModule.StateFormat != fresh.services.KernelModule.StateFormat {
 		return fmt.Errorf("tenant %s recovery factory has different app composition or restore formats: %v", id, err)
 	}
 	fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
@@ -88,21 +92,35 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		return fmt.Errorf("recover tenant %s runtime state: %w", id, err)
 	}
 	fresh.attachJournal(context.Background(), journal)
+	if err := fresh.deactivateOwners(fresh.desiredDisabledOwners()); err != nil {
+		return fmt.Errorf("restore tenant %s module selection: %w", id, err)
+	}
 	if err := registry.replace(id, old, fresh); err != nil {
 		return err
 	}
 	if projection != nil {
-		flushProjection(context.Background(), registry, fresh, projection)
+		d.runProjection(registry, fresh, projection)
 	}
 	log.Printf("recovered tenant %s in place from %d journal entries", id, len(entries))
 	return nil
 }
 
-func flushProjection(ctx context.Context, registry *tenantRegistry, tenant *Tenant, projection *Projection) {
+func (d *Deployment) runProjection(registry *tenantRegistry, tenant *Tenant, projection *Projection) {
+	if d.background == nil || d.runtimeContext == nil {
+		return
+	}
+	ctx, background := d.runtimeContext, d.background
+	background.Add(1)
 	go func() {
+		defer background.Done()
 		tick := time.NewTicker(time.Second)
 		defer tick.Stop()
-		for range tick.C {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
 			if registry.current(tenant.ID) != tenant {
 				return
 			}

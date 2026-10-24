@@ -151,6 +151,10 @@ func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 // Execute runs the steps over rows, resolving other datasets through read,
 // then applies expectations; it returns the kept rows and the quarantined ones.
 func (p Pipeline) Execute(input []map[string]any, read func(dataset string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, []QuarantinedRow, error) {
+	return p.ExecuteWithRules(platform.NativeRules{}, input, read, rowLimit...)
+}
+
+func (p Pipeline) ExecuteWithRules(engine platform.RuleEngine, input []map[string]any, read func(dataset string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, []QuarantinedRow, error) {
 	if len(rowLimit) > 0 && rowLimit[0] > 0 && len(input) > rowLimit[0] {
 		return nil, nil, fmt.Errorf("pipeline input exceeds the %d row limit", rowLimit[0])
 	}
@@ -163,7 +167,7 @@ func (p Pipeline) Execute(input []map[string]any, read func(dataset string) ([]m
 	}
 	var err error
 	for i, s := range p.Steps {
-		rows, err = s.Apply(rows, read, rowLimit...)
+		rows, err = s.ApplyWithRules(engine, rows, read, rowLimit...)
 		if err != nil {
 			return nil, nil, fmt.Errorf("step %d (%s): %v", i+1, s.Kind, err)
 		}
@@ -173,6 +177,10 @@ func (p Pipeline) Execute(input []map[string]any, read func(dataset string) ([]m
 }
 
 func (s Step) Apply(rows []map[string]any, read func(string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, error) {
+	return s.ApplyWithRules(platform.NativeRules{}, rows, read, rowLimit...)
+}
+
+func (s Step) ApplyWithRules(engine platform.RuleEngine, rows []map[string]any, read func(string) ([]map[string]any, error), rowLimit ...int) ([]map[string]any, error) {
 	switch s.Kind {
 	case "select":
 		out := make([]map[string]any, len(rows))
@@ -245,12 +253,12 @@ func (s Step) Apply(rows []map[string]any, read func(string) ([]map[string]any, 
 			}
 		}
 		refs(*expr)
-		var program *platform.ExprProgram
+		var program platform.ExprProgram
 		var err error
 		if s.FormulaExpr == nil {
-			program, err = platform.CompileFrozenFormula(*expr, schema)
+			program, err = engine.CompileFrozenFormula(*expr, schema)
 		} else {
-			program, err = platform.CompileExpr(*expr, schema)
+			program, err = engine.CompileExpr(*expr, schema)
 		}
 		if err != nil {
 			return nil, err

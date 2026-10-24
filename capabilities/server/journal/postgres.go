@@ -152,6 +152,13 @@ func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(1347174740, 1)`); err != nil {
 		return err
 	}
+	var fenced bool
+	if err := tx.QueryRow(ctx, `select to_regclass('public.platform_storage_fence') is not null`).Scan(&fenced); err != nil {
+		return err
+	}
+	if fenced {
+		return fmt.Errorf("storage is fenced for handover; use the verified target or perform a new handover from the current authority")
+	}
 	if _, err := tx.Exec(ctx, `create table if not exists journal_migrations (id text primary key, applied timestamptz not null default now())`); err != nil {
 		return err
 	}

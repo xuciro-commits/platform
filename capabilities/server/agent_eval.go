@@ -159,7 +159,7 @@ func (t *Tenant) Evaluate(now time.Time) {
 	}
 	for {
 		t.mu.Lock()
-		if t.quarantined() {
+		if t.businessStopped() {
 			t.mu.Unlock()
 			return
 		}

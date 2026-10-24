@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,10 +24,11 @@ import (
 )
 
 type Config struct {
-	Directory string
-	StateDir  string
-	Token     string
-	Resolve   func(platform.DriverBinding) (platform.DriverRuntime, error)
+	Directory    string
+	StateDir     string
+	Token        string
+	LegacyTenant string // explicit owner of old, unscoped bindings; never inferred from a request
+	Resolve      func(platform.DriverBinding) (platform.DriverRuntime, error)
 	// Samples is an external raw-sample sink. The business host does not receive
 	// this stream, and this gateway retains only the latest value of each point.
 	Samples io.Writer
@@ -36,31 +38,39 @@ type rpcClient interface {
 	Call(context.Context, string, any, any) error
 	Available() bool
 	Close()
+	CloseWait(context.Context) error
 }
 
 type Server struct {
-	config    Config
-	mu        sync.Mutex
-	processes map[string]rpcClient
-	sessions  map[string]*session
-	active    map[string]string
-	receipts  map[string]receipt
-	start     func(string) (rpcClient, error)
-	ctx       context.Context
-	cancel    context.CancelFunc
-	sampleMu  sync.Mutex
+	config      Config
+	mu          sync.Mutex
+	processes   map[string]rpcClient
+	sessions    map[string]*session
+	active      map[string]string
+	receipts    map[string]receipt
+	start       func(string) (rpcClient, error)
+	ctx         context.Context
+	cancel      context.CancelFunc
+	sampleMu    sync.Mutex
+	resources   platform.Resources
+	processRefs map[rpcClient]int
 }
 
 type session struct {
-	binding  platform.DriverBinding
-	profile  platform.DriverProfile
-	open     platform.DriverOpen
-	mu       sync.Mutex
-	client   rpcClient
-	latest   map[string]platform.DriverSample
-	sampling bool
-	stop     context.CancelFunc
-	preview  *time.Timer
+	binding   platform.DriverBinding
+	profile   platform.DriverProfile
+	open      platform.DriverOpen
+	mu        sync.Mutex
+	client    rpcClient
+	opened    bool
+	latest    map[string]platform.DriverSample
+	sampling  bool
+	stop      context.CancelFunc
+	preview   *time.Timer
+	done      chan struct{}
+	resources platform.Resources
+	draining  bool // persisted binding intent, guarded by Server.mu
+	released  bool
 }
 
 func New(config Config) (*Server, error) {
@@ -71,27 +81,25 @@ func New(config Config) (*Server, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Server{config: config, processes: map[string]rpcClient{}, sessions: map[string]*session{}, active: map[string]string{}, receipts: map[string]receipt{}, ctx: ctx, cancel: cancel}
+	s := &Server{config: config, processes: map[string]rpcClient{}, processRefs: map[rpcClient]int{}, sessions: map[string]*session{}, active: map[string]string{}, receipts: map[string]receipt{}, ctx: ctx, cancel: cancel}
 	s.start = func(path string) (rpcClient, error) { return driver.Start(path) }
 	if err := s.loadBindings(); err != nil {
 		cancel()
 		return nil, err
 	}
+	_ = s.resources.Track("driver sessions", s.closeSessions)
 	return s, nil
 }
 
 func (s *Server) Close() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = s.CloseWait(ctx)
+}
+
+func (s *Server) CloseWait(ctx context.Context) error {
 	s.cancel()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, live := range s.sessions {
-		if live.preview != nil {
-			live.preview.Stop()
-		}
-	}
-	for _, client := range s.processes {
-		client.Close()
-	}
+	return s.resources.Close(ctx)
 }
 
 func sessionKey(connection, revision string) string { return connection + "/" + revision }
@@ -103,8 +111,21 @@ func (s *Server) process(ctx context.Context, binding platform.DriverBinding) (r
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := processKey(binding)
-	if client := s.processes[key]; client != nil && client.Available() {
-		return client, nil
+	if client := s.processes[key]; client != nil {
+		if client.Available() {
+			s.processRefs[client]++
+			return client, nil
+		}
+		if err := client.CloseWait(ctx); err != nil {
+			return nil, err
+		}
+		delete(s.processes, key)
+		if s.processRefs[client] == 0 {
+			delete(s.processRefs, client)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	runtime, err := s.config.Resolve(binding)
 	if err != nil {
@@ -122,13 +143,25 @@ func (s *Server) process(ctx context.Context, binding platform.DriverBinding) (r
 	if err != nil {
 		return nil, err
 	}
+	s.processes[key] = client
+	s.processRefs[client] = 1
+	abandon := func() {
+		closing, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if client.CloseWait(closing) == nil {
+			delete(s.processes, key)
+			delete(s.processRefs, client)
+		} else {
+			s.processRefs[client] = 0
+		}
+	}
 	var described platform.DriverRuntime
 	if err = client.Call(ctx, "describe", struct{}{}, &described); err != nil {
-		client.Close()
+		abandon()
 		return nil, err
 	}
 	if described.ABI != platform.DriverABI || !reflect.DeepEqual(described.Profiles, runtime.Profiles) {
-		client.Close()
+		abandon()
 		return nil, fmt.Errorf("driver description differs from its installed package")
 	}
 	s.processes[key] = client
@@ -138,11 +171,20 @@ func (s *Server) process(ctx context.Context, binding platform.DriverBinding) (r
 // call restores a read session after a process restart. A failed execute is
 // never replayed here: its durable attempt receipt decides subsequent requests.
 func (s *Server) call(ctx context.Context, live *session, method string, params, result any) error {
+	release, err := live.resources.Acquire()
+	if err != nil {
+		return err
+	}
+	defer release()
 	live.mu.Lock()
 	defer live.mu.Unlock()
 	client, err := s.process(ctx, live.binding)
 	if err != nil {
 		return err
+	}
+	defer s.releaseProcess(context.Background(), live.binding, client)
+	if client == live.client && !live.opened {
+		return fmt.Errorf("the prior driver initialization needs cleanup before retry")
 	}
 	if client != live.client {
 		var generation [16]byte
@@ -150,13 +192,23 @@ func (s *Server) call(ctx context.Context, live *session, method string, params,
 			return err
 		}
 		live.open.Generation = hex.EncodeToString(generation[:])
+		s.mu.Lock()
+		s.processRefs[client]++
+		s.mu.Unlock()
+		previous := live.client
+		live.client, live.opened = client, false
+		if previous != nil {
+			_ = s.releaseProcess(ctx, live.binding, previous)
+		}
+		// Track the handle before open: timeout can mean the driver opened the
+		// device but its reply was late. Cleanup still owns that exact session.
 		if err = client.Call(ctx, "validate", live.open, nil); err != nil {
 			return err
 		}
 		if err = client.Call(ctx, "open", live.open, nil); err != nil {
 			return err
 		}
-		live.client = client
+		live.opened = true
 		if live.sampling {
 			if err = client.Call(ctx, "start", platform.DriverSession{Session: live.open.Session}, nil); err != nil {
 				return err
@@ -174,6 +226,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "gateway bearer token is required")
 		return
 	}
+	release, err := s.resources.Acquire()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "gateway is draining")
+		return
+	}
+	defer release()
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) != 5 || parts[0] != "bindings" || parts[2] != "revisions" || !identity(parts[1]) || !platform.DriverDigest(parts[3]) {
 		writeError(w, http.StatusNotFound, "unknown gateway route")
@@ -192,6 +250,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		if tenant := r.Header.Get("X-Platform-Tenant"); tenant != "" && binding.Scope != "" && binding.Scope != platform.DriverScope(tenant) {
+			writeError(w, http.StatusConflict, "binding belongs to another tenant scope")
+			return
+		}
 		if binding.Revision() != revision {
 			writeError(w, http.StatusConflict, "binding revision differs from its configuration")
 			return
@@ -208,10 +270,66 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	live := s.sessions[sessionKey(connection, revision)]
 	s.mu.Unlock()
 	if live == nil {
-		writeError(w, http.StatusNotFound, "configure this exact binding revision first")
-		return
+		if operation == "release" && r.Method == http.MethodPost {
+			var binding platform.DriverBinding
+			if err := decode(r, &binding); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if tenant := r.Header.Get("X-Platform-Tenant"); tenant != "" && binding.Scope != "" && binding.Scope != platform.DriverScope(tenant) {
+				writeError(w, http.StatusConflict, "binding belongs to another tenant scope")
+				return
+			}
+			if binding.Revision() != revision {
+				writeError(w, http.StatusConflict, "release needs the original binding revision")
+				return
+			}
+			prepared, err := s.newSession(connection, revision, binding)
+			if err != nil {
+				writeError(w, http.StatusConflict, err.Error())
+				return
+			}
+			s.mu.Lock()
+			live = s.sessions[sessionKey(connection, revision)]
+			if live == nil {
+				live = prepared
+				s.sessions[sessionKey(connection, revision)] = live
+			}
+			s.mu.Unlock()
+		} else {
+			writeError(w, http.StatusNotFound, "configure this exact binding revision first")
+			return
+		}
+	}
+	if tenant := r.Header.Get("X-Platform-Tenant"); tenant != "" {
+		if live.binding.Scope != "" && live.binding.Scope != platform.DriverScope(tenant) {
+			writeError(w, http.StatusConflict, "binding belongs to another tenant scope")
+			return
+		}
+		if operation == "release" && live.binding.Scope == "" && s.config.LegacyTenant != tenant {
+			writeError(w, http.StatusConflict, "Legacy bindings require an explicit gateway tenant before release")
+			return
+		}
 	}
 	switch {
+	case operation == "lifecycle" && r.Method == http.MethodGet:
+		status, err := s.sessionStatus(connection, revision, live)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	case operation == "release" && r.Method == http.MethodPost:
+		status, err := s.releaseSession(ctx, connection, revision, live)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		code := http.StatusOK
+		if len(status.Blockers) != 0 {
+			code = http.StatusConflict
+		}
+		writeJSON(w, code, status)
 	case operation == "check" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 		if strings.HasPrefix(connection, "preview-") {
 			defer s.discardPreview(connection, revision, live)
@@ -309,13 +427,31 @@ func (s *Server) configure(ctx context.Context, connection, revision string, bin
 	if live == nil {
 		live = prepared
 		s.sessions[key] = live
+	} else if (live.released || live.resources.State().State == "closed") && !readOnly {
+		if live.resources.State().State != "closed" {
+			s.mu.Unlock()
+			return nil, fmt.Errorf("the prior binding has not finished cleanup")
+		}
+		live = prepared
+		s.sessions[key] = live
+	} else if live.draining && !readOnly {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("this binding still has unresolved retirement work")
 	}
 	s.mu.Unlock()
-	if err = s.call(ctx, live, "", nil, nil); err != nil {
-		if strings.HasPrefix(connection, "preview-") {
-			s.discardPreview(connection, revision, live)
+	if !readOnly || strings.HasPrefix(connection, "preview-") {
+		if err = s.call(ctx, live, "", nil, nil); err != nil {
+			closing, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			cleanupErr := s.closeSession(closing, live)
+			cancel()
+			if cleanupErr != nil {
+				err = errors.Join(err, cleanupErr)
+			}
+			if strings.HasPrefix(connection, "preview-") {
+				s.discardPreview(connection, revision, live)
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 	if strings.HasPrefix(connection, "preview-") {
 		live.mu.Lock()
@@ -340,13 +476,12 @@ func (s *Server) configure(ctx context.Context, connection, revision string, bin
 	s.mu.Unlock()
 	if !readOnly {
 		if old != nil && old != live {
-			old.mu.Lock()
-			if old.stop != nil {
-				old.stop()
-				old.sampling = false
-				old.stop = nil
+			if err = s.stopSampling(ctx, old); err != nil {
+				return nil, err
 			}
-			old.mu.Unlock()
+			if err = s.closeConnection(ctx, old); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return live, nil

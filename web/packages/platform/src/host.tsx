@@ -10,6 +10,7 @@ import { Button, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Form, Inp
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { when } from "./shared";
+import { PackageSources } from "./package-sources";
 
 type TenantView = Api.HostTenantView;
 type Artifact = Api.HostArtifactView;
@@ -40,8 +41,8 @@ function useConsole() {
 
 const currentGrants = (items: Grant[] | undefined, tenant: string) => (items ?? []).filter(grant => grant.tenant === tenant && Date.parse(grant.expires) > Date.now());
 
-const lifecycleTone = (tenant: TenantView) => tenant.quarantined ? "danger" : tenant.lifecycle === "suspended" ? "warning" : tenant.lifecycle === "decommissioned" ? "neutral" : "success";
-const lifecycleLabel = (tenant: TenantView) => tenant.quarantined ? t("Quarantined") : tenant.lifecycle === "suspended" ? t("Suspended") : tenant.lifecycle === "decommissioned" ? t("Decommissioned") : t("Open");
+const lifecycleTone = (tenant: TenantView) => tenant.quarantined ? "danger" : tenant.lifecycle === "suspend" ? "warning" : tenant.lifecycle === "decommission" ? "neutral" : "success";
+const lifecycleLabel = (tenant: TenantView) => tenant.quarantined ? t("Quarantined") : tenant.lifecycle === "suspend" ? t("Suspended") : tenant.lifecycle === "decommission" ? t("Decommissioned") : t("Open");
 
 export function HostOverview() {
   const overview = useReadQuery<Api.HostOverview>("/v1/host/overview", 10000);
@@ -81,7 +82,8 @@ export function HostTenant({ tenant }: { tenant: string }) {
   const grants = useReadQuery<Grant[]>(`/v1/host/tenants/${encodeURIComponent(tenant)}/support`);
   const migrations = useReadQuery<Manifest[]>(`/v1/host/tenants/${encodeURIComponent(tenant)}/migrations`);
   const call = useConsole();
-  const { open } = useWorkspace();
+  const { open, confirmLeave } = useWorkspace();
+  const { me } = useHost();
   const [lifecycle, setLifecycle] = useState<"suspend" | "resume" | "decommission">();
   const [reason, setReason] = useState("");
   const [support, setSupport] = useState(false);
@@ -121,9 +123,9 @@ export function HostTenant({ tenant }: { tenant: string }) {
         <Button size="sm" variant="ghost" onClick={() => open({ view: "host-promotions", params: { tenant } })}>{t("Promote a release")}</Button>
         <Button size="sm" variant="ghost" onClick={() => open({ view: "host-migrations", params: { tenant } })}>{t("Migrate records")}</Button>
         <Button size="sm" onClick={() => setSupport(true)}>{t("Open a support session")}</Button>
-        {data?.lifecycle === "suspended" ? <Button size="sm" variant="primary" onClick={() => setLifecycle("resume")}>{t("Resume")}</Button>
-          : <Button size="sm" onClick={() => setLifecycle("suspend")}>{t("Suspend")}</Button>}
-        <Button size="sm" variant="ghost" onClick={() => setLifecycle("decommission")}>{t("Decommission")}</Button>
+        {data?.lifecycle === "suspend" ? <Button size="sm" variant="primary" onClick={() => setLifecycle("resume")}>{t("Resume")}</Button>
+          : <Button size="sm" onClick={() => tenant === me.tenantId ? confirmLeave(() => setLifecycle("suspend")) : setLifecycle("suspend")}>{t("Suspend")}</Button>}
+        <Button size="sm" variant="ghost" onClick={() => tenant === me.tenantId ? confirmLeave(() => setLifecycle("decommission")) : setLifecycle("decommission")}>{t("Decommission")}</Button>
       </>} />
     {data && <div className="mb-4"><PropertyList columns={3} items={[
       [t("State"), <Tag key="state" label={lifecycleLabel(data)} tone={lifecycleTone(data)} />],
@@ -132,6 +134,8 @@ export function HostTenant({ tenant }: { tenant: string }) {
     ]} /></div>}
     {data?.fault && <p role="alert" className="mb-3 text-sm text-danger">{data.fault}</p>}
     <div className="grid gap-4">
+      <PackageSources items={[]} reviewOnly inspectPath={`/v1/host/tenants/${encodeURIComponent(tenant)}/packages/inspect`} />
+      <RuntimeComposition tenant={tenant} changed={() => view.refetch()} />
       <Panel className="grid gap-2 p-3">
         <h2 className="text-sm font-semibold">{t("Trusted artifacts")}</h2>
         <DataTable data={artifacts.data ?? []} columns={artifactColumns} getRowId={(a) => a.candidate} height={220} empty={t("No releases or candidates saved for this tenant.")} />
@@ -154,6 +158,57 @@ export function HostTenant({ tenant }: { tenant: string }) {
     </Dialog>
     <SupportDialog tenant={tenant} open={support} onOpenChange={setSupport} />
   </>;
+}
+
+function RuntimeComposition({ tenant, changed }: { tenant: string; changed: () => Promise<unknown> }) {
+  const { client, me } = useHost(), { open, confirmLeave } = useWorkspace();
+  const path = `/v1/host/tenants/${encodeURIComponent(tenant)}/composition`;
+  const query = useReadQuery<Api.HostComposition>(path);
+  const [draft, setDraft] = useState<Record<string, string>>(), [reason, setReason] = useState("");
+  const [ownersDraft, setOwnersDraft] = useState<string[]>();
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const pending = useRef<Api.CompositionRequest | undefined>(undefined);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  useUnsavedChanges(!!draft || !!ownersDraft || unconfirmed, () => { setDraft(undefined); setOwnersDraft(undefined); setReason(""); }, busy);
+  const value = query.data, selection = draft ?? value?.desired ?? {};
+  const save = async () => {
+    setBusy(true); setError("");
+    const body = pending.current ??= { selection, disabledOwners: ownersDraft ?? value?.desiredDisabledOwners ?? [], reason, at: new Date().toISOString() };
+    try {
+      const result = await client.call<Api.HostComposition>("POST", path, body);
+      if (!result.ok) { setError(apiErrorMessage(result.body) ?? t("The host refused this request.")); pending.current = undefined; setUnconfirmed(false); return; }
+      pending.current = undefined; setUnconfirmed(false); setDraft(undefined); setOwnersDraft(undefined); setReason("");
+      await Promise.all([query.refetch(), changed()]);
+    } catch { setUnconfirmed(true); setError(t("The request is unconfirmed. Retry the same saved selection before editing.")); }
+    finally { setBusy(false); }
+  };
+  return <Panel role="region" aria-label={t("Foundational capabilities")} title={t("Foundational capabilities")} className="grid min-w-0 gap-3">
+    <p className="text-sm text-muted">{t("Saving a selection pauses this tenant. Restart the host to activate compatible implementations, verify recovery, then resume the tenant. Removing a required implementation keeps business access stopped; data and maintenance access remain.")}</p>
+    <div><Button size="sm" onClick={() => open({ view: "host-package-help", params: { topic: "foundations" } })}>{t("Package guide")}</Button></div>
+    {query.isPending ? <p role="status">{t("Loading…")}</p> : query.isError ? <div role="alert"><p>{t("Runtime configuration could not be loaded.")}</p><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></div> : value && <>
+      <Tag label={t(value.state)} tone={value.state === "ready" ? "success" : "warning"} />
+      {value.reason && <p role="status" className="text-sm">{t(value.reason)}</p>}
+      <div className="grid gap-3 md:grid-cols-3">{Object.keys(value.desired).map(contract => <label key={contract} className="grid min-w-0 content-start gap-1 text-sm">
+        <span className="break-all font-medium">{t(contract === "platform.rules" ? "Business rules" : contract === "platform.authorization" ? "Authorization" : "Kernel")}</span>
+        <Select disabled={busy || unconfirmed} aria-label={contract} value={selection[contract] ?? ""} onChange={event => setDraft({ ...selection, [contract]: event.target.value })}>
+          <option value="">{t("Remove implementation (maintenance)")}</option>
+          {value.available.filter(module => module.provides.some(item => item.id === contract)).map(module => <option key={module.id} value={module.id}>{module.title} · {module.version}</option>)}
+        </Select>
+        <span className="break-all text-xs text-muted">{t("Current implementation")}: {value.current[contract]}</span>
+      </label>)}</div>
+      <Disclosure summary={t("Storage")}><PropertyList items={[[t("Current implementation"), t(value.storage.title)], [t("Scope"), t(value.storage.scope)], [t("Restore format"), value.storage.stateFormat]]} /><p className="mt-2 text-sm text-muted">{t("Storage is shared by the deployment. Stop all writers and verify the handover before starting a different store; tenants cannot switch it independently.")}</p></Disclosure>
+      <Disclosure summary={t("Platform modules")}><div className="grid gap-2">
+        <p className="text-sm text-muted">{t("Uncheck a module to withdraw its live routes and services after restart. Saved records and history remain. Dependencies and unfinished work can block removal.")}</p>
+        {value.owners.map(module => {
+          const id = module.id.replace("platform.owner.", ""), disabled = ownersDraft ?? value.desiredDisabledOwners;
+          return <Checkbox key={module.id} disabled={busy || unconfirmed} checked={!disabled.includes(id)} onChange={enabled => setOwnersDraft(enabled ? disabled.filter(item => item !== id) : [...disabled, id])}>{t(module.title)} · {id} · {module.version}</Checkbox>;
+        })}
+      </div></Disclosure>
+      <label className="grid gap-1 text-sm">{t("Reason")}<Input disabled={busy || unconfirmed} value={reason} onChange={event => setReason(event.target.value)} /></label>
+      <div><Button disabled={busy || (!unconfirmed && ((!draft && !ownersDraft) || !reason.trim()))} onClick={() => tenant === me.tenantId ? confirmLeave(() => void save()) : void save()}>{t(busy ? "Saving…" : unconfirmed ? "Retry saved selection" : "Save selection and pause")}</Button></div>
+    </>}
+    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+  </Panel>;
 }
 
 /** A new tenant from a template: its first administrator holds admin in every app; settings are decided and journaled. */

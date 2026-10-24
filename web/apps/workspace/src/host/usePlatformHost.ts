@@ -158,15 +158,9 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     // A record opens in its app's view; a protocol's record (lodging.booking)
     // in the view of the app the tenant binds as its provider (D5).
     const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow-instance"]]);
-    for (const app of apps ?? []) {
-      for (const [type, view] of Object.entries(app.opens ?? {})) {
-        const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
-        if (own || protocols.some((p) => p.id.startsWith(`${type}/`) && p.bound === app.id)) opens.set(type, view);
-      }
-    }
     const host: Host = {
       client, me, entities, definitions, source, opens, outbox, decide, refresh,
-      role: (app) => me.profile.roles[app] || undefined,
+      role: (app) => me.apps.some(enabled => enabled.id === app) ? me.profile.roles[app] || undefined : undefined,
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
       catalog: actions ?? [],
@@ -176,6 +170,13 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
         finally { setOutbox([...client.authorities.outbox]); }
       },
     };
+    for (const app of apps ?? []) {
+      if (app.for && !app.for(host)) continue;
+      for (const [type, view] of Object.entries(app.opens ?? {})) {
+        const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
+        if (own || protocols.some((p) => p.id.startsWith(`${type}/`) && p.bound === app.id)) opens.set(type, view);
+      }
+    }
     host.applications = applicationUIInfo((apps ?? []).filter(app => app.id !== "host-console" || hostMe.isSuccess), host);
     return host;
   }, [actions, apps, client, decide, definitions, entities, hostMe.isSuccess, me, outbox, protocols, refresh, source]);

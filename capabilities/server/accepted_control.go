@@ -83,8 +83,8 @@ func decodeControl(raw []byte, v any) error {
 }
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
-	view := &Tenant{ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, definitions: t.definitions, records: t.records, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
-		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(), work: newWorkBoard(), works: t.forkWorkState()}
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, definitions: t.definitions, records: t.records, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
+		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(t.services.Kernel), work: newWorkBoard(), works: t.forkWorkState()}
 	for _, j := range t.work.jobs {
 		copy := *j
 		view.work.addJob(&copy)
@@ -112,7 +112,7 @@ func (t *Tenant) installControl(kind string, raw json.RawMessage) error {
 			return err
 		}
 		_, marks := t.connectors.kernel.State()
-		t.connectors.kernel = kernel.NewConnectors()
+		t.connectors.kernel = t.services.Kernel.Connectors()
 		t.connectors.kernel.Restore(descriptors, marks)
 		t.connectors.byID = map[string]*pb.ConnectorDescriptor{}
 		for _, desc := range descriptors {

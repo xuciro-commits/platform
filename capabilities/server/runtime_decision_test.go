@@ -53,7 +53,7 @@ func (missingPrivateLedgerRuntime) HoldChanges(*platform.Ledger) (func(), *kerne
 	return func() {}, nil
 }
 
-func (missingPrivateLedgerRuntime) DraftChanges(*platform.Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog {
+func (missingPrivateLedgerRuntime) DraftChanges(*platform.Ledger, func() platform.ChangeLog) platform.ChangeLog {
 	return nil
 }
 

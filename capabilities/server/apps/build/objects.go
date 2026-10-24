@@ -48,10 +48,10 @@ func (b *Build) objectEntity() platform.Entity {
 						}
 					}
 					if c.Staging() {
-						if err := b.Check(*object, object.ID); err != nil {
+						if err := b.Check(*object, object.ID, c.Rules()); err != nil {
 							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 						}
-						if err := b.validateObjectInstallation(*object); err != nil {
+						if err := b.validateObjectInstallation(c, *object); err != nil {
 							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 						}
 					} else if err := b.install(c, *object); err != nil {
@@ -70,7 +70,7 @@ func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
 	return b.lookupEntity(typ)
 }
 
-func (b *Build) Check(o construction.Object, id string) error {
+func (b *Build) Check(o construction.Object, id string, engines ...platform.RuleEngine) error {
 	if err := b.checkName(o.Name, id); err != nil {
 		return err
 	}
@@ -80,19 +80,19 @@ func (b *Build) Check(o construction.Object, id string) error {
 	if err := construction.CheckFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
-	if err := construction.CheckEnterpriseUse(o); err != nil {
+	if err := construction.CheckEnterpriseUse(o, engines...); err != nil {
 		return err
 	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {
 		return err
 	}
-	if err := b.checkObjectRules(o); err != nil {
+	if err := b.checkObjectRules(o, engines...); err != nil {
 		return err
 	}
-	if err := b.checkConstraints(o); err != nil {
+	if err := b.checkConstraints(o, engines...); err != nil {
 		return err
 	}
-	if err := b.checkRecordSets(o); err != nil {
+	if err := b.checkRecordSets(o, engines...); err != nil {
 		return err
 	}
 	if err := b.checkVersioning(o); err != nil {
@@ -104,7 +104,7 @@ func (b *Build) Check(o construction.Object, id string) error {
 	if err := checkScope(o); err != nil {
 		return err
 	}
-	if err := b.checkTransactions(o); err != nil {
+	if err := b.checkTransactions(o, engines...); err != nil {
 		return err
 	}
 	if err := b.checkCreates(o); err != nil {
@@ -213,13 +213,15 @@ func (b *Build) install(c platform.Caller, o construction.Object) *kernel.Error 
 	// A restore installs definitions that were already accepted, in ID order;
 	// objects that refer to each other (a visit creating follow-ups that refer
 	// back) cannot each pass the draft checks before the other is installed.
-	if err := b.Check(o, o.ID); err != nil && !c.Replaying {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+	if !c.Replaying {
+		if err := b.Check(o, o.ID, c.Rules()); err != nil {
+			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+		}
 	}
 	// Historical direct publication and pure recovery validate before extending
 	// the ledger. New decisions validate privately and install only their saved
 	// publication image after acceptance.
-	if err := b.validateObjectInstallation(o); err != nil {
+	if err := b.validateObjectInstallation(c, o); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	entity := b.entity(o)

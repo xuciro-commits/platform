@@ -115,7 +115,7 @@ func MatrixRuleReads(c *PageComposite) RuleReadSpec {
 	}}
 }
 
-func (p Page) CheckCompositeBindings(lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool)) error {
+func (p Page) CheckCompositeBindings(lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool), engines ...RuleEngine) error {
 	for _, s := range p.Sections {
 		contract := pageWidget(s.Widget)
 		composite := contract != nil && len(contract.ModelPorts) > 0
@@ -147,7 +147,7 @@ func (p Page) CheckCompositeBindings(lookup func(string) (EntityInfo, bool), cri
 			}
 			// Validate one source while retaining the original page's producers,
 			// so declared sets can resolve their actual typed record variable.
-			if err := p.checkModelSources([]Section{{PageWidgetConfig: PageWidgetConfig{Model: &binding.Model}, ID: s.ID, Widget: "table"}}, lookup, criteria); err != nil {
+			if err := p.checkModelSources([]Section{{PageWidgetConfig: PageWidgetConfig{Model: &binding.Model}, ID: s.ID, Widget: "table"}}, lookup, criteria, engines...); err != nil {
 				return err
 			}
 			info, _ := lookup(binding.Model.Type)
@@ -176,17 +176,17 @@ func (p Page) CheckCompositeBindings(lookup func(string) (EntityInfo, bool), cri
 					if target := declaration.Target; target != "" && f.Type == "reference" && f.Ref != c.Bindings[target].Model.Type {
 						return fmt.Errorf("section %s role %s: reference target differs from %s", s.ID, role, target)
 					}
-				} else if err := CheckRuleExpression(expression, RuleReadSpec{Object: binding.Model.Type}, lookup); err != nil {
+				} else if err := CheckRuleExpression(expression, RuleReadSpec{Object: binding.Model.Type}, lookup, engines...); err != nil {
 					return fmt.Errorf("section %s role %s: %w", s.ID, role, err)
 				} else if target := declaration.Target; target != "" {
 					// Ask the original compiler to compare against the declared
 					// reference type. Matching ID text cannot change its owner.
-					schema, err := RuleSchema(expression, RuleReadSpec{Object: binding.Model.Type}, lookup)
+					schema, err := RuleSchema(expression, RuleReadSpec{Object: binding.Model.Type}, lookup, engines...)
 					if err != nil {
 						return err
 					}
 					schema.Refs["$visualTarget"] = ExprType{Kind: "reference", Object: c.Bindings[target].Model.Type}
-					_, err = CompileExpr(Expr{Op: "=", Kind: "boolean", Args: []Expr{expression, ExprReference("reference", "$visualTarget")}}, schema)
+					_, err = ruleEngineOf(engines).CompileExpr(Expr{Op: "=", Kind: "boolean", Args: []Expr{expression, ExprReference("reference", "$visualTarget")}}, schema)
 					if err != nil {
 						return fmt.Errorf("section %s role %s: reference target differs from %s: %w", s.ID, role, target, err)
 					}
@@ -215,7 +215,7 @@ func (p Page) CheckCompositeBindings(lookup func(string) (EntityInfo, bool), cri
 			if c.Value == nil || !slices.Contains([]string{"text", "boolean", "integer", "number", "decimal"}, c.Value.Kind) {
 				return fmt.Errorf("section %s: matrix needs a scalar cell expression", s.ID)
 			}
-			if err := CheckRuleExpression(*c.Value, MatrixRuleReads(c), lookup); err != nil {
+			if err := CheckRuleExpression(*c.Value, MatrixRuleReads(c), lookup, engines...); err != nil {
 				return fmt.Errorf("section %s cell: %w", s.ID, err)
 			}
 		} else if c.Value != nil {

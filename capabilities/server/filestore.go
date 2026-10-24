@@ -81,6 +81,15 @@ type s3Files struct {
 // pair from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY, and makes the
 // bucket when it does not exist.
 func NewS3Files(ctx context.Context, endpoint string) (FileStore, error) {
+	return openS3Files(ctx, endpoint, true)
+}
+
+// OpenS3Files opens an existing bucket without creating a missing store.
+func OpenS3Files(ctx context.Context, endpoint string) (FileStore, error) {
+	return openS3Files(ctx, endpoint, false)
+}
+
+func openS3Files(ctx context.Context, endpoint string, create bool) (FileStore, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Host == "" || strings.Trim(u.Path, "/") == "" {
 		return nil, fmt.Errorf("files: %q is not http(s)://host:port/bucket", endpoint)
@@ -96,6 +105,9 @@ func NewS3Files(ctx context.Context, endpoint string) (FileStore, error) {
 		return nil, fmt.Errorf("files: %v", err)
 	}
 	if !exists {
+		if !create {
+			return nil, fmt.Errorf("files: the bucket does not exist")
+		}
 		if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
 			return nil, fmt.Errorf("files: %v", err)
 		}

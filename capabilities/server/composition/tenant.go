@@ -18,7 +18,11 @@ import (
 
 // NewTenant is used for startup, tenant creation and isolated recovery.
 func NewTenant(id string, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
-	return platformserver.NewTenant(id,
+	return NewTenantWithCapabilities(id, platformserver.DefaultRuntimeCapabilities(), seats...)
+}
+
+func NewTenantWithCapabilities(id string, services platformserver.RuntimeCapabilities, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
+	return platformserver.NewTenantWithCapabilities(id, services,
 		platformserver.NewConsole(id, seats...),
 		enterprise.New(id, platform.OrgSeed{Memberships: platformserver.Memberships(seats)}),
 		relations.New(id), ai.New(id), work.New(id), flow.New(id),

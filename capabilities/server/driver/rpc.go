@@ -95,14 +95,18 @@ func Serve(input io.Reader, output io.Writer, handler Handler) error {
 }
 
 type Client struct {
-	command   *exec.Cmd
-	input     io.WriteCloser
-	responses chan response
-	done      chan struct{}
-	stopped   chan struct{}
-	mu        sync.Mutex
-	sequence  atomic.Uint64
-	close     sync.Once
+	command    *exec.Cmd
+	input      io.WriteCloser
+	callGate   chan struct{}
+	pendingID  uint64
+	pending    chan response
+	done       chan struct{}
+	stopped    chan struct{}
+	sequence   atomic.Uint64
+	close      sync.Once
+	stateMu    sync.Mutex
+	writers    sync.WaitGroup
+	terminated chan struct{}
 }
 
 func Start(executable string) (*Client, error) {
@@ -113,15 +117,19 @@ func Start(executable string) (*Client, error) {
 	}
 	output, err := command.StdoutPipe()
 	if err != nil {
+		_ = input.Close()
 		return nil, err
 	}
 	command.Stderr = io.Discard
 	if err = command.Start(); err != nil {
+		_ = input.Close()
+		_ = output.Close()
 		return nil, err
 	}
-	client := &Client{command: command, input: input, responses: make(chan response, 1), done: make(chan struct{}), stopped: make(chan struct{})}
+	client := &Client{command: command, input: input, callGate: make(chan struct{}, 1), done: make(chan struct{}), stopped: make(chan struct{}), terminated: make(chan struct{})}
 	go func() {
 		defer close(client.done)
+		defer func() { _ = command.Process.Kill(); _ = command.Wait() }()
 		scanner := bufio.NewScanner(output)
 		scanner.Buffer(make([]byte, 4096), MaxMessageBytes)
 		for scanner.Scan() {
@@ -129,20 +137,34 @@ func Start(executable string) (*Client, error) {
 			if json.Unmarshal(scanner.Bytes(), &answer) != nil || answer.JSONRPC != "2.0" {
 				break
 			}
-			select {
-			case client.responses <- answer:
-			case <-client.stopped:
-				return
+			client.stateMu.Lock()
+			pending := client.pending
+			expected := client.pendingID
+			client.stateMu.Unlock()
+			if answer.ID == 0 || answer.ID > client.sequence.Load() {
+				break
+			}
+			// An abandoned caller's late answer cannot stop a shared process or
+			// satisfy another call. Each live call owns its own bounded channel.
+			if answer.ID == expected && pending != nil {
+				select {
+				case pending <- answer:
+				default:
+				}
 			}
 		}
-		_ = command.Process.Kill()
-		_ = command.Wait()
 	}()
 	return client, nil
 }
 func (c *Client) Call(ctx context.Context, method string, params, result any) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	select {
+	case c.callGate <- struct{}{}:
+		defer func() { <-c.callGate }()
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.stopped:
+		return fmt.Errorf("driver process is unavailable")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -165,7 +187,23 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 	default:
 	}
 	written := make(chan error, 1)
-	go func() { _, err := c.input.Write(append(encoded, '\n')); written <- err }()
+	answers := make(chan response, 1)
+	c.stateMu.Lock()
+	if !c.Available() {
+		c.stateMu.Unlock()
+		return fmt.Errorf("driver process is unavailable")
+	}
+	c.pendingID, c.pending = call.ID, answers
+	defer func() {
+		c.stateMu.Lock()
+		if c.pendingID == call.ID {
+			c.pendingID, c.pending = 0, nil
+		}
+		c.stateMu.Unlock()
+	}()
+	c.writers.Add(1)
+	go func() { defer c.writers.Done(); _, err := c.input.Write(append(encoded, '\n')); written <- err }()
+	c.stateMu.Unlock()
 	select {
 	case err = <-written:
 		if err != nil {
@@ -173,18 +211,16 @@ func (c *Client) Call(ctx context.Context, method string, params, result any) er
 			return err
 		}
 	case <-ctx.Done():
-		c.Close()
 		return ctx.Err()
 	case <-c.stopped:
 		return fmt.Errorf("driver process is unavailable")
 	}
 	select {
 	case <-ctx.Done():
-		c.Close()
 		return ctx.Err()
 	case <-c.done:
 		return fmt.Errorf("driver process stopped before answering")
-	case answer := <-c.responses:
+	case answer := <-answers:
 		if answer.ID != call.ID {
 			c.Close()
 			return fmt.Errorf("driver returned another call's identity")
@@ -209,5 +245,26 @@ func (c *Client) Available() bool {
 	}
 }
 func (c *Client) Close() {
-	c.close.Do(func() { close(c.stopped); _ = c.input.Close(); _ = c.command.Process.Kill() })
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = c.CloseWait(ctx)
+}
+
+// CloseWait returns only after the reader and child process have exited. It is
+// safe to retry after a deadline; the original shutdown remains in progress.
+func (c *Client) CloseWait(ctx context.Context) error {
+	c.close.Do(func() {
+		c.stateMu.Lock()
+		close(c.stopped)
+		_ = c.input.Close()
+		_ = c.command.Process.Kill()
+		c.stateMu.Unlock()
+		go func() { <-c.done; c.writers.Wait(); close(c.terminated) }()
+	})
+	select {
+	case <-c.terminated:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

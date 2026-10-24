@@ -14,6 +14,7 @@ import { MyAccount } from "./account";
 import { Organisation } from "./organisation";
 import { Enterprise } from "./enterprise";
 import { Apps, Matrix, Protocols } from "./apps";
+import { PackageHelp } from "./package-sources";
 import { Words } from "./words";
 import { Automation, Deliveries, SystemHealth, Integrations, Endpoints, OutboundEffects, AppSettingsView, Audit } from "./operations";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
@@ -38,6 +39,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
     { label: t("Access and packages"), items: [
       ...(admin(host) || auditor(host) ? [item(t("Roles and permissions"), <KeyRound />, "permissions")] : []),
       ...(admin(host) || auditor(host) || host.can("build.app.create") ? [item(t("Packages"), <Blocks />, "apps")] : []),
+      item(t("Package guide"), <BookOpen />, "package-help"),
       ...(admin(host) ? [item(t("Capability matrix"), <Grid3x3 />, "matrix"), item(t("Protocols"), <Cable />, "protocols")] : []),
     ] },
     { label: t("Settings and audit"), items: [
@@ -74,6 +76,7 @@ const controlPanelViews: View[] = [
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
   { id: "apps", title: () => t("Packages"), render: () => <Apps /> },
+  { id: "package-help", title: () => t("Package guide"), render: p => <PackageHelp topic={p.topic} /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
   { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
   { id: "app-settings", title: () => t("App settings"), render: () => <AppSettingsView /> },
@@ -209,6 +212,7 @@ export const hostConsole = defineApp({
   description: t("Every tenant on this host: health, lifecycle, support sessions, promotions and migrations."),
   home: { view: "host-overview" },
   views: [
+ { id: "host-package-help", title: () => t("Package guide"), render: p => <PackageHelp maintenance topic={p.topic ?? "foundations"} /> },
     { id: "host-overview", title: () => t("Host Console"), render: () => <HostOverview /> },
     { id: "host-tenant", title: (p) => p.tenant ?? t("Tenant"), render: (p) => <HostTenant key={p.tenant} tenant={p.tenant ?? ""} /> },
     { id: "host-promotions", title: () => t("Promote a release"), render: (p) => <HostPromotions tenant={p.tenant} from={p.from} candidate={p.candidate} /> },

@@ -163,7 +163,7 @@ func (t *Tenant) Work(now time.Time) {
 func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.quarantined() {
+	if t.businessStopped() {
 		return false
 	}
 	defer func() {
@@ -180,6 +180,9 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 				break
 			}
 			a := t.apps[(t.quota.turn+i)%n].Manifest().ID
+			if !t.ownerActive(a) {
+				continue
+			}
 			if t.overQuota(a, now) {
 				continue
 			}
@@ -196,7 +199,7 @@ func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 	}
 	t.quota.next(n)
 	for _, j := range t.work.jobs {
-		if j.due(now) && took < budget && !t.overQuota(j.App, now) {
+		if t.ownerActive(j.App) && j.due(now) && took < budget && !t.overQuota(j.App, now) {
 			t.run(j, now, false)
 			t.spend(j.App, now)
 			took++
@@ -224,11 +227,11 @@ func (t *Tenant) pending(now time.Time) bool {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for app, q := range t.work.queues {
-		if ready(q, now) != nil && !t.overQuota(app, now) {
+		if t.ownerActive(app) && ready(q, now) != nil && !t.overQuota(app, now) {
 			return true
 		}
 	}
-	return slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return j.due(now) && !t.overQuota(j.App, now) })
+	return slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return t.ownerActive(j.App) && j.due(now) && !t.overQuota(j.App, now) })
 }
 
 // overQuota reports whether app has used its attempts of the minute (Tenant.Quota).
@@ -249,6 +252,9 @@ func (t *Tenant) deferred(now time.Time) []string {
 	var out []string
 	for _, a := range t.apps {
 		id := a.Manifest().ID
+		if !t.ownerActive(id) {
+			continue
+		}
 		if t.overQuota(id, now) && (ready(t.work.queued(id), now) != nil || slices.ContainsFunc(t.work.jobs, func(j *Task) bool { return j.App == id && j.due(now) })) {
 			out = append(out, id)
 		}

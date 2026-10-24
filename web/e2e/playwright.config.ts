@@ -6,6 +6,7 @@ import { defineConfig } from "@playwright/test";
 
 const port = 18496;
 const protocolPackages = process.env.PLATFORM_PACKAGES_DIR ? ' -packages "$PLATFORM_PACKAGES_DIR"' : "";
+const maintenance = process.argv.some(argument => argument.includes("package-lifecycle")) ? " -host-admins=manager" : "";
 const protocolServices = process.argv.some(argument => argument.includes("protocol-packages")) || !process.argv.some(argument => argument.includes(".spec."));
 
 export default defineConfig({
@@ -16,7 +17,7 @@ export default defineConfig({
   // On a Mac the installed Google Chrome runs the tests; CI installs Playwright's Chromium.
   use: { baseURL: `http://127.0.0.1:${port}`, locale: "en-US", trace: "retain-on-failure", screenshot: process.env.PLATFORM_SCREENSHOTS ? "on" : "only-on-failure", channel: process.env.CI ? undefined : "chrome" },
   webServer: [{
-    command: `go run ./cmd/platform-server -addr 127.0.0.1:${port} -tenants ../../web/e2e/tenants.json -web ../../web/apps/workspace/dist${protocolPackages}`,
+    command: `go run ./cmd/platform-server -addr 127.0.0.1:${port} -tenants ../../web/e2e/tenants.json -web ../../web/apps/workspace/dist${protocolPackages}${maintenance}`,
     cwd: "../../capabilities/server",
     url: `http://127.0.0.1:${port}/healthz`,
     timeout: 180_000,

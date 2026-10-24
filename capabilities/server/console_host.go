@@ -3,7 +3,6 @@ package platformserver
 import (
 	"context"
 	"io"
-	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -12,11 +11,20 @@ import (
 	"platformserver/platform"
 )
 
-func (h hostView) Apps() []platform.App       { return slices.Clone(h.t.apps) }
-func (h hostView) App(id string) platform.App { return h.t.app(id) }
+func (h hostView) Apps() []platform.App { return h.t.liveApps() }
+func (h hostView) App(id string) platform.App {
+	if !h.t.ownerActive(id) {
+		return nil
+	}
+	return h.t.app(id)
+}
+func (h hostView) BaseModules() []platform.CapabilityModule { return h.t.baseModules() }
+func (h hostView) PackageBlockers(id string, proofs map[string]string) ([]string, bool) {
+	return h.t.packageBlockers(id, proofs)
+}
 func (h hostView) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
-	for _, app := range h.t.apps {
+	for _, app := range h.t.liveApps() {
 		owned, err := h.t.codeReleaseAssetsLocked(app)
 		if err != nil {
 			return nil, err

@@ -71,15 +71,15 @@ func intervalRuleSchema(kind string) ExprSchema {
 	return ExprSchema{Refs: map[string]ExprType{"sample.value": {Kind: kind}, "sample.at": {Kind: "datetime"}, "sample.receivedAt": {Kind: "datetime"}}}
 }
 
-func (d ObservationIntervals) Check(windowSeconds int) error {
+func (d ObservationIntervals) Check(windowSeconds int, engines ...RuleEngine) error {
 	if !slices.Contains([]string{"decimal", "choice", "boolean"}, d.ValueKind) || d.When.Kind != "boolean" || d.MaxGapSeconds < 1 || d.MaxGapSeconds > windowSeconds || !slices.Contains([]string{"reject", "correct"}, d.LatePolicy) || d.LatenessSeconds < 0 || d.LatenessSeconds > windowSeconds || d.LatePolicy == "reject" && d.LatenessSeconds != 0 || d.MaxIntervals < 1 || d.MaxIntervals > ObservationMaxIntervals {
 		return fmt.Errorf("state intervals need a typed condition, bounded gap/results and explicit late-data policy")
 	}
-	_, err := CompileExpr(d.When, intervalRuleSchema(d.ValueKind))
+	_, err := ruleEngineOf(engines).CompileExpr(d.When, intervalRuleSchema(d.ValueKind))
 	return err
 }
 
-func intervalPointValue(kind, value string) (ExprValue, error) {
+func intervalPointValue(kind, value string, engines ...RuleEngine) (ExprValue, error) {
 	if kind == "decimal" {
 		if err := CheckObservationDecimal(value); err != nil {
 			return ExprValue{}, err
@@ -95,7 +95,7 @@ func intervalPointValue(kind, value string) (ExprValue, error) {
 	if len(value) > 256 || kind == "choice" && value == "" {
 		return ExprValue{}, fmt.Errorf("state observation value exceeds its declared scalar shape")
 	}
-	program, err := CompileExpr(ExprLiteralValue(kind, literal), ExprSchema{})
+	program, err := ruleEngineOf(engines).CompileExpr(ExprLiteralValue(kind, literal), ExprSchema{})
 	if err != nil {
 		return ExprValue{}, err
 	}
@@ -105,15 +105,15 @@ func intervalPointValue(kind, value string) (ExprValue, error) {
 
 // AnalyzeObservationIntervals retains no source points. It refuses malformed
 // reads, and preserves uncertain segments rather than closing an event there.
-func AnalyzeObservationIntervals(policy ObservationIntervals, input ObservationIntervalInput, now time.Time) (ObservationIntervalResult, error) {
+func AnalyzeObservationIntervals(policy ObservationIntervals, input ObservationIntervalInput, now time.Time, engines ...RuleEngine) (ObservationIntervalResult, error) {
 	out := ObservationIntervalResult{Version: ObservationIntervalVersion, Revision: input.Revision, Since: input.Since, Until: input.Until, Count: len(input.Points), Intervals: []ObservationInterval{}, Unknown: []ObservationUnknown{}}
 	if input.Since.IsZero() || !input.Since.Before(input.Until) || input.Until.Sub(input.Since) > time.Duration(ObservationMaxWindowSeconds)*time.Second || input.Revision == "" || len(input.Revision) > 256 || len(input.Points) > ObservationMaxPoints {
 		return out, fmt.Errorf("state observations need a bounded window and source revision")
 	}
-	if err := policy.Check(ObservationMaxWindowSeconds); err != nil {
+	if err := policy.Check(ObservationMaxWindowSeconds, engines...); err != nil {
 		return out, err
 	}
-	condition, err := CompileExpr(policy.When, intervalRuleSchema(policy.ValueKind))
+	condition, err := ruleEngineOf(engines).CompileExpr(policy.When, intervalRuleSchema(policy.ValueKind))
 	if err != nil {
 		return out, err
 	}
@@ -144,7 +144,7 @@ func AnalyzeObservationIntervals(policy ObservationIntervals, input ObservationI
 		}
 		counts[point.Quality]++
 		if point.Quality == "good" {
-			value, err := intervalPointValue(policy.ValueKind, point.Value)
+			value, err := intervalPointValue(policy.ValueKind, point.Value, engines...)
 			if err != nil {
 				return out, err
 			}

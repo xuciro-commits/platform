@@ -9,7 +9,7 @@ import (
 	"reflect"
 )
 
-func (b *Build) checkRecordSets(o construction.Object) error {
+func (b *Build) checkRecordSets(o construction.Object, engines ...platform.RuleEngine) error {
 	if len(o.Sets) == 0 {
 		return nil
 	}
@@ -23,7 +23,7 @@ func (b *Build) checkRecordSets(o construction.Object) error {
 		}
 		return b.conditionLookup(typ)
 	}
-	if err := platform.CheckRecordSets(info, lookup); err != nil {
+	if err := platform.CheckRecordSets(info, lookup, engines...); err != nil {
 		return err
 	}
 	for _, set := range o.Sets {

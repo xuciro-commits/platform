@@ -14,8 +14,11 @@ type Policy func(caller Caller, s *pb.Submission) bool
 
 // Receiver applies the kernel's receiving order (K6 T2) for one authority.
 type Receiver struct {
-	Changes     *ChangeLog
-	Authorities *Authorities
+	Changes interface {
+		SubmitChecked(*pb.Submission, time.Time, func() *Error) (*pb.ChangeRecord, *Error)
+		Records(string) []*pb.ChangeRecord
+	}
+	Authorities interface{ Authorize(*pb.Submission) *Error }
 	Policy      Policy
 }
 

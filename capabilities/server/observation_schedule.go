@@ -20,7 +20,7 @@ type observationWindowAttempt struct {
 // source window produces at most an ordinary business decision. Unmatched
 // windows, source points and this disposable scheduling memory are not logged.
 func (t *Tenant) EvaluateObservations(at time.Time) {
-	if t.quarantined() {
+	if t.businessStopped() || !t.ownerActive(BuildApp) {
 		return
 	}
 	type scheduled struct {

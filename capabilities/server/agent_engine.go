@@ -53,13 +53,13 @@ func (t *Tenant) Think(now time.Time) { onLane(t.turns(now)) }
 // turns are the agents' due turns, to run on the I/O lane: each
 // calls its model outside the tenant's lock.
 func (t *Tenant) turns(now time.Time) []func() {
-	if t.agents == nil || t.quarantined() {
+	if t.agents == nil || t.businessStopped() {
 		return nil
 	}
 	var out []func()
 	for _, x := range t.agents.DueAgentTurns(now) {
 		out = append(out, func() {
-			if !t.quarantined() {
+			if !t.businessStopped() {
 				t.take(x, now)
 			}
 		})

@@ -17,7 +17,7 @@ import (
 // ReadDispatches uses the source loop's outside lane. Only the small status
 // evidence becomes an input; external reads never execute during recovery.
 func (t *Tenant) ReadDispatches(at time.Time) {
-	if t.quarantined() || t.app(construction.ID) == nil {
+	if t.businessStopped() || !t.ownerActive(construction.ID) || t.app(construction.ID) == nil {
 		return
 	}
 	t.mu.Lock()

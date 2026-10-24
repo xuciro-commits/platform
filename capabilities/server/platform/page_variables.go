@@ -442,7 +442,7 @@ func pageLiteralType(raw json.RawMessage) string {
 
 // CheckVariables checks the same finite type/operator graph consumed by the
 // browser. It evaluates no source text and accesses no records or capabilities.
-func (d *PageDocument) CheckVariables() error {
+func (d *PageDocument) CheckVariables(engines ...RuleEngine) error {
 	contract := pageWidgets.Runtime
 	if len(d.Variables) > contract.MaxVariables {
 		return fmt.Errorf("page variable limit exceeded")
@@ -663,7 +663,7 @@ func (d *PageDocument) CheckVariables() error {
 				if !PageRuleFits(v.Type, v.Rule.Kind) {
 					return fail("rule output type differs")
 				}
-				if _, err := CompileExpr(*v.Rule, schema); err != nil {
+				if _, err := ruleEngineOf(engines).CompileExpr(*v.Rule, schema); err != nil {
 					return fail(err.Error())
 				}
 				break
@@ -767,8 +767,8 @@ func (d PageDocument) PageRuleSchema() ExprSchema {
 
 // NormalizePageRules runs only on a live save/publication. Historical bytes
 // remain untouched; legacy graphs are also lowered in the browser on read.
-func (d *PageDocument) NormalizePageRules() error {
-	if err := d.CheckVariables(); err != nil {
+func (d *PageDocument) NormalizePageRules(engines ...RuleEngine) error {
+	if err := d.CheckVariables(engines...); err != nil {
 		return err
 	}
 	schema := d.PageRuleSchema()
@@ -784,7 +784,7 @@ func (d *PageDocument) NormalizePageRules() error {
 			d.Variables[name] = v
 		}
 	}
-	return d.CheckVariables()
+	return d.CheckVariables(engines...)
 }
 
 // Page variables retain their presentation scalar carriers. Rule kinds remain

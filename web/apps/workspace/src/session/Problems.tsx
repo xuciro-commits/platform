@@ -29,15 +29,16 @@ export function Recovery({ client, token, tenant }: { client: EdgeClient; token:
       setRetrying(false);
     }
   };
+  const maintenance = health.data?.status === "suspended";
   return <main className="grid min-h-dvh place-items-center p-4">
     <Card className="w-full max-w-xl space-y-3 p-5">
-      <h1 className="text-lg font-semibold">{t("Tenant recovery")}</h1>
-      <p>{t("This tenant is quarantined. Business inputs and work are stopped; other tenants can continue.")}</p>
+      <h1 className="text-lg font-semibold">{t(maintenance ? "Tenant maintenance" : "Tenant recovery")}</h1>
+      <p>{t(maintenance ? "This tenant is paused for maintenance. A host administrator can restore its required implementations and resume access in Host Console. Your saved records and history remain." : "This tenant is quarantined. Business inputs and work are stopped; other tenants can continue.")}</p>
       {health.data?.recoveryError && <p role="alert" className="break-all text-danger">{health.data.recoveryError}</p>}
       {health.error && <p role="alert">{t("Only a tenant administrator can view recovery diagnostics and retry.")}</p>}
-      <p>{t("Repair the underlying journal or restore a valid backup before retrying. Recovery rebuilds this tenant from its durable history without restarting healthy tenants.")}</p>
+      {!maintenance && <p>{t("Repair the underlying journal or restore a valid backup before retrying. Recovery rebuilds this tenant from its durable history without restarting healthy tenants.")}</p>}
       {failure && <p role="alert" className="break-all text-danger">{failure}</p>}
-      {!health.error && <Button disabled={retrying || !health.data} onClick={() => void retry()}>
+      {!maintenance && !health.error && <Button disabled={retrying || !health.data} onClick={() => void retry()}>
         {retrying ? t("Recovering…") : t("Retry recovery")}
       </Button>}
     </Card>

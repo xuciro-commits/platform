@@ -82,11 +82,11 @@ type Journals interface {
 // path has (the projection for outside tools). A local file
 // journal has none; the deployment refuses what needs one.
 func Pool(j Journals) (*pgxpool.Pool, bool) {
-	pg, ok := j.(*Postgres)
+	pg, ok := j.(interface{ Pool() *pgxpool.Pool })
 	if !ok {
 		return nil, false
 	}
-	return pg.pool, true
+	return pg.Pool(), true
 }
 
 // Pool is the connection pool the PostgreSQL journal runs on, for the host's

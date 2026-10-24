@@ -38,8 +38,12 @@ func seatOf(id string, roles ...string) Seat {
 // composeTenant is a tenant on the Console with these seats and apps, failing
 // the test if the composition is refused.
 func composeTenant(t *testing.T, id string, seats []Seat, apps ...platform.App) *Tenant {
+	return composeTenantWithCapabilities(t, id, DefaultRuntimeCapabilities(), seats, apps...)
+}
+
+func composeTenantWithCapabilities(t *testing.T, id string, services RuntimeCapabilities, seats []Seat, apps ...platform.App) *Tenant {
 	t.Helper()
-	tn, err := NewTenant(id, append([]platform.App{NewConsole(id, seats...)}, apps...)...)
+	tn, err := NewTenantWithCapabilities(id, services, append([]platform.App{NewConsole(id, seats...)}, apps...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

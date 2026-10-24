@@ -15,9 +15,9 @@ import (
 // supplies captured source values and commits the resulting images separately.
 type MigrationProgram struct {
 	Plan        MigrationPlan
-	predicates  map[string]*ExprProgram
-	conversions map[string]*ExprProgram
-	identities  map[string]*ExprProgram
+	predicates  map[string]ExprProgram
+	conversions map[string]ExprProgram
+	identities  map[string]ExprProgram
 	sources     map[string]EntityInfo
 	targets     map[string]EntityInfo
 }
@@ -33,11 +33,12 @@ type MigrationRecordResult struct {
 
 // CompileMigrationPlan validates actual source and target shapes, not names
 // supplied by a client. Every conversion resolves against the source release.
-func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]EntityInfo) (*MigrationProgram, error) {
+func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]EntityInfo, engines ...RuleEngine) (*MigrationProgram, error) {
+	engine := ruleEngineOf(engines)
 	if err := plan.Check(); err != nil {
 		return nil, err
 	}
-	program := &MigrationProgram{Plan: plan, sources: sources, targets: targets, predicates: map[string]*ExprProgram{}, conversions: map[string]*ExprProgram{}, identities: map[string]*ExprProgram{}}
+	program := &MigrationProgram{Plan: plan, sources: sources, targets: targets, predicates: map[string]ExprProgram{}, conversions: map[string]ExprProgram{}, identities: map[string]ExprProgram{}}
 	referenced := map[string]bool{}
 	for _, source := range sources {
 		for _, field := range source.Fields {
@@ -75,7 +76,7 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 				if plan.Scope.Where.Kind != "boolean" {
 					return nil, fmt.Errorf("migration predicate must be boolean")
 				}
-				predicate, err := CompileExpr(*plan.Scope.Where, schema)
+				predicate, err := engine.CompileExpr(*plan.Scope.Where, schema)
 				if err != nil {
 					return nil, err
 				}
@@ -90,7 +91,7 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 				if !found || source.App != target.App {
 					return nil, fmt.Errorf("extraction needs a target of the same authority")
 				}
-				identity, err := CompileExpr(*step.Identity, schema)
+				identity, err := engine.CompileExpr(*step.Identity, schema)
 				if err != nil {
 					return nil, err
 				}
@@ -139,7 +140,7 @@ func CompileMigrationPlan(plan MigrationPlan, sources, targets map[string]Entity
 				if expression.Kind != RuleFieldKind(to.Type) {
 					return nil, fmt.Errorf("conversion result does not match target field %s", to.Name)
 				}
-				compiled, err := CompileExpr(*expression, schema)
+				compiled, err := engine.CompileExpr(*expression, schema)
 				if err != nil {
 					return nil, err
 				}

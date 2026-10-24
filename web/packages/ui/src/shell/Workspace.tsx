@@ -55,6 +55,8 @@ type Unsaved = {
   ask: (panels: string[], run: () => void, owner?: symbol) => void;
 };
 type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; closeAll: () => void; notify: typeof toast; unsaved?: Unsaved;
+  /** Confirms other open drafts before an operation stops their providers. */
+  confirmLeave: (run: () => void, exceptPanel?: string) => void;
   /** Names a panel's tab after what it shows ("Object type · Visit") once the view knows it; the view's static title stays the category. */
   retitle?: (panel: string, title: string) => void;
   transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void;
@@ -71,13 +73,14 @@ const ViewCallContext = createContext<{ input?: unknown; expired?: boolean; retu
 export const useViewCall = () => useContext(ViewCallContext);
 
 export const WorkspaceContext = createContext<WorkspaceApi | null>(null);
+const ViewRegistryContext = createContext<ReadonlyMap<string, View>>(new Map());
 
 /** Opens routes as tabs, beside the current group or in a separate window. */
 export function useWorkspace(): WorkspaceApi {
   const api = useContext(WorkspaceContext);
   const panel = useContext(PanelContext);
   if (!api) throw new Error("useWorkspace outside <Workspace>");
-  return { ...api, transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
+  return { ...api, confirmLeave: (run: () => void) => api.confirmLeave(run, panel), transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
 }
 
 /** The tab of the current view shows "<category> · <name>" once the name is known (UX-03);
@@ -492,6 +495,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const workspace = useMemo<WorkspaceApi>(() => ({
     open, notify: toast, close: (route) => closePanel(keyOf(route)), closeAll, unsaved,
+    confirmLeave: (run, exceptPanel) => unsaved.ask((dock.current?.panels ?? []).map(panel => panel.id).filter(id => id !== exceptPanel), run),
     transfer: (from, route, input, result) => {
       if (!dock.current?.getPanel(from)) return;
       const id = transfers.current.start(from, input, result), called = { ...route, params: { ...route.params, call: id } };
@@ -529,7 +533,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   const components = useMemo(() => ({
     view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
-      const view = byId.get(params.route.view);
+      const view = useContext(ViewRegistryContext).get(params.route.view);
       const ticket = params.route.params?.call;
       const call = ticket ? transfers.current.read(ticket, api.id) : undefined;
       const returned = (value: unknown) => {
@@ -553,7 +557,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         </ViewBoundary></ViewCallContext.Provider></PanelContext.Provider></ViewVisibilityContext.Provider>
       </div>;
     },
-  }), [byId, closePanel]);
+  }), [closePanel]);
 
   const onReady = useCallback(({ api }: { api: DockviewApi }) => {
     dock.current = api;
@@ -664,6 +668,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
 
   return (
     <WorkspaceContext.Provider value={workspace}>
+      <ViewRegistryContext.Provider value={byId}>
       <div className={cn("grid h-dvh w-full min-w-0 max-w-full overflow-hidden bg-background text-foreground",
         rail && !compact ? "grid-cols-[44px_minmax(0,1fr)]" : "grid-cols-1", rail && compact ? "grid-rows-[36px_1fr_44px]" : "grid-rows-[36px_1fr]")}>
         {rail && !compact && (
@@ -836,6 +841,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         </div>
       </Dialog>
       <Toaster position="bottom-right" toastOptions={{ className: "!rounded-md !border-border !bg-surface !text-foreground !text-sm" }} />
+      </ViewRegistryContext.Provider>
     </WorkspaceContext.Provider>
   );
 }

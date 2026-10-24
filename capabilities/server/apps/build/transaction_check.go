@@ -315,7 +315,7 @@ type txnWrite struct {
 	when           *platform.Expr
 }
 
-func (b *Build) checkTransactions(object construction.Object) error {
+func (b *Build) checkTransactions(object construction.Object, engines ...platform.RuleEngine) error {
 	if object.CreateTransaction != nil {
 		clone := object
 		clone.Actions = slices.Clone(object.Actions)
@@ -361,7 +361,7 @@ func (b *Build) checkTransactions(object construction.Object) error {
 		if err := b.checkConfirmation(txn.Confirmation, object); err != nil {
 			return err
 		}
-		if err := b.checkDispatch(txn.Dispatch, object, action); err != nil {
+		if err := b.checkDispatch(txn.Dispatch, object, action, engines...); err != nil {
 			return err
 		}
 		if object.Numbering != nil {
@@ -410,7 +410,7 @@ func (b *Build) checkTransactions(object construction.Object) error {
 			}
 			return b.conditionLookup(typ)
 		}
-		if err := b.checkRefusalDeclarations(object, action, txn.Refusals, spec, "", lookup); err != nil {
+		if err := b.checkRefusalDeclarations(object, action, txn.Refusals, spec, "", lookup, engines...); err != nil {
 			return err
 		}
 		if err := b.checkRuleCollections(spec, "transaction "+action.Name, lookup); err != nil {
@@ -420,7 +420,7 @@ func (b *Build) checkTransactions(object construction.Object) error {
 			if txn.Guard.Kind != "boolean" || txn.Message == "" {
 				return fmt.Errorf("transaction guard needs a boolean and message")
 			}
-			if _, err := platform.RuleSchema(*txn.Guard, spec, lookup); err != nil {
+			if _, err := platform.RuleSchema(*txn.Guard, spec, lookup, engines...); err != nil {
 				return err
 			}
 		}
@@ -461,11 +461,11 @@ func (b *Build) checkTransactions(object construction.Object) error {
 					if step.When.Kind != "boolean" {
 						return fmt.Errorf("%s when must be boolean", where)
 					}
-					if _, err := platform.RuleSchema(*step.When, scope, lookup); err != nil {
+					if _, err := platform.RuleSchema(*step.When, scope, lookup, engines...); err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
 				}
-				if err := b.checkRefusalDeclarations(object, action, step.Refusals, scope, row, lookup); err != nil {
+				if err := b.checkRefusalDeclarations(object, action, step.Refusals, scope, row, lookup, engines...); err != nil {
 					return fmt.Errorf("%s: %w", where, err)
 				}
 				if step.Kind == "for-each" {
@@ -476,7 +476,7 @@ func (b *Build) checkTransactions(object construction.Object) error {
 						if step.ForEach.Of != "" {
 							return fmt.Errorf("%s interval cannot name a collection record", where)
 						}
-						if err := checkTxnRange(*step.ForEach.Range, scope, lookup); err != nil {
+						if err := checkTxnRange(*step.ForEach.Range, scope, lookup, engines...); err != nil {
 							return fmt.Errorf("%s: %w", where, err)
 						}
 						if err := check(step.ForEach.Steps, withTxnRange(scope, step.ForEach.Range.From.Kind), "", step.Name); err != nil {
@@ -519,7 +519,7 @@ func (b *Build) checkTransactions(object construction.Object) error {
 					if count != 1 || !typed[step.Kind] || step.Link != nil || step.Sequence != nil || len(step.Changes) > 0 {
 						return fmt.Errorf("%s needs exactly its typed payload", where)
 					}
-					if err := b.checkTypedTxnStep(step, scope, lookup); err != nil {
+					if err := b.checkTypedTxnStep(step, scope, lookup, engines...); err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
 					if step.Intervals != nil && loop != "" {
@@ -632,7 +632,7 @@ func (b *Build) checkTransactions(object construction.Object) error {
 					if !ruleAssignmentFits(field.Type, expr.Kind) {
 						return fmt.Errorf("%s assignment type differs", where)
 					}
-					if _, err := platform.RuleSchema(expr, scope, lookup); err != nil {
+					if _, err := platform.RuleSchema(expr, scope, lookup, engines...); err != nil {
 						return fmt.Errorf("%s field %s: %w", where, field.Name, err)
 					}
 				}

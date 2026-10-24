@@ -86,6 +86,9 @@ func (t *Tenant) health(now time.Time) TenantHealth {
 	if h.Failed > 0 || h.OpenBreakers > 0 || h.Connectors > 0 || h.Endpoints > 0 || len(h.Deferred) > 0 {
 		h.Status = "degraded"
 	}
+	if t.console.suspended() {
+		h.Status = "suspended"
+	}
 	return h
 }
 

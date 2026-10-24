@@ -70,6 +70,8 @@ type tenantState struct {
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
 	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
 	HostLifecycle    string                           `json:"hostLifecycle,omitempty"`
+	RuntimeSelection map[string]string                `json:"runtimeSelection,omitempty"`
+	DisabledOwners   []string                         `json:"disabledOwners,omitempty"`
 	Support          []SupportGrant                   `json:"support,omitempty"`
 	Sealed           map[string]SealedArtifact        `json:"sealed,omitempty"`
 	ReleaseOrigins   map[string]ReleaseOrigin         `json:"releaseOrigins,omitempty"`
@@ -554,7 +556,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return err
 	}
 	t.audit.restore(&s)
-	if err := validateHostImage(t.ID, hostControlImage{s.HostLifecycle, s.Support, s.Migrations, s.HostRequests}); err != nil {
+	if err := validateHostImage(t.ID, hostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners}); err != nil {
 		return err
 	}
 	t.console.restore(&s)

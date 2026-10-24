@@ -108,9 +108,9 @@ func toolsFor(t *Tenant, m platform.Member) []map[string]any {
 
 func readsFor(t *Tenant, m platform.Member) []string {
 	var out []string
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, read := range a.Manifest().Reads {
-			if len(m.RolesIn(a.Manifest().ID)) > 0 || slices.Contains(a.Manifest().Everyone, read) {
+			if t.mayCallRead(m, read) {
 				out = append(out, read)
 			}
 		}

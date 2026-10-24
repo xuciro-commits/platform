@@ -25,6 +25,9 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	pages := pageDefinitionProjection{member: m, entities: entities, actions: actions, definitions: registeredDefinitions, sources: retainedPageDefinitionSources{tenant: t}}
 	out := []platform.Definition{}
 	for _, registered := range registeredDefinitions {
+		if !t.ownerActive(registered.Ref.App) {
+			continue
+		}
 		def := registered
 		switch def.Ref.Kind {
 		case platform.AssetObject:
@@ -265,6 +268,9 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	publishedFlows := map[platform.AssetRef]bool{}
 	if m.Holds("build", "builder") && t.procs != nil {
 		for _, registered := range registeredDefinitions {
+			if !t.ownerActive(registered.Ref.App) {
+				continue
+			}
 			if registered.Application == nil {
 				continue
 			}
@@ -277,6 +283,9 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	}
 	applications := construction.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range registeredDefinitions {
+		if !t.ownerActive(registered.Ref.App) {
+			continue
+		}
 		if def, ok := construction.ProjectApplication(registered, applications); ok {
 			out = append(out, def)
 		}

@@ -22,7 +22,7 @@ type ChangeArchive interface {
 }
 
 type ChangeLog struct {
-	schemas  *SchemaRegistry
+	schemas  interface{ Accepts(*pb.SchemaRef) bool }
 	logs     map[string][]*pb.ChangeRecord
 	byKey    map[string]map[string]*pb.ChangeRecord
 	byID     map[string]map[string]bool // resident causal references; archived IDs stay in the archive
@@ -36,7 +36,7 @@ type ChangeLog struct {
 	Facts func(tenant, factID string) bool
 }
 
-func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
+func NewChangeLog(schemas interface{ Accepts(*pb.SchemaRef) bool }) *ChangeLog {
 	return &ChangeLog{schemas: schemas, logs: map[string][]*pb.ChangeRecord{},
 		byKey: map[string]map[string]*pb.ChangeRecord{}, byID: map[string]map[string]bool{}, revs: map[[3]string]uint32{}}
 }

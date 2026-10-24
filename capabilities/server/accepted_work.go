@@ -412,12 +412,12 @@ func (task *Task) restoreOutcome(saved Task) {
 	task.event, task.job, task.since = event, job, since
 }
 
-func (t *Tenant) forkWorkState() *kernel.Works {
+func (t *Tenant) forkWorkState() platform.Works {
 	items := t.works.All()
 	for i, item := range items {
 		items[i] = proto.Clone(item).(*pb.Work)
 	}
-	draft := kernel.NewWorks()
+	draft := t.services.Kernel.Works()
 	draft.Restore(items)
 	return draft
 }

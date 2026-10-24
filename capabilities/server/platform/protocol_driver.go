@@ -42,6 +42,7 @@ type DriverPackage struct {
 	Runtime DriverRuntime `json:"runtime"`
 }
 type DriverBinding struct {
+	Scope         string              `json:"scope,omitempty"`
 	Package       string              `json:"package"`
 	Version       string              `json:"version"`
 	Digest        string              `json:"digest"`
@@ -133,6 +134,7 @@ type DriverReadResult struct {
 	Coverage *DriverCoverage    `json:"coverage,omitempty"`
 }
 type DriverDispatchIdentity struct {
+	Scope           string    `json:"scope,omitempty"`
 	RunID           string    `json:"runID"`
 	AttemptID       string    `json:"attemptID"`
 	BusinessKey     string    `json:"businessKey"`
@@ -196,11 +198,33 @@ func (r DriverRuntime) Target() (DriverTarget, error) {
 	return DriverTarget{}, fmt.Errorf("driver has no binary for %s/%s", runtime.GOOS, runtime.GOARCH)
 }
 func (b DriverBinding) Check() error {
+	if b.Scope != "" && !DriverDigest(b.Scope) {
+		return fmt.Errorf("driver scope must be a tenant digest")
+	}
 	if !driverName(b.Package) || !driverName(b.Version) || !DriverDigest(b.Digest) || !driverName(b.Profile) {
 		return fmt.Errorf("driver binding needs an exact package, version, binary digest and profile")
 	}
 	return b.Configuration.Check()
 }
+
+// DriverScope is a deployment-local namespace, never a business identity.
+func DriverScope(tenant string) string {
+	sum := sha256.Sum256([]byte(tenant))
+	return hex.EncodeToString(sum[:])
+}
+
+func (b DriverBinding) ConnectionID(id string) string {
+	if b.Scope == "" {
+		return id
+	} // original retained routes and receipts
+	sum := sha256.Sum256([]byte(b.Scope + "\x00" + id))
+	key := hex.EncodeToString(sum[:])
+	if strings.HasPrefix(id, "preview-") {
+		return "preview-" + key
+	}
+	return key
+}
+
 func (b DriverBinding) Revision() string {
 	raw, _ := json.Marshal(b)
 	digest := sha256.Sum256(raw)

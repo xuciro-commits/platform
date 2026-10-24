@@ -174,7 +174,7 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 
 // protocolActions are the actions a protocol declares, from any app providing it.
 func (t *Tenant) protocolActions(protocol string) []platform.Action {
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, p := range a.Manifest().Provides {
 			if p.Protocol.ID() == protocol {
 				return p.Protocol.Actions

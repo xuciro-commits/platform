@@ -609,6 +609,9 @@ func cosine(a, b []float32) float64 {
 // Embed gives passages without a vector theirs, as owned work outside the
 // tenant's lock; the host calls it apart from other work.
 func (t *Tenant) Embed(now time.Time) {
+	if t.businessStopped() {
+		return
+	}
 	k := &t.index
 	if t.knowledge == nil || t.ai == nil {
 		return

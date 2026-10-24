@@ -64,7 +64,7 @@ func (c Caller) ruleRecordSet(object, id, name string, record any, at time.Time)
 
 // RecordSetPredicate lowers an optional reference prefix into the same Expr
 // path operation used everywhere else. Order always addresses the set element.
-func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (EntityInfo, bool)) (Expr, error) {
+func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) (Expr, error) {
 	if len(set.Path) == 0 {
 		return expr, nil
 	}
@@ -73,7 +73,7 @@ func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (Enti
 		return Expr{}, fmt.Errorf("set %s filter path must end at a declared record reference", set.Name)
 	}
 	schemaLookup := func(typ string) (EntityInfo, bool) { info, ok := lookup(typ); return ConstraintEntity(info), ok }
-	if _, err := RuleSchema(expr, RuleReadSpec{Object: field.Ref}, schemaLookup); err != nil {
+	if _, err := RuleSchema(expr, RuleReadSpec{Object: field.Ref}, schemaLookup, engines...); err != nil {
 		return Expr{}, err
 	}
 	var lower func(Expr) Expr
@@ -98,7 +98,7 @@ func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (Enti
 		return node
 	}
 	lowered := lower(expr)
-	_, err = RuleSchema(lowered, RuleReadSpec{Object: set.Object}, schemaLookup)
+	_, err = RuleSchema(lowered, RuleReadSpec{Object: set.Object}, schemaLookup, engines...)
 	return lowered, err
 }
 
@@ -115,7 +115,7 @@ func (s *RecordSet) UnmarshalJSON(raw []byte) error {
 	return strictTxn(raw, (*plain)(s))
 }
 
-func CheckRecordSets(info EntityInfo, lookup func(string) (EntityInfo, bool)) error {
+func CheckRecordSets(info EntityInfo, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
 	if len(info.Sets) > RecordSetMaxDeclarations {
 		return fmt.Errorf("object has %d sets; limit is %d", len(info.Sets), RecordSetMaxDeclarations)
 	}
@@ -166,14 +166,14 @@ func CheckRecordSets(info EntityInfo, lookup func(string) (EntityInfo, bool)) er
 			if err := visit(expr); err != nil {
 				return err
 			}
-			_, err := RuleSchema(expr, RuleReadSpec{Object: target.Type}, schemaLookup)
+			_, err := RuleSchema(expr, RuleReadSpec{Object: target.Type}, schemaLookup, engines...)
 			return err
 		}
 		for _, where := range set.Where {
 			if where.Kind != "boolean" {
 				return fmt.Errorf("set predicate must be boolean")
 			}
-			where, err := LowerRecordSetPredicate(set, where, lookup)
+			where, err := LowerRecordSetPredicate(set, where, lookup, engines...)
 			if err != nil {
 				return err
 			}

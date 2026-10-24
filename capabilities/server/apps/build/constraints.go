@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-func (b *Build) checkConstraints(o construction.Object) error {
+func (b *Build) checkConstraints(o construction.Object, engines ...platform.RuleEngine) error {
 	if len(o.Constraints) == 0 {
 		return nil
 	}
@@ -16,7 +16,7 @@ func (b *Build) checkConstraints(o construction.Object) error {
 		return err
 	}
 	lookup := ruleLookup(o, b.conditionLookup)
-	if err := platform.CheckConstraints(info, lookup, true); err != nil {
+	if err := platform.CheckConstraints(info, lookup, true, engines...); err != nil {
 		return err
 	}
 	for _, constraint := range o.Constraints {

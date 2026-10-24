@@ -41,7 +41,9 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
-	installingSet      bool // private owner images validate cross-references as one complete set
+	services           RuntimeCapabilities
+	disabledOwners     map[string]bool // immutable live bindings; saved owner codecs remain available for history and recovery
+	installingSet      bool            // private owner images validate cross-references as one complete set
 	currentReadScopes  bool
 	recordReadError    error
 	startupSnapshot    *snapshotCompatibility
@@ -93,7 +95,7 @@ type Tenant struct {
 	directory host.Directory  // the organisation, when composed
 	hops      int             // of the event being handled, for the events it causes
 	acted     int             // decisions published and notifications given, ever
-	works     *kernel.Works
+	works     platform.Works
 	// opsMu guards what reads and the runner share: queues, connectors,
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
 	opsMu sync.Mutex
@@ -148,14 +150,31 @@ func (t *Tenant) Audit() []AuditEntry { return t.audit.all() }
 // NewTenant enables apps for a tenant; it refuses duplicate names, consumed
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, committed: committed{refusals: map[string]resultformat.Refusal{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
-		connectors: newConnectorRoster(), records: newRecordStore()}
+	return NewTenantWithCapabilities(id, DefaultRuntimeCapabilities(), apps...)
+}
+
+func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
+	if err := services.Check(); err != nil {
+		return nil, err
+	}
+	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, committed: committed{refusals: map[string]resultformat.Refusal{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: newWorkBoard(),
+		connectors: newConnectorRoster(services.Kernel), records: newRecordStore()}
 	for i, app := range apps {
 		id := app.Manifest().ID
-		if _, exists := t.appIndex[id]; !exists {
-			t.appIndex[id] = i
+		if _, exists := t.appIndex[id]; exists || id == "" {
+			return nil, fmt.Errorf("tenant %s: owner identity %q is empty or repeated", t.ID, id)
+		}
+		t.appIndex[id] = i
+	}
+	t.services = services
+	for _, app := range apps {
+		if owner, ok := app.(interface{ AcceptedLedger() *platform.Ledger }); ok {
+			if err := owner.AcceptedLedger().BindKernel(services.Kernel); err != nil {
+				return nil, fmt.Errorf("bind kernel for %s: %w", app.Manifest().ID, err)
+			}
 		}
 	}
+	t.records.rules = services.Rules
 	t.staged = stagedChannel{tenant: id, files: t.files}
 	t.i18n = translator{apps: func() []platform.App { return t.apps }, tenant: t.words.clone}
 	claim := func(name string, a platform.App) error {
@@ -179,9 +198,15 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			t.observers = append(t.observers, x)
 		}
 		if x, ok := a.(host.Linker); ok {
+			if t.linker != nil {
+				return nil, fmt.Errorf("tenant %s has two link owners", id)
+			}
 			t.linker = x
 		}
 		if x, ok := a.(host.Directory); ok {
+			if t.directory != nil {
+				return nil, fmt.Errorf("tenant %s has two directory owners", id)
+			}
 			t.directory = x
 		}
 		if identity, ok := a.(host.IdentityDirectory); ok {
@@ -191,12 +216,21 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			t.identity = identity
 		}
 		if x, ok := a.(models); ok {
+			if t.ai != nil {
+				return nil, fmt.Errorf("tenant %s has two model owners", id)
+			}
 			t.ai = x
 		}
 		if x, ok := a.(host.Tasks); ok {
+			if t.tasks != nil {
+				return nil, fmt.Errorf("tenant %s has two task owners", id)
+			}
 			t.tasks = x
 		}
 		if x, ok := a.(host.Processes); ok {
+			if t.procs != nil {
+				return nil, fmt.Errorf("tenant %s has two process owners", id)
+			}
 			t.procs = x
 		}
 		if _, ok := a.(host.Listener); ok {
@@ -209,6 +243,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			t.agents = x
 		}
 		if x, ok := a.(host.Glossary); ok {
+			if t.knowledge != nil {
+				return nil, fmt.Errorf("tenant %s has two glossary owners", id)
+			}
 			t.knowledge = x
 		}
 		_, subscriber := a.(platform.Subscriber)
@@ -420,6 +457,9 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 }
 
 func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *resultformat.ObservationDecisionEvidence, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+	if t.businessStopped() {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
+	}
 	// A malformed transport identity cannot reserve a durable key for another
 	// tenant, authority or member. The kernel still supplies its ordinary
 	// refusal, but no result under this tenant can represent that submission.
@@ -695,11 +735,14 @@ func outcomeOf(err *kernel.Error) string {
 // journal records an accepted submission as the member's, for the audit and the journal.
 // Input routes a connector input (push batch, poll page, heartbeat) to its app.
 func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
-	if t.quarantined() {
+	if t.businessStopped() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.businessStopped() {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
+	}
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return nil, refusal
 	}
@@ -807,7 +850,7 @@ func (t *Tenant) planAcceptedEvent(e platform.Event) resultformat.Event {
 	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
 	plan := resultformat.Event{App: e.App, Changed: slices.Clone(e.Changed), Names: names,
 		Effects: t.eventEffects(e, names)}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		if slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
 			plan.Subscribers = append(plan.Subscribers, a.Manifest().ID)
 		}
@@ -842,13 +885,17 @@ func submitted(member string, a platform.App, s *pb.Submission, at time.Time) Au
 // Catalog is what m may call: each app's actions for m's role there, and an
 // action that uses protocol actions only when m may call the bound provider's.
 func (t *Tenant) Catalog(m platform.Member) []platform.Action {
+	m = m.WithAuthorization(t.services.Authorization)
 	out := []platform.Action{}
 	entities := map[string]platform.EntityInfo{}
 	for _, info := range t.Entities(m) {
 		entities[info.Type] = info
 	}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		for _, action := range a.Manifest().Actions.ForRoles(m.RolesIn(a.Manifest().ID)) {
+			if !m.May(a.Manifest().ID, action.Schema, action.Roles).Allow {
+				continue
+			}
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
 				owner, schema, _ := t.provider(used)
 				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
@@ -884,7 +931,7 @@ func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
 // the protocol graph and the capability matrix read this.
 func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		m := a.Manifest()
 		info := AppInfo{ID: m.ID, Title: m.Title, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
 			Roles: m.AllRoles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...), Interfaces: append([]platform.Interface{}, m.Interfaces...)}
@@ -919,7 +966,7 @@ type AppEntry struct {
 // AppsOf are the apps the member holds a role in, in the order the tenant runs them.
 func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
 	out := []AppEntry{}
-	for _, a := range t.apps {
+	for _, a := range t.liveApps() {
 		man := a.Manifest()
 		if role := m.Roles[man.ID]; role != "" {
 			out = append(out, AppEntry{ID: man.ID, Title: cmp.Or(man.Title, man.ID), Role: role})
@@ -950,7 +997,8 @@ func (t *Tenant) Member(id string) (platform.Member, bool) {
 	if t.identity == nil {
 		return platform.Member{}, false
 	}
-	return t.identity.MemberByID(id)
+	member, found := t.identity.MemberByID(id)
+	return member.WithAuthorization(t.services.Authorization), found
 }
 
 func readApp(app platform.App, c platform.Caller, name string) (any, *kernel.Error) {

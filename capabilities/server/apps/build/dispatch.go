@@ -48,7 +48,7 @@ func dispatchCommand(object construction.Object, name string) (platform.Dispatch
 	return object.DispatchCommands[i], true
 }
 
-func (b *Build) checkDispatch(spec *platform.Dispatch, object construction.Object, action construction.Action) error {
+func (b *Build) checkDispatch(spec *platform.Dispatch, object construction.Object, action construction.Action, engines ...platform.RuleEngine) error {
 	if spec == nil {
 		return nil
 	}
@@ -84,7 +84,7 @@ func (b *Build) checkDispatch(spec *platform.Dispatch, object construction.Objec
 		if err != nil {
 			return err
 		}
-		if _, err := platform.RuleSchema(expr, scope, lookup); err != nil {
+		if _, err := platform.RuleSchema(expr, scope, lookup, engines...); err != nil {
 			return fmt.Errorf("Dispatch parameter %s: %w", set.Field, err)
 		}
 	}

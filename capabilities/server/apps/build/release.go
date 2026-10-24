@@ -157,7 +157,7 @@ func (b *Build) PublishedPage(name string) (bool, error) {
 	return false, nil
 }
 
-func (b *Build) validateObjectInstallation(record construction.Object) error {
+func (b *Build) validateObjectInstallation(c platform.Caller, record construction.Object) error {
 	if processes := b.host.BuildProcesses(); processes != nil {
 		current, exists := platform.Get[construction.Object](b.host.Automation(platform.Caller{}, construction.ID), record.ID)
 		if previous, ok := construction.ReadPublication[construction.Object](current.Published); exists && ok {
@@ -212,7 +212,7 @@ func (b *Build) validateObjectInstallation(record construction.Object) error {
 	if b.jointMode {
 		return nil // The complete private installation checks replaced and retained dependents together.
 	}
-	return b.host.ValidateInstallDependents(entity, objectActions(record, entity), generated, pages...)
+	return b.host.ValidateInstallDependents(c, entity, objectActions(record, entity), generated, pages...)
 }
 
 // An explicitly published page owns its name after it replaces an object's

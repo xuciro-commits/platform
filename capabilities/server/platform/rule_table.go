@@ -17,24 +17,28 @@ type RuleTableRow struct {
 	Result    json.RawMessage `json:"result"`
 }
 
-func (plan RuleTablePlan) Decide(facts ExprContext, lookup func(string) (EntityInfo, bool)) (json.RawMessage, error) {
+func (plan RuleTablePlan) Decide(facts ExprContext, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) (json.RawMessage, error) {
 	schemas := []ExprSchema{}
 	for _, row := range plan.Rows {
-		schema, err := RuleSchema(row.Condition, plan.Reads, lookup)
+		schema, err := RuleSchema(row.Condition, plan.Reads, lookup, engines...)
 		if err != nil {
 			return nil, err
 		}
 		schemas = append(schemas, schema)
 	}
-	return plan.DecideSchemas(facts, schemas)
+	return plan.DecideSchemas(facts, schemas, engines...)
 }
 
-func (plan RuleTablePlan) DecideSchemas(facts ExprContext, schemas []ExprSchema) (json.RawMessage, error) {
+func (plan RuleTablePlan) DecideSchemas(facts ExprContext, schemas []ExprSchema, engines ...RuleEngine) (json.RawMessage, error) {
+	var engine RuleEngine = NativeRules{}
+	if len(engines) > 0 {
+		engine = engines[0]
+	}
 	if len(schemas) != len(plan.Rows) {
 		return nil, fmt.Errorf("decision table schemas are not bound")
 	}
 	for i, row := range plan.Rows {
-		p, err := CompileExpr(row.Condition, schemas[i])
+		p, err := engine.CompileExpr(row.Condition, schemas[i])
 		if err != nil {
 			return nil, err
 		}

@@ -9,7 +9,13 @@ import (
 	"platformserver/platform"
 )
 
-func (h hostView) ValidateInstallOperation(o platform.Operation) error {
+func (h hostView) ValidateInstallOperation(c platform.Caller, o platform.Operation) error {
+	if c.Replaying {
+		return h.validateOperation(o, platform.NativeRules{})
+	}
+	return h.validateOperation(o, h.t.services.Rules)
+}
+func (h hostView) validateOperation(o platform.Operation, engine platform.RuleEngine) error {
 	if err := o.Check(); err != nil {
 		return err
 	}
@@ -27,7 +33,7 @@ func (h hostView) ValidateInstallOperation(o platform.Operation) error {
 			if row.Condition.Kind != "boolean" {
 				return fmt.Errorf("row %d requires boolean", i+1)
 			}
-			if _, err := platform.RuleSchema(row.Condition, o.Rules.Reads, h.t.entity); err != nil {
+			if _, err := platform.RuleSchema(row.Condition, o.Rules.Reads, h.t.entity, engine); err != nil {
 				return err
 			}
 			if err := o.Output.Validate(row.Result, o.Limits.MaxOutputBytes); err != nil {
@@ -62,7 +68,11 @@ func (h hostView) InstallOperation(c platform.Caller, o platform.Operation, vers
 	if version < 1 {
 		return fmt.Errorf("operation requires a published owner version")
 	}
-	if err := h.ValidateInstallOperation(o); err != nil {
+	var engine platform.RuleEngine = h.t.services.Rules
+	if c.Replaying {
+		engine = platform.NativeRules{}
+	}
+	if err := h.validateOperation(o, engine); err != nil {
 		return err
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetCompute, Name: o.Name}

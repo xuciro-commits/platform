@@ -2,10 +2,10 @@ package platformserver
 
 import (
 	"maps"
+	"platformserver/platform"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 )
 
 // connectorRoster is the tenant's view of its connectors: the kernel registry
@@ -13,13 +13,13 @@ import (
 // last refusal each connector earned. Protected by the tenant's opsMu, like
 // the operations that consult it.
 type connectorRoster struct {
-	kernel    *kernel.Connectors
+	kernel    platform.Connectors
 	byID      map[string]*pb.ConnectorDescriptor
 	lastError map[string]ConnectorError
 }
 
-func newConnectorRoster() connectorRoster {
-	return connectorRoster{kernel: kernel.NewConnectors(), byID: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
+func newConnectorRoster(provider platform.KernelFactory) connectorRoster {
+	return connectorRoster{kernel: provider.Connectors(), byID: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}}
 }
 
 func (r *connectorRoster) register(d *pb.ConnectorDescriptor) error {

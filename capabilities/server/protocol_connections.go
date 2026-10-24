@@ -99,6 +99,9 @@ func (h *Host) routesProtocolConnections(rt *routes) {
 		if connection.Protocol == nil {
 			result.Error = "Choose an installed protocol package"
 		} else {
+			binding := *connection.Protocol
+			binding.Scope = platform.DriverScope(t.ID)
+			connection.Protocol = &binding
 			connection.ID = "preview-" + connection.Protocol.Revision()[:24]
 			result = t.checkProtocolConnection(r.Context(), connection, h.Now())
 		}
@@ -125,6 +128,7 @@ func (t *Tenant) protocolHTTP(ctx context.Context, connection construction.Conne
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
+	request.Header.Set("X-Platform-Tenant", t.ID)
 	if connection.Secret != "" {
 		credential, found := t.credentialHeader(connection.Secret, "connection/"+connection.ID, connection.Resolve(path))
 		if !found || strings.TrimSpace(string(credential)) == "" {

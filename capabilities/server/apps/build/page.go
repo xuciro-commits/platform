@@ -124,7 +124,7 @@ func (b *Build) pageEntity() platform.Entity {
 						if err := descriptor(*page).BindRuleTypes(b.conditionLookup); err != nil {
 							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 						}
-						if err := page.Document.NormalizePageRules(); err != nil {
+						if err := page.Document.NormalizePageRules(c.Rules()); err != nil {
 							return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 						}
 					}
@@ -177,7 +177,7 @@ func (b *Build) pageDraftEntity() platform.Entity {
 			}
 			return b.conditionLookup(typ)
 		}
-		if err := b.validatePageDocument(page, lookup); err != nil {
+		if err := b.validatePageDocument(page, lookup, c.Rules()); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		return nil
@@ -185,7 +185,7 @@ func (b *Build) pageDraftEntity() platform.Entity {
 	return entity
 }
 
-func (b *Build) validatePageDocument(page *Page, lookup func(string) (platform.EntityInfo, bool)) error {
+func (b *Build) validatePageDocument(page *Page, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
 	if err := b.normalizePageModel(page, lookup); err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func (b *Build) validatePageDocument(page *Page, lookup func(string) (platform.E
 	if err := descriptor(*page).BindRuleTypes(lookup); err != nil {
 		return err
 	}
-	return page.Document.NormalizePageRules()
+	return page.Document.NormalizePageRules(engines...)
 }
 
 // release installs the page: the host checks it against what is installed now

@@ -253,8 +253,8 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	return t.installPage(app, p, true)
 }
 
-func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) error {
-	if err := p.CheckModelBindings(t.entity, t.modelCriteria); err != nil {
+func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, engines ...platform.RuleEngine) error {
+	if err := p.CheckModelBindings(t.entity, t.modelCriteria, engines...); err != nil {
 		return err
 	}
 	if err := t.checkModelQueries(p); err != nil {

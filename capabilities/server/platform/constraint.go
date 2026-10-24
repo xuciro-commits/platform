@@ -48,7 +48,7 @@ func ConstraintEntity(info EntityInfo) EntityInfo {
 
 // CheckConstraints is shared by native declarations and builder publication.
 // A host must supply an explicit accepted transaction boundary for txn rules.
-func CheckConstraints(info EntityInfo, lookup func(string) (EntityInfo, bool), transactionBoundary bool) error {
+func CheckConstraints(info EntityInfo, lookup func(string) (EntityInfo, bool), transactionBoundary bool, engines ...RuleEngine) error {
 	if len(info.Constraints) > 64 {
 		return fmt.Errorf("object supports at most 64 constraints")
 	}
@@ -115,7 +115,7 @@ func CheckConstraints(info EntityInfo, lookup func(string) (EntityInfo, bool), t
 			if c.Expr.Kind != "boolean" {
 				return fmt.Errorf("constraint %s must return boolean", c.Name)
 			}
-			if _, err := RuleSchema(*c.Expr, ConstraintSpec(info, c), ownerLookup); err != nil {
+			if _, err := RuleSchema(*c.Expr, ConstraintSpec(info, c), ownerLookup, engines...); err != nil {
 				return fmt.Errorf("constraint %s: %w", c.Name, err)
 			}
 		}

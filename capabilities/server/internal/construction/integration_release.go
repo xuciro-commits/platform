@@ -30,6 +30,7 @@ func PortableDriverBinding(binding *platform.DriverBinding) *platform.DriverBind
 	}
 	var out platform.DriverBinding
 	_ = json.Unmarshal(platform.Raw(binding), &out)
+	out.Scope = ""
 	out.Configuration.Connection = nil
 	out.Configuration.Scenario, out.Configuration.Seed = "", 0
 	for i := range out.Configuration.Devices {

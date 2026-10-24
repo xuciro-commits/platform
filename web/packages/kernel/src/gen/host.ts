@@ -779,6 +779,19 @@ export type Capability = {
   parameters?: Field[];
 };
 
+export type CapabilityBinding = {
+  id: string;
+  version: string;
+  semantics: string;
+  provider: string;
+};
+
+export type CapabilityContract = {
+  id: string;
+  version: string;
+  semantics: string;
+};
+
 export type CapabilityDescriptor = {
   ref: AssetRef;
   kind: string;
@@ -816,6 +829,17 @@ export type CapabilityInvocation = {
   sources?: string[];
   record?: string;
   bindings?: Record<string, Binding>;
+};
+
+export type CapabilityModule = {
+  id: string;
+  version: string;
+  title: string;
+  scope: string;
+  replacement: string;
+  stateFormat?: string;
+  provides: CapabilityContract[];
+  requires?: CapabilityContract[];
 };
 
 export type CapabilityResult = {
@@ -903,6 +927,19 @@ export type CompositeEdit = {
   schema: string;
   target: EntityRef;
   payload?: unknown;
+};
+
+export type CompositionPlan = {
+  modules: CapabilityModule[];
+  bindings: CapabilityBinding[];
+  order: string[];
+};
+
+export type CompositionRequest = {
+  selection: Record<string, string>;
+  reason: string;
+  at: string;
+  disabledOwners?: string[];
 };
 
 export type ComputeFixture = {
@@ -1433,6 +1470,7 @@ export type DraftChangeField = {
 };
 
 export type DriverBinding = {
+  scope?: string;
   package: string;
   version: string;
   digest: string;
@@ -2011,6 +2049,18 @@ export type HostArtifactView = {
   assets: number;
   verified: boolean;
   note?: string;
+};
+
+export type HostComposition = {
+  current: Record<string, string>;
+  desired: Record<string, string>;
+  available: CapabilityModule[];
+  state: string;
+  reason?: string;
+  owners: CapabilityModule[];
+  disabledOwners: string[];
+  desiredDisabledOwners: string[];
+  storage: CapabilityModule;
 };
 
 export type HostOverview = {
@@ -2704,6 +2754,12 @@ export type OrgSeed = {
   memberships: Membership[];
 };
 
+export type PackageArtifactInfo = {
+  digest: string;
+  mediaType: string;
+  size: number;
+};
+
 export type PackageBlueprint = {
   roots: AssetRef[];
   assets: ReleaseAsset[];
@@ -2727,6 +2783,7 @@ export type PackageDescriptor = {
   title?: string;
   namespace: string;
   requires?: string[];
+  capabilities?: CapabilityContract[];
   compatibility?: string;
   contributions?: PackageContribution[];
   artifactDigest?: string;
@@ -2753,6 +2810,26 @@ export type PackageDraftResult = {
   drafts: PackageDraft[];
 };
 
+export type PackageInspectRequest = {
+  url?: string;
+  content?: unknown;
+};
+
+export type PackagePreview = {
+  descriptor: PackageDescriptor;
+  digest: string;
+  origin: string;
+  precheck: Precheck;
+  artifacts: PackageArtifactInfo[];
+};
+
+export type PackageRemoval = {
+  id: string;
+  ok: boolean;
+  needsCleanup: boolean;
+  blockers: string[];
+};
+
 export type PackageSetup = {
   roles: PackageSetupRole[];
   steps: PackageSetupStep[];
@@ -2772,6 +2849,9 @@ export type PackageSetupStep = {
 };
 
 export type PackageView = {
+  origin?: string;
+  sourceDigest?: string;
+  removal?: PackageRemoval;
   descriptor: PackageDescriptor;
   installed?: InstalledPackage;
   precheck: Precheck;
@@ -3568,6 +3648,7 @@ export type Precheck = {
   ok: boolean;
   problems?: string[];
   missing?: string[];
+  bindings?: CapabilityBinding[];
 };
 
 export type Predicate = {

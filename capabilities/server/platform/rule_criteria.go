@@ -64,7 +64,7 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 			return ExprResult{}, err
 		}
 	}
-	schema, err := RuleSchema(expr, reads, lookup)
+	schema, err := RuleSchema(expr, reads, lookup, caller.Rules())
 	if err != nil {
 		return ExprResult{}, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())
 	}
@@ -76,7 +76,7 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 		filtered := ruleTraceContext(expr, context)
 		observed = &filtered
 	}
-	program, err := CompileExpr(expr, schema)
+	program, err := caller.Rules().CompileExpr(expr, schema)
 	if err != nil {
 		return ExprResult{}, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}

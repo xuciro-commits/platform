@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 )
 
 // IntervalIdentity is a current projection row. Retired rows are excluded by
@@ -35,7 +34,7 @@ func intervalOverlap(a, b ObservationInterval) bool {
 // ReconcileObservationIntervals matches only confirmed ranges. K1 validates
 // fresh identities and redirects; the caller writes rows/links in its original
 // private transaction. Human fields are deliberately absent from this plan.
-func ReconcileObservationIntervals(object string, previous []IntervalIdentity, result ObservationIntervalResult, newID func(int) string) (IntervalReconciliation, error) {
+func ReconcileObservationIntervals(object string, previous []IntervalIdentity, result ObservationIntervalResult, newID func(int) string, engines ...KernelFactory) (IntervalReconciliation, error) {
 	out := IntervalReconciliation{Events: []IntervalChange{}, Retired: []string{}, Redirects: []*pb.Redirect{}}
 	if err := result.Check(); err != nil {
 		return out, err
@@ -59,7 +58,11 @@ func ReconcileObservationIntervals(object string, previous []IntervalIdentity, r
 		seen[old.ID] = true
 		entities = append(entities, &pb.EntityRef{Type: object, Id: old.ID})
 	}
-	identity := kernel.NewIdentity(entities)
+	var engine KernelFactory = NativeKernel{}
+	if len(engines) != 0 {
+		engine = engines[0]
+	}
+	identity := engine.Identity(entities)
 	type candidate struct {
 		interval ObservationInterval
 		review   bool

@@ -240,7 +240,7 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 	}
 	type acc struct {
 		keys  []any
-		folds []*platform.ExprNumericAggregate
+		folds []platform.ExprNumericAggregate
 	}
 	byKey := map[string]*acc{}
 	var order []*acc
@@ -262,13 +262,13 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 			if maxRows > 0 && len(order) >= maxRows {
 				return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Aggregate has {count} groups; limit is {limit}", len(order)+1, maxRows)
 			}
-			group = &acc{keys: keys, folds: make([]*platform.ExprNumericAggregate, len(measures))}
+			group = &acc{keys: keys, folds: make([]platform.ExprNumericAggregate, len(measures))}
 			for i, measure := range measures {
 				kind := measure.kind
 				if measure.op == "count" {
 					kind = "integer"
 				}
-				group.folds[i], err = platform.NewExprNumericAggregate(measure.op, kind, "")
+				group.folds[i], err = s.rules.NewExprNumericAggregate(measure.op, kind, "")
 				if err != nil {
 					return Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 				}

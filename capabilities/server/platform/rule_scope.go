@@ -60,7 +60,7 @@ func RuleFieldKind(kind string) string {
 // RuleSchema checks every reference path against the original object owner.
 // Only paths actually named in the immutable expression are expanded, so
 // cyclic object references do not create an unbounded schema tree.
-func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, bool)) (ExprSchema, error) {
+func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) (ExprSchema, error) {
 	schema := ExprSchema{Refs: map[string]ExprType{"caller.id": {Kind: "text"}, "caller.tenant": {Kind: "text"}, "observation.ready": {Kind: "boolean"}, "observation.source": {Kind: "text"}, "observation.object": {Kind: "text"}, "observation.subject": {Kind: "text"}}, Sets: map[string]ExprSetType{}}
 	for key, typ := range spec.Inputs {
 		name := "input." + key
@@ -184,7 +184,7 @@ func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, b
 	if err := visit(expr, ""); err != nil {
 		return schema, err
 	}
-	if _, err := CompileExpr(expr, schema); err != nil {
+	if _, err := ruleEngineOf(engines).CompileExpr(expr, schema); err != nil {
 		return schema, err
 	}
 	return schema, nil

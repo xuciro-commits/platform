@@ -122,7 +122,7 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record constructio
 	if err != nil {
 		return err
 	}
-	if err := platform.CheckObservationDefinition(definition, b.lookupEntity); err != nil {
+	if err := platform.CheckObservationDefinition(definition, b.lookupEntity, c.Rules()); err != nil {
 		return err
 	}
 	rows, err := b.integrationInventory(platform.AssetObservation)

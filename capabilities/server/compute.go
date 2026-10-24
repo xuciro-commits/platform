@@ -185,7 +185,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 		}
 		aggregate := platform.Expr{}
 		for _, row := range op.Rules.Rows {
-			schema, err := platform.RuleSchema(row.Condition, op.Rules.Reads, t.entity)
+			schema, err := platform.RuleSchema(row.Condition, op.Rules.Reads, t.entity, t.services.Rules)
 			if err != nil {
 				return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
@@ -497,7 +497,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			if b.RuleFacts == nil {
 				err = fmt.Errorf("Rule facts are not bound")
 			} else {
-				output, err = op.Rules.DecideSchemas(*b.RuleFacts, b.RuleSchemas)
+				output, err = op.Rules.DecideSchemas(*b.RuleFacts, b.RuleSchemas, t.services.Rules)
 			}
 		} else if op.Binding.Kind == "native" {
 			executor, ok := t.app(x.App).(platform.OperationExecutor)

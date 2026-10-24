@@ -17,7 +17,7 @@ import (
 	"platformserver/platform"
 )
 
-func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool)) error {
+func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleReadSpec, lookup func(string) (platform.EntityInfo, bool), engines ...platform.RuleEngine) error {
 	check := func(expr *platform.Expr, kinds ...string) error {
 		if expr == nil {
 			return nil
@@ -25,7 +25,7 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 		if len(kinds) > 0 && !slices.Contains(kinds, expr.Kind) {
 			return fmt.Errorf("Transaction expression has an incompatible result type")
 		}
-		_, err := platform.RuleSchema(*expr, scope, lookup)
+		_, err := platform.RuleSchema(*expr, scope, lookup, engines...)
 		return err
 	}
 	parameters := func(sets []platform.TxnSet) error {
@@ -62,7 +62,7 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 			if field.Type != "decimal" || p.Amount.Kind != "integer" {
 				return err
 			}
-			if _, err = platform.RuleSchema(p.Amount, scope, lookup); err != nil {
+			if _, err = platform.RuleSchema(p.Amount, scope, lookup, engines...); err != nil {
 				return err
 			}
 		}
@@ -218,9 +218,9 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 	return nil
 }
 
-func txnMath(kind, op string, left, right platform.ExprValue, now time.Time) (platform.ExprValue, *kernel.Error) {
+func txnMath(engine platform.RuleEngine, kind, op string, left, right platform.ExprValue, now time.Time) (platform.ExprValue, *kernel.Error) {
 	expr := platform.Expr{Op: op, Kind: kind, Args: []platform.Expr{platform.ExprReference(left.Kind, "left"), platform.ExprReference(right.Kind, "right")}}
-	program, err := platform.CompileExpr(expr, platform.ExprSchema{Refs: map[string]platform.ExprType{"left": {Kind: left.Kind}, "right": {Kind: right.Kind}}})
+	program, err := engine.CompileExpr(expr, platform.ExprSchema{Refs: map[string]platform.ExprType{"left": {Kind: left.Kind}, "right": {Kind: right.Kind}}})
 	if err != nil {
 		return platform.ExprValue{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 	}
@@ -289,7 +289,7 @@ func (b *Build) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.Txn
 	if p.Subtract {
 		op = "-"
 	}
-	next, problem := txnMath(kind, op, current, amount.Value, now)
+	next, problem := txnMath(c.Rules(), kind, op, current, amount.Value, now)
 	if problem != nil {
 		return "", problem
 	}
@@ -300,7 +300,7 @@ func (b *Build) txnPost(c platform.Caller, r *pb.ChangeRecord, step platform.Txn
 			_ = json.Unmarshal(next.Data, &money)
 			zero = platform.ExprPresent("money", map[string]any{"amount": 0, "currency": json.RawMessage(money["currency"])})
 		}
-		comparison, err := platform.CompareExprValues(next, zero)
+		comparison, err := c.Rules().CompareExprValues(next, zero)
 		if err != nil || comparison < 0 {
 			return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The balance cannot fall below zero")
 		}
@@ -460,7 +460,7 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 				return err
 			}
 			zero := platform.ExprPresent(amount.Value.Kind, 0)
-			cmp, compareErr := platform.CompareExprValues(amount.Value, zero)
+			cmp, compareErr := c.Rules().CompareExprValues(amount.Value, zero)
 			if compareErr != nil || cmp < 0 {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Accounting amounts cannot be negative")
 			}
@@ -474,10 +474,10 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 			}
 			if line.Debit != nil {
 				value.Debit = number
-				debit, err = txnMath("decimal", "+", debit, amount.Value, now)
+				debit, err = txnMath(c.Rules(), "decimal", "+", debit, amount.Value, now)
 			} else {
 				value.Credit = number
-				credit, err = txnMath("decimal", "+", credit, amount.Value, now)
+				credit, err = txnMath(c.Rules(), "decimal", "+", credit, amount.Value, now)
 			}
 			if err != nil {
 				return err
@@ -488,7 +488,7 @@ func (b *Build) txnJournal(c platform.Caller, r *pb.ChangeRecord, key string, sp
 	if len(entry.Lines) < 2 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A journal entry needs at least two accounting lines")
 	}
-	if cmp, err := platform.CompareExprValues(debit, credit); err != nil || cmp != 0 {
+	if cmp, err := c.Rules().CompareExprValues(debit, credit); err != nil || cmp != 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Accounting debits and credits must balance")
 	}
 	return c.TxnTransport().QueueTxnJournal(c, r, key, entry, "", now)

@@ -31,14 +31,14 @@ type EnterpriseUsage struct {
 
 // Current-use rules are pure owner declarations over this record, evaluated by
 // the existing expression engine. No record-name or state-name inference lives here.
-func enterpriseRecordCurrent(info platform.EntityInfo, value reflect.Value, now time.Time) bool {
+func enterpriseRecordCurrent(info platform.EntityInfo, value reflect.Value, now time.Time, engines ...platform.RuleEngine) bool {
 	if records.Header(value).Archived {
 		return false
 	}
 	if info.EnterpriseUse == nil {
 		return true
 	}
-	program, err := info.CompileEnterpriseUse()
+	program, err := info.CompileEnterpriseUse(engines...)
 	if err != nil {
 		return true
 	}
@@ -88,7 +88,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 			if len(paths) == 0 && !historical {
 				continue
 			}
-			current := len(paths) > 0 && enterpriseRecordCurrent(et.info, r.Value, now)
+			current := len(paths) > 0 && enterpriseRecordCurrent(et.info, r.Value, now, t.services.Rules)
 			visible := false
 			title, field := "", ""
 			if details {

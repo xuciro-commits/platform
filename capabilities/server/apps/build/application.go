@@ -60,7 +60,7 @@ func (b *Build) applicationEntity() platform.Entity {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			d := platform.PageDocument{UIProfile: platform.PageUIProfile(), Variables: a.Variables}
-			if err := d.NormalizePageRules(); err != nil {
+			if err := d.NormalizePageRules(c.Rules()); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			a.Variables = d.Variables

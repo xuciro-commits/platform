@@ -53,26 +53,28 @@ func Memberships(seats []Seat) []platform.Membership {
 }
 
 type Console struct {
-	mu           sync.Mutex
-	credentialMu sync.RWMutex // acquired after mu for writes; outbound readers take only this lock
-	credentials  map[string]credentialRecord
-	tenant       string
-	members      map[string]*platform.Member
-	subjects     map[string]string    // subject → member ID
-	then         func()               // what the decision being applied says once the lock is released
-	profiles     map[string]*Profile  // member ID → profile
-	tokens       map[string]*Token    // hashed personal tokens
-	minted       map[string]bool      // token secrets already handed out
-	lastSeen     map[string]time.Time // the host's memory, not decided state
-	sessions     sessionTable
-	roles        map[string]*CustomRole
-	policies     map[string]*PolicyRecord
-	teams        map[string]*Team
-	projects     map[string]*BuildProject
-	packages     map[string]*InstalledPackage
-	index        *PackageIndex
-	ledger       *platform.Ledger
-	host         host.ConsoleHost // only governance capabilities, attached at composition
+	mu              sync.Mutex
+	credentialMu    sync.RWMutex // acquired after mu for writes; outbound readers take only this lock
+	credentials     map[string]credentialRecord
+	tenant          string
+	members         map[string]*platform.Member
+	subjects        map[string]string    // subject → member ID
+	then            func()               // what the decision being applied says once the lock is released
+	profiles        map[string]*Profile  // member ID → profile
+	tokens          map[string]*Token    // hashed personal tokens
+	minted          map[string]bool      // token secrets already handed out
+	lastSeen        map[string]time.Time // the host's memory, not decided state
+	sessions        sessionTable
+	roles           map[string]*CustomRole
+	policies        map[string]*PolicyRecord
+	teams           map[string]*Team
+	projects        map[string]*BuildProject
+	packages        map[string]*InstalledPackage
+	packageSources  map[string]PackageSource
+	packageCleanups map[string]packageCleanupProof
+	index           *PackageIndex
+	ledger          *platform.Ledger
+	host            host.ConsoleHost // only governance capabilities, attached at composition
 }
 
 func ConsoleActions() *platform.Catalog {
@@ -161,21 +163,25 @@ func (d *Console) Identities() []Identity {
 
 // Snapshot and Restore: the members, how they sign in, and the decisions.
 type consoleState struct {
-	Credentials map[string]credentialRecord  `json:"credentials,omitempty"`
-	Members     map[string]*platform.Member  `json:"members"`
-	Subjects    map[string]string            `json:"subjects"`
-	Profiles    map[string]*Profile          `json:"profiles,omitempty"`
-	Projects    map[string]*BuildProject     `json:"projects,omitempty"`
-	Packages    map[string]*InstalledPackage `json:"packages,omitempty"`
-	Roles       map[string]*CustomRole       `json:"roles,omitempty"`
-	Policies    map[string]*PolicyRecord     `json:"policies,omitempty"`
-	Teams       map[string]*Team             `json:"teams,omitempty"`
-	Tokens      map[string]*Token            `json:"tokens,omitempty"`
+	PackageSources  map[string]PackageSource       `json:"packageSources,omitempty"`
+	PackageCleanups map[string]packageCleanupProof `json:"packageCleanups,omitempty"`
+	Credentials     map[string]credentialRecord    `json:"credentials,omitempty"`
+	Members         map[string]*platform.Member    `json:"members"`
+	Subjects        map[string]string              `json:"subjects"`
+	Profiles        map[string]*Profile            `json:"profiles,omitempty"`
+	Projects        map[string]*BuildProject       `json:"projects,omitempty"`
+	Packages        map[string]*InstalledPackage   `json:"packages,omitempty"`
+	Roles           map[string]*CustomRole         `json:"roles,omitempty"`
+	Policies        map[string]*PolicyRecord       `json:"policies,omitempty"`
+	Teams           map[string]*Team               `json:"teams,omitempty"`
+	Tokens          map[string]*Token              `json:"tokens,omitempty"`
 }
 
 // state is the directory as snapshots and accepted-state digests see it.
 func (d *Console) state() consoleState {
 	s := consoleState{Credentials: d.credentials, Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: d.projects, Packages: d.packages}
+	s.PackageSources = d.packageSources
+	s.PackageCleanups = d.packageCleanups
 	if len(d.roles) > 0 {
 		s.Roles = d.roles
 	}
@@ -216,6 +222,8 @@ func (d *Console) Restore(raw json.RawMessage) error {
 
 // restoreAccess takes the access configuration and tokens of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
+	d.packageSources = s.PackageSources
+	d.packageCleanups = s.PackageCleanups
 	d.credentialMu.Lock()
 	d.credentials = s.Credentials
 	if d.credentials == nil {
@@ -336,6 +344,8 @@ func (d *Console) ForkAcceptedState() (platform.App, error) {
 	fork := NewConsole(d.tenant)
 	fork.ledger, fork.index, fork.host = d.ledger, d.index, d.host
 	fork.members, fork.subjects = state.Members, state.Subjects
+	fork.packageSources = state.PackageSources
+	fork.packageCleanups = state.PackageCleanups
 	if state.Credentials != nil {
 		fork.credentials = state.Credentials
 	}
@@ -377,6 +387,21 @@ func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
 	}
 	if state.Members == nil || state.Subjects == nil {
 		return fmt.Errorf("accepted directory is incomplete")
+	}
+	for digest, source := range state.PackageSources {
+		if digest != source.Digest || !platform.DriverDigest(digest) || source.ID == "" || source.Version == "" || source.Origin == "" {
+			return fmt.Errorf("accepted package source is incomplete")
+		}
+	}
+	for id, proof := range state.PackageCleanups {
+		if id == "" || proof.ID != id || !platform.DriverDigest(proof.Generation) {
+			return fmt.Errorf("invalid package cleanup receipt")
+		}
+		for key, digest := range proof.Connections {
+			if !strings.HasPrefix(key, id+"\x00") || !platform.DriverDigest(digest) {
+				return fmt.Errorf("invalid package cleanup binding")
+			}
+		}
 	}
 	for id, member := range state.Members {
 		if id == "" || member == nil || member.ID != id || member.Tenant != d.tenant || member.Roles == nil {
@@ -667,5 +692,6 @@ func (t *Tenant) member(id string) (platform.Member, bool) {
 	if t.identity == nil {
 		return platform.Member{}, false
 	}
-	return t.identity.MemberByID(id)
+	member, found := t.identity.MemberByID(id)
+	return member.WithAuthorization(t.services.Authorization), found
 }

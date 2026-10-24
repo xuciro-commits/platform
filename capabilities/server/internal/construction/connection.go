@@ -64,7 +64,7 @@ func (c Connection) Resolve(ref string) string {
 		if err != nil || u.IsAbs() || u.Host != "" || u.User != nil || strings.Contains(u.Path, "..") || strings.HasPrefix(ref, "//") {
 			return ""
 		}
-		return strings.TrimRight(c.Address, "/") + "/bindings/" + url.PathEscape(c.ID) + "/revisions/" + c.Protocol.Revision() + "/" + strings.TrimLeft(ref, "/")
+		return strings.TrimRight(c.Address, "/") + "/bindings/" + url.PathEscape(c.Protocol.ConnectionID(c.ID)) + "/revisions/" + c.Protocol.Revision() + "/" + strings.TrimLeft(ref, "/")
 	}
 	if ref == "" {
 		return c.Address

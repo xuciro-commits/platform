@@ -31,6 +31,9 @@ type PackageDraftResult struct {
 }
 
 func (h *Host) routesPackageDrafts(rt *routes) {
+	h.routesPackageSources(rt)
+	h.routesComposition(rt)
+	h.routesPackageCleanup(rt)
 	rt.authorized(Route{Pattern: "POST /v1/packages/{id}/drafts", Summary: "Create original Build drafts from an installed package; publication and permissions stay separate", Body: PackageDraftRequest{}, Answer: PackageDraftResult{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request PackageDraftRequest
 		if !decodeReleaseBody(w, r, &request) {

@@ -31,10 +31,10 @@ type BuildHost interface {
 	Record(ref string) (any, bool)
 	ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool)
 	ValidateInstallApplication(a platform.Application) error
-	ValidateInstallDependents(e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error
+	ValidateInstallDependents(c platform.Caller, e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error
 	ValidateInstallFunction(f platform.AIFunction) error
 	ValidateInstallLinkType(l platform.LinkType) error
-	ValidateInstallOperation(o platform.Operation) error
+	ValidateInstallOperation(c platform.Caller, o platform.Operation) error
 	ValidateInstallPage(p platform.Page) error
 	ValidateInstallPropertyType(p platform.PropertyType) error
 	ValidateInstallQuery(q platform.NamedQuery) error

@@ -57,7 +57,8 @@ func TestReleaseEnvironmentUsesOwnerDescriptorAndHostCredential(t *testing.T) {
 	}
 	asset := platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: "1", Body: json.RawMessage(`{"name":"external"}`)}
 	var checked string
-	target := &Tenant{Secrets: func(name string) ([]byte, bool) { checked = name; return []byte("configured"), true }}
+	target := composeTenant(t, "environment-target", nil)
+	target.Secrets = func(name string) ([]byte, bool) { checked = name; return []byte("configured"), true }
 	context, err := target.assetReleaseContextLocked(registry, []platform.ReleaseAsset{asset}, platform.Member{ID: "reviewer"}, time.Now(), false)
 	if err != nil || len(context.Bindings) != 1 || context.Bindings[0].Ref != ref || context.Bindings[0].TargetRecord != "owned-record" || checked != "local-credential" {
 		t.Fatal(context, checked, err)

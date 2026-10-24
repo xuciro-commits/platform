@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -29,8 +30,9 @@ type localClient struct {
 	beforeExecute    func()
 }
 
-func (c *localClient) Available() bool { c.mu.Lock(); defer c.mu.Unlock(); return !c.closed }
-func (c *localClient) Close()          { c.mu.Lock(); c.closed = true; c.mu.Unlock() }
+func (c *localClient) Available() bool                 { c.mu.Lock(); defer c.mu.Unlock(); return !c.closed }
+func (c *localClient) Close()                          { c.mu.Lock(); c.closed = true; c.mu.Unlock() }
+func (c *localClient) CloseWait(context.Context) error { c.Close(); return nil }
 func (c *localClient) Call(ctx context.Context, method string, input, output any) error {
 	c.mu.Lock()
 	if method == "start" {
@@ -90,10 +92,10 @@ func gatewayRequest(t *testing.T, s *Server, binding platform.DriverBinding, ope
 		}
 	}
 	method := http.MethodPost
-	if operation == "check" || operation == "source" || operation == "source?commands=1" {
+	if operation == "check" || operation == "source" || operation == "source?commands=1" || operation == "lifecycle" {
 		method = http.MethodGet
 	}
-	r := httptest.NewRequest(method, "/bindings/heating/revisions/"+binding.Revision()+"/"+operation, &body)
+	r := httptest.NewRequest(method, "/bindings/"+binding.ConnectionID("heating")+"/revisions/"+binding.Revision()+"/"+operation, &body)
 	r.Header.Set("Authorization", "Bearer test-token")
 	w := httptest.NewRecorder()
 	s.ServeHTTP(w, r)
@@ -178,6 +180,103 @@ func TestProtocolGatewayAttemptRecoveryAndRevision(t *testing.T) {
 	}
 }
 
+func TestPreviewReleasesOnlyItsSharedProcessReference(t *testing.T) {
+	config, binding := gatewayFixture(t)
+	s, client := newLocalGateway(t, config)
+	if w := gatewayRequest(t, s, binding, "configure", binding); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	raw, _ := json.Marshal(binding)
+	r := httptest.NewRequest(http.MethodPost, "/bindings/preview-check/revisions/"+binding.Revision()+"/configure?readOnly=1", bytes.NewReader(raw))
+	r.Header.Set("Authorization", "Bearer test-token")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	live := s.sessions[sessionKey("preview-check", binding.Revision())]
+	s.discardPreview("preview-check", binding.Revision(), live)
+	if !client.Available() || len(s.processes) != 1 || s.processRefs[client] != 1 {
+		t.Fatal("preview closed another connection's process")
+	}
+	if w = gatewayRequest(t, s, binding, "check", nil); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := s.CloseWait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if client.Available() || len(s.processes) != 0 || len(s.processRefs) != 0 {
+		t.Fatal("last session did not release its process")
+	}
+	if w = gatewayRequest(t, s, binding, "check", nil); w.Code != http.StatusServiceUnavailable {
+		t.Fatal("closed gateway accepted work", w.Code)
+	}
+}
+
+func TestReleasePreservesSharedPeerAndDoesNotReopenAfterRestart(t *testing.T) {
+	config, binding := gatewayFixture(t)
+	s, client := newLocalGateway(t, config)
+	if w := gatewayRequest(t, s, binding, "configure", binding); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := s.configure(ctx, "peer", binding.Revision(), binding, false); err != nil {
+		t.Fatal(err)
+	}
+	w := gatewayRequest(t, s, binding, "release", struct{}{})
+	var status platform.DriverLifecycle
+	_ = json.Unmarshal(w.Body.Bytes(), &status)
+	if w.Code != 200 || !status.Released || status.State != "closed" || !client.Available() || s.processRefs[client] != 1 {
+		t.Fatal("release changed peer resources", w.Code, w.Body.String())
+	}
+	if w = gatewayRequest(t, s, binding, "source", nil); w.Code != http.StatusServiceUnavailable {
+		t.Fatal("released connection restarted sampling")
+	}
+	s.Close()
+	reopened, _ := newLocalGateway(t, config)
+	if w = gatewayRequest(t, reopened, binding, "check", nil); w.Code != http.StatusServiceUnavailable || len(reopened.processes) != 0 {
+		t.Fatal("restart reopened released resource", w.Code, w.Body.String())
+	}
+	if w = gatewayRequest(t, reopened, binding, "release", struct{}{}); w.Code != 200 {
+		t.Fatal("release retry", w.Body.String())
+	}
+}
+
+func TestUnknownAttemptBlocksReleaseAcrossRestartWithoutResending(t *testing.T) {
+	config, binding := gatewayFixture(t)
+	binding.Configuration.Scenario = "unknown"
+	s, client := newLocalGateway(t, config)
+	if w := gatewayRequest(t, s, binding, "configure", binding); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	input := platform.DriverExecute{Dispatch: platform.DriverDispatchIdentity{RunID: "run", AttemptID: "attempt", BusinessKey: "business", Deadline: time.Now().Add(time.Hour), BindingRevision: binding.Revision(), PackageDigest: binding.Digest}, Command: platform.DriverCommandValue{Name: "set", Value: "64.2"}}
+	if w := gatewayRequest(t, s, binding, "execute", input); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	w := gatewayRequest(t, s, binding, "release", struct{}{})
+	var status platform.DriverLifecycle
+	_ = json.Unmarshal(w.Body.Bytes(), &status)
+	if w.Code != 409 || len(status.Blockers) != 1 || status.State != "blocked" || !client.Available() {
+		t.Fatal("unknown command lost its readback scope", w.Code, w.Body.String())
+	}
+	if w = gatewayRequest(t, s, binding, "execute", input); w.Code != 200 || client.executes != 1 {
+		t.Fatal("release resent the original command")
+	}
+	s.Close()
+	reopened, next := newLocalGateway(t, config)
+	w = gatewayRequest(t, reopened, binding, "lifecycle", nil)
+	if w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &status)
+	if status.State != "blocked" || len(status.Blockers) != 1 || next.executes != 0 || len(reopened.processes) != 0 {
+		t.Fatal("restart hid a retained unknown attempt", w.Body.String())
+	}
+}
+
 func TestProtocolGatewayCheckAndObservation(t *testing.T) {
 	config, binding := gatewayFixture(t)
 	s, client := newLocalGateway(t, config)
@@ -197,7 +296,7 @@ func TestProtocolGatewayCheckAndObservation(t *testing.T) {
 	if w.Code != 200 || result.Window == nil || result.Window.Count != 3 || result.Window.Mean != "58.4" || len(result.Points) != 2 || result.Coverage == nil || !result.Coverage.Truncated || client.starts != 1 {
 		t.Fatalf("deterministic observation: %d %s", w.Code, w.Body.String())
 	}
-	request := httptest.NewRequest(http.MethodGet, "/bindings/heating/revisions/"+binding.Revision()+"/source", nil)
+	request := httptest.NewRequest(http.MethodGet, "/bindings/"+binding.ConnectionID("heating")+"/revisions/"+binding.Revision()+"/source", nil)
 	unauthorized := httptest.NewRecorder()
 	s.ServeHTTP(unauthorized, request)
 	if unauthorized.Code != 401 {
@@ -224,5 +323,101 @@ func TestProtocolGatewayCheckAndObservation(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(config.StateDir, "bindings", bindingFile("preview-check"))); !os.IsNotExist(err) {
 		t.Fatal("preview configuration was persisted", err)
+	}
+}
+
+func TestProtocolGatewayTenantScopesPreservePeersWithIdenticalNamesAndAttemptKeys(t *testing.T) {
+	config, original := gatewayFixture(t)
+	s, client := newLocalGateway(t, config)
+	a, b := original, original
+	a.Scope, b.Scope = platform.DriverScope("tenant-a"), platform.DriverScope("tenant-b")
+	for _, binding := range []platform.DriverBinding{a, b} {
+		if w := gatewayRequest(t, s, binding, "configure", binding); w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		input := platform.DriverExecute{Dispatch: platform.DriverDispatchIdentity{Scope: binding.Scope, RunID: "same-run", AttemptID: "same-attempt", BusinessKey: "same-business", Deadline: time.Now().Add(time.Hour), BindingRevision: binding.Revision(), PackageDigest: binding.Digest}, Command: platform.DriverCommandValue{Name: "set", Value: "64.2"}}
+		if w := gatewayRequest(t, s, binding, "execute", input); w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	if client.executes != 2 || len(s.processes) != 1 {
+		t.Fatal("tenant scopes collided or duplicated the shared provider", client.executes, len(s.processes))
+	}
+	if w := gatewayRequest(t, s, a, "release", a); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := gatewayRequest(t, s, b, "check", nil); w.Code != 200 || !client.Available() {
+		t.Fatal("releasing tenant A changed tenant B", w.Code, w.Body.String())
+	}
+	s.Close()
+	restored, _ := newLocalGateway(t, config)
+	if w := gatewayRequest(t, restored, b, "check", nil); w.Code != 200 {
+		t.Fatal("tenant B did not recover", w.Code, w.Body.String())
+	}
+	if w := gatewayRequest(t, restored, a, "configure", a); w.Code != 200 {
+		t.Fatal("explicit reinstall could not reactivate its own scope", w.Code, w.Body.String())
+	}
+}
+
+func TestFailedPreviewCleansItsHandleAndKeepsSharedPeer(t *testing.T) {
+	config, binding := gatewayFixture(t)
+	s, client := newLocalGateway(t, config)
+	if w := gatewayRequest(t, s, binding, "configure", binding); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	original := client.handler
+	client.handler = driver.HandlerFunc(func(ctx context.Context, method string, raw json.RawMessage) (any, error) {
+		var open platform.DriverOpen
+		_ = json.Unmarshal(raw, &open)
+		if method == "open" && strings.HasPrefix(open.Connection, "preview-") {
+			// The device really opens, then its caller loses the answer.
+			if _, err := original.Handle(ctx, method, raw); err != nil {
+				return nil, err
+			}
+			return nil, context.DeadlineExceeded
+		}
+		return original.Handle(ctx, method, raw)
+	})
+	if _, err := s.configure(context.Background(), "preview-failed", binding.Revision(), binding, true); err == nil {
+		t.Fatal("failed preview reported success")
+	}
+	client.handler = original
+	if !client.Available() || len(s.processes) != 1 {
+		t.Fatal("preview failure terminated shared provider")
+	}
+	if _, found := s.sessions[sessionKey("preview-failed", binding.Revision())]; found {
+		t.Fatal("failed preview retained its registration")
+	}
+	if w := gatewayRequest(t, s, binding, "check", nil); w.Code != 200 {
+		t.Fatal("peer failed after preview error", w.Code, w.Body.String())
+	}
+}
+
+func TestCleanupFailureRetainsResponsibilityAndRetriesOnlyItsScope(t *testing.T) {
+	config, binding := gatewayFixture(t)
+	s, client := newLocalGateway(t, config)
+	if w := gatewayRequest(t, s, binding, "configure", binding); w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	original := client.handler
+	fail := true
+	client.handler = driver.HandlerFunc(func(ctx context.Context, method string, raw json.RawMessage) (any, error) {
+		if method == "close" && fail {
+			return nil, fmt.Errorf("device close is unavailable")
+		}
+		return original.Handle(ctx, method, raw)
+	})
+	if w := gatewayRequest(t, s, binding, "release", binding); w.Code == 200 {
+		t.Fatal("failed cleanup reported released", w.Body.String())
+	}
+	if w := gatewayRequest(t, s, binding, "lifecycle", nil); w.Code != 200 || !strings.Contains(w.Body.String(), "cleanup-failed") || !strings.Contains(w.Body.String(), "device close") {
+		t.Fatal("cleanup responsibility disappeared", w.Body.String())
+	}
+	fail = false
+	if w := gatewayRequest(t, s, binding, "release", binding); w.Code != 200 || !strings.Contains(w.Body.String(), `"released":true`) {
+		t.Fatal("cleanup retry failed", w.Code, w.Body.String())
+	}
+	if client.Available() || len(s.processes) != 0 {
+		t.Fatal("last process survived cleanup")
 	}
 }

@@ -47,17 +47,18 @@ type PackageContribution struct {
 
 // PackageDescriptor is one installable package, as the index declares it.
 type PackageDescriptor struct {
-	Blueprint      *PackageBlueprint       `json:"blueprint,omitempty"`
-	Runtime        *platform.DriverRuntime `json:"runtime,omitempty"`
-	ID             string                  `json:"id"`
-	Version        string                  `json:"version"`
-	Title          string                  `json:"title,omitempty"`
-	Namespace      string                  `json:"namespace"`
-	Requires       []string                `json:"requires,omitempty"` // package IDs
-	Compatibility  string                  `json:"compatibility,omitempty"`
-	Contributions  []PackageContribution   `json:"contributions,omitempty"`
-	ArtifactDigest string                  `json:"artifactDigest,omitempty"` // sha256 over the descriptor
-	Description    string                  `json:"description,omitempty"`
+	Blueprint      *PackageBlueprint             `json:"blueprint,omitempty"`
+	Runtime        *platform.DriverRuntime       `json:"runtime,omitempty"`
+	ID             string                        `json:"id"`
+	Version        string                        `json:"version"`
+	Title          string                        `json:"title,omitempty"`
+	Namespace      string                        `json:"namespace"`
+	Requires       []string                      `json:"requires,omitempty"`     // package IDs
+	Capabilities   []platform.CapabilityContract `json:"capabilities,omitempty"` // required platform contracts
+	Compatibility  string                        `json:"compatibility,omitempty"`
+	Contributions  []PackageContribution         `json:"contributions,omitempty"`
+	ArtifactDigest string                        `json:"artifactDigest,omitempty"` // sha256 over the descriptor
+	Description    string                        `json:"description,omitempty"`
 }
 
 // PackageBlueprint contains the original owners' portable definitions. It
@@ -134,20 +135,24 @@ type RetainedArtifact struct {
 
 // Precheck is the read a person sees before installing.
 type Precheck struct {
-	ID       string   `json:"id"`
-	Version  string   `json:"version"`
-	OK       bool     `json:"ok"`
-	Problems []string `json:"problems,omitempty"`
-	Missing  []string `json:"missing,omitempty"`
+	ID       string                       `json:"id"`
+	Version  string                       `json:"version"`
+	OK       bool                         `json:"ok"`
+	Problems []string                     `json:"problems,omitempty"`
+	Missing  []string                     `json:"missing,omitempty"`
+	Bindings []platform.CapabilityBinding `json:"bindings,omitempty"`
 }
 
 // PackageView is one package as the console lists it: what the index offers and
 // what the tenant has.
 type PackageView struct {
-	Descriptor PackageDescriptor `json:"descriptor"`
-	Installed  *InstalledPackage `json:"installed,omitempty"`
-	Precheck   Precheck          `json:"precheck"`
-	Source     string            `json:"source"` // index or installed; an installed record is not an installation offer
+	Origin       string            `json:"origin,omitempty"`
+	SourceDigest string            `json:"sourceDigest,omitempty"`
+	Removal      *PackageRemoval   `json:"removal,omitempty"`
+	Descriptor   PackageDescriptor `json:"descriptor"`
+	Installed    *InstalledPackage `json:"installed,omitempty"`
+	Precheck     Precheck          `json:"precheck"`
+	Source       string            `json:"source"` // index or installed; an installed record is not an installation offer
 }
 
 // Contribution is one namespaced contribution of this tenant: built-in app
@@ -182,6 +187,9 @@ func PackageActions() []platform.Action {
 	fields := []platform.Field{{Name: "id", Type: "string", Required: true, Description: "The package's ID"},
 		{Name: "version", Type: "string", Description: "The version; empty: the newest the index offers"}}
 	return []platform.Action{
+		{Schema: SchemaPackageCleanupConfirm, Target: PackageType, Capability: "packages", Title: "Confirm resource cleanup", Description: "Keep a verified technical cleanup receipt for this exact installation; no business facts are removed.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
+		{Schema: SchemaPackageImport, Target: PackageType, Capability: "packages", Title: "Add reviewed package", Description: "Keep exactly the reviewed package in this tenant's available library; install separately.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
+		{Schema: SchemaPackageRemoveSource, Target: PackageType, Capability: "packages", Title: "Remove package source", Description: "Remove an uninstalled source from the library; installed artifacts and business history stay.", Payload: []platform.Field{{Name: "id", Type: "string", Required: true}, {Name: "digest", Type: "string", Required: true}}, Roles: admin},
 		{Schema: SchemaPackageInstall, Target: PackageType, Capability: "packages", Title: "Install package",
 			Description: "Precheck a package's requirements and register the contributions it brings.", Payload: fields, Roles: admin},
 		{Schema: SchemaPackageUpgrade, Target: PackageType, Capability: "packages", Title: "Upgrade package",
@@ -250,12 +258,19 @@ func (p PackageDescriptor) validate() error {
 	if p.ID == "" || p.Version == "" || p.Namespace == "" {
 		return fmt.Errorf("a package needs an ID, a version and a namespace")
 	}
-	if strings.ContainsAny(p.ID+p.Namespace+p.Version, " \t\n") {
-		return fmt.Errorf("package %s: ID, namespace and version have no spaces", p.ID)
+	for _, value := range []string{p.ID, p.Namespace, p.Version} {
+		if len(value) > 200 || value == "." || value == ".." || strings.ContainsAny(value, "/\\") || strings.IndexFunc(value, func(r rune) bool { return r <= ' ' || r == 127 }) >= 0 {
+			return fmt.Errorf("package ID, namespace and version must be safe path segments")
+		}
 	}
 	for _, c := range p.Contributions {
 		if c.View == "" {
 			return fmt.Errorf("package %s: a contribution needs a view", p.ID)
+		}
+	}
+	for _, need := range p.Capabilities {
+		if err := need.Check(); err != nil {
+			return err
 		}
 	}
 	if p.Runtime != nil {
@@ -533,17 +548,21 @@ func (d *Console) packageIndex() (*PackageIndex, error) {
 	bound := d.index
 	d.mu.Unlock()
 	if bound.Directory == "" {
-		return bound, nil
+		return d.sourceIndex(bound)
 	}
 	current, err := LoadPackageIndex(bound.Directory)
 	if err != nil {
 		return bound, err
 	}
-	return current, nil
+	return d.sourceIndex(current)
 }
 
 func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 	out := Precheck{ID: p.ID, Version: p.Version, OK: true}
+	if err := p.validate(); err != nil {
+		out.OK, out.Problems = false, []string{err.Error()}
+		return out
+	}
 	if p.Blueprint != nil {
 		var owner host.ConstructionDrafts
 		for _, app := range d.host.Apps() {
@@ -604,6 +623,11 @@ func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 		if owner, taken := views[key]; taken && owner != p.ID {
 			out.Problems = append(out.Problems, fmt.Sprintf("view %s is already brought by %s", key, owner))
 		}
+	}
+	if plan, err := d.packageComposition(p, index); err != nil {
+		out.Problems = append(out.Problems, err.Error())
+	} else {
+		out.Bindings = plan.Bindings
 	}
 	out.OK = len(out.Problems) == 0 && len(out.Missing) == 0
 	return out
@@ -714,6 +738,12 @@ func (d *Console) verifySealedPackage(held InstalledPackage) error {
 // decidePackage applies the console's package decisions. It returns the closure
 // shape the console's other decisions use.
 func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+	if s.GetSchema().GetName() == SchemaPackageCleanupConfirm {
+		return d.decidePackageCleanup(s)
+	}
+	if s.GetSchema().GetName() == SchemaPackageImport || s.GetSchema().GetName() == SchemaPackageRemoveSource {
+		return d.decidePackageSource(c, s)
+	}
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		ID, Version string
@@ -729,42 +759,18 @@ func (d *Console) decidePackage(c platform.Caller, s *pb.Submission) (func(*pb.C
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		state := "draining"
+		removal := d.packageRemoval(p.ID)
+		if schema == SchemaPackageDrain {
+			removal.Blockers = d.packageDependents(p.ID)
+			removal.OK = len(removal.Blockers) == 0
+		}
+		if !removal.OK {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", strings.Join(removal.Blockers, "; "))
+		}
 		if schema == SchemaPackageRetire {
-			ids := make([]string, 0, len(installed))
-			for id := range installed {
-				ids = append(ids, id)
-			}
-			slices.Sort(ids)
-			for _, id := range ids {
-				dependent := installed[id]
-				if id == p.ID || dependent.State == "retired" {
-					continue
-				}
-				var descriptor PackageDescriptor
-				var err error
-				if dependent.Artifact != "" {
-					descriptor, err = d.sealedPackageDescriptor(id, dependent.Version, dependent.Artifact)
-				} else {
-					// Pre-sealing installations can only recover their original declaration from the index.
-					var index *PackageIndex
-					index, err = d.packageIndex()
-					if err == nil {
-						var found bool
-						descriptor, found = index.find(id, dependent.Version)
-						if !found {
-							err = fmt.Errorf("installed declaration %s@%s is unavailable", id, dependent.Version)
-						}
-					}
-				}
-				if err != nil {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package retirement cannot check {package}: {reason}", id, err.Error())
-				}
-				if slices.Contains(descriptor.Requires, p.ID) {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} is still required by {dependent}", p.ID, id)
-				}
-			}
 			state = "retired"
 		}
+
 		return func(*pb.ChangeRecord) {
 			held.State = state
 			held.ChangedAt = time.Now().UTC()
@@ -848,9 +854,18 @@ func (d *Console) PackageViews() []PackageView {
 			pre.Problems = append(pre.Problems, indexErr.Error())
 		}
 		view := PackageView{Descriptor: descriptor, Precheck: pre, Source: "index"}
+		d.mu.Lock()
+		for digest, source := range d.packageSources {
+			if source.ID == descriptor.ID && source.Version == descriptor.Version {
+				view.Source, view.Origin, view.SourceDigest = "imported", source.Origin, digest
+				break
+			}
+		}
+		d.mu.Unlock()
 		if held := installed[descriptor.ID]; held != nil {
 			copy := *held
 			view.Installed = &copy
+			view.Removal = d.packageRemoval(descriptor.ID)
 		}
 		out = append(out, view)
 		listed[descriptor.ID+"@"+descriptor.Version] = true
@@ -869,7 +884,7 @@ func (d *Console) PackageViews() []PackageView {
 			}
 		}
 		copy := *held
-		out = append(out, PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Source: "installed"})
+		out = append(out, PackageView{Descriptor: descriptor, Installed: &copy, Precheck: pre, Source: "installed", Removal: d.packageRemoval(held.ID)})
 	}
 	slices.SortFunc(out, func(a, b PackageView) int {
 		if a.Descriptor.ID != b.Descriptor.ID {

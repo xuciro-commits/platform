@@ -1,4 +1,4 @@
-import { StrictMode, useState } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { DockviewApi, IDockviewReactProps } from "dockview-react";
@@ -88,6 +88,45 @@ const start = async (props: Parameters<typeof Shell>[0] = {}) => {
   return await screen.findByRole("textbox", { name: "Draft A" });
 };
 const choose = (id: string) => act(() => api.applications!.onSelect(id));
+
+test("maintenance waits for sibling drafts and can be cancelled without losing input", async () => {
+  const input = await start();
+  act(() => api.open({ view: "flow", params: { id: "B" } }, { window: "beside" }));
+  await screen.findByLabelText("Draft B");
+  const maintenance = api, apply = vi.fn();
+  fireEvent.change(input, { target: { value: "keep until maintenance is confirmed" } });
+  act(() => maintenance.confirmLeave(apply));
+  expect(apply).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole("button", { name: /^Keep editing$/ }));
+  expect((input as HTMLInputElement).value).toBe("keep until maintenance is confirmed");
+  act(() => maintenance.confirmLeave(apply));
+  fireEvent.click(await screen.findByRole("button", { name: /^Discard changes$/ }));
+  expect(apply).toHaveBeenCalledOnce();
+  expect((input as HTMLInputElement).value).toBe("saved");
+});
+
+test("withdrawing one contribution releases its subscriptions and preserves the other open draft", async () => {
+  const subscriptions = new Set<string>();
+  function LiveDraft({ id }: { id: string }) {
+    useEffect(() => { subscriptions.add(id); return () => { subscriptions.delete(id); }; }, [id]);
+    return <InputDraftProvider isolated scope={id}><Draft id={id} /></InputDraftProvider>;
+  }
+  const offered: View[] = [
+    { id: "flow", title: () => "First", render: () => <LiveDraft id="A" /> },
+    { id: "knowledge", title: () => "Second", render: () => <LiveDraft id="B" /> },
+  ];
+  const shell = (views: View[]) => <Workspace product="Fixture" storageKey="withdraw:test" views={views} home={{ view: "flow" }} nav={[]} />;
+  const mounted = render(shell(offered));
+  await screen.findByLabelText("Draft A");
+  act(() => api.open({ view: "knowledge" }, { window: "beside" }));
+  const peer = await screen.findByLabelText("Draft B");
+  fireEvent.change(peer, { target: { value: "keep peer input" } });
+  expect([...subscriptions].sort()).toEqual(["A", "B"]);
+  mounted.rerender(shell(offered.filter(view => view.id !== "flow")));
+  await waitFor(() => expect([...subscriptions]).toEqual(["B"]));
+  expect(screen.queryByLabelText("Draft A")).toBeNull();
+  expect((screen.getByLabelText("Draft B") as HTMLInputElement).value).toBe("keep peer input");
+});
 
 test("inspection preserves the active task and explicit comparison creates a split", async () => {
   const input = await start();

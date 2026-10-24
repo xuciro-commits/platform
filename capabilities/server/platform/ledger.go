@@ -23,32 +23,57 @@ type Ledger struct {
 	authority    string
 	declarations []*pb.AuthorityDeclaration
 	archive      kernel.ChangeArchive
-	changes      *kernel.ChangeLog
-	authorities  *kernel.Authorities
+	changes      ChangeLog
+	authorities  Authorities
+	kernel       KernelFactory
+	schemaRefs   []*pb.SchemaRef
 	// schemas is the change log's registry, kept so the package can teach it a
 	// schema that did not exist when it started (K7 S7).
-	schemas *kernel.SchemaRegistry
+	schemas SchemaRegistry
 	Catalog *Catalog
 }
 
 // NewLedger declares authority as the tenant server for classes and accepts the
 // catalog's actions and their retained numeric families.
 func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *Ledger {
+	return NewLedgerWithKernel(NativeKernel{}, tenant, authority, catalog, classes...)
+}
+
+func NewLedgerWithKernel(engine KernelFactory, tenant, authority string, catalog *Catalog, classes ...string) *Ledger {
 	var schemas []*pb.SchemaRef
 	for _, a := range catalog.actions {
 		for family := uint32(1); family <= schemaFamily(a); family++ {
 			schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: family})
 		}
 	}
-	registry := kernel.NewSchemaRegistry(schemas, nil)
-	l := &Ledger{tenant: tenant, authority: authority, changes: kernel.NewChangeLog(registry), schemas: registry,
-		authorities: kernel.NewAuthorities(authority), Catalog: catalog}
+	registry := engine.Schemas(schemas)
+	l := &Ledger{tenant: tenant, authority: authority, changes: engine.Changes(registry), schemas: registry,
+		kernel: engine, schemaRefs: slices.Clone(schemas), authorities: engine.Authorities(authority), Catalog: catalog}
 	for _, class := range classes {
 		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: authority, Epoch: 1}
 		l.authorities.Declare(d)
 		l.declarations = append(l.declarations, d)
 	}
 	return l
+}
+
+// BindKernel is startup-only. All historical schemas and authority declarations
+// are handed to the selected implementation before any accepted state exists.
+func (l *Ledger) BindKernel(engine KernelFactory) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.changes.Last(l.tenant) != nil {
+		return fmt.Errorf("kernel binding requires an unstarted ledger")
+	}
+	registry := engine.Schemas(l.schemaRefs)
+	changes, authorities := engine.Changes(registry), engine.Authorities(l.authority)
+	for _, declaration := range l.declarations {
+		if err := authorities.Declare(declaration); err != nil {
+			return err
+		}
+	}
+	l.kernel, l.schemas, l.changes, l.authorities = engine, registry, changes, authorities
+	return nil
 }
 
 // Extend declares data classes and actions after composition: what an object a
@@ -76,6 +101,7 @@ func (l *Ledger) Extend(classes []string, actions []Action) error {
 	if err := l.schemas.Learn(schemas...); err != nil { // K7 S7
 		return err
 	}
+	l.schemaRefs = append(l.schemaRefs, schemas...)
 	l.Catalog.Add(actions...)
 	for _, class := range classes {
 		if slices.ContainsFunc(l.declarations, func(d *pb.AuthorityDeclaration) bool { return d.GetDataClass() == class }) {
@@ -100,7 +126,11 @@ func schemaFamily(action Action) uint32 {
 func (l *Ledger) HistoricalSchemas(schemas ...*pb.SchemaRef) *kernel.Error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.schemas.Learn(schemas...)
+	if err := l.schemas.Learn(schemas...); err != nil {
+		return err
+	}
+	l.schemaRefs = append(l.schemaRefs, schemas...)
+	return nil
 }
 
 // Declarations are the package's authority declarations, for edges (K5 A9).
@@ -131,10 +161,10 @@ func (l *Ledger) UseChangeArchive(archive kernel.ChangeArchive) {
 
 // ForkAcceptedChanges validates a complete host batch without advancing the
 // authoritative log. The tenant commit lock still owns promotion.
-func (l *Ledger) ForkAcceptedChanges() *kernel.ChangeLog {
+func (l *Ledger) ForkAcceptedChanges() ChangeLog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.changes.Fork()
+	return l.changes.ForkLog()
 }
 
 // RecordsFor returns a defensive copy of tenant's accepted records,
@@ -156,7 +186,7 @@ func (l *Ledger) LastAccepted(tenant string) *pb.ChangeRecord {
 func (l *Ledger) SetFacts(facts func(tenant, factID string) bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.changes.Facts = facts
+	l.changes.SetFacts(facts)
 }
 
 // AcceptedFor returns a saved receipt for a key without running application
@@ -199,7 +229,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	// a host-owned decision view may use a private change log.
 	// Ordinary callers and replay retain the existing authoritative path.
 	if draft, ok := c.rt.(StagedRuntime); ok {
-		changes = draft.DraftChanges(l, l.changes.Fork)
+		changes = draft.DraftChanges(l, l.changes.ForkLog)
 		if changes == nil || changes == l.changes {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
@@ -207,21 +237,20 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	if probing {
 		// Probes validate kernel identity, key conflicts and expected revisions
 		// too. Only their private log advances; their apply callback never runs.
-		changes = changes.Fork()
+		changes = changes.ForkLog()
 	}
-	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities,
-		Policy: func(kernel.Caller, *pb.Submission) bool {
-			if !c.Replaying || probing {
-				decision = catalog.DecideSubmission(c, s, now)
-			}
-			ok := c.Replaying && !probing || decision.Allow && (allowed == nil || c.Automation || allowed())
-			refused = !ok
+	policy := func(kernel.Caller, *pb.Submission) bool {
+		if !c.Replaying || probing {
+			decision = catalog.DecideSubmission(c, s, now)
+		}
+		ok := c.Replaying && !probing || decision.Allow && (allowed == nil || c.Automation || allowed())
+		refused = !ok
 
-			return ok
-		}}
+		return ok
+	}
 	var apply func(*pb.ChangeRecord)
 	decided := false
-	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
+	record, err := l.kernel.Receive(changes, l.authorities, policy, kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
 		decided = true // retries reuse a receipt without entering business rules
 		if rules == nil {
 			return nil

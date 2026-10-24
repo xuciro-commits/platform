@@ -22,7 +22,7 @@ import (
 
 // RunPipelines runs every due pipeline of the tenant once, on the outside loop.
 func (t *Tenant) RunPipelines(now time.Time) {
-	if t.quarantined() {
+	if t.businessStopped() || !t.ownerActive(construction.ID) {
 		return
 	}
 	t.mu.Lock()
@@ -117,7 +117,7 @@ func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 		} else if run.Input == 0 {
 			run.Error = "The input dataset has no rows yet"
 		} else {
-			kept, quarantined, err := p.Execute(data[p.Input], func(id string) ([]map[string]any, error) { return data[id], nil })
+			kept, quarantined, err := p.ExecuteWithRules(t.services.Rules, data[p.Input], func(id string) ([]map[string]any, error) { return data[id], nil })
 			if err != nil {
 				run.Error = err.Error()
 			} else {

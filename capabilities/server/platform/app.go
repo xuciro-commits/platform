@@ -28,11 +28,12 @@ import (
 // for the many places that ask for one; RolesIn answers with all of them.
 // What a rule scopes by is the member's organisation.
 type Member struct {
-	AIContext bool              `json:"-"` // trusted read narrowing, never a grant or request field
-	ID        string            `json:"id"`
-	Tenant    string            `json:"tenant"`
-	Roles     map[string]string `json:"roles"`
-	Grants    []Grant           `json:"grants,omitempty"`
+	authorization authz.Engine
+	AIContext     bool              `json:"-"` // trusted read narrowing, never a grant or request field
+	ID            string            `json:"id"`
+	Tenant        string            `json:"tenant"`
+	Roles         map[string]string `json:"roles"`
+	Grants        []Grant           `json:"grants,omitempty"`
 	// Status is the member's standing: "" active, invited
 	// (added, not yet signed in), suspended (holds nothing until resumed),
 	// left (offboarded: no subjects, no grants; the record stays for history).
@@ -94,7 +95,16 @@ func (m Member) Holds(app, role string) bool { return slices.Contains(m.RolesIn(
 // May asks the engine whether the member may exercise a
 // permission of app that names roles: any role they hold there suffices.
 func (m Member) May(app, permission string, roles []string) authz.Verdict {
-	return authz.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
+	engine := m.authorization
+	if engine == nil {
+		engine = authz.Standard{}
+	}
+	return engine.Decide(authz.Request{Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: roles})
+}
+
+func (m Member) WithAuthorization(engine authz.Engine) Member {
+	m.authorization = engine
+	return m
 }
 
 // Active reports whether the member may act at all: not suspended, not left.
@@ -250,8 +260,13 @@ type AcceptedFactApp interface {
 // As views member from app, without a host (tests of one app).
 func As(app string, m Member) Caller { return Caller{Member: m, App: app} }
 
+type AuthorizationEngineRuntime interface{ AuthorizationEngine() authz.Engine }
+
 // NewCaller is how the host runtime hands an app its caller.
 func NewCaller(rt Runtime, m Member, app string, replaying, automation bool) Caller {
+	if provider, ok := rt.(AuthorizationEngineRuntime); ok {
+		m = m.WithAuthorization(provider.AuthorizationEngine())
+	}
 	return Caller{Member: m, App: app, Replaying: replaying, Automation: automation, rt: rt}
 }
 
@@ -390,7 +405,7 @@ type StagedRuntime interface {
 	// receive of the same ledger, and retains a parent's private log identity
 	// across nested savepoints until the returned release function runs.
 	HoldChanges(*Ledger) (release func(), refusal *kernel.Error)
-	DraftChanges(*Ledger, func() *kernel.ChangeLog) *kernel.ChangeLog
+	DraftChanges(*Ledger, func() ChangeLog) ChangeLog
 }
 
 // Runtime is what the host does for a caller; package platformserver implements

@@ -165,9 +165,9 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 	var matched bool
 	var inputs map[string]json.RawMessage
 	if result.Intervals != nil {
-		matched, inputs, err = platform.EvaluateObservationIntervals(plan.info.Definition, plan.entity, plan.record, *result.Intervals, now)
+		matched, inputs, err = platform.EvaluateObservationIntervals(plan.info.Definition, plan.entity, plan.record, *result.Intervals, now, t.services.Rules)
 	} else {
-		matched, inputs, err = platform.EvaluateObservation(plan.info.Definition, plan.entity, plan.record, result.Window, now)
+		matched, inputs, err = platform.EvaluateObservation(plan.info.Definition, plan.entity, plan.record, result.Window, now, t.services.Rules)
 	}
 	if err != nil {
 		return answer, observationUnavailable(err)

@@ -99,7 +99,7 @@ func (b *Build) txnIntervals(c platform.Caller, receipt *pb.ChangeRecord, subjec
 		previous = append(previous, platform.IntervalIdentity{ID: ids[i], Interval: interval})
 		reviews[ids[i]] = review
 	}
-	plan, err := platform.ReconcileObservationIntervals(info.Type, previous, *proof.Intervals, func(i int) string { return receipt.GetChangeId() + "-" + step + "-" + strconv.Itoa(i) })
+	plan, err := platform.ReconcileObservationIntervals(info.Type, previous, *proof.Intervals, func(i int) string { return receipt.GetChangeId() + "-" + step + "-" + strconv.Itoa(i) }, c.Kernel())
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}

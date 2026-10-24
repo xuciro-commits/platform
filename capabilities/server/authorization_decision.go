@@ -89,7 +89,7 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 		context.Principal.Allowed = false
 	}
 	owner := t.app(c.App)
-	if owner == nil || !declared {
+	if owner == nil || !declared || !t.ownerActive(c.App) {
 		context.Verb = &authz.Gate{Reason: "The operation is unavailable in its owner declaration"}
 	}
 	var policies []authz.Policy
@@ -132,7 +132,7 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 			}
 		}
 	}
-	return authz.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": c.ID, "app": c.App}, Context: context}, policies...)
+	return t.services.Authorization.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: c.ID, App: c.App, Roles: c.RolesHere(), Agent: c.Agent, Automation: c.Automation}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": c.ID, "app": c.App}, Context: context}, policies...)
 }
 
 func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string, allowed []string, declared bool, detail authorizationDetails) platform.AuthzDecision {
@@ -189,7 +189,7 @@ func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string,
 			t.opsMu.Unlock()
 		}
 	}
-	return authz.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": m.ID, "app": app}, Context: context}, policies...)
+	return t.services.Authorization.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": m.ID, "app": app}, Context: context}, policies...)
 }
 
 // Retain caller/token narrowing while dropping roles revoked in the directory.
@@ -413,7 +413,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 		context.Fields.Reason = "Some fields are withheld by field permissions or source grants"
 		context.Derived.Reason = "Derived content is limited to readable declared sources"
 	}
-	decision := authz.Decide(request, policies...)
+	decision := t.services.Authorization.Decide(request, policies...)
 
 	if !cycle && depth < 16 {
 		walk.decisions[key] = decision

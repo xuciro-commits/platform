@@ -234,7 +234,7 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 			other, ok := d.constraintLookup(typ)
 			return other, ok && other.App == info.App
 		}
-		schema, err := platform.RuleSchema(*rule.Expr, spec, lookup)
+		schema, err := platform.RuleSchema(*rule.Expr, spec, lookup, c.Rules())
 		if err != nil {
 			return false, fail("definition_unavailable")
 		}
@@ -242,7 +242,7 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 		if err != nil {
 			return false, fail("input_unavailable")
 		}
-		program, err := platform.CompileExpr(*rule.Expr, schema)
+		program, err := c.Rules().CompileExpr(*rule.Expr, schema)
 		if err != nil {
 			return false, fail("definition_unavailable")
 		}

@@ -250,7 +250,7 @@ func (t *Tenant) prepareMigrationLocked(plan platform.MigrationPlan, m platform.
 			contracts[typ] = entity.info
 		}
 	}
-	program, err := platform.CompileMigrationPlan(plan, contracts, targets)
+	program, err := platform.CompileMigrationPlan(plan, contracts, targets, t.services.Rules)
 	if err != nil {
 		return nil, err
 	}

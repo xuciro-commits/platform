@@ -17,7 +17,7 @@ func (d *stagedDecision) stageObservers() *kernel.Error {
 	}
 	count := len(d.events)
 	for _, e := range slices.Clone(d.events) {
-		for _, app := range d.tenant.apps {
+		for _, app := range d.tenant.liveApps() {
 			_, observer := app.(host.Observer)
 			if !observer {
 				continue

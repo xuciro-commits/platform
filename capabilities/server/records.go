@@ -14,6 +14,7 @@ import (
 )
 
 type recordStore struct {
+	rules           platform.RuleEngine
 	historyStore    journal.RuntimeState
 	readView        journal.StateReadView
 	appliedPosition int64
@@ -89,7 +90,7 @@ type RecordChange = records.RecordChange
 type FieldChange = records.FieldChange
 
 func newRecordStore() *recordStore {
-	return &recordStore{types: map[string]*entityType{}, byGo: map[reflect.Type]*entityType{}}
+	return &recordStore{rules: platform.NativeRules{}, types: map[string]*entityType{}, byGo: map[reflect.Type]*entityType{}}
 }
 
 // forkRecords snapshots immutable row, dirty and change indexes without
@@ -104,7 +105,7 @@ func (s *recordStore) forkRecords() *recordStore {
 
 func (s *recordStore) forkRecordsLocked() *recordStore {
 	s.prepareUniqueIndexes()
-	draft := &recordStore{historyStore: s.historyStore, readView: s.readView, tenant: s.tenant, appliedPosition: s.appliedPosition, currentPosition: s.currentPosition, readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{rules: s.rules, historyStore: s.historyStore, readView: s.readView, tenant: s.tenant, appliedPosition: s.appliedPosition, currentPosition: s.currentPosition, readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
 	for typ, et := range s.types {

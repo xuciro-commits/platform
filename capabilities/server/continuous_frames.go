@@ -792,7 +792,7 @@ func (t *Tenant) PullContinuousSources(now time.Time) {
 // Reserve before entering the shared I/O lane, so a slow database does not
 // accumulate one waiting goroutine per timer tick for the same tenant.
 func (t *Tenant) continuousSources(now time.Time) []func() {
-	if t.quarantined() || !t.streamMu.TryLock() {
+	if t.businessStopped() || !t.ownerActive(platform.FlowApp) || !t.streamMu.TryLock() {
 		return nil
 	}
 	return []func(){func() {
@@ -802,7 +802,7 @@ func (t *Tenant) continuousSources(now time.Time) []func() {
 }
 
 func (t *Tenant) pullContinuousSources(now time.Time) {
-	if t.quarantined() {
+	if t.businessStopped() {
 		return
 	}
 	t.mu.Lock()

@@ -4,6 +4,7 @@ import { apiErrorMessage, type Api } from "@platform/kernel";
 import { PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
 import { Fragment, useRef, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";
+import { PackageSources } from "./package-sources";
 
 // Tiers of the protocol graph: an app sits one column right of the providers of
 // the protocols it consumes (providers are enabled before their consumers).
@@ -25,8 +26,9 @@ export function Apps() {
   return (
     <>
       <PageHeader title={t("Packages")} help={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
-      {packages.isError ? <p role="alert">{t("Package inventory could not be loaded.")}</p> : <PackageList items={packages.data ?? []} />}
-      {role("platform") === "admin" && <><div className="mb-3 mt-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Built-in application modules")}</h2><ContextHelp title={t("Built-in application modules")}>{t("Modules the host ships; they are not installed or retired here. What each provides and uses is on the Capability matrix.")}</ContextHelp></div><div className="flex gap-6 overflow-x-auto">
+      <PackageSources items={packages.data ?? []} />
+      {packages.isError ? <div role="alert"><p>{t("Package inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading packages…")}</p> : <PackageList items={packages.data ?? []} refresh={() => packages.refetch()} />}
+      {role("platform") === "admin" && <><div className="mb-3 mt-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Built-in application modules")}</h2><ContextHelp title={t("Built-in application modules")}>{t("Built-in modules use Host Console maintenance to stop and restart their services. The Capability matrix describes their contracts and dependencies.")}</ContextHelp></div><div className="flex gap-6 overflow-x-auto">
         {tiers(apps).map((tier, i) => (
           <div key={i} className="grid content-start gap-3">
             <h2 className="text-xs uppercase text-muted">{i === 0 ? t("Platform and business modules") : i === 1 ? t("Consumers of their protocols") : t("Tier {n}", { n: i + 1 })}</h2>
@@ -47,13 +49,22 @@ export function Apps() {
 const stateTone = (state?: string): "neutral" | "success" | "warning" => state === "active" ? "success" : state === "draining" ? "warning" : "neutral";
 
 /** One card per package: what the index offers, what is installed, the precheck, and the decision that applies next. */
-function PackageList({ items }: { items: Api.PackageView[] }) {
+function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: () => Promise<unknown> }) {
   const { can, client, decide } = useHost(), { open } = useWorkspace();
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [versions, setVersions] = useState<Record<string, string>>({});
   const creationKeys = useRef<Record<string, string>>({});
-  if (!items.length) return <p className="text-sm text-muted">{t("No packages: the host offers no index and nothing is installed.")}</p>;
+  const cleanup = async (id: string) => {
+    setBusy(id); setRefused(current => ({ ...current, [id]: "" }));
+    try {
+      const result = await client.call<Api.PackageRemoval>("POST", `/v1/packages/${encodeURIComponent(id)}/cleanup`, {});
+      if (!result.ok || !result.body.ok) setRefused(current => ({ ...current, [id]: result.body.blockers?.join("; ") || apiErrorMessage(result.body) || t("Resource cleanup is unconfirmed. Retry to check the same resources.") }));
+      await refresh();
+    } catch { setRefused(current => ({ ...current, [id]: t("Resource cleanup is unconfirmed. Retry to check the same resources.") })); }
+    finally { setBusy(""); }
+  };
+  if (!items.length) return <p className="text-sm text-muted">{t("This library is empty. Download a package or import a local file to begin.")}</p>;
   const act = async (schema: string, id: string, payload: unknown) => {
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
     await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) }); // the host's own reason stays on the card
@@ -81,7 +92,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
         const protocol = available.some(item => item.descriptor.runtime), blueprint = available.some(item => item.descriptor.blueprint);
         const version = versions[packageID] ?? held?.version ?? (protocol || blueprint ? "" : available[0]!.descriptor.version);
         const chosen = available.find(item => item.descriptor.version === version);
-        const { descriptor: d, precheck, source } = chosen ?? available[0]!;
+        const { descriptor: d, precheck, source, sourceDigest, removal } = chosen ?? available[0]!;
         const id = d.id || held?.id || "";
         const state = held?.state;
         const different = !!held && state !== "retired" && !!d.version && d.version !== held.version;
@@ -101,7 +112,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
             </Select></label>}
             <dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
               <dt className="text-muted">{t("Namespace")}</dt><dd className="break-all font-mono">{d.namespace || held?.namespace}</dd>
-              <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : "Deployment index")}</dd>
+              <dt className="text-muted">{t("Source")}</dt><dd>{t(source === "installed" ? "Installed record" : source === "imported" ? "Imported package" : "Deployment index")}</dd>
               <dt className="text-muted">{t("Offered")}</dt><dd>{source === "installed" ? "—" : d.version || "—"}{d.compatibility ? ` · ${t("platform API {v}", { v: d.compatibility })}` : ""}</dd>
               <dt className="text-muted">{t(state === "retired" ? "Last installed" : "Installed")}</dt><dd>{held ? `${held.version}${held.installedAt ? ` · ${when(held.installedAt)}` : ""}` : "—"}</dd>
               <dt className="text-muted">{t("Requires")}</dt><dd>{d.requires?.length ? d.requires.join(", ") : t("nothing")}</dd>
@@ -114,6 +125,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
                 <dt className="text-muted">{t("Driver profiles")}</dt><dd className="grid gap-1">{d.runtime.profiles.map(profile => <span key={profile.id}>{t(profile.title)} · {profile.operations.map(operation => t(operation)).join(", ")}</span>)}</dd>
               </>}
             </dl>
+            <Disclosure summary={t("Inspect all package contents")}><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(d, null, 2)}</pre></Disclosure>
             {d.blueprint && <div className="grid gap-2 text-xs">
               <p className="text-muted">{t("{count} definitions in the blueprint", { count: d.blueprint.assets.length })}</p>
               {d.blueprint.guide && <Disclosure summary={t("Build guide")}><p className="whitespace-pre-wrap break-words text-xs leading-relaxed">{d.blueprint.guide}</p></Disclosure>}
@@ -137,8 +149,15 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
               {next === "install" && <Button size="sm" variant="primary" disabled={!chosen || !precheck.ok || busy === id} title={precheck.ok ? undefined : t("Fix the precheck first")} onClick={() => void act("platform.package.install", id, { id, version: d.version })}>{t(reinstall ? "Reinstall" : "Install")}</Button>}
               {different && <Button size="sm" variant="primary" disabled={!chosen || !precheck.ok || busy === id} onClick={() => void act("platform.package.upgrade", id, { id, version: d.version })}>{t("Switch to {v}", { v: d.version })}</Button>}
               {next === "drain" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.drain", id, { id })}>{t("Prepare to uninstall")}</Button>}
-              {next === "retire" && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.retire", id, { id })}>{t("Uninstall")}</Button>}
+              {next === "retire" && removal?.needsCleanup && <Button size="sm" disabled={busy === id} onClick={() => void cleanup(id)}>{t("Release protocol resources")}</Button>}
+              {next === "retire" && <Button size="sm" disabled={busy === id || removal?.ok === false} onClick={() => void act("platform.package.retire", id, { id })}>{t("Uninstall")}</Button>}
+              {sourceDigest && (!held || state === "retired" || held.version !== d.version) && <Button size="sm" disabled={busy === id} onClick={() => void act("platform.package.remove-source", id, { id, digest: sourceDigest })}>{t("Remove source")}</Button>}
             </div>}
+            {held && state !== "retired" && <Disclosure summary={t("Uninstall impact")}>
+              <p className="text-xs">{t("Uninstall withdraws the package's live contributions. Business records, history, copied application definitions and sealed artifacts remain.")}</p>
+              {removal?.blockers?.map(problem => <p key={problem} className="mt-1 text-xs text-[var(--tone-warning)]">{problem}</p>)}
+              <Button size="sm" onClick={() => open({ view: "package-help", params: { topic: "uninstall" } })}>{t("Package guide")}</Button>
+            </Disclosure>}
             {state === "draining" && <p className="text-xs text-muted">{t("New use has stopped. Finish work in flight before uninstalling; application data and history will stay.")}</p>}
             {refused[id] && <p role="alert" className="break-words text-xs text-[var(--tone-danger)]">{refused[id]}</p>}
           </Panel>
@@ -198,6 +217,7 @@ function ModuleCard({ app: a }: { app: AppInfo }) {
 }
 
 export function Matrix() {
+ const { role } = useHost();
   const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
   const [q, setQ] = useState("");
   const needle = q.trim().toLocaleLowerCase();
@@ -208,12 +228,22 @@ export function Matrix() {
       <PageHeader title={t("Capability matrix")} help={t("What each module provides (capabilities and their actions, roles, reads, protocols) and what it uses (protocols, actions, events, connector inputs), read live from the host's registry. Packages are installed on the Packages page; this page explains what they bring.")}
         actions={<Input aria-label={t("Filter modules")} placeholder={t("Filter by module, capability, protocol or role")} value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />} />
       <div className="mb-3"><PropertyList columns={2} items={[[t("Modules"), apps.length], [t("Capabilities"), capabilities]]} /></div>
+      {role("platform") === "admin" && <RuntimeContracts />}
       <div className="grid max-w-6xl gap-3">
         {shown.map((a) => <ModuleCard key={a.id} app={a} />)}
         {!shown.length && <p className="text-sm text-muted">{t("No module matches.")}</p>}
       </div>
     </>
   );
+}
+
+function RuntimeContracts() {
+ const query = useRead<Api.CompositionPlan>("/v1/composition");
+ return <Disclosure summary={t("Runtime implementations")}>
+  {query.isError ? <div role="alert"><p>{t("Runtime configuration could not be loaded.")}</p><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></div> : query.isPending ? <p role="status">{t("Loading…")}</p> : <div className="grid gap-3 md:grid-cols-2">{query.data?.modules.filter(module => !module.id.startsWith("platform.owner.")).map(module => <Panel key={module.id} title={t(module.title)}>
+   <PropertyList items={[[t("Current implementation"), module.id + " · " + module.version], [t("Scope"), t(module.scope)], [t("Replacement"), t(module.replacement)], [t("Provides"), module.provides.map(item => item.id + " · " + item.version + " / " + item.semantics).join(", ")], [t("Requires"), module.requires?.map(item => item.id + " · " + item.version).join(", ") || t("nothing")]]} />
+  </Panel>)}</div>}
+ </Disclosure>;
 }
 
 // Protocols: apps meet through them, not through each other.

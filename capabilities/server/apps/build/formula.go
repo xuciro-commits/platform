@@ -72,7 +72,7 @@ func computeRulesOf(o construction.Object, lookup func(string) (platform.EntityI
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
 			s := ruleSpec(o, construction.Action{}, o.Reads)
-			schema, err := platform.RuleSchema(e, s, lookup)
+			schema, err := platform.RuleSchema(e, s, lookup, c.Rules())
 			if f.Formula != "" {
 				refs := map[string]platform.ExprType{}
 				for _, field := range o.Fields {
@@ -83,7 +83,7 @@ func computeRulesOf(o construction.Object, lookup func(string) (platform.EntityI
 					refs[field.Name] = platform.ExprType{Kind: kind}
 				}
 				schema = platform.ExprSchema{Refs: refs}
-				_, err = platform.CompileFrozenFormula(e, schema)
+				_, err = c.Rules().CompileFrozenFormula(e, schema)
 			}
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -109,11 +109,11 @@ func computeRulesOf(o construction.Object, lookup func(string) (platform.EntityI
 					}
 				}
 			}
-			var program *platform.ExprProgram
+			var program platform.ExprProgram
 			if f.Formula != "" {
-				program, err = platform.CompileFrozenFormula(e, schema)
+				program, err = c.Rules().CompileFrozenFormula(e, schema)
 			} else {
-				program, err = platform.CompileExpr(e, schema)
+				program, err = c.Rules().CompileExpr(e, schema)
 			}
 			if err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())

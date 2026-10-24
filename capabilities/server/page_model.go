@@ -163,7 +163,7 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model page is unavailable")
 		}
 	}
-	if err := page.CheckModelBindings(t.entity, t.modelCriteria); err != nil {
+	if err := page.CheckModelBindings(t.entity, t.modelCriteria, t.services.Rules); err != nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if page.Document == nil {
@@ -415,7 +415,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 				if name == "id" {
 					kind = "text"
 				}
-				comparison, err := platform.CompareExprValues(platform.ExprPresent(kind, left[name]), platform.ExprPresent(kind, right[name]))
+				comparison, err := t.services.Rules.CompareExprValues(platform.ExprPresent(kind, left[name]), platform.ExprPresent(kind, right[name]))
 				if err != nil {
 					sortErr = err
 					return 0

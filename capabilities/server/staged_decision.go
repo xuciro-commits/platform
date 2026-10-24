@@ -40,7 +40,7 @@ type stagedDecision struct {
 	control                *controlDecision
 	tenant                 *Tenant
 	records                *recordStore
-	logs                   map[*platform.Ledger]*kernel.ChangeLog
+	logs                   map[*platform.Ledger]platform.ChangeLog
 	events                 []platform.Event
 	sequences              map[string]int // private counters, copied before any decision code
 	allocated              map[string]int // counters actually consumed by this decision
@@ -70,7 +70,7 @@ type stagedDecision struct {
 	privateApps            map[string]platform.App
 	states                 map[string]platform.AcceptedStateApp
 	stateBases             map[string]json.RawMessage
-	connectors             *kernel.Connectors
+	connectors             platform.Connectors
 	deliveries             []resultformat.ConnectorDelivery
 	operationAnswers       map[string]platform.OperationResult
 	operationCancels       map[string]bool
@@ -115,11 +115,11 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	for i, descriptor := range descriptors {
 		descriptors[i] = proto.Clone(descriptor).(*pb.ConnectorDescriptor)
 	}
-	connectors := kernel.NewConnectors()
+	connectors := t.services.Kernel.Connectors()
 	connectors.Restore(descriptors, marks)
 	before, _ := acceptance.Digest(notices)
 	return &stagedDecision{simulation: t.simulation, tenant: t, records: t.records.forkRecords(),
-		logs: map[*platform.Ledger]*kernel.ChangeLog{}, sequences: sequences,
+		logs: map[*platform.Ledger]platform.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
 		notices: notices, noticeBase: noticeSeq, noticeSeq: noticeSeq, noticeBefore: before,
 		writers: map[string][]string{}, changed: map[string][]string{}, connectors: connectors}
@@ -186,7 +186,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 
 // DraftChanges is called under the ledger's lock. It keeps both the kernel
 // receipt and the host record image private until a durable result exists.
-func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() *kernel.ChangeLog) *kernel.ChangeLog {
+func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() platform.ChangeLog) platform.ChangeLog {
 	if d.logs[l] == nil {
 		d.logs[l] = fork()
 		d.bindPrivateFacts(l)
@@ -201,7 +201,7 @@ func (d *stagedDecision) bindPrivateFacts(l *platform.Ledger) {
 			continue
 		}
 		if facts, ok := owner.(platform.AcceptedFactApp); ok {
-			d.logs[l].Facts = facts.HasAcceptedFact
+			d.logs[l].SetFacts(facts.HasAcceptedFact)
 		}
 	}
 }
@@ -378,7 +378,7 @@ func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id s
 
 func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
 	original := d.routingTenant()
-	view := &Tenant{ID: original.ID, apps: slices.Clone(original.apps), appIndex: original.appIndex, records: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
+	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, apps: slices.Clone(original.apps), appIndex: original.appIndex, records: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
 	view.settings.restore(original.settings.clone())
 	for i, app := range view.apps {
 		view.apps[i] = d.stateApp(app)

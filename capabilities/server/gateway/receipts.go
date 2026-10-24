@@ -28,7 +28,11 @@ type receipt struct {
 }
 
 func receiptID(dispatch platform.DriverDispatchIdentity) string {
-	digest := sha256.Sum256([]byte(dispatch.RunID + "\x00" + dispatch.AttemptID))
+	key := dispatch.RunID + "\x00" + dispatch.AttemptID
+	if dispatch.Scope != "" {
+		key = dispatch.Scope + "\x00" + key
+	}
+	digest := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(digest[:])
 }
 
@@ -107,7 +111,7 @@ func (s *Server) execute(w http.ResponseWriter, r *http.Request, connection, rev
 		return
 	}
 	input.Session = ""
-	if !identity(input.Dispatch.RunID) || !identity(input.Dispatch.AttemptID) || input.Dispatch.BusinessKey == "" || len(input.Dispatch.BusinessKey) > 500 || input.Dispatch.BindingRevision != revision || strings.TrimPrefix(input.Dispatch.PackageDigest, "sha256:") != strings.TrimPrefix(live.binding.Digest, "sha256:") {
+	if input.Dispatch.Scope != live.binding.Scope || !identity(input.Dispatch.RunID) || !identity(input.Dispatch.AttemptID) || input.Dispatch.BusinessKey == "" || len(input.Dispatch.BusinessKey) > 500 || input.Dispatch.BindingRevision != revision || strings.TrimPrefix(input.Dispatch.PackageDigest, "sha256:") != strings.TrimPrefix(live.binding.Digest, "sha256:") {
 		writeError(w, http.StatusBadRequest, "execute needs the frozen run, attempt, business key, binding revision and package digest")
 		return
 	}

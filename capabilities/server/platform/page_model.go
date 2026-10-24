@@ -344,14 +344,14 @@ func (p *Page) NormalizeModelBindings(lookup func(string) (EntityInfo, bool)) er
 	return nil
 }
 
-func (p Page) CheckModelBindings(lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool)) error {
-	if err := p.CheckCompositeBindings(lookup, criteria); err != nil {
+func (p Page) CheckModelBindings(lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool), engines ...RuleEngine) error {
+	if err := p.CheckCompositeBindings(lookup, criteria, engines...); err != nil {
 		return err
 	}
-	return p.checkModelSources(p.Sections, lookup, criteria)
+	return p.checkModelSources(p.Sections, lookup, criteria, engines...)
 }
 
-func (p Page) checkModelSources(sections []Section, lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool)) error {
+func (p Page) checkModelSources(sections []Section, lookup func(string) (EntityInfo, bool), criteria func(AssetRef) (*RuleCriteria, bool), engines ...RuleEngine) error {
 	for _, section := range sections {
 		m := section.Model
 		if m == nil {
@@ -463,7 +463,7 @@ func (p Page) checkModelSources(sections []Section, lookup func(string) (EntityI
 			if expr.Kind != "boolean" {
 				return fmt.Errorf("%s predicate %d: boolean required", where, i)
 			}
-			if err := CheckRuleExpression(expr, RuleReadSpec{Object: m.Type}, lookup); err != nil {
+			if err := CheckRuleExpression(expr, RuleReadSpec{Object: m.Type}, lookup, engines...); err != nil {
 				return fmt.Errorf("%s predicate %d: %w", where, i, err)
 			}
 		}
@@ -471,7 +471,7 @@ func (p Page) checkModelSources(sections []Section, lookup func(string) (EntityI
 			if m.Label.Kind != "text" {
 				return fmt.Errorf("%s label: text required", where)
 			}
-			if err := CheckRuleExpression(*m.Label, RuleReadSpec{Object: m.Type}, lookup); err != nil {
+			if err := CheckRuleExpression(*m.Label, RuleReadSpec{Object: m.Type}, lookup, engines...); err != nil {
 				return fmt.Errorf("%s label: %w", where, err)
 			}
 		}
@@ -479,12 +479,12 @@ func (p Page) checkModelSources(sections []Section, lookup func(string) (EntityI
 	return nil
 }
 
-func CheckRuleExpression(expr Expr, reads RuleReadSpec, lookup func(string) (EntityInfo, bool)) error {
-	schema, err := RuleSchema(expr, reads, lookup)
+func CheckRuleExpression(expr Expr, reads RuleReadSpec, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
+	schema, err := RuleSchema(expr, reads, lookup, engines...)
 	if err != nil {
 		return err
 	}
-	_, err = CompileExpr(expr, schema)
+	_, err = ruleEngineOf(engines).CompileExpr(expr, schema)
 	return err
 }
 

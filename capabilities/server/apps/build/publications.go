@@ -100,7 +100,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		if err != nil {
 			return err
 		}
-		return b.host.ValidateInstallOperation(tb.Definition())
+		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, tb.Definition())
 	}
 	if schema == SchemaAgentPublish {
 		var record Agent
@@ -140,7 +140,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		if err != nil {
 			return err
 		}
-		return b.host.ValidateInstallOperation(code.Definition())
+		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, code.Definition())
 	}
 	if schema == SchemaFunction {
 		f, err := functionImage(image)
@@ -173,7 +173,7 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		if !ok {
 			return fmt.Errorf("accepted object has no published definition")
 		}
-		return b.validateObjectInstallation(published)
+		return b.validateObjectInstallation(platform.Caller{Replaying: true}, published)
 	case construction.SchemaRelease:
 		return b.host.ValidateInstallPage(pages[0])
 	case construction.SchemaHandOver:

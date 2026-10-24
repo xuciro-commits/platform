@@ -26,6 +26,9 @@ func main() {
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
 		return composition.NewTenant(id, deployment.SeatsFor(id)...)
 	}
+	deployment.RebuildWithCapabilities = func(id string, services platformserver.RuntimeCapabilities) (*platformserver.Tenant, error) {
+		return composition.NewTenantWithCapabilities(id, services, deployment.SeatsFor(id)...)
+	}
 	development := platformserver.TenantSpec{ID: *tenant}
 	if *admin != "" {
 		development.Seats = []platformserver.Seat{{Subjects: []string{*admin}, Member: platform.Member{

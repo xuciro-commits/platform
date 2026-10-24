@@ -62,12 +62,12 @@ func (h hostView) installationDraft() *Tenant {
 }
 
 func (h hostView) installationView(recordView *recordStore) *Tenant {
-	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, appIndex: h.t.appIndex, owner: maps.Clone(h.t.owner),
+	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, apps: h.t.apps, appIndex: h.t.appIndex, owner: maps.Clone(h.t.owner),
 		identity: h.t.identity, directory: h.Directory(), records: recordView, definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
 	return draft
 }
 
-func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
+func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
 	h.t.opsMu.Lock()
 	bindings := maps.Clone(h.t.bindings)
 	h.t.opsMu.Unlock()
@@ -92,11 +92,15 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 	if err := draft.Install(h.app, e, actions, pages...); err != nil {
 		return err
 	}
+	var engine platform.RuleEngine = h.t.services.Rules
+	if c.Replaying {
+		engine = platform.NativeRules{} // saved publication shape, without running the selected provider
+	}
 	for _, et := range draft.records.sortedTypes() {
-		if err := draft.checkRecordSetDeclarations(et.info); err != nil {
+		if err := draft.checkRecordSetDeclarations(et.info, engine); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(et.info, draft.entity, true); err != nil {
+		if err := platform.CheckConstraints(et.info, draft.entity, true, engine); err != nil {
 			return err
 		}
 	}
@@ -330,7 +334,10 @@ func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
 	}
 	// Reinstall restores original descriptors as a group, then validates all
 	// navigation targets against that complete group before returning.
-	return h.t.installPage(h.app, p, !c.Replaying)
+	if c.Replaying {
+		return h.t.installPage(h.app, p, false)
+	}
+	return h.t.installPage(h.app, p, true, c.Rules())
 }
 func (h hostView) ValidateInstallPage(p platform.Page) error {
 	return h.installationDraft().InstallPage(h.app, p)
@@ -442,7 +449,7 @@ func (h hostView) ModelQueryBinding(ref platform.AssetRef) (platform.AssetBindin
 }
 
 func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
-	if err := p.CheckModelBindings(h.t.modelVisibleLookup(c.Member), h.t.modelCriteria); err != nil {
+	if err := p.CheckModelBindings(h.t.modelVisibleLookup(c.Member), h.t.modelCriteria, c.Rules()); err != nil {
 		return err
 	}
 	return h.t.checkModelQueries(p)

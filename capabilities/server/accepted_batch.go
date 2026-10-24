@@ -18,7 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 
 	"platformserver/platform"
 )
@@ -339,7 +338,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 	if err := t.sequences.check(result.SequenceBases, result.Sequences); err != nil {
 		return nil, err
 	}
-	checks := map[string]*kernel.ChangeLog{}
+	checks := map[string]platform.ChangeLog{}
 	for app, ledger := range ledgers {
 		checks[app] = ledger.ForkAcceptedChanges()
 	}

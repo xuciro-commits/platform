@@ -19,9 +19,10 @@ func main() {
 	listen := flag.String("listen", "127.0.0.1:8510", "gateway HTTP listen address")
 	packages := flag.String("packages", "", "trusted package directory")
 	state := flag.String("state", "", "persistent technical receipt directory")
+	legacyTenant := flag.String("legacy-tenant", "", "explicit tenant owner of retained unscoped bindings; required for platform cleanup of legacy connections")
 	tokenEnv := flag.String("token-env", "PLATFORM_GATEWAY_TOKEN", "environment variable containing the bearer token")
 	flag.Parse()
-	gw, err := gateway.New(gateway.Config{Directory: *packages, StateDir: *state, Token: os.Getenv(*tokenEnv), Samples: os.Stdout, Resolve: func(binding platform.DriverBinding) (platform.DriverRuntime, error) {
+	gw, err := gateway.New(gateway.Config{Directory: *packages, StateDir: *state, LegacyTenant: *legacyTenant, Token: os.Getenv(*tokenEnv), Samples: os.Stdout, Resolve: func(binding platform.DriverBinding) (platform.DriverRuntime, error) {
 		index, err := server.LoadPackageIndex(*packages)
 		if err != nil {
 			return platform.DriverRuntime{}, err

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"platformserver/internal/acceptance"
 	resultformat "platformserver/internal/acceptance/result"
@@ -104,7 +105,7 @@ func (h *Host) hostAuthorization(subject string, authenticated bool, permission,
 		roles = []string{"host-admin"}
 	}
 	definition, _ := acceptance.Digest([]any{permission, tenant, "host-admin"})
-	return authz.Decide(authz.Request{Kind: "action", Subject: authz.Subject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &authz.Context{Tenant: pass, Principal: authz.Gate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
+	return h.AuthorizationEngine.Decide(authz.Request{Kind: "action", Subject: authz.Subject{ID: "host:" + subject, App: "host", Roles: roles}, Permission: permission, Allowed: []string{"host-admin"}, Context: &authz.Context{Tenant: pass, Principal: authz.Gate{Allowed: authenticated && subject != "", Reason: "The operation principal is invalid or inactive"}, Row: pass, Fields: pass, Derived: pass, Markings: pass, Definition: definition}})
 }
 
 func hostRequestAuthorization(r *http.Request, tenant string) []resultformat.AuthorizationEvidence {
@@ -149,6 +150,7 @@ func (h *Host) hostRoute(mux *http.ServeMux, route Route, f func(http.ResponseWr
 
 // hostConsoleRoutes registers the console's four areas.
 func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
+	h.hostCompositionRoutes(mux)
 	h.tenantRoutes(mux)
 	h.hostRoute(mux, Route{Pattern: "GET /v1/host/me", Summary: "Whether the caller is a host administrator, and the tenants this console serves", Answer: map[string]any{}},
 		func(w http.ResponseWriter, _ *http.Request, subject string, _ *Tenant) {
@@ -460,6 +462,9 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time,
 				return SupportGrant{}, errSupport("a quarantined tenant is already stopped; repair it through recovery")
 			}
 			image.Lifecycle = ""
+			if (action == "resume" || action == "open") && (missingRuntime(t.desiredRuntime()) || !maps.Equal(t.desiredRuntime(), t.services.Selection()) || !slices.Equal(t.currentDisabledOwners(), t.desiredDisabledOwners()) || slices.Contains(t.desiredDisabledOwners(), PlatformApp)) {
+				return SupportGrant{}, errSupport("Activate the saved compatible implementation before resuming business access")
+			}
 			if action == "suspend" || action == "decommission" {
 				image.Lifecycle = action
 			}

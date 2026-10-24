@@ -28,7 +28,7 @@ func (t *Tenant) validateAcceptedDeliveries(deliveries []resultformat.ConnectorD
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	descriptors, marks := t.connectors.kernel.State()
-	private := kernel.NewConnectors()
+	private := t.services.Kernel.Connectors()
 	private.Restore(descriptors, marks)
 	for _, delivery := range deliveries {
 		if delivery.Connector == "" || delivery.DataClass == "" || delivery.At.IsZero() || delivery.Before == "" {
