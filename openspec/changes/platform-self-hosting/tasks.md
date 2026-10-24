@@ -10,7 +10,7 @@
 - [x] 1.3b 删除 `build` 的 source、connection、dataset、pipeline、writeback、match、observation、dispatch、confirmation 及对应 Web 编辑器。**2026-10-24 完成**：9 个 build 文件、6 个根包文件与整套装配（`build.go`、`activation.go`、`release*.go`、`joint_release.go`、事务引擎的 effect/dispatch 步骤）已删除；`go build ./... && go vet ./...` 绿，`go test .`（自举验收）通过。
 - [x] 1.4 删除知识、企业建模与专业可视化：`apps/knowledge`、UAF 元素/关系/视图/租户链接、`ui/src/spatial`、三维/地图/标注组件。**2026-10-24 完成方式改为推倒重写**：旧前端 `web/packages/{build,app,ui}` 与 `web/apps/workspace/src` 整包删除，`spatial`、`RecordCollaboration`、`surface-plugins`、协作/上传/PDF/标注 widget 随宿主一起消失，不需要再拆分重构；新界面（`web/packages/platform`，见 6.7）不引用页面模型、`map`/`scene` 段或任何 widget 契约。
 - 1.4a（移出本变更）`apps/{files,relations}` 保留：7.5b 的实测证明删掉这两个应用会让已有租户在真实数据上被隔离（`accepted observation needs missing projection relations`），退役需要先有迁移路径（7.5c）。两块合计 24 KB，删除收益小于重放破损的代价。
-- [x] 1.5 精简树通过检查：`cd capabilities/server && go build ./... && go vet ./...` 全绿，`go test ./...` 只剩保留集（`platformserver` 自举验收 0.84s 通过、`internal/systemscope`）；Web 的 `pnpm -r typecheck` 与 `vite build` 在重写后重跑全绿（2026-10-24）。**体量**：`capabilities/server` Go 3,853,478 B / 538 文件（基线 10,183,233 B，−62.2%）；手写前端 166,731 B（host.ts 之外的 `.ts/.tsx/.css`；基线 4,643,732 B，−96.4%）。
+- [x] 1.5 精简树通过检查：`cd capabilities/server && go build ./... && go vet ./...` 全绿，`go test ./...` 只剩保留集（`platformserver` 自举验收 0.84s 通过、`internal/systemscope`）；Web 的 `pnpm -r typecheck` 与 `vite build` 在重写后重跑全绿（2026-10-24）。**体量**：`capabilities/server` Go 3,887,693 B / 545 文件（基线 10,183,233 B，−61.8%；第三轮加入视图/编码缓存、边缘层与静态资源，净增 34 KB）；手写前端 144,930 B / 11 文件（`web/packages/{platform,kernel}/src` + `web/apps/workspace/src`，不含生成的 `gen/`；基线 4,643,732 B，−96.9%）。
 
 ## 2. system 作用域与角色
 
@@ -74,3 +74,22 @@
 - 删除过程中 `scripts/boundaries.sh` 的允许清单只减不增；`scripts/escapes.sh` 随 `@platform/ui` 一起删除（它守的是已不存在的 kit 与 app 包）。
 - **下一刀（已量化）**：`capabilities/server/platform/page_*.go` 78 个文件 347,164 B，加上 `apps/build/page.go`、`page_composite.go` 与 `Section` 契约字段，是剩余最大的一块死重；新界面不读页面模型，删它是契约变更（需重生成 `host.ts`）而不是纯删除，单独一个 change 做。
 - 自举上线后不以测试数量或代码行数作为交付证据；以演练与真实操作结果判断。
+
+## 8. SaaS 完备性与性能（第三轮，2026-10-24）
+
+> 判据：一个人只拿浏览器，能不能把宿主的全套读写做完；以及同一台机器上每个读的代价。
+
+- [x] 8.1 操作面按宿主已有的读铺开：`web/packages/platform/src/operate.tsx` 用一个通用表渲染 34 个 `GET /v1/{read}`（成员、权限、访问配置、设置、租户、账户、收件箱、请求、通知、审计、投递、工作、连接器、端点、效果、健康、个人数据读取、凭据、智能体、用量、模型、限额、运行、记忆、组织、项目、包、链接、时间线、视图、贡献），每个决定表单按目标类型从目录里现取；`hostconsole.tsx` 是宿主自己的作用域（`/v1/host/me|overview|tenants|templates|lifecycle|support`），只有被 `-host-admins` 点名的 subject 看得到入口。租户未装的应用（404）与角色不够（403）说人话，不抛红错。
+- [x] 8.2 记录面补齐：证过的坑：`expectedRevision` 只在详情页带上（那是用户看到的版本）；列表页的批准/激活不带，否则一次读到的旧版本会把下一次决定挡回去（宿主如实回 409）。分页（50 一页）、按类型的搜索框、CSV 导出（`POST /v1/export/{type}`）、详情页把 `record.revision` 作为 `expectedRevision` 随决定提交（K4 C12，旧界面没有传），以及该记录的 `history`（谁、什么时候、哪次变更、改了哪些字段）。
+- [x] 8.3 自举控制台重写：提问（`agent.run.start` / `system.architect`）、批准（`system.change.approve`）、激活与窗口内取消（`system.release.activate` / `system.release.cancel`）、改文件（`system.file.save`，带它期望的修订号）、提案（`system.change.propose`）。每个按钮先查目录里有没有这个动作，没有就不出现。**实测**：`chg-smoke1` 以控制台同形的提交提出（`system.change.propose`，带 `files`）→ `approved`；`chg-probe-1` 经内核客户端 outbox 提交后同样 `approved`；`platform.setting.set` 把租户名改成 `System` 并回读确认；`core.person.create` → `POST /v1/records/core.person/query` 搜到 `PER-SMOKE2`。
+- [x] 8.4 前端自检：`pnpm -r typecheck`（kernel/platform/workspace 三包）与 `vite build` 全绿，产物 `index-*.js` 295.7 kB / gzip 88.7 kB、CSS 4.97 kB；宿主静态层按内容哈希给 `immutable` 一年缓存，`index.html` 走 `no-cache` + ETag。
+- [x] 8.5 性能（`n=6000 c=16`，`PLATFORM_RATE_LIMIT=0`，不带 `Accept-Encoding`）：
+  - `/v1/me` 1,255 → **7,281 rps**（p50 12.70 → 1.65 ms）；
+  - `/v1/entities` 3,268 → **15,443**（0.76 ms）；
+  - `/v1/actions` 3,614 → **13,112**；
+  - `/v1/definitions` 2,883 → **8,251**；
+  - `/`（静态首页）**40,953 rps**；`/v1/members` 4,985、`/v1/settings` 2,916。
+  - 手段：视图缓存（键 = 权限签名 + 定义生成号，`maxViewEntries=8`）、编码体缓存（`kind:lang` → plain/etag/gz，`If-None-Match` → 304，gzip 直出已压字节：`/v1/entities` 65,913 → 12,074 B）、manifest 按 `platform.App` **值**缓存（draft/fork 同 ID 不同值）、`Accept-Language` 为空时不再列举租户语言（这一条单独把 `/v1/entities` 从 3.6k 推到 14k）、`AppsOf`/`TenantRecord`/`primaryRole`/`translator`/`setting` 全部走缓存 manifest、settings 无锁读（`atomic.Pointer` 快照）、`/v1/me` 不再是单请求 CPU 瓶颈（c=1 0.41 ms）。
+- [x] 8.6 边缘层：安全头（nosniff/frame-deny/referrer）、CORS、`Vary`、令牌桶限流（`PLATFORM_RATE_LIMIT`，默认 600/s，0 关；429 + `Retry-After`）、`GET /metrics`（`platform_requests_total`、`platform_request_duration_seconds` 直方图、`platform_requests_in_flight`；需凭据或 loopback）、`PLATFORM_ACCESS_LOG=1`、`PLATFORM_PPROF=1` 才开 `/debug/pprof` 且只认 loopback。静态资源从内存出（启动时读 64 MB 上限）。
+- 8.7 缺口（记录，不做）：**认证**只有 OIDC 或部署发放的令牌，没有本地口令、找回密码、邮箱验证——本地 IdP 只签发令牌（`idp/local.go` 的 HS256），加口令等于换一套身份模型；**计费/套餐/配额**不存在（多租户的生命周期、隔离与用量视图在，收款不在）；**整租户数据导出/删除**没有一键流程，只有按类型的 CSV 导出与逐记录决定；**界面文案**只有英文（宿主返回的声明文本按请求语言翻译，UI 自己的字没有字典）。
+- 8.8 下一刀（已量化）：`capabilities/server/platform/page_*.go` 78 文件 536 KB，加上 `apps/build/page.go` 与契约里的 `Section`，是最大的一块死重；新界面不读页面模型，删它是契约变更（重生成 `host.ts`）而不是纯删除，单独一个 change 做。

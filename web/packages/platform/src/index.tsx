@@ -7,11 +7,23 @@ import type { EdgeClient as Client } from "@platform/kernel";
 import * as api from "./api";
 import { HostProvider, useHost } from "./host";
 import { Definitions, Records, RecordView, Releases, SystemConsole, CreateView } from "./views";
+import { Operate } from "./operate";
+import { HostConsole, HostLink } from "./hostconsole";
 import { Empty, Loading, Note, Panel, Problem } from "./ui";
 
 export type Identity = { token: string; label: string };
 
-type Route = { kind: "home" } | { kind: "records"; type: string; search: string } | { kind: "record"; type: string; id: string } | { kind: "new"; type: string } | { kind: "definitions" } | { kind: "releases" } | { kind: "system" };
+type Route =
+  | { kind: "home" }
+  | { kind: "records"; type: string; search: string }
+  | { kind: "record"; type: string; id: string }
+  | { kind: "new"; type: string }
+  | { kind: "definitions" }
+  | { kind: "releases" }
+  | { kind: "system" }
+  | { kind: "operate"; section: string }
+  | { kind: "host" }
+  | { kind: "missing" };
 
 function routeOf(hash: string): Route {
   const path = hash.replace(/^#\/?/, "").split("?")[0] ?? "";
@@ -24,7 +36,10 @@ function routeOf(hash: string): Route {
   if (head === "def") return { kind: "definitions" };
   if (head === "rel") return { kind: "releases" };
   if (head === "sys") return { kind: "system" };
-  return { kind: "home" };
+  if (head === "o" && second) return { kind: "operate", section: second };
+  if (head === "host") return { kind: "host" };
+  if (head === "") return { kind: "home" };
+  return { kind: "missing" };
 }
 
 export function useRoute(): Route {
@@ -103,6 +118,8 @@ export function PlatformApp() {
   );
 }
 
+const active = (route: Route, section: string): string => (route.kind === "operate" && route.section === section ? "active" : "");
+
 function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: string) => void; onLeave: () => void }) {
   const host = useHost();
   const route = useRoute();
@@ -123,10 +140,20 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
               {entity.plural || entity.title}
             </a>
           ))}
+          <p className="label">You</p>
+          <a href="#/o/inbox" className={active(route, "inbox")}>Inbox</a>
+          <a href="#/o/security" className={active(route, "security")}>Account</a>
           <p className="label">Platform</p>
           <a href="#/def" className={route.kind === "definitions" ? "active" : ""}>Definitions</a>
           <a href="#/rel" className={route.kind === "releases" ? "active" : ""}>Releases</a>
           <a href="#/sys" className={route.kind === "system" ? "active" : ""}>Self-hosting</a>
+          <p className="label">Admin</p>
+          <a href="#/o/people" className={active(route, "people")}>People</a>
+          <a href="#/o/settings" className={active(route, "settings")}>Settings</a>
+          <a href="#/o/ops" className={active(route, "ops")}>Operations</a>
+          <a href="#/o/ai" className={active(route, "ai")}>AI</a>
+          <a href="#/o/data" className={active(route, "data")}>Data</a>
+          <HostLink />
         </nav>
         <div className="side-foot">
           {me.tenants && me.tenants.length > 1 ? (
@@ -151,6 +178,9 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
         {route.kind === "definitions" ? <Definitions /> : null}
         {route.kind === "releases" ? <Releases /> : null}
         {route.kind === "system" ? <SystemConsole /> : null}
+        {route.kind === "operate" ? <Operate section={route.section} /> : null}
+        {route.kind === "host" ? <HostConsole /> : null}
+        {route.kind === "missing" ? <Panel title="Not found"><Empty>Nothing lives at this address. <a href="#/">Back to the overview</a>.</Empty></Panel> : null}
       </section>
     </main>
   );

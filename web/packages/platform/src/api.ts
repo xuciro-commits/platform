@@ -9,6 +9,15 @@ export type EntityInfo = Api.EntityInfo;
 export type CatalogAction = Api.Action;
 export type Definition = Api.Definition;
 export type RecordPage = Api.RecordPage;
+
+/** One record as the host answers it: the values, its identity and history. */
+export type RecordDetail = {
+  values: Record<string, unknown>;
+  record: { id: string; revision: number; name?: string; [field: string]: unknown };
+  history?: HistoryEntry[];
+};
+
+export type HistoryEntry = { change: string; schema: string; by: string; at: string; fields?: { field: string; before?: unknown; after?: unknown }[] };
 export type Group = { entity: EntityInfo; actions: CatalogAction[] };
 
 const json = (path: string) => fetch(path, { headers: { Accept: "application/json" } });
@@ -63,8 +72,13 @@ export async function page(client: EdgeClient, type: string, offset = 0, limit =
   return await client.records<RecordPage>(type, { limit, offset, ...(search ? { search } : {}) });
 }
 
-export async function record(client: EdgeClient, type: string, id: string): Promise<Record<string, unknown>> {
-  return await client.get<Record<string, unknown>>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
+/** The whole scope's records of a type as CSV, read the way the page reads it. */
+export async function exportCSV(client: EdgeClient, type: string): Promise<Blob> {
+  return await client.exportCSV(type, { limit: 5000 });
+}
+
+export async function record(client: EdgeClient, type: string, id: string): Promise<RecordDetail> {
+  return await client.get<RecordDetail>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
 }
 
 export type Outcome = { ok: boolean; code?: string; message?: string; issues?: Api.FieldIssue[]; key: string };
