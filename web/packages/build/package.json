@@ -1,5 +1,5 @@
 {
-  "name": "@pkg/build",
+  "name": "@platform/build",
   "private": true,
   "type": "module",
   "exports": {

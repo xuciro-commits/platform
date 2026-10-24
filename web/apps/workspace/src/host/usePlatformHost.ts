@@ -155,7 +155,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
 
   const host = useMemo<Host | undefined>(() => {
     if (!me || !source) return undefined;
-    // A record opens in its app's view; a protocol's record (lodging.booking)
+    // A record opens in its app's view; a protocol's record (orders.confirm)
     // in the view of the app the tenant binds as its provider (D5).
     const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow-instance"]]);
     const host: Host = {

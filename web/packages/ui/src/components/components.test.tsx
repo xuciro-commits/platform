@@ -164,23 +164,23 @@ test("DataTable handles cell editing, Escape cancel, Enter commit, and Tab hop",
 });
 
 test("RecordLookup finds a scoped record beyond the first 500 without preloading them", async () => {
-  const all = Array.from({ length: 600 }, (_, i) => ({ id: `A-${String(i + 1).padStart(3, "0")}`, name: `Account ${i + 1}` }));
+  const all = Array.from({ length: 600 }, (_, i) => ({ id: `P-${String(i + 1).padStart(3, "0")}`, name: `Partner ${i + 1}` }));
   const list = vi.fn(async (_type: string, q: { search?: string; offset?: number; limit?: number }) => {
     const matching = all.filter((r) => !q.search || `${r.id} ${r.name}`.toLowerCase().includes(q.search.toLowerCase()));
     return { records: matching.slice(q.offset ?? 0, (q.offset ?? 0) + (q.limit ?? 25)) as never[], total: matching.length };
   });
-  const source = { entity: () => ({ type: "crm.account", display: "name" }), list } as unknown as RecordSource;
+  const source = { entity: () => ({ type: "core.partner", display: "name" }), list } as unknown as RecordSource;
   const chosen = vi.fn();
-  render(<RecordLookup id="account" source={source} type="crm.account" onChange={chosen} />);
+  render(<RecordLookup id="partner" source={source} type="core.partner" onChange={chosen} />);
   const input = screen.getByRole("combobox");
   fireEvent.focus(input);
-  await waitFor(() => expect(screen.getByRole("option", { name: "A-001 · Account 1" })).toBeTruthy());
-  expect(list).toHaveBeenCalledWith("crm.account", expect.objectContaining({ limit: 25, offset: 0 }));
-  fireEvent.change(input, { target: { value: "A-599" } });
-  await waitFor(() => expect(screen.getByRole("option", { name: "A-599 · Account 599" })).toBeTruthy());
-  fireEvent.click(screen.getByRole("option", { name: "A-599 · Account 599" }));
-  expect(chosen).toHaveBeenCalledWith("A-599");
-  expect(list).toHaveBeenCalledWith("crm.account", expect.objectContaining({ search: "A-599", limit: 25 }));
+  await waitFor(() => expect(screen.getByRole("option", { name: "P-001 · Partner 1" })).toBeTruthy());
+  expect(list).toHaveBeenCalledWith("core.partner", expect.objectContaining({ limit: 25, offset: 0 }));
+  fireEvent.change(input, { target: { value: "P-599" } });
+  await waitFor(() => expect(screen.getByRole("option", { name: "P-599 · Partner 599" })).toBeTruthy());
+  fireEvent.click(screen.getByRole("option", { name: "P-599 · Partner 599" }));
+  expect(chosen).toHaveBeenCalledWith("P-599");
+  expect(list).toHaveBeenCalledWith("core.partner", expect.objectContaining({ search: "P-599", limit: 25 }));
 });
 
 test("StatusTag maps states to tones and falls back to neutral", () => {
@@ -194,21 +194,21 @@ test("StatusTag maps states to tones and falls back to neutral", () => {
 
 test("EntityForm validates with the schema before submitting", async () => {
   const submit = vi.fn();
-  const schema = z.object({ guest: z.string().min(1, "Required"), nights: z.number().min(1, "At least one night") });
-  render(<EntityForm schema={schema} onSubmit={submit} defaultValues={{ guest: "", nights: 0 }}
-    fields={[{ name: "guest", label: "Guest" }, { name: "nights", label: "Nights", kind: "number" }]} />);
-  expect(screen.queryByText("At least one night")).toBeNull();
-  await act(async () => { fireEvent.blur(screen.getByLabelText("Nights")); });
-  expect(screen.getByText("At least one night")).toBeTruthy();
+  const schema = z.object({ name: z.string().min(1, "Required"), quantity: z.number().min(1, "At least one") });
+  render(<EntityForm schema={schema} onSubmit={submit} defaultValues={{ name: "", quantity: 0 }}
+    fields={[{ name: "name", label: "Name" }, { name: "quantity", label: "Quantity", kind: "number" }]} />);
+  expect(screen.queryByText("At least one")).toBeNull();
+  await act(async () => { fireEvent.blur(screen.getByLabelText("Quantity")); });
+  expect(screen.getByText("At least one")).toBeTruthy();
   expect(submit).not.toHaveBeenCalled();
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
   expect(submit).not.toHaveBeenCalled();
   expect(screen.getByText("Required")).toBeTruthy();
-  expect(screen.getByLabelText("Guest").getAttribute("aria-invalid")).toBe("true");
-  fireEvent.change(screen.getByLabelText("Guest"), { target: { value: "Ada" } });
-  fireEvent.change(screen.getByLabelText("Nights"), { target: { value: "2" } });
+  expect(screen.getByLabelText("Name").getAttribute("aria-invalid")).toBe("true");
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ada" } });
+  fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "2" } });
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
-  expect(submit).toHaveBeenCalledWith({ guest: "Ada", nights: 2 }, expect.anything());
+  expect(submit).toHaveBeenCalledWith({ name: "Ada", quantity: 2 }, expect.anything());
 });
 
 test("EntityForm disables buttons and indicates saving while submitting", async () => {
@@ -275,12 +275,12 @@ test("humanizeKernelError maps error codes and translates to reader's language",
 test("RecordPage shows structured error state with retry on fetch failure", async () => {
   let callCount = 0;
   const mockSource: RecordSource = {
-    entity: () => ({ app: "crm", type: "crm.account", title: "Account", plural: "Accounts", display: "id", fields: [], standard: [] }),
+    entity: () => ({ app: "core", type: "core.partner", title: "Partner", plural: "Partners", display: "id", fields: [], standard: [] }),
     get: vi.fn().mockImplementation(() => {
       callCount++;
       if (callCount === 1) return Promise.reject(new Error("ERROR_CODE_NOT_FOUND"));
       return Promise.resolve({
-        record: { id: "ACC-1", type: "crm.account", revision: 1, created: { at: "2026-09-01T00:00:00Z" }, changed: { at: "2026-09-01T00:00:00Z" } },
+        record: { id: "P-1", type: "core.partner", revision: 1, created: { at: "2026-09-01T00:00:00Z" }, changed: { at: "2026-09-01T00:00:00Z" } },
         tasks: [], approvals: [], processes: [], files: [], comments: [], related: [],
       });
     }),
@@ -288,7 +288,7 @@ test("RecordPage shows structured error state with retry on fetch failure", asyn
     aggregate: vi.fn() as any,
   };
 
-  render(<RecordPage source={mockSource} type="crm.account" id="ACC-1" />);
+  render(<RecordPage source={mockSource} type="core.partner" id="P-1" />);
 
   await waitFor(() => {
     expect(screen.getByRole("alert")).toBeTruthy();
@@ -303,7 +303,7 @@ test("RecordPage shows structured error state with retry on fetch failure", asyn
 
   await waitFor(() => {
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByText("ACC-1")).toBeTruthy();
+    expect(screen.getByText("P-1")).toBeTruthy();
   });
 });
 

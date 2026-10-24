@@ -1,5 +1,5 @@
 {
-  "name": "@pkg/platform",
+  "name": "@platform/platform",
   "private": true,
   "type": "module",
   "exports": {
@@ -7,7 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "pnpm --filter @platform/ui exec vitest run --root ../platform --config ../ui/vitest.config.ts src/navigation.test.mjs",
+    "test": "pnpm --filter @platform/ui exec vitest run --root ../platform --config ../ui/vitest.config.ts",
     "build": "true"
   },
   "dependencies": {

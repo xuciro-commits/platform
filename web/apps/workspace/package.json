@@ -1,10 +1,10 @@
 {
   "dependencies": {
-    "@platform/catalog-app": "workspace:*",
-    "@pkg/build": "workspace:*",
-    "@pkg/platform": "workspace:*",
     "@platform/app": "workspace:*",
+    "@platform/build": "workspace:*",
+    "@platform/catalog-app": "workspace:*",
     "@platform/kernel": "workspace:*",
+    "@platform/platform": "workspace:*",
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "lucide-react": "^1.47.0",
@@ -20,7 +20,7 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
   },
-  "name": "workspace",
+  "name": "@platform/workspace",
   "private": true,
   "scripts": {
     "build": "node ../../../scripts/rule-browser.mjs && vite build",

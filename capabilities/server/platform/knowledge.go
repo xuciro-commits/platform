@@ -25,6 +25,6 @@ type KnowledgeTerm struct {
 	Term     string   `json:"term" field:"required,search" help:"The word people here use" example:"PO"`
 	Meaning  string   `json:"meaning" field:"required" type:"longtext" help:"What it means in this organisation"`
 	Synonyms string   `json:"synonyms,omitempty" help:"Other words for it, comma-separated"`
-	RefersTo string   `json:"refersTo,omitempty" title:"Refers to" help:"The declaration it names: an entity type, <type>.<field> or an action" example:"mes.order"`
+	RefersTo string   `json:"refersTo,omitempty" title:"Refers to" help:"The declaration it names: an entity type, <type>.<field> or an action" example:"core.material"`
 	Apps     []string `json:"apps,omitempty" title:"Read by members of"`
 }

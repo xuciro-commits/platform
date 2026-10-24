@@ -34,7 +34,7 @@ type Subject struct {
 type Request struct {
 	Kind       string
 	Subject    Subject
-	Permission string   // e.g. "mes.order.release", "mes.order.read", "mes.order.cost.write"
+	Permission string   // e.g. "core.material.release", "core.material.read", "core.material.cost.write"
 	Resource   string   // "<type>/<id>" when about a record; "" otherwise
 	Allowed    []string // the roles the permission names (AnyMember for every member)
 	Attributes map[string]string

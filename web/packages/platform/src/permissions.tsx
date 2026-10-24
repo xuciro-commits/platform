@@ -189,7 +189,7 @@ function PolicyForm({ members, onSubmit, onCancel }: { members: Member[]; onSubm
       {field(t("Policy ID"), <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="freeze-closing" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
       {field(t("Effect"), <Select value={effect} onChange={(e) => setEffect(e.target.value)}><option value="deny">{t("deny")}</option><option value="allow">{t("allow")}</option></Select>)}
-      {field(t("Permission (an action, or a prefix ending in *)"), <Input value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="mes.order.*" />)}
+      {field(t("Permission (an action, or a prefix ending in *)"), <Input value={permission} onChange={(e) => setPermission(e.target.value)} placeholder="core.material.*" />)}
       {field(t("Only for member (optional)"), <Select value={member} onChange={(e) => setMember(e.target.value)}><option value="">—</option>{members.map((m) => <option key={m.id} value={m.id}>{m.profile.displayName || m.id}</option>)}</Select>)}
       <Checkbox className="text-sm" checked={agent} onChange={setAgent}>{t("Only when an AI agent acts")}</Checkbox>
       <div className="grid grid-cols-2 gap-2">{field(t("From (optional)"), <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />)}{field(t("Until (optional)"), <Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />)}</div>
@@ -231,7 +231,7 @@ function ProjectForm({ members, project, onSubmit, onCancel }: { members: Member
   const valid = parsed.every((a) => assetKinds.includes(a.kind) && !!a.name);
   return (
     <Form className="grid gap-3" onSubmit={() => { return onSubmit(id, { name: id, title, members: chosen.map((member) => ({ member, role: "editor" })), assets: parsed }); }}>
-      {field(t("Project ID"), <Input value={id} disabled={!!project} onChange={(e) => setId(e.target.value)} placeholder="hotel-opening" />)}
+      {field(t("Project ID"), <Input value={id} disabled={!!project} onChange={(e) => setId(e.target.value)} placeholder="spring-rollout" />)}
       {field(t("Title"), <Input value={title} onChange={(e) => setTitle(e.target.value)} />)}
       <fieldset className="grid max-h-48 gap-1 overflow-auto text-sm"><legend className="text-xs text-muted">{t("Editors")}</legend>
         {members.map((m) => <Checkbox key={m.id} checked={chosen.includes(m.id)} onChange={(checked) => setChosen(checked ? [...chosen, m.id] : chosen.filter((y) => y !== m.id))}>{m.profile.displayName || m.id}</Checkbox>)}

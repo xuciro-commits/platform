@@ -82,7 +82,7 @@ export function Catalog({ initialID, initialLayer, initialExpand = false }: { in
       </Select>
       <p className="px-1 text-xs text-muted">{t("{n} matching assets", { n: total })}</p>
       {tree.map((group) => <PanelSection key={group.layer} title={<span><span className="mr-1 font-mono text-[10px] text-muted">L{group.layer}</span>{t(group.label)}</span>}>
-        {group.entries.map((asset) => <StructureRow key={asset.id} icon={<Box />} label={asset.name} meta={asset.owner.replace("@platform/", "").replace("@pkg/", "")} selected={asset.id === selected} onClick={() => { setSelected(asset.id); setExpanded(false); }} />)}
+        {group.entries.map((asset) => <StructureRow key={asset.id} icon={<Box />} label={asset.name} meta={asset.owner.replace("@platform/", "")} selected={asset.id === selected} onClick={() => { setSelected(asset.id); setExpanded(false); }} />)}
       </PanelSection>)}
       {total === 0 && <p className="p-2 text-sm text-muted">{t("No matching assets. Try another task or remove a filter.")}</p>}
     </div> }}

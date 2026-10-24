@@ -31,7 +31,7 @@ make help    # 中文命令说明
 
 底层命令仍可单独使用：`make infra`、`make dev SOLUTION=hospitality`、`make web SOLUTION=hospitality`（前端 5176；制造 5175）、`make infra-compute`。无 Docker 的内存探针用 `make dev-light`。首次缺依赖时运行 `make setup`。`make local` 复用数据卷和登录配置，不重建宿主镜像；计算容器使用独立的 `platform-dev-compute` 项目。
 
-宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants-next.json）；`deploy/local/.env` 的密钥同样被读取。
+宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants.json）；`deploy/local/.env` 的密钥同样被读取。
 
 PostgreSQL 仍使用原 18 主版本和 `pgdata` 数据卷，镜像由 `Dockerfile.postgres` 加入 pgvector 0.8.7。首次升级检索依赖时运行 `docker compose -f deploy/local/compose.yaml build postgres`，再 `docker compose -f deploy/local/compose.yaml up -d --no-deps postgres`；后续使用原本地更新入口。宿主初始化扩展并转换可重建向量索引，不删除业务日志或重置数据卷。
 
@@ -60,7 +60,7 @@ if ! rg -q '^PLATFORM_PERSONAL_TOKEN_KEY=' .env 2>/dev/null; then
   printf 'PLATFORM_PERSONAL_TOKEN_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
 fi
 chmod 600 .env
-chmod g+w hospitality/tenants-next.json manufacturing/tenants-next.json
+chmod g+w hospitality/tenants.json manufacturing/tenants.json
 docker compose up -d --build
 ```
 
@@ -74,7 +74,7 @@ cd deploy/local && docker compose ps
 - **更新 8495/8490 的代码**：在根目录运行 `deploy/local/update.sh`，沿用当前本地或容器模式，更新两台宿主并校验实际版本、健康和页面资源，报告位于 `.build/local-update/<revision>.json`。保留原数据卷、密钥与租户配置。临时浏览器宿主 `18496/18497` 的测试不会更新这两个日常入口；视觉检查以实际使用的入口为准。
 - **直接运行开发宿主的编译配置**：单独 `go run` 不会继承 Compose 的环境。需要使用 `cmd/code-builder` 与 `cmd/wasm-worker` 的私有 Unix socket，并将宿主的 `PLATFORM_CODE_BUILDER_SOCKET` / `PLATFORM_WASM_WORKER_SOCKET` 指向它们；构建 driver 的 `PLATFORM_GO_WASM_IMAGE` / `PLATFORM_TINYGO_WASM_IMAGE` 使用本文件上面的固定摘要。出现 “owner-configured toolchain image pinned by sha256” 表示宿主未配置对应工具链，不是租户源码错误。已有内存宿主保存着编辑内容时，不为补配置直接重启；另起已配置实例，保留原实例中的数据。
 - 行业样本由包内显式初始化计划提供，按下节执行 `make initialize`；启动与安装不自动播种。
-- 完整演练：在仓库根目录运行 `make rehearse`（即 `scripts/verify.sh deploy`）。它使用独立 Compose 项目、另一组端口和全新卷，验证真实 OIDC 身份、通用声明发布、在途迁移与 Flow、原离线请求键、七节点遥测原版本接续、快照重启、PostgreSQL 备份恢复及单租户隔离恢复，不安装酒店、制造或供暖应用。环境身份映射在 `rehearsal-fixtures.json`；应用业务验收由构建者在原应用测试与发布入口执行。需 Docker、Node/pnpm、Python 3 与 Google Chrome（或 `CI=1` 下已安装的 Playwright Chromium）；结束只移除本次项目资源，诊断保存在 `.build/retirement/rehearsal-*`，恢复后的浏览器截图在 `web/e2e/test-results/deploy-recovery`。
+- 完整演练：在仓库根目录运行 `make rehearse`（即 `scripts/verify.sh deploy`）。它使用独立 Compose 项目、另一组端口和全新卷，验证真实 OIDC 身份、通用声明发布、在途迁移与 Flow、原离线请求键、七节点遥测原版本接续、快照重启、PostgreSQL 备份恢复及单租户隔离恢复，不安装酒店、制造或供暖应用。环境身份映射在 `rehearsal-fixtures.json`；应用业务验收由构建者在原应用测试与发布入口执行。需 Docker、Node/pnpm、Python 3 与 Google Chrome（或 `CI=1` 下已安装的 Playwright Chromium）；结束只移除本次项目资源，诊断保存在 `.build/rehearse/rehearsal-*`，恢复后的浏览器截图在 `web/e2e/test-results/deploy-recovery`。
 - 数据/定义迁移演练：本地 Air/Vite 与基础设施运行后，在根目录执行 `make rehearse PROFILE=migration`。使用当前 HEAD 的通用宿主二进制、两个配置实例及真实 OIDC/PostgreSQL/RustFS，创建独立临时数据库与进程，验证首批暂停、快照重启、备份恢复、全日志重建、原键续接/激活与旧/新 Flow；结束清理本次资源。不会重建镜像或更改 8495/8490 与现有租户数据；完整容器演练仍走上面的入口。
 
 真实供应商的密钥放在 `deploy/local/.env`，compose 启动时自动读取。一行一个：
@@ -140,20 +140,7 @@ python3 deploy/local/storage_handover.py \
 
 ## 声明式应用包初始化
 
-通用宿主的本地与容器启动入口分别使用 `hospitality/tenants-next.json` 与 `manufacturing/tenants-next.json`，在原基础设施上启用新的测试范围；原 `tenants.json` 保留用于旧二进制回退。切换日常运行实例前先完成下述资产移交，再执行 `deploy/local/update.sh`。新范围不复用旧探针租户 ID：
-
-| 原测试范围 | 新测试范围 | 处理 |
-|---|---|---|
-| `hotel-a` | `hotel-a-build` | 从应用包重建 CRM、PMS |
-| `hotel-test` | `hotel-test-build` | 独立空白酒店验证范围 |
-| `plant-sz` | `plant-sz-build` | 从应用包重建 MES、ERP |
-| `acme` | 不自动映射 | 保留原范围，移交前不切换或重建 |
-
-新配置保留对应成员的 ID、登录 subject 和平台设置。旧 CRM/PMS/MES/ERP 的有效业务角色明确映射到 Build 的 sales、salesmanager、desk、hotelmanager、supervisor、operator、quality、buyer、controller、accountant；管理员显式配置 Builder 与初始化所需 Core accountant，会计成员显式配置 Core accountant；采购成员仅配置 Core reference-reader，以读取科目和期间，不授予主数据维护、凭证或试算读取及账务写入。HCM/CSM、原 gateway/assistant 的角色不产生新业务授权，其身份仍保留。酒店旧组织任职不自动复制；制造 L1/L2 任职保留，`plant-sz` 的组织任职显式映射到初始化计划的 `sampleplant`，其他任职仍须在 Enterprise 受权配置。包安装本身不执行这些角色配置。
-
-切换前必须沿原资产入口移交 `hotel-a` 的 WMS 应用 `wms`、对象 `employee`、`partitem`、`order`、`goodsreceipt`、`partimports`、页面 `item`/`goodsreceipt`、数据集 `hrstaff`、`hrclean`、`partimports`、`mesmat`、`sapmat`、`sapom`，以及管道 `hrtoent`、`hrtoemployee`、`pipehrclean`、`mesparts`、`omtoorg`、`sapmaterials`，保留构建定义和有效草稿。负责人已允许 WMS 测试数据和结构重建，不要求复制旧业务记录、状态或历史；原日志与数据卷仍归档保留。现有 `plant-sz` 的 `mesworkspace`/`mesorders` 依赖原生 MES，随替代验收退出，不能作为新 MES 的输入。`application.heating` 及范围外构建内容仍保留。原数据库卷、日志、文件、身份与部署密钥均不清理；移交未验证前不启用新配置替换日常入口。
-
-旧客户端继续携带原租户标识、请求键、schema 及回调关联，不能重定向到新租户或重签为新请求。切换前停止旧测试范围写入并保留原二进制、`tenants.json` 和环境；回退恢复这组原输入，不将新租户日志交给旧二进制，也不承诺反向转换新模型数据。
+通用宿主的本地与容器启动入口都使用 `hospitality/tenants.json` 与 `manufacturing/tenants.json`：每个宿主实例一份租户配置，仓库里没有第二份。专用 Solution 宿主已删除，也没有可回退的旧二进制。旧探针租户（`hotel-a`、`hotel-test`、`plant-sz`、`acme`）与它们的日志、数据卷、身份和部署密钥原样归档保留，不被新范围复用，新范围也不复用旧探针租户 ID。那次切换的资产移交清单与角色映射属于已归档 change 的完成记录，不在本指南重复维护。
 
 新的通用宿主不在启动时创建行业组织、业务样本或业务角色。先在 Packages 选择并安装 `application.hospitality` 或 `application.manufacturing` 的确切版本，生成应用草稿，在 Application Studio 完成候选检查及发布。包卡片的“初始化计划”可逐项查看所需角色、目标与数据；“构建说明”列出后续业务角色和环境绑定。
 
@@ -184,7 +171,7 @@ make initialize ARGS='--package deploy/packages/manufacturing.json --host http:/
 TOKEN=$(/tmp/platform-server -profile lightweight -data /var/lib/platform -mint-token user:ops@example.com)
 
 # 3. 启动；工作台（可选）用 -web 指向 web/apps/workspace 的构建
-/tmp/platform-server -profile lightweight -data /var/lib/platform -addr 127.0.0.1:8495 -tenants deploy/local/hospitality/tenants-next.json -packages deploy/packages
+/tmp/platform-server -profile lightweight -data /var/lib/platform -addr 127.0.0.1:8495 -tenants deploy/local/hospitality/tenants.json -packages deploy/packages
 ```
 
 - 备份前停止宿主，再复制整个数据目录；不要只复制日志或在活动写入中把不同时间的文件拼成备份。恢复到受支持的同版本宿主时保留原 `idp.key`，不要重新初始化密钥。
@@ -211,7 +198,7 @@ TOKEN=$(/tmp/platform-server -profile lightweight -data /var/lib/platform -mint-
 | webhook-sink | http://localhost:8497 | 本地 webhook、邮件、固定模型与状态窗口样本 |
 | PostgreSQL | `localhost:5433`，库 `platform`，用户 `platform`，密码 `platform-local-only` | 两个租户的日志表 `journal` |
 
-主机的接口也在同一个地址下（`/v1/...`）。开发工作台时用 `.claude/launch.json` 的配置：`workspace-hospitality`（连内存里的酒店业主机 8496，开发令牌）、`workspace-manufacturing`（连 8491）、`workspace-app`（连单个应用的开发主机 8499）、`workspace-oidc`（连 Docker 里的 8495，要登录），页面在 http://localhost:5176（`workspace-manufacturing` 是 5175，`workspace-app` 是 5177）。
+主机的接口也在同一个地址下（`/v1/...`）。`make local` 下 Vite 占用对外入口（酒店 8495、制造 8490）并把 API 代理到内部 Go 端口（`environment.py` 的 `SOLUTIONS`：18495、18490）；容器模式由 Go 宿主直接提供同一入口。单独跑 `make web SOLUTION=<solution>` 时 Vite 在 5176（制造 5175）。浏览器任务用另一组临时宿主 18496/18497（`web/e2e/playwright.config.ts`），不更新这两个日常入口。
 
 账号登录到不属于自己的宿主时，提示页提供“退出并切换账号”，结束当前身份提供商会话并回到登录页；无需清理浏览器数据。退出同时清除该工作台记住的开发身份与租户选择。
 
@@ -283,7 +270,7 @@ make ui-capture CONFIG=.build/ui-capture-profiles.json ARGS='--limit 8 --desktop
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 每个人只担一份职责，测试时换人登录就能看到权限的差别；要同时看两个人，用一个普通窗口加一个无痕窗口分别登录。
 - 初始化账号只在首次创建身份库时导入。新增真实成员走原身份管理与平台授权；需要重新导入演示身份时使用新的数据命名空间，不删除日常身份卷。
-- 租户、成员名单与起始设置来自 `manufacturing/tenants-next.json` 和 `hospitality/tenants-next.json`；模板在 `deploy/templates/`。`sup@plant.test` 持有声明式 ERP 的 controller 资格。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
+- 租户、成员名单与起始设置来自 `manufacturing/tenants.json` 和 `hospitality/tenants.json`；模板在 `deploy/templates/`。`sup@plant.test` 持有声明式 ERP 的 controller 资格。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
 ## 服务账号与 AI 代理（client credentials）
 
@@ -339,7 +326,7 @@ WMS 是工作台中保存并发布的 `build.app` 与对象/页面/流程/代码
 
 | 用途 | URL | 密钥名 | 勾选 |
 |---|---|---|---|
-| 通用 webhook | `http://webhook-sink:8080/hook` | `sink` | 勾"内部地址"；事件任选，如 `lodging.booking/1#canceled` |
+| 通用 webhook | `http://webhook-sink:8080/hook` | `sink` | 勾"内部地址"；事件任选，如 `orders.confirm/1#canceled` |
 
 sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址。外部 ERP 通过 Connection、Writeback 和 Confirmation 声明请求、回读与结果映射；HTTP 成功不等于业务确认。原失败恢复任务为 `make e2e SPEC=business-confirmation`，完整来源到业务应用任务为 `make e2e SPEC=integration-fabric`。
 
@@ -381,7 +368,7 @@ CRM 的 `lodgingupstream`、MES 的 `productionupstream` 应连接实际提供�
 
 宿主控制台的管理员由 `-host-admins` 显式指定 OIDC subject，租户的 platform.admin 不自动获得宿主权限。本地酒店配置 `user:manager@hotel.test`，制造配置 `user:sup@plant.test`；其它账号访问 `/v1/host/*` 被拒绝。新租户由模板创建并写入可写的 tenants.json，需在生产配置中选择实际宿主运维身份。
 
-新建租户需要写回挂载的租户配置。宿主仍以 `nobody` 运行，Compose 用 `TENANTS_GID` 加入文件所属组（macOS 的默认 staff 为 20）；启动前运行 `chmod g+w deploy/local/{hospitality,manufacturing}/tenants-next.json`，其他系统以 `TENANTS_GID=$(id -g) docker compose -f deploy/local/compose.yaml up -d --build` 启动。文件只含租户配置与身份引用，不含登录密钥。
+新建租户需要写回挂载的租户配置。宿主仍以 `nobody` 运行，Compose 用 `TENANTS_GID` 加入文件所属组（macOS 的默认 staff 为 20）；启动前运行 `chmod g+w deploy/local/{hospitality,manufacturing}/tenants.json`，其他系统以 `TENANTS_GID=$(id -g) docker compose -f deploy/local/compose.yaml up -d --build` 启动。文件只含租户配置与身份引用，不含登录密钥。
 
 OIDC delivery 使用 `PLATFORM_PERSONAL_TOKEN_KEY`（至少 32 字节）签发个人令牌，未配置时拒绝启动；该密钥独立于 OIDC 公钥，重启时必须保留，轮换会使已签发的个人令牌失效。开发令牌宿主只用于开发；lightweight 使用其已有的私有签名密钥。
 

@@ -30,8 +30,8 @@ echo "==> Building the workspace / 构建工作台..."
 # must see web/package.json before choosing the pinned pnpm version.
 (cd web && "${pnpm[@]}" --dir apps/workspace build)
 
-echo "==> Building $solution / 编译行业宿主..."
-# Both deployments use the same platform module.
+echo "==> Building the platform host / 编译通用宿主..."
+# Both deployments run this one binary; only -tenants, -addr and -data differ.
 (cd capabilities/server && "$go" build -o "$root/$bin" ./cmd/platform-server)
 
 if [[ ! -f "$data_dir/idp.key" ]]; then
@@ -57,7 +57,7 @@ fi
 exec "$bin" \
   -profile lightweight \
   -data "$data_dir" \
-  -tenants "deploy/local/$solution/tenants-next.json" \
+  -tenants "deploy/local/$solution/tenants.json" \
   -packages deploy/packages \
   -templates deploy/templates \
   -addr "$bind:$port" \

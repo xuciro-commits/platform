@@ -1,6 +1,6 @@
 {
   "title": "Hotel",
-  "description": "A property: PMS, CRM, CSM, HCM and loyalty; the first administrator administers every app.",
+  "description": "A property's locale and calendar defaults. Business applications are not built in: install the application.hospitality package, generate the drafts and publish them.",
   "settings": {
     "timezone": "Europe/Berlin",
     "currency": "EUR",

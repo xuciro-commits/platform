@@ -19,7 +19,7 @@ if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 1
 fi
 if [[ -n ${PLATFORM_DEV_LIGHT:-} ]]; then
-  exec "$bin" -addr "127.0.0.1:$port" -tenants "deploy/local/$solution/tenants-next.json" -packages deploy/packages -templates deploy/templates
+  exec "$bin" -addr "127.0.0.1:$port" -tenants "deploy/local/$solution/tenants.json" -packages deploy/packages -templates deploy/templates
 fi
 export PLATFORM_S3_ACCESS_KEY=platform PLATFORM_S3_SECRET_KEY=platform-files-local-only
 export PLATFORM_SECRET_SINK=sinkLocalOnly0000000000000000000000000000000000000000000000000000
@@ -31,5 +31,5 @@ exec "$bin" -addr "127.0.0.1:$port" \
   -oidc-issuer "http://localhost:${IDP_PORT:-8480}/auth/v1/" \
   -oidc-keys "http://localhost:${IDP_PORT:-8480}/auth/v1/oidc/certs" \
   -files "http://127.0.0.1:${FILES_PORT:-9000}/platform" \
-  -tenants "deploy/local/$solution/tenants-next.json" -packages deploy/packages -templates deploy/templates \
+  -tenants "deploy/local/$solution/tenants.json" -packages deploy/packages -templates deploy/templates \
   -host-admins "$admin" -project

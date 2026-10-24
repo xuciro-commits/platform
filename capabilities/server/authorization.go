@@ -66,8 +66,8 @@ type ProjectAsset struct {
 // security boundary around records.
 type BuildProject struct {
 	platform.Record
-	Name    string          `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"hotel-opening"`
-	Title   string          `json:"title" field:"required,search" title:"What people call it" example:"Hotel opening"`
+	Name    string          `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"spring-rollout"`
+	Title   string          `json:"title" field:"required,search" title:"What people call it" example:"Spring rollout"`
 	Members []ProjectMember `json:"members,omitempty" title:"Members"`
 	Assets  []ProjectAsset  `json:"assets,omitempty" title:"Assets"`
 }

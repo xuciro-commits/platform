@@ -67,9 +67,9 @@ func (t *Tenant) checkDriverBinding(binding platform.DriverBinding) error {
 
 func (t *Tenant) connectionKinds() ConnectionKindPage {
 	out := ConnectionKindPage{Items: []ConnectionKind{
-		{ID: "http", Kind: "http", Title: "HTTP / REST / files", AddressPlaceholder: "https://erp.example.com/api/"},
+		{ID: "http", Kind: "http", Title: "HTTP / REST / files", AddressPlaceholder: "https://api.example.com/v1/"},
 		{ID: "odata", Kind: "odata", Title: "OData (SAP Gateway)", AddressPlaceholder: "https://sap.example.com/sap/opu/odata/sap/API_PRODUCT_SRV/"},
-		{ID: "postgres", Kind: "postgres", Title: "PostgreSQL (read-only)", AddressPlaceholder: "postgres://reader@mes-db.example.com:5432/mes?sslmode=require"},
+		{ID: "postgres", Kind: "postgres", Title: "PostgreSQL (read-only)", AddressPlaceholder: "postgres://reader@db.example.com:5432/app?sslmode=require"},
 	}}
 	if owner, ok := t.app(PlatformApp).(ProtocolPackageCatalog); ok {
 		for _, pkg := range owner.ProtocolPackages() {

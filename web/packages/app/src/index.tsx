@@ -204,7 +204,7 @@ export function definitionPresentation(definition: Definition): { title: string;
 }
 
 /**
- * Opens a record by reference — `"pms.reservation/R-1"` or `{ type, id }` —
+ * Opens a record by reference — `"core.partner/P-1"` or `{ type, id }` —
  * in a read-only detail sheet. Work requests and runtime tasks open their
  * owning view for handling; explicit inspect/tab/beside/popout requests remain available.
  */

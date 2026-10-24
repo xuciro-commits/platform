@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@platform/app": "workspace:*",
+    "@platform/build": "workspace:*",
     "@platform/catalog": "workspace:*",
-    "@pkg/build": "workspace:*",
     "@platform/ui": "workspace:*",
     "lucide-react": "^1.47.0",
     "react": "^19.3.0",

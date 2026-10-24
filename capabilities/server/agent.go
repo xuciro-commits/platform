@@ -375,7 +375,7 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 		}
 		for _, b := range []agentTool{
 			{kind: "context", tool: Tool{Name: "context", Description: "Read a record with its history, the records it references and that reference it, its links across apps, the flows and tasks about it.",
-				Properties: map[string]any{"type": map[string]any{"type": "string", "description": "The entity type, like mes.order"}, "id": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"type", "id", "rationale"}}},
+				Properties: map[string]any{"type": map[string]any{"type": "string", "description": "The entity type, like core.material"}, "id": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"type", "id", "rationale"}}},
 			{kind: "search", tool: Tool{Name: "search", Description: "Search records of every type you may read by text; answers types, IDs and titles.",
 				Properties: map[string]any{"query": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"query", "rationale"}}},
 			{kind: "knowledge", tool: Tool{Name: "knowledge", Description: "Search the tenant's documents and knowledge (house rules, manuals, FAQs) by what you need to know; answers passages with their sources, to cite.",

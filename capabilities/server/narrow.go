@@ -119,7 +119,7 @@ func fieldName(t reflect.Type, path []int) string {
 // fields m's role reads, and the app that derives content from other records
 // leaves out what m may not read at the source. The host applies it wherever
 // records leave for a member — a record page, a record's detail, every app
-// read — so no app, page or builder carries a second filter (rule 11).
+// read — so no app, page or builder carries a second filter (AGENTS.md rule 6).
 func (t *Tenant) narrowed(m platform.Member, v any, now time.Time, held bool) any {
 	return t.narrowedSource(m, v, now, held, "")
 }

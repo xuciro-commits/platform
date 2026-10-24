@@ -1,7 +1,7 @@
-// Package platformserver is the platform host (layer 2): it runs a
-// tenant's apps behind one HTTP surface — authentication, the directory, routing
-// by action, read and input name, the per-caller catalog, one journal — and maps
-// contract errors to HTTP once.
+// The HTTP surface of the host: authentication, the directory, routing by
+// action, read and input name, the per-caller catalog, one journal, and the one
+// place contract errors become HTTP. The package's component map, lock
+// obligations and pipeline entry points are in doc.go.
 package platformserver
 
 import (

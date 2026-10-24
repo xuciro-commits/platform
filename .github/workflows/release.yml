@@ -1,9 +1,10 @@
 # Runs only when a version is fixed: pushing a v* tag (make tag VERSION=vX.Y.Z)
 # or by hand. Day-to-day pushes run nothing here; `make check` and `make verify`
 # are the developer's layers. The job is the same `make verify`, then
-# the artifacts: the workspace build and the two solution hosts for linux
-# amd64/arm64, attached to the GitHub Release of the tag, and the solution
-# images pushed to GHCR under the tag.
+# the artifacts: the workspace build and the common platform host for linux
+# amd64/arm64, attached to the GitHub Release of the tag, and the one host
+# image pushed to GHCR under the tag. The two local entries (8495/8490) are
+# configurations of that same host, not separate binaries.
 name: release
 
 on:
@@ -65,7 +66,7 @@ jobs:
         run: for f in .build/verify/*.log; do echo "== $f"; tail -n 80 "$f"; done
 
   artifacts:
-    name: workspace, hosts, images
+    name: workspace, host, image
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -84,15 +85,15 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: cd web && pnpm install --frozen-lockfile
-      - name: Workspace and hosts
+      - name: Workspace and host
         run: |
           set -euo pipefail
           mkdir -p .build/release
           pnpm --dir web/apps/workspace build
           tar -C web/apps/workspace -czf ".build/release/workspace-$VERSION.tar.gz" dist
-          for s in hospitality manufacturing; do for arch in amd64 arm64; do
-            (cd "solutions/$s" && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "$GITHUB_WORKSPACE/.build/release/$s-server-$VERSION-linux-$arch" "./cmd/$s-server")
-          done; done
+          for arch in amd64 arm64; do
+            (cd capabilities/server && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w" -o "$GITHUB_WORKSPACE/.build/release/platform-server-$VERSION-linux-$arch" ./cmd/platform-server)
+          done
           (cd .build/release && sha256sum * > SHA256SUMS)
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -100,16 +101,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Images
+      - name: Image
         env: { OWNER: "${{ github.repository_owner }}" }
         run: |
           set -euo pipefail
-          for s in hospitality manufacturing; do
-            docker buildx build --platform linux/amd64,linux/arm64 --push \
-              --build-arg PLATFORM_REVISION="$(git rev-parse HEAD)" \
-              -t "ghcr.io/${OWNER,,}/$s-server:$VERSION" -t "ghcr.io/${OWNER,,}/$s-server:latest" \
-              -f "solutions/$s/Dockerfile" .
-          done
+          docker buildx build --platform linux/amd64,linux/arm64 --push \
+            --build-arg PLATFORM_REVISION="$(git rev-parse HEAD)" \
+            -t "ghcr.io/${OWNER,,}/platform-server:$VERSION" -t "ghcr.io/${OWNER,,}/platform-server:latest" \
+            -f capabilities/server/cmd/platform-server/Dockerfile .
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}

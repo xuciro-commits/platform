@@ -28,7 +28,7 @@ export function HostOnly({ client, token, admin, email, onSignOut }: { client: E
   const [app, setApp] = useState<AppUI>();
   useEffect(() => {
     let live = true;
-    void import("@pkg/platform").then((m) => { if (live) setApp(m.hostConsole); }, () => notify.error(t("Host unreachable")));
+    void import("@platform/platform").then((m) => { if (live) setApp(m.hostConsole); }, () => notify.error(t("Host unreachable")));
     return () => { live = false; };
   }, []);
   const host = useMemo(() => hostOnly(client, admin), [client, admin.subject]);

@@ -118,7 +118,7 @@ func lifecycleActions() []platform.Action {
 			Payload:     []platform.Field{reason, {Name: "successor", Type: "string", Description: "The member who takes over their delegations and open items"}}, Roles: admin},
 		{Schema: SchemaTokenIssue, Target: TokenType, Capability: "account", Title: "Issue personal token",
 			Description: "A credential for scripts and integrations that acts as you, within the permissions you name, until a day. The secret is shown once.",
-			Payload: []platform.Field{{Name: "label", Type: "string", Required: true}, {Name: "scopes", Type: "json", Description: "Permission patterns, such as mes.order.* ; empty: everything you may do"},
+			Payload: []platform.Field{{Name: "label", Type: "string", Required: true}, {Name: "scopes", Type: "json", Description: "Permission patterns, such as core.material.* ; empty: everything you may do"},
 				{Name: "until", Type: "string", Description: "Until this day, exclusive (YYYY-MM-DD)"}}, Roles: []string{platform.AnyMember}},
 		{Schema: SchemaTokenRevoke, Target: TokenType, Capability: "account", Title: "Revoke personal token",
 			Description: "The token stops working at once. Administrators revoke anyone's.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}},
