@@ -1,34 +1,31 @@
-import {initializeRules} from "@platform/app/rules";
-import { currentSession, signIn, type Api, type OidcConfig } from "@platform/kernel";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+// The workspace's entry: mount the platform UI. When the host names an OIDC
+// provider, the page finishes the provider's redirect (or starts it) before the
+// first render; the token joins the host's session and the tenant is learned
+// from GET /v1/me on the way in. Without a provider, the UI asks for a token.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
+import { currentSession, signIn } from "@platform/kernel";
+import { PlatformApp } from "@pkg/platform";
+import "@pkg/platform/styles.css";
 import "./styles.css";
-import {preparedSignIn} from "./offline/signin";
-import {t} from "@platform/ui";
 
 const root = createRoot(document.getElementById("root")!);
-async function start(){
-await initializeRules();
-  // The host says how to sign in: at its identity provider, once for
-  // every app; or, on development tokens, as one of its development identities.
-  let offline=false;
-  const how = await fetch("/v1/sign-in").then((r) => r.json() as Promise<Api.SignIn>).catch((): Api.SignIn => {offline=true;return preparedSignIn()??{};});
-  const oidc: OidcConfig | undefined = how.issuer && how.client ? { issuer: how.issuer, clientId: how.client, redirectUri: `${location.origin}/` } : undefined;
-  const session = oidc ? (await currentSession(oidc)) ?? (!offline?await signIn(oidc):undefined) : undefined;
+const store = "workspace:session";
 
-  // Tenant changes already invalidate reads through /v1/changes. Only views
-  // of live operational state opt into their own polling interval.
-  const queries = new QueryClient({ defaultOptions: { queries: { refetchInterval: false, retry: 1, networkMode:"always" } } });
+async function fromProvider(): Promise<void> {
+  const how = await fetch("/v1/sign-in").then((response) => response.json()).catch(() => undefined) as { issuer?: string; client?: string } | undefined;
+  if (!how?.issuer || !how.client) return;
+  if (sessionStorage.getItem(store)) return; // an established host session outranks the provider
+  const config = { issuer: how.issuer, clientId: how.client, redirectUri: `${location.origin}/` };
+  const session = (await currentSession(config)) ?? (await signIn(config));
+  if (!session) return;
+  sessionStorage.setItem(store, JSON.stringify({ token: session.accessToken, tenant: "" }));
+}
 
-  if(oidc&&!session)root.render(<main role="alert" className="grid h-dvh place-items-center p-6 text-sm">{t("Connect to sign in. A new or expired identity cannot use prepared content.")}</main>);
-  else root.render(
+void fromProvider().catch(() => undefined).finally(() => {
+  root.render(
     <StrictMode>
-      <QueryClientProvider client={queries}>
-        <App signedIn={oidc && session ? { config: oidc, session } : undefined} identities={how.identities ?? []} />
-      </QueryClientProvider>
+      <PlatformApp />
     </StrictMode>,
   );
-}
-void start().catch(problem=>root.render(<main role="alert" className="grid h-dvh place-items-center p-6 text-sm"><div><p>{t("This workspace task could not be reopened. Connect and reload; saved inputs were retained.")}</p><p className="mt-2 text-muted">{t(problem instanceof Error?problem.message:String(problem))}</p></div></main>));
+});

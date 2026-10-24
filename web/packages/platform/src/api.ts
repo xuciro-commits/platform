@@ -1,0 +1,79 @@
+// The host as this workspace sees it: one client per identity, and the small
+// set of reads and decisions every view performs. Nothing here knows about a
+// particular application: the host's catalog says what can be done and this
+// layer only carries the caller's words to it.
+import { EdgeClient, type Api, type Entry } from "@platform/kernel";
+
+export type Me = Api.MeView;
+export type EntityInfo = Api.EntityInfo;
+export type CatalogAction = Api.Action;
+export type Definition = Api.Definition;
+export type RecordPage = Api.RecordPage;
+export type Group = { entity: EntityInfo; actions: CatalogAction[] };
+
+const json = (path: string) => fetch(path, { headers: { Accept: "application/json" } });
+
+/** The development identities a host without an identity provider offers. */
+export async function signInOptions(): Promise<Api.SignIn> {
+  const response = await json("/v1/sign-in").catch(() => undefined);
+  return response?.ok ? (await response.json()) as Api.SignIn : {};
+}
+
+/** Who this token is on this host, before a tenant is chosen. */
+export async function identify(token: string, tenant: string): Promise<Me> {
+  const response = await fetch("/v1/me", { headers: { Authorization: `Bearer ${token}`, ...(tenant ? { "Platform-Tenant": tenant } : {}) } });
+  if (!response.ok) throw new Error(response.status === 401 ? "This host does not accept this token." : `The host answered ${response.status}.`);
+  return await response.json() as Me;
+}
+
+export function connect(me: Me, token: string): EdgeClient {
+  return new EdgeClient({ server: "", token, tenant: me.tenantId, principal: me.principalId });
+}
+
+export async function catalog(client: EdgeClient): Promise<{ entities: EntityInfo[]; actions: CatalogAction[] }> {
+  const [entities, actions] = await Promise.all([client.get<EntityInfo[]>("/v1/entities"), client.get<CatalogAction[]>("/v1/actions")]);
+  return { entities, actions };
+}
+
+/** The actions a member may perform on a record type, in catalog order. */
+export function actionsOf(actions: CatalogAction[], type: string): CatalogAction[] {
+  return actions.filter((action) => action.target === type || action.target === "");
+}
+
+export async function definitions(client: EdgeClient): Promise<Definition[]> {
+  return await client.get<Definition[]>("/v1/definitions");
+}
+
+export async function releases(client: EdgeClient): Promise<Api.ReleasePage> {
+  return await client.get<Api.ReleasePage>("/v1/releases/candidates?limit=24");
+}
+
+export async function activeRelease(client: EdgeClient): Promise<string> {
+  return (await client.get<Api.ReleaseActive>("/v1/releases/active")).id;
+}
+
+export async function page(client: EdgeClient, type: string, offset = 0, limit = 50, search = ""): Promise<RecordPage> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (search) query.set("search", search);
+  return await client.get<RecordPage>(`/v1/records/${encodeURIComponent(type)}?${query}`);
+}
+
+export async function record(client: EdgeClient, type: string, id: string): Promise<Record<string, unknown>> {
+  return await client.get<Record<string, unknown>>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
+}
+
+export type Outcome = { ok: boolean; code?: string; message?: string; issues?: Api.FieldIssue[]; key: string };
+
+/** One decision: queued through the outbox, then sent once with its own key. */
+export async function decide(client: EdgeClient, action: CatalogAction, targetId: string, values: Record<string, unknown>, expectedRevision?: number): Promise<Outcome> {
+  const key = client.draft(action.schema, { type: action.target, id: targetId }, values, [], expectedRevision, action.schemaVersion);
+  const answers: Entry[] = await client.send();
+  const answer = answers.find((entry) => entry.submission.idempotencyKey === key);
+  if (!answer) return { ok: false, message: "The decision is saved and waiting for the host.", key };
+  const ok = answer.state === "SUBMISSION_STATE_CONFIRMED";
+  return { ok, code: ok ? undefined : answer.outcome, message: answer.reason, issues: answer.issues, key };
+}
+
+export function activate(client: EdgeClient, candidateId: string): Promise<{ ok: boolean; status: number; body: { id?: string; error?: { message?: string } } }> {
+  return client.call("POST", "/v1/releases/active", { candidateId, key: crypto.randomUUID() });
+}

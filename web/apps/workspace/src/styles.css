@@ -1,5 +1,6 @@
-@import "@platform/ui/styles.css";
-/* Every app UI package composed here, by one glob: a package added
-   later cannot be forgotten and lose its styles. */
-@source "./";
-@source "../../../packages";
+/* The workspace shell adds nothing to the platform UI but the page frame: the
+   document owns the viewport, the app owns the rest. */
+html, body, #root { height: 100%; }
+body { margin: 0; -webkit-font-smoothing: antialiased; }
+#root { min-height: 100%; }
+a { color: inherit; }
