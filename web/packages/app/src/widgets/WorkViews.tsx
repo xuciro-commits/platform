@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from "react";
-import {ApprovalInbox,NotificationList,Panel,t,useViewVisible,type ApprovalInboxRow,type RecordSource} from "@platform/ui";
+import {ApprovalInbox,NotificationList,notify,Panel,t,useViewVisible,type ApprovalInboxRow,type RecordSource} from "@platform/ui";
 import {pageUIManifest,type Api} from "@platform/kernel";
 import {useHost,useOpenRecord,useReadQuery} from "../index";
 import {approvalDecisionReason,approvalTasks,createWorkViews,originalNotifications} from "../work/service";
@@ -24,9 +24,9 @@ export function WorkViewsRenderer({kind,label,live,enabled=true,readSource}:{kin
   }catch(error){setApprovals({key,rows:[],total:0,error:message(error)});}
   return()=>{current=false;};
  },[key,visible,kind]);
- const mutate=async(id:string,action:()=>Promise<boolean>)=>{
+ const mutate=async(id:string,action:()=>Promise<boolean>,success?:string)=>{
   if(!active()||!live||!enabled||busyIDs.current.has(id))return;busyIDs.current.add(id);setBusy([...busyIDs.current]);setErrors(prior=>{const next={...prior};delete next[id];return next;});
-  try{if(!await action()&&active())setErrors(prior=>({...prior,[id]:t("The work decision was not confirmed.")}));}
+  try{const done=await action();if(!done&&active())setErrors(prior=>({...prior,[id]:t("The work decision was not confirmed.")}));else if(done&&success)notify.success(t(success));}
   catch(error){if(active())setErrors(prior=>({...prior,[id]:t(message(error))}));}
   finally{if(active()){busyIDs.current.delete(id);setBusy([...busyIDs.current]);}}
  };
@@ -37,8 +37,8 @@ export function WorkViewsRenderer({kind,label,live,enabled=true,readSource}:{kin
   if(!sourceReady||inbox.isFetching||!inbox.data||approvals?.key!==key)return <p role="status">{t("Loading original approvals…")}</p>;
   if(approvals.error)return <Panel role="alert">{t(approvals.error)}</Panel>;
   return <ApprovalInbox title={label} rows={approvals.rows} total={approvals.total} enabled={enabled&&live} busyIDs={busy} errors={errors}
-   onApprove={host.can("work.approval.approve")?(request,task)=>mutate(request.id,()=>service.decideApproval(task,request,"approve")):undefined}
-   onReject={host.can("work.approval.reject")?(request,task)=>mutate(request.id,()=>service.decideApproval(task,request,"reject")):undefined}
+   onApprove={host.can("work.approval.approve")?(request,task)=>mutate(request.id,()=>service.decideApproval(task,request,"approve"),"Approval recorded."):undefined}
+   onReject={host.can("work.approval.reject")?(request,task)=>mutate(request.id,()=>service.decideApproval(task,request,"reject"),"Decision recorded."):undefined}
    onOpenRequest={live?(request)=>openRelated(`work.approval/${request.id}`):undefined} onOpenRelated={live?(request)=>openRelated(request.target):undefined}/>;
  }
  if(notices.isError)return <Panel role="alert">{t("The original notifications could not be read.")}</Panel>;

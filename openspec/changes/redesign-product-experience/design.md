@@ -42,3 +42,11 @@
 - 双模式壳：同一壳承载使用与构建；应用作用域页提供 scopedViews（概览 + 运行记录 `application-runs`/`application-overview`），发布完成页新增「Verify as an operator」就地跳转运营区运行记录，打通 构建→使用 连续谱。
 - 工作域重划：`studio-model.ts` 五域收敛为构建者心智域名（Logic→Behavior「业务行为」、Integration→Connections「连接」），旧域名引用清零（不保接口，符合 q4 破坏容忍）。
 - 文案：三区与新增入口 zh-CN 全量补齐；工作区 i18n 旧三分类键删除。
+
+## 批次4 实施记录（M3 交互范式）
+
+- 编辑分流：`ui/editLaneOf` 固化规则——无输入的决定就地执行（既有 transition 直发与网格编辑），记录表单（编辑/转换/新建/记录动作）经 `frame="drawer"` 以侧板打开，页面与列表保持可见；构建器保持整页。同一资源的相邻操作共用同一通道；档案等不可逆确认保留居中模态。
+- 提交反馈四态：提交中（busy 守卫+Executing…）、成功（审批/发布新增 `notify.success` 回执；行内动作保留已提交状态行）、拒绝（统一 `Rejection`）、未知（等待视图+「查看请求状态」My requests 链接+「打开原记录」入口）。动作、发布、审批、集成效果（运行记录操作含未知态重试）四类覆盖。
+- 统一拒绝呈现：`ui/Rejection`（目录资产 ui/rejection）=人话标题+原因+建议动作+可展开技术详情（拒绝码、请求键、逐条事实轨迹）；字段级问题仍就地渲染；`ActionRefusal` 重构为其组合并保留类别人话映射与原输入对照。
+- 弹窗治理：`OverlayFrame` 引入深度上下文——弹窗内的再打开自动降级为侧板，单模态成立；确认弹窗仅档案等不可逆操作保留；关闭由 Radix 焦点/滚动机制返回原上下文（`returnFocus`+滚动恢复）。
+- 验证：ui 26 文件/214 测试（新增嵌套降级、Rejection 语义 3 项）、check-web 全绿、catalog generate 一致、i18n 中文完整性测试通过。

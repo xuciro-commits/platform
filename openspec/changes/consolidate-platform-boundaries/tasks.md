@@ -16,7 +16,9 @@
 ## 3. B3 Go 宿主分域拆分
 
 - [ ] 3.1 定包依赖方向规则（工具 → 域 → 宿主壳）并更新 `doc.go` 锁义务地图；逐域搬迁 `routes_*.go` / `accepted_*.go` 到目录化包，`host.go` 收缩为装配壳。
+  - 注：依赖方向规则已写入 `doc.go`（工具→域→宿主壳；routes 调域、域不调 routes）；`host.go` 已同包收缩为装配壳（1016→约 350 行：身份+组装+审计类型），提交管线→`submit.go`、读取与连接器输入→`reads.go`、事件计划与投递→`events.go`、成员门面（catalog/声明/应用/目录）→`facade.go`，符号清单 40/40 逐项一致+gofmt+import 双向核查。目录化包搬迁须在可达 Go 代理的环境编译验证后进行（沙箱缺 otel 家族模块，见 5.1 注）。
 - [ ] 3.2 每域搬迁后运行 `make check` + `make test-go PKG=<改动包>`；`boundaries.sh` / `escapes.sh` 已知逃逸数只减不增；对外 `platformserver/platform` 导入面不变。
+  - 注：本轮为同包文件组织，`platformserver/platform` 导入面零变化；`boundaries.sh` 全过、`escapes.sh` 已知逃逸维持 2 项（web 侧存量，未新增）。`make check`/`test-go` 随目录化搬迁在代理可用环境执行。
 
 ## 4. B4 Web 包重划（等体验线 M2 三区定版后启动）
 

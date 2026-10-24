@@ -492,7 +492,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         </>} />
       {archive.dialog}
       {transition.dialog}
-      {editing&&catalog.find(action=>action.schema===`${type}.edit`)&&<DeclaredActionDialog declared={catalog.find(action=>action.schema===`${type}.edit`)!} type={type} record={editing} initial={editing} onClose={()=>setEditing(undefined)} onCompleted={()=>setEditing(undefined)}/>}
+      {editing&&catalog.find(action=>action.schema===`${type}.edit`)&&<DeclaredActionDialog frame="drawer" declared={catalog.find(action=>action.schema===`${type}.edit`)!} type={type} record={editing} initial={editing} onClose={()=>setEditing(undefined)} onCompleted={()=>setEditing(undefined)}/>}
     </>
   );
 }

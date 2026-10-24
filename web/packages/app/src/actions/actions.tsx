@@ -7,7 +7,7 @@ import {OfflineReadError,type Api} from "@platform/kernel";
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, ContextHelp, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, Dialog, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
+import { Button, ContextHelp, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
@@ -191,7 +191,8 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
 }
 
 /** One action taken through the existing modal entry point. */
-function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, prefix }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; prefix?:string }) {
+function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, prefix, frame }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; prefix?:string;
+ /** "drawer" keeps the page in view while the form is out (record context); the default is the centered modal. */ frame?: "modal"|"drawer" }) {
  const host=useHost(),{source}=host,info=source.entity(type);
  const [baseline]=useState(record);
  const [local]=useState(()=>{try{return {drafts:actionDrafts(host,declared,type,record?.id)};}catch(problem){return {drafts:[],error:problem instanceof Error?problem.message:String(problem)};}});
@@ -200,14 +201,15 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
  const saved=local.drafts.find(draft=>draft.target.id===target.id),entries=[...host.client.authorities.outbox].reverse().filter(entry=>entry.submission.schema?.name===declared.schema&&entry.submission.target?.type===type&&entry.submission.target.id===target.id);
  const recovered=originalOutcome??entries.find(entry=>entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN")??(saved?entries.find(entry=>(entry.state==="SUBMISSION_STATE_REJECTED"||entry.state==="SUBMISSION_STATE_CONFLICT")&&(entry.submission.expectedRevision??0)===(saved.expectedRevision??0)):undefined);
  const [pending,setPending]=useState(recovered?.state==="SUBMISSION_STATE_PENDING"||recovered?.state==="SUBMISSION_STATE_UNKNOWN");
- return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
+ const drawer=frame==="drawer";
+ return <OverlayFrame open sheet={drawer} wide={!drawer&&generated&&info?.fields.some(f=>f.type==="lines")} width={drawer?560:undefined} backdrop={!drawer||!submitting} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
  {local.error&&<p role="alert" className="text-sm text-danger">{t(local.error)}</p>}
  {!record&&local.drafts.length>1&&<div className="grid gap-2"><p className="text-xs text-muted">{t("Choose a local draft to continue its original record.")}</p>{local.drafts.map(draft=><Button key={draft.key} size="sm" disabled={submitting||pending} onClick={()=>{setId(draft.target.id);setRound(value=>value+1);}}>{t("Resume draft {id}",{id:draft.target.id})}</Button>)}</div>}
  {pending&&<p role="status" className="text-xs text-warning">{t("This operation is awaiting confirmation. Retry its original target and inputs.")}</p>}
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
  <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onClose();onCompleted?.(confirmed);}} onBusy={setSubmitting} onPending={setPending} initial={initial} originalOutcome={recovered} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
- </div></Dialog>;
+ </div></OverlayFrame>;
 }
 export {ActionDialog as DeclaredActionDialog};
 
@@ -249,7 +251,7 @@ export function useNewRecord(type: string, onCreated?: (target: { type: string; 
   const { catalog } = useHost();
   const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown> }>();
   const offered = catalog.filter((a) => a.target === type && a.new);
-  const dialog = taking ? <ActionDialog declared={taking.declared} initial={taking.initial} type={type} prefix={prefix} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  const dialog = taking ? <ActionDialog frame="drawer" declared={taking.declared} initial={taking.initial} type={type} prefix={prefix} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
   return { offered, available: offered.length > 0, take: (schema?: string, initial?: Record<string, unknown>) => {
     const declared = schema ? offered.find(action => action.schema === schema) : offered[0];
     setTaking(declared ? { declared, initial: initial && structuredClone(initial) } : undefined);
@@ -273,7 +275,7 @@ export function RecordActions({ type, record, allowed, steps: withSteps = false 
   return <>
     {steps.map((x) => <Button key={x.schema} size="sm" onClick={() => transition.take(x.schema, record)}>{x.title}</Button>)}
     {offered.map((a) => <Button key={a.schema} size="sm" onClick={() => setTaking(a)}>{a.title}</Button>)}
-    {taking && <ActionDialog declared={taking} type={type} record={record} onClose={() => setTaking(undefined)} />}
+    {taking && <ActionDialog frame="drawer" declared={taking} type={type} record={record} onClose={() => setTaking(undefined)} />}
     {transition.dialog}
   </>;
 }
@@ -288,7 +290,7 @@ export function useTransition(type: string) {
     if (declared?.payload.length) setTaking({ declared, record,initial:destination?{[destination.parameter]:destination.value}:undefined });
     else if(declared)void (async()=>{let originalOutcome:Entry|undefined,reason="";const ok=await decide(schema,{type,id:record.id},{},{expectedRevision:record.revision,onOutcome:entry=>{originalOutcome=entry;},onRefused:message=>{reason=message;}});if(!ok&&originalOutcome)setTaking({declared,record,originalOutcome});else if(!ok&&reason)notify.error(reason);})();
   };
-  const dialog = taking && <ActionDialog declared={taking.declared} type={type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => setTaking(undefined)} />;
+  const dialog = taking && <ActionDialog frame="drawer" declared={taking.declared} type={type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => setTaking(undefined)} />;
   return { take, dialog };
 }
 
@@ -305,7 +307,7 @@ export function useActionEffect() {
     return new Promise((settle) => setTaking({ declared, type: declared.target, record, initial, settle }));
   };
   const close = (ok: boolean) => { taking?.settle(ok); setTaking(undefined); };
-  const dialog = taking && <ActionDialog declared={taking.declared} type={taking.type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => close(false)} onCompleted={() => close(true)} />;
+  const dialog = taking && <ActionDialog frame="drawer" declared={taking.declared} type={taking.type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => close(false)} onCompleted={() => close(true)} />;
   return { take, dialog };
 }
 

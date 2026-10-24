@@ -1,7 +1,7 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges, notify} from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { matchesResourceKind, refKey, resourceKinds, resourceRef, type ResourceKind } from "../projects/resources";
@@ -232,6 +232,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       setError(message); return;
     }
     rememberRequest();
+    notify.success(t("Release request confirmed."));
     try {
       if (request.kind === "evaluate") { setReportID(answer.body.id); await reports.refetch(); }
       else { setSavedID(answer.body.id); await inventory.refetch(); await readSaved(answer.body.id); }

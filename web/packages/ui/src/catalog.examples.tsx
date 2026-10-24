@@ -18,7 +18,7 @@ export function StructuredEditorExample(){
  return <InputDraftProvider scope="catalog-source"><StructuredEditor scope="catalog-source" value={value} onChange={setValue} fields={[{name:"name",title:t("Name"),type:"text",required:true,example:"example"},{name:"enabled",title:t("Enabled"),type:"boolean"},{name:"quantity",title:t("Quantity"),type:"integer",constraints:{min:0}}]}><Input aria-label={t("Name")} value={String(value.name??"")} onChange={event=>setValue({...value,name:event.target.value})}/></StructuredEditor></InputDraftProvider>;
 }
 import {
-  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, EmptyState, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  AIResult,ExternalFrame,CollectionCounts,DerivedMean,RecordResourceList,SearchAround,AssetDirectory,RecordNeighborhood,BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, EmptyState, DateTimeInput, DateInput, DateRangeInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet, Rejection, editLaneOf,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordDeliveries, RecordLookup, InterfaceRecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -413,6 +413,10 @@ export function DateInputExample(){const [value,setValue]=useState("2028-02-29")
 export function DateTimeInputExample(){const [value,setValue]=useState("2028-02-29T08:30:45.123456789+08:00");return <DateTimeInput value={value} offset="Z" title="Business time" label="Date and time" onChange={setValue}/>;}
 
 export function NoticeExample(){return <Notice title={t("Alert banner")} message={t("Review the affected records before continuing.")} tone="warning"/>;}
+
+export function RejectionExample(){return <Rejection title={t("Access refused")} message={t("You do not hold the role this action requires.")} advice={t("Ask an administrator to review access before trying again.")} code="ERROR_CODE_POLICY_DENIED" requestKey="act-12" trail={<p>{t("The authority kept each fact of the decision; the trail lists them.")}</p>}/>;}
+
+export function EditLaneExample(){const noInput=editLaneOf([]),form=editLaneOf([{type:"text"}]);return <div className="grid gap-1 text-sm"><p>{t("A no-input decision stays inline; a record form opens the drawer; builders keep the page.")}</p><p className="font-mono text-xs text-muted">editLaneOf([]) → {noInput} · editLaneOf([field]) → {form}</p></div>;}
 
 export function SeparatorExample(){return <Separator name={t("Separator")} label={t("Operator instructions")}/>;}
 

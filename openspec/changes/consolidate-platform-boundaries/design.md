@@ -68,3 +68,10 @@ workspace 壳 → ui/app/kernel
 - 收编：`capabilities/server/internal/sink/sink.go` 承载原 webhook-sink 全部路由（`hook`/`received`/`mail`/`fail`/`a2a/v1`/`v1/chat/completions`）与内置 SMTP；`cmd/webhook-sink` 收缩为参数薄壳（`-addr`/`-smtp`/`WEBHOOK_SECRET`），保留独立运行能力；`cmd/platform-server` 经 `PLATFORM_SINK_ADDRESS`/`PLATFORM_SMTP_ADDRESS` 环境选择启用，未设置则不监听。composition 装配 `NewTenant[WithCapabilities]` 显式声明能力。收编后与原二进制逐字节同代码，`/received` 与 echo 模型行为冒烟一致。
 - 部署：compose 删除独立 sink 服务；manufacturing 宿主面 8497（`PLATFORM_SINK_ADDRESS=0.0.0.0:8497`、SMTP 2525），hospitality 经宿主 8499→容器 8497；演练端口 58497/58499；`cmd/webhook-sink/Dockerfile` 删除。连接配置里指向本地 sink 的 URL 不变（同容器内 127.0.0.1 或跨面宿主端口）。
 - 依赖还原（5.1）：`scripts/restore-deps.sh` 从 GitHub codeload tag tar 字节级组装模块 zip，按 go.sum 逐 entry `h1:` 哈希校验（官方 dirhash 算法，含模块自身 go.mod 与嵌套模块排除）；46/56 模块全绿。余 10 个 otel/genproto/proto 模块的 tag 内容与当年代理记录不符（tag 被重指或 monorepo 子 tag 共用 commit），GitHub 历史狩猎（按 `go.mod` 路径过滤提交）未复现原始字节，须有可达 Go 代理环境完成；不放松 go.sum 校验，不以未校验字节伪造 vendor。
+
+## 批次4 实施记录（B3 同包分域文件化）
+
+- 依赖方向规则入 `doc.go`：工具→域→宿主壳；域只进 `platform/`、`internal/*`、`journal/`，不进兄弟域私有文件；`routes_*.go` 是壳的 API 面，域不反向调用。
+- `host.go` 1016→约 350 行装配壳（Tenant 身份、能力组装 `NewTenant[WithCapabilities]`、app/caller 接线、审计类型）；提交管线（Submit→submitAccepted→decideAccepted→explained/outcomeOf）→`submit.go`；成员读取与连接器输入→`reads.go`；接受事件计划/发布/投递→`events.go`；成员门面（Catalog/Declarations/Apps/AppsOf/Member）→`facade.go`。
+- 验证：纯同包文本搬移——顶级声明清单 40/40 前后一致、gofmt 全清、逐文件 import 双向核查（用即导入、导入即用）；`boundaries.sh` 全过；`escapes.sh` 已知逃逸 2 项无新增；`platformserver/platform` 导入面不变。
+- 目录化包（internal/<域>）与逐域 `make check`/`test-go` 需可达 Go 代理的环境编译验证后进行（沙箱缺 otel 家族模块）。

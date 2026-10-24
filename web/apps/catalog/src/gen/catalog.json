@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:963dbc4023b5a08f",
+  "revision": "sha256:ac1a9165b05d5190",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -4432,7 +4432,8 @@
       "layer": 2,
       "source": "web/packages/ui/src/primitives/dialog.tsx",
       "exports": [
-        "Dialog"
+        "Dialog",
+        "OverlayFrame"
       ],
       "example": "Dialogs",
       "authority": "api",
@@ -4614,6 +4615,32 @@
           "type": "ReactNode",
           "optional": false
         }
+      ]
+    },
+    {
+      "id": "ui/edit-lane",
+      "owner": "@platform/ui",
+      "name": "Edit lane rule",
+      "summary": "Choose the editing lane by form need: no input stays inline, a record form opens the drawer, builders keep the page.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/editLane.ts",
+      "exports": [
+        "editLaneOf"
+      ],
+      "example": "EditLaneExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "editing",
+        "navigation",
+        "forms"
+      ],
+      "constraints": [
+        "The rule is a presentation decision; it never grants permissions or changes what a form submits. Adjacent operations on one resource share the lane."
       ]
     },
     {
@@ -10513,6 +10540,118 @@
       ]
     },
     {
+      "id": "ui/rejection",
+      "owner": "@platform/ui",
+      "name": "Unified refusal",
+      "summary": "Present one refusal face: plain-language title, the next action, and the refusal code, request key and recorded facts behind a disclosure.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/Rejection.tsx",
+      "exports": [
+        "Rejection"
+      ],
+      "example": "RejectionExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "refusal",
+        "feedback",
+        "error",
+        "transparency"
+      ],
+      "dependencies": [
+        "ui/notice"
+      ],
+      "constraints": [
+        "The caller owns the refusal evidence and field-level problems. The component renders text only; it performs no queries and never retries the request."
+      ],
+      "props": [
+        {
+          "name": "title",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "advice",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "tone",
+          "type": "\"danger\" | \"warning\" | \"info\"",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "waiting",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
+        },
+        {
+          "name": "code",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "requestKey",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "trail",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        }
+      ],
+      "slots": [
+        {
+          "name": "trail",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
+          "name": "children",
+          "type": "ReactNode",
+          "optional": true
+        }
+      ],
+      "composed": [
+        "ui/disclosure",
+        "ui/notice"
+      ]
+    },
+    {
       "id": "ui/relation-canvas",
       "owner": "@platform/ui",
       "name": "Relationship canvas",
@@ -11230,6 +11369,9 @@
       "states": [
         "Open",
         "Closed"
+      ],
+      "composed": [
+        "ui/dialog"
       ]
     },
     {
@@ -12305,6 +12447,7 @@
       "Choose an application, role, protocol or member from the tenant's existing directory.": "从租户现有目录选择应用、角色、协议或成员。",
       "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",
       "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
+      "Choose the editing lane by form need: no input stays inline, a record form opens the drawer, builders keep the page.": "按表单需要选择编辑通道：无输入就地执行，记录表单以抽屉打开，构建器保持整页。",
       "Civil date input": "业务日期输入",
       "Closed": "关闭",
       "Collapsed": "收起",
@@ -12349,6 +12492,7 @@
       "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.": "编辑调用方拥有的时刻文本，不应用浏览器时区转换或精度截断。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
+      "Edit lane rule": "编辑分流规则",
       "Edit one declaration through its original visual editor or JSON/YAML, with field guidance and explicit draft application.": "通过原可视化编辑器或 JSON/YAML 编辑同一份声明，提供字段指南并明确应用到草稿。",
       "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",
       "Edit the original page draft with layout gestures, scoped commands, inspectors and undo history.": "通过布局手势、作用域命令、检查器和撤销历史编辑原页面草稿。",
@@ -12478,6 +12622,7 @@
       "Present complete original scalar counts as fixed-size tags with optional caller-owned group selection.": "以固定字号标签呈现完整原标量计数，并可由调用方控制分组选择。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present literal directory entries with their actual retained asset identity and version.": "展示原始目录条目及其实际保留资源身份和版本。",
+      "Present one refusal face: plain-language title, the next action, and the refusal code, request key and recorded facts behind a disclosure.": "以同一面孔呈现拒绝：人话标题、下一步动作，以及可展开的拒绝码、请求键与事实轨迹。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
       "Present original change IDs, schemas, actors and field changes in their supplied order with an explicit display window.": "按提供顺序呈现原变更身份、决策名称、操作者及字段变更，并明确展示窗口。",
       "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
@@ -12628,6 +12773,7 @@
       "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.": "调用方拥有原字符串集合及查询条件。多选控件修改一个声明选项并保留未匹配值。",
       "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection.": "调用方拥有原字符串状态、选项及查询条件。空值或未匹配值保留到显式选择。",
       "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
+      "The caller owns the refusal evidence and field-level problems. The component renders text only; it performs no queries and never retries the request.": "拒绝证据与字段级问题由调用方提供。组件只渲染文本，不做查询，也不重试请求。",
       "The caller supplies an authorized window of at most 100 records, typed WGS84 coordinate fields and scoped selection confirmation. The map never invents coordinates or reads remote tiles.": "调用方提供最多100条受权记录窗口、类型化WGS84坐标字段和作用域内选择确认。地图不编造坐标，也不读取远端瓦片。",
       "The caller supplies authorized bytes and confirmed attachment metadata. Only PNG, JPEG, GIF and WebP with bounded matching dimensions render inline; other formats keep metadata and downloads. Object URLs retire with bytes, scope or unmount.": "调用方提供授权字节及已确认附件元数据；只有尺寸符合预算及文件头的PNG、JPEG、GIF、WebP内联显示，其他格式保留元数据和下载。对象地址随字节、作用域变更或卸载退役。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
@@ -12654,6 +12800,7 @@
       "The original summary and record window share their query scope and total. No synthetic 24-hour points, live heartbeat, signal stream or availability promise is created.": "原摘要与记录窗口共享查询作用域和总数。不生成合成的二十四小时点、实时心跳、信号流或可用率承诺。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The project's module: its pages, header and navigation, with the page editor inside and a live preview.": "项目的模块：其页面、页头与导航，内含页面编辑器和实时预览。",
+      "The rule is a presentation decision; it never grants permissions or changes what a form submits. Adjacent operations on one resource share the lane.": "该规则只决定呈现，不授予权限，也不改变表单提交内容。同一资源的相邻操作共用同一通道。",
       "The runnable examples include complete model bindings and synthetic sample answers. Live expressions and permissions are evaluated by the original host.": "可运行示例包含完整模型绑定和合成答案；真实表达式和权限由原宿主判断。",
       "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
       "The selector returns typed references. Host validation and original permissions remain authoritative.": "选择器返回类型化引用；宿主校验和原权限仍为准。",
@@ -12667,6 +12814,7 @@
       "Typed filters": "类型化筛选",
       "Typed semantic selection": "类型化语义选择",
       "Unchecked": "未选中",
+      "Unified refusal": "统一拒绝呈现",
       "Unread": "未读",
       "Use exact registry keys; unknown states fall back to a neutral label.": "使用登记表的精确键；未知状态回退为中性色标签。",
       "Use semantic tokens instead of assigning domain meaning to raw colors.": "使用语义令牌表达含义，不给原始色值赋予领域语义。",
@@ -12705,6 +12853,7 @@
       "web/packages/app/src/actions/LocalDraftControls.tsx",
       "web/packages/app/src/actions/RefusalHistory.tsx",
       "web/packages/app/src/actions/actions.tsx",
+      "web/packages/app/src/actions/refusal.tsx",
       "web/packages/app/src/automation/agents.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/automation/capability.tsx",
@@ -13061,6 +13210,7 @@
       "web/packages/platform/src/host.tsx",
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/package-sources.tsx",
+      "web/packages/ui/src/components/Rejection.tsx",
       "web/packages/ui/src/components/StructuredEditor.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
@@ -13503,6 +13653,7 @@
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/platform/src/permissions.tsx",
+      "web/packages/ui/src/primitives/sheet.tsx",
       "web/packages/ui/src/records/EditableRecordGrid.tsx",
       "web/packages/ui/src/shell/Workspace.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
@@ -13553,16 +13704,8 @@
       "web/packages/app/src/work/service.ts",
       "web/apps/workspace/src/host/usePlatformHost.ts"
     ],
-    "ui/notice": [
-      "web/packages/app/src/actions/refusal.tsx",
-      "web/packages/app/src/observations/Observations.tsx",
-      "web/packages/app/src/widgets/Alert.tsx",
-      "web/packages/app/src/widgets/Notice.tsx",
-      "web/packages/build/src/ontology/object-protocols.tsx",
-      "web/packages/build/src/projects/InstalledApplicationHome.tsx",
-      "web/packages/build/src/projects/project.tsx",
-      "web/packages/platform/src/enterprise/TenantLinks.tsx",
-      "web/packages/platform/src/enterprise/lifecycle.tsx"
+    "ui/rejection": [
+      "web/packages/app/src/actions/refusal.tsx"
     ],
     "ui/page-header": [
       "web/packages/app/src/automation/agents.tsx",
@@ -13807,6 +13950,17 @@
       "web/packages/app/src/widgets/Chart.tsx",
       "web/packages/ui/src/records/RecordChart.tsx",
       "web/packages/ui/src/records/Records.tsx"
+    ],
+    "ui/notice": [
+      "web/packages/app/src/observations/Observations.tsx",
+      "web/packages/app/src/widgets/Alert.tsx",
+      "web/packages/app/src/widgets/Notice.tsx",
+      "web/packages/build/src/ontology/object-protocols.tsx",
+      "web/packages/build/src/projects/InstalledApplicationHome.tsx",
+      "web/packages/build/src/projects/project.tsx",
+      "web/packages/platform/src/enterprise/TenantLinks.tsx",
+      "web/packages/platform/src/enterprise/lifecycle.tsx",
+      "web/packages/ui/src/components/Rejection.tsx"
     ],
     "ui/record-workspace": [
       "web/packages/app/src/pages/pages.tsx"
@@ -14327,6 +14481,7 @@
         "ContextCommand",
         "DataTableProps",
         "Dictionary",
+        "EditLane",
         "EditorProps",
         "Encoding",
         "Entity",

@@ -78,3 +78,27 @@ for (const Frame of [Dialog, Sheet]) test(`${Frame.name} releases global layers 
   rerender(view(true));
   expect((await screen.findByLabelText("Retained pane input") as HTMLInputElement).value).toBe("mock draft");
 });
+
+test("a call from inside an overlay opens beside it, never a stacked modal", async () => {
+  setLanguage("en");
+  function Example() {
+    const [outer, changeOuter] = useState(false), [inner, changeInner] = useState(false);
+    return <>
+      <Button onClick={() => changeOuter(true)}>Open task</Button>
+      <Dialog open={outer} onOpenChange={changeOuter} title="Outer task">
+        {outer && <Button onClick={() => changeInner(true)}>Open one more field</Button>}
+        {inner && <Sheet open={inner} onOpenChange={changeInner} title="One more field"><p>Side content</p></Sheet>}
+      </Dialog>
+    </>;
+  }
+  render(<Example />);
+  fireEvent.click(screen.getByRole("button", { name: "Open task" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open one more field" }));
+  // The open sheet is the one live dialog; Radix hides the covered modal
+  // from the accessibility tree, so the covered frame needs hidden: true.
+  const frames = await screen.findAllByRole("dialog", { hidden: true });
+  expect(frames).toHaveLength(2);
+  expect(frames.filter(frame => frame.getAttribute("data-frame") === "modal")).toHaveLength(1);
+  expect(frames.filter(frame => frame.getAttribute("data-frame") === "sheet")).toHaveLength(1);
+  await screen.findByText("Side content");
+});
