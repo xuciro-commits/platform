@@ -350,7 +350,6 @@ export type ApplicationArtifact = {
   model: AssetBinding[];
   rules: AssetBinding[];
   pages: AssetBinding[];
-  flows: AssetBinding[];
   ai: AssetBinding[];
   integrations: AssetBinding[];
   roles: ApplicationRole[];
@@ -385,7 +384,6 @@ export type ApplicationDiagnostic = {
   type: string;
   record: string;
   decisions: ApplicationDecisionTrace[];
-  runs: ApplicationRun[];
 };
 
 export type ApplicationExtension = {
@@ -431,7 +429,6 @@ export type ApplicationMonitoring = {
   refused: number;
   constraintFailures: number;
   refusalRate: number;
-  runs: ApplicationRunSummary;
   memberQuota?: AIQuota;
   agentBudgets: ApplicationAgentBudget[];
 };
@@ -478,46 +475,6 @@ export type ApplicationRole = {
   scope?: string;
   readFields?: string[];
   writeFields?: string[];
-};
-
-export type ApplicationRun = {
-  applications?: AssetBinding[];
-  subject?: string;
-  id: string;
-  kind: string;
-  title: string;
-  resource?: AssetRef;
-  resourceName: string;
-  state: string;
-  version?: string;
-  release?: string;
-  dependencies?: string;
-  module?: string;
-  node?: string;
-  error?: string;
-  association: string;
-  shared: string[];
-  created: string;
-  aiTokens?: number;
-  aiUsd?: number;
-  costReported?: boolean;
-};
-
-export type ApplicationRunPage = {
-  application: AssetRef;
-  title: string;
-  runs: ApplicationRun[];
-  total: number;
-  summary: ApplicationRunSummary;
-};
-
-export type ApplicationRunSummary = {
-  failed: number;
-  pendingEffects: number;
-  waitingFlows: number;
-  aiTokens: number;
-  aiUsd: number;
-  unmeteredAI: number;
 };
 
 export type ApplicationRuntime = {
@@ -630,8 +587,7 @@ export type AuthzRequest = {
 };
 
 export type Binding = {
-  source: "literal" | "input" | "subject" | "step" | "item" | "index" | "answer";
-  step?: string;
+  source: "literal" | "subject" | "input";
   path?: string[];
   value?: unknown;
 };
@@ -741,34 +697,6 @@ export type Calendar = {
   holidays?: string[];
 };
 
-export type CandidateSimulation = {
-  actors?: SimulationActor[];
-  candidateId: string;
-  testId?: string;
-  model?: string;
-  fixture?: boolean;
-  steps: Simulation[];
-  recovered: boolean;
-  passed?: boolean;
-};
-
-export type CandidateSimulationRequest = {
-  organization?: OrgSeed;
-  roots?: AssetRef[];
-  applicationId?: string;
-  candidateId?: string;
-  actors?: string[];
-  sample?: string;
-  objectId?: string;
-  processId?: string;
-  functionId?: string;
-  model?: string;
-  as?: string;
-  at: string;
-  steps: SimulationStep[];
-  samples?: SimulationSample[];
-};
-
 export type Capability = {
   kind: string;
   name: string;
@@ -833,24 +761,6 @@ export type CatalogModel = {
   free?: boolean;
 };
 
-export type Chain = {
-  nodes: ChainNode[];
-  edges: ChainEdge[];
-};
-
-export type ChainEdge = {
-  from: string;
-  to: string;
-};
-
-export type ChainNode = {
-  ref: string;
-  kind: string;
-  title: string;
-  state?: string;
-  detail?: string;
-};
-
 /** The kernel contract's ChangeRecord (contract/proto). */
 export type ChangeRecord = ChangeRecordJson;
 
@@ -877,13 +787,6 @@ export type Citation = {
   step: number;
 };
 
-export type Collection = {
-  status?: string;
-  items: Item[];
-  complete: boolean;
-  withheld?: boolean;
-};
-
 export type Column = {
   name: string;
   title: string;
@@ -905,25 +808,6 @@ export type CompositeEdit = {
   payload?: unknown;
 };
 
-export type ComputeFixture = {
-  app?: string;
-  name: string;
-  output?: string;
-  error?: string;
-  expectState: "completed" | "failed";
-  expectOutput?: string;
-};
-
-export type ComputeSDK = {
-  source: string;
-};
-
-export type ComputeSDKRequest = {
-  abi?: string;
-  input: ValueSchema;
-  output: ValueSchema;
-};
-
 export type Confirmation = {
   parties: ConfirmationParty[];
   deadlineSeconds: number;
@@ -932,13 +816,6 @@ export type Confirmation = {
   onComplete: string;
   onPartialAction?: string;
   reviewerRole: string;
-};
-
-export type ConfirmationDifference = {
-  at: string;
-  matched: boolean;
-  observed?: unknown;
-  error?: string;
 };
 
 export type ConfirmationParty = {
@@ -953,38 +830,6 @@ export type ConfirmationParty = {
   reconcile?: ConfirmationRead;
 };
 
-export type ConfirmationProgress = {
-  name: string;
-  title: string;
-  state: string;
-  intent: string;
-  key: string;
-  at?: string;
-  answer?: unknown;
-  reason?: string;
-  request?: unknown;
-  requestVersion?: number;
-  source?: unknown;
-  connection?: unknown;
-  sourceVersion?: string;
-  protocol?: ConfirmationProtocol;
-  compensationRequest?: unknown;
-  compensation?: string;
-  compensationState?: string;
-  compensationAt?: string;
-  compensationAnswer?: unknown;
-  compensationReason?: string;
-  reconcileDue?: string;
-  differences?: ConfirmationDifference[];
-};
-
-export type ConfirmationProtocol = {
-  provider: string;
-  version: string;
-  action: string;
-  compensateAction?: string;
-};
-
 export type ConfirmationRead = {
   keyInput?: string;
   source: string;
@@ -992,78 +837,6 @@ export type ConfirmationRead = {
   resultField: string;
   expected: unknown;
   everySeconds: number;
-};
-
-export type ConfirmationRun = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  subject: string;
-  action: string;
-  member: string;
-  state: "pending" | "partial" | "confirmed" | "expired" | "rejected" | "compensating" | "compensated";
-  deadline: string;
-  partial: boolean;
-  escalated?: boolean;
-  definition: Confirmation;
-  release?: string;
-  assets: ReleaseAsset[];
-  input: unknown;
-  parties: ConfirmationProgress[];
-  reviewers: string[];
-  completion?: string;
-  completionError?: string;
-  withheld?: boolean;
-};
-
-export type Connection = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  name: string;
-  title: string;
-  kind: "http" | "odata" | "postgres";
-  protocol?: DriverBinding;
-  address: string;
-  secret?: string;
-  allowPrivate?: boolean;
-  marking?: "internal" | "confidential" | "restricted";
-  state: string;
-  requested?: boolean;
-  last?: ConnectionCheck;
-  definitionVersion?: number;
-  published?: string;
-  definitionVersions?: string[];
-};
-
-export type ConnectionCheck = {
-  at: string;
-  ok: boolean;
-  error?: string;
-  detail?: string;
-  samples?: DriverSample[];
-  bindingRevision?: string;
-};
-
-export type ConnectionKind = {
-  id: string;
-  title: string;
-  kind: string;
-  addressPlaceholder?: string;
-  package?: string;
-  version?: string;
-  digest?: string;
-  profile?: DriverProfile;
-};
-
-export type ConnectionKindPage = {
-  items: ConnectionKind[];
 };
 
 export type ConnectorError = {
@@ -1096,16 +869,6 @@ export type Constraint = {
   reads?: RuleReadSpec;
 };
 
-export type Context = {
-  sources?: string[];
-  windows?: Record<string, WindowSummary>;
-  refs: Record<string, Value>;
-  sets?: Record<string, Collection>;
-  me: string;
-  now: string;
-  today: string;
-};
-
 export type ContextView = {
   type: string;
   record: unknown;
@@ -1113,38 +876,7 @@ export type ContextView = {
   references: string[];
   related: Related[];
   links: string[];
-  flows: FlowSummary[];
   tasks: TaskSummary[];
-};
-
-export type Continuous = {
-  Source: string;
-  entry?: string;
-  Batch: number;
-  State: number;
-  FrameBytes: number;
-  checkpointEvery?: number;
-  Window: StreamWindow;
-  Intake?: StreamIntake;
-  DeadLetter: boolean;
-  deadLetterMaxRecords?: number;
-  deadLetterTtlMs?: number;
-  concurrency?: number;
-  aggregate?: StreamAggregate;
-  threshold?: StreamThreshold;
-  output?: StreamOutput;
-  errorPolicy?: string;
-  deadLetterRetry?: boolean;
-};
-
-export type Contract = {
-  stereotype: string;
-  client?: string[];
-  supplier?: string[];
-  basis?: string[];
-  extension?: Pair[];
-  platform?: boolean;
-  note?: string;
 };
 
 export type Contribution = {
@@ -1235,22 +967,6 @@ export type DecisionDefinition = {
   applications: AssetBinding[];
 };
 
-export type DecisionTrace = {
-  kind: string;
-  name?: string;
-  type?: string;
-  id?: string;
-  operation?: string;
-  expression?: Expr;
-  reads?: Context;
-  result?: Result;
-  request?: AuthzRequest;
-  authorization?: Verdict;
-  before?: unknown;
-  after?: unknown;
-  refusal?: string;
-};
-
 export type Definition = {
   alert?: AlertRule;
   observation?: ObservationDefinition;
@@ -1274,10 +990,7 @@ export type Definition = {
   application?: Application;
   query?: NamedQuery;
   queryVersions?: Record<string, NamedQuery>;
-  flow?: FlowDefinition;
   function?: AIFunction;
-  evaluation?: EvaluationSetDescriptor;
-  testPlan?: TestPlanDescriptor;
   agent?: AgentReleaseDescriptor;
   operation?: Operation;
 };
@@ -1317,27 +1030,6 @@ export type Dispatch = {
   reviewerRole: string;
 };
 
-export type DispatchAttempt = {
-  number: number;
-  intent: string;
-  target: string;
-  state: string;
-  at: string;
-  reason?: string;
-  answer?: unknown;
-  compensation?: boolean;
-};
-
-export type DispatchCommand = {
-  name: string;
-  title: string;
-  endpointKind: string;
-  writeback: string;
-  idempotent: boolean;
-  receiverDeduplicates?: boolean;
-  compensate?: string;
-};
-
 export type DispatchRead = {
   name: string;
   source?: string;
@@ -1348,60 +1040,6 @@ export type DispatchRead = {
   reasonField?: string;
   states: Record<string, string>;
   everySeconds: number;
-};
-
-export type DispatchReading = {
-  at: string;
-  state: string;
-  value?: string;
-  reason?: string;
-  observed?: unknown;
-};
-
-export type DispatchRun = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  subject: string;
-  action: string;
-  member: string;
-  command: DispatchCommand;
-  definition: Dispatch;
-  target: string;
-  key: string;
-  state: "pending" | "accepted" | "running" | "completed" | "stuck" | "failed" | "unknown" | "cancelled" | "compensating" | "compensated";
-  reason?: string;
-  startedAt: string;
-  stateAt: string;
-  deadline: string;
-  readDue: string;
-  readback: DispatchReading[];
-  attempts: DispatchAttempt[];
-  attempt: number;
-  intent: string;
-  request: unknown;
-  source?: unknown;
-  connection?: unknown;
-  observation?: unknown;
-  device?: string;
-  compensationCommand?: DispatchCommand;
-  compensationRequest?: unknown;
-  compensating?: boolean;
-  release?: string;
-  assets: ReleaseAsset[];
-  input: unknown;
-  reviewers: string[];
-  escalated?: boolean;
-  policyApplied?: boolean;
-  withheld?: boolean;
-};
-
-export type DispatchTarget = {
-  id: string;
-  title: string;
 };
 
 export type Draft = {
@@ -1432,58 +1070,6 @@ export type DraftChangeField = {
   after?: unknown;
 };
 
-export type DriverBinding = {
-  package: string;
-  version: string;
-  digest: string;
-  profile: string;
-  configuration: DriverConfiguration;
-};
-
-export type DriverCommand = {
-  id: string;
-  point: string;
-  min?: string;
-  max?: string;
-};
-
-export type DriverConfiguration = {
-  connection?: Record<string, unknown>;
-  devices: DriverDevice[];
-  points: DriverPoint[];
-  commands?: DriverCommand[];
-  scenario?: string;
-  seed?: number;
-};
-
-export type DriverCoverage = {
-  availableSince: string;
-  completeUntil: string;
-  truncated: boolean;
-  good: number;
-  bad: number;
-  uncertain: number;
-  stale: number;
-};
-
-export type DriverDevice = {
-  id: string;
-  title: string;
-  settings?: Record<string, unknown>;
-};
-
-export type DriverPoint = {
-  id: string;
-  device: string;
-  address: string;
-  type: string;
-  dataType?: string;
-  unit?: string;
-  scale?: string;
-  offset?: string;
-  intervalMS: number;
-};
-
 export type DriverProfile = {
   id: string;
   title: string;
@@ -1499,27 +1085,6 @@ export type DriverRuntime = {
   abi: string;
   targets: DriverTarget[];
   profiles: DriverProfile[];
-};
-
-export type DriverSample = {
-  device: string;
-  signal: string;
-  type: string;
-  value?: unknown;
-  unit?: string;
-  quality: string;
-  at: string;
-  receivedAt: string;
-  reason?: string;
-  source: DriverSampleSource;
-};
-
-export type DriverSampleSource = {
-  connection: string;
-  revision: string;
-  generation: string;
-  sequence?: string;
-  clock?: string;
 };
 
 export type DriverTarget = {
@@ -1573,25 +1138,6 @@ export type EffectKind = {
   irreversible?: boolean;
 };
 
-export type Element = {
-  id: string;
-  stereotype: string;
-  name: string;
-  shortName?: string;
-  kind?: string;
-  legal?: boolean;
-  external?: boolean;
-  from?: string;
-  until?: string;
-  closed?: string;
-  calendar?: string;
-  owner?: string;
-  published?: boolean;
-  properties?: Record<string, unknown>;
-  periods?: Period[];
-  deleted?: boolean;
-};
-
 export type EndpointView = {
   id: string;
   kind: string;
@@ -1609,103 +1155,7 @@ export type EndpointView = {
   delivered: number;
 };
 
-export type EnterpriseLinkChange = {
-  kind: string;
-  id: string;
-  name: string;
-};
-
-export type EnterpriseLinkPreview = {
-  link: string;
-  base: string;
-  content: string;
-  connectionRevision: number;
-  slice: Slice;
-  changes: EnterpriseLinkChange[];
-};
-
-export type EnterpriseModel = {
-  uaf: string;
-  scale?: string;
-  kinds: Kind[];
-  elements: Element[];
-  relationships: Relationship[];
-  views: View[];
-  calendars?: Calendar[];
-  tenantLinks?: TenantLink[];
-};
-
-export type EnterpriseQueryElement = {
-  id: string;
-  stereotype: string;
-  name: string;
-  kind?: string;
-  shortName?: string;
-  legal?: boolean;
-  from?: string;
-  until?: string;
-  periods?: Period[];
-  closed?: boolean;
-};
-
-export type EnterpriseQueryResult = {
-  elements: EnterpriseQueryElement[];
-};
-
-export type EnterpriseReference = {
-  type: string;
-  field: string;
-  fieldTitle: string;
-  stereotype?: string;
-  id: string;
-  name: string;
-};
-
-export type EnterpriseReferenceGroup = {
-  type: string;
-  title: string;
-  field: string;
-  fieldTitle: string;
-  stereotype?: string;
-  total: number;
-  records: EnterpriseReference[];
-};
-
-export type EnterpriseTarget = {
-  source: string;
-  stereotype: string;
-  id: string;
-  name: string;
-  shortName?: string;
-  kind?: string;
-  parent?: string;
-  root?: string;
-  in?: string;
-  relation?: string;
-  at?: string;
-  atKind?: string;
-  from?: string;
-  until?: string;
-  properties?: string[];
-};
-
-export type EnterpriseUsage = {
-  canDelete: boolean;
-  canClose: boolean;
-  hasRestrictedUsage: boolean;
-  items: EnterpriseUsageItem[];
-};
-
-export type EnterpriseUsageItem = {
-  kind: string;
-  title: string;
-  ref?: string;
-  field?: string;
-  current: boolean;
-};
-
 export type EntityInfo = {
-  enterpriseUse?: Expr;
   versioning?: Versioning;
   versionPins?: VersionPinBinding[];
   sets?: RecordSet[];
@@ -1728,45 +1178,12 @@ export type EntityInfo = {
 /** The kernel contract's EntityRef (contract/proto). */
 export type EntityRef = EntityRefJson;
 
-export type Enumeration = {
-  name: string;
-  literals: string[];
-};
-
 export type ErrorBody = {
   message?: string;
   issues?: FieldIssue[];
   code: string;
   status?: number;
   detail?: string;
-};
-
-export type EvaluationCase = {
-  name: string;
-  input: unknown;
-  expected: unknown;
-};
-
-export type EvaluationPolicy = {
-  compareFields?: string[];
-  minQuality: number;
-  maxCostUsd: number;
-  maxLatencyMillis: number;
-  cases: EvaluationCase[];
-};
-
-export type EvaluationSetDescriptor = {
-  name: string;
-  title: string;
-  function: AssetBinding;
-  model?: string;
-  policy: EvaluationPolicy;
-};
-
-export type Expectation = {
-  column: string;
-  rule: string;
-  value?: string;
 };
 
 export type Explanation = {
@@ -1872,95 +1289,10 @@ export type FieldRef = {
   transform?: string;
 };
 
-export type FlowDefinition = {
-  id: string;
-  app: string;
-  title: string;
-  version: number;
-  start: string[];
-  steps: FlowStep[];
-};
-
-export type FlowStep = {
-  name: string;
-  title: string;
-  kind: "action" | "wait" | "ask" | "subflow" | "fork" | "agent" | "transform" | "branch" | "foreach" | "compute" | "ai" | "end" | "break" | "continue";
-  next: string[];
-  chooses?: boolean;
-};
-
-export type FlowSummary = {
-  id: string;
-  flow: string;
-  state: string;
-  trace: TraceLine[];
-};
-
-export type Frame = {
-  node: string;
-  index: number;
-  item?: unknown;
-};
-
-export type FunctionFixture = {
-  output: string;
-  inputTokens: number;
-  outputTokens: number;
-  expectState: "ready" | "rejected";
-  expectOutput?: string;
-};
-
 export type FunctionRef = {
   app?: string;
   name: string;
   version: number;
-};
-
-export type FunctionRun = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  sourceValues?: Record<string, unknown>;
-  sourceRevision?: number;
-  decision?: "pending" | "adopted" | "rejected" | "expired";
-  expiresAt?: string;
-  reviewers?: string[];
-  decidedBy?: string;
-  decidedAt?: string;
-  adoptedAction?: string;
-  adoptedChange?: string;
-  amendments?: unknown;
-  applications?: AssetBinding[];
-  question?: string;
-  history?: string[];
-  function: string;
-  app?: string;
-  contract: AIFunction;
-  version: number;
-  member: string;
-  source: string;
-  state: "pending" | "ready" | "rejected";
-  output?: string;
-  code?: string;
-  reason?: string;
-  definition: string;
-  dependencies: string;
-  model: string;
-  inputHash: string;
-  release?: string;
-  metered?: boolean;
-  tokensReported?: boolean;
-  inputTokens?: number;
-  outputTokens?: number;
-  costReported?: boolean;
-  costUsd?: number;
-  latencyMillis?: number;
-  servedModel?: string;
-  sources: string[];
-  withheld?: boolean;
 };
 
 export type Grant = {
@@ -2125,24 +1457,6 @@ export type InstalledPackage = {
   retained?: RetainedArtifact[];
 };
 
-export type IntegrationEffect = {
-  id: string;
-  endpoint: string;
-  event: string;
-  state: string;
-  due: string;
-  last?: string;
-  error?: string;
-};
-
-export type IntegrationExecution = {
-  id: string;
-  member: string;
-  pending?: boolean;
-  snapshot: string;
-  inputs?: Record<string, number>;
-};
-
 export type Interface = {
   name: string;
   title: string;
@@ -2167,28 +1481,9 @@ export type InterfaceRecordPage = {
   total: number;
 };
 
-export type Issue = {
-  code: string;
-  at: string;
-  message: string;
-};
-
-export type Item = {
-  id: string;
-  fields: Record<string, Value>;
-};
-
 export type JointDraftRef = {
   kind: string;
   id: string;
-};
-
-export type Kind = {
-  id: string;
-  name: string;
-  kind: string;
-  matrix?: boolean;
-  owner?: string;
 };
 
 export type Layer = {
@@ -2262,15 +1557,6 @@ export type LiveQueryResult = {
   body: unknown;
 };
 
-export type LoopFrame = {
-  items?: unknown[];
-  outer?: string[];
-  next: number;
-  results?: Record<string, unknown>;
-  state?: unknown;
-  while?: boolean;
-};
-
 export type MeView = {
   tenantId: string;
   principalId: string;
@@ -2283,12 +1569,6 @@ export type MeView = {
   currency: string;
   account: Account;
   tenant: TenantRecord;
-};
-
-export type Measure = {
-  fn: string;
-  column?: string;
-  to: string;
 };
 
 export type Member = {
@@ -2349,17 +1629,6 @@ export type Message = {
   content: string;
   toolCalls?: ToolCall[];
   toolCallId?: string;
-};
-
-export type Metamodel = {
-  version: string;
-  uri: string;
-  domains: string[];
-  profile: ProfileEntry[];
-  stereotypes: Record<string, Stereotype>;
-  enumerations: Record<string, Enumeration>;
-  views: Viewpoint[];
-  contracts: Contract[];
 };
 
 export type MigrateField = {
@@ -2497,11 +1766,6 @@ export type NamedQuery = {
   limit?: number;
 };
 
-export type NodePosition = {
-  x: number;
-  y: number;
-};
-
 export type Note = {
   entity: string;
   by: string;
@@ -2560,26 +1824,6 @@ export type ObservationDefinition = {
   intervals?: ObservationIntervals;
 };
 
-export type ObservationEvaluate = {
-  record: string;
-  until: string;
-  key: string;
-};
-
-export type ObservationEvaluation = {
-  observation?: ObservationResult;
-  matched: boolean;
-  receipt?: SubmissionAnswer;
-  reused?: boolean;
-};
-
-export type ObservationInfo = {
-  ref: AssetRef;
-  version: string;
-  definition: ObservationDefinition;
-  supportsLatest?: boolean;
-};
-
 export type ObservationInterval = {
   since: string;
   until: string;
@@ -2605,35 +1849,6 @@ export type ObservationIntervals = {
   latePolicy: "reject" | "correct";
   latenessSeconds: number;
   maxIntervals: number;
-};
-
-export type ObservationPoint = {
-  at: string;
-  value: string;
-};
-
-export type ObservationRead = {
-  record: string;
-  since: string;
-  until: string;
-  mode: string;
-  limit?: number;
-};
-
-export type ObservationResult = {
-  ref: AssetRef;
-  version: string;
-  object: AssetRef;
-  record: string;
-  device: string;
-  signal: string;
-  window: WindowSummary;
-  points?: ObservationPoint[];
-  sources: string[];
-  matched?: boolean;
-  coverage?: DriverCoverage;
-  latest?: DriverSample;
-  intervals?: ObservationIntervalResult;
 };
 
 export type ObservationUnknown = {
@@ -2667,12 +1882,6 @@ export type OperationLimits = {
   maxOutputBytes: number;
   stagedOutputBytes?: number;
   dataInputBytes?: number;
-};
-
-export type OperationRef = {
-  app?: string;
-  name: string;
-  version: number;
 };
 
 export type OperationResult = {
@@ -3447,11 +2656,6 @@ export type PageVertexGraph = {
   groups: PageNeighborhoodGroup[];
 };
 
-export type Pair = {
-  source: string;
-  target: string;
-};
-
 export type Passage = {
   document: string;
   title: string;
@@ -3477,71 +2681,6 @@ export type PersonalRead = {
   type: string;
   ids: string[];
   fields: string[];
-};
-
-export type Pin = {
-  ref: string;
-  label?: string;
-  anchor: string;
-  at: number[];
-};
-
-export type Pipeline = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  name: string;
-  title: string;
-  input: string;
-  steps: Step[];
-  expectations?: Expectation[];
-  outputDataset?: string;
-  outputObject?: string;
-  key?: string;
-  marking?: string;
-  outputEnterprise?: EnterpriseTarget;
-  every?: string;
-  state: string;
-  runner?: string;
-  requested?: boolean;
-  last?: PipelineRun;
-  definitionVersion?: number;
-  published?: string;
-  definitionVersions?: string[];
-};
-
-export type PipelinePreview = {
-  inputVersion: number;
-  inputRows: number;
-  sampledRows: number;
-  truncated: boolean;
-  rows: Record<string, unknown>[];
-  quarantine: QuarantinedRow[];
-  marking?: string;
-};
-
-export type PipelinePreviewRequest = {
-  pipeline: Pipeline;
-};
-
-export type PipelineRun = {
-  execution?: IntegrationExecution;
-  definitionVersion?: string;
-  at: string;
-  inputVersion: number;
-  rows: number;
-  written: number;
-  marking?: string;
-  merged?: number;
-  quarantined: number;
-  failed: number;
-  error?: string;
-  quarantine?: QuarantinedRow[];
-  failures?: SourceFailure[];
-  outputVersion?: number;
 };
 
 export type PlatformserverAggregate = {
@@ -3570,92 +2709,6 @@ export type Precheck = {
   missing?: string[];
 };
 
-export type Predicate = {
-  op: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "exists" | "all" | "any" | "not";
-  left?: Binding;
-  right?: Binding;
-  terms?: Predicate[];
-};
-
-export type Process = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  name: string;
-  title: string;
-  kind?: "flow" | "automation";
-  object?: string;
-  when?: string;
-  manual?: boolean;
-  every?: string;
-  scheduler?: string;
-  input?: unknown;
-  inputSchema?: ValueSchema;
-  continuous?: Continuous;
-  steps: ProcessStep[];
-  lanes?: ProcessLane[];
-  layout?: Record<string, NodePosition>;
-  state: "draft" | "published";
-  version?: number;
-  published?: string;
-  versions?: string[];
-};
-
-export type ProcessDiagnostic = {
-  node?: string;
-  code: string;
-  message: string;
-};
-
-export type ProcessDiagnostics = {
-  valid: boolean;
-  issues: ProcessDiagnostic[];
-};
-
-export type ProcessLane = {
-  name: string;
-  title?: string;
-};
-
-export type ProcessStep = {
-  name: string;
-  title?: string;
-  kind: "payload" | "query" | "action" | "transform" | "branch" | "switch" | "foreach" | "while" | "fork" | "join" | "ask" | "wait" | "subflow" | "ai" | "compute" | "end" | "fail" | "break" | "continue";
-  lane?: string;
-  inputs?: Record<string, Binding>;
-  value?: Binding;
-  target?: Binding;
-  condition?: Predicate;
-  collection?: Binding;
-  waitUntil?: Binding;
-  cases?: Record<string, string>;
-  branches?: string[];
-  next?: string;
-  error?: string;
-  ask?: string;
-  answers?: string[];
-  act?: string;
-  protocol?: string;
-  app?: string;
-  query?: string;
-  queryVersion?: number;
-  function?: FunctionRef;
-  operation?: OperationRef;
-  body?: string;
-  maxIterations?: number;
-  concurrency?: number;
-  mode?: "all" | "any";
-  timeoutSeconds?: number;
-  untilSeconds?: number;
-  retryAttempts?: number;
-  retryBackoffMs?: number;
-  flow?: string;
-  flowVersion?: number;
-};
-
 export type Profile = {
   member: string;
   displayName?: string;
@@ -3679,14 +2732,6 @@ export type Profile = {
   theme?: string;
   density?: string;
   lastSeen?: string;
-};
-
-export type ProfileEntry = {
-  stereotype: string;
-  title: string;
-  plural: string;
-  kinds?: string[];
-  icon?: string;
 };
 
 export type ProjectAsset = {
@@ -3715,13 +2760,6 @@ export type PromotionTarget = {
   member: string;
   at: string;
   active: boolean;
-};
-
-export type Property = {
-  name: string;
-  type: string;
-  many?: boolean;
-  description?: string;
 };
 
 export type PropertyType = {
@@ -3802,11 +2840,6 @@ export type Provider = {
   baseUrl: string;
   secret?: string;
   wire: string;
-};
-
-export type QuarantinedRow = {
-  reason: string;
-  row: Record<string, unknown>;
 };
 
 export type Query = {
@@ -3960,21 +2993,6 @@ export type RelationMigrationPlan = {
   migrated: boolean;
 };
 
-export type Relationship = {
-  id: string;
-  stereotype: string;
-  kind?: string;
-  source: string;
-  target: string;
-  role?: string;
-  relation?: string;
-  share?: number;
-  primary?: boolean;
-  from?: string;
-  until?: string;
-  periods?: Period[];
-};
-
 export type ReleaseActivateRequest = {
   candidateId: string;
   key: string;
@@ -4004,17 +3022,6 @@ export type ReleaseDraftClosure = {
 
 export type ReleaseDraftsRequest = {
   kind: string;
-  id: string;
-};
-
-export type ReleaseEvaluationRequest = {
-  candidateId: string;
-  planId?: string;
-  agent?: string;
-  key: string;
-};
-
-export type ReleaseEvaluationStarted = {
   id: string;
 };
 
@@ -4059,18 +3066,6 @@ export type ReleasePreviewRequest = {
   drafts?: JointDraftRef[];
 };
 
-export type ReleaseSaveRequest = {
-  kind?: string;
-  id?: string;
-  drafts?: JointDraftRef[];
-  candidateId: string;
-  key: string;
-};
-
-export type ReleaseSaved = {
-  id: string;
-};
-
 export type ReleaseSummary = {
   id: string;
   title: string;
@@ -4085,12 +3080,6 @@ export type ReleaseUpgradePlan = {
   candidateId: string;
   activeId: string;
   additions: ReleaseFieldAddition[];
-};
-
-export type Result = {
-  sources?: string[];
-  value: Value;
-  reasons?: Issue[];
 };
 
 export type RetainedArtifact = {
@@ -4384,140 +3373,6 @@ export type Signal = {
   value?: string;
 };
 
-export type SimulatedChange = {
-  before?: unknown;
-  type: string;
-  id: string;
-  record: unknown;
-};
-
-export type SimulatedFlow = {
-  id: string;
-  flow: string;
-  version: number;
-  dependencies?: string;
-  release?: string;
-  state: string;
-  tokens: Token[];
-  trace: TraceLine[];
-  outputs?: Record<string, unknown>;
-};
-
-export type Simulation = {
-  issues?: FieldIssue[];
-  refusalCode?: string;
-  unsupported?: boolean;
-  traceTruncated?: boolean;
-  input?: SimulationStep;
-  trace?: DecisionTrace[];
-  read?: unknown;
-  rolledBack?: boolean;
-  accepted: boolean;
-  refusal?: string;
-  changes: SimulatedChange[];
-  matched?: boolean;
-  flows?: SimulatedFlow[];
-  tasks?: WorkTask[];
-  functions?: FunctionRun[];
-  computeMatched?: boolean;
-  functionMatched?: boolean;
-};
-
-export type SimulationActor = {
-  member: string;
-  steps: Simulation[];
-  testId: string;
-  recovered: boolean;
-  passed?: boolean;
-};
-
-export type SimulationSample = {
-  type: string;
-  records: unknown[];
-};
-
-export type SimulationStep = {
-  read?: boolean;
-  type: string;
-  id: string;
-  action: string;
-  payload: unknown;
-  expect?: string;
-  as?: string;
-  advanceSeconds?: number;
-  flow?: string;
-  step?: string;
-  answer?: string;
-  function?: FunctionFixture;
-  compute?: ComputeFixture;
-};
-
-export type Slice = {
-  tenant: string;
-  uaf: string;
-  elements: Element[];
-  relationships: Relationship[];
-  kinds?: Kind[];
-};
-
-export type Source = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  name: string;
-  title: string;
-  connection?: string;
-  profile?: "json" | "csv" | "odata" | "table";
-  url?: string;
-  entity?: string;
-  filter?: string;
-  since?: string;
-  cursor?: string;
-  allowPrivate?: boolean;
-  header?: string;
-  path?: string;
-  dataset?: string;
-  object?: string;
-  key?: string;
-  mapping?: SourceField[];
-  stream?: boolean;
-  every?: string;
-  state: string;
-  puller?: string;
-  requested?: boolean;
-  last?: SourcePull;
-  definitionVersion?: number;
-  published?: string;
-  definitionVersions?: string[];
-};
-
-export type SourceFailure = {
-  id: string;
-  outcome: string;
-};
-
-export type SourceField = {
-  from: string;
-  to: string;
-  convert?: string;
-};
-
-export type SourcePull = {
-  execution?: IntegrationExecution;
-  definitionVersion?: string;
-  at: string;
-  rows: number;
-  applied: number;
-  failed: number;
-  merged?: number;
-  error?: string;
-  failures?: SourceFailure[];
-  cursor?: string;
-};
-
 export type Stamp = {
   by?: string;
   at?: string;
@@ -4529,90 +3384,6 @@ export type State = {
   title: string;
   tone?: "info" | "success" | "warning" | "danger" | "neutral";
   description?: string;
-};
-
-export type Step = {
-  kind: string;
-  columns?: string[];
-  from?: string;
-  to?: string;
-  column?: string;
-  type?: string;
-  op?: string;
-  value?: string;
-  formulaExpr?: Expr;
-  formula?: string;
-  dataset?: string;
-  match?: string;
-  as?: string;
-  outer?: boolean;
-  desc?: boolean;
-  measures?: Measure[];
-};
-
-export type Stereotype = {
-  name: string;
-  id: string;
-  domain: string;
-  aspect?: string;
-  description?: string;
-  abstract?: boolean;
-  generals?: string[];
-  bases?: string[];
-  properties?: Property[];
-  constraints?: string[];
-  client?: string[];
-  supplier?: string[];
-};
-
-export type StreamAggregate = {
-  node: string;
-  kernel?: string;
-  above?: number;
-  signal?: string;
-  group?: string[];
-  measures: string[];
-};
-
-export type StreamIntake = {
-  sourceRecord: string;
-  key: string;
-  partition: string[];
-  eventTime: string;
-  value: string;
-  offset?: "latest" | "earliest";
-  fields?: string[];
-  retry?: StreamPreparationRetry;
-};
-
-export type StreamOutput = {
-  node: string;
-  name: string;
-  mode: string;
-};
-
-export type StreamPreparationRetry = {
-  attempts: number;
-  backoffMs: number;
-};
-
-export type StreamThreshold = {
-  node: string;
-  field: string;
-  high: number;
-  low: number;
-  debounceMs: number;
-  severity?: string;
-};
-
-export type StreamWindow = {
-  node: string;
-  windowMs: number;
-  slideMs: number;
-  watermarkMs: number;
-  maxRecords: number;
-  retry?: StreamPreparationRetry;
-  lateEvents: string;
 };
 
 export type Structure = {
@@ -4731,16 +3502,6 @@ export type TenantHealth = {
   endpointsFailing: number;
 };
 
-export type TenantLink = {
-  id: string;
-  organization: string;
-  tenant: string;
-  root: string;
-  connection: string;
-  updatedAt?: string;
-  content?: string;
-};
-
 export type TenantRecord = {
   id: string;
   name: string;
@@ -4757,51 +3518,6 @@ export type TenantTemplate = {
   description?: string;
   settings?: Record<string, string>;
   adminRoles?: Record<string, string>;
-};
-
-export type TestPlanDescriptor = {
-  organization?: OrgSeed;
-  name: string;
-  title: string;
-  roots: AssetRef[];
-  at: string;
-  samples?: SampleRecords[];
-  steps: TestStep[];
-};
-
-export type TestStep = {
-  read?: boolean;
-  type: string;
-  id: string;
-  action: string;
-  payload: string;
-  expect: string;
-  as?: string;
-  advanceSeconds?: number;
-  flow?: string;
-  step?: string;
-  answer?: string;
-  function?: FunctionFixture;
-  compute?: ComputeFixture;
-};
-
-export type Token = {
-  id: number;
-  step: string;
-  branch?: string;
-  waits?: string;
-  attempts?: number;
-  due?: string;
-  task?: string;
-  child?: string;
-  error?: string;
-  parent?: number;
-  frames?: Frame[];
-  input?: unknown;
-  outputs?: Record<string, unknown>;
-  operation?: string;
-  loop?: LoopFrame;
-  results?: Record<string, unknown>;
 };
 
 export type TokenView = {
@@ -4839,14 +3555,6 @@ export type Total = {
   reported: number;
   estimated: number;
   costUnknown: number;
-};
-
-export type TraceLine = {
-  at: string;
-  step?: string;
-  what: string;
-  detail?: string;
-  by?: string;
 };
 
 export type Transcript = {
@@ -5046,12 +3754,6 @@ export type Usage = {
   outcome: string;
 };
 
-export type Value = {
-  kind: string;
-  status: string;
-  value?: unknown;
-};
-
 export type ValueSchema = {
   type: string;
   nullable?: boolean;
@@ -5097,27 +3799,6 @@ export type Versioning = {
   pin: string;
 };
 
-export type View = {
-  id: string;
-  name: string;
-  viewpoint: string;
-  kind?: string;
-  elements: string[];
-  layout?: Record<string, number[]>;
-  context?: string[];
-  pins?: Pin[];
-  asOf?: string;
-};
-
-export type Viewpoint = {
-  id: string;
-  title: string;
-  note: string;
-  elements: string[];
-  context?: string[];
-  relationships: string[];
-};
-
 export type WindowReference = {
   source: string;
   aggregate?: string;
@@ -5149,27 +3830,6 @@ export type WordsView = {
   apps: string[];
   languages: string[];
   words: Word[];
-};
-
-export type WorkTask = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  title: string;
-  body?: string;
-  withheld?: boolean;
-  ref?: string;
-  app: string;
-  key?: string;
-  candidates: string[];
-  assignee?: string;
-  due?: string;
-  state: "open" | "done" | "canceled";
-  answers?: string[];
-  answer?: string;
 };
 
 /** Shared build-time page UI contracts. */
