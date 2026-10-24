@@ -12,8 +12,10 @@ import (
 	"platformserver/platform"
 )
 
-func (h hostView) Apps() []platform.App       { return slices.Clone(h.t.apps) }
-func (h hostView) App(id string) platform.App { return h.t.app(id) }
+func (h hostView) Apps() []platform.App                  { return slices.Clone(h.t.apps) }
+func (h hostView) App(id string) platform.App            { return h.t.app(id) }
+func (h hostView) AppIDs() []string                      { return h.t.AppIDs() }
+func (h hostView) Manifest(app string) platform.Manifest { return h.t.manifestById(app) }
 func (h hostView) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	for _, app := range h.t.apps {

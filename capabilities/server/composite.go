@@ -354,7 +354,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	if err := t.records.promoteRecords(draft.records); err != nil {
 		return saved, err
 	}
-	t.definitions = draft.definitions
+	t.setDefinitions(draft.definitions)
 	t.committed.saveComposite(saved.Key, saved.Digest)
 	t.audit.remember(AuditEntry{At: saved.At, Member: saved.Member, App: construction.ID, Action: "composite", Target: saved.Key})
 	return saved, nil

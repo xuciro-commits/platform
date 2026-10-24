@@ -53,7 +53,7 @@ func (t *Tenant) registerDefinitions() error {
 			}
 		}
 		seen[def.Ref] = true
-		t.definitions = append(t.definitions, def)
+		t.setDefinitions(append(t.definitions, def))
 		return nil
 	}
 	for _, et := range t.records.sortedTypes() {
@@ -215,6 +215,16 @@ func uniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 // fields and actions are filtered through the existing read/catalog paths at
 // request time, so role and field changes are never cached in the registry.
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
+	gen, key := t.definitionsFingerprint(), rights(m)
+	if out, ok := t.cachedDefinitions(m, gen, key); ok {
+		return out
+	}
+	out := t.buildDefinitions(m)
+	t.storeDefinitions(gen, key, out)
+	return out
+}
+
+func (t *Tenant) buildDefinitions(m platform.Member) []platform.Definition {
 	definitions, err := t.definitionsFor(m)
 	if err != nil {
 		return []platform.Definition{}

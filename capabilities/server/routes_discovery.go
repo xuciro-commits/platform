@@ -32,13 +32,13 @@ func (h *Host) routesDiscovery(rt *routes) {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	rt.metadata(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Catalog(m), t.Language(m, r)))
+		WriteView(w, r, t.cachedView("catalog", m, t.Language(m, r)))
 	})
 	rt.metadata(Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []AppInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Apps(), t.Language(m, r)))
 	})
 	rt.metadata(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Entities(m), t.Language(m, r)))
+		WriteView(w, r, t.cachedView("entities", m, t.Language(m, r)))
 	})
 	rt.metadata(Route{Pattern: "GET /v1/words", Summary: "An app's declaration texts (?app=, default build: what the tenant defined) with what every language says for each (administrators)", Query: []Param{{"app", "App ID"}}, Answer: WordsView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if !m.Holds(PlatformApp, Admin) {
@@ -77,12 +77,7 @@ func (h *Host) routesDiscovery(rt *routes) {
 		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.metadata(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		definitions, err := t.definitionsFor(m)
-		if err != nil {
-			http.Error(w, "Asset discovery is unavailable because accepted owner metadata could not be read", http.StatusInternalServerError)
-			return
-		}
-		WriteJSON(w, http.StatusOK, t.i18n.Translate(definitions, t.Language(m, r)))
+		WriteView(w, r, t.cachedView("definitions", m, t.Language(m, r)))
 	})
 	rt.metadata(Route{Pattern: "GET /v1/dependencies", Summary: "Authorized declarations with forward dependencies and reverse impact from the same frozen description", Query: []Param{{"app", "Asset owner; used alone to select an application"}, {"kind", "Focused asset kind"}, {"name", "Focused asset name"}}, Answer: DependencyView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		query := r.URL.Query()

@@ -530,16 +530,17 @@ func (t *Tenant) setting(c platform.Caller, name string) string {
 	if a == nil {
 		return ""
 	}
-	i := slices.IndexFunc(a.Manifest().Settings, func(s platform.Setting) bool { return s.Name == name })
-	if i < 0 {
-		return ""
-	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
+	// A read takes no queue lock: the settings snapshot is lock-free, and a
+	// write replaces it whole.
 	if v, ok := t.settings.get(app + "/" + name); ok {
 		return v
 	}
-	return a.Manifest().Settings[i].Default
+	settings := t.manifestOf(a, t.definitionsFingerprint()).Settings
+	i := slices.IndexFunc(settings, func(s platform.Setting) bool { return s.Name == name })
+	if i < 0 {
+		return ""
+	}
+	return settings[i].Default
 }
 
 // AppSettings are an app's declared settings with their current values.

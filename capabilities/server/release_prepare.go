@@ -335,7 +335,7 @@ func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
 			return nil
 		}
 	}
-	t.definitions = append(t.definitions, definition)
+	t.setDefinitions(append(t.definitions, definition))
 	return nil
 }
 
@@ -374,7 +374,7 @@ func (t *Tenant) anchorReleaseRecords(draft *recordStore) error {
 func (t *Tenant) registerOwnedAssetMetadata() error {
 	definitions, err := t.ownedAssetDefinitions(t.definitions)
 	if err == nil {
-		t.definitions = definitions
+		t.setDefinitions(definitions)
 	}
 	return err
 }

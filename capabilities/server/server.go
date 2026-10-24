@@ -10,8 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
-	"path/filepath"
 	"platformserver/idp"
 	"strconv"
 	"strings"
@@ -61,6 +59,10 @@ type Host struct {
 	Mint func(subject string) string
 	// HostAdmins are the subjects that may open the host console: an independent scope, not a tenant's administrators.
 	HostAdmins map[string]bool
+	// stats and limiter belong to the edge every request crosses (http_edge.go).
+	stats   *edgeStats
+	limiter *limiter
+	web     *webFiles
 	// Templates and CreateTenant are how the host console adds a tenant;
 	// a host without a Rebuild leaves CreateTenant nil.
 	Templates    func() []TenantTemplate
@@ -225,6 +227,8 @@ func (h *Host) Handler() http.Handler {
 	rt.metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
+	// The runtime's own profiles, when the operator asks for them.
+	profileRoutes(mux)
 	// The host console: its own scope, its own administrators.
 	h.hostConsoleRoutes(mux)
 	h.environmentRoutes(mux)
@@ -246,26 +250,55 @@ func (h *Host) Handler() http.Handler {
 			"release": h.Release, "releaseDigest": h.ReleaseDigest})
 	})
 	if h.Web != "" {
-		// The workspace is one page: a path that is not a file is its route.
-		pages := http.FileServer(http.Dir(h.Web))
+		// The workspace is one page held in memory: a path that is not a file
+		// is its route, and a hashed asset is cached for a year.
+		if h.web == nil {
+			h.web = loadWeb(h.Web)
+		}
+		web := h.web
 		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-			if _, err := os.Stat(filepath.Join(h.Web, filepath.FromSlash(path.Clean("/"+r.URL.Path)))); err != nil {
-				r.URL.Path = "/"
-			}
-			pages.ServeHTTP(w, r)
+			web.serve(w, r)
 		})
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept-Language, "+TenantHeader+", "+SchemaVersionHeader)
-		w.Header().Set("Vary", "Accept-Language") // declarations are served in the request's language
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+	// What the process has served, in the exposition format Prometheus reads.
+	// The counts name route patterns, never tenants or members.
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		if !h.scrapeAllowed(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":{"code":"ERROR_CODE_POLICY_DENIED","message":"Metrics need a credential or a loopback caller."}}`))
 			return
 		}
-		mux.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		h.stats.writePrometheus(w)
 	})
+	if h.limiter == nil {
+		// A person never reaches this; a loop or a leaked token does.
+		// PLATFORM_RATE_LIMIT=0 turns it off.
+		rate, _ := strconv.ParseFloat(os.Getenv("PLATFORM_RATE_LIMIT"), 64)
+		if rate == 0 && os.Getenv("PLATFORM_RATE_LIMIT") == "" {
+			rate = 600
+		}
+		burst, _ := strconv.ParseFloat(os.Getenv("PLATFORM_RATE_BURST"), 64)
+		if burst == 0 {
+			burst = rate * 2
+		}
+		h.limiter = newLimiter(rate, burst)
+	}
+	return h.edge(mux)
+}
+
+// scrapeAllowed keeps the process counters off the open internet: a scrape
+// needs a credential this host accepts, or a loopback caller.
+func (h *Host) scrapeAllowed(r *http.Request) bool {
+	if r.Header.Get("Authorization") != "" {
+		if _, _, ok := h.member(r); ok {
+			return true
+		}
+	}
+	host := remoteOf(r)
+	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }
 
 var statuses = map[pb.ErrorCode]int{

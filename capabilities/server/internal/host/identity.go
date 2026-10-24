@@ -37,6 +37,8 @@ type UnitGrantUsage struct {
 type AppCatalog interface {
 	Apps() []platform.App
 	App(id string) platform.App
+	AppIDs() []string                      // cached: governance reads it per request
+	Manifest(app string) platform.Manifest // cached: governance reads it per request
 }
 
 // ConsoleHost supplies only tenant governance projections and artifact storage.

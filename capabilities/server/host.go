@@ -68,6 +68,8 @@ type Tenant struct {
 	i18n        translator     // says declarations and messages in a language
 	agentRun    string         // the run whose agent is submitting, under mu: its effects name it
 	mu          tenantLane
+	views       viewCache                   // catalog, entities and definitions per rights signature
+	defGen      atomic.Uint64               // moves when the installed definitions do
 	streamMu    sync.Mutex                  // one outside-lane source intake pass per tenant
 	fault       atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
 	apps        []platform.App
@@ -152,7 +154,11 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 	}
 	t.staged = stagedChannel{tenant: id, files: t.files}
-	t.i18n = translator{apps: func() []platform.App { return t.apps }, tenant: t.words.clone}
+	t.i18n = translator{
+		apps:     func() []platform.App { return t.apps },
+		manifest: func(a platform.App) platform.Manifest { return t.manifestOf(a, t.definitionsFingerprint()) },
+		tenant:   t.words.clone,
+	}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
@@ -815,16 +821,28 @@ func submitted(member string, a platform.App, s *pb.Submission, at time.Time) Au
 // Catalog is what m may call: each app's actions for m's role there, and an
 // action that uses protocol actions only when m may call the bound provider's.
 func (t *Tenant) Catalog(m platform.Member) []platform.Action {
+	gen, key := t.definitionsFingerprint(), rights(m)
+	if out, ok := t.cachedCatalog(m, gen, key); ok {
+		return out
+	}
+	out := t.buildCatalog(m)
+	t.storeCatalog(gen, key, out)
+	return out
+}
+
+func (t *Tenant) buildCatalog(m platform.Member) []platform.Action {
 	out := []platform.Action{}
 	entities := map[string]platform.EntityInfo{}
 	for _, info := range t.Entities(m) {
 		entities[info.Type] = info
 	}
+	gen := t.definitionsFingerprint()
 	for _, a := range t.apps {
-		for _, action := range a.Manifest().Actions.ForRoles(m.RolesIn(a.Manifest().ID)) {
+		manifest := t.manifestOf(a, gen)
+		for _, action := range manifest.Actions.ForRoles(m.RolesIn(manifest.ID)) {
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
 				owner, schema, _ := t.provider(used)
-				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
+				return owner == nil || !t.manifestOf(owner, gen).Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
 			}) {
 				if version, err := t.actionSchemaVersion(a, action); err == nil {
 					action.SchemaVersion = &version
@@ -855,10 +873,31 @@ func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
 
 // Apps describes the enabled apps from their manifests: discovery,
 // the protocol graph and the capability matrix read this.
+// AppIDs are the installed apps' IDs, from the manifest cache.
+func (t *Tenant) AppIDs() []string {
+	gen := t.definitionsFingerprint()
+	out := make([]string, 0, len(t.apps))
+	for _, a := range t.apps {
+		out = append(out, t.manifestOf(a, gen).ID)
+	}
+	return out
+}
+
+// manifestById is the compiled manifest of an app the tenant installed,
+// answered from the manifest cache: the hot paths ask for it per request.
+func (t *Tenant) manifestById(id string) platform.Manifest {
+	a := t.app(id)
+	if a == nil {
+		return platform.Manifest{}
+	}
+	return t.manifestOf(a, t.definitionsFingerprint())
+}
+
 func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
+	gen := t.definitionsFingerprint()
 	for _, a := range t.apps {
-		m := a.Manifest()
+		m := t.manifestOf(a, gen)
 		info := AppInfo{ID: m.ID, Title: m.Title, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
 			Roles: m.AllRoles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...), Interfaces: append([]platform.Interface{}, m.Interfaces...)}
 		for input, journaled := range m.Inputs {
@@ -892,8 +931,9 @@ type AppEntry struct {
 // AppsOf are the apps the member holds a role in, in the order the tenant runs them.
 func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
 	out := []AppEntry{}
+	gen := t.definitionsFingerprint()
 	for _, a := range t.apps {
-		man := a.Manifest()
+		man := t.manifestOf(a, gen)
 		if role := m.Roles[man.ID]; role != "" {
 			out = append(out, AppEntry{ID: man.ID, Title: cmp.Or(man.Title, man.ID), Role: role})
 		}

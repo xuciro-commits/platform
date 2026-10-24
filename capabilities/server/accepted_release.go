@@ -75,7 +75,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (resultformat.Release, error) 
 		} else if err := t.records.promoteRecords(draft.records); err != nil {
 			return saved, err
 		}
-		t.definitions = draft.definitions
+		t.setDefinitions(draft.definitions)
 		for key, app := range draft.owner {
 			draft.owner[key] = t.app(app.Manifest().ID)
 		}

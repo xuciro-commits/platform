@@ -66,14 +66,17 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 			t.owner["read:"+name] = t.app(id)
 		}
 	}
-	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
+	kept := slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
 		return def.Ref.App == id && def.Source == "tenant" && def.Action != nil && def.Action.Target == info.Type && !slices.ContainsFunc(actions, func(action platform.Action) bool { return action.Schema == def.Ref.Name })
 	})
-	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
+	kept = slices.DeleteFunc(kept, func(def platform.Definition) bool {
 		return def.Ref.App == id && def.Protocol != nil && slices.ContainsFunc(def.Requires, func(ref platform.AssetRef) bool {
 			return ref.Kind == platform.AssetAction && strings.HasPrefix(ref.Name, e.Type+".")
 		})
 	})
+	if len(kept) != len(t.definitions) {
+		t.setDefinitions(kept)
+	}
 	return t.installDefinitions(id, info, actions, pages, e.Protocols...)
 }
 
@@ -162,7 +165,7 @@ func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 	if index >= 0 {
 		t.definitions[index] = def
 	} else {
-		t.definitions = append(t.definitions, def)
+		t.setDefinitions(append(t.definitions, def))
 	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 }
@@ -183,7 +186,7 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 			t.definitions[i] = def
 			return
 		}
-		t.definitions = append(t.definitions, def)
+		t.setDefinitions(append(t.definitions, def))
 	}
 	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
 	entity := info

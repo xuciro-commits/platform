@@ -52,12 +52,19 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 // asked is the first language of Accept-Language the tenant speaks, and
 // whether the request named one at all (English included).
 func (t *Tenant) asked(r *http.Request) (string, bool) {
-	known := t.i18n.languages()
-	for _, part := range strings.Split(r.Header.Get("Accept-Language"), ",") {
+	header := r.Header.Get("Accept-Language")
+	if header == "" {
+		return "", false
+	}
+	var known []string
+	for _, part := range strings.Split(header, ",") {
 		tag, _, _ := strings.Cut(strings.TrimSpace(part), ";")
 		tag = canonical(tag)
 		if tag == "" {
 			continue
+		}
+		if known == nil {
+			known = t.i18n.languages()
 		}
 		if strings.HasPrefix(tag, "en") {
 			if slices.Contains(known, "en") {
