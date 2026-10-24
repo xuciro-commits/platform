@@ -94,3 +94,19 @@
 - 8.7 缺口（记录，不做）：**认证**只有 OIDC 或部署发放的令牌，没有本地口令、找回密码、邮箱验证——本地 IdP 只签发令牌（`idp/local.go` 的 HS256），加口令等于换一套身份模型；**计费/套餐/配额**不存在（多租户的生命周期、隔离与用量视图在，收款不在）；**整租户数据导出/删除**没有一键流程，只有按类型的 CSV 导出与逐记录决定；**界面文案**只有英文（宿主返回的声明文本按请求语言翻译，UI 自己的字没有字典）。
 - [x] 8.8 决定面不逐个写死：`#/o/decisions` 把目录里所有「目标不是记录类型」的动作按目标类型分组列出（成员、角色、策略、团队、令牌、连接器、设置、工作、协议、端点、效果、操作、项目、包、凭据、通知、翻译），新增一个控制台动作不需要改前端。
 - 8.9 下一刀（已量化）：`capabilities/server/platform/page_*.go` 78 文件 536 KB，加上 `apps/build/page.go` 与契约里的 `Section`，是最大的一块死重；新界面不读页面模型，删它是契约变更（重生成 `host.ts`）而不是纯删除，单独一个 change 做。
+
+## 9. 架构统一（第四轮，2026-10-24）
+
+> 判据：一份定义，两个来源（Go 应用与 Build 应用）走同一条读通路；发布即生效，不改 Go、不改 React、不重启。
+
+- [x] 9.1 应用与页面只有一条读通路：`capabilities/server/applications.go`（`Tenant.Applications`、`Tenant.PageView`）与 `routes_applications.go`（`GET /v1/applications`、`POST /v1/page-view`）。两者只读 `t.Definitions(m)`——code 应用的定义与 tenant 应用的定义在 `installDefinitions` 之后是同一份注册表，没有桥接层、适配层或第二套注册表。实测：`GET /v1/applications` 同时列出 code 的 `build` 与 tenant 的 `notes`、`directory`。
+- [x] 9.2 Application Runtime：`web/packages/platform/src/runtime.tsx`。路由 `#/a/{app}/{page}[/{id}]`，侧栏按应用分组列页面，页面按定义渲染列表、记录、页面自带动作与子表；`POST /v1/page-view` 的应答就是它的全部输入。运行时不知道任何应用的名字。
+- [x] 9.3 定义编辑同一份权威模型：`platform.Field` 增加 `fields`（子表列），`EntityActions` 把 `lines` 字段连同其列一起下发，前端 `Lines` 组件按列编辑行；`build.object.create/edit` 的 `fields` 因此是 20 列子表，而不是一个字符串。编辑表单由 `seedOf` 用记录现值预填，`build.object.edit` 第一次带上 `title`、`fields` 等既有值。
+- [x] 9.4 缺陷①：客户端绑定身份后从不读 `GET /v1/declarations`，`authorityOf` 恒空，`Authorities.enqueue` 抛 `NOT_FOUND`，普通动作根本提交不出去。修复在 `api.connect()`（K5 A9）。实测：`platform.setting.set`（把租户名改成 `System`）与 `core.person.create` 都从内核 outbox 提交并确认。
+- [x] 9.5 缺陷②：创建记录后 `CreateView` 打开的是幂等键而不是记录 id；`newId` 只有 6 个十六进制字符。改为 20 个十六进制字符，并用页面自己选的 id 打开。
+- [x] 9.6 缺陷④及自举最后一公里：`installDefinitions` 在覆盖已有定义时只改数组元素、不推进 `defGen`，于是缓存里的 entity/catalog 永远是旧的——发布一个改过字段的对象，要重启才生效。实测修复后 `build.object.edit`（a,d）→ `publish` → `GET /v1/entities` 立刻是 a,e。
+- [x] 9.7 缺陷（发布即隔离）：重装一个类型时，若旧记录还带着新声明已删掉的字段，严格解码失败会让已接受的批次无法应用并隔离租户（`install accepted object: json: unknown field "c"`）。`records.PruneImage` 在严格解码失败时丢弃已删字段重试，语义与 `recordStore.install` 的注释一致：记录保留仍在的字段的值。实测：删字段重发布不再隔离，行里的 `a` 保留、`c` 消失。
+- [x] 9.8 平台管理页面由普通定义构建：租户用 `build.page.create` 建 `people`（`core.person`，list=name,kind,email，detail 六列，actions=`core.person.create/edit`），再用 `build.app.create` 建 `directory` 把它挂上，发布后 `POST /v1/page-view {"app":"directory","page":"people"}` 返回 list-detail 页面与平台的 `core.person` 动作。宿主自己没有为这个页面写一行 Go 或 React。
+- [ ] 9.9 未完成：③ composed 页面（`Section`/`Document`）经 `pageDefinitionProjection` 之后的形态未验；⑤ 删除旧应用对历史/租户恢复的影响（见 7.5c）；⑥ 过时文档与失效命令的核对；⑦ 楼宇供暖应用包；⑧ 最终报告。
+- [ ] 9.10 未做的减法：`platform/page_*.go` 78 文件 347 KB（section 8.9 已量化）。新运行时只读 list-detail 页面，删它是契约变更，不在本切片里顺手做。
+- 9.11 本轮净变化（`4830263..HEAD`）：41 文件、+2,711 / −890；其中 `pnpm-lock.yaml` 因旧锁文件损坏被重生成（−786）。Go 侧新增 `applications.go`（≈150 行）、`routes_applications.go`（≈60 行）、`PruneImage`（20 行），删掉 `publications.go` 里为定位隔离原因临时加的日志。
