@@ -13,6 +13,11 @@ export type Group = { entity: EntityInfo; actions: CatalogAction[] };
 
 const json = (path: string) => fetch(path, { headers: { Accept: "application/json" } });
 
+/** The id a page gives a new record: its own prefix, then six characters. The
+ * host names the record in the submission, so the page must choose it before
+ * the decision and keep it across retries. */
+export const newId = (prefix: string): string => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+
 /** The development identities a host without an identity provider offers. */
 export async function signInOptions(): Promise<Api.SignIn> {
   const response = await json("/v1/sign-in").catch(() => undefined);
@@ -52,10 +57,10 @@ export async function activeRelease(client: EdgeClient): Promise<string> {
   return (await client.get<Api.ReleaseActive>("/v1/releases/active")).id;
 }
 
+/** A page of a type: the host reads the complete set within the caller's scope,
+ * then windows it. The same shape serves search (q). */
 export async function page(client: EdgeClient, type: string, offset = 0, limit = 50, search = ""): Promise<RecordPage> {
-  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-  if (search) query.set("search", search);
-  return await client.get<RecordPage>(`/v1/records/${encodeURIComponent(type)}?${query}`);
+  return await client.records<RecordPage>(type, { limit, offset, ...(search ? { search } : {}) });
 }
 
 export async function record(client: EdgeClient, type: string, id: string): Promise<Record<string, unknown>> {

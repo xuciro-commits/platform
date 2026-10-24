@@ -59,7 +59,6 @@ func (d *stagedDecision) attachPrivateHosts() {
 	}
 }
 
-
 func (d *stagedDecision) savedStates() ([]resultformat.State, error) {
 	var out []resultformat.State
 	for _, id := range slices.Sorted(maps.Keys(d.states)) {

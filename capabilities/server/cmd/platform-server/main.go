@@ -29,7 +29,7 @@ func main() {
 	if *admin != "" {
 		roles := map[string]string{
 			platformserver.PlatformApp: platformserver.Admin,
-			construction.ID: construction.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
+			construction.ID:            construction.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
 			work.ID: work.Admin, platformserver.AgentApp: platformserver.AgentAdmin,
 		}
 		// The development seat of the system tenant is its publisher: without

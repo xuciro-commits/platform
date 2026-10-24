@@ -12,7 +12,6 @@ import (
 // BaseField is the required record reference of an extension object.
 const BaseField = "base"
 
-
 // checkFields refuses a field the platform has no type for, a choice without
 // values, or a reference to an object this tenant has not.
 func CheckFields(fields []Field, known func(string) bool) error {

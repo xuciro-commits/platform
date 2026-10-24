@@ -440,7 +440,7 @@ type ApplicationDiagnostic struct {
 }
 
 func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (ApplicationDiagnostic, *kernel.Error) {
-	out := ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []ApplicationDecisionTrace{}, }
+	out := ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []ApplicationDecisionTrace{}}
 	runtime, refusal := t.ApplicationRuntimeOf(m, ref, now)
 	if refusal != nil {
 		return out, refusal

@@ -615,7 +615,6 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	return info, nil
 }
 
-
 // ApplyFieldAliases copies only declared compatible fields. Owners use the
 // same projection before validation and accepted writes; aliases have no input.
 func ApplyFieldAliases(info EntityInfo, value reflect.Value) {

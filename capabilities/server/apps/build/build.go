@@ -159,7 +159,7 @@ const (
 var directInstallSchemas = []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver,
 	SchemaPropertyType, construction.SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
 	SchemaTablePublish, SchemaAlertPublish,
-	}
+}
 
 // checkReleaseProfile refuses a direct install that a production tenant has
 // retired, naming the schema and the route that replaces it. Replay and

@@ -71,7 +71,7 @@ root = Path.cwd()
 revision = os.environ['PLATFORM_REVISION']
 dist = root / 'web/apps/workspace/dist'
 html = (dist / 'index.html').read_bytes()
-assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html.decode())) | {'/popout.html'})
+assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html.decode())))
 compose = ['docker', 'compose', '-f', 'deploy/local/compose.yaml']
 hosts = []
 for service, port in [('hospitality-server', 8495), ('manufacturing-server', 8490)]:

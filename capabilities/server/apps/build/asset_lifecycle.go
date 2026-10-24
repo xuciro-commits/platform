@@ -71,8 +71,6 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	return platform.ReleaseAsset{}, fmt.Errorf("asset version %s@%s is unavailable", ref, version)
 }
 
-
-
 func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
 	ordered, err := orderOwnerAssets(assets)
 	if err != nil {

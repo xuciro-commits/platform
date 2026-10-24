@@ -3,7 +3,6 @@ package platform
 import (
 	"slices"
 	"time"
-
 )
 
 // The organisation's vocabulary: units of any kind, in any number of
@@ -128,5 +127,3 @@ type ElementInfo struct {
 	Kind       string `json:"kind,omitempty"`
 	Owner      string `json:"owner,omitempty"` // "tenant:<id>" when federated in
 }
-
-

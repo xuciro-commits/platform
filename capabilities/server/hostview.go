@@ -303,10 +303,8 @@ func (h hostView) Tasks() host.Tasks {
 	return h.t.tasks
 }
 
-
 // ActiveRelease is read inside a decision, which already holds the tenant lock.
 func (h hostView) ActiveRelease() string { return h.t.releases.active }
-
 
 // InstallPage offers a page composed in this tenant.
 func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {

@@ -14,7 +14,6 @@ type runtime struct{ t *Tenant }
 
 var _ platform.Runtime = runtime{}
 
-
 // Decide and Attempt explicitly retain the legacy caller's direct semantics,
 // including historical input replay and entries not yet migrated to results.
 // They offer no savepoint or atomic-result guarantee. Accepted entry points

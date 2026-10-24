@@ -36,7 +36,6 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	return assets, nil
 }
 
-
 func (b *Build) releaseInventory() ([]construction.Object, []Page, []Application, error) {
 	if b.host == nil {
 		return nil, nil, nil, fmt.Errorf("builder has no host")
@@ -262,8 +261,6 @@ func releaseAssets(objects []construction.Object, pages []Page, apps []Applicati
 	slices.SortFunc(assets, func(a, b platform.ReleaseAsset) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return assets, nil
 }
-
-
 
 func definitionBody(value construction.Object, typ string) (json.RawMessage, error) {
 	raw, err := json.Marshal(value)

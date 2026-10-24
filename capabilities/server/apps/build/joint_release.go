@@ -223,9 +223,9 @@ func findReleaseAsset(assets []platform.ReleaseAsset, ref platform.AssetRef) (pl
 // draftInventories are the builder's four record families as one candidate
 // sees them: installed records with the selected drafts substituted in.
 type draftInventories struct {
-	objects   []construction.Object
-	pages     []Page
-	apps      []Application
+	objects []construction.Object
+	pages   []Page
+	apps    []Application
 }
 
 // applyRecordDraft substitutes one saved record draft into the shared

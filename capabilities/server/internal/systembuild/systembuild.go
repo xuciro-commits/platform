@@ -40,9 +40,6 @@ var (
 	// The workspace is built by vite itself, never by the repository's build
 	// script: a change may rewrite that script, and the gate would not stop it.
 	WebCommand = []string{"pnpm", "--dir", "apps/workspace", "exec", "vite", "build"}
-	// The rule engine the browser trusts is compiled from the same Go source,
-	// by this fixed command rather than the script that wraps it.
-	RuleCommand = []string{"go", "build", "-trimpath", "-o", "{out}", "./cmd/rule-browser"}
 )
 
 // Materialize seeds a fresh work tree from the repository the running host was
@@ -193,11 +190,6 @@ func Build(cfg Config, req host.SystemBuildRequest) (host.SystemBuildResult, err
 			result.Duration = time.Since(started)
 			return result, nil
 		}
-		if diagnostics, err := buildRuleEngine(work); err != nil {
-			result.Diagnostics = "rule engine build failed: " + diagnostics
-			result.Duration = time.Since(started)
-			return result, nil
-		}
 		dist := filepath.Join(work, "web", "apps", "workspace", "dist")
 		web.WriteString(digestFile(dist))
 	}
@@ -297,31 +289,6 @@ func command(cfg Config, argv []string) []string {
 		return argv
 	}
 	return append([]string{"corepack"}, argv...)
-}
-
-// buildRuleEngine compiles the browser's rule evaluator into the workspace's
-// public directory, so the served pages carry an engine built from the same
-// sources as the binary.
-func buildRuleEngine(work string) (string, error) {
-	dir := filepath.Join(work, "web", "public", "rules")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	out := filepath.Join(dir, "engine.wasm")
-	wasm := replace(RuleCommand, "{out}", out)
-	diagnostics, err := run(Config{}, work, module(work), append([]string{"env", "GOOS=js", "GOARCH=wasm"}, wasm...))
-	if err != nil {
-		return diagnostics, err
-	}
-	goroot, err := output(module(work), "go", "env", "GOROOT")
-	if err != nil {
-		return "", err
-	}
-	body, err := os.ReadFile(filepath.Join(goroot, "lib", "wasm", "wasm_exec.js"))
-	if err != nil {
-		return "", err
-	}
-	return "", os.WriteFile(filepath.Join(dir, "wasm_exec.js"), body, 0o644)
 }
 
 // output runs one command in dir and returns its trimmed standard output.

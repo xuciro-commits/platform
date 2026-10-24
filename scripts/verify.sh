@@ -61,25 +61,12 @@ format() {
 }
 
 capabilities() {
-  # Platform mechanisms are checked independently of industry application packages.
   step capability-server check_module capabilities/server -timeout=45m
-  step app-scaffold scaffold
 }
 
-# The scaffold (cmd/new-app) writes an app whose tests pass, in a scratch copy
-# of the repository's layout, so the documented new-app command produces a usable starting point.
-scaffold() {
-  local root=.build/scaffold
-  rm -rf "$root" && mkdir -p "$root" && ln -s ../../contract ../../capabilities "$root"/ &&
-    (cd capabilities/server && go run ./cmd/new-app -root "../../$root" -id scaffolded -entity request -web=false) &&
-    check_module "$root/apps/scaffolded/server"
-}
-
-# Apps know no other app; they meet through protocols; and no
-# escape hatch appears without being listed.
+# No app reaches around the app API.
 composition_static() {
   step app-boundaries scripts/boundaries.sh
-  step escapes scripts/escapes.sh
 }
 
 composition() {

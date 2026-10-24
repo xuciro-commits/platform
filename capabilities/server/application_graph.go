@@ -7,7 +7,6 @@ import (
 	"platformserver/platform"
 )
 
-
 func applicationRunGraph(root platform.AssetRef, assets map[platform.AssetRef]platform.ReleaseAsset) map[platform.AssetRef]bool {
 	graph := map[platform.AssetRef]bool{}
 	var visit func(platform.AssetRef)

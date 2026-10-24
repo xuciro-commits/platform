@@ -493,7 +493,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		}
 		c.Put(r, run) // before its flow goes on, which may keep a signal on it
 		if run.State == "done" {
-				}
+		}
 	}
 }
 
@@ -712,8 +712,6 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord
 	c.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".",
 		Ref: RunType + "/" + run.ID, To: a.recipients(c, a.def(run.Agent), *run), Key: "agent:" + run.ID + ":stopped"})
 }
-
-
 
 // Interested and Listen take the events agents wait on (internal/host.Listener).
 func (a *Agents) Interested(_ []string, e platform.Event) bool { return a.interested(e) }

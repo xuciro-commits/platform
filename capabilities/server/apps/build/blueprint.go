@@ -89,5 +89,3 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]construction.JointDraft
 	}
 	return out, nil
 }
-
-

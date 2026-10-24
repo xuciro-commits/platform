@@ -66,8 +66,10 @@ export class EdgeClient {
     return () => { stops.forEach(stop => stop()); stops.clear(); };
   }
   recordsPath(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}) {
-    if (q.set || q.traversal || q.businessTime) return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
-    return `/v1/records/${encodeURIComponent(type)}?${this.readParams(q)}`;
+    // The host reads a complete, scoped set and windows it; every read is the
+    // same POST body, so a set expression and a plain page never diverge.
+    const {domain, ...rest} = q;
+    return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify({...rest, ...(domain === undefined ? {} : {domain})})}`;
   }
   interfaceRecordsPath(name:string,q:Omit<Query,"domain"> & {domain?:unknown[]}={}) {
     return `/v1/interfaces/${encodeURIComponent(name)}/records?${this.readParams(q)}`;

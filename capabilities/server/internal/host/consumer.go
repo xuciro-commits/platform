@@ -106,4 +106,3 @@ type Glossary interface {
 	Terms(app string) []platform.KnowledgeTerm
 	TermsFor(declaration string) []string
 }
-

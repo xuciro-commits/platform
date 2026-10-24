@@ -22,9 +22,9 @@ const (
 	AssetApp AssetKind = "app"
 	// AssetQuery is a named, pure query an app declares once:
 	// pages and agent tools run the same declaration.
-	AssetQuery AssetKind = "query"
-	AssetFunction   AssetKind = "function"
-	AssetAgent      AssetKind = "agent"
+	AssetQuery    AssetKind = "query"
+	AssetFunction AssetKind = "function"
+	AssetAgent    AssetKind = "agent"
 	// AssetFlow is a retained flow definition kind; the flow app is no longer
 	// composed, so nothing installs it.
 	AssetFlow       AssetKind = "flow"
@@ -456,27 +456,27 @@ type Definition struct {
 	Protocol    *ProtocolReleaseDescriptor `json:"protocol,omitempty"`
 	// OwnerRecord is the internal metadata read boundary for assets whose
 	// descriptor is not itself a record type. It never enters discovery JSON.
-	OwnerRecord      string                   `json:"-"`
-	ContentVersion   string                   `json:"contentVersion,omitempty"`
-	PropertyType     *PropertyType            `json:"propertyType,omitempty"`
-	PropertyVersions map[string]PropertyType  `json:"propertyVersions,omitempty"`
-	LinkType         *LinkType                `json:"linkType,omitempty"`
-	LinkVersions     map[string]LinkType      `json:"linkVersions,omitempty"`
-	Ref              AssetRef                 `json:"ref"`
-	Source           string                   `json:"source"`  // code, until published definitions exist
-	Version          string                   `json:"version"` // installed app manifest version, not a published revision
-	ContractVersion  int                      `json:"contractVersion"`
-	Requires         []AssetRef               `json:"requires"`
-	Provides         []Capability             `json:"provides"`
-	Entity           *EntityInfo              `json:"entity,omitempty"`
-	Action           *Action                  `json:"action,omitempty"`
-	Page             *Page                    `json:"page,omitempty"`
-	Application      *Application             `json:"application,omitempty"`
-	Query            *NamedQuery              `json:"query,omitempty"`
-	QueryVersions    map[string]NamedQuery    `json:"queryVersions,omitempty"`
-	Function         *AIFunction              `json:"function,omitempty"`
-	Agent            *AgentReleaseDescriptor  `json:"agent,omitempty"`
-	Operation        *Operation               `json:"operation,omitempty"`
+	OwnerRecord      string                  `json:"-"`
+	ContentVersion   string                  `json:"contentVersion,omitempty"`
+	PropertyType     *PropertyType           `json:"propertyType,omitempty"`
+	PropertyVersions map[string]PropertyType `json:"propertyVersions,omitempty"`
+	LinkType         *LinkType               `json:"linkType,omitempty"`
+	LinkVersions     map[string]LinkType     `json:"linkVersions,omitempty"`
+	Ref              AssetRef                `json:"ref"`
+	Source           string                  `json:"source"`  // code, until published definitions exist
+	Version          string                  `json:"version"` // installed app manifest version, not a published revision
+	ContractVersion  int                     `json:"contractVersion"`
+	Requires         []AssetRef              `json:"requires"`
+	Provides         []Capability            `json:"provides"`
+	Entity           *EntityInfo             `json:"entity,omitempty"`
+	Action           *Action                 `json:"action,omitempty"`
+	Page             *Page                   `json:"page,omitempty"`
+	Application      *Application            `json:"application,omitempty"`
+	Query            *NamedQuery             `json:"query,omitempty"`
+	QueryVersions    map[string]NamedQuery   `json:"queryVersions,omitempty"`
+	Function         *AIFunction             `json:"function,omitempty"`
+	Agent            *AgentReleaseDescriptor `json:"agent,omitempty"`
+	Operation        *Operation              `json:"operation,omitempty"`
 }
 
 // ApplicationVisibility is the original member-facing metadata projection.

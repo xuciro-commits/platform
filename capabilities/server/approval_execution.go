@@ -42,7 +42,6 @@ func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Erro
 	return "", nil
 }
 
-
 // A tenant's latest activation may belong to another application. Select an
 // approval's original complete action from an actual installed candidate.
 func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.ReleaseCandidate, *kernel.Error) {
@@ -86,4 +85,3 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	}
 	return bound, nil
 }
-

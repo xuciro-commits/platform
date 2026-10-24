@@ -8,8 +8,9 @@
 - [x] 1.2 `deploy/local/lite.sh` 与 `make lite` 改为单一宿主，不再传已删除的 `-packages deploy/packages`，也不再按 solution 名分支；`deploy/dev/run.sh` 同步去掉该参数。
 - [x] 1.3a 删除协议网关与驱动执行栈：`gateway/`、`drivers/{modbus,s7,simulator}`、`driver/`、`cmd/{gateway,driver-modbus,driver-s7,driver-simulator,webhook-sink}`、`scripts/package-artifacts.py`；包索引改为自己校验制品摘要。删除后重建并换版成功（release 0006）。
 - [x] 1.3b 删除 `build` 的 source、connection、dataset、pipeline、writeback、match、observation、dispatch、confirmation 及对应 Web 编辑器。**2026-10-24 完成**：9 个 build 文件、6 个根包文件与整套装配（`build.go`、`activation.go`、`release*.go`、`joint_release.go`、事务引擎的 effect/dispatch 步骤）已删除；`go build ./... && go vet ./...` 绿，`go test .`（自举验收）通过。
-- [ ] 1.4 删除知识、文件、关系、企业建模与专业可视化：`apps/{knowledge,files,relations}`、UAF 元素/关系/视图/租户链接、`ui/src/spatial`、三维/地图/标注组件。**实测卡点（2026-10-24）**：删 `ui/src/spatial` 后 typecheck 只有 8 个错，但都落在 `widgets/RecordCollaboration.tsx` —— 这个渲染器同时承载评论、上传、媒体预览、PDF 与标注/三维（`collaboration-plugins.ts` 六个 widget 共用一个组件），所以删空间组件要先把它拆开；`surface-plugins.ts` 的 `record-map` 与页面模型的 `map`/`scene` 段来自契约（`packages/kernel/src/gen/host.ts`），删字段要重生成。`apps/{knowledge,files,relations}` 另有 7.5c 的重放阻断。三件事都是重构，不是删除。
-- [x] 1.5 精简树通过检查：`cd capabilities/server && go build ./... && go vet ./...` 全绿，`go test ./...` 只剩保留集（`platformserver` 自举验收 0.84s 通过、`internal/systemscope`）。Web 的 `pnpm -r typecheck` 待前端重构完成后重跑。
+- [x] 1.4 删除知识、企业建模与专业可视化：`apps/knowledge`、UAF 元素/关系/视图/租户链接、`ui/src/spatial`、三维/地图/标注组件。**2026-10-24 完成方式改为推倒重写**：旧前端 `web/packages/{build,app,ui}` 与 `web/apps/workspace/src` 整包删除，`spatial`、`RecordCollaboration`、`surface-plugins`、协作/上传/PDF/标注 widget 随宿主一起消失，不需要再拆分重构；新界面（`web/packages/platform`，见 6.7）不引用页面模型、`map`/`scene` 段或任何 widget 契约。
+- 1.4a（移出本变更）`apps/{files,relations}` 保留：7.5b 的实测证明删掉这两个应用会让已有租户在真实数据上被隔离（`accepted observation needs missing projection relations`），退役需要先有迁移路径（7.5c）。两块合计 24 KB，删除收益小于重放破损的代价。
+- [x] 1.5 精简树通过检查：`cd capabilities/server && go build ./... && go vet ./...` 全绿，`go test ./...` 只剩保留集（`platformserver` 自举验收 0.84s 通过、`internal/systemscope`）；Web 的 `pnpm -r typecheck` 与 `vite build` 在重写后重跑全绿（2026-10-24）。**体量**：`capabilities/server` Go 3,853,478 B / 538 文件（基线 10,183,233 B，−62.2%）；手写前端 166,731 B（host.ts 之外的 `.ts/.tsx/.css`；基线 4,643,732 B，−96.4%）。
 
 ## 2. system 作用域与角色
 
@@ -50,6 +51,7 @@
 - [x] 6.3 源码编辑：文件列表 + 修订号 + 保存/删除，冲突由宿主拒绝并在界面上报。
 - [x] 6.4 双语键（`packages/platform/src/i18n.ts`）。
 - [x] 6.5 浏览器入口可用：宿主以 `-tenant system -admin user:admin@example.test` 启动时，开发席位持有 `system.publisher`，工作区列出 Platform 的三页；构建产物 `web/0013` 里能找到这些页面。完整点击演练仍待负责人走查。
+- [x] 6.7 前端推倒重写（2026-10-24）：`web/packages/platform` 只剩 `api.ts`（宿主读写）、`host.tsx`（一个 client 的加载与刷新）、`ui.tsx`（按 `FieldInfo.type` 渲染字段）、`views.tsx`（记录、记录详情、定义、发布、自举控制台）、`index.tsx`（hash 路由与会话），样式是一张手写 CSS（4.9 kB，无 Tailwind）。自举控制台直接对上宿主既有动作：`agent.run.start`（system.architect）提问、`system.change.approve` 批准、`system.release.activate` 激活、`system.file.save` + `system.change.propose` 人工改代码。**实测**（lightweight 宿主 + 浏览器产物）：`GET /v1/sign-in`、`/v1/me`、`/v1/entities`、`/v1/actions`、`/v1/definitions`、`/v1/system-changes` 与 `POST /v1/records/{type}/query` 可用；用内核客户端对 system 租户提交 `system.change.propose` 成功（`chg-probe-1`），随后 `system.change.approve` 把它推进到 `approved`。
 - 6.6 删除（不做）：同上，切换入口等于在业务租户里露出 system 作用域；需要时以 system 席位另开会话即可。
 
 ## 7. 验收与文档
@@ -65,9 +67,10 @@
 - [x] 7.5b 注入数据不兼容：release 0010（删掉 files/relations 的树）能通过临时目录探活，但在真实数据上隔离了 system 租户；监督进程按 `status != ok` 判定失败、回滚 0009，并把 `current.json` 改回 0009，健康恢复且不再反复重试。
 - 7.5c（记录，不阻塞）删除 `files`/`relations`/`knowledge` 三个应用会让已有租户无法重放（`accepted observation needs missing projection relations`），必须先有退役与迁移路径；本次已回退这三处删除，仅保留 gateway/驱动/协议二进制的删除。
 - [x] 7.6 文档：`docs/Architecture.md` 第 9 节、`docs/WorkQueue.md`、`AGENTS.md` 硬规则 8 与检查入口、`openspec/README.md`。
-- [ ] 7.7 归档：`make openspec ARGS='validate platform-self-hosting --strict'` 已通过（2026-10-24）；归档等 1.3/1.4 要么完成、要么作为独立 change 移出本变更的范围内。
+- [ ] 7.7 归档：`make openspec ARGS='validate platform-self-hosting --strict'` 已通过（2026-10-24）；归档等 5.5（真模型演练，缺凭据）与 1.4a（移出本变更）落定。
 
 ## Workflow follow-up
 
-- 删除过程中 `scripts/boundaries.sh`、`scripts/escapes.sh` 的允许清单只减不增。
+- 删除过程中 `scripts/boundaries.sh` 的允许清单只减不增；`scripts/escapes.sh` 随 `@platform/ui` 一起删除（它守的是已不存在的 kit 与 app 包）。
+- **下一刀（已量化）**：`capabilities/server/platform/page_*.go` 78 个文件 347,164 B，加上 `apps/build/page.go`、`page_composite.go` 与 `Section` 契约字段，是剩余最大的一块死重；新界面不读页面模型，删它是契约变更（需重生成 `host.ts`）而不是纯删除，单独一个 change 做。
 - 自举上线后不以测试数量或代码行数作为交付证据；以演练与真实操作结果判断。

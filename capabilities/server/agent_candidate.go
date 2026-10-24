@@ -71,7 +71,6 @@ func (a *Agents) evaluationDefinition(candidate, agent string) (*agentDef, strin
 	return d, digest, nil
 }
 
-
 func (t *Tenant) agentEvaluationsReadyLocked(candidate platform.ReleaseCandidate) error {
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind != platform.AssetAgent || asset.Ref.App != construction.ID {

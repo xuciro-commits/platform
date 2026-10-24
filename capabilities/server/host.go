@@ -41,14 +41,14 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
-	installingSet      bool // private owner images validate cross-references as one complete set
-	currentReadScopes  bool
-	recordReadError    error
-	startupSnapshot    *snapshotCompatibility
-	runtimePosition    func() int64
-	snapshotPosition   int64 // last captured/restored checkpoint; zero-position diagnostics preserve it
-	simulation         bool                         // isolated builder execution, never authoritative state
-	simulationTrace    func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
+	installingSet     bool // private owner images validate cross-references as one complete set
+	currentReadScopes bool
+	recordReadError   error
+	startupSnapshot   *snapshotCompatibility
+	runtimePosition   func() int64
+	snapshotPosition  int64                        // last captured/restored checkpoint; zero-position diagnostics preserve it
+	simulation        bool                         // isolated builder execution, never authoritative state
+	simulationTrace   func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
 	// Private control views route callbacks back into their owning decision.
 	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity      host.IdentityDirectory
@@ -61,23 +61,23 @@ type Tenant struct {
 	AcceptResult func(Entry, string, string) ([]byte, error)
 	// Store keeps what is derived outside the journal: vectors and transcripts;
 	// without one they stay in memory.
-	Store         Store
-	memStore      journal.Memory // the Store without one
-	knowledge     host.Glossary  // the knowledge app: documents are searched, terms read
-	index         index          // passages cut from documents and knowledge fields
-	i18n          translator     // says declarations and messages in a language
-	agentRun      string         // the run whose agent is submitting, under mu: its effects name it
-	mu            tenantLane
-	streamMu      sync.Mutex                  // one outside-lane source intake pass per tenant
-	fault         atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
-	apps          []platform.App
-	appIndex      map[string]int          // immutable composition identity; private views replace owners in the same positions
-	committed     committed               // answers by idempotency key (committed.go)
-	releases      releaseStore            // release_store.go
-	console       hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
-	staged        stagedChannel           // the per-call result channel (compute_channel.go)
-	definitions   []platform.Definition   // installed code assets; member views are derived on read
-	owner         map[string]platform.App // "action:", "read:" and "input:" names → app
+	Store       Store
+	memStore    journal.Memory // the Store without one
+	knowledge   host.Glossary  // the knowledge app: documents are searched, terms read
+	index       index          // passages cut from documents and knowledge fields
+	i18n        translator     // says declarations and messages in a language
+	agentRun    string         // the run whose agent is submitting, under mu: its effects name it
+	mu          tenantLane
+	streamMu    sync.Mutex                  // one outside-lane source intake pass per tenant
+	fault       atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
+	apps        []platform.App
+	appIndex    map[string]int          // immutable composition identity; private views replace owners in the same positions
+	committed   committed               // answers by idempotency key (committed.go)
+	releases    releaseStore            // release_store.go
+	console     hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
+	staged      stagedChannel           // the per-call result channel (compute_channel.go)
+	definitions []platform.Definition   // installed code assets; member views are derived on read
+	owner       map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	audit     auditLog // recent inputs, deliveries, personal reads (audit_log.go)

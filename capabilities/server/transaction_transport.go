@@ -79,7 +79,6 @@ func (q *txnCalls) Call(call platform.TxnCall, inputs json.RawMessage, at time.T
 	return q.decision.tenant.readQueryVersionFrom(store, q.caller, call.Ref.App, call.Ref.Name, call.Version, inputs, at)
 }
 
-
 func (h hostView) QueueTxnJournal(c platform.Caller, receipt *pb.ChangeRecord, step string, journal platform.Journal, reverseAction string, at time.Time) *kernel.Error {
 	if h.decision == nil || !c.Staging() || c.App != construction.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction journal intents require their original private owner")
