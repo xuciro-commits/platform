@@ -9,10 +9,10 @@
 | 内核契约 | K1–K9：身份、事实、决策、权威、租户策略、模式演进、连接器、工作所有权。语言中立 | `contract/`（protobuf、语义规范、JSON 向量、Go 参考实现、Lean 模型） | 语义确需演进时，先更新规范与跨语言向量 |
 | 宿主运行时 | 租户组合、提交管线、持久化与重放、快照、记录存储、受属工作、效果分发、模型调用 | `capabilities/server/`（包 `platformserver`） | 平台需要新机制时 |
 | 应用 API | 应用唯一可见的表面：`Member`、`Caller`、`Manifest`、生命/动作/读取/流程/智能体/作业/设置/效果声明、`Ledger`、`Runtime` | `capabilities/server/platform/` | 应用需要宿主尚未提供的能力时 |
-| 平台应用 | 跨行业通用能力：`ai`、`build`、`core`、`enterprise`、`files`、`flow`、`knowledge`、`relations`、`work` | `capabilities/server/apps/<id>/` | 该能力所属的语义需要扩展时 |
+| 平台应用 | 跨行业通用能力：`ai`、`build`、`core`、`enterprise`、`files`、`flow`、`knowledge`、`relations`、`work`；`system` 只装配在 system 作用域 | `capabilities/server/apps/<id>/` | 该能力所属的语义需要扩展时 |
 | 协议 | 应用之间唯一允许的耦合：由资产声明版本化接口，平台检查契约和映射 | 应用包中的协议声明；`capabilities/server/platform/protocol.go` | 提供方或消费方的受控接口变化时 |
 | 业务应用 | 通过平台声明表达业务任务；包内对象、动作、规则、流程与页面可由构建者修改 | `deploy/packages/` | 保留业务任务或通用构建能力变化时 |
-| 部署装配 | 同一平台工厂装配能力，两个实例由租户与包配置区分 | `capabilities/server/composition/`、`cmd/platform-server/`、`deploy/local/` | 平台能力组合或部署配置变化时 |
+| 部署装配 | 同一平台工厂装配能力，实例由租户配置区分；自举的构建与换版由独立进程持有 | `capabilities/server/composition/`、`cmd/platform-server/`、`cmd/platform-updater/`、`deploy/local/` | 平台能力组合或部署配置变化时 |
 | Web | 工作区、构建者应用、治理应用、共享 UI | `web/apps/`、`web/packages/` | 界面职责变化时 |
 
 ## 2. 代码地图
@@ -29,20 +29,21 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
   internal/          acceptance agents aistate construction enterprise host records rules
-  cmd/               platform-server、api-types、new-app、check-boundaries、uaf-gen、webhook-sink
+  cmd/               platform-server（宿主）、platform-updater（构建与换版）、api-types、new-app、check-boundaries、code-builder、compute、wasm-worker、rule-browser
+  internal/systemscope  自举的内核闸门：哪些路径永远不能被变更修改
+  internal/systembuild  独立工作树与固定构建命令
+  internal/host         宿主消费者的具名窄角色
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 web/
   apps/workspace     唯一工作区：session host shell chrome
-  apps/catalog       资产库与代码沙箱
   packages/ui        @platform/ui    共享 UI Kit
   packages/app       @platform/app   前端应用 API
   packages/kernel    @platform/kernel 契约类型（src/gen/host.ts 生成）
   packages/build     统一构建台（Model/Logic/Interface/Integration/Release）
-  packages/platform  治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
-  e2e                Playwright 路线，spec 只经 tests/kit.ts
-scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
+  packages/platform  治理与运维（Control Panel/Runs/Agents/AI/Knowledge/Host Console）+ Platform 自举视图
+scripts/             boundaries escapes verify code-size sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples
-docs/                Intent Architecture WorkQueue standards/uaf
+docs/                Intent Architecture WorkQueue
 openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 .agents/skills/      官方 OpenSpec 核心工作流（CLI 生成）
 ```
@@ -146,6 +147,7 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 
 | 涉及变化 | 主责规范 |
 |---|---|
+| 系统改自己：作用域、闸门、构建、激活、两条入口 | [自举](../openspec/specs/platform/self-hosting/spec.md) |
 | 内核、语言边缘与形式化范围 | [契约](../openspec/specs/kernel/contracts/spec.md)；精确规则链接原契约正文 |
 | 单权威、接受顺序、并发与故障 | [宿主](../openspec/specs/runtime/host/spec.md) |
 | 正式状态、历史字节、格式与恢复 | [存储](../openspec/specs/runtime/storage/spec.md) |
@@ -155,3 +157,16 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 | 运行形态、受控执行依赖与交付证据 | [部署与运维](../openspec/specs/runtime/deployment/spec.md) |
 
 生成物、共享入口、双语和验证选择等工作规则继续归 AGENTS；模型、流程、AI、工作区和专业可视化在目录中各有模块，避免在这里重复其需求。规范变化通过同一 OpenSpec change 修改所涉模块，不能新增永久的旁路规则或过程总结。
+
+## 9. 自举（system 作用域）
+
+平台把自己当作一个应用来改：系统的源码、变更、发布与激活都是 `system` 租户里的受控记录，写入仍走同一条提交管线。
+
+- **作用域**：`capabilities/server/tenants.go` 的 `systemSpec` 装配宿主级唯一的 `system` 租户（不可由 Console 创建或删除）。它复用 `composition.NewTenant`，额外装入 `apps/system`，角色为 `builder` / `publisher`，`-host-admins` 默认拿到 `system=publisher`，`platform=admin`、`build=builder`。
+- **记录**（`apps/system/system.go`）：`system.blob` 内容寻址（sha256，同一内容只存一份）、`system.file` 每路径一条并带修订与墓碑、`system.change` 记录来源（`ui` 或 `prompt`）、提示词、冻结文件清单与诊断、`system.release` 不可变并带二进制/工作区/工具链摘要、`system.activation` 记录可取消窗口与结果。所有文本字段都声明 `source`；漏写会被 `SetZero` 静默清空。
+- **闸门**（`internal/systemscope`）：保存前与构建前各执行一次，纯函数给出拒绝项。冻结 `contract/`、`host.go`、`accepted_*`、`replay`、`snapshot`、`journal/`、`internal/{acceptance,records,host,systemscope}/`、`platform/authz/`、`idp/`、`go.mod/go.sum`；拒绝 `.git/`、绝对路径、`..`、密钥文件；上限 2 MiB/文件、20 MiB/变更。
+- **构建**（`internal/systembuild`）：从运行中的代码树播种到 `.build/system/work/<时间>/`，叠加变更冻结的文件、删除墓碑，再用固定命令编译宿主（`go build ./cmd/platform-server`）与工作区（`vite build`），并编译浏览器规则引擎。从不执行仓库的 Makefile 或 `scripts/`。
+- **换版**（`cmd/platform-updater`）：`watch` 轮询已批准的变更并构建、把 `requested` 的激活交给 `swap`；`swap` 用临时数据目录起候选、核对 `/healthz.release`，通过才写 `.build/system/current.json`。`keep` 把产物按发布号放进 `.build/system/{bin,web,releases}`，只保留最近 5 个；正在运行与可回滚的发布永不清理。`serve` 是监督进程：每秒读该文件，探活新版本、排空旧进程、启动新版本并核对发布号，失败即回滚；收到 SIGTERM 时按同一排空流程停掉子进程。
+- **会话恢复**：`Platform-Tenant` 只是"多租户时选哪一个"的偏好。宿主对不存在的租户名直接忽略（`Host.serves`），工作区在 `/v1/me` 401 且自己没有 OIDC 会话时清掉记住的租户与令牌、改用宿主签发的开发身份，所以换租户或重置数据目录后不必手动清 localStorage。
+- **导出**（`platform-updater export`、`make system-export`）：读 `.build/system/releases/<发布号>.json` 里记录的工作树与每个冻结文件的 sha256，逐一校验后再整棵复制到 `.build/system/exports/<发布号>/`；导出的是源码树，构建产物与依赖目录留在原处。
+- **两条入口**：AI 入口是 `system.architect` 智能体（`agent.run.start`，目标为提示词），只能 `system.file.save` 与 `system.change.propose`；人工入口是工作区 `Platform` 应用中的 changes / files / releases 三页，批准、激活、取消与保存都通过同一批动作。

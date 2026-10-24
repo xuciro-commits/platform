@@ -79,19 +79,6 @@ func (q *txnCalls) Call(call platform.TxnCall, inputs json.RawMessage, at time.T
 	return q.decision.tenant.readQueryVersionFrom(store, q.caller, call.Ref.App, call.Ref.Name, call.Version, inputs, at)
 }
 
-func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects require their original private owner")
-	}
-	var request construction.WritebackRequest
-	if json.Unmarshal(raw, &request) != nil || request.Version != 1 || request.Connection == "" || request.Writeback == "" || request.Dispatch != "" || request.Confirmation != "" || target.Type == "" || target.ID == "" {
-		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction delivery has no frozen writeback request")
-	}
-	key := receipt.GetChangeId() + ":" + step
-	endpoint := construction.WritebackEndpoint + request.Connection
-	x := platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}
-	return h.queueTxnIntent(c, receipt, x)
-}
 
 func (h hostView) QueueTxnJournal(c platform.Caller, receipt *pb.ChangeRecord, step string, journal platform.Journal, reverseAction string, at time.Time) *kernel.Error {
 	if h.decision == nil || !c.Staging() || c.App != construction.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {

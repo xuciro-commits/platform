@@ -47,9 +47,6 @@ type Tenant struct {
 	startupSnapshot    *snapshotCompatibility
 	runtimePosition    func() int64
 	snapshotPosition   int64 // last captured/restored checkpoint; zero-position diagnostics preserve it
-	observationWindows map[string]observationWindowAttempt
-	confirmationReads  statusReadSchedule
-	dispatchReads      statusReadSchedule
 	simulation         bool                         // isolated builder execution, never authoritative state
 	simulationTrace    func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
 	// Private control views route callbacks back into their owning decision.
@@ -72,7 +69,6 @@ type Tenant struct {
 	agentRun      string         // the run whose agent is submitting, under mu: its effects name it
 	mu            tenantLane
 	streamMu      sync.Mutex                  // one outside-lane source intake pass per tenant
-	flowArtifacts flowArtifactGC              // transient preparation/collection exclusion; no authoritative state
 	fault         atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
 	apps          []platform.App
 	appIndex      map[string]int          // immutable composition identity; private views replace owners in the same positions
@@ -120,7 +116,6 @@ type Tenant struct {
 	ai        models          // the AI app: the models the host calls
 	records   *recordStore    // the apps' entity records
 	tasks     host.Tasks      // serves Caller.Assign: the work app
-	procs     host.Processes  // the flow app
 	listeners []string        // platform apps given other apps' events as owned work (host.Listener)
 	agents    AgentRuntime    // AI agents
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
@@ -196,9 +191,6 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if x, ok := a.(host.Tasks); ok {
 			t.tasks = x
 		}
-		if x, ok := a.(host.Processes); ok {
-			t.procs = x
-		}
 		if _, ok := a.(host.Listener); ok {
 			t.listeners = append(t.listeners, m.ID)
 		}
@@ -252,17 +244,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
-	for _, a := range apps { // flows, once every app is composed
-		if len(a.Manifest().Flows) == 0 {
-			continue
-		}
-		if t.procs == nil {
-			return nil, fmt.Errorf("tenant %s: %s declares flows, and the tenant runs no flow app", id, a.Manifest().ID)
-		}
-		if err := t.procs.Declare(a); err != nil {
-			return nil, fmt.Errorf("tenant %s: %v", id, err)
-		}
-	}
+
 	{ // interfaces, once every entity is described (A2)
 		manifests := make([]platform.Manifest, len(apps))
 		infos := map[string]platform.EntityInfo{}
@@ -355,11 +337,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 		a = t.app(s.GetAuthority())
 		if a == nil {
 			return nil, unknown()
-		}
-	}
-	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
-		if record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, contentVersion...); handled {
-			return record, refusal
 		}
 	}
 	t.mu.Lock()
@@ -523,12 +500,8 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
 	}
 	member, _ := json.Marshal(m)
-	var versions map[string]int
-	if t.procs != nil {
-		versions = draft.flowVersions()
-	}
 	committed, err := t.acceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
-		Principal: member, Body: raw, At: now, Versions: versions}, s.GetIdempotencyKey(), hash)
+		Principal: member, Body: raw, At: now}, s.GetIdempotencyKey(), hash)
 	if err != nil {
 		if err == errAcceptedConflict {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}

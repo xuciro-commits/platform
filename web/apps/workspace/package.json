@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "@platform/catalog-app": "workspace:*",
     "@pkg/build": "workspace:*",
     "@pkg/platform": "workspace:*",
     "@platform/app": "workspace:*",

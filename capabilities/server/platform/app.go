@@ -466,7 +466,6 @@ type Manifest struct {
 	Functions     []AIFunction            // typed, bounded inference through existing model effects
 	Operations    []Operation             // typed native or controlled Wasm computation
 	Observations  []ObservationDefinition // external summaries and result-only business decisions
-	Flows         []Flow                  // long-running processes the host runs for the app
 	Agents        []Agent                 // AI agents the host runs for the app
 	Sequences     []Sequence              // numbers of its documents, without gaps
 	// Roles are roles that grant no action but open something else, such as

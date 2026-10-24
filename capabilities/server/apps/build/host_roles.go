@@ -31,5 +31,4 @@ func (b *Build) CandidateActions(asset platform.ReleaseAsset) ([]platform.Action
 }
 
 var _ host.ConstructionDrafts = (*Build)(nil)
-var _ host.IntegrationDefinitions = (*Build)(nil)
 var _ host.ConstructionSandbox = (*Build)(nil)

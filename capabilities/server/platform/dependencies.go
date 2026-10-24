@@ -526,28 +526,6 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			readSpec(&operation.Rules.Reads)
 		}
 		capability("operation", operation.Name, CapabilityPure, operation.Roles, operation.Input, operation.Output, nil)
-	case AssetFlow:
-		var flow FlowReleaseDescriptor
-		if err := json.Unmarshal(asset.Body, &flow); err != nil {
-			return out, err
-		}
-		if flow.Subject.Name != "" && flow.Subject.Kind != AssetObject || !json.Valid(flow.Definition) || len(flow.Definition) == 0 || flow.Definition[0] != '{' {
-			return out, fmt.Errorf("release flow %s needs an optional subject and complete definition", asset.Ref)
-		}
-		add(flow.Subject)
-		for _, binding := range append(append(slices.Clone(flow.Functions), flow.Operations...), flow.Queries...) {
-			add(binding.Ref)
-		}
-		for _, ref := range flow.Actions {
-			if ref.Kind != AssetAction {
-				return out, fmt.Errorf("flow %s binds a non-action", asset.Ref)
-			}
-			add(ref)
-		}
-		for _, ref := range flow.Dependencies {
-			add(ref)
-		}
-		capability("operation", flow.Name, CapabilityAuthoritative, nil, ValueSchema{}, ValueSchema{}, nil)
 	case AssetAgent:
 		var agent AgentReleaseDescriptor
 		if err := json.Unmarshal(asset.Body, &agent); err != nil {
@@ -604,20 +582,6 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			}
 		}
 		capability("operation", agent.Name, CapabilityEffect, nil, ValueSchema{}, ValueSchema{}, nil)
-	case AssetEvaluation:
-		evaluation, err := ReadEvaluationSet(asset.Body)
-		if err != nil {
-			return out, err
-		}
-		add(evaluation.Function.Ref)
-	case AssetTestPlan:
-		plan, err := ReadTestPlan(asset.Body)
-		if err != nil {
-			return out, err
-		}
-		for _, root := range plan.Dependencies() {
-			add(root)
-		}
 	case AssetSampleSet:
 		var samples SampleSet
 		if err := json.Unmarshal(asset.Body, &samples); err != nil {

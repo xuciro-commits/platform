@@ -101,12 +101,6 @@ func (t *Tenant) assetInstallationView(recordView *recordStore) (*Tenant, error)
 	draft.console.restore(&control)
 	draft.Secrets = t.Secrets
 	draft.apps = slices.Clone(t.apps)
-	if t.procs != nil {
-		draft.procs = t.procs.InstallationDraft()
-		if app, ok := draft.procs.(platform.App); ok {
-			host.Attach(app, hostView{t: draft, app: app})
-		}
-	}
 	for i, app := range draft.apps {
 		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
 			continue

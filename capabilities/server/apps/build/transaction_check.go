@@ -153,7 +153,7 @@ func (b *Build) normalizeTransaction(object construction.Object, action *constru
 			}()} {
 				if parameters != nil {
 					for j, parameter := range *parameters {
-						expr, err := dispatchParameter(parameter, scope)
+						expr, err := parameterExpr(parameter, scope)
 						if err != nil {
 							return err
 						}
@@ -239,7 +239,7 @@ func (b *Build) normalizeTransaction(object construction.Object, action *constru
 	}
 	if dispatch := action.Transaction.Dispatch; dispatch != nil {
 		for i, parameter := range dispatch.Payload {
-			expr, err := dispatchParameter(parameter, scope)
+			expr, err := parameterExpr(parameter, scope)
 			if err != nil {
 				return err
 			}
@@ -357,12 +357,6 @@ func (b *Build) checkTransactions(object construction.Object) error {
 					proposalFields[field.Name] = true
 				}
 			}
-		}
-		if err := b.checkConfirmation(txn.Confirmation, object); err != nil {
-			return err
-		}
-		if err := b.checkDispatch(txn.Dispatch, object, action); err != nil {
-			return err
 		}
 		if object.Numbering != nil {
 			return fmt.Errorf("transaction sequence steps replace legacy record-count numbering")

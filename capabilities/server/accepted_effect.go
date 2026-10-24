@@ -13,7 +13,6 @@ import (
 
 	"time"
 
-	"platformserver/internal/host"
 
 	"platformserver/platform"
 )
@@ -248,7 +247,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		return
 	}
 	principal, _ := json.Marshal(t.automation(PlatformApp, false).Member)
-	committed, err := t.acceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, result.Key, result.RequestHash)
+	committed, err := t.acceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at}, result.Key, result.RequestHash)
 	if err != nil {
 		if errors.Is(err, errAcceptedConflict) {
 			t.quarantine(fmt.Errorf("effect %s conflicts with a previously committed outcome", id))
@@ -305,16 +304,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	}
 	if x.Endpoint == resultformat.OperationEndpoint {
 		draft.operationAnswers = map[string]platform.OperationResult{x.ID: operationResultOf(x)}
-		processesOwner := t.procs
-		if app, ok := t.procs.(platform.App); ok {
-			processesOwner = draft.stateApp(app).(host.Processes)
-		}
-		if processes, ok := processesOwner.(host.OperationCompletion); ok {
-			c := platform.NewCaller(draft, platform.Member{ID: "app:" + "flow", Tenant: t.ID}, "flow", false, true)
-			if err := processes.OperationEnded(c, x.ID, at); err != nil {
-				return err
-			}
-		}
+
 	}
 	c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
 	if app, ok := draft.stateApp(t.app(x.App)).(platform.Answerer); ok {

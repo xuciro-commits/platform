@@ -1,8 +1,11 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 
+	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
@@ -31,6 +34,27 @@ func (t *Tenant) checkExtensionSet() error {
 		}
 	}
 	return nil
+}
+
+// releaseAssetShapes are the object shapes a candidate installs, by type.
+func (t *Tenant) releaseAssetShapes(assets []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
+	shapes := map[string]platform.EntityInfo{}
+	for _, asset := range assets {
+		if asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		var object construction.Object
+		if err := json.Unmarshal(asset.Body, &object); err != nil {
+			return nil, err
+		}
+		entity := construction.CompileObjectShape(object)
+		info, err := platform.Describe(construction.ID, entity, func(reflect.Type) string { return "" })
+		if err != nil {
+			return nil, err
+		}
+		shapes[entity.Type] = info
+	}
+	return shapes, nil
 }
 
 func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]ReleaseExtensionReview, error) {

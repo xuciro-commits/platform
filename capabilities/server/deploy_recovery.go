@@ -34,7 +34,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			err = fmt.Errorf("tenant %s recovery panicked: %v", id, failure)
 		}
 	}()
-	recoveryStarted := time.Now().UTC()
+	_ = time.Now().UTC()
 	fresh, err := d.rebuildTenant(id)
 	if err != nil {
 		return fmt.Errorf("compose tenant %s: %w", id, err)
@@ -58,11 +58,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if err := fresh.recoverEntries(entries); err != nil {
 		return fmt.Errorf("recover tenant %s: %w", id, err)
 	}
-	if fresh.procs != nil {
-		if err := fresh.procs.Check(); err != nil {
-			return fmt.Errorf("process recovery for tenant %s: %w", id, err)
-		}
-	}
 	var projection *Projection
 	if pgPool, pg := journalPool(journal); d.Project && pg {
 		projection, err = Project(ctx, pgPool, fresh)
@@ -83,7 +78,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			return fmt.Errorf("write repaired tenant %s checkpoint: %w", id, err)
 		}
 	}
-	fresh.flowArtifactRecoveryComplete(recoveryStarted)
 	if err := fresh.migrateRuntimeState(ctx, journal); err != nil {
 		return fmt.Errorf("recover tenant %s runtime state: %w", id, err)
 	}

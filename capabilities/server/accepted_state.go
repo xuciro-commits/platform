@@ -59,14 +59,6 @@ func (d *stagedDecision) attachPrivateHosts() {
 	}
 }
 
-// Version choices belong to the private Flow instance that actually decided.
-// They are saved with the result before the live registry is changed.
-func (d *stagedDecision) flowVersions() map[string]int {
-	if private, ok := d.privateApps[platform.FlowApp].(host.Processes); ok {
-		return private.Versions()
-	}
-	return nil
-}
 
 func (d *stagedDecision) savedStates() ([]resultformat.State, error) {
 	var out []resultformat.State

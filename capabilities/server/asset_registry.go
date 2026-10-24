@@ -262,15 +262,6 @@ func (t *Tenant) assetRegistryLocked() (*platform.AssetRegistry, error) {
 		}
 		owner, _ := app.(platform.AssetLifecycleOwner)
 		wrapper := runtimeAssetOwner{App: app, lifecycle: owner, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {
-			for _, flow := range app.Manifest().Flows {
-				asset, err := t.nativeFlowAsset(app, flow.Name, flow.Version)
-				if err != nil {
-					return asset, err
-				}
-				if asset.Ref == ref && asset.SourceVersion == source {
-					return asset, nil
-				}
-			}
 			return platform.ReleaseAsset{}, fmt.Errorf("native flow is not retained by its code owner")
 		}}
 		if len(wrapper.AssetKinds()) == 0 {

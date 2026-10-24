@@ -93,7 +93,7 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 // them. A staged result saves these bytes before the journal commit.
 func (t *Tenant) eventEffects(e platform.Event, names []string) []platform.Effect {
 	s := e.Record.GetSubmission()
-	planned := t.writebackEffects(e)
+	planned := []platform.Effect{}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, ep := range t.endpoints {
@@ -285,7 +285,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	t.opsMu.Lock()
 	// Apps' model requests go to the built-in model destination;
 	// the model door keeps each provider's own breaker.
-	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: resultformat.ModelEndpoint, Kind: resultformat.ModelEndpoint}) {
+	for _, ep := range append(slices.Clone(t.endpoints), booksEndpoint(), &Endpoint{ID: resultformat.ModelEndpoint, Kind: resultformat.ModelEndpoint}) {
 		if ep.Kind != resultformat.ModelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now) {
 			continue
 		}
@@ -307,9 +307,6 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	for _, j := range jobs {
 		sends = append(sends, func() {
 			if t.quarantined() {
-				return
-			}
-			if !t.beginDispatchAttempt(j.effect, now) {
 				return
 			}
 			span := outside(j.span, "send "+j.effect.Event+" to "+j.endpoint.ID, attribute.String("platform.tenant", t.ID),
@@ -348,9 +345,6 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 	}
 	if ep.Kind == "a2a" {
 		return t.sendA2A(ep, x, false)
-	}
-	if ep.Kind == "connection" {
-		return t.sendWriteback(x)
 	}
 	if ep.Kind == "books" {
 		return t.sendBooks(x, now)

@@ -37,7 +37,6 @@ type AgentHost interface {
 	Entity(string) (platform.EntityInfo, bool)
 	ActiveRelease() string
 	AgentTasks() TaskClosure
-	AgentFlows() AgentFlowCompletion
 	ProtocolActions(string) []platform.Action
 	ProtocolProvider(string) (platform.App, string, bool)
 	InvokeDecision(platform.Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)
@@ -77,7 +76,4 @@ type AgentEvaluationDefinitions interface {
 // it cannot install, pin or redeclare a flow through either collaborator.
 type TaskClosure interface {
 	Close(platform.Caller, *pb.ChangeRecord, string)
-}
-type AgentFlowCompletion interface {
-	RunEnded(platform.Caller, RunEnd, time.Time)
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"platformserver/internal/host"
 	"slices"
-	"strings"
 	"time"
 
 	"platformserver/internal/construction"
@@ -116,16 +115,6 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			}
 			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
 				SourceVersion: manifest.Version, Body: body})
-		case platform.AssetFlow:
-			if def.Flow == nil {
-				return nil, fmt.Errorf("native flow has no owner descriptor")
-			}
-			name := strings.TrimPrefix(def.Ref.Name, manifest.ID+".")
-			asset, err := t.nativeFlowAsset(app, name, def.Flow.Version)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, asset)
 		case platform.AssetFunction:
 			if def.Function == nil {
 				return nil, fmt.Errorf("code function %s has no owner declaration", def.Ref)
@@ -295,12 +284,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	}
 	var drafts []construction.JointDraftRef
 	var err error
-	if kind == platform.AssetApp {
-		drafts, err = owner.ApplicationDrafts(id)
-		drafts = slices.DeleteFunc(drafts, func(draft construction.JointDraftRef) bool { return draft.Kind == kind && draft.ID == id })
-	} else {
-		drafts, err = owner.ReferencedDrafts(kind, id)
-	}
+	drafts, err = owner.ReferencedDrafts(kind, id)
 	if err != nil {
 		return ReleaseDraftClosure{}, err
 	}
@@ -569,16 +553,5 @@ func (t *Tenant) PreviewApplicationDrafts(m platform.Member, id string) (Release
 	if !m.Holds(construction.ID, construction.Builder) {
 		return ReleasePreview{}, fmt.Errorf("Only a builder can inspect application drafts")
 	}
-	t.mu.Lock()
-	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
-	if !ok {
-		t.mu.Unlock()
-		return ReleasePreview{}, fmt.Errorf("Construction owner is unavailable")
-	}
-	drafts, err := owner.ApplicationDrafts(id)
-	t.mu.Unlock()
-	if err != nil {
-		return ReleasePreview{}, err
-	}
-	return t.PreviewReleaseDrafts(m, drafts)
+	return t.PreviewReleaseDrafts(m, []construction.JointDraftRef{{Kind: platform.AssetApp, ID: id}})
 }

@@ -4,8 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./catalog": "./src/catalog.ts",
-    "./catalog/examples": "./src/catalog.examples.tsx",
     "./styles.css": "./src/styles.css",
     "./canvas-snapping": "./src/layout/canvas-snapping.ts",
     "./range": "./src/components/range.ts",
@@ -24,7 +22,6 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
-    "@platform/catalog": "workspace:*",
     "@platform/kernel": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.13",

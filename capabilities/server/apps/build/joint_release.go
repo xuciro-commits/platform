@@ -17,7 +17,7 @@ import (
 // owner's asset snapshot.
 func recordKind(kind platform.AssetKind) bool {
 	switch kind {
-	case platform.AssetObject, platform.AssetPage, platform.AssetApp, platform.AssetFlow:
+	case platform.AssetObject, platform.AssetPage, platform.AssetApp:
 		return true
 	}
 	return false
@@ -90,10 +90,6 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []construction.JointDraftRef, mem
 	if err != nil {
 		return result, err
 	}
-	processes, err := b.processInventory()
-	if err != nil {
-		return result, err
-	}
 	before, err := b.ReleaseAssets()
 	if err != nil {
 		return result, err
@@ -111,7 +107,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []construction.JointDraftRef, mem
 	}
 	defer func() { b.jointEntities, b.jointMode, b.jointDeclarations = restore, restoreMode, restoreDeclarations }()
 
-	inv := draftInventories{objects: objects, pages: pages, apps: apps, processes: processes}
+	inv := draftInventories{objects: objects, pages: pages, apps: apps}
 	overrides := map[platform.AssetRef]platform.ReleaseAsset{}
 	removed := map[platform.AssetRef]bool{}
 	// Agents consume selected queries; evaluation plans pin selected function
@@ -175,13 +171,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []construction.JointDraftRef, mem
 			return result, err
 		}
 	}
-	recordAssets, err := releaseAssets(inv.objects, inv.pages, inv.apps, inv.processes, b.Manifest().Version)
-	if err == nil {
-		recordAssets, err = b.bindConfirmationAssets(recordAssets)
-	}
-	if err == nil {
-		recordAssets, err = b.bindDispatchAssets(recordAssets)
-	}
+	recordAssets, err := releaseAssets(inv.objects, inv.pages, inv.apps, b.Manifest().Version)
 	if err != nil {
 		return result, err
 	}
@@ -236,7 +226,6 @@ type draftInventories struct {
 	objects   []construction.Object
 	pages     []Page
 	apps      []Application
-	processes []construction.Process
 }
 
 // applyRecordDraft substitutes one saved record draft into the shared
@@ -246,52 +235,6 @@ type draftInventories struct {
 func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind, id string, member platform.Member) (prior, next platform.AssetRef, hadPrior bool, err error) {
 	joint := b.jointMode
 	switch kind {
-	case platform.AssetFlow:
-		i := slices.IndexFunc(inv.processes, func(p construction.Process) bool { return p.ID == id })
-		if i < 0 {
-			return prior, next, false, fmt.Errorf("draft process %q not found", id)
-		}
-		record := inv.processes[i]
-		if was, ok := construction.ReadPublication[construction.Process](record.Published); ok {
-			prior = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(was.Name)}
-			hadPrior = true
-		}
-		next = platform.AssetRef{App: construction.ID, Kind: kind, Name: construction.TypeOf(record.Name)}
-		source := b.installed[record.Object]
-		models := []platform.Entity{}
-		for _, object := range inv.objects {
-			if _, selected := b.jointEntities[construction.TypeOf(object.Name)]; !selected || object.Archived {
-				continue
-			}
-			model := Entity(object)
-			models = append(models, model)
-			if model.Type == record.Object {
-				source = model
-			}
-		}
-		if problem := b.checkFlow(record, source, models...); problem != nil {
-			err = fmt.Errorf("%s", problem.Message)
-		} else if record.Version >= 64 {
-			err = fmt.Errorf("a process may retain at most 64 published versions")
-		} else if b.host.BuildProcesses() == nil {
-			err = fmt.Errorf("this tenant runs no processes")
-		} else {
-			record.Version++
-			if record.Every != "" || record.Continuous != nil && record.Continuous.Intake != nil {
-				record.Scheduler = member.ID
-			} else {
-				record.Scheduler = ""
-			}
-			if !joint {
-				err = b.host.BuildProcesses().Validate(b, b.flowOf(record))
-			}
-			if err == nil {
-				record.Published = published(record)
-				record.Versions = append(slices.Clone(record.Versions), record.Published)
-				record.State = "published"
-				inv.processes[i] = record
-			}
-		}
 	case platform.AssetObject:
 		i := slices.IndexFunc(inv.objects, func(o construction.Object) bool { return o.ID == id && !o.Archived })
 		if i < 0 {
@@ -359,15 +302,6 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 // singleDraftAssets is the owner's original one-draft comparison, unchanged for
 // simple kinds and routed through the shared record substitution otherwise.
 func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	if construction.ValueIntegrationKind(kind) {
-		return b.integrationDraftAssets(kind, id)
-	}
-	if kind == platform.AssetEvaluation || kind == platform.AssetTestPlan {
-		return b.testPlanDraftAssets(id)
-	}
-	if kind == platform.AssetSampleSet {
-		return b.sampleSetDraftAssets(id)
-	}
 	if kind == platform.AssetMigration {
 		return b.migrationPlanDraftAssets(id)
 	}
@@ -431,10 +365,6 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]construc
 	if err != nil {
 		return nil, err
 	}
-	processes, err := b.processInventory()
-	if err != nil {
-		return nil, err
-	}
 	find := func(want platform.AssetKind, name string) (construction.JointDraftRef, bool) {
 		switch want {
 		case platform.AssetObject:
@@ -445,12 +375,6 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]construc
 			}
 		case platform.AssetPage:
 			for _, p := range pages {
-				if p.Published == "" && (p.Name == name || construction.TypeOf(p.Name) == name) {
-					return construction.JointDraftRef{Kind: want, ID: p.ID}, true
-				}
-			}
-		case platform.AssetFlow:
-			for _, p := range processes {
 				if p.Published == "" && (p.Name == name || construction.TypeOf(p.Name) == name) {
 					return construction.JointDraftRef{Kind: want, ID: p.ID}, true
 				}
@@ -494,14 +418,6 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]construc
 			}
 			for _, resource := range apps[i].Resources {
 				dependencies[resource.Kind] = append(dependencies[resource.Kind], resource.Name)
-			}
-		case platform.AssetFlow:
-			i := slices.IndexFunc(processes, func(p construction.Process) bool { return p.ID == next.ID })
-			if i < 0 {
-				return nil, fmt.Errorf("no saved workflow draft %s", next.ID)
-			}
-			if processes[i].Object != "" {
-				dependencies[platform.AssetObject] = append(dependencies[platform.AssetObject], processes[i].Object)
 			}
 		}
 		for want, names := range dependencies {

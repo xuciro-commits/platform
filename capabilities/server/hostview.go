@@ -63,7 +63,7 @@ func (h hostView) installationDraft() *Tenant {
 
 func (h hostView) installationView(recordView *recordStore) *Tenant {
 	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, appIndex: h.t.appIndex, owner: maps.Clone(h.t.owner),
-		identity: h.t.identity, directory: h.Directory(), records: recordView, definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
+		identity: h.t.identity, directory: h.Directory(), records: recordView, definitions: slices.Clone(h.t.definitions), Files: h.t.files(), releases: h.t.releases}
 	return draft
 }
 
@@ -303,25 +303,10 @@ func (h hostView) Tasks() host.Tasks {
 	return h.t.tasks
 }
 
-func (h hostView) Processes() host.Processes {
-	if h.decision != nil && h.t.procs != nil {
-		return h.decision.stateApp(h.t.procs.(platform.App)).(host.Processes)
-	}
-	return h.t.procs
-}
 
 // ActiveRelease is read inside a decision, which already holds the tenant lock.
 func (h hostView) ActiveRelease() string { return h.t.releases.active }
 
-func (h hostView) Runs() host.Runs {
-	if h.t.agents == nil {
-		return nil
-	}
-	if h.decision != nil {
-		return h.decision.stateApp(h.t.agents).(host.Runs)
-	}
-	return h.t.agents
-}
 
 // InstallPage offers a page composed in this tenant.
 func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
@@ -394,7 +379,6 @@ func (h hostView) Record(ref string) (any, bool) {
 	return h.t.held(ref)
 }
 
-func (h hostView) BuildProcesses() host.ProcessDefinitions { return h.Processes() }
 func (h hostView) Calendar(party string, day platform.Date) platform.Calendar {
 	if directory := h.Directory(); directory != nil {
 		return directory.Calendar(party, day)

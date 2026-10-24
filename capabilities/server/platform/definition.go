@@ -23,10 +23,11 @@ const (
 	// AssetQuery is a named, pure query an app declares once:
 	// pages and agent tools run the same declaration.
 	AssetQuery AssetKind = "query"
-	// AssetFlow is a versioned definition executed by the existing flow app.
-	AssetFlow       AssetKind = "flow"
 	AssetFunction   AssetKind = "function"
 	AssetAgent      AssetKind = "agent"
+	// AssetFlow is a retained flow definition kind; the flow app is no longer
+	// composed, so nothing installs it.
+	AssetFlow       AssetKind = "flow"
 	AssetEvaluation AssetKind = "evaluation-set"
 	AssetTestPlan   AssetKind = "test-plan"
 	AssetCompute    AssetKind = "compute"
@@ -77,8 +78,8 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
-		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert}, r.Kind) {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFunction, AssetCompute,
+		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetMigration, AssetAgent, AssetFlow, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -473,10 +474,7 @@ type Definition struct {
 	Application      *Application             `json:"application,omitempty"`
 	Query            *NamedQuery              `json:"query,omitempty"`
 	QueryVersions    map[string]NamedQuery    `json:"queryVersions,omitempty"`
-	Flow             *FlowDefinition          `json:"flow,omitempty"`
 	Function         *AIFunction              `json:"function,omitempty"`
-	Evaluation       *EvaluationSetDescriptor `json:"evaluation,omitempty"`
-	TestPlan         *TestPlanDescriptor      `json:"testPlan,omitempty"`
 	Agent            *AgentReleaseDescriptor  `json:"agent,omitempty"`
 	Operation        *Operation               `json:"operation,omitempty"`
 }

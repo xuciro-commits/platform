@@ -2,40 +2,23 @@ package platformserver
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"platformserver/internal/records"
 	"reflect"
-	"strconv"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/construction"
-	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
-// enterpriseApp is the tenant's enterprise modeling app, when one is mounted:
-// the typed query and resolve reads dispatch into it.
-func enterpriseApp(t *Tenant) host.EnterpriseQueries {
-	d, _ := t.app(enterprisemodel.ID).(host.EnterpriseQueries)
-	return d
-}
 
 // routesRecords serves records, files, links, aggregates, search, knowledge and transcripts.
 func (h *Host) routesRecords(rt *routes) {
-	rt.handle(Route{Pattern: "POST /v1/enterprise-links/{id}/preview", Summary: "Preview an authorized tenant source through its original ready connection without importing it", Answer: EnterpriseLinkPreview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		preview, err := t.PreviewEnterpriseLink(r.Context(), m, r.PathValue("id"), h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, preview)
-	})
-	rt.handle(Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+rt.handle(Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request *PageModelRead
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 		decoder.DisallowUnknownFields()
@@ -125,18 +108,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, up)
 	})
-	rt.handle(Route{Pattern: "GET /v1/files/{id}", Summary: "Download a file attached to a record the caller may read"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		t.Download(w, m, r.PathValue("id"), h.Now())
-	})
-	rt.recordRead(Route{Pattern: "GET /v1/chain/{type}/{id}", Summary: "The chain an agent run or a flow instance belongs to: its record, flows, runs and the effects they caused", Answer: Chain{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		chain, err := t.chainRead(m, r.PathValue("type")+"/"+r.PathValue("id"), h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, chain)
-	})
-	rt.handle(Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller",
+rt.handle(Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller",
 		Query: []Param{{"preview", "true: check each row and apply none"}}, Body: []byte{}, Answer: []ImportRow{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))
 		rows, err := t.Import(m, r.PathValue("type"), body, r.URL.Query().Get("preview") == "true", h.Now())
@@ -220,106 +192,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, result)
 	})
-	rt.recordRead(Route{Pattern: "GET /v1/link-types/{app}/{name}/{version}/{direction}/{id}", Summary: "Follow one retained link type within the member's original record scope", Answer: RecordPage{}, Query: []Param{{"domain", "Additional record filters"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated"}, {"offset", "Records to skip"}, {"limit", "Records in the page"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search")}
-		if sort := r.URL.Query().Get("sort"); sort != "" {
-			q.Sort = strings.Split(sort, ",")
-		}
-		fmt.Sscan(r.URL.Query().Get("offset"), &q.Offset)
-		fmt.Sscan(r.URL.Query().Get("limit"), &q.Limit)
-		result, err := t.traverseLinkRead(m, platform.AssetBinding{Ref: platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetLinkType, Name: r.PathValue("name")}, SourceVersion: r.PathValue("version")}, r.PathValue("direction"), r.PathValue("id"), q, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, result)
-	})
-	rt.recordRead(Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []Param{{"domain", "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated; -field for descending"}, {"offset", "Records to skip"}, {"limit", "Records in the page"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
-		if sort := r.URL.Query().Get("sort"); sort != "" {
-			q.Sort = strings.Split(sort, ",")
-		}
-		fmt.Sscan(r.URL.Query().Get("offset"), &q.Offset)
-		fmt.Sscan(r.URL.Query().Get("limit"), &q.Limit)
-		page, err := t.recordsRead(m, r.PathValue("type"), q, h.Now())
-		if err == nil && r.PathValue("type") == construction.ObjectType {
-			page, err = t.objectDraftPage(m, page)
-		}
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, page)
-	})
-	rt.recordRead(Route{Pattern: "GET /v1/enterprise-usage", Summary: "Uses preventing removal or closure of an enterprise element", Answer: EnterpriseUsage{}, Query: []Param{{"element", "The enterprise element"}, {"until", "Proposed closure day"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-
-		answer, err := t.enterpriseUsageRead(m, r.URL.Query().Get("element"), r.URL.Query().Get("until"), h.Now())
-
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
-	})
-
-	rt.recordRead(Route{Pattern: "GET /v1/enterprise-references", Summary: "Records that name an enterprise element, at any nesting depth, by entity type and page", Answer: []EnterpriseReferenceGroup{}, Query: []Param{{"element", "The element's id"}, {"offset", "Records to skip, by column"}, {"limit", "Records per column (default 50, at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		offset, limit := pageBounds(r, 0, 50)
-		if offset < 0 || limit < 0 {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "offset and limit are numbers"))
-			return
-		}
-		groups, err := t.enterpriseReferencesRead(m, r.URL.Query().Get("element"), offset, limit, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, groups)
-	})
-	rt.recordRead(Route{Pattern: "GET /v1/enterprise-query", Summary: "Elements of the enterprise model by stereotype, kind, words and day: the typed read", Answer: enterprisemodel.EnterpriseQueryResult{}, Query: []Param{{"stereotype", "UAF stereotypes, comma-separated; empty: all"}, {"kind", "Exact kind within the stereotype, e.g. line, workshop"}, {"q", "Words to find in id, name, short name or kind"}, {"alive", "\"all\" takes closed and future elements too; a YYYY-MM-DD day reads that day; empty: today"}, {"limit", "Elements to return (default 200, at most 1000)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if err := t.admits(m); err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		limit := 200
-		if raw := r.URL.Query().Get("limit"); raw != "" {
-			n, err := strconv.Atoi(raw)
-			if err != nil || n < 1 || n > 1000 {
-				Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "limit is a number between 1 and 1000"))
-				return
-			}
-			limit = n
-		}
-		app := enterpriseApp(t)
-		if app == nil {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model"))
-			return
-		}
-		out, err := app.Query(strings.Split(r.URL.Query().Get("stereotype"), ","), r.URL.Query().Get("kind"), r.URL.Query().Get("q"),
-			r.URL.Query().Get("alive"), limit, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
-	})
-	rt.recordRead(Route{Pattern: "GET /v1/enterprise-resolve", Summary: "Named elements by id: stored references read back, closed elements included and marked", Answer: enterprisemodel.EnterpriseQueryResult{}, Query: []Param{{"ids", "Element ids, comma-separated (at most 100)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if err := t.admits(m); err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		app := enterpriseApp(t)
-		if app == nil {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "This tenant has no enterprise model"))
-			return
-		}
-		out, err := app.Resolve(strings.Split(r.URL.Query().Get("ids"), ","), h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
-	})
-	rt.recordRead(Route{Pattern: "GET /v1/context/{type}/{id}", Summary: "A record with its history, references, links, flows and tasks: the context graph", Answer: ContextView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+rt.recordRead(Route{Pattern: "GET /v1/context/{type}/{id}", Summary: "A record with its history, references, links, flows and tasks: the context graph", Answer: ContextView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.contextRead(&m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)

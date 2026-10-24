@@ -21,6 +21,7 @@ import { Credentials } from "./credentials";
 import { Flows, Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
 import { Glossary, Knowledge } from "./knowledge";
 import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host";
+import { SystemChanges, SystemFiles, SystemReleases } from "./system";
 
 const admin = (host: Host) => host.role("platform") === "admin";
 const auditor = (host: Host) => host.role("platform") === "auditor";
@@ -259,5 +260,25 @@ export const enterprise = defineApp({
   ] }],
 });
 
-export const contributions: AppUI[] = [runs, dataConnection, agents, ai, knowledge, hostConsole, masterData, enterprise];
+// --- Platform: the system's own changes, files and releases. It appears only
+// for a member holding a role in the system app, which only the system tenant
+// composes; a business tenant never sees it.
+export const selfHosting = defineApp({
+  id: "system", serves: ["system"], category: "govern", title: t("Platform"), icon: <Blocks />,
+  description: t("Iterate the platform itself: proposed changes, the source they freeze, builds and releases."),
+  for: (host) => !!host.role("system"),
+  home: { view: "system-changes" },
+  views: [
+    { id: "system-changes", title: () => t("System changes"), render: () => <SystemChanges /> },
+    { id: "system-files", title: () => t("System files"), render: () => <SystemFiles /> },
+    { id: "system-releases", title: () => t("System releases"), render: () => <SystemReleases /> },
+  ],
+  nav: () => [{ label: t("Platform"), items: [
+    { label: t("System changes"), icon: <History />, route: { view: "system-changes" } },
+    { label: t("System files"), icon: <Blocks />, route: { view: "system-files" } },
+    { label: t("System releases"), icon: <Upload />, route: { view: "system-releases" } },
+  ] }],
+});
+
+export const contributions: AppUI[] = [runs, dataConnection, agents, ai, knowledge, hostConsole, masterData, enterprise, selfHosting];
 export default controlPanel;

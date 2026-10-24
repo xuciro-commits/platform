@@ -1,6 +1,9 @@
 /* @platform/ui design tokens: dense, data-first (Palantir-like density on shadcn/Radix).
    Apps import this file once; Tailwind scans the package through @source. */
-@import "tailwindcss";
+/* Explicit sources: a clean build tree has no .git, so Tailwind's automatic
+   detection would scan node_modules and fall over. Every package that uses a
+   class declares itself instead. */
+@import "tailwindcss" source(none);
 @import "dockview-react/dist/styles/dockview.css";
 @import "@xyflow/react/dist/style.css";
 @source "./";

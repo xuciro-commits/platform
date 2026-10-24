@@ -30,14 +30,16 @@
 1. **内核是契约。** `contract/` 不含领域词汇。内核语义变更先改规范与向量，再改 Go 与 Rust/TypeScript 边缘；三端跑同一套向量。`v1` 语义变更在提交信息里写清理由。
 2. **一项决策只改一个权威。** 跨应用只走版本化协议声明，用请求—应答与补偿，不做跨权威原子性。
 3. **写入只走一条路径。** 权威状态的新写入必须经接受结果；新封存结果恢复只应用已保存映像，不重跑规则、不重新授权、不发起外部调用；旧输入的兼容读取责任见 Architecture。历史字节永不重写。
-4. **单一归属，先复用。** 应用只导入 `platformserver/platform`；客户端只用 `@platform/ui` 与 `@platform/app`。缺的能力在归属方扩展；`scripts/boundaries.sh`、`scripts/escapes.sh` 的已知逃逸只减不增。UI 变更前先 `node scripts/catalog.mjs search <关键词>`。
-5. **生成文件不手改。** `contract/go/gen`、`web/packages/kernel/src/gen/host.ts`（宿主 API 类型变了就在 `capabilities/server` 跑 `go run ./cmd/api-types`）、`web/apps/catalog/src/gen`（`node scripts/catalog.mjs generate`）。
+4. **单一归属，先复用。** 应用只导入 `platformserver/platform`；客户端只用 `@platform/ui` 与 `@platform/app`。缺的能力在归属方扩展；`scripts/boundaries.sh`、`scripts/escapes.sh` 的已知逃逸只减不增。
+5. **生成文件不手改。** `contract/go/gen` 与 `web/packages/kernel/src/gen/host.ts`；宿主 API 类型变了就在 `capabilities/server` 跑 `go run ./cmd/api-types`。
 6. **一个语义一个实现。** 规则求值、约束检查、授权判定、依赖解析各一份。替换不是增量：同批删除被替代的路径，不保留两套规则。
 7. **租户扩展只走受控路径。** 受控编译、隔离执行、版本化制品；不在宿主直接执行租户脚本。
-8. **参考应用是验证载体。** `apps/*` 不定义平台真理；行业规则在用或已承诺的能力由构建者声明替代后才退出。撞墙时登记为通用缺口并在归属方补齐，不在探针里绕过。
-9. **双语文案。** 产品界面英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web 用 `t()` + 包内 `i18n.ts`。业务数据不翻译。
-10. **提交信息**单句祈使句；提交与推送按负责人授权。
-11. **安全。** 不提交密钥与凭据；应用和包只保存凭据引用，实际秘密走平台受控加密托管或部署注入，加密主密钥留在部署环境。
+8. **系统修改自己也要走同一条路径。** 平台的源码、变更、发布与激活是 `system` 作用域里的受控记录：`system.file.save`、`system.change.propose`、`system.change.approve`、`system.release.activate|finished`。内核路径由 `internal/systemscope` 冻结，直接改仓库不会生效在运行中的宿主上——要让改动活着，必须提出变更、批准、由 `platform-updater` 构建出发布、再激活换版。构建只跑固定命令，不跑仓库的 Makefile 或 `scripts/`。
+
+9. **参考应用是验证载体。** `apps/*` 不定义平台真理；行业规则在用或已承诺的能力由构建者声明替代后才退出。撞墙时登记为通用缺口并在归属方补齐，不在探针里绕过。
+10. **双语文案。** 产品界面英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web 用 `t()` + 包内 `i18n.ts`。业务数据不翻译。
+11. **提交信息**单句祈使句；提交与推送按负责人授权。
+12. **安全。** 不提交密钥与凭据；应用和包只保存凭据引用，实际秘密走平台受控加密托管或部署注入，加密主密钥留在部署环境。
 
 开工前从 [规范目录](openspec/README.md#层级与模块) 选择相关模块，读完整需求和场景，再核对实现；不用每次审计全仓。内核精确条款仍以 `contract/spec` 为唯一语义来源，OpenSpec 不复制一份。
 
@@ -56,15 +58,13 @@
 |---|---|
 | 文档、规则、注释 | 链接与引用一致、`git diff --check`；涉及 OpenSpec 时加 `make check-specs`，格式校验不等于业务测试 |
 | 内核规范 / 向量 / 实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘 |
-| Lean 模型 | `scripts/verify.sh formal` |
-| Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改应用 API 或组合时加 `scripts/verify.sh composition` |
-| 应用 / 协议 | 应用通过原包内验收计划维护；平台机制修改运行对应 owner 检查与适用的通用浏览器路线，另跑 `scripts/verify.sh composition` |
-| Web | `make check-web`（生成一致性、Catalog、全部包 tsc）；只在对应包运行受影响的单元测试，`make test` 是完整测试入口 |
-| 成组交付或发布节点 | 选一条浏览器路线 `make e2e SPEC=<name>`；完整浏览器任务用 `make e2e`，发布构建与契约检查用 `make verify` |
+| Go 宿主 | `cd capabilities/server && go build ./... && go vet ./...`，`go test ./...`（当前保留集：`TestSelfHosting*` 与 `internal/systemscope`） |
+| 自举 | `go test -run TestSelfHosting .`；端到端按 [WorkQueue](docs/WorkQueue.md) 的表格跑一次提议→构建→激活→换版 |
+| Web | `cd web && corepack pnpm -r run typecheck`；实际渲染用 `make lite` 或 `.build/system/web/<release>` |
 | 结构整理（搬文件、拆函数） | 整块完成后按受影响语言运行构建、类型与原边界检查；有实际行为影响时再选对应测试，不默认跑整个宿主测试、不为搬迁新增测试 |
 | 部署、恢复、存储 | `make rehearse`；需要真实 PostgreSQL 的用例设 `PLATFORM_TEST_DATABASE`，未设置即跳过，**跳过的不能报为通过** |
 
-测试写法：浏览器 spec 用 `web/e2e/tests/kit.ts`（`builder`/`editor`/`runtime`/`shots`），一个 spec 一条路线；宿主测试用 `capabilities/server/testkit_test.go`（`composeTenant`/`builderTenant`/`seatOf`/`decide`/`refuse`/`publishObject`）。不手写登录、对象、页面、发布或 `pb.Submission`。不写像素断言、为每种设备复制的路线、或服务端已证明规则的浏览器重测。外观与手感靠截图和负责人走查。
+测试写法：`capabilities/server/system_test.go` 的 `newSystemTenant` 起一个 system 租户，`kit.submit` / `kit.refuses` 走真实提交管线；一个用例守一条不变量（内核闸门、修订冲突、自批拒绝、窗口取消、重放不重建）。不写像素断言，外观与手感靠实际渲染和负责人走查。
 
 CI 只在 `v*` 标签上运行，不要依赖它发现问题。
 

@@ -45,11 +45,6 @@ func legacyAgentContextPredecessor(prior *records.Row, image resultformat.BatchR
 	if json.Unmarshal([]byte(historical), &oldContext) != nil || json.Unmarshal([]byte(run.Seen), &currentContext) != nil {
 		return nil
 	}
-	var oldFlows, currentFlows []FlowSummary
-	if json.Unmarshal(oldContext["flows"], &oldFlows) != nil || json.Unmarshal(currentContext["flows"], &currentFlows) != nil || len(oldFlows) != 1 || len(currentFlows) != 0 || oldFlows[0].ID != run.Flow {
-		return nil
-	}
-	oldContext["flows"] = json.RawMessage("[]")
 	oldDigest, err := acceptance.Digest(oldContext)
 	currentDigest, currentErr := acceptance.Digest(currentContext)
 	if err != nil || currentErr != nil || oldDigest != currentDigest {

@@ -183,7 +183,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			}
 			continue
 		}
-		decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until})
+		_, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until})
 		if err != nil {
 			return PackageDraftResult{}, err
 		}
@@ -193,7 +193,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			return PackageDraftResult{}, err
 		}
 		principal, _ := json.Marshal(m)
-		committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
+		committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at}, saved.Key, saved.RequestHash)
 		if err != nil {
 			return PackageDraftResult{}, err
 		}

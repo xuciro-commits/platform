@@ -57,9 +57,6 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 				continue
 			}
 			ref, _ := draftAssetRef(entity.Type, meta.Name)
-			if entity.Type == construction.TestPlanType && len(meta.Evaluation) > 0 {
-				ref.Kind = platform.AssetEvaluation
-			}
 			if application != "" && !(entity.Type == construction.AppType && meta.ID == application) && !held[ref] {
 				// A renamed draft still belongs to the application that references
 				// its original published identity until membership is edited.
@@ -136,15 +133,10 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 			switch r := record.(type) {
 			case construction.Alert:
 				asset, err = alertReleaseAsset(r, max(1, r.DefinitionVersion))
-			case SampleSetRecord:
-				asset, err = sampleSetAsset(r, max(1, r.DefinitionVersion))
 			case MigrationPlanRecord:
 				asset, err = migrationPlanAsset(r, max(1, r.DefinitionVersion))
-			case construction.TestPlan:
-				asset, err = b.testPlanAsset(r, max(1, r.DefinitionVersion))
 			default:
-				_, ordinal, _, _ := integrationMetadata(record)
-				asset, err = b.integrationAsset(frozen.Ref.Kind, record, max(1, ordinal))
+				err = fmt.Errorf("retained %s assets are no longer published", frozen.Ref.Kind)
 			}
 			current = asset.Body
 		} else {

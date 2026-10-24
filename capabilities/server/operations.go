@@ -639,12 +639,6 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 	if !a.Manifest().Settings[i].Accepts(p.Value) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if !c.Replaying && id == "platform/enterpriseRoot" && p.Value != "" {
-		element, ok := c.Enterprise().Element(p.Value, now)
-		if !ok || element.Stereotype != "ActualOrganization" || element.Owner != "" {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an active local organization for this tenant")
-		}
-	}
 	return func(*pb.ChangeRecord) { t.settings.set(id, p.Value) }, nil
 }
 

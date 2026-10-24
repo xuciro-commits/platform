@@ -30,6 +30,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // --- Session: the identity, the tenant and the client that speaks for them.
   const [token, setToken] = useState(signedIn?.session.accessToken ?? remembered(IDENTITY_KEY) ?? preferred(identities));
   const [tenant, setTenant] = useState(remembered(TENANT_KEY) ?? "");
+  const [recovering, setRecovering] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const client = useMemo(() => new EdgeClient({ server: "", token, tenant, principal: "" }), [token, tenant]);
@@ -65,6 +66,21 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // A subject the host names an administrator may be a member of no tenant: the console still opens for them.
   const noMember = meQuery.isError && /HTTP 401/.test(String(meQuery.error));
   const hostAdminQuery = useQuery({ queryKey: [token, "host-only"], queryFn: () => client.get<HostAdmin>("/v1/host/me"), enabled: noMember, retry: false });
+  // A remembered tenant or token can name a host that no longer serves it: a
+  // local run that moved from `workspace` to `system`, or a reset data
+  // directory with a new signing key. Clearing what this browser remembers and
+  // taking the identity the host offers is the one recovery that cannot grant
+  // more than the host already does.
+  useEffect(() => {
+    if (!noMember || recovering || signedIn || identities.length === 0) return;
+    const offered = preferred(identities);
+    if (!offered || (offered === token && tenant === "")) return;
+    setRecovering(true);
+    forget(IDENTITY_KEY);
+    forget(TENANT_KEY);
+    setTenant("");
+    setToken(offered);
+  }, [noMember, recovering, signedIn, identities, token, tenant]);
   const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
   useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;

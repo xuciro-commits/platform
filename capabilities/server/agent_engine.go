@@ -493,8 +493,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		}
 		c.Put(r, run) // before its flow goes on, which may keep a signal on it
 		if run.State == "done" {
-			a.ended(c, r, run, now)
-		}
+				}
 	}
 }
 
@@ -708,48 +707,13 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord
 		run.Task = ""
 	}
 	if run.Flow != "" {
-		a.ended(c, r, *run, now)
 		return
 	}
 	c.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".",
 		Ref: RunType + "/" + run.ID, To: a.recipients(c, a.def(run.Agent), *run), Key: "agent:" + run.ID + ":stopped"})
 }
 
-// ended hands a flow's run back to its flow.
-func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord, now time.Time) {
-	processes := a.host.AgentFlows()
-	if run.Flow != "" && processes != nil {
-		processes.RunEnded(c, host.RunEnd{ID: run.ID, Agent: run.Agent, Flow: run.Flow, State: run.State, Result: run.Result, Stopped: run.Stopped, Token: run.Token}, now)
-	}
-}
 
-// Start, Signal and Finished serve flows' agent steps (internal/host.Runs).
-func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s host.RunStart, now time.Time) {
-	run, err := a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now, !c.Replaying && c.Staging())
-	if err != nil {
-		c.FailDecision(err)
-		return
-	}
-	a.host.Automation(c, AgentApp).Put(r, run)
-}
-
-func (a *Agents) Signal(c platform.Caller, r *pb.ChangeRecord, run string, s host.RunSignal, now time.Time) {
-	a.RecordAgentSignal(c, r, run, Signal{At: s.At, Kind: s.Kind, By: s.By, Detail: s.Detail}, now)
-}
-
-func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
-	where := []any{[]any{"flow", "=", flow}, []any{"state", "=", "done"}}
-	if step != "" {
-		where = append(where, []any{"step", "=", step})
-	}
-	domain, _ := json.Marshal(where)
-	runs, _, _ := platform.Find[AgentRunRecord](a.host.Automation(c, AgentApp), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
-	var out []string
-	for _, run := range runs {
-		out = append(out, run.ID)
-	}
-	return out
-}
 
 // Interested and Listen take the events agents wait on (internal/host.Listener).
 func (a *Agents) Interested(_ []string, e platform.Event) bool { return a.interested(e) }

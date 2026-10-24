@@ -11,13 +11,6 @@ import {t} from "@platform/ui";
 const root = createRoot(document.getElementById("root")!);
 async function start(){
 await initializeRules();
-const previewWorkspace = new URLSearchParams(location.search).get("preview") === "pattern/workspace";
-if (previewWorkspace) {
-  // Only the fixture Workspace shell needs its own window. Ordinary examples
-  // stay inside Catalog's app shell and the normal host sign-in path.
-  const { CatalogPreview } = await import("@platform/catalog-app/view");
-  root.render(<StrictMode><CatalogPreview id="pattern/workspace" standalone /></StrictMode>);
-} else {
   // The host says how to sign in: at its identity provider, once for
   // every app; or, on development tokens, as one of its development identities.
   let offline=false;
@@ -37,6 +30,5 @@ if (previewWorkspace) {
       </QueryClientProvider>
     </StrictMode>,
   );
-}
 }
 void start().catch(problem=>root.render(<main role="alert" className="grid h-dvh place-items-center p-6 text-sm"><div><p>{t("This workspace task could not be reopened. Connect and reload; saved inputs were retained.")}</p><p className="mt-2 text-muted">{t(problem instanceof Error?problem.message:String(problem))}</p></div></main>));

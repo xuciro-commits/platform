@@ -158,12 +158,6 @@ services:
     restart: on-failure
 
   # A webhook receiver, mail server, model server and supplier's agent for local endpoints and the rehearsal.
-  webhook-sink:
-    build: { context: ../.., dockerfile: capabilities/server/cmd/webhook-sink/Dockerfile }
-    environment: { WEBHOOK_SECRET: sinkLocalOnly0000000000000000000000000000000000000000000000000000 }
-    ports: ["127.0.0.1:${SINK_PORT:-8497}:8080"]
-
-volumes:
   pgdata:
     name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_pgdata
   rauthy:

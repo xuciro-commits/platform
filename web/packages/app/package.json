@@ -4,9 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
-    "./catalog": "./src/catalog.ts",
-    "./catalog/examples": "./src/catalog.examples.tsx",
-    "./catalog/fixtures": "./src/catalog.fixtures.tsx",
     "./decimal": "./src/runtime/decimal.ts",
     "./search": "./src/widgets/search-input.ts",
     "./action-table": "./src/widgets/action-table.ts",
@@ -24,8 +21,7 @@
     "@platform/kernel": "workspace:*",
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
-    "react": "^19.3.0",
-    "@platform/catalog": "workspace:*"
+    "react": "^19.3.0"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

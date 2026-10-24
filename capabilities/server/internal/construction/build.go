@@ -36,7 +36,6 @@ type Object struct {
 	CreateTransaction *platform.BusinessTxn        `json:"createTransaction,omitempty" type:"json" field:"aside" title:"Creation transaction"`
 	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
 	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
-	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Current enterprise use"`
 	// States and Actions make its records a small process: the
 	// object editor owns them, so generated forms do not ask for them.
 	States  []State  `json:"states,omitempty" field:"aside" title:"States"`

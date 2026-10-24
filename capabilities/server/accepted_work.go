@@ -187,7 +187,7 @@ func (t *Tenant) acceptWork(task *Task, now time.Time) (outcome string) {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	principal, _ := json.Marshal(c.Member)
-	committed, err := t.acceptResult(Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()},
+	committed, err := t.acceptResult(Entry{App: task.App, Kind: "accepted-result", Principal: principal, Body: raw, At: now},
 		result.Key, result.RequestHash)
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()

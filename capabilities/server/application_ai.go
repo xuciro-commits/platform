@@ -88,7 +88,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		if asset.Ref.Kind != platform.AssetFunction {
 			continue
 		}
-		definition, version, err := functionAssetDefinition(asset)
+		definition, _, err := functionAssetDefinition(asset)
 		if err != nil {
 			return nil, migrationRefusal(err)
 		}
@@ -121,24 +121,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 				}
 			}
 		}
-		if m.Holds(construction.ID, construction.Builder) || m.Holds(construction.ID, construction.Publisher) {
-			offset := 0
-			for {
-				rows, total, problem := platform.Find[construction.Evaluation](t.automation(construction.ID, false), platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
-				if problem != nil {
-					return nil, problem
-				}
-				for _, report := range rows {
-					if report.Function == asset.Ref.Name && report.Version == version && !report.Archived {
-						item.Evaluations = append(item.Evaluations, ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: report.State, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
-					}
-				}
-				offset += len(rows)
-				if offset >= total || len(rows) == 0 {
-					break
-				}
-			}
-		}
+
 		out = append(out, item)
 	}
 	return out, nil

@@ -255,7 +255,7 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []CompositeEdit,
 		return CompositeAnswer{}, err
 	}
 	principal, _ := json.Marshal(m)
-	committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}, saved.Key, saved.RequestHash)
+	committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, saved.Key, saved.RequestHash)
 	if err != nil {
 		return CompositeAnswer{}, err
 	}

@@ -54,9 +54,6 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
-	// EnterpriseUse says whether this record still actively uses its enterprise references.
-	// Nil keeps every unarchived record current; history always protects deletion.
-	EnterpriseUse    *Expr
 	Protocols        []Provision
 	CreateTxn        *BusinessTxn
 	ApplyCreateTxn   func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
@@ -451,7 +448,6 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
-	EnterpriseUse   *Expr               `json:"enterpriseUse,omitempty"`
 	Versioning      *Versioning         `json:"versioning,omitempty"`
 	VersionPins     []VersionPinBinding `json:"versionPins,omitempty"`
 	Sets            []RecordSet         `json:"sets,omitempty"`
@@ -505,7 +501,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	info.RecordFormat, info.RecordImages = e.RecordFormat, slices.Clone(e.RecordImages)
 	if err := checkRecordImageFormats(info); err != nil {
 		return EntityInfo{}, err
@@ -616,27 +612,9 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			return EntityInfo{}, fmt.Errorf("field %s needs one compatible direct read alias target", alias.Name)
 		}
 	}
-	if _, err := info.CompileEnterpriseUse(); err != nil {
-		return EntityInfo{}, fmt.Errorf("entity %s: %w", e.Type, err)
-	}
 	return info, nil
 }
 
-// CompileEnterpriseUse permits only this record's fields, using the same pure
-// expression compiler as other owner rules.
-func (info EntityInfo) CompileEnterpriseUse() (*ExprProgram, error) {
-	if info.EnterpriseUse == nil {
-		return nil, nil
-	}
-	if info.EnterpriseUse.Kind != "boolean" {
-		return nil, fmt.Errorf("current enterprise use must return boolean")
-	}
-	refs := map[string]ExprType{"archived": {Kind: "boolean"}}
-	for _, field := range info.Fields {
-		refs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
-	}
-	return CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
-}
 
 // ApplyFieldAliases copies only declared compatible fields. Owners use the
 // same projection before validation and accepted writes; aliases have no input.

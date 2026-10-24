@@ -200,15 +200,6 @@ func constraintLocked(info platform.EntityInfo, before *records.Row) bool {
 }
 
 func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.EntityInfo, rule platform.Constraint, after *records.Row, before *records.Row) (refusal *kernel.Error) {
-	if d.TraceEnabled() {
-		defer func() {
-			event := platform.DecisionTrace{Kind: "constraint", Name: rule.Name, Type: info.Type, ID: records.Header(after.Value).ID, Operation: rule.Kind}
-			if refusal != nil {
-				event.Refusal = refusal.Message
-			}
-			d.RecordDecisionTrace(event)
-		}()
-	}
 	values := constraintValues(info, after.Value)
 	fail := func(reason string) *kernel.Error {
 		visible := map[string]json.RawMessage{}

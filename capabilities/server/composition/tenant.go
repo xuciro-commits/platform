@@ -7,21 +7,25 @@ import (
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/core"
-	"platformserver/apps/enterprise"
 	"platformserver/apps/files"
-	"platformserver/apps/flow"
-	"platformserver/apps/knowledge"
 	"platformserver/apps/relations"
+	"platformserver/apps/system"
 	"platformserver/apps/work"
+	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
 
-// NewTenant is used for startup, tenant creation and isolated recovery.
+// NewTenant is used for startup, tenant creation and isolated recovery. Only
+// the host's one system tenant composes the system app: a business tenant never
+// sees the Platform, and its reads of the system's own collections stay empty.
 func NewTenant(id string, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
-	return platformserver.NewTenant(id,
+	apps := []platform.App{
 		platformserver.NewConsole(id, seats...),
-		enterprise.New(id, platform.OrgSeed{Memberships: platformserver.Memberships(seats)}),
-		relations.New(id), ai.New(id), work.New(id), flow.New(id),
-		platformserver.NewAgents(id), knowledge.New(id), files.New(id),
-		core.New(id), build.New(id))
+		relations.New(id), ai.New(id), work.New(id),
+		platformserver.NewAgents(id), files.New(id), core.New(id), build.New(id),
+	}
+	if id == systemscope.Tenant {
+		apps = append(apps, system.New(id))
+	}
+	return platformserver.NewTenant(id, apps...)
 }

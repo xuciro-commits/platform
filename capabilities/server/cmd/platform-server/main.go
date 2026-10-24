@@ -8,13 +8,12 @@ import (
 
 	"platformserver"
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
 	"platformserver/apps/core"
-	"platformserver/apps/enterprise"
-	"platformserver/apps/flow"
-	"platformserver/apps/knowledge"
+	"platformserver/apps/system"
 	"platformserver/apps/work"
 	"platformserver/composition"
+	"platformserver/internal/construction"
+	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
 
@@ -28,13 +27,18 @@ func main() {
 	}
 	development := platformserver.TenantSpec{ID: *tenant}
 	if *admin != "" {
+		roles := map[string]string{
+			platformserver.PlatformApp: platformserver.Admin,
+			construction.ID: construction.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
+			work.ID: work.Admin, platformserver.AgentApp: platformserver.AgentAdmin,
+		}
+		// The development seat of the system tenant is its publisher: without
+		// it nobody could approve a change in a local run.
+		if *tenant == systemscope.Tenant {
+			roles[system.ID] = system.Publisher
+		}
 		development.Seats = []platformserver.Seat{{Subjects: []string{*admin}, Member: platform.Member{
-			ID: "builder", Roles: map[string]string{
-				platformserver.PlatformApp: platformserver.Admin, enterprise.ID: enterprise.Admin,
-				build.ID: build.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
-				work.ID: work.Admin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin,
-				knowledge.ID: knowledge.Editor,
-			},
+			ID: "builder", Roles: roles,
 		}}}
 	}
 	if err := deployment.Run(development); err != nil {

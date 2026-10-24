@@ -23,7 +23,6 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // accepted-result transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
-	confirmationCompleting *confirmationCompletion
 	currentSubmission      *pb.Submission
 	businessRefusals       map[*kernel.Error]platform.BusinessRefusalFact
 	businessFacts          []platform.BusinessRefusalFact
@@ -364,16 +363,6 @@ func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data 
 	d.intents = append(d.intents, planned...)
 	d.tenant.askHeldEffects(c, kind, entity, planned, now)
 	return len(planned), nil
-}
-func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
-	view := d.enterpriseUsageTenant()
-	return view.checkEnterpriseUsage(c, d.records, id, until, deleting, now)
-}
-func (d *stagedDecision) CheckEnterpriseTenantLink(c platform.Caller, id string, revision uint32, now time.Time) *kernel.Error {
-	return d.enterpriseUsageTenant().checkTenantLink(c, id, revision, now)
-}
-func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
-	return d.routingTenant().checkTenantConnection(c, id, now)
 }
 
 func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
