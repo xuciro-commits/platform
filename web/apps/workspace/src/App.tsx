@@ -262,7 +262,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute} onEmpty={() => setActiveRoute(undefined)}
-        navigation={<div className="grid gap-3"><ZoneRail />{app?.navigation?.(activeRoute)}</div>}
+        navigation={<div className="grid gap-3"><ZoneRail sections={app?.nav(host, activeRoute) ?? []} activeRoute={activeRoute} />{app?.navigation?.(activeRoute)}</div>}
         nav={[
           { label: t("Work"), items: [
             { label: t("Inbox"), icon: <InboxIcon />, route: { view: "inbox" } },
