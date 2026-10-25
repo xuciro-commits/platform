@@ -419,6 +419,8 @@ register("zh-CN", {
   "Consumers": "使用方",
   "Consumes": "使用",
   "Context": "上下文",
+  "Cost by day": "按日成本",
+  "Cost by model": "按模型成本",
   "Cost (USD)": "费用（美元）",
   "Cursor": "游标",
   "Day": "日期",

@@ -1112,4 +1112,10 @@ register("zh-CN", {
   "End evidence": "终点证据",
   "Unknown intervals": "未知区间",
   "Processing version": "处理版本",
+  "Explain the authorization": "解释这次授权判定",
+  "Hide the authorization explain": "收起授权解释",
+  "Asking the authorization engine…": "正在询问授权引擎…",
+  "Only administrators and auditors may read the authorization explain.": "只有管理员与审计员可以查看授权解释。",
+  "The engine would allow this now.": "引擎此刻会放行。",
+  "The engine refuses.": "引擎拒绝。",
 });

@@ -1,6 +1,7 @@
 import type {Api,Entry} from "@platform/kernel";
 import {Button, Disclosure, Rejection, language, t, useWorkspace} from "@platform/ui";
 import {useQuery} from "@tanstack/react-query";
+import {useState} from "react";
 import {useHost, useOpenRecord} from "../index";
 
 export const refusalCategoryName=(category:string)=>t(({business:"Business refused",constraint:"Constraint refused",policy:"Access refused",technical:"Technical failure",input:"Input refused"} as Record<string,string>)[category]??"Request refused");
@@ -38,7 +39,36 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
    <Button size="sm" variant="ghost" onClick={()=>open({view:"requests"})}>{t("View request status")}</Button>
    {target?.type&&target.id&&<Button size="sm" variant="ghost" onClick={()=>openRecord(`${target.type}/${target.id}`)}>{t("Open the original record")}</Button>}
   </div>}
+  {policy&&!waiting&&<ExplainAccess entry={entry}/>}
   {original&&<Disclosure summary={t("Original refused inputs")}><pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(original,null,2)}</pre><p className="text-xs text-muted">{t("Retry original inputs repeats the saved request. Corrected inputs or a refreshed definition create a linked correction.")}</p></Disclosure>}
+ </div>;
+}
+
+/** The ordered authorization verdict behind an access refusal, for the
+ * administrators and auditors allowed to ask the engine why. Others see the
+ * platform's refusal of the explain itself. */
+type ExplainVerdict = { allow?: boolean; rule?: string; reason?: string; layers?: { name: string; allowed?: boolean; reason?: string; role?: string; policy?: string }[] };
+function ExplainAccess({ entry }: { entry?: Entry }) {
+ const {client,me}=useHost();
+ const [asking,setAsking]=useState(false);
+ const target=entry?.submission.target,submission=entry?.submission;
+ const explain=useQuery({queryKey:[client.connection.token,client.connection.tenant,"authz-explain",submission?.principalId,submission?.authority,target?.type,target?.id],enabled:asking&&!!target?.type,retry:false,queryFn:async()=>{
+   const asked=await client.call<ExplainVerdict & {error?:{detail?:string}}>("POST","/v1/authz/explain",{
+     principal:submission?.principalId||me.principalId,tenant:me.tenantId,
+     kind:submission?.authority?"action":target?.id?"write":"create",
+     type:target?.type||"",record:target?.id||"",action:submission?.authority||"",
+   });
+   if(!asked.ok)throw new Error((asked.body as {error?:{detail?:string}}).error?.detail||"explain refused");
+   return asked.body;
+ }});
+ return <div className="grid gap-1">
+  <Button size="sm" variant="ghost" onClick={()=>setAsking(v=>!v)}>{asking?t("Hide the authorization explain"):t("Explain the authorization")}</Button>
+  {asking&&(explain.isLoading?<p className="text-xs text-muted">{t("Asking the authorization engine…")}</p>
+   :explain.isError?<p className="text-xs text-muted">{t("Only administrators and auditors may read the authorization explain.")}</p>
+   :explain.data&&<div className="grid min-w-0 gap-1 rounded border border-border p-2 text-xs">
+    <p>{explain.data.allow?t("The engine would allow this now."):explain.data.reason||t("The engine refuses.")} <span className="font-mono text-muted">{explain.data.rule}</span></p>
+    {(explain.data.layers??[]).map((layer,index)=><p key={index} className="break-words"><span className={layer.allowed?"text-success":"text-danger"}>{layer.allowed?"✓":"✗"}</span> <span className="font-medium">{layer.name}</span>{layer.role?` · ${layer.role}`:""}{layer.policy?` · ${layer.policy}`:""} — {layer.reason}</p>)}
+   </div>)}
  </div>;
 }
 

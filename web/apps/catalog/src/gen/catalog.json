@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8a1146fcd9bc1c42",
+  "revision": "sha256:e2f0e248dc380fa3",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -9509,6 +9509,7 @@
       "composed": [
         "ui/button",
         "ui/chart",
+        "ui/dialog",
         "ui/input",
         "ui/pivot",
         "ui/record-cards",
@@ -9523,7 +9524,7 @@
         {
           "name": "RecordSource",
           "kind": "type",
-          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
         },
         {
           "name": "RecordQuery",
@@ -10052,7 +10053,7 @@
         {
           "name": "RecordSource",
           "kind": "type",
-          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
         },
         {
           "name": "EntityRecord",
@@ -13658,6 +13659,7 @@
       "web/packages/govern/src/permissions.tsx",
       "web/packages/ui/src/primitives/sheet.tsx",
       "web/packages/ui/src/records/EditableRecordGrid.tsx",
+      "web/packages/ui/src/records/Records.tsx",
       "web/packages/ui/src/shell/Workspace.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/session/ReleaseInformation.tsx"
@@ -13950,6 +13952,7 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/Chart.tsx",
+      "web/packages/govern/src/ai.tsx",
       "web/packages/ui/src/records/RecordChart.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],

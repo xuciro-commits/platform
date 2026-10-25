@@ -270,7 +270,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" } },
             { label: t("Outbox"), icon: <Send />, route: { view: "outbox" }, badge: host.outbox.filter(entry => entry.state !== "SUBMISSION_STATE_CONFIRMED" && entry.state !== "SUBMISSION_STATE_REJECTED").length || undefined },
           ] },
-          ...(app?.id === "core" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ...(saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
           {id:"offline",label:t("Offline applications"),run:()=>setOfflineOpen(true)},

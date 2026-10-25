@@ -140,6 +140,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
       exportCSV: (type, q) => client.exportCSV(type, q),
+      importCSV: (type, csv, preview) => client.importCSV(type, new Blob([csv], { type: "text/csv" }), preview),
       interfaceList: (name,q) => client.get<InterfaceRecordPageData>(client.interfaceRecordsPath(name,q)),
       watchInterfaceList: (name,q,changed) => client.subscribeRead(client.interfaceRecordsPath(name,q),changed),
       namedInterfaceList: (binding,q) => client.get<InterfaceRecordPageData>(client.namedQueryPath(binding,q)),

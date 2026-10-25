@@ -1,7 +1,7 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition, SchemaVersion } from "./gen/host";
+import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition, SchemaVersion, ImportRow } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
 import { PreparedWorkspace, preparedIdentity, rememberPreparedIdentity, preparedMetadataPaths, readPath, type PreparedApplication } from "./prepared";
@@ -250,11 +250,14 @@ export class EdgeClient {
   }
 
   /** Imports records of a type from CSV, or previews what each row would do. */
-  async importCSV(type: string, file: Blob, preview: boolean): Promise<{ row: number; id: string; action: string; outcome: string }[]> {
+  async importCSV(type: string, file: Blob, preview: boolean): Promise<ImportRow[]> {
     const response = await fetch(`${this.connection.server}/v1/import/${encodeURIComponent(type)}?preview=${preview}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": "text/csv" }, body: file,
     });
-    if (!response.ok) throw new Error(`import failed: ${response.status}`);
+    if (!response.ok) {
+      const refused = await response.json().catch(() => undefined) as { error?: { detail?: string; message?: string } } | undefined;
+      throw new Error(refused?.error?.detail ?? refused?.error?.message ?? `import failed: ${response.status}`);
+    }
     return response.json();
   }
 
@@ -271,6 +274,7 @@ export class EdgeClient {
     }
     return response.blob();
   }
+
 
   /** A file's bytes, as the member may read them. */
   async download(id: string, options:{signal?:AbortSignal;maxBytes?:number}={}): Promise<Blob> {

@@ -1,6 +1,6 @@
 // Settings: AI providers, the playground and usage.
 import { useHost, MemberSelect, useReadQuery as useRead } from "@platform/app";
-import { PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
+import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -221,10 +221,34 @@ export function AIUsage() {
     { accessorKey: "millis", header: "ms", meta: { width: 80, align: "right" } },
     { accessorKey: "outcome", header: t("Outcome"), meta: { width: 240 }, cell: (c) => <Tag label={c.getValue()} tone={c.getValue() === "ok" ? "success" : "danger"} /> },
   ];
+  const totals2 = usage?.totals ?? [];
+  const day = (rows: Total[]) => {
+    const per = new Map<string, { day: string; cost: number; calls: number }>();
+    for (const row of rows) { const item = per.get(row.day) ?? { day: row.day, cost: 0, calls: 0 }; item.cost += row.cost; item.calls += row.calls; per.set(row.day, item); }
+    return [...per.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+  };
+  const byModel = (rows: Total[]) => {
+    const per = new Map<string, { model: string; cost: number }>();
+    for (const row of rows) { const item = per.get(row.model) ?? { model: row.model, cost: 0 }; item.cost += row.cost; per.set(row.model, item); }
+    return [...per.values()].sort((a, b) => b.cost - a.cost);
+  };
+  const sum = (pick: (row: Total) => number) => (totals2.reduce((acc, row) => acc + pick(row), 0));
   return (
     <>
       <PageHeader title={t("AI usage")} help={t("Every model call, metered from the journal: per day, member and model. Administrators of the ai app see everyone's; others see their own.")} />
-      <DataTable data={usage?.totals ?? []} columns={totals} getRowId={(t) => `${t.day}${t.member}${t.model}`} height={220} searchable={false} empty={t("No calls yet")} />
+      <div className="grid gap-3 sm:grid-cols-4">
+        {[[t("Calls"), String(sum((row) => row.calls))], [t("Tokens in"), sum((row) => row.input).toLocaleString()], [t("Tokens out"), sum((row) => row.output).toLocaleString()], [t("Cost (USD)"), `$${sum((row) => row.cost).toFixed(2)}`]].map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-border bg-surface px-3 py-2">
+            <p className="text-xs text-muted">{label}</p>
+            <p className="text-lg font-semibold tabular-nums">{value}</p>
+          </div>
+        ))}
+      </div>
+      {totals2.length > 0 && <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
+        <Chart spec={{ title: t("Cost by day"), data: { values: day(totals2) }, mark: "bar", encoding: { x: { field: "day", type: "nominal" }, y: { field: "cost", type: "quantitative" } } }} height={180} />
+        <Chart spec={{ title: t("Cost by model"), data: { values: byModel(totals2) }, mark: { type: "arc", donut: true }, encoding: { theta: { field: "cost", type: "quantitative" }, color: { field: "model", type: "nominal" } } }} height={180} />
+      </div>}
+      <DataTable data={totals2} columns={totals} getRowId={(t) => `${t.day}${t.member}${t.model}`} height={220} searchable={false} empty={t("No calls yet")} />
       <AILimits />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Recent calls")}</h2>
       <DataTable data={usage?.calls ?? []} columns={calls} getRowId={(u) => `${u.at}${u.member}${u.model}${u.millis}`} height="calc(100dvh - 470px)" empty={t("No calls yet")} />
