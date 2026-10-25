@@ -419,16 +419,57 @@ test("programmatic opens use published route replacements and retain the origina
   expect((await screen.findByRole("textbox", { name: "Draft A" }) as HTMLInputElement).value).toBe("retain draft");
 });
 
-test("a delayed programmatic replacement cannot reopen its saved result after another document is selected", async () => {
+test("a delayed programmatic replacement cannot reopen its saved result or close its original after another document is selected", async () => {
   let finish!: (route: Route) => void;
   const pending = new Promise<Route>(resolve => { finish = resolve; });
   await start({ resolveRoute: route => route.view === "original-page" ? pending : route });
-  act(() => api.open({ view: "original-page" }, { ifCurrent: { view: "flow", params: { id: "A" } } }));
+  act(() => api.open({ view: "original-page" }, { ifCurrent: { view: "flow", params: { id: "A" } }, replace: true }));
   act(() => api.open({ view: "flow", params: { id: "B" } }));
   expect(await screen.findByRole("textbox", { name: "Draft B" })).toBeTruthy();
   await act(async () => finish({ view: "flow", params: { id: "C" } }));
   expect(observed.dock!.getPanel("flow?id=C")).toBeUndefined();
   expect(observed.dock!.activePanel?.id).toBe("flow?id=B");
+  expect(observed.dock!.getPanel("flow?id=A")).toBeTruthy();
+});
+
+test("replacing a saved task waits for route resolution before closing its original panel", async () => {
+  let finish!: (route: Route) => void;
+  const pending = new Promise<Route>(resolve => { finish = resolve; });
+  await start({ resolveRoute: route => route.view === "saved-page" ? pending : route });
+  act(() => api.open({ view: "saved-page" }, { ifCurrent: { view: "flow", params: { id: "A" } }, replace: true }));
+  expect(observed.dock!.getPanel("flow?id=A")).toBeTruthy();
+  await act(async () => finish({ view: "flow", params: { id: "saved" } }));
+  expect(observed.dock!.activePanel?.id).toBe("flow?id=saved");
+  expect(observed.dock!.getPanel("flow?id=A")).toBeUndefined();
+  expect(location.hash).toBe("#/flow?id=saved");
+});
+
+test("a failed saved-route resolution leaves the original task open", async () => {
+  let fail!: (error: Error) => void;
+  const pending = new Promise<Route>((_, reject) => { fail = reject; });
+  await start({ resolveRoute: route => route.view === "saved-page" ? pending : route });
+  act(() => api.open({ view: "saved-page" }, { ifCurrent: { view: "flow", params: { id: "A" } }, replace: true }));
+  await act(async () => fail(Error("The saved route could not be read")));
+  expect(observed.dock!.activePanel?.id).toBe("flow?id=A");
+  expect(observed.dock!.panels).toHaveLength(1);
+  expect(location.hash).toBe("#/flow?id=A");
+});
+
+test("a replacement resolved after switching applications stays in its original hidden dock", async () => {
+  let finish!: (route: Route) => void;
+  const pending = new Promise<Route>(resolve => { finish = resolve; });
+  await start({ resolveRoute: route => route.view === "saved-page" ? pending : route });
+  const originalDock = observed.dock!;
+  act(() => api.open({ view: "saved-page" }, { ifCurrent: { view: "flow", params: { id: "A" } }, replace: true }));
+  choose("knowledge");
+  await screen.findByRole("heading", { name: "Documents" });
+  await act(async () => finish({ view: "flow", params: { id: "saved" } }));
+  expect(location.hash).toBe("#/knowledge");
+  expect(api.applications!.current).toBe("knowledge");
+  expect(originalDock.getPanel("flow?id=A")).toBeUndefined();
+  choose("build");
+  expect(await screen.findByRole("textbox", { name: "Draft saved" })).toBeTruthy();
+  expect(location.hash).toBe("#/flow?id=saved");
 });
 
 test("a newly published replacement follows the current link while retaining its draft", async () => {
@@ -472,4 +513,70 @@ test("a hidden application scope stops publishing visibility and restores it in 
   choose("build");
   await waitFor(() => expect(seen.at(-1)).toBe(true));
   mounted.unmount();
+});
+
+test("same-route tasks in different application docks keep separate close guards and density", async () => {
+  const tasks = new Map<string, ReturnType<typeof useWorkspace>>();
+  function SharedDraft() {
+    const workspace = useWorkspace();
+    const [owner] = useState(workspace.applications!.current!);
+    const [value, setValue] = useState("");
+    tasks.set(owner, workspace);
+    useUnsavedChanges(!!value, () => setValue(""));
+    return <input aria-label={`Shared ${owner}`} value={value} onChange={event => setValue(event.target.value)} />;
+  }
+  const sharedViews = [...views, { id: "shared", title: () => "Shared task", render: () => <SharedDraft /> }];
+  function SharedShell() {
+    const [current, setCurrent] = useState("build");
+    return <Workspace product="Fixture" storageKey="workspace:shared" layoutScope={current} scopeOf={scopeOf} views={sharedViews} home={{ view: "home" }} nav={[]}
+      applications={{ apps, categories: [], current, onSelect: setCurrent }} />;
+  }
+  render(<SharedShell />);
+  await screen.findByLabelText("Draft A");
+  act(() => api.open({ view: "shared" }));
+  const first = await screen.findByRole("textbox", { name: "Shared build" });
+  expect(first.closest("[data-density]")?.getAttribute("data-density")).toBe("compact");
+  fireEvent.change(first, { target: { value: "retain hidden draft" } });
+  act(() => tasks.get("build")!.applications!.onSelect("knowledge"));
+  await screen.findByRole("heading", { name: "Documents" });
+  act(() => api.open({ view: "shared" }));
+  const second = await screen.findByRole("textbox", { name: "Shared knowledge" });
+  expect(second.closest("[data-density]")?.getAttribute("data-density")).toBe("comfortable");
+  act(() => tasks.get("knowledge")!.close({ view: "shared" }));
+  expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull();
+  await waitFor(() => expect(screen.queryByLabelText("Shared knowledge")).toBeNull());
+  expect((first as HTMLInputElement).value).toBe("retain hidden draft");
+  const leave = vi.fn();
+  act(() => api.confirmLeave(leave));
+  expect(leave).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
+  act(() => api.applications!.onSelect("build"));
+  expect(await screen.findByRole("textbox", { name: "Shared build" })).toBe(first);
+  expect(location.hash).toBe("#/shared");
+});
+
+test("a save completed in a hidden dock updates that task without taking the foreground URL", async () => {
+  let finish!: (route: Route) => void;
+  const pending = new Promise<Route>(resolve => { finish = resolve; });
+  await start({ resolveRoute: route => route.view === "pending-foreground" ? pending : route });
+  const savedTask = api, original = { view: "flow", params: { id: "A" } };
+  choose("knowledge");
+  await screen.findByRole("heading", { name: "Documents" });
+  act(() => api.open({ view: "pending-foreground" }));
+  act(() => savedTask.open({ view: "flow", params: { id: "saved" } }, { ifCurrent: original }));
+  expect(location.hash).toBe("#/knowledge");
+  expect(api.applications!.current).toBe("knowledge");
+  await act(async () => finish({ view: "knowledge", params: { id: "foreground" } }));
+  expect(location.hash).toBe("#/knowledge?id=foreground");
+  choose("build");
+  expect(await screen.findByRole("textbox", { name: "Draft saved" })).toBeTruthy();
+  expect(location.hash).toBe("#/flow?id=saved");
+});
+
+test("an explicit cross-application open completes in its newly mounted dock", async () => {
+  await start();
+  act(() => api.open({ view: "knowledge", params: { id: "linked" } }));
+  expect(await screen.findByRole("heading", { name: "Documents" })).toBeTruthy();
+  expect(api.applications!.current).toBe("knowledge");
+  expect(location.hash).toBe("#/knowledge?id=linked");
 });

@@ -72,7 +72,7 @@ test("builder publishes a model invariant and a rejected form keeps its values",
   await expect(form.getByText("Code must be unique.", { exact: true })).toBeVisible();
   await expect(form.getByRole("textbox", { name: "Code", exact: true })).toHaveValue("EXISTING");
   await form.getByRole("textbox", { name: "Code", exact: true }).fill("CORRECTED");
-  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await form.getByRole("button", { name: "Submit corrected inputs", exact: true }).click();
   await expect(form).toBeHidden();
   await expect(tab.getByText("CORRECTED", { exact: true }).first()).toBeVisible();
 });

@@ -1,4 +1,4 @@
-import { expect, pageUIProfile, selectObjectSection, shots, slug, test } from "./kit";
+import { expect, pageUIProfile, runtime, selectObjectSection, shots, slug, test } from "./kit";
 
 test("an application authors related drafts and a template before its first release", async ({ page, builder, operator, editor }, testInfo) => {
   test.setTimeout(180_000);
@@ -192,4 +192,63 @@ test("a narrow workspace can search applications and reopen the empty page widge
     await page.getByRole("button", { name: "Close structure panel", exact: true }).click();
   }
   await shots(page, page.locator("body"), "empty-page-narrow", testInfo);
+});
+
+test("authoring previews stay read-only with and without a published application or an embedded page", async ({ page, builder, editor }) => {
+  test.setTimeout(150_000);
+  const object = await builder.object({ title: "Preview entry", fields: [{ name: "note", title: "Note", type: "text" }] });
+  await builder.records(object.type, [{ note: "Existing authorized entry" }]);
+  const sections = [
+    { id: "records", widget: "table", configVersion: 1, title: "Preview records", fields: ["note"] },
+    { id: "create", widget: "form", configVersion: 1, title: "Create preview entry", fields: ["note"] },
+  ];
+  const document = { formatVersion: 2, uiProfile: pageUIProfile, root: "root", nodes: {
+    root: { kind: "rows", children: ["records", "create"] }, records: { kind: "widget", section: "records" }, create: { kind: "widget", section: "create" },
+  } };
+  const original = await builder.page({ title: "Preview boundaries", object: object.type, sections, document });
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (request.method() !== "POST") return;
+    const path = new URL(request.url()).pathname;
+    if (path === "/v1/submissions") {
+      const schema = request.postDataJSON()?.schema?.name;
+      if (typeof schema === "string" && schema.startsWith(`${object.type}.`)) writes.push(schema);
+    } else if (path.startsWith("/v1/capabilities/calls/") || path === "/v1/files" || path.startsWith("/v1/import/")) writes.push(path);
+  });
+  const preview = async (id: string, application?: string) => {
+    if (application) { await builder.open(page, `/module?id=${application}&application=${application}&page=${id}&surface=studio`); await editor.visual(); }
+    else await editor.open(builder, id);
+    const previewButton = page.getByRole("button", { name: "Preview", exact: true });
+    if (await previewButton.getAttribute("aria-pressed") !== "true") await previewButton.click();
+    const canvas = page.locator(`[data-structured-editor^="build.page:${id}:"]:visible [data-canvas-scroll]`);
+    await expect(canvas).toHaveCount(1);
+    await expect(canvas.getByText("The form does not submit while you compose.", { exact: true })).toBeVisible();
+    await expect(canvas.getByRole("textbox", { name: "Note", exact: true })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+    await expect(canvas.getByText("Existing authorized entry", { exact: true })).toBeVisible();
+    expect(writes).toEqual([]);
+  };
+  await preview(original.id);
+  const application = await builder.application({ title: "Preview boundary application", pages: [original.name] });
+  await preview(original.id, application.id);
+  await builder.activate(await builder.candidate([{ kind: "page", id: original.id }, { kind: "app", id: application.id }]));
+  await preview(original.id, application.id);
+  const added = await builder.page({ title: "New page of published application", object: object.type, sections, document });
+  await builder.decide("build.app.edit", { type: "build.app", id: application.id }, { pages: [original.name, added.name] });
+  await preview(added.id, application.id);
+  const published = (await builder.definitions<any>()).find(definition => definition.ref.kind === "page" && definition.ref.name === original.name);
+  const embedded = await builder.page({ title: "Embedded preview", object: object.type,
+    sections: [{ id: "child", widget: "embedded-page", configVersion: 1, title: "Embedded entry workspace", embedding: {
+      kind: "module", page: { ref: published.ref, sourceVersion: published.version }, contentVersion: published.contentVersion, interfaceVersion: 0,
+    } }], document: { formatVersion: 2, uiProfile: pageUIProfile, root: "root", nodes: { root: { kind: "rows", children: ["child"] }, child: { kind: "widget", section: "child" } } },
+  });
+  await preview(embedded.id);
+  expect((await builder.read<{ records: unknown[] }>(`records/${object.type}`)).records).toHaveLength(1);
+
+  // The same published form remains usable in the actual application.
+  const live = await runtime(page, builder, original.name);
+  await live.getByRole("textbox", { name: "Note", exact: true }).fill("Created in runtime");
+  await live.getByRole("button", { name: "Create", exact: true }).last().click();
+  await expect.poll(async () => (await builder.read<{ records: unknown[] }>(`records/${object.type}`)).records.length).toBe(2);
+  await live.close();
 });

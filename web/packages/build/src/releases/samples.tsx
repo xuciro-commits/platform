@@ -214,7 +214,7 @@ function SyntheticRecords({ application, samples, onChange }: Pick<SampleProps, 
 }
 
 export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
-  const application = useApplicationScope(), { open, close } = useApplicationWorkspace();
+  const application = useApplicationScope(), { open } = useApplicationWorkspace();
   const projects = useRecordInventory<Project>("build.app"), inventory = useRecordInventory<SampleSetRecord>("build.sample-set");
   const project = projects.data?.records.find(record => record.id === application), record = inventory.data?.records.find(record => record.id === id);
   if (!application) return <div className="grid max-w-xl content-start gap-4 p-4">
@@ -234,8 +234,7 @@ export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
   if (!project || id !== "new" && !record) return <p role={failed ? "alert" : "status"} className="p-3 text-sm">{failed ? t("The application sample could not be loaded.") : t("Loading…")}</p>;
   return <SampleDocument key={`${application}:${id}`} application={project} record={record} onSaved={saved => {
     if (id !== "new") return;
-    open({ view: "sample-set", params: { id: saved.id, application } }, { ifCurrent: { view: "sample-set", params: { id, application } } });
-    close({ view: "sample-set", params: { id, application } });
+    open({ view: "sample-set", params: { id: saved.id, application } }, { ifCurrent: { view: "sample-set", params: { id, application } }, replace: true });
   }} />;
 }
 

@@ -57,7 +57,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   const discoveryScope = useRef(metadataScope);
   if (discoveryScope.current !== metadataScope) { discoveryScope.current = metadataScope; discoveryLatch.current = false; }
   if (actionQuery.isSuccess && entityQuery.isSuccess && definitionQuery.isSuccess) discoveryLatch.current = true;
-  const discovery: WorkspaceDiscovery = useMemo(() => {
+  const discovery: WorkspaceDiscovery = (() => {
     const queries = [actionQuery, entityQuery, definitionQuery];
     const retry = () => { for (const query of queries) if (query.isError) void query.refetch(); };
     if (discoveryLatch.current) return { phase: "ready", retry };
@@ -65,7 +65,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     if (!failed) return { phase: "pending", retry };
     if (offline(failed.error)) return { phase: "offline", message: failed.error instanceof OfflineReadError ? t(failed.error.message) : t("The live connection is unavailable."), retry };
     return { phase: "error", message: humanizeKernelError(failed.error instanceof Error ? failed.error.message : String(failed.error)), retry };
-  }, [actionQuery.isError, actionQuery.isSuccess, definitionQuery.isError, definitionQuery.isSuccess, entityQuery.isError, entityQuery.isSuccess]);
+  })();
   const release = read<Api.ReleaseActive>("/v1/releases/active", false, { retry: false });
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const unread = (read<Notification[]>("/v1/notifications").data ?? []).filter((n) => !n.read).length;

@@ -218,6 +218,9 @@ func pageDraft(pageDescriptor platform.Page) (Page, error) {
 		if s.Query.Name != "" {
 			section.Query = s.Query.App + "." + s.Query.Name
 		}
+		if s.Actions != nil {
+			section.Actions = make([]string, 0, len(s.Actions))
+		}
 		for _, action := range s.Actions {
 			section.Actions = append(section.Actions, action.Name)
 		}

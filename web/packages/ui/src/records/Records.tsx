@@ -138,11 +138,11 @@ const money = (o: { label: string; required?: boolean; readOnly?: boolean }): Fi
 export type Options = Record<string, { value: string; label: string }[]>;
 
 /** A kit entity from the host's description; `options` gives the choices of reference fields, a line's by "<lines>.<column>". */
-export function entityFrom(info: EntityInfo, options: Options = {}, source?: RecordSource): Entity<EntityRecord> {
-  return defineEntity<EntityRecord>({ name: info.type, fields: fieldsOf(info, info.fields, options, source), primary: info.display === "id" ? "id" : info.display });
+export function entityFrom(info: EntityInfo, options: Options = {}, source?: RecordSource, onOpen?: (type: string, id: string) => void): Entity<EntityRecord> {
+  return defineEntity<EntityRecord>({ name: info.type, fields: fieldsOf(info, info.fields, options, source, onOpen), primary: info.display === "id" ? "id" : info.display });
 }
 
-function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source?: RecordSource): Record<string, FieldType<any, EntityRecord>> {
+function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source?: RecordSource, onOpen?: (type: string, id: string) => void): Record<string, FieldType<any, EntityRecord>> {
   const fields: Record<string, FieldType<any, EntityRecord>> = {};
   for (const f of infos) {
     const common = { input:{name:f.name,type:f.type==="integer"?"integer":f.type==="decimal"?"number":f.type==="date"||f.type==="datetime"||f.type==="boolean"||f.type==="json"||f.type==="lines"?f.type:["tags","references"].includes(f.type)?"string[]":"string",required:f.required,description:f.title,constraints:f.constraints,range:f.range,group:f.group}, label: f.title, help: f.help, required: f.required, readOnly: f.readOnly, when: f.when };
@@ -163,11 +163,11 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
           : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c, tone: choiceTone(c) })) });
         case "reference": return source && f.ref
           ? { ...text(common), type: "reference", display: (value) => value === undefined || value === null || value === "" ? <span className="text-muted">—</span>
-              : f.ref === "enterprise.element" ? <EnterpriseReference source={source} value={value} />
-              : <RecordChip source={source} type={f.ref!} id={String(value)} person={f.ref === "platform.member"} />,
+              : f.ref === "enterprise.element" ? <EnterpriseReference source={source} value={value} onOpen={onOpen} />
+              : <RecordChip source={source} type={f.ref!} id={String(value)} person={f.ref === "platform.member"} onOpen={onOpen} />,
             editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} stereotypes={[...(f.stereotype ? [f.stereotype] : []), ...(f.stereotypes ?? [])]} onChange={onChange} /> }
           : options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
-        case "references": return source&&f.ref ? {...multiSelect({...common,options:options[f.name]??[]}),display:(value)=>!Array.isArray(value)||!value.length?<span className="text-muted">—</span>:<span className="flex max-w-64 flex-wrap gap-1 overflow-hidden">{value.filter(item=>item!=null&&item!=="").map(item=><RecordChip key={String(item)} source={source} type={f.ref!} id={String(item)} person={f.ref==="platform.member"}/>)}</span>,editor:({id,value,onChange})=>{
+        case "references": return source&&f.ref ? {...multiSelect({...common,options:options[f.name]??[]}),display:(value)=>!Array.isArray(value)||!value.length?<span className="text-muted">—</span>:<span className="flex max-w-64 flex-wrap gap-1 overflow-hidden">{value.filter(item=>item!=null&&item!=="").map(item=><RecordChip key={String(item)} source={source} type={f.ref!} id={String(item)} person={f.ref==="platform.member"} onOpen={onOpen}/>)}</span>,editor:({id,value,onChange})=>{
           const values:string[]=value??[],stereotypes=[...(f.stereotype?[f.stereotype]:[]),...(f.stereotypes??[])];
           return <div id={id} role="group" aria-label={f.title} className="grid gap-2">{values.map((item,index)=><div key={index} className="flex gap-2"><span className="min-w-0 flex-1"><RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} value={item} ariaLabel={f.title} onChange={next=>onChange(next?values.map((old,at)=>at===index?next:old):values.filter((_,at)=>at!==index))}/></span><Button size="sm" onClick={()=>onChange(values.filter((_,at)=>at!==index))}>{t("Remove")}</Button></div>)}<RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} ariaLabel={f.title} onChange={next=>{if(next&&!values.includes(next))onChange([...values,next]);}}/></div>;
         }}:multiSelect({ ...common, options: options[f.name] ?? [] });
@@ -175,7 +175,7 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         // words a person types (labels, field names).
         case "tags": return options[f.name]?.length ? multiSelect({ ...common, options: options[f.name]! }) : tags(common);
         case "lines": return f.fields?.length
-          ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source))
+          ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source, onOpen))
           : { ...json(common), type:"lines", schema:z.array(z.unknown()) };
         default: return text(common);
       }
@@ -274,11 +274,14 @@ type ListView = "list" | "kanban" | "pivot" | "chart";
 export type ListState = {
   view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];
   group?: string; columns?: string; measure?: string; mark?: Mark;
+  /** Original predicates and read shape; personal filters never replace them. */
+  baseQuery?: RecordQuery; searchLocked?:boolean; sortLocked?:boolean; filtersLocked?:boolean;
   /** Chosen enum filters, by choice field; missing means the view predates them. */
   filters?: Record<string, string[]>;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate, kanban, onMove, moves = [] }: {
+export function RecordList({ source, type, onOpen, onOpenReference, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate, kanban, onMove, moves = [] }: {
+  onOpenReference?: (type: string, id: string) => void;
   tablePresentation?:Api.PageTablePresentation;onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};selectedId?:string;columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;
@@ -287,7 +290,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   fields?: string[];
   /** A caller-owned authorized window. Controls emit view changes and never
    * issue another list/aggregate read or override the owning plan's domain. */
-  window?: { query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number;
+  window?: { query:RecordQuery; baseQuery?:RecordQuery; facetQuery?:(field:string)=>RecordQuery|undefined; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number;
     /** The window's current enum filters; a fixed-predicate window locks them and explains why. */
     filters?:Record<string,string[]>; filtersLocked?:boolean;
     onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void };
@@ -305,16 +308,18 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const cardIdentity=JSON.stringify([source.scope,type,cards]),[cardChoice,setCardChoice]=useState<{identity:string;layout:"grid"|"list"}>();
   const cardLayout=cardChoice?.identity===cardIdentity?cardChoice.layout:cards?.layout??"grid";
   const info = source.entity(type);
-  const [localSearch, setSearch] = useState(initial.search ?? "");
-  const [localSort, setSort] = useState(initial.sort ?? "-changed");
+  const [localSearch, setSearch] = useState(initial.search ?? initial.baseQuery?.search ?? "");
+  const [localSort, setSort] = useState(initial.sort ? [initial.sort] : initial.baseQuery?.sort ?? ["-changed"]);
   const [localOffset, setOffset] = useState(0);
-  const [archived, setArchived] = useState(initial.archived ?? false);
-  const [loadedPage, setLoadedPage] = useState<{ key: string; page: RecordPageData }>();
-  const search = window ? window.inputSearch ?? window.query.search ?? "" : localSearch, sort = window ? window.query.sort?.[0] ?? "id" : localSort, offset = window ? window.query.offset ?? 0 : localOffset;
+  const [archived, setArchived] = useState(initial.archived ?? initial.baseQuery?.archived ?? false);
+  const [loadedPage, setLoadedPage] = useState<{ source:string|RecordSource;key: string; page: RecordPageData }>();
+  const baseQuery=window?window.baseQuery??window.query:initial.baseQuery??{};
+  const searchLocked=window?window.searchLocked:initial.searchLocked,sortLocked=window?window.sortLocked:initial.sortLocked,filtersLocked=window?window.filtersLocked:initial.filtersLocked;
+  const search = window ? window.inputSearch ?? window.query.search ?? "" : localSearch, sort = window ? window.query.sort?.[0] ?? "id" : localSort[0]??"id", offset = window ? window.query.offset ?? 0 : localOffset;
   if (window) pageSize = window.query.limit ?? pageSize;
+  else if(baseQuery.limit!==undefined)pageSize=Math.min(pageSize,baseQuery.limit);
   const windowKey = JSON.stringify(window?.query);
-  const [localError, setError] = useState<string>();
-  const error = window ? window.error : localError;
+  const [localError, setError] = useState<{source:string|RecordSource;key:string;message:string}>();
   const [localView, setView] = useState<ListView>(initial.view ?? "list");
   const [drilled, setDrilled] = useState<unknown[] | undefined>(initial.drilled);
   const groups = useMemo(() => (info ? groupable(info) : []), [info]);
@@ -351,15 +356,11 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   // the one effective query: locally it joins the list's own domain, on a
   // caller window it goes to the owner through the same change protocol, so
   // the list, its counts, sort and export always share one scope. Saved
-  // filters on fields the object no longer declares are reported, not applied.
+  // unavailable saved filters stop the read until explicitly cleared.
   const [facetPanel, setFacetPanel] = useState(false);
-  const [localFilters, setLocalFilters] = useState<Record<string, string[]> | undefined>(() => {
-    const usable = Object.fromEntries(Object.entries(initial.filters ?? {}).filter(([name]) => !!info?.fields.some((f) => f.name === name && f.type === "choice")));
-    return Object.keys(usable).length ? usable : undefined;
-  });
-  const staleFilters = useMemo(() => Object.keys(initial.filters ?? {}).filter((name) => !info?.fields.some((f) => f.name === name && f.type === "choice")), [initial.filters, info]);
+  const [localFilters, setLocalFilters] = useState(initial.filters);
   const facetSelection = window ? window.filters ?? {} : localFilters ?? {};
-  const [facetCounts, setFacetCounts] = useState<Record<string, { value: string; count: number }[] | "unavailable">>();
+  const staleFilters=Object.keys(facetSelection).filter(name=>{const field=info?.fields.find(f=>f.name===name&&f.type==="choice");return !field||facetSelection[name]!.some(value=>!field.choices?.includes(value));});
   const facetFields = useMemo(() => {
     if (!info) return [];
     const fields = info.fields.filter((f) => f.type === "choice" && f.choices?.length);
@@ -368,37 +369,53 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     return shown;
   }, [info, facetSelection]);
   const facetTerms = useMemo(() => Object.entries(facetSelection).flatMap(([field, values]) => values.length ? [[field, "in", values]] : []), [facetSelection]);
-  const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? []), ...facetTerms], [fixedKey, drilled, facetTerms]);
+  const baseDomainKey=JSON.stringify(baseQuery.domain??[]);
+  const domain = useMemo(() => [...JSON.parse(baseDomainKey),...JSON.parse(fixedKey), ...(drilled ?? []), ...facetTerms], [baseDomainKey,fixedKey, drilled, facetTerms]);
   const applyFilters = (next: Record<string, string[]>) => {
     const usable = Object.fromEntries(Object.entries(next).filter(([, values]) => values.length > 0));
     if (window) window.onChange({ filters: usable, offset: 0 });
     else { setLocalFilters(Object.keys(usable).length ? usable : undefined); setOffset(0); }
   };
-  const loadFacets = () => {
-    if (!source.aggregate) return;
-    const effective = (window ? window.query.domain ?? [] : domain) as unknown[];
-    for (const field of facetFields) {
-      // Counts answer the effective query without this field's own selection:
-      // fixed conditions, drill-down, search and every other chosen filter.
-      const base = effective.filter((term) => !(Array.isArray(term) && term[0] === field.name && term[1] === "in"));
-      source.aggregate(type, { groups: [field.name], measures: ["count"], search: window ? window.query.search ?? search : search, domain: base })
-        .then((data) => setFacetCounts((current) => ({ ...current, [field.name]: data.rows.map((row) => ({ value: String(row[field.name] ?? ""), count: Number(row.count ?? 0) })) })))
-        .catch(() => setFacetCounts((current) => ({ ...current, [field.name]: "unavailable" })));
-    }
-  };
-  const entity = useMemo(() => (info ? entityFrom(info,{},source) : undefined), [info,source]);
+  const entity = useMemo(() => (info ? entityFrom(info,{},source,onOpenReference) : undefined), [info,source,onOpenReference]);
   const infoKey = JSON.stringify(info);
-  const pageKey = JSON.stringify([source.scope, type, infoKey, domain, search, sort, offset, archived, pageSize]);
-  const page = window ? window.page : loadedPage?.key === pageKey ? loadedPage.page : undefined;
+  const pageKey = JSON.stringify([source.scope, type, infoKey, baseQuery,domain, search, localSort,sort, offset, archived, pageSize]);
   const from = useRef(source);
   from.current = source;
   // Scoped sources may be wrapped anew during ordinary parent renders. Their
   // scope, metadata, query and revision determine when a read is necessary.
   const sourceIdentity = source.scope ?? source;
+  const taskIdentity=source.ruleIdentity?.me??sourceIdentity,editTask=useRef({identity:taskIdentity,generation:0});
+  if(editTask.current.identity!==taskIdentity)editTask.current={identity:taskIdentity,generation:editTask.current.generation+1};
   const visible = useViewVisible();
+  const error = staleFilters.length?t("Saved filters on {fields} are unavailable. Clear them to continue.",{fields:staleFilters.join(", ")}):window ? window.error : localError?.source===sourceIdentity&&localError.key===pageKey?localError.message:undefined;
+  const page = staleFilters.length?undefined:window ? window.page : loadedPage?.source===sourceIdentity&&loadedPage.key === pageKey ? loadedPage.page : undefined;
   const sortField = sort.replace(/^-/, "");
   const knownSort = ["id", "created", "changed"].includes(sortField) || info?.fields.some((f) => f.name === sortField);
-  const recordQuery: RecordQuery = window?.query ?? { domain, search, sort: knownSort ? [sort] : ["id"], offset, limit: pageSize, archived };
+  const recordQuery: RecordQuery = window?.query ?? { ...baseQuery,domain, search, sort: knownSort ? localSort : ["id"], offset, limit: pageSize, archived };
+  // The query owner removes only its own user selection. Fixed predicates,
+  // set operands and traversal stay opaque to this presentation component.
+  const facetQueries=facetFields.map(field=>[field.name,window?window.facetQuery?.(field.name):{...recordQuery,domain:[...JSON.parse(baseDomainKey),...JSON.parse(fixedKey),...(drilled??[]),...facetTerms.filter(term=>term[0]!==field.name)]}] as const);
+  const facetKey=JSON.stringify([type,facetQueries]);
+  type FacetCounts=Record<string,{value:string;count:number}[]|"unavailable">;
+  const [countResult,setCountResult]=useState<{source:typeof sourceIdentity;key:string;counts:FacetCounts}>();
+  const facetCounts=countResult?.source===sourceIdentity&&countResult.key===facetKey?countResult.counts:undefined;
+  useEffect(()=>{
+    if(!facetPanel||!visible||staleFilters.length)return;
+    let active=true;
+    const source=from.current,stops:(()=>void)[]=[];
+    setCountResult({source:sourceIdentity,key:facetKey,counts:{}});
+    for(const [field,query] of facetQueries){
+      let epoch=0;
+      const set=(counts:FacetCounts[string])=>{if(active)setCountResult(current=>({source:sourceIdentity,key:facetKey,counts:{...current?.counts,[field]:counts}}));};
+      if(!query||!source.aggregate){set("unavailable");continue;}
+      const {offset:_,limit:__,sort:___,...predicate}=query;
+      const aggregateQuery={...predicate,groups:[field],measures:["count"]};
+      const load=()=>{const request=++epoch;void source.aggregate!(type,aggregateQuery).then(data=>{if(active&&request===epoch)set(data.rows.map(row=>({value:String(row[field]??""),count:Number(row.count??0)})));},()=>{if(active&&request===epoch)set("unavailable");});};
+      const stop=source.watchAggregate?.(type,aggregateQuery,load);if(stop)stops.push(stop);
+      load();
+    }
+    return ()=>{active=false;stops.forEach(stop=>stop());};
+  },[sourceIdentity,source.revision,facetKey,facetPanel,visible,staleFilters.length]);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string>();
   const exportIdentity = JSON.stringify([source.scope, type, recordQuery]);
@@ -410,7 +427,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     return () => { exportCurrent.current.active = false; };
   }, []);
   const exportCSV = async () => {
-    if (!source.exportCSV) return;
+    if (!source.exportCSV||staleFilters.length) return;
     const current = () => exportCurrent.current.active && exportCurrent.current.identity === exportIdentity && exportCurrent.current.source === sourceIdentity;
     setExporting(true);
     setExportError(undefined);
@@ -427,43 +444,44 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     }
   };
   useEffect(() => {
-    if (!visible || window || !info || (view !== "list" && view !== "kanban")) return;
-    let current = true;
+    if (!visible || window || !info || staleFilters.length || (view !== "list" && view !== "kanban")) return;
+    let current = true,epoch=0;
     const source = from.current;
     setError(undefined);
     const load = () => {
+      const request=++epoch;
       source.list(type, recordQuery)
-        .then((p) => { if (current) { setLoadedPage({ key: pageKey, page: p }); setError(undefined); } }, (e) => { if (current) { setLoadedPage(undefined); setError(String(e)); } });
+        .then((p) => { if (current&&request===epoch) { setLoadedPage({ source:sourceIdentity,key: pageKey, page: p }); setError(undefined); } }, (e) => { if (current&&request===epoch) { setLoadedPage(undefined); setError({source:sourceIdentity,key:pageKey,message:String(e)}); } });
     };
     const stop = source.watchList?.(type, recordQuery, load);
     const handle = setTimeout(load, 150);
     return () => { current = false; stop?.(); clearTimeout(handle); };
-  }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible]);
+  }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible,staleFilters.length]);
   if (!info || !entity) return <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted">{t("No activated object {type} here yet. Its records appear once a release that includes it is active; a draft shows its fields in the object model.", { type })}</p>;
   const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", enableSorting: false,
-    meta: { width: 130, querySort: { direction: sort === "id" ? "asc" as const : sort === "-id" ? "desc" as const : undefined,
-      onChange: (next) => { const key = next === "asc" ? "id" : "-id"; if (window) window.onChange({ sort: [key], offset: 0 }); else { setSort(key); setOffset(0); } } } },
+    meta: { width: 130, querySort: sortLocked?undefined:{ direction: sort === "id" ? "asc" as const : sort === "-id" ? "desc" as const : undefined,
+      onChange: (next) => { const key = next === "asc" ? "id" : "-id"; if (window) window.onChange({ sort: [key], offset: 0 }); else { setSort([key]); setOffset(0); } } } },
     cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
   const total = page?.total ?? 0;
-  const query = { domain, search, archived };
+  const {offset:_,limit:__,sort:___,...query}=recordQuery;
   const measureEncoding = measure === "count" ? { type: "quantitative" as const, aggregate: "count" as const }
     : { type: "quantitative" as const, aggregate: measure.split(":")[0] as "sum" | "avg", field: measure.split(":")[1] };
   const groupEncoding = { field: rows.split(":")[0], type: rows.includes(":") ? "temporal" as const : "nominal" as const, ...(rows.includes(":") ? { timeUnit: rows.split(":")[1] as "month" } : {}) };
   const spec: ChartSpec = {
-    data: { entity: type, domain, search, archived }, mark,
+    data: { entity: type, ...query }, mark,
     encoding: mark === "arc" ? { theta: measureEncoding, color: groupEncoding } : { x: groupEncoding, y: measureEncoding },
   };
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-2">
+    <div className="grid min-w-0 grid-cols-1 gap-2" data-density={tablePresentation||densityChoice?.identity===densityIdentity?density==="normal"?"comfortable":"compact":undefined}>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {showToolbar&&<>
         {tablePresentation&&<Select aria-label={t("Record density")} value={density} onChange={e=>setDensityChoice({identity:densityIdentity,density:e.target.value})}><option value="compact">{t("Compact")}</option><option value="normal">{t("Comfortable")}</option></Select>}
-        {showSearch&&<Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} disabled={window?.searchLocked} className="w-56"
+        {showSearch&&<Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} disabled={searchLocked} className="w-56"
           onChange={(e) => { if(window)window.onChange({search:e.target.value,offset:0});else {setSearch(e.target.value);setOffset(0);} }} />}
         {(view === "list" || view === "kanban") ? (
-          <Select aria-label={t("Sort")} value={sort} disabled={window?.sortLocked} className="w-48" onChange={(e) => { if(window)window.onChange({sort:[e.target.value],offset:0});else {setSort(e.target.value);setOffset(0);} }}>
-            {[["-changed", t("Recently changed")], ["id", t("ID")], ...info.fields.filter((f) => f.type !== "references" && f.type !== "tags").flatMap((f) =>
+          <Select aria-label={t("Sort")} value={sort} disabled={sortLocked} className="w-48" onChange={(e) => { if(window)window.onChange({sort:[e.target.value],offset:0});else {setSort([e.target.value]);setOffset(0);} }}>
+            {[["-changed", t("Recently changed")], ["id", t("ID")], ...info.fields.filter((f) => !["references","tags","lines","json"].includes(f.type)).flatMap((f) =>
               [[f.name, `${f.title} ↑`], [`-${f.name}`, `${f.title} ↓`]])].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </Select>
         ) : <>
@@ -485,14 +503,16 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
             </Select>
           )}
         </>}
-        {!window?.filtersLocked && facetFields.length > 0 && <Button size="sm" aria-expanded={facetPanel} aria-pressed={facetPanel} onClick={() => { const next = !facetPanel; setFacetPanel(next); if (next) loadFacets(); }}>{t("Filters")}{Object.values(facetSelection).some((values) => values.length) ? <span className="tabular-nums">·</span> : null}</Button>}
+        {!filtersLocked && facetFields.length > 0 && <Button size="sm" aria-expanded={facetPanel} aria-pressed={facetPanel} onClick={() => setFacetPanel(!facetPanel)}>{t("Filters")}{Object.values(facetSelection).some((values) => values.length) ? <span className="tabular-nums">·</span> : null}</Button>}
         {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />{t("Archived")}</label>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
-        {source.exportCSV && <Button size="sm" disabled={exporting} onClick={() => void exportCSV()}>{t("Export CSV")}</Button>}
+        {source.exportCSV && <Button size="sm" disabled={exporting||staleFilters.length>0} onClick={() => void exportCSV()}>{t("Export CSV")}</Button>}
         {exportError && <span role="alert" className="text-xs text-danger">{exportError}</span>}
         {toolbar}
-        {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark, filters: Object.values(facetSelection).some((values) => values.length) ? facetSelection : undefined })}>{t("Save view…")}</Button>}
+        {onSave && <Button size="sm" variant="ghost" disabled={staleFilters.length>0} onClick={() => onSave({ view, search, sort:recordQuery.sort?.length===1?sort:undefined, archived:recordQuery.archived, drilled, group: rows, columns, measure, mark,
+          baseQuery:{...baseQuery,domain:[...(baseQuery.domain??[]),...JSON.parse(fixedKey)],sort:recordQuery.sort,limit:recordQuery.limit},searchLocked,sortLocked,filtersLocked,
+          filters: Object.values(facetSelection).some((values) => values.length) ? facetSelection : undefined })}>{t("Save view…")}</Button>}
         {availableViews.length > 1 && (
           <span role="group" aria-label={t("View")} className="flex rounded-md border border-border">
             {availableViews.map((v) => (
@@ -512,12 +532,12 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
           </span>
         )}
       </div>
-      {staleFilters.length > 0 && <p role="status" className="text-xs text-muted">{t("Saved filters on {fields} are no longer available and were not applied.", { fields: staleFilters.join(", ") })}</p>}
-      {facetPanel && facetFields.length > 0 && <div role="group" aria-label={t("Filter by values")} className="flex flex-wrap items-start gap-x-6 gap-y-3 rounded-md border border-border p-3">
+      {staleFilters.length > 0 && <p role="alert" className="text-xs text-danger">{error} <Button size="sm" variant="ghost" onClick={()=>applyFilters({})}>{t("Clear filters")}</Button></p>}
+      {facetPanel && !filtersLocked && facetFields.length > 0 && <div role="group" aria-label={t("Filter by values")} className="flex flex-wrap items-start gap-x-6 gap-y-3 rounded-md border border-border p-3">
         {facetFields.map((field) => {
           const counts = facetCounts?.[field.name];
           const unavailable = counts === "unavailable";
-          const options = (unavailable || !counts ? (field.choices ?? []).map((value) => ({ value, count: undefined })) : counts)
+          const options = (field.choices ?? []).map(value=>({value,count:counts&&!unavailable?counts.find(option=>option.value===value)?.count??0:undefined}))
             .filter((option) => (facetSelection[field.name]?.includes(option.value)) || unavailable || !counts || (option.count ?? 0) > 0);
           return <FacetChoices key={field.name} title={field.title} histogram={!!counts && !unavailable} options={options} value={facetSelection[field.name] ?? []}
             onChange={(values) => applyFilters({ ...facetSelection, [field.name]: values })} />;
@@ -525,9 +545,9 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         {Object.values(facetCounts ?? {}).includes("unavailable") && <p role="status" className="text-xs text-muted self-center">{t("Counts are unavailable right now; choices come from the object model.")}</p>}
         <Button size="sm" variant="ghost" onClick={() => applyFilters({})}>{t("Clear filters")}</Button>
       </div>}
-      {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate} source={source}/>)}
+      {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate} source={source} onOpenReference={onOpenReference}/>)}
       {view === "list" && !cards && (
-        <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
+        <EditableRecordGrid key={JSON.stringify([editTask.current.generation,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.preview])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
       )}
       {view === "kanban" && kanbanLanes.length > 0 && kanbanStateField && (
         error ? <p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>
@@ -598,17 +618,17 @@ export function useRecordView(source: RecordSource, type: string, id?: string, r
   const from = useRef(source);
   from.current = source;
   const sourceIdentity = source.scope ?? source;
-  const [result, setResult] = useState<{ identity: string; key: string; view?: RecordView; error?: string; loading: boolean }>();
+  const [result, setResult] = useState<{ source: typeof sourceIdentity; identity: string; key: string; view?: RecordView; error?: string; loading: boolean }>();
   const request = useRef(0);
   const refresh = useCallback(() => {
     if (!id) return;
     const epoch = ++request.current, source = from.current, scope = source.scope;
-    setResult(previous => ({ identity, key, view: previous?.identity === identity ? previous.view : undefined, loading: true }));
+    setResult(previous => ({ source: sourceIdentity, identity, key, view: previous?.source === sourceIdentity && previous.identity === identity ? previous.view : undefined, loading: true }));
     source.get(type, id).then(view => {
       if (view.record.id !== id) throw new Error("Record identity mismatch");
-      if (request.current === epoch && source.scope === scope) setResult({ identity, key, view, loading: false });
+      if (request.current === epoch && source.scope === scope) setResult({ source: sourceIdentity, identity, key, view, loading: false });
     }).catch(error => {
-      if (request.current === epoch && source.scope === scope) setResult({ identity, key, error: error instanceof Error ? error.message : String(error), loading: false });
+      if (request.current === epoch && source.scope === scope) setResult({ source: sourceIdentity, identity, key, error: error instanceof Error ? error.message : String(error), loading: false });
     });
   }, [sourceIdentity, type, id, identity, key]);
   const visible = useViewVisible();
@@ -618,7 +638,7 @@ export function useRecordView(source: RecordSource, type: string, id?: string, r
     const stop = from.current.watchRecord?.(type, id, refresh);
     return () => { request.current++; stop?.(); };
   }, [refresh, visible, type, id]);
-  const current = result?.identity === identity ? result : undefined;
+  const current = result?.source === sourceIdentity && result.identity === identity ? result : undefined;
   return { view: current?.view, error: current?.key === key ? current.error : undefined, loading: !!id && (current?.key !== key || current.loading), refresh };
 }
 
@@ -646,7 +666,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   const [tabState,setTab]=useState<{identity:string;value:string}>();
   const info = source.entity(type);
   const { view, error, loading, refresh: load } = useRecordView(source, type, id, reload);
-  const entity = useMemo(() => (info ? entityFrom(info,{},source) : undefined), [info,source]);
+  const entity = useMemo(() => (info ? entityFrom(info,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined) : undefined), [info,source,onOpen]);
   if (error) {
     return (
       <div role="alert" className="grid max-w-xl gap-2 rounded-md border border-[var(--tone-danger)] bg-surface p-4 text-sm">
@@ -680,7 +700,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
   // Extension records (A3): a type that extends this one pairs one record per base record; its
   // fields show as the base record's own, as far as the reader may read them (the host already filters).
-  const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo,{},source);return [{rel,relInfo,relEntity,row}];});
+  const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined);return [{rel,relInfo,relEntity,row}];});
   const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
         {barcode&&<div className="mb-3 flex justify-center overflow-hidden"><Barcode text={barcode}/></div>}
         {detailPresentation?.print&&<div className="mb-3 flex justify-end print:hidden"><Button size="sm" onClick={()=>window.print()}><Printer/>{t("Print")}</Button></div>}
@@ -696,7 +716,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       </section>);
   const groups=detailOnly&&!recordTabs&&!linksOnly?[]:recordLinks===undefined?[...view.related,...(view.linked??[])].map(rel=>({rel,title:undefined as string|undefined})):recordLinks.flatMap(group=>{const target=source.entity(group.object.name),field=target?.fields.find(f=>f.name===group.field&&f.type==="reference"&&f.ref===type&&!!f.inverse),rel=view.related.find(r=>r.type===group.object.name&&r.field===group.field);return field&&target?.app===group.object.app&&rel?[{rel,title:group.title}]:[];});
   const related=detailOnly&&!recordTabs&&!linksOnly?[]:groups.filter(({rel})=>!extensions.some(x=>x.rel===rel)).flatMap(({rel,title}) => {
-    const relInfo=source.entity(rel.type),relEntity=relInfo&&entityFrom(relInfo,{},source);if(!relEntity)return [];
+    const relInfo=source.entity(rel.type),relEntity=relInfo&&entityFrom(relInfo,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined);if(!relEntity)return [];
     return [<section key={`${rel.type}.${rel.field}`}>
       <h2 className="mb-1 text-sm font-semibold">{title||relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : rel.relation ? <>{" · "}{rel.relation}</> : <>{t(", by")} {rel.field}</>})</span></h2>
       <DataTable data={rel.records} columns={[{id:"id",header:"ID",accessorKey:"id",meta:{width:130}},...columnsFor(relEntity,listed(relEntity))] as never} getRowId={(x:EntityRecord)=>x.id} height={Math.min(40+rel.records.length*28,260)} searchable={false} onRowClick={onOpen&&((x:EntityRecord)=>onOpen(rel.type,x))} empty={t("None")}/>

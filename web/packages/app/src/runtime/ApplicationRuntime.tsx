@@ -31,7 +31,8 @@ export function ApplicationSessionsProvider({ children }: { children: ReactNode 
  * route itself is the write boundary - no holder lookup participates. */
 export const AuthoringPreview = createContext(false);
 
-export function ApplicationPage({ pageRef, route, applicationRef, preview = false, children }: { pageRef: Api.AssetRef; route: Route; applicationRef?: Api.AssetRef; preview?: boolean; children: ReactNode }) {
+export function ApplicationPage({ pageRef, route, applicationRef, preview: requestedPreview = false, children }: { pageRef: Api.AssetRef; route: Route; applicationRef?: Api.AssetRef; preview?: boolean; children: ReactNode }) {
+  const preview = useContext(AuthoringPreview) || requestedPreview;
   const { definitions, source,refresh } = useHost(), workspace = useWorkspace(), hub = useContext(Hub);
   const appearance=useTheme();
   const [localPreview] = useState(() => `preview:${crypto.randomUUID()}`);

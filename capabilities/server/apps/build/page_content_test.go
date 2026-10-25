@@ -48,3 +48,26 @@ func TestPagePublicationHistoryIsBoundedDistinctAndNonrecursive(t *testing.T) {
 		t.Fatal("history budget mutated original publication")
 	}
 }
+
+func TestPageSectionActionChangeRetainsOriginalPublicationBytes(t *testing.T) {
+	p := Page{Record: platform.Record{ID: "PAGE"}, Name: "notes", Object: "build.note", Actions: []string{"build.note.edit"}, Sections: []Section{{Widget: "table", Fields: []string{"name"}}}}
+	if err := retainPagePublication(&p); err != nil {
+		t.Fatal(err)
+	}
+	original := p.Published
+	p.Sections[0].Actions = []string{}
+	if err := retainPagePublication(&p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Versions) != 2 || p.Versions[0] != original || p.Published == original {
+		t.Fatal("changing section restrictions rewrote or collapsed the original publication")
+	}
+	before, ok := construction.ReadPublication[Page](p.Versions[0])
+	if !ok || before.Sections[0].Actions != nil {
+		t.Fatal("the original inherited restriction changed")
+	}
+	after, ok := construction.ReadPublication[Page](p.Published)
+	if !ok || after.Sections[0].Actions == nil || len(after.Sections[0].Actions) != 0 {
+		t.Fatal("the explicit write prohibition was not published")
+	}
+}

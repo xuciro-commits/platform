@@ -34,6 +34,49 @@ func modelAuthoringSections(sections []platform.Section) []build.Section {
 	return values
 }
 
+func TestPageSectionActionsSurviveSavedDraftAndPublishedReads(t *testing.T) {
+	at := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	tn := builderTenant(t, "page-section-actions")
+	object := publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "sectionactions", "title": "Section actions", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
+	action := object + ".edit"
+	page := modelTestPage(object, []platform.Section{{ID: "inherit", Widget: "table", ConfigVersion: 1}, {ID: "deny", Widget: "table", ConfigVersion: 1}, {ID: "narrow", Widget: "table", ConfigVersion: 1}})
+	sections := []build.Section{{ID: "inherit", Widget: "table", ConfigVersion: 1, Fields: []string{"name"}}, {ID: "deny", Widget: "table", ConfigVersion: 1, Fields: []string{"name"}, Actions: []string{}}, {ID: "narrow", Widget: "table", ConfigVersion: 1, Fields: []string{"name"}, Actions: []string{action}}}
+	decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": "sectionactions", "title": "Section actions", "object": object, "actions": []string{action}, "sections": sections, "document": page.Document}, at)
+	readDraft := func() build.Page {
+		t.Helper()
+		view, err := tn.RecordOf(memberOf(t, tn, "builder"), construction.PageType, "PAGE", at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var saved build.Page
+		if err := json.Unmarshal(platform.Raw(view.Record), &saved); err != nil {
+			t.Fatal(err)
+		}
+		if saved.Sections[0].Actions != nil || saved.Sections[1].Actions == nil || len(saved.Sections[1].Actions) != 0 || !slices.Equal(saved.Sections[2].Actions, []string{action}) {
+			t.Fatalf("draft read changed the original section restrictions: %+v", saved.Sections)
+		}
+		return saved
+	}
+	readDraft()
+	decide(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at)
+	original := readDraft().Published
+	for _, member := range []string{"builder", "user"} {
+		var published *platform.Page
+		for _, definition := range tn.Definitions(memberOf(t, tn, member)) {
+			if definition.Ref == (platform.AssetRef{App: construction.ID, Kind: platform.AssetPage, Name: "sectionactions"}) {
+				published = definition.Page
+			}
+		}
+		if published == nil || len(published.Actions) != 1 || published.Sections[0].Actions != nil || published.Sections[1].Actions == nil || len(published.Sections[1].Actions) != 0 || len(published.Sections[2].Actions) != 1 || published.Sections[2].Actions[0].Name != action {
+			t.Fatalf("%s discovery lost page or section restrictions: %+v", member, published)
+		}
+	}
+	decide(t, tn, "builder", construction.ID, "build.page.edit", construction.PageType, "PAGE", map[string]any{"title": "Reopened draft"}, at)
+	if saved := readDraft(); saved.Published != original {
+		t.Fatal("editing the draft rewrote its published bytes")
+	}
+}
+
 func TestPageDraftRulesUseSavedModelsWithoutPublishingThem(t *testing.T) {
 	for _, installed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "unpublished object", true: "published object with a new field"}[installed], func(t *testing.T) {

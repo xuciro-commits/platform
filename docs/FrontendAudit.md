@@ -2,6 +2,8 @@
 
 审计日期：2026-10-24（America/Los_Angeles）。基线：`1349da544505d06f207ef317f669cffe6dae2975`，分支 `arena/c1bdb2ae-platform`，开始时工作树干净。主审与三个子智能体分别追查客户端/权限、应用交付/Studio、工作区/记录、组件/工程质量，并交叉复核。交付仅为本报告与六项 OpenSpec；未修改业务实现、当前规范或现有活动变更，未提交、部署或操作浏览器。
 
+第 1–10 节保留原审计基线，其中的“当前”“本轮”、行号和验证数量均指上述只读审计。后续整改与验证状态见第 11 节，不回写历史发现。
+
 ## 1. 整体判断
 
 前端已有真正的定义驱动主干，并未证实存在两套行业 Runtime。主要问题发生在主干交接处：**来源作用域、执行模式、交付对象和任务身份在 UI 投影中丢失，局部组件以自己的状态或默认值补齐，形成表面可用、整体断裂的任务链。** 继续增加组件或页面分类无法解决这些问题。
@@ -211,12 +213,12 @@ Q02–Q04 可按现有约定直接修复，本轮没有为局部回归再发明�
 
 | 标识 | Change / 主责模块 | 消除的根因与验收 |
 |---|---|---|
-| C1 | [scope-record-reference-reads](../openspec/changes/scope-record-reference-reads/proposal.md) · experience/workspace、runtime/access-control | F01/F09：删除全局名称缓存、统一源消费；跨身份同ID不泄漏，详情/卡片正向引用可达 |
-| C2 | [unify-record-query-interactions](../openspec/changes/unify-record-query-interactions/proposal.md) · experience/workspace | F08/Q01及缺省能力衔接：一个有效查询；筛选→保存→重开→导出一致，声明式列表复用原操作 |
-| C3 | [retain-workspace-task-context](../openspec/changes/retain-workspace-task-context/proposal.md) · experience/workspace | F04–F07：稳定任务/输入身份；跨应用返回原输入，lastSeen不清会话，暂存受保护，重复明细不串行 |
-| C4 | [separate-studio-preview-from-live-runtime](../openspec/changes/separate-studio-preview-from-live-runtime/proposal.md) · experience/workspace | F02：执行模式不依赖 holder；四象限及嵌入无正式副作用，正式使用和原隔离试运行正常 |
-| C5 | [complete-application-delivery-handoffs](../openspec/changes/complete-application-delivery-handoffs/proposal.md) · experience/workspace | F03/F10–F12：完整交接对象；33/128发布可达、Publisher不读草稿、65退役不截断、未知原键、应用模板进原包草稿 |
-| C6 | [align-workspace-discovery-and-outcomes](../openspec/changes/align-workspace-discovery-and-outcomes/proposal.md) · experience/workspace | F13–F16：当前入口和原结果不失真；Integrator首页可用，启动失败可重试，监控失败非空态，解释使用原schema |
+| C1 | [scope-record-reference-reads](../openspec/changes/archive/2026-10-24-scope-record-reference-reads/proposal.md) · experience/workspace、runtime/access-control | F01/F09：删除全局名称缓存、统一源消费；跨身份同ID不泄漏，详情/卡片正向引用可达 |
+| C2 | [unify-record-query-interactions](../openspec/changes/archive/2026-10-24-unify-record-query-interactions/proposal.md) · experience/workspace | F08/Q01及缺省能力衔接：一个有效查询；筛选→保存→重开→导出一致，声明式列表复用原操作 |
+| C3 | [retain-workspace-task-context](../openspec/changes/archive/2026-10-24-retain-workspace-task-context/proposal.md) · experience/workspace | F04–F07：稳定任务/输入身份；跨应用返回原输入，lastSeen不清会话，暂存受保护，重复明细不串行 |
+| C4 | [separate-studio-preview-from-live-runtime](../openspec/changes/archive/2026-10-24-separate-studio-preview-from-live-runtime/proposal.md) · experience/workspace | F02：执行模式不依赖 holder；四象限及嵌入无正式副作用，正式使用和原隔离试运行正常 |
+| C5 | [complete-application-delivery-handoffs](../openspec/changes/archive/2026-10-24-complete-application-delivery-handoffs/proposal.md) · experience/workspace | F03/F10–F12：完整交接对象；33/128发布可达、Publisher不读草稿、65退役不截断、未知原键、应用模板进原包草稿 |
+| C6 | [align-workspace-discovery-and-outcomes](../openspec/changes/archive/2026-10-24-align-workspace-discovery-and-outcomes/proposal.md) · experience/workspace | F13–F16：当前入口和原结果不失真；Integrator首页可用，启动失败可重试，监控失败非空态，解释使用原schema |
 
 各 change 均有 proposal、design、specs 和未勾选 tasks，可进入实施。P0 先修 C1 的隔离、C4 的预览和 C5 的发布断点；P1 按各 design 的依赖完成 C2/C3/C5/C6。此处为审计严重度，不另建项目执行队列，项目排序仍归 WorkQueue。P2 依原约定修具体消费点，P3 本轮无独立任务。
 
@@ -226,3 +228,22 @@ Q02–Q04 可按现有约定直接修复，本轮没有为局部回归再发明�
 - 同文件多 change 时按职责合成，不重复编写 store 或覆盖另一个改动：C4 的 mode 与 C3 的 key 分开；C2 的查询变更消费 C3 的离开保护；C5 的批量 busy 只调用原保护；C6 不再改 Publisher 菜单。
 - 当前 `unify-directory-pages` 的目录归因和 `consolidate-platform-boundaries` 的包/进程/宿主组织不被重做，也不被本报告宣称完成。
 - 本轮完成的是有证据的全局结论和可实施整改规格。业务实现、浏览器与真实业务效果仍待后续实施验证；不得把未勾选任务或历史走查标成这些缺陷已修复。
+
+## 11. 六项整改复核
+
+C1–C6 的 33 项任务已完成适用验收，差量已同步至现行模块规范，六项 change 已归档。第 1–10 节保留原审计时的发现与待验状态，不能当成整改后的现状。
+
+| 范围 | 本轮消除的根因 |
+|---|---|
+| C1 · 引用读取 | 删除脱离身份的标题缓存；引用呈现消费原 source，导航由获权父入口提供。 |
+| C2 · 查询与列表 | 筛选、排序、保存视图及导出消费同一有效查询；动作继承、显式禁写及收窄经过保存、发布和重开，可视入口保留三者区别，CSV 导入遵守原页面动作范围。 |
+| C3 · 任务寿命 | 返回应用保留原任务；读取代次与任务身份分开，输入、明细及暂存不再互串或被无关刷新清除。 |
+| C4 · 作者预览 | 模式不依赖 application holder；嵌入、覆盖层与原写端口继承限制。修复旧表单校验回调及上传字节迟到后继续提交的漏口，已接受结果仍保留。 |
+| C5 · 应用交付 | 完整草稿选择与确切封存候选交接；批退役冻结原清单和请求键，未知结果保留上下文，确定拒绝可显式修正。65→64 边界、丢失答复同键核对及应用包模板起步均已沿原浏览器路线验证。 |
+| C6 · 入口和结果 | 获权入口、启动重试和原读取状态保持一致；服务失败不再显示成功空态或被解释为无权限，拒绝说明使用原动作 schema。 |
+
+已通过完整 Web 测试 **707 项**、`make check-web`（类型、生成物与 Catalog 一致性）、Go 构建与 vet、组合及包边界检查。隔离环境的 `make rehearse` 已通过，包含真实 PostgreSQL 的备份与恢复。预览端口补充渲染回归 19 项、Records 回归 40 项通过；这些定向集合包含在适用包的验证范围内，不与完整套件数量叠加。
+
+浏览器按原路线分组执行并复验失败项，**38 个文件、79 个独立用例全部通过**，最终没有跳过或待跑项；没有用早先的中断或部分通过代替验收。已查看桌面与 390px 窄屏截图，包含迁移编辑、引用链及记录权限。另修复同名本地协议无法切换到安装契约、成功修正缺少关联证据及批次拒绝遗漏原说明的问题。
+
+真实 AI 输出质量、真实设备接入、独立 FDE 人工构建与耗时、目标规模的 CPU/内存/帧率及触控体验仍未观察；固定模拟、单元测试和恢复演练均不替代这些证据。B3 宿主目录化搬迁与其后续验证不在本轮整改范围。

@@ -5,6 +5,7 @@ export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
 import {DraftInputs, InputDraftProvider, InputProblems, useInputDrafts, notify } from "@platform/ui";
 import { ImportControl, SaveViewDialog } from "./widgets/list-operations";
+import { defaultTableEdit, tableEditableFields } from "./widgets/table-edit";
 export { useTransition, SourceFieldInput, sourceFieldInput } from "./actions/actions";
 export { Observations, ObservationRead, ObservationWindowResult, RecordObservations } from "./observations/Observations";
 import { RecordObservations } from "./observations/Observations";
@@ -21,7 +22,7 @@ export {searchInputObjects} from "./widgets/search-input";
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
 import "./i18n";
-import { apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
+import { apiErrorMessage, OfflineReadError, pageUIManifest, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
   Button, Chart, Disclosure, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
@@ -214,6 +215,10 @@ export function useOpenRecord(): (ref: string | { type: string; id: string }, op
   const { open } = useWorkspace();
   return (ref, options) => {
     const { type, id } = typeof ref === "string" ? { type: ref.split("/")[0]!, id: ref.split("/").slice(1).join("/") } : ref;
+    if (type === "enterprise.element") {
+      open({ view: "enterprise", params: { element: id, section: "organization" } }, options);
+      return;
+    }
     const work = ["work.approval", "work.task", "flow.instance", "agent.run"].includes(type);
     if (options?.window === "inspect" || !options && !work) {
       open({ view: "record", params: { type, id, inspect: "true" } }, { window: "inspect" });
@@ -333,11 +338,12 @@ export function Records({ type, description, help, actions, covers, saved, kanba
   // Cell editing on the generic list: staged in the grid, each row submitted
   // through the type's original edit action at its opened revision. Fields the
   // entity marks read-only, plus lines and attachments, never stage.
-  const cellFields = (info?.fields ?? []).filter(f => !f.readOnly && !["lines", "attachment"].includes(f.type)).map(f => f.name);
-  const inlineEdit = can(`${type}.edit`) && cellFields.length > 0 ? {
-    schema: `${type}.edit`, fields: cellFields, scope: `${String(source.scope ?? "")}|${type}`, maxRows: 50,
+  const edit = defaultTableEdit(info, catalog, catalog.map(action => action.schema));
+  const cellFields = tableEditableFields(info, edit, (info?.fields ?? []).map(field => field.name));
+  const inlineEdit = edit ? {
+    schema: edit.schema, fields: cellFields, scope: `${String(source.scope ?? "")}|${type}`, maxRows: pageUIManifest.runtime.tableEditing.maxRows,
     submit: async (baseline: EntityRecord, patch: Record<string, unknown>) => {
-      const accepted = await decide(`${type}.edit`, { type, id: baseline.id }, patch, { expectedRevision: baseline.revision, quiet: true });
+      const accepted = await decide(edit.schema, { type, id: baseline.id }, patch, { expectedRevision: baseline.revision, quiet: true });
       return accepted ? { accepted: true } : { accepted: false, error: t("The host refused this edit.") };
     },
   } : undefined;
@@ -359,6 +365,7 @@ export function Records({ type, description, help, actions, covers, saved, kanba
         onSave={setSaving}
         toolbar={<ImportControl source={source} type={type} importable={can(`${type}.create`) || can(`${type}.edit`)} />}
         onOpen={(r) => openRecord({ type, id: r.id })}
+        onOpenReference={(referenceType, id) => openRecord({ type: referenceType, id })}
         kanban={kanban}
         moves={moves}
         onMove={(record, schema, destination) => {

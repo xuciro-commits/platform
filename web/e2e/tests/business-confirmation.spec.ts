@@ -41,9 +41,8 @@ test("a builder declares ERP and WMS confirmation and source evidence converges 
     await builder.decide("build.connection.create", { type: "build.connection", id: connectionID }, { name: slug("receiver"), title: "Confirmation receiver", kind: "http", address: `http://127.0.0.1:${address.port}/`, allowPrivate: true });
     await builder.decide("build.connection.check", { type: "build.connection", id: connectionID }, {});
     await expect.poll(async () => (await builder.record("build.connection", connectionID)).state, { timeout: 20_000 }).toBe("ready");
-    const writes: Record<string, string> = {};
-    for (const party of ["erp", "wms"]) {
-      writes[party] = fresh("WRITEBACK");
+    const writes = { erp: fresh("WRITEBACK"), wms: fresh("WRITEBACK") };
+    for (const party of ["erp", "wms"] as const) {
       await builder.decide("build.writeback.create", { type: "build.writeback", id: writes[party] }, { name: slug(party), title: party.toUpperCase(), connection: connectionID, object: type, on: "confirmation", path: party });
       await builder.decide("build.writeback.publish", { type: "build.writeback", id: writes[party] }, {});
     }
@@ -51,10 +50,10 @@ test("a builder declares ERP and WMS confirmation and source evidence converges 
     await builder.decide("build.source.create", { type: "build.source", id: sourceID }, { name: slug("status"), title: "WMS source status", connection: connectionID, profile: "json", url: "rows", object: type, key: "id", mapping: [{ from: "state", to: "status" }] });
     await builder.decide("build.source.publish", { type: "build.source", id: sourceID }, {});
     await builder.open(page, `/action-type?id=${object.id}&action=start`);
-    await page.getByRole("button", { name: "Transaction", exact: true }).click();
+    await page.getByRole("region", { name: "Action structure", exact: true }).getByRole("button", { name: /^Transaction(?: \d+)?$/ }).click();
     await page.getByRole("checkbox", { name: "Wait for declared parties", exact: true }).check();
     await page.getByLabel("When all parties confirm", { exact: true }).selectOption("complete");
-    for (const party of ["erp", "wms"]) {
+    for (const party of ["erp", "wms"] as const) {
       await page.getByRole("button", { name: "Add confirmation party", exact: true }).click();
       await page.getByLabel("Party name", { exact: true }).last().fill(party);
       await page.getByLabel("Party title", { exact: true }).last().fill(party.toUpperCase());

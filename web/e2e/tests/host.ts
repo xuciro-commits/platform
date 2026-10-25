@@ -49,7 +49,24 @@ export const fresh = (prefix: string) => `${prefix}-${Date.now().toString(36).to
 // Keep request-count assertions within one revision; unrelated tenant inputs
 // legitimately invalidate all readers. Explicit local writes still refresh.
 export async function stableReadRevision(page: Page) {
-  await page.route("**/v1/changes", route => route.fulfill({ status: 200, contentType: "text/event-stream", body: "" }));
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.href);
+      if (url.pathname !== "/v1/changes") return original(input, init);
+      const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      let release = () => {};
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const abort = () => { release(); controller.error(new DOMException("Aborted", "AbortError")); };
+          release = () => signal?.removeEventListener("abort", abort);
+          if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
+        },
+        cancel() { release(); },
+      });
+      return Promise.resolve(new Response(body, { headers: { "Content-Type": "text/event-stream" } }));
+    };
+  });
 }
 
 /** Retains an old action catalog in both HTTP discovery and live snapshots.

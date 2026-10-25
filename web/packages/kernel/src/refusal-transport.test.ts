@@ -1,7 +1,23 @@
 import {afterEach,expect,test,vi} from "vitest";
-import {EdgeClient} from "./client";
+import {CompositeRefusalError,EdgeClient} from "./client";
 
 afterEach(()=>vi.unstubAllGlobals());
+
+test("composite transport distinguishes saved refusals from unknown outcomes without losing the original message",async()=>{
+ const client=setup(),edits=[{schema:"build.object.archive",target:{type:"build.object",id:"draft"},payload:{}}];
+ vi.stubGlobal("fetch",async()=>new Response(JSON.stringify({error:"edit refused",outcome:"refused"}),{status:409}));
+ await expect(client.composite("original",edits)).rejects.toBeInstanceOf(CompositeRefusalError);
+ await expect(client.composite("original",edits)).rejects.toThrow("edit refused");
+ for(const response of [{error:"application answer unavailable"},{error:{message:"legacy conflict"}}]){
+  vi.stubGlobal("fetch",async()=>new Response(JSON.stringify(response),{status:409}));
+  try{await client.composite("original",edits);throw Error("composite unexpectedly succeeded");}catch(error){
+   expect(error).toBeInstanceOf(Error);expect(error).not.toBeInstanceOf(CompositeRefusalError);
+   expect((error as Error).message).toBe(typeof response.error==="string"?response.error:response.error.message);
+  }
+ }
+ vi.stubGlobal("fetch",async()=>{throw TypeError("connection lost");});
+ await expect(client.composite("original",edits)).rejects.toThrow("connection lost");
+});
 
 function setup() {
  const saved=new Map<string,string>();

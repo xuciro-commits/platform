@@ -290,7 +290,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         navigation={app?.navigation?.(activeRoute)}
         nav={[
           ...(app?.nav(host, activeRoute) ?? []),
-          ...(saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ...(app?.id === sharedViewApplication({ view: "saved" }) && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
           {id:"offline",label:t("Offline applications"),run:()=>setOfflineOpen(true)},

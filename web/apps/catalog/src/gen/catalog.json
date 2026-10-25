@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:babe4f165bfdb0c8",
+  "revision": "sha256:3ce009919fa54e9f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -259,8 +259,7 @@
           "type": "boolean",
           "optional": true,
           "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "false"
+          "isSlot": false
         },
         {
           "name": "children",
@@ -268,6 +267,14 @@
           "optional": false,
           "isCallback": false,
           "isSlot": true
+        },
+        {
+          "name": "requestedPreview",
+          "type": "unknown",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "false"
         }
       ],
       "slots": [
@@ -4087,8 +4094,7 @@
           "type": "number",
           "optional": true,
           "isCallback": false,
-          "isSlot": false,
-          "defaultValue": "28"
+          "isSlot": false
         },
         {
           "name": "onRowClick",
@@ -8282,6 +8288,20 @@
           "optional": false,
           "isCallback": false,
           "isSlot": false
+        },
+        {
+          "name": "source",
+          "type": "RecordSource",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onOpenReference",
+          "type": "(type:string,id:string)=>void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
         }
       ],
       "composed": [
@@ -8387,6 +8407,13 @@
           "type": "RecordSource",
           "optional": true,
           "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onOpenReference",
+          "type": "(type:string,id:string)=>void",
+          "optional": true,
+          "isCallback": true,
           "isSlot": false
         }
       ],
@@ -8649,6 +8676,20 @@
           "type": "string",
           "optional": false,
           "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "source",
+          "type": "RecordSource",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onOpenReference",
+          "type": "(type:string,id:string)=>void",
+          "optional": true,
+          "isCallback": true,
           "isSlot": false
         }
       ]
@@ -9344,6 +9385,13 @@
       ],
       "props": [
         {
+          "name": "onOpenReference",
+          "type": "(type: string, id: string) => void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
           "name": "tablePresentation",
           "type": "Api.PageTablePresentation",
           "optional": true,
@@ -9453,7 +9501,7 @@
         },
         {
           "name": "window",
-          "type": "{ query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; /** The window's current enum filters; a fixed-predicate window locks them and explains why. */ filters?:Record<string,string[]>; filtersLocked?:boolean; onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void }",
+          "type": "{ query:RecordQuery; baseQuery?:RecordQuery; facetQuery?:(field:string)=>RecordQuery|undefined; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; /** The window's current enum filters; a fixed-predicate window locks them and explains why. */ filters?:Record<string,string[]>; filtersLocked?:boolean; onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void }",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -9548,7 +9596,7 @@
         {
           "name": "ListState",
           "kind": "type",
-          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n  /** Chosen enum filters, by choice field; missing means the view predates them. */\n  filters?: Record<string, string[]>;\n};"
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n  /** Original predicates and read shape; personal filters never replace them. */\n  baseQuery?: RecordQuery; searchLocked?:boolean; sortLocked?:boolean; filtersLocked?:boolean;\n  /** Chosen enum filters, by choice field; missing means the view predates them. */\n  filters?: Record<string, string[]>;\n};"
         }
       ]
     },
@@ -10455,6 +10503,13 @@
         "Pass a scoped RecordSource; this layout does not define a business entity."
       ],
       "props": [
+        {
+          "name": "onOpenReference",
+          "type": "(type: string, id: string) => void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
         {
           "name": "title",
           "type": "string",
@@ -13087,6 +13142,7 @@
       "web/apps/catalog/src/Preview.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/workspace/src/App.tsx",
+      "web/apps/workspace/src/HostOnly.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
       "web/apps/workspace/src/session/Problems.tsx",
@@ -13644,6 +13700,7 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/HeaderEditor.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
+      "web/packages/build/src/workshop/editor.tsx",
       "web/packages/build/src/workshop/page-editor/CompositeBindingInspector.tsx",
       "web/packages/build/src/workshop/page-editor/EffectsPanel.tsx",
       "web/packages/build/src/workshop/page-editor/InterfacePanel.tsx",
@@ -13998,6 +14055,7 @@
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/widgets/RecordActivity.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx",
+      "web/packages/ui/src/records/RecordChip.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
     "ui/chart": [

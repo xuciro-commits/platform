@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -17,50 +18,62 @@ import (
 )
 
 func TestBusinessRefusalCorrectionUsesOriginalIdentityAndProjection(t *testing.T) {
-	tn := txnTenant(t)
-	var entries []Entry
-	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	businessRefusalOwnerSetup(t, tn)
-	member := memberOf(t, tn, "operator")
-	original := txnRequest(t, tn, "operator", "block")
-	before := txnState(tn)
-	_, refusal, issues := tn.submitDiagnosed(member, original, txnAt)
-	if refusal == nil || len(issues) != 1 || issues[0].BusinessCode != "blockreason" {
-		t.Fatalf("business reason missing: %v %+v", refusal, issues)
+	for _, label := range []string{"flag", "accepted"} {
+		t.Run(label, func(t *testing.T) {
+			tn := txnTenant(t)
+			var entries []Entry
+			tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+			businessRefusalOwnerSetup(t, tn)
+			member := memberOf(t, tn, "operator")
+			original := txnRequest(t, tn, "operator", "block")
+			before := txnState(tn)
+			_, refusal, issues := tn.submitDiagnosed(member, original, txnAt)
+			if refusal == nil || len(issues) != 1 || issues[0].BusinessCode != "blockreason" {
+				t.Fatalf("business reason missing: %v %+v", refusal, issues)
+			}
+			txnUnchanged(t, tn, before)
+			count := len(entries)
+			_, same, again := tn.submitDiagnosed(member, original, txnAt.Add(time.Second))
+			if same == nil || *same != *refusal || len(again) != 1 || len(entries) != count {
+				t.Fatal("same key made another refusal")
+			}
+			corrected := txnRequest(t, tn, "operator", label)
+			corrected.CorrelationId = "correction:" + original.IdempotencyKey
+			receipt, err := tn.Submit(member, corrected, txnAt.Add(time.Second))
+			if err != nil {
+				t.Fatal(err)
+			}
+			repeated, err := tn.Submit(member, corrected, txnAt.Add(2*time.Second))
+			if err != nil || !proto.Equal(receipt, repeated) {
+				t.Fatal("correction was not idempotent")
+			}
+			page, err := tn.BusinessRefusals(member, "build.request", "operator", 0, 200, txnAt)
+			if err != nil || page.Total != 2 {
+				t.Fatalf("history count: %+v %v", page, err)
+			}
+			if page.Records[0].CorrectionOf != original.IdempotencyKey || len(page.Records[0].Changes) != 1 || page.Records[0].Changes[0].Field != "label" || len(page.Records[0].Facts) != map[string]int{"flag": 1, "accepted": 0}[label] {
+				t.Fatalf("correction lineage missing: %+v", page)
+			}
+			other, err := tn.BusinessRefusals(memberOf(t, tn, "limited"), "build.request", "operator", 0, 200, txnAt)
+			if err != nil || other.Total != 0 {
+				t.Fatal("another member read refused input history")
+			}
+			forged := proto.Clone(corrected).(*pb.Submission)
+			forged.CorrelationId = "correction:another"
+			if _, err := tn.Submit(member, forged, txnAt); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT {
+				t.Fatal("same key switched correction origin")
+			}
+			CheckReplay(t, tn, entries, func() *Tenant { return txnTenant(t) })
+			restored := txnTenant(t)
+			if err := restored.Replay(entries); err != nil {
+				t.Fatal(err)
+			}
+			recovered, err := restored.BusinessRefusals(memberOf(t, restored, "operator"), "build.request", "operator", 0, 200, txnAt)
+			if err != nil || !reflect.DeepEqual(page, recovered) {
+				t.Fatalf("restored correction evidence differs: %+v %v", recovered, err)
+			}
+		})
 	}
-	txnUnchanged(t, tn, before)
-	count := len(entries)
-	_, same, again := tn.submitDiagnosed(member, original, txnAt.Add(time.Second))
-	if same == nil || *same != *refusal || len(again) != 1 || len(entries) != count {
-		t.Fatal("same key made another refusal")
-	}
-	corrected := txnRequest(t, tn, "operator", "flag")
-	corrected.CorrelationId = "correction:" + original.IdempotencyKey
-	receipt, err := tn.Submit(member, corrected, txnAt.Add(time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
-	repeated, err := tn.Submit(member, corrected, txnAt.Add(2*time.Second))
-	if err != nil || !proto.Equal(receipt, repeated) {
-		t.Fatal("correction was not idempotent")
-	}
-	page, err := tn.BusinessRefusals(member, "build.request", "operator", 0, 200, txnAt)
-	if err != nil || page.Total != 2 {
-		t.Fatalf("history count: %+v %v", page, err)
-	}
-	if page.Records[0].CorrectionOf != original.IdempotencyKey || len(page.Records[0].Changes) != 1 || page.Records[0].Changes[0].Field != "label" || len(page.Records[0].Facts) != 1 {
-		t.Fatalf("correction lineage missing: %+v", page)
-	}
-	other, err := tn.BusinessRefusals(memberOf(t, tn, "limited"), "build.request", "operator", 0, 200, txnAt)
-	if err != nil || other.Total != 0 {
-		t.Fatal("another member read refused input history")
-	}
-	forged := proto.Clone(corrected).(*pb.Submission)
-	forged.CorrelationId = "correction:another"
-	if _, err := tn.Submit(member, forged, txnAt); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT {
-		t.Fatal("same key switched correction origin")
-	}
-	CheckReplay(t, tn, entries, func() *Tenant { return txnTenant(t) })
 }
 
 func TestBusinessRefusalPersistenceReopensWithoutExecutingRules(t *testing.T) {

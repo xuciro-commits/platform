@@ -66,7 +66,10 @@ test("an object provides a versioned protocol through its original actions and r
   await page.reload();
   await expect(binding.getByRole("combobox", { name: "Protocol", exact: true })).toContainText(`${protocol}/2`);
   await expect(binding.getByRole("combobox", { name: "Object action for release", exact: true })).toHaveValue("complete");
+  await expect(binding.getByRole("textbox", { name: "Protocol name", exact: true })).toHaveValue(protocol);
+  await expect(binding.getByRole("combobox", { name: "Protocol", exact: true })).toHaveValue("");
   await binding.getByRole("combobox", { name: "Protocol", exact: true }).selectOption(`${protocol}/2`);
+  await expect(binding.getByRole("combobox", { name: "Protocol", exact: true })).toHaveValue(`${protocol}/2`);
   await expect(binding).toContainText("Uses the installed protocol contract.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect.poll(async () => (await builder.record("build.object", object.id)).protocols[0].contract?.Name).toBe(protocol);

@@ -14,6 +14,7 @@ export const retirementBatch = <T extends RetireItem>(items: readonly T[], picke
 export const retirementEdits = (items: readonly RetireItem[]): { schema: string; target: { type: string; id: string }; payload: Record<string, never> }[] =>
   items.map(item => ({ schema: `${item.kind.type}.archive`, target: { type: item.kind.type, id: item.record!.id }, payload: {} }));
 
-/** A retried intent keeps its original key; only discarding it starts a new one. */
-export const retireAgain = (intent: { key: string; retried?: number }): { key: string; retried: number } =>
-  ({ key: intent.key, retried: (intent.retried ?? 0) + 1 });
+export function retirementIntent<T extends RetireItem>(key: string, items: readonly T[]) {
+  const reviewed = structuredClone([...items]);
+  return { key, items: reviewed, edits: retirementEdits(reviewed) };
+}

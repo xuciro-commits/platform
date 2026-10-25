@@ -22,7 +22,6 @@ function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children
 // (queued and failed deliveries, scheduled jobs), and every delivery attempt.
 export function Automation() {
   const appsQuery = useRead<Api.AppInfo[]>("/v1/apps");
-  const apps = appsQuery.data ?? [];
   const { decide } = useHost();
   const work = useRead<Task[]>("/v1/work");
   const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
@@ -38,14 +37,14 @@ export function Automation() {
     { id: "retry", header: "", meta: { width: 90 }, cell: ({ row: { original: w } }) => (w.state === "failed" || w.kind === "job") &&
       <Button size="sm" onClick={() => void decide("platform.work.retry", { type: "platform.work", id: w.id }, {})}>{w.kind === "job" ? t("Run now") : t("Retry")}</Button> },
   ];
-  const subscriptions = apps.flatMap((a) => a.subscribes.map((action) => ({ app: a.id, action })));
   return <>
     <PageHeader title={t("Work queue")} help={t("Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision.")} />
-      <div className="mb-3 flex flex-wrap gap-2 text-sm">
-        {appsQuery.isError && !appsQuery.data ? <span className="text-danger">{t("Subscriptions are unavailable: the app list could not be read.")}</span> :
-          subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
-          subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
-      </div>
+    <ReadResult query={appsQuery}>{apps => {
+      const subscriptions = apps.flatMap(app => app.subscribes.map(action => ({ app: app.id, action })));
+      return <div className="mb-3 flex flex-wrap gap-2 text-sm">{subscriptions.length
+        ? subscriptions.map(s => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)
+        : <span className="text-muted">{t("No subscriptions.")}</span>}</div>;
+    }}</ReadResult>
     <ReadResult query={work}>{(rows) => <DataTable data={rows} columns={taskColumns} getRowId={(task) => task.id} height="calc(100dvh - 260px)" searchable={false} empty={t("Nothing queued, no jobs")} />}</ReadResult>
   </>;
 }
@@ -276,7 +275,7 @@ export function AppSettingsView() {
                       </Select>
                     ) : (
                       <span className="flex gap-2">
-                        <Input aria-label={s.title} draftKey={s.name} step={s.type==="integer"?1:undefined} optional={false} type={s.type === "integer" ? "number" : "text"} value={draft[key] ?? s.value}
+                        <Input aria-label={s.title} draftKey={key} step={s.type==="integer"?1:undefined} optional={false} type={s.type === "integer" ? "number" : "text"} value={draft[key] ?? s.value}
                           onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
                         <Button size="md" disabled={(draft[key] ?? s.value) === s.value}
                           onClick={async () => { if (await set(a.app, s, draft[key]!)) setDraft(({ [key]: _, ...rest }) => rest); }}>{t("Save")}</Button>

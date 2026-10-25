@@ -13,7 +13,8 @@ test("preview preserves every generated widget field without a second field list
   const result = previewSection(draft);
   for (const field of fields) assert.equal(result[field], draft[field], field);
   for (const field of ["object", "query", "function", "inlineEdit"]) assert.equal(result[field], undefined);
-  assert.deepEqual(result.actions, []);
+  assert.equal(result.actions, undefined);
+  assert.deepEqual(previewSection({widget:"table",actions:[]}).actions, []);
 });
 
 test("preview translates original owner bindings and keeps ordering without changing its draft", () => {

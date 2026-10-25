@@ -9,7 +9,7 @@ import {OfflineReadError,type Api} from "@platform/kernel";
 import type { ActionDeclaration } from "@platform/kernel";
 import { Button, ContextHelp, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
 import {actionEntryInputs, actionInputSignature, ActionRefusal} from "./refusal";
 import type {Entry} from "@platform/kernel";
@@ -123,6 +123,8 @@ export function DeclaredActionForm(props:Parameters<typeof DeclaredActionFormBod
 }
 function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
  const host=useHost(),{decide,catalog,source}=host,lock=useRef(false),inputsDraft=useInputDrafts(),trial=useActionTrial();
+ const execution=useRef({enabled,preview,mounted:true});if(execution.current.enabled!==enabled||execution.current.preview!==preview)execution.current={enabled,preview,mounted:true};const opened=execution.current;
+ useEffect(()=>{execution.current.mounted=true;return()=>{execution.current.mounted=false;};},[]);
  const [local]=useState<{context?:ReturnType<typeof actionDraftContext>;saved?:LocalFormDraft;problem?:string}>(()=>{
   if(preview)return {};
   try{const context=actionDraftContext(host,openedDeclaration),saved=context?host.client.prepared?.form(actionDraftKey(context,openedDeclaration,target,fixed)):undefined;return {context,saved:saved&&!completedLocalDraft(host,saved)?saved:undefined};}
@@ -150,7 +152,7 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  const sameTarget=attempt?.entry.submission.target?.type===target.type&&attempt.entry.submission.target.id===target.id;
  const changed=!!attempt&&(!sameTarget||schemaChanged||actionInputSignature(values)!==actionInputSignature(attempt.values));
  const submit=async(inputs=values,original=false)=>{
-  if(!enabled||preview||lock.current||inputsDraft?.invalid&&!original)return false;
+  if(!opened.enabled||opened.preview||!opened.mounted||execution.current!==opened||lock.current||inputsDraft?.invalid&&!original)return false;
   setSubmitted(true);
   if(!original&&!generated&&!payloadSchema(declared.payload).safeParse(inputs).success)return false;
   const same=!!attempt&&(original||!schemaChanged&&sameTarget&&actionInputSignature(inputs)===actionInputSignature(attempt.values));
@@ -164,6 +166,7 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
     const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);
    }});
    if(accepted){
+    if(!opened.mounted||execution.current!==opened)return true;
     if(local.context)try{for(const key of new Set([savedDraft?.key,actionDraftKey(local.context,openedDeclaration,target,fixed),actionDraftKey(local.context,declared,target,fixed)]))if(key)host.client.prepared?.removeForm(key);}
     catch{notify.error(t("The request was accepted, but its local draft could not be removed. Review it in Offline applications."));}
     setPending(false);onPending?.(false);onCompleted(requested);
@@ -208,7 +211,7 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
  {!record&&local.drafts.length>1&&<div className="grid gap-2"><p className="text-xs text-muted">{t("Choose a local draft to continue its original record.")}</p>{local.drafts.map(draft=><Button key={draft.key} size="sm" disabled={submitting||pending} onClick={()=>{setId(draft.target.id);setRound(value=>value+1);}}>{t("Resume draft {id}",{id:draft.target.id})}</Button>)}</div>}
  {pending&&<p role="status" className="text-xs text-warning">{t("This operation is awaiting confirmation. Retry its original target and inputs.")}</p>}
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
- <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onClose();onCompleted?.(confirmed);}} onBusy={setSubmitting} onPending={setPending} initial={initial} originalOutcome={recovered} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
+ <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onCompleted?.(confirmed);onClose();}} onBusy={setSubmitting} onPending={setPending} initial={initial} originalOutcome={recovered} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
  </div></OverlayFrame>;
 }
 export {ActionDialog as DeclaredActionDialog};
@@ -297,17 +300,31 @@ export function useTransition(type: string) {
 /** An action taken as one effect of a page event chain: at once
  * when it takes no input, through its form otherwise. Resolves true when the
  * host accepted it, false when the person cancelled, so the chain can stop. */
-export function useActionEffect() {
-  const { action, decide } = useHost();
-  const [taking, setTaking] = useState<{ declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; initial: Record<string, unknown>; settle: (ok: boolean) => void;originalOutcome?:Entry }>();
+export function useActionEffect(enabled: boolean) {
+  const { action, decide, source } = useHost();
+  const current = useRef({ enabled, scope: source.scope });
+  if (current.current.enabled !== enabled || current.current.scope !== source.scope) current.current = { enabled, scope: source.scope };
+  useEffect(() => {
+    current.current = { enabled, scope: source.scope };
+    return () => { current.current = { enabled: false, scope: source.scope }; };
+  }, []);
+  const [taking, setTaking] = useState<{ scope: typeof source.scope; declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; initial: Record<string, unknown>; settle: (ok: boolean) => void;originalOutcome?:Entry }>();
+  useEffect(() => {
+    if (taking && (!enabled || taking.scope !== source.scope)) { taking.settle(false); setTaking(undefined); }
+  }, [enabled, source.scope, taking]);
+  useEffect(() => () => taking?.settle(false), [taking]);
   const take = (schema: string, record?: Pick<EntityRecord, "id" | "revision">, initial: Record<string, unknown> = {}): Promise<boolean> => {
+    const scope = source.scope;
+    const started = current.current;
+    const active = () => current.current === started && started.enabled;
+    if (!active()) return Promise.resolve(false);
     const declared = action(schema);
     if (!declared || (declared.new ? !!record : !record)) return Promise.resolve(false);
-    if (!declared.payload.length && record) {let originalOutcome:Entry|undefined,reason="";return decide(schema,{type:declared.target,id:record.id},{},{expectedRevision:record.revision,quiet:true,onRefused:message=>{reason=message;},onOutcome:entry=>{originalOutcome=entry;}}).then(ok=>{if(!ok&&!originalOutcome&&reason)notify.error(reason);return ok||!originalOutcome?ok:new Promise<boolean>(settle=>setTaking({declared,type:declared.target,record,initial:{},settle,originalOutcome}));});}
-    return new Promise((settle) => setTaking({ declared, type: declared.target, record, initial, settle }));
+    if (!declared.payload.length && record) {let originalOutcome:Entry|undefined,reason="";return decide(schema,{type:declared.target,id:record.id},{},{expectedRevision:record.revision,quiet:true,onRefused:message=>{reason=message;},onOutcome:entry=>{originalOutcome=entry;}}).then(ok=>{if(!active())return false;if(!ok&&!originalOutcome&&reason)notify.error(reason);return ok||!originalOutcome?ok:new Promise<boolean>(settle=>setTaking({scope,declared,type:declared.target,record,initial:{},settle,originalOutcome}));});}
+    return new Promise((settle) => setTaking({ scope, declared, type: declared.target, record, initial, settle }));
   };
   const close = (ok: boolean) => { taking?.settle(ok); setTaking(undefined); };
-  const dialog = taking && <ActionDialog frame="drawer" declared={taking.declared} type={taking.type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => close(false)} onCompleted={() => close(true)} />;
+  const dialog = enabled && taking && taking.scope === source.scope && <ActionDialog frame="drawer" declared={taking.declared} type={taking.type} record={taking.record} initial={taking.initial} originalOutcome={taking.originalOutcome} onClose={() => close(false)} onCompleted={() => close(true)} />;
   return { take, dialog };
 }
 

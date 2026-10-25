@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {PropertyList,t,type EntityRecord} from '@platform/ui';
 import type {Api} from '@platform/kernel';
 import {GeneratedForm,newId,useHost,useInvokeCapability} from '../index';
@@ -14,6 +14,10 @@ export function CreateFormRenderer({object:type,parentObject:parentType,config:s
   const bindings = section.inputs ?? {};
   const bindingKey = JSON.stringify([parentType, master?.id, bindings]);
   const id = useMemo(() => newId(prefixOf(type)), [type, round, bindingKey]);
+  const current = useRef({ live, id, scope: source.scope, mounted: true });
+  if (current.current.live !== live || current.current.id !== id || current.current.scope !== source.scope) current.current = { live, id, scope: source.scope, mounted: true };
+  const opened = current.current;
+  useEffect(() => { current.current.mounted = true; return () => { current.current.mounted = false; }; }, []);
   const [bound, setBound] = useState<{ key: string; values?: Record<string, unknown>; error?: string }>({ key: "" });
   useEffect(() => {
     let current = true;
@@ -54,7 +58,7 @@ export function CreateFormRenderer({object:type,parentObject:parentType,config:s
       <GeneratedForm key={round} type={type} fields={fields} submitLabel={t("Create")} onCancel={() => { setError(""); setRound((r) => r + 1); }}
         context={type+' · '+id+' · 0'} onTrial={live&&ready?values=>trial(type+'.create',{type,id},{...values,...bound.values,...refField&&master?{[refField.name]:master.id}:{}},0):undefined}
         onSubmit={async (values) => {
-          if (!live) return;
+          if (!opened.live || !opened.mounted || current.current !== opened) return;
           setError("");
           const payload = refField && master ? { ...values, [refField.name]: master.id } : values;
           try {

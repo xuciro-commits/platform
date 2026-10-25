@@ -158,6 +158,7 @@ test.describe("flow condition editing", () => {
     });
     await builder.open(page, `/flow?id=${id}`);
     const editor = page.getByRole("region", { name: "Editor", exact: true });
+    await editor.getByRole("button", { name: "Source editor", exact: true }).click();
     const source = editor.getByRole("textbox", { name: "Configuration source", exact: true });
     const original = JSON.parse(await source.inputValue());
     await editor.getByRole("button", { name: "Visual", exact: true }).click();

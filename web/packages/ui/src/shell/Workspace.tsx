@@ -49,12 +49,12 @@ export type Rail = { home: Route; applications: Route; notifications?: { route: 
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
 /** Inspect keeps the current task; tab, beside and popout open working documents. */
-type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route };
+type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route; from?: string; replace?: boolean };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void, busy?: boolean) => void;
   ask: (panels: string[], run: () => void, owner?: symbol) => void;
 };
-type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; closeAll: () => void; notify: typeof toast; unsaved?: Unsaved;
+type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route, from?: string) => void; closeAll: (from?: string) => void; notify: typeof toast; unsaved?: Unsaved;
   /** Confirms other open drafts before an operation stops their providers. */
   confirmLeave: (run: () => void, exceptPanel?: string) => void;
   /** Names a panel's tab after what it shows ("Object type · Visit") once the view knows it; the view's static title stays the category. */
@@ -69,6 +69,8 @@ type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close
   /** The portal and rail this shell was given, for views that list applications (Home). */
   applications?: Applications; rail?: Rail; };
 const PanelContext = createContext<string | undefined>(undefined);
+const DockScope = createContext<string | undefined>(undefined);
+const taskKey = (scope: string | undefined, panel: string) => JSON.stringify([scope ?? null, panel]);
 /** False for every panel of a dock whose application scope is not the front
  * one: hidden scopes keep their instances but stop measuring, subscribing and
  * publishing as if they were visible. */
@@ -84,7 +86,7 @@ export function useWorkspace(): WorkspaceApi {
   const api = useContext(WorkspaceContext);
   const panel = useContext(PanelContext);
   if (!api) throw new Error("useWorkspace outside <Workspace>");
-  return { ...api, confirmLeave: (run: () => void) => api.confirmLeave(run, panel), transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
+  return { ...api, open: (route, options) => api.open(route, { ...options, from: panel }), close: route => api.close(route, panel), closeAll: () => api.closeAll(panel), confirmLeave: (run: () => void) => api.confirmLeave(run, panel), transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
 }
 
 /** The tab of the current view shows "<category> · <name>" once the name is known (UX-03);
@@ -182,7 +184,12 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const drafts = useRef(new Map<string, Map<symbol, { discard: () => void; busy: boolean }>>());
   const transfers = useRef(new ViewTransfers());
   const [pending, setPending] = useState<{ panels: string[]; run: () => void; owner?: symbol }>();
-  const panelIn = useCallback((id: string) => { for (const api of docks.current.values()) if (api.getPanel(id)) return true; return false; }, []);
+  const taskOwner = useCallback((address: string) => {
+    const [storedScope, id] = JSON.parse(address) as [string | null, string];
+    const scope = storedScope ?? undefined, api = docks.current.get(scope);
+    return { scope, id, api, panel: api?.getPanel(id) };
+  }, []);
+  const panelIn = useCallback((address: string) => !!taskOwner(address).panel, [taskOwner]);
   const unsaved = useMemo<Unsaved>(() => ({
     register: (panel, owner, discard, busy = false) => {
       if ((discard || busy) && panelIn(panel)) {
@@ -205,7 +212,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     },
   }), []);
   const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
-  const closePanels = useCallback((ids: string[]) => unsaved.ask(ids, () => { for (const id of ids) for (const api of docks.current.values()) api.getPanel(id)?.api.close(); }), [unsaved]);
+  const closePanels = useCallback((ids: string[]) => unsaved.ask(ids, () => { for (const id of ids) taskOwner(id).panel?.api.close(); }), [unsaved, taskOwner]);
   const closePanel = useCallback((id: string) => closePanels([id]), [closePanels]);
   const scope = useRef(layoutScope);
   const routeScope = useRef(scopeOf); routeScope.current = scopeOf;
@@ -219,9 +226,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const switching = useRef(false);
   const incomingRevision = useRef(0);
   const queuedOpen = useRef<{ route: Route; options: OpenOptions; scope?: string | undefined } | undefined>(undefined);
-  const leaveViews = useCallback((run: () => void) => unsaved.ask((dock.current?.panels ?? []).map((panel) => panel.id), () => {
+  const allTasks = useCallback(() => [...docks.current].flatMap(([scope, api]) => api.panels.map(panel => taskKey(scope, panel.id))), []);
+  const leaveViews = useCallback((run: () => void) => unsaved.ask(allTasks(), () => {
     ++incomingRevision.current; queuedOpen.current = undefined; run();
-  }), [unsaved]);
+  }), [unsaved, allTasks]);
   const applications = useMemo<Applications | undefined>(() => appEntries && ({ ...appEntries, onSelect: (id) => {
     if (id === appEntries.current || !appEntries.apps.some((app) => app.id === id)) return;
     // Switching preserves every scope's live work; the activation effect only
@@ -255,10 +263,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     return true;
   }, [storageKey]);
   const popping = useRef(new Set<string>());
-  const popout = useCallback((id: string) => {
-    const api = dock.current, panel = api?.getPanel(id);
-    if (!api || !panel || panel.api.location.type === "popout" || popping.current.has(id)) return;
-    popping.current.add(id);
+  const popout = useCallback((id: string, dockScope: string | undefined) => {
+    const api = docks.current.get(dockScope), panel = api?.getPanel(id), address = taskKey(dockScope, id);
+    if (!api || !panel || panel.api.location.type === "popout" || popping.current.has(address)) return;
+    popping.current.add(address);
     // Dockview rehomes the same panel and returns it when the child closes.
     // Moving it is not a destructive close, and must not discard its draft.
     void api.addPopoutGroup(panel, { onDidOpen: ({ window: child }) => {
@@ -277,7 +285,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       }, { once: true });
     } }).then((opened) => { if (!opened) toast.error(t("Could not open a new window. Allow pop-ups and try again.")); })
       .catch(() => toast.error(t("Could not open a new window. Allow pop-ups and try again.")))
-      .finally(() => popping.current.delete(id));
+      .finally(() => popping.current.delete(address));
   }, []);
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -360,12 +368,12 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const emptied = useRef(onEmpty); emptied.current = onEmpty;
   const visit = useRef(visited); visit.current = visited;
 
-  const canBeside = (id?: string) => {
-    const api = dock.current, panel = id && api?.getPanel(id);
+  const canBeside = (id: string | undefined, dockScope: string | undefined) => {
+    const api = docks.current.get(dockScope), panel = id && api?.getPanel(id);
     return !!api && !!panel && !compact && (panel.group.panels.length > 1 || api.groups.some((group) => group !== panel.group && group.api.location.type === "grid"));
   };
-  const placeBeside = useCallback((id: string, reference: string) => {
-    const api = dock.current, panel = api?.getPanel(id), source = api?.getPanel(reference)?.group;
+  const placeBeside = useCallback((id: string, reference: string, dockScope: string | undefined) => {
+    const api = docks.current.get(dockScope), panel = api?.getPanel(id), source = api?.getPanel(reference)?.group;
     if (!api || !panel || !source || compact) return;
     if (panel.group !== source && panel.group.api.location.type === "grid") return; // already beside the reference
     const other = api.groups.find((group) => group !== source && group.api.location.type === "grid");
@@ -374,7 +382,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     if (!other && (source.api.location.type !== "grid" || source.panels.length < 2)) return;
     panel.api.moveTo({ group: other ?? api.addGroup({ referenceGroup: source, direction: "right" }) });
   }, [compact]);
-  const show = useCallback((route: Route, options: OpenOptions = {}, dockScope: string | undefined = scope.current) => {
+  const show = useCallback((route: Route, options: OpenOptions, dockScope: string | undefined) => {
     const api = dockScope === scope.current ? dock.current : docks.current.get(dockScope), view = byId.get(route.view);
     if (!view) return;
     if (!api) { // the scope's dock is not mounted yet: mount it, then open on ready
@@ -387,7 +395,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     let panel = api.getPanel(key);
     if (panel) {
       if (view.documentKey) panel.api.updateParameters({ route });
-      if (options.window === "beside" && reference) placeBeside(panel.id, reference);
+      if (options.window === "beside" && reference) placeBeside(panel.id, reference, dockScope);
     } else if (options.window === "beside" && !compact && api.activePanel?.group.api.location.type === "grid") {
       const current = api.activePanel.group;
       const other = api.groups.find((group) => group !== current && group.api.location.type === "grid")
@@ -397,22 +405,32 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     panel ??= api.addPanel({ id: key, component: "view", title, params: { route } });
     panel.api.setActive();
     syncs.current.get(dockScope)?.();
-    if (options.window === "popout") popout(panel.id);
-  }, [byId, compact, popout, placeBeside, keyOf]);
+    if (options.window === "popout") popout(panel.id, dockScope);
+    // A saved document replaces its original task only after the destination
+    // opened. Failed resolution and late replies never close the draft.
+    if (options.replace && options.from && options.from !== taskKey(dockScope, panel.id)) closePanel(options.from);
+  }, [byId, compact, popout, placeBeside, keyOf, closePanel]);
   const openResolved = useCallback((route: Route, options: OpenOptions = {}, hint?: string | undefined) => {
     if (!viewRegistry.current.has(route.view)) return;
-    const api = dock.current;
-    const call = route.params?.call ? transfers.current.read(route.params.call, keyOf(route)) : undefined;
-    const origin = call && api ? api.getPanel(call.from) : undefined;
+    const source = options.from ? taskOwner(options.from) : undefined;
+    if (source && !source.panel) return;
+    const target = hint ?? (route.params?.call && source ? source.scope : routeScope.current?.(route) ?? source?.scope ?? scope.current);
+    const call = route.params?.call ? transfers.current.read(route.params.call, taskKey(target, keyOf(route))) : undefined;
+    const origin = call ? taskOwner(call.from).panel : undefined;
     const originRoute = (origin?.params as { route?: Route } | undefined)?.route;
     // A called editor is part of its caller's task: it opens in the caller's
     // dock and never switches the front application. Every other open lands
     // in the dock that owns its route.
-    const target = hint ?? routeScope.current?.(originRoute ?? route) ?? scope.current;
     const scopeApi = target === scope.current ? dock.current : docks.current.get(target);
     // A completed save may replace its own new-record tab, but must not
     // take focus back after the member has already chosen another document.
-    if (options.ifCurrent && scopeApi?.activePanel?.id !== keyOf(options.ifCurrent)) return;
+    if (options.ifCurrent && (source?.api ?? scopeApi)?.activePanel?.id !== keyOf(options.ifCurrent)) return;
+    if (source && source.scope !== scope.current) {
+      // A hidden task may finish its own navigation, but it cannot replace a
+      // foreground task, inspection or pending application switch.
+      if (target === source.scope && options.window !== "inspect") show(route, { ...options, window: "tab" }, target);
+      return;
+    }
     if (options.window === "inspect") {
       setInspection(previous => ({ route, focus: previous?.focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null) }));
       return;
@@ -427,14 +445,17 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       followed.current?.(originRoute ?? route);
       return;
     }
-    show(route, options);
-  }, [show, keyOf]);
+    show(route, options, target);
+  }, [show, keyOf, taskOwner]);
   const open = useCallback((route: Route, options: OpenOptions = {}, hint?: string | undefined) => {
     const resolve = routeReader.current;
     if (!resolve) { openResolved(route, options, hint); return; }
-    if (options.ifCurrent && dock.current?.activePanel?.id !== keyOf(options.ifCurrent)) return;
-    const revision = ++incomingRevision.current;
-    const take = (resolved: Route) => { if (revision === incomingRevision.current) openResolved(resolved, options, hint); };
+    const source = options.from ? taskOwner(options.from) : undefined;
+    if (source && !source.panel) return;
+    if (options.ifCurrent && (source?.api ?? dock.current)?.activePanel?.id !== keyOf(options.ifCurrent)) return;
+    const foreground = !source || source.scope === scope.current;
+    const revision = foreground ? ++incomingRevision.current : incomingRevision.current;
+    const take = (resolved: Route) => { if (!foreground || revision === incomingRevision.current) openResolved(resolved, options, hint); };
     try {
       const resolved = resolve(route);
       if (resolved instanceof Promise) void resolved.then(take).catch(() => {
@@ -444,7 +465,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     } catch {
       if (revision === incomingRevision.current) toast.error(t("Could not open this view."));
     }
-  }, [openResolved, keyOf]);
+  }, [openResolved, keyOf, taskOwner]);
   const readLink = useCallback((route: Route) => {
     const revision = ++incomingRevision.current;
     void Promise.resolve().then(() => routeReader.current?.(route) ?? route).then((resolved) => {
@@ -473,16 +494,16 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       if (revision === incomingRevision.current && routeToHash(linked) === location.hash && routeKey(resolved) !== routeKey(linked)) openResolved(resolved);
     }).catch(() => { /* An explicit navigation reports resolution failures. */ });
   }, [resolveRoute, openResolved]);
-  const beside = useCallback((id: string) => {
-    placeBeside(id, id);
-    dock.current?.getPanel(id)?.api.setActive();
+  const beside = useCallback((id: string, dockScope: string | undefined) => {
+    placeBeside(id, id, dockScope);
+    docks.current.get(dockScope)?.getPanel(id)?.api.setActive();
   }, [placeBeside]);
-  const closeAll = useCallback(() => closePanels((dock.current?.panels ?? []).map((p) => p.id)), [closePanels]);
-  const closeOthers = useCallback((id: string) => closePanels((dock.current?.panels ?? []).filter((p) => p.id !== id).map((p) => p.id)), [closePanels]);
-  const closeRight = useCallback((id: string) => {
-    const group = dock.current?.getPanel(id)?.group; if (!group) return;
+  const closeAll = useCallback(() => closePanels((dock.current?.panels ?? []).map((p) => taskKey(scope.current, p.id))), [closePanels]);
+  const closeOthers = useCallback((id: string, dockScope: string | undefined) => closePanels((docks.current.get(dockScope)?.panels ?? []).filter((p) => p.id !== id).map((p) => taskKey(dockScope, p.id))), [closePanels]);
+  const closeRight = useCallback((id: string, dockScope: string | undefined) => {
+    const group = docks.current.get(dockScope)?.getPanel(id)?.group; if (!group) return;
     const index = group.panels.findIndex((p) => p.id === id);
-    closePanels(group.panels.slice(index + 1).map((p) => p.id));
+    closePanels(group.panels.slice(index + 1).map((p) => taskKey(dockScope, p.id)));
   }, [closePanels]);
   // Activation is a visibility change: the visited scope's dock comes to the
   // front (lazily mounted on first visit) and the previous one keeps every
@@ -506,55 +527,62 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   }, []);
 
   const workspace = useMemo<WorkspaceApi>(() => ({
-    open, notify: toast, close: (route) => closePanel(keyOf(route)), closeAll, unsaved,
-    confirmLeave: (run, exceptPanel) => unsaved.ask((dock.current?.panels ?? []).map(panel => panel.id).filter(id => id !== exceptPanel), run),
+    open, notify: toast, close: (route, from) => closePanel(taskKey(from ? taskOwner(from).scope : scope.current, keyOf(route))),
+    closeAll: from => {
+      if (!from) { closeAll(); return; }
+      const owner = taskOwner(from);
+      closePanels((owner.api?.panels ?? []).map(panel => taskKey(owner.scope, panel.id)));
+    }, unsaved,
+    confirmLeave: (run, exceptPanel) => unsaved.ask(allTasks().filter(id => id !== exceptPanel), run),
     transfer: (from, route, input, result) => {
-      if (!dock.current?.getPanel(from)) return;
+      const source = taskOwner(from);
+      if (!source.panel) return;
       const id = transfers.current.start(from, input, result), called = { ...route, params: { ...route.params, call: id } };
-      transfers.current.bind(id, keyOf(called)); open(called);
+      transfers.current.bind(id, taskKey(source.scope, keyOf(called))); open(called, { from });
     },
     palette: () => setPaletteOpen(true),
     retitle: (id, name) => {
-      const panel = dock.current?.getPanel(id);
+      const panel = taskOwner(id).panel;
       const route = (panel?.params as { route?: Route } | undefined)?.route;
       const category = route ? byId.get(route.view)?.title(route.params ?? {}) : undefined;
       const title = category && category !== name ? `${category} · ${name}` : name;
       if (panel && panel.api.title !== title) panel.setTitle(title);
     },
     recent: memory.recent, favorites: memory.favorites, toggleFavorite, applications, rail,
-  }), [open, closePanel, closeAll, unsaved, memory, toggleFavorite, applications, rail, byId]);
+  }), [open, closePanel, closePanels, closeAll, unsaved, memory, toggleFavorite, applications, rail, byId, allTasks, taskOwner]);
 
   const tab = useCallback((props: IDockviewPanelHeaderProps) => {
-    const id = props.api.id;
+    const id = props.api.id, dockScope = useContext(DockScope), address = taskKey(dockScope, id);
     const items: { label: string; run: () => void; separator?: boolean; disabled?: boolean }[] = [
-      { label: t("Close"), run: () => closePanel(id) },
-      { label: t("Close others"), run: () => closeOthers(id) },
-      { label: t("Close to the right"), run: () => closeRight(id) },
-      { label: t("Close all"), run: closeAll },
-      { label: t("Open beside"), run: () => beside(id), separator: true, disabled: !canBeside(id) },
-      { label: t("Move to new window"), run: () => popout(id) },
+      { label: t("Close"), run: () => closePanel(address) },
+      { label: t("Close others"), run: () => closeOthers(id, dockScope) },
+      { label: t("Close to the right"), run: () => closeRight(id, dockScope) },
+      { label: t("Close all"), run: () => closePanels((docks.current.get(dockScope)?.panels ?? []).map(panel => taskKey(dockScope, panel.id))) },
+      { label: t("Open beside"), run: () => beside(id, dockScope), separator: true, disabled: !canBeside(id, dockScope) },
+      { label: t("Move to new window"), run: () => popout(id, dockScope) },
     ];
     return <ContextMenu.Root>
-      <ContextMenu.Trigger asChild><div className="flex h-full"><DockviewDefaultTab {...props} closeActionOverride={() => closePanel(id)} /></div></ContextMenu.Trigger>
+      <ContextMenu.Trigger asChild><div className="flex h-full"><DockviewDefaultTab {...props} closeActionOverride={() => closePanel(address)} /></div></ContextMenu.Trigger>
       <ContextMenu.Portal><ContextMenu.Content className={menuPanel}>
         {items.map((item) => <div key={item.label}>{item.separator && <ContextMenu.Separator className="my-1 h-px bg-border" />}
           <ContextMenu.Item onSelect={item.run} disabled={item.disabled} className={menuItem}>{item.label}</ContextMenu.Item></div>)}
       </ContextMenu.Content></ContextMenu.Portal>
     </ContextMenu.Root>;
-  }, [closePanel, closeOthers, closeRight, closeAll, beside, popout, compact]);
+  }, [closePanel, closePanels, closeOthers, closeRight, beside, popout, compact]);
 
   const components = useMemo(() => ({
     view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
       const view = useContext(ViewRegistryContext).get(params.route.view);
+      const dockScope = useContext(DockScope), address = taskKey(dockScope, api.id);
       const ticket = params.route.params?.call;
-      const call = ticket ? transfers.current.read(ticket, api.id) : undefined;
+      const call = ticket ? transfers.current.read(ticket, address) : undefined;
       const returned = (value: unknown) => {
         if (!ticket) return;
-        unsaved.ask([api.id], () => {
-          const origin = transfers.current.finish(ticket, api.id, value);
-          if (origin && dock.current?.getPanel(origin)) {
-            dock.current.getPanel(origin)!.api.setActive();
-            dock.current.getPanel(api.id)?.api.close();
+        unsaved.ask([address], () => {
+          const origin = transfers.current.finish(ticket, address, value);
+          if (origin && taskOwner(origin).panel) {
+            taskOwner(origin).panel!.api.setActive();
+            taskOwner(address).panel?.api.close();
           }
         });
       };
@@ -566,22 +594,23 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       }, [api]);
       const visible = panelVisible && front;
       return <div style={{ display: panelVisible ? undefined : "none" }} role="region" aria-label={view?.title(params.route.params ?? {}) ?? t("Workspace view")} className="h-full overflow-auto bg-background p-4">
-        <ViewVisibilityContext.Provider value={visible}><PanelContext.Provider value={api.id}><ViewCallContext.Provider value={ticket ? { input: call?.input, expired: !call, returnValue: call ? returned : undefined } : undefined}><ViewBoundary onClose={() => closePanel(api.id)}>
+        <ViewVisibilityContext.Provider value={visible}><PanelContext.Provider value={address}><ViewCallContext.Provider value={ticket ? { input: call?.input, expired: !call, returnValue: call ? returned : undefined } : undefined}><ViewBoundary onClose={() => closePanel(address)}>
           {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
         </ViewBoundary></ViewCallContext.Provider></PanelContext.Provider></ViewVisibilityContext.Provider>
       </div>;
     },
-  }), [closePanel]);
+  }), [closePanel, taskOwner, unsaved]);
 
   const onDockReady = useCallback(({ api }: { api: DockviewApi }, dockScope: string | undefined) => {
     docks.current.set(dockScope, api);
     if (dockScope === scope.current) dock.current = api;
     api.onDidRemovePanel((panel) => {
-      transfers.current.remove(panel.id);
-      drafts.current.delete(panel.id);
+      const address = taskKey(dockScope, panel.id);
+      transfers.current.remove(address);
+      drafts.current.delete(address);
       setPending((request) => {
         if (!request) return request;
-        const panels = request.panels.filter((id) => id !== panel.id);
+        const panels = request.panels.filter((id) => id !== address);
         return panels.length ? { ...request, panels } : undefined;
       });
     });
@@ -596,8 +625,8 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         setActiveRoute(route && routeKey(route));
         if (!switching.current) {
           history.replaceState(null, "", route ? routeToHash(route) : "#/");
-          const call = route?.params?.call ? transfers.current.read(route.params.call, api.activePanel!.id) : undefined;
-          const origin = call ? api.getPanel(call.from) : undefined;
+          const call = route?.params?.call ? transfers.current.read(route.params.call, taskKey(dockScope, api.activePanel!.id)) : undefined;
+          const origin = call ? taskOwner(call.from).panel : undefined;
           const originRoute = (origin?.params as { route?: Route } | undefined)?.route;
           if (route) followed.current?.(originRoute ?? route); else emptied.current?.();
           if (route && !call) visit.current(route, api.activePanel?.title ?? route.view);
@@ -622,20 +651,20 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       const front = dockScope === scope.current;
       if (front) { dock.current = api; switching.current = false; }
       if (!api.panels.length && !linked && !queued) show(applicationEntries.current?.apps.find((app) => app.id === dockScope)?.home ?? home, {}, dockScope);
+      if (queued) show(queued.route, queued.options, dockScope);
       if (front) {
         booted.current = true;
-        if (queued) open(queued.route, queued.options);
-        else if (linked && linkRevision === incomingRevision.current) readLink(linked);
+        if (!queued && linked && linkRevision === incomingRevision.current) readLink(linked);
       }
       sync();
     });
-  }, [home, open, show, readLink, loadLayout, saveLayout]);
+  }, [home, open, show, readLink, loadLayout, saveLayout, taskOwner]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !e.defaultPrevented && mobileNavOpen) { setMobileNavOpen(false); navigationTrigger.current?.focus(); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((v) => !v); }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w" && dock.current?.activePanel) { e.preventDefault(); closePanel(dock.current.activePanel.id); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w" && dock.current?.activePanel) { e.preventDefault(); closePanel(taskKey(scope.current, dock.current.activePanel.id)); }
     };
     const onHash = () => { const route = routeFromHash(location.hash); if (route) readLink(route); };
     addEventListener("keydown", onKey);
@@ -655,10 +684,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       ...([["system", t("Follow system")], ["light", t("Light")], ["dark", t("Dark")]] as const).map(([scheme, label]) => ({ label, shortcut: appearance.scheme === scheme ? "✓" : undefined, onSelect: () => appearance.setScheme(scheme) })),
     ] },
     { label: t("Window"), items: [
-      { label: t("Open beside"), disabled: !canBeside(active), onSelect: () => { const p = activePanel(); if (p) beside(p.id); } },
-      { label: t("Move to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id); } },
-      { label: t("Close"), shortcut: "⌘W", disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(p.id); } },
-      { label: t("Close others"), disabled: openTabs.length < 2, onSelect: () => { const p = activePanel(); if (p) closeOthers(p.id); } },
+      { label: t("Open beside"), disabled: !canBeside(active, scope.current), onSelect: () => { const p = activePanel(); if (p) beside(p.id, scope.current); } },
+      { label: t("Move to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) popout(p.id, scope.current); } },
+      { label: t("Close"), shortcut: "⌘W", disabled: !active, onSelect: () => { const p = activePanel(); if (p) closePanel(taskKey(scope.current, p.id)); } },
+      { label: t("Close others"), disabled: openTabs.length < 2, onSelect: () => { const p = activePanel(); if (p) closeOthers(p.id, scope.current); } },
       { label: t("Close all"), disabled: !openTabs.length, onSelect: closeAll },
       ...openTabs.map((t) => ({ label: t.title, onSelect: () => dock.current?.getPanel(t.key)?.api.setActive() })),
     ] },
@@ -782,10 +811,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
           )}
           <div className="platform-dock relative min-h-0 min-w-0 overflow-hidden">
             {created.map((dockScope) => (
-              <div key={dockScope ?? "shell"} className="absolute inset-0" style={{ visibility: dockScope === layoutScope ? "visible" : "hidden", zIndex: dockScope === layoutScope ? 1 : 0 }}>
-                <FrontDock.Provider value={dockScope === layoutScope}>
+              <div key={dockScope ?? "shell"} data-density={appEntries?.apps.find(app => app.id === dockScope)?.category === "business" ? "comfortable" : "compact"} className="absolute inset-0" style={{ visibility: dockScope === layoutScope ? "visible" : "hidden", zIndex: dockScope === layoutScope ? 1 : 0 }}>
+                <DockScope.Provider value={dockScope}><FrontDock.Provider value={dockScope === layoutScope}>
                   <DockviewReact defaultRenderer="always" defaultTabComponent={tab} watermarkComponent={watermark} components={components} onReady={(event) => onDockReady(event, dockScope)} theme={appearance.theme==="dark"?themeDark:themeLight} />
-                </FrontDock.Provider>
+                </FrontDock.Provider></DockScope.Provider>
               </div>
             ))}
           </div>

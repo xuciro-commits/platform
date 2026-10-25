@@ -37,11 +37,12 @@ export function useApplicationQueries(session:ApplicationSession|undefined, valu
   const failed=state?.status==="error"&&reads?.querySignature(planKey(queryID))===result.signature;
   if(failed)collectionInputs[id]={status:"error",code:"Resource read failed"};
   resources[id]=failed?{status:"error",code:"Resource read failed"}:state?.status==="pending"||!matches?{status:"pending"}:window!.records.length?{status:"value",value:{kind:"object-set",window:window!}}:{status:"empty",value:{kind:"object-set",window:window!}};
-  const current=snapshot?.views[planKey(queryID)];
-  windows[id]={query:result.query,page:reads?.queryPage(planKey(queryID),result.signature),error:failed?"Resource read failed":undefined,
-   filters:current?.base===result.signature?current?.filters:undefined,
+  const initial=base.find(([key])=>key===queryID)?.[1],saved=snapshot?.views[planKey(queryID)],current=initial?.status==="value"&&saved?.base===initial.signature?saved:undefined;
+  windows[id]={query:result.query,baseQuery:initial?.status==="value"?initial.query:undefined,page:reads?.queryPage(planKey(queryID),result.signature),error:failed?"Resource read failed":undefined,
+   filters:current?.filters,
+   facetQuery:field=>{if(initial?.status!=="value")return;const counts=queryView(plan,initial,{...current,filters:Object.fromEntries(Object.entries(current?.filters??{}).filter(([name])=>name!==field))},source.entity(plan.object.name),named(plan),pageUIManifest.runtime.query);return counts.status==="value"?counts.query:undefined;},
    filtersLocked:!!result.interface||windowFiltersLocked(boundQueryDefinition(named(plan),plan.query)),
-   searchLocked:!!plan.search,sortLocked:!!boundQueryDefinition(named(plan),plan.query)?.query?.sort?.length,maxOffset:pageUIManifest.runtime.query.maxOffset,
+   searchLocked:!!plan.search,sortLocked:!!result.sortLocked||!!boundQueryDefinition(named(plan),plan.query)?.query?.sort?.length,maxOffset:pageUIManifest.runtime.query.maxOffset,
    onChange:(change:QueryView)=>{const initial=base.find(([key])=>key===queryID)?.[1];if(!reads||initial?.status!=="value")return;const next=queryView(plan,initial,{...(snapshot?.views[planKey(queryID)]?.base===initial.signature?snapshot.views[planKey(queryID)]:{}),...change},source.entity(plan.object.name),named(plan),pageUIManifest.runtime.query);if(next.status==="value")reads.setQueryView(planKey(queryID),initial.signature,change);},
   };
  }

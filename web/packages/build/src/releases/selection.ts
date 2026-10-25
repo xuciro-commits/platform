@@ -19,11 +19,17 @@ export const merged = (current: JointChoice[], incoming: JointChoice[]): JointCh
 };
 
 export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app" | "migration";
+/** Entry points check the same complete request that the review will send. */
+export function releaseSelectionProblem(drafts: readonly JointChoice[]): string | undefined {
+  if (drafts.length > 128) return "A joint candidate accepts at most 128 drafts. Select a supported application closure.";
+  if (new TextEncoder().encode(JSON.stringify({ drafts: drafts.map(ownerDraft) })).length > releaseCommandBytes) return "The release selection exceeds the original 65536-byte request budget. No drafts were dropped.";
+}
 /** Decode incoming candidate selections without silently discarding a bad
  * joint closure and delivering only its application root. */
 export function releaseDraftsSelection(value: string | undefined, kinds: readonly string[]): { drafts: JointChoice[]; error?: string } {
   if (!value) return { drafts: [] };
   const invalid = () => ({ drafts: [], error: "The release selection is invalid or exceeds its budget. Reopen review from the application." });
+  if (new TextEncoder().encode(value).length > releaseCommandBytes) return invalid();
   let selected: unknown;
   if (value.trimStart().startsWith("[")) {
     try { selected = JSON.parse(value); } catch { return invalid(); }
@@ -43,7 +49,8 @@ export function releaseDraftsSelection(value: string | undefined, kinds: readonl
     const choice = { kind: item.kind as ReleaseKind, id: item.id };
     if (!out.some(existing => jointKey(existing) === jointKey(choice))) out.push(choice);
   }
-  return { drafts: out };
+  const problem = releaseSelectionProblem(out);
+  return problem ? { drafts: [], error: problem } : { drafts: out };
 }
 /** The original host budget for one release command's metadata: 128 drafts x 512 bytes. */
 export const releaseCommandBytes = 128 * 512;

@@ -11,11 +11,9 @@ import { MigrationWorkbench } from "./migration";
 
 // One selected saved draft in a joint candidate. The selection is
 // what the builder checked; the server recomputes the candidate from it.
-// One selected saved draft in a joint candidate. The selection is
-// what the builder checked; the server recomputes the candidate from it.
 export { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue } from "./selection";
 export type { JointChoice, ReleaseKind } from "./selection";
-import { jointKey, merged, ownerDraft, releaseCommandBytes, type JointChoice, type ReleaseKind } from "./selection";
+import { jointKey, merged, ownerDraft, releaseCommandBytes, releaseSelectionProblem, type JointChoice, type ReleaseKind } from "./selection";
 type ReleaseRequest = { kind: "save"; body: Api.ReleaseSaveRequest }
   | { kind: "evaluate"; body: Api.ReleaseEvaluationRequest }
   | { kind: "activate"; body: Api.ReleaseActivateRequest };
@@ -79,6 +77,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   // only a fallback for legacy links. The transferred batch is received as
   // reviewed - not merged with whatever the route still carries.
   const call = useViewCall();
+  const invalidSelection = !!selectionError || !!call?.expired;
   const transferred = (call?.input as { drafts?: JointChoice[] } | undefined)?.drafts;
   const [joint, setJoint] = useState<JointChoice[]>(() => {
     if (transferred?.length) return transferred;
@@ -122,13 +121,10 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const evaluated = functionNames.every((name) => passedFunctions.includes(name)) && agentNames.every(name => candidateAI.some(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name && item.evaluations.some(report => report.candidate === savedID && report.state === "passed")));
   useEffect(() => {
     const key = `${savedID}/${report?.id}`;
-    if (!savedID || report?.state !== "passed" || locked || reviewedEvaluation.current === key) return;
+    if (!mayRelease || !savedID || report?.state !== "passed" || locked || reviewedEvaluation.current === key) return;
     reviewedEvaluation.current = key;
     void perform(() => readSaved(savedID, true));
-  }, [savedID, report?.id, report?.state, locked]);
-  if (!mayRelease) {
-    return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
-  }
+  }, [mayRelease, savedID, report?.id, report?.state, locked]);
   const clearReview = () => {
     setReview(undefined); setAssets([]); setCandidateAI([]); setSavedReview(false); setRunningMatches(undefined); setRunningDiagnostic("");
     setCanActivate(false); setActivationDiagnostic(""); setUpgradePlan(undefined); setExtensions([]); setOrigin(undefined); setPromotedTo([]);
@@ -161,12 +157,17 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   // and after a refresh; it is not re-fetched on every render.
   const openedCandidate = useRef("");
   useEffect(() => {
-    if (!candidateID || openedCandidate.current === candidateID) return;
+    if (!mayRelease || locked || !candidateID || openedCandidate.current === candidateID) return;
     openedCandidate.current = candidateID;
     void loadSaved(candidateID);
-  }, [candidateID]);
+  }, [mayRelease, locked, candidateID]);
+  if (!mayRelease) {
+    return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
+  }
   const inspect = (drafts?: JointChoice[]) => {
-    if (pendingRef.current || selectionError) return;
+    if (!builder || pendingRef.current || invalidSelection) return;
+    const problem = drafts && releaseSelectionProblem(drafts);
+    if (problem) { setError(t(problem)); return; }
     const request: Api.ReleasePreviewRequest = drafts?.length ? { drafts: drafts.map(ownerDraft) } : ownerDraft({ kind, id });
     if (new TextEncoder().encode(JSON.stringify(request)).length > releaseCommandBytes) { setError(t("The release selection exceeds the original 65536-byte request budget. No drafts were dropped.")); return; }
     return perform(async () => {
@@ -181,7 +182,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   // The original server owner computes dependencies. The view never invents
   // a closure from cached browser inventories or truncates it to fit a budget.
   const addReferenced = (from: JointChoice) => {
-    if (!from.id || pendingRef.current) return;
+    if (!builder || invalidSelection || !from.id || pendingRef.current) return;
     return perform(async () => {
       setJointNote("");
       try {
@@ -301,7 +302,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </Select>
       </label>}
       {query.isError && <p role="alert" className="text-sm text-danger">{t("Release review could not be loaded.")}</p>}
-      <Button disabled={!!selectionError || !id || locked} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
+      <Button disabled={invalidSelection || !id || locked} onClick={() => void inspect()}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
     </Card>
     <Card className="grid gap-3 p-3" aria-label={t("Deliver drafts together")}>
       <div className="flex items-center justify-between gap-2">
@@ -326,7 +327,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </ul> : <p className="text-xs text-muted">{t("No drafts selected yet.")}</p>}
       {joint.length > 128 && <p role="alert" className="text-xs text-warning">{t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")}</p>}
       {jointNote && <p className="text-xs text-muted" role="status">{jointNote}</p>}
-      <Button disabled={!!selectionError || !joint.length || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
+      <Button disabled={invalidSelection || !joint.length || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
     </Card>
     </>}
     {call?.expired && !error && <Panel role="status" className="p-3 text-sm text-muted">{t("The original handoff expired when the view was reopened. Reopen release review from the application to review its current selection.")}</Panel>}

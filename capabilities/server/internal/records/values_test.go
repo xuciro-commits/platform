@@ -22,3 +22,15 @@ func TestEmptyListsPreservesFrozenOwnerDescriptors(t *testing.T) {
 		t.Fatal("record display defaults changed an immutable owner descriptor")
 	}
 }
+
+func TestEmptyListsPreservesOptionalNilAndExplicitEmptySlices(t *testing.T) {
+	value := struct {
+		Required []string `json:"required"`
+		Missing  []string `json:"missing,omitzero"`
+		Empty    []string `json:"empty,omitzero"`
+	}{Empty: []string{}}
+	EmptyLists(reflect.ValueOf(&value).Elem())
+	if value.Required == nil || value.Missing != nil || value.Empty == nil || !bytes.Equal(platform.Raw(value), []byte(`{"required":[],"empty":[]}`)) {
+		t.Fatal("display defaults changed a declared omission or explicit empty slice", string(platform.Raw(value)))
+	}
+}

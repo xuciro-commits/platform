@@ -5,7 +5,7 @@
 // shell carries only that application: no portal, no records, no decisions.
 import { HostContext, type AppUI, type Host, type Me } from "@platform/app";
 import type { EdgeClient } from "@platform/kernel";
-import { Workspace, language, notify, t } from "@platform/ui";
+import { Button, Workspace, language, notify, t } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 
 export type HostAdmin = { subject: string; tenants: string[] };
@@ -26,12 +26,15 @@ function hostOnly(client: EdgeClient, admin: HostAdmin): Host {
 
 export function HostOnly({ client, token, admin, email, onSignOut }: { client: EdgeClient; token: string; admin: HostAdmin; email?: string; onSignOut?: () => void }) {
   const [app, setApp] = useState<AppUI>();
+  const [failed, setFailed] = useState(false), [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
-    void import("@platform/govern").then((m) => { if (live) setApp(m.hostConsole); }, () => notify.error(t("Host unreachable")));
+    setFailed(false);
+    void import("@platform/govern").then((m) => { if (live) setApp(m.hostConsole); }, () => { if (live) setFailed(true); });
     return () => { live = false; };
-  }, []);
+  }, [attempt]);
   const host = useMemo(() => hostOnly(client, admin), [client, admin.subject]);
+  if (failed) return <main className="grid h-dvh place-content-center gap-3 p-6 text-center text-sm"><p role="alert">{t("The workspace's applications could not load. Retry, or sign in again.")}</p><div className="flex justify-center gap-2"><Button onClick={() => setAttempt(value => value + 1)}>{t("Retry")}</Button>{onSignOut && <Button variant="ghost" onClick={onSignOut}>{t("Sign out")}</Button>}</div></main>;
   if (!app) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
   return (
     <HostContext.Provider value={host}>

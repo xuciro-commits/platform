@@ -152,7 +152,7 @@ export const date = (o: Common): FieldType<string> => ({
 /** Stored as `YYYY-MM-DDTHH:MM` local time, the value of a datetime-local input. */
 export const datetime = (o: Common): FieldType<string> => ({
   ...date(o), type: "datetime", width: 150, schema: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, "Date and time"),
-  display: (v) => (v ? <span className="tabular-nums" title={v}>{formatDateTimeSmart(v.slice(0, 16))}</span> : muted),
+  display: (v) => (v ? <span className="tabular-nums" title={v}>{formatDateTimeSmart(v)}</span> : muted),
   editor: input("datetime-local", (s) => s, (v) => v.slice(0, 16)),
 });
 

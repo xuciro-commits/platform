@@ -13,7 +13,7 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublish
   id: string; view: "flow" | "automation"; empty: () => WorkflowDraft; failure: string;
   onDiscard?: () => void; onPublished?: () => Promise<unknown>;
 }) {
-  const { decide } = useHost(), { open, close } = useApplicationWorkspace();
+  const { decide } = useHost(), { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`, undefined, id !== "new");
   const session = useDraftSession<WorkflowDraft>(empty());
   const { draft, dirty } = session;
@@ -64,8 +64,7 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublish
     const accepted = { ...submitted, id: target, revision: revision + 1 };
     if (!submitted.id) {
       acknowledge(draft, accepted);
-      open({ view, params: { id: target } }, { ifCurrent: { view, params: { id } } });
-      close({ view, params: { id } });
+      open({ view, params: { id: target } }, { ifCurrent: { view, params: { id } }, replace: true });
     } else await refresh(draft, accepted, t("The resource was saved, but its current record could not be reloaded."));
     return target;
   };

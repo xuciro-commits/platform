@@ -102,3 +102,47 @@ func TestPageWidgetConfigRoundTripsAllFieldsAndKeepsFlatJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestPageSectionActionsKeepInheritanceAndExplicitRestrictions(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{"inherit", `{"widget":"table"}`, nil},
+		{"deny", `{"widget":"table","actions":[]}`, []string{}},
+		{"narrow", `{"widget":"table","actions":["build.note.edit"]}`, []string{"build.note.edit"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var section Section
+			if err := json.Unmarshal([]byte(tc.raw), &section); err != nil {
+				t.Fatal(err)
+			}
+			assertActions := func(got []string) {
+				t.Helper()
+				if !reflect.DeepEqual(got, tc.want) {
+					t.Fatalf("section restriction changed: %#v, want %#v", got, tc.want)
+				}
+			}
+			assertActions(section.Actions)
+			var saved Section
+			if err := json.Unmarshal(platform.Raw(section), &saved); err != nil {
+				t.Fatal(err)
+			}
+			assertActions(saved.Actions)
+			page := descriptor(Page{Name: "notes", Object: "build.note", Actions: []string{"build.note.edit"}, Sections: []Section{saved}})
+			var read platform.Page
+			if err := json.Unmarshal(platform.Raw(page), &read); err != nil {
+				t.Fatal(err)
+			}
+			if (read.Sections[0].Actions == nil) != (tc.want == nil) || len(read.Sections[0].Actions) != len(tc.want) {
+				t.Fatalf("published descriptor lost the original restriction: %#v", read.Sections[0].Actions)
+			}
+			draft, err := pageDraft(read)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertActions(draft.Sections[0].Actions)
+		})
+	}
+}

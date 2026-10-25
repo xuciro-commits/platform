@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retireAgain, retireLimit, retirementBatch, retirementEdits } from "./retirement.ts";
+import { retireLimit, retirementBatch, retirementEdits, retirementIntent } from "./retirement.ts";
 
 const item = (name, id = name) => ({ kind: { type: "build.object" }, ref: { app: "build", kind: "object", name }, record: { id }, title: name, installed: false, missing: false });
 const keyOf = (item) => `${item.ref.app}/${item.ref.kind}/${item.ref.name}`;
@@ -22,17 +22,15 @@ test("a retirement batch is exactly the selected retireable items: 64 pass, 65 a
 test("selection changes after the review opens do not alter a frozen batch, and a retry keeps the original composite key", () => {
   const items = [item("a"), item("b"), item("c")];
   const picked = new Set(["build/object/a", "build/object/b"]);
-  const frozen = retirementBatch(items, picked, keyOf);
+  const frozen = retirementIntent("KEY-1", retirementBatch(items, picked, keyOf));
   // The member changes their selection while the dialog is open.
   picked.add("build/object/c"); picked.delete("build/object/a");
-  assert.deepEqual(frozen.map(keyOf), ["build/object/a", "build/object/b"]);
-  assert.deepEqual(retirementEdits(frozen).map((edit) => edit.target.id), ["a", "b"]);
-  // Retrying the same intent never mints a new key.
-  const intent = { key: "KEY-1" };
-  const again = retireAgain(intent);
-  assert.equal(again.key, "KEY-1");
-  assert.equal(retireAgain(again).key, "KEY-1");
-  assert.equal(retireAgain(again).retried, 2);
+  items[0].record.id = "changed-after-review";
+  items[0].title = "Changed title";
+  assert.deepEqual(frozen.items.map(keyOf), ["build/object/a", "build/object/b"]);
+  assert.equal(frozen.items[0].title, "a");
+  assert.deepEqual(frozen.edits.map((edit) => edit.target.id), ["a", "b"]);
+  assert.equal(frozen.key, "KEY-1");
 });
 
 test("unselected or record-less rows never enter the batch", () => {

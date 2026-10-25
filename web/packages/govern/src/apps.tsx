@@ -132,6 +132,7 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
                 </div>
               </Disclosure>}
               {can("build.app.create") && state === "active" && held?.version === d.version && chosen && <div><Button size="sm" variant="primary" disabled={busy === id} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
+              {chosen && (next === "install" || different) && !can("platform.package.install") && <p role="status" className="text-muted">{t("Ask an administrator to install {id} version {version}, then return here to create application drafts.", { id, version: d.version })}</p>}
             </div>}
             {chosen && (next === "install" || different) && <div className="flex flex-wrap items-center gap-2 text-xs">
               <Tag label={precheck.ok ? t("precheck ok") : t("precheck failed")} tone={precheck.ok ? "success" : "danger"} />

@@ -11,8 +11,8 @@ const textSchema: ValueSchema = { type: "string" };
 const emptyPredicate = () => ({ op: "eq" as const, left: { source: "input" as const }, right: { source: "literal" as const, value: true } });
 const fieldClass = "grid gap-1 text-xs";
 
-function IdentifierInput({ value, label, onCommit, invalid }: { value: string; label: string; onCommit: (name: string) => void; invalid?: (name: string) => boolean }) {
-  const input = useDraftInput(`identifier:${label}:${value}`, value), { text } = input;
+function IdentifierInput({ value, label, draftKey, onCommit, invalid }: { value: string; label: string; draftKey: string; onCommit: (name: string) => void; invalid?: (name: string) => boolean }) {
+  const input = useDraftInput(draftKey, value), { text } = input;
   const problem = invalid?.(text) ? t("Choose a unique, valid identifier.") : "";
   const commit = () => { if (!problem) { input.clear(); if (text !== value) onCommit(text); } };
   return <><Input data-draft-key={input.path} aria-label={label} aria-invalid={!!problem} value={text} onChange={(event) => input.write(event.target.value, invalid?.(event.target.value) ? t("Choose a unique, valid identifier.") : event.target.value !== value ? t("Finish editing this identifier before saving.") : "")} onBlur={commit}
@@ -24,7 +24,7 @@ function NamedInputs({ inputs = {}, schema, parameters = [], steps, onChange, ed
   const fields = [...new Set([...Object.keys(schema?.properties ?? {}), ...parameters.map((field) => field.name), ...Object.keys(inputs)])];
   return <div className="grid gap-2">{fields.map((field) => {
     const parameter = parameters.find((entry) => entry.name === field), required = schema?.required?.includes(field) || parameter?.required;
-    return <BindingEditor key={field} label={`${field}${required ? " *" : ""}`} value={inputs[field]}
+    return <BindingEditor key={field} draftKey={`inputs.${field}`} label={`${field}${required ? " *" : ""}`} value={inputs[field]}
       optional={!required} schema={schema?.properties?.[field] ?? (parameter ? parameterSchema(parameter) : undefined)} steps={steps}
       onChange={(value) => { const next = { ...inputs }; if (value) next[field] = value; else delete next[field]; onChange(next); }} />;
   })}
@@ -49,7 +49,7 @@ export function WorkflowSettings({ draft, onChange, objects }: { draft: Workflow
       <Disclosure summary={<span className="text-xs font-medium">{t("Lanes")}</span>}>
         <div className="mt-2 grid gap-2">
           {(draft.lanes ?? []).map((lane, at) => <div key={lane.name} className="grid gap-1 rounded border border-border p-2">
-            <IdentifierInput label={t("Lane name")} value={lane.name}
+            <IdentifierInput draftKey={`lanes.${lane.name}.name`} label={t("Lane name")} value={lane.name}
               invalid={(name) => !/^[a-z][a-z0-9]*$/.test(name) || (draft.lanes ?? []).some((other, index) => index !== at && other.name === name)}
               onCommit={(name) => onChange({ lanes: (draft.lanes ?? []).map((item, index) => index === at ? { ...item, name } : item), steps: draft.steps.map((step) => step.lane === lane.name ? { ...step, lane: name } : step) })} />
             <Input aria-label={t("Lane title")} value={lane.title ?? ""} placeholder={lane.name}
@@ -63,8 +63,8 @@ export function WorkflowSettings({ draft, onChange, objects }: { draft: Workflow
       </Disclosure>
       <Disclosure defaultOpen summary={<span className="text-xs font-medium">{t("Workflow input schema")}</span>}>
         <SchemaEditor schema={draft.inputSchema ?? { type: "object", properties: {} }} onChange={(inputSchema) => onChange({ inputSchema })} /></Disclosure>
-      <JSONEditor label={t("Default workflow input")} value={draft.input ?? {}} schema={draft.inputSchema} onChange={(input) => onChange({ input })} />
-      <JSONEditor label={t("Continuous source intake")} value={draft.continuous ?? null} onChange={(continuous) => onChange({ continuous: continuous as Api.Continuous | undefined })} />
+      <JSONEditor draftKey="input" label={t("Default workflow input")} value={draft.input ?? {}} schema={draft.inputSchema} onChange={(input) => onChange({ input })} />
+      <JSONEditor draftKey="continuous" label={t("Continuous source intake")} value={draft.continuous ?? null} onChange={(continuous) => onChange({ continuous: continuous as Api.Continuous | undefined })} />
       <ContextHelp title={t("Entry")}><p className="text-xs leading-5 text-muted">{t("The entry is the first declared block. Use Make entry on a selected block to change it.")}</p></ContextHelp>
     </div>
   </div>;
@@ -81,12 +81,12 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
   const queryVersions=Object.keys(queryDefinition?.queryVersions??{}).map(version=>({source:version,ordinal:Number(version.match(/\.query-(\d+)$/)?.[1]??0)})).filter(v=>v.ordinal>0);
   const others = steps.filter((item) => item.name !== step.name);
   const field = (label: string, element: ReactNode) => <label className={fieldClass}>{t(label)}{element}</label>;
-  const binding = (label: string, name: "value" | "target" | "collection" | "waitUntil", schema?: ValueSchema, optional = false) => <BindingEditor label={t(label)} value={step[name]} schema={schema} optional={optional} steps={others} onChange={(value) => onChange({ [name]: value })} />;
+  const binding = (label: string, name: "value" | "target" | "collection" | "waitUntil", schema?: ValueSchema, optional = false) => <BindingEditor draftKey={name} label={t(label)} value={step[name]} schema={schema} optional={optional} steps={others} onChange={(value) => onChange({ [name]: value })} />;
   const condition = <PredicateEditor value={step.condition ?? emptyPredicate()} steps={others} onChange={(condition) => onChange({ condition })} />;
   const paths = <div className="grid gap-2">
     {step.kind === "switch" && <Button onClick={() => { let key = "case"; while (key in (step.cases ?? {})) key += "2"; onChange({ cases: { ...step.cases, [key]: "" } }); }}>{t("Add case")}</Button>}
     {(step.kind === "branch" || step.kind === "switch" || step.kind === "ask") && Object.entries(step.cases ?? {}).map(([key, target]) => <div key={key} className="grid gap-1 rounded border border-border p-2">
-      {step.kind === "switch" ? <IdentifierInput label={t("Case value")} value={key} invalid={(name) => !name || name !== key && name in (step.cases ?? {})} onCommit={(name) => { const next = { ...step.cases }; delete next[key]; next[name] = target; onChange({ cases: next }); }} /> : <span className="text-xs font-medium">{key}</span>}
+      {step.kind === "switch" ? <IdentifierInput draftKey={`cases.${key}`} label={t("Case value")} value={key} invalid={(name) => !name || name !== key && name in (step.cases ?? {})} onCommit={(name) => { const next = { ...step.cases }; delete next[key]; next[name] = target; onChange({ cases: next }); }} /> : <span className="text-xs font-medium">{key}</span>}
       <Select aria-label={t("After {case}", { case: key })} value={target} onChange={(event) => onChange({ cases: { ...step.cases, [key]: event.target.value } })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>
     </div>)}
     {!linear && !["end", "join", "break", "continue", "fail", "branch"].includes(step.kind) && field(step.kind === "switch" ? "Default path" : "Next path", <Select value={step.next ?? ""} onChange={(event) => onChange({ next: event.target.value || undefined })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
@@ -96,13 +96,13 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
     <ContentTabs key={step.name} compact label={t("Block inspector")} value={tab} onChange={next => setTab(next as typeof tab)} items={[
       { id: "settings", title: t("Settings"), content: <div className="grid content-start gap-3 p-3">
         {field("Step title", <Input value={step.title ?? ""} onChange={(event) => onChange({ title: event.target.value })} />)}
-        {field("Step name", <IdentifierInput label={t("Step name")} value={step.name} onCommit={onRename} invalid={(name) => !/^[a-z][a-z0-9]*$/.test(name) || others.some((item) => item.name === name)} />)}
+        {field("Step name", <IdentifierInput draftKey="name" label={t("Step name")} value={step.name} onCommit={onRename} invalid={(name) => !/^[a-z][a-z0-9]*$/.test(name) || others.some((item) => item.name === name)} />)}
         {lanes.length > 0 && field("Lane", <Select value={step.lane ?? ""} onChange={(event) => onChange({ lane: event.target.value || undefined })}>
           <option value="">{t("No lane")}</option>{lanes.map((lane) => <option key={lane.name} value={lane.name}>{lane.title || lane.name}</option>)}</Select>)}
         <div className="flex items-center gap-1"><Tag label={t(capability?.group ?? step.kind)} /><Tag label={capability?.source ?? "platform"} /></div>
         {capability && <><p className="text-xs leading-5 text-muted">{t(capability.description)}</p><code className="break-all text-2xs text-muted">{capability.ref.app}/{capability.ref.kind}/{capability.ref.name}@{capability.version}</code></>}
         {!linear && steps[0]?.name !== step.name && <Button onClick={onMakeEntry}><ArrowDownToLine className="mr-1 size-3" />{t("Make entry")}</Button>}
-        {field("Timeout (seconds)", <Input type="number" min={0} max={2592000} value={step.timeoutSeconds ?? 0} onChange={(event) => onChange({ timeoutSeconds: Number(event.target.value) })} />)}
+        {field("Timeout (seconds)", <Input draftKey="timeoutSeconds" type="number" min={0} max={2592000} value={step.timeoutSeconds ?? 0} onChange={(event) => onChange({ timeoutSeconds: Number(event.target.value) })} />)}
         <Disclosure summary={<span className="text-xs font-medium">{t("Control paths")}</span>}><div className="mt-2">{paths}</div></Disclosure>
       </div> },
       { id: "input", title: t("Input"), content: <div className="grid content-start gap-3 p-3">
@@ -113,9 +113,9 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
             ? binding("Complete input value", "value", capability?.input)
             : <NamedInputs inputs={step.inputs} schema={capability?.input} parameters={capability?.parameters} steps={others} onChange={(inputs) => onChange({ inputs })} />}
           {step.kind === "action" && <>{binding("Target record ID", "target", textSchema)}{field("Protocol (if cross-app)", <ProtocolSelect empty={t("None: the action's own app")} value={step.protocol ?? ""} onChange={(protocol) => onChange({ protocol: protocol || undefined })} />)}</>}
-          {step.kind === "compute" && step.operation && field("Retained code version", <Input type="number" min={step.operation.app === "build" ? 1 : 0} disabled={step.operation.app !== "build"} value={step.operation.version} onChange={(event) => onChange({ operation: { ...step.operation!, version: Number(event.target.value) } })} />)}
+          {step.kind === "compute" && step.operation && field("Retained code version", <Input draftKey="operation.version" type="number" min={step.operation.app === "build" ? 1 : 0} disabled={step.operation.app !== "build"} value={step.operation.version} onChange={(event) => onChange({ operation: { ...step.operation!, version: Number(event.target.value) } })} />)}
         </>}
-        {step.kind === "ai" && <>{binding("Source record ID", "target", textSchema)}{step.function && field("Retained AI version", <Input type="number" min={step.function.app === "build" ? 1 : 0} disabled={step.function.app !== "build"} value={step.function.version} onChange={(event) => onChange({ function: { ...step.function!, version: Number(event.target.value) } })} />)}<ContextHelp title={t("Retained AI version")}><p className="text-xs text-muted">{t("AI calls keep the existing source permissions, model budget and evaluation gate.")}</p></ContextHelp></>}
+        {step.kind === "ai" && <>{binding("Source record ID", "target", textSchema)}{step.function && field("Retained AI version", <Input draftKey="function.version" type="number" min={step.function.app === "build" ? 1 : 0} disabled={step.function.app !== "build"} value={step.function.version} onChange={(event) => onChange({ function: { ...step.function!, version: Number(event.target.value) } })} />)}<ContextHelp title={t("Retained AI version")}><p className="text-xs text-muted">{t("AI calls keep the existing source permissions, model budget and evaluation gate.")}</p></ContextHelp></>}
         {(step.kind === "transform" || step.kind === "payload") && <>
           <NamedInputs inputs={step.inputs} steps={others} editableNames onChange={(inputs) => onChange({ inputs, value: undefined })} />
           {binding("Whole output value", "value", undefined, true)}
@@ -124,8 +124,8 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
         {step.kind === "switch" && <>{binding("Switch value", "value")}{paths}</>}
         {(step.kind === "foreach" || step.kind === "while") && <>
           {step.kind === "foreach" ? binding("Collection", "collection", { type: "array" }) : <>{binding("Initial loop state", "value")}{condition}</>}
-          {field("Maximum iterations", <Input type="number" min={1} max={10000} value={step.maxIterations ?? 100} onChange={(event) => onChange({ maxIterations: Number(event.target.value) })} />)}
-          {field("Concurrency", <Input type="number" min={1} max={step.kind === "while" ? 1 : 32} value={step.concurrency ?? 1} onChange={(event) => onChange({ concurrency: Number(event.target.value) })} />)}
+          {field("Maximum iterations", <Input draftKey="maxIterations" type="number" min={1} max={10000} value={step.maxIterations ?? 100} onChange={(event) => onChange({ maxIterations: Number(event.target.value) })} />)}
+          {field("Concurrency", <Input draftKey="concurrency" type="number" min={1} max={step.kind === "while" ? 1 : 32} value={step.concurrency ?? 1} onChange={(event) => onChange({ concurrency: Number(event.target.value) })} />)}
           {field("Loop body", <Select value={step.body ?? ""} onChange={(event) => onChange({ body: event.target.value || undefined })}><option value="">{t("Connect on canvas")}</option>{others.map((item) => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select>)}
           <ContextHelp title={t("Loop body")}><p className="text-xs leading-5 text-muted">{t("End the body with Return. Item and index bindings are available only inside this scope.")}</p></ContextHelp>
         </>}
@@ -138,10 +138,10 @@ export function WorkflowInspector({ step, steps, lanes, capabilities, onChange, 
           }} />)}{paths}<ContextHelp title={t("Human task")}><p className="text-xs text-muted">{t("People answer in the existing inbox; this block suspends without occupying a worker.")}</p></ContextHelp></>}
         {step.kind === "wait" && <>
           {field("Wait for", <Select value={step.waitUntil ? "deadline" : step.condition ? "condition" : "duration"} onChange={event => onChange(event.target.value === "deadline" ? { waitUntil: { source: "literal", value: '""' }, condition: undefined, untilSeconds: undefined } : event.target.value === "condition" ? { waitUntil: undefined, condition: emptyPredicate(), untilSeconds: undefined } : { waitUntil: undefined, condition: undefined, untilSeconds: 60 })}><option value="duration">{t("Duration")}</option><option value="deadline">{t("Declared deadline")}</option><option value="condition">{t("Condition")}</option></Select>)}
-          {step.waitUntil ? <>{binding("Deadline timestamp", "waitUntil", textSchema)}<p className="text-xs text-muted">{t("The workflow saves this exact timestamp when entering the wait. Unreadable or invalid deadlines follow the original error path.")}</p></> : step.condition ? condition : field("Wait duration (seconds)", <Input type="number" min={0} max={2592000} value={step.untilSeconds ?? 60} onChange={event => onChange({ untilSeconds: Number(event.target.value) })} />)}
+          {step.waitUntil ? <>{binding("Deadline timestamp", "waitUntil", textSchema)}<p className="text-xs text-muted">{t("The workflow saves this exact timestamp when entering the wait. Unreadable or invalid deadlines follow the original error path.")}</p></> : step.condition ? condition : field("Wait duration (seconds)", <Input draftKey="untilSeconds" type="number" min={0} max={2592000} value={step.untilSeconds ?? 60} onChange={event => onChange({ untilSeconds: Number(event.target.value) })} />)}
         </>}
         {step.kind === "subflow" && <>{field("Workflow", <Select value={step.flow ?? ""} onChange={(event) => onChange({ flow: event.target.value, flowVersion: flows.find((flow) => flow.id === event.target.value)?.version ?? 1 })}><option value="">{t("Choose a workflow")}</option>{flows.map((flow) => <option key={`${flow.id}:${flow.version}`} value={flow.id}>{flow.title} · v{flow.version}</option>)}</Select>)}
-          {field("Retained workflow version", <Input type="number" min={1} value={step.flowVersion ?? 1} onChange={(event) => onChange({ flowVersion: Number(event.target.value) })} />)}<NamedInputs inputs={step.inputs} steps={others} editableNames onChange={(inputs) => onChange({ inputs })} /></>}
+          {field("Retained workflow version", <Input draftKey="flowVersion" type="number" min={1} value={step.flowVersion ?? 1} onChange={(event) => onChange({ flowVersion: Number(event.target.value) })} />)}<NamedInputs inputs={step.inputs} steps={others} editableNames onChange={(inputs) => onChange({ inputs })} /></>}
         {["end", "join", "continue"].includes(step.kind) && binding("Return value", "value", undefined, true)}
         {["break", "continue"].includes(step.kind) && <ContextHelp title={t("Loop control")}><p className="text-xs leading-5 text-muted">{t("This control exits or continues the innermost loop scope. Accepted actions remain accepted.")}</p></ContextHelp>}
         {step.kind === "fail" && <p className="text-xs text-muted">{t("The block title becomes the explicit failure message.")}</p>}

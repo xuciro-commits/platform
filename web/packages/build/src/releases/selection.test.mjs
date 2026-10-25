@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue } from "./selection.ts";
+import { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue, releaseSelectionProblem } from "./selection.ts";
 
 const kinds = ["object", "query", "flow", "app", "migration"];
 const choice = (index) => ({ kind: "object", id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}` });
@@ -41,4 +41,10 @@ test("the command budget is the original host budget: 128 drafts x 512 bytes", (
   // A full 128-draft selection of normal UUIDs stays inside it.
   const body = JSON.stringify({ drafts: choices(128).map((item) => ({ ...item, kind: "object" })) });
   assert.ok(new TextEncoder().encode(body).length <= releaseCommandBytes);
+  assert.equal(releaseSelectionProblem(choices(128)), undefined);
+  assert.ok(releaseSelectionProblem(choices(129)));
+  const oversized = [{ kind: "object", id: "x".repeat(releaseCommandBytes - releaseDraftsValue([{ kind: "object", id: "" }]).length) }];
+  assert.equal(new TextEncoder().encode(releaseDraftsValue(oversized)).length, releaseCommandBytes);
+  assert.ok(releaseSelectionProblem(oversized));
+  assert.ok(releaseDraftsSelection(releaseDraftsValue(oversized), kinds).error);
 });

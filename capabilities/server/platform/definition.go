@@ -264,9 +264,9 @@ type Section struct {
 	// Query is a named query (AssetQuery) the section lists instead of all of
 	// Object: its conditions, and the selected record when it takes one (21c).
 	Query        AssetRef           `json:"query,omitempty"`
-	Fields       []string           `json:"fields,omitempty"`  // table, detail, filter, form
-	Actions      []AssetRef         `json:"actions,omitempty"` // actions
-	Group        string             `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
+	Fields       []string           `json:"fields,omitempty"` // table, detail, filter, form
+	Actions      []AssetRef         `json:"actions,omitzero"` // nil inherits page actions; an empty slice forbids section writes
+	Group        string             `json:"group,omitempty"`  // chart: the field it groups by, or "<field>:month"
 	ChartVariant string             `json:"chartVariant,omitempty"`
 	Mark         string             `json:"mark,omitempty"`
 	ColumnGroup  string             `json:"columnGroup,omitempty"`

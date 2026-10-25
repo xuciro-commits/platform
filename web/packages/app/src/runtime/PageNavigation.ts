@@ -49,11 +49,11 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
 export function usePageEffects(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void, provided?: PageCall) {
   const { definitions, source } = useHost(), workspace = useWorkspace(), inherited = useViewCall(), call = provided ?? inherited;
   const application = useApplicationContext();
-  const actions = useActionEffect();
+  const actions = useActionEffect(live);
   const [error, setError] = useState<string>();
   const active = useRef(true); useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const currentScope = useRef(source.scope); currentScope.current = source.scope;
-  const currentApplication = useRef(application?.identity); currentApplication.current = application?.identity;
+  const execution = useRef({ scope: source.scope, application: application?.identity, live });
+  if (execution.current.scope !== source.scope || execution.current.application !== application?.identity || execution.current.live !== live) execution.current = { scope: source.scope, application: application?.identity, live };
   const iface = page.document?.interface;
   const alive = (context?: EventContext) => active.current && (!context || context.isActive());
   const doReturn = () => {
@@ -70,9 +70,9 @@ export function usePageEffects(page: Api.Page, live: boolean, values: Record<str
     if ((targetInterface?.version ?? 0) !== navigation.interfaceVersion) throw new Error("The target page interface changed.");
     const input = navigationValues(navigation.inputs ?? {}, context?.values ?? values), problem = checkPortValues(targetInterface?.inputs ?? {}, input);
     if (problem) throw new Error(problem);
-    const scope = source.scope, applicationIdentity = application?.identity;
+    const started = execution.current;
     workspace.transfer("", { view: live ? "page" : "page-preview", params: { app: navigation.page.app, kind: "page", name: navigation.page.name, ...(application?.definition.ref.app === navigation.page.app && application.definition.application?.pages.includes(navigation.page.name) ? application.routeParams : {}) } }, { version: navigation.interfaceVersion, values: input }, (raw) => {
-      if (!alive(context) || currentScope.current !== scope || currentApplication.current !== applicationIdentity) return;
+      if (!alive(context) || execution.current !== started) return;
       const returned = readPageEnvelope(raw);
       if (!returned || returned.version !== navigation.interfaceVersion || checkPortValues(targetInterface?.outputs ?? {}, returned.values)) { setError("The returned page values do not match the interface."); return; }
       for (const [output, id] of Object.entries(navigation.results ?? {})) {
@@ -83,10 +83,11 @@ export function usePageEffects(page: Api.Page, live: boolean, values: Record<str
     });
   };
   const run = async (event: Api.PageEventBinding, context?: EventContext) => {
+    const started = execution.current;
     try {
       setError(undefined);
       for (const effect of event.effects ?? []) {
-        if (!alive(context)) return;
+        if (!alive(context) || execution.current !== started) return;
         switch (effect.kind) {
           case "set": {
             const source = effect.from ? (context?.values ?? values)[effect.from] : undefined;

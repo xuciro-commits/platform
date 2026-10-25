@@ -59,7 +59,12 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		answer, err := t.Composite(m, request.Key, request.Edits, h.Now())
 		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+			failure := map[string]any{"error": err.Error()}
+			var refusal compositeRefusal
+			if errors.As(err, &refusal) {
+				failure["outcome"] = "refused"
+			}
+			WriteJSON(w, http.StatusConflict, failure)
 			return
 		}
 		WriteJSON(w, http.StatusOK, answer)

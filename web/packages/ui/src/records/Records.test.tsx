@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@t
 import { afterEach, expect, test, vi } from "vitest";
 import { entityFrom, RecordList, RecordPage, RecordLinks, RecordStatus, RecordDeliveries, useRecordView, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
-import { EnterpriseElementLookup,RecordLookup } from "./RecordLookup";
+import { EnterpriseElementLookup,EnterpriseReference,RecordLookup } from "./RecordLookup";
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
 import { RecordWorkspace } from "./RecordWorkspace";
 afterEach(cleanup);
@@ -218,10 +218,14 @@ test("cell staging submits changed fields per row and preserves failed baselines
  expect(screen.getByRole("button",{name:"Finish editing"})).toBeTruthy();expect(screen.getByRole("cell",{name:"B retry"})).toBeTruthy();
  fireEvent.click(screen.getByRole("button",{name:"Finish editing"}));expect(screen.queryByRole("button",{name:"Finish editing"})).toBeNull();
 });
-test("retiring the edit scope ignores a pending result and does not submit remaining rows",async()=>{
- const response=pending<{accepted:boolean}>(),submit=vi.fn(()=>response.promise),info={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]},source:RecordSource={scope:"actor",entity:()=>info,list:vi.fn(),get:vi.fn()},data=[{...record("A"),title:"A old"},{...record("B"),title:"B old"}],port={schema:"sample.item.edit",scope:"binding",fields:["title"],maxRows:64,submit};
+test.each(["scope","preview","preview then live"])("retiring the edit %s does not submit remaining rows",async(change)=>{
+ const response=pending<{accepted:boolean}>(),submit=vi.fn(()=>response.promise),info={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]},source:RecordSource={scope:"actor",ruleIdentity:{me:"actor",timezone:"UTC"},entity:()=>info,list:vi.fn(),get:vi.fn()},data=[{...record("A"),title:"A old"},{...record("B"),title:"B old"}],port={schema:"sample.item.edit",scope:"binding",fields:["title"],maxRows:64,submit};
  const props={source,type:info.type,inlineEdit:port,window:{query:{limit:100},page:{records:data,total:2},maxOffset:100,onChange:vi.fn()}};const {rerender}=render(<RecordList {...props}/>);fireEvent.click(screen.getByRole("button",{name:"Edit cells"}));for(const label of ["A old","B old"]){const cell=screen.getByRole("cell",{name:label});fireEvent.doubleClick(cell);const input=cell.querySelector("input")!;fireEvent.change(input,{target:{value:label+" draft"}});fireEvent.keyDown(input,{key:"Enter"});}
- fireEvent.click(screen.getByRole("button",{name:"Submit cell edits"}));await waitFor(()=>expect(submit).toHaveBeenCalledTimes(1));rerender(<RecordList {...props} source={{...source,scope:"other actor"}} inlineEdit={{...port,scope:"other binding"}}/>);await act(async()=>response.resolve({accepted:true}));expect(submit).toHaveBeenCalledTimes(1);expect(screen.queryByText(/Submitted 1 rows/)).toBeNull();expect(screen.queryByRole("cell",{name:"B old draft"})).toBeNull();
+ fireEvent.click(screen.getByRole("button",{name:"Submit cell edits"}));await waitFor(()=>expect(submit).toHaveBeenCalledTimes(1));
+ if(change==="scope")rerender(<RecordList {...props} source={{...source,scope:"other actor",ruleIdentity:{me:"other actor",timezone:"UTC"}}} inlineEdit={{...port,scope:"other binding"}}/>);
+ else {rerender(<RecordList {...props} inlineEdit={{...port,preview:true}}/>);if(change==="preview then live")rerender(<RecordList {...props}/>);}
+ await act(async()=>response.resolve({accepted:true}));expect(submit).toHaveBeenCalledTimes(1);
+ expect(screen.queryByText(/Submitted 1 rows/)).toBeNull();expect(screen.queryByRole("cell",{name:"B old draft"})).toBeNull();
 });
 test("preview cell edits can be staged but never call the submission port",()=>{
  const submit=vi.fn(),info={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]},source:RecordSource={entity:()=>info,list:vi.fn(),get:vi.fn()};render(<RecordList source={source} type={info.type} inlineEdit={{schema:"sample.item.edit",fields:["title"],scope:"preview",maxRows:64,preview:true,submit}} window={{query:{limit:100},page:{records:[{...record("A"),title:"Original"}],total:1},maxOffset:100,onChange:vi.fn()}}/>);fireEvent.click(screen.getByRole("button",{name:"Edit cells"}));const cell=screen.getByRole("cell",{name:"Original"});fireEvent.doubleClick(cell);const input=cell.querySelector("input")!;fireEvent.change(input,{target:{value:"Preview draft"}});fireEvent.keyDown(input,{key:"Enter"});const button=screen.getByRole("button",{name:"Submit cell edits"});expect((button as HTMLButtonElement).disabled).toBe(true);fireEvent.click(button);expect(submit).not.toHaveBeenCalled();
@@ -248,7 +252,7 @@ test("a caller window owns enum filters: selections change the owner query and c
  const aggregate=vi.fn(async()=>({rows:[{state:"open",count:2},{state:"held",count:1}],groups:["state"],measures:["count"]} as never));
  const source:RecordSource={scope:"member",entity:()=>choiceInfo,list:vi.fn(),get:vi.fn(),aggregate};
  const change=vi.fn();
- const props=()=>({source,type:choiceInfo.type,window:{query:{domain:[["owner","=","MEMBER-1"],["state","in",["open"]]],search:"term",sort:["id"],limit:1},page:{records:[record("WINDOW")],total:1},maxOffset:10,filters:{state:["open"]},onChange:change}});
+ const props=()=>({source,type:choiceInfo.type,window:{query:{domain:[["owner","=","MEMBER-1"],["state","in",["open","held"]],["state","in",["open"]]],search:"term",sort:["id"],limit:1},facetQuery:()=>({domain:[["owner","=","MEMBER-1"],["state","in",["open","held"]]],search:"term",archived:true,set:{op:"union",inputs:[{domain:[["id","=","A"]]}]}}),page:{records:[record("WINDOW")],total:1},maxOffset:10,filters:{state:["open"]},onChange:change}});
  const {rerender}=render(<RecordList {...props()}/>);
  // A window that cannot carry predicates does not offer controls it cannot apply.
  rerender(<RecordList {...props()} window={{...props().window,filtersLocked:true}}/>);
@@ -257,26 +261,26 @@ test("a caller window owns enum filters: selections change the owner query and c
  fireEvent.click(screen.getByRole("button",{name:/Filters/}));
  await waitFor(()=>expect(aggregate).toHaveBeenCalled());
  // Counts answer the effective window: fixed conditions and search, without this field's own selection.
- expect((aggregate.mock.calls[0] as unknown[])[1] as {domain:unknown[];search:string}).toMatchObject({domain:[["owner","=","MEMBER-1"]],search:"term"});
+ expect((aggregate.mock.calls[0] as unknown[])[1]).toMatchObject({domain:[["owner","=","MEMBER-1"],["state","in",["open","held"]]],search:"term",archived:true,set:{op:"union",inputs:[{domain:[["id","=","A"]]}]}});
  fireEvent.click(screen.getByRole("checkbox",{name:"held"}));
  expect(change).toHaveBeenLastCalledWith({filters:{state:["open","held"]},offset:0});
  fireEvent.click(screen.getByRole("button",{name:"Clear filters"}));
  expect(change).toHaveBeenLastCalledWith({filters:{},offset:0});
 });
 
-test("saved enum filters survive reopening, stale fields are reported and saving keeps them",async()=>{
+test("saved enum filters are never silently discarded when a field becomes unavailable",async()=>{
  const choiceInfo={...entity,fields:[{name:"state",title:"State",type:"choice" as const,choices:["open","held"]}]};
  const list=vi.fn(async()=>({records:[record("A")],total:1}));
  const source:RecordSource={scope:"member",entity:()=>choiceInfo,list,get:vi.fn()};
  const onSave=vi.fn();
  render(<RecordList source={source} type={choiceInfo.type} initial={{filters:{state:["open"],gone:["x"]}}} onSave={onSave}/>);
- await waitFor(()=>expect(screen.getAllByRole("status").some((el)=>el.textContent?.includes("no longer available"))).toBe(true));
+ expect(screen.getByRole("alert").textContent).toContain("unavailable");
+ expect(list).not.toHaveBeenCalled();
+ expect((screen.getByRole("button",{name:"Save view…"}) as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.click(screen.getByRole("button",{name:"Clear filters"}));
  await waitFor(()=>expect(list).toHaveBeenCalled());
- const issued=JSON.stringify((list.mock.calls[0] as unknown[])[1]);
- expect(issued).toContain("\"state\",\"in\",[\"open\"]");
- expect(issued).not.toContain("gone");
  fireEvent.click(screen.getByRole("button",{name:"Save view…"}));
- expect((onSave.mock.calls[0] as unknown[])[0]).toMatchObject({filters:{state:["open"]}});
+ expect((onSave.mock.calls[0] as unknown[])[0]).toMatchObject({filters:undefined});
 });
 
 test("the ID column header sorts the query, not the current page",async()=>{
@@ -297,10 +301,71 @@ test("the ID column header sorts the query, not the current page",async()=>{
  fireEvent.click(screen.getByRole("button",{name:"ID"}));
  await waitFor(()=>expect(JSON.stringify((list.mock.calls.at(-1) as unknown[])[1])).toContain("\"sort\":[\"id\"]"));
  expect(screen.getByRole("columnheader",{name:"ID"}).getAttribute("aria-sort")).toBe("ascending");
+ cleanup();
+ render(<RecordList source={source} type={textInfo.type} window={{query:{sort:["id"],limit:1},page:{records:[],total:0},sortLocked:true,maxOffset:10,onChange:change}}/>);
+ expect(screen.queryByRole("button",{name:"ID"})).toBeNull();
+});
+
+test("saving and reopening a view retains its original predicates, read shape and personal filters",async()=>{
+ const info={...entity,fields:[{name:"state",title:"State",type:"choice" as const,choices:["open","held"]}]};
+ const baseQuery={domain:[["state","in",["open","held"]]],sort:["id","-changed"],limit:12,archived:true,set:{op:"union",inputs:[{domain:[["id","=","A"]]}]}};
+ const list=vi.fn(async()=>({records:[record("A")],total:1})),save=vi.fn(),source:RecordSource={scope:"member",entity:()=>info,list,get:vi.fn()};
+ render(<RecordList source={source} type={info.type} onSave={save} window={{query:{...baseQuery,domain:[...baseQuery.domain,["state","in",["open"]]],search:"term"},baseQuery,sortLocked:true,filters:{state:["open"]},page:{records:[record("A")],total:1},maxOffset:100,onChange:vi.fn()}}/>);
+ fireEvent.click(screen.getByRole("button",{name:"Save view…"}));
+ const saved=save.mock.calls[0]![0];expect(saved.baseQuery).toMatchObject(baseQuery);expect(saved.filters).toEqual({state:["open"]});
+ cleanup();render(<RecordList source={source} type={info.type} initial={saved}/>);
+ await waitFor(()=>expect(list).toHaveBeenCalled());
+ expect((list.mock.calls[0] as unknown[])[1]).toMatchObject({...baseQuery,domain:[...baseQuery.domain,["state","in",["open"]]],search:"term",offset:0});
+ expect((screen.getByRole("combobox",{name:"Sort"}) as HTMLSelectElement).disabled).toBe(true);
+});
+
+test("facet reads follow the current scope and watch without applying late counts",async()=>{
+ const info={...entity,fields:[{name:"state",title:"State",type:"choice" as const,choices:["open","held"]}]},first=pending<never>(),second=pending<never>(),stop=vi.fn();let changed!:()=>void;
+ const aggregate=vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockResolvedValue({rows:[{state:"held",count:7}]}),watchAggregate=vi.fn((_type:string,_query:unknown,next:()=>void)=>{changed=next;return stop;});
+ const source:RecordSource={scope:"first",entity:()=>info,list:async()=>({records:[],total:0}),get:vi.fn(),aggregate,watchAggregate};
+ const {rerender}=render(<RecordList source={source} type={info.type}/>);
+ fireEvent.click(screen.getByRole("button",{name:"Filters"}));await waitFor(()=>expect(aggregate).toHaveBeenCalledTimes(1));
+ rerender(<RecordList source={{...source,scope:"second"}} type={info.type}/>);await waitFor(()=>expect(aggregate).toHaveBeenCalledTimes(2));
+ await act(async()=>second.resolve({rows:[{state:"held",count:3}]} as never));
+ expect(screen.getByRole("checkbox",{name:"held"}).parentElement?.parentElement?.textContent).toContain("3");
+ await act(async()=>first.resolve({rows:[{state:"open",count:99}]} as never));
+ expect(screen.queryByRole("checkbox",{name:"open"})).toBeNull();
+ await act(async()=>changed());expect(screen.getByRole("checkbox",{name:"held"}).parentElement?.parentElement?.textContent).toContain("7");
+ expect(stop).toHaveBeenCalledTimes(1);
+});
+
+test("ordinary metadata refresh preserves staged rows and submits with the current port",async()=>{
+ const info={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]},submit=vi.fn(async()=>({accepted:true})),updated=vi.fn(async()=>({accepted:true}));
+ const source:RecordSource={scope:"actor/gen1",ruleIdentity:{me:"actor",timezone:"UTC"},entity:()=>info,list:vi.fn(),get:vi.fn()},port={schema:"sample.item.edit",scope:"gen1",fields:["title"],maxRows:64,submit};
+ const props={source,type:info.type,inlineEdit:port,window:{query:{limit:10},page:{records:[{...record("A"),title:"Old"}],total:1},maxOffset:100,onChange:vi.fn()}};
+ const {rerender}=render(<RecordList {...props}/>);fireEvent.click(screen.getByRole("button",{name:"Edit cells"}));
+ const cell=screen.getByRole("cell",{name:"Old"});fireEvent.doubleClick(cell);const input=cell.querySelector("input")!;fireEvent.change(input,{target:{value:"Staged"}});fireEvent.keyDown(input,{key:"Enter"});
+ rerender(<RecordList {...props} source={{...source,scope:"actor/gen2",entity:()=>({...info})}} inlineEdit={{...port,scope:"gen2",submit:updated}}/>);
+ expect(screen.getByRole("cell",{name:"Staged"})).toBeTruthy();fireEvent.click(screen.getByRole("button",{name:"Submit cell edits"}));
+ await waitFor(()=>expect(updated).toHaveBeenCalledTimes(1));expect(submit).not.toHaveBeenCalled();
+});
+
+test("replacing an unscoped record source cannot carry staged values into its matching record ID",()=>{
+ const info={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]},source:RecordSource={entity:()=>info,list:vi.fn(),get:vi.fn()},submit=vi.fn();
+ const props={source,type:info.type,inlineEdit:{schema:"sample.item.edit",scope:"binding",fields:["title"],maxRows:64,submit},window:{query:{limit:10},page:{records:[{...record("A"),title:"First source"}],total:1},maxOffset:100,onChange:vi.fn()}};
+ const {rerender}=render(<RecordList {...props}/>);fireEvent.click(screen.getByRole("button",{name:"Edit cells"}));
+ const cell=screen.getByRole("cell",{name:"First source"});fireEvent.doubleClick(cell);const input=cell.querySelector("input")!;fireEvent.change(input,{target:{value:"Private draft"}});fireEvent.keyDown(input,{key:"Enter"});
+ rerender(<RecordList {...props} source={{...source}} window={{...props.window,page:{records:[{...record("A"),title:"Second source"}],total:1}}}/>);
+ expect(screen.queryByRole("cell",{name:"Private draft"})).toBeNull();expect(screen.getByRole("cell",{name:"Second source"})).toBeTruthy();expect(screen.queryByRole("button",{name:"Submit cell edits"})).toBeNull();expect(submit).not.toHaveBeenCalled();
+});
+
+test("enterprise references retain closed labels through their own source and require an explicit navigation port",async()=>{
+ const next=pending<never>(),source:RecordSource={scope:"one",entity:()=>entity,list:vi.fn(),get:vi.fn(),enterpriseResolve:vi.fn(async()=>({elements:[{id:"A",name:"Closed unit",closed:true}]} as never))},open=vi.fn();
+ const {rerender}=render(<EnterpriseReference source={source} value="A" onOpen={open}/>);
+ await waitFor(()=>expect(screen.getByRole("button").textContent).toBe("Closed unit · Inactive"));
+ fireEvent.click(screen.getByRole("button"));expect(open).toHaveBeenCalledWith("enterprise.element","A");
+ rerender(<EnterpriseReference source={{...source,scope:"two",enterpriseResolve:()=>next.promise}} value="A"/>);
+ expect(screen.getByRole("button").textContent).toBe("A");expect((screen.getByRole("button") as HTMLButtonElement).disabled).toBe(true);
+ await act(async()=>next.resolve({elements:[]} as never));expect(screen.getByRole("button").textContent).toBe("A");
 });
 
 test("staged cell edits survive a window filter change and keep their opened revision",async()=>{
- const textInfo={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]};
+ const textInfo={...entity,fields:[{name:"title",title:"Title",type:"text" as const},{name:"state",title:"State",type:"choice" as const,choices:["open"]}]};
  const submit=vi.fn(async()=>({accepted:true})),source:RecordSource={scope:"actor",entity:()=>textInfo,list:vi.fn(),get:vi.fn()};
  const data=[{...record("A"),title:"A old"},{...record("B"),title:"B old"}];
  const props=(filters?:Record<string,string[]>)=>({source,type:textInfo.type,inlineEdit:{schema:"sample.item.edit",scope:"binding",fields:["title"],maxRows:64,submit},

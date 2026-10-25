@@ -17,7 +17,7 @@ export function previewSection(section: AuthoringSection): Api.Section {
     query: query ? { app: query.split(".")[0] ?? "", kind: "query", name: query.split(".").slice(1).join(".") } : undefined,
     function: fn ? { ref: { app: "build", kind: "function", name: fn.name }, sourceVersion: `preview.function-${fn.version}` } : undefined,
     inlineEdit: inlineEdit ? { ...inlineEdit, action: { app: inlineEdit.action.split(".")[0] ?? "", kind: "action", name: inlineEdit.action } } : undefined,
-    actions: (actions ?? []).map(schema => ({ app: schema.split(".")[0] ?? "", kind: "action", name: schema })),
+    actions: actions?.map(schema => ({ app: schema.split(".")[0] ?? "", kind: "action", name: schema })),
   };
 }
 

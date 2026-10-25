@@ -2,6 +2,8 @@ import { expect, fresh, selectObjectSection, slug, shots, test } from "./kit";
 
 test("an unpublished application trials synthetic samples across controlled members and saves its scenario", async ({ page, builder, operator }, info) => {
   test.setTimeout(120_000);
+  const outsider = slug("trialoutsider");
+  await builder.decide("platform.member.add", { type: "platform.member", id: outsider }, { subject: `user:${outsider}@test` }, "platform");
   const name = slug("trial"), objectId = fresh("TRIAL"), type = `build.${name}`;
   await builder.decide("build.object.create", { type: "build.object", id: objectId }, {
     name, title: "Trial work order", fields: [
@@ -74,7 +76,7 @@ test("an unpublished application trials synthetic samples across controlled memb
   await workspace.getByRole("checkbox", { name: "Include in application releases", exact: true }).uncheck();
   await workspace.getByRole("region", { name: "Application samples", exact: true }).getByRole("combobox", { name: "Sample set", exact: true }).selectOption(sampleName);
   const me = await builder.read<any>("me"), user = await operator.read<any>("me");
-  await workspace.getByRole("textbox", { name: "Comparison members (up to three, comma separated)", exact: true }).fill(`${me.principalId}, ${user.principalId}, sales-1`);
+  await workspace.getByRole("textbox", { name: "Comparison members (up to three, comma separated)", exact: true }).fill(`${me.principalId}, ${user.principalId}, ${outsider}`);
   await workspace.getByRole("textbox", { name: "Test plan name", exact: true }).fill("Complete work order regression");
   await workspace.getByRole("button", { name: "Add a test step", exact: true }).click();
   const step = workspace.getByRole("group", { name: "Test step 1", exact: true });
@@ -121,7 +123,7 @@ test("an unpublished application trials synthetic samples across controlled memb
   const comparison = workspace.getByRole("region", { name: "Role comparison", exact: true });
   await expect(comparison.getByRole("region", { name: me.principalId, exact: true }).getByRole("status")).toHaveText("All expected outcomes matched.");
   await expect(comparison.getByRole("region", { name: user.principalId, exact: true }).getByRole("status")).toHaveText("All expected outcomes matched.");
-  const denied = comparison.getByRole("region", { name: "sales-1", exact: true });
+  const denied = comparison.getByRole("region", { name: outsider, exact: true });
   await expect(denied.getByText("Refused", { exact: false }).first()).toBeVisible();
   await expect(denied.getByRole("status")).toHaveText("Some expected outcomes did not match.");
   await shots(page, comparison, "builder-role-comparison", info);
@@ -158,7 +160,7 @@ test("an unpublished application trials synthetic samples across controlled memb
   expect(await builder.record("build.sample-set", savedSample.id)).toEqual(savedSample);
   expect((await builder.request.get(`/v1/records/${type}`, {headers:builder.headers})).status()).toBe(404);
   await workspace.getByRole("button", { name: "Reload saved plan", exact: true }).click();
-  await expect(workspace.getByRole("textbox", { name: "Comparison members (up to three, comma separated)", exact: true })).toHaveValue(`${me.principalId}, ${user.principalId}, sales-1`);
+  await expect(workspace.getByRole("textbox", { name: "Comparison members (up to three, comma separated)", exact: true })).toHaveValue(`${me.principalId}, ${user.principalId}, ${outsider}`);
   await workspace.getByRole("checkbox", { name: "Include in application releases", exact: true }).check();
   const portableRun = page.waitForResponse(response => response.url().endsWith("/v1/simulate/candidate") && response.request().method() === "POST");
   await workspace.getByRole("button", { name: "Run isolated test", exact: true }).click();

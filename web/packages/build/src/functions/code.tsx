@@ -36,7 +36,7 @@ export function CodeFunctions() {
 }
 
 export function CodeEditor({ id }: { id: string }) {
-  const { decide, client, role } = useHost(), { open, close } = useApplicationWorkspace(), invoke = useInvokeCapability();
+  const { decide, client, role } = useHost(), { open } = useApplicationWorkspace(), invoke = useInvokeCapability();
   const authoringHost = useHost(), trial = useActionTrial(), declarationFields = authoringHost.source.entity("build.code")?.fields ?? [];
   const [draft, setDraft] = useState<CodeDraft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
  const [createID]=useState(()=>crypto.randomUUID());
@@ -75,7 +75,7 @@ export function CodeEditor({ id }: { id: string }) {
     // current draft can be delivered. The retained publication remains separate.
     const accepted = { ...submitted, id: target, revision, state: "draft", module: undefined, builtSource: undefined, buildHash: undefined };
     confirmedDraft.current = structuredClone(accepted); setDraft(accepted); markSaved(); setDirty(false);
-    if (!submitted.id) { open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return revision; }
+    if (!submitted.id) { open({ view: "code", params: { id: target } }, { ifCurrent: { view: "code", params: { id } }, replace: true }); return revision; }
     try {
       const fresh = await query.refetch();
       if (fresh.isSuccess && fresh.data?.record?.revision === revision) { confirmedDraft.current = structuredClone(fresh.data.record); setDraft(fresh.data.record); }

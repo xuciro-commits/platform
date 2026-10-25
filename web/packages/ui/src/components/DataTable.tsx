@@ -4,7 +4,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, Search, Calendar, CalendarClock, CircleDot, CheckSquare, Link2, Tags, Hash, Banknote, AlignLeft, Braces, Rows3, Star } from "lucide-react";
-import { useCallback,useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback,useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import type { FieldType } from "../fields/types";
 import { Input } from "../primitives/input";
@@ -77,7 +77,7 @@ function headerTypeIcon(type?: string) {
 
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
-  data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
+  data, columns, getRowId, height = 480, rowHeight, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
   selectedIds,loading = false, loadingText, onCellEdit, cellAccess,resizable = true, virtualColumns = false, onRowContextMenu,
 }: DataTableProps<T>) {
   const editorPrefix=useId();
@@ -90,9 +90,17 @@ export function DataTable<T>({
   const browse = typeof onRowClick === "function";
   const grid = !browse && typeof onCellEdit === "function";
   // Default row height follows the density token; an explicit prop wins.
-  const rh = Number.isFinite(rowHeight) && rowHeight > 0
-    ? rowHeight
-    : Number.parseFloat(typeof document === "undefined" ? "" : getComputedStyle(document.documentElement).getPropertyValue("--table-row-h")) || 28;
+  const [tokenRowHeight,setTokenRowHeight]=useState(28);
+  const explicitRowHeight=typeof rowHeight==="number"&&Number.isFinite(rowHeight)&&rowHeight>0;
+  const rh = explicitRowHeight ? rowHeight : tokenRowHeight;
+  useLayoutEffect(()=>{
+    if(explicitRowHeight||!scroller.current)return;
+    const read=()=>setTokenRowHeight(Number.parseFloat(getComputedStyle(scroller.current!).getPropertyValue("--table-row-h"))||28);
+    read();
+    const observer=new MutationObserver(read);
+    for(let element:HTMLElement|null=scroller.current;element;element=element.parentElement)observer.observe(element,{attributes:true,attributeFilter:["data-density","style","class"]});
+    return ()=>observer.disconnect();
+  },[explicitRowHeight]);
 
   // Like a spreadsheet: opening an editor selects the value, so typing replaces it.
   const selectOnOpen = useCallback((el: HTMLDivElement | null) => {
@@ -127,6 +135,7 @@ export function DataTable<T>({
     getScrollElement: () => scroller.current, getItemKey: (i) => rows[i]?.id ?? i,
     initialRect: { width: 0, height: typeof height === "number" ? height : 480 },
   });
+  useEffect(()=>virtualizer.measure(),[rh]);
 
   const widths = leaf.map((c) => sizing[c.id] ?? c.columnDef.meta?.width ?? c.columnDef.meta?.field?.width);
   const horizontal = virtualColumns && table.getHeaderGroups().length === 1;

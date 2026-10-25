@@ -133,10 +133,22 @@ test("enterprise daily management preserves identity, usage history and source o
   await expect(nameInput).toBeDisabled();
   for (const label of ["Edit", "Close…", "Delete unused element", "Reopen element", "Reinstate element"]) await expect(inspector.getByRole("button", { name: label, exact: true })).toHaveCount(0);
   await expect(inspector.getByRole("button", { name: "Hide in this view", exact: true })).toBeEnabled();
+  const retainedFilter = `External organisation ${suffix}`;
+  await page.getByRole("textbox", { name: "Find an enterprise element", exact: true }).fill(retainedFilter);
+  await page.locator('input[aria-label="As of"]:visible').fill(tomorrow);
+  await expect(page.getByRole("button", { name: "Save view", exact: true })).toBeEnabled();
   await builder.decide("enterprise.relationship.add", { type: "enterprise.relationship", id: `current-${membership}` }, { stereotype: "ActualOrganizationRole", source: `member:${me.principalId}`, target: parent, role: "employee", from: day }, "enterprise");
   await builder.open(page, `/member?id=${me.principalId}`);
-  await page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Unsaved changes", exact: true }) }).getByRole("button", { name: "Discard changes", exact: true }).click();
   const membershipPanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Organisation", exact: true }) });
+  await expect(membershipPanel).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Unsaved changes", exact: true })).toHaveCount(0);
+  await builder.open(page, `/enterprise?element=${external}&section=organization`);
+  await expect(page.getByRole("textbox", { name: "Find an enterprise element", exact: true })).toHaveValue(retainedFilter);
+  await expect(page.locator('input[aria-label="As of"]:visible')).toHaveValue(tomorrow);
+  await expect(page.getByRole("button", { name: "Save view", exact: true })).toBeEnabled();
+  await expect(nameInput).toBeDisabled();
+  await expect(page.getByRole("dialog", { name: "Unsaved changes", exact: true })).toHaveCount(0);
+  await builder.open(page, `/member?id=${me.principalId}`);
   await membershipPanel.getByRole("button", { name: renamed, exact: true }).first().click();
   await expect.poll(() => Object.fromEntries(new URLSearchParams(new URL(page.url()).hash.split("?")[1]))).toMatchObject({ element: parent, section: "organization" });
 

@@ -17,7 +17,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
   normalize?: (record: T) => T; payload: (draft: T) => unknown; failure: string;
   joinApplication?: boolean; onDiscard?: () => void;
 }) {
-  const host = useHost(), { open, close } = useApplicationWorkspace();
+  const host = useHost(), { open } = useApplicationWorkspace();
   const application = useApplicationScope();
   const query = useReadQuery<{ record?: T & EntityRecord }>("/v1/records/" + type + "/" + encodeURIComponent(id), 5000);
   const [draft, setDraft] = useState(empty), [edited, setDirty] = useState(false);
@@ -79,8 +79,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     setError(message); return false;
   };
   const showSaved = (target: string) => {
-    open({ view, params: { id: target } }, { ifCurrent: { view, params: { id } } });
-    close({ view, params: { id } });
+    open({ view, params: { id: target } }, { ifCurrent: { view, params: { id } }, replace: true });
   };
   const save = async (deferNavigation = false): Promise<Saved | undefined> => {
     if (inputs?.invalid) return;
@@ -116,8 +115,8 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
   };
   const review = async () => {
     if (inputs?.invalid) return;
-    const saved = dirty || id === "new" ? await save() : confirmed.current;
-    if (saved?.id) open({ view: "release-review", params: { kind, id: saved.id } }, { ifCurrent: { view, params: { id: saved.id } } });
+    const saved = dirty || id === "new" ? await save(true) : confirmed.current;
+    if (saved?.id) open({ view: "release-review", params: { kind, id: saved.id } }, { ifCurrent: { view, params: { id } }, replace: id === "new" });
   };
   return { draft, structured, createID, query, dirty, joining, busy, error, setError, inputs, patch, perform, save, transition, review, reload, discardChanges, confirmDiscard };
 }

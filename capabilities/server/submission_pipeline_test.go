@@ -102,6 +102,8 @@ func TestCompositeIsolatesAcceptedApplicationFailure(t *testing.T) {
 	at := time.Date(2026, 10, 11, 15, 0, 0, 0, time.UTC)
 	if _, err := tn.Composite(member("dana"), "publish", edits, at); err == nil || !tn.quarantined() || appended != 1 {
 		t.Fatalf("accepted application failure was not isolated: %v, quarantined=%v, appended=%d", err, tn.quarantined(), appended)
+	} else if refusal := (compositeRefusal)(""); errors.As(err, &refusal) {
+		t.Fatal("an application failure after acceptance was reported as a saved refusal")
 	}
 	if _, err := tn.Composite(member("dana"), "another", edits, at); err == nil || appended != 1 {
 		t.Fatal("quarantined tenant accepted another command")

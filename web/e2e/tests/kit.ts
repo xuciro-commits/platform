@@ -146,10 +146,10 @@ export class Builder extends Member {
     return ids;
   }
   /** A native page draft with supplied sections or one editor placeholder. */
-  async page(spec: { name?: string; title: string; object?: string; sections?: unknown[]; document?: unknown }): Promise<{ id: string; name: string }> {
+  async page(spec: { name?: string; title: string; object?: string; actions?: string[]; sections?: unknown[]; document?: unknown }): Promise<{ id: string; name: string }> {
     const name = spec.name ?? slug("page"), id = fresh("PAGE");
     await this.decide("build.page.create", { type: "build.page", id }, {
-      name, title: spec.title, object: spec.object,
+      name, title: spec.title, object: spec.object, actions: spec.actions,
       sections: spec.sections ?? [{ id: "initial", widget: "text", configVersion: 1, text: "Initial" }],
       document: spec.document===null?undefined:spec.document ?? { formatVersion: 2, uiProfile: pageUIProfile, root: "root", nodes: { root: { kind: "rows", children: ["initial"] }, initial: { kind: "widget", section: "initial" } } },
     });
@@ -228,9 +228,10 @@ export class Editor {
   async open(builder: Builder, pageID: string, mode: "visual" | "source" = "visual") {
     await builder.open(this.page, `/module?page=${pageID}&surface=studio`);
     if (mode === "visual") await this.visual();
+    else await this.page.locator('[data-structured-editor^="build.page:"] > div > [role="group"]').getByRole("button", { name: "Source editor", exact: true }).click();
   }
   async visual() {
-    const mode = this.page.locator('[data-structured-editor^="build.page:"]').getByRole("group", { name: "Editing mode", exact: true });
+    const mode = this.page.locator('[data-structured-editor^="build.page:"] > div > [role="group"]');
     await mode.getByRole("button", { name: "Visual", exact: true }).click();
   }
   async select(widgetTitle: string) {

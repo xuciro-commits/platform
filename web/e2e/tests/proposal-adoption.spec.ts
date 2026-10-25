@@ -134,7 +134,10 @@ test("a builder assembles proposal review and a person adopts through the origin
     await builder.open(page, `/project?id=${application.id}&area=release`);
     await page.getByText("AI placement and evaluations", { exact: true }).click();
     await expect(page.getByText("Business proposal", { exact: false }).first()).toBeVisible();
-    await expect(page.getByText(/1 calls · 10 input tokens · 6 output tokens/)).toBeVisible();
+    const placement = page.getByRole("region", { name: "Verification and delivery", exact: true });
+    for (const [label, value] of [["Calls", "1"], ["Input tokens", "10"], ["Output tokens", "6"]]) {
+      await expect(placement.locator("dl > div").filter({ has: page.getByText(label!, { exact: true }) }).locator("dd")).toHaveText(value!);
+    }
   } finally {
     releaseModel();
     provider.closeAllConnections();

@@ -62,6 +62,12 @@ test("an application authors AI functions, agents and evaluation sets over saved
   await page.getByRole("textbox", { name: "What it does for others", exact: true }).fill("Review the saved model through its declared action");
   await page.getByRole("textbox", { name: "Instructions", exact: true }).fill("Review the note and ask a person before writing");
   await page.getByRole("button", { name: "AI source model · Review note", exact: true }).click();
+  const agentWrites: { schema: string; id: string }[] = [];
+  await page.route("**/v1/submissions", async route => {
+    const submission = route.request().postDataJSON();
+    if (submission.schema?.name === "build.agent.create" || submission.schema?.name === "build.agent.edit") agentWrites.push({ schema: submission.schema.name, id: submission.target.id });
+    await route.continue();
+  });
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   let started!: () => void;
@@ -76,8 +82,27 @@ test("an application authors AI functions, agents and evaluation sets over saved
   release();
   await expect.poll(async () => (await builder.record("build.app", application.id)).resources).toContainEqual({ app: "build", kind: "agent", name: agentName });
   await expect(page).toHaveURL(/#\/project\?/);
-  await expect(page.getByRole("tab", { name: "Agents · Review saved notes", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Application Studio · AI drafting application", exact: true })).toHaveAttribute("aria-selected", "true");
+  const retainedAgent = page.getByRole("tab", { name: "Agents · Review saved notes", exact: true });
+  await expect(retainedAgent).toHaveCount(1);
+  await expect(retainedAgent).toHaveAttribute("aria-selected", "false");
   await page.unroute(`**/v1/records/build.app/${application.id}`);
+
+  // Choosing another task never closes the original editor. Its accepted
+  // record and inputs stay usable; following its saved identity writes nothing.
+  expect(agentWrites).toHaveLength(1);
+  expect(agentWrites[0]!.schema).toBe("build.agent.create");
+  const agent = await builder.record("build.agent", agentWrites[0]!.id);
+  await retainedAgent.click();
+  await expect(page.getByRole("textbox", { name: "Agent name", exact: true })).toHaveValue(agentName);
+  await expect(page.getByRole("textbox", { name: "Agent title", exact: true })).toHaveValue("Review saved notes");
+  await expect(page.getByRole("textbox", { name: "Instructions", exact: true })).toHaveValue("Review the note and ask a person before writing");
+  await page.getByRole("button", { name: "Save agent", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#/agent\\?.*\\bid=${agent.id}(?:&|$)`));
+  await expect(retainedAgent).toHaveCount(1);
+  expect(agentWrites).toEqual([{ schema: "build.agent.create", id: agent.id }]);
+  expect((await builder.record("build.agent", agent.id)).revision).toBe(agent.revision);
+  await page.unroute("**/v1/submissions");
 
   await builder.open(page, `/project?id=${application.id}&area=release`);
   await create("Evaluation set");

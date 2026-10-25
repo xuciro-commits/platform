@@ -6,8 +6,9 @@ import { defineConfig } from "@playwright/test";
 
 const port = 18496;
 const protocolPackages = process.env.PLATFORM_PACKAGES_DIR ? ' -packages "$PLATFORM_PACKAGES_DIR"' : "";
-const maintenance = process.argv.some(argument => argument.includes("package-lifecycle")) ? " -host-admins=manager" : "";
-const protocolServices = process.argv.some(argument => argument.includes("protocol-packages")) || !process.argv.some(argument => argument.includes(".spec."));
+const fullSuite = !process.argv.some(argument => argument.includes(".spec."));
+const maintenance = fullSuite || process.argv.some(argument => argument.includes("package-lifecycle")) ? " -host-admins=manager" : "";
+const protocolServices = fullSuite || process.argv.some(argument => argument.includes("protocol-packages"));
 
 export default defineConfig({
   testDir: "tests",

@@ -1,4 +1,4 @@
-import type {Api,Entry} from "@platform/kernel";
+import {apiErrorMessage,type Api,type Entry} from "@platform/kernel";
 import {Button, Disclosure, Rejection, language, t, useWorkspace} from "@platform/ui";
 import {useQuery} from "@tanstack/react-query";
 import {useState} from "react";
@@ -57,16 +57,16 @@ function ExplainAccess({ entry }: { entry?: Entry }) {
  const explain=useQuery({queryKey:[client.connection.token,client.connection.tenant,source.scope,"authz-explain",submission?.principalId,me.tenantId,action,target?.type,target?.id],enabled:asking&&!!target?.type&&!!action,retry:false,queryFn:async()=>{
    const request=authzExplainRequest(submission as Entry["submission"],me.principalId,me.tenantId);
    const asked=await client.call<Api.Verdict & {error?:{detail?:string}}>("POST","/v1/authz/explain",request);
-   if(!asked.ok)throw Object.assign(new Error((asked.body as {error?:{detail?:string}}).error?.detail||"explain refused"),{refused:true});
+   if(!asked.ok)throw Object.assign(new Error(apiErrorMessage(asked.body)??t("The authorization engine could not be asked.")),{refused:asked.status===401||asked.status===403});
    return asked.body;
  }});
- const refused=!!explain.error&&Object.hasOwn(explain.error as {refused?:boolean},"refused");
+ const refused=(explain.error as {refused?:boolean}|null)?.refused===true;
  return <div className="grid gap-1">
   <Button size="sm" variant="ghost" onClick={()=>setAsking(v=>!v)}>{asking?t("Hide the authorization explain"):t("Explain the authorization")}</Button>
   {asking&&(explain.isPending?<p className="text-xs text-muted">{t("Asking the authorization engine…")}</p>
    :explain.isError?(refused
      ?<p className="text-xs text-muted">{t("Only administrators and auditors may read the authorization explain.")}</p>
-     :<div className="grid justify-items-start gap-1 text-xs"><p className="text-xs text-danger">{t("The authorization engine could not be asked.")}</p>
+     :<div className="grid justify-items-start gap-1 text-xs"><p className="text-xs text-danger">{explain.error instanceof Error?explain.error.message:t("The authorization engine could not be asked.")}</p>
        <Button size="sm" variant="ghost" onClick={()=>void explain.refetch()}>{t("Retry")}</Button></div>)
    :explain.data&&<div className="grid min-w-0 gap-1 rounded border border-border p-2 text-xs">
     <p>{explain.data.allow?t("The engine would allow this now."):explain.data.reason||t("The engine refuses.")} <span className="font-mono text-muted">{explain.data.rule}</span></p>

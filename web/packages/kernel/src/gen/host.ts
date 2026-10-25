@@ -6307,6 +6307,7 @@ export const pageUIManifest = {
     },
     {
       "authoringFields": [
+        "actions",
         "collectionVariable",
         "configVersion",
         "facets",
@@ -6345,6 +6346,7 @@ export const pageUIManifest = {
       "componentID": "table",
       "configVersion": 1,
       "configurationFields": [
+        "actions",
         "facets",
         "fields",
         "filterSearchVariable",
@@ -8164,6 +8166,7 @@ export const pageUIManifest = {
     },
     {
       "authoringFields": [
+        "actions",
         "cardLabel",
         "collectionVariable",
         "configVersion",
@@ -8189,6 +8192,7 @@ export const pageUIManifest = {
       "componentID": "record-list",
       "configVersion": 1,
       "configurationFields": [
+        "actions",
         "fields",
         "model",
         "object",

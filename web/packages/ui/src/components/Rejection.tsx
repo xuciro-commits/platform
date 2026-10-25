@@ -26,8 +26,8 @@ export function Rejection({ title, message, advice, tone, waiting = false, code,
   children?: ReactNode;
 }) {
   const heading = title ?? (waiting ? t("This request is still awaiting confirmation.") : t("The request was refused."));
-  return <div role={waiting ? "status" : "alert"} className="grid min-w-0 gap-2">
-    <Notice title={heading} message={message} tone={waiting ? "warning" : tone ?? "danger"} />
+  return <div role={waiting ? "status" : "alert"} aria-label={heading} className="grid min-w-0 gap-2">
+    <Notice title={heading} message={message} tone={waiting ? "warning" : tone ?? "danger"} role="note" />
     {advice && <p className="break-words text-xs text-muted">{advice}</p>}
     {children}
     {(code || requestKey || trail) && <Disclosure summary={t("Technical details")}>

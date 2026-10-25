@@ -156,6 +156,7 @@ test("business source trial stays private and formal refusal retries the origina
   expect(JSON.parse(await source.inputValue())).toMatchObject({ name: "Trial item", quantity: 0, enabled: false });
   await dialog.getByRole("button", { name: "Retry original inputs", exact: true }).click();
   await expect.poll(() => requests.length).toBe(2);
+  await expect(dialog.getByRole("button", { name: "Retry original inputs", exact: true })).toBeEnabled();
   expect(requests[1]).toEqual(requests[0]);
   expect(await operator.record(object.type, id)).toMatchObject({ name: "Existing record", quantity: 7, enabled: true, revision: 1 });
   await shots(page, dialog, "dual-business-refusal-en", info);
@@ -249,6 +250,7 @@ test("object, relationship, action, flow and page source return to the original 
   page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/v1/submissions") writes++; });
   await builder.open(page, `/object-type?id=${model.id}`);
   const objectRevision = (await builder.record("build.object", model.id)).revision;
+  await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
   await expect(page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true })).toHaveAttribute("aria-pressed", "true");
   const source = page.getByRole("textbox", { name: "Configuration source", exact: true });
   const objectDeclaration = JSON.parse(await source.inputValue());
@@ -298,6 +300,7 @@ test("object, relationship, action, flow and page source return to the original 
   await builder.decide("build.process.create", { type: "build.process", id: flowID }, { name: slug("sourceflow"), title: "Source flow", manual: true, steps: [{ name: "done", kind: "end" }] });
   await builder.open(page, `/flow?id=${flowID}`);
   const flowEditor = page.getByRole("region", { name: "Flows", exact: true });
+  await flowEditor.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true }).click();
   await expect(flowEditor.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Source editor", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(flowEditor.getByRole("region", { name: "Flow map", exact: true })).toHaveCount(0);
   const flow = JSON.parse(await source.inputValue());

@@ -53,8 +53,8 @@ export function AgentEditor({ id }: { id: string }) {
   if (!(draft.tools ?? []).length) issues.push(t("Give it at least one action or query."));
   const review = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
-    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
-    if (saved) open({ view: "release-review", params: { kind: "agent", id: saved.id } }, { ifCurrent: { view: "agent", params: { id: saved.id } } });
+    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: draft.revision };
+    if (saved) open({ view: "release-review", params: { kind: "agent", id: saved.id } }, { ifCurrent: { view: "agent", params: { id } }, replace: id === "new" });
   };
   const publish = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }

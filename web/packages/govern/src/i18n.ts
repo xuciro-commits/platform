@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Ask an administrator to install {id} version {version}, then return here to create application drafts.": "请让管理员安装 {id} 的 {version} 版本，然后回到这里创建应用草稿。",
   "Inspect built-in modules in the capability matrix": "在能力矩阵中查看内置模块",
   "Package library": "包目录",
   "Package details": "包详情",

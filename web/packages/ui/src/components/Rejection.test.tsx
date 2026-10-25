@@ -7,6 +7,8 @@ afterEach(cleanup);
 test("a refusal shows its plain-language title, the next action, and hides the trail behind a disclosure", () => {
   setLanguage("en");
   render(<Rejection title="Access refused" message="You do not hold the required role." advice="Ask an administrator to review access before trying again." code="ERROR_CODE_POLICY_DENIED" requestKey="act-12" trail={<p>fact one</p>} />);
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+  expect(screen.getByRole("alert", { name: "Access refused" })).toBeTruthy();
   expect(screen.getByText("Access refused")).toBeTruthy();
   expect(screen.getByText("You do not hold the required role.")).toBeTruthy();
   expect(screen.getByText("Ask an administrator to review access before trying again.")).toBeTruthy();

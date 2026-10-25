@@ -5,7 +5,9 @@ test.use({ actionTimeout: 15_000 });
 test("a new administrator reviews a local package, installs it, uninstalls and removes its source", async ({ page, builder }, info) => {
   test.setTimeout(150_000);
   const id = slug("extension");
-  await builder.open(page, "/apps");
+  const objectName = slug("templateobject"), applicationName = slug("templateapp");
+  await builder.open(page, "/projects");
+  await page.getByRole("button", { name: "New from template…", exact: true }).click();
   await page.getByRole("region", { name: "Packages", exact: true }).getByRole("button", { name: "Package guide", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Understand the source", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Uninstall safely", exact: true }).click();
@@ -18,7 +20,13 @@ test("a new administrator reviews a local package, installs it, uninstalls and r
   await page.getByRole("button", { name: "Review package", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "HTTPS" })).toBeVisible();
   await page.getByLabel("Package source", { exact: true }).selectOption("file");
-  const descriptor = { id, version: "1.0.0", namespace: id, title: "Reviewed extension", capabilities: [{ id: "platform.kernel", version: "1", semantics: "1" }] };
+  const descriptor = { id, version: "1.0.0", namespace: id, title: "Reviewed extension", capabilities: [{ id: "platform.kernel", version: "1", semantics: "1" }], blueprint: {
+    roots: [{ app: "build", kind: "app", name: applicationName }],
+    assets: [
+      { ref: { app: "build", kind: "object", name: `build.${objectName}` }, contractVersion: 1, sourceVersion: "1", body: { type: `build.${objectName}`, name: objectName, title: "Template entry", fields: [{ name: "note", title: "Note", type: "text" }], states: [{ name: "open", title: "Open" }] } },
+      { ref: { app: "build", kind: "app", name: applicationName }, contractVersion: 1, sourceVersion: "1", body: { name: applicationName, title: "Imported template application", pages: [objectName] } },
+    ],
+  } };
   await page.getByLabel("Package file", { exact: true }).setInputFiles({ name: "package.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(descriptor)) });
   await page.getByRole("button", { name: "Review package", exact: true }).click();
   await expect(page.getByText("Reviewed content", { exact: true })).toBeVisible();
@@ -34,6 +42,13 @@ test("a new administrator reviews a local package, installs it, uninstalls and r
   await expect(card.getByText("Imported package", { exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Install", exact: true }).click();
   await expect(card.getByText("active", { exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Create application drafts", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Imported template application", exact: true }).first()).toBeVisible();
+  expect(await builder.record("build.app", applicationName)).toMatchObject({ name: applicationName, state: "draft", pages: [objectName] });
+  expect(await builder.record("build.object", objectName)).toMatchObject({ name: objectName, state: "draft", fields: [{ name: "note", title: "Note", type: "text" }] });
+  expect((await builder.definitions<any>()).some(definition => definition.ref.kind === "object" && definition.ref.name === `build.${objectName}`)).toBe(false);
+  await builder.open(page, "/apps");
+  await page.getByRole("region", { name: "Package library", exact: true }).getByRole("button").filter({ hasText: id }).click();
   await card.getByRole("button", { name: "Prepare to uninstall", exact: true }).click();
   await expect(card.getByText("draining", { exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Uninstall", exact: true }).click();
@@ -42,6 +57,7 @@ test("a new administrator reviews a local package, installs it, uninstalls and r
   await expect(card.getByText("Installed record", { exact: true })).toBeVisible();
   await expect(card.getByRole("button", { name: "Remove source", exact: true })).not.toBeVisible();
   expect((await builder.read<any[]>("packages")).find(item => item.descriptor.id === id)?.installed.state).toBe("retired");
+  expect((await builder.record("build.app", applicationName)).state).toBe("draft");
   await page.setViewportSize({ width: 390, height: 844 });
   await shots(page, page.locator("body"), "package-removed-narrow", info);
   await page.setViewportSize({ width: 1280, height: 900 });

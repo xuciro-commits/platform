@@ -24,7 +24,7 @@ export function ObservationSources() {
 }
 
 export function ObservationSourceEditor({ id }: { id: string }) {
-  const { decide, can, definitions, source, catalog } = useHost(), { open, close } = useApplicationWorkspace();
+  const { decide, can, definitions, source, catalog } = useHost(), { open } = useApplicationWorkspace();
   const query = useReadQuery<{ record?: ObservationDraft }>(`/v1/records/build.observation/${encodeURIComponent(id)}`, undefined, id !== "new");
   const connections = useRecordInventory<Api.Connection>("build.connection");
   const capabilities = useProvidedCapabilities("action", "authoritative");
@@ -48,7 +48,7 @@ export function ObservationSourceEditor({ id }: { id: string }) {
     const payload = { ...declarationValue(snapshot, declarationFields), name, title, description, connection, object, deviceField, signal, unit, path, windowSeconds, expectedRetentionSeconds, expectedGranularitySeconds, roles, scheduled: !!decision && !!scheduled, decision: decision ?? null, intervals:snapshot.intervals??null, requireComplete: !!requireComplete };
     if (!await decide(`build.observation.${snapshot.id ? "edit" : "create"}`, { type: "build.observation", id: target }, payload, { expectedRevision: snapshot.id ? snapshot.revision : 0, quiet: true, onRefused: setError })) return;
     load({ ...snapshot, id: target, revision: (snapshot.id ? snapshot.revision : 0) + 1 }); markSaved(); setEdited(false);
-    if (!snapshot.id) { open({ view: "observation-source", params: { id: target } }); close({ view: "observation-source", params: { id } }); }
+    if (!snapshot.id) open({ view: "observation-source", params: { id: target } }, { ifCurrent: { view: "observation-source", params: { id } }, replace: true });
     else { const refreshed = await query.refetch(); if (refreshed.isSuccess && refreshed.data?.record) load(refreshed.data.record); }
     return target;
   };

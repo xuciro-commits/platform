@@ -23,7 +23,7 @@ import { recordPaths } from "../ontology/record-paths";
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  ActionMenu, Button, CanvasEditor, CanvasRegion, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
+  ActionMenu, Button, CanvasEditor, CanvasRegion, Checkbox, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
   type CanvasCommand, type CanvasDrop, type CanvasPayload, type EntityInfo,
 } from "@platform/ui";
 import { Copy, Clipboard, Columns2, ExternalLink, Rows3, Group, Ungroup, Archive, ChevronUp, Settings2, Equal, RotateCcw, Monitor, MoreHorizontal, Play, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
@@ -316,7 +316,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   ] : [];
   const widgetTabs: WorkbenchTab[] = canvasSelection ? widgetInspectorTabs({
     section: canvasSelection, sections, document, info: modelEntity(authoringEntity(canvasSelection.model?.type||canvasSelection.object || page.object),canvasSelection.model,authoringEntity), object: page.object, selections, relatedObjects,
-    catalog: model.actions, onChange: (patch) => change(chosen, patch),
+    catalog: model.actions, pageActions: page.actions ?? [], onChange: (patch) => change(chosen, patch),
     onResourcesChange: (patch, variables) => edit((old) => ({ ...old, document: { ...old.document, variables }, sections: old.sections.map((s) => s.id === canvasSelection.id ? { ...s, ...patch } : s) }), "graph-resources"),
     events: (() => { const Inspector = widgetInspector(canvasSelection.widget, canvasSelection.configVersion ?? 0)?.events; return <InspectorFrame id={canvasSelection.id ?? String(chosen)} widget={canvasSelection.widget} version={canvasSelection.configVersion ?? 0} part="events">{Inspector && <Inspector buttons={canvasSelection.buttons} onGroupChange={(buttons, document) => edit({ document, sections: sections.map((s) => s.id === canvasSelection.id ? { ...s, buttons } : s) })} document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}</InspectorFrame>; })(),
     appearance: <>
@@ -431,6 +431,7 @@ type PropertiesProps = {
   section?: Draft; sections:Draft[]; document: HostApi.PageDocument; info?: EntityInfo; object: string; relatedObjects?: string[];
   selections: HostApi.SelectionVariable[];
   catalog: { schema: string; title: string; target: string; draft?: boolean }[];
+  pageActions: string[];
   onChange: (patch: Partial<Draft>) => void;
   onResourcesChange:(patch:Partial<Draft>,variables:Record<string,HostApi.PageVariable>)=>void;
 };
@@ -471,7 +472,7 @@ function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: 
   ];
 }
 
-function Properties({ section, sections, document, info, catalog, object, selections, relatedObjects = [], onChange }: PropertiesProps) {
+function Properties({ section, sections, document, info, catalog, pageActions, object, selections, relatedObjects = [], onChange }: PropertiesProps) {
   const { definitions } = useHost();
   const model = useAuthoringModel();
   const capabilityQuery = useProvidedCapabilities();
@@ -496,6 +497,7 @@ function Properties({ section, sections, document, info, catalog, object, select
   const parentType = section.parentSelection ? selections.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : object;
   const relations = fields.filter((field) => field.type === "reference" && field.ref === parentType && field.inverse).map((field) => field.inverse!);
   const actions = catalog.filter(action => action.target === (section.object || object) && (action.draft || provided.some(item => item.capability.kind === "action" && item.capability.side === "authoritative" && item.capability.name === action.schema)));
+  const listActions = ["table", "record-list"].includes(section.widget);
   const leaf=Object.entries(document.nodes).find(([,n])=>n.section===section.id)?.[0],overlay=leaf?overlayOwner(document,leaf):undefined;
   const accessible=(v:HostApi.PageVariable)=>variableAccessible(v,undefined,overlay);
   const measures = ["count", ...fields.filter((f) => f.type === "integer" || f.type === "decimal" || f.type === "money").flatMap((f) => [`sum:${f.name}`, `avg:${f.name}`])];
@@ -615,10 +617,13 @@ function Properties({ section, sections, document, info, catalog, object, select
             onChange={(value) => onChange({ fields: value })} />
         </fieldset>
       )}
-      {["actions","record-view"].includes(section.widget) && (
+      {["actions","record-view","table","record-list"].includes(section.widget) && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Actions it offers")}</legend>
-          <Toggles options={actions.map((a) => ({ value: a.schema, label: a.title }))} value={section.actions ?? []}
+          {listActions && <Checkbox checked={section.actions == null} onChange={inherit => onChange({actions:inherit?undefined:[]})}>{t("Inherit page actions")}</Checkbox>}
+          {listActions && <p className="text-muted">{t("Turn off inheritance to choose actions for this list. Choose none for a read-only list.")}</p>}
+          {listActions && <p className="text-muted">{t("CSV import needs both Create and Edit.")}</p>}
+          <Toggles options={(listActions?actions.filter(action=>pageActions.includes(action.schema)):actions).map((a) => ({ value: a.schema, label: a.title }))} value={listActions&&section.actions==null?pageActions:section.actions ?? []} disabled={listActions&&section.actions==null}
             onChange={(value) => onChange({ actions: value })} empty={t("No action of this object is offered to you.")} />
         </fieldset>
       )}

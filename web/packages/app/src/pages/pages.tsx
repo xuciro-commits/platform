@@ -7,9 +7,10 @@ import {
 } from "@platform/ui";
 import { useMemo, useState } from "react";
 import type { ListState, RecordEditPort } from "@platform/ui";
+import { pageUIManifest } from "@platform/kernel";
 import { NewActions, PayloadFields } from "../actions/actions";
 import { ImportControl, SaveViewDialog } from "../widgets/list-operations";
-import { defaultTableEdit } from "../widgets/table-edit";
+import { defaultTableEdit, tableEditableFields } from "../widgets/table-edit";
 import { ComposedPage, isComposed } from "./sections";
 import { RecordDetail, assetKey, useHost, useOpenRecord, type Definition } from "../index";
 
@@ -37,10 +38,10 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   const type = page.object.name, info = source.entity(type);
   // The same standard patch the generic list stages: the member catalog's
   // edit action within the page's declared set, over the listed fields.
-  const edit = allowed.length > 0 ? defaultTableEdit(info, catalog, allowed) : undefined;
-  const editFields = edit ? (info?.fields ?? []).filter(f => f.type !== "lines" && !f.readOnly && edit.payload.some(p => p.name === f.name)).map(f => f.name) : [];
+  const edit = defaultTableEdit(info, catalog, allowed, page.listFields);
+  const editFields = tableEditableFields(info, edit, page.listFields);
   const inlineEdit: RecordEditPort | undefined = edit && editFields.length > 0 && can(`${type}.edit`) ? {
-    schema: edit.schema, fields: editFields, scope: `${String(source.scope ?? "")}|${type}`, maxRows: 50,
+    schema: edit.schema, fields: editFields, scope: `${String(source.scope ?? "")}|${type}`, maxRows: pageUIManifest.runtime.tableEditing.maxRows,
     submit: async (baseline, patch) => {
       const accepted = await decide(edit.schema, { type, id: baseline.id }, patch, { expectedRevision: baseline.revision, quiet: true });
       return accepted ? { accepted: true } : { accepted: false, error: t("The host refused this edit.") };
@@ -48,6 +49,7 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   } : undefined;
   return <>
     <RecordWorkspace title={page.title} description={page.description} source={source} type={type} listFields={page.listFields}
+      onOpenReference={(type, id) => openRecord({ type, id })}
       selected={selected} onSelect={setSelected} actions={<NewActions type={type} allowed={allowed} />}
       listToolbar={<ImportControl source={source} type={type} importable={allowed.length > 0 && (can(`${type}.create`) || can(`${type}.edit`))} />}
       onListSave={(state) => setSaving(state)}

@@ -4,10 +4,11 @@ import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
+import { releaseSelectionProblem } from "../releases/selection";
 // one application, five workspaces and builder-named concepts.
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
-import type { Api } from "@platform/kernel";
+import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -21,7 +22,7 @@ export type Project = Api.Application & { id: string; revision: number; state: s
 
 import { kindIcon } from "./resource-icons";
 import { useProjectResources, type OwnedResource } from "./resource-inventory";
-import { retireAgain, retireLimit, retirementBatch, retirementEdits } from "./retirement";
+import { retireLimit, retirementBatch, retirementIntent } from "./retirement";
 export type { OwnedResource } from "./resource-inventory";
 import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioResourceGroups, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
@@ -112,10 +113,11 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   // Bulk retirement: a composite retires several assets as one transaction —
   // every step is probed first, and either all retire or none does.
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [retiring, setRetiring] = useState(false);
   const [retireBusy, setRetireBusy] = useState(false);
-  const retireIntent = useRef<{ key: string; retried?: number; items: OwnedResource[] } | undefined>(undefined);
-  const setRetireIntent = (intent: typeof retireIntent.current) => { retireIntent.current = intent; };
+  const [retireIntent, setRetireIntent] = useState<(ReturnType<typeof retirementIntent<OwnedResource>> & { client: typeof client; attempted?: boolean; refusal?: string })>();
+  const pendingRetirement = useRef(retireIntent); pendingRetirement.current = retireIntent;
+  const retireLock = useRef(false);
+  const rememberRetirement = (intent: typeof retireIntent) => { pendingRetirement.current = intent; setRetireIntent(intent); };
   const retireable = (item: { kind: { type: string }; record?: { id: string } | undefined }) => !!item.record && !!action(`${item.kind.type}.archive`);
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
   type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
@@ -165,12 +167,13 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     return out;
   }, [project, settings, edited]);
   const dirty = Object.keys(changedSettings).length > 0;
-  const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!pendingPatch || !!createdResource, () => {
+  const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!pendingPatch || !!createdResource || !!retireIntent, () => {
     pendingRef.current = undefined; setPendingPatch(undefined); setCreatedResource(undefined);
+    rememberRetirement(undefined);
     baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); setError(undefined);
-  }, saving);
+  }, saving || retireBusy || !!retireIntent?.attempted && !retireIntent.refusal);
   const patch = async (changes: Partial<Api.Application>, revision = latestProject.current?.revision, settingsSave = false) => {
-    if ((!latestProject.current && !pendingRef.current) || lock.current) return false;
+    if ((!latestProject.current && !pendingRef.current) || lock.current || pendingRetirement.current) return false;
     if (dirty && !settingsSave) { setError(t("Save or discard project settings before changing resource membership.")); return false; }
     const original = pendingRef.current;
     if (original && (JSON.stringify(original.changes) !== JSON.stringify(changes) || original.revision !== revision)) {
@@ -235,28 +238,32 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   };
   // One retirement intent is frozen when the review opens: the reviewed list,
   // the composite key and the edits are the same object on submit and on any
-  // retry. An unclear answer keeps the original intent; only an explicit
-  // correction starts a new one. No truncation and no key change on retry.
+  // retry. An unclear answer keeps the original intent and cannot be discarded.
   const beginRetire = () => {
-    const items = retirementBatch(visible, picked, item => refKey(item.ref));
+    if (lock.current || pendingRetirement.current || dirty || pendingPatch || createdResource) return;
+    const items = retirementBatch(owned, picked, item => refKey(item.ref));
     if (items.length > retireLimit) { notify(t("A single retirement accepts at most 64 assets. Select a smaller batch.")); return; }
+    if (items.length !== picked.size || items.some(item => !retireable(item))) { notify(t("Some selected assets are no longer available for retirement. Refresh the selection before continuing.")); return; }
     if (!items.length) return;
-    setRetireIntent({ key: crypto.randomUUID(), items });
-    setRetiring(true);
+    rememberRetirement({ ...retirementIntent(crypto.randomUUID(), items), client });
   };
   const retire = async () => {
-    const intent = retireIntent.current;
-    if (!intent) { setRetiring(false); return; }
+    const intent = pendingRetirement.current;
+    if (!intent || intent.refusal || retireLock.current) return;
+    if (intent.client !== client) { notify(t("Return to the original workspace identity before retrying this request.")); return; }
+    retireLock.current = true;
+    rememberRetirement({ ...intent, attempted: true });
     setRetireBusy(true);
     try {
-      await client.composite(intent.key, retirementEdits(intent.items));
+      const answer = await intent.client.composite(intent.key, intent.edits);
+      if (answer.key !== intent.key || answer.applied !== intent.items.length) throw Error(t("The retirement result did not confirm the reviewed batch. Retry its original request."));
       notify(t("{count} assets retired together.", { count: intent.items.length }));
-      setPicked(new Set()); setRetiring(false); setRetireIntent(undefined);
+      setPicked(new Set()); rememberRetirement(undefined);
     } catch (problem) {
-      // The answer is unclear, not a success. The frozen intent stays so a
-      // retry sends exactly its original key and payload.
+      if (problem instanceof CompositeRefusalError) rememberRetirement({ ...intent, attempted: true, refusal: problem.message });
+      // All other failures leave the original request available for retry.
       notify(humanizeKernelError(problem instanceof Error ? problem.message : String(problem)));
-    } finally { setRetireBusy(false); }
+    } finally { retireLock.current = false; setRetireBusy(false); }
   };
   const remove = async (ref: Api.AssetRef) => {
     const current = latestProject.current;
@@ -290,7 +297,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     {!visible.length && <p className="p-3 text-xs text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
   </div>;
   const conceptPatch = (concepts: Api.AppConcept[]) => patch({ concepts });
-  const locked = saving || dirty || !!pendingPatch || !!createdResource;
+  const locked = saving || dirty || !!pendingPatch || !!createdResource || !!retireIntent;
   const dependencies = dependencyQuery.data;
   const header = installed?.application?.pages.find((name) => definitions.some((d) => d.ref.app === "build" && d.ref.kind === "page" && d.ref.name === name));
   return <>
@@ -298,8 +305,8 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{unpublished.length}</span>}</Button>}
-        {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={saving || dirty || !!pendingPatch || !!createdResource} onChange={(event) => {
+        {builder && <Button size="sm" disabled={locked} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{unpublished.length}</span>}</Button>}
+        {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={locked} onChange={(event) => {
           let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
           try { choice = JSON.parse(event.target.value); } catch { return; }
           if (choice.kind === "shared" && choice.ref) {
@@ -314,8 +321,10 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {shared.length > 0 && <optgroup label={t("Published resources (all owners)")}>{shared.map((item) => <option key={refKey(item.ref)} value={JSON.stringify({ kind: "shared", ref: item.ref })}>{item.title} · {item.app} · {item.ref.kind}</option>)}</optgroup>}
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
-        {builder && <NewResourceMenu application={id} area={activeArea} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || savedChanges.isPending || savedChanges.isError || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => {
+        {builder && <NewResourceMenu application={id} area={activeArea} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} />}
+        {builder && <Button size="sm" variant="primary" disabled={locked || resourcesUnavailable || savedChanges.isPending || savedChanges.isError || (!project.pages?.length && !project.resources?.length)} onClick={() => {
+            const problem = releaseSelectionProblem(releaseSelection);
+            if (problem) { setError(t(problem)); return; }
             // The complete joint selection travels through the original view
             // call; only the anchor identity is in the route. Legacy JSON
             // links keep working through the decoder's URL fallback.
@@ -341,7 +350,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           <strong className="mr-auto">{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
           {!current && <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} className="w-full sm:w-56" value={filter} onChange={event => setFilter(event.target.value)} />}
           <Button size="sm" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
-          {picked.size > 0 && <Button size="sm" variant="danger" disabled={picked.size > 64} onClick={beginRetire}>{t("Retire {count} selected", { count: picked.size })}</Button>}
+          {picked.size > 0 && <Button size="sm" variant="danger" disabled={locked} onClick={beginRetire}>{t("Retire {count} selected", { count: picked.size })}</Button>}
           {activeArea === "model" && <Button size="sm" onClick={() => open({ view: "object-type", params: { application: id } })}>{t("Open business model")}</Button>}
           {activeArea === "interface" && <><Button size="sm" onClick={() => open({ view: "module", params: { id, application: id } })}>{t("Navigation and header")}</Button><Button size="sm" disabled={locked} onClick={() => setTab("templates")}>{t("New page from template…")}</Button></>}
         </div>}
@@ -362,8 +371,8 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
               {!current.installed && <ContextHelp title={t("Dependencies")}>{t("Draft dependencies are checked by the release owner. Published links use declared dependencies.")}</ContextHelp>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {(current.record || current.installed) && <Button size="sm" variant="primary" onClick={() => open(assetRoute(current.ref, owned, definitions, project.id))}>{t(!current.record && current.ref.kind === "object" ? "Open in object model" : "Open")}</Button>}
-                {builder && current.missing && current.kind !== publishedResourceKind && <NewResourceMenu application={id} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
-                {builder && <Button size="sm" disabled={saving || dirty || !!pendingPatch || !!createdResource} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
+                {builder && current.missing && current.kind !== publishedResourceKind && <NewResourceMenu application={id} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)}>{t("Create it")}</NewResourceMenu>}
+                {builder && <Button size="sm" disabled={locked} onClick={() => void remove(current.ref)}>{t("Remove from project")}</Button>}
               </div>
             </div> : <div role="region" aria-label={t("Workspace resources")} className="grid gap-2 divide-y divide-border">
               {studioResourceGroups(project, activeArea, visible).map(group => <Panel variant="plain" key={group.id} className="py-3">
@@ -371,7 +380,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
                 {group.items.map(item => {
                   const key = refKey(item.ref);
                   return <div key={key} className="flex items-center gap-1">
-                    {retireable(item) && <Checkbox ariaLabel={t("Select {title}", { title: item.title })} checked={picked.has(key)}
+                    {retireable(item) && <Checkbox disabled={locked} ariaLabel={t("Select {title}", { title: item.title })} checked={picked.has(key)}
                       onChange={checked => setPicked(next => { const picked2 = new Set(next); if (checked) picked2.add(key); else picked2.delete(key); return picked2; })} />}
                     <Button variant="row" className="min-w-0 flex-1 gap-3 py-3" onClick={() => item.missing ? setSelected(refKey(item.ref)) : open(assetRoute(item.ref, owned, definitions, id))}>
                       <span className="text-muted [&>svg]:size-4">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{statusOf(item)}</span>
@@ -420,16 +429,16 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {verificationSelection.current ? <ReleaseReview initialKind="app" initialID={id} initialDrafts={verificationSelection.current} embedded /> : <p role={savedChanges.isError ? "alert" : "status"}>{t(savedChanges.isError ? "Saved changes could not be loaded." : "Loading…")}</p>}
         </div></ViewVisibilityContext.Provider></div>}
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
-        {retiring && retireIntent.current && <Dialog open={retiring} onOpenChange={setRetiring} title={t("Retire {count} selected", { count: retireIntent.current.items.length })}>
+        {retireIntent && <Dialog open onOpenChange={open => { if (!open && !retireLock.current && (!retireIntent.attempted || retireIntent.refusal)) rememberRetirement(undefined); }} title={t("Retire {count} selected", { count: retireIntent.items.length })}>
           <div className="grid gap-3 p-1 text-sm">
             <p className="text-muted">{t("These assets retire together in one transaction: every step is checked first, and either all retire or none does.")}</p>
             <ul className="grid max-h-56 gap-1 overflow-auto rounded border border-border p-2 text-xs">
-              {retireIntent.current.items.map(item => <li key={refKey(item.ref)} className="flex items-center gap-2"><span className="text-muted [&>svg]:size-3.5">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-muted">{t(item.kind.label)}</span></li>)}
+              {retireIntent.items.map(item => <li key={refKey(item.ref)} className="flex items-center gap-2"><span className="text-muted [&>svg]:size-3.5">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-muted">{t(item.kind.label)}</span></li>)}
             </ul>
-            {!retireBusy && (retireIntent.current.retried ?? 0) > 0 && <p role="alert" className="text-xs text-warning">{t("The previous retirement request was not confirmed. Retrying sends its original key and list; discard it only to choose a different batch.")}</p>}
+            {retireIntent.refusal ? <p role="alert" className="text-xs text-danger">{humanizeKernelError(retireIntent.refusal)}</p> : !retireBusy && retireIntent.attempted && <p role="alert" className="text-xs text-warning">{t("The previous retirement request was not confirmed. Retry its original key and list before leaving or choosing a different batch.")}</p>}
             <div className="flex justify-end gap-2">
-              <Button size="sm" onClick={() => { setRetiring(false); setRetireIntent(undefined); }} disabled={retireBusy}>{t("Discard and reselect")}</Button>
-              <Button size="sm" variant="danger" disabled={retireBusy} onClick={() => { const current = retireIntent.current; if (current) { retireIntent.current = { ...current, ...retireAgain(current) }; } void retire(); }}>{retireBusy ? t("Retiring…") : t("Retire them")}</Button>
+              <Button size="sm" onClick={() => rememberRetirement(undefined)} disabled={retireBusy || !!retireIntent.attempted && !retireIntent.refusal}>{t("Discard and reselect")}</Button>
+              <Button size="sm" variant="danger" disabled={retireBusy || !!retireIntent.refusal} onClick={() => void retire()}>{retireBusy ? t("Retiring…") : t("Retire them")}</Button>
             </div>
           </div>
         </Dialog>}

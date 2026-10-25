@@ -11,6 +11,8 @@ export type ActionDeclaration = Action;
 
 export type Connection = { readonly server: string; token: string; readonly tenant: string; readonly principal: string };
 export class OfflineReadError extends Error { readonly name="OfflineReadError"; }
+/** The host saved a terminal refusal for this exact composite key. */
+export class CompositeRefusalError extends Error { readonly name="CompositeRefusalError"; }
 
 /** The HTTP edge accepts both the host's structured refusal and a plain
  * diagnostic. Callers render only text, never the error object itself. */
@@ -264,10 +266,11 @@ export class EdgeClient {
   /** Apply several builder actions as one transaction: every edit is probed
    * against the same rules, and either all apply or none does. */
   async composite(key: string, edits: { schema: string; target: { type: string; id: string }; payload?: unknown }[]): Promise<CompositeAnswer> {
-    const answer = await this.call<CompositeAnswer & { error?: { detail?: string; message?: string } }>("POST", "/v1/composites", { key, edits });
+    const answer = await this.call<CompositeAnswer & { error?: string | { detail?: string; message?: string }; outcome?: "refused" }>("POST", "/v1/composites", { key, edits });
     if (!answer.ok) {
-      const detail = (answer.body as { error?: { detail?: string; message?: string } }).error;
-      throw new Error(detail?.detail ?? detail?.message ?? `composite failed: ${answer.status}`);
+      const detail = answer.body.error;
+      const message = (typeof detail === "object" ? detail.detail ?? detail.message : detail) ?? `composite failed: ${answer.status}`;
+      throw answer.body.outcome === "refused" ? new CompositeRefusalError(message) : new Error(message);
     }
     return answer.body;
   }

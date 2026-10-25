@@ -60,8 +60,8 @@ export function FunctionEditor({ id }: { id: string }) {
   if (!(draft.instructions ?? "").trim()) issues.push(t("Write instructions for the model stage."));
   if (!(draft.output ?? []).length || (draft.output ?? []).some((field) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.name) || !field.description?.trim()) || new Set((draft.output ?? []).map((field) => field.name)).size !== (draft.output ?? []).length)
     issues.push(t("Give every output a unique field name, scalar type and description."));
-  const save = async () => {
-    const saved = await editor.save();
+  const save = async (deferNavigation = false) => {
+    const saved = await editor.save(deferNavigation);
     if (saved?.reloaded === false) { setError(t("Reload the saved function before editing again.")); return; }
     return saved;
   };
@@ -72,8 +72,8 @@ export function FunctionEditor({ id }: { id: string }) {
   };
   const review = async () => {
     if (issues.length) { setError(issues.join(" ")); return; }
-    const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
-    if (saved) open({ view: "release-review", params: { kind: "function", id: saved.id } }, { ifCurrent: { view: "function", params: { id: saved.id } } });
+    const saved = dirty || id === "new" ? await save(true) : { id: draft.id, revision: draft.revision };
+    if (saved) open({ view: "release-review", params: { kind: "function", id: saved.id } }, { ifCurrent: { view: "function", params: { id } }, replace: id === "new" });
   };
   const reload = () => editor.reload(t("The function could not be saved or loaded. Your draft is still here."));
   if (role("build") !== "builder") return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{t("Only a builder can edit AI functions.")}</WorkbenchMessage></Workbench>;

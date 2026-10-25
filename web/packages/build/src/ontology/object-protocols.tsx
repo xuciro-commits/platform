@@ -24,7 +24,7 @@ export function ObjectProtocolsEditor({ process, onChange }: { process: Process;
     {bindings.map((binding, at) => <InputDraftProvider key={at} scope={JSON.stringify({ kind: "protocol", at })}>
       <fieldset className="grid min-w-0 gap-3 border-t border-border pt-4" aria-label={t("Protocol binding {number}", { number: at + 1 })}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-xs sm:col-span-2">{t("Use an installed protocol")}<ProtocolSelect value={binding.name ? `${binding.name}/${binding.version}` : ""} empty={t("Choose an installed protocol, or declare one below")} onChange={id => {
+          <label className="grid gap-1 text-xs sm:col-span-2">{t("Use an installed protocol")}<ProtocolSelect value={binding.contract ? `${binding.contract.Name}/${binding.contract.Version}` : ""} empty={t("Choose an installed protocol, or declare one below")} onChange={id => {
             const contract = query.data?.find(item => item.id === id);
             if (!contract) return;
             const slash = id.lastIndexOf("/");

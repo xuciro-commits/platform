@@ -44,7 +44,7 @@ test("a declared device command is read back without blind resend and a stuck co
     await builder.decide("build.source.publish", { type: "build.source", id: source }, {});
 
     await builder.open(page, `/action-type?id=${object.id}&action=start`);
-    await page.getByRole("button", { name: "Transaction", exact: true }).click();
+    await page.getByRole("region", { name: "Action structure", exact: true }).getByRole("button", { name: /^Transaction(?: \d+)?$/ }).click();
     await page.getByRole("checkbox", { name: "Dispatch a declared command after this transaction", exact: true }).check();
     await page.getByRole("button", { name: "Add command declaration", exact: true }).click();
     await page.getByLabel("Command name", { exact: true }).fill("move");
@@ -69,12 +69,12 @@ test("a declared device command is read back without blind resend and a stuck co
     await operator.open(page, `/record?type=${type}&id=${first}`);
     const progress = page.getByRole("region", { name: "Device dispatch progress", exact: true });
     await expect(progress).toBeVisible();
-    await expect(progress.getByText("Outcome unknown", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(progress.locator('[data-ui="tag"]').filter({ hasText: /^Outcome unknown$/ })).toBeVisible({ timeout: 20_000 });
     await shots(page, progress, "device-dispatch-unknown", info);
     states.set(first, { state: "running", reason: "Controller reports movement in progress" });
-    await expect(progress.getByText("In transit", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(progress.locator('[data-ui="tag"]').filter({ hasText: /^In transit$/ })).toBeVisible({ timeout: 20_000 });
     states.set(first, { state: "completed", reason: "Controller confirms arrival" });
-    await expect(progress.getByText("Completed", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(progress.locator('[data-ui="tag"]').filter({ hasText: /^Completed$/ })).toBeVisible({ timeout: 20_000 });
     const runs = await builder.read<{ runs: { kind: string; subject: string; state: string }[] }>(`applications/build/${application.name}/runs?kind=dispatch`);
     expect(runs.runs).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "dispatch", subject: `${type}/${first}`, state: "completed" })]));
     expect(sent).toHaveLength(1);
@@ -84,8 +84,8 @@ test("a declared device command is read back without blind resend and a stuck co
     await operator.decide(`${type}.create`, { type, id: second }, { status: "new" });
     await operator.decide(`${type}.start`, { type, id: second }, {});
     await builder.open(page, `/record?type=${type}&id=${second}`);
-    await expect(progress.getByText("Stuck", { exact: true })).toBeVisible({ timeout: 20_000 });
-    await expect(progress.getByText("Controller requires an operator", { exact: true }).first()).toBeVisible();
+    await expect(progress.locator('[data-ui="tag"]').filter({ hasText: /^Stuck$/ })).toBeVisible({ timeout: 20_000 });
+    await expect(progress.getByRole("paragraph").filter({ hasText: /^Controller requires an operator$/ })).toBeVisible();
     await shots(page, progress, "device-dispatch-stuck", info);
     await builder.open(page, "/inbox");
     const task = page.getByRole("listitem").filter({ hasText: "Move to target" });
@@ -94,7 +94,7 @@ test("a declared device command is read back without blind resend and a stuck co
     await page.getByRole("combobox", { name: "Dispatch decision", exact: true }).selectOption("complete");
     await page.getByRole("textbox", { name: "Decision evidence", exact: true }).fill("The on-site operator checked the destination and confirmed completion.");
     await page.getByRole("button", { name: "Record dispatch decision", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Device dispatch progress", exact: true }).getByText("Completed", { exact: true })).toBeVisible();
+    await expect(progress.locator('[data-ui="tag"]').filter({ hasText: /^Completed$/ })).toBeVisible();
     await shots(page, page.locator("body"), "device-dispatch-work-completed", info);
     expect(sent).toHaveLength(2);
     expect(new Set(sent).size).toBe(2);

@@ -1,4 +1,5 @@
 import { expect, selectObjectSection, slug, test, shots } from "./kit";
+import type { AssetRef } from "../../packages/kernel/src/gen/host";
 
 test("installed native applications open without drafts and accept an explicitly published extension", async ({ page, builder }, info) => {
   const definitions = await builder.definitions<any>();
@@ -35,7 +36,7 @@ test("installed native applications open without drafts and accept an explicitly
 
   // Large code applications expose workspaces, then objects with their actions.
   const builderApp = definitions.find(item => item.ref.app === "build" && item.ref.kind === "app" && item.ref.name === "build");
-  const action = definitions.find(item => item.ref.kind === "action" && item.action?.target && builderApp.application.resources.some(ref => ref.app === item.ref.app && ref.kind === item.ref.kind && ref.name === item.ref.name));
+  const action = definitions.find(item => item.ref.kind === "action" && item.action?.target && builderApp.application.resources.some((ref: AssetRef) => ref.app === item.ref.app && ref.kind === item.ref.kind && ref.name === item.ref.name));
   const target = definitions.find(item => item.ref.app === action.ref.app && item.ref.kind === "object" && item.ref.name === action.action.target);
   await builder.open(page, "/project?id=installed/build/build&area=logic");
   const assets = page.getByRole("region", { name: "Application assets", exact: true });

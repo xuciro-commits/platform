@@ -2,7 +2,7 @@
 
 ## Why
 
-可发现的 Data Connection 把 Integrator 带到无权首页；启动元数据失败只留下 Opening，运行监控失败可被画成空列表，动作授权解释还把 authority 当成 action。共同根因是 UI 在入口和结果投影时丢掉当前能力、状态及请求语义，见[审计 F13–F16](../../../docs/FrontendAudit.md)。
+可发现的 Data Connection 把 Integrator 带到无权首页；启动元数据失败只留下 Opening，运行监控失败可被画成空列表，动作授权解释还把 authority 当成 action。共同根因是 UI 在入口和结果投影时丢掉当前能力、状态及请求语义，见[审计 F13–F16](../../../../docs/FrontendAudit.md)。
 
 ## What Changes
 

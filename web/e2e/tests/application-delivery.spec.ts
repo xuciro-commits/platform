@@ -89,6 +89,79 @@ test("saved application changes include published drafts and use the original jo
   await expect.poll(async () => (await builder.read<{ changes: unknown[] }>(`releases/drafts/changes?application=${application.id}`)).changes.length).toBe(0);
 });
 
+test("bulk retirement retains an accepted request through a lost reply and only replaces confirmed refusals", async ({ page, builder }) => {
+  test.setTimeout(120_000);
+  const retained = await builder.object({ title: "Retained published object", fields: [] });
+  const pages: { id: string; name: string; title: string }[] = [];
+  for (let index = 1; index <= 65; index++) {
+    const title = `Retirement draft ${String(index).padStart(3, "0")}`;
+    pages.push({ ...await builder.page({ title, object: retained.type }), title });
+  }
+  const application = await builder.application({ title: "Retirement review", pages: pages.map(item => item.name), resources: [{ app: "build", kind: "object", name: retained.type }] });
+  const before = await builder.read<{ records: { id: string; revision: number }[] }>("records/build.page?limit=1000");
+  const revisions = new Map(before.records.map(record => [record.id, record.revision]));
+  expect(pages.every(item => revisions.has(item.id))).toBe(true);
+  const sent: { key: string; edits: unknown[] }[] = [], answers: any[] = [];
+  await page.route("**/v1/composites", async route => {
+    sent.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    answers.push(await response.json());
+    if (sent.length === 1) await route.abort("connectionreset");
+    else await route.fulfill({ response });
+  });
+  await builder.open(page, `/project?id=${application.id}&area=interface`);
+  for (const item of pages) await page.getByRole("checkbox", { name: `Select ${item.title}`, exact: true }).check();
+  await page.getByRole("button", { name: "Retire 65 selected", exact: true }).click();
+  await expect(page.getByText("A single retirement accepts at most 64 assets. Select a smaller batch.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /^Select Retirement draft \d{3}$/, checked: true })).toHaveCount(65);
+  await expect(page.getByRole("dialog", { name: /^Retire \d+ selected$/ })).toHaveCount(0);
+  expect(sent).toHaveLength(0);
+  const excluded = pages[64]!, reviewed = pages.slice(0, 64);
+  await page.getByRole("checkbox", { name: `Select ${excluded.title}`, exact: true }).uncheck();
+  await page.getByRole("button", { name: "Retire 64 selected", exact: true }).click();
+  const review = page.getByRole("dialog", { name: "Retire 64 selected", exact: true });
+  await expect(review.getByRole("listitem")).toHaveText(reviewed.map(item => new RegExp(`^${item.title}\\s*Page$`)));
+  await review.getByRole("button", { name: "Retire them", exact: true }).click();
+  await expect(review.getByRole("alert")).toContainText("The previous retirement request was not confirmed.");
+  await expect(review.getByRole("listitem")).toHaveText(reviewed.map(item => new RegExp(`^${item.title}\\s*Page$`)));
+  await expect(review.getByRole("button", { name: "Discard and reselect", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(review).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+w");
+  await expect(page.getByText("An operation is in progress. Wait for its result before leaving.", { exact: true })).toBeVisible();
+  await expect(review).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.edits).toEqual(reviewed.map(item => ({ schema: "build.page.archive", target: { type: "build.page", id: item.id }, payload: {} })));
+  expect(answers[0]).toMatchObject({ key: sent[0]!.key, applied: 64 });
+  await review.getByRole("button", { name: "Retire them", exact: true }).click();
+  await expect(review).toHaveCount(0);
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toEqual(sent[0]);
+  expect(answers[1]).toEqual(answers[0]);
+  const after = await builder.read<{ records: { id: string; revision: number; archived?: boolean }[] }>("records/build.page?archived=true&limit=1000");
+  for (const item of reviewed) expect(after.records.find(record => record.id === item.id)).toMatchObject({ archived: true, revision: revisions.get(item.id)! + 1 });
+  const unselected = await builder.record("build.page", excluded.id);
+  expect(unselected.revision).toBe(revisions.get(excluded.id));
+  expect(unselected.archived).not.toBe(true);
+
+  await builder.open(page, `/project?id=${application.id}&area=model`);
+  await page.getByRole("checkbox", { name: "Select Retained published object", exact: true }).check();
+  await page.getByRole("button", { name: "Retire 1 selected", exact: true }).click();
+  const refused = page.getByRole("dialog", { name: "Retire 1 selected", exact: true });
+  await refused.getByRole("button", { name: "Retire them", exact: true }).click();
+  await expect(refused.getByRole("alert")).toContainText("A published object cannot be archived");
+  expect(answers[2].outcome).toBe("refused");
+  await expect(refused.getByRole("button", { name: "Discard and reselect", exact: true })).toBeEnabled();
+  await refused.getByRole("button", { name: "Discard and reselect", exact: true }).click();
+  await page.getByRole("button", { name: "Retire 1 selected", exact: true }).click();
+  await refused.getByRole("button", { name: "Retire them", exact: true }).click();
+  await expect(refused.getByRole("alert")).toContainText("A published object cannot be archived");
+  expect(sent[3]!.key).not.toBe(sent[2]!.key);
+  expect(sent[3]!.edits).toEqual(sent[2]!.edits);
+  expect((await builder.record("build.object", retained.id)).archived).not.toBe(true);
+  await refused.getByRole("button", { name: "Discard and reselect", exact: true }).click();
+});
+
 test("application capacity, original decisions and headless runtime remain visible", async ({ page, builder, operator }, testInfo) => {
   test.setTimeout(120_000);
   const object = await builder.object({ title: "Runtime case object", fields: [{ name: "note", title: "Note", type: "text" }] });
@@ -239,7 +312,7 @@ test("application capacity, original decisions and headless runtime remain visib
   await expect(page.getByRole("heading", { name: "Application overview", exact: true })).toBeVisible();
   await expect(page.getByText("No business pages are available in this application. You can view its activity and diagnose problems from application runs.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "View application runs", exact: true }).click();
-  const artifact=page.getByLabel("Application artifact",{exact:true});
+  const artifact=page.getByLabel("Application artifact",{exact:true}).filter({visible:true});
   await expect(artifact.getByText("Current content version",{exact:true})).toHaveCount(0);
   const explanation=artifact.getByRole("button",{name:"About Application artifact",exact:true});
   await explanation.focus();
@@ -251,7 +324,7 @@ test("application capacity, original decisions and headless runtime remain visib
   await artifact.getByRole("button",{name:"Versions and recovery",exact:true}).click();
   await expect(artifact.getByText("Current content version", { exact: true })).toBeVisible();
   await expect(page.getByRole("alert").filter({ hasText: "scale exceeded: 2 / 1" })).toBeVisible();
-  await page.getByText("Diagnose a record", { exact: true }).click();
+  await artifact.getByRole("button", { name: "Diagnose a record", exact: true }).click();
   await page.getByRole("textbox", { name: "Record ID", exact: true }).fill(first);
   const diagnostic = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/records/${object.type}/${first}/diagnostic`));
   await page.getByRole("button", { name: "Diagnose", exact: true }).click();
@@ -266,7 +339,7 @@ test("application capacity, original decisions and headless runtime remain visib
   await runView.getByRole("button", { name: "Back to application runs", exact: true }).click();
   const versions=artifact.getByRole("button",{name:"Versions and recovery",exact:true});
   if(await versions.getAttribute("aria-expanded")!=="true")await versions.click();
-  await expect(page.getByText("Current content version", { exact: true })).toBeVisible();
+  await expect(artifact.getByText("Current content version", { exact: true })).toBeVisible();
   await expect(selected).toContainText(`${workflow.title} ${first}`);
   await shots(page, page.locator("body"), "application-runtime", testInfo);
 });
