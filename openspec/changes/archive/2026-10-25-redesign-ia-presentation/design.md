@@ -57,4 +57,4 @@
 ### 验证记录
 
 - `make check-web` 全绿（catalog 147 条、十包 typecheck）；ui 214 测试全绿；openspec strict 校验通过；check-specs 9/9；check-local 通过。
-- Go 侧（check-go/escapes/boundaries）本轮零 Go 文件改动，沙箱 Go 工具链随会话重置丢失且下载源受限，留给 CI 验证。
+- 修正：escapes 实为 web 层「能力逃逸」检查（业务代码不得手搓平台已有控件，AGENTS.md 规则 4「单一归属，先复用」）——本 change 期间它抓到 ZoneRail 的手搓按钮，已按检查器要求换回 Button 组合（与收编方向一致）。沙箱 Go 工具链随会话重置丢失且下载源受限，check-go 一线留给 CI。
