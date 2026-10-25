@@ -1,11 +1,6 @@
-// The Applications portal, after Foundry's: every application
-// this member may open, by category, searchable, starrable. It reads the apps
-// the shell was given, so an application handed over while it is open shows up.
-import { useHost } from "@platform/app";
-import { Button, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
+// Application tiles, shared by the home workbench: one application, one entry.
+import { Button, useWorkspace, t, type PlatformApplication } from "@platform/ui";
 import { Star } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { categories, projections, type Projection } from "./registry";
 
 /** One application tile: icon, title, description, the member's role in it, and a star. */
 export function ApplicationTile({ app, role, compact = false }: { app: PlatformApplication; role?: string; compact?: boolean }) {
@@ -27,46 +22,5 @@ export function ApplicationTile({ app, role, compact = false }: { app: PlatformA
         <Star className="size-3.5" fill={starred ? "currentColor" : "none"} />
       </Button>
     </div>
-  );
-}
-
-export function ApplicationsPortal({ projection }: { projection?: Projection }) {
-  const { applications } = useWorkspace();
-  const { me } = useHost();
-  const [query, setQuery] = useState("");
-  const [only, setOnly] = useState<string>(projection ?? "all");
-  useEffect(() => setOnly(projection ?? "all"), [projection]);
-  const lead: readonly string[] | undefined = projections.find((p) => p.id === only)?.categories;
-  const apps = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return (applications?.apps ?? []).filter(a => (!lead || lead.includes(a.category)) && (!text || `${a.title} ${a.description ?? ""} ${a.id}`.toLowerCase().includes(text)));
-  }, [applications?.apps, query, only]);
-  const ordered = categories.filter(category => !lead || lead.includes(category.id));
-  const role = (id: string) => me.apps.find((e) => e.id === id)?.role;
-  return (
-    <>
-      <PageHeader title={t("Applications")} help={t("Every application you may open in {tenant}: the ones your organisation runs, and the platform's own tools your role allows.", { tenant: me.tenantId })} />
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Find an application…")} aria-label={t("Find an application…")} className="w-full sm:w-72" />
-        <div className="flex flex-wrap items-center gap-1 text-xs">
-          {[{ id: "all", title: () => t("All") }, ...projections].map((p) => (
-            <Button key={p.id} size="sm" variant={only === p.id ? "primary" : "ghost"} onClick={() => setOnly(p.id)}>{p.title()}</Button>
-          ))}
-        </div>
-      </div>
-      {ordered.map((category) => {
-        const inCategory = apps.filter((a) => a.category === category.id);
-        if (inCategory.length === 0) return null;
-        return (
-          <div key={category.id} className="mb-5">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{category.label()}</h2>
-            <div className="grid max-w-6xl grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2">
-              {inCategory.map((a) => <ApplicationTile key={a.id} app={a} role={role(a.id)} />)}
-            </div>
-          </div>
-        );
-      })}
-      {apps.length === 0 && <p className="text-sm text-muted">{t("No application matches.")}</p>}
-    </>
   );
 }

@@ -25,11 +25,20 @@ import { checkbox, date, datetime, json, longText, markdown, multiSelect, number
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { EnterpriseReference, RecordLookup } from "./RecordLookup";
+import { RecordChip } from "./RecordChip";
 import { Chart } from "../charts/Chart";
 import { FlowSteps, type FlowStepEdge, type FlowStepNode } from "../graph/flow/FlowSteps";
 import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 import { t } from "../i18n";
+
+/** A stable low-saturation category tone per select value; danger stays semantic. */
+const categoryTones = ["info", "success", "warning", "purple", "teal", "pink", "orange", "neutral"] as const;
+export function choiceTone(value: string) {
+  let hash = 0;
+  for (let at = 0; at < value.length; at++) hash = (hash * 31 + value.charCodeAt(at)) | 0;
+  return categoryTones[Math.abs(hash) % categoryTones.length]!;
+}
 import { humanizeKernelError } from "../lib/errors";
 import type { Api } from "@platform/kernel";
 
@@ -140,11 +149,14 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         case "datetime": return {...datetime(common),editor:({value,onChange})=><DateTimeInput value={value??""} title={f.title} offset="Z" onChange={onChange}/>};
         case "boolean": return checkbox(common);
         case "choice": return info.lifecycle?.field === f.name ? lifecycleField(common, info.lifecycle)
-          : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c })) });
+          : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c, tone: choiceTone(c) })) });
         case "reference": return source && f.ref
-          ? { ...text(common), type: "reference", display: (value,record) => f.ref === "enterprise.element" ? <EnterpriseReference source={source} value={value} /> : text(common).display(value,record), editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} stereotypes={[...(f.stereotype ? [f.stereotype] : []), ...(f.stereotypes ?? [])]} onChange={onChange} /> }
+          ? { ...text(common), type: "reference", display: (value) => value === undefined || value === null || value === "" ? <span className="text-muted">—</span>
+              : f.ref === "enterprise.element" ? <EnterpriseReference source={source} value={value} />
+              : <RecordChip source={source} type={f.ref!} id={String(value)} person={f.ref === "platform.member"} />,
+            editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} stereotypes={[...(f.stereotype ? [f.stereotype] : []), ...(f.stereotypes ?? [])]} onChange={onChange} /> }
           : options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
-        case "references": return source&&f.ref ? {...multiSelect({...common,options:options[f.name]??[]}),editor:({id,value,onChange})=>{
+        case "references": return source&&f.ref ? {...multiSelect({...common,options:options[f.name]??[]}),display:(value)=>!Array.isArray(value)||!value.length?<span className="text-muted">—</span>:<span className="flex max-w-64 flex-wrap gap-1 overflow-hidden">{value.filter(item=>item!=null&&item!=="").map(item=><RecordChip key={String(item)} source={source} type={f.ref!} id={String(item)} person={f.ref==="platform.member"}/>)}</span>,editor:({id,value,onChange})=>{
           const values:string[]=value??[],stereotypes=[...(f.stereotype?[f.stereotype]:[]),...(f.stereotypes??[])];
           return <div id={id} role="group" aria-label={f.title} className="grid gap-2">{values.map((item,index)=><div key={index} className="flex gap-2"><span className="min-w-0 flex-1"><RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} value={item} ariaLabel={f.title} onChange={next=>onChange(next?values.map((old,at)=>at===index?next:old):values.filter((_,at)=>at!==index))}/></span><Button size="sm" onClick={()=>onChange(values.filter((_,at)=>at!==index))}>{t("Remove")}</Button></div>)}<RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} ariaLabel={f.title} onChange={next=>{if(next&&!values.includes(next))onChange([...values,next]);}}/></div>;
         }}:multiSelect({ ...common, options: options[f.name] ?? [] });

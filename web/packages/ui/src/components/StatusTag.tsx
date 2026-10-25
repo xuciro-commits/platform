@@ -2,7 +2,7 @@ import { cn } from "../lib/cn";
 import { t } from "../i18n";
 
 /** Semantic tones; domains map their own states onto them. */
-export type Tone = "neutral" | "info" | "success" | "warning" | "danger";
+export type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "purple" | "pink" | "teal" | "orange";
 
 export type StatusRegistry = Record<string, { label: string; tone: Tone }>;
 

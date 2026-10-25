@@ -9,9 +9,10 @@ import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@
 import { EdgeClient, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark } from "lucide-react";
+import { Bell, Bookmark, ClipboardList, Inbox as InboxIcon, Send } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chromeViews, explorerApplication, personalWork } from "./chrome";
+import { ZoneRail } from "./shell/ZoneRail";
 import { availablePackages, packages, type Package } from "./host/packages";
 import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
@@ -261,9 +262,14 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         applications={{ apps: portal, categories: categories.map((c) => ({ id: c.id, label: c.label() })), current: app?.id, onSelect: openApplication }}
         onLanguage={(id) => decide("platform.profile.update", { type: "platform.profile", id: me!.principalId }, { language: id })}
         onActiveRoute={setActiveRoute} onEmpty={() => setActiveRoute(undefined)}
-        navigation={app?.navigation?.(activeRoute)}
+        navigation={<div className="grid gap-3"><ZoneRail />{app?.navigation?.(activeRoute)}</div>}
         nav={[
-          ...(app?.nav(host, activeRoute) ?? []),
+          { label: t("Work"), items: [
+            { label: t("Inbox"), icon: <InboxIcon />, route: { view: "inbox" } },
+            { label: t("My requests"), icon: <ClipboardList />, route: { view: "requests" } },
+            { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" } },
+            { label: t("Outbox"), icon: <Send />, route: { view: "outbox" }, badge: host.outbox.filter(entry => entry.state !== "SUBMISSION_STATE_CONFIRMED" && entry.state !== "SUBMISSION_STATE_REJECTED").length || undefined },
+          ] },
           ...(app?.id === "core" && saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },

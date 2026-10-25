@@ -13,6 +13,7 @@ import { Markdown, MarkdownEditor } from "../components/Markdown";
 import { WorkspaceContext } from "../shell/Workspace";
 import type { Route } from "../shell/route";
 import { t } from "../i18n";
+import { formatDate, formatDateTimeSmart } from "../lib/datetime-format";
 import {StructuredValueInput} from './StructuredValueInput';
 
 export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean; describedBy?: string };
@@ -145,13 +146,13 @@ export const checkbox = (o: Common): FieldType<boolean> => ({
 
 export const date = (o: Common): FieldType<string> => ({
   type: "date", width: 110, ...o, schema: z.iso.date(), compare: byString, operators: timeOps, text: (v) => v ?? "",
-  display: (v) => (v ? <span className="tabular-nums">{v}</span> : muted), editor: input("date", (s) => s),
+  display: (v) => (v ? <span className="tabular-nums" title={v}>{formatDate(v)}</span> : muted), editor: input("date", (s) => s),
 });
 
 /** Stored as `YYYY-MM-DDTHH:MM` local time, the value of a datetime-local input. */
 export const datetime = (o: Common): FieldType<string> => ({
   ...date(o), type: "datetime", width: 150, schema: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, "Date and time"),
-  display: (v) => (v ? <span className="tabular-nums">{v.slice(0, 16).replace("T", " ")}</span> : muted),
+  display: (v) => (v ? <span className="tabular-nums" title={v}>{formatDateTimeSmart(v.slice(0, 16))}</span> : muted),
   editor: input("datetime-local", (s) => s, (v) => v.slice(0, 16)),
 });
 

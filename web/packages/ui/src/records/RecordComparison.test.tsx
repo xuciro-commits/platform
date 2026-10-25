@@ -48,7 +48,7 @@ test("datetime compares instants at nanosecond precision across UTC offsets and 
  const view=render(<RecordComparison {...props} fields={["datetime"]} records={[record("A",{datetime:"2028-02-29T08:00:00.123456789+08:00"}),record("B",{datetime:"2028-02-29T00:00:00.123456789Z"})]}/>);
  expect(screen.getByRole("rowheader",{name:"Time Same"})).toBeTruthy();
  view.rerender(<RecordComparison {...props} fields={["datetime"]} records={[record("A",{datetime:"2028-02-29T00:00:00.123456789Z"}),record("B",{datetime:"2028-02-29T00:00:00.123456788Z"})]}/>);
- expect(screen.getByRole("rowheader",{name:"Time Different"})).toBeTruthy();expect(screen.getAllByText("2028-02-29 00:00")).toHaveLength(2);
+ expect(screen.getByRole("rowheader",{name:"Time Different"})).toBeTruthy();expect(screen.getAllByTitle("2028-02-29T00:00:00.123456789Z")).toHaveLength(1);expect(screen.getAllByTitle("2028-02-29T00:00:00.123456788Z")).toHaveLength(1);
  for(const [a,b] of [["0001-01-01T00:00:00Z","0001-01-01T01:00:00+01:00"],["2000-12-31T23:30:00Z","2001-01-01T00:30:00+01:00"],["9999-12-31T23:59:59.1Z","9999-12-31T23:59:59.100000000+00:00"]]){
   view.rerender(<RecordComparison {...props} fields={["datetime"]} records={[record("A",{datetime:a}),record("B",{datetime:b})]}/>);expect(screen.getByRole("rowheader",{name:"Time Same"})).toBeTruthy();
  }

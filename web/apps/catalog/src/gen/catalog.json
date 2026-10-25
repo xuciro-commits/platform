@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:711bfa17b5913db6",
+  "revision": "sha256:8a1146fcd9bc1c42",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13551,7 +13551,6 @@
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
-      "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
@@ -13759,7 +13758,6 @@
       "web/packages/govern/src/words.tsx",
       "web/packages/ui/src/records/RecordWorkspace.tsx",
       "web/apps/workspace/src/chrome.tsx",
-      "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],

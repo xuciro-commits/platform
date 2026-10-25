@@ -3,7 +3,7 @@ import {
   type ColumnDef, type SortingState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, ArrowUp, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Search, Calendar, CalendarClock, CircleDot, CheckSquare, Link2, Tags, Hash, Banknote, AlignLeft, Braces, Rows3, Star } from "lucide-react";
 import { useCallback,useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import type { FieldType } from "../fields/types";
@@ -59,6 +59,18 @@ const focusSel = (root: HTMLElement | null, sel: string, n = 3) => {
   if (el) el.focus();
   else if (n) requestAnimationFrame(() => focusSel(root, sel, n - 1));
 };
+
+/** A muted type glyph before the header title, Notion-style: the column's
+ * field semantics at a glance without spending a cell on it. */
+const headerTypeIcons: Record<string, typeof Calendar> = {
+  date: Calendar, datetime: CalendarClock, choice: CircleDot, boolean: CheckSquare,
+  reference: Link2, references: Link2, tags: Tags, integer: Hash, decimal: Hash,
+  money: Banknote, longtext: AlignLeft, json: Braces, lines: Rows3, rating: Star,
+};
+function headerTypeIcon(type?: string) {
+  const Icon = type ? headerTypeIcons[type] : undefined;
+  return Icon ? <Icon className="size-3 shrink-0 text-muted" aria-hidden /> : null;
+}
 
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
@@ -192,7 +204,7 @@ export function DataTable<T>({
                     {!header.isPlaceholder && (header.column.getCanSort() ? (
                       <button type="button" className="flex min-w-0 items-center gap-1 hover:text-foreground"
                         onClick={header.column.getToggleSortingHandler()}>
-                        <span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                        {headerTypeIcon(meta?.field?.type)}<span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
                         {sorted === "asc" ? <ArrowUp className="size-3 shrink-0" /> : sorted === "desc" ? <ArrowDown className="size-3 shrink-0" /> : null}
                       </button>
                     ) : <div className="min-w-0 flex-1">{flexRender(header.column.columnDef.header, header.getContext())}</div>)}
