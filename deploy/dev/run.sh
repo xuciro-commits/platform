@@ -10,8 +10,8 @@ solution=${1:-hospitality} port=${2:-8495}
 [[ -f deploy/local/.env ]] && set -a && source deploy/local/.env && set +a
 bin=".build/dev/$solution-server"
 case "$solution" in
-  hospitality) admin=user:manager@hotel.test ;;
-  manufacturing) admin=user:sup@plant.test ;;
+  hospitality) admin=user:manager@hotel.test; sink_port=${SINK_PORT_HOSPITALITY:-8499}; smtp_port=${SINK_SMTP_PORT_HOSPITALITY:-2526} ;;
+  manufacturing) admin=user:sup@plant.test; sink_port=${SINK_PORT:-8497}; smtp_port=${SINK_SMTP_PORT:-2525} ;;
   *) echo "Unknown solution: $solution" >&2; exit 2 ;;
 esac
 if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -23,7 +23,7 @@ if [[ -n ${PLATFORM_DEV_LIGHT:-} ]]; then
 fi
 export PLATFORM_S3_ACCESS_KEY=platform PLATFORM_S3_SECRET_KEY=platform-files-local-only
 # The local sink stand-in (webhooks, mail, model fixtures) runs in the host process.
-export PLATFORM_SINK_ADDRESS="0.0.0.0:${SINK_PORT:-8497}" PLATFORM_SINK_SMTP_ADDRESS="0.0.0.0:${SINK_SMTP_PORT:-2525}"
+export PLATFORM_SINK_ADDRESS="0.0.0.0:$sink_port" PLATFORM_SINK_SMTP_ADDRESS="0.0.0.0:$smtp_port"
 export PLATFORM_SECRET_SINK=sinkLocalOnly0000000000000000000000000000000000000000000000000000
 export PLATFORM_SECRET_OPENROUTER=${OPENROUTER_API_KEY:-}
 compute=.build/dev/compute

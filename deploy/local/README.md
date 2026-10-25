@@ -31,6 +31,8 @@ make help    # 中文命令说明
 
 本地就绪还核对端口监听者属于当前 Air/Vite 启动进程，旧进程的健康答复不能代替当前版本。外来端口占用会明确报错，不自动按端口结束进程；更新时另外核对实际 API 进程使用的二进制映像，并在原更新报告中记录其 PID。
 
+本机内置模拟接收器分别使用酒店 HTTP `8499` / SMTP `2526`、制造 HTTP `8497` / SMTP `2525`，两宿主不共占同一端口。旧独立模拟容器若仍运行，应先保留其记录并停止它；不与新宿主并行监听。
+
 底层命令仍可单独使用：`make infra`、`make dev SOLUTION=hospitality`、`make web SOLUTION=hospitality`（前端 5176；制造 5175）、`make infra-compute`。无 Docker 的内存探针用 `make dev-light`。首次缺依赖时运行 `make setup`。`make local` 复用数据卷和登录配置，不重建宿主镜像；计算容器使用独立的 `platform-dev-compute` 项目。
 
 宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants.json）；`deploy/local/.env` 的密钥同样被读取。
