@@ -743,6 +743,7 @@ export default {
  "Submitting…": "正在提交…",
  "Staged edits": "暂存修改",
  "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.": "可选 RecordEditPort 提供授权展示字段及绑定原记录版本的提交回调。失败修改仍保留暂存，调用方管理权限及执行。",
+ "Finish editing": "完成编辑",
  "Edit cells": "编辑单元格",
  "Cancel cell edits": "取消单元格修改",
  "Submit cell edits": "提交单元格修改",
