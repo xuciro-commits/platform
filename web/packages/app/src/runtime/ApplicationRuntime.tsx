@@ -25,6 +25,10 @@ export function ApplicationSessionsProvider({ children }: { children: ReactNode 
 
 /** Application identity is explicit for reused pages. The shell retains only
  * the opaque instance ID; this provider owns attachment and teardown. */
+/** True inside an authoring preview route: pages render and read, but the
+ * route itself is the write boundary - no holder lookup participates. */
+export const AuthoringPreview = createContext(false);
+
 export function ApplicationPage({ pageRef, route, applicationRef, preview = false, children }: { pageRef: Api.AssetRef; route: Route; applicationRef?: Api.AssetRef; preview?: boolean; children: ReactNode }) {
   const { definitions, source,refresh } = useHost(), workspace = useWorkspace(), hub = useContext(Hub);
   const appearance=useTheme();
@@ -52,7 +56,7 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview = fals
   const showSessionControls = holders.length > 0 && (preview || holders.length > 1 || Object.keys(definition?.application?.variables ?? {}).length > 0);
   const collapsed=useSyncExternalStore(session?.subscribe??emptySubscribe,session?.headerSnapshot??(()=>undefined),()=>undefined);
   const navigate = (application: string, instance: string) => { const params:Record<string,string> = { ...route.params, ...sessionParams(application, instance) }; delete params.call; workspace.open({ ...route, params }); };
-  return <ApplicationContext.Provider value={context}><div className="min-w-0 max-w-full">
+  return <AuthoringPreview.Provider value={preview}><ApplicationContext.Provider value={context}><div className="min-w-0 max-w-full">
     {showSessionControls && <div className="mb-3 flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <Select aria-label={t("Page application")} value={id} onChange={(event) => navigate(event.target.value, instance)}><option value="">{t("Choose an application")}</option>{holders.map((d) => <option key={idOf(d)} value={idOf(d)}>{d.application?.title}</option>)}</Select>
       <Button disabled={!context} onClick={() => navigate(id, crypto.randomUUID())}>{t("New application instance")}</Button>
@@ -61,7 +65,7 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview = fals
     </div>}
     {definition && !session && <Panel role="alert">{t("The application instance is unavailable.")}</Panel>}
     {definition?.application?.header?<ApplicationHeader key={identity} header={definition.application.header} collapsed={collapsed} onCollapsedChange={session?.setHeaderCollapsed} pages={definition.application.pages.flatMap(name=>{const page=definitions.find(d=>d.ref.app===pageRef.app&&d.ref.kind==="page"&&d.ref.name===name)?.page;return page?[{name,title:page.title}]:[];})} currentPage={pageRef.name} onPage={name=>workspace.open({view:preview?"page-preview":"page",params:{app:pageRef.app,kind:"page",name,...sessionParams(id,instance)}})} onRefresh={refresh?()=>void refresh():undefined} onTheme={appearance.toggle}>{children}</ApplicationHeader>:children}
-  </div></ApplicationContext.Provider>;
+  </div></ApplicationContext.Provider></AuthoringPreview.Provider>;
 }
 
 export function useApplicationVariables(variables: Record<string, Api.PageVariable>) {

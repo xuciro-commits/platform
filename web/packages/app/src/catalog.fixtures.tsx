@@ -55,7 +55,7 @@ const sampleRun: Api.AgentRunRecord = {
   result: "The record is ready for human review. No model was called.", steps: [{ at: stamp.at, tool: "catalog.sample.read", outcome: "Sample quantity: 12", rationale: "Read the local example record." }],
 };
 
-class FixtureClient extends EdgeClient {
+export class FixtureClient extends EdgeClient {
   constructor(private readonly reads: Record<string, unknown>) { super({ server: "", token: "catalog-fixture", tenant: "catalog-fixture", principal: "catalog-fixture" }, "catalog-fixture"); }
   override async get<T>(path: string): Promise<T> {
     if (Object.hasOwn(this.reads, path)) return this.reads[path] as T;
@@ -81,17 +81,17 @@ class FixtureClient extends EdgeClient {
 /** Trusted local fixtures for owner demos, never a tenant or runtime host. */
 const noReads: Record<string, unknown> = {};
 const readerRole = { catalog: "reader" };
-export function CatalogFixture({ children, reads = noReads, roles = readerRole, definitions = sampleDefinitions }: { children: ReactNode; reads?: Record<string, unknown>; roles?: Record<string, string>; definitions?: Definition[] }) {
+export function CatalogFixture({ children, reads = noReads, roles = readerRole, definitions = sampleDefinitions, client, decide }: { children: ReactNode; reads?: Record<string, unknown>; roles?: Record<string, string>; definitions?: Definition[]; client?: EdgeClient; decide?: Host["decide"] }) {
   const [message, setMessage] = useState("");
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } }));
   const host = useMemo<Host>(() => ({
-    client: new FixtureClient(reads), me: { tenantId: "catalog-fixture", principalId: "catalog-fixture", profile: { id: "catalog-fixture", tenant: "catalog-fixture", roles },
+    client: client ?? new FixtureClient(reads), me: { tenantId: "catalog-fixture", principalId: "catalog-fixture", profile: { id: "catalog-fixture", tenant: "catalog-fixture", roles },
       apps: [{ id: "catalog", title: "Catalog fixtures", role: "reader" }], tenants: ["catalog-fixture"], language: "en", languages: ["en", "zh-CN"], currency: "CNY",
       account: { member: "catalog-fixture", subjects: ["user:fixture@example.test"], effective: { language: "en", timezone: "UTC", dateFormat: "ymd", numberFormat: "1,234.56", weekStart: "monday", email: "", digest: "instant" } },
       tenant: { id: "catalog-fixture", name: "Catalog fixture", settings: {}, apps: ["catalog"], members: 1, status: "active" } },
     role: (app) => roles[app], can: (schema) => sampleActions.some((action) => action.schema === schema),
     action: (schema) => sampleActions.find((action) => action.schema === schema), catalog: sampleActions,
-    decide: async (_schema, _target, _payload, options) => { const reason = t("Local example only. No action was sent to a host."); setMessage(reason); options?.onRefused?.(reason); return false; },
+    decide: decide ?? (async (_schema, _target, _payload, options) => { const reason = t("Local example only. No action was sent to a host."); setMessage(reason); options?.onRefused?.(reason); return false; }),
     outbox: [], resend: async () => {}, entities: [sampleObject], definitions, source: sampleSource, opens: new Map(),
   }), [reads, roles, definitions]);
   return <QueryClientProvider client={queryClient}><HostContext.Provider value={host}><PreviewWorkspace onOpen={() => setMessage(t("Local example only. Open the connected workspace to follow this link."))}>

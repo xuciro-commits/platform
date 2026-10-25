@@ -3626,7 +3626,7 @@ register("zh-CN", {
   "This page is empty.": "此页面是空的。",
   "Drag a widget from the library, or pick one to add it here.": "从库中拖一个组件过来，或选择一个添加到这里。",
   "Add widget": "添加组件",
-  "Preview: your records as they are; actions run for real.": "预览：记录如实显示；操作会真实执行。",
+  "Preview: your records as they are; actions do not run here. Use a rehearsal or the published application for real runs.": "预览：记录如实显示；此处动作不会执行。真实运行请使用原隔离试运行或已发布应用。",
   "Design: your records as they are. Actions do not run while you compose.": "设计：记录如实显示。编排时操作不会执行。",
   "Drag a widget onto the canvas, or click to add it to the selected layout.": "把组件拖到画布上，或点击把它加入所选布局。",
   "This is the object type workbench with synthetic local data. Save and publish are refused in Catalog.": "这是使用本地合成数据的对象类型工作台。在目录中保存与发布会被拒绝。",

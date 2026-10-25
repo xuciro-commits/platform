@@ -414,12 +414,12 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
                   const includes = (id: string): boolean => id === node || [...(document.nodes[id]?.children ?? []), ...(document.unusedWidgets ?? []).filter((entry) => entry.parent === id).map((entry) => entry.node)].some(includes);
                   return includes(overlay.root);
                 })?.root;
-              })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={preview} chosen={preview ? -1 : chosen} onChoose={preview ? () => {} : choose}
+              })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={false} chosen={preview ? -1 : chosen} onChoose={preview ? () => {} : choose}
                 notice={nothing && <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted"><p>{t("This page is empty.")}</p><p className="mt-1 text-xs">{t("Drag a widget from the library, or pick one to add it here.")}</p><Button className="mt-3" size="sm" onClick={() => { setPreview(false); setLeftTab("widgets"); setLeftOpen(true); }}><Plus />{t("Add widget")}</Button></div>}
                 wrapLayout={preview ? undefined : (id, _node, body) => <CanvasRegion key={id} id={id}>{body}</CanvasRegion>} /></ApplicationPage>
             </div>
           </div>
-          <div className="flex items-center gap-2 border-t border-border px-3 py-1 text-xs text-muted" role="status">{preview ? t("Preview: your records as they are; actions run for real.") : t("Design: your records as they are. Actions do not run while you compose.")}</div>
+          <div className="flex items-center gap-2 border-t border-border px-3 py-1 text-xs text-muted" role="status">{preview ? t("Preview: your records as they are; actions do not run here. Use a rehearsal or the published application for real runs.") : t("Design: your records as they are. Actions do not run while you compose.")}</div>
         </CanvasEditor>
       </fieldset></StructuredEditor>
     </Workbench>

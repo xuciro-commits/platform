@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:a64aa0f8c4b8155c",
+  "revision": "sha256:3b6c65b475de02df",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -8382,6 +8382,13 @@
         {
           "name": "label",
           "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "source",
+          "type": "RecordSource",
           "optional": true,
           "isCallback": false,
           "isSlot": false
