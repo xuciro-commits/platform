@@ -3,27 +3,12 @@ import { User } from "lucide-react";
 import { WorkspaceContext } from "../shell/Workspace";
 import type { RecordSource } from "./Records";
 
-/** One resolved title per referenced record per session; chips render the id until it lands. */
-const titles = new Map<string, Promise<string>>();
-
-function resolveTitle(source: RecordSource, type: string, id: string): Promise<string> {
-  const key = `${type}/${id}`;
-  let pending = titles.get(key);
-  if (!pending) {
-    pending = source.get(type, id).then((view) => {
-      const info = source.entity(type);
-      const display = info?.display && info.display !== "id" ? info.display : undefined;
-      const value = display ? view.record[display] : undefined;
-      return value === undefined || value === null || value === "" ? id : String(value);
-    }).catch(() => id);
-    titles.set(key, pending);
-  }
-  return pending;
-}
-
 /** A referenced record as a chip: the resolved title (the id until it arrives),
  * opening the record in the inspect pane beside the list. The cell's copied or
- * exported value stays the raw id — presentation never replaces data. */
+ * exported value stays the raw id — presentation never replaces data. The
+ * title resolves through the caller's own authorized source each time its
+ * identity or revision moves: no cross-identity reuse, no permanent failure
+ * fallback, and a rename arrives with the next revision. */
 export function RecordChip({ source, type, id, person = false, ariaLabel }: {
   source: RecordSource; type: string; id: string;
   /** The target is a person: a leading avatar glyph. */
@@ -31,11 +16,18 @@ export function RecordChip({ source, type, id, person = false, ariaLabel }: {
 }) {
   const workspace = useContext(WorkspaceContext);
   const [title, setTitle] = useState<string>();
+  const identity = source.scope ?? source;
   useEffect(() => {
     let live = true;
-    void resolveTitle(source, type, id).then((resolved) => { if (live) setTitle(resolved); });
+    source.get(type, id).then((view) => {
+      if (!live) return;
+      const info = source.entity(type);
+      const display = info?.display && info.display !== "id" ? info.display : undefined;
+      const value = display ? view.record[display] : undefined;
+      setTitle(value === undefined || value === null || value === "" ? id : String(value));
+    }, () => { if (live) setTitle(undefined); });
     return () => { live = false; };
-  }, [source, type, id]);
+  }, [identity, source.revision, type, id]);
   const shown = title ?? (id.length > 14 ? `${id.slice(0, 11)}…` : id);
   return <button type="button" data-entity={id} disabled={!workspace}
     aria-label={ariaLabel ?? `${type}/${id}`}

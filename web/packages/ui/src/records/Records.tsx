@@ -481,7 +481,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         })}
         <Button size="sm" variant="ghost" onClick={() => { setFacetSelection(undefined); setOffset(0); }}>{t("Clear filters")}</Button>
       </div>}
-      {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate}/>)}
+      {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate} source={source}/>)}
       {view === "list" && !cards && (
         <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
       )}
@@ -602,7 +602,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   const [tabState,setTab]=useState<{identity:string;value:string}>();
   const info = source.entity(type);
   const { view, error, loading, refresh: load } = useRecordView(source, type, id, reload);
-  const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
+  const entity = useMemo(() => (info ? entityFrom(info,{},source) : undefined), [info,source]);
   if (error) {
     return (
       <div role="alert" className="grid max-w-xl gap-2 rounded-md border border-[var(--tone-danger)] bg-surface p-4 text-sm">
@@ -636,7 +636,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
   // Extension records (A3): a type that extends this one pairs one record per base record; its
   // fields show as the base record's own, as far as the reader may read them (the host already filters).
-  const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo);return [{rel,relInfo,relEntity,row}];});
+  const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo,{},source);return [{rel,relInfo,relEntity,row}];});
   const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
         {barcode&&<div className="mb-3 flex justify-center overflow-hidden"><Barcode text={barcode}/></div>}
         {detailPresentation?.print&&<div className="mb-3 flex justify-end print:hidden"><Button size="sm" onClick={()=>window.print()}><Printer/>{t("Print")}</Button></div>}
@@ -652,7 +652,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       </section>);
   const groups=detailOnly&&!recordTabs&&!linksOnly?[]:recordLinks===undefined?[...view.related,...(view.linked??[])].map(rel=>({rel,title:undefined as string|undefined})):recordLinks.flatMap(group=>{const target=source.entity(group.object.name),field=target?.fields.find(f=>f.name===group.field&&f.type==="reference"&&f.ref===type&&!!f.inverse),rel=view.related.find(r=>r.type===group.object.name&&r.field===group.field);return field&&target?.app===group.object.app&&rel?[{rel,title:group.title}]:[];});
   const related=detailOnly&&!recordTabs&&!linksOnly?[]:groups.filter(({rel})=>!extensions.some(x=>x.rel===rel)).flatMap(({rel,title}) => {
-    const relInfo=source.entity(rel.type),relEntity=relInfo&&entityFrom(relInfo);if(!relEntity)return [];
+    const relInfo=source.entity(rel.type),relEntity=relInfo&&entityFrom(relInfo,{},source);if(!relEntity)return [];
     return [<section key={`${rel.type}.${rel.field}`}>
       <h2 className="mb-1 text-sm font-semibold">{title||relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : rel.relation ? <>{" · "}{rel.relation}</> : <>{t(", by")} {rel.field}</>})</span></h2>
       <DataTable data={rel.records} columns={[{id:"id",header:"ID",accessorKey:"id",meta:{width:130}},...columnsFor(relEntity,listed(relEntity))] as never} getRowId={(x:EntityRecord)=>x.id} height={Math.min(40+rel.records.length*28,260)} searchable={false} onRowClick={onOpen&&((x:EntityRecord)=>onOpen(rel.type,x))} empty={t("None")}/>
