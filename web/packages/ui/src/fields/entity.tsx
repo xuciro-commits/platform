@@ -1,6 +1,6 @@
 import type {Api} from "@platform/kernel";
 import {validCivilDate,validTimestamp,timestampNanoseconds} from "../components/date";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { Plus, X } from "lucide-react";
 import { z } from "zod";
 import { Button } from "../primitives/button";
@@ -20,13 +20,18 @@ export function valueOf<R>(entity: Entity<R>, key: string, row: R): unknown {
   return field?.compute ? field.compute(row) : (row as Record<string, unknown>)[key];
 }
 
+function FieldCell<R>(context:CellContext<R,unknown>) {
+  const field=context.column.columnDef.meta!.field!;
+  return field.display(context.getValue(),context.row.original);
+}
+
 /** Table columns from field types: display, alignment, width and sorting. */
 export function columnsFor<R>(entity: Entity<R>, keys: string[] = Object.keys(entity.fields)): ColumnDef<R, any>[] {
   return keys.map((key) => {
     const field = entity.fields[key]!;
     return {
       id: key, header: field.label, accessorFn: (row: R) => valueOf(entity, key, row),
-      cell: (c) => field.display(c.getValue(), c.row.original),
+      cell: FieldCell,
       sortingFn: (a, b) => {
         const x = a.getValue(key), y = b.getValue(key);
         return x === undefined ? -1 : y === undefined ? 1 : field.compare(x, y);

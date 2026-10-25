@@ -1,5 +1,9 @@
 import { User } from "lucide-react";
-import { useRecordView, type RecordSource } from "./Records";
+import { createContext, useContext } from "react";
+import { useRecordView, type EntityRecord, type RecordSource } from "./Records";
+
+/** The current record is already authorized by this mounted record view. */
+export const RecordReadContext=createContext<{scope:string|RecordSource;type:string;record:EntityRecord}|undefined>(undefined);
 
 /** A referenced record as a chip: the resolved title (the id until it arrives),
  * opening the record in the inspect pane beside the list. The cell's copied or
@@ -13,8 +17,9 @@ export function RecordChip({ source, type, id, person = false, ariaLabel, onOpen
   person?: boolean; ariaLabel?: string; onOpen?: (type: string, id: string) => void;
 }) {
   const display = source.entity(type)?.display;
-  const { view, loading, error } = useRecordView(source, type, display&&display!=="id"?id:undefined);
-  const value = !loading && !error && display && display !== "id" ? view?.record[display] : undefined;
+  const current=useContext(RecordReadContext),known=current?.scope===(source.scope??source)&&current.type===type&&current.record.id===id?current.record:undefined;
+  const { view, loading, error } = useRecordView(source, type, !known&&display&&display!=="id"?id:undefined);
+  const value = display && display !== "id" ? known?known[display]:!loading&&!error?view?.record[display]:undefined : undefined;
   const title = value === undefined || value === null || value === "" ? undefined : String(value);
   const shown = title ?? (id.length > 14 ? `${id.slice(0, 11)}…` : id);
   return <button type="button" data-entity={id} disabled={!onOpen}

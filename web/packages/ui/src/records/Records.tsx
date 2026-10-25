@@ -26,7 +26,7 @@ import { checkbox, date, datetime, json, longText, markdown, multiSelect, number
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { EnterpriseReference, RecordLookup } from "./RecordLookup";
-import { RecordChip } from "./RecordChip";
+import { RecordChip, RecordReadContext } from "./RecordChip";
 import { Chart } from "../charts/Chart";
 import { FlowSteps, type FlowStepEdge, type FlowStepNode } from "../graph/flow/FlowSteps";
 import { Pivot } from "../charts/Pivot";
@@ -680,6 +680,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   }
   if (!info || !entity || !view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const r = view.record;
+  const currentRecord=(content:ReactNode)=><RecordReadContext.Provider value={{scope:source.scope??source,type,record:r}}>{content}</RecordReadContext.Provider>;
   if(statusOnly){
    const l=info.lifecycle,value=statusTracker,field=info.fields.find(f=>f.name===value?.field);
    if(!l||!value||value.field!==l.field||!field||!value.stages.length||value.stages.some(name=>!l.states.some(s=>s.name===name))||typeof r[value.field]!=="string")return <p role="alert" className="text-sm text-muted">{t("Lifecycle status is unavailable.")}</p>;
@@ -722,15 +723,15 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       <DataTable data={rel.records} columns={[{id:"id",header:"ID",accessorKey:"id",meta:{width:130}},...columnsFor(relEntity,listed(relEntity))] as never} getRowId={(x:EntityRecord)=>x.id} height={Math.min(40+rel.records.length*28,260)} searchable={false} onRowClick={onOpen&&((x:EntityRecord)=>onOpen(rel.type,x))} empty={t("None")}/>
     </section>];
   });
-  if(linksOnly)return <div className="grid min-w-0 gap-3">{related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>}</div>;
+  if(linksOnly)return currentRecord(<div className="grid min-w-0 gap-3">{related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>}</div>);
   if(recordTabs){
     const tabs=recordTabs.filter(tab=>(pageUIManifest.runtime.recordView.tabs as readonly string[]).includes(tab));
     const titles:Record<string,string>={overview:t("Overview"),properties:t("Properties"),links:t("Links"),history:t("History")};
     const overview=<div className="grid gap-3">{info.lifecycle&&<StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field]??"")}/>}<PropertyList columns={2} items={info.fields.filter(f=>fields?.includes(f.name)&&["integer","decimal"].includes(f.type)).slice(0,4).map(f=>[f.title,entity.fields[f.name]!.display(r[f.name],r)])}/><PropertyList items={[...view.related,...(view.linked??[])].flatMap(rel=>{const target=source.entity(rel.type);return target?[[target.plural,String(rel.total)] as [string,ReactNode]]:[];})}/></div>;
     const panels:Record<string,ReactNode>={overview,properties,links:related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>,history:<><RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/><RecordHistory info={info} history={view.history}/></>};
-    return <div className="grid min-w-0 gap-3">{header}<ContentTabs key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:tabs[0]} onChange={value=>setTab({identity:tabIdentity,value})} items={tabs.map(id=>({id,title:titles[id]!,content:panels[id]}))}/></div>;
+    return currentRecord(<div className="grid min-w-0 gap-3">{header}<ContentTabs key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:tabs[0]} onChange={value=>setTab({identity:tabIdentity,value})} items={tabs.map(id=>({id,title:titles[id]!,content:panels[id]}))}/></div>);
   }
-  return (
+  return currentRecord(
     <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">
       {header}
       {!detailOnly && info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={schema=>!loading&&(can?.(schema)??false)}

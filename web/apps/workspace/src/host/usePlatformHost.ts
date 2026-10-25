@@ -77,7 +77,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   // Moves with every change the host reports and every decision taken here: views that read through the source read again.
   const [revision, setRevision] = useState(0);
   useEffect(() => ready ? client.enableLiveReads() : undefined, [client, ready]);
-  const refresh = useCallback(async () => { client.usingPrepared = false; client.refreshLiveReads(); await queries.invalidateQueries(); setRevision((r) => r + 1); }, [client, queries]);
+  const refresh = useCallback(async () => { client.usingPrepared = false; client.refreshLiveReads(); setRevision((r) => r + 1); await queries.invalidateQueries(); }, [client, queries]);
 
   // Restoring an unanswered request also restores its transport. Check once
   // when this identity is ready and once per reconnect, using the K5 sender.
@@ -128,7 +128,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     let answered: Entry[];
     try {
       key = original?.submission.idempotencyKey ?? pending?.submission.idempotencyKey ?? client.draft(schema, target, payload, options.evidence, options.expectedRevision, options.schemaVersion ?? actions?.find(action => action.schema === schema)?.schemaVersion, options.correctionOf);
-      answered = original && ["SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_REJECTED", "SUBMISSION_STATE_CONFLICT"].includes(original.state) ? [await client.repeat(key!)] : await client.send();
+      answered = original && ["SUBMISSION_STATE_CONFIRMED", "SUBMISSION_STATE_REJECTED", "SUBMISSION_STATE_CONFLICT"].includes(original.state) ? [await client.repeat(key!)] : await client.send(key);
     } catch (error) {
       if (original) options.onOutcome?.(original);
       setOutbox([...client.authorities.outbox]);
@@ -153,7 +153,9 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       }
     }
     setOutbox([...client.authorities.outbox]);
-    if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED" || entry.outcome === "ERROR_CODE_UNKNOWN_SCHEMA")) await refresh().catch(() => undefined);
+    // The original receipt completes the decision. Reloading other mounted
+    // work must not hold its form open after the host has already accepted it.
+    if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED" || entry.outcome === "ERROR_CODE_UNKNOWN_SCHEMA")) void refresh().catch(() => undefined);
     return confirmedDecision(client.authorities.outbox, client.connection.tenant, key);
   }, [actions, client, refresh]);
 

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { RecordChip } from "./RecordChip";
+import { RecordChip, RecordReadContext } from "./RecordChip";
 import { type EntityInfo, type RecordSource } from "./Records";
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
 
@@ -14,6 +14,12 @@ const sourceWith = (scope: string, title: string | undefined, failure?: boolean)
 
 describe("RecordChip", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  test("the open record's display value is never reused by another read scope",async()=>{
+    const source=sourceWith("another-member",undefined,true);
+    render(<RecordReadContext.Provider value={{scope:"original-member",type:entity.type,record:{id:"c1",name:"Private title"} as never}}><RecordChip source={source} type={entity.type} id="c1"/></RecordReadContext.Provider>);
+    await waitFor(()=>expect(source.get).toHaveBeenCalledTimes(1));expect(screen.getByRole("button").textContent).toBe("c1");
+  });
 
   test("resolves the display title through the caller's own source", async () => {
     render(<RecordChip source={sourceWith("tenant-a", "Acme")} type="crm.customer" id="c1" />);

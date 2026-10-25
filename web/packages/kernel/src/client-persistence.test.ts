@@ -128,3 +128,12 @@ test("recovery and a concurrent decision share a serial sender without dropping 
   expect(client.authorities.outbox.map(entry=>entry.state)).toEqual(["SUBMISSION_STATE_CONFIRMED","SUBMISSION_STATE_CONFIRMED"]);
   await client.send();expect(bodies).toHaveLength(2);
 });
+
+test("a foreground save completes before the remaining recovered outbox is drained",async()=>{
+ setup();const client=declare(new EdgeClient(connection)),first=draft(client),second=draft(client),requests:string[]=[];
+ let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>{release=resolve;}),observed=new Promise<void>(resolve=>{started=resolve;});
+ vi.stubGlobal("fetch",async(_url:string,options:RequestInit)=>{const key=JSON.parse(String(options.body)).idempotencyKey;requests.push(key);if(key===first){started();await held;}return new Response(JSON.stringify({record:{changeId:key}}));});
+ const recovered=client.send();await observed;const current=draft(client),saved=client.send(current);release();await saved;
+ expect(client.authorities.outbox.find(entry=>entry.submission.idempotencyKey===current)?.state).toBe("SUBMISSION_STATE_CONFIRMED");
+ await recovered;expect(requests).toEqual([first,current,second]);
+});

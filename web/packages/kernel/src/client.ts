@@ -52,7 +52,7 @@ export class EdgeClient {
   private live = new LiveReads((paths, signal) => fetch(this.connection.server + "/v1/changes?" + new URLSearchParams({ watch: JSON.stringify(paths) }), { headers: this.headers(), signal }));
   enableLiveReads() { return this.live.enable(); }
   subscribeRead(path: string, changed: () => void) { return this.live.subscribe(path, changed); }
-  refreshLiveReads() { this.live.refresh(); }
+  refreshLiveReads() { this.readRevision++; this.live.refresh(); }
   subscribeInventory(type: string, limit: number, changed: () => void) {
     const path = (offset: number) => `/v1/records/${encodeURIComponent(type)}?limit=500&offset=${offset}`;
     const stops = new Map<number, () => void>();
@@ -105,6 +105,8 @@ export class EdgeClient {
   }
   private storageKey?: string;
   private storageLoadError?: Error;
+  private inFlightReads = new Map<string, Promise<unknown>>();
+  private readRevision = 0;
   private generation = 0;
   private closed = false;
   private sendQueue: Promise<void> = Promise.resolve();
@@ -158,6 +160,7 @@ export class EdgeClient {
     this.generation++;
     this.sending.abort();
     this.sending = new AbortController();
+    this.inFlightReads.clear();
     this.live.dispose();
   }
 
@@ -174,6 +177,8 @@ export class EdgeClient {
   }
 
   async get<T>(key: string, fresh = false): Promise<T> {
+    if (this.closed && this.connection.principal) throw Error("The workspace identity changed.");
+    const generation = this.generation;
     const prepared=async():Promise<T>=>{
       try{
         if(fresh)throw Error("Connect to prepare current application content.");
@@ -187,13 +192,25 @@ export class EdgeClient {
     try{cached=fresh?undefined:this.live.read<T>(key);}catch(error){if(String(error).includes("live connection unavailable"))return prepared();throw error;}
     if(cached)return cached.value;
     const [path, body] = key.split("\n");
-    let response:Response;
-    try{response=await fetch(this.connection.server + path, { headers: this.headers(body !== undefined), ...(body !== undefined ? { method: "POST", body } : {}) });}
-    catch{return prepared();}
-    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
-    const current = fresh ? undefined : this.live.read<T>(key); if (current) return current.value;
-    const value = await response.json() as T;
-    return fresh ? value : this.live.read<T>(key)?.value ?? value;
+    const headers=this.headers(body !== undefined),signal=this.sending.signal;
+    const read=async():Promise<T>=>{
+      let response:Response;
+      try{response=await fetch(this.connection.server + path, { headers, signal, ...(body !== undefined ? { method: "POST", body } : {}) });}
+      catch{if(signal.aborted)throw Error("The workspace identity changed.");return prepared();}
+      if(generation!==this.generation)throw Error("The workspace identity changed.");
+      if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+      const current = fresh ? undefined : this.live.read<T>(key); if (current) return current.value;
+      const value = await response.json() as T;
+      if(generation!==this.generation)throw Error("The workspace identity changed.");
+      return fresh ? value : this.live.read<T>(key)?.value ?? value;
+    };
+    // Reference chips, record panes and lookups share only the in-flight read
+    // under this exact identity and read revision. LiveReads owns snapshots.
+    if(fresh||!readPath(key))return read();
+    const scope=JSON.stringify([key,this.connection.tenant,this.connection.principal,headers,this.readRevision]);
+    const pending=this.inFlightReads.get(scope);if(pending)return pending as Promise<T>;
+    const request=read();this.inFlightReads.set(scope,request);
+    try{return await request;}finally{if(this.inFlightReads.get(scope)===request)this.inFlightReads.delete(scope);}
   }
 
   /** Read all pages of a bounded record inventory. Never silently return the
@@ -431,21 +448,28 @@ export class EdgeClient {
     return entry;
   }
 
-  /** Sends pending entries and retries unknown ones with the same key; returns entries that got an answer. */
-  send(timeoutMs = 5000): Promise<Entry[]> {
-    const sent = this.sendQueue.then(() => this.sendPending(timeoutMs));
-    this.sendQueue = sent.then(() => undefined, () => undefined);
-    return sent;
+  /** Sends one original request, or resumes the outbox when no key is given.
+   * Each request joins the same sender; a foreground save need not wait for
+   * every remaining offline request to finish. */
+  async send(key?: string, timeoutMs = 5000): Promise<Entry[]> {
+    this.save();
+    const generation = this.generation, answered: Entry[] = [];
+    for (const entry of this.authorities.outbox.filter(e => (!key || e.submission.idempotencyKey === key)
+      && (e.state === "SUBMISSION_STATE_PENDING" || e.state === "SUBMISSION_STATE_UNKNOWN"))) {
+      if (generation !== this.generation) break;
+      const sent = this.sendQueue.then(() => this.sendEntry(entry, timeoutMs));
+      this.sendQueue = sent.then(() => undefined, () => undefined);
+      const answer = await sent;
+      if (answer) answered.push(answer);
+    }
+    return answered;
   }
 
-  private async sendPending(timeoutMs: number): Promise<Entry[]> {
+  private async sendEntry(entry: Entry, timeoutMs: number): Promise<Entry | undefined> {
     this.save();
     const generation = this.generation;
-    const answered: Entry[] = [];
-    for (const entry of this.authorities.outbox.filter((e) => e.state === "SUBMISSION_STATE_PENDING" || e.state === "SUBMISSION_STATE_UNKNOWN")) {
+    if ((entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN") && navigator.onLine) {
       const { tenantId = "", idempotencyKey = "" } = entry.submission;
-      if (generation !== this.generation) break;
-      if (!navigator.onLine) continue;
       if (entry.submission.tenantId !== this.connection.tenant || entry.submission.principalId !== this.connection.principal) throw Error("Saved requests belong to another workspace identity.");
       const previous = entry.state;
       this.authorities.transition(tenantId, idempotencyKey, entry.state === "SUBMISSION_STATE_PENDING" ? "send" : "retry");
@@ -456,24 +480,23 @@ export class EdgeClient {
       }
       try {
         const body = await this.transmit(entry, timeoutMs);
-        if (generation !== this.generation) break;
+        if (generation !== this.generation) return;
         if (body) {
           this.authorities.answer(tenantId, idempotencyKey, body.error?.code);
           entry.outcome = body.error?.code ?? body.record?.changeId ?? "";
           entry.reason = body.error?.message;
           entry.issues = body.error?.issues;
-          answered.push(entry);
           if (body.error?.code === "ERROR_CODE_NOT_AUTHORITY") await this.refreshDeclarations().catch(() => undefined);
         } else {
           this.authorities.transition(tenantId, idempotencyKey, "timeout");
         }
       } catch {
-        if (generation !== this.generation) break;
+        if (generation !== this.generation) return;
         // A browser cannot tell whether a failed request reached the server: unknown, retried with the same key.
         this.authorities.transition(tenantId, idempotencyKey, "timeout");
       }
       this.save();
+      if (entry.state !== "SUBMISSION_STATE_UNKNOWN") return entry;
     }
-    return answered;
   }
 }

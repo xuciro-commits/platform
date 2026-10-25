@@ -5,12 +5,35 @@ import { entityFrom, RecordList, RecordPage, RecordLinks, RecordStatus, RecordDe
 import { EnterpriseElementLookup,EnterpriseReference,RecordLookup } from "./RecordLookup";
 import { ViewVisibilityContext } from "../shell/ViewVisibility";
 import { RecordWorkspace } from "./RecordWorkspace";
+import { DataTable } from "../components/DataTable";
+import { columnsFor } from "../fields/entity";
 afterEach(cleanup);
 Element.prototype.getBoundingClientRect = () => ({ width: 800, height: 280, top: 0, left: 0, right: 800, bottom: 280, x: 0, y: 0, toJSON: () => ({}) });
 for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as const) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => value });
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+
+test("recreating field column descriptions does not remount their reference readers",async()=>{
+ const owner={...entity,display:"name",fields:[{name:"name",title:"Name",type:"text" as const}]},line={...entity,type:"sample.line",fields:[{name:"parent",title:"Parent",type:"reference" as const,ref:owner.type}]};
+ const source:RecordSource={scope:"member",entity:type=>type===owner.type?owner:line,list:vi.fn(),get:vi.fn(async()=>({record:{...record("A"),name:"Owner"},related:[],linked:[],history:[],activity:[],tasks:[],approvals:[],processes:[],files:[],comments:[],following:false}))};
+ const rows=[{...record("line"),parent:"A"}],tree=()=> <DataTable data={rows} columns={columnsFor(entityFrom(line,{},source),["parent"])} getRowId={row=>row.id} height={200}/>;
+ const {rerender}=render(tree());await screen.findByText("Owner");expect(source.get).toHaveBeenCalledTimes(1);
+ rerender(tree());await act(async()=>{});expect(source.get).toHaveBeenCalledTimes(1);
+});
+
+test("related references to the open record use its current authorized value without reading it again",async()=>{
+ const owner={...entity,display:"name",fields:[{name:"name",title:"Name",type:"text" as const}]},line={...entity,type:"sample.line",fields:[{name:"parent",title:"Parent",type:"reference" as const,ref:owner.type}]};
+ const view:RecordView={record:{...record("A"),name:"Owner"},related:[{type:line.type,title:"Lines",field:"parent",total:20,records:Array.from({length:20},(_,index)=>({...record(`line-${index}`),parent:"A"}))}],linked:[],history:[],activity:[],tasks:[],approvals:[],processes:[],files:[],comments:[],following:false};
+ const source:RecordSource={scope:"member",entity:type=>type===owner.type?owner:line,list:vi.fn(),get:vi.fn(async()=>view)};
+ const {rerender}=render(<RecordPage source={source} type={owner.type} id="A" onOpen={()=>{}}/>);
+ await waitFor(()=>expect(screen.getAllByRole("button",{name:`${owner.type}/A`})).toHaveLength(20));
+ expect(source.get).toHaveBeenCalledTimes(1);
+ source.get=vi.fn(async()=>({...view,record:{...view.record,name:"Renamed",revision:2}}));
+ rerender(<RecordPage source={{...source,revision:2}} type={owner.type} id="A" onOpen={()=>{}}/>);
+ await waitFor(()=>expect(screen.getAllByRole("button",{name:`${owner.type}/A`})[0]?.textContent).toBe("Renamed"));
+ expect(source.get).toHaveBeenCalledTimes(1);
+});
 
 test("an unprepared reference search reports its connection requirement without clearing the selected input",async()=>{
  const message="This task was not prepared for offline use. Connect to continue.",change=vi.fn();
