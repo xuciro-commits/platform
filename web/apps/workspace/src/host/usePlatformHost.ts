@@ -18,10 +18,14 @@ const offline = (error: unknown) => error instanceof OfflineReadError || /live c
 // Remounts receive a new identity too, without reusing an older query key.
 let metadataRevision = 0;
 
+/** The original discovery reads behind the first route resolution: waiting,
+ * the failure with its own retry, or offline preparation — never a bare flag. */
+export type WorkspaceDiscovery = { phase: "pending" | "ready" | "error" | "offline"; message?: string; retry: () => void };
+
 export type PlatformHost = {
   host?: Host;
   /** Initial route resolution waits for this identity's original discovery reads. */
-  metadataReady: boolean;
+  discovery: WorkspaceDiscovery;
   release: UseQueryResult<Api.ReleaseActive>;
   unread: number;
   saved: SavedView[];
@@ -46,10 +50,22 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   // a code page, or one someone composed in this tenant.
   const definitionQuery = read<Definition[]>("/v1/definitions");
   const definitions = definitionQuery.data ?? [];
-  const initialMetadata = useRef({ scope: "", ready: false });
+  // Boot waits for the three discovery reads once per identity; once they have
+  // answered, later refreshes never bounce the shell back to a start screen.
+  const discoveryLatch = useRef(false);
   const metadataScope = JSON.stringify([token, tenant, me?.principalId]);
-  if (initialMetadata.current.scope !== metadataScope) initialMetadata.current = { scope: metadataScope, ready: false };
-  if (actionQuery.isSuccess && entityQuery.isSuccess && definitionQuery.isSuccess) initialMetadata.current.ready = true;
+  const discoveryScope = useRef(metadataScope);
+  if (discoveryScope.current !== metadataScope) { discoveryScope.current = metadataScope; discoveryLatch.current = false; }
+  if (actionQuery.isSuccess && entityQuery.isSuccess && definitionQuery.isSuccess) discoveryLatch.current = true;
+  const discovery: WorkspaceDiscovery = useMemo(() => {
+    const queries = [actionQuery, entityQuery, definitionQuery];
+    const retry = () => { for (const query of queries) if (query.isError) void query.refetch(); };
+    if (discoveryLatch.current) return { phase: "ready", retry };
+    const failed = queries.find((query) => query.isError);
+    if (!failed) return { phase: "pending", retry };
+    if (offline(failed.error)) return { phase: "offline", message: failed.error instanceof OfflineReadError ? t(failed.error.message) : t("The live connection is unavailable."), retry };
+    return { phase: "error", message: humanizeKernelError(failed.error instanceof Error ? failed.error.message : String(failed.error)), retry };
+  }, [actionQuery.isError, actionQuery.isSuccess, definitionQuery.isError, definitionQuery.isSuccess, entityQuery.isError, entityQuery.isSuccess]);
   const release = read<Api.ReleaseActive>("/v1/releases/active", false, { retry: false });
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const unread = (read<Notification[]>("/v1/notifications").data ?? []).filter((n) => !n.read).length;
@@ -182,5 +198,5 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     return host;
   }, [actions, apps, client, decide, definitions, entities, hostMe.isSuccess, me, outbox, protocols, refresh, source]);
 
-  return { host, metadataReady: initialMetadata.current.ready, release, unread, saved, hostAdmin: hostMe.isSuccess };
+  return { host, discovery, release, unread, saved, hostAdmin: hostMe.isSuccess };
 }

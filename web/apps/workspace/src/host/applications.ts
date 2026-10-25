@@ -3,7 +3,7 @@ import type { NavSection, Route } from "@platform/ui";
 
 /** Trusted UI packages can contribute to one functional app without adding
  * another portal entry or changing the backend that owns its resources. */
-export type ComposedApplication = AppUI & { homeFor: (host: Host) => AppUI["home"] };
+export type ComposedApplication = AppUI & { homeFor: (host: Host) => Route };
 export function composeApplications(contributions: readonly AppUI[]): ComposedApplication[] {
   const groups = new Map<string, AppUI[]>();
   for (const app of contributions) groups.set(app.id, [...groups.get(app.id) ?? [], app]);
@@ -14,7 +14,10 @@ export function composeApplications(contributions: readonly AppUI[]): ComposedAp
       serves: [...new Set(sources.flatMap(app => app.serves ?? [app.id]))],
       views: sources.flatMap(app => app.views),
       opens: Object.assign({}, ...sources.map(app => app.opens)),
-      homeFor: member => (sources.find(app => !app.for || app.for(member)) ?? primary).home,
+      homeFor: member => {
+        const source = sources.find(app => !app.for || app.for(member)) ?? primary;
+        return typeof source.home === "function" ? source.home(member) : source.home;
+      },
       for: member => sources.some(app => !app.for || app.for(member)),
       nav: (member, route) => {
         const sections = new Map<string, NavSection>();
@@ -113,7 +116,7 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
   return entries.map(entry => {
     const attached = extensions.filter(extension => extension.entry === entry.id);
     if (!attached.length) return entry;
-    return { ...entry, home: resolveApplicationRoute(entry.home, definitions, metadata), nav: (host, route) => [
+    return { ...entry, home: host => resolveApplicationRoute(typeof entry.home === "function" ? entry.home(host) : entry.home, definitions, metadata), nav: (host, route) => [
       ...entry.nav(host, route).map(section => ({ ...section, items: replaceItems(section.items) })),
       ...attached.flatMap(({ definition }) => {
         const application = definition.application;

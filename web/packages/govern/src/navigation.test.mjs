@@ -1,13 +1,13 @@
 import { expect, test, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ host: undefined }));
+const state = vi.hoisted(() => ({ host: undefined, reads: undefined }));
 
 vi.mock("@platform/app", async () => {
   const { createElement } = await import("react");
   return {
     defineApp: app => app,
     useHost: () => state.host,
-    useReadQuery: () => ({ data: [] }),
+    useReadQuery: path => state.reads?.[path] ?? { data: [] },
     newId: () => "id",
     Records: ({ type }) => createElement("div", { "data-record-type": type }),
   };
@@ -22,6 +22,7 @@ vi.mock("@platform/ui", () => {
   ];
   return {
     t: text => text,
+    humanizeKernelError: text => text,
     register: () => {},
     navigationLinks: links,
     defineStatuses: states => states,
@@ -112,6 +113,11 @@ test("runtime lists have dedicated routes and administration stays outside a bui
   const admin = host({ platform: "admin" });
 
   expect(dataConnection.for(builder)).toBe(true);
+  // The home comes from the same projection as `for` and `nav`: an
+  // integrator lands on their authorized observations, never on the
+  // connectors view the console refuses for them.
+  expect(dataConnection.home(admin)).toEqual({ view: "integrations" });
+  expect(dataConnection.home(builder)).toEqual({ view: "observations" });
   expect(routes(dataConnection, builder)).toEqual(["observations", "lineage"]);
   expect(routes(dataConnection, admin)).toEqual([
     "integrations", "endpoints", "observations", "lineage", "effects",
@@ -130,6 +136,31 @@ test("runtime lists have dedicated routes and administration stays outside a bui
   expect(home.render({}).type().type).toBe(Flows);
   expect(routes(runs, host({ flow: "operator" }))).toEqual(["flows"]);
 });
+
+test("monitoring reads report their own failure and retry instead of an empty success", async () => {
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { Automation, Deliveries } = await vi.importActual("./operations.tsx");
+  state.host = host({ platform: "admin" });
+  // A failed read keeps its own phases: the alert, the original reason and a
+  // retry — never a successful "nothing queued".
+  state.reads = {
+    "/v1/work": { isPending: false, isError: true, error: new Error("HTTP 403"), data: undefined, refetch: () => {} },
+    "/v1/deliveries": { isPending: true, isError: false, data: undefined, refetch: () => {} },
+  };
+  const failed = renderToStaticMarkup(createElement(Automation));
+  expect(failed).toContain('role="alert"');
+  expect(failed).toContain("HTTP 403");
+  expect(failed).not.toContain("Nothing queued");
+  const waiting = renderToStaticMarkup(createElement(Deliveries));
+  expect(waiting).toContain('role="status"');
+  expect(waiting).not.toContain("No deliveries");
+  // A successful read may say none, and only then.
+  state.reads = { "/v1/work": { isPending: false, isError: false, data: [{ id: "W1", kind: "job", app: "a", title: "T", state: "queued", attempts: 1, at: "", due: "" }], refetch: () => {} } };
+  const working = renderToStaticMarkup(createElement(Automation));
+  expect(working).not.toContain('role="alert"');
+});
+
 
 test("master data groups every existing core type and keeps Explorer in this application", () => {
   const core = contributions.find(app => app.id === "core");

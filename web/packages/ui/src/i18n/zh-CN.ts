@@ -975,6 +975,7 @@ export default {
   "No open tabs.": "没有打开的页签。",
   "Open home": "打开主页",
   "Could not open this view.": "无法打开此视图。",
+  "This address points to a task your current access does not include.": "该地址指向的任务不包含在你当前的访问范围内。",
   "Could not open a new window. Allow pop-ups and try again.": "无法打开新窗口，请允许弹出窗口后重试。",
   "An operation is in progress. Wait for its result before leaving.": "操作正在进行，请等待结果后再离开。",
   "Unsaved changes": "未保存的修改",

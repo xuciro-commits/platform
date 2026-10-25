@@ -261,7 +261,9 @@ export type AppUI = {
   navigation?: (route?: Route) => ReactNode;
   /** Original editor context around a shared asset reference view. */
   referenceContext?: (route: Route, children: ReactNode) => ReactNode;
-  home: Route;
+  /** The entry the current member may actually use, from the same projection
+   * as `for` and `nav` — never a landing the host would refuse. */
+  home: Route | ((host: Host) => Route);
   /** Entity type → the id of the view that shows one record, given `{ id }`. */
   opens?: Record<string, string>;
   commands?: (host: Host) => ShellCommand[];

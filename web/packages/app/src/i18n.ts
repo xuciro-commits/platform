@@ -1116,6 +1116,7 @@ register("zh-CN", {
   "Hide the authorization explain": "收起授权解释",
   "Asking the authorization engine…": "正在询问授权引擎…",
   "Only administrators and auditors may read the authorization explain.": "只有管理员与审计员可以查看授权解释。",
+  "The authorization engine could not be asked.": "无法询问授权引擎。",
   "The engine would allow this now.": "引擎此刻会放行。",
   "The engine refuses.": "引擎拒绝。",
   "Imported {ok} rows.": "已导入 {ok} 行。",

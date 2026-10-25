@@ -71,20 +71,25 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
   const selectedPackages = me ? availablePackages(me.apps.map((app) => app.id), me.profile.roles) : [];
   const packageScope = me ? JSON.stringify([identityScope, selectedPackages.map((p) => packages.indexOf(p))]) : undefined;
-  const [ready, setReady] = useState(false);
+  // Bootstrap is a sequence of original reads, each with its own failure and
+  // retry: the member's declarations, the discovery metadata, the packages.
+  const [declared, setDeclared] = useState<{ phase: "pending" | "ready" | "error" }>({ phase: "pending" });
+  const [declareAttempt, setDeclareAttempt] = useState(0);
   useEffect(() => {
     if (!me) return;
     if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser
     let live = true;
-    setReady(false);
+    setDeclared({ phase: "pending" });
     client.bindIdentity(me.tenantId, me.principalId);
     if(!signedIn)remember(IDENTITY_KEY,token);
     const application=new URLSearchParams(location.hash.split("?")[1]).get("application")??remembered(`workspace:selection:${me.tenantId}:${me.principalId}`);
     if(application)client.prepared?.activate(application);
     setCurrency(me.currency); // the default of amounts people enter
-    client.refreshDeclarations().then(() => { if (live) setReady(true); }, () => { if (live) notify.error(t("Host unreachable")); });
+    client.refreshDeclarations().then(
+      () => { if (live) setDeclared({ phase: "ready" }); },
+      () => { if (live) { setDeclared({ phase: "error" }); } });
     return () => { live = false; };
-  }, [client, identityScope, me?.preferred]);
+  }, [client, identityScope, me?.preferred, declareAttempt]);
 
   // --- Packages: the code applications this member's roles unlock.
   const [loadedPackages, setLoadedPackages] = useState<{ scope: string; groups: { source: Package; apps: (AppUI & { serves?: string[] })[] }[] }>();
@@ -93,17 +98,24 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const loadedApps = useMemo(() => loadedPackages && loadedPackages.scope === identityScope
     ? [...loadedPackages.groups.filter((group) => selectedPackages.includes(group.source)).flatMap((group) => group.apps), personalWork, explorerApplication]
     : undefined, [loadedPackages, packageScope]);
+  const [packageAttempt, setPackageAttempt] = useState(0);
+  const [packageFailure, setPackageFailure] = useState<string>();
+  // The session is ready to read once the member, their declarations and the
+  // application packages are all in; the host's own discovery runs after.
+  const ready = !!me && declared.phase === "ready" && !packageFailure && !!loadedApps;
   useEffect(() => {
     if (!me) return;
     let live = true;
+    setPackageFailure(undefined);
     void Promise.all(selectedPackages.map((p) => p.load().then((m) => ({ source: p,
       apps: [m.default, ...(m.contributions ?? [])].map((app) => ({ ...app, serves: app.serves ?? p.serves })) }))))
-      .then((groups) => { if (live) setLoadedPackages({ scope: identityScope!, groups }); });
+      .then((groups) => { if (live) setLoadedPackages({ scope: identityScope!, groups }); })
+      .catch(() => { if (live) setPackageFailure(t("The workspace's applications could not load. Retry, or sign in again.")); });
     return () => { live = false; };
-  }, [packageScope]);
+  }, [packageScope, packageAttempt]);
 
   // --- Host: reads, decisions and the record source every view shares.
-  const { host, metadataReady, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
+  const { host, discovery, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
   const apps = useMemo(() => loadedApps && host ? composeApplications(loadedApps.filter(app => !app.for || app.for(host))) : undefined, [loadedApps, host]);
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
@@ -175,7 +187,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (home && homeOpened.current !== key && (!location.hash || location.hash === "#/home" || location.hash === "#/")) {
       homeOpened.current = key;
       const target = all.find((a) => a.id === home);
-      if (target) { select(target.id); location.hash = routeToHash(target.home); }
+      if (target) {
+        select(target.id);
+        const home = typeof target.home === "function" ? host && target.home(host) : target.home;
+        if (home) location.hash = routeToHash(home);
+      }
     }
   }, [me?.account?.theme, me?.account?.homePage, ready, all.length]);
   useEffect(() => {
@@ -215,12 +231,23 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       : meQuery.error instanceof OfflineReadError ? t(meQuery.error.message) : t("The host is unreachable.");
     return <SignInProblem problem={problem} email={signedIn?.session.email} signingOut={signingOut} error={signOutError} onSignOut={() => void leaveSession()} />;
   }
-  if (!host || !apps || !ready || !metadataReady) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+  const bootstrap = (message: string, detail: string | undefined, retry: () => void, alert = true) => <main className="grid h-dvh place-items-center p-6 text-sm">
+    <div className="grid max-w-md gap-2 text-center">
+      <p role={alert ? "alert" : "status"} className={alert ? "text-danger" : "text-muted"}>{message}</p>
+      {detail && <p className="break-words text-xs text-muted">{detail}</p>}
+      <div className="flex justify-center gap-2"><Button size="sm" onClick={retry}>{t("Retry")}</Button><Button size="sm" variant="ghost" onClick={() => void leaveSession()}>{t("Sign out")}</Button></div>
+    </div>
+  </main>;
+  if (declared.phase === "error") return bootstrap(t("The host's declarations could not load, so the workspace cannot tell what you may see and do."), undefined, () => setDeclareAttempt((n) => n + 1));
+  if (packageFailure) return bootstrap(packageFailure, undefined, () => setPackageAttempt((n) => n + 1));
+  if (discovery.phase === "error") return bootstrap(t("The workspace could not read what this member may see and do."), discovery.message, discovery.retry);
+  if (discovery.phase === "offline") return bootstrap(t("The live connection is unavailable."), discovery.message, discovery.retry, false);
+  if (!host || !apps || !ready || discovery.phase !== "ready") return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
   // The portal: every application this member may open, by
   // category; and the projections they may switch between. Both only group
   // what the host already allowed.
-  const portal = all.map(portalEntry);
+  const portal = all.map((entry) => portalEntry(entry, host));
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);
     if (!target) return;
@@ -240,7 +267,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       history.replaceState(null, "", "#/home");
       setActiveRoute(undefined);
       setCurrent(undefined);
-      setReady(false);
       setLoadedPackages(undefined);
     }
     if (id.startsWith("tenant:")) { setTenant(id.slice(7)); remember(TENANT_KEY, id.slice(7)); }

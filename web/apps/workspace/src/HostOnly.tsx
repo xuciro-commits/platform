@@ -36,7 +36,7 @@ export function HostOnly({ client, token, admin, email, onSignOut }: { client: E
   return (
     <HostContext.Provider value={host}>
       <Workspace key={token} product={app.title} productIcon={app.icon} storageKey={`workspace.layout:host:${admin.subject}`}
-        views={app.views} home={app.home} nav={app.nav(host)}
+        views={app.views} home={typeof app.home === "function" ? app.home(host) : app.home} nav={app.nav(host)}
         status={<span className="text-xs text-muted">{t("{n} tenants", { n: admin.tenants.length })}</span>}
         session={{ tenant: t("Host"), principal: admin.subject, detail: email, current: "",
           options: onSignOut ? [{ id: "sign-out", label: email ? t("Sign out {email}", { email }) : t("Sign out") }] : [],

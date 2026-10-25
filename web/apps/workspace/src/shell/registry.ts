@@ -4,7 +4,7 @@
 // identity, a different lead set of applications. Who may open what is decided
 // by the host (`/v1/me`, actions) and the packages' own `for`/role checks, so a
 // member without governance roles sees no system entries at all.
-import { categoryOf, type AppUI, type PlatformAppCategory } from "@platform/app";
+import { categoryOf, type AppUI, type Host, type PlatformAppCategory } from "@platform/app";
 import { t, type PlatformApplication } from "@platform/ui";
 
 export const categories: { id: PlatformAppCategory; label: () => string }[] = [
@@ -24,6 +24,7 @@ export const projections: { id: Projection; title: () => string; categories: Pla
 ];
 
 /** The portal entry of an app the workspace loaded. */
-export const portalEntry = (app: AppUI): PlatformApplication =>
+export const portalEntry = (app: AppUI, host: Host): PlatformApplication =>
   ({ id: app.id, title: app.title, icon: app.icon, description: app.description,
-    category: categoryOf(app) === "govern" ? "operate" : categoryOf(app) === "developer" ? "build" : categoryOf(app), home: app.home });
+    category: categoryOf(app) === "govern" ? "operate" : categoryOf(app) === "developer" ? "build" : categoryOf(app),
+    home: typeof app.home === "function" ? app.home(host) : app.home });

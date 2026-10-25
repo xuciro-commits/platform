@@ -24,6 +24,11 @@ test('one functional app combines original views and menu groups while preservin
   assert.equal(app.views[1], runtime);
   assert.equal(app.homeFor(builder), connection);
   assert.equal(app.homeFor(admin), connector);
+  // A contribution may project its home from the same member conditions as
+  // `for` and `nav`, so a landed route is one the host would answer.
+  const projected = { ...authoring, home: member => member.roles.includes('builder') ? connection : connector };
+  assert.equal(composeApplications([projected, administration])[0].homeFor(builder), connection);
+  assert.equal(composeApplications([projected, administration])[0].homeFor({ roles: ['admin'] }), connector);
   assert.equal(app.for({ roles: [] }), false);
   assert.deepEqual(app.nav(builder), authoring.nav());
   assert.deepEqual(app.nav(admin), administration.nav());
@@ -64,10 +69,11 @@ test('published extensions retain the original entry and views, replace its menu
   assert.equal(app.id, code.id);
   assert.equal(app.views, code.views);
   assert.equal(app.opens, code.opens);
-  assert.deepEqual(app.home, { view: 'page', params: { app: 'build', kind: 'page', name: 'routes', application: 'build:z-routing' } });
+  const home = app.home({});
+  assert.deepEqual(home, { view: 'page', params: { app: 'build', kind: 'page', name: 'routes', application: 'build:z-routing' } });
   const sections = app.nav({});
   assert.deepEqual(sections.map(section => section.label), ['Operations', 'a-capacity', 'z-routing']);
-  assert.deepEqual(sections[0].items[0], { label: 'Routings', route: app.home });
+  assert.deepEqual(sections[0].items[0], { label: 'Routings', route: home });
   assert.equal(sections[1].items[0].label, 'Planning');
   assert.deepEqual(sections[2].items.map(item => item.label), ['capacity']);
   assert.equal(applicationEntry(takeover, [code]), 'mes');

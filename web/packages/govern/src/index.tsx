@@ -131,7 +131,9 @@ export const dataConnection = defineApp({
   id: "data-connection", serves: ["platform"], category: "ontology", title: t("Data Connection"), icon: <Database />,
   description: t("Connectors that bring facts in, webhooks that carry events out, and their health."),
   for: (host) => admin(host) || ["builder", "integrator"].includes(host.role("build") ?? ""),
-  home: { view: "integrations" },
+  // The entry the current member may actually use: connectors for governance,
+  // the authorized observations of what enters and leaves for everyone else.
+  home: (host) => admin(host) ? { view: "integrations" } : { view: "observations" },
   views: [
     { id: "integrations", title: () => t("Connectors"), render: () => <Integrations /> },
     { id: "endpoints", title: () => t("Endpoints"), render: () => <Endpoints /> },

@@ -450,7 +450,12 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     void Promise.resolve().then(() => routeReader.current?.(route) ?? route).then((resolved) => {
       if (revision !== incomingRevision.current) return;
       if (viewRegistry.current.has(resolved.view)) openResolved(resolved);
-      else if (!dock.current?.panels.length) open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home);
+      else {
+        // A deep link outside the member's access is refused where it landed;
+        // the home it falls back to is the way back, not a silent success.
+        toast.error(t("This address points to a task your current access does not include."));
+        if (!dock.current?.panels.length) open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home);
+      }
     }).catch(() => {
       if (revision !== incomingRevision.current) return;
       const previous = (dock.current?.activePanel?.params as { route?: Route } | undefined)?.route;

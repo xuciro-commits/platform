@@ -1,14 +1,28 @@
 // Settings: owned work, integrations, app settings and the audit trail.
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, useWorkspace } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
+import { type UseQueryResult } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
+
+/** A read's own phases at the point of display: the original wait, refusal or
+ * failure with its nearby retry — only a successful read may say "none". */
+function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children: (data: T) => ReactNode }) {
+  if (query.isPending) return <p role="status" className="text-sm text-muted">{t("Loading…")}</p>;
+  if (query.isError && query.data === undefined) return <div role="alert" className="grid justify-items-start gap-1 text-sm">
+    <p className="text-danger">{humanizeKernelError(query.error instanceof Error ? query.error.message : String(query.error))}</p>
+    <Button size="sm" variant="ghost" onClick={() => void query.refetch()}>{t("Retry")}</Button>
+  </div>;
+  return <>{children(query.data as T)}{query.isError && <p role="status" className="text-xs text-muted">{t("Showing the last known answer; refreshing failed.")}</p>}</>;
+}
 
 // Automation: which app reacts to which decisions, the work the host owns
 // (queued and failed deliveries, scheduled jobs), and every delivery attempt.
 export function Automation() {
-  const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
+  const appsQuery = useRead<Api.AppInfo[]>("/v1/apps");
+  const apps = appsQuery.data ?? [];
   const { decide } = useHost();
   const work = useRead<Task[]>("/v1/work");
   const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
@@ -28,10 +42,11 @@ export function Automation() {
   return <>
     <PageHeader title={t("Work queue")} help={t("Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision.")} />
       <div className="mb-3 flex flex-wrap gap-2 text-sm">
-        {subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
+        {appsQuery.isError && !appsQuery.data ? <span className="text-danger">{t("Subscriptions are unavailable: the app list could not be read.")}</span> :
+          subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
           subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
       </div>
-    <DataTable data={work.data ?? []} columns={taskColumns} getRowId={(task) => task.id} height="calc(100dvh - 260px)" searchable={false} empty={t("Nothing queued, no jobs")} />
+    <ReadResult query={work}>{(rows) => <DataTable data={rows} columns={taskColumns} getRowId={(task) => task.id} height="calc(100dvh - 260px)" searchable={false} empty={t("Nothing queued, no jobs")} />}</ReadResult>
   </>;
 }
 
@@ -47,15 +62,15 @@ export function Deliveries() {
   ];
   return <>
     <PageHeader title={t("Delivery attempts")} help={t("Every outbound delivery the host has retried, oldest first. Attempts appear as endpoints receive effects; nothing here is authored by hand.")} />
-    <DataTable data={[...(deliveries.data ?? [])].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`} height="calc(100dvh - 220px)" empty={t("No deliveries yet")} />
+    <ReadResult query={deliveries}>{(rows) => <DataTable data={[...rows].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`} height="calc(100dvh - 220px)" empty={t("No deliveries yet")} />}</ReadResult>
   </>;
 }
 
 export function SystemHealth() {
-  const health = useRead<Api.TenantHealth>("/v1/health", 5000).data;
+  const health = useRead<Api.TenantHealth>("/v1/health", 5000);
   return <>
     <PageHeader title={t("Health")} help={t("The host's own runtime view: what started, what it is built from, and what it has been doing. Everything here is reported by the host itself.")} />
-      {health && <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
+    <ReadResult query={health}>{(health) => <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
         {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
         <Tag label={health.status === "quarantined" ? t("Quarantined") : health.status === "ok" ? t("Healthy") : t("Needs attention")}
           tone={health.status === "quarantined" ? "danger" : health.status === "ok" ? "success" : "warning"} />
@@ -78,7 +93,7 @@ export function SystemHealth() {
           {health.breakers.map((b) => <Tag key={b.destination} label={t("{destination}: breaker {state} after {n} failures", { destination: b.destination, state: t(b.state), n: b.failures })}
             tone={b.state === "closed" ? "neutral" : "danger"} />)}
         </div>}
-      </div>}
+      </div>}</ReadResult>
   </>;
 }
 
@@ -105,12 +120,14 @@ export function Integrations() {
   return (
     <>
       <PageHeader title={t("Connectors")} help={t("Connectors bring facts in, with health, cursors and the last refused input. A connector registers itself with the host when its runtime starts; an application's connections are declared in the builder.")} />
-      {connectors.error ? <p className="text-sm text-[var(--tone-danger)]">{String(connectors.error)} {t("— administrators only.")}</p> :
-        <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 300px)" searchable={false}
+      <ReadResult query={connectors}>{(rows) => (
+        <DataTable data={rows} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 300px)" searchable={false}
           empty={<EmptyState title={t("No connectors in this tenant")} hint={t("A connector appears here when its runtime registers with the host. Declare the application's connections in the builder.")}
-            action={role("build") ? <Button size="sm" onClick={() => open({ view: "connection" })}>{t("Open connection setup")}</Button> : undefined} />} />}
+            action={role("build") ? <Button size="sm" onClick={() => open({ view: "connection" })}>{t("Open connection setup")}</Button> : undefined} />} />
+      )}</ReadResult>
     </>
   );
+
 }
 
 // Webhook endpoints and their effects: events go out signed, at least
@@ -132,9 +149,9 @@ export function Endpoints() {
   return <>
     <PageHeader title={t("Endpoints")} help={t("Webhooks send events and effects signed (Standard Webhooks); email endpoints mail members their notifications. At least once, with a key receivers deduplicate by.")}
       actions={<Button variant="primary" onClick={() => { setDraft(blank); setAdding(true); }}>{t("Add endpoint")}</Button>} />
-      <div className="grid gap-2">
-        {endpoints.data?.length === 0 && <p className="text-sm text-muted">{t("No endpoints.")}</p>}
-        {endpoints.data?.map((ep) => (
+      <ReadResult query={endpoints}>{(rows) => <>
+        {rows.length === 0 && <p className="text-sm text-muted">{t("No endpoints.")}</p>}
+        {rows.map((ep) => (
           <Card key={ep.id} className="flex flex-wrap items-center gap-2 p-2 text-sm">
             <span className="font-semibold">{ep.id}</span><Tag label={ep.kind} /><span className="font-mono text-xs">{ep.url}</span>
             <Tag label={ep.health} tone={ep.health === "ok" ? "success" : "danger"} />
@@ -144,7 +161,7 @@ export function Endpoints() {
             <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decide("platform.endpoint.remove", { type: "platform.endpoint", id: ep.id }, {})}>{t("Remove")}</Button>
           </Card>
         ))}
-      </div>
+      </>}</ReadResult>
       <Dialog open={adding} onOpenChange={setAdding} title={t("Add endpoint")}>
         <div className="grid gap-2 text-sm">
           <Select aria-label={t("Kind")} value={draft.kind} onChange={(e) => setDraft({ ...blank, kind: e.target.value, id: draft.id })}>
@@ -225,7 +242,7 @@ export function OutboundEffects() {
   return <>
     <PageHeader title={t("Outbound effects")} help={t("Every delivery an application's emitted event produces, and what the receiver made of it. Effects appear once an app declares and emits events; endpoints decide where they go.")} />
       {resolving&&host.action("platform.effect.resolve")&&<Panel title={t("Resolve unknown delivery")}><DeclaredActionForm declared={host.action("platform.effect.resolve")!} target={{type:"platform.effect",id:resolving}} revision={0} initial={{outcome:"delivered"}} onCancel={()=>setResolving(undefined)} onCompleted={()=>{setResolving(undefined);void effects.refetch();}} enabled/></Panel>}
-    <DataTable data={effects.data ?? []} columns={effectColumns} getRowId={(effect) => effect.id} height="calc(100dvh - 220px)" empty={t("Nothing sent yet")} />
+    <ReadResult query={effects}>{(rows) => <DataTable data={rows} columns={effectColumns} getRowId={(effect) => effect.id} height="calc(100dvh - 220px)" empty={t("Nothing sent yet")} />}</ReadResult>
   </>;
 }
 
@@ -239,9 +256,10 @@ export function AppSettingsView() {
   return (
     <>
       <PageHeader title={t("App settings")} help={t("Values within the rules each app's code defines: thresholds, switches, choices. Rules themselves are code.")} />
-      {settings.data?.filter((a) => a.app !== "platform").length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
+      <ReadResult query={settings}>{(rows) => <>
+      {rows.filter((a) => a.app !== "platform").length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
       <div className="grid max-w-3xl gap-3">
-        {settings.data?.filter((a) => a.app !== "platform").map((a) => ( // the tenant's own settings are the Organisation page's
+        {rows.filter((a) => a.app !== "platform").map((a) => ( // the tenant's own settings are the Organisation page's
           <Panel key={a.app} title={<span className="font-mono">{a.app}</span>}>
             <div className="grid gap-3">
               {a.settings.map((s) => {
@@ -271,6 +289,7 @@ export function AppSettingsView() {
           </Panel>
         ))}
       </div>
+      </>}</ReadResult>
     </>
   );
 }
@@ -280,7 +299,7 @@ export function Audit() {
   const { catalog, me } = useHost();
   const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title])); // the member's catalog, in their language
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
-  const personal = useRead<Api.PersonalRead[]>("/v1/personal-reads").data ?? [];
+  const personalQuery = useRead<Api.PersonalRead[]>("/v1/personal-reads");
   const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
@@ -298,9 +317,9 @@ export function Audit() {
   return (
     <>
       <PageHeader title={t("Audit")} help={t("Accepted inputs of this tenant, newest first, rebuilt from the journal.")} />
-      <DataTable data={[...(audit.data ?? [])].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />
+      <ReadResult query={audit}>{(rows) => <DataTable data={[...rows].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />}</ReadResult>
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Reads of personal data")}</h2>
-      <DataTable data={personal} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />
+      <ReadResult query={personalQuery}>{(rows) => <DataTable data={rows} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />}</ReadResult>
     </>
   );
 }
