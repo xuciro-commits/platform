@@ -17,24 +17,24 @@
 - [x] 2.1 宿主级唯一 `system` 租户：`tenants.go` 的 `systemSpec` 装配，不可由 Console 创建或删除；启动、恢复与健康检查按普通租户处理。
 - [x] 2.2 非 system 作用域提交系统资产被拒绝（`Only the system tenant`），并有回归用例。
 - [x] 2.3 角色：`system` 沿用 builder/publisher 语义；智能体 `system.architect` 只有 `file.save` 与 `change.propose`，不能自批。
-- 2.4 删除（不做）：与 `specs/platform/self-hosting` 的「非 system 作用域的界面不出现该应用入口」冲突；业务租户按设计看不到 system 元对象，投影会制造第二套可见性规则。
+- [x] 2.4 系统作者入口仅在 system 租户显示；已激活的系统定义按原 owner 安装为业务租户只读声明，仍受原数据权限限制，不复制系统元数据行或业务日志。作者入口与系统页面的读取投影是不同责任。
 
 ## 3. 系统记录与内核闸门
 
 - [x] 3.1 `system.file` + `system.blob`：路径唯一、内容寻址、修订检查、删除墓碑；复用日志与文件存储。
 - [x] 3.2 `system.change`：来源、提示词、冻结文件清单、批准、诊断、失败状态；批准后清单不可改。
-- [x] 3.3 `system.release` 与 `system.activation`：不可变发布、二进制/前端/工具链摘要、上一版本、可取消窗口；同一时刻只有一个未过期的 `requested` 激活（过期的请求不再阻塞下一次决定），激活成功时旧激活标 `superseded`。
+- [x] 3.3 `system.release` 与 `system.activation`：不可变发布、二进制/前端/工具链摘要、上一版本、可取消窗口；同一时刻只有一个未完成的 `requested` 激活；窗口结束允许换版，不释放未完成请求，激活成功时旧激活标 `superseded`。
 - [x] 3.4 `internal/systemscope`：保存前与构建前各执行一次，冻结契约、提交入口、接受结果、重放、快照、日志、内部格式、授权与身份提供方，拒绝 `.git`、绝对路径、`..`、密钥。
 - [x] 3.5 表驱动用例：内核闸门、修订冲突、同内容单副本、重放不重建、窗口取消、自批拒绝。
 
 ## 4. updater 与构建激活
 
 - [x] 4.1 `cmd/platform-updater`：`build`、`activate`、`swap`、`finish`、`serve`、`watch`。用 publisher 身份与宿主既有提交接口读写 system 作用域，不另建旁路。
-- [x] 4.2 物化与固定构建：从运行中的代码树播种到 `.build/system/work/<时间>/`，叠加变更文件，执行固定的 `go build ./cmd/platform-server`、`vite build` 与规则引擎编译；不执行 Makefile 或 `scripts/`。
-- [x] 4.3 体检、排空与切换：候选在临时数据目录探测 `/healthz.release`，通过才写 `current.json`；监督进程探活、排空、换版，失败回滚并记录 `rolled-back`。
+- [x] 4.2 物化与固定构建：从提案绑定的完整封存源码物化，叠加冻结文件；固定执行 Go build/vet、锁定依赖还原、各包 tsc 和 updater 配置的 Vite；不执行仓库脚本、pnpmfile、Vite/PostCSS 配置或依赖生命周期脚本。
+- [x] 4.3 体检、排空与切换：swap先封存确切激活与选择；监督进程在临时数据目录探测 `/healthz.release` 后排空、换版，失败回滚并记录 `rolled-back`。
 - [x] 4.4 版本保留：`.build/system/{bin,web,releases}` 只保留最近 5 个，正在运行与可回滚的发布永不清理；release 0009 构建时 0001–0004 被清掉，0005–0009 留下。
 - [x] 4.5 `/healthz` 报告 `release` 与 `releaseDigest`；工作区资源随发布目录切换。
-- [x] 4.6 从发布清单导出完整工作树：`platform-updater export` / `make system-export RELEASE=<n>` 读 `releases/<n>.json` 记录的构建工作树，逐个校验冻结文件的 sha256 后复制到 `.build/system/exports/<n>/`；release 0015 导出 1443 个文件、2 个冻结文件校验通过，导出树可独立编译出宿主。
+- [x] 4.6 导出完整封存源码：`platform-updater export` / `make system-export RELEASE=<n>` 校验 release 的完整源树摘要，从 `sources/<digest>/files` 导出；不依赖可清理的构建工作树。旧缺完整源码的发布明确拒绝，不临时拿当前仓库补齐。
 
 ## 5. AI 入口
 
@@ -42,12 +42,12 @@
 - [x] 5.2 提示词运行产出 `origin=prompt` 的变更，记录提示词、理由与文件清单。
 - [x] 5.3 只有 publisher 可批准，提案主体不能自批（有回归用例）。
 - [x] 5.4 禁区：内核路径在保存与构建两处被拒；智能体没有构建、激活或读取凭据的动作。
-- [ ] 5.5 在真实模型提供方上跑一次提示词演练（本机沙箱只放行 github/npm/pypi，没有模型凭据，未观察）。AI 入口的代码路径由 `system.architect` 与 `system_test.go` 覆盖；缺的是真模型那一次的观测记录，不是实现。
+- [x] 5.5 真实模型路线：2026-10-25，DeepSeek 的 `audit-ai-verified` 运行完成读取→保存→提案→finish，主体 `agent:system.architect`、日志未遮蔽；人工批准 `chg-35` 后 updater 构建发布 0007，先取消再按新激活身份换版。`/healthz.release=7`，实际 HTML 标题为 `Platform self-hosting verified`，业务记录修订仍为 1。
 
 ## 6. 人工入口
 
 - [x] 6.1 `web/packages/platform/src/system.tsx`：changes、files、releases 三页，只在成员持有 `system` 角色时出现。
-- [x] 6.2 变更视图：来源、冻结文件、诊断、批准、激活、窗口内取消。
+- [x] 6.2 变更视图：来源、冻结文件、诊断、批准、激活、窗口内取消；提案保留实际源码基线的前后映像，旧提案基线未知时明确说明，AI 运行链接取原 Agent owner 的调用上下文。
 - [x] 6.3 源码编辑：文件列表 + 修订号 + 保存/删除，冲突由宿主拒绝并在界面上报。
 - [x] 6.4 双语键（`packages/platform/src/i18n.ts`）。
 - [x] 6.5 浏览器入口可用：宿主以 `-tenant system -admin user:admin@example.test` 启动时，开发席位持有 `system.publisher`，工作区列出 Platform 的三页；构建产物 `web/0013` 里能找到这些页面。完整点击演练仍待负责人走查。
@@ -67,7 +67,7 @@
 - [x] 7.5b 注入数据不兼容：release 0010（删掉 files/relations 的树）能通过临时目录探活，但在真实数据上隔离了 system 租户；监督进程按 `status != ok` 判定失败、回滚 0009，并把 `current.json` 改回 0009，健康恢复且不再反复重试。
 - 7.5c（记录，不阻塞）删除 `files`/`relations`/`knowledge` 三个应用会让已有租户无法重放（`accepted observation needs missing projection relations`），必须先有退役与迁移路径；本次已回退这三处删除，仅保留 gateway/驱动/协议二进制的删除。
 - [x] 7.6 文档：`docs/Architecture.md` 第 9 节、`docs/WorkQueue.md`、`AGENTS.md` 硬规则 8 与检查入口、`openspec/README.md`。
-- [ ] 7.7 归档：`make openspec ARGS='validate platform-self-hosting --strict'` 已通过（2026-10-24）；归档等 5.5（真模型演练，缺凭据）与 1.4a（移出本变更）落定。
+- [ ] 7.7 归档：本轮严格校验通过、真实模型演练已完成；完整组合页面运行时、全资产退役/旧租户迁移，以及浏览器权限中断后的未观察项目尚未闭合，当前不归档。
 
 ## Workflow follow-up
 
@@ -110,6 +110,14 @@
 - [x] 9.9 楼宇供暖应用包：`deploy/heating/application.json`（5 对象 / 5 页面 / 1 应用）+ `capabilities/server/cmd/install-bundle`（读 `/v1/actions` 取内容版本，按 `bundle-<tenant>-<n>` 幂等，走与人相同的 create→publish 决定）。实装在**另一个租户** `workspace`：22 次决定、2.2 秒，装完 `GET /v1/applications` 出现 `heating` 五页，`page-view` 返回六个动作；业务链 BLD-1 → ZON-1 → MTR-1 → RDG-1 → WRK-1 assign → complete 跑通，`done` 上 cancel 被 409 拒绝。见 `deploy/heating/README.md`。
 - [x] 9.10 发布候选可封闭：`POST /v1/releases/candidates` 原本不存在，而生产档的拒绝语就叫运维去 POST 它——文档里唯一的生产交付路径不可达。现在这条路由按预览给出的 candidate id 冻结草稿（走一直存在的 `SaveReleaseCandidates`，请求体类型 `ReleaseSaveRequest` 早已声明却没人用）。实测（`workspace` 租户，heating 应用）：`POST /v1/releases/preview` → `POST /v1/releases/candidates` 201 → `GET /v1/releases/candidates` → `GET .../{id}`（34 个资产、`canActivate:true`）→ `POST /v1/releases/active` 200 → `/v1/releases/active` 报告该 id，页面与记录完好。
 - [x] 9.11 恢复路径的同一致命伤：重新声明过类型的租户在快照恢复时，遇到仍带着已删字段的行会 `restore snapshot 92: json: unknown field "c"` 并隔离。`decodeRowImage` 把「严格解码失败 → 丢弃已删字段重试」这条规则同时用于重装与快照恢复；被隔离的 `system` 租户随后恢复干净，唯一那行仍读出保留下来的字段。
-- [ ] 9.12 未完成：③ composed 页面（`Section`/`Document`）经 `pageDefinitionProjection` 之后的形态未验（当前所有已装页面都是 list-detail，composed 无实例）；⑤ 删除旧应用对历史/租户恢复的影响（见 7.5c）；⑥ 过时文档与失效命令的核对；⑧ 最终报告。
-- [ ] 9.13 未做的减法：`platform/page_*.go` 78 文件 347 KB（section 8.9 已量化）。新运行时只读 list-detail 页面，删它是契约变更，不在本切片里顺手做。
+- [ ] 9.12 完整 composed/Document 页面运行时与旧应用退役后的历史/租户恢复仍未完成；已删除错误近似渲染，复杂声明在读取前明确说明不支持。过时命令、文档及本轮审计结果已同步；不将有限支持写成全量页面验收。
+- [x] 9.13 按调用方核对页面契约：`page_*.go` 仍参与 Build 保存、候选发布、字段/端口/权限投影，不能判为无用代码。保留必要契约，删除前端将复杂组件冒充通用列表的错误近似；复杂 Document 页面明确说明当前运行时不支持，不读业务数据。
 - 9.14 本轮净变化（`4830263..HEAD`）：41 文件、+2,711 / −890；其中 `pnpm-lock.yaml` 因旧锁文件损坏被重生成（−786）。Go 侧新增 `applications.go`（≈150 行）、`routes_applications.go`（≈60 行）、`PruneImage`（20 行），删掉 `publications.go` 里为定位隔离原因临时加的日志。
+
+## 10. 本轮自举审计收尾
+
+- [x] 10.1 冷启动可按路径读取完整运行源码；保存/提案/构建使用同一闸门与规范路径，凭据不进入索引；完整基线绑定提案，后续仓库修改不进入构建。
+- [x] 10.2 纯定义、混合发布、只读共享声明、业务记录归属及 SQL 安装 delta 复用原发布 owner；日志与快照恢复通过 owner 测试。同 Ref 旧版回退可用；需要移除新增资产的回退仍由原 owner 明确拒绝，不能伪装删除成功。
+- [x] 10.3 updater 保留制品后再上报，未知答复复用原键；保存确切激活 ID 与前驱，取消重试不覆写原结果，支持首发监督接管与启动失败的新回滚决定。
+- [x] 10.4 清除旧自举界面和未消费宿主构建接口；补双语帮助、真实应用 owner/name 路由和代码换版提示；修工具输入与日志 metadata 命名冲突、逻辑目标虚构来源、具名读取的实际 owner 失效。审阅改为逐文件前后对照，基线与提案一起冻结并能恢复，不信任客户端 correlation 标签作为 AI 运行证据。
+- [x] 10.5 集中 Go build/vet、保留测试和新增 owner 测试、Web tsc/Vite、生成一致性、边界与 OpenSpec 检查通过；真实人工定义/代码、DeepSeek 提案换版、编译失败、实际数据目录启动失败回滚、取消重试和封存导出已记录于同一 WorkQueue。追加真实 PostgreSQL 隔离测试，发现并修复候选原始字节被嵌套 JSON 重组的问题；SQL 激活、业务写入、检查点与重连恢复通过。追加文件审阅收尾后，自举与 Agent 受影响测试、Go build/vet/格式/边界、Web 类型与产物、OpenSpec 严格检查通过；不重复运行未受影响的 PG 与整套演练。浏览器关闭后未再操作，新审阅界面未获浏览器验收；完整 Document、全资产退休和旧部署迁移仍未完成，不据此归档原 change。

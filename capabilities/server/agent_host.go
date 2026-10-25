@@ -55,9 +55,9 @@ func (h hostView) AgentQuery(reader platform.Member, query platform.NamedQuery, 
 	out.Body, _ = json.Marshal(page)
 	return out, nil
 }
-func (h hostView) AgentRead(reader platform.Member, name string) (host.AgentObservation, *kernel.Error) {
+func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.RawMessage) (host.AgentObservation, *kernel.Error) {
 	reader.AIContext = true
-	value, err := h.t.read(reader, name)
+	value, err := h.t.read(reader, name, inputs...)
 	if err != nil {
 		return host.AgentObservation{}, err
 	}

@@ -908,7 +908,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			ft = ft.Elem() // optional scalar values retain their declared field kind
 		}
 		switch {
-		case refined == "json" && (ft.Kind() == reflect.Map || ft.Kind() == reflect.Struct || ft == reflect.TypeOf(json.RawMessage{})):
+		case refined == "json" && (ft.Kind() == reflect.Map || ft.Kind() == reflect.Struct || ft.Kind() == reflect.Slice || ft.Kind() == reflect.Array):
 			f.Type = "json" // governed structured definitions; each owner validates its schema
 		case ft.Implements(refIface):
 			f.Type = "reference"
@@ -1020,7 +1020,12 @@ func describeDerived(info *EntityInfo, e Entity) error {
 			list, last, entered := strings.Cut(d.From, ".")
 			if entered {
 				f, ok := info.Field(list)
-				if !ok || f.Type != "lines" {
+				jsonList := false
+				if ok && f.Type == "json" {
+					fieldType := info.Go.FieldByIndex(f.Index).Type
+					jsonList = fieldType.Kind() == reflect.Slice && elementOf(info.Go, f.Index).Kind() == reflect.Struct
+				}
+				if !ok || f.Type != "lines" && !jsonList {
 					return fail("%q enters %q, which is not a list of records the type holds", d.From, list)
 				}
 				out.List, holder, at = f.Index, elementOf(info.Go, f.Index), list+"."

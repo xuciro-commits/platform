@@ -6,8 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { EdgeClient as Client } from "@platform/kernel";
 import * as api from "./api";
 import { HostProvider, useHost } from "./host";
-import { Definitions, Records, RecordView, Releases, SystemConsole, CreateView } from "./views";
+import { Definitions, Records, RecordView, Releases, CreateView } from "./views";
 import { ApplicationPage, useApplications } from "./runtime";
+import { SystemConsole } from "./system";
 import { Operate } from "./operate";
 import { HostConsole, HostLink } from "./hostconsole";
 import { Empty, Loading, Note, Panel, Problem } from "./ui";
@@ -16,7 +17,7 @@ export type Identity = { token: string; label: string };
 
 type Route =
   | { kind: "home" }
-  | { kind: "app"; app: string; page: string; id?: string }
+  | { kind: "app"; owner: string; app: string; page: string; id?: string }
   | { kind: "records"; type: string; search: string }
   | { kind: "record"; type: string; id: string }
   | { kind: "new"; type: string }
@@ -29,10 +30,15 @@ type Route =
 
 function routeOf(hash: string): Route {
   const path = hash.replace(/^#\/?/, "").split("?")[0] ?? "";
-  const search = new URLSearchParams(hash.split("?")[1] ?? "").get("q") ?? "";
+  const query = new URLSearchParams(hash.split("?")[1] ?? ""), search = query.get("q") ?? "";
   const parts = path.split("/").filter(Boolean).map(decodeURIComponent);
   const [head, second, third, fourth] = parts;
-  if (head === "a" && second && third) return { kind: "app", app: second, page: third, id: fourth };
+  if (head === "a" && second && third) {
+    // Static application links predate the owner parameter: their app name
+    // is their owner. Never ask the host to guess among same-name owners.
+    const owner = query.get("owner") ?? second;
+    return owner ? { kind: "app", owner, app: second, page: third, id: fourth } : { kind: "missing" };
+  }
   if (head === "r" && second && third) return { kind: "record", type: second, id: third };
   if (head === "r" && second) return { kind: "records", type: second, search };
   if (head === "new" && second) return { kind: "new", type: second };
@@ -41,9 +47,12 @@ function routeOf(hash: string): Route {
   if (head === "sys") return { kind: "system" };
   if (head === "o" && second) return { kind: "operate", section: second };
   if (head === "host") return { kind: "host" };
-  if (head === "") return { kind: "home" };
+  if (head === undefined) return { kind: "home" };
   return { kind: "missing" };
 }
+
+const applicationURL = (owner: string, app: string, page: string, id?: string): string =>
+  `#/a/${encodeURIComponent(app)}/${encodeURIComponent(page)}${id ? `/${encodeURIComponent(id)}` : ""}?${new URLSearchParams({ owner })}`;
 
 export function useRoute(): Route {
   const [hash, setHash] = useState(() => window.location.hash);
@@ -140,11 +149,11 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
           <a href="#/" className={route.kind === "home" ? "active" : ""}>Overview</a>
           <p className="label">Applications</p>
           {applications.length === 0 ? <p className="muted small">No application is offered to you yet.</p> : applications.map((application) => (
-            <div key={application.app} className="group">
+            <div key={`${application.app}/${application.name}`} className="group">
               <span className="group-title">{application.title}</span>
               {application.pages.map((page) => (
-                <a key={`${application.app}/${page.name}`} href={`#/a/${encodeURIComponent(application.app)}/${encodeURIComponent(page.name)}`}
-                  className={route.kind === "app" && route.app === application.app && route.page === page.name ? "active" : ""}>{page.title}</a>
+                <a key={page.name} href={applicationURL(application.app, application.name, page.name)}
+                  className={route.kind === "app" && route.owner === application.app && route.app === application.name && route.page === page.name ? "active" : ""}>{page.title}</a>
               ))}
             </div>
           ))}
@@ -160,7 +169,7 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
           <p className="label">Platform</p>
           <a href="#/def" className={route.kind === "definitions" ? "active" : ""}>Definitions</a>
           <a href="#/rel" className={route.kind === "releases" ? "active" : ""}>Releases</a>
-          <a href="#/sys" className={route.kind === "system" ? "active" : ""}>Self-hosting</a>
+          {me.tenantId === "system" && apps.some(app => app.id === "system") ? <a href="#/sys" className={route.kind === "system" ? "active" : ""}>Self-hosting</a> : null}
           <p className="label">Admin</p>
           <a href="#/o/people" className={active(route, "people")}>People</a>
           <a href="#/o/settings" className={active(route, "settings")}>Settings</a>
@@ -187,8 +196,8 @@ function Shell({ me, onSwitch, onLeave }: { me: api.Me; onSwitch: (tenant: strin
           <span className="muted small">release {host.release || "—"} · {entities.length} types</span>
         </header>
         {route.kind === "home" ? <Home /> : null}
-        {route.kind === "app" ? <ApplicationPage app={route.app} page={route.page} id={route.id}
-          onOpen={(id) => { window.location.hash = `#/a/${encodeURIComponent(route.app)}/${encodeURIComponent(route.page)}/${encodeURIComponent(id)}`; }} /> : null}
+        {route.kind === "app" ? <ApplicationPage owner={route.owner} app={route.app} page={route.page} id={route.id}
+          onOpen={(id) => { window.location.hash = applicationURL(route.owner, route.app, route.page, id); }} /> : null}
         {route.kind === "records" ? <Records type={route.type} search={route.search} /> : null}
         {route.kind === "record" ? <RecordView type={route.type} id={route.id} /> : null}
         {route.kind === "new" ? <CreateView type={route.type} /> : null}
@@ -213,11 +222,11 @@ function Home() {
         {applications.length === 0 ? <Empty>Nothing has been built for you yet. An application appears here once its definition is published.</Empty> : (
           <div className="cards">
             {applications.map((application) => (
-              <div key={application.app} className="card">
+              <div key={`${application.app}/${application.name}`} className="card">
                 <strong>{application.title}</strong>
                 {application.description ? <p className="muted small">{application.description}</p> : null}
                 <div className="row wrap">
-                  {application.pages.map((page) => <a key={page.name} className="button" href={`#/a/${encodeURIComponent(application.app)}/${encodeURIComponent(page.name)}`}>{page.title}</a>)}
+                  {application.pages.map((page) => <a key={page.name} className="button" href={applicationURL(application.app, application.name, page.name)}>{page.title}</a>)}
                 </div>
               </div>
             ))}

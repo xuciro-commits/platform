@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import * as api from "./api";
 import { useHost, useLoad } from "./host";
+import { t } from "./i18n";
 import { Decision, seedOf } from "./views";
 import { Empty, Loading, Note, Panel, Problem, show } from "./ui";
 
@@ -20,14 +21,21 @@ export function useApplications(): { apps: Api.ApplicationView[]; loading: boole
   return { apps: load.data ?? [], loading: load.loading };
 }
 
+type PageRoute = { owner: string; app: string; page: string; id?: string; onOpen: (id: string) => void };
+
+/** A different route cannot briefly mount readers from the previous page. */
+export function ApplicationPage(props: PageRoute) {
+  return <ResolvedPage key={`${props.owner}/${props.app}/${props.page}`} {...props} />;
+}
+
 /** One page of one application, as the host resolves it for this caller. */
-export function ApplicationPage({ app, page, id, onOpen }: { app: string; page: string; id?: string; onOpen: (id: string) => void }) {
+function ResolvedPage({ owner, app, page, id, onOpen }: PageRoute) {
   const host = useHost();
   const view = useLoad(async () => {
-    const answer = await host.client.call("POST", "/v1/page-view", { app, page });
+    const answer = await host.client.call("POST", "/v1/page-view", { owner, app, page });
     if (!answer.ok) throw new Error(api.errorOf(answer.body) ?? `The host answered ${answer.status}.`);
     return answer.body as Api.PageView;
-  }, [host.client, app, page, host.revision]);
+  }, [host.client, owner, app, page, host.revision]);
 
   if (view.loading) return <Loading what={page} />;
   if (view.error) return <Problem>{view.error}</Problem>;
@@ -37,7 +45,7 @@ export function ApplicationPage({ app, page, id, onOpen }: { app: string; page: 
 
 function PageBody({ view, id, onOpen }: { view: Api.PageView; id?: string; onOpen: (id: string) => void }) {
   const { page } = view;
-  if (page.layout === "composed" && page.sections?.length) return <Composed view={view} id={id} onOpen={onOpen} />;
+  if (page.layout !== "list-detail" || page.document || page.sections?.length || page.selections?.length) return <Composed view={view} id={id} onOpen={onOpen} />;
   const list = page.listFields ?? [];
   const detail = page.detailFields ?? [];
   return (
@@ -99,7 +107,7 @@ function List({ view, columns, onOpen, selected }: { view: Api.PageView; columns
   );
 }
 
-function Detail({ view, shown, id }: { view: Api.PageView; shown: string[]; id?: string }) {
+function Detail({ view, shown, id, title }: { view: Api.PageView; shown: string[]; id?: string; title?: string }) {
   const host = useHost();
   const type = view.entity?.type ?? "";
   const record = useLoad(() => (type && id ? api.record(host.client, type, id) : Promise.resolve(undefined)), [host.client, type, id, host.revision]);
@@ -117,7 +125,7 @@ function Detail({ view, shown, id }: { view: Api.PageView; shown: string[]; id?:
   const chosen = actions.find((action) => action.schema === open);
   return (
     <>
-      <Panel title={label(row, titleField) || id} actions={<span className="muted small">revision {revision}</span>}>
+      <Panel title={title ?? (label(row, titleField) || id)} actions={<span className="muted small">revision {revision}</span>}>
         <dl className="record">
           {names.map((name) => (
             <div key={name}>
@@ -165,21 +173,52 @@ function CreateActions({ view }: { view: Api.PageView }) {
 /** The id prefix a page gives a new record: the type's own last word. */
 const prefixOf = (type: string): string => (type.split(".").pop() ?? type).slice(0, 10).toUpperCase();
 
-/** A composed page: the sections a builder laid out, rendered in order. */
+/** Check the small shape this runtime actually renders before mounting any
+ * record reader. Unsupported bindings cannot fall back to the page's object. */
+function composedIssues(view: Api.PageView): string[] {
+  const { page, entity } = view, sections = page.sections ?? [], issues: string[] = [];
+  if (page.layout !== "composed") issues.push("page.layout");
+  if (page.document) issues.push("page.document");
+  if (page.selections?.length) issues.push("page.selections");
+  if (page.actions?.length || view.actions.length) issues.push("page.actions");
+  if (!sections.length) issues.push("page.sections");
+  for (const [index, section] of sections.entries()) {
+    const path = `sections[${index}]`, data = section.widget === "table" || section.widget === "detail";
+    if (!data && section.widget !== "text") issues.push(`${path}.widget (${section.widget})`);
+    if (section.configVersion !== undefined && section.configVersion !== 0 && section.configVersion !== 1) issues.push(`${path}.configVersion`);
+    if (section.width && section.width !== "full") issues.push(`${path}.width`);
+    const object = section.object;
+    if (object && (object.app || object.kind || object.name) && (!data || object.app !== page.object.app || object.kind !== page.object.kind || object.name !== page.object.name)) issues.push(`${path}.object`);
+    if (data && (!entity || entity.type !== page.object.name || entity.app !== page.object.app || page.object.kind !== "object")) issues.push("page.object");
+    if (data && (!section.fields?.length || section.fields.some(name => name !== "id" && !entity?.fields.some(field => field.name === name)))) issues.push(`${path}.fields`);
+    const allowed = ["id", "configVersion", "widget", "title", "width", "object", data ? "fields" : "text"];
+    for (const [field, value] of Object.entries(section)) {
+      if (allowed.includes(field) || value === undefined || value === null || value === "" || Array.isArray(value) && !value.length) continue;
+      // Go's zero AssetRef is still serialized as an object, not a binding.
+      if (field === "query" && !section.query?.app && !section.query?.kind && !section.query?.name) continue;
+      issues.push(`${path}.${field}`);
+    }
+  }
+  return [...new Set(issues)];
+}
+
+/** Documentless text and plain, read-only sections over the same object. */
 function Composed({ view, id, onOpen }: { view: Api.PageView; id?: string; onOpen: (id: string) => void }) {
-  const sections = view.page.sections ?? [];
+  const { me } = useHost(), issues = composedIssues(view), text = (value: string) => t(value, me.language);
+  if (issues.length) return <Panel title={view.page.title}>
+    <Problem>{text("This page requires presentation features that this workspace does not support. No business records were read and no actions were opened.")}</Problem>
+    <Note>{text("Supported composed pages contain only static text or plain read-only tables and details over one object. Document layouts, conditions, variables, events, queries, action bindings and other widgets require their declared runtime; they are not replaced with a generic list.")}</Note>
+    <p>{text("Unsupported declarations:")}</p><ul>{issues.map(issue => <li key={issue}><code>{issue}</code></li>)}</ul>
+  </Panel>;
   return (
     <>
-      {sections.map((section, index) => {
-        const widget = section.widget ?? "";
-        if (/table|list|grid|kanban|calendar|gallery/.test(widget)) {
-          return <List key={index} view={view} columns={section.fields?.length ? section.fields : (view.page.listFields ?? [])} onOpen={onOpen} selected={id} />;
-        }
-        if (/detail|form|card|view/.test(widget)) {
-          return <Detail key={index} view={view} shown={section.fields ?? view.page.detailFields ?? []} id={id} />;
-        }
-        if (section.text) return <Panel key={index} title={section.title || ""}><p>{section.text}</p></Panel>;
-        return <Panel key={index} title={section.title || widget}><Note>This part of the page is not drawn by this runtime ({widget || "unknown widget"}).</Note></Panel>;
+      {view.page.description ? <Note>{view.page.description}</Note> : null}
+      {view.page.sections!.map((section, index) => {
+        const key = section.id || index;
+        if (section.widget === "text") return <Panel key={key} title={section.title ?? ""}><p>{section.text}</p></Panel>;
+        const local = { ...view, page: { ...view.page, title: section.title ?? view.page.title }, actions: [] };
+        if (section.widget === "table") return <List key={key} view={local} columns={section.fields!} onOpen={onOpen} selected={id} />;
+        return <Detail key={key} view={local} shown={section.fields!} id={id} title={section.title} />;
       })}
     </>
   );

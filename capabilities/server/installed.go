@@ -267,6 +267,12 @@ func (t *Tenant) reinstall() error {
 		return err
 	}
 	t.installingSet = before
+	if t.systemDefinitionState.source.Load() != nil {
+		t.systemDefinitionState.applied = ""
+		if err := t.applySystemDefinitionProjection(); err != nil {
+			return err
+		}
+	}
 	return t.validateAssetSet()
 }
 

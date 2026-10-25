@@ -146,6 +146,7 @@ func (d *Deployment) Tenants(development TenantSpec) []TenantSpec {
 func (d *Deployment) systemSpec(development TenantSpec) TenantSpec {
 	roles := map[string]string{
 		"platform": Admin, "system": "publisher", "build": "builder",
+		platform.AIApp: platform.AIAdmin, AgentApp: AgentAdmin,
 	}
 	seats := []Seat{}
 	if d.HostAdmins != "" {

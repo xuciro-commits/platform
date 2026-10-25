@@ -1,19 +1,5 @@
 #!/usr/bin/env bash
-# Dependency boundaries across all apps (see docs/Architecture.md):
-#   1. an app never depends on another app; a protocol depends on no app;
-#   2. an app's and a protocol's own packages import the app API
-#      (platformserver/platform) and never the host runtime (platformserver):
-#      the runtime is reachable only through platform.Runtime, which the host
-#      hands each caller. Their binaries (cmd/) compose tenants and may import
-#      it, and so may test harnesses (packages named *test, like httptest);
-#   3. every app has one shape: apps/<id>/server is the Go module
-#      <id> with <id>.go, <id>_test.go, i18n/zh-CN.json and a development host
-#      cmd/<id>-server; its UI, when it has one, is web/packages/<id> with
-#      src/index.tsx and src/i18n.ts;
-#   4. the host's own apps (capabilities/server/apps/*) import the app API and
-#      internal/host, never the host runtime;
-#   5. code outside platform never touches .Changes or .changes directly: all
-#      reads and decisions go through locked methods (RecordsFor, Receive, etc.).
+# Platform owners consume the public API and named private host roles.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
@@ -22,36 +8,10 @@ fail() { echo "boundary: $*" >&2; exit 1; }
 # omitted by current OS/build tags. No count allowance or migration exception.
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 
-# Every Go module under apps/ and protocols/, named by its module path.
-modules() { for m in "$@"; do [[ ! -f $m/go.mod ]] || echo "$m:$(awk '/^module /{print $2}' "$m/go.mod")"; done; }
-apps=$(modules apps/*/server)
-protocols=$(modules protocols/*)
-names=$(for x in $apps; do echo "${x#*:}"; done)
-
-for x in $apps $protocols; do
-  dir=${x%%:*} self=${x#*:}
-  deps=$(cd "$dir" && go list -deps ./... 2>/dev/null)
-  for other in $names; do
-    [[ $other == "$self" ]] && continue
-    grep -qx "$other" <<<"$deps" && fail "$self depends on the app $other"
-  done
-  hits=$(cd "$dir" && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... | grep -vE '/cmd/|test:' | grep -E ' platformserver( |$)' || true)
-  [[ -z $hits ]] || fail "app code imports the host runtime, not the app API:"$'\n'"$hits"
-done
-for x in $apps; do
-  dir=${x%%:*} id=${x#*:}
-  [[ $dir == apps/$id/server ]] || fail "$dir holds the module $id: an app's directory, module and ID share one name"
-  for f in "$id.go" "${id}_test.go" i18n/zh-CN.json "cmd/$id-server/main.go"; do
-    [[ -f $dir/$f ]] || fail "$dir has no $f"
-  done
-  ui=web/packages/$id
-  [[ ! -d $ui ]] || [[ -f $ui/src/index.tsx && -f $ui/src/i18n.ts ]] || fail "$ui has no src/index.tsx and src/i18n.ts"
-done
 hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./apps/... 2>/dev/null | grep -E ' platformserver( |$)' || true)
 [[ -z $hits ]] || fail "a platform app imports the host runtime, not the app API and internal/host:"$'\n'"$hits"
 
-app_dirs=$(find apps -type d -name server 2>/dev/null || true)
-leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" ${app_dirs:+$app_dirs} capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
+leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
 [[ -z $leaks ]] || fail "code outside platform touches change log directly without ledger lock:"$'\n'"$leaks"
 
 # probing is a private decision mode, never a tenant-wide switch.
@@ -65,4 +25,4 @@ selection=$(grep -nE 'type (ResultApp|AcceptedActionApp|AcceptedWorker) interfac
 [[ -z $selection ]] || fail "submission admission has optional legacy selectors:"$'\n'"$selection"
 
 platformapps=$(cd capabilities/server && go list ./apps/... 2>/dev/null | wc -l | tr -d ' ')
-echo "boundaries ok: $(printf '%s\n' "$apps" | awk 'NF { n++ } END { print n+0 }') apps, $(printf '%s\n' "$protocols" | awk 'NF { n++ } END { print n+0 }') protocols, $platformapps platform apps as packages"
+echo "boundaries ok: $platformapps platform owners as packages"

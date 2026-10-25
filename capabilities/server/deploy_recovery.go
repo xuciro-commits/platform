@@ -51,6 +51,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		return fmt.Errorf("tenant %s recovery factory has different app composition or restore formats: %v", id, err)
 	}
 	fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
+	fresh.systemDefinitionState.source.Store(old.systemDefinitionState.source.Load())
 	entries, err := journal.Entries(ctx, id, 0)
 	if err != nil {
 		return fmt.Errorf("read tenant %s from the beginning: %w", id, err)
@@ -85,6 +86,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if err := registry.replace(id, old, fresh); err != nil {
 		return err
 	}
+	(&Host{}).bindSystemDefinitions(registry.list())
 	if projection != nil {
 		flushProjection(context.Background(), registry, fresh, projection)
 	}

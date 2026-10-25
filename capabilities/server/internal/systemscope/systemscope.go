@@ -13,6 +13,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Limits bound one system change. They keep a single decision small enough to
@@ -61,19 +62,51 @@ const (
 	StateRolledBack = "rolled-back"
 )
 
-// frozen are the paths no self-hosting change may write. Each entry is either
-// a file or a directory prefix (with a trailing slash).
+// frozen names the actual owners of the frozen kernel. Entries include files,
+// directory prefixes and root-package filename families split out of host.go.
 var frozen = []string{
 	"contract/",
+	"go.work",
+	"go.work.sum",
 	"capabilities/server/host.go",
+	"capabilities/server/server.go",
+	"capabilities/server/routes.go",
+	"capabilities/server/routes_core.go",
+	"capabilities/server/submission_schema.go",
+	"capabilities/server/staged_decision.go",
+	"capabilities/server/runtime.go",
+	"capabilities/server/hostview.go",
+	"capabilities/server/runtime_state.go",
+	"capabilities/server/runtime_snapshot.go",
+	"capabilities/server/decision_definition.go",
 	"capabilities/server/accepted_",
+	"capabilities/server/committed.go",
 	"capabilities/server/replay",
 	"capabilities/server/snapshot",
+	"capabilities/server/journal_bridge.go",
 	"capabilities/server/journal/",
+	"capabilities/server/records",
+	"capabilities/server/record_",
+	"capabilities/server/authorization",
+	"capabilities/server/access.go",
+	"capabilities/server/console.go",
+	"capabilities/server/console_identity.go",
+	"capabilities/server/console_member.go",
+	"capabilities/server/identity_roles.go",
+	"capabilities/server/lifecycle.go",
+	"capabilities/server/hostadmin.go",
+	"capabilities/server/host_control.go",
+	"capabilities/server/tenant_registry.go",
 	"capabilities/server/internal/acceptance/",
 	"capabilities/server/internal/records/",
 	"capabilities/server/internal/host/",
 	"capabilities/server/internal/systemscope/",
+	"capabilities/server/platform/app.go",
+	"capabilities/server/platform/ledger.go",
+	"capabilities/server/platform/actions.go",
+	"capabilities/server/platform/authorization.go",
+	"capabilities/server/platform/record_image.go",
+	"capabilities/server/platform/snapshot.go",
 	"capabilities/server/platform/authz/",
 	"capabilities/server/idp/",
 	"capabilities/server/go.mod",
@@ -82,6 +115,21 @@ var frozen = []string{
 
 // secret names are refused wherever they appear.
 var secretSuffixes = []string{".key", ".pem", ".p12", ".pfx", ".env"}
+
+// Sensitive identifies credential files both the edit gate and source capture
+// must exclude. Frozen kernel files remain readable build inputs.
+func Sensitive(p string) bool {
+	name := strings.ToLower(path.Base(p))
+	if name == ".env" || strings.HasPrefix(name, ".env.") {
+		return true
+	}
+	for _, suffix := range secretSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
 
 // Verdict says why a path is frozen, or "" when a system change may write it.
 func Verdict(p string) string {
@@ -92,30 +140,27 @@ func Verdict(p string) string {
 		return "only repository-relative paths are allowed"
 	}
 	clean := path.Clean(p)
+	if clean != p {
+		return "use one canonical repository-relative path without dot segments or repeated separators"
+	}
+	if clean == "." {
+		return "a repository root is not a file"
+	}
 	if clean == ".." || strings.HasPrefix(clean, "../") {
 		return "a path may not leave the repository"
 	}
-	if clean == ".git" || strings.HasPrefix(clean, ".git/") {
+	match := strings.ToLower(clean)
+	if match == ".git" || strings.HasPrefix(match, ".git/") {
 		return "version-control state is not a system asset"
 	}
-	for _, suffix := range secretSuffixes {
-		if strings.HasSuffix(clean, suffix) {
-			return "credentials are never system assets"
-		}
+	if Sensitive(clean) {
+		return "credentials are never system assets"
 	}
 	for _, entry := range frozen {
-		if strings.HasSuffix(entry, "/") {
-			if strings.HasPrefix(clean, entry) {
-				return "the kernel is frozen: " + entry + " moves by version release only"
-			}
-			continue
-		}
-		if clean == entry || strings.HasPrefix(clean, entry) {
+		// Deleting a parent directory also deletes its frozen descendants.
+		if match == strings.TrimSuffix(entry, "/") || strings.HasPrefix(match, entry) || strings.HasPrefix(entry, match+"/") {
 			return "the kernel is frozen: " + entry + " moves by version release only"
 		}
-	}
-	if clean == "capabilities/server/accepted_requests.go" {
-		return "the kernel is frozen: accepted results move by version release only"
 	}
 	return ""
 }
@@ -183,4 +228,12 @@ func Manifest(files map[string]string) string {
 	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(sum[:])
+}
+
+// Editable source records carry text; binary assets need their original owner.
+func CheckContent(p, content string) error {
+	if strings.IndexByte(content, 0) >= 0 || !utf8.ValidString(content) {
+		return Violation{Path: p, Reason: "system source edits must be UTF-8 text"}
+	}
+	return nil
 }

@@ -24,13 +24,17 @@ type systemKit struct {
 	entries []Entry
 }
 
-func newSystemTenant(t *testing.T) *systemKit {
+func newSystemTenant(t *testing.T, sources ...*platform.SystemSource) *systemKit {
 	t.Helper()
 	seats := []Seat{
 		{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{system.ID: system.Builder}}},
 		{Subjects: []string{"publisher"}, Member: platform.Member{ID: "publisher", Roles: map[string]string{system.ID: system.Publisher}}},
 	}
-	tenant, err := NewTenant(systemscope.Tenant, NewConsole(systemscope.Tenant, seats...), NewAgents(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant))
+	source := systemTestSource()
+	if len(sources) > 0 {
+		source = sources[0]
+	}
+	tenant, err := NewTenant(systemscope.Tenant, NewConsole(systemscope.Tenant, seats...), NewAgents(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant, source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +136,7 @@ func TestSelfHostingProposesApprovesAndPublishes(t *testing.T) {
 		"files": []map[string]any{{"path": "web/packages/build/src/index.tsx", "content": "export const title = \"Platform\";\n"}},
 	})
 	kit.submit(t, "publisher", system.SchemaApprove, system.ChangeType, "chg-2", map[string]any{})
-	kit.submit(t, "publisher", system.SchemaBuilt, system.ChangeType, "chg-2", map[string]any{"ok": true, "binary": "abc", "web": "def", "toolchain": "go1.27.1"})
+	kit.submit(t, "publisher", system.SchemaBuilt, system.ChangeType, "chg-2", map[string]any{"ok": true, "binary": "abc", "web": "def", "toolchain": "go1.27.1", "sourceDigest": "test-source-built", "manifest": map[string]string{"web/a.tsx": "a"}})
 	releases := kit.releases(t)
 	if len(releases) != 1 || releases[0].Version != 1 || releases[0].State != system.StatePublished || releases[0].Change != "chg-2" {
 		t.Fatalf("want one published release of chg-2, got %+v", releases)
@@ -188,7 +192,7 @@ func TestSelfHostingReplaysWithoutRebuilding(t *testing.T) {
 		{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{system.ID: system.Builder}}},
 		{Subjects: []string{"publisher"}, Member: platform.Member{ID: "publisher", Roles: map[string]string{system.ID: system.Publisher}}},
 	}
-	fresh, err := NewTenant(systemscope.Tenant, NewConsole(systemscope.Tenant, seats...), NewAgents(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant))
+	fresh, err := NewTenant(systemscope.Tenant, NewConsole(systemscope.Tenant, seats...), NewAgents(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant, systemTestSource()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +245,7 @@ func TestSelfHostingCancelsAnOpenWindow(t *testing.T) {
 		"title": "t", "rationale": "r", "files": []map[string]any{{"path": "web/a.tsx", "content": "x"}},
 	})
 	kit.submit(t, "publisher", system.SchemaApprove, system.ChangeType, "chg", map[string]any{})
-	kit.submit(t, "publisher", system.SchemaBuilt, system.ChangeType, "chg", map[string]any{"ok": true})
+	kit.submit(t, "publisher", system.SchemaBuilt, system.ChangeType, "chg", map[string]any{"ok": true, "binary": "abc", "web": "def", "sourceDigest": "test-source-built", "manifest": map[string]string{"web/a.tsx": "a"}})
 	kit.submit(t, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 30})
 	kit.submit(t, "publisher", system.SchemaCancel, system.ReleaseType, "0001", map[string]any{"reason": "wait for the next review"})
 	if activations := kit.activations(t); activations[0].Result != "aborted" {
@@ -254,12 +258,32 @@ func TestSelfHostingCancelsAnOpenWindow(t *testing.T) {
 
 func TestSelfHostingAnAgentCannotApproveItsOwnProposal(t *testing.T) {
 	kit := newSystemTenant(t)
-	kit.submit(t, "builder", system.SchemaPropose, system.ChangeType, "chg", map[string]any{
-		"title": "t", "rationale": "r", "agent": "builder",
-		"files": []map[string]any{{"path": "web/a.tsx", "content": "x"}},
-	})
-	kit.refuses(t, "builder", system.SchemaApprove, system.ChangeType, "chg", map[string]any{})
-	kit.submit(t, "publisher", system.SchemaApprove, system.ChangeType, "chg", map[string]any{})
+	// Deliberately grant publisher: denial must come from the managed-agent
+	// boundary, rather than accidentally proving only a missing role.
+	agent, _ := kit.tenant.Member("publisher")
+	agent.Agent = true
+	agent.ID = "agent:system.architect"
+	input := func(schema, typ, id string, payload any) *pb.Submission {
+		return &pb.Submission{TenantId: kit.tenant.ID, PrincipalId: agent.ID, Authority: system.ID, IdempotencyKey: fmt.Sprintf("agent-%d", kit.keys.Add(1)), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+	}
+	proposal := input(system.SchemaPropose, system.ChangeType, "agent-change", map[string]any{"title": "t", "rationale": "r", "prompt": "Improve the interface", "files": []map[string]any{{"path": "web/a.tsx", "content": "x"}}})
+	if _, err := kit.tenant.Submit(agent, proposal, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	changes := kit.changes(t)
+	if len(changes) != 1 || changes[0].Agent != agent.ID || changes[0].Origin != "prompt" {
+		t.Fatalf("unattributed managed proposal: %+v", changes)
+	}
+	if _, err := kit.tenant.Submit(agent, input(system.SchemaApprove, system.ChangeType, "agent-change", map[string]any{}), time.Now()); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("publisher agent approved: %v", err)
+	}
+	// The ordinary human publisher remains eligible; AI role protection must
+	// not introduce an unrelated two-human approval policy.
+	kit.submit(t, "publisher", system.SchemaApprove, system.ChangeType, "agent-change", map[string]any{})
+}
+
+func systemTestSource() *platform.SystemSource {
+	return &platform.SystemSource{Digest: "test-source-baseline", Read: func(path string) (string, error) { return "", fmt.Errorf("%s not in the test baseline", path) }}
 }
 
 func readFiles(t *testing.T, tenant *Tenant) []system.FileView {
@@ -270,5 +294,177 @@ func readFiles(t *testing.T, tenant *Tenant) []system.FileView {
 		t.Fatalf("read system-files: %v", refusal)
 	}
 	files, _ := out.([]system.FileView)
+	for i, file := range files {
+		value, err := tenant.Read(member, "system-file", platform.Raw(map[string]any{"path": file.Path}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[i] = value.(system.FileView)
+	}
 	return files
+}
+
+func (k *systemKit) publishCode(t *testing.T, id string) {
+	t.Helper()
+	k.submit(t, "builder", system.SchemaPropose, system.ChangeType, id, map[string]any{"title": id, "rationale": "owner lifecycle", "files": []map[string]any{{"path": "web/a.tsx", "content": id}}})
+	k.submit(t, "publisher", system.SchemaApprove, system.ChangeType, id, map[string]any{})
+	k.submit(t, "publisher", system.SchemaBuilt, system.ChangeType, id, map[string]any{"ok": true, "binary": "bin-" + id, "web": "web-" + id, "sourceDigest": "source-" + id, "manifest": map[string]string{"web/a.tsx": systemscope.Digest([]byte(id))}})
+}
+
+func TestSelfHostingWindowExpiryDoesNotReleaseAnUnfinishedActivation(t *testing.T) {
+	kit := newSystemTenant(t)
+	kit.publishCode(t, "first")
+	kit.publishCode(t, "second")
+	kit.submit(t, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0})
+	member, _ := kit.tenant.Member("publisher")
+	call := func(schema, id string, payload any) *pb.Submission {
+		return &pb.Submission{TenantId: kit.tenant.ID, PrincipalId: member.ID, Authority: system.ID, IdempotencyKey: fmt.Sprintf("later-%d", kit.keys.Add(1)), Target: &pb.EntityRef{Type: system.ReleaseType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+	}
+	later := time.Now().Add(time.Minute)
+	for _, input := range []*pb.Submission{call(system.SchemaCancel, "0001", map[string]any{"activationId": "0001"}), call(system.SchemaActivate, "0002", map[string]any{"window": 0})} {
+		if _, err := kit.tenant.Submit(member, input, later); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
+			t.Fatalf("elapsed window admitted %s: %v", input.Schema.Name, err)
+		}
+	}
+	kit.submit(t, "publisher", system.SchemaFinished, system.ActivationType, "0001", map[string]any{"result": "aborted", "evidence": "probe refused"})
+	kit.submit(t, "publisher", system.SchemaActivate, system.ReleaseType, "0002", map[string]any{"window": 30})
+}
+
+func TestSelfHostingRepeatedActivationsKeepTheirOwnEvidence(t *testing.T) {
+	kit := newSystemTenant(t)
+	kit.publishCode(t, "first")
+	kit.submit(t, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 30})
+	kit.submit(t, "publisher", system.SchemaCancel, system.ReleaseType, "0001", map[string]any{"activationId": "0001", "reason": "review again"})
+	kit.submit(t, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 30})
+	values := kit.activations(t)
+	if len(values) != 2 {
+		t.Fatalf("re-activation overwrote history: %+v", values)
+	}
+	var requested string
+	for _, v := range values {
+		if v.Result == system.StateRequested {
+			requested = v.ID
+		} else if v.ID != "0001" || v.Failure != "review again" {
+			t.Fatalf("lost cancellation: %+v", v)
+		}
+	}
+	if requested == "0001" || requested == "" {
+		t.Fatalf("new activation identity missing: %+v", values)
+	}
+	kit.refuses(t, "publisher", system.SchemaCancel, system.ReleaseType, "0001", map[string]any{"activationId": "0001"})
+	kit.submit(t, "publisher", system.SchemaCancel, system.ReleaseType, "0001", map[string]any{"activationId": requested})
+}
+
+func TestSelfHostingColdSourceReadsAndExplicitEmptyEdits(t *testing.T) {
+	contents := map[string]string{"web/src/main.tsx": "running code", "contract/spec/K1.md": "frozen code"}
+	source := &platform.SystemSource{Digest: "cold-baseline", Files: []platform.SystemSourceFile{{Path: "web/src/main.tsx", Digest: systemscope.Digest([]byte(contents["web/src/main.tsx"])), Editable: true}, {Path: "contract/spec/K1.md", Editable: false}}, Read: func(path string) (string, error) { return contents[path], nil }}
+	kit := newSystemTenant(t, source)
+	reader, _ := kit.tenant.Member("publisher")
+	values, err := kit.tenant.Read(reader, "system-files", platform.Raw(map[string]any{"search": "MAIN", "limit": 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := values.([]system.FileView)
+	if len(listed) != 1 || listed[0].Path != "web/src/main.tsx" || listed[0].Content != "" || listed[0].Revision != 0 {
+		t.Fatalf("cold index read: %+v", listed)
+	}
+	value, err := kit.tenant.Read(reader, "system-file", platform.Raw(map[string]any{"path": "web/src/main.tsx"}))
+	if err != nil || value.(system.FileView).Content != "running code" {
+		t.Fatalf("cold file read: %+v / %v", value, err)
+	}
+	kit.submit(t, "builder", system.SchemaFileSave, system.FileType, "file", map[string]any{"path": "web/src/main.tsx", "revision": 0, "content": "saved draft"})
+	kit.submit(t, "builder", system.SchemaPropose, system.ChangeType, "empty", map[string]any{"title": "empty", "rationale": "empty is content", "files": []map[string]any{{"path": "web/src/main.tsx", "revision": 1, "content": ""}}})
+	change := kit.changes(t)[0]
+	if change.SourceDigest != "cold-baseline" || len(change.Files) != 1 || change.Files[0].Content != "" || change.Files[0].Digest != systemscope.Digest(nil) {
+		t.Fatalf("explicit empty was replaced by the draft: %+v", change)
+	}
+}
+
+func TestSelfHostingStaleBuildClosesWithoutPublishing(t *testing.T) {
+	kit := newSystemTenant(t)
+	kit.publishCode(t, "first")
+	kit.submit(t, "builder", system.SchemaPropose, system.ChangeType, "stale", map[string]any{"title": "Stale", "rationale": "concurrent review", "files": []map[string]any{{"path": "web/a.tsx", "content": "stale"}}})
+	kit.submit(t, "publisher", system.SchemaApprove, system.ChangeType, "stale", map[string]any{})
+	kit.submit(t, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0})
+	kit.submit(t, "publisher", system.SchemaFinished, system.ActivationType, "0001", map[string]any{"result": "active"})
+	kit.submit(t, "publisher", system.SchemaBuilt, system.ChangeType, "stale", map[string]any{"ok": true, "binary": "bin", "web": "web", "sourceDigest": "stale-source", "manifest": map[string]string{"web/a.tsx": "stale"}})
+	if len(kit.releases(t)) != 1 {
+		t.Fatal("stale baseline published")
+	}
+	for _, c := range kit.changes(t) {
+		if c.ID == "stale" && c.State != system.StateFailed {
+			t.Fatalf("stale build blocks updater: %+v", c)
+		}
+	}
+}
+
+func TestSelfHostingReviewKeepsTheProposedBaselineThroughRecovery(t *testing.T) {
+	contents := map[string]string{"web/main.tsx": "running", "web/old.tsx": "remove me"}
+	source := &platform.SystemSource{Digest: "review-baseline", Read: func(path string) (string, error) { return contents[path], nil }}
+	for path, content := range contents {
+		source.Files = append(source.Files, platform.SystemSourceFile{Path: path, Digest: systemscope.Digest([]byte(content)), Editable: true})
+	}
+	kit := newSystemTenant(t, source)
+	kit.submit(t, "builder", system.SchemaFileSave, system.FileType, "draft", map[string]any{"path": "web/main.tsx", "content": "unrelated draft"})
+	kit.submit(t, "builder", system.SchemaPropose, system.ChangeType, "review", map[string]any{
+		"title": "Review exact source", "rationale": "Keep the actual baseline, not another writer's draft", "files": []map[string]any{
+			{"path": "web/main.tsx", "content": "proposed"}, {"path": "web/old.tsx", "deleted": true}, {"path": "web/new.tsx", "content": ""},
+		},
+	})
+	kit.submit(t, "publisher", system.SchemaApprove, system.ChangeType, "review", map[string]any{})
+	kit.submit(t, "builder", system.SchemaFileSave, system.FileType, "draft", map[string]any{"path": "web/main.tsx", "content": "later draft", "revision": 1})
+	contents["web/main.tsx"] = "later source"
+	fresh := newSystemTenant(t)
+	if err := fresh.tenant.Replay(kit.entries); err != nil {
+		t.Fatal(err)
+	}
+	change := fresh.changes(t)[0]
+	if change.SourceDigest != "review-baseline" || change.State != system.StateApproved || len(change.Files) != 3 {
+		t.Fatalf("lost frozen proposal: %+v", change)
+	}
+	for _, file := range change.Files {
+		if file.Before == nil {
+			t.Fatalf("missing before image: %+v", file)
+		}
+		switch file.Path {
+		case "web/main.tsx":
+			if file.Before.Content != "running" || file.Before.Digest != systemscope.Digest([]byte("running")) || file.Content != "proposed" {
+				t.Fatalf("review drifted to a draft or another source: %+v", file)
+			}
+		case "web/old.tsx":
+			if !file.Deleted || file.Before.Content != "remove me" || file.Before.Digest == "" {
+				t.Fatalf("deletion lost its original content: %+v", file)
+			}
+		case "web/new.tsx":
+			if file.Before.Digest != "" || file.Content != "" || file.Digest != systemscope.Digest(nil) {
+				t.Fatalf("new empty file lost its identity: %+v", file)
+			}
+		}
+	}
+}
+
+func TestSelfHostingReviewDoesNotTrustAnAgentCorrelationLabel(t *testing.T) {
+	kit := newSystemTenant(t)
+	publisher, _ := kit.tenant.Member("publisher")
+	_, err := kit.tenant.Submit(publisher, &pb.Submission{TenantId: kit.tenant.ID, PrincipalId: publisher.ID, Authority: AgentApp, IdempotencyKey: "start-review-run",
+		Target: &pb.EntityRef{Type: RunType, Id: "review-run"}, Schema: &pb.SchemaRef{Name: SchemaRunStart, Version: 1},
+		Payload: platform.Raw(map[string]any{"agent": "system.architect", "goal": "Review source"})}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := publisher
+	agent.ID, agent.Agent = "agent:system.architect", true
+	for _, run := range []string{"review-run", "nonexistent-run"} {
+		_, err := kit.tenant.Submit(agent, &pb.Submission{TenantId: kit.tenant.ID, PrincipalId: agent.ID, Authority: system.ID, IdempotencyKey: "propose-" + run, CorrelationId: run,
+			Target: &pb.EntityRef{Type: system.ChangeType, Id: run}, Schema: &pb.SchemaRef{Name: system.SchemaPropose, Version: 1},
+			Payload: platform.Raw(map[string]any{"title": run, "rationale": "Review source", "files": []map[string]any{{"path": "web/new.tsx", "content": "new"}}})}, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, change := range kit.changes(t) {
+		if change.Run != "" {
+			t.Fatalf("a correlation label invented agent provenance: %+v", change)
+		}
+	}
 }

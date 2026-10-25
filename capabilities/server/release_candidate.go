@@ -177,7 +177,7 @@ func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAs
 			return nil, err
 		}
 	}
-	return available, nil
+	return append(available, t.sharedSystemAssets(manifest.ID)...), nil
 }
 
 // A changed object or page can affect a page or application above it. Include

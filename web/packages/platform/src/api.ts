@@ -22,7 +22,7 @@ export type Group = { entity: EntityInfo; actions: CatalogAction[] };
 
 const json = (path: string) => fetch(path, { headers: { Accept: "application/json" } });
 
-/** The id a page gives a new record: its own prefix, then six characters. The
+/** The id a page gives a new record: its own prefix, then random characters. The
  * host names the record in the submission, so the page must choose it before
  * the decision and keep it across retries. */
 export const newId = (prefix: string): string =>
@@ -93,16 +93,30 @@ export async function record(client: EdgeClient, type: string, id: string): Prom
   return await client.get<RecordDetail>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
 }
 
-export type Outcome = { ok: boolean; code?: string; message?: string; issues?: Api.FieldIssue[]; key: string };
+export type Outcome = { ok: boolean; pending?: boolean; code?: string; message?: string; issues?: Api.FieldIssue[]; key: string };
+
+export const unanswered = (entry: Entry): boolean => ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(entry.state);
+
+export function outcomeOf(entry: Entry): Outcome {
+  const ok=entry.state === "SUBMISSION_STATE_CONFIRMED",pending=unanswered(entry);
+  return {ok,pending,code:ok||pending?undefined:entry.outcome,message:entry.reason,issues:entry.issues,key:entry.submission.idempotencyKey!};
+}
+
+/** Continue the saved submission itself; no form values or new key take part. */
+export async function resume(client: EdgeClient, key: string): Promise<Outcome> {
+  await client.send();
+  const entry=client.authorities.outbox.find(entry=>entry.submission.idempotencyKey===key);
+  if(!entry)throw Error("The original request is unavailable.");
+  return outcomeOf(entry);
+}
 
 /** One decision: queued through the outbox, then sent once with its own key. */
 export async function decide(client: EdgeClient, action: CatalogAction, targetId: string, values: Record<string, unknown>, expectedRevision?: number): Promise<Outcome> {
   const key = client.draft(action.schema, { type: action.target, id: targetId }, values, [], expectedRevision, action.schemaVersion);
   const answers: Entry[] = await client.send();
   const answer = answers.find((entry) => entry.submission.idempotencyKey === key);
-  if (!answer) return { ok: false, message: "The decision is saved and waiting for the host.", key };
-  const ok = answer.state === "SUBMISSION_STATE_CONFIRMED";
-  return { ok, code: ok ? undefined : answer.outcome, message: answer.reason, issues: answer.issues, key };
+  if (!answer) return { ok: false, pending: true, message: "The decision is saved and waiting for the host.", key };
+  return outcomeOf(answer);
 }
 
 export function activate(client: EdgeClient, candidateId: string): Promise<{ ok: boolean; status: number; body: { id?: string; error?: { message?: string } } }> {

@@ -218,6 +218,17 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 			if err := b.receipt(decision.Event.App, decision.Receipt, decision.Definition, nil); err != nil {
 				return err
 			}
+			if publication := decision.Publication; publication != nil {
+				installation, err := systemDefinitionInstallation(publication.Schema, publication.Image)
+				if err != nil {
+					return err
+				}
+				if len(installation) > 0 {
+					if err := b.accepted(installation); err != nil {
+						return err
+					}
+				}
+			}
 		}
 		return b.plan(result.ChangePlan())
 	case "refusal":

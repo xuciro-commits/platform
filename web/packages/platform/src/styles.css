@@ -127,3 +127,9 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .lines-grid .field > span, .lines-grid .field > small { display: none; }
 .lines-grid .field { gap: 0; }
 .lines-grid input, .lines-grid select { width: 100%; min-width: 90px; padding: 4px 6px; }
+
+/* Source paths are data; keep the editor readable without growing the page
+   to the size of the source tree. */
+.source-list { max-height: 360px; overflow: auto; margin-top: 12px; }
+.source-editor { max-width: none; }
+.source-editor textarea { font-family: var(--mono); min-width: 0; }

@@ -25,7 +25,11 @@ func (l *tenantLane) Lock() { l.lockContext(context.Background()) }
 func (l *tenantLane) lockContext(ctx context.Context) {
 	l.lock.Lock()
 	if l.tenant != nil {
+		l.tenant.recordReadError = nil
 		l.tenant.openRecordRead(ctx)
+		if l.tenant.recordReadError == nil && !l.tenant.quarantined() {
+			l.tenant.recordReadError = l.tenant.applySystemDefinitionProjection()
+		}
 	}
 }
 func (l *tenantLane) Unlock() {
@@ -85,7 +89,7 @@ func (t *Tenant) recordReadRefusal() *kernel.Error {
 	return nil
 }
 func recordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	if !t.currentReadScopes {
+	if !t.currentReadScopes && t.systemDefinitionState.source.Load() == nil {
 		return read()
 	}
 	return coordinatedRecordRead(t, ctx, read)

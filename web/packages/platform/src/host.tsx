@@ -4,6 +4,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { EdgeClient } from "@platform/kernel";
 import * as api from "./api";
+import { t } from "./i18n";
+
+type CodeRelease = { release: number; releaseDigest: string };
 
 type HostState = {
   client: EdgeClient;
@@ -23,6 +26,8 @@ export function HostProvider({ client, me, release, children }: { client: EdgeCl
   const [problem, setProblem] = useState("");
   const [revision, setRevision] = useState(0);
   const [current, setCurrent] = useState(release);
+  const initialCode = useRef<CodeRelease | undefined>(undefined);
+  const [changedCode, setChangedCode] = useState<CodeRelease | undefined>(undefined);
 
   useEffect(() => {
     let live = true;
@@ -39,10 +44,37 @@ export function HostProvider({ client, me, release, children }: { client: EdgeCl
 
   useEffect(() => { setCurrent(release); }, [release]);
 
+  useEffect(() => {
+    let live = true, checking = false;
+    const check = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const code = await client.get<CodeRelease>("/healthz", true);
+        if (!live) return;
+        initialCode.current ??= code;
+        const first = initialCode.current;
+        setChangedCode(code.release !== first.release || code.releaseDigest !== first.releaseDigest ? code : undefined);
+      } catch { /* An unavailable host does not prove a version change. */ }
+      finally { checking = false; }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 30_000);
+    window.addEventListener("focus", check);
+    return () => { live = false; window.clearInterval(timer); window.removeEventListener("focus", check); };
+  }, [client]);
+
   const reload = useCallback(() => setRevision((value) => value + 1), []);
 
   if (problem) throw new Error(problem);
-  return <HostContext.Provider value={{ client, me, entities, actions, release: current, revision, reload }}>{children}</HostContext.Provider>;
+  return <HostContext.Provider value={{ client, me, entities, actions, release: current, revision, reload }}>
+    {changedCode ? <aside className="panel" role="status">
+      <strong>{t("The platform code changed. Refresh when you are ready.", me.language)}</strong>
+      <p>{t("Save your current edits before refreshing. This page will not reload automatically.", me.language)}</p>
+      <button onClick={() => window.location.reload()}>{t("Refresh the page", me.language)}</button>
+    </aside> : null}
+    {children}
+  </HostContext.Provider>;
 }
 
 export function useHost(): HostState {

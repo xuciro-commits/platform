@@ -17,6 +17,7 @@ import (
 // Host is the composition aggregate used only by Attach. Owners receive their
 // named consumer roles and cannot retain or request this aggregate.
 type Host interface {
+	platform.SystemDefinitionHost
 	BuildHost
 	FileHost
 	KnowledgeHost

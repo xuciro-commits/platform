@@ -24,6 +24,7 @@ import (
 
 	"platformserver/internal/construction"
 	"platformserver/internal/host"
+	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
 
@@ -41,14 +42,16 @@ type Delivery struct {
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
-	installingSet     bool // private owner images validate cross-references as one complete set
-	currentReadScopes bool
-	recordReadError   error
-	startupSnapshot   *snapshotCompatibility
-	runtimePosition   func() int64
-	snapshotPosition  int64                        // last captured/restored checkpoint; zero-position diagnostics preserve it
-	simulation        bool                         // isolated builder execution, never authoritative state
-	simulationTrace   func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
+	systemDefinitions     atomic.Pointer[systemDefinitionProjection]
+	systemDefinitionState systemDefinitionState
+	installingSet         bool // private owner images validate cross-references as one complete set
+	currentReadScopes     bool
+	recordReadError       error
+	startupSnapshot       *snapshotCompatibility
+	runtimePosition       func() int64
+	snapshotPosition      int64                        // last captured/restored checkpoint; zero-position diagnostics preserve it
+	simulation            bool                         // isolated builder execution, never authoritative state
+	simulationTrace       func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
 	// Private control views route callbacks back into their owning decision.
 	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity      host.IdentityDirectory
@@ -147,6 +150,7 @@ func (t *Tenant) Audit() []AuditEntry { return t.audit.all() }
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, committed: committed{refusals: map[string]resultformat.Refusal{}}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), work: newWorkBoard(),
 		connectors: newConnectorRoster(), records: newRecordStore()}
+	t.mu.tenant = t
 	for i, app := range apps {
 		id := app.Manifest().ID
 		if _, exists := t.appIndex[id]; !exists {
@@ -333,8 +337,16 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
+	if t.ID != systemscope.Tenant && s.GetAuthority() == systemscope.App {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system tenant may change system assets")
+	}
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if refusal := t.recordReadRefusal(); refusal != nil {
+		return nil, refusal
 	}
 	a := t.owner["action:"+s.GetSchema().GetName()]
 	retired := a == nil
@@ -344,11 +356,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 		if a == nil {
 			return nil, unknown()
 		}
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if refusal := t.recordReadRefusal(); refusal != nil {
-		return nil, refusal
 	}
 	if retired {
 		key := a.Manifest().ID + "/" + s.GetIdempotencyKey()
@@ -710,32 +717,32 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 
 // Read serves a named read of the app that declares it, to members holding a
 // role in that app or to everyone when the manifest says so; the app may refuse further.
-func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
+func (t *Tenant) Read(m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	if name == "health" && t.quarantined() {
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		return t.read(m, name)
+		return t.read(m, name, inputs...)
 	}
-	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.read(m, name) })
+	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.read(m, name, inputs...) })
 }
-func (t *Tenant) read(m platform.Member, name string) (any, *kernel.Error) {
-	return t.readFrom(m, t.owner["read:"+name], name)
+func (t *Tenant) read(m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+	return t.readFrom(m, t.owner["read:"+name], name, inputs...)
 }
 
 // ReadFrom keeps a composed form's reads on the action's declared owner.
 // Authorization and result projection stay on Read's path.
-func (t *Tenant) ReadFrom(m platform.Member, app, name string) (any, *kernel.Error) {
-	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.readFromApp(m, app, name) })
+func (t *Tenant) ReadFrom(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.readFromApp(m, app, name, inputs...) })
 }
-func (t *Tenant) readFromApp(m platform.Member, app, name string) (any, *kernel.Error) {
+func (t *Tenant) readFromApp(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	a := t.app(app)
 	if a == nil || !slices.Contains(a.Manifest().Reads, name) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return t.readFrom(m, a, name)
+	return t.readFrom(m, a, name, inputs...)
 }
 
-func (t *Tenant) readFrom(m platform.Member, a platform.App, name string) (any, *kernel.Error) {
+func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	m = t.authorizationMember(m)
 	if err := t.admits(m); err != nil {
 		return nil, err
@@ -754,7 +761,7 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string) (any, 
 	if refusal := authorizationRefusal(entry); refusal != nil {
 		return nil, refusal
 	}
-	out, err := readApp(a, t.caller(m, a, false), name)
+	out, err := readApp(a, t.caller(m, a, false), name, inputs...)
 	if err != nil {
 		return nil, err
 	}
@@ -966,7 +973,27 @@ func (t *Tenant) Member(id string) (platform.Member, bool) {
 	return t.identity.MemberByID(id)
 }
 
-func readApp(app platform.App, c platform.Caller, name string) (any, *kernel.Error) {
+func readApp(app platform.App, c platform.Caller, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
+	if app == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if fields, declared := app.Manifest().ReadInputs[name]; declared {
+		if reader, ok := app.(platform.ParameterizedReader); ok {
+			raw := json.RawMessage(`{}`)
+			if len(inputs) > 0 && len(inputs[0]) > 0 {
+				raw = inputs[0]
+			}
+			var values map[string]any
+			if json.Unmarshal(raw, &values) != nil || values == nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Read inputs must be a JSON object")
+			}
+			if issues := platform.InputIssues(fields, values); len(issues) > 0 {
+				return nil, c.RefuseFields(issues)
+			}
+			return reader.ReadInput(c, name, raw)
+		}
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
 	if reader, ok := app.(platform.Reader); ok {
 		return reader.Read(c, name)
 	}

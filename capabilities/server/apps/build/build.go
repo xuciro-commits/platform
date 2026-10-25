@@ -17,6 +17,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/host"
+	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
 
@@ -158,7 +159,7 @@ const (
 // definition for operators at once, without a saved candidate.
 var directInstallSchemas = []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver,
 	SchemaPropertyType, construction.SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
-	SchemaTablePublish, SchemaAlertPublish,
+	SchemaTablePublish, SchemaAlertPublish, SchemaAgentPublish,
 }
 
 // checkReleaseProfile refuses a direct install that a production tenant has
@@ -166,6 +167,9 @@ var directInstallSchemas = []string{construction.SchemaPublish, construction.Sch
 // recovery never take this path, so a historical Published image, its versions
 // and a restore keep working in every profile.
 func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
+	if c.Tenant == systemscope.Tenant && slices.Contains(directInstallSchemas, schema) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System definitions are published through an approved Platform change")
+	}
 	if c.Setting(SettingReleaseProfile) != ProfileProduction || !slices.Contains(directInstallSchemas, schema) {
 		return nil
 	}
@@ -257,6 +261,11 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if !c.Replaying {
+		if err := b.checkSystemDefinitionWrite(s); err != nil {
+			return nil, err
+		}
+	}
 	if s.GetSchema().GetName() == construction.LinkTypeType+".migrate" {
 		return b.migrateLinkType(c, s, now)
 	}

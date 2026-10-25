@@ -94,14 +94,18 @@ func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 
 // NewHost serves tenants; a tenant's members come from its console (the platform app).
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
-	return &Host{tenants: tenants, authenticate: authenticate, Now: Now}
+	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now}
+	h.bindSystemDefinitions(tenants)
+	return h
 }
 
 func (h *Host) currentTenants() []*Tenant {
+	tenants := h.tenants
 	if h.tenantsFrom != nil {
-		return h.tenantsFrom()
+		tenants = h.tenantsFrom()
 	}
-	return h.tenants
+	h.bindSystemDefinitions(tenants)
+	return tenants
 }
 
 func consoleOf(t *Tenant) IdentitySessions {

@@ -194,6 +194,12 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 			def.Protocol = &projected
 		default:
+			if def.Source == "system" {
+				if !m.Active() || !m.Holds(def.Ref.App, construction.Builder) {
+					continue
+				}
+				break
+			}
 			typ, _, _ := strings.Cut(def.OwnerRecord, "/")
 			info, ok := entities[typ]
 			if !ok || def.OwnerRecord == "" || !m.Active() || t.admits(m) != nil {

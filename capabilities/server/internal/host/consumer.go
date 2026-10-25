@@ -7,6 +7,7 @@ import (
 )
 
 type BuildHost interface {
+	SystemDefinitionReadOnly(platform.AssetRef) bool
 	Action(schema string) (app string, a platform.Action, ok bool)
 	Automation(parent platform.Caller, app string) platform.Caller
 	BindInterfaceQuery(platform.NamedQuery, ...platform.EntityInfo) (platform.NamedQuery, error)
@@ -77,6 +78,9 @@ type AttachedRelations interface{ AttachRelations(RelationsHost) }
 
 // Attach is composition plumbing. Each owner receives its narrow named role.
 func Attach(app platform.App, h Host) {
+	if owner, ok := app.(platform.AttachedSystemDefinitions); ok {
+		owner.AttachSystemDefinitions(h)
+	}
 	if owner, ok := app.(AttachedAgent); ok {
 		owner.AttachAgent(h)
 	}

@@ -1,8 +1,11 @@
 package platformserver
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -111,7 +114,13 @@ func (h *Host) routesCore(rt *routes) {
 		WriteJSON(w, http.StatusOK, map[string]string{"secret": secret})
 	})
 	rt.recordRead(Route{Pattern: "GET /v1/{read}", Summary: "A named read of an app, such as inbox, requests, notifications, views, settings, members or audit; the app decides who may read it"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		out, err := t.read(m, r.PathValue("read"))
+		name := r.PathValue("read")
+		inputs, err := namedReadInputs(t.owner["read:"+name], name, r.URL.Query())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		out, err := t.read(m, name, inputs)
 		if err != nil {
 			Reply(w, nil, err)
 			return
@@ -126,7 +135,12 @@ func (h *Host) routesCore(rt *routes) {
 	})
 	rt.recordRead(Route{Pattern: "GET /v1/apps/{app}/reads/{read}", Summary: "A named read selected by its original app; the same owner authorization and field filtering apply"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		name := r.PathValue("read")
-		out, err := t.readFromApp(m, r.PathValue("app"), name)
+		inputs, err := namedReadInputs(t.app(r.PathValue("app")), name, r.URL.Query())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		out, err := t.readFromApp(m, r.PathValue("app"), name, inputs)
 		if err != nil {
 			Reply(w, nil, err)
 			return
@@ -158,4 +172,42 @@ func (h *Host) routesCore(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+}
+
+// namedReadInputs translates transport strings using the owner's declaration.
+// Undeclared query parameters never become input to a named read.
+func namedReadInputs(app platform.App, name string, query url.Values) (json.RawMessage, *kernel.Error) {
+	if app == nil {
+		return nil, nil
+	}
+	fields, declared := app.Manifest().ReadInputs[name]
+	if !declared {
+		return nil, nil
+	}
+	values := map[string]any{}
+	for _, field := range fields {
+		if !query.Has(field.Name) {
+			continue
+		}
+		text := query.Get(field.Name)
+		var value any = text
+		var err error
+		switch field.Type {
+		case "integer":
+			value, err = strconv.ParseInt(text, 10, 64)
+		case "number":
+			value, err = strconv.ParseFloat(text, 64)
+		case "boolean":
+			value, err = strconv.ParseBool(text)
+		}
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, fmt.Sprintf("Read input %s must be %s", field.Name, field.Type))
+		}
+		values[field.Name] = value
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Read inputs cannot be encoded as JSON")
+	}
+	return raw, nil
 }

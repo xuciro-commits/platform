@@ -1,313 +1,125 @@
 # Design
 
-## Context
+## 目标与边界
 
-现状（已核对代码）：
+人和 AI 通过同一条提交、接受、发布与激活路径修改系统。`system` 是宿主唯一的系统权威，其他租户共享实际二进制和工作区资源，各自保存业务记录、历史与在途实例。源码、定义、批准与激活均有原始记录；仓库只提供首次基线，运行与恢复不依赖 Git。
 
-- 内核 `contract/` 5.5k 行，宿主 `capabilities/server` 197k 行（其中测试 64.7k），Web 包 66.6k 行，e2e 6.9k 行。
-- `build` 应用已经把对象、页面、动作、查询、函数、流程与智能体保存为数据；发布即安装，租户页面由 `@platform/app` 的通用页面运行时渲染。这是**对租户应用的自举**。
-- 平台自身的应用（`build`、`ai`、`work`、`flow`、`core`）、Studio 编辑器、路由表与 UI 包都是编译期代码；工作区通过 `defineApp` 静态加载代码包，把租户定义（`source !== "code"`）投影成普通应用入口。
-- 宿主是一个二进制 + 一份工作区 dist 服务全部租户（`-tenants`、`-web`）；`deploy/local/update.sh` 已具备"重建 → 核对 revision → healthz"的骨架，但要求工作树干净、由外部人执行。
-- 没有任何"系统变更"对象，也没有人能改系统本身；AI 只能调用已发布的动作与查询。
+内核契约、提交管线、接受结果、日志、恢复、授权与身份保持冻结。允许平台应用与表现层随受控源码发布演进，不允许通过修改构建配置替换内核。构建由独立 updater 执行，宿主不编译或重启自己。
 
-因此要补的不是"更快的发布脚本"，而是一层**系统作用域**：把系统自身变成与租户应用同构的受控对象，并为它定义唯一的写入路径、构建路径与回退路径。
+这份设计按本轮已核对实现修订，替换旧的可变 seed、仓库构建脚本与已删除 Studio/Catalog 入口描述。原 change 尚未完成的范围仍由 [tasks](tasks.md) 与 [WorkQueue](../../../docs/WorkQueue.md) 跟踪，不以核心链路可用代替整个 change 完成。
 
-## Goals / Non-Goals
+## 单一归属
 
-**目标**
+| 责任 | 归属与选择理由 |
+|---|---|
+| 系统源码与变更 | `apps/system`，使用普通 `Tenant.Submit` 与私有决定，不另建文件写入通道 |
+| 系统定义草稿与候选 | 原 Build 与 release owner，使用完整候选、依赖检查和安装映像，不复制检查器 |
+| 业务运行与数据 | 原业务租户；共享系统定义不是复制系统记录或业务日志 |
+| 源码基线与构建物 | `internal/systembuild` 的内容寻址封存；不从变动中的仓库补齐文件 |
+| 构建与进程切换 | 独立 `platform-updater`，使用 publisher 的原提交接口记录结果 |
+| 系统编辑与审阅 | 单工作区 `web/packages/platform/src/system.tsx`；定义编辑继续走普通 Records/决定表单与原 Build 草稿 |
+| AI | 既有 Agent/AI owner，普通受管主体、原模型预算与运行日志 |
 
-- 一条路径改系统：人（前端）与 AI（提示词）都通过 `Tenant.Submit` 提交 `system.change`，经校验、批准、构建、激活生效。
-- 内核冻结：`contract/`、提交管线、接受结果、日志/重放/快照不可被自举改动，由代码拒绝而非约定。
-- 定义类改动热生效；代码类改动走独立 updater、有窗口切换、失败自动回滚。
-- 系统定义对全部租户只读可见，对 system 租户可写。
-- 同批删除与自举无关的设计、代码与测试。
+## 系统记录与源码基线
 
-**非目标**
+`system.file` 按规范相对路径保存修订与删除墓碑，内容引用不可变 `system.blob`。保存必须携带期望修订；冲突返回实际修订，不覆盖另一位作者。内容相同的不同路径共用一个 blob，各自保留文件修订。
 
-- 不承诺零停机、蓝绿双活或每租户独立系统版本。
-- 不把现有 Studio 编辑器改写成数据页面（第一阶段只新增 Platform 应用与系统记录；Studio 本体仍随源码演进）。
-- 不引入新的执行器、第二数据库、插件市场或外部 CI 依赖。
-- 不允许修改内核；内核演进仍走正常版本发布。
-- 不为行业应用、集成驱动、企业建模或专业可视化保留兼容层。
+启动时部署提供 `platform.SystemSource`。开发仓库先捕获为 `.build/system/sources/<digest>/`，目录包含 `manifest.json` 与完整 `files/`，清单绑定路径、内容摘要与文件模式。构建产物、Git、依赖目录和凭据文件不进入封存。冻结内核文件作为构建输入保留并可读，但不可通过自举修改。
 
-## 已定决策
+文件索引是分页、可搜索的元数据；只在打开一个路径时读取内容。已保存文件草稿覆盖编辑器看到的基线，但不改变实际运行源码，也不自动成为提案。
 
-| # | 决策 | 结论 | 直接后果 |
-|---|---|---|---|
-| 1 | 可编辑基质 | 元对象 + 源码 | 系统既有定义层也有代码层 |
-| 2 | 内核 | 冻结 | 路径闸门必须可执行 |
-| 3 | 权威 | system 租户日志 | 与租户应用同一条写入路径 |
-| 4 | 生效 | 分层 | 定义热激活，代码构建重启 |
-| 5 | AI 产物 | 提案 + 人工批准 | AI 不能自批 |
-| 6 | 人工入口 | 复用 Studio | 不新造编辑器 |
-| 7 | 作用域 | host 单例 | 一份二进制/前端服务所有租户 |
-| 8 | 源码粒度 | 整文件 | 每个文件一条记录，按内容寻址 |
-| 9 | 物化 | 独立构建工作树 | 仓库只是 seed，可导出 |
-| 10 | 构建/重启 | 独立 updater | 宿主不编译、不重启自己 |
-| 11 | 停机 | 有窗口、先排空 | 不承诺零停机 |
-| 12 | 删除力度 | 只剩内核 + 自举 | 约 10 万行退出 |
-| 13 | 保留应用 | build/ai/work/flow/core | enterprise 收敛为组织目录 |
-| 14 | 测试 | 跟随删除 + 最小验收 | 保留向量、管线、存储与自举测试 |
-| 15 | AI 文件范围 | 全树 + 内核闸门 | 白名单之外拒绝 |
-| 16 | 批准 | 一次批准 + 可取消窗口 | 提案页给 diff、影响面与日志 |
-| 17 | 人工顺序 | 先元对象，后源码 | 每步独立验收 |
-| 18 | 变更对象 | 复用 build 发布机制 | 不建第二套发布 |
-| 19 | 组织模型 | 保留最小目录 | 删 UAF 元素/视图/生成器 |
-| 20 | seed 与 git | seed + 导出 | 运行时永不依赖 git |
-| 21 | AI 执行 | 宿主内 agent + 上限 | 20 轮、构建 10 分钟、2 次失败即停 |
-| 22 | 元对象作用域 | system 租户 | 不给实体加 scope 字段 |
-| 23 | 并发 | 修订检查 + 拒绝 | 冲突可见、可重取 |
-| 24 | 验收 | 四次真实演练 | 单元测试不算交付证据 |
-| 25 | 交付物 | OpenSpec change | 本目录即蓝图、规范与任务 |
-| 26 | 删除时机 | 同一 change，第一块 | 先得到可编译的精简树 |
-| 27 | 界面入口 | Studio 内 Platform 应用 | 不新增顶层入口 |
-| 28 | 角色 | builder / publisher | AI 以受管主体提案 |
-| 29 | 构建环境 | 本机工具链 | lite 模式无需 Docker |
-| 30 | 依赖 | 允许新增，记录进 release | 构建可联网，离线明确失败 |
+`system.change.propose` 同时冻结：
 
-## 目标结构
+- 当前全局 active 发布与实际源码摘要；两者分开，纯定义发布不替换二进制。
+- 选中的文件内容、摘要、删除集与期望修订。
+- 每个路径在完整源码基线中的修改前内容与摘要；新增路径保留明确的空基线标识。审阅不再依赖之后的文件草稿或当前工作树。
+- 原 release owner 产生的完整定义候选，包含此前系统定义闭包，后续草稿修改不能改变它。
+- 来源、理由、原提示词及受管主体；真实 Agent 运行关联由原 Agent owner 绑定在调用上下文，不取客户端 correlation 标签，也不把手工 `origin=prompt` 标签当作模型证据。
 
-```
-                     system 租户（host 单例，唯一权威）
-   人 Studio/Platform │  system.file/change/release/activation + build 元对象
-   编辑元对象/源码 ──► │  Tenant.Submit → 私有决定 → 接受结果 → 持久接受
-   AI 提示词 ────────► │  system.architect（工具、预算、无批准权）
-                     └───────────────┬───────────────────────────┘
-                                     │ 已批准 system.change
-                                     ▼
-                          platform-updater（独立进程，owner-only socket）
-                          物化工作树 → 固定命令构建 → 体检 → 排空 → 切换
-                                     │ 失败
-                                     └──────► 回滚上一 release
-                                     ▼
-                 platform-server（N 租户）+ workspace dist（共享一份）
+源码比较前后内容合计受变更字节预算约束。旧提案没有修改前映像时显示“基线不可用”，不读取现在的文件冒充原内容。批准后的提案不可修改；修正或构建失败后重做须新建变更。
+
+候选原始字节作为 opaque `[]byte` 保存，避免嵌套 JSON/SQL 投影重组后改变内容身份。已有嵌入 JSON 格式只通过原历史候选 owner 还原并验证原身份，历史字节不重写。
+
+## 定义、源码与混合激活
+
+```text
+人工或 Agent
+    │ 普通提交、权限与内核闸门
+    ▼
+system.change（冻结源码基线、文件与原定义候选）
+    │ 人工 publisher 批准
+    ├─ 纯定义 → definitions release → 显式热激活
+    └─ 含源码 → updater 固定构建 → source/mixed release
+                                      │ 可取消窗口、探活、排空、换版
+                                      ▼
+                              finished(active) 安装混合定义
 ```
 
-两条生效路径：
+纯定义批准时产生发布，显式激活时由原 release owner 准备和接受安装；不编译、不重启。含源码时，构建失败不产生发布。混合定义直到代码换版成功并接受 `finished(active)` 才安装；失败或取消不提前安装定义。
 
-```
-定义类（对象/字段/页面/导航/动作/函数/智能体）
-  草稿 → 候选 → system.release（无二进制） → 发布 → 安装到 system 作用域
-        → 各租户下一次读取 definitions 时生效，不重启
+系统安装映像保留在 system 的接受结果，SQL delta 由原安装格式归属方转换并与同一接受事务落盘。恢复只应用保存映像，不重跑草稿解析、授权、构建或外部调用。
 
-代码类（Go / TypeScript / 构建配置）
-  system.change（文件清单） → 校验与内核闸门 → publisher 批准
-        → updater 构建并冻结 system.release（二进制摘要 + dist 摘要）
-        → 排空 → 切换 → 健康 → 生效；失败自动回滚
-```
+业务租户在自己的协调读取边界使用已接受的系统定义投影：来源标为 `system`，本地不可修改，数据与动作仍经过当前权限。普通本地候选把系统声明当成不可变前置条件；系统 owner 更新才允许替换这些共享声明。激活前检查本地同名冲突，不能等业务读取时才发现无法安装。
 
-## 系统作用域与元对象
-
-- **system 租户**：宿主级、唯一、不可由 Console 创建或删除；成员是平台操作者席位。它运行与业务租户相同的应用组合（`build`、`ai`、`work`、`flow`、`core` + Console/Agents），因此不需要第二套提交或存储。
-- **元对象**：system 租户里的 `build.*` 记录（应用、对象、动作、页面、查询、函数、智能体、流程）与四个 `system.*` 记录。它们描述平台自己，而不是某个租户的业务。
-- **只读投影**：宿主在读取任意租户的 definitions 时合并 system 作用域已安装的定义，标记 `source: "system"`；页面与导航由此出现在每个租户的工作区。编辑动作只在 system 租户的提交中可用；其他租户提交 `build.*` 到 system 资产一律拒绝。
-- **可见性仍按当前权限过滤**：投影不绕过只读范围、角色或标记。
-- **Platform 应用**：system 租户里一个特殊应用，进入 Studio 的应用切换器；它的页面就是系统元对象本身（系统变更列表、发布、文件、激活），编辑体验与业务应用一致。
-
-## 数据模型
-
-新增四个实体，全部在 `build` 应用中声明（system 租户安装后生效），沿用 `platform.Record`、生命周期、标准动作与接受结果。
-
-### system.file
-
-| 字段 | 含义 |
-|---|---|
-| `path` | 仓库相对路径，唯一；不含 `.git`、密钥或内核路径 |
-| `digest` | 内容 sha256，blob 按摘要存储 |
-| `size`, `mode` | 字节数与可执行位 |
-| `revision` | 该路径的修订号，写入必须携带期望值 |
-| `deleted` | 墓碑；内容与历史仍可读 |
-
-内容寻址：同一内容只存一份；被任何 change 或 release 引用的 blob 不回收。删除是追加墓碑，不重写历史。
-
-### system.change
-
-| 字段 | 含义 |
-|---|---|
-| `title`, `rationale` | 人读的意图 |
-| `origin` | `prompt` 或 `ui` |
-| `prompt` | 原始提示词（origin=prompt） |
-| `base` | 基线 release 版本 |
-| `files` | 冻结清单：`[{path, digest, deleted}]` |
-| `assets` | 关联的 `build.*` 草稿引用 |
-| `diagnostics` | 构建/校验输出摘要 |
-| `state` | draft → validated → approved → activating → applied / failed / rejected / withdrawn |
-| `approvedBy`, `approvedAt` | publisher 的批准证据 |
-| `window` | 切换前可取消秒数（默认 30） |
-| `agent` | 提案的受管主体（AI 时非空） |
-
-变更一经 `approved`，文件清单冻结；之后再改必须新建 change。合并冲突按 `system.file.revision` 拒绝，返回当前修订，不静默覆盖。
-
-### system.release
-
-| 字段 | 含义 |
-|---|---|
-| `version` | 递增整数 |
-| `change` | 来源变更 |
-| `manifest`, `manifestDigest` | 文件路径与摘要的规范清单 |
-| `binaryDigest`, `webDigest` | 构建产物摘要；定义类发布为空 |
-| `toolchain` | go / node / pnpm 版本 |
-| `deps` | go.sum、pnpm-lock 的摘要；新依赖在此留证 |
-| `previous` | 上一 release，用于回滚 |
-| `state` | published → active → superseded / failed |
-| `health` | 激活后的健康证据 |
-
-发布不可变；修正只能新建 release。
-
-### system.activation
-
-| 字段 | 含义 |
-|---|---|
-| `release`, `from` | 目标与来源版本 |
-| `requestedBy`, `at` | 触发者与时间 |
-| `drainedAt`, `swappedAt` | 排空与切换时刻 |
-| `result` | active / rolled-back / aborted |
-| `failure`, `evidence` | 失败原因与日志摘要 |
-
-激活本身是一次接受结果：先记录决定与证据，再由 updater 执行；重放只应用保存的映像，不重新构建、不重启进程。
+定义版本回退复用原安装 owner。同一 Ref 的旧版可恢复；如果回退需要撤除新引入的资产，当前 owner 尚无整资产退役映像与历史责任计划，明确拒绝。不能把归档草稿当作撤除运行定义，也不能只删除共享投影伪装成功。
 
 ## 内核闸门
 
-`internal/systemscope` 提供**纯函数**：给一组路径，返回拒绝项。保存前与 updater 构建前各执行一次，两道都必须过。
+保存与构建共同调用 `internal/systemscope`。路径必须是单一规范相对路径；大小写、父目录删除、重复分隔符与点段都不能绕过冻结路径。实际冻结表由该模块维护，不在文档复制另一份名单。
 
-拒绝列表：
+冻结范围包括契约、提交与接受、日志/重放/快照、记录持久映像、授权、身份、闸门自身及相关 Go workspace/module 入口。后者避免使用 `replace` 或 workspace 重定向绕过内核冻结。Go 模块调整走普通版本发布；可编辑 Web 依赖仍须锁定并记录摘要。
 
-```
-contract/**                          内核语义、向量与生成类型
-capabilities/server/host.go          提交入口与管线持有者
-capabilities/server/accepted_*.go    各结果族的接受与封存
-capabilities/server/replay*.go       恢复的重放分支
-capabilities/server/snapshot*.go     快照与检查点映像
-capabilities/server/journal/**       日志、SQL 状态与读取视图
-capabilities/server/internal/acceptance/**  共同格式与变化计划
-capabilities/server/internal/records/**     冻结映像、历史与索引
-capabilities/server/internal/host/**        宿主内部窄角色
-capabilities/server/platform/authz/**       授权判定
-capabilities/server/idp/**                  身份提供方
-.git/**, *.key, .env*                版本库与凭据
-```
+凭据文件在源码捕获与编辑闸门两处排除。秘密由部署环境或原凭据 owner 托管，源码与发布只保存引用。编辑内容限 UTF-8 文本；二进制资产仍由其原 owner 处理。
 
-其余路径（平台应用、`platform/` 应用 API、`cmd/`、Web、脚本、部署、文档、Makefile）可改。生成物（`web/packages/kernel/src/gen/host.ts`、`web/apps/catalog/src/gen`）的生成器保持唯一来源；删除 Catalog 后只剩宿主类型生成。
+## 固定构建与完整导出
 
-闸门是**拒绝**而不是警告：越界路径使整个 change 无效，并记录审计。
+updater 校验提案的实际基线摘要，从封存完整源码物化独立工作树，再叠加冻结文件与删除集。完整新源码在执行构建前封存；之后清理构建工作树不影响运行文件读取或导出。
 
-## 变更生命周期
+固定命令：
 
-1. **产生**：人在 Platform 应用里编辑元对象/文件；或 AI 在提示词运行中写入临时工作树。
-2. **固化**：change 保存时冻结文件清单（摘要 + 删除集）与关联草稿；校验路径闸门、大小上限（单文件 2 MB、整批 20 MB）、二进制文件拒绝。
-3. **校验**：静态检查（闸门、清单完整性、依赖文件存在）；可选快速构建（Go 编译 + tsc）产出诊断。
-4. **批准**：`system.change.approve` 需要 `publisher`（system.publisher）；提案主体不能批准自己的提案。
-5. **发布**：
-   - 只有元对象 → 生成定义类 `system.release`，立即安装。
-   - 含文件 → updater 物化并构建；成功后写入 `system.release`（二进制 + dist 摘要）。
-6. **激活**：定义类热激活；代码类进入排空窗口，窗口内可取消。
-7. **收尾**：写 `system.activation`；失败保留证据并回滚。
+1. 在物化宿主模块运行 `go build -trimpath` 与 `go vet`。
+2. 在物化 Web 工作区运行锁定依赖还原，禁用生命周期脚本与 pnpmfile。
+3. 直接运行 TypeScript 编译器检查各包与工作区，不执行 package scripts。
+4. updater 生成受信 Vite 配置，关闭仓库 Vite/PostCSS 配置与 envDir，直接执行 Vite 构建工作区。
 
-## 构建与激活
+不运行 Makefile、`scripts/`、自定义 package build 或仓库 Vite/PostCSS 脚本。依赖使用部署机器的工具链与锁定缓存；新增未缓存依赖无法解析时明确失败，记录诊断，不产生部分发布。
 
-**物化**：从 blob 重建到 `.build/system/work/<change>/`，按记录的 `go.mod/go.sum`、`package.json/pnpm-lock.yaml` 还原依赖；工作树是干净目录，不含 `.git`、密钥或前一次构建残留。
+发布证据包含完整清单、源码摘要、实际二进制/工作区摘要、工具链和依赖锁摘要。构建结果先保存在 `.build/system/builds/<identity>` 再上报；答复未知沿原键和原内容重试，不重新构建或产生第二个发布。
 
-**构建命令固定**，不执行仓库脚本：
+`platform-updater export` / `make system-export RELEASE=<n>` 校验并复制完整封存源码。旧发布缺完整源树时拒绝，不拿当前仓库补齐，也不把补丁当作完整源码。
 
-```
-go build -trimpath -o build/platform-server ./capabilities/server/cmd/platform-server
-pnpm --dir web install --frozen-lockfile      # 仅当 lockfile 变化
-pnpm --dir web/apps/workspace build
-```
+## 独立监督与回滚
 
-`make`、`scripts/*` 与 `deploy/*` 永不作为构建入口——否则 AI 写入的脚本会在构建期执行，闸门形同虚设。
+监督进程 `serve -watch` 保存确切激活身份、前驱、结果和上报键。首次接管允许实际 code release 为零且全局前驱仅为同源码定义发布；已有代码发布缺失保留产物时不猜测前驱。
 
-**体检**：
+每次代码激活：
 
-| 级别 | 内容 | 失败后果 |
-|---|---|---|
-| L0 | 闸门与清单摘要 | 拒绝，不构建 |
-| L1 | Go 编译 + `go vet` + 全包 tsc | 返回诊断，release 不产生 |
-| L2 | 新二进制以临时端口与临时数据目录启动，`/healthz` 200 且租户隔离为 0 | 回滚，不切换 |
-| L3 | 切换后真实端口 `/healthz` 与一条冒烟读取 | 自动回滚到 `previous` |
+1. 等待已接受的可取消窗口，核对请求仍有效。同一时刻仅允许一个未结束的 requested 激活；窗口到期不释放这项责任。
+2. 在独立临时数据目录探测候选，要求健康且没有隔离租户。
+3. 排空并等待旧监听退出；启动相同数据目录、租户配置、密钥与部署参数的新宿主，服务同一发布的前端。
+4. 核对实际健康与发布身份，成功后以原激活 ID 上报 `active`，旧 active 标为 `superseded`。
+5. 临时探测失败不切换；真实数据启动失败则恢复上一代码产物并上报 `rolled-back`，保留原数据与证据。
 
-**切换**：向旧宿主发 SIGTERM → 等在途请求结束、日志检查点落盘（有上限，超时中止）→ 原子替换 `current` 链接 → 启动新二进制（相同 `-data`、`-tenants`、`-web`）→ L3 → 成功则旧版本进入保留集。
+重复激活使用新的激活身份，不能覆写取消或失败的结果。重启后发现已完成发布不能启动，产生新的原回滚决定，不修改旧的 active 证据。逻辑定义版本与实际代码版本分别保存，保留清理保护实际运行产物与可回滚前驱。
 
-**回滚**：保留最近 5 个 release 的二进制与 dist；回滚是"启动上一版本"，不重建、不改日志。
+构建/上报/健康读取有界，缺 updater 或工具链只留下原状态与诊断。保留策略清理旧 bin/web/release 与构建缓存，不删被运行与回滚所引用的版本。
 
-**前端**：dist 与二进制来自同一工作树；切换后客户端检测到 release id 变化，提示刷新。离线快照不跨 release 复用。
+客户端按健康端点的实际代码版本与摘要检测换版，提示用户保存编辑后手动刷新，不自动重载或等待全工作区刷新才结束原决定。当前工作区未启用离线快照；以后启用时仍不能跨发布复用。
 
-## AI 入口
+## 人工与 AI
 
-- **主体**：`system.architect` 是 system 租户声明的一个普通 Agent，主体为 `agent:build.system-architect`，没有额外特权，不能批准。
-- **工具**：`list`、`read`、`search`、`write`、`delete`、`build`、`diff`。全部作用于临时工作树并受同一闸门约束；`write` 携带期望修订。
-- **预算**：最多 20 个模型轮次、单次构建 10 分钟、2 次构建失败即停；令牌与费用走现有 Budget 与计量。
-- **上下文**：先 `Architecture` 与目录，再按需搜索；不把整仓塞入提示词。
-- **产物**：一个 `system.change`（origin=prompt），含提示词、理由、文件清单、诊断；AI 的每次读写都进入它的运行日志，可回放。
-- **禁区**：不联网（依赖解析由 updater 构建阶段完成）、不读凭据、不写内核路径、不能批准或激活。
+Platform 作者入口仅在 system 租户且具备系统角色时出现。业务租户可以看到获权的共享系统页面，不出现系统作者导航。当前前端已用单工作区替换旧 Studio/Catalog 包，不恢复第二套编辑器；元对象经通用表单保存为原 Build 草稿，再与源码一同选择提案。
 
-## 人工入口
+审阅界面显示来源、提示词、理由、基线、批准证据、选中定义引用、每个冻结文件的修改前后内容和构建诊断。源码文件可搜索、打开、保存、删除并加入同一个提案。回执未知保留原输入与原键，原请求重试不新建一次修改。帮助提供英文与简体中文。
 
-**第一阶段（元对象）**
+`system.architect` 是普通受管 Agent，只具备声明的源码索引、单文件读取、保存与提案工具；没有 build、批准、激活或凭据读取工具。模型、费用、步数与运行日志复用原 Agent/AI owner。达到上限停止并留下原日志或草稿，不隐式批准。
 
-- Studio 的应用切换器出现 **Platform**；进入后是 system 租户的应用上下文。
-- 复用现有编辑器：对象、字段、页面、导航、动作、函数、智能体；保存即草稿，发布即定义类 release。
-- **System changes** 视图：变更列表、文件 diff、受影响的元对象/页面/权限清单、构建日志、批准、可取消窗口。
+受管 Agent 即使被错误授予 publisher，也不能批准或激活。普通人工 publisher 可以批准人工提案；这里没有额外的双人批准策略。手工来源标签只表示来源，模型实际运行证据在原 `agent.run`。
 
-**第二阶段（源码）**
+## 删除与仍待完成的范围
 
-- 同一视图内增加文件树与编辑器：打开、编辑、保存（修订冲突拒绝）、与元对象同一个 change。
-- 不提供终端，不执行任意命令；预览走已构建的工作区。
+已退出的旧界面、自举重复入口、未消费宿主构建接口、行业包与驱动等不保留隐藏兼容实现。仍有调用方的页面契约保留：它们继续负责 Build 保存、发布和权限投影，不能以新界面暂不渲染就判为死代码。
 
-## 删除与保留
+`files` / `relations` 和其他历史 owner 的恢复责任不能通过删模块、清空数据或换新租户消失。完整旧租户退役迁移、需要移除新增资产的定义回退、完整 composed/Document 运行时仍未完成；复杂页面先明确说明不支持，不假装通用列表已执行原语义。
 
-每批删除以"可达性清单"开始：从保留入口出发反查引用，确认无消费者后再删。预期删除集：
-
-| 区域 | 处理 | 规模（约） |
-|---|---|---|
-| 行业包与 solution 宿主：`deploy/packages/{heating,hospitality,manufacturing}.json`、`deploy/local/{hospitality,manufacturing}`、行业 e2e | 删 | 1.6 MB + 配置 |
-| `build` 的集成作者：source / connection / dataset / pipeline / writeback / match / observation / dispatch / confirmation 及测试 | 删 | 9k 行 |
-| 外部协同：`gateway/`、`drivers/`、`driver/`、`cmd/{gateway,driver-modbus,driver-s7,driver-simulator,webhook-sink}`、协议包 | 删 | 5k 行 |
-| 应用：`knowledge`、`files`、`relations` 及其 UI | 删 | 1k 行 |
-| 企业建模：UAF 元素/关系/视图/租户链接、`cmd/uaf-gen`、`docs/standards/uaf` | 删 | 3k 行 |
-| 形式化：`contract/lean`、`scripts/formal.sh`、Makefile 的 formal 目标 | 删 | 29 KB 模型 + 62 行脚本 |
-| 专业可视化：`ui/src/spatial`、三维/地图/标注组件、`experience/professional-visualization` 规范 | 删 | 3k 行 |
-| 组件 Catalog：`web/apps/catalog`、`web/packages/catalog`、`scripts/catalog*`、生成物 | 删 | 1k 行 + 生成物 |
-| 跟随测试：上述模块的单测、e2e、fixture | 删 | 50k 行 |
-| 保留 | `contract/{proto,spec,vectors,go}`、宿主提交/日志/存储、`build` 的模型/页面/动作/函数/智能体/发布、`core`、`ai`、`work`、`flow`、最小工作区与 Studio 编辑器、Playwright `kit.ts` | |
-
-`enterprise` 收敛为最小组织目录：保留单位、结构、任职与 `/v1/organization`；删除元素、关系、视图、租户链接与专业建模 UI。`platform/ai-knowledge` 的模块名保留（它仍主责模型治理、函数与智能体），只移除知识部分，避免为改名做一次无收益的全仓引用整理。
-
-## 恢复、重放与导出
-
-- 系统写入与其他租户完全同构：先私有决定，再接受结果，再应用；恢复只应用已保存映像。
-- 激活决定是接受结果；重放不构建、不重启、不重新授权。
-- **导出**：`make system-export VERSION=<n>` 从 journal 生成干净工作树与补丁，供评审或灾难恢复；导出不是权威，运行时永不读 git。
-- **首次 seed**：当前 HEAD 的已删减树构建一次，登记为 release #1（记录工具链与两侧摘要）；此后 journal 为准。
-
-## 风险与取舍
-
-| 风险 | 处理 |
-|---|---|
-| 自编译失败导致无法更新 | updater 与宿主分离；构建失败不触碰运行版本；保留 5 个版本与工具链；保留一条命令行人工发布路径 |
-| AI 通过构建脚本绕过闸门 | 构建只执行固定命令，不运行 `make`/`scripts`；工作树无凭据、无 `.git`；构建进程最小权限 |
-| 新依赖供应链 | 允许新增但把 lockfile 与解析结果写入 release；构建日志留证；失败/异常可回滚 |
-| 共享 dist 的并发生效 | 切换是全租户同时生效；客户端按 release id 提示刷新；不承诺新旧前端并存 |
-| 删除破坏 flow/work/ai 引用 | 每批以编译、vet、tsc 为门；保留集回归；删除跟随规范同步 |
-| 测试证据下降 | 保留内核向量、管线与存储测试；新增自举验收；未观察项明确标注 |
-| 双权威漂移（journal 与 git） | journal 权威；仓库只作 seed 与导出；部署核对 release id 与实际二进制摘要 |
-| 元对象膨胀成第二套平台 | 只允许 system 租户写；只读投影；不为每个新界面新建模型 |
-
-## 迁移计划
-
-1. 第一块删除完成后，树保持可编译、可启动。
-2. 建 system 租户与四个记录，导入 seed release #1（此时还没有自举入口，用命令行完成）。
-3. 上线 updater，先只做"构建 + 体检 + 回滚"演练，不开放写入口。
-4. 开放人工元对象入口；再开放 AI 入口；最后开放源码编辑器。
-5. 每步结束后重建本地两台宿主（`deploy/local/update.sh`），保留数据卷、密钥与租户配置，核对实际 release id 与页面资源。
-
-## 验收
-
-| # | 演练 | 判据 |
-|---|---|---|
-| 1 | 人在 Platform 里新增一个系统对象字段/页面并发布 | 各租户刷新后可见；无重启；definitions 带 `source: system` |
-| 2 | 一句提示词让 AI 改一处平台自身行为，publisher 批准 | 生成 change、构建、重启、生效；`/healthz` 报新 release；运行日志可回放 |
-| 3 | 一次故意写错的构建 | 构建失败、release 不产生、运行版本与数据不变；再次注入启动失败，自动回滚到上一版本 |
-| 4 | 全程核对数据卷与修订 | 租户日志、记录、文件与在途工作不变；`git` 导出与 release 清单一致 |
-
-四次演练都要留下实际观察（浏览器路线、构建日志、healthz、release 摘要），未观察项如实标注。
+上述范围与关闭浏览器后未观察的界面项目继续保留在原任务清单，不归档本 change。核心自举验收仍需真实的定义热激活、人工/AI 源码换版、失败回滚、数据与修订保留及完整源码导出；单元测试或 OpenSpec 格式通过不能代替这些证据。

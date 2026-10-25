@@ -29,27 +29,16 @@ type Config struct {
 	Root    string
 	Work    string
 	Timeout time.Duration
-	// SkipWeb skips the workspace build when Node is unavailable; the host
-	// still builds and reports the missing evidence.
-	SkipWeb bool
 }
 
-// Fixed commands. Nothing else is executed, whatever the change edited.
-var (
-	HostCommand = []string{"go", "build", "-trimpath", "-o", "{out}", "./cmd/platform-server"}
-	// The workspace is built by vite itself, never by the repository's build
-	// script: a change may rewrite that script, and the gate would not stop it.
-	WebCommand = []string{"pnpm", "--dir", "apps/workspace", "exec", "vite", "build"}
-)
-
-// Materialize seeds a fresh work tree from the repository the running host was
-// built from, overlays the change's frozen files, and removes its deletes. The
-// seed is only a starting point: every byte a change touches is its own, and
-// nothing outside the work tree is ever written. It re-checks the kernel gate,
-// so a tampered change never reaches a compiler.
-func Materialize(cfg Config, files map[string]string, deleted []string) (string, error) {
+// Materialize copies the immutable running baseline and overlays only the
+// approved change. Later edits of the deployment repository cannot enter it.
+func Materialize(cfg Config, source Source, files map[string]string, deleted []string) (string, error) {
 	paths := make([]string, 0, len(files))
-	for p := range files {
+	for p, content := range files {
+		if err := systemscope.CheckContent(p, content); err != nil {
+			return "", err
+		}
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
@@ -60,10 +49,9 @@ func Materialize(cfg Config, files map[string]string, deleted []string) (string,
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		return "", err
 	}
-	if err := seedTree(cfg.Root, work); err != nil {
+	if err := CopySource(source.Root, work); err != nil {
 		return "", err
 	}
-	copyWorkspace(cfg.Root, work)
 	for _, p := range paths {
 		target := filepath.Join(work, filepath.FromSlash(p))
 		if !strings.HasPrefix(target, work+string(os.PathSeparator)) {
@@ -84,179 +72,103 @@ func Materialize(cfg Config, files map[string]string, deleted []string) (string,
 	return work, nil
 }
 
-// seedTree copies the repository's source into work, skipping what a build
-// regenerates or must not inherit: version control, earlier build trees,
-// dependency directories and web output. Dependency caches are linked in after
-// the copy, so a build can run offline against the machine's cache without the
-// seed carrying node_modules.
-func seedTree(root, work string) error {
-	skip := map[string]bool{".git": true, ".build": true, "node_modules": true, "dist": true,
-		".next": true, ".turbo": true, "coverage": true}
-	root = filepath.Clean(root)
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			if path != root && skip[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(work, rel)
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		mode := info.Mode().Perm()
-		if mode&0o111 != 0 {
-			mode = 0o755
-		} else {
-			mode = 0o644
-		}
-		body, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, body, mode)
-	})
-}
-
-// copyWorkspace carries the machine's Go workspace into the copy, naming the
-// copy's module directories. Without it the build would compile whatever the
-// original workspace points at instead of the change; with it, a deployment
-// that runs without a workspace is unaffected.
-func copyWorkspace(root, work string) {
-	source := filepath.Join(root, ".build", "sandbox-go", "go.work")
-	body, err := os.ReadFile(source)
-	if err != nil {
-		return
-	}
-	real, err := filepath.EvalSymlinks(root)
-	if err != nil || real == "" {
-		real = root
-	}
-	// One prefix, replaced once: the copy's path contains the original, so a
-	// second replacement would nest the copy inside itself.
-	target := filepath.Join(work, ".build", "sandbox-go", "go.work")
-	if fileExists(target) {
-		return
-	}
-	text := strings.ReplaceAll(string(body), real, work)
-	if os.MkdirAll(filepath.Dir(target), 0o755) != nil {
-		return
-	}
-	_ = os.WriteFile(target, []byte(text), 0o644)
-}
-
 // Build materializes and builds one change. A failed step returns evidence
 // rather than an error, so the change records exactly why it did not build.
 func Build(cfg Config, req host.SystemBuildRequest) (host.SystemBuildResult, error) {
 	started := time.Now()
-	result := host.SystemBuildResult{Toolchain: toolchain(), Manifest: digests(req.Files)}
-	work, err := Materialize(cfg, req.Files, req.Deleted)
+	result := host.SystemBuildResult{Toolchain: toolchain()}
+	source, err := OpenSource(req.Source)
+	if err == nil && source.Digest != req.SourceDigest {
+		err = fmt.Errorf("the approved source baseline differs")
+	}
+	if err != nil {
+		result.Diagnostics = "source baseline: " + err.Error()
+		return result, nil
+	}
+	work, err := Materialize(cfg, source, req.Files, req.Deleted)
 	if err != nil {
 		result.Diagnostics = err.Error()
 		return result, err
 	}
 	result.Work = work
-	linkDependencies(cfg.Root, work)
+	sealed, err := CaptureSource(work, filepath.Join(cfg.Root, ".build", "system", "sources"))
+	if err != nil {
+		return result, err
+	}
+	result.Source, result.SourceDigest = sealed.Root, sealed.Digest
+	result.Manifest = map[string]string{}
+	for path, file := range sealed.Files {
+		result.Manifest[path] = file.Digest
+	}
 	out := filepath.Join(work, ".build", "platform-server")
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return result, err
 	}
-	hostBuild := replace(HostCommand, "{out}", out)
+	hostBuild := []string{"go", "build", "-trimpath", "-o", out, "./cmd/platform-server"}
 	if diagnostics, err := run(cfg, work, module(work), hostBuild); err != nil {
 		result.Diagnostics = "host build failed: " + diagnostics
 		result.Duration = time.Since(started)
 		return result, nil
 	}
-	result.Binary = digestFile(out)
+	if diagnostics, err := run(cfg, work, module(work), []string{"go", "vet", "./..."}); err != nil {
+		result.Diagnostics = "host vet failed: " + diagnostics
+		result.Duration = time.Since(started)
+		return result, nil
+	}
+	result.Binary = DigestFile(out)
 	if result.Binary == "" {
 		result.Diagnostics = "the host build produced no binary"
 		result.Duration = time.Since(started)
 		return result, nil
 	}
-	var web strings.Builder
-	if !cfg.SkipWeb {
-		if diagnostics, err := run(cfg, work, filepath.Join(work, "web"), command(cfg, WebCommand)); err != nil {
-			result.Diagnostics = "workspace build failed: " + diagnostics
-			result.Duration = time.Since(started)
-			return result, nil
-		}
-		dist := filepath.Join(work, "web", "apps", "workspace", "dist")
-		web.WriteString(digestFile(dist))
+	if diagnostics, err := buildWeb(cfg, work); err != nil {
+		result.Diagnostics = "workspace build failed: " + diagnostics
+		result.Duration = time.Since(started)
+		return result, nil
 	}
-	result.Web = web.String()
+	result.Web = digestFile(filepath.Join(work, "web", "apps", "workspace", "dist"))
+	if result.Web == "" {
+		result.Diagnostics = "the workspace build produced no resources"
+		return result, nil
+	}
+	for _, cmd := range [][]string{{"node", "--version"}, command([]string{"pnpm", "--version"})} {
+		if version, err := output(cfg.Root, cmd...); err == nil {
+			result.Toolchain += "; " + cmd[0] + " " + version
+		}
+	}
 	result.OK = true
 	result.Duration = time.Since(started)
 	return result, nil
 }
 
-// digests is the change's own path→digest list, recorded with the release so
-// an export can prove the tree it copies is the tree that was built.
-func digests(files map[string]string) map[string]string {
-	out := make(map[string]string, len(files))
-	for path, body := range files {
-		sum := sha256.Sum256([]byte(body))
-		out[path] = hex.EncodeToString(sum[:])
+// Dependency resolution consumes the approved lockfile but never runs its
+// lifecycle hooks, pnpmfile, package scripts, Vite config or PostCSS config.
+func buildWeb(cfg Config, work string) (string, error) {
+	web := filepath.Join(work, "web")
+	install := command([]string{"pnpm", "install", "--frozen-lockfile", "--ignore-scripts", "--ignore-pnpmfile"})
+	if diagnostics, err := run(cfg, work, web, install); err != nil {
+		return "dependency restore: " + diagnostics, err
 	}
-	return out
-}
-
-// RequestActivation leaves the activation order where the updater looks for
-// it. The host never swaps its own process.
-func RequestActivation(root string, req host.SystemActivationRequest) error {
-	dir := filepath.Join(root, ".build", "system")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	body, err := json.MarshalIndent(map[string]any{
-		"release": req.Release, "previous": req.Previous, "manifest": req.Manifest,
-		"requestedAt": time.Now().UTC().Format(time.RFC3339),
-	}, "", "  ")
+	tsc := filepath.Join(web, "apps", "workspace", "node_modules", "typescript", "bin", "tsc")
+	projects, err := filepath.Glob(filepath.Join(web, "packages", "*", "tsconfig.json"))
 	if err != nil {
-		return err
+		return "typecheck projects", err
 	}
-	return os.WriteFile(filepath.Join(dir, "activate.json"), append(body, '\n'), 0o644)
-}
-
-// Activations lists requested activations, newest first (for the updater).
-func Activations(root string) ([]host.SystemActivationRequest, error) {
-	var out []host.SystemActivationRequest
-	body, err := os.ReadFile(filepath.Join(root, ".build", "system", "activate.json"))
-	if os.IsNotExist(err) {
-		return out, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var one host.SystemActivationRequest
-	if err := json.Unmarshal(body, &one); err != nil {
-		return nil, err
-	}
-	return append(out, one), nil
-}
-
-// linkDependencies reuses the machine's installed node_modules instead of
-// restoring them: the workspace build is a type check of the change, not a
-// dependency install, and the lockfile is part of the change's evidence.
-func linkDependencies(root, work string) {
-	for _, rel := range []string{"node_modules", "web/node_modules", "web/apps/workspace/node_modules"} {
-		source := filepath.Join(root, filepath.FromSlash(rel))
-		if _, err := os.Stat(source); err != nil {
-			continue
+	projects = append(projects, filepath.Join(web, "apps", "workspace", "tsconfig.json"))
+	for _, project := range projects {
+		if diagnostics, err := run(cfg, work, web, []string{"node", tsc, "-p", project}); err != nil {
+			return "typecheck " + project + ": " + diagnostics, err
 		}
-		target := filepath.Join(work, filepath.FromSlash(rel))
-		_ = os.MkdirAll(filepath.Dir(target), 0o755)
-		_ = os.Symlink(source, target)
 	}
+	plugin := filepath.Join(web, "apps", "workspace", "node_modules", "@vitejs", "plugin-react", "dist", "index.js")
+	encoded, _ := json.Marshal(plugin)
+	config := filepath.Join(work, ".build", "updater.vite.mjs")
+	body := "import react from " + string(encoded) + ";\nexport default { plugins:[react()], clearScreen:false, envDir:false, css:{postcss:{}}, build:{target:'safari17',outDir:'dist'} };\n"
+	if err := os.WriteFile(config, []byte(body), 0o644); err != nil {
+		return "bundler config", err
+	}
+	vite := filepath.Join(web, "apps", "workspace", "node_modules", "vite", "bin", "vite.js")
+	return run(cfg, work, filepath.Join(web, "apps", "workspace"), []string{"node", vite, "build", "--config", config, "--configLoader", "native"})
 }
 
 // module is the work tree's host module, where the fixed Go commands run.
@@ -281,7 +193,7 @@ func fileExists(path string) bool {
 
 // command uses the package manager the machine has: pnpm itself, or corepack
 // when only that is installed.
-func command(cfg Config, argv []string) []string {
+func command(argv []string) []string {
 	if argv[0] != "pnpm" {
 		return argv
 	}
@@ -309,11 +221,13 @@ func run(cfg Config, work, dir string, argv []string) (string, error) {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = dir
 	// Reuse the machine's toolchain and caches exactly as they are, but point
-	// a workspace at the copy: the repository's go.work would compile the
-	// repository, not the change. No repository script is ever the entry point.
+	// a workspace at the copy: an external go.work must not compile the
+	// mutable deployment repository instead of the change. No repository script is ever the entry point.
 	env := withoutEnv(os.Environ(), "GOWORK")
-	if workspace := filepath.Join(work, ".build", "sandbox-go", "go.work"); fileExists(workspace) {
+	if workspace := filepath.Join(work, "go.work"); fileExists(workspace) {
 		env = append(env, "GOWORK="+workspace)
+	} else {
+		env = append(env, "GOWORK=off")
 	}
 	cmd.Env = append(env, "CGO_ENABLED=0")
 	output, err := cmd.CombinedOutput()
@@ -331,14 +245,6 @@ func run(cfg Config, work, dir string, argv []string) (string, error) {
 		return text + "\nthe build exceeded its time budget", ctx.Err()
 	}
 	return text, err
-}
-
-func replace(argv []string, key, value string) []string {
-	out := make([]string, len(argv))
-	for i, a := range argv {
-		out[i] = strings.ReplaceAll(a, key, value)
-	}
-	return out
 }
 
 func digestFile(p string) string {

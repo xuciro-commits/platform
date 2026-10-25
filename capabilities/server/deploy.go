@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"platformserver/idp"
 	"platformserver/journal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -151,6 +152,9 @@ func (d *Deployment) makeKey() error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(filepath.Dir(d.idpKeyPath()), 0o700); err != nil {
+		return err
+	}
 	return idp.SaveKey(d.idpKeyPath(), key)
 }
 
@@ -180,7 +184,18 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error)
 // profile's journal is a file, not a second set of semantics, so a restart
 // replays and a damaged journal quarantines exactly as it does on PostgreSQL.
 func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
-	for _, t := range tenants {
+	ordered := slices.Clone(tenants)
+	slices.SortStableFunc(ordered, func(a, b *Tenant) int {
+		if a.ID == "system" && b.ID != "system" {
+			return -1
+		}
+		if b.ID == "system" && a.ID != "system" {
+			return 1
+		}
+		return 0
+	})
+	(&Host{}).bindSystemDefinitions(ordered)
+	for _, t := range ordered {
 		recoveryStarted := time.Now().UTC()
 		var statePosition int64
 		var stateActive bool

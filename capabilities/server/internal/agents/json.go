@@ -148,7 +148,8 @@ func LegacyOutcome(s string, limit int) string {
 	return s[:limit] + "…"
 }
 
-// ActionPayload strips agent-only fields. Retained single-call entries use
+// ActionPayload unwraps the action input separately from agent metadata.
+// Retained flat single-call entries use
 // their original float decoding; accepted multi-call entries retain numbers.
 func ActionPayload(raw json.RawMessage, completeCall bool) json.RawMessage {
 	var payload map[string]any
@@ -157,6 +158,12 @@ func ActionPayload(raw json.RawMessage, completeCall bool) json.RawMessage {
 		decoder.UseNumber()
 	}
 	decoder.Decode(&payload)
+	if completeCall {
+		if input, ok := payload["payload"].(map[string]any); ok {
+			body, _ := json.Marshal(input)
+			return body
+		}
+	}
 	delete(payload, "target")
 	delete(payload, "rationale")
 	body, _ := json.Marshal(payload)

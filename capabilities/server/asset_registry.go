@@ -64,7 +64,11 @@ func (o runtimeAssetOwner) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, owned...)
+		for _, asset := range owned {
+			if !slices.ContainsFunc(o.code, func(original platform.ReleaseAsset) bool { return original.Ref == asset.Ref }) {
+				out = append(out, asset)
+			}
+		}
 	}
 	return out, nil
 }
@@ -251,6 +255,12 @@ func (o runtimeAssetOwner) ApplyAssetInstallation(plan platform.AssetInstallatio
 }
 
 func (t *Tenant) assetRegistryLocked() (*platform.AssetRegistry, error) {
+	return t.newAssetRegistryLocked(false)
+}
+
+// The system owner may replace its own projected definitions. Local releases
+// instead see those exact bytes as immutable prerequisites.
+func (t *Tenant) newAssetRegistryLocked(systemUpdate bool) (*platform.AssetRegistry, error) {
 	registry, err := platform.NewAssetRegistry()
 	if err != nil {
 		return nil, err
@@ -259,6 +269,12 @@ func (t *Tenant) assetRegistryLocked() (*platform.AssetRegistry, error) {
 		code, err := t.codeReleaseAssetsLocked(app)
 		if err != nil {
 			return nil, err
+		}
+		if systemUpdate {
+			shared := t.sharedSystemAssets(app.Manifest().ID)
+			code = slices.DeleteFunc(code, func(asset platform.ReleaseAsset) bool {
+				return slices.ContainsFunc(shared, func(original platform.ReleaseAsset) bool { return original.Ref == asset.Ref })
+			})
 		}
 		owner, _ := app.(platform.AssetLifecycleOwner)
 		wrapper := runtimeAssetOwner{App: app, lifecycle: owner, code: code, nativeFlow: func(ref platform.AssetRef, source string) (platform.ReleaseAsset, error) {

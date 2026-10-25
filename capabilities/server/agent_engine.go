@@ -562,13 +562,24 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		about, _ := args["about_person"].(bool)
 		return a.remember(c, run, str("fact"), about && run.OnBehalf != "", now)
 	case "read":
+		declared := args
+		if inputs, ok := args["inputs"].(map[string]any); ok {
+			declared = inputs
+		}
+		values := map[string]any{}
+		for _, field := range tool.inputs {
+			if value, ok := declared[field.Name]; ok {
+				values[field.Name] = value
+			}
+		}
+		inputs, _ := json.Marshal(values)
 		var view host.AgentObservation
 		var err *kernel.Error
 		if m := a.reader(*run); m != nil {
-			view, err = h.AgentRead(*m, tool.schema)
+			view, err = h.AgentRead(*m, tool.schema, inputs)
 		} else {
 			var out any
-			out, err = readApp(h.App(d.app), h.Automation(c, d.app), tool.schema)
+			out, err = readApp(h.App(d.app), h.Automation(c, d.app), tool.schema, inputs)
 			view.Body, _ = json.Marshal(out)
 			view.Sources = h.AgentSources(out)
 		}
@@ -603,9 +614,18 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		return fmt.Sprintf("sent %s/%s to %d receivers; waiting for the answer", d.app, tool.schema, n), nil
 	}
 	target := str("target")
-	if tool.target != "" && target != "" {
-		step.Sources = append(step.Sources, tool.target+"/"+target)
+	trackTarget := func() {
+		if tool.target == "" || target == "" {
+			return
+		}
+		ref := tool.target + "/" + target
+		if _, exists := h.Record(ref); exists && !slices.Contains(step.Sources, ref) {
+			step.Sources = append(step.Sources, ref)
+		}
 	}
+	// Some owners accept a logical target rather than a stored row ID. Only
+	// real rows are record dependencies, before or after the nested decision.
+	trackTarget()
 	body := agents.ActionPayload(raw, step.CallID != "")
 	if d.Guard != nil {
 		if err := d.Guard(h.Automation(c, d.app), a.run(*run), tool.schema, target, body); err != nil {
@@ -613,7 +633,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		}
 	}
 	key := fmt.Sprintf("agent:%s:%d", run.ID, len(run.Steps)+1)
-	agent := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.app, true)
+	agent := platform.AgentCaller(c, a.AgentPrincipal(run.Agent), d.app, run.ID)
 	person := a.reader(*run)
 	mustConfirm := slices.Contains(d.Checkpoints, tool.schema)
 	if tool.kind == "action" {
@@ -654,6 +674,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
+		trackTarget()
 		run.ActionsUsed++
 		return "done: " + schema + " " + target, nil
 	}
@@ -683,6 +704,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	if err != nil {
 		return "refused: " + err.Error(), nil
 	}
+	trackTarget()
 	run.ActionsUsed++
 	return "done: " + tool.schema + " " + target + " (" + record.GetChangeId() + ")", nil
 }

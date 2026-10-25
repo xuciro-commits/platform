@@ -172,12 +172,12 @@ export function Form({ fields, onSend, sending, error, initial }: { fields: Inpu
   const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...initial }));
   const seed = JSON.stringify(initial ?? {});
   useEffect(() => { setValues({ ...initial }); }, [fields, seed]);
-  const missing = useMemo(() => fields.filter((field) => field.required && !field.readOnly && (values[field.name] === undefined || values[field.name] === "")).map((field) => field.title || field.name), [fields, values]);
+  const missing = useMemo(() => fields.filter((field) => field.required && !field.readOnly && (values[field.name] === undefined || values[field.name] === null || values[field.name] === "")).map((field) => field.title || field.name), [fields, values]);
   return (
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const cleaned: Record<string, unknown> = {};
-      for (const field of fields) if (values[field.name] !== undefined && values[field.name] !== "") cleaned[field.name] = values[field.name];
+      for (const field of fields) if (!field.readOnly && Object.hasOwn(values, field.name)) cleaned[field.name] = values[field.name] === undefined || values[field.name] === "" ? null : values[field.name];
       onSend(cleaned);
     }}>
       {fields.filter((field) => !field.readOnly).map((field) => (

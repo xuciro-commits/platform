@@ -19,13 +19,18 @@ import (
 // the host's one system tenant composes the system app: a business tenant never
 // sees the Platform, and its reads of the system's own collections stay empty.
 func NewTenant(id string, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
+	return NewTenantWithSource(id, nil, seats...)
+}
+
+// NewTenantWithSource binds the running immutable source once, including recovery.
+func NewTenantWithSource(id string, source *platform.SystemSource, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	apps := []platform.App{
 		platformserver.NewConsole(id, seats...),
 		relations.New(id), ai.New(id), work.New(id),
 		platformserver.NewAgents(id), files.New(id), core.New(id), build.New(id),
 	}
 	if id == systemscope.Tenant {
-		apps = append(apps, system.New(id))
+		apps = append(apps, system.New(id, source))
 	}
 	return platformserver.NewTenant(id, apps...)
 }
