@@ -142,6 +142,21 @@ test('RecordForm submits complete declared source input through its original act
   expect(JSON.parse(source().value)).toEqual(next);
 });
 
+test('clearing a record field stays explicit through source mode and submission',async()=>{
+  const entity=defineEntity<{name:string;contact?:string;phone?:string;untouched?:string}>({name:'Customer',primary:'name',fields:{name:text({label:'Name',required:true}),contact:text({label:'Contact'}),phone:text({label:'Phone'}),untouched:text({label:'Untouched'})}});
+  const submit=vi.fn((_values:object)=>false);
+  render(<RecordForm entity={entity} defaultValues={{name:'Customer',contact:'Original contact',phone:'Original phone'}} onSubmit={submit}/>);
+  fireEvent.change(screen.getByRole('textbox',{name:'Contact'}),{target:{value:''}});
+  expect((screen.getByRole('textbox',{name:'Contact'}) as HTMLInputElement).value).toBe('');
+  fireEvent.click(screen.getByRole('button',{name:'Source editor'}));
+  expect(JSON.parse(source().value)).toEqual({name:'Customer',contact:null,phone:'Original phone'});
+  fireEvent.click(screen.getByRole('button',{name:'Visual'}));
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Save'}));});
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(JSON.stringify(submit.mock.calls[0]![0]))).toEqual({name:'Customer',contact:null,phone:'Original phone'});
+  expect((screen.getByRole('textbox',{name:'Contact'}) as HTMLInputElement).value).toBe('');
+});
+
 test('EntityForm source excludes immutable identity while its original schema and submission retain it',async()=>{
   const submit=vi.fn(()=>false);
   render(<EntityForm schema={z.object({id:z.string().min(1),name:z.string().min(1)})} fields={[{name:'id',label:'ID',required:true,readOnly:true},{name:'name',label:'Name',required:true}]} defaultValues={{id:'original-id',name:'Original'}} onSubmit={submit}/>);
