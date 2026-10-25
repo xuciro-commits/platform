@@ -13033,7 +13033,8 @@
       "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Home.tsx",
-      "web/apps/workspace/src/shell/Lineage.tsx"
+      "web/apps/workspace/src/shell/Lineage.tsx",
+      "web/apps/workspace/src/shell/ZoneRail.tsx"
     ],
     "ui/command-menu": [
       "web/packages/app/src/actions/OpenIn.tsx",
