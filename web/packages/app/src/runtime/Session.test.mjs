@@ -25,7 +25,7 @@ test("interface windows keep duplicate IDs distinct and confirm only authorized 
   await store.confirmInterfaceSelection("selected",{...rows[1],id:"hidden"},"coded");
   await store.confirmInterfaceSelection("selected",rows[0],"foreign");
   assert.deepEqual(reads,[["sample.b","SAME"]]);
-  store.updateSource({...source,scope:"different-member"});
+  store.updateSource({...source,scope:"different-member",ruleIdentity:{me:"different-member",timezone:"UTC"}});
   assert.equal(store.snapshot().records.selected.status,"empty");
   await store.confirmInterfaceSelection("selected",rows[1],"coded");
   assert.deepEqual(reads,[["sample.b","SAME"]]);
@@ -55,7 +55,7 @@ test("record sets confirm authorized window members, preserve producer isolation
 test("record sets enforce declared query ownership, budget, current membership and actor retirement",async()=>{
  const source={scope:"one",revision:1,entity:()=>({fields:[]}),get:async(_type,id)=>({record:record(id)}),list:async()=>({records:[record("A"),record("B")],total:2})},p={maxSelectionSetRecords:1,objects:new Map([["set","sample.note"]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["read",new Set(["set"])]] )},store=new PageSessionStore(source,p);
  await store.querySource("read").list("sample.note",{limit:2});await store.querySource("wrong").list("sample.note",{limit:2});store.selectSet("set",["A"],"wrong");store.selectSet("set",["A","B"],"read");store.selectSet("set",["A","A"],"read");assert.equal(store.snapshot().recordSets.set,undefined);
- store.selectSet("set",["A"],"read");await tick();assert.equal(store.snapshot().recordSets.set.status,"value");store.updateSource({...source,scope:"two"});assert.equal(store.snapshot().recordSets.set.status,"empty");assert.deepEqual(store.selectedSet("set"),[]);store.selectSet("set",["A"],"read");assert.equal(store.snapshot().recordSets.set.status,"empty");
+ store.selectSet("set",["A"],"read");await tick();assert.equal(store.snapshot().recordSets.set.status,"value");store.updateSource({...source,scope:"two",ruleIdentity:{me:"two",timezone:"UTC"}});assert.equal(store.snapshot().recordSets.set.status,"empty");assert.deepEqual(store.selectedSet("set"),[]);store.selectSet("set",["A"],"read");assert.equal(store.snapshot().recordSets.set.status,"empty");
  store.reconcileExternalWindow("read","external",["A"]);store.selectSet("set",["A"],"read");await tick();assert.equal(store.snapshot().recordSets.set.status,"value");store.reconcileExternalWindow("read","external",undefined);assert.equal(store.snapshot().recordSets.set.status,"empty");assert.deepEqual(store.selectedSet("set"),[]);
 });
 test("disposing and reactivating a session cannot restore an earlier identical record-set read",async()=>{
@@ -144,7 +144,7 @@ test("a changed member/definition scope clears values and discards the previous 
   const source = { scope: "member-a", entity: () => ({ fields: [{ name: "active", type: "boolean" }] }), get: () => read.promise, list: async () => ({ records: [], total: 0 }) };
   const store = new PageSessionStore(source, plan());
   store.setScalar("tab", "private-tab"); store.filter("sample.parent", "active", true); store.select("parent", record("A"));
-  source.scope = "member-b"; store.updateSource(source);
+  source.scope = "member-b"; store.updateSource({ ...source, ruleIdentity: { me: "member-b", timezone: "UTC" } });
   read.resolve({ record: record("A") }); await tick();
   assert.equal(store.selected("parent"), undefined);
   assert.equal(store.snapshot().records.parent.status, "empty");
@@ -181,7 +181,7 @@ test("loop item states follow identity through reorder and clear on removal, que
   store.reconcileLoop("loop", "query-b", ["B"]);
   assert.equal(store.snapshot().items.B, undefined);
   store.setItemScalar("loop", "B", "open", true);
-  source.scope="two";store.updateSource(source);
+  store.updateSource({ ...source, scope: "two", ruleIdentity: { me: "two", timezone: "UTC" } });
   assert.deepEqual(store.snapshot().items, {});
 });
 
@@ -232,7 +232,7 @@ test("ending an overlay clears only its states atomically and invalidates the ol
   assert.notEqual(store.overlayEpoch("A"), opening);
   assert.equal(store.overlayEpoch("B"), 0);
   assert.deepEqual(other.snapshot().scalars, {});
-  source.scope = "different-member-or-version"; store.updateSource(source);
+  source.scope = "different-member-or-version"; store.updateSource({ ...source, ruleIdentity: { me: "different-member", timezone: "UTC" } });
   assert.deepEqual(store.snapshot().scalars, {});
 });
 
@@ -249,7 +249,7 @@ test("shared plan windows own table selections and fields while views and obsole
  const signature=JSON.stringify(["sample.parent",{offset:1,limit:1}]);
  assert.equal(store.queryPage("plan/read",signature).records[0].id,"B");
  assert.equal(store.queryPage("plan/read",JSON.stringify(["sample.parent",{offset:0,limit:1}])),undefined);
- store.select("parent",record("B"));await tick();source.scope="two";store.updateSource(source);
+ store.select("parent",record("B"));await tick();store.updateSource({ ...source, scope: "two", ruleIdentity: { me: "two", timezone: "UTC" } });
  assert.deepEqual(store.snapshot().views,{});assert.equal(store.selected("parent"),undefined);
 });
 
@@ -297,7 +297,7 @@ test("scoped query readers reuse answers and refresh only their live window unti
 });
 
 test("paired range Clear publishes one original snapshot and member replacement retires both drafts",()=>{
- const source={scope:"one",entity:()=>({fields:[]}),get:async(_type,id)=>({record:record(id)}),list:async()=>({records:[],total:0})},store=new PageSessionStore(source,plan());store.setScalars({lower:"10",upper:"20"});const snapshots=[];store.subscribe(()=>snapshots.push({...store.snapshot().scalars}));store.setScalars({lower:"",upper:""});assert.deepEqual(snapshots,[{lower:"",upper:""}]);store.setScalars({lower:"10",upper:"20"});store.updateSource({...source,scope:"two"});assert.equal(store.snapshot().scalars.lower,undefined);assert.equal(store.snapshot().scalars.upper,undefined);
+ const source={scope:"one",entity:()=>({fields:[]}),get:async(_type,id)=>({record:record(id)}),list:async()=>({records:[],total:0})},store=new PageSessionStore(source,plan());store.setScalars({lower:"10",upper:"20"});const snapshots=[];store.subscribe(()=>snapshots.push({...store.snapshot().scalars}));store.setScalars({lower:"",upper:""});assert.deepEqual(snapshots,[{lower:"",upper:""}]);store.setScalars({lower:"10",upper:"20"});store.updateSource({...source,scope:"two",ruleIdentity:{me:"two",timezone:"UTC"}});assert.equal(store.snapshot().scalars.lower,undefined);assert.equal(store.snapshot().scalars.upper,undefined);
 });
 test("stable picker IDs require a current window and confirmed authorized identity; obsolete confirmations never return",async()=>{
  const reads=new Map(),source={scope:"member",revision:1,entity:()=>({fields:[]}),list:async()=>({records:[record("A"),record("B")],total:2}),get:(_type,id)=>{const r=deferred();reads.set(id,r);return r.promise;}},p={objects:new Map([["pick","sample.note"]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["read",new Set(["pick"])]] )},store=new PageSessionStore(source,p);
@@ -349,4 +349,46 @@ test("shared record-set consumers reconfirm references without trusting copied f
  const pending=store.selectSetReferences("consumer",[{object:"sample.note",id:"A",note:"copied secret"}]);assert.deepEqual(store.snapshot().recordSets.consumer.value,[{object:"sample.note",id:"A"}]);await tick();reads[0].resolve({record:{...record("A"),note:"current authorized value"}});await pending;assert.equal(store.selectedSet("consumer")[0].note,"current authorized value");
  const denied=store.selectSetReferences("consumer",[{object:"sample.note",id:"B"}]);assert.deepEqual(store.selectedSet("consumer"),[]);await tick();reads[1].reject(Error("Denied"));assert.equal(await denied,undefined);assert.equal(store.snapshot().recordSets.consumer.status,"error");assert.deepEqual(store.selectedSet("consumer"),[]);
  await store.querySource("read").list("sample.note",{limit:2});const late=store.selectSet("set",["B"],"read");await tick();store.resetQueries(["read"]);reads[2].resolve({record:record("B")});assert.equal(await late,undefined);assert.deepEqual(store.selectedSet("set"),[]);
+});
+
+test("a read generation change refreshes reads but keeps the task: selections, scalars and views survive an unrelated release or a lastSeen bump",async()=>{
+ const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return{promise,resolve,reject};};
+ const readOne=deferred();
+ const source={scope:"member",revision:1,ruleIdentity:{me:"member-1",timezone:"UTC"},entity:()=>({fields:[]}),list:async()=>({records:[record("A"),record("B")],total:2}),get:(_t,id)=>id==="A"?readOne.promise:Promise.resolve({record:record(id)})};
+ const p={objects:new Map([["set","sample.note"]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["read",new Set(["set"])]])},store=new PageSessionStore(source,p);
+ store.setScalar("draft","hello");
+ await store.querySource("read").list("sample.note",{limit:2});
+ store.selectSet("set",["A"],"read");
+ readOne.resolve({record:record("A")});await tick();await tick();
+ assert.equal(store.snapshot().recordSets.set.status,"value");
+ // The member's profile refresh (lastSeen) arrives as a new revision: reads
+ // may re-run, but the selection and the page's own inputs are not the data.
+ store.updateSource({...source,revision:2});
+ await tick();await tick();
+ assert.notEqual(store.snapshot().recordSets.set.status,"empty");
+ assert.equal(store.snapshot().scalars.draft,"hello");
+ readOne.resolve({record:record("A")});await tick();await tick();
+ assert.equal(store.snapshot().recordSets.set.status,"value");
+ // An unrelated application publishes: the definition scope changes, the member does not.
+ store.updateSource({...source,revision:3,scope:"member+other-app"});
+ await tick();await tick();
+ assert.notEqual(store.snapshot().recordSets.set.status,"empty");
+ assert.deepEqual(store.selectedSet("set").map(x=>x.id),["A"]);
+ assert.equal(store.snapshot().scalars.draft,"hello");
+ store.updateSource({...source,revision:4,scope:"member+other-app+more"});
+ await tick();
+ assert.equal(store.snapshot().scalars.draft,"hello");
+});
+
+test("a change of member ends the task: selections, scalars and unreadable snapshots are cleared",async()=>{
+ const source={scope:"member",revision:1,ruleIdentity:{me:"member-1",timezone:"UTC"},entity:()=>({fields:[]}),list:async()=>({records:[record("A")],total:1}),get:async(_t,id)=>({record:record(id)})};
+ const p={objects:new Map([["set","sample.note"]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["read",new Set(["set"])]])},store=new PageSessionStore(source,p);
+ store.setScalar("draft","hello");
+ await store.querySource("read").list("sample.note",{limit:2});
+ store.selectSet("set",["A"],"read");await tick();await tick();
+ assert.equal(store.snapshot().recordSets.set.status,"value");
+ store.updateSource({...source,revision:5,scope:"member",ruleIdentity:{me:"member-2",timezone:"UTC"}});
+ assert.equal(store.snapshot().recordSets.set.status,"empty");
+ assert.deepEqual(store.selectedSet("set"),[]);
+ assert.equal(store.snapshot().scalars.draft,undefined);
 });

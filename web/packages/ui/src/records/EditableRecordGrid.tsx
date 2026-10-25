@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from "react";
 import type {ColumnDef} from "@tanstack/react-table";
 import {DataTable} from "../components/DataTable";
 import {Dialog} from "../primitives/dialog";
+import {useUnsavedChanges} from "../shell/Workspace";
 import {Checkbox} from "../primitives/controls";
 import {Button} from "../primitives/button";
 import type {Entity} from "../fields/entity";
@@ -19,9 +20,12 @@ export function EditableRecordGrid({data,columns,entity,height,rowHeight,showToo
  const [review,setReview]=useState(false),reviewedRows=useRef<Record<string,PendingRow>|undefined>(undefined);
  const alive=useRef(true),lock=useRef(false),currentPort=useRef(port);currentPort.current=port;
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
- // Confirmed removal clears no-longer-authorized/viewed record snapshots. A
- // normal pending refresh keeps the opened revision, so it cannot rebase edits.
- useEffect(()=>{if(!data)return;const ids=new Set(data.filter(r=>!r.archived).map(r=>r.id));setRows(old=>{const next=Object.assign(emptyRows(),Object.fromEntries(Object.entries(old).filter(([id])=>ids.has(id))));if(Object.keys(next).length!==Object.keys(old).length)setNotice(t("Edits for records no longer in this view were cleared."));return next;});},[data]);
+ // Staged rows are a real task: the original dirty/busy owner protects them
+ // against closing and leaving, and they survive searches, pagination and
+ // refreshes. Only explicit discard, an accepted submission or a stopped
+ // submission clears them; an authorization change stops later submissions
+ // (checked per row) instead of silently dropping work.
+ const {confirmDiscard}=useUnsavedChanges(Object.keys(rows).length>0,()=>{setRows(emptyRows());setNotice("");setEditing(!!port?.alwaysEditing);},busy);
  const stage=(record:EntityRecord,field:string,value:unknown)=>{
   if(busy||review||port?.enabled===false||record.archived||!port?.fields.includes(field)||port.access?.[record.id]?.[field]?.allow===false)return;
   setNotice("");setRows(old=>{if(!old[record.id]&&Object.keys(old).length>=port.maxRows){setNotice(t("The staged row limit has been reached."));return old;}const baseline=old[record.id]?.baseline??structuredClone(record),patch={...old[record.id]?.patch};if(Object.is(value,baseline[field]))delete patch[field];else patch[field]=value;const next=Object.assign(emptyRows(),old);if(Object.keys(patch).length)next[record.id]={baseline,patch};else delete next[record.id];return next;});
@@ -58,7 +62,7 @@ export function EditableRecordGrid({data,columns,entity,height,rowHeight,showToo
  <DataTable key={JSON.stringify([editing,busy])} virtualColumns={tableColumns.length>=10} data={shown} columns={tableColumns as never} selectedId={selectedId} selectedIds={selectionSet?.selectedIDs} getRowId={r=>r.id} height={height} rowHeight={rowHeight} searchable={false}
    onRowClick={editing?undefined:selectionSet||onOpen?choose:undefined} cellAccess={(record,name)=>port?.access?.[record.id]?.[name]} onCellEdit={editing&&!busy&&!review&&port?.enabled!==false?stage:undefined} loading={loading} empty={empty}
    toolbar={port&&(showToolbar||editing)?(editing?<>
-     <Button size="sm" variant={editing?"ghost":undefined} aria-pressed={editing} onClick={()=>{if(!port.alwaysEditing)setEditing(false);setRows(emptyRows());setNotice("");}}>{t("Finish editing")}</Button>
+     <Button size="sm" variant={editing?"ghost":undefined} aria-pressed={editing} onClick={()=>{confirmDiscard(()=>{if(!port.alwaysEditing)setEditing(false);setRows(emptyRows());setNotice("");});}}>{t("Finish editing")}</Button>
      <Button size="sm" variant="primary" disabled={busy||port.preview||port.enabled===false||Object.keys(rows).length===0} onClick={()=>{if(port.confirmation){reviewedRows.current=structuredClone(rows);setReview(true);}else void submit();}}>{busy?t("Submitting…"):t("Submit cell edits")}</Button>
      <span className="text-xs text-muted">{t("{count} rows staged",{count:Object.keys(rows).length})}</span>
    </>:<>

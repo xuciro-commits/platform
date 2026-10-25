@@ -17,8 +17,10 @@ const emptySnapshot = () => empty, emptySubscribe = () => () => {};
 const idOf = (d: Api.Definition) => `${d.ref.app}:${d.ref.name}`;
 
 export function ApplicationSessionsProvider({ children }: { children: ReactNode }) {
-  const { source } = useHost();
-  const hub = useMemo(() => new ApplicationSessionHub(), [source.scope]);
+  const { me } = useHost();
+  // The hub belongs to the member, not to the definition set: publishing an
+  // unrelated application must not destroy live application sessions.
+  const hub = useMemo(() => new ApplicationSessionHub(), [me?.tenantId, me?.principalId]);
   useEffect(()=>()=>hub.clear(),[hub]);
   return <Hub.Provider value={hub}>{children}</Hub.Provider>;
 }

@@ -2,6 +2,7 @@ import {CanvasSelectionToolbar,type CanvasCommand} from "./CanvasSelectionToolba
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode,type PointerEvent as ReactPointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {t} from '../i18n';
+import {useViewVisible} from '../shell/ViewVisibility';
 import type {LayoutSize} from './LayoutRegion';
 
 export type CanvasRect={x:number;y:number;width:number;height:number};
@@ -30,12 +31,14 @@ function visibleRect(el:Element):CanvasRect {
  return {x:left,y:top,width:Math.max(0,right-left),height:Math.max(0,bottom-top)};
 }
 
-export function CanvasEditor({model,selected,onSelect,onDrop,onMove,resize,onResize,onResetSize,children,zoom=1,disabled=false,revision,commands=[],icon}: {
+export function CanvasEditor({
+ model,selected,onSelect,onDrop,onMove,resize,onResize,onResetSize,children,zoom=1,disabled=false,revision,commands=[],icon}: {
  model:CanvasModel;selected?:string;onSelect:(id:string)=>void;onDrop:(payload:CanvasPayload,target:CanvasDrop)=>void;onMove:(id:string,delta:-1|1)=>void;
  resize:(id:string,axis:'width'|'height',pixels:number,rects:Record<string,CanvasRect>)=>Record<string,LayoutSize>|undefined;
  onResize:(sizes:Record<string,LayoutSize>)=>void;onResetSize:(id:string,axis:'width'|'height')=>void;
  children:ReactNode;commands?:CanvasCommand[];icon?:ReactNode;zoom?:number;disabled?:boolean;revision?:unknown;
 }){
+ const visible=useViewVisible();
  const root=useRef<HTMLDivElement>(null),current=useRef({model,selected,onSelect,onDrop,onMove,resize,onResize,onResetSize,zoom,disabled});
  current.current={model,selected,onSelect,onDrop,onMove,resize,onResize,onResetSize,zoom,disabled};
  const cancel=useRef<()=>void>(()=>{}),[drag,setDrag]=useState<State>(),[selectionBox,setSelectionBox]=useState<CanvasRect>(),[resizeLabel,setResizeLabel]=useState(''),[resizeGuide,setResizeGuide]=useState<CanvasRect>();
@@ -46,11 +49,11 @@ export function CanvasEditor({model,selected,onSelect,onDrop,onMove,resize,onRes
  useEffect(()=>{cancel.current();},[revision,disabled]);
  useEffect(()=>()=>cancel.current(),[]);
  useEffect(()=>{
-  if(!selected){setSelectionBox(undefined);return;}
+  if(!selected||!visible){setSelectionBox(undefined);return;} // a hidden canvas stops measuring; the box returns with the view
   let frame=0;
   const tick=()=>{const el=selected?region(selected):undefined,next=el?rect(el):undefined;setSelectionBox(old=>same(old,next)?old:next);frame=requestAnimationFrame(tick);};
   frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);
- },[selected]);
+ },[selected,visible]);
  const resolve=(payload:CanvasPayload,x:number,y:number):Target|undefined=>{
   const nodes=current.current.model,excluded=new Set<string>();
   const walk=(id:string)=>{if(excluded.has(id))return;excluded.add(id);for(const child of nodes[id]?.children??[])walk(child);};

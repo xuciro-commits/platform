@@ -8,6 +8,7 @@ import { InputDraftProvider, useDraftInput } from "../fields/draft";
 import { routeKey, type Route } from "./route";
 import { setLanguage } from "../i18n";
 import { NavigationItems, navigationLinks } from "./Navigation";
+import { useViewVisible } from "./ViewVisibility";
 
 test("nested menus expose original routes, can collapse, and reopen for the active document", async () => {
   const original = { view: "code", params: { application: "one" } };
@@ -263,55 +264,55 @@ test("compact custom navigation closes after route parameters or application sco
   await waitFor(() => expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull());
 });
 
-test("switching applications asks once for all local drafts; cancellation keeps raw input, selection and URL", async () => {
+test("switching applications preserves both drafts without prompting; returning restores each app's work and URL", async () => {
   const selected = vi.fn();
   const input = await start({ onSelect: selected });
   fireEvent.change(input, { target: { value: "keep A" } });
   act(() => api.open({ view: "flow", params: { id: "B" } }));
   fireEvent.change(await screen.findByLabelText("Raw timeout B"), { target: { value: "-" } });
   choose("knowledge");
-  const dialog = await screen.findByRole("dialog", { name: "Unsaved changes" });
-  expect(within(dialog).getByText("Flow A")).toBeTruthy();
-  expect(within(dialog).getByText("Flow B")).toBeTruthy();
-  expect(selected).not.toHaveBeenCalled();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Keep editing" }));
-  expect((screen.getByLabelText("Draft A") as HTMLInputElement).value).toBe("keep A");
-  act(() => api.open({ view: "flow", params: { id: "B" } }));
+  expect(await screen.findByRole("heading", { name: "Documents" })).toBeTruthy();
+  expect(selected).toHaveBeenCalledWith("knowledge");
+  expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).toBeNull();
+  expect(discard).not.toHaveBeenCalled();
+  choose("build");
+  // Returning fronts the same live instances: flow B is active with its raw
+  // input, and flow A's draft survives hidden beside it.
+  expect(await screen.findByLabelText("Raw timeout B")).toBeTruthy();
   expect((screen.getByLabelText("Raw timeout B") as HTMLInputElement).value).toBe("-");
+  expect((screen.getByLabelText("Draft A") as HTMLInputElement).value).toBe("keep A");
   expect(location.hash).toBe("#/flow?id=B");
   expect(api.applications!.current).toBe("build");
-  expect(discard).not.toHaveBeenCalled();
 });
 
-test("confirmed app switching discards only those drafts and restores the old active entity on return", async () => {
+test("app switching discards nothing and restores the previous active entity on return", async () => {
   const selected = vi.fn();
   await start({ onSelect: selected });
   act(() => api.open({ view: "flow", params: { id: "B", surface: "studio" } }));
-  fireEvent.change(await screen.findByLabelText("Draft B"), { target: { value: "discard B" } });
+  fireEvent.change(await screen.findByLabelText("Draft B"), { target: { value: "retain B" } });
   choose("knowledge");
-  fireEvent.click(await screen.findByRole("button", { name: "Discard changes" }));
   expect(await screen.findByRole("heading", { name: "Documents" })).toBeTruthy();
   expect(selected).toHaveBeenCalledWith("knowledge");
-  expect(discard).toHaveBeenCalledWith("B");
-  expect(observed.dock!.getPanel("flow?id=A")).toBeUndefined();
+  expect(discard).not.toHaveBeenCalled();
   choose("build");
   expect(await screen.findByRole("textbox", { name: "Draft B" })).toBeTruthy();
-  expect((screen.getByLabelText("Draft B") as HTMLInputElement).value).toBe("saved");
+  expect((screen.getByLabelText("Draft B") as HTMLInputElement).value).toBe("retain B");
   expect(location.hash).toBe("#/flow?id=B&surface=studio");
   expect(api.applications!.current).toBe("build");
 });
 
-test("a cross-application hash cannot tear down a dirty editor before confirmation", async () => {
+test("a cross-application hash preserves the dirty editor and the route back to it", async () => {
   const input = await start();
   fireEvent.change(input, { target: { value: "keep through Back" } });
   act(() => { location.hash = "#/knowledge"; dispatchEvent(new HashChangeEvent("hashchange")); });
-  fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
-  expect(location.hash).toBe("#/flow?id=A");
-  expect((screen.getByLabelText("Draft A") as HTMLInputElement).value).toBe("keep through Back");
-  expect(api.applications!.current).toBe("build");
-  act(() => api.open({ view: "knowledge" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Discard changes" }));
   expect(await screen.findByRole("heading", { name: "Documents" })).toBeTruthy();
+  expect(discard).not.toHaveBeenCalled();
+  await waitFor(() => expect(location.hash).toBe("#/knowledge"));
+  choose("build");
+  expect(await screen.findByLabelText("Draft A")).toBeTruthy();
+  expect((screen.getByLabelText("Draft A") as HTMLInputElement).value).toBe("keep through Back");
+  expect(location.hash).toBe("#/flow?id=A");
+  expect(api.applications!.current).toBe("build");
 });
 
 test("stored tabs reassigned to another application cannot replace the chosen app's home", async () => {
@@ -327,19 +328,20 @@ test("stored tabs reassigned to another application cannot replace the chosen ap
   await screen.findByRole("heading", { name: "Documents" });
 });
 
-test("shared shell tabs stay out of app memory and never replace a new app's home", async () => {
+test("shell tabs travel with their host scope and stay out of other applications' memory", async () => {
   await start();
   act(() => api.open({ view: "home" }));
+  expect(await screen.findByRole("heading", { name: "Home" })).toBeTruthy();
   choose("knowledge");
   expect(await screen.findByRole("heading", { name: "Documents" })).toBeTruthy();
-  const build = JSON.parse(localStorage.getItem("workspace:test:build")!);
-  const shell = JSON.parse(localStorage.getItem("workspace:test:shell")!);
-  expect(build.panels.home).toBeUndefined();
-  expect(shell.panels.home.params.route).toEqual({ view: "home" });
-  expect(observed.dock!.getPanel("home")).toBeTruthy();
+  const knowledge = JSON.parse(localStorage.getItem("workspace:test:knowledge")!);
+  expect(knowledge.panels.home).toBeUndefined();
   choose("build");
-  expect(await screen.findByRole("textbox", { name: "Draft A" })).toBeTruthy();
-  expect(location.hash).toBe("#/flow?id=A");
+  // The shell tab was opened inside build's scope: it is still there, with
+  // its instance, when build comes back to the front.
+  expect(await screen.findByRole("heading", { name: "Home" })).toBeTruthy();
+  expect(location.hash).toBe("#/home");
+  expect(discard).not.toHaveBeenCalled();
 });
 
 test("opening an already-open view beside moves the same panel and retains local and raw drafts", async () => {
@@ -444,4 +446,30 @@ test("strict effect replay still opens the incoming entity", async () => {
   render(<StrictMode><Shell /></StrictMode>);
   expect(await screen.findByRole("textbox", { name: "Draft A" })).toBeTruthy();
   expect(observed.dock!.activePanel?.id).toBe(routeKey({ view: "flow", params: { id: "A" } }));
+});
+
+test("a hidden application scope stops publishing visibility and restores it in front", async () => {
+  const seen: boolean[] = [];
+  function Watch() { const visible = useViewVisible(); seen.push(visible); return null; }
+  const watched: View[] = [
+    ...views,
+    { id: "watch", title: () => "Watch", render: () => <Watch /> },
+  ];
+  function WatchShell({ initial }: { initial: string }) {
+    const [current, setCurrent] = useState(initial);
+    return <Workspace product="Fixture" storageKey="workspace:watch" layoutScope={current} scopeOf={scopeOf} views={watched} home={{ view: "home" }} nav={[]}
+      applications={{ apps, categories: [{ id: "build", label: "Build" }, { id: "business", label: "Business" }], current, onSelect: setCurrent }}
+      onActiveRoute={(route) => { const owner = route && scopeOf(route); if (owner && owner !== current) setCurrent(owner); }} />;
+  }
+  const mounted = render(<WatchShell initial="build" />);
+  await screen.findByRole("textbox", { name: "Draft A" });
+  act(() => api.open({ view: "watch" }));
+  await screen.findByText("Watch");
+  expect(seen.at(-1)).toBe(true);
+  choose("knowledge");
+  await screen.findByRole("heading", { name: "Documents" });
+  await waitFor(() => expect(seen.at(-1)).toBe(false));
+  choose("build");
+  await waitFor(() => expect(seen.at(-1)).toBe(true));
+  mounted.unmount();
 });

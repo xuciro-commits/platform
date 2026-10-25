@@ -13,9 +13,11 @@ export function Input(props:ComponentProps<"input">&{draftKey?:string;optional?:
  return <input data-ui="field" className={cn(field,className)} {...input}/>;
 }
 function NumericInput({className,draftKey,optional,...props}:ComponentProps<"input">&{draftKey?:string;optional?:boolean}){
- const errorID=useId(),captionSet=useRef(false);
+ const instanceID=useId(),errorID=useId(),captionSet=useRef(false);
  const [label,setLabel]=useState(props.name??props["aria-label"]??props.id??"number");
- const input=useDraftInput(`number:${draftKey??props.name??props["aria-label"]??props.id??label}`,String(props.value??props.defaultValue??"")),[touched,setTouched]=useState(false);
+ // The draft path is an identity, never a caption: an unnamed field gets one
+ // stable per-instance path, so two same-caption fields never share a buffer.
+ const input=useDraftInput(`number:${draftKey??props.name??props.id??instanceID}`,String(props.value??props.defaultValue??"")),[touched,setTouched]=useState(false);
  const empty=useRef(optional??(props.value===undefined||props.value===""));
  const publish=(event:ChangeEvent<HTMLInputElement>)=>{
   const raw=event.target.value,n=Number(raw),step=props.step===undefined?undefined:Number(props.step);
@@ -42,9 +44,11 @@ export function Textarea(props:TextareaHTMLAttributes<HTMLTextAreaElement>&{pars
  return <textarea data-ui="field" className={cn(field,"h-auto min-h-16 py-1",className)} {...input}/>;
 }
 function JSONTextarea({className,parse,draftKey,defaultValue,...props}:TextareaHTMLAttributes<HTMLTextAreaElement>&{parse?:"json";draftKey?:string}){
- const captionSet=useRef(false);
+ const instanceID=useId(),captionSet=useRef(false);
  const [label,setLabel]=useState(props.name??props["aria-label"]??props.id??"json");
- const input=useDraftInput(`json:${draftKey??props.name??props["aria-label"]??props.id??label}`,String(props.value??defaultValue??""));
+ // Same rule as NumericInput: identity from explicit props or the component
+ // instance; the rendered caption never becomes a buffer key.
+ const input=useDraftInput(`json:${draftKey??props.name??props.id??instanceID}`,String(props.value??defaultValue??""));
  return <span className="grid min-w-0 gap-1"><textarea {...props} aria-label={props["aria-label"]??(label!=="json"&&!props.name&&!props.id?label:undefined)} data-ui="field" data-draft-key={input.path} className={cn(field,"h-auto min-h-16 py-1",className)} value={input.text}
   ref={node=>{if(node&&!captionSet.current&&!props.name&&!props["aria-label"]&&!props.id){captionSet.current=true;const clone=node.closest("label")?.cloneNode(true) as HTMLElement|undefined;clone?.querySelectorAll("textarea,[role=alert]").forEach(node=>node.remove());const caption=clone?.textContent?.trim();if(caption&&caption!==label)setLabel(caption);}}}
   aria-invalid={props["aria-invalid"]||!!input.problem} onChange={event=>{const raw=event.target.value;try{if(raw.trim())JSON.parse(raw);if(input.write(raw))props.onChange?.(event);}catch{input.write(raw,t("Enter valid JSON. The original draft is retained."));}}}/>{input.problem&&<span role="alert" className="text-xs text-danger">{input.problem}</span>}</span>;

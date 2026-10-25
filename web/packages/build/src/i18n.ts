@@ -167,7 +167,7 @@ register("zh-CN", {
   "Data and preview": "数据与预览",
   "Object behavior": "对象行为",
   "Object areas": "对象工作区",
-  "Inspect installed applications and extend them through the same drafts and releases.": "查看已安装应用，并通过同样的草稿与发布进行扩展。从模板新建会打开包库：已安装的声明式应用包经原有审阅与草稿生成，成为可编辑的应用草稿。",
+  "Inspect installed applications and extend them through the same drafts and releases. New from template opens the package library: an installed declarative package becomes editable application drafts through its original review and draft generation.": "查看已安装应用，并通过同样的草稿与发布进行扩展。从模板新建会打开包库：已安装的声明式应用包经原有审阅与草稿生成，成为可编辑的应用草稿。",
   "Application extension": "应用扩展",
   "Build application": "构建应用",
   "Published application": "已发布应用",

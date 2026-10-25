@@ -101,8 +101,11 @@ export class PageSessionStore {
   private readAdapter?: RecordSource;
   private sourceRevision?: number;
   private sourceScope?: string;
+  /** Task identity (the member the session belongs to). Definition sets and
+   * revisions are read generations, never a reason to destroy the task. */
+  private identityMe?: string;
   private disposed = false;
-  constructor(source: RecordSource, plan: SelectionPlan) { const identity=source.ruleIdentity;this.property.clock={me:identity?.me,now:this.ruleClock,today:new Intl.DateTimeFormat("en-CA",{timeZone:identity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(this.ruleClock))};this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.plan = plan; }
+  constructor(source: RecordSource, plan: SelectionPlan) { const identity=source.ruleIdentity;this.property.clock={me:identity?.me,now:this.ruleClock,today:new Intl.DateTimeFormat("en-CA",{timeZone:identity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(this.ruleClock))};this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.identityMe = source.ruleIdentity?.me; this.plan = plan; }
   activate() { this.disposed = false; }
   snapshot = () => this.state;
   snapshotScope = () => this.sourceScope;
@@ -378,13 +381,21 @@ export class PageSessionStore {
   updateSource(source: RecordSource) {
     if (this.disposed || (source === this.source || source.scope !== undefined) && source.revision === this.sourceRevision && source.scope === this.sourceScope) return;
     const changedScope = source.scope !== this.sourceScope;
+    const changedIdentity = source.ruleIdentity?.me !== this.identityMe;
     this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.version++;
     for(const child of this.childSessions.values())child.session.updateSource(this.readSource());
+    // A scope or revision change is a read generation: sensitive reads are
+    // refreshed or shadowed below. Only a change of member ends the task -
+    // an unrelated application's release must not clear this session's
+    // inputs, views or selections.
     this.aggregates.clear();
     this.queries.clear();this.queryData.clear();this.interfaceData.clear(); this.reads.clear();this.viewCache.clear();this.rulePending.clear();this.ruleFailures.clear();for(const stop of this.ruleWatches.values())stop();this.ruleWatches.clear();
     this.publish({ aggregates:{}, queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
-    if (changedScope) {
+    if (changedIdentity || changedScope) {
       const identity=source.ruleIdentity;this.ruleClock=new Date().toISOString();this.property.clock={me:identity?.me,now:this.ruleClock,today:new Intl.DateTimeFormat("en-CA",{timeZone:identity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(this.ruleClock))};
+    }
+    if (changedIdentity) {
+      this.identityMe = source.ruleIdentity?.me;
       this.externalMembers.clear();this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear(); this.querySignatures.clear();
       this.publish({ aggregates:{}, views:{}, scalars: {}, items: {}, filters: {}, records: this.clear([...this.plan.objects.keys(),...this.plan.interfaces?.keys()??[]]) });
       return;

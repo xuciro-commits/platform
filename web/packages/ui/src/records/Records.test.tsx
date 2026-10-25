@@ -212,7 +212,11 @@ test("cell staging submits changed fields per row and preserves failed baselines
  await waitFor(()=>expect(submit).toHaveBeenCalledTimes(2));expect(submit.mock.calls[0]![0].revision).toBe(1);expect(submit.mock.calls[0]![1]).toEqual({title:"A new"});expect(screen.getByRole("cell",{name:"A old"})).toBeTruthy();expect(screen.getByRole("alert").textContent).toContain("CONFLICT");expect(screen.getByRole("cell",{name:"B draft"})).toBeTruthy();
  data=[{...data[0]!,revision:2,title:"A new"},{...data[1]!,revision:2,title:"B remote"}];rerender(<RecordList {...props()}/>);fireEvent.click(screen.getByRole("button",{name:"Submit cell edits"}));await waitFor(()=>expect(submit).toHaveBeenCalledTimes(3));expect(submit.mock.calls[2]![0].revision).toBe(1);
  fireEvent.click(screen.getByRole("button",{name:"Finish editing"}));fireEvent.click(screen.getByRole("button",{name:"Edit cells"}));stage("B remote","B retry");fireEvent.click(screen.getByRole("button",{name:"Submit cell edits"}));await waitFor(()=>expect(submit).toHaveBeenCalledTimes(4));expect(submit.mock.calls[3]![0].revision).toBe(2);
- rerender(<RecordList {...props()} window={{...props().window,query:{search:"different",limit:100}}}/>);expect(screen.queryByRole("button",{name:"Finish editing"})).toBeNull();expect(screen.queryByRole("cell",{name:"B retry"})).toBeNull();
+ // A search change is a read-generation concern, not a teardown: the staged
+ // retry and its controls survive it, and Finish editing still protects them.
+ rerender(<RecordList {...props()} window={{...props().window,query:{search:"different",limit:100}}}/>);
+ expect(screen.getByRole("button",{name:"Finish editing"})).toBeTruthy();expect(screen.getByRole("cell",{name:"B retry"})).toBeTruthy();
+ fireEvent.click(screen.getByRole("button",{name:"Finish editing"}));expect(screen.queryByRole("button",{name:"Finish editing"})).toBeNull();
 });
 test("retiring the edit scope ignores a pending result and does not submit remaining rows",async()=>{
  const response=pending<{accepted:boolean}>(),submit=vi.fn(()=>response.promise),info={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]},source:RecordSource={scope:"actor",entity:()=>info,list:vi.fn(),get:vi.fn()},data=[{...record("A"),title:"A old"},{...record("B"),title:"B old"}],port={schema:"sample.item.edit",scope:"binding",fields:["title"],maxRows:64,submit};
@@ -376,4 +380,39 @@ test("record actions wait for the refreshed original revision after an accepted 
  expect(screen.getByRole("button",{name:"Act on revision 1"}).closest("fieldset")?.disabled).toBe(true);
  await act(async()=>next.resolve({...view,record:{...view.record,revision:2}}));
  expect(screen.getByRole("button",{name:"Act on revision 2"}).closest("fieldset")?.disabled).toBe(false);
+});
+
+test("structured line inputs keep their drafts on their own row and field", async () => {
+  const linesEntity = entityFrom({ ...entity, fields: [
+    { name: "qty", title: "Qty", type: "integer" },
+    { name: "items", title: "Items", type: "lines", fields: [{ name: "qty", title: "Qty", type: "integer" }, { name: "note", title: "Note", type: "text" }] },
+  ] } as never);
+  const editor = linesEntity.fields.items!.editor!;
+  const change = vi.fn();
+  const view = render(editor({ id: "record:items", value: [{ qty: 1, note: "first" }, { qty: 2, note: "second" }] as never, onChange: change }));
+  const spins = screen.getAllByRole("spinbutton");
+  expect(spins).toHaveLength(2);
+  // An invalid exponent in row one stays in row one; row two keeps its value.
+  fireEvent.change(spins[0]!, { target: { value: "1e-" } });
+  expect(change).not.toHaveBeenCalled();
+  fireEvent.blur(spins[0]!);
+  await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+  expect((spins[1] as HTMLInputElement).value).toBe("2");
+  // Rows carry their own draft path, visible on the element.
+  const paths = screen.getAllByRole("spinbutton").map((node) => node.getAttribute("data-draft-key"));
+  expect(paths[0]).not.toEqual(paths[1]);
+  expect(paths[0]).toContain("line:");
+  // Deleting the first row removes its draft and moves the remaining row's
+  // input with its object, not its index.
+  const before = screen.getAllByRole("spinbutton")[1]!.getAttribute("data-draft-key");
+  fireEvent.click(screen.getAllByRole("button", { name: "Remove line" })[0]!);
+  expect(change).toHaveBeenCalledTimes(1);
+  const next = change.mock.calls[0]![0] as unknown[];
+  expect(next).toHaveLength(1);
+  // The surviving row is the same object, so its inputs move with it.
+  view.rerender(editor({ id: "record:items", value: next as never, onChange: change }));
+  const remaining = screen.getAllByRole("spinbutton");
+  expect(remaining).toHaveLength(1);
+  expect(remaining[0]!.getAttribute("data-draft-key")).toBe(before);
+  view.unmount();
 });

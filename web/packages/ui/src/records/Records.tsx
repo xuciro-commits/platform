@@ -108,6 +108,15 @@ export type RecordSource = {
 
 // The tenant's currency: the default of amounts people enter; the workspace sets it from /v1/me.
 let tenantCurrency = "EUR";
+/** Local, per-instance row identity for structured sub-tables: assigned by
+ * object identity, so it moves with the row without changing the record's
+ * business shape. */
+const localRowKeys = new WeakMap<object, string>();
+const localRowKey = (row: object): string => {
+  let key = localRowKeys.get(row);
+  if (!key) { key = crypto.randomUUID(); localRowKeys.set(row, key); }
+  return key;
+};
 export const setCurrency = (currency: string) => { if (currency) tenantCurrency = currency; };
 
 const money = (o: { label: string; required?: boolean; readOnly?: boolean }): FieldType<Money> => ({
@@ -202,8 +211,10 @@ const lines = (common: { label: string; help?: string; required?: boolean; readO
           <table className="w-full text-sm">
             <thead><tr>{shown.map(([k, c]) => <th key={k} className="px-1 text-left text-xs font-medium text-muted">{c.label}{c.required ? " *" : ""}</th>)}<th /></tr></thead>
             <tbody>{rows.map((line, i) => (
-              <tr key={i}>
-                {shown.map(([k, c]) => <td key={k} className="min-w-28 px-1 py-0.5">{!c.readOnly&&c.editor?c.editor({ value: line[k] as never, onChange: (v) => set(i, k, v) }):c.display(line[k] as never, line)}</td>)}
+              // A local row key travels with the row object: deleting or
+              // reordering moves this row's inputs, and never another row's.
+              <tr key={localRowKey(line)}>
+                {shown.map(([k, c]) => <td key={k} className="min-w-28 px-1 py-0.5">{!c.readOnly&&c.editor?c.editor({ id: `${id ? `${id}:` : ""}line:${localRowKey(line)}:${k}`, value: line[k] as never, onChange: (v) => set(i, k, v) }):c.display(line[k] as never, line)}</td>)}
                 <td><Button size="sm" variant="ghost" aria-label={t("Remove line")} onClick={() => onChange(rows.filter((_, j) => j !== i))}>×</Button></td>
               </tr>
             ))}</tbody>
@@ -483,7 +494,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
       </div>}
       {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate} source={source}/>)}
       {view === "list" && !cards && (
-        <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
+        <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
       )}
       {view === "kanban" && kanbanLanes.length > 0 && kanbanStateField && (
         error ? <p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>
