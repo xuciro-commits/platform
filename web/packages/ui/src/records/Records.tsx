@@ -16,6 +16,7 @@ import {EditableRecordGrid,type RecordEditPort,type RecordSelectionPort} from ".
 import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresentation";
 import { DataTable } from "../components/DataTable";
 import { Dialog } from "../primitives/dialog";
+import { FacetChoices } from "../fields/FacetChoices";
 import {ContentTabs} from "../layout/ContentTabs";
 import {pageUIManifest} from "@platform/kernel";
 import { PropertyList } from "../components/EntityCard";
@@ -331,7 +332,23 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const view = window || !availableViews.includes(localView) ? "list" : localView;
   const fixedKey = JSON.stringify(fixed ?? []);
   useEffect(() => { setOffset(0); }, [fixedKey, type]);
-  const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? [])], [fixedKey, drilled]);
+  // In-place facets: choice fields with live counts; a selection narrows the
+  // list through the same domain language the drill-down writes.
+  const [facetPanel, setFacetPanel] = useState(false);
+  const [facetSelection, setFacetSelection] = useState<Record<string, string[]>>();
+  const [facetCounts, setFacetCounts] = useState<Record<string, { value: string; count: number }[]>>();
+  const facetFields = useMemo(() => (info ? info.fields.filter((f) => f.type === "choice" && f.choices?.length).slice(0, 4) : []), [info]);
+  const facetTerms = useMemo(() => Object.entries(facetSelection ?? {}).flatMap(([field, values]) => values.length ? [[field, "in", values]] : []), [facetSelection]);
+  const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? []), ...facetTerms], [fixedKey, drilled, facetTerms]);
+  const loadFacets = () => {
+    if (!source.aggregate) return;
+    const base = JSON.parse(fixedKey) as unknown[];
+    for (const field of facetFields) {
+      source.aggregate(type, { groups: [field.name], measures: ["count"], search, domain: base })
+        .then((data) => setFacetCounts((current) => ({ ...current, [field.name]: data.rows.map((row) => ({ value: String(row[field.name] ?? ""), count: Number(row.count ?? 0) })) })))
+        .catch(() => setFacetCounts((current) => ({ ...current, [field.name]: (field.choices ?? []).map((value) => ({ value, count: 0 })) })));
+    }
+  };
   const entity = useMemo(() => (info ? entityFrom(info,{},source) : undefined), [info,source]);
   const infoKey = JSON.stringify(info);
   const pageKey = JSON.stringify([source.scope, type, infoKey, domain, search, sort, offset, archived, pageSize]);
@@ -454,6 +471,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
             </Select>
           )}
         </>}
+        {facetFields.length > 0 && <Button size="sm" aria-expanded={facetPanel} aria-pressed={facetPanel} onClick={() => { const next = !facetPanel; setFacetPanel(next); if (next) loadFacets(); }}>{t("Filters")}{facetSelection && Object.values(facetSelection).some((values) => values.length) ? <span className="tabular-nums">·</span> : null}</Button>}
         {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />{t("Archived")}</label>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
@@ -481,6 +499,16 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
           </span>
         )}
       </div>
+      {facetPanel && facetFields.length > 0 && <div role="group" aria-label={t("Filter by values")} className="flex flex-wrap items-start gap-x-6 gap-y-3 rounded-md border border-border p-3">
+        {facetFields.map((field) => {
+          const counts = facetCounts?.[field.name];
+          const options = (counts ?? (field.choices ?? []).map((value) => ({ value, count: 0 })))
+            .filter((option) => (facetSelection?.[field.name]?.includes(option.value)) || option.count > 0 || !counts);
+          return <FacetChoices key={field.name} title={field.title} histogram={!!counts} options={options} value={facetSelection?.[field.name] ?? []}
+            onChange={(values) => { setFacetSelection((sel) => ({ ...sel, [field.name]: values })); setOffset(0); }} />;
+        })}
+        <Button size="sm" variant="ghost" onClick={() => { setFacetSelection(undefined); setOffset(0); }}>{t("Clear filters")}</Button>
+      </div>}
       {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate}/>)}
       {view === "list" && !cards && (
         <>

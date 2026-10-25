@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:e2f0e248dc380fa3",
+  "revision": "sha256:882d3fa74901135a",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -9510,6 +9510,7 @@
         "ui/button",
         "ui/chart",
         "ui/dialog",
+        "ui/facet-choices",
         "ui/input",
         "ui/pivot",
         "ui/record-cards",
@@ -13953,6 +13954,7 @@
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/Chart.tsx",
       "web/packages/govern/src/ai.tsx",
+      "web/packages/govern/src/processes.tsx",
       "web/packages/ui/src/records/RecordChart.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],
@@ -14064,7 +14066,8 @@
       "web/packages/app/src/widgets/Exploration.tsx"
     ],
     "ui/facet-choices": [
-      "web/packages/app/src/widgets/Facets.tsx"
+      "web/packages/app/src/widgets/Facets.tsx",
+      "web/packages/ui/src/records/Records.tsx"
     ],
     "ui/gauge": [
       "web/packages/app/src/widgets/Gauge.tsx",

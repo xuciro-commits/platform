@@ -1,6 +1,6 @@
 // Settings: flows, agents and their evaluations.
 import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t } from "@platform/ui";
+import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t, Chart} from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
@@ -117,10 +117,20 @@ function AgentsOverview() {
       ? can("agent.resume") && <Button size="sm" onClick={() => void decide("agent.resume", { type: "agent.switch", id: o.member }, {})}>{t("Resume")}</Button>
       : can("agent.suspend") && <Button size="sm" variant="danger" onClick={() => void decide("agent.suspend", { type: "agent.switch", id: o.member }, {})}>{t("Suspend")}</Button> },
   ];
+  const overview = rows.data ?? [];
+  const judgedSides = (rows: Api.AgentOverview[]) => {
+    const sides = { accepted: 0, changed: 0, refused: 0 };
+    for (const o of rows) { sides.accepted += judged(o, "confirmed") + judged(o, "approved") + judged(o, "accepted"); sides.changed += judged(o, "changed") + judged(o, "corrected"); sides.refused += judged(o, "rejected") + judged(o, "discarded") + judged(o, "undone"); }
+    return [{ side: t("Accepted"), count: sides.accepted }, { side: t("Changed"), count: sides.changed }, { side: t("Refused"), count: sides.refused }].filter((side) => side.count > 0);
+  };
   return (
     <>
       <div className="mb-2 mt-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t("Overview")}</h2><ContextHelp title={t("Overview")}>{t("Every agent, the apps' and those outside that act as one: what it did, what it cost from the usage kept, and what people made of its work. Suspending one stops its runs at their next step and refuses its calls.")}</ContextHelp></div>
-      <DataTable data={rows.data ?? []} columns={columns} getRowId={(o) => o.member} height={220} empty={t("No agent yet")} />
+      {overview.length > 0 && <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
+        <Chart spec={{ title: t("Runs by agent"), data: { values: overview.map((o) => ({ agent: o.member, runs: o.runs })) }, mark: { type: "bar", orient: "horizontal" }, encoding: { x: { field: "runs", type: "quantitative" }, y: { field: "agent", type: "nominal" } } }} height={Math.max(120, 40 + overview.length * 28)} />
+        <Chart spec={{ title: t("What people made of the work"), data: { values: judgedSides(overview) }, mark: { type: "arc", donut: true }, encoding: { theta: { field: "count", type: "quantitative" }, color: { field: "side", type: "nominal" } } }} height={Math.max(120, 40 + overview.length * 28)} />
+      </div>}
+      <DataTable data={overview} columns={columns} getRowId={(o) => o.member} height={220} empty={t("No agent yet")} />
     </>
   );
 }

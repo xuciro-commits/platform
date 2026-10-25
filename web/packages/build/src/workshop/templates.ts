@@ -4,7 +4,7 @@ import type { EntityInfo } from "@platform/ui";
  *  The module shapes used by enterprise applications, following
  *  Fiori floorplans: list report, object page with items, worklist, wizard,
  *  board. Each produces the existing build.page payload. */
-export type TemplateId = "build/list-report" | "build/object-page" | "build/worklist" | "build/wizard" | "build/board" | "build/record-handling";
+export type TemplateId = "build/list-report" | "build/object-page" | "build/worklist" | "build/wizard" | "build/board" | "build/record-handling" | "build/metrics-overview" | "build/time-planner";
 
 export const pageTemplates: readonly { id: TemplateId; revision: string; title: string; summary: string; bindings: string[]; child?: boolean }[] = [
   { id: "build/list-report", revision: "v1", title: "List report",
@@ -19,6 +19,10 @@ export const pageTemplates: readonly { id: TemplateId; revision: string; title: 
     summary: "Records as cards by state: move them with their actions; counts and a chart by state above.", bindings: ["Object", "Visible fields", "Offered actions"] },
   { id: "build/record-handling", revision: "v1", title: "Record handling workspace",
     summary: "Select a record, inspect its details and use the original object actions.", bindings: ["Object", "Visible fields", "Offered actions"] },
+  { id: "build/metrics-overview", revision: "v1", title: "Metrics overview",
+    summary: "Read the state of things at a glance: headline numbers, breakdowns by category, and the records beneath.", bindings: ["Object", "Visible fields"] },
+  { id: "build/time-planner", revision: "v1", title: "Time planner",
+    summary: "Records on a calendar by their date field, with the numbers above and the list beneath. The object needs a date field.", bindings: ["Object", "Visible fields"] },
 ];
 
 export type TemplateBindings = { object: EntityInfo; name: string; title: string; fields: string[]; actions: string[]; description: string; child?: EntityInfo; relation?: string };
@@ -32,6 +36,14 @@ const filter = (object: EntityInfo, fields: string[]): Section[] => {
   return names.length ? [{ widget: "filter", width: "full", fields: names }] : [];
 };
 const hasStates = (object: EntityInfo) => !!object.lifecycle?.states?.length;
+const groupableFields = (object: EntityInfo, fields: string[]) =>
+  object.fields.filter((field) => fields.includes(field.name) && (field.type === "choice" || (field.type === "boolean"))).map((field) => field.name);
+const measureOf = (object: EntityInfo, fields: string[]) => {
+  const numeric = object.fields.find((field) => fields.includes(field.name) && ["integer", "decimal", "money"].includes(field.type));
+  return numeric ? `sum:${numeric.name}` : undefined;
+};
+const dateFieldOf = (object: EntityInfo, fields: string[]) =>
+  object.fields.find((field) => fields.includes(field.name) && ["date", "datetime"].includes(field.type))?.name;
 const label = (object: EntityInfo, fields: string[]) => fields.find((name) => object.fields.some((f) => f.name === name && f.type === "text")) ?? fields[0] ?? "id";
 const childFields = (child: EntityInfo) => child.fields.filter((f) => f.type !== "lines").slice(0, 5).map((f) => f.name);
 
@@ -91,6 +103,28 @@ export function templateDraft(id: TemplateId, b: TemplateBindings) {
         { widget: "table", width: "full", fields }, { widget: "detail", width: "half", fields },
         { widget: "actions", width: "half", actions }, { widget: "timeline", width: "half" }, { widget: "tasks", width: "half" },
       ];
+      case "build/metrics-overview": {
+        const measure = measureOf(object, fields);
+        const groups = groupableFields(object, fields).slice(0, 2);
+        return [
+          ...filter(object, fields),
+          { widget: "metric", width: "half", measure: "count", title: "Records" },
+          ...(measure ? [{ widget: "metric", width: "half", measure, title: `Total ${measure.slice(4)}` } as Section] : []),
+          ...groups.map((name) => ({ widget: "chart", width: "half", group: name, measure: "count", title: `By ${name}` } as Section)),
+          { widget: "table", width: "full", fields: fields.slice(0, 5), showSearch: true },
+        ];
+      }
+      case "build/time-planner": {
+        const dateField = dateFieldOf(object, fields);
+        const labelField = label(object, fields);
+        return [
+          ...filter(object, fields),
+          { widget: "metric", width: "half", measure: "count", title: "Records" },
+          ...(dateField ? [{ widget: "record-calendar", width: "full", object: object.type,
+            model: { type: object.type, fields: [{ name: dateField, slot: "recordCalendar.dateField" }, { name: labelField, slot: "recordCalendar.labelField" }] } } as Section] : []),
+          { widget: "table", width: "full", fields: fields.slice(0, 5), showSearch: true },
+        ];
+      }
     }
   })();
   return { ...base, sections };

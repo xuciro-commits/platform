@@ -419,6 +419,8 @@ register("zh-CN", {
   "Consumers": "使用方",
   "Consumes": "使用",
   "Context": "上下文",
+  "Runs by agent": "各智能体运行次数",
+  "What people made of the work": "人们对智能体工作的处理",
   "Cost by day": "按日成本",
   "Cost by model": "按模型成本",
   "Cost (USD)": "费用（美元）",
