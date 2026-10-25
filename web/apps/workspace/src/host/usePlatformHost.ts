@@ -127,7 +127,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     if (outcome) {
       options.onOutcome?.(outcome);
       if (outcome.state === "SUBMISSION_STATE_PENDING" || outcome.state === "SUBMISSION_STATE_UNKNOWN") {
-        const reason = t("Awaiting confirmation. Retry sends the same request.");
+        const reason = t("Waiting for the server response. Retry sends the same request.");
         if (options.onRefused) options.onRefused(reason); else notify.error(reason);
       }
     }

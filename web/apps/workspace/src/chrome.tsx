@@ -103,6 +103,7 @@ function Outbox() {
     { id: "target", header: t("Target"), meta: { width: 180 }, accessorFn: (e) => `${e.submission.target?.type ?? ""}/${e.submission.target?.id ?? ""}` },
     { accessorKey: "state", header: t("State"), meta: { width: 120 }, cell: (c) => <StatusTag status={c.getValue()} registry={submissionStatuses} /> },
     { accessorKey: "outcome", header: t("Answer"), meta: { width: 260 }, cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
+    { accessorKey: "reason", header: t("Reason"), meta: { width: 320 }, cell: (c) => <span title={c.getValue()}>{c.getValue()}</span> },
   ];
   return <>
     <PageHeader title={t("Outbox")} help={t("K5: every decision waits here until the host answers; unanswered ones are sent again with the same key.")}

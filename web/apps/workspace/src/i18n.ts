@@ -59,7 +59,7 @@ register("zh-CN", {
  "Local request storage is unavailable. Retry after storage is restored.": "本地请求存储不可用，请在存储恢复后重试。",
  "The workspace identity changed.": "工作台身份已切换。",
  "Saved requests belong to another workspace identity.": "已保存的请求属于另一个工作台身份。",
- "Awaiting confirmation. Retry sends the same request.": "请求尚待确认。重试会发送同一请求。",
+ "Waiting for the server response. Retry sends the same request.": "尚未收到服务器答复。重试会复用原请求。",
  "Home": "首页",
  "Applications": "应用",
  "Platform": "平台",

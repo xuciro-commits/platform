@@ -35,8 +35,15 @@ environment.stop()
 subprocess.run(['make', 'local'], cwd=root, check=True)
 revision = os.environ['PLATFORM_REVISION']
 hosts = []
+listeners = environment.native_listeners()
+if not listeners:
+    raise SystemExit('The selected local processes are not listening yet')
 for solution, api, port in environment.SOLUTIONS:
-    metadata = subprocess.check_output(['go', 'version', '-m', str(root / '.build/dev' / (solution + '-server'))], text=True)
+    binary = root / '.build/dev' / (solution + '-server')
+    api_pid = listeners[solution]['api']
+    if not environment.running_binary(api_pid, binary):
+        raise SystemExit(f'{solution}: API listener {api_pid} is not running the current binary')
+    metadata = subprocess.check_output(['go', 'version', '-m', str(binary)], text=True)
     if 'vcs.revision=' + revision not in metadata or 'vcs.modified=true' in metadata:
         raise SystemExit(f'{solution}: local binary differs from the committed revision')
     base = f'http://localhost:{port}'
@@ -53,7 +60,10 @@ for solution, api, port in environment.SOLUTIONS:
         with urllib.request.urlopen(base + asset, timeout=10) as response:
             if not response.read():
                 raise SystemExit(f'{solution}: empty workspace resource {asset}')
-    hosts.append({'service': solution + '-server', 'url': base, 'revision': revision, 'mode': 'native', 'health': health, 'matchedAssets': len(assets)})
+    current = environment.native_listeners()
+    if not current or current[solution]['api'] != api_pid or not environment.running_binary(api_pid, binary):
+        raise SystemExit(f'{solution}: API listener changed during verification; retry the local update')
+    hosts.append({'service': solution + '-server', 'url': base, 'revision': revision, 'mode': 'native', 'apiPID': api_pid, 'health': health, 'matchedAssets': len(assets)})
     print(f'{base}: {revision[:12]}, healthy, Vite + {len(assets)} resources verified')
 report = {'revision': revision, 'mode': 'native', 'checkedAtUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'hosts': hosts}
 (root / '.build/local-update' / (revision + '.json')).write_text(json.dumps(report, indent=2) + '\n')

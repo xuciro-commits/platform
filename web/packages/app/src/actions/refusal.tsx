@@ -29,7 +29,7 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
  const reason=result?.facts?.[0]?refusalFactMessage(result.facts[0]):message;
  const advice=policy?t("Ask an administrator to review access before trying again."):constraint?t("Correct the marked values before submitting a new intent."):business?t("Review the business reason and correct the inputs or follow the declared correction path."):undefined;
  return <div className="grid min-w-0 gap-2">
-  <Rejection title={waiting?t("Awaiting confirmation"):refusalCategoryName(category)} message={reason} advice={advice}
+  <Rejection title={waiting?t("Waiting for the server"):refusalCategoryName(category)} message={reason} advice={advice}
    waiting={!!waiting} tone={business?"info":undefined}
    code={result?.code||entry?.outcome} requestKey={key}
    trail={result?.facts?.length?result.facts.map((fact,index)=><div key={index} className="grid min-w-0 gap-0.5 rounded border border-border p-2">
@@ -37,7 +37,7 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
     <p className="whitespace-pre-wrap break-words">{refusalFactMessage(fact)}</p>
    </div>):undefined}/>
   {waiting&&<div className="flex flex-wrap gap-2">
-   <Button size="sm" variant="ghost" onClick={()=>open({view:"requests"})}>{t("View request status")}</Button>
+   <Button size="sm" variant="ghost" onClick={()=>open({view:"outbox"})}>{t("View outbox")}</Button>
    {target?.type&&target.id&&<Button size="sm" variant="ghost" onClick={()=>openRecord(`${target.type}/${target.id}`)}>{t("Open the original record")}</Button>}
   </div>}
   {policy&&!waiting&&<ExplainAccess entry={entry}/>}

@@ -29,6 +29,8 @@ make help    # 中文命令说明
 
 `make local` 启动后台进程，终端退出后继续运行；重复执行不会重复启动。日志在 `.build/dev/`。启动等待实际就绪或进程退出，不因租户日志恢复超过固定时长而停止宿主；需要停止时可中断等待或执行 `make docker`。本地 Go API 使用内部 `18495/18490`，Vite 占用对外 `8495/8490` 并代理 API；容器模式由 Go 宿主直接提供同样的入口。同一租户不同时运行两个宿主。`make docker` 要求源码已提交，镜像版本和页面资源仍由 `update.sh` 核对。
 
+本地就绪还核对端口监听者属于当前 Air/Vite 启动进程，旧进程的健康答复不能代替当前版本。外来端口占用会明确报错，不自动按端口结束进程；更新时另外核对实际 API 进程使用的二进制映像，并在原更新报告中记录其 PID。
+
 底层命令仍可单独使用：`make infra`、`make dev SOLUTION=hospitality`、`make web SOLUTION=hospitality`（前端 5176；制造 5175）、`make infra-compute`。无 Docker 的内存探针用 `make dev-light`。首次缺依赖时运行 `make setup`。`make local` 复用数据卷和登录配置，不重建宿主镜像；计算容器使用独立的 `platform-dev-compute` 项目。
 
 宿主的启动参数在 `deploy/dev/run.sh`，与下面 Compose 里的宿主一致（同一 PostgreSQL、同一 Rauthy、同一 tenants.json）；`deploy/local/.env` 的密钥同样被读取。

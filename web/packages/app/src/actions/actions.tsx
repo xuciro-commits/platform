@@ -121,7 +121,7 @@ export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(
 export function DeclaredActionForm(props:Parameters<typeof DeclaredActionFormBody>[0]) {
  return <InputDraftProvider isolated scope={props.declared.schema+":"+props.target.id}><DeclaredActionFormBody {...props}/></InputDraftProvider>;
 }
-function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,onPending,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;onPending?:(pending:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
+function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
  const host=useHost(),{decide,catalog,source}=host,lock=useRef(false),inputsDraft=useInputDrafts(),trial=useActionTrial();
  const execution=useRef({enabled,preview,mounted:true});if(execution.current.enabled!==enabled||execution.current.preview!==preview)execution.current={enabled,preview,mounted:true};const opened=execution.current;
  useEffect(()=>{execution.current.mounted=true;return()=>{execution.current.mounted=false;};},[]);
@@ -135,13 +135,27 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
   const defaults={...Object.fromEntries(openedDeclaration.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial,...savedDraft?.values,...fixed};
   return originalOutcome&&(originalOutcome.state==="SUBMISSION_STATE_PENDING"||originalOutcome.state==="SUBMISSION_STATE_UNKNOWN")?actionEntryInputs(originalOutcome,defaults):defaults;
  });
- const [values,setValues]=useState<Record<string,unknown>>(startingValues),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false),[pending,setPending]=useState(originalOutcome?.state==="SUBMISSION_STATE_PENDING"||originalOutcome?.state==="SUBMISSION_STATE_UNKNOWN"),[ownerIssues,setOwnerIssues]=useState<Api.FieldIssue[]>(originalOutcome?.issues??[]);
+ const [values,setValues]=useState<Record<string,unknown>>(startingValues),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState(originalOutcome?humanizeKernelError(originalOutcome.reason??originalOutcome.outcome):""),[submitted,setSubmitted]=useState(false);
  const [attempt,setAttempt]=useState<{entry:Entry;values:Record<string,unknown>}|undefined>(()=>originalOutcome?{entry:originalOutcome,values:actionEntryInputs(originalOutcome,startingValues)}:undefined);
+ const entry=attempt&&(host.client.authorities.outbox.find(current=>current.submission.tenantId===attempt.entry.submission.tenantId&&current.submission.principalId===attempt.entry.submission.principalId&&current.submission.idempotencyKey===attempt.entry.submission.idempotencyKey)??attempt.entry);
+ const pending=!!entry&&["SUBMISSION_STATE_PENDING","SUBMISSION_STATE_SENDING","SUBMISSION_STATE_UNKNOWN"].includes(entry.state);
+ const ownerIssues=(entry?.issues??[]).filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>values[name]===attempt?.values[name]));
  const current=catalog.find(action=>action.schema===openedDeclaration.schema&&action.target===target.type);
- const refused=attempt&&["SUBMISSION_STATE_REJECTED","SUBMISSION_STATE_CONFLICT"].includes(attempt.entry.state);
- const attemptedVersion=attempt?.entry.schemaVersion??openedDeclaration.schemaVersion;
+ const refused=!!entry&&["SUBMISSION_STATE_REJECTED","SUBMISSION_STATE_CONFLICT"].includes(entry.state);
+ const attemptedVersion=entry?.schemaVersion??openedDeclaration.schemaVersion;
  const schemaChanged=!!refused&&!!attemptedVersion&&!!current?.schemaVersion&&actionInputSignature(current.schemaVersion)!==actionInputSignature(attemptedVersion);
  const declared=schemaChanged&&current?current:openedDeclaration;
+ const completed=useRef(false);
+ const complete=(requested:{type:string;id:string})=>{
+  if(completed.current||!opened.mounted||execution.current!==opened)return;
+  completed.current=true;
+  if(local.context)try{for(const key of new Set([savedDraft?.key,actionDraftKey(local.context,openedDeclaration,target,fixed),actionDraftKey(local.context,declared,target,fixed)]))if(key)host.client.prepared?.removeForm(key);}
+  catch{notify.error(t("The request was accepted, but its local draft could not be removed. Review it in Offline applications."));}
+  onCompleted(requested);
+ };
+ useEffect(()=>{
+  if(!submitting&&entry?.state==="SUBMISSION_STATE_CONFIRMED"&&entry.submission.target?.type&&entry.submission.target.id)complete({type:entry.submission.target.type,id:entry.submission.target.id});
+ },[entry?.state,entry?.submission.idempotencyKey,submitting]);
  // Generated forms expose writable model fields in both editing modes;
  // fixed bindings remain part of the same original owner submission.
  const generatedInputs=(next:Record<string,unknown>)=>{
@@ -149,34 +163,27 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
   const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&(field.aside||Object.hasOwn(startingValues,field.name))).map(field=>field.name)]);
   return Object.fromEntries(Object.entries(inputs).filter(([name])=>allowed.has(name)&&!model.some(field=>field.name===name&&field.readOnly)));
  };
- const sameTarget=attempt?.entry.submission.target?.type===target.type&&attempt.entry.submission.target.id===target.id;
+ const sameTarget=entry?.submission.target?.type===target.type&&entry.submission.target.id===target.id;
  const changed=!!attempt&&(!sameTarget||schemaChanged||actionInputSignature(values)!==actionInputSignature(attempt.values));
  const submit=async(inputs=values,original=false)=>{
   if(!opened.enabled||opened.preview||!opened.mounted||execution.current!==opened||lock.current||inputsDraft?.invalid&&!original)return false;
   setSubmitted(true);
   if(!original&&!generated&&!payloadSchema(declared.payload).safeParse(inputs).success)return false;
   const same=!!attempt&&(original||!schemaChanged&&sameTarget&&actionInputSignature(inputs)===actionInputSignature(attempt.values));
-  const requested=same?{type:attempt!.entry.submission.target!.type!,id:attempt!.entry.submission.target!.id!}:{...target};
+  const requested=same?{type:entry!.submission.target!.type!,id:entry!.submission.target!.id!}:{...target};
   if(!requested.id)return false;
   inputs=structuredClone(same?attempt!.values:inputs);
   lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");
   try{
-   const accepted=await decide(declared.schema,requested,inputs,{expectedRevision:same?attempt!.entry.submission.expectedRevision:!attempt?savedDraft?.expectedRevision??revision:revision,schemaVersion:same?attempt!.entry.schemaVersion:declared.schemaVersion,quiet:true,originalKey:same?attempt?.entry.submission.idempotencyKey:undefined,correctionOf:!same&&sameTarget?attempt?.entry.submission.idempotencyKey:undefined,onRefused:setRefusal,onOutcome:entry=>{
-    setOwnerIssues(entry.issues??[]);setAttempt({entry,values:actionEntryInputs(entry,inputs)});
-    const waiting=entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN";setPending(waiting);onPending?.(waiting);
-   }});
-   if(accepted){
-    if(!opened.mounted||execution.current!==opened)return true;
-    if(local.context)try{for(const key of new Set([savedDraft?.key,actionDraftKey(local.context,openedDeclaration,target,fixed),actionDraftKey(local.context,declared,target,fixed)]))if(key)host.client.prepared?.removeForm(key);}
-    catch{notify.error(t("The request was accepted, but its local draft could not be removed. Review it in Offline applications."));}
-    setPending(false);onPending?.(false);onCompleted(requested);
-   }return accepted;
-  }catch{setPending(true);onPending?.(true);setRefusal(t("The action could not be completed. Try again."));return false;}
+   const accepted=await decide(declared.schema,requested,inputs,{expectedRevision:same?entry!.submission.expectedRevision:!attempt?savedDraft?.expectedRevision??revision:revision,schemaVersion:same?entry!.schemaVersion:declared.schemaVersion,quiet:true,originalKey:same?entry?.submission.idempotencyKey:undefined,correctionOf:!same&&sameTarget?entry?.submission.idempotencyKey:undefined,onRefused:setRefusal,onOutcome:entry=>setAttempt({entry,values:actionEntryInputs(entry,inputs)})});
+   if(accepted)complete(requested);return accepted;
+  }catch{setRefusal(t("The action could not be completed. Try again."));return false;}
   finally{lock.current=false;setSubmitting(false);onBusy?.(false);}
  };
- const change=(next:Record<string,unknown>)=>{setOwnerIssues(old=>old.filter(issue=>[...issue.path,...(issue.relatedPaths??[]).flat()].every(name=>next[name]===values[name])));setValues({...next,...fixed});};
- const refusalView=refusal&&<ActionRefusal entry={attempt?.entry} message={refusal} original={!pending?attempt?.values:undefined}/>;
- const retry=attempt&&!pending&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
+ const change=(next:Record<string,unknown>)=>setValues({...next,...fixed});
+ const refusalMessage=pending?t("Waiting for the server response. Retry sends the same request."):refused?humanizeKernelError(entry?.reason??entry?.outcome):refusal;
+ const refusalView=entry?.state!=="SUBMISSION_STATE_CONFIRMED"&&refusalMessage&&<ActionRefusal entry={entry} message={refusalMessage} original={!pending?attempt?.values:undefined}/>;
+ const retry=attempt&&refused&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
  const label=submitting?t("Executing…"):pending?t("Retry confirmation"):schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
  const localControls=<>{savedDraft&&<p role="status" className="text-xs text-muted">{t("Restored local draft from {time}.",{time:formatStamp(savedDraft.at)})}</p>}{local.problem&&<p role="alert" className="text-sm text-danger">{t(local.problem)}</p>}<LocalDraftControls context={local.context} saved={savedDraft} action={declared} target={target} expectedRevision={!attempt?savedDraft?.expectedRevision??revision:revision} values={values} fixed={fixed} disabled={pending||submitting||preview||!enabled||inputsDraft?.invalid}/></>;
  if(generated)return <div className="grid gap-3">{declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}{localControls}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!pending&&!changed} locked={pending} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onTrial={preview?undefined:next=>trial(declared.schema,target,generatedInputs(next),revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await(pending&&attempt?submit(attempt.values,true):submit(generatedInputs(inputs as Record<string,unknown>)))||undefined}/>{retry}</div>;
@@ -202,16 +209,16 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
  const [id,setId]=useState(()=>originalOutcome?.submission.target?.id??(local.drafts.length===1?local.drafts[0]!.target.id:prefix===""?"":newId(prefix??declared.idPrefix??prefixOf(type)))),[round,setRound]=useState(0),[submitting,setSubmitting]=useState(false);
  const target={type,id:baseline?.id??id},generated=[`${type}.create`,`${type}.edit`].includes(declared.schema)&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
  const saved=local.drafts.find(draft=>draft.target.id===target.id),entries=[...host.client.authorities.outbox].reverse().filter(entry=>entry.submission.schema?.name===declared.schema&&entry.submission.target?.type===type&&entry.submission.target.id===target.id);
- const recovered=originalOutcome??entries.find(entry=>entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN")??(saved?entries.find(entry=>(entry.state==="SUBMISSION_STATE_REJECTED"||entry.state==="SUBMISSION_STATE_CONFLICT")&&(entry.submission.expectedRevision??0)===(saved.expectedRevision??0)):undefined);
- const [pending,setPending]=useState(recovered?.state==="SUBMISSION_STATE_PENDING"||recovered?.state==="SUBMISSION_STATE_UNKNOWN");
+ const recovered=(originalOutcome?entries.find(entry=>entry.submission.idempotencyKey===originalOutcome.submission.idempotencyKey)??originalOutcome:undefined)??entries.find(entry=>entry.state==="SUBMISSION_STATE_PENDING"||entry.state==="SUBMISSION_STATE_UNKNOWN")??(saved?entries.find(entry=>(entry.state==="SUBMISSION_STATE_REJECTED"||entry.state==="SUBMISSION_STATE_CONFLICT")&&(entry.submission.expectedRevision??0)===(saved.expectedRevision??0)):undefined);
+ const pending=!!recovered&&["SUBMISSION_STATE_PENDING","SUBMISSION_STATE_SENDING","SUBMISSION_STATE_UNKNOWN"].includes(recovered.state);
  const drawer=frame==="drawer";
  return <OverlayFrame open sheet={drawer} wide={!drawer&&generated&&info?.fields.some(f=>f.type==="lines")} width={drawer?560:undefined} backdrop={!drawer||!submitting} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
  <div className="grid gap-3">
  {local.error&&<p role="alert" className="text-sm text-danger">{t(local.error)}</p>}
  {!record&&local.drafts.length>1&&<div className="grid gap-2"><p className="text-xs text-muted">{t("Choose a local draft to continue its original record.")}</p>{local.drafts.map(draft=><Button key={draft.key} size="sm" disabled={submitting||pending} onClick={()=>{setId(draft.target.id);setRound(value=>value+1);}}>{t("Resume draft {id}",{id:draft.target.id})}</Button>)}</div>}
- {pending&&<p role="status" className="text-xs text-warning">{t("This operation is awaiting confirmation. Retry its original target and inputs.")}</p>}
+ {pending&&<p role="status" className="text-xs text-warning">{t("The server response is unknown. Retry the original request or check Outbox.")}</p>}
  {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
- <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onCompleted?.(confirmed);onClose();}} onBusy={setSubmitting} onPending={setPending} initial={initial} originalOutcome={recovered} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
+ <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onCompleted?.(confirmed);onClose();}} onBusy={setSubmitting} initial={initial} originalOutcome={recovered} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
  </div></OverlayFrame>;
 }
 export {ActionDialog as DeclaredActionDialog};
