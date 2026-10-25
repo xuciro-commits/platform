@@ -1,7 +1,7 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, Definition, SchemaVersion, ImportRow } from "./gen/host";
+import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, CompositeAnswer, Definition, SchemaVersion, ImportRow } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
 import { PreparedWorkspace, preparedIdentity, rememberPreparedIdentity, preparedMetadataPaths, readPath, type PreparedApplication } from "./prepared";
@@ -259,6 +259,17 @@ export class EdgeClient {
       throw new Error(refused?.error?.detail ?? refused?.error?.message ?? `import failed: ${response.status}`);
     }
     return response.json();
+  }
+
+  /** Apply several builder actions as one transaction: every edit is probed
+   * against the same rules, and either all apply or none does. */
+  async composite(key: string, edits: { schema: string; target: { type: string; id: string }; payload?: unknown }[]): Promise<CompositeAnswer> {
+    const answer = await this.call<CompositeAnswer & { error?: { detail?: string; message?: string } }>("POST", "/v1/composites", { key, edits });
+    if (!answer.ok) {
+      const detail = (answer.body as { error?: { detail?: string; message?: string } }).error;
+      throw new Error(detail?.detail ?? detail?.message ?? `composite failed: ${answer.status}`);
+    }
+    return answer.body;
   }
 
   /** The records a list shows the member, as CSV. */

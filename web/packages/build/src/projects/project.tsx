@@ -8,7 +8,7 @@ import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
@@ -118,14 +118,20 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
 
 function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan, initialTemplate }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string; initialTemplate?: string }) {
   const activeArea = studioArea(area, initialSelected?.split("/")[1]);
-  const { client, decide, role, definitions } = useHost();
-  const { open } = useWorkspace();
+  const { client, decide, role, definitions, action } = useHost();
+  const { open, notify } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
   const builder = role("build") === "builder";
   const savedChanges = useSavedDraftChanges(id, undefined, builder);
 
   const [filter, setFilter] = useState("");
+  // Bulk retirement: a composite retires several assets as one transaction —
+  // every step is probed first, and either all retire or none does.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [retiring, setRetiring] = useState(false);
+  const [retireBusy, setRetireBusy] = useState(false);
+  const retireable = (item: { kind: { type: string }; record?: { id: string } | undefined }) => !!item.record && !!action(`${item.kind.type}.archive`);
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
   type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
   const emptyProject = !!project && !project.pages?.length && !project.resources?.length;
@@ -242,6 +248,18 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (!original || !await patch(original.changes, original.revision, original.settings)) return;
     if (createdResource) { const resource = createdResource; setCreatedResource(undefined); open(resourceRoute(resource.kind, resource.target.id, id), { ifCurrent: { view: "project", params: { id } } }); }
   };
+  const retire = async () => {
+    const items = visible.filter(item => picked.has(refKey(item.ref)) && retireable(item)).slice(0, 64);
+    if (!items.length) { setRetiring(false); return; }
+    setRetireBusy(true);
+    try {
+      await client.composite(crypto.randomUUID(), items.map(item => ({ schema: `${item.kind.type}.archive`, target: { type: item.kind.type, id: item.record!.id }, payload: {} })));
+      notify(t("{count} assets retired together.", { count: items.length }));
+      setPicked(new Set()); setRetiring(false);
+    } catch (problem) {
+      notify(humanizeKernelError(problem instanceof Error ? problem.message : String(problem)));
+    } finally { setRetireBusy(false); }
+  };
   const remove = async (ref: Api.AssetRef) => {
     const current = latestProject.current;
     if (!current) return;
@@ -318,6 +336,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           <strong className="mr-auto">{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
           {!current && <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} className="w-full sm:w-56" value={filter} onChange={event => setFilter(event.target.value)} />}
           <Button size="sm" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
+          {picked.size > 0 && <Button size="sm" variant="danger" disabled={picked.size > 64} onClick={() => setRetiring(true)}>{t("Retire {count} selected", { count: picked.size })}</Button>}
           {activeArea === "model" && <Button size="sm" onClick={() => open({ view: "object-type", params: { application: id } })}>{t("Open business model")}</Button>}
           {activeArea === "interface" && <><Button size="sm" onClick={() => open({ view: "module", params: { id, application: id } })}>{t("Navigation and header")}</Button><Button size="sm" disabled={locked} onClick={() => setTab("templates")}>{t("New page from template…")}</Button></>}
         </div>}
@@ -344,9 +363,16 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             </div> : <div role="region" aria-label={t("Workspace resources")} className="grid gap-2 divide-y divide-border">
               {studioResourceGroups(project, activeArea, visible).map(group => <Panel variant="plain" key={group.id} className="py-3">
                 <h2 className="mb-2 text-sm font-semibold">{t(group.title)}</h2>
-                {group.items.map(item => <Button key={refKey(item.ref)} variant="row" className="gap-3 py-3" onClick={() => item.missing ? setSelected(refKey(item.ref)) : open(assetRoute(item.ref, owned, definitions, id))}>
-                  <span className="text-muted [&>svg]:size-4">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{statusOf(item)}</span>
-                </Button>)}
+                {group.items.map(item => {
+                  const key = refKey(item.ref);
+                  return <div key={key} className="flex items-center gap-1">
+                    {retireable(item) && <input type="checkbox" aria-label={t("Select {title}", { title: item.title })} checked={picked.has(key)}
+                      onChange={(event) => setPicked(next => { const picked2 = new Set(next); if (event.target.checked) picked2.add(key); else picked2.delete(key); return picked2; })} />}
+                    <Button variant="row" className="min-w-0 flex-1 gap-3 py-3" onClick={() => item.missing ? setSelected(refKey(item.ref)) : open(assetRoute(item.ref, owned, definitions, id))}>
+                      <span className="text-muted [&>svg]:size-4">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{statusOf(item)}</span>
+                    </Button>
+                  </div>;
+                })}
               </Panel>)}
               {!visible.length && <p className="py-6 text-sm text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
             </div>}
@@ -389,6 +415,18 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {verificationSelection.current ? <ReleaseReview initialKind="app" initialID={id} initialDrafts={verificationSelection.current} embedded /> : <p role={savedChanges.isError ? "alert" : "status"}>{t(savedChanges.isError ? "Saved changes could not be loaded." : "Loading…")}</p>}
         </div></ViewVisibilityContext.Provider></div>}
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
+        {retiring && <Dialog open={retiring} onOpenChange={setRetiring} title={t("Retire {count} selected", { count: picked.size })}>
+          <div className="grid gap-3 p-1 text-sm">
+            <p className="text-muted">{t("These assets retire together in one transaction: every step is checked first, and either all retire or none does.")}</p>
+            <ul className="grid max-h-56 gap-1 overflow-auto rounded border border-border p-2 text-xs">
+              {visible.filter(item => picked.has(refKey(item.ref)) && retireable(item)).map(item => <li key={refKey(item.ref)} className="flex items-center gap-2"><span className="text-muted [&>svg]:size-3.5">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-muted">{t(item.kind.label)}</span></li>)}
+            </ul>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" onClick={() => setRetiring(false)} disabled={retireBusy}>{t("Cancel")}</Button>
+              <Button size="sm" variant="danger" disabled={retireBusy} onClick={() => void retire()}>{retireBusy ? t("Retiring…") : t("Retire them")}</Button>
+            </div>
+          </div>
+        </Dialog>}
         {tab === "roles" && <ProjectRoles owned={owned} />}
         {tab === "settings" && settings && <StructuredEditor expectedRevision={baseline.current?.revision ?? project.revision} fieldInput={sourceFieldInput} value={declarationValue(settings, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${declarationHost.source.scope}`} readOnly={!builder} disabled={saving || !!pendingPatch || !!createdResource} onChange={next => { editSettings({ ...next, title: next.title as string, name: next.name as string, description: next.description as string ?? "", icon: next.icon as string ?? "boxes", profile: next.profile as Api.ApplicationProfile ?? {}, entry: next.entry as string ?? "", replacements: next.replacements as NonNullable<Api.Application["replacements"]> ?? [] }); setSourceApplied(true); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, baseline.current?.values ?? {}), baseline.current?.revision ?? project.revision)}><fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <ExtensionSettings value={settings} pages={project.pages ?? []} disabled={!builder} onChange={extension => editSettings({ ...settings, ...extension, entry: extension.entry ?? "", replacements: extension.replacements ?? [] })} />

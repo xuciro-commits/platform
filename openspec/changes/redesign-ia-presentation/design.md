@@ -35,3 +35,26 @@
 ## Migration Plan
 
 按块交付，每块 `make check-web` + ui 测试 + （涉及的）`check-specs` 通过后提交；全部完成后请负责人截图走查，通过后 `openspec-sync-specs` 合入并归档。回退只回退 Web 差量。
+
+## 收尾审计（实现完成时）
+
+### 重复实现收编（防框架漂移）
+
+- **导入 CSV 双入口**：块5 批次在 ui RecordList 内部新建的导入对话框，与 app 包 RecordsPage 既有的 Transfer 工具栏组件（FilePicker + client.importCSV 预览对话框）完全重叠——同能力两处 UI。收编：对话框抽为 ui 导出组件 `RecordImportDialog`（文件选择→逐行检查→拒绝行列明→按行应用），Transfer 瘦身为带权限条件（`can(create)||can(edit)`）的挂载点并复用该组件；RecordList 内部按钮移除。导入能力只有一个实现、一个挂载语义（列表工具栏），目录登记在 `ui/record-lists`。
+- **时间戳格式化漂移**：`new Date(x).toLocaleString()` 散布 app 8 处 + govern `when` 助手。收编：ui `lib/datetime-format.ts` 新增 `formatStamp`（按成员语言的完整时间戳，空值回落破折号），govern `when` 与 app 各处全部改走它。与字段展示语义（civil/相对日期）分离：后者走 formatDate/formatDateTimeSmart，前者（审计轨迹、运行日志）统一走 formatStamp。
+- **保留的双实现（有意）**：app 层 widgets/Facets（页面级 facet 变量管线）与 ui RecordList 的就地 facet 面板都组合同一个 ui 原语 `FacetChoices`，属分层而非重复；AI 用量与智能体概览的图表均复用平台 Chart 组件与 ChartSpec，未引入第二套图表实现。
+
+### 实现期审计修正（tasks 前提失实处）
+
+- `GET /v1/ai-usage`、`GET /v1/agent-overview` 路由与治理包 AIUsage / AgentsOverview 页面（含挂起/恢复开关）均已存在——前轮审计只 grep 了 `routes_*.go` 而漏掉 `api.go` 的声明式清单。实际工作收敛为：为两页补图表（AI 用量 KPI 行+按日/按模型图；智能体概览运行条图+判定环图）。
+- audit 界面化同理：治理包 Settings 已有审计表。
+- 声明式 Dashboard 系统仅支持实体聚合数据源；AI 用量属计量数据放不进去，故落在治理包页面内并复用 Chart 系统。
+
+### composites 事务的挂载拍板
+
+`POST /v1/composites` 的语义是多条 builder 动作在私有 fork 上逐条探测、全部通过才一起生效（≤64 条，幂等键分片）。唯一配得上「全有或全无」的前端场景是项目资源页的批量下架：资产行多选（仅动作目录含 `<type>.archive` 者出现勾选框，遵循「从目录渲染」）、危险操作确认框列明资产并声明事务性、成功后 toast 并随 watchList 自动刷新。单资产编辑仍走原草稿+发布路径，不因批量能力而绕过已声明确认链。
+
+### 验证记录
+
+- `make check-web` 全绿（catalog 147 条、十包 typecheck）；ui 214 测试全绿；openspec strict 校验通过；check-specs 9/9；check-local 通过。
+- Go 侧（check-go/escapes/boundaries）本轮零 Go 文件改动，沙箱 Go 工具链随会话重置丢失且下载源受限，留给 CI 验证。

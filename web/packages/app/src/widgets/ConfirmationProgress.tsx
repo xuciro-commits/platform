@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Disclosure, Input, PropertyList, Select, Tag, t } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, PropertyList, Select, Tag, t, formatStamp} from "@platform/ui";
 import { useState, type ReactNode } from "react";
 import { useHost, useReadQuery } from "../index";
 
@@ -44,7 +44,7 @@ function ConfirmationCard({ run, onChanged }: { run: Api.ConfirmationRun; onChan
       <strong>{t("Business confirmation progress")}</strong>
       <Tag label={t(run.state)} tone={run.state === "confirmed" || run.state === "compensated" ? "success" : run.state === "rejected" ? "danger" : "warning"} />
     </div>
-    <PropertyList items={[[t("Business deadline"),new Date(run.deadline).toLocaleString()]]}/>
+    <PropertyList items={[[t("Business deadline"),formatStamp(run.deadline)]]}/>
     {run.partial && <p role="status" className="text-sm text-warning">{t("This confirmation has a visible partial outcome.")}</p>}
     {run.escalated && <p role="status" className="text-sm text-warning">{t("The business deadline was escalated to its declared reviewers.")}</p>}
     {run.parties?.map(p => <div key={p.name} className="grid min-w-0 gap-2 border-b border-border pb-3 text-xs last:border-b-0" aria-label={p.title}>

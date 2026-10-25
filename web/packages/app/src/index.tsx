@@ -3,7 +3,7 @@ import { DispatchProgress } from "./widgets/DispatchProgress";
 import {RefusalHistory} from "./actions/RefusalHistory";
 export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
-import {DraftInputs,InputDraftProvider,InputProblems,useInputDrafts,notify} from "@platform/ui";
+import {DraftInputs, InputDraftProvider, InputProblems, useInputDrafts, notify, RecordImportDialog } from "@platform/ui";
 export { useTransition, SourceFieldInput, sourceFieldInput } from "./actions/actions";
 export { Observations, ObservationRead, ObservationWindowResult, RecordObservations } from "./observations/Observations";
 import { RecordObservations } from "./observations/Observations";
@@ -22,7 +22,7 @@ export {searchInputObjects} from "./widgets/search-input";
 import "./i18n";
 import { apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
-  Button, Chart, Dialog, Disclosure, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
+  Button, Chart, Dialog, Disclosure, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
@@ -324,7 +324,7 @@ export type SavedView = Api.SavedView;
  * the type (F-33); an app that offers one itself names it in `covers`.
  */
 export function Records({ type, description, help, actions, covers, saved, kanban }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"] }) {
-  const { source, decide, client, can, catalog } = useHost();
+  const { source, decide, can, catalog } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const info = source.entity(type);
@@ -358,7 +358,7 @@ export function Records({ type, description, help, actions, covers, saved, kanba
         type={type}
         initial={initial}
         onSave={setSaving}
-        toolbar={<Transfer type={type} client={client} importable={can(`${type}.create`) || can(`${type}.edit`)} />}
+        toolbar={<Transfer source={source} type={type} importable={can(`${type}.create`) || can(`${type}.edit`)} />}
         onOpen={(r) => openRecord({ type, id: r.id })}
         kanban={kanban}
         moves={moves}
@@ -382,27 +382,15 @@ export function Records({ type, description, help, actions, covers, saved, kanba
   );
 }
 
-/** Import a type's records from CSV after a preview of what each row would do. */
-function Transfer({ type, client, importable }: { type: string; client: EdgeClient; importable: boolean }) {
-  const [file, setFile] = useState<File>();
-  const [rows, setRows] = useState<{ row: number; id: string; action: string; outcome: string }[]>();
-  const [done, setDone] = useState(false);
-  const close = () => { setFile(undefined); setRows(undefined); setDone(false); };
+/** Import a type's records from CSV: the shell's one import flow, mounted where the list is. */
+function Transfer({ source, type, importable }: { source: RecordSource; type: string; importable: boolean }) {
+  const [open, setOpen] = useState(false);
+  const { notify } = useWorkspace();
+  if (!importable) return null;
   return <>
-    {importable && <FilePicker accept=".csv,text/csv" onFile={async (f) => { setFile(f); setRows(await client.importCSV(type, f, true)); }}>{t("Import CSV")}</FilePicker>}
-    <Dialog open={!!rows} onOpenChange={(o) => !o && close()} title={done ? t("Imported") : t("What the import would do")}>
-      <div className="grid gap-3">
-        <ul className="max-h-80 overflow-auto text-sm">
-          {rows?.map((r) => <li key={r.row} className="flex gap-2"><span className="w-10 text-muted">{r.row}</span><span className="font-mono">{r.id}</span>
-            <span>{r.action.endsWith(".edit") ? t("edit") : t("create")}</span><span className={r.outcome === "ok" ? "" : "text-[var(--tone-danger)]"}>{r.outcome}</span></li>)}
-        </ul>
-        <div className="flex justify-end gap-2">
-          <Button onClick={close}>{done ? t("Close") : t("Cancel")}</Button>
-          {!done && <Button variant="primary" disabled={!rows?.some((r) => r.outcome === "ok")}
-            onClick={async () => { if (file) { setRows(await client.importCSV(type, file, false)); setDone(true); } }}>{t("Import")}</Button>}
-        </div>
-      </div>
-    </Dialog>
+    <Button size="sm" onClick={() => setOpen(true)}>{t("Import CSV")}</Button>
+    <RecordImportDialog source={source} type={type} open={open} onOpenChange={setOpen}
+      onImported={(applied, refused) => notify(refused ? t("{ok} rows imported; {refused} were refused.", { ok: applied, refused }) : t("Imported {ok} rows.", { ok: applied }))} />
   </>;
 }
 

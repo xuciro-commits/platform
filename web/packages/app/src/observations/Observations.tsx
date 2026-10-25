@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { ActionMenu, Button, Chart, DataTable, DateTimeInput, Disclosure, Input, Notice, PageHeader, Panel, PropertyList, RecordLookup, Select, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
+import { ActionMenu, Button, Chart, DataTable, DateTimeInput, Disclosure, Input, Notice, PageHeader, Panel, PropertyList, RecordLookup, Select, t, useUnsavedChanges, useWorkspace, formatStamp} from "@platform/ui";
 import { assetKey, useHost, useProvidedCapabilities, useReadQuery } from "../index";
 
 /** Sources remain member-scoped; the record is checked again by the read owner. */
@@ -128,7 +128,7 @@ export function ObservationWindowResult({ result }: { result: Api.ObservationRes
     const quality = ({ good: t("Good quality"), bad: t("Bad quality"), uncertain: t("Uncertain quality"), stale: t("Stale reading") } as Record<string, string>)[sample.quality] ?? sample.quality;
     return <Panel role="region" aria-label={t("Current device reading")} title={t("Current device reading")} className="grid gap-3">
       <p className="text-2xl font-semibold tabular-nums">{sample.value === undefined || sample.value === null ? t("No value") : String(sample.value)}{sample.unit && <span className="ml-2 text-sm font-normal text-muted">{sample.unit}</span>}</p>
-      <PropertyList items={[[t("Device"), sample.device], [t("Signal"), sample.signal], [t("Quality"), quality], [t("Observed at"), new Date(sample.at).toLocaleString()], [t("Received at"), new Date(sample.receivedAt).toLocaleString()]]} />
+      <PropertyList items={[[t("Device"), sample.device], [t("Signal"), sample.signal], [t("Quality"), quality], [t("Observed at"), formatStamp(sample.at)], [t("Received at"), formatStamp(sample.receivedAt)]]} />
       {sample.quality !== "good" && <Notice tone="warning" role="status" message={sample.reason || quality} />}
       <Disclosure summary={t("Reading source details")}><PropertyList items={[[t("Connection"), sample.source.connection], [t("Configuration revision"), sample.source.revision], [t("Read generation"), sample.source.generation], ...(sample.source.sequence ? [[t("Sequence"), sample.source.sequence] as [string, string]] : [])]} /></Disclosure>
     </Panel>;
@@ -148,7 +148,7 @@ export function ObservationWindowResult({ result }: { result: Api.ObservationRes
 }
 
 function StateIntervalResult({result,analysis}:{result:Api.ObservationResult;analysis:Api.ObservationIntervalResult}){
- const time=(at:string)=>new Date(at).toLocaleString();
+ const time=(at:string)=>formatStamp(at);
  const boundary=(open:boolean|undefined)=>open?t("Boundary remains open"):t("Observed transition");
  const reasons:Record<string,string>={coverage:t("Window coverage is not complete"),gap:t("Missing samples"),bad:t("Bad quality"),uncertain:t("Uncertain quality"),stale:t("Stale reading"),late:t("Outside the declared lateness policy"),rule:t("The condition could not be decided")};
  return <Panel title={t("State intervals")} role="region" aria-label={t("State intervals")} className="grid min-w-0 gap-3">

@@ -1118,4 +1118,5 @@ register("zh-CN", {
   "Only administrators and auditors may read the authorization explain.": "只有管理员与审计员可以查看授权解释。",
   "The engine would allow this now.": "引擎此刻会放行。",
   "The engine refuses.": "引擎拒绝。",
+  "Imported {ok} rows.": "已导入 {ok} 行。",
 });

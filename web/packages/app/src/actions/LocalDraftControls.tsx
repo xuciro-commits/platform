@@ -1,5 +1,5 @@
 import {useState} from "react";
-import {Button,t} from "@platform/ui";
+import {Button,t, formatStamp} from "@platform/ui";
 import type {ActionDeclaration,LocalFormDraft} from "@platform/kernel";
 import {useHost} from "../index";
 import {actionDraftKey,type actionDraftContext} from "./local-draft";
@@ -13,6 +13,6 @@ export function LocalDraftControls({context,action,target,expectedRevision,value
   <Button type="button" size="sm" disabled={disabled||!target.id} onClick={()=>{
    setError("");try{const at=new Date().toISOString();client.prepared!.saveForm({key,...context,schema:action.schema,schemaVersion:action.schemaVersion,target:{...target},expectedRevision,values,at});setLast({key,at,signature:actionInputSignature(values)});}catch(problem){setError(t(problem instanceof Error?problem.message:String(problem)));}
   }}>{t("Save local draft")}</Button>
-  {last?.key===key&&<span role="status" className="text-xs text-muted">{same?t("Local draft saved {time}.",{time:new Date(last.at).toLocaleString()}):t("Changes since the last local save.")}</span>}
+  {last?.key===key&&<span role="status" className="text-xs text-muted">{same?t("Local draft saved {time}.",{time:formatStamp(last.at)}):t("Changes since the last local save.")}</span>}
  </div><p className="text-xs text-muted">{t("A local draft keeps inputs on this device. Submit separately for the host's decision.")}</p>{error&&<p role="alert" className="text-sm text-danger">{error}</p>}</div>;
 }

@@ -1,5 +1,6 @@
 // Shared answer types and display helpers for Settings.
 import type { Api } from "@platform/kernel";
+import { formatStamp } from "@platform/ui";
 
 // What the host answers with is generated from its Go types.
 export type Member = Api.MemberView;
@@ -18,7 +19,7 @@ export type AuditEntry = Api.AuditEntry;
 export type Chart = Api.OrgSeed;
 export const today = () => new Date().toISOString().slice(0, 10);
 export const active = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);
-export const when = (at?: string) => (at ? new Date(at).toLocaleString() : "—");
+export const when = (at?: string) => formatStamp(at);
 
 export const kind = (m: Member) => (m.agent ? "AI agent" : m.subjects.some((s) => s.startsWith("client:")) ? "service" : "person");
 

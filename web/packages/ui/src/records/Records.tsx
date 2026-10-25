@@ -15,7 +15,6 @@ import {RecordUploader} from "./RecordUploader";
 import {EditableRecordGrid,type RecordEditPort,type RecordSelectionPort} from "./EditableRecordGrid";
 import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresentation";
 import { DataTable } from "../components/DataTable";
-import { Dialog } from "../primitives/dialog";
 import { FacetChoices } from "../fields/FacetChoices";
 import {ContentTabs} from "../layout/ContentTabs";
 import {pageUIManifest} from "@platform/kernel";
@@ -372,32 +371,6 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     exportCurrent.current.active = true;
     return () => { exportCurrent.current.active = false; };
   }, []);
-  // Import: a CSV previewed against the type's checks, then each row applied
-  // as this member. Rows the authority refuses stay listed; the rest commit.
-  const [importing, setImporting] = useState(false);
-  const [importCsv, setImportCsv] = useState<string>();
-  const [importPreview, setImportPreview] = useState<Api.ImportRow[]>();
-  const [importBusy, setImportBusy] = useState(false);
-  const [importNotice, setImportNotice] = useState<string>();
-  const [importedAt, setImportedAt] = useState(0);
-  const runImport = async (apply: boolean) => {
-    if (!source.importCSV || importCsv === undefined) return;
-    setImportBusy(true); setImportNotice(undefined);
-    try {
-      const rows = await source.importCSV(type, importCsv, !apply);
-      if (apply) {
-        const refused = rows.filter((row) => row.error);
-        setImportPreview(undefined); setImportCsv(undefined);
-        setImporting(false);
-        setImportedAt(Date.now());
-        if (refused.length) setExportError(t("{ok} rows imported; {refused} were refused.", { ok: rows.length - refused.length, refused: refused.length }));
-        return;
-      }
-      setImportPreview(rows);
-    } catch (error) {
-      setImportNotice(humanizeKernelError(error instanceof Error ? error.message : String(error)));
-    } finally { setImportBusy(false); }
-  };
   const exportCSV = async () => {
     if (!source.exportCSV) return;
     const current = () => exportCurrent.current.active && exportCurrent.current.identity === exportIdentity && exportCurrent.current.source === sourceIdentity;
@@ -427,7 +400,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     const stop = source.watchList?.(type, recordQuery, load);
     const handle = setTimeout(load, 150);
     return () => { current = false; stop?.(); clearTimeout(handle); };
-  }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible, importedAt]);
+  }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible]);
   if (!info || !entity) return <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted">{t("No activated object {type} here yet. Its records appear once a release that includes it is active; a draft shows its fields in the object model.", { type })}</p>;
   const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
@@ -476,7 +449,6 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
         {source.exportCSV && <Button size="sm" disabled={exporting} onClick={() => void exportCSV()}>{t("Export CSV")}</Button>}
-        {source.importCSV && <Button size="sm" onClick={() => { setImportPreview(undefined); setImportCsv(undefined); setImportNotice(undefined); setImporting(true); }}>{t("Import CSV")}</Button>}
         {exportError && <span role="alert" className="text-xs text-danger">{exportError}</span>}
         {toolbar}
         {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark })}>{t("Save view…")}</Button>}
@@ -511,30 +483,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
       </div>}
       {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate}/>)}
       {view === "list" && !cards && (
-        <>
         <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} rowHeight={density==="normal"?36:28} showToolbar={showToolbar} port={inlineEdit} selectedId={selectedId} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
-        <Dialog open={importing} onOpenChange={setImporting} title={t("Import CSV")}>
-          <div className="grid gap-3 p-1 text-sm">
-            <p className="text-muted">{t("A CSV whose header names this type's fields, with an id column. Every row is checked first, then created or edited as you.")}</p>
-            <input type="file" accept=".csv,text/csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) void file.text().then((text) => { setImportCsv(text); setImportPreview(undefined); setImportNotice(undefined); }); }} />
-            {importNotice && <p role="alert" className="text-xs text-danger">{importNotice}</p>}
-            {importPreview && (() => {
-              const refused = importPreview.filter((row) => row.error);
-              return <div className="grid gap-2">
-                <p role="status">{t("{total} rows checked: {ok} apply cleanly, {refused} are refused.", { total: importPreview.length, ok: importPreview.length - refused.length, refused: refused.length })}</p>
-                {refused.length > 0 && <ul className="grid max-h-40 gap-1 overflow-auto rounded border border-border p-2 text-xs">
-                  {refused.slice(0, 20).map((row, index) => <li key={index} className="break-words">{t("Row {row} ({id}): {reason}", { row: row.row, id: row.id, reason: row.error?.detail ?? row.error?.message ?? row.outcome })}</li>)}
-                </ul>}
-                <div className="flex gap-2">
-                  <Button size="sm" variant="primary" disabled={importBusy || refused.length === importPreview.length} onClick={() => void runImport(true)}>{importBusy ? t("Importing…") : t("Import {ok} rows", { ok: importPreview.length - refused.length })}</Button>
-                  <Button size="sm" variant="ghost" onClick={() => void runImport(false)}>{t("Check again")}</Button>
-                </div>
-              </div>;
-            })()}
-            {importCsv !== undefined && !importPreview && <Button size="sm" disabled={importBusy} onClick={() => void runImport(false)}>{importBusy ? t("Checking…") : t("Check rows")}</Button>}
-          </div>
-        </Dialog>
-        </>
       )}
       {view === "kanban" && kanbanLanes.length > 0 && kanbanStateField && (
         error ? <p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>

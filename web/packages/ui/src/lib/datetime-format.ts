@@ -46,3 +46,10 @@ export function formatDateTimeSmart(value: string | undefined): string {
   if (!value) return value ?? "";
   return formatRelative(value) ?? formatDateTime(value);
 }
+
+/** A full timestamp as the member reads it: audit trails, run logs, receipts. */
+export function formatStamp(value: string | undefined): string {
+  if (!value) return "—";
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? value : at.toLocaleString(language());
+}

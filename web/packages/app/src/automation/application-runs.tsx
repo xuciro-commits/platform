@@ -1,6 +1,6 @@
 import { useRunControl } from "./use-run-control";
 import type { Api } from "@platform/kernel";
-import { Button, ContextHelp, DataTable, Disclosure, PageHeader, Panel, PropertyList, Input, Select, Tag, t, useWorkspace, type ColumnDef } from "@platform/ui";
+import { Button, ContextHelp, DataTable, Disclosure, PageHeader, Panel, PropertyList, Input, Select, Tag, t, useWorkspace, type ColumnDef, formatStamp} from "@platform/ui";
 import { useState, type ReactNode } from "react";
 import { ChainGraph, useHost, useOpenRecord, useReadQuery, useRecordInventory } from "../index";
 import {refusalCategoryName} from "../actions/refusal";
@@ -260,7 +260,7 @@ function RecordDiagnostic({owner,name,types}:{owner:string;name:string;types:str
   {selection&&query.isPending&&<p role="status">{t("Loading…")}</p>}
   {selection&&query.isError&&<p role="alert">{t("This record diagnostic is unavailable to you.")}</p>}
   {selection&&query.data&&!query.isError&&<div className="mt-2 grid gap-3">
-   <ol className="grid gap-2 text-xs">{query.data.decisions.map(decision=><li key={decision.change}><strong>{decision.schema}</strong> · <span className="font-mono">{decision.change}</span> · {new Date(decision.at).toLocaleString()}
+   <ol className="grid gap-2 text-xs">{query.data.decisions.map(decision=><li key={decision.change}><strong>{decision.schema}</strong> · <span className="font-mono">{decision.change}</span> · {formatStamp(decision.at)}
     <p className="break-all font-mono">{t("Definition content")}: {decision.content?.version??t("Not recorded")}</p>
     {decision.definition&&<ul>{decision.definition.dependencies.map(binding=><li key={`${binding.ref.app}:${binding.ref.kind}:${binding.ref.name}`} className="break-all font-mono">{binding.ref.name} @ {binding.sourceVersion}</li>)}</ul>}
    </li>)}</ol>
