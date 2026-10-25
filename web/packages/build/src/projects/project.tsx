@@ -8,7 +8,7 @@ import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, Checkbox, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Checkbox, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
@@ -21,10 +21,10 @@ export type Project = Api.Application & { id: string; revision: number; state: s
 
 import { kindIcon } from "./resource-icons";
 import { useProjectResources, type OwnedResource } from "./resource-inventory";
+import { retireAgain, retireLimit, retirementBatch, retirementEdits } from "./retirement";
 export type { OwnedResource } from "./resource-inventory";
 import { assetRoute, conceptTree, moveConceptAsset, resourceInArea, studioArea, studioAreas, studioResourceGroups, studioRoute } from "./studio-model";
 import { StudioTemplates } from "../workshop/template-ui";
-import { pageTemplates } from "../workshop/templates";
 import { StudioGuide } from "./studio-guide";
 import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
 import { InstalledApplicationHome } from "./InstalledApplicationHome";
@@ -40,22 +40,19 @@ export function ProjectsList() {
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
-  // Starting from a template keeps the original paths: the blank application
-  // is created through the same declared action, and the chosen template is
-  // installed later through the original page-template gate. No wizard.
-  const chosenTemplate = useRef<string | undefined>(undefined);
-  const create = useNewRecord("build.app", (target) => open(chosenTemplate.current
-    ? { view: "project", params: { id: target.id, area: "interface", section: "templates", template: chosenTemplate.current } }
-    : { view: "project", params: { id: target.id } }));
-  const [choosing, setChoosing] = useState(false);
+  // An application template is an installed declarative package: its models,
+  // rules, pages and flows become editable drafts through the original
+  // package review, precheck and draft generation. Page-layout templates stay
+  // in the application's Interface area. No second wizard and no seeded app.
+  const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));
   const builder = role("build") === "builder";
   const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
     .filter(item => `${item.title} ${item.ref.app} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title={t("Applications")} help={t("Inspect installed applications and extend them through the same drafts and releases.")} actions={<div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+    <PageHeader title={t("Applications")} help={t("Inspect installed applications and extend them through the same drafts and releases. New from template opens the package library: an installed declarative package becomes editable application drafts through its original review and draft generation.")} actions={<div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
         <Input type="search" aria-label={t("Search projects")} placeholder={t("Search projects")} value={search} onChange={(event) => setSearch(event.target.value)} className="min-w-0 flex-1 basis-56 sm:w-56 sm:flex-none" />
         {builder && create.available && <Button className="shrink-0" variant="primary" onClick={() => create.take()}><Plus />{t("New application")}</Button>}
-        {builder && create.available && <Button className="shrink-0" variant="ghost" onClick={() => setChoosing(true)}>{t("New from template…")}</Button>}
+        {builder && <Button className="shrink-0" variant="ghost" onClick={() => open({ view: "apps" })}>{t("New from template…")}</Button>}
       </div>} />
     {delegated.length > 0 && <Notice tone="info" role="note" message={t("You build within {projects}: only the assets they name accept your edits; publishing stays with the builders.", { projects: delegated.join(", ") })} />}
     {(projects.isLoading || installedApps.isLoading) && <p className="text-sm text-muted">{t("Loading…")}</p>}
@@ -71,20 +68,6 @@ export function ProjectsList() {
         </Button>
       </li>)}
     </ul>
-    {builder && create.available && <Dialog open={choosing} onOpenChange={setChoosing} title={t("Start from a template")}>
-      <div className="grid gap-3">
-        <p className="text-xs text-muted">{t("A template drafts the page; you bind the object and fields it needs. The application starts through the original create action, and publishing stays with the release gate.")}</p>
-        <ul className="grid gap-2" aria-label={t("Start from a template")}>
-          {pageTemplates.map((template) => <li key={template.id} className="grid min-w-0 gap-1.5 rounded-md border border-border p-3 text-sm">
-            <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="min-w-0 flex-1 truncate font-semibold">{t(template.title)}</span><Tag label={`r${template.revision}`} /></div>
-            <p className="break-words text-xs text-muted">{t(template.summary)}</p>
-            <p className="break-words text-xs text-muted">{t("Needs")}: {[...template.bindings, ...(template.child ? [t("Child object")] : [])].map(bound => t(bound)).join(" · ")}</p>
-            <p className="break-words text-xs text-muted">{t("Initialization")}: {[t("Bind the object and fields"), t("Review the page draft"), t("Publish through the release gate")].join(" → ")}</p>
-            <Button size="sm" className="w-fit" onClick={() => { chosenTemplate.current = template.id; setChoosing(false); create.take(); }}>{t("Start with this template")}</Button>
-          </li>)}
-        </ul>
-      </div>
-    </Dialog>}
     {create.dialog}
   </div>;
 }
@@ -119,7 +102,7 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
 function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan, initialTemplate }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string; initialTemplate?: string }) {
   const activeArea = studioArea(area, initialSelected?.split("/")[1]);
   const { client, decide, role, definitions, action } = useHost();
-  const { open, notify } = useWorkspace();
+  const { open, transfer, notify } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
   const builder = role("build") === "builder";
@@ -131,6 +114,8 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [retiring, setRetiring] = useState(false);
   const [retireBusy, setRetireBusy] = useState(false);
+  const retireIntent = useRef<{ key: string; retried?: number; items: OwnedResource[] } | undefined>(undefined);
+  const setRetireIntent = (intent: typeof retireIntent.current) => { retireIntent.current = intent; };
   const retireable = (item: { kind: { type: string }; record?: { id: string } | undefined }) => !!item.record && !!action(`${item.kind.type}.archive`);
   const [selected, setSelected] = useState<string | undefined>(initialSelected);
   type Section = "resources" | "runs" | "roles" | "settings" | "concepts" | "guide" | "templates" | "release";
@@ -248,15 +233,28 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (!original || !await patch(original.changes, original.revision, original.settings)) return;
     if (createdResource) { const resource = createdResource; setCreatedResource(undefined); open(resourceRoute(resource.kind, resource.target.id, id), { ifCurrent: { view: "project", params: { id } } }); }
   };
+  // One retirement intent is frozen when the review opens: the reviewed list,
+  // the composite key and the edits are the same object on submit and on any
+  // retry. An unclear answer keeps the original intent; only an explicit
+  // correction starts a new one. No truncation and no key change on retry.
+  const beginRetire = () => {
+    const items = retirementBatch(visible, picked, item => refKey(item.ref));
+    if (items.length > retireLimit) { notify(t("A single retirement accepts at most 64 assets. Select a smaller batch.")); return; }
+    if (!items.length) return;
+    setRetireIntent({ key: crypto.randomUUID(), items });
+    setRetiring(true);
+  };
   const retire = async () => {
-    const items = visible.filter(item => picked.has(refKey(item.ref)) && retireable(item)).slice(0, 64);
-    if (!items.length) { setRetiring(false); return; }
+    const intent = retireIntent.current;
+    if (!intent) { setRetiring(false); return; }
     setRetireBusy(true);
     try {
-      await client.composite(crypto.randomUUID(), items.map(item => ({ schema: `${item.kind.type}.archive`, target: { type: item.kind.type, id: item.record!.id }, payload: {} })));
-      notify(t("{count} assets retired together.", { count: items.length }));
-      setPicked(new Set()); setRetiring(false);
+      await client.composite(intent.key, retirementEdits(intent.items));
+      notify(t("{count} assets retired together.", { count: intent.items.length }));
+      setPicked(new Set()); setRetiring(false); setRetireIntent(undefined);
     } catch (problem) {
+      // The answer is unclear, not a success. The frozen intent stays so a
+      // retry sends exactly its original key and payload.
       notify(humanizeKernelError(problem instanceof Error ? problem.message : String(problem)));
     } finally { setRetireBusy(false); }
   };
@@ -317,7 +315,14 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={saving || dirty || !!pendingPatch || !!createdResource} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || savedChanges.isPending || savedChanges.isError || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id, drafts: releaseDraftsValue(releaseSelection) } })}>{t("Publish")}</Button>}
+        {builder && <Button size="sm" variant="primary" disabled={saving || dirty || resourcesUnavailable || savedChanges.isPending || savedChanges.isError || !!pendingPatch || !!createdResource || (!project.pages?.length && !project.resources?.length)} onClick={() => {
+            // The complete joint selection travels through the original view
+            // call; only the anchor identity is in the route. Legacy JSON
+            // links keep working through the decoder's URL fallback.
+            const route = { view: "release-review" as const, params: { kind: "app", id: project.id, application: project.id, applicationName: project.name } };
+            if (transfer) transfer("", route, { drafts: releaseSelection }, () => {});
+            else open({ ...route, params: { ...route.params, drafts: releaseDraftsValue(releaseSelection) } });
+          }}>{t("Publish")}</Button>}
       </>}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
@@ -336,7 +341,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           <strong className="mr-auto">{t(studioAreas.find(item => item.id === activeArea)!.description)}</strong>
           {!current && <Input type="search" aria-label={t("Filter resources")} placeholder={t("Filter resources")} className="w-full sm:w-56" value={filter} onChange={event => setFilter(event.target.value)} />}
           <Button size="sm" onClick={() => open(studioRoute(id, "release", selected))}>{t("Verify application")}</Button>
-          {picked.size > 0 && <Button size="sm" variant="danger" disabled={picked.size > 64} onClick={() => setRetiring(true)}>{t("Retire {count} selected", { count: picked.size })}</Button>}
+          {picked.size > 0 && <Button size="sm" variant="danger" disabled={picked.size > 64} onClick={beginRetire}>{t("Retire {count} selected", { count: picked.size })}</Button>}
           {activeArea === "model" && <Button size="sm" onClick={() => open({ view: "object-type", params: { application: id } })}>{t("Open business model")}</Button>}
           {activeArea === "interface" && <><Button size="sm" onClick={() => open({ view: "module", params: { id, application: id } })}>{t("Navigation and header")}</Button><Button size="sm" disabled={locked} onClick={() => setTab("templates")}>{t("New page from template…")}</Button></>}
         </div>}
@@ -415,15 +420,16 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {verificationSelection.current ? <ReleaseReview initialKind="app" initialID={id} initialDrafts={verificationSelection.current} embedded /> : <p role={savedChanges.isError ? "alert" : "status"}>{t(savedChanges.isError ? "Saved changes could not be loaded." : "Loading…")}</p>}
         </div></ViewVisibilityContext.Provider></div>}
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
-        {retiring && <Dialog open={retiring} onOpenChange={setRetiring} title={t("Retire {count} selected", { count: picked.size })}>
+        {retiring && retireIntent.current && <Dialog open={retiring} onOpenChange={setRetiring} title={t("Retire {count} selected", { count: retireIntent.current.items.length })}>
           <div className="grid gap-3 p-1 text-sm">
             <p className="text-muted">{t("These assets retire together in one transaction: every step is checked first, and either all retire or none does.")}</p>
             <ul className="grid max-h-56 gap-1 overflow-auto rounded border border-border p-2 text-xs">
-              {visible.filter(item => picked.has(refKey(item.ref)) && retireable(item)).map(item => <li key={refKey(item.ref)} className="flex items-center gap-2"><span className="text-muted [&>svg]:size-3.5">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-muted">{t(item.kind.label)}</span></li>)}
+              {retireIntent.current.items.map(item => <li key={refKey(item.ref)} className="flex items-center gap-2"><span className="text-muted [&>svg]:size-3.5">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-muted">{t(item.kind.label)}</span></li>)}
             </ul>
+            {!retireBusy && (retireIntent.current.retried ?? 0) > 0 && <p role="alert" className="text-xs text-warning">{t("The previous retirement request was not confirmed. Retrying sends its original key and list; discard it only to choose a different batch.")}</p>}
             <div className="flex justify-end gap-2">
-              <Button size="sm" onClick={() => setRetiring(false)} disabled={retireBusy}>{t("Cancel")}</Button>
-              <Button size="sm" variant="danger" disabled={retireBusy} onClick={() => void retire()}>{retireBusy ? t("Retiring…") : t("Retire them")}</Button>
+              <Button size="sm" onClick={() => { setRetiring(false); setRetireIntent(undefined); }} disabled={retireBusy}>{t("Discard and reselect")}</Button>
+              <Button size="sm" variant="danger" disabled={retireBusy} onClick={() => { const current = retireIntent.current; if (current) { retireIntent.current = { ...current, ...retireAgain(current) }; } void retire(); }}>{retireBusy ? t("Retiring…") : t("Retire them")}</Button>
             </div>
           </div>
         </Dialog>}

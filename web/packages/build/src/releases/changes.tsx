@@ -20,7 +20,7 @@ export function useSavedDraftChanges(application?: string, detail?: Pick<Api.Dra
 }
 
 export function Changes({ initialKind, initialID }: { initialKind?: string; initialID?: string }) {
-  const scope = useApplicationScope(), { open } = useApplicationWorkspace();
+  const scope = useApplicationScope(), { open, transfer } = useApplicationWorkspace();
   const query = useSavedDraftChanges(scope), rows = query.data?.changes ?? [];
   const [picked, setPicked] = useState<{ kind?: string; id?: string }>({ kind: initialKind, id: initialID });
   const [checked, setChecked] = useState<string[]>([]);
@@ -29,10 +29,15 @@ export function Changes({ initialKind, initialID }: { initialKind?: string; init
   const original = detail.data?.changes.find(row => row.type === current?.type && row.id === current?.id);
   const { confirmDiscard } = useUnsavedChanges(false, () => {});
   const selected = rows.filter(row => checked.includes(changeKey(row)));
+  // The complete selection travels through the workspace's original view
+  // call; the route carries only the anchor draft. Legacy links keep the
+  // JSON-in-URL form, so the fallback below stays valid.
   const review = (selection: Api.DraftChange[]) => {
     const drafts: JointChoice[] = selection.map(change => ({ kind: draftChangeKind(change), id: change.id }));
     if (!drafts.length || drafts.length > 128) return;
-    open({ view: "release-review", params: { kind: drafts[0]!.kind, id: drafts[0]!.id, drafts: releaseDraftsValue(drafts) } });
+    const route = { view: "release-review" as const, params: { kind: drafts[0]!.kind, id: drafts[0]!.id, ...(scope ? { application: scope } : {}) } };
+    if (transfer) transfer("", route, { drafts }, () => {});
+    else open({ ...route, params: { ...route.params, drafts: releaseDraftsValue(drafts) } });
   };
   const columns: ColumnDef<Api.DraftChange, any>[] = [
     { id: "selected", header: t("Select"), meta: { width: 50 }, cell: ({ row: { original: change } }) => <span onClick={event => event.stopPropagation()}><Checkbox ariaLabel={t("Select {title}", { title: change.title })} checked={checked.includes(changeKey(change))} onChange={value => setChecked(current => value ? [...current, changeKey(change)] : current.filter(key => key !== changeKey(change)))} /></span> },

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:3b6c65b475de02df",
+  "revision": "sha256:03c0327cc0a36352",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13273,7 +13273,6 @@
       "web/packages/build/src/ontology/marking.tsx",
       "web/packages/build/src/ontology/pipeline.tsx",
       "web/packages/build/src/ontology/writeback.tsx",
-      "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",

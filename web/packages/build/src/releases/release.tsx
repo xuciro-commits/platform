@@ -1,59 +1,21 @@
 // Builder release workbench: saved candidates come from committed bytes.
 // Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges, notify} from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges, useViewCall, notify} from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
-import { matchesResourceKind, refKey, resourceKinds, resourceRef, type ResourceKind } from "../projects/resources";
+import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../projects/resources";
 import { diagnose } from "./diagnostics";
 import { useEffect, useRef, useState } from "react";
 import { MigrationWorkbench } from "./migration";
 
 // One selected saved draft in a joint candidate. The selection is
 // what the builder checked; the server recomputes the candidate from it.
-export type JointChoice = { kind: ReleaseKind; id: string };
-const ownerDraft = (choice: JointChoice): JointChoice => ({ ...choice, kind: choice.kind === "table" ? "compute" : choice.kind });
-const jointKey = (choice: JointChoice) => `${ownerDraft(choice).kind}/${choice.id}`;
-const merged = (current: JointChoice[], incoming: JointChoice[]): JointChoice[] => {
-  const seen = new Set<string>();
-  const out: JointChoice[] = [];
-  for (const choice of [...current, ...incoming]) {
-    if (!choice.id || seen.has(jointKey(choice))) continue;
-    seen.add(jointKey(choice));
-    out.push(choice);
-  }
-  return out;
-};
-
-export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app" | "migration";
-/** Decode incoming candidate selections without silently discarding a bad
- * joint closure and delivering only its application root. */
-export function releaseDraftsSelection(value: string | undefined, kinds: readonly string[]): { drafts: JointChoice[]; error?: string } {
-  if (!value) return { drafts: [] };
-  const invalid = () => ({ drafts: [], error: "The release selection is invalid or exceeds its budget. Reopen review from the application." });
-  let selected: unknown;
-  if (value.trimStart().startsWith("[")) {
-    try { selected = JSON.parse(value); } catch { return invalid(); }
-  } else {
-    // Incoming-only compatibility. A record ID may itself contain colons.
-    selected = value.split(",").map((item) => {
-      const separator = item.indexOf(":");
-      return { kind: item.slice(0, separator), id: separator < 0 ? "" : item.slice(separator + 1) };
-    });
-  }
-  if (!Array.isArray(selected) || selected.length > 32) return invalid();
-  const out: JointChoice[] = [];
-  for (const item of selected) {
-    if (!item || typeof item !== "object" || typeof item.kind !== "string" || typeof item.id !== "string"
-      || !kinds.includes(item.kind) || !item.id) return invalid();
-    const choice = { kind: item.kind as ReleaseKind, id: item.id };
-    if (!out.some(existing => jointKey(existing) === jointKey(choice))) out.push(choice);
-  }
-  return { drafts: out };
-}
-/** New links carry lossless JSON, not punctuation-delimited record identities. */
-export const releaseDraftsValue = (drafts: readonly JointChoice[]): string => JSON.stringify(drafts.map(({ kind, id }) => ({ kind, id })));
-
+// One selected saved draft in a joint candidate. The selection is
+// what the builder checked; the server recomputes the candidate from it.
+export { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue } from "./selection";
+export type { JointChoice, ReleaseKind } from "./selection";
+import { jointKey, merged, ownerDraft, releaseCommandBytes, type JointChoice, type ReleaseKind } from "./selection";
 type ReleaseRequest = { kind: "save"; body: Api.ReleaseSaveRequest }
   | { kind: "evaluate"; body: Api.ReleaseEvaluationRequest }
   | { kind: "activate"; body: Api.ReleaseActivateRequest };
@@ -68,7 +30,7 @@ const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
 ];
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
-export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], selectionError, embedded = false }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; selectionError?: string; embedded?: boolean } = {}) {
+export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], selectionError, embedded = false, candidateID, applicationName }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; selectionError?: string; embedded?: boolean; candidateID?: string; applicationName?: string } = {}) {
   const { client, role } = useHost();
   const builder = role("build") === "builder";
   const mayRelease = builder || role("build") === "publisher";
@@ -113,12 +75,25 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     try { await job(); }
     finally { lock.current = false; setBusy(false); }
   };
-  const [joint, setJoint] = useState<JointChoice[]>(() => initialID && (initialKind === "app" || initialDrafts.length) ? merged([{ kind: initialKind, id: initialID }], initialDrafts) : initialDrafts);
+  // A complete selection arrives through the original view call; the URL is
+  // only a fallback for legacy links. The transferred batch is received as
+  // reviewed - not merged with whatever the route still carries.
+  const call = useViewCall();
+  const transferred = (call?.input as { drafts?: JointChoice[] } | undefined)?.drafts;
+  const [joint, setJoint] = useState<JointChoice[]>(() => {
+    if (transferred?.length) return transferred;
+    return initialID && (initialKind === "app" || initialDrafts.length) ? merged([{ kind: initialKind, id: initialID }], initialDrafts) : initialDrafts;
+  });
   const [jointNote, setJointNote] = useState("");
   const applications = useRecordInventory<Record & Api.Application>("build.app", 1000, builder);
   const scopedApplication = scope ? applications.data?.records.find(item => item.id === scope) : undefined;
   const held = new Set([...(scopedApplication?.resources ?? []).map(refKey), ...(scopedApplication?.pages ?? []).map(name => refKey({ app: "build", kind: "page", name }))]);
-  const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20${scopedApplication ? `&application=${encodeURIComponent(scopedApplication.name)}` : ""}`, undefined, mayRelease && (!scope || !!scopedApplication));
+  // Candidates filter by the formal application name. A builder scope still
+  // resolves through the readable build.app draft; a publisher handoff names
+  // the application explicitly and never depends on that draft.
+  const filterName = applicationName ?? scopedApplication?.name;
+  const scopeUnresolved = !!scope && !scopedApplication && !applicationName;
+  const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20${filterName ? `&application=${encodeURIComponent(filterName)}` : ""}`, undefined, mayRelease && (!scope || !!scopedApplication || !!applicationName));
   const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess; // the host console answers only host administrators
   const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
   // What another environment promoted here and nobody activated yet: the
@@ -182,10 +157,18 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     if (!candidateID || pendingRef.current) return;
     return perform(() => readSaved(candidateID));
   };
+  // An explicit candidate handoff loads the sealed candidate on first mount
+  // and after a refresh; it is not re-fetched on every render.
+  const openedCandidate = useRef("");
+  useEffect(() => {
+    if (!candidateID || openedCandidate.current === candidateID) return;
+    openedCandidate.current = candidateID;
+    void loadSaved(candidateID);
+  }, [candidateID]);
   const inspect = (drafts?: JointChoice[]) => {
     if (pendingRef.current || selectionError) return;
     const request: Api.ReleasePreviewRequest = drafts?.length ? { drafts: drafts.map(ownerDraft) } : ownerDraft({ kind, id });
-    if (new TextEncoder().encode(JSON.stringify(request)).length > 4096) { setError(t("The release selection exceeds the original 4096-byte request budget. No drafts were dropped.")); return; }
+    if (new TextEncoder().encode(JSON.stringify(request)).length > releaseCommandBytes) { setError(t("The release selection exceeds the original 65536-byte request budget. No drafts were dropped.")); return; }
     return perform(async () => {
       clearReview(); setSavedID(""); setConfirmedUpgrade(""); setCandidateKey("");
       try {
@@ -217,7 +200,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const send = (request: ReleaseRequest) => perform(async () => {
     const current = pendingRef.current;
     if (current && current !== request) return; // an unconfirmed request cannot be replaced
-    if (new TextEncoder().encode(JSON.stringify(request.body)).length > 4096) { setError(t("The release selection exceeds the original 4096-byte request budget. No drafts were dropped.")); return; }
+    if (new TextEncoder().encode(JSON.stringify(request.body)).length > releaseCommandBytes) { setError(t("The release selection exceeds the original 65536-byte request budget. No drafts were dropped.")); return; }
     rememberRequest(request);
     const path = request.kind === "save" ? "/v1/releases/candidates" : request.kind === "evaluate" ? "/v1/releases/evaluations" : "/v1/releases/active";
     let answer: { ok: boolean; status: number; body: { id: string } };
@@ -272,6 +255,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   return <div className="grid gap-3">
     {!embedded && <PageHeader title={t("Release review")} help={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
       actions={builder && scope && <Button onClick={() => open({ view: "project", params: { id: scope } })}>{t("Back to project")}</Button>} />}
+    {scopeUnresolved && !builder && <Panel role="status" className="p-3 text-sm text-muted">{t("This handoff points at a builder draft, which a publisher does not read. Reopen release review from a saved candidate or a named application.")}</Panel>}
     <Card className="grid gap-3 p-3" aria-label={t("Saved releases")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("Saved releases")}</h2>
@@ -345,6 +329,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       <Button disabled={!!selectionError || !joint.length || joint.length > 128 || locked} onClick={() => void inspect(joint)}>{busy ? t("Checking…") : t("Check joint candidate")}</Button>
     </Card>
     </>}
+    {call?.expired && !error && <Panel role="status" className="p-3 text-sm text-muted">{t("The original handoff expired when the view was reopened. Reopen release review from the application to review its current selection.")}</Panel>}
     {error && <Card className="p-3 text-sm text-danger" role="alert">{error}</Card>}
     {pending && <Card role="alert" className="grid gap-2 p-3 text-sm">
       <p>{t("A release request is unconfirmed. It may already have been accepted. Retry its original key and payload; leaving does not cancel accepted work.")}</p>

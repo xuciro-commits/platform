@@ -64,7 +64,7 @@ const editorViews: View[] = [
   { id: "changes", title: () => t("Changes"), render: p => <Changes key={`${p.kind ?? ""}:${p.id ?? ""}`} initialKind={p.kind} initialID={p.id} /> },
   { id: "release-review", title: () => t("Release review"), render: p => {
     const selection = releaseDraftsSelection(p.drafts, releaseKinds);
-    return <ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={selection.drafts} selectionError={selection.error} />;
+    return <ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}:${p.candidate ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={selection.drafts} selectionError={selection.error} candidateID={p.candidate} applicationName={p.applicationName} />;
   } },
   { id: "release-history", title: () => t("Release history"), render: () => <ReleaseReview key="history" /> },
   { id: "connection", title: () => t("Connections"), render: p => p.id ? <ConnectionEditor key={p.id} id={p.id} /> : <Connections /> },
@@ -91,7 +91,9 @@ function StudioHome() {
 const releaseViews = new Set(["changes", "release-review", "release-history"]);
 function AuthoringView({ route, children }: { route: Route; children: ReactNode }) {
   const host = useHost();
-  const allowed = route.view === "projects" || builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || host.role("build") === "publisher" && releaseViews.has(route.view);
+  // Publisher surfaces enter sealed candidates and history. Draft changes are
+  // a builder view: the handoff to a publisher carries candidates, not drafts.
+  const allowed = route.view === "projects" || builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || host.role("build") === "publisher" && route.view !== "changes" && releaseViews.has(route.view);
   return allowed ? <>{children}</> : <PageHeader title={t("Application Studio")} description={t("This authoring view is not available with your current access.")} />;
 }
 const contextualViews = (views: View[]) => views.map(view => ({ ...view, render: (params: Record<string, string>) => {
@@ -114,7 +116,7 @@ export default defineApp({
     return [
       ...(builder(host) ? [{ label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] }] : []),
       ...allowed.map(area => ({ label: t(area.title), items: studioNavigation(area.id)
-        .filter(link => builder(host) || integrator(host) || releaseViews.has(link.view))
+        .filter(link => builder(host) || integrator(host) || link.view !== "changes" && releaseViews.has(link.view))
         .map(link => ({ label: t(link.title), icon: kindIcon[link.kind ?? "definition"], route: { view: link.view, ...("params" in link && link.params ? { params: link.params } : {}) } })) })),
     ];
   },
