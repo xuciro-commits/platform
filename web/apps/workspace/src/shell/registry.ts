@@ -23,15 +23,6 @@ export const projections: { id: Projection; title: () => string; categories: Pla
   { id: "admin", title: () => t("System"), categories: ["operate"] },
 ];
 
-/** The sidebar's three fixed zones: every application lives in exactly one,
- * so any function has one place to look for. The retired portal's four
- * overlapping categories collapse into these. */
-export const zones: { id: Projection; label: () => string; categories: PlatformAppCategory[] }[] = [
-  { id: "operations", label: () => t("Operate"), categories: ["business", "ontology"] },
-  { id: "build", label: () => t("Build"), categories: ["build"] },
-  { id: "admin", label: () => t("System"), categories: ["operate"] },
-];
-
 /** The portal entry of an app the workspace loaded. */
 export const portalEntry = (app: AppUI): PlatformApplication =>
   ({ id: app.id, title: app.title, icon: app.icon, description: app.description,

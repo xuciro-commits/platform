@@ -652,7 +652,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     { id: "home", label: t("Home"), icon: <HomeIcon />, active: active === routeKey(rail.home), run: () => open(rail.home) },
     { id: "search", label: t("Search"), icon: <Search />, run: () => setPaletteOpen(true) },
     ...(rail.notifications ? [{ id: "notifications", label: t("Notifications"), icon: <Bell />, badge: rail.notifications.unread, active: active === routeKey(rail.notifications.route), run: () => open(rail.notifications!.route) }] : []),
-    { id: "applications", label: t("Applications"), icon: <Grid2x2 />, run: () => setPaletteOpen(true) },
+    { id: "applications", label: t("Applications"), icon: <Grid2x2 />, active: active === routeKey(rail.applications), run: () => open(rail.applications) },
   ] : [];
   const railButton = (item: RailItem) => (
     <button key={item.id} type="button" title={item.label} aria-label={item.label} aria-current={item.active ? "page" : undefined} onClick={item.run}

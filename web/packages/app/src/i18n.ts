@@ -1119,4 +1119,5 @@ register("zh-CN", {
   "The engine would allow this now.": "引擎此刻会放行。",
   "The engine refuses.": "引擎拒绝。",
   "Imported {ok} rows.": "已导入 {ok} 行。",
+  "The host refused this edit.": "宿主拒绝了这次修改。",
 });

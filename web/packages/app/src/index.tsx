@@ -328,6 +328,17 @@ export function Records({ type, description, help, actions, covers, saved, kanba
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const info = source.entity(type);
+  // Cell editing on the generic list: staged in the grid, each row submitted
+  // through the type's original edit action at its opened revision. Fields the
+  // entity marks read-only, plus lines and attachments, never stage.
+  const cellFields = (info?.fields ?? []).filter(f => !f.readOnly && !["lines", "attachment"].includes(f.type)).map(f => f.name);
+  const inlineEdit = can(`${type}.edit`) && cellFields.length > 0 ? {
+    schema: `${type}.edit`, fields: cellFields, scope: `${String(source.scope ?? "")}|${type}`, maxRows: 50,
+    submit: async (baseline: EntityRecord, patch: Record<string, unknown>) => {
+      const accepted = await decide(`${type}.edit`, { type, id: baseline.id }, patch, { expectedRevision: baseline.revision, quiet: true });
+      return accepted ? { accepted: true } : { accepted: false, error: t("The host refused this edit.") };
+    },
+  } : undefined;
   const transition = useTransition(type);
   const [saving, setSaving] = useState<ListState>();
   const [busy, setBusy] = useState(false);
@@ -357,6 +368,7 @@ export function Records({ type, description, help, actions, covers, saved, kanba
         source={source}
         type={type}
         initial={initial}
+        inlineEdit={inlineEdit}
         onSave={setSaving}
         toolbar={<Transfer source={source} type={type} importable={can(`${type}.create`) || can(`${type}.edit`)} />}
         onOpen={(r) => openRecord({ type, id: r.id })}

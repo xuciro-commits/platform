@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1a02a4221526336e",
+  "revision": "sha256:3ca0bde640c04f7d",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -13053,8 +13053,7 @@
       "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Home.tsx",
-      "web/apps/workspace/src/shell/Lineage.tsx",
-      "web/apps/workspace/src/shell/ZoneRail.tsx"
+      "web/apps/workspace/src/shell/Lineage.tsx"
     ],
     "ui/command-menu": [
       "web/packages/app/src/actions/OpenIn.tsx",
@@ -13565,6 +13564,7 @@
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/workspace/src/chrome.tsx",
       "web/apps/workspace/src/offline/Preparation.tsx",
+      "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],
@@ -13773,6 +13773,7 @@
       "web/packages/govern/src/words.tsx",
       "web/packages/ui/src/records/RecordWorkspace.tsx",
       "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Applications.tsx",
       "web/apps/workspace/src/shell/Explorer.tsx",
       "web/apps/workspace/src/shell/Lineage.tsx"
     ],

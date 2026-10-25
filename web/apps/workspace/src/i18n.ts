@@ -5,8 +5,6 @@ register("zh-CN", {
   "Open an application or continue your work.": "打开应用，或继续之前的工作。",
   "Workspace tasks": "工作入口",
   "Operate": "运营",
-  "Work": "工作",
-  "Opening your home…": "正在打开你的首页…",
   "System": "系统",
   "Continue working": "继续工作",
  "Tenant maintenance": "租户维护",

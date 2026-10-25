@@ -2,9 +2,9 @@
 import { useHost, useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, routeKey, useWorkspace, t, type InboxTask, Panel} from "@platform/ui";
-import { Bell, Clock, Inbox, Send, Star } from "lucide-react";
+import { ArrowRight, Bell, Clock, Inbox, Send, Star } from "lucide-react";
 import { ApplicationTile } from "./Applications";
-import { zones } from "./registry";
+import { projections } from "./registry";
 
 export function Home() {
   const { me, can } = useHost();
@@ -14,6 +14,7 @@ export function Home() {
   const notifications = useRead<Api.Notification[]>("/v1/notifications");
   const apps = applications?.apps ?? [];
   const starred = apps.filter(app => favorites.includes(app.id));
+  const business = apps.filter(app => app.category === "business");
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t("Good morning, {name}") : hour < 18 ? t("Good afternoon, {name}") : t("Good evening, {name}");
 
@@ -23,6 +24,9 @@ export function Home() {
         <h1 className="text-2xl font-semibold tracking-tight">{greeting.replace("{name}", me.principalId)}</h1>
         <p className="mt-2 text-sm text-muted">{t("Open an application or continue your work.")}</p>
       </div>
+      <nav aria-label={t("Workspace tasks")} className="flex flex-wrap gap-2">
+        {projections.filter(projection => apps.some(app => projection.categories.some(category => category === app.category))).map(projection => <Button key={projection.id} onClick={() => open({ view: "portal", params: { workspace: projection.id } })}>{projection.title()}<ArrowRight className="size-4" /></Button>)}
+      </nav>
     </header>
 
     <nav aria-label={t("My work")} className="flex flex-wrap gap-x-5 gap-y-2 border-y border-border py-3 text-sm">
@@ -34,14 +38,10 @@ export function Home() {
       {can("agent.run.start") && <Button variant="ghost" size="sm" onClick={() => open({ view: "assistant" })}>{t("Assistant")}</Button>}
     </nav>
 
-    {zones.map(zone => {
-      const zoneApps = apps.filter(app => (zone.categories as readonly string[]).includes(app.category));
-      if (!zoneApps.length) return null;
-      return <Panel key={zone.id} variant="plain" aria-label={zone.label()}>
-        <h2 className="mb-3 text-base font-semibold">{zone.label()}</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{zoneApps.map(app => <ApplicationTile key={app.id} app={app} role={me.apps.find(entry => entry.id === app.id)?.role} />)}</div>
-      </Panel>;
-    })}
+    {business.length > 0 && <Panel variant="plain" aria-label={t("Business applications")}>
+      <h2 className="mb-3 text-base font-semibold">{t("Business applications")}</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{business.map(app => <ApplicationTile key={app.id} app={app} role={me.apps.find(entry => entry.id === app.id)?.role} />)}</div>
+    </Panel>}
 
     {(recent.length > 0 || starred.length > 0) && <div className="grid gap-8 lg:grid-cols-2">
       {recent.length > 0 && <Panel variant="plain" aria-label={t("Continue working")}>
