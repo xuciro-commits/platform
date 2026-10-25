@@ -1576,6 +1576,8 @@ export default {
   "Filters": "筛选",
   "Filter by values": "按值筛选",
   "Clear filters": "清除筛选",
+  "Saved filters on {fields} are no longer available and were not applied.": "保存的筛选字段 {fields} 已不存在，未予应用。",
+  "Counts are unavailable right now; choices come from the object model.": "暂时无法取得计数；可选项来自对象模型。",
   "Import CSV": "导入 CSV",
   "A CSV whose header names this type's fields, with an id column. Every row is checked first, then created or edited as you.": "CSV 的表头须写明该类型的字段名并含 id 列。每行都会先做检查，再以你的身份创建或编辑。",
   "Check rows": "检查行",

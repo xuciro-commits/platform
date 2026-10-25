@@ -21,6 +21,9 @@ declare module "@tanstack/react-table" {
     pin?: "left";
     /** Set by columnsFor: the column's field type, which also edits cells inline. */
     field?: FieldType<any, TData>;
+    /** Server-ordered column: the header hands the next direction to the
+     * query owner instead of reordering the current page locally. */
+    querySort?: { direction?: "asc" | "desc"; onChange: (next: "asc" | "desc") => void };
   }
 }
 
@@ -190,8 +193,8 @@ export function DataTable<T>({
               {group.headers.map((header) => {
                 const ci = columnIndex; columnIndex += header.colSpan;
                 if(mountedColumns&&!mountedColumns.has(ci))return null;
-                const sorted = header.column.getIsSorted();
                 const meta = header.column.columnDef.meta;
+                const sorted = meta?.querySort ? meta.querySort.direction : header.column.getIsSorted();
                 const pin = pins[ci];
                 return (
                   <div role="columnheader" key={header.id}
@@ -201,9 +204,9 @@ export function DataTable<T>({
                     className={cn("relative flex min-h-7 items-center gap-1 px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted",
                       (meta?.align ?? meta?.field?.align) === "right" && "justify-end text-right", pin != null && "z-[2] bg-surface")}
                     style={{gridColumn:`${ci+1} / span ${header.colSpan}`,...(pin != null ? { position: "sticky", left: pin } : {})}}>
-                    {!header.isPlaceholder && (header.column.getCanSort() ? (
+                    {!header.isPlaceholder && (header.column.getCanSort() || meta?.querySort ? (
                       <button type="button" className="flex min-w-0 items-center gap-1 hover:text-foreground"
-                        onClick={header.column.getToggleSortingHandler()}>
+                        onClick={(event) => meta?.querySort ? meta.querySort.onChange(sorted === "asc" ? "desc" : "asc") : header.column.getToggleSortingHandler()?.(event)}>
                         {headerTypeIcon(meta?.field?.type)}<span className="truncate">{flexRender(header.column.columnDef.header, header.getContext())}</span>
                         {sorted === "asc" ? <ArrowUp className="size-3 shrink-0" /> : sorted === "desc" ? <ArrowDown className="size-3 shrink-0" /> : null}
                       </button>

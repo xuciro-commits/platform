@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8e5cdc466af0ae8a",
+  "revision": "sha256:92982c5d6f7fc508",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1699,10 +1699,6 @@
       ],
       "composed": [
         "app/record-actions",
-        "ui/button",
-        "ui/dialog",
-        "ui/form",
-        "ui/input",
         "ui/page-header",
         "ui/record-list"
       ],
@@ -5155,7 +5151,7 @@
         },
         {
           "name": "options",
-          "type": "{value:string;count:number}[]",
+          "type": "{value:string;count?:number}[]",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -9457,7 +9453,7 @@
         },
         {
           "name": "window",
-          "type": "{ query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; onChange:(change:{search?:string;sort?:string[];offset?:number})=>void }",
+          "type": "{ query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; /** The window's current enum filters; a fixed-predicate window locks them and explains why. */ filters?:Record<string,string[]>; filtersLocked?:boolean; onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void }",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -9552,7 +9548,7 @@
         {
           "name": "ListState",
           "kind": "type",
-          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n};"
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n  /** Chosen enum filters, by choice field; missing means the view predates them. */\n  filters?: Record<string, string[]>;\n};"
         }
       ]
     },
@@ -10528,6 +10524,34 @@
           "optional": true,
           "isCallback": false,
           "isSlot": true
+        },
+        {
+          "name": "listToolbar",
+          "type": "ReactNode",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": true
+        },
+        {
+          "name": "onListSave",
+          "type": "(state: ListState) => void",
+          "optional": true,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "listInlineEdit",
+          "type": "RecordEditPort",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "listInitial",
+          "type": "ListState",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false
         }
       ],
       "slots": [
@@ -10543,6 +10567,11 @@
         },
         {
           "name": "notice",
+          "type": "ReactNode",
+          "optional": true
+        },
+        {
+          "name": "listToolbar",
           "type": "ReactNode",
           "optional": true
         }
@@ -12907,6 +12936,7 @@
       "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
       "web/packages/app/src/widgets/ScanInput.tsx",
+      "web/packages/app/src/widgets/list-operations.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
@@ -13403,7 +13433,6 @@
       "web/packages/app/src/automation/application-runs.tsx",
       "web/packages/app/src/automation/capability.tsx",
       "web/packages/app/src/composites/catalog-examples.tsx",
-      "web/packages/app/src/index.tsx",
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/semantic/References.tsx",
@@ -13418,6 +13447,7 @@
       "web/packages/app/src/widgets/ProposalReview.tsx",
       "web/packages/app/src/widgets/RecordWork.tsx",
       "web/packages/app/src/widgets/ScanInput.tsx",
+      "web/packages/app/src/widgets/list-operations.tsx",
       "web/packages/build/src/automate/automation.tsx",
       "web/packages/build/src/automate/workflow-binding.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
@@ -13649,7 +13679,7 @@
     "ui/form": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/automation/agents.tsx",
-      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/widgets/list-operations.tsx",
       "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/govern/src/account.tsx",
@@ -13666,9 +13696,9 @@
     ],
     "ui/dialog": [
       "web/packages/app/src/actions/actions.tsx",
-      "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/pages/sections.tsx",
+      "web/packages/app/src/widgets/list-operations.tsx",
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
@@ -13938,17 +13968,6 @@
       "web/packages/app/src/catalog.examples.tsx",
       "web/packages/app/src/widgets/Observation.tsx"
     ],
-    "ui/record-list": [
-      "web/packages/app/src/index.tsx",
-      "web/packages/app/src/widgets/AIWidget.tsx",
-      "web/packages/app/src/widgets/Table.tsx",
-      "web/packages/build/src/editor/ResourceList.tsx",
-      "web/packages/build/src/ontology/ModelWorkbench.tsx",
-      "web/packages/ui/src/records/RecordLookup.tsx",
-      "web/packages/ui/src/records/RecordWorkspace.tsx",
-      "web/apps/workspace/src/chrome.tsx",
-      "web/apps/workspace/src/shell/Explorer.tsx"
-    ],
     "app/external-observations": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/widgets/RecordDetails.tsx",
@@ -13961,6 +13980,18 @@
     ],
     "ui/record-form": [
       "web/packages/app/src/index.tsx"
+    ],
+    "ui/record-list": [
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/widgets/AIWidget.tsx",
+      "web/packages/app/src/widgets/Table.tsx",
+      "web/packages/app/src/widgets/list-operations.tsx",
+      "web/packages/build/src/editor/ResourceList.tsx",
+      "web/packages/build/src/ontology/ModelWorkbench.tsx",
+      "web/packages/ui/src/records/RecordLookup.tsx",
+      "web/packages/ui/src/records/RecordWorkspace.tsx",
+      "web/apps/workspace/src/chrome.tsx",
+      "web/apps/workspace/src/shell/Explorer.tsx"
     ],
     "ui/record-page": [
       "web/packages/app/src/index.tsx",

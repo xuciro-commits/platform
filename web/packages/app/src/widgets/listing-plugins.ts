@@ -1,6 +1,6 @@
 import {t} from '@platform/ui';
 import {pageUIManifest} from '@platform/kernel';
-import {tableEditableFields} from './table-edit';
+import {tableEditableFields,sectionWriteActions,defaultTableEdit} from './table-edit';
 import {defineWidgetPlugin} from './plugin';
 import type {WidgetBindingContext} from './bindings';
 import type {TableSurfaceProps} from './TableSurface';
@@ -18,12 +18,20 @@ export function bindTable(c:WidgetBindingContext):TableSurfaceProps{
  const isMaster=section.model?!section.model.relation:type===parent(c)&&!section.parentSelection&&!section.relation;
  const query=section.query?.name?c.definitions?.find(d=>d.ref.app===section.query?.app&&d.ref.kind===section.query.kind&&d.ref.name===section.query.name)?.query:undefined;
  const reference=section.model?(section.model.relation?info?.fields.find(f=>f.name===section.model?.relation?.field):undefined):!isMaster?(query?.by?info?.fields.find(f=>f.name===query.by):info?.fields.find(f=>f.type==='reference'&&f.ref===parent(c)&&(!section.relation||f.inverse===section.relation))):undefined;
- const action=section.inlineEdit?c.catalog?.find(a=>a.schema===section.inlineEdit!.action.name):undefined,fields=tableEditableFields(info,action,section.inlineEdit?.fields??[]);
+ // Writes follow the page's declared action set, narrowed by an explicit
+ // section allow-list; an authored inlineEdit still names its original action
+ // and fields, and a list without one derives the type's standard patch over
+ // the displayed fields through the original profile gates. None of this
+ // grants permission — the catalog and decide still answer for every submit.
+ const writes=sectionWriteActions(c.page,c.section);
+ const action=section.inlineEdit?c.catalog?.find(a=>a.schema===section.inlineEdit!.action.name&&writes.includes(a.schema)):defaultTableEdit(info,c.catalog,writes,section.fields);
+ const fields=tableEditableFields(info,action,section.inlineEdit?.fields??(info?.fields??[]).filter(f=>f.type!=="lines").map(f=>f.name));
  const inlineEdit=action&&fields.length&&c.decide?{schema:action.schema,fields,access:c.modelAccess,scope:JSON.stringify([c.aggregateScope,action]),preview:!c.live,maxRows:pageUIManifest.runtime.tableEditing.maxRows,submit:async(record:import('@platform/ui').EntityRecord,patch:Record<string,unknown>)=>{let error:string|undefined;const accepted=await c.decide!(action.schema,{type,id:record.id},patch,{expectedRevision:record.revision,quiet:true,onRefused:reason=>error=reason});return {accepted,error};}}:undefined;
+ const writable=c.live&&writes.length>0&&!!c.can&&(c.can(`${type}.create`)||c.can(`${type}.edit`));
  if(section.collectionVariable&&collection?.status==='error')return {message:collection.code};
  const status=section.collectionVariable?!window?'missing-window':undefined:(section.relation||section.parentSelection)&&!reference?'invalid-reference':reference&&!master?'missing-parent':undefined;
  const predicates=[...((query?.domain as unknown[]|undefined)??[]),...domain(c.narrowed[type]??{}),...domain(c.sharedFilter??{}),...reference&&master?[[reference.name,'=',master.id]]:[]];
- return {tableKey:section.collectionVariable?type:reference?`${type}/${reference.name}/${master?.id}`:type,navigate:section.widget==='record-list'&&c.live,ports:{cards:section.widget==='record-list'?{layout:section.recordList?.layout as 'grid'|'list'??'grid',labelField:section.cardLabel??'id'}:undefined,source:section.model||section.collectionVariable?source:c.session?.querySource(section.id??`section:${page.sections?.indexOf(section)}`)??source,presentation:section.tablePresentation,columns:section.tableColumns,showSearch:section.showSearch,keepActive:section.widget==='record-list'||c.keepActive,selectionSet:c.selectionSet,inlineEdit,object:type,fields:section.fields,domain:section.collectionVariable?undefined:predicates,window,selected:c.selected,onSelect:c.onSelect,status,plural:info?.plural?.toLowerCase()}};
+ return {tableKey:section.collectionVariable?type:reference?`${type}/${reference.name}/${master?.id}`:type,navigate:section.widget==='record-list'&&c.live,ports:{importable:writable,savable:c.live,cards:section.widget==='record-list'?{layout:section.recordList?.layout as 'grid'|'list'??'grid',labelField:section.cardLabel??'id'}:undefined,source:section.model||section.collectionVariable?source:c.session?.querySource(section.id??`section:${page.sections?.indexOf(section)}`)??source,presentation:section.tablePresentation,columns:section.tableColumns,showSearch:section.showSearch,keepActive:section.widget==='record-list'||c.keepActive,selectionSet:c.selectionSet,inlineEdit,object:type,fields:section.fields,domain:section.collectionVariable?undefined:predicates,window,selected:c.selected,onSelect:c.onSelect,status,plural:info?.plural?.toLowerCase()}};
 }
 export const listingPlugins={
  table:define('table',1,bindTable,()=>import('./TableSurface').then(m=>m.TableSurfaceRenderer)),

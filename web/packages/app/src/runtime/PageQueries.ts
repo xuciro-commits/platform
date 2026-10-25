@@ -6,7 +6,7 @@ import { pageUIManifest, type Api } from "@platform/kernel";
 import { findDefinition, useHost } from "../index";
 import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session";
 import type { VariableResult } from "./variables";
-import { boundQueryDefinition, compileQueryPlans, queryView, variablePlan, planKey } from "./query-plans";
+import { boundQueryDefinition, compileQueryPlans, queryView, variablePlan, planKey, windowFiltersLocked } from "./query-plans";
 import {interfaceWindowSignature} from "./ontology-interface";
 
 export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot, overlays:Record<string,Record<string,VariableResult>>={}, editingOverlay?:string,itemOwner?:string,keepOnUnmount=false) {
@@ -77,6 +77,8 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   const windows = Object.fromEntries(compiled.map(([id,result]) => [id,result.status==="value" ? {
     interface:result.interface,interfacePage:result.interface?session.interfacePage(planKey(id),result.signature):undefined,
     query:result.query,page:session.queryPage(planKey(id),result.signature),error:snapshot.queries[planKey(id)]?.status==="error"&&session.querySignature(planKey(id))===result.signature?"Resource read failed":undefined,
+    filters:snapshot.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]?.filters:undefined,
+    filtersLocked:!!result.interface||fixedObservation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)||!!(plans[id]?.query&&windowFiltersLocked(boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query))),
     inputSearch:picker(id)?snapshot.views[planKey(id)]?.search??"":undefined,searchLocked:ranked(id)||!picker(id)&&!!plans[id]?.search,sortLocked:!!result.sortLocked||observation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)||!!(plans[id]?.query&&boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query)?.query?.sort?.length),maxOffset:fixedObservation(id)||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)?0:pageUIManifest.runtime.query.maxOffset,
     onChange:(change:QueryView)=>{if(fixedObservation(id)||observation(id)&&change.sort!==undefined||ranked(id)||avatars(id)||resourceList(id)||analysisAxes(id)||recordWork(id)||picker(id)&&(change.sort!==undefined||change.offset!==undefined&&change.offset!==0))return;const original=base.find(([key])=>key===id)?.[1];if(original?.status!=="value")return;const next=queryView(plans[id]!,original,{...(snapshot.views[planKey(id)]?.base===original.signature?snapshot.views[planKey(id)]:{}),...change},source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query,pickerTitle(id));if(next.status==="value")session.setQueryView(planKey(id),original.signature,change);}
   }:undefined]));

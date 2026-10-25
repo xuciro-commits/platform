@@ -4,7 +4,7 @@ import {useEffect} from "react";
 import {pageUIManifest,type Api} from "@platform/kernel";
 import {useHost,findDefinition} from "../index";
 import type {ApplicationSession} from "./ApplicationSessions";
-import {compileQueryPlans,queryView,boundQueryDefinition,planKey} from "./query-plans";
+import {compileQueryPlans,queryView,boundQueryDefinition,planKey,windowFiltersLocked} from "./query-plans";
 import type {VariableResult} from "./variables";
 import type {QueryView} from "./Session";
 
@@ -37,7 +37,11 @@ export function useApplicationQueries(session:ApplicationSession|undefined, valu
   const failed=state?.status==="error"&&reads?.querySignature(planKey(queryID))===result.signature;
   if(failed)collectionInputs[id]={status:"error",code:"Resource read failed"};
   resources[id]=failed?{status:"error",code:"Resource read failed"}:state?.status==="pending"||!matches?{status:"pending"}:window!.records.length?{status:"value",value:{kind:"object-set",window:window!}}:{status:"empty",value:{kind:"object-set",window:window!}};
-  windows[id]={query:result.query,page:reads?.queryPage(planKey(queryID),result.signature),error:failed?"Resource read failed":undefined,searchLocked:!!plan.search,sortLocked:!!boundQueryDefinition(named(plan),plan.query)?.query?.sort?.length,maxOffset:pageUIManifest.runtime.query.maxOffset,
+  const current=snapshot?.views[planKey(queryID)];
+  windows[id]={query:result.query,page:reads?.queryPage(planKey(queryID),result.signature),error:failed?"Resource read failed":undefined,
+   filters:current?.base===result.signature?current?.filters:undefined,
+   filtersLocked:!!result.interface||windowFiltersLocked(boundQueryDefinition(named(plan),plan.query)),
+   searchLocked:!!plan.search,sortLocked:!!boundQueryDefinition(named(plan),plan.query)?.query?.sort?.length,maxOffset:pageUIManifest.runtime.query.maxOffset,
    onChange:(change:QueryView)=>{const initial=base.find(([key])=>key===queryID)?.[1];if(!reads||initial?.status!=="value")return;const next=queryView(plan,initial,{...(snapshot?.views[planKey(queryID)]?.base===initial.signature?snapshot.views[planKey(queryID)]:{}),...change},source.entity(plan.object.name),named(plan),pageUIManifest.runtime.query);if(next.status==="value")reads.setQueryView(planKey(queryID),initial.signature,change);},
   };
  }

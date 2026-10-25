@@ -64,11 +64,34 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
  return variableDepends(variable);
 }
 
+/** The user's enum filters as domain terms: only choice fields of the entity,
+ * with values the field declares; anything else is unavailable, not widened. */
+export function enumFilterTerms(filters: Record<string,string[]> | undefined, info?: EntityInfo): unknown[][] {
+  const terms:unknown[][]=[];
+  for(const [name,values] of Object.entries(filters??{})){
+    if(!Array.isArray(values)||values.length===0||values.length>contractMaxFilterValues||!validID.test(name))continue;
+    const field=info?.fields.find(f=>f.name===name&&f.type==="choice");
+    if(!field||values.some(value=>typeof value!=="string"||value===""||new TextEncoder().encode(value).length>4096||field.choices!==undefined&&!field.choices.includes(value)))continue;
+    terms.push([name,"in",values]);
+  }
+  return terms;
+}
+const contractMaxFilterValues=64;
+/** Whether the member asked for any enum filter at all, however malformed. */
+export function hasEnumFilters(filters: Record<string,string[]> | undefined):boolean {
+  return Object.values(filters??{}).some(values=>Array.isArray(values)&&values.length>0);
+}
+/** Whether a window can carry enum filters at all: fixed domains belong to
+ * their named query and interface shapes own their predicates. */
+export function windowFiltersLocked(named: Api.Definition | undefined, base?: {interface?:string}):boolean {
+  return !!base?.interface||Array.isArray(named?.query?.domain)&&named.query.domain.length>0;
+}
+
 export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, pickerTitle?:string): QueryPlanResult {
   named=plan.query?boundQueryDefinition(named,plan.query):named;
   if(base.status!=="value" || !view) return base;
   if(base.interface&&base.binding){
-    if(view.sort!==undefined||view.offset!==undefined&&(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)||view.search!==undefined&&(plan.search||new TextEncoder().encode(view.search).length>4096))return failed("Interface query window is unavailable or incompatible.");
+    if(view.sort!==undefined||view.offset!==undefined&&(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)||view.search!==undefined&&(plan.search||new TextEncoder().encode(view.search).length>4096)||hasEnumFilters(view.filters))return failed("Interface query window is unavailable or incompatible.");
     const query={...base.query,...view.offset===undefined?{}:{offset:view.offset},...view.search===undefined?{}:{search:view.search}};
     return {...base,query,signature:interfaceWindowSignature(base.interface,base.binding,query)};
   }
@@ -87,6 +110,15 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
      query.domain=[...domain,...pickerTitle==="id"?[["id","like",view.search]]:["|",[pickerTitle,"like",view.search],["id","like",view.search]]];
     }
    }else{if(plan.search)return failed("This plan owns its search parameter.");query.search=view.search;}
+  }
+  if(view.filters!==undefined){
+   if(windowFiltersLocked(named))return failed("The named query owns its conditions.");
+   const terms=enumFilterTerms(view.filters,info);
+   const requested=Object.values(view.filters).filter(values=>Array.isArray(values)&&values.length>0).length;
+   if(terms.length!==requested)return failed("Query filter field is unavailable.");
+   const domain=query.domain??[];
+   if(domain.filter(Array.isArray).length+terms.length>contract.maxConditions)return failed("Query filters exceed the condition budget.");
+   if(terms.length)query.domain=[...domain,...terms];
   }
   if(view.sort!==undefined){if(base.sortLocked||named?.query?.sort?.length)return failed("The named query owns its ordering.");if(view.sort.length<1||view.sort.length>contract.maxSort||view.sort.some((key)=>{const field=key.replace(/^-/,"");return !validID.test(field)||!["id","created","changed"].includes(field)&&!info?.fields.some((f)=>f.name===field&&!['references','tags','lines','json'].includes(f.type));}))return failed("Query sort field is unavailable.");query.sort=view.sort;}
   return {...base,query,signature:JSON.stringify([base.object,query])};

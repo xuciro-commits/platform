@@ -243,6 +243,80 @@ test("a controlled RecordList renders its caller window without a second read an
   expect(screen.queryByRole("cell",{name:"WINDOW"})).toBeNull();expect(list).not.toHaveBeenCalled();
 });
 
+test("a caller window owns enum filters: selections change the owner query and counts answer the effective window",async()=>{
+ const choiceInfo={...entity,fields:[{name:"state",title:"State",type:"choice" as const,choices:["open","held","done"]},{name:"owner",title:"Owner",type:"reference" as const,ref:"sample.member"}]};
+ const aggregate=vi.fn(async()=>({rows:[{state:"open",count:2},{state:"held",count:1}],groups:["state"],measures:["count"]} as never));
+ const source:RecordSource={scope:"member",entity:()=>choiceInfo,list:vi.fn(),get:vi.fn(),aggregate};
+ const change=vi.fn();
+ const props=()=>({source,type:choiceInfo.type,window:{query:{domain:[["owner","=","MEMBER-1"],["state","in",["open"]]],search:"term",sort:["id"],limit:1},page:{records:[record("WINDOW")],total:1},maxOffset:10,filters:{state:["open"]},onChange:change}});
+ const {rerender}=render(<RecordList {...props()}/>);
+ // A window that cannot carry predicates does not offer controls it cannot apply.
+ rerender(<RecordList {...props()} window={{...props().window,filtersLocked:true}}/>);
+ expect(screen.queryByRole("button",{name:/Filters/})).toBeNull();
+ rerender(<RecordList {...props()}/>);
+ fireEvent.click(screen.getByRole("button",{name:/Filters/}));
+ await waitFor(()=>expect(aggregate).toHaveBeenCalled());
+ // Counts answer the effective window: fixed conditions and search, without this field's own selection.
+ expect((aggregate.mock.calls[0] as unknown[])[1] as {domain:unknown[];search:string}).toMatchObject({domain:[["owner","=","MEMBER-1"]],search:"term"});
+ fireEvent.click(screen.getByRole("checkbox",{name:"held"}));
+ expect(change).toHaveBeenLastCalledWith({filters:{state:["open","held"]},offset:0});
+ fireEvent.click(screen.getByRole("button",{name:"Clear filters"}));
+ expect(change).toHaveBeenLastCalledWith({filters:{},offset:0});
+});
+
+test("saved enum filters survive reopening, stale fields are reported and saving keeps them",async()=>{
+ const choiceInfo={...entity,fields:[{name:"state",title:"State",type:"choice" as const,choices:["open","held"]}]};
+ const list=vi.fn(async()=>({records:[record("A")],total:1}));
+ const source:RecordSource={scope:"member",entity:()=>choiceInfo,list,get:vi.fn()};
+ const onSave=vi.fn();
+ render(<RecordList source={source} type={choiceInfo.type} initial={{filters:{state:["open"],gone:["x"]}}} onSave={onSave}/>);
+ await waitFor(()=>expect(screen.getAllByRole("status").some((el)=>el.textContent?.includes("no longer available"))).toBe(true));
+ await waitFor(()=>expect(list).toHaveBeenCalled());
+ const issued=JSON.stringify((list.mock.calls[0] as unknown[])[1]);
+ expect(issued).toContain("\"state\",\"in\",[\"open\"]");
+ expect(issued).not.toContain("gone");
+ fireEvent.click(screen.getByRole("button",{name:"Save view…"}));
+ expect((onSave.mock.calls[0] as unknown[])[0]).toMatchObject({filters:{state:["open"]}});
+});
+
+test("the ID column header sorts the query, not the current page",async()=>{
+ const textInfo={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]};
+ const change=vi.fn(),list=vi.fn(async()=>({records:[record("A")],total:1}));
+ const source:RecordSource={scope:"member",entity:()=>textInfo,list,get:vi.fn()};
+ const {rerender}=render(<RecordList source={source} type={textInfo.type} window={{query:{sort:["id"],limit:1},page:{records:[record("A")],total:1},maxOffset:10,onChange:change}}/>);
+ fireEvent.click(screen.getByRole("button",{name:"ID"}));
+ expect(change).toHaveBeenLastCalledWith({sort:["-id"],offset:0});
+ rerender(<RecordList source={source} type={textInfo.type} window={{query:{sort:["-id"],limit:1},page:{records:[record("A")],total:1},maxOffset:10,onChange:change}}/>);
+ fireEvent.click(screen.getByRole("button",{name:"ID"}));
+ expect(change).toHaveBeenLastCalledWith({sort:["id"],offset:0});
+ // The full local table keeps its own ordering semantics: the header toggles
+ // its local model (none → ascending), while the query reload follows.
+ cleanup();
+ render(<RecordList source={source} type={textInfo.type}/>);
+ await waitFor(()=>expect(list).toHaveBeenCalled());
+ fireEvent.click(screen.getByRole("button",{name:"ID"}));
+ await waitFor(()=>expect(JSON.stringify((list.mock.calls.at(-1) as unknown[])[1])).toContain("\"sort\":[\"id\"]"));
+ expect(screen.getByRole("columnheader",{name:"ID"}).getAttribute("aria-sort")).toBe("ascending");
+});
+
+test("staged cell edits survive a window filter change and keep their opened revision",async()=>{
+ const textInfo={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]};
+ const submit=vi.fn(async()=>({accepted:true})),source:RecordSource={scope:"actor",entity:()=>textInfo,list:vi.fn(),get:vi.fn()};
+ const data=[{...record("A"),title:"A old"},{...record("B"),title:"B old"}];
+ const props=(filters?:Record<string,string[]>)=>({source,type:textInfo.type,inlineEdit:{schema:"sample.item.edit",scope:"binding",fields:["title"],maxRows:64,submit},
+   window:{query:{limit:100,...(filters?{domain:[["state","in",Object.values(filters).flat()]]}:{})},page:{records:data,total:2},maxOffset:100,filters,onChange:vi.fn()}});
+ const {rerender}=render(<RecordList {...props()}/>);
+ fireEvent.click(screen.getByRole("button",{name:"Edit cells"}));
+ const cell=screen.getByRole("cell",{name:"B old"});fireEvent.doubleClick(cell);
+ const input=cell.querySelector("input")!;fireEvent.change(input,{target:{value:"B staged"}});fireEvent.keyDown(input,{key:"Enter"});
+ // A filter change re-reads the window; the staged row and its baseline stay.
+ rerender(<RecordList {...props({state:["open"]})}/>);
+ expect(screen.getByRole("cell",{name:"B staged"})).toBeTruthy();
+ fireEvent.click(screen.getByRole("button",{name:"Submit cell edits"}));
+ await waitFor(()=>expect(submit).toHaveBeenCalledTimes(1));
+ const [staged,patch]=submit.mock.calls[0] as unknown as [EntityRecord,Record<string,unknown>];expect(staged.revision).toBe(1);expect(patch).toEqual({title:"B staged"});
+});
+
 test("RecordList cannot replace a newer query result with an earlier response", async () => {
   const requests = new Map<string, ReturnType<typeof pending<RecordPageData>>>();
   const source: RecordSource = { entity: () => entity, get: async () => { throw new Error("unused"); }, list: (_, query) => {

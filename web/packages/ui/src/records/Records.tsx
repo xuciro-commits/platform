@@ -274,6 +274,8 @@ type ListView = "list" | "kanban" | "pivot" | "chart";
 export type ListState = {
   view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];
   group?: string; columns?: string; measure?: string; mark?: Mark;
+  /** Chosen enum filters, by choice field; missing means the view predates them. */
+  filters?: Record<string, string[]>;
 };
 
 export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate, kanban, onMove, moves = [] }: {
@@ -285,7 +287,10 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   fields?: string[];
   /** A caller-owned authorized window. Controls emit view changes and never
    * issue another list/aggregate read or override the owning plan's domain. */
-  window?: { query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; onChange:(change:{search?:string;sort?:string[];offset?:number})=>void };
+  window?: { query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number;
+    /** The window's current enum filters; a fixed-predicate window locks them and explains why. */
+    filters?:Record<string,string[]>; filtersLocked?:boolean;
+    onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void };
   /** Always applied, like an app's own view of the type. */
   domain?: unknown[];
   /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
@@ -342,21 +347,43 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const view = window || !availableViews.includes(localView) ? "list" : localView;
   const fixedKey = JSON.stringify(fixed ?? []);
   useEffect(() => { setOffset(0); }, [fixedKey, type]);
-  // In-place facets: choice fields with live counts; a selection narrows the
-  // list through the same domain language the drill-down writes.
+  // In-place facets: choice fields with live counts. A selection is part of
+  // the one effective query: locally it joins the list's own domain, on a
+  // caller window it goes to the owner through the same change protocol, so
+  // the list, its counts, sort and export always share one scope. Saved
+  // filters on fields the object no longer declares are reported, not applied.
   const [facetPanel, setFacetPanel] = useState(false);
-  const [facetSelection, setFacetSelection] = useState<Record<string, string[]>>();
-  const [facetCounts, setFacetCounts] = useState<Record<string, { value: string; count: number }[]>>();
-  const facetFields = useMemo(() => (info ? info.fields.filter((f) => f.type === "choice" && f.choices?.length).slice(0, 4) : []), [info]);
-  const facetTerms = useMemo(() => Object.entries(facetSelection ?? {}).flatMap(([field, values]) => values.length ? [[field, "in", values]] : []), [facetSelection]);
+  const [localFilters, setLocalFilters] = useState<Record<string, string[]> | undefined>(() => {
+    const usable = Object.fromEntries(Object.entries(initial.filters ?? {}).filter(([name]) => !!info?.fields.some((f) => f.name === name && f.type === "choice")));
+    return Object.keys(usable).length ? usable : undefined;
+  });
+  const staleFilters = useMemo(() => Object.keys(initial.filters ?? {}).filter((name) => !info?.fields.some((f) => f.name === name && f.type === "choice")), [initial.filters, info]);
+  const facetSelection = window ? window.filters ?? {} : localFilters ?? {};
+  const [facetCounts, setFacetCounts] = useState<Record<string, { value: string; count: number }[] | "unavailable">>();
+  const facetFields = useMemo(() => {
+    if (!info) return [];
+    const fields = info.fields.filter((f) => f.type === "choice" && f.choices?.length);
+    const shown = fields.slice(0, 4);
+    for (const f of fields.slice(4)) if ((facetSelection[f.name] ?? []).length > 0 && !shown.includes(f)) shown.push(f);
+    return shown;
+  }, [info, facetSelection]);
+  const facetTerms = useMemo(() => Object.entries(facetSelection).flatMap(([field, values]) => values.length ? [[field, "in", values]] : []), [facetSelection]);
   const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? []), ...facetTerms], [fixedKey, drilled, facetTerms]);
+  const applyFilters = (next: Record<string, string[]>) => {
+    const usable = Object.fromEntries(Object.entries(next).filter(([, values]) => values.length > 0));
+    if (window) window.onChange({ filters: usable, offset: 0 });
+    else { setLocalFilters(Object.keys(usable).length ? usable : undefined); setOffset(0); }
+  };
   const loadFacets = () => {
     if (!source.aggregate) return;
-    const base = JSON.parse(fixedKey) as unknown[];
+    const effective = (window ? window.query.domain ?? [] : domain) as unknown[];
     for (const field of facetFields) {
-      source.aggregate(type, { groups: [field.name], measures: ["count"], search, domain: base })
+      // Counts answer the effective query without this field's own selection:
+      // fixed conditions, drill-down, search and every other chosen filter.
+      const base = effective.filter((term) => !(Array.isArray(term) && term[0] === field.name && term[1] === "in"));
+      source.aggregate(type, { groups: [field.name], measures: ["count"], search: window ? window.query.search ?? search : search, domain: base })
         .then((data) => setFacetCounts((current) => ({ ...current, [field.name]: data.rows.map((row) => ({ value: String(row[field.name] ?? ""), count: Number(row.count ?? 0) })) })))
-        .catch(() => setFacetCounts((current) => ({ ...current, [field.name]: (field.choices ?? []).map((value) => ({ value, count: 0 })) })));
+        .catch(() => setFacetCounts((current) => ({ ...current, [field.name]: "unavailable" })));
     }
   };
   const entity = useMemo(() => (info ? entityFrom(info,{},source) : undefined), [info,source]);
@@ -413,7 +440,10 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     return () => { current = false; stop?.(); clearTimeout(handle); };
   }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible]);
   if (!info || !entity) return <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted">{t("No activated object {type} here yet. Its records appear once a release that includes it is active; a draft shows its fields in the object model.", { type })}</p>;
-  const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
+  const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", enableSorting: false,
+    meta: { width: 130, querySort: { direction: sort === "id" ? "asc" as const : sort === "-id" ? "desc" as const : undefined,
+      onChange: (next) => { const key = next === "asc" ? "id" : "-id"; if (window) window.onChange({ sort: [key], offset: 0 }); else { setSort(key); setOffset(0); } } } },
+    cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
   const total = page?.total ?? 0;
   const query = { domain, search, archived };
@@ -455,14 +485,14 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
             </Select>
           )}
         </>}
-        {facetFields.length > 0 && <Button size="sm" aria-expanded={facetPanel} aria-pressed={facetPanel} onClick={() => { const next = !facetPanel; setFacetPanel(next); if (next) loadFacets(); }}>{t("Filters")}{facetSelection && Object.values(facetSelection).some((values) => values.length) ? <span className="tabular-nums">·</span> : null}</Button>}
+        {!window?.filtersLocked && facetFields.length > 0 && <Button size="sm" aria-expanded={facetPanel} aria-pressed={facetPanel} onClick={() => { const next = !facetPanel; setFacetPanel(next); if (next) loadFacets(); }}>{t("Filters")}{Object.values(facetSelection).some((values) => values.length) ? <span className="tabular-nums">·</span> : null}</Button>}
         {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />{t("Archived")}</label>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
         {source.exportCSV && <Button size="sm" disabled={exporting} onClick={() => void exportCSV()}>{t("Export CSV")}</Button>}
         {exportError && <span role="alert" className="text-xs text-danger">{exportError}</span>}
         {toolbar}
-        {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark })}>{t("Save view…")}</Button>}
+        {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark, filters: Object.values(facetSelection).some((values) => values.length) ? facetSelection : undefined })}>{t("Save view…")}</Button>}
         {availableViews.length > 1 && (
           <span role="group" aria-label={t("View")} className="flex rounded-md border border-border">
             {availableViews.map((v) => (
@@ -482,15 +512,18 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
           </span>
         )}
       </div>
+      {staleFilters.length > 0 && <p role="status" className="text-xs text-muted">{t("Saved filters on {fields} are no longer available and were not applied.", { fields: staleFilters.join(", ") })}</p>}
       {facetPanel && facetFields.length > 0 && <div role="group" aria-label={t("Filter by values")} className="flex flex-wrap items-start gap-x-6 gap-y-3 rounded-md border border-border p-3">
         {facetFields.map((field) => {
           const counts = facetCounts?.[field.name];
-          const options = (counts ?? (field.choices ?? []).map((value) => ({ value, count: 0 })))
-            .filter((option) => (facetSelection?.[field.name]?.includes(option.value)) || option.count > 0 || !counts);
-          return <FacetChoices key={field.name} title={field.title} histogram={!!counts} options={options} value={facetSelection?.[field.name] ?? []}
-            onChange={(values) => { setFacetSelection((sel) => ({ ...sel, [field.name]: values })); setOffset(0); }} />;
+          const unavailable = counts === "unavailable";
+          const options = (unavailable || !counts ? (field.choices ?? []).map((value) => ({ value, count: undefined })) : counts)
+            .filter((option) => (facetSelection[field.name]?.includes(option.value)) || unavailable || !counts || (option.count ?? 0) > 0);
+          return <FacetChoices key={field.name} title={field.title} histogram={!!counts && !unavailable} options={options} value={facetSelection[field.name] ?? []}
+            onChange={(values) => applyFilters({ ...facetSelection, [field.name]: values })} />;
         })}
-        <Button size="sm" variant="ghost" onClick={() => { setFacetSelection(undefined); setOffset(0); }}>{t("Clear filters")}</Button>
+        {Object.values(facetCounts ?? {}).includes("unavailable") && <p role="status" className="text-xs text-muted self-center">{t("Counts are unavailable right now; choices come from the object model.")}</p>}
+        <Button size="sm" variant="ghost" onClick={() => applyFilters({})}>{t("Clear filters")}</Button>
       </div>}
       {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate} source={source}/>)}
       {view === "list" && !cards && (

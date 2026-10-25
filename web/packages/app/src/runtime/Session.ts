@@ -18,7 +18,10 @@ export type QueryWindow = {
   object: string; query: RecordQuery; revision?: number; interface?:string;binding?:Api.AssetBinding;
   records: RecordReference[]; total: number; complete: boolean;
 };
-export type QueryView = {search?:string;sort?:string[];offset?:number};
+/** What a member changed on a query owner's window. Enum filters name choice
+ * fields and their selected values; the original compiler folds them into the
+ * window's domain under the same budget as any authored condition. */
+export type QueryView = {search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>};
 export type PageSessionSnapshot = {
   aggregates:Record<string,{signature:string;result:VariableResult}>;
   views: Record<string,QueryView & {base:string}>;

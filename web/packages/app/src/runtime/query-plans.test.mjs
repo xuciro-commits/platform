@@ -70,6 +70,41 @@ test("original named query conditions, ordering, limit and version constrain an 
   assert.equal(compileQueryPlan({...plan,conditions:[{field:"count",op:">",value:{literal:4}}]},variables,{},info,undefined,contract).status,"value");
 });
 
+test("window enum filters fold into the original domain under fixed conditions, budgets and owners",()=>{
+ const choiceInfo={type:info.type,fields:[...info.fields,{name:"state",type:"choice",choices:["open","held","done"]}]};
+ const values={bucket:{status:"value",value:"A"}},base=compileQueryPlan(plan,variables,values,choiceInfo,undefined,contract);
+ // One effective query: the plan's fixed parent condition and the member's
+ // chosen values are issued together, and the signature follows the content.
+ const filtered=queryView(plan,base,{filters:{state:["open","held"]},offset:20},choiceInfo,undefined,contract);
+ assert.deepEqual(filtered.query.domain,[["bucket","=","A"],["state","in",["open","held"]]]);
+ assert.equal(filtered.query.offset,20);assert.notEqual(filtered.signature,base.signature);
+ // Clearing every selection leaves the query exactly as the plan owns it.
+ const cleared=queryView(plan,base,{filters:{}},choiceInfo,undefined,contract);
+ assert.deepEqual(cleared.query.domain,base.query.domain);assert.equal(cleared.signature,base.signature);
+ // Fields that are not declared choices, and values the field does not
+ // declare, are unavailable rather than widened.
+ assert.equal(queryView(plan,base,{filters:{bucket:["A"]}},choiceInfo,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{filters:{state:["open","nope"]}},choiceInfo,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{filters:{state:[1]}},choiceInfo,undefined,contract).status,"error");
+ // Each chosen field costs one condition of the same budget.
+ const manyInfo={type:info.type,fields:Array.from({length:contract.maxConditions+1},(_,i)=>({name:`f${i}`,type:"choice",choices:["x"]}))};
+ const plain=compileQueryPlan({object:plan.object,limit:5},{},{},manyInfo,undefined,contract);
+ for(const count of [contract.maxConditions-1,contract.maxConditions]){
+  const filters=Object.fromEntries(Array.from({length:count},(_,i)=>[`f${i}`,["x"]]));
+  assert.equal(queryView({object:plan.object,limit:5},plain,{filters},manyInfo,undefined,contract).status,"value");
+ }
+ const tooMany=Object.fromEntries(Array.from({length:contract.maxConditions+1},(_,i)=>[`f${i}`,["x"]]));
+ assert.equal(queryView({object:plan.object,limit:5},plain,{filters:tooMany},manyInfo,undefined,contract).status,"error");
+ // A named query that owns its domain, and interface windows, refuse filters.
+ const owned={ref:{app:"sample",kind:"query",name:"owned"},version:"q1",query:{object:info.type,domain:[["active","=",true]]}};
+ const bound={...plan,query:{ref:owned.ref,sourceVersion:"q1"}};
+ const namedBase=compileQueryPlan(bound,variables,values,choiceInfo,owned,contract);
+ assert.equal(queryView(bound,namedBase,{filters:{state:["open"]}},choiceInfo,owned,contract).status,"error");
+ const interfaceBase=compileQueryPlan({object:{app:"",kind:"",name:""},interface:"sample.coded",query:{ref:owned.ref,sourceVersion:"q1"},limit:5},{},{},undefined,{...owned,query:{...owned.query,interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[]}}},contract);
+ assert.equal(interfaceBase.status,"value");
+ assert.equal(queryView({object:{app:"",kind:"",name:""},interface:"sample.coded",query:{ref:owned.ref,sourceVersion:"q1"},limit:5},interfaceBase,{filters:{state:["open"]}},undefined,{...owned,query:{...owned.query,interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[]}}},contract).status,"error");
+});
+
 test("query views preserve domain and limit and reject locked or unauthorized overrides",()=>{
  const values={bucket:{status:"value",value:"A"}},base=compileQueryPlan(plan,variables,values,info,undefined,contract);
  const view=queryView(plan,base,{search:"note",offset:20,sort:["-bucket"]},info,undefined,contract);

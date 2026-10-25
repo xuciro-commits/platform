@@ -3,7 +3,8 @@ import { DispatchProgress } from "./widgets/DispatchProgress";
 import {RefusalHistory} from "./actions/RefusalHistory";
 export {RefusalHistory} from "./actions/RefusalHistory";
 import {ProposalReview} from "./widgets/ProposalReview";
-import {DraftInputs, InputDraftProvider, InputProblems, useInputDrafts, notify, RecordImportDialog } from "@platform/ui";
+import {DraftInputs, InputDraftProvider, InputProblems, useInputDrafts, notify } from "@platform/ui";
+import { ImportControl, SaveViewDialog } from "./widgets/list-operations";
 export { useTransition, SourceFieldInput, sourceFieldInput } from "./actions/actions";
 export { Observations, ObservationRead, ObservationWindowResult, RecordObservations } from "./observations/Observations";
 import { RecordObservations } from "./observations/Observations";
@@ -22,7 +23,7 @@ export {searchInputObjects} from "./widgets/search-input";
 import "./i18n";
 import { apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
-  Button, Chart, Dialog, Disclosure, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
+  Button, Chart, Disclosure, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
@@ -326,7 +327,6 @@ export type SavedView = Api.SavedView;
 export function Records({ type, description, help, actions, covers, saved, kanban }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"] }) {
   const { source, decide, can, catalog } = useHost();
   const openRecord = useOpenRecord();
-  const { open } = useWorkspace();
   const info = source.entity(type);
   // Cell editing on the generic list: staged in the grid, each row submitted
   // through the type's original edit action at its opened revision. Fields the
@@ -341,24 +341,9 @@ export function Records({ type, description, help, actions, covers, saved, kanba
   } : undefined;
   const transition = useTransition(type);
   const [saving, setSaving] = useState<ListState>();
-  const [busy, setBusy] = useState(false);
-  const [title, setTitle] = useState(saved?.title ?? "");
   const initial = useMemo<ListState>(() => { try { return saved ? JSON.parse(saved.state) as ListState : {}; } catch { return {}; } }, [saved]);
   const moves = useMemo(() => kanban?.stateField && kanban.stateField !== info?.lifecycle?.field
     ? [] : recordKanbanMoves(info, catalog), [info, catalog, kanban?.stateField]);
-  const save = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const id = saved?.id ?? newId("VIEW");
-      if (await decide("work.view.save", { type: "work.view", id }, { title, entity: type, state: JSON.stringify(saving) })) {
-        setSaving(undefined);
-        if (!saved) open({ view: "saved", params: { id } });
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <>
       <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} /></>}
@@ -370,7 +355,7 @@ export function Records({ type, description, help, actions, covers, saved, kanba
         initial={initial}
         inlineEdit={inlineEdit}
         onSave={setSaving}
-        toolbar={<Transfer source={source} type={type} importable={can(`${type}.create`) || can(`${type}.edit`)} />}
+        toolbar={<ImportControl source={source} type={type} importable={can(`${type}.create`) || can(`${type}.edit`)} />}
         onOpen={(r) => openRecord({ type, id: r.id })}
         kanban={kanban}
         moves={moves}
@@ -381,29 +366,9 @@ export function Records({ type, description, help, actions, covers, saved, kanba
         }}
       />
       {transition.dialog}
-      <Dialog open={!!saving} onOpenChange={(o) => !o && !busy && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
-        <Form className="grid gap-3" onSubmit={() => { if (title.trim() && !busy) return save(); }}>
-          <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
-          <div className="flex justify-end gap-2">
-            <Button type="button" onClick={() => setSaving(undefined)} disabled={busy}>{t("Cancel")}</Button>
-            <Button type="submit" variant="primary" disabled={!title.trim() || busy}>{busy ? t("Saving…") : t("Save")}</Button>
-          </div>
-        </Form>
-      </Dialog>
+      <SaveViewDialog type={type} state={saving} saved={saved ? { id: saved.id, title: saved.title } : undefined} onClose={() => setSaving(undefined)} />
     </>
   );
-}
-
-/** Import a type's records from CSV: the shell's one import flow, mounted where the list is. */
-function Transfer({ source, type, importable }: { source: RecordSource; type: string; importable: boolean }) {
-  const [open, setOpen] = useState(false);
-  const { notify } = useWorkspace();
-  if (!importable) return null;
-  return <>
-    <Button size="sm" onClick={() => setOpen(true)}>{t("Import CSV")}</Button>
-    <RecordImportDialog source={source} type={type} open={open} onOpenChange={setOpen}
-      onImported={(applied, refused) => notify(refused ? t("{ok} rows imported; {refused} were refused.", { ok: applied, refused }) : t("Imported {ok} rows.", { ok: applied }))} />
-  </>;
 }
 
 /** An app's dashboard: its charts, each over the host's aggregates within the member's scope. */

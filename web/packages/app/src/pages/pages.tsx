@@ -6,7 +6,10 @@ import {
   type RecordPageData, type RecordSource, type RecordView, t,
 } from "@platform/ui";
 import { useMemo, useState } from "react";
+import type { ListState, RecordEditPort } from "@platform/ui";
 import { NewActions, PayloadFields } from "../actions/actions";
+import { ImportControl, SaveViewDialog } from "../widgets/list-operations";
+import { defaultTableEdit } from "../widgets/table-edit";
 import { ComposedPage, isComposed } from "./sections";
 import { RecordDetail, assetKey, useHost, useOpenRecord, type Definition } from "../index";
 
@@ -19,9 +22,10 @@ export function isPageDefinition(definition: Definition | undefined): definition
 
 /** A code page operates through the current member's record/action contracts. */
 export function PageWorkspace({ definition }: { definition: PageDefinition }) {
-  const { source, opens } = useHost();
+  const { source, opens, can, decide, catalog } = useHost();
   const openRecord = useOpenRecord();
   const [selected, setSelected] = useState<string>();
+  const [saving, setSaving] = useState<ListState>();
   const page = definition.page;
   const allowed = page.actions.map((ref) => ref.name);
   if (isComposed(page)) { // laid out from sections someone composed
@@ -30,12 +34,30 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
       <ComposedPage page={page} definitionKey={`${definition.ref.app}/${definition.ref.name}@${definition.version}`} />
     </>;
   }
-  return <RecordWorkspace title={page.title} description={page.description} source={source} type={page.object.name} listFields={page.listFields}
-    selected={selected} onSelect={setSelected} actions={<NewActions type={page.object.name} allowed={allowed} />}
-    detail={(id) => <>
-      {opens.has(page.object.name) && <Button className="mb-2" variant="primary" onClick={() => openRecord({ type: page.object.name, id }, { window: "tab" })}>{t("Open full view")}</Button>}
-      <RecordDetail type={page.object.name} id={id} fields={page.detailFields} allowed={allowed} />
-    </>} />;
+  const type = page.object.name, info = source.entity(type);
+  // The same standard patch the generic list stages: the member catalog's
+  // edit action within the page's declared set, over the listed fields.
+  const edit = allowed.length > 0 ? defaultTableEdit(info, catalog, allowed) : undefined;
+  const editFields = edit ? (info?.fields ?? []).filter(f => f.type !== "lines" && !f.readOnly && edit.payload.some(p => p.name === f.name)).map(f => f.name) : [];
+  const inlineEdit: RecordEditPort | undefined = edit && editFields.length > 0 && can(`${type}.edit`) ? {
+    schema: edit.schema, fields: editFields, scope: `${String(source.scope ?? "")}|${type}`, maxRows: 50,
+    submit: async (baseline, patch) => {
+      const accepted = await decide(edit.schema, { type, id: baseline.id }, patch, { expectedRevision: baseline.revision, quiet: true });
+      return accepted ? { accepted: true } : { accepted: false, error: t("The host refused this edit.") };
+    },
+  } : undefined;
+  return <>
+    <RecordWorkspace title={page.title} description={page.description} source={source} type={type} listFields={page.listFields}
+      selected={selected} onSelect={setSelected} actions={<NewActions type={type} allowed={allowed} />}
+      listToolbar={<ImportControl source={source} type={type} importable={allowed.length > 0 && (can(`${type}.create`) || can(`${type}.edit`))} />}
+      onListSave={(state) => setSaving(state)}
+      listInlineEdit={inlineEdit}
+      detail={(id) => <>
+        {opens.has(type) && <Button className="mb-2" variant="primary" onClick={() => openRecord({ type, id }, { window: "tab" })}>{t("Open full view")}</Button>}
+        <RecordDetail type={type} id={id} fields={page.detailFields} allowed={allowed} />
+      </>} />
+    <SaveViewDialog type={type} state={saving} onClose={() => setSaving(undefined)} />
+  </>;
 }
 
 const previewValue = (field: FieldInfo, index: number): unknown => {
