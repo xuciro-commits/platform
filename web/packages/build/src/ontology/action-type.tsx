@@ -17,7 +17,7 @@ import { Button, Card, Checkbox, GroupedList, Input, PageHeader, Panel, PanelSec
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { DraftStatus } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
-import { Boxes, FileInput, ListChecks, Plus, Shield, Trash2, Zap } from "lucide-react";
+import { Boxes, FileInput, ListChecks, Plus, Shield, Trash2, Zap, Blocks } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { EnterpriseReferenceTypes, Label } from "./process";
@@ -60,7 +60,7 @@ export function ActionTypes() {
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
   const objectRef = (object: ObjectDraft): Api.AssetRef => ({ app: "build", kind: "object", name: `build.${object.name}` });
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={t("Action types")} help={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one. The host already ships create, edit and archive for every object type and each module its own actions — they are listed below so you declare only what is missing.")} />
+    <PageHeader title={t("Action types")} help={t("An action type is how people change an object: its parameters, rules, criteria and side effects. Every action belongs to one object type; open the object type to add one. The host already ships create, edit and archive for every object type and each module its own actions — they are listed below so you declare only what is missing.")} actions={<Button size="sm" onClick={() => open({ view: "object-type" })}><Blocks aria-hidden className="size-4" />{t("Open the object model")}</Button>} />
     <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />
     <Panel title={t("Declared in this organisation")} description={t("{n} action types on {objects} object types", { n: rows.length, objects: drafts.filter((o) => o.actions?.length).length })}>
       <GroupedList<ActionRow> items={rows} id={(row) => row.key} text={(row) => `${row.action.title} ${row.action.name} ${row.object.title} ${row.object.name}`}

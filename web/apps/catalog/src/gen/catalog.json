@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:e6bf9ffee273a3d3",
+  "revision": "sha256:a64aa0f8c4b8155c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -14353,6 +14353,10 @@
     "ui/tree": [
       "web/packages/govern/src/enterprise/index.tsx"
     ],
+    "ui/empty-state": [
+      "web/packages/govern/src/operations.tsx",
+      "web/packages/ui/src/components/DataTable.tsx"
+    ],
     "ui/entity-form": [
       "web/packages/govern/src/people.tsx"
     ],
@@ -14361,9 +14365,6 @@
     ],
     "ui/indexed-choices": [
       "web/packages/ui/src/components/ChoiceInput.tsx"
-    ],
-    "ui/empty-state": [
-      "web/packages/ui/src/components/DataTable.tsx"
     ],
     "ui/file-picker": [
       "web/packages/ui/src/records/RecordImport.tsx",

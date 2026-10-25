@@ -1,7 +1,7 @@
 // Settings: owned work, integrations, app settings and the audit trail.
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp} from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 import { when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
 
@@ -46,7 +46,7 @@ export function Deliveries() {
     { accessorKey: "outcome", header: t("Outcome"), meta: { width: 200 }, cell: (c) => <Tag label={c.getValue()} tone={c.getValue() === "ok" ? "success" : "danger"} /> },
   ];
   return <>
-    <PageHeader title={t("Delivery attempts")} />
+    <PageHeader title={t("Delivery attempts")} help={t("Every outbound delivery the host has retried, oldest first. Attempts appear as endpoints receive effects; nothing here is authored by hand.")} />
     <DataTable data={[...(deliveries.data ?? [])].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`} height="calc(100dvh - 220px)" empty={t("No deliveries yet")} />
   </>;
 }
@@ -54,7 +54,7 @@ export function Deliveries() {
 export function SystemHealth() {
   const health = useRead<Api.TenantHealth>("/v1/health", 5000).data;
   return <>
-    <PageHeader title={t("Health")} />
+    <PageHeader title={t("Health")} help={t("The host's own runtime view: what started, what it is built from, and what it has been doing. Everything here is reported by the host itself.")} />
       {health && <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
         {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
         <Tag label={health.status === "quarantined" ? t("Quarantined") : health.status === "ok" ? t("Healthy") : t("Needs attention")}
@@ -85,7 +85,8 @@ export function SystemHealth() {
 // Integrations: the tenant's connectors (K8) with health, cursor and the last refused input.
 export function Integrations() {
   const connectors = useRead<Connector[]>("/v1/connectors", 5000);
-  const { decide } = useHost();
+  const { decide, role } = useHost();
+  const { open } = useWorkspace();
   const tone = (h: string) => (({ ok: "success", stale: "warning", disabled: "neutral" }) as const)[h as "ok"] ?? "danger";
   const columns: ColumnDef<Connector, any>[] = [
     { accessorKey: "id", header: t("Connector"), meta: { width: 130 } },
@@ -103,9 +104,11 @@ export function Integrations() {
   ];
   return (
     <>
-      <PageHeader title={t("Connectors")} help={t("Connectors bring facts in, with health, cursors and the last refused input.")} />
+      <PageHeader title={t("Connectors")} help={t("Connectors bring facts in, with health, cursors and the last refused input. A connector registers itself with the host when its runtime starts; an application's connections are declared in the builder.")} />
       {connectors.error ? <p className="text-sm text-[var(--tone-danger)]">{String(connectors.error)} {t("— administrators only.")}</p> :
-        <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height={180} searchable={false} empty={t("No connectors in this tenant")} />}
+        <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 300px)" searchable={false}
+          empty={<EmptyState title={t("No connectors in this tenant")} hint={t("A connector appears here when its runtime registers with the host. Declare the application's connections in the builder.")}
+            action={role("build") ? <Button size="sm" onClick={() => open({ view: "connection" })}>{t("Open connection setup")}</Button> : undefined} />} />}
     </>
   );
 }
@@ -220,7 +223,7 @@ export function OutboundEffects() {
     </span> },
   ];
   return <>
-    <PageHeader title={t("Outbound effects")} />
+    <PageHeader title={t("Outbound effects")} help={t("Every delivery an application's emitted event produces, and what the receiver made of it. Effects appear once an app declares and emits events; endpoints decide where they go.")} />
       {resolving&&host.action("platform.effect.resolve")&&<Panel title={t("Resolve unknown delivery")}><DeclaredActionForm declared={host.action("platform.effect.resolve")!} target={{type:"platform.effect",id:resolving}} revision={0} initial={{outcome:"delivered"}} onCancel={()=>setResolving(undefined)} onCompleted={()=>{setResolving(undefined);void effects.refetch();}} enabled/></Panel>}
     <DataTable data={effects.data ?? []} columns={effectColumns} getRowId={(effect) => effect.id} height="calc(100dvh - 220px)" empty={t("Nothing sent yet")} />
   </>;

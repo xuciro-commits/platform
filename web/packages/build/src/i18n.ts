@@ -3512,6 +3512,7 @@ register("zh-CN", {
   "Flow map": "流程地图",
   "Action type": "操作类型",
   "Action types": "操作类型",
+  "Open the object model": "打开对象模型",
   "Compose the modules of an application: pages of typed widgets over the Ontology, with their header and navigation.": "组合应用的模块：基于本体的类型化组件页面，以及它们的页头与导航。",
   "Modules": "模块",
   "Automations that run when records change; logic flows for branching work; the runs of both.": "记录变化时运行的自动化；用于分支工作的逻辑流程；以及两者的运行记录。",
