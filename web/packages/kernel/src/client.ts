@@ -107,6 +107,7 @@ export class EdgeClient {
   private storageLoadError?: Error;
   private generation = 0;
   private closed = false;
+  private sendQueue: Promise<void> = Promise.resolve();
   private sending = new AbortController();
   private currentConnection: Connection;
   get connection(): Connection { return this.currentConnection; }
@@ -431,7 +432,13 @@ export class EdgeClient {
   }
 
   /** Sends pending entries and retries unknown ones with the same key; returns entries that got an answer. */
-  async send(timeoutMs = 5000): Promise<Entry[]> {
+  send(timeoutMs = 5000): Promise<Entry[]> {
+    const sent = this.sendQueue.then(() => this.sendPending(timeoutMs));
+    this.sendQueue = sent.then(() => undefined, () => undefined);
+    return sent;
+  }
+
+  private async sendPending(timeoutMs: number): Promise<Entry[]> {
     this.save();
     const generation = this.generation;
     const answered: Entry[] = [];

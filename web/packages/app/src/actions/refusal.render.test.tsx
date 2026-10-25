@@ -67,14 +67,14 @@ test.each(["SUBMISSION_STATE_REJECTED","SUBMISSION_STATE_CONFLICT"] as const)("a
   client.authorities.outbox=[original];
   const tree=()=> <CatalogFixture client={client}><OutboxOwner client={client} decide={decide}><DeclaredActionDialog declared={sampleActions[0]!} type="catalog.sample" record={{id:"SAMPLE-001",revision:7}} initial={{note:"Original note"}} onClose={closed} originalOutcome={original}/></OutboxOwner></CatalogFixture>;
   const {rerender}=render(tree());
-  const note=screen.getByRole("textbox",{name:"Review note *"});
-  expect(note.matches(":disabled")).toBe(true);
+  expect(screen.queryByRole("textbox",{name:"Review note *"})).toBeNull();
+  expect(screen.getByText("Original request inputs",{exact:true})).toBeTruthy();
   expect(screen.getByText("Waiting for the server response. Retry sends the same request.")).toBeTruthy();
   expect(screen.queryByText("refused",{exact:true})).toBeNull();
   const answered={...original,state,outcome:state==="SUBMISSION_STATE_REJECTED"?"ERROR_CODE_INVALID_ARGUMENT":"ERROR_CODE_CONFLICT",reason:"The original owner refused this intent."};
   client.authorities.outbox=[answered];rerender(tree());
   await screen.findByText(answered.reason);
-  expect(screen.queryByText("The server response is unknown. Retry the original request or check Outbox.")).toBeNull();
+  const note=screen.getByRole("textbox",{name:"Review note *"});
   expect(note.matches(":disabled")).toBe(false);expect((note as HTMLInputElement).value).toBe("Original note");
   expect(decide).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:"Retry original inputs"}));
@@ -88,9 +88,21 @@ test("a late outbox confirmation completes the original form once without creati
   const tree=()=> <CatalogFixture client={client}><OutboxOwner client={client} decide={decide}><DeclaredActionDialog declared={sampleActions[0]!} type="catalog.sample" record={{id:"SAMPLE-001",revision:7}} initial={{note:"Original note"}} onClose={closed} onCompleted={completed} originalOutcome={original}/></OutboxOwner></CatalogFixture>;
   const {rerender}=render(tree());
   client.authorities.outbox.unshift({...original,state:"SUBMISSION_STATE_CONFIRMED",submission:{...original.submission,principalId:"another-member"}});
-  rerender(tree());expect(completed).not.toHaveBeenCalled();expect(screen.getByRole("textbox",{name:"Review note *"}).matches(":disabled")).toBe(true);
+  rerender(tree());expect(completed).not.toHaveBeenCalled();expect(screen.getByRole("button",{name:"Retry confirmation"})).toBeTruthy();
   await act(async()=>{await Promise.resolve();original.state="SUBMISSION_STATE_CONFIRMED";original.outcome="original-change";rerender(tree());});
   await waitFor(()=>expect(completed).toHaveBeenCalledTimes(1));expect(completed).toHaveBeenCalledWith({type:"catalog.sample",id:"SAMPLE-001"});
   rerender(tree());expect(closed).toHaveBeenCalledTimes(1);expect(decide).not.toHaveBeenCalled();
   expect(screen.queryByText("The server response is unknown. Retry the original request or check Outbox.")).toBeNull();
+});
+
+test.each(["SUBMISSION_STATE_SENDING","SUBMISSION_STATE_UNKNOWN"] as const)("a restored %s request checks its original inputs without validating the current edit form",async(state)=>{
+  const declared=sampleActions.find(action=>action.schema==="catalog.sample.edit")!,original={...pendingEntry(),state,submission:{...pendingEntry().submission,schema:{name:declared.schema},payload:btoa(JSON.stringify({quantity:0}))}},client=new FixtureClient({});
+  const decide=vi.fn<Host["decide"]>(async()=>false);client.authorities.outbox=[original];
+  render(<CatalogFixture client={client}><OutboxOwner client={client} decide={decide}><DeclaredActionDialog declared={{...declared,payload:[...declared.payload,{name:"newRequired",type:"string",description:"New required input",required:true}]}} type="catalog.sample" record={{id:"SAMPLE-001",revision:8}} initial={{title:"Current record",quantity:12}} onClose={()=>{}}/></OutboxOwner></CatalogFixture>);
+  expect(screen.queryByRole("textbox",{name:"Title"})).toBeNull();
+  fireEvent.click(screen.getByText("Original request inputs",{exact:true}));
+  expect(screen.getByText('{\n  "quantity": 0\n}',{exact:true,normalizer:text=>text})).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Retry confirmation"}));
+  await waitFor(()=>expect(decide).toHaveBeenCalledTimes(1));
+  expect(decide.mock.calls[0]).toMatchObject([declared.schema,{type:"catalog.sample",id:"SAMPLE-001"},{quantity:0},{originalKey:"review-original",expectedRevision:7,schemaVersion:original.schemaVersion}]);
 });

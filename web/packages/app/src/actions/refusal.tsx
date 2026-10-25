@@ -41,7 +41,7 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
    {target?.type&&target.id&&<Button size="sm" variant="ghost" onClick={()=>openRecord(`${target.type}/${target.id}`)}>{t("Open the original record")}</Button>}
   </div>}
   {policy&&!waiting&&<ExplainAccess entry={entry}/>}
-  {original&&<Disclosure summary={t("Original refused inputs")}><pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(original,null,2)}</pre><p className="text-xs text-muted">{t("Retry original inputs repeats the saved request. Corrected inputs or a refreshed definition create a linked correction.")}</p></Disclosure>}
+  {original&&<Disclosure summary={t(waiting?"Original request inputs":"Original refused inputs")}><pre className="max-h-60 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(original,null,2)}</pre>{!waiting&&<p className="text-xs text-muted">{t("Retry original inputs repeats the saved request. Corrected inputs or a refreshed definition create a linked correction.")}</p>}</Disclosure>}
  </div>;
 }
 

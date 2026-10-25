@@ -79,6 +79,27 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   useEffect(() => ready ? client.enableLiveReads() : undefined, [client, ready]);
   const refresh = useCallback(async () => { client.usingPrepared = false; client.refreshLiveReads(); await queries.invalidateQueries(); setRevision((r) => r + 1); }, [client, queries]);
 
+  // Restoring an unanswered request also restores its transport. Check once
+  // when this identity is ready and once per reconnect, using the K5 sender.
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    const resume = async () => {
+      if (!navigator.onLine || !client.authorities.outbox.some(entry => entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN")) return;
+      try {
+        const answered = await client.send();
+        if (active && answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED" || entry.outcome === "ERROR_CODE_UNKNOWN_SCHEMA")) await refresh();
+      } catch (error) {
+        if (active) notify.error(error instanceof Error ? t(error.message) : t("Host unreachable"));
+      } finally {
+        if (active) setOutbox([...client.authorities.outbox]);
+      }
+    };
+    void resume();
+    window.addEventListener("online", resume);
+    return () => { active = false; window.removeEventListener("online", resume); };
+  }, [client, ready, refresh]);
+
   const decide = useCallback<Host["decide"]>(async (schema, target, payload, options = {}) => {
     // A type this client has no authority for is one the tenant declared while
     // it was open — an object someone published. Learn it, then decide.
@@ -96,7 +117,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     }
     const pending = client.authorities.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.principalId === client.connection.principal
       && entry.submission.schema?.name === schema && entry.submission.target?.type === target.type && entry.submission.target?.id === target.id
-      && (entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN"));
+      && (entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_SENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN"));
     if (pending && (!sameInput(pending) || original && original !== pending)) {
       options.onOutcome?.(pending);
       const reason = t("An earlier request is awaiting confirmation. Retry it before submitting changes.");

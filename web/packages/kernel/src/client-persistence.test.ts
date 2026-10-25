@@ -111,3 +111,20 @@ test("an answer that cannot be persisted remains recoverable under its original 
   const recovered = new EdgeClient(connection);
   expect(recovered.authorities.outbox[0]).toMatchObject({ state: "SUBMISSION_STATE_UNKNOWN", submission: { idempotencyKey: key } });
 });
+
+test("recovery and a concurrent decision share a serial sender without dropping the new request", async () => {
+  setup();const client=declare(new EdgeClient(connection)),original=draft(client),bodies:string[]=[];
+  let started!:()=>void,release!:()=>void;
+  const observed=new Promise<void>(resolve=>{started=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+  vi.stubGlobal("fetch",async(_url:string,options:RequestInit)=>{
+    bodies.push(String(options.body));
+    if(bodies.length===1){started();await held;}
+    return new Response(JSON.stringify({record:{changeId:`accepted-${bodies.length}`}}));
+  });
+  const recovery=client.send();await observed;
+  const next=draft(client),decision=client.send();
+  release();await Promise.all([recovery,decision]);
+  expect(bodies.map(body=>JSON.parse(body).idempotencyKey)).toEqual([original,next]);
+  expect(client.authorities.outbox.map(entry=>entry.state)).toEqual(["SUBMISSION_STATE_CONFIRMED","SUBMISSION_STATE_CONFIRMED"]);
+  await client.send();expect(bodies).toHaveLength(2);
+});
