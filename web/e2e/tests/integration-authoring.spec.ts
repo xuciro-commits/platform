@@ -79,7 +79,7 @@ test("an application assembles integration drafts over a saved model before join
     };
     const back = async () => {
       await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "Integration drafting application", exact: true }).click();
-      await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Integration", exact: true }).click();
+      await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Connections", exact: true }).click();
     };
     const savedID = async (save: string) => {
       await page.getByRole("button", { name: save, exact: true }).click();

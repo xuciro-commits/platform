@@ -2,3 +2,10 @@ packages:
   - packages/*
   - apps/*
   - e2e
+
+overrides:
+  vite: ^8.3.5
+  zod: ^4.6.7
+  undici: ^8.12.3
+  "@vitest/mocker": ^5.0.5
+  source-map-js: ^1.2.2

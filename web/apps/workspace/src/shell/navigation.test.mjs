@@ -82,7 +82,7 @@ test('legacy automation lists use the original surface or saved owner; builder e
 
 test('built-in explicit views have one global declaration across chrome, Builder and platform packages', () => {
   const ids = new Map();
-  for (const path of ['../chrome.tsx', '../../../../packages/build/src/index.tsx', '../../../../packages/platform/src/index.tsx']) {
+  for (const path of ['../chrome.tsx', '../../../../packages/build/src/index.tsx', '../../../../packages/govern/src/index.tsx']) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
     // These explicit declaration rows are the common contract of all three
     // owners. This check needs no compiler service or package loading.
@@ -93,5 +93,5 @@ test('built-in explicit views have one global declaration across chrome, Builder
   }
   assert.equal(ids.get('flow'), '../../../../packages/build/src/index.tsx');
   assert.equal(ids.get('flow-instance'), '../chrome.tsx');
-  assert.equal(ids.get('automation-operations'), '../../../../packages/platform/src/index.tsx');
+  assert.equal(ids.get('automation-operations'), '../../../../packages/govern/src/index.tsx');
 });

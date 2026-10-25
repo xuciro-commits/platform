@@ -55,7 +55,7 @@ test("an application authors AI functions, agents and evaluation sets over saved
   await page.unroute("**/v1/submissions");
 
   await page.getByRole("navigation", { name: "Application context", exact: true }).getByRole("button", { name: "AI drafting application", exact: true }).click();
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Logic", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Behavior", exact: true }).click();
   await create("Agent");
   await page.getByRole("textbox", { name: "Agent name", exact: true }).fill(agentName);
   await page.getByRole("textbox", { name: "Agent title", exact: true }).fill("Review saved notes");

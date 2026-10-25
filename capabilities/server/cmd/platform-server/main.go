@@ -29,7 +29,11 @@ func main() {
 	// fixtures, supplier's agent) as an in-process capability. Unset addresses
 	// mean the capability is off: nothing listens, no port is claimed.
 	if addr := os.Getenv("PLATFORM_SINK_ADDRESS"); addr != "" {
-		s := sink.New([]byte(os.Getenv("WEBHOOK_SECRET")))
+		secret := os.Getenv("WEBHOOK_SECRET")
+		if secret == "" {
+			secret = os.Getenv("PLATFORM_SECRET_SINK")
+		}
+		s := sink.New([]byte(secret))
 		go func() {
 			if err := s.ListenAndServe(addr); err != nil {
 				log.Fatal(err)

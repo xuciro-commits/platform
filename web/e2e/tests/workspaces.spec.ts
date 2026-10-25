@@ -19,8 +19,8 @@ test("Builder keeps its complete menus, original object and action editors, and 
   const showNavigation = async () => { if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click(); };
   const navigation = page.getByRole("navigation", { name: "Main", exact: true });
   await expect(navigation).toBeVisible();
-  for (const group of ["Applications", "Model", "Logic", "Interface", "Integration", "Release"]) {
-    await expect(navigation.getByText(group, { exact: true })).toBeVisible();
+  for (const group of ["Applications", "Model", "Behavior", "Interface", "Connections", "Release"]) {
+    await expect(navigation.getByText(group, { exact: true }).first()).toBeVisible();
   }
   for (const entry of ["All applications", "Object types", "Link types", "Shared properties", "Queries", "Pages", "Templates", "Object behavior", "Logic flows", "Automations", "AI functions", "Code functions", "Decision tables", "Agents", "Alert rules", "Connections", "Observation sources", "Data sources", "Datasets", "Pipelines", "Matching rules", "Writebacks", "Integration health", "Sample sets", "Business test plans", "Evaluation sets", "Changes", "Release review", "Release history"]) {
     await expect(navigation.getByRole("button", { name: entry, exact: true })).toBeVisible();
@@ -56,11 +56,11 @@ test("Builder keeps its complete menus, original object and action editors, and 
 
   await builder.open(page, `/project?id=${application.id}`);
   const workspaces = navigation.getByRole("navigation", { name: "Application workspaces", exact: true });
-  for (const area of ["Model", "Logic", "Interface", "Integration", "Release"]) {
+  for (const area of ["Model", "Behavior", "Interface", "Connections", "Release"]) {
     await expect(workspaces.getByRole("button", { name: area, exact: true })).toBeVisible();
   }
-  await workspaces.getByRole("button", { name: "Logic", exact: true }).click();
-  await expect(workspaces.getByRole("button", { name: "Logic", exact: true })).toHaveAttribute("aria-current", "page");
+  await workspaces.getByRole("button", { name: "Behavior", exact: true }).click();
+  await expect(workspaces.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
 test("system definitions are opt-in across lists and keep native references and tenant drafts separate", async ({ page, builder }, testInfo) => {
@@ -316,7 +316,7 @@ test("task workspaces preserve platform applications and hand off a controlled r
 
   // Master data and Knowledge remain task-owned, not builder-only aliases.
   await builder.open(page, "/home");
-  await page.getByRole("button", { name: "Use applications", exact: true }).click();
+  await page.getByRole("button", { name: "Operate", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Master data\b/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Platform Catalog", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /^Master data\b/ }).first().click();
@@ -391,7 +391,10 @@ test("task workspaces preserve platform applications and hand off a controlled r
     }
   });
   await term.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(term.getByText("ERROR_CODE_INVALID_ARGUMENT", { exact: true })).toBeVisible();
+  await expect(term.getByText("Create term was refused", { exact: false })).toBeVisible();
+  const details = term.getByRole("button", { name: "Technical details", exact: true });
+  if (await details.count()) await details.click();
+  await expect(term.getByText("ERROR_CODE_INVALID_ARGUMENT", { exact: false })).toBeVisible();
   await expect(term.getByRole("textbox", { name: "ID *", exact: true })).toHaveValue(termID);
   await expect(term.getByRole("textbox", { name: "Term *", exact: true })).toHaveValue(termName);
   await expect(term.getByRole("textbox", { name: "Meaning *", exact: true })).toHaveValue("Accepting an incoming delivery");
@@ -431,7 +434,7 @@ test("task workspaces preserve platform applications and hand off a controlled r
   const cancelledRules = await builder.read<{ records: { name: string }[] }>("records/build.alertrule?limit=1000");
   expect(cancelledRules.records.some(rule => rule.name === cancelledRuleName)).toBe(false);
 
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Logic", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Behavior", exact: true }).click();
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "Alert rule", exact: true }).click();
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();

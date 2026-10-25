@@ -44,6 +44,11 @@ def main():
     fixtures = []
     wait(lambda: request(issuer + '.well-known/openid-configuration'), lambda value: value.get('issuer'), 'The identity provider did not become ready', timeout=120)
     sql("create role rehearsal_source login password 'sinkLocalOnly0000000000000000000000000000000000000000000000000000'; grant connect on database platform to rehearsal_source; grant usage on schema public to rehearsal_source")
+    for port_env in ['SINK_PORT', 'SINK_PORT_HOSPITALITY']:
+        sink_port = os.environ[port_env]
+        wait(lambda: request('http://127.0.0.1:' + sink_port + '/received'), lambda value: isinstance(value, dict) and 'calls' in value, 'Embedded sink on ' + port_env + ' did not become ready', timeout=30)
+        models = request('http://127.0.0.1:' + sink_port + '/v1/models')
+        require(any(m.get('id') == 'echo' for m in models.get('data', [])), 'Embedded sink on ' + port_env + ' missing models fixture')
     environment = json.loads((ROOT / 'deploy/local/rehearsal-fixtures.json').read_text())
     for configuration in environment:
         suffix, tenant = configuration['suffix'], configuration['tenant']
@@ -110,7 +115,7 @@ def main():
         require(f['builder'].record('build.migration', 'MIGRATION-RUN')['record']['state'] == 'complete', 'Completed migration did not recover')
         telemetry.resume(f['builder'], f['telemetry'], sql)
     subprocess.run(['pnpm', '--filter', '@platform/e2e', 'exec', 'playwright', 'test', '--config', 'playwright.deploy.config.ts'], cwd=ROOT / 'web', env={**os.environ, 'PLATFORM_DEPLOY_PASSWORD': 'Plant-Local-1'}, check=True)
-    print('ok   common host: actual OIDC, generic declarations, restart, PostgreSQL backup, original edge keys, retained telemetry outputs, isolated recovery and old/new flows', flush=True)
+    print('ok   common host: actual OIDC, embedded sink stand-in, generic declarations, restart, PostgreSQL backup, original edge keys, retained telemetry outputs, isolated recovery and old/new flows', flush=True)
 
 
 if __name__ == '__main__':

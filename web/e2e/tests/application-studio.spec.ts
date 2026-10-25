@@ -257,7 +257,7 @@ test("one application retains drafts across five workspaces and delivers grouped
   await existing.selectOption(manualChoice);
   await expect(existing).toBeEnabled();
   await existing.selectOption(automaticChoice);
-  await navigation.getByRole("button", { name: "Logic", exact: true }).click();
+  await navigation.getByRole("button", { name: "Behavior", exact: true }).click();
   const inventoryAssets = navigation.getByRole("region", { name: "Application assets", exact: true });
   await expect(resources.getByRole("button", { name: /^Inventory manual flow/ })).toHaveCount(1);
   await expect(resources.getByRole("button", { name: /^Inventory automation/ })).toHaveCount(1);
@@ -350,7 +350,7 @@ test("decision tables and alerts remain application members through editing and 
   await assets.getByRole("button", { name: /^Heating decision/ }).click();
   await expect(page.getByRole("heading", { name: "Heating decision", exact: true }).first()).toBeVisible();
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
-  await expect(navigation.getByRole("button", { name: "Logic", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("button", { name: "Behavior", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(assets.getByRole("heading", { name: "Heating control", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Application context", exact: true })
     .getByRole("button", { name: "Heating control", exact: true })).toBeVisible();

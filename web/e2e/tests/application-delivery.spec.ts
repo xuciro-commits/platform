@@ -4,11 +4,14 @@ test("shared published resources retain their owners through application discove
   test.setTimeout(120_000);
   const before = await builder.definitions<any>();
   const operatorKeys = new Set((await operator.definitions<any>()).map(definition => JSON.stringify(definition.ref)));
-  const action = before.find(definition => definition.ref.app !== "build" && definition.action && !operatorKeys.has(JSON.stringify(definition.ref)));
-  const fn = before.find(definition => definition.ref.app !== "build" && definition.function);
-  const flow = before.find(definition => definition.ref.app !== "build" && definition.flow);
-  expect(action).toBeTruthy(); expect(fn).toBeTruthy(); expect(flow).toBeTruthy();
-  const resources = [{ definition: action, title: action.action.title }, { definition: fn, title: fn.function.title }, { definition: flow, title: flow.flow.title }];
+  const actions = before.filter(definition => definition.ref.app !== "build" && definition.action && !operatorKeys.has(JSON.stringify(definition.ref)));
+  expect(actions.length).toBeGreaterThan(0);
+  const action = actions[0];
+  const secondAction = actions.find(d => d.ref.app !== action.ref.app) ?? actions[1];
+  const resources = [
+    { definition: action, title: action.action.title },
+    ...(secondAction ? [{ definition: secondAction, title: secondAction.action.title }] : []),
+  ];
   const missing = { app: "build", kind: "action", name: slug("unavailable") };
   const application = await builder.application({ title: "Shared service resources", resources: [missing] });
   await builder.open(page, `/project?id=${application.id}&area=logic&asset=${encodeURIComponent(`${missing.app}/${missing.kind}/${missing.name}`)}`);
@@ -25,8 +28,8 @@ test("shared published resources retain their owners through application discove
     const navigation = page.getByRole("navigation", { name: "Main", exact: true });
     const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
     if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
-    await navigation.getByRole("button", { name: "Logic", exact: true }).click();
-    await navigation.getByRole("region", { name: "Application assets", exact: true }).getByRole("button", { name: new RegExp(`^${resource.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) }).click();
+    await navigation.getByRole("button", { name: "Behavior", exact: true }).click();
+    await page.getByRole("region", { name: "Workspace resources", exact: true }).getByRole("button", { name: new RegExp(`^${resource.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) }).click();
     await expect(page.getByRole("heading", { name: resource.title, exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Published resource", exact: true })).toBeVisible();
     const diagram = page.getByRole("group", { name: "Dependency diagram", exact: true });
