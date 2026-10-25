@@ -5,7 +5,7 @@
 // form on a member's page (people.tsx).
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import {useUnsavedChanges, Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t } from "@platform/ui";
+import {useUnsavedChanges, Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t, formatStamp} from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 import type { Member } from "./shared";
 
@@ -152,7 +152,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
       <div className="flex items-center gap-3">
         <Button variant="primary" disabled={!dirty} onClick={() => void save()}>{t("Save")}</Button>
         {dirty && <Button onClick={() => setDraft({})}>{t("Discard")}</Button>}
-        {account.lastSeen && <span className="text-xs text-muted">{t("Last seen")} {new Date(account.lastSeen).toLocaleString()}</span>}
+        {account.lastSeen && <span className="text-xs text-muted">{t("Last seen")} {formatStamp(account.lastSeen)}</span>}
       </div>
     </div>
   );
@@ -249,7 +249,7 @@ function Tokens() {
             {x.scopes.map((s) => <Tag key={s} label={s} />)}
             {x.until && <span className="text-xs text-muted">{t("until {day}", { day: x.until })}</span>}
             {x.expired && <Tag label={t("expired")} tone="warning" />}
-            <span className="text-xs text-muted">{x.lastUsed ? t("last used {at}", { at: new Date(x.lastUsed).toLocaleString() }) : t("never used")}</span>
+            <span className="text-xs text-muted">{x.lastUsed ? t("last used {at}", { at: formatStamp(x.lastUsed) }) : t("never used")}</span>
             {can("platform.token.revoke") && <Button size="sm" variant="ghost" onClick={async () => { if (await decide("platform.token.revoke", { type: "platform.token", id: x.id }, {})) void tokens.refetch(); }}>{t("Revoke")}</Button>}
           </p>
         ))}
@@ -274,9 +274,9 @@ function Sessions() {
             <Tag label={t(s.kind)} tone={s.kind === "token" ? "info" : "neutral"} />
             <span>{s.agent || t("unknown client")}</span>
             {s.token && <span className="font-mono text-xs text-muted">{s.token}</span>}
-            <span className="text-xs text-muted">{t("since {at}", { at: new Date(s.first).toLocaleString() })} · {t("last {at}", { at: new Date(s.last).toLocaleString() })}</span>
+            <span className="text-xs text-muted">{t("since {at}", { at: formatStamp(s.first) })} · {t("last {at}", { at: formatStamp(s.last) })}</span>
             {s.current && <Tag label={t("this session")} tone="success" />}
-            {s.ended && <Tag label={t("ended {at}", { at: new Date(s.ended).toLocaleString() })} tone="warning" />}
+            {s.ended && <Tag label={t("ended {at}", { at: formatStamp(s.ended) })} tone="warning" />}
           </p>
         ))}
       </div>

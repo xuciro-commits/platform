@@ -49,20 +49,20 @@ function ConfirmationCard({ run, onChanged }: { run: Api.ConfirmationRun; onChan
     {run.escalated && <p role="status" className="text-sm text-warning">{t("The business deadline was escalated to its declared reviewers.")}</p>}
     {run.parties?.map(p => <div key={p.name} className="grid min-w-0 gap-2 border-b border-border pb-3 text-xs last:border-b-0" aria-label={p.title}>
       <strong>{p.title}</strong>
-      <div className="flex flex-wrap gap-2"><span>{t(p.state)}</span>{p.at && <time dateTime={p.at}>{new Date(p.at).toLocaleString()}</time>}</div>
+      <div className="flex flex-wrap gap-2"><span>{t(p.state)}</span>{p.at && <time dateTime={p.at}>{formatStamp(p.at)}</time>}</div>
       {(p.state === "pending" || p.state === "unknown") && run.created.at && <p>{t("Waiting {n} minutes", { n: Math.max(0, Math.floor((Date.now() - Date.parse(run.created.at)) / 60000)) })}</p>}
       {p.reason && <p>{p.reason}</p>}
       {p.compensation&&<div className="grid gap-2">
         <PropertyList columns={2} items={[
           [t("Compensation"),t(p.compensationState??"pending")],
-          ...(p.compensationAt?[[t("Time"),new Date(p.compensationAt).toLocaleString()] as [string,string]]:[]),
+          ...(p.compensationAt?[[t("Time"),formatStamp(p.compensationAt)] as [string,string]]:[]),
         ]}/>
         {p.compensationReason&&<p>{p.compensationReason}</p>}
       </div>}
       {p.differences?.map((d,i)=><div key={i} className="grid gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span>{t("Source reconciliation")}</span><Tag label={d.matched?t("Matched"):t("Difference")} tone={d.matched?"success":"warning"}/>
-          <time dateTime={d.at}>{new Date(d.at).toLocaleString()}</time>
+          <time dateTime={d.at}>{formatStamp(d.at)}</time>
         </div>
         {d.error&&<p role="alert">{d.error}</p>}
         <Disclosure summary={t("Observed values")}><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(d.observed,null,2)}</pre></Disclosure>

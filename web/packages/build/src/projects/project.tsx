@@ -8,7 +8,7 @@ import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 // Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
-import { ActionMenu, Button, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
+import { ActionMenu, Button, Checkbox, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Tag, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
@@ -366,8 +366,8 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
                 {group.items.map(item => {
                   const key = refKey(item.ref);
                   return <div key={key} className="flex items-center gap-1">
-                    {retireable(item) && <input type="checkbox" aria-label={t("Select {title}", { title: item.title })} checked={picked.has(key)}
-                      onChange={(event) => setPicked(next => { const picked2 = new Set(next); if (event.target.checked) picked2.add(key); else picked2.delete(key); return picked2; })} />}
+                    {retireable(item) && <Checkbox ariaLabel={t("Select {title}", { title: item.title })} checked={picked.has(key)}
+                      onChange={checked => setPicked(next => { const picked2 = new Set(next); if (checked) picked2.add(key); else picked2.delete(key); return picked2; })} />}
                     <Button variant="row" className="min-w-0 flex-1 gap-3 py-3" onClick={() => item.missing ? setSelected(refKey(item.ref)) : open(assetRoute(item.ref, owned, definitions, id))}>
                       <span className="text-muted [&>svg]:size-4">{kindIcon[item.kind.kind]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{statusOf(item)}</span>
                     </Button>

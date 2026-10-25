@@ -1,5 +1,5 @@
 import { sourceFieldInput } from "@platform/app";
-import { ContextHelp, StructuredEditor } from "@platform/ui";
+import { ContentTabs, ContextHelp, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -122,20 +122,20 @@ export function CodeEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     <StructuredEditor expectedRevision={draft.id ? draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.code:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setDirty(true); setError(""); setSDK(""); }} onTrial={next => trial(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: draft.id || createID }, next, draft.id ? draft.revision : 0)}><fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("Code function editor")}>
-          {(["source", "contract", "sdk", "test"] as const).map((key) => <Button key={key} role="tab" aria-selected={tab === key} variant={tab === key ? "primary" : "ghost"} onClick={() => setTab(key)}>{t(({ source: "Source code", contract: "Input and output", sdk: "Generated SDK", test: "Test published version" })[key])}</Button>)}
-        </div>
-        {tab === "source" && <>
+        <ContentTabs label={t("Code function editor")} value={tab} onChange={(id) => setTab(id as typeof tab)} items={[
+          { id: "source", title: t("Source code"), content: <>
           <ContextHelp title={t("Source code")}><p className="text-xs text-muted">{t("Implement Run(input Input) (Output, error). The SDK generates the command wrapper from your schema.")}</p></ContextHelp>
           <label className="grid gap-1 text-xs">{t("Source code")}<Textarea spellCheck={false} rows={22} className="font-mono text-xs leading-6" value={draft.source} onChange={(event) => change({ source: event.target.value })} /></label>
-        </>}
-        {tab === "contract" && <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+          </> },
+          { id: "contract", title: t("Input and output"), content: <div className="grid min-w-0 gap-4 xl:grid-cols-2">
           <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Input schema")}</legend><InputDraftProvider scope="input-schema"><SchemaEditor schema={draft.input} onChange={(input) => change({ input })} /></InputDraftProvider></fieldset>
           <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Output schema")}</legend><InputDraftProvider scope="output-schema"><SchemaEditor schema={draft.output} onChange={(output) => change({ output })} /></InputDraftProvider></fieldset>
-        </div>}
-        {tab === "sdk" && <><Button disabled={busy || invalid} onClick={() => void perform(previewSDK)}>{t("Generate SDK")}</Button>
-          {sdk && <pre className="max-h-[36rem] overflow-auto rounded-lg bg-background p-3 text-xs" aria-label={t("Generated SDK")}>{sdk}</pre>}</>}
-        {tab === "test" && <>
+          </div> },
+          { id: "sdk", title: t("Generated SDK"), content: <>
+            <Button disabled={busy || invalid} onClick={() => void perform(previewSDK)}>{t("Generate SDK")}</Button>
+            {sdk && <pre className="max-h-[36rem] overflow-auto rounded-lg bg-background p-3 text-xs" aria-label={t("Generated SDK")}>{sdk}</pre>}
+          </> },
+          { id: "test", title: t("Test published version"), content: <>
           <p className="text-xs text-muted">{t("This calls the installed version with the current member and saves its accepted result.")}</p>
           <DraftInputs.Provider value={{...testInputs,scope:"test"}}>
             <JSONEditor label={t("Test input")} value={input} onChange={setInput} schema={published?.input ?? draft.input} rows={6} />
@@ -153,7 +153,8 @@ export function CodeEditor({ id }: { id: string }) {
               <p className="break-all text-xs text-muted">{t("Call")}: {call}</p>
             </>}
           </Panel>
-        </>}
+          </> },
+        ]} />
       </Card>
       <Panel className="grid content-start gap-3 p-4" aria-label={t("Function settings")}>
         <label className="grid gap-1 text-xs">{t("Function name")}<Input disabled={!!draft.published} value={draft.name} onChange={(event) => change({ name: event.target.value })} /></label>

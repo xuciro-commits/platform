@@ -1,7 +1,7 @@
 // Settings: owned work, integrations, app settings and the audit trail.
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp} from "@platform/ui";
 import { useState } from "react";
 import { when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
 
@@ -38,7 +38,7 @@ export function Automation() {
 export function Deliveries() {
   const deliveries = useRead<Delivery[]>("/v1/deliveries");
   const columns: ColumnDef<Delivery, any>[] = [
-    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
+    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
     { accessorKey: "action", header: t("Event"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "target", header: t("Target"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "subscriber", header: t("Delivered to"), meta: { width: 120 } },
@@ -67,7 +67,7 @@ export function SystemHealth() {
           [t("Failing connectors"), health.connectorsFailing],
           [t("Failing endpoints"), health.endpointsFailing],
         ]} />
-        <Disclosure summary={t("Details")}><PropertyList columns={2} items={[[t("Host started"), new Date(health.started).toLocaleString()], [t("Version"), <code key="version" className="break-all">{health.built || "—"}</code>]]} /></Disclosure>
+        <Disclosure summary={t("Details")}><PropertyList columns={2} items={[[t("Host started"), formatStamp(health.started)], [t("Version"), <code key="version" className="break-all">{health.built || "—"}</code>]]} /></Disclosure>
         {health.status === "quarantined" && <div role="alert" className="text-danger">
           {t("This tenant is quarantined. Inputs and work are stopped. Repair its journal or restore a valid backup, then retry recovery.")}
           {health.recoveryError && <code className="block break-all">{health.recoveryError}</code>}
@@ -279,14 +279,14 @@ export function Audit() {
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
   const personal = useRead<Api.PersonalRead[]>("/v1/personal-reads").data ?? [];
   const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [
-    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
+    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
     { accessorKey: "type", header: t("Record type"), meta: { width: 160 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "ids", header: t("Records"), accessorFn: (r) => r.ids.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "fields", header: t("Personal fields"), meta: { width: 200 }, accessorFn: (r) => r.fields.join(", ") },
   ];
   const columns: ColumnDef<AuditEntry, any>[] = [
-    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
+    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => formatStamp(c.getValue()) },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
     { accessorKey: "app", header: t("App"), meta: { width: 120 }, cell: (c) => appTitle(c.getValue() as string) },
     { accessorKey: "action", header: t("Action"), cell: (c) => { const schema = c.getValue() as string, title = titles.get(schema); return <span className="flex min-w-0 items-baseline gap-2"><span className="truncate">{title ?? schema}</span>{title && <span className="truncate font-mono text-2xs text-muted">{schema}</span>}</span>; } },

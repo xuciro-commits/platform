@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { Button, Card, ContextHelp, DataTable, Disclosure, PropertyList, Select, Tag, Textarea, t, type ColumnDef } from "@platform/ui";
+import { Button, Card, ContextHelp, DataTable, Disclosure, PropertyList, Select, Tag, Textarea, t, type ColumnDef, formatStamp} from "@platform/ui";
 import { useState } from "react";
 import { useHost, useOpenRecord, useReadQuery } from "../index";
 import { useRunControl } from "../automation/use-run-control";
@@ -35,7 +35,7 @@ function DispatchCard({ run, onChanged }: { run: Api.DispatchRun; onChanged: () 
     { accessorKey: "number", header: t("Attempt") },
     { accessorKey: "target", header: t("Dispatch target"), cell: cell => <span className="break-all font-mono text-xs">{cell.row.original.target}</span> },
     { accessorKey: "state", header: t("State"), cell: cell => stateName(cell.row.original.state) },
-    { accessorKey: "at", header: t("Time"), cell: cell => new Date(cell.row.original.at).toLocaleString() },
+    { accessorKey: "at", header: t("Time"), cell: cell => formatStamp(cell.row.original.at) },
     { accessorKey: "reason", header: t("Reason") },
   ];
   const review = async () => {
@@ -48,14 +48,14 @@ function DispatchCard({ run, onChanged }: { run: Api.DispatchRun; onChanged: () 
     <PropertyList columns={2} items={[
       [t("Dispatch target"),<code className="break-all">{run.target}</code>],
       [t("Stable business key"),<code className="select-all break-all">{run.key}</code>],
-      [t("Business deadline"),<time dateTime={run.deadline}>{new Date(run.deadline).toLocaleString()}</time>],
+      [t("Business deadline"),<time dateTime={run.deadline}>{formatStamp(run.deadline)}</time>],
       [t("Attempts"),run.attempt],
     ]}/>
     {!terminalStates.includes(run.state) && <p role="status" className="text-xs">{t("Elapsed: {seconds} seconds", { seconds: elapsed(run.startedAt) })}{run.state === "stuck" ? ` · ${t("Stuck for {seconds} seconds", { seconds: elapsed(run.stateAt) })}` : ""}</p>}
     {run.reason && <p className="whitespace-pre-wrap break-words text-sm">{run.reason}</p>}
     {run.state === "unknown" && <p role="status" className="text-xs text-warning">{t("The result is unknown. The target may already have acted; status readback continues.")}</p>}
     {reading&&<PropertyList columns={2} items={[
-      [t("Latest status read"),new Date(reading.at).toLocaleString()],
+      [t("Latest status read"),formatStamp(reading.at)],
       [t("State"),stateName(reading.state)],
       ...(reading.value?[[t("Value"),reading.value] as [string,string]]:[]),
       ...(reading.reason&&reading.reason!==run.reason?[[t("Reason"),reading.reason] as [string,string]]:[]),
@@ -64,7 +64,7 @@ function DispatchCard({ run, onChanged }: { run: Api.DispatchRun; onChanged: () 
     {!!run.attempts?.length && <Disclosure summary={t("Dispatch attempts")}><DataTable data={run.attempts} columns={attemptColumns} getRowId={attempt => attempt.intent} searchable={false} height={200} /></Disclosure>}
     {!!run.readback?.length&&<Disclosure summary={t("Status read history")}>
       <div className="py-2"><DataTable data={[...run.readback].reverse().map((entry,index)=>({...entry,rowId:String(index)}))} columns={[
-        {accessorKey:"at",header:t("Time"),cell:cell=>new Date(cell.row.original.at).toLocaleString()},
+        {accessorKey:"at",header:t("Time"),cell:cell=>formatStamp(cell.row.original.at)},
         {accessorKey:"state",header:t("State"),cell:cell=>stateName(cell.row.original.state)},
         {accessorKey:"value",header:t("Value")},
         {accessorKey:"reason",header:t("Reason")},

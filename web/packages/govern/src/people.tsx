@@ -1,6 +1,6 @@
 // Settings: members and the organisation.
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import { ContextHelp, Button, Form, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t } from "@platform/ui";
+import { ContextHelp, Button, Form, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t, formatStamp} from "@platform/ui";
 import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, type Chart, type Member } from "./shared";
@@ -77,7 +77,7 @@ export function MemberDetail({ id }: { id: string }) {
     <div className="grid max-w-3xl gap-4">
       <EntityCard title={member.profile.displayName || member.id} subtitle={member.subjects.join(", ")} status={<span className="flex gap-1"><Tag label={t(kind(member))} /><Standing status={member.status} /></span>}
         properties={[[t("Member ID"), member.id], [t("Apps with a role"), Object.keys(member.roles).join(", ") || t("none")],
-          [t("Timezone"), account.effective.timezone], [t("Last seen"), member.profile.lastSeen ? new Date(member.profile.lastSeen).toLocaleString() : t("never")]]} />
+          [t("Timezone"), account.effective.timezone], [t("Last seen"), member.profile.lastSeen ? formatStamp(member.profile.lastSeen) : t("never")]]} />
       {!self && standing !== "left" && (can("platform.member.suspend") || can("platform.member.offboard")) && <Panel title={t("Standing")}>
         <p className="text-xs text-muted">{standing === "suspended" ? t("The member keeps their roles on record but holds nothing and cannot act until resumed; their sessions end.")
           : t("Suspend to pause a member without losing their roles; offboard when they leave for good.")}</p>

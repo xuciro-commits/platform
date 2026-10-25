@@ -18,8 +18,7 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "../runtim
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord,
-} from "@platform/ui";
+  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord} from "@platform/ui";
 import { Component, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HostContext, useHost,useOpenRecord, findDefinition, type Definition } from "../index";
 import type { Api } from "@platform/kernel";

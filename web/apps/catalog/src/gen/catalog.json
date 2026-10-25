@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1fd6a3ae068b5b07",
+  "revision": "sha256:e6bf9ffee273a3d3",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -12865,8 +12865,12 @@
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
+      "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/build/src/workshop/page-editor/diagnostics.ts",
+      "web/packages/govern/src/account.tsx",
       "web/packages/govern/src/enterprise/properties.tsx",
+      "web/packages/govern/src/operations.tsx",
+      "web/packages/govern/src/people.tsx",
       "web/packages/govern/src/shared.tsx",
       "web/packages/ui/src/records/Records.tsx"
     ],
@@ -13597,6 +13601,7 @@
       "web/packages/build/src/ontology/query.tsx",
       "web/packages/build/src/ontology/shape.tsx",
       "web/packages/build/src/projects/project-roles.tsx",
+      "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/releases/changes.tsx",
       "web/packages/build/src/releases/migration.tsx",
       "web/packages/build/src/releases/release.tsx",
@@ -13999,6 +14004,8 @@
     "ui/content-tabs": [
       "web/packages/app/src/pages/sections.tsx",
       "web/packages/build/src/automate/workflow-inspector.tsx",
+      "web/packages/build/src/functions/code.tsx",
+      "web/packages/build/src/ontology/ModelWorkbench.tsx",
       "web/packages/build/src/ontology/process.tsx",
       "web/packages/ui/src/components/Markdown.tsx",
       "web/packages/ui/src/layout/Workbench.tsx",
