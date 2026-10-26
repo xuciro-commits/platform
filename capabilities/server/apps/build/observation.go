@@ -80,11 +80,11 @@ func (b *Build) checkObservation(c platform.Caller, record construction.Observat
 	return b.checkObservationDefinition(c, record, true)
 }
 
-func (b *Build) checkObservationDefinition(c platform.Caller, record construction.Observation, ready bool) error {
+func (b *Build) checkObservationDefinition(c platform.Caller, record construction.Observation, published bool) error {
 	// Authoring may reference a saved model before its joint publication.
 	// This private shape is used only for draft validation; execution still
 	// resolves the exact installed or selected candidate definition.
-	if !ready && !b.jointMode {
+	if !published && !b.jointMode {
 		if _, selected := b.jointEntities[record.Object]; !selected {
 			objects, err := readDefinitionInventory[construction.Object](b.host.Automation(platform.Caller{}, construction.ID))
 			if err != nil {
@@ -150,16 +150,20 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record constructio
 		if !ok || owner != definition.Decision.Action.App || action.Target != definition.Object.Name {
 			return fmt.Errorf("The observation decision must use an action on its declared object")
 		}
-		if ready && c.ID != "" && (!c.Member.InScope(action.Schema) || !c.May(owner, action.Schema, action.Roles).Allow) {
-			return fmt.Errorf("The publisher cannot invoke the declared observation decision")
-		}
 		if err := platform.CheckObservationAction(definition, action); err != nil {
 			return err
 		}
 	}
 	connection, ok := platform.Get[construction.Connection](b.host.Automation(platform.Caller{}, construction.ID), record.Connection)
-	if !ok || connection.Archived || ready && connection.State != "ready" || connection.Kind != "http" {
-		return fmt.Errorf("The observation connection must be a ready HTTP connection")
+	if !ok || connection.Archived {
+		return fmt.Errorf("The observation connection is unavailable")
+	}
+	connection, err = b.ConnectionConfiguration(connection)
+	if err != nil {
+		return err
+	}
+	if connection.Kind != "http" {
+		return fmt.Errorf("The observation connection must be an HTTP connection")
 	}
 	return nil
 }

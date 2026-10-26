@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
@@ -15,28 +14,21 @@ import (
 // outside loop when its input is newer than its last run, quarantines the bad
 // rows and writes the rest as the output dataset's next version.
 func TestPipelineRunsOnNewDatasetVersion(t *testing.T) {
-	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{construction.ID: construction.Builder}}}
-	tn, err := NewTenant("pipelines", NewConsole("pipelines", seat), build.New("pipelines"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	member, _ := tn.Member("dana")
+	tn := composeTenant(t, "pipelines", []Seat{seatOf("dana", "build:builder")}, build.New("pipelines"))
 	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
-	submit := func(key, schema, typ, target, payload string) {
+	submit := func(schema, typ, target, payload string) {
 		t.Helper()
-		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key,
-			Target: &pb.EntityRef{Type: typ, Id: target}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at); err != nil {
-			t.Fatalf("%s: %v", key, err)
-		}
+		decide(t, tn, "dana", construction.ID, schema, typ, target, json.RawMessage(payload), at)
 	}
-	submit("ds-in", construction.DatasetType+".create", construction.DatasetType, "raw", `{"name":"rawitems","title":"Raw items"}`)
-	submit("ds-out", construction.DatasetType+".create", construction.DatasetType, "clean", `{"name":"cleanitems","title":"Clean items","keep":2}`)
-	submit("pipe", construction.PipelineType+".create", construction.PipelineType, "p1", `{"name":"clean","title":"Clean","input":"raw","outputDataset":"clean",
+	submit(construction.DatasetType+".create", construction.DatasetType, "raw", `{"name":"rawitems","title":"Raw items"}`)
+	submit(construction.DatasetType+".create", construction.DatasetType, "clean", `{"name":"cleanitems","title":"Clean items","keep":2}`)
+	submit(construction.PipelineType+".create", construction.PipelineType, "p1", `{"name":"clean","title":"Clean","input":"raw","outputDataset":"clean",
 		"steps":[{"kind":"filter","column":"plant","op":"=","value":"1000"},{"kind":"cast","column":"qty","type":"number"}],
 		"expectations":[{"column":"sku","rule":"notnull"},{"column":"qty","rule":"range","value":"0..10"}]}`)
-	submit("pipe-publish", construction.PipelineType+".publish", construction.PipelineType, "p1", `{}`)
-	tn.RunPipelines(at) // publish requests a run; with no input version it records why and writes nothing
-	submit("load-1", construction.SchemaDatasetLoad, construction.DatasetType, "raw", `{"rows":[{"sku":"A","plant":"1000","qty":"3"},{"sku":"","plant":"1000","qty":"1"},{"sku":"C","plant":"2000","qty":"1"},{"sku":"D","plant":"1000","qty":"50"}],"producer":"test"}`)
+	submit(construction.PipelineType+".publish", construction.PipelineType, "p1", `{}`)
+	decide(t, tn, "dana", construction.ID, construction.PipelineType+".run", construction.PipelineType, "p1", map[string]any{}, at)
+	tn.RunPipelines(at) // The explicit run records the missing input without writing output.
+	submit(construction.SchemaDatasetLoad, construction.DatasetType, "raw", `{"rows":[{"sku":"A","plant":"1000","qty":"3"},{"sku":"","plant":"1000","qty":"1"},{"sku":"C","plant":"2000","qty":"1"},{"sku":"D","plant":"1000","qty":"50"}],"producer":"test"}`)
 	tn.RunPipelines(at.Add(time.Minute))
 	c := tn.automation(construction.ID, false)
 	out, ok := platform.Get[construction.Dataset](c, "clean")
@@ -58,7 +50,7 @@ func TestPipelineRunsOnNewDatasetVersion(t *testing.T) {
 	}
 	// Three loads with keep=2 on the input: the first version is emptied.
 	for i := 2; i <= 3; i++ {
-		submit("load-"+string(rune('0'+i)), construction.SchemaDatasetLoad, construction.DatasetType, "raw", `{"rows":[{"sku":"A","plant":"1000","qty":"1"}]}`)
+		submit(construction.SchemaDatasetLoad, construction.DatasetType, "raw", `{"rows":[{"sku":"A","plant":"1000","qty":"1"}]}`)
 	}
 	in, _ := platform.Get[construction.Dataset](c, "raw")
 	if in.Version != 3 || len(in.Schema) != 3 {

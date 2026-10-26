@@ -165,47 +165,6 @@ func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]pla
 	return []platform.AssetEnvironmentRequirement{req}, nil
 }
 
-func (b *Build) ResolveAssetEnvironment(requirement platform.AssetEnvironmentRequirement) (platform.AssetEnvironmentTarget, error) {
-	if requirement.Ref.App != construction.ID || requirement.Ref.Kind != platform.AssetConnection {
-		return platform.AssetEnvironmentTarget{}, fmt.Errorf("environment binding %s has no Build connection owner", requirement.Ref)
-	}
-	connections, _, refusal := platform.Find[construction.Connection](b.host.Automation(platform.Caller{}, construction.ID), platform.Query{})
-	if refusal != nil {
-		return platform.AssetEnvironmentTarget{}, refusal
-	}
-	var connection construction.Connection
-	for _, candidate := range connections {
-		if candidate.Archived || candidate.Name != requirement.Ref.Name {
-			continue
-		}
-		if connection.ID != "" {
-			return platform.AssetEnvironmentTarget{}, fmt.Errorf("target environment binding %s is ambiguous", requirement.Ref)
-		}
-		connection = candidate
-	}
-	if connection.ID == "" {
-		return platform.AssetEnvironmentTarget{}, fmt.Errorf("release needs a target environment binding for %s", requirement.Ref)
-	}
-	if err := checkEnvironmentConnection(connection, requirement); err != nil {
-		return platform.AssetEnvironmentTarget{}, err
-	}
-	target := platform.AssetEnvironmentTarget{TargetRecord: connection.ID}
-	if requirement.Credential {
-		target.Credential = connection.Secret
-	}
-	return target, nil
-}
-
-func checkEnvironmentConnection(connection construction.Connection, requirement platform.AssetEnvironmentRequirement) error {
-	if connection.Archived || connection.Name != requirement.Ref.Name || connection.State != "ready" || requirement.Profile != "" && connection.Kind != requirement.Profile {
-		return fmt.Errorf("target environment binding %s is not ready or has an incompatible connection kind", requirement.Ref)
-	}
-	if requirement.Credential && connection.Secret == "" {
-		return fmt.Errorf("target environment binding %s needs its own credential", requirement.Ref)
-	}
-	return nil
-}
-
 func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) (func(), error) {
 	saved := b.releaseDraftIDs
 	b.releaseDraftIDs = maps.Clone(saved)
@@ -213,55 +172,42 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 		b.releaseDraftIDs = map[platform.AssetRef]string{}
 	}
 	restore := func() { b.releaseDraftIDs = saved }
-	if ctx.DraftsOnly {
-		b.draftIntegrationTargets(assets)
-		for ref, id := range ctx.DraftIDs {
-			b.releaseDraftIDs[ref] = id
-		}
-		return restore, nil
-	}
 	for _, asset := range assets {
 		if asset.Ref.App != construction.ID || !construction.ValueIntegrationKind(asset.Ref.Kind) {
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetConnection {
-			var target string
-			for _, binding := range ctx.Bindings {
-				if binding.Ref == asset.Ref {
-					if target != "" {
-						restore()
-						return nil, fmt.Errorf("connection binding is duplicated")
-					}
-					target = binding.TargetRecord
-				}
-			}
-			conn, ok := platform.Get[construction.Connection](b.host.Automation(platform.Caller{}, construction.ID), target)
-			var d construction.ConnectionDefinition
-			if target == "" || !ok || construction.ValueDecodeIntegration(asset.Body, &d) != nil {
-				restore()
-				return nil, fmt.Errorf("connection %s needs a ready target binding with matching kind and credential", asset.Ref)
-			}
-			if err := checkEnvironmentConnection(conn, platform.AssetEnvironmentRequirement{Ref: asset.Ref, Profile: d.Kind, Credential: d.Credential}); err != nil {
-				restore()
-				return nil, err
-			}
-			b.releaseDraftIDs[asset.Ref] = target
-		} else {
-			rows, err := b.integrationInventory(asset.Ref.Kind)
-			if err != nil {
-				restore()
-				return nil, err
-			}
-			id := asset.Ref.Name
-			for _, r := range rows {
-				name, _, _, _ := integrationMetadata(r)
-				if name == asset.Ref.Name {
-					id = integrationRecord(r).ID
-					break
-				}
-			}
-			b.releaseDraftIDs[asset.Ref] = id
+		rows, err := b.integrationInventory(asset.Ref.Kind)
+		if err != nil {
+			restore()
+			return nil, err
 		}
+		id, found := asset.Ref.Name, false
+		for _, row := range rows {
+			name, _, _, _ := integrationMetadata(row)
+			if name != asset.Ref.Name {
+				continue
+			}
+			if found {
+				restore()
+				return nil, fmt.Errorf("integration name %s is ambiguous", name)
+			}
+			found, id = true, integrationRecord(row).ID
+			if connection, ok := row.(construction.Connection); ok {
+				var definition construction.ConnectionDefinition
+				if err := construction.ValueDecodeIntegration(asset.Body, &definition); err != nil {
+					restore()
+					return nil, err
+				}
+				if definition.Kind != connection.Kind {
+					restore()
+					return nil, fmt.Errorf("connection %s has an incompatible local kind", asset.Ref)
+				}
+			}
+		}
+		b.releaseDraftIDs[asset.Ref] = id
+	}
+	for ref, id := range ctx.DraftIDs {
+		b.releaseDraftIDs[ref] = id
 	}
 	return restore, nil
 }
@@ -293,9 +239,6 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetConnection {
-			if !ctx.DraftsOnly {
-				continue
-			}
 			connection, err := portableConnectionDraft(asset)
 			if err != nil {
 				return nil, err
@@ -353,9 +296,6 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 	return out, nil
 }
 func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platform.AssetReleaseContext) ([]platform.AssetInstallation, error) {
-	if err := b.validateReleaseMember(assets, ctx.Member); err != nil && !ctx.DraftsOnly {
-		return nil, err
-	}
 	restore, err := b.integrationTargets(assets, ctx)
 	if err != nil {
 		return nil, err
@@ -408,24 +348,10 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		}
 		switch r := record.(type) {
 		case construction.Source:
-			prior := current.(construction.Source)
-			if prior.Published != r.Published || prior.State != "published" {
-				var d construction.SourceDefinition
-				if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
-					return nil, err
-				}
-				if !d.Stream {
-					r.Requested = true
-				}
-			}
-			r.State, r.Puller = "published", ctx.Member.ID
+			r.State = "published"
 			record = r
 		case construction.Pipeline:
-			prior := current.(construction.Pipeline)
-			if prior.Published != r.Published || prior.State != "published" {
-				r.Requested = true
-			}
-			r.State, r.Runner = "published", ctx.Member.ID
+			r.State = "published"
 			record = r
 		case construction.Writeback:
 			r.State, r.Publisher = "published", ctx.Member.ID
@@ -452,6 +378,13 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 			continue
 		}
 		out = append(out, platform.AssetInstallation{Ref: asset.Ref, Schema: integrationType(asset.Ref.Kind) + ".publish", Record: integrationType(asset.Ref.Kind) + "/" + integrationRecord(record).ID, Image: raw})
+	}
+	if !ctx.DraftsOnly {
+		for _, plan := range out {
+			if slices.Contains([]platform.AssetKind{platform.AssetSource, platform.AssetPipeline, platform.AssetWriteback, platform.AssetObservation, platform.AssetMatching}, plan.Ref.Kind) && (!ctx.Member.Active() || !ctx.Member.InScope(plan.Schema)) {
+				return nil, fmt.Errorf("release publication token does not permit %s", plan.Schema)
+			}
+		}
 	}
 	return orderOwnerInstallations(assets, out)
 }
@@ -535,45 +468,10 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	if err != nil {
 		return err
 	}
-	var actor string
-	switch r := record.(type) {
-	case construction.Source:
-		actor = r.Puller
-	case construction.Pipeline:
-		actor = r.Runner
-	case construction.Writeback:
-		actor = r.Publisher
-	case construction.Observation:
-		actor = r.Publisher
-	case construction.Match:
-		actor = r.Publisher
-	}
-	var c platform.Caller
-	if actor != "" {
-		member, ok := b.host.Member(actor)
-		if !ok || !member.Active() || !member.InScope(plan.Schema) || !member.May(construction.ID, plan.Schema, []string{construction.Builder, construction.Integrator}).Allow {
-			return fmt.Errorf("integration execution member lacks publication permission")
-		}
-		c = b.host.Caller(platform.Caller{}, member, construction.ID)
-	} else if plan.Ref.Kind != platform.AssetConnection && plan.Ref.Kind != platform.AssetDataset {
-		return fmt.Errorf("integration execution member is missing")
-	}
-	writes := func(object string) error {
-		if object == "" {
-			return nil
-		}
-		for _, verb := range []string{"create", "edit"} {
-			schema := object + "." + verb
-			owner, action, ok := b.host.Action(schema)
-			if !ok || !c.Member.Active() || !c.Member.InScope(schema) || !c.May(owner, schema, action.Roles).Allow {
-				return fmt.Errorf("integration execution member cannot %s", schema)
-			}
-		}
-		return nil
-	}
+	c := b.host.Automation(platform.Caller{}, construction.ID)
 	switch r := record.(type) {
 	case construction.Connection:
-		_, err = b.ExecutionConnection(r)
+		_, err = b.ConnectionConfiguration(r)
 	case construction.Dataset:
 		_, err = b.ExecutionDataset(r)
 	case construction.Source:
@@ -584,7 +482,6 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 		if e := b.checkSource(c, fixed); e != nil {
 			return e
 		}
-		err = writes(fixed.Object)
 	case construction.Pipeline:
 		fixed, e := b.ExecutionPipeline(r)
 		if e != nil {
@@ -593,7 +490,6 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 		if e := b.checkPipeline(c, fixed); e != nil {
 			return e
 		}
-		err = writes(fixed.OutputObject)
 	case construction.Writeback:
 		fixed, e := b.ExecutionWriteback(r)
 		if e != nil {
@@ -602,13 +498,7 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 		if e := b.checkWriteback(c, fixed); e != nil {
 			return e
 		}
-		if len(fixed.Result) > 0 {
-			schema := fixed.Object + ".edit"
-			owner, action, ok := b.host.Action(schema)
-			if !ok || !c.Member.InScope(schema) || !c.May(owner, schema, action.Roles).Allow {
-				return fmt.Errorf("writeback execution member cannot apply answer fields")
-			}
-		}
+
 	case construction.Observation:
 		if _, e := b.ExecutionObservation(r); e != nil {
 			return e
@@ -767,103 +657,6 @@ func orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.As
 	return out, nil
 }
 
-// Preparation retains the caller's token scopes, which are not directory
-// fields. Dependency installation later validates current target role grants.
-func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member platform.Member) error {
-	permission := func(schema string) error {
-		if !member.Active() || !member.InScope(schema) {
-			return fmt.Errorf("release execution member cannot %s", schema)
-		}
-		return nil
-	}
-	writes := func(object string, verbs ...string) error {
-		for _, verb := range verbs {
-			if err := permission(object + "." + verb); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	for _, asset := range assets {
-		if asset.Ref.App != construction.ID || !construction.ValueIntegrationKind(asset.Ref.Kind) {
-			continue
-		}
-		switch asset.Ref.Kind {
-		case platform.AssetSource:
-			var d construction.SourceDefinition
-			if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
-				return err
-			}
-			if err := permission(construction.SourceType + ".publish"); err != nil {
-				return err
-			}
-			if d.Object != "" {
-				if err := writes(d.Object, "create", "edit"); err != nil {
-					return err
-				}
-			}
-			if d.Dataset != "" {
-				if err := permission(construction.SchemaDatasetLoad); err != nil {
-					return err
-				}
-			}
-		case platform.AssetPipeline:
-			var d construction.PipelineDefinition
-			if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
-				return err
-			}
-			if err := permission(construction.PipelineType + ".publish"); err != nil {
-				return err
-			}
-			if d.OutputObject != "" {
-				if err := writes(d.OutputObject, "create", "edit"); err != nil {
-					return err
-				}
-			}
-			if d.OutputDataset != "" {
-				if err := permission(construction.SchemaDatasetLoad); err != nil {
-					return err
-				}
-			}
-		case platform.AssetWriteback:
-			var d construction.WritebackDefinition
-			if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
-				return err
-			}
-			if err := permission(construction.WritebackType + ".publish"); err != nil {
-				return err
-			}
-			if len(d.Result) > 0 {
-				if err := writes(d.Object, "edit"); err != nil {
-					return err
-				}
-			}
-		case platform.AssetObservation:
-			var d platform.ObservationDefinition
-			if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
-				return err
-			}
-			if err := permission(construction.SchemaObservation); err != nil {
-				return err
-			}
-			if d.Decision != nil {
-				if err := permission(d.Decision.Action.Name); err != nil {
-					return err
-				}
-				owner, action, ok := b.observationAction(d)
-				if !ok || owner != d.Decision.Action.App || !member.May(owner, action.Schema, action.Roles).Allow {
-					return fmt.Errorf("release execution member cannot invoke the declared observation decision")
-				}
-			}
-		case platform.AssetMatching:
-			if err := permission(MatchType + ".publish"); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 	kinds := map[string]platform.AssetKind{construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.ProcessType: platform.AssetFlow, SampleSetType: platform.AssetSampleSet,
 		construction.PropertyTypeType: platform.AssetPropertyType, construction.LinkTypeType: platform.AssetLinkType, construction.QueryType: platform.AssetQuery, construction.FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent,
@@ -951,7 +744,6 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	saved, savedMode := b.jointEntities, b.jointMode
 	savedAssets := b.jointAssets
 	savedDeclarations := b.jointDeclarations
-	savedIDs := b.releaseDraftIDs
 	available := map[platform.AssetRef]bool{}
 	shapes := maps.Clone(saved)
 	if shapes == nil {
@@ -985,13 +777,14 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	for _, asset := range assets {
 		b.jointDeclarations[asset.Ref] = asset
 	}
-	b.releaseDraftIDs = maps.Clone(savedIDs)
-	if b.releaseDraftIDs == nil {
-		b.releaseDraftIDs = map[platform.AssetRef]string{}
+	restoreTargets, err := b.integrationTargets(assets, platform.AssetReleaseContext{})
+	if err != nil {
+		b.jointEntities, b.jointMode, b.jointAssets, b.jointDeclarations = saved, savedMode, savedAssets, savedDeclarations
+		return nil, err
 	}
-	b.draftIntegrationTargets(assets)
 	return func() {
-		b.jointEntities, b.jointMode, b.jointAssets, b.releaseDraftIDs, b.jointDeclarations = saved, savedMode, savedAssets, savedIDs, savedDeclarations
+		restoreTargets()
+		b.jointEntities, b.jointMode, b.jointAssets, b.jointDeclarations = saved, savedMode, savedAssets, savedDeclarations
 	}, nil
 }
 

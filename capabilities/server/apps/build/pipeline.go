@@ -42,7 +42,7 @@ func (b *Build) pipelineEntity() platform.Entity {
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Check the pipeline and let the host run it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishPipeline},
+				{Name: "publish", Title: "Publish", Description: "Publish this pipeline definition. Use Run now to start it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishPipeline},
 				{Name: "run", Title: "Run now", Description: "Ask for one run at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: requestRun},
 				{Name: "pause", Title: "Pause", Description: "Stop running; the definition stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
@@ -52,10 +52,13 @@ func pipelineActions() []platform.Action {
 		Payload: []platform.Field{{Name: "run", Type: "json", Required: true, Description: "The run's counts, quarantine and failures"}}}}
 }
 
-func requestRun(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func requestRun(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	p, ok := record.(*construction.Pipeline)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	if !c.Replaying {
+		p.Runner, p.RunnerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
 	}
 	p.Requested = true
 	return nil
@@ -74,7 +77,10 @@ func (b *Build) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 	if err := b.checkPipeline(c, *p); err != nil {
 		return err
 	}
-	p.Runner, p.Requested = c.ID, true
+	if c.Replaying {
+		// Old input journals retain their original publish-and-start meaning.
+		p.Runner, p.Requested = c.ID, true
+	}
 	if !c.Replaying {
 		fixed, err := b.freezeDirectIntegration(platform.AssetPipeline, *p)
 		if err != nil {
@@ -242,7 +248,7 @@ func (b *Build) submitPipelineRan(c platform.Caller, s *pb.Submission, now time.
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Run result has no pipeline")
 		}
 		if p.Last != nil && p.Last.Execution != nil && p.Last.Execution.Pending {
-			if err := checkIntegrationExecution(p.Last.Execution, payload.Run.Execution, c.ID); err != nil {
+			if err := checkIntegrationExecution(p.Last.Execution, payload.Run.Execution, c.Member); err != nil {
 				return nil, err
 			}
 			if payload.Run.DefinitionVersion != p.Last.DefinitionVersion || !payload.Run.At.Equal(p.Last.At) {
@@ -253,7 +259,7 @@ func (b *Build) submitPipelineRan(c platform.Caller, s *pb.Submission, now time.
 			if versionErr != nil || !equivalent {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
 			}
-			if err := checkIntegrationExecution(nil, payload.Run.Execution, c.ID); err != nil {
+			if err := checkIntegrationExecution(nil, payload.Run.Execution, c.Member); err != nil {
 				return nil, err
 			}
 		}

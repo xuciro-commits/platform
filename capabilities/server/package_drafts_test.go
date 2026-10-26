@@ -23,14 +23,14 @@ func TestInstalledManufacturingPackageCreatesAllDraftsWithoutPublishingOrGrantin
 		t.Fatal(err)
 	}
 	testConsoleOf(tn).BindPackageIndex(index)
-	decide(t, tn, "builder", PlatformApp, SchemaPackageInstall, PackageType, "application.manufacturing", map[string]any{"id": "application.manufacturing", "version": "0.1.0"}, txnAt)
+	decide(t, tn, "builder", PlatformApp, SchemaPackageInstall, PackageType, "application.manufacturing", map[string]any{"id": "application.manufacturing", "version": "0.1.1"}, txnAt)
 	var accepted []Entry
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
 		accepted = append(accepted, entry)
 		return entry.Body, nil
 	}
 	member := memberOf(t, tn, "builder")
-	answer, err := tn.CreatePackageDrafts(member, "application.manufacturing", "0.1.0", "create-original", txnAt)
+	answer, err := tn.CreatePackageDrafts(member, "application.manufacturing", "0.1.1", "create-original", txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestInstalledManufacturingPackageCreatesAllDraftsWithoutPublishingOrGrantin
 		t.Fatal("the original constrained draft was lost or published")
 	}
 	before := len(accepted)
-	retried, err := tn.CreatePackageDrafts(member, "application.manufacturing", "0.1.0", "create-original", txnAt)
+	retried, err := tn.CreatePackageDrafts(member, "application.manufacturing", "0.1.1", "create-original", txnAt)
 	if err != nil || !slices.Equal(retried.Drafts, answer.Drafts) || len(accepted) != before {
 		t.Fatalf("same-key retry changed the draft task: %v", err)
 	}

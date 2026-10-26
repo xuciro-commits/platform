@@ -87,6 +87,9 @@ func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, st
 	if json.Unmarshal(raw, &request) != nil || request.Version != 1 || request.Connection == "" || request.Writeback == "" || request.Dispatch != "" || request.Confirmation != "" || target.Type == "" || target.ID == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction delivery has no frozen writeback request")
 	}
+	if refusal := h.t.checkWritebackCredential(request); refusal != nil {
+		return refusal
+	}
 	key := receipt.GetChangeId() + ":" + step
 	endpoint := construction.WritebackEndpoint + request.Connection
 	x := platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}

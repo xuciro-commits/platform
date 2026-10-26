@@ -23,7 +23,7 @@ import (
 	"platformserver/platform"
 )
 
-// A committed activation must recover with its measured gate and shared
+// A committed activation must recover with its measured reports and shared
 // page/flow closure even if the process dies before applying the pointer.
 func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
@@ -141,8 +141,8 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if _, err := live.SaveReleaseCandidate(builder, platform.AssetApp, "APP", preview.CandidateID, "save", at); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := live.ActivateRelease(builder, preview.CandidateID, "before-evaluation", at); err == nil {
-		t.Fatal("joint candidate activated without an evaluation")
+	if review, err := live.ReviewSavedRelease(builder, preview.CandidateID); err != nil || !review.CanActivate {
+		t.Fatalf("unevaluated declaration could not be delivered: %+v %v", review, err)
 	}
 	submit(construction.ID, construction.TestPlanType+".edit", construction.TestPlanType, "EVAL", map[string]any{"model": "not-enabled/new-draft", "evaluation": []construction.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 0.05, MaxLatencyMillis: 300000, Cases: []construction.EvaluationCase{{Name: "newdraft", Input: json.RawMessage(`{"note":"New draft"}`), Expected: json.RawMessage(`{"summary":"Different","category":"review","review":false}`)}}}}})
 	reportID, err := live.EvaluateRelease(builder, ReleaseEvaluationRequest{CandidateID: preview.CandidateID, PlanID: "EVAL", Key: "evaluate"}, at)
@@ -276,7 +276,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	}
 	replayedReport, ok := platform.Get[construction.Evaluation](recovered.automation(construction.ID, false), reportID)
 	if !ok || replayedReport.State != "passed" || len(replayedReport.Attempts) != construction.EvaluationRepeats {
-		t.Fatalf("recovery lost the measured gate: %+v", replayedReport)
+		t.Fatalf("recovery lost the measured report: %+v", replayedReport)
 	}
 	recovered.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 		return reopened.AppendAccepted(ctx, id, e, key, hash)
@@ -312,22 +312,23 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		return raw, err
 	}
 	targetMember := memberOf(t, target, "builder")
-	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "missing-model", true, targetMember, at); err == nil || target.ActiveRelease() != "" {
-		t.Fatal("target accepted missing model bindings or installed a partial application")
+	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "before-configuration", true, targetMember, at); err != nil || target.ActiveRelease() != preview.CandidateID {
+		t.Fatalf("target could not deliver without external configuration: %v", err)
 	}
 	decide(t, target, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": provider.URL}, at)
 	decide(t, target, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"}, at)
-	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "missing-connection", true, targetMember, at); err == nil || target.ActiveRelease() != "" {
-		t.Fatal("target accepted a missing connection or installed a partial application")
+	connection, exists := platform.Get[construction.Connection](target.automation(construction.ID, false), "feed")
+	if !exists || connection.Address != "" || connection.Secret != "" || connection.State == "ready" {
+		t.Fatal("delivery configured or omitted the target logical connection")
 	}
-	decide(t, target, "builder", construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "TARGET-CONNECTION", map[string]any{"name": "feed", "title": "Target feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true}, at)
-	decide(t, target, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "TARGET-CONNECTION", map[string]any{}, at)
+	decide(t, target, "builder", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, connection.ID, map[string]any{"name": "feed", "title": "Target feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true}, at)
+	decide(t, target, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, connection.ID, map[string]any{}, at)
 	target.CheckConnections(at)
 	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "stage-unmeasured", false, targetMember, at); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "unmeasured", true, targetMember, at); err == nil {
-		t.Fatal("promotion bypassed measured AI gates")
+	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "unmeasured", true, targetMember, at); err != nil {
+		t.Fatalf("missing quality report blocked application delivery: %v", err)
 	}
 	decide(t, target, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "fixture/probe"}, at)
 	measureTarget := func(candidateID, key string) {

@@ -38,9 +38,9 @@ func (b *Build) sourceEntity() platform.Entity {
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
 			Transitions: []platform.Transition{
-				{Name: "publish", Title: "Publish", Description: "Check the source and let the builder's job pull it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishSource},
-				{Name: "pull", Title: "Pull now", Description: "Ask for one pull at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: requestPull},
-				{Name: "reset", Title: "Reset cursor", Description: "Forget the incremental cursor and pull everything at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: resetCursor},
+				{Name: "publish", Title: "Publish", Description: "Publish this source definition. Use Pull now to start it.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.publishSource},
+				{Name: "pull", Title: "Pull now", Description: "Ask for one pull at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.requestPull},
+				{Name: "reset", Title: "Reset cursor", Description: "Forget the incremental cursor and pull everything at the next tick.", From: []string{"published"}, To: []string{"published"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}, Do: b.resetCursor},
 				{Name: "pause", Title: "Pause", Description: "Stop pulling; the mapping stays.", From: []string{"published"}, To: []string{"draft"}, Roles: []string{construction.Builder, construction.Integrator}, Capability: "integrations", Payload: []platform.Field{}}}}}
 }
 
@@ -49,7 +49,7 @@ func sourceActions() []platform.Action {
 		Payload: []platform.Field{{Name: "pull", Type: "json", Required: true, Description: "The pull's counts and first failures"}}}}
 }
 
-func requestPull(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (b *Build) requestPull(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	s, ok := record.(*construction.Source)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -57,17 +57,26 @@ func requestPull(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) 
 	if s.Stream {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source is consumed through its Flow instance")
 	}
+	if problem := b.prepareSourcePull(c, s); problem != nil {
+		return problem
+	}
+	if !c.Replaying {
+		s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
+	}
 	s.Requested = true
 	return nil
 }
 
-func resetCursor(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (b *Build) resetCursor(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	s, ok := record.(*construction.Source)
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if s.Stream {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A continuous source cursor belongs to its Flow instance")
+	}
+	if problem := b.prepareSourcePull(c, s); problem != nil {
+		return problem
 	}
 	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
 		last, execution := *s.Last, *s.Last.Execution
@@ -76,7 +85,33 @@ func resetCursor(_ platform.Caller, record any, _ json.RawMessage, _ time.Time) 
 		last.Error = "The previous pull was stopped by resetting its cursor"
 		s.Last = &last
 	}
+	if !c.Replaying {
+		s.Puller, s.PullerScopes = c.ID, string(platform.Raw(c.Member.Scopes))
+	}
 	s.Cursor, s.Requested = "", true
+	return nil
+}
+
+func (b *Build) prepareSourcePull(c platform.Caller, source *construction.Source) *kernel.Error {
+	if c.Replaying {
+		return nil
+	}
+	fixed, err := b.ExecutionSource(*source)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+	}
+	if problem := b.checkSourceConnection(c, fixed); problem != nil {
+		return problem
+	}
+	if fixed.Connection != "" {
+		connection, ok := platform.Get[construction.Connection](c, fixed.Connection)
+		if !ok {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Connection {connection} does not exist", fixed.Connection)
+		}
+		if _, err := b.ExecutionConnection(connection); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+		}
+	}
 	return nil
 }
 
@@ -88,7 +123,10 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 	if err := b.checkSource(c, *s); err != nil {
 		return err
 	}
-	s.Puller, s.Requested = c.ID, !s.Stream
+	if c.Replaying {
+		// Old input journals retain their original publish-and-start meaning.
+		s.Puller, s.Requested = c.ID, !s.Stream
+	}
 	if !c.Replaying {
 		fixed, err := b.freezeDirectIntegration(platform.AssetSource, *s)
 		if err != nil {
@@ -135,7 +173,7 @@ func (b *Build) checkSource(c platform.Caller, s construction.Source) *kernel.Er
 	}
 	if s.Connection != "" {
 		if conn, ok := platform.Get[construction.Connection](c, s.Connection); ok {
-			fixed, err := b.ExecutionConnection(conn)
+			fixed, err := b.ConnectionConfiguration(conn)
 			if err != nil {
 				return refuse(err.Error())
 			}
@@ -184,14 +222,14 @@ func (b *Build) checkSourceConnection(c platform.Caller, s construction.Source) 
 	}
 	conn, ok := platform.Get[construction.Connection](c, s.Connection)
 	if ok {
-		fixed, err := b.ExecutionConnection(conn)
+		fixed, err := b.ConnectionConfiguration(conn)
 		if err != nil {
 			return refuse(err.Error())
 		}
 		conn = fixed
 	}
-	if !ok || conn.State != "ready" {
-		return refuse("Connection {connection} is not ready; check it first", s.Connection)
+	if !ok {
+		return refuse("Connection {connection} does not exist", s.Connection)
 	}
 	switch {
 	case (s.Profile == "odata") != (conn.Kind == "odata"), (s.Profile == "table") != (conn.Kind == "postgres"):
@@ -226,7 +264,7 @@ func (b *Build) submitSourcePulled(c platform.Caller, s *pb.Submission, now time
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Pull result has no source")
 		}
 		if src.Last != nil && src.Last.Execution != nil && src.Last.Execution.Pending {
-			if err := checkIntegrationExecution(src.Last.Execution, payload.Pull.Execution, c.ID); err != nil {
+			if err := checkIntegrationExecution(src.Last.Execution, payload.Pull.Execution, c.Member); err != nil {
 				return nil, err
 			}
 			if payload.Pull.DefinitionVersion != src.Last.DefinitionVersion || !payload.Pull.At.Equal(src.Last.At) {
@@ -237,7 +275,7 @@ func (b *Build) submitSourcePulled(c platform.Caller, s *pb.Submission, now time
 			if versionErr != nil || !equivalent {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration definition changed before its result was accepted")
 			}
-			if err := checkIntegrationExecution(nil, payload.Pull.Execution, c.ID); err != nil {
+			if err := checkIntegrationExecution(nil, payload.Pull.Execution, c.Member); err != nil {
 				return nil, err
 			}
 		}
@@ -252,7 +290,7 @@ func (b *Build) submitSourcePulled(c platform.Caller, s *pb.Submission, now time
 	})
 }
 
-func checkIntegrationExecution(prior, next *construction.IntegrationExecution, member string) *kernel.Error {
+func checkIntegrationExecution(prior, next *construction.IntegrationExecution, member platform.Member) *kernel.Error {
 	if next == nil {
 		if prior != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The pending integration execution must finish first")
@@ -260,7 +298,7 @@ func checkIntegrationExecution(prior, next *construction.IntegrationExecution, m
 		return nil // historical/direct-development result without a preparation
 	}
 	digest, err := hex.DecodeString(next.Snapshot)
-	if next.ID == "" || len(next.ID) > 64 || err != nil || len(digest) != 32 || next.Member != member {
+	if next.ID == "" || len(next.ID) > 64 || err != nil || len(digest) != 32 || next.Member != member.ID {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Integration execution has no retained input")
 	}
 	if prior != nil {
@@ -269,7 +307,7 @@ func checkIntegrationExecution(prior, next *construction.IntegrationExecution, m
 		if !reflect.DeepEqual(*prior, fixed) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The pending integration execution must finish first")
 		}
-	} else if !next.Pending {
+	} else if !next.Pending || !reflect.DeepEqual(next.Scopes, member.Scopes) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Integration execution was not prepared")
 	}
 	return nil

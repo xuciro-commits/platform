@@ -58,7 +58,7 @@ func TestObservationSourceUsesOriginalReleaseAndEnvironmentOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	context := platform.AssetReleaseContext{Member: target.host.(lifecycleHost).member, Bindings: []platform.AssetEnvironmentBinding{{Ref: connectionAsset.Ref, TargetRecord: targetConnection.ID}}}
+	context := platform.AssetReleaseContext{Member: target.host.(lifecycleHost).member}
 	requirements, err := target.AssetEnvironmentRequirements(asset)
 	if err != nil || len(requirements) != 1 || requirements[0].Ref != connectionAsset.Ref || requirements[0].Profile != "http" {
 		t.Fatal("observation invented a separate environment binding", requirements, err)

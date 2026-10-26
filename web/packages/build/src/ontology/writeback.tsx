@@ -74,7 +74,7 @@ export function WritebackEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {connectionQuery.isError && <Panel role="alert" className="text-danger">{t("The connections could not be loaded.")}</Panel>}
     {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
-    {connection && connection.state !== "ready" && <Panel role="status" className="text-xs text-warning">{t("This saved connection is not ready. Check the connection before publishing or running this integration.")}</Panel>}
+    {connection && connection.state !== "ready" && <Panel role="status" className="flex flex-wrap items-center gap-2 text-xs text-warning"><p>{t("This logical connection is not configured for use. You can publish the declaration; configure and check it before running the integration.")}</p><Button size="sm" variant="ghost" onClick={() => open({ view: "connection", params: { id: connection.id } })}>{t("Open connection")}</Button></Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Trigger")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Writeback name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="grtosap" onChange={(e) => patch({ name: e.target.value })} /></label>
@@ -87,7 +87,7 @@ export function WritebackEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Transport")}<Select value={draft.transport === "a2a" ? "a2a" : ""} onChange={event => patch({ transport: event.target.value, ...(event.target.value === "a2a" ? { method: "POST" } : {}) })}><option value="">HTTP</option><option value="a2a">A2A</option></Select>
           <span className="text-xs text-muted">{t("A2A sends the mapped payload as one message with the original effect identity. The connection secret remains the complete Authorization header.")}</span></label>
         <label className={fieldClass}>{t("Connection")}<Select value={draft.connection} onChange={(e) => patch({ connection: e.target.value })}><option value="">{t("Choose a connection")}</option>{connections.map((c) => <option key={c.id} value={c.id}>{c.title} · {c.kind}</option>)}</Select>
-          <span className="text-xs text-muted">{t("Saved http or OData connections can be configured here; publishing still requires a ready connection. Credentials stay with the connection.")}</span></label>
+          <span className="text-xs text-muted">{t("Choose a saved HTTP or OData logical connection. Configure its address and credentials before sending requests.")}</span></label>
         <div className="grid grid-cols-[auto_1fr] gap-2">
           <label className={fieldClass}>{t("Method")}<Select disabled={draft.transport === "a2a"} value={draft.method ?? "POST"} onChange={(e) => patch({ method: e.target.value })}>{["POST", "PUT", "PATCH"].map((m) => <option key={m} value={m}>{m}</option>)}</Select></label>
           <label className={fieldClass}>{t("Path")}<Input value={draft.path ?? ""} placeholder="A_MaterialDocumentHeader" onChange={(e) => patch({ path: e.target.value })} /><span className="text-xs text-muted">{t("Relative to the connection's address; {id} and {field} are filled from the payload.")}</span></label>

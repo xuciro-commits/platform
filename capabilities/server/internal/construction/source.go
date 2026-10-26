@@ -62,10 +62,11 @@ type Source struct {
 	// Every is a period such as 15m or 24h; empty: pulled only when asked.
 	Every string `json:"every,omitempty" title:"Pull every" help:"A period such as 15m, 1h or 24h; empty: only when asked"`
 	State string `json:"state" field:"readonly"`
-	// Puller is the member who published the source; rows are decided as them.
-	Puller    string      `json:"puller,omitempty" field:"readonly" title:"Pulls as"`
-	Requested bool        `json:"requested,omitempty" field:"readonly" title:"Pull requested"`
-	Last      *SourcePull `json:"last,omitempty" field:"readonly" type:"json" title:"Last pull"`
+	// Puller and its token scopes belong to the explicit run request.
+	Puller       string      `json:"puller,omitempty" field:"readonly" title:"Pulls as"`
+	PullerScopes string      `json:"pullerScopes,omitempty" field:"readonly" type:"json"`
+	Requested    bool        `json:"requested,omitempty" field:"readonly" title:"Pull requested"`
+	Last         *SourcePull `json:"last,omitempty" field:"readonly" type:"json" title:"Last pull"`
 	// Definition publication is independent of data/runtime versions.
 	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
 	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -85,6 +86,7 @@ type SourceField struct {
 type IntegrationExecution struct {
 	ID       string         `json:"id"`
 	Member   string         `json:"member"`
+	Scopes   []string       `json:"scopes,omitempty"`
 	Pending  bool           `json:"pending,omitempty"`
 	Snapshot string         `json:"snapshot"`
 	Inputs   map[string]int `json:"inputs,omitempty"`

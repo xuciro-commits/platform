@@ -30,7 +30,7 @@ afterEach(() => { act(() => root.unmount()); document.body.replaceChildren(); vi
 
 test("package preparation keeps publication before business role assignment and never grants an unavailable role", async () => {
   render();
-  for (const title of ["Install and create drafts", "Configure and publish", "Assign business access", "Initialize and use"]) expect(container.textContent).toContain(title);
+  for (const title of ["Install and create drafts", "Publish applications", "Configure services when needed", "Assign business access", "Initial data and application access"]) expect(container.textContent).toContain(title);
   expect(container.textContent).toContain("Publish the application before assigning this role.");
   expect(button("Grant this role to me")).toBeUndefined(); expect(button("Assign business roles")).toBeUndefined();
   expect(state.host.decide).not.toHaveBeenCalled();
@@ -40,6 +40,22 @@ test("package preparation keeps publication before business role assignment and 
   expect(state.host.decide).not.toHaveBeenCalled();
   await click("Grant this role to me");
   expect(state.host.decide).toHaveBeenCalledWith("platform.member.grant", { type: "platform.member", id: "builder" }, { app: "build.sample", role: "operator" }, expect.any(Object));
+});
+
+test("unconfigured services do not block publication or require sample initialization for application access", async () => {
+  state.query.data.connections = [{ ref: { app: "build", kind: "connection", name: "external" }, title: "External service", draftId: "connection", kind: "http", credential: true, configured: false, ready: false }];
+  state.query.data.ai = [{ ref: { app: "build", kind: "function", name: "summary" }, ready: false, problem: "No model configured" }];
+  state.query.data.setup = { roles: [{ app: "build.sample", role: "operator" }], steps: [{ name: "Sample record", app: "build", schema: "build.entry.create", target: { type: "build.entry", id: "sample" }, payload: "{}" }] };
+  render();
+  expect(container.textContent).toContain("Needs configuration"); expect(container.textContent).toContain("No model configured");
+  await click("Publish application");
+  expect(state.open).toHaveBeenCalledWith({ view: "release-review", params: { kind: "app", id: "draft", application: "draft", applicationName: "desk" } });
+  state.query.data.applications[0].published = true; render();
+  expect(container.textContent).toContain("Optional initial data");
+  expect(button("Create initial data").disabled).toBe(true);
+  await click("Open application");
+  expect(state.open).toHaveBeenLastCalledWith({ view: "page", params: { app: "build", kind: "page", name: "entry", application: "build:desk" } });
+  expect(state.host.decide).not.toHaveBeenCalled(); expect(state.host.client.call).not.toHaveBeenCalled();
 });
 
 test("preparation reads expose their actual error and retry the original read", async () => {

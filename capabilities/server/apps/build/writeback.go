@@ -115,14 +115,14 @@ func (b *Build) checkWritebackConnection(c platform.Caller, w construction.Write
 	}
 	conn, ok := platform.Get[construction.Connection](c, w.Connection)
 	if ok {
-		fixed, err := b.ExecutionConnection(conn)
+		fixed, err := b.ConnectionConfiguration(conn)
 		if err != nil {
 			return refuse(err.Error())
 		}
 		conn = fixed
 	}
-	if !ok || conn.State != "ready" {
-		return refuse("Connection {connection} is not ready; check it first", w.Connection)
+	if !ok {
+		return refuse("Connection {connection} does not exist", w.Connection)
 	}
 	if conn.Kind != "http" && conn.Kind != "odata" {
 		return refuse("A writeback goes through an http or OData connection")

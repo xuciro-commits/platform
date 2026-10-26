@@ -203,12 +203,12 @@ func (b *Build) bindDispatch(spec platform.Dispatch, object construction.Object)
 	if !known || !valid {
 		return out, fmt.Errorf("Dispatch target connection is unavailable")
 	}
-	connection, err = b.ExecutionConnection(connection)
+	connection, err = b.ConnectionConfiguration(connection)
 	if err != nil {
 		return out, err
 	}
-	if connection.State != "ready" || !slices.Contains([]string{"http", "odata"}, connection.Kind) {
-		return out, fmt.Errorf("Dispatch target must be a ready external connection")
+	if !slices.Contains([]string{"http", "odata"}, connection.Kind) {
+		return out, fmt.Errorf("Dispatch target must be an HTTP or OData connection")
 	}
 	out.Target = platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: connection.Name}
 	if spec.Readback.Source != "" {

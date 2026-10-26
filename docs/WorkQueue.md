@@ -2,7 +2,11 @@
 
 只放当前要交付的工作。完成即移除；被替代的条目删除，不留记录。为什么做归 [Intent](Intent.md)，系统结构归 [Architecture](Architecture.md)，行为约定归 [OpenSpec 模块规范](../openspec/README.md)，工作方式归 [AGENTS](../AGENTS.md)。
 
-## 1. 自举：系统修改自己（唯一当前目标）
+## 0. 当前交付阻断：应用独立安装与发布
+
+按负责人最新要求，在 [decouple-application-delivery-from-environment](../openspec/changes/decouple-application-delivery-from-environment/) 收敛交付与运行的边界：移除外部连接、模型和真实评测的整体发布门禁，保留实际使用检查，修正包及前端，并按明确范围重置当前本地业务配置。完成后退出此项，继续原自举范围。
+
+## 1. 自举：系统修改自己
 
 平台要能让 AI 与人在运行时修改平台自身：AI 用一句提示词提出变更，人在工作区里审阅、批准并激活，宿主按新版本重启后继续服务同一份数据。这一块交付完之前，不加业务场景、不补行业样例。
 

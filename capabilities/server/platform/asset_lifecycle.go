@@ -11,40 +11,23 @@ import (
 	"time"
 )
 
-// AssetEnvironmentBinding maps a portable asset to an existing record of its
-// target owner. TargetRecord is that record's ID, never an endpoint, credential
-// value, source cursor or data copy. Each owner validates its concrete type.
-type AssetEnvironmentBinding struct {
-	Ref          AssetRef `json:"ref"`
-	TargetRecord string   `json:"targetRecord"`
-}
-
 // AssetEnvironmentRequirement is declared by the trusted descriptor owner.
-// Profile and Credential constrain the target's existing connection; they do
-// not carry a URL, secret name or secret value into candidate bytes.
+// Profile and Credential describe runtime configuration needs; they do not
+// require a configured external service when installing the declaration.
 type AssetEnvironmentRequirement struct {
 	Ref        AssetRef `json:"ref"`
 	Profile    string   `json:"profile,omitempty"`
 	Credential bool     `json:"credential,omitempty"`
 }
 
-// AssetEnvironmentTarget is the owner's resolved local configuration. Its
-// credential name is preparation-only host context, not a portable asset.
-type AssetEnvironmentTarget struct {
-	TargetRecord string
-	Credential   string
-}
-
-// AssetReleaseContext is transient preparation context. Execution identities
-// are rebound to this target member and frozen in the accepted installation;
-// the candidate never acquires this principal or the target binding records.
+// AssetReleaseContext carries transient declaration preparation context.
+// Actual execution selects and authorizes its runtime identity separately.
 type AssetReleaseContext struct {
 	DraftsOnly bool
 	DraftIDs   map[AssetRef]string
 	Member     Member
 	At         time.Time
 	Upgrade    bool
-	Bindings   []AssetEnvironmentBinding
 }
 
 // AssetApplyContext separates private compatibility trials from pure recovery.
@@ -93,7 +76,6 @@ type AssetLifecycleOwner interface {
 	ReleaseAssets() ([]ReleaseAsset, error)
 	ResolvePinned(ref AssetRef, sourceVersion string, contentVersion ...string) (ReleaseAsset, error)
 	AssetEnvironmentRequirements(ReleaseAsset) ([]AssetEnvironmentRequirement, error)
-	ResolveAssetEnvironment(AssetEnvironmentRequirement) (AssetEnvironmentTarget, error)
 	// BeginAssetBootstrap exposes the complete immutable shape set only in a
 	// private owner while its original create actions construct missing drafts.
 	// The returned release restores transient lookups; no definition is installed.
@@ -343,35 +325,12 @@ func (r *AssetRegistry) EnvironmentRequirements(assets []ReleaseAsset) ([]AssetE
 	return out, nil
 }
 
-func (r *AssetRegistry) validateBindings(assets []ReleaseAsset, context AssetReleaseContext) error {
-	provided := map[AssetRef]string{}
-	for _, binding := range context.Bindings {
-		if _, err := r.Owner(binding.Ref); err != nil {
-			return err
-		}
-		if binding.Ref.Kind != AssetConnection || binding.TargetRecord == "" || provided[binding.Ref] != "" {
-			return fmt.Errorf("environment binding %s is missing, duplicate or unsupported", binding.Ref)
-		}
-		provided[binding.Ref] = binding.TargetRecord
-	}
-	required, err := r.EnvironmentRequirements(assets)
-	if err != nil {
-		return err
-	}
-	for _, requirement := range required {
-		if provided[requirement.Ref] == "" && !context.DraftsOnly {
-			return fmt.Errorf("release needs a target environment binding for %s", requirement.Ref)
-		}
-	}
-	return nil
-}
-
 func (r *AssetRegistry) PrepareReleaseAssets(assets []ReleaseAsset, context AssetReleaseContext) ([]AssetInstallation, error) {
 	grouped, err := r.groupedAssets(assets)
 	if err != nil {
 		return nil, err
 	}
-	if err := r.validateBindings(assets, context); err != nil {
+	if _, err := r.EnvironmentRequirements(assets); err != nil {
 		return nil, err
 	}
 	var out []AssetInstallation
@@ -402,7 +361,7 @@ func (r *AssetRegistry) ReleaseDrafts(assets []ReleaseAsset, context AssetReleas
 	if err != nil {
 		return nil, err
 	}
-	if err := r.validateBindings(assets, context); err != nil {
+	if _, err := r.EnvironmentRequirements(assets); err != nil {
 		return nil, err
 	}
 	var out []AssetDraft

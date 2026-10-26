@@ -16,38 +16,6 @@ import (
 	"platformserver/platform"
 )
 
-func (t *Tenant) assetReleaseContextLocked(registry *platform.AssetRegistry, assets []platform.ReleaseAsset, member platform.Member, at time.Time, upgrade bool) (platform.AssetReleaseContext, error) {
-	context := platform.AssetReleaseContext{Member: member, At: at, Upgrade: upgrade}
-	requirements, err := registry.EnvironmentRequirements(assets)
-	if err != nil {
-		return context, err
-	}
-	for _, requirement := range requirements {
-		owner, err := registry.Owner(requirement.Ref)
-		if err != nil {
-			return context, err
-		}
-		target, err := owner.ResolveAssetEnvironment(requirement)
-		if err != nil {
-			return context, err
-		}
-		if requirement.Credential {
-			connection, found := platform.Get[construction.Connection](t.automation(requirement.Ref.App, false), target.TargetRecord)
-			valid := false
-			if found {
-				_, valid = t.credentialValue(target.Credential, "connection/"+connection.ID, connection.Address)
-			} else {
-				_, valid = t.secret(target.Credential)
-			}
-			if !valid {
-				return context, fmt.Errorf("target environment binding %s has no credential", requirement.Ref)
-			}
-		}
-		context.Bindings = append(context.Bindings, platform.AssetEnvironmentBinding{Ref: requirement.Ref, TargetRecord: target.TargetRecord})
-	}
-	return context, nil
-}
-
 // Missing drafts are real owner create decisions, but remain private until
 // their enclosing release and definition images have all been accepted.
 func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly ...bool) (*stagedDecision, json.RawMessage, error) {
@@ -261,20 +229,8 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 }
 
 func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]resultformat.ReleaseInstallation, json.RawMessage, error) {
-	for _, asset := range candidate.Assets {
-		if asset.Ref.Kind != platform.AssetEvaluation {
-			continue
-		}
-		descriptor, err := platform.ReadEvaluationSet(asset.Body)
-		if err != nil {
-			return nil, nil, err
-		}
-		if t.ai == nil {
-			return nil, nil, fmt.Errorf("evaluation set %s needs the target AI owner", asset.Ref)
-		}
-		if _, _, refusal := t.ai.Callable(member, descriptor.Model); refusal != nil {
-			return nil, nil, fmt.Errorf("evaluation set %s needs an enabled target model permitted to this member", asset.Ref)
-		}
+	if err := checkApplicationProposalFunctions(candidate); err != nil {
+		return nil, nil, err
 	}
 	return t.prepareReleaseInstallationLocked(candidate, member, at, upgrade, true)
 }
@@ -289,10 +245,7 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 	if err != nil {
 		return nil, nil, err
 	}
-	context, err := t.assetReleaseContextLocked(registry, candidate.Assets, member, at, upgrade)
-	if err != nil {
-		return nil, nil, err
-	}
+	context := platform.AssetReleaseContext{Member: member, At: at, Upgrade: upgrade}
 	decision, bootstrap, err := t.releaseBootstrapLocked(candidate, context, !activating)
 	if err != nil {
 		return nil, nil, err

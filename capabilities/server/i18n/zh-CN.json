@@ -2625,5 +2625,18 @@
   "ModelBinding": "模型绑定",
   "Build vector index with": "用以下模型构建向量索引",
   "Explicitly prepare an index with this model before activating it in AI configuration; indexing may incur provider charges.": "在 AI 配置中激活前，请先用此模型显式准备索引；建立索引可能产生提供方费用。",
-  "ModelOptions": "模型选项"
+  "ModelOptions": "模型选项",
+  "connection is not ready; configure and check it before use": "连接尚未就绪；请在使用此功能前配置并检查连接",
+  "Connection {connection} does not exist": "连接 {connection} 不存在",
+  "The observation connection is unavailable": "观测连接不可用",
+  "The observation connection must be an HTTP connection": "观测必须使用 HTTP 连接",
+  "Dispatch target must be an HTTP or OData connection": "派发目标必须是 HTTP 或 OData 连接",
+  "The writeback connection is not configured": "回写连接尚未配置",
+  "The connection credential is not configured or permitted for this target": "连接凭据尚未配置，或未获准用于此目标",
+  "The model capability is unavailable": "模型能力不可用",
+  "Publish this source definition. Use Pull now to start it.": "发布此来源定义；需要运行时请使用“立即拉取”",
+  "Publish this pipeline definition. Use Run now to start it.": "发布此流水线定义；需要运行时请使用“立即运行”",
+  "The writeback publication is unavailable": "回写的已发布定义不可用",
+  "The execution member is no longer available": "执行成员已不可用",
+  "The pipeline runs as its requesting member, who needs the Enterprise admin role to land elements in the model": "流水线以请求成员的身份运行；将元素写入企业模型需要 Enterprise 管理员角色"
 }

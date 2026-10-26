@@ -80,7 +80,8 @@ func settled(state string) bool {
 // emit reconstructs effects for a historical input without a saved event plan.
 // New decisions save their transaction intents and subscription plan privately.
 func (t *Tenant) emit(e platform.Event, names []string) {
-	planned := append(t.eventEffects(e, names), t.legacyJournalEffects(e)...)
+	planned, _ := t.eventEffects(e, names, false)
+	planned = append(planned, t.legacyJournalEffects(e)...)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, x := range planned {
@@ -91,9 +92,12 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 
 // eventEffects computes the immutable outbound intents without enqueuing
 // them. A staged result saves these bytes before the journal commit.
-func (t *Tenant) eventEffects(e platform.Event, names []string) []platform.Effect {
+func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *kernel.Error) {
 	s := e.Record.GetSubmission()
-	planned := t.writebackEffects(e)
+	planned, refusal := t.writebackEffects(e, preparing)
+	if refusal != nil {
+		return nil, refusal
+	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, ep := range t.endpoints {
@@ -112,7 +116,7 @@ func (t *Tenant) eventEffects(e platform.Event, names []string) []platform.Effec
 		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
 			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)})
 	}
-	return planned
+	return planned, nil
 }
 
 func (t *Tenant) trimEffects() {

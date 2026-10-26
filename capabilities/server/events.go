@@ -6,6 +6,7 @@ package platformserver
 import (
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/host"
 	"platformserver/platform"
@@ -31,10 +32,14 @@ func (t *Tenant) publish(e platform.Event) {
 // planAcceptedEvent freezes the subscribers and outbound intents while the
 // decision is private. Recovery does not rediscover them from a newer
 // manifest or changed endpoint subscriptions.
-func (t *Tenant) planAcceptedEvent(e platform.Event) resultformat.Event {
+func (t *Tenant) planAcceptedEvent(e platform.Event) (resultformat.Event, *kernel.Error) {
 	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
+	effects, refusal := t.eventEffects(e, names, true)
+	if refusal != nil {
+		return resultformat.Event{}, refusal
+	}
 	plan := resultformat.Event{App: e.App, Changed: slices.Clone(e.Changed), Names: names,
-		Effects: t.eventEffects(e, names)}
+		Effects: effects}
 	for _, a := range t.liveApps() {
 		if slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
 			plan.Subscribers = append(plan.Subscribers, a.Manifest().ID)
@@ -46,7 +51,7 @@ func (t *Tenant) planAcceptedEvent(e platform.Event) resultformat.Event {
 			plan.Subscribers = append(plan.Subscribers, id)
 		}
 	}
-	return plan
+	return plan, nil
 }
 
 func (t *Tenant) publishAccepted(e platform.Event, plan resultformat.Event, version int) {

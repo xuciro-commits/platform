@@ -1,9 +1,9 @@
 {
   "id": "application.production-consumer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "namespace": "application.production-consumer",
   "title": "Production batch consumer",
-  "description": "Declarative production batches. Provider and consumer are installed into separate tenants. Quantities are local facts; cross-system receipts remain independent. Configure the consumer connection before publishing.",
+  "description": "Independent declarative production batch example. Install and publish using platform capabilities; configure external cooperation after installation. Quantities are local facts, and cross-system receipts remain independent.",
   "blueprint": {
     "roots": [
       {
@@ -772,12 +772,12 @@
         "ref": {
           "app": "build",
           "kind": "connection",
-          "name": "productionupstream"
+          "name": "batchconsumerupstream"
         },
         "contractVersion": 1,
         "sourceVersion": "1.connection-1",
         "body": {
-          "name": "productionupstream",
+          "name": "batchconsumerupstream",
           "title": "Upstream production provider",
           "kind": "http",
           "credential": true
@@ -796,9 +796,9 @@
           "title": "Production start",
           "object": "build.shoporder",
           "on": "confirmation",
-          "connection": "productionupstream",
+          "connection": "batchconsumerupstream",
           "method": "POST",
-          "path": "/v1/protocols/production.orders/2/start/{order}",
+          "path": "/v1/protocols/production.batchorders/2/start/{order}",
           "mapping": [
             {
               "from": "id",
@@ -820,9 +820,9 @@
           "title": "Production confirm",
           "object": "build.shoporder",
           "on": "confirmation",
-          "connection": "productionupstream",
+          "connection": "batchconsumerupstream",
           "method": "POST",
-          "path": "/v1/protocols/production.orders/2/confirm/{order}",
+          "path": "/v1/protocols/production.batchorders/2/confirm/{order}",
           "mapping": [
             {
               "from": "id",
@@ -858,9 +858,9 @@
         "body": {
           "name": "productionreceiptsource",
           "title": "Accepted upstream batches",
-          "connection": "productionupstream",
+          "connection": "batchconsumerupstream",
           "profile": "json",
-          "url": "/v1/records/build.productionbatch?limit=200&sort=-created",
+          "url": "/v1/records/build.batchproviderbatch?limit=200&sort=-created",
           "path": "records",
           "dataset": "productionreceipts"
         }
@@ -898,7 +898,7 @@
             {
               "app": "build",
               "kind": "connection",
-              "name": "productionupstream"
+              "name": "batchconsumerupstream"
             },
             {
               "app": "build",
@@ -923,6 +923,7 @@
           ]
         }
       }
-    ]
+    ],
+    "guide": "Install and publish independently. After installation, configure and check batchconsumerupstream before starting or reporting upstream batches. The example adapter uses production.batchorders/2 and reads batchproviderbatch receipts; adapt it to the intended provider contract without changing accepted local batch facts. Unconfigured cooperation remains unavailable. / 独立安装并发布；安装后在使用上游开工或报工前配置并检查 batchconsumerupstream。示例适配 production.batchorders/2，读取 batchproviderbatch 回执；可按目标提供方契约配置，不改写本地已接受的批次事实。未配置时对应协同功能不可用。"
   }
 }

@@ -226,21 +226,23 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	if problem != nil || len(runtime.AI) != 1 || runtime.AI[0].Placement != "propose" || runtime.AI[0].Calls == 0 || len(runtime.AI[0].Checkpoints) == 0 {
 		t.Fatalf("application AI projection: %+v %+v %s", runtime.AI, problem, problem.Message)
 	}
-	// Activation cannot omit the configured proposal function and its original
-	// measured evaluation gate. Fixtures never satisfy that gate.
+	// Structural adoption references must remain complete; measured evaluation
+	// is a separate operation and does not block declaration delivery.
 	candidate, releaseErr := tn.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.inspection"}})
 	if releaseErr != nil {
 		t.Fatal(releaseErr)
 	}
-	if err := tn.evaluationsReadyLocked(candidate.ID, candidate.Bytes); err == nil {
-		t.Fatal("adoption function omitted from activation gate")
+	incomplete := candidate
+	incomplete.Assets = slices.DeleteFunc(slices.Clone(candidate.Assets), func(asset platform.ReleaseAsset) bool { return asset.Ref.Kind == platform.AssetFunction })
+	if err := checkApplicationProposalFunctions(incomplete); err == nil {
+		t.Fatal("adoption function omitted from structural validation")
 	}
 	candidate, releaseErr = tn.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetApp, Name: "quality"}})
 	if releaseErr != nil {
 		t.Fatal(releaseErr)
 	}
-	if err := tn.evaluationsReadyLocked(candidate.ID, candidate.Bytes); err == nil {
-		t.Fatal("unevaluated function activated")
+	if err := checkApplicationProposalFunctions(candidate); err != nil {
+		t.Fatal(err)
 	}
 	// Recovery applies saved results; it neither calls a model nor re-adopts.
 	raw, _, snapshotErr := tn.Snapshot(func() int64 { return 0 })
@@ -285,7 +287,7 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	}
 }
 
-func TestApplicationAgentCandidateEvaluationGate(t *testing.T) {
+func TestApplicationAgentCandidateIndependentEvaluation(t *testing.T) {
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
 		return composeTenant(t, "agent-candidate", []Seat{seatOf("builder", "build:builder", "platform:admin", "ai:admin"), seatOf("operator", "build:user")}, build.New("agent-candidate"), ai.New("agent-candidate"), work.New("agent-candidate"), NewAgents("agent-candidate"))
@@ -309,8 +311,8 @@ func TestApplicationAgentCandidateEvaluationGate(t *testing.T) {
 	if problem != nil {
 		t.Fatal(problem)
 	}
-	if _, problem := tn.ActivateRelease(m, saved, "unmeasured", at); problem == nil {
-		t.Fatal("unmeasured agent activated")
+	if _, problem := tn.ActivateRelease(m, saved, "unmeasured", at); problem != nil {
+		t.Fatalf("unmeasured agent declaration could not activate: %v", problem)
 	}
 	if _, problem := tn.EvaluateRelease(memberOf(t, tn, "operator"), ReleaseEvaluationRequest{CandidateID: saved, Agent: "build.assistant", Key: "denied"}, at); problem == nil {
 		t.Fatal("operator started candidate evaluation")
@@ -326,8 +328,12 @@ func TestApplicationAgentCandidateEvaluationGate(t *testing.T) {
 		t.Fatal(problem)
 	}
 	tn.Evaluate(at)
-	if _, problem := tn.ActivateRelease(m, saved, "failed-evaluation", at); problem == nil {
-		t.Fatal("failed agent evaluation activated")
+	failedReport, ok := platform.Get[Evaluation](tn.automation(AgentApp, false), failed)
+	if !ok || failedReport.Score == 1 || failedReport.Fails == 0 {
+		t.Fatalf("failed evaluation was lost: %+v", failedReport)
+	}
+	if review, problem := tn.ReviewSavedRelease(m, saved); problem != nil || !review.CanActivate {
+		t.Fatalf("failed quality report blocked application delivery: %+v %v", review, problem)
 	}
 	result, request.Key = "Ready", "passed"
 	passed, problem := tn.EvaluateRelease(m, request, at)
@@ -353,15 +359,6 @@ func TestApplicationAgentCandidateEvaluationGate(t *testing.T) {
 	}
 	decide(t, tn, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/other", map[string]any{"access": "users"}, at)
 	decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/other"}, at)
-	candidate, _ := tn.releases.candidate(saved)
-	if problem := tn.agentEvaluationsReadyLocked(candidate); problem == nil {
-		t.Fatal("evaluation survived a changed model")
-	}
-	decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/probe"}, at)
-	decide(t, tn, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]any{"access": "users", "defaults": platform.ModelOptions{MaxTokens: 128}}, at)
-	if problem := tn.agentEvaluationsReadyLocked(candidate); problem == nil {
-		t.Fatal("evaluation survived a changed generation budget")
-	}
 	changed, problem := tn.ReviewSavedRelease(m, saved)
 	if problem != nil {
 		t.Fatal(problem)

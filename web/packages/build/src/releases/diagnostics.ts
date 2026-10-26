@@ -17,6 +17,9 @@ const quoted = (value: string) => {
 };
 
 const rules: Rule[] = [
+  { match: /release publication token does not permit (\S+)/, text: (m) => t("The release token does not permit {schema}.", { schema: m[1]! }) },
+  { match: /connection (\S+) has an incompatible local kind/, text: (m) => t("Connection {connection} has an incompatible local kind. Choose a connection with the declared kind.", { connection: m[1]! }) },
+  { match: /Connection (\S+) does not exist/, text: (m) => t("Connection {connection} does not exist", { connection: m[1]! }) },
   { match: /the group "((?:[^"\\]|\\.)*)" holds no page/, text: (m) => t("The group “{group}” holds no page. Put a page under it or remove the group.", { group: quoted(m[1]!) }), fix: (_, ids) => navigation(ids) },
   { match: /a group needs a title/, text: () => t("A navigation group has no title."), fix: (_, ids) => navigation(ids) },
   { match: /the group "((?:[^"\\]|\\.)*)" names the page "((?:[^"\\]|\\.)*)", which the application does not hold/, text: (m) => t("The group “{group}” lists the page “{page}”, which this module does not hold.", { group: quoted(m[1]!), page: quoted(m[2]!) }), fix: (_, ids) => navigation(ids) },
@@ -24,7 +27,6 @@ const rules: Rule[] = [
   { match: /application (\S+): it holds no page/, text: (m) => t("The module {name} holds no page yet.", { name: m[1]! }), fix: (_, ids) => navigation(ids) },
   { match: /application (\S+): no published resource (\S+)/, text: (m) => t("The module {name} depends on {resource}, which is not published. Add that draft to the joint candidate or publish it first.", { name: m[1]!, resource: m[2]! }) },
   { match: /application (\S+): no page (\S+)/, text: (m) => t("The module {name} references page {page}, which is unavailable in this candidate. Include its saved draft or check the page reference.", { name: m[1]!, page: m[2]! }), fix: (_, ids) => navigation(ids) },
-  { match: /integration draft (source|writeback)\/(\S+): Connection (\S+) is not ready; check it first/, text: (m) => t("Integration {name} requires connection {connection}, which is not ready. Check the connection before publishing.", { name: m[2]!, connection: m[3]! }), fix: (m) => ({ label: t("Open connection"), view: "connection", params: { id: m[3]! } }) },
   { match: /application header needs its profile, bounded items and a supported layout/, text: () => t("The module's header requires a valid UI profile, 1-24 items, and a horizontal or vertical layout."), fix: (_, ids) => ids.application ? { label: t("Open the header"), view: "module", params: { id: ids.application, application: ids.application, focus: "header" } } : undefined },
   { match: /application header logo needs a safe static image URL/, text: () => t("The module's header logo must be a safe static image URL."), fix: (_, ids) => ids.application ? { label: t("Open the header"), view: "module", params: { id: ids.application, application: ids.application, focus: "header" } } : undefined },
   { match: /application header item exceeds its budget/, text: () => t("One header item exceeds its size limit (label/text under 1024 characters, pages under 32)."), fix: (_, ids) => ids.application ? { label: t("Open the header"), view: "module", params: { id: ids.application, application: ids.application, focus: "header" } } : undefined },

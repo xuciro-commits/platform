@@ -758,6 +758,10 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "rejected", ask.ConfigurationError
 		return out, nil
 	}
+	if t.ai == nil {
+		out.Result, out.Detail = "rejected", "The model capability is unavailable"
+		return out, nil
+	}
 	model := ask.Model
 	if model == "" {
 		out.Result, out.Detail = "rejected", "no model is set for apps"

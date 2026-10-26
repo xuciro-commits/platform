@@ -199,12 +199,6 @@ func (o runtimeAssetOwner) AssetEnvironmentRequirements(asset platform.ReleaseAs
 	}
 	return o.lifecycle.AssetEnvironmentRequirements(asset)
 }
-func (o runtimeAssetOwner) ResolveAssetEnvironment(requirement platform.AssetEnvironmentRequirement) (platform.AssetEnvironmentTarget, error) {
-	if o.lifecycle == nil {
-		return platform.AssetEnvironmentTarget{}, fmt.Errorf("code owner %s has no environment bindings", o.Manifest().ID)
-	}
-	return o.lifecycle.ResolveAssetEnvironment(requirement)
-}
 func (o runtimeAssetOwner) ReleaseDrafts(assets []platform.ReleaseAsset, context platform.AssetReleaseContext) ([]platform.AssetDraft, error) {
 	controlled, err := o.controlled(assets)
 	if err != nil {

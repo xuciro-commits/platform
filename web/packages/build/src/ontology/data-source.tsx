@@ -61,7 +61,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   const last = draft.last;
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New data source")} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Endpoint → rows → mapping → period. Publish lets the host pull it; Pull now asks for one pull within seconds.")}
+    <PageHeader title={draft.title || t("New data source")} help={draft.stream ? t("The Flow owns its cursor and event projection. Use a unique increasing incremental column; pause this source to stop intake.") : t("Declare the source, row mapping and schedule. Publishing saves the declaration; Pull now checks the current environment and requests a pull.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "data-source" })}>{t("Data sources")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
@@ -76,14 +76,14 @@ export function DataSourceEditor({ id }: { id: string }) {
     {connectionQuery.isError && <Panel role="alert" className="text-danger">{t("The connections could not be loaded.")}</Panel>}
     {datasetQuery.isError && <Panel role="alert" className="text-danger">{t("The datasets could not be loaded.")}</Panel>}
     {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
-    {conn && conn.state !== "ready" && <Panel role="status" className="text-xs text-warning">{t("This saved connection is not ready. Check the connection before publishing or running this integration.")}</Panel>}
+    {conn && conn.state !== "ready" && <Panel role="status" className="flex flex-wrap items-center gap-2 text-xs text-warning"><p>{t("This logical connection is not configured for use. You can publish the declaration; configure and check it before running the integration.")}</p><Button size="sm" variant="ghost" onClick={() => open({ view: "connection", params: { id: conn.id } })}>{t("Open connection")}</Button></Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Endpoint")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Source name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="erpitems" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Source title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Connection")}<Select value={draft.connection ?? ""} onChange={(e) => { const c = connections.find((x) => x.id === e.target.value); patch({ connection: e.target.value, profile: c?.kind === "odata" ? "odata" : c?.kind === "postgres" ? "table" : profile === "odata" || profile === "table" ? "json" : profile }); }}>
           <option value="">{t("— none: a bare URL")}</option>{connections.map((c) => <option key={c.id} value={c.id}>{c.title} · {c.kind}</option>)}</Select>
-          <span className="text-xs text-muted">{t("Saved connections can be configured here; publishing still requires a ready connection. Credentials stay with the connection.")}</span></label>
+          <span className="text-xs text-muted">{t("Choose a saved logical connection. Its address and credentials can be configured after publication.")}</span></label>
         <label className={fieldClass}>{t("Profile")}<Select value={profile} onChange={(e) => patch({ profile: e.target.value as Api.Source["profile"] })}>{PROFILES.filter(([p]) => conn ? (conn.kind === "odata" ? p === "odata" : conn.kind === "postgres" ? p === "table" : p === "json" || p === "csv") : p === "json" || p === "csv").map(([p, label]) => <option key={p} value={p}>{t(label)}</option>)}</Select></label>
         {(profile === "json" || profile === "csv") && <label className={fieldClass}>{t("URL")}<Input value={draft.url ?? ""} placeholder={conn ? "items.csv" : "https://api.example.com/items"} onChange={(e) => patch({ url: e.target.value })} />{conn && <span className="text-xs text-muted">{t("Relative to the connection's address, or absolute.")}</span>}</label>}
         {(profile === "odata" || profile === "table") && <label className={fieldClass}>{profile === "odata" ? t("Entity set") : t("Table")}<Input value={draft.entity ?? ""} placeholder={profile === "odata" ? "A_Product" : "orders"} onChange={(e) => patch({ entity: e.target.value })} /></label>}

@@ -2101,6 +2101,7 @@ export type IntegrationEffect = {
 export type IntegrationExecution = {
   id: string;
   member: string;
+  scopes?: string[];
   pending?: boolean;
   snapshot: string;
   inputs?: Record<string, number>;
@@ -3580,6 +3581,7 @@ export type Pipeline = {
   every?: string;
   state: string;
   runner?: string;
+  runnerScopes?: string;
   requested?: boolean;
   last?: PipelineRun;
   definitionVersion?: number;
@@ -4562,6 +4564,7 @@ export type Source = {
   every?: string;
   state: string;
   puller?: string;
+  pullerScopes?: string;
   requested?: boolean;
   last?: SourcePull;
   definitionVersion?: number;

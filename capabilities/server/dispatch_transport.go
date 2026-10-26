@@ -67,6 +67,9 @@ func (h hostView) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run platf
 	if json.Unmarshal(body, &request) != nil || request.Dispatch != run.ID || request.Version != 1 || request.Connection != run.Target || request.SafeRetry != command.SafeRetry() || key == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch delivery has no original frozen request")
 	}
+	if refusal := h.t.checkWritebackCredential(request); refusal != nil {
+		return refusal
+	}
 	request.DispatchKey = key
 	typ, _, _ := strings.Cut(run.Subject, "/")
 	applications, err := h.t.bindApplications(platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: typ}, run.Release, "")

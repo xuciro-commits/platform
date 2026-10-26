@@ -128,7 +128,7 @@ export function PipelineEditor({ id }: { id: string }) {
   ].map((node, i) => ({ ...node, position: { x: i * 268, y: 0 } }));
   const stepEdges: FlowEdge[] = stepNodes.slice(0, -1).map((node, i) => ({ id: `${node.id}>${stepNodes[i + 1]!.id}`, source: node.id, sourcePort: "rows", target: stepNodes[i + 1]!.id, targetPort: "rows" }));
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New pipeline")} help={t("Input → steps → expectations → output. Publish lets the host run it whenever the input gains a version; Run now asks for one run within seconds.")}
+    <PageHeader title={draft.title || t("New pipeline")} help={t("Declare the input, transformations, expectations and output. Publishing saves the declaration; Run now explicitly requests a run with current permissions.")}
       actions={<div className="flex min-w-0 flex-wrap items-center gap-2">
         <MarkingTag marking={draft.marking} />
         <Button onClick={() => open({ view: "pipeline" })}>{t("Pipelines")}</Button>
@@ -168,7 +168,7 @@ export function PipelineEditor({ id }: { id: string }) {
           <option value="dataset">{t("A dataset (next version)")}</option><option value="object">{t("An object (one record per row)")}</option><option value="enterprise">{t("The enterprise model (one element per row)")}</option></Select></label>
         <datalist id="pipeline-columns">{columns.map((c) => <option key={c} value={c} />)}</datalist>
         {out === "enterprise" ? <>
-          <p className="text-xs text-muted">{t("Each run syncs the system's slice of the enterprise model: new ids start today, ids no longer sent close today, history stays. Name a column, or write =value for a constant. The publisher needs the Enterprise admin role.")}</p>
+          <p className="text-xs text-muted">{t("Each run syncs the system's slice of the enterprise model: new ids start today, ids no longer sent close today, history stays. Name a column, or write =value for a constant. The running member needs the Enterprise admin role.")}</p>
           <label className={fieldClass}>{t("Source system")}<Input value={ent.source} placeholder="sap-om" onChange={(e) => patchEnterprise({ source: e.target.value })} /><span className="text-xs text-muted">{t("Element ids become source:id; the system owns them.")}</span></label>
           <label className={fieldClass}>{t("Stereotype")}<Select value={ent.stereotype} onChange={(e) => patchEnterprise({ stereotype: e.target.value })}>{STEREOTYPES.map((st) => <option key={st} value={st}>{st}</option>)}</Select></label>
           {column(t("Id column"), "id", "objid")}

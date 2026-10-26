@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "connection is not ready; configure and check it before use": "连接尚未就绪，请在使用前配置并检查。",
+ "Connection {connection} does not exist": "连接 {connection} 不存在。",
+ "The observation connection is unavailable": "观测连接不可用。",
+ "The observation connection must be an HTTP connection": "观测连接必须使用 HTTP 类型。",
+ "Dispatch target must be an HTTP or OData connection": "派发目标必须使用 HTTP 或 OData 连接。",
+ "The writeback connection is not configured": "回写连接尚未配置。",
+ "The connection credential is not configured or permitted for this target": "连接凭据尚未配置，或未获准用于此目标。",
+ "The model capability is unavailable": "模型能力当前不可用。",
   "Thinking enabled": "启用思考",
   "Thinking disabled": "关闭思考",
   "Adaptive thinking": "自动调整思考",
@@ -346,9 +354,9 @@ register("zh-CN", {
   "delivered": "已送达",
 
  "Agent candidate evaluations": "智能体候选评测",
- "Each candidate agent must pass its declared cases three times with the current agent model before activation.": "每个候选智能体必须使用当前智能体模型连续三次通过声明用例，才能激活。",
+ "Run each agent's declared cases three times with the current agent model to measure that configuration. Reports do not determine application delivery.": "使用当前智能体模型对每个智能体的声明用例运行三次，以评测该配置。报告不决定应用是否可交付。",
  "Run declared cases": "运行声明用例",
- "Required AI evaluations are missing. Ask a builder to complete them before activation.": "缺少必需的 AI 评测。请构建者在激活前完成。",
+ "This candidate is not fully evaluated. Configure models and run evaluations when needed; no quality result is claimed.": "此候选尚未完成全部评测。可按需配置模型并评测；当前不宣称品质通过。",
  "Authorized actions": "受权动作",
  "Autonomous within granted scope": "在授权范围内自主执行",
  "A builder and declared cases are required for candidate agent evaluation": "候选智能体评测需要构建者与声明用例",

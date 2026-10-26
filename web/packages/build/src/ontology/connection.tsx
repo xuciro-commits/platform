@@ -47,7 +47,7 @@ export function ConnectionEditor({ id }: { id: string }) {
     patch({ kind: option.kind as Api.Connection["kind"] });
   };
   return <div className="grid min-w-0 grid-cols-1 gap-3">
-    <PageHeader title={draft.title || t("New connection")} help={t("Choose a built-in connection kind. Check confirms the saved connection before release.")}
+    <PageHeader title={draft.title || t("New connection")} help={t("Choose a logical connection kind. Address and credentials can be configured after installation; Check explicitly tests the current environment.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "connection" })}>{t("Connections")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>

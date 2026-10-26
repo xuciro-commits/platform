@@ -112,26 +112,6 @@ func portableConnectionDraft(asset platform.ReleaseAsset) (construction.Connecti
 		return construction.Connection{}, err
 	}
 	// Site addresses, credentials and concrete protocol settings are filled in
-	// this environment before check/publication, never copied from a package.
+	// this environment before use, never copied from a package.
 	return construction.Connection{Name: definition.Name, Title: definition.Title, Kind: definition.Kind, Marking: definition.Marking, State: "draft"}, nil
-}
-
-func (b *Build) draftIntegrationTargets(assets []platform.ReleaseAsset) {
-	for _, asset := range assets {
-		if asset.Ref.App != construction.ID || !construction.ValueIntegrationKind(asset.Ref.Kind) {
-			continue
-		}
-		id := asset.Ref.Name
-		rows, err := b.integrationInventory(asset.Ref.Kind)
-		if err == nil {
-			for _, row := range rows {
-				name, _, _, _ := integrationMetadata(row)
-				if name == asset.Ref.Name {
-					id = integrationRecord(row).ID
-					break
-				}
-			}
-		}
-		b.releaseDraftIDs[asset.Ref] = id
-	}
 }

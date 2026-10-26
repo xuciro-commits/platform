@@ -1,9 +1,9 @@
 {
   "id": "application.heating",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "title": "Heating operations teaching package",
   "namespace": "application.heating",
-  "description": "Original Build definitions for a fictional teaching site. Configure the gateway, property endpoint and model before publishing. Synthetic samples run only in isolated trials; ordinary business actions create any demonstration records. Values and city configurations are examples, not engineering standards or proof of equipment compatibility.",
+  "description": "Original Build definitions for a fictional teaching site. Install and publish independently, then configure the gateway, property endpoint and intended model before using those features. Synthetic samples run only in isolated trials; ordinary business actions create any demonstration records. Values and city configurations are examples, not engineering standards or proof of equipment compatibility.",
   "blueprint": {
     "roots": [
       {
@@ -5589,7 +5589,7 @@
             "latesttemp",
             "healthscore"
           ],
-          "model": "heating/health",
+          "model": "",
           "roles": [
             "user",
             "builder"
@@ -5680,7 +5680,7 @@
             },
             "sourceVersion": "1.function-1"
           },
-          "model": "heating/health",
+          "model": "",
           "policy": {
             "minQuality": 1,
             "maxCostUsd": 0.05,
@@ -5704,6 +5704,6 @@
         }
       }
     ],
-    "guide": "Build guide / 构建记录\n1. Scope / 范围：先用模拟设备，楼宇、区域、控制器和回路共用逻辑设备/点名；原始采样不变成业务记录。\n2. Model / 建模：将异常、告警与维修单放在同一 Build 事务；维修确认使用原 Flow。通行证是业务对象，不是平台角色。\n3. Connect / 接入：创建草稿后配置 heatingfield、propertyfeed 与 heating/health；试读、实测评估后沿原候选发布。\n4. Use / 使用：先跑 heatingdemo 与三个普通业务计划，再经原创建动作建立演示记录；在楼宇、设备、告警、门禁和健康页处理业务。\n5. Reuse / 复用：第二城市只换连接环境与模拟初值，同一应用定义不复制、不改代码。\nConstruction record / 本轮记录：2026-10-15，本地装配与修复时段 10:20:49–12:13:19 UTC，112 分 30 秒；整批检查另行执行，不计为客户实施工时。通用问题在原 owner 修复：应用包草稿创建、业务场景版本交付、整件发布依赖、隔离试跑及新鲜观测时间。真实客户需求、点表与阈值尚未核定，客户变更次数尚无记录。\n"
+    "guide": "Build guide / 构建记录\n1. Scope / 范围：先用模拟设备，楼宇、区域、控制器和回路共用逻辑设备/点名；原始采样不变成业务记录。\n2. Model / 建模：将异常、告警与维修单放在同一 Build 事务；维修确认使用原 Flow。通行证是业务对象，不是平台角色。\n3. Deliver and connect / 交付与接入：先生成草稿并沿原候选发布；外部网关、通知端点和模型不阻断交付。安装后配置 heatingfield、propertyfeed 与实际可用模型，再显式试读或运行真实评估；未配置时对应功能保持不可用。\n4. Use / 使用：可选运行 heatingdemo 与三个普通业务计划的隔离试验；演示业务记录须由人员显式经原创建动作建立，不是安装或发布前置。在楼宇、设备、告警、门禁和健康页处理业务。\n5. Reuse / 复用：第二城市只换连接环境与模拟初值，同一应用定义不复制、不改代码。\n"
   }
 }

@@ -12,7 +12,7 @@ export function PackageRequirements({ id, version }: { id: string; version: stri
     <p className="font-medium">{t("Before using this package")}</p>
     <p>{t("Applications: {names}", { names: plan.applications.map(app => app.title).join(", ") })}</p>
     <p>{plan.connections.length ? t("Configure {count} external connections in this environment.", { count: plan.connections.length }) : t("No external connection is required.")}</p>
-    {plan.ai.length > 0 && <p>{t("AI features require an available model and passing release evaluations.")}</p>}
+    {plan.ai.length > 0 && <p>{t("Configure a model after installation to use AI features. Evaluate the actual configuration when needed.")}</p>}
     <p>{t("Installation makes the package available. Prepare and activate its applications before using them.")}</p>
   </div>;
 }
@@ -60,7 +60,6 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
     }
   });
   const openApp = (app: Api.PackageApplication) => open({ view: "page", params: { app: app.ref.app, kind: "page", name: app.pages[0]!, application: `${app.ref.app}:${app.ref.name}` } });
-  const missingConfiguration = !!plan && (plan.connections.some(connection => !connection.ready) || plan.ai.some(item => !item.ready));
   const missingDrafts = !!plan?.applications.some(app => !app.draftId);
   const allPublished = !!plan?.applications.length && plan.applications.every(app => app.published);
   const setupEntries = plan?.setup?.steps.map((step, index) => setupRun ? host.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.principalId === client.connection.principal && entry.submission.schema?.name === step.schema && entry.submission.target?.id === step.target?.id && entry.submission.idempotencyKey?.endsWith(`:${setupRun}:${index}`)) : undefined) ?? [];
@@ -83,21 +82,22 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
           {app.draftId && <Button disabled={busy} onClick={() => open({ view: "project", params: { id: app.draftId! } })}>{t("Edit application")}</Button>}
         </div>)}
       </Panel>
-      <Panel title={t("Configure and publish")} className="grid min-w-0 grid-cols-1 gap-3">
-        {!plan.installed || missingDrafts ? <p className="text-sm text-muted">{t("Install the package and create its application drafts before configuring or publishing.")}</p> : null}
-        {!plan.connections.length && !plan.ai.length && <p className="text-sm">{t("No external configuration is required. Continue to publication.")}</p>}
+      <Panel title={t("Publish applications")} className="grid min-w-0 grid-cols-1 gap-3">
+        <p className="text-sm text-muted">{t("Publish the complete application independently. Configure external services afterward for the features you use.")}</p>
+        <div className="grid gap-2 border-t border-border pt-3">
+          <p className="text-sm text-muted">{t("Review the exact candidate and its checks before activation. Return here and refresh readiness after publishing.")}</p>
+          {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto font-medium">{app.title}</span><Tag label={t(app.published ? "Published" : "Not published")} />{app.draftId && <Button variant={app.published ? "default" : "primary"} disabled={busy || !plan.installed} onClick={() => open({ view: "release-review", params: { kind: "app", id: app.draftId!, application: app.draftId!, applicationName: app.ref.name } })}>{t(app.published ? "Review release" : "Publish application")}</Button>}</div>)}
+        </div>
+      </Panel>
+      <Panel title={t("Configure services when needed")} className="grid min-w-0 grid-cols-1 gap-3">
+        {!plan.connections.length && !plan.ai.length && <p className="text-sm">{t("This package has no external service requirements.")}</p>}
         {plan.connections.map(connection => <div key={connection.ref.name} className="grid gap-2 border-b border-border pb-3 text-sm">
           <div className="flex flex-wrap gap-2"><strong>{connection.title || connection.ref.name}</strong><Tag label={t(connection.ready ? "Ready" : "Needs configuration")} tone={connection.ready ? "success" : "warning"} /></div>
           <p>{t(connection.credential ? "Provide this environment's service address and credential, then check the connection." : "Provide this environment's service address, then check the connection.")}</p>
           <div><Button disabled={!connection.draftId} onClick={() => open({ view: "connection", params: { id: connection.draftId! } })}>{t("Configure connection")}</Button></div>
         </div>)}
         {plan.ai.map(item => <div key={`${item.ref.kind}/${item.ref.name}`} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto">{item.ref.name}{item.model ? ` · ${item.model}` : ""}</span><Tag label={t(item.ready ? "Model available" : "Needs a model")} tone={item.ready ? "success" : "warning"} />{item.problem && <p className="w-full text-xs text-danger">{item.problem}</p>}{item.ref.kind === "evaluation-set" && item.draftId && <Button onClick={() => open({ view: "evaluation-set", params: { id: item.draftId! } })}>{t("Configure evaluation")}</Button>}</div>)}
-        {plan.ai.length > 0 && <div className="flex flex-wrap gap-2"><Button onClick={() => open({ view: "ai-configuration",params:{fromPackage:id,fromVersion:version} })}>{t("Manage AI configuration")}</Button><p className="text-xs text-muted">{t("Run the required evaluations in release review after saving the candidate.")}</p></div>}
-        <div className="grid gap-2 border-t border-border pt-3">
-          <p className="text-sm text-muted">{t("Review the exact candidate and its checks before activation. Return here and refresh readiness after publishing.")}</p>
-          {missingConfiguration && <p className="text-sm text-warning">{t("Finish the required connection and model configuration before publishing.")}</p>}
-          {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto font-medium">{app.title}</span><Tag label={t(app.published ? "Published" : "Not published")} />{app.draftId && <Button variant={app.published ? "default" : "primary"} disabled={busy || !plan.installed || missingConfiguration} onClick={() => open({ view: "release-review", params: { kind: "app", id: app.draftId!, application: app.draftId!, applicationName: app.ref.name } })}>{t(app.published ? "Review release" : "Publish application")}</Button>}</div>)}
-        </div>
+        {plan.ai.length > 0 && <div className="flex flex-wrap gap-2"><Button onClick={() => open({ view: "ai-configuration",params:{fromPackage:id,fromVersion:version} })}>{t("Manage AI configuration")}</Button><p className="text-xs text-muted">{t("Configure models and run evaluations explicitly when you need the AI features.")}</p></div>}
       </Panel>
       <Panel title={t("Assign business access")} className="grid min-w-0 grid-cols-1 gap-3">
         <p className="text-sm">{t("Grant business roles explicitly to the people who will use the application. Package installation does not grant access.")}</p>
@@ -105,10 +105,10 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
         <ul className="grid gap-2 text-sm">{plan.roles.map(item => <li key={`${item.app}/${item.role}`} className="flex flex-wrap items-center gap-2"><span className="mr-auto">{item.app} · {item.role} · {t(item.held ? "You hold this role" : "Not held by you")}</span>{!item.available ? <p className="w-full text-muted">{t("Publish the application before assigning this role.")}</p> : !item.held && can("platform.member.grant") && <Button size="sm" disabled={busy} onClick={() => void perform(async () => { await decide("platform.member.grant", { type: "platform.member", id: host.me.principalId }, { app: item.app, role: item.role }, { onRefused: setError }); })}>{t("Grant this role to me")}</Button>}</li>)}</ul>
         {plan.roles.some(item => item.available) && (can("platform.member.grant") ? <div><Button disabled={busy} onClick={() => open({ view: "members" })}>{t("Assign business roles")}</Button></div> : plan.roles.some(item => item.available && !item.held) ? <p className="text-sm text-muted">{t("Ask an administrator to assign the required business roles, then refresh readiness.")}</p> : null)}
       </Panel>
-      <Panel title={t("Initialize and use")} className="grid min-w-0 grid-cols-1 gap-3">
+      <Panel title={t("Initial data and application access")} className="grid min-w-0 grid-cols-1 gap-3">
         {!allPublished && <p className="text-sm text-muted">{t("Activate all package applications before running initial data requests.")}</p>}
-        {plan.setup?.steps.length ? <div className="grid gap-3">
-          <p className="text-sm">{t("After activation, review and run this package's initial data requests. Each step uses your current permissions; existing business records are not overwritten.")}</p>
+        {plan.setup?.steps.length ? <div className="grid gap-3"><h3 className="text-sm font-medium">{t("Optional initial data")}</h3>
+          <p className="text-sm">{t("Initial data is optional. Review and run these requests only when you need the sample data. Application access does not require running them.")}</p>
           <ol className="grid gap-2 text-sm">{plan.setup.steps.map((step, index) => <li key={step.name}><Disclosure summary={<span className="flex flex-wrap items-center gap-2"><span>{index + 1}. {step.name}</span><Tag label={t(setupStatus(setupEntries[index]?.state))} /></span>}><PropertyList items={[[t("Action"), step.schema], [t("Target"), step.target?.id ?? ""]]} /><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{step.payload}</pre>{setupEntries[index]?.reason && <p className="text-danger">{setupEntries[index]!.reason}</p>}</Disclosure></li>)}</ol>
           <Checkbox checked={reviewedSetup} onChange={setReviewedSetup}>{t("I reviewed the initial data requests.")}</Checkbox>
           {!setupComplete && missingSetupRoles && <p className="text-sm text-muted">{t("Your initialization roles must be available and assigned before continuing.")}</p>}

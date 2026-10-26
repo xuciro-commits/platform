@@ -33,6 +33,7 @@ type ConstructionDraftReader interface {
 // IntegrationDefinitions resolves accepted typed configuration. It owns no
 // transport or host lock; consumers capture values before outside I/O.
 type IntegrationDefinitions interface {
+	ConnectionConfiguration(construction.Connection) (construction.Connection, error)
 	ExecutionSource(construction.Source) (construction.Source, error)
 	ExecutionConnection(construction.Connection) (construction.Connection, error)
 	ExecutionDataset(construction.Dataset) (construction.Dataset, error)

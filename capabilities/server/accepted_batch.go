@@ -92,7 +92,10 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		if err != nil {
 			return nil, err
 		}
-		plan := d.routingTenant().planAcceptedEvent(event)
+		plan, refusal := d.routingTenant().planAcceptedEvent(event)
+		if refusal != nil {
+			return nil, refusal
+		}
 		plan.Observed = d.observed
 		plan.Hops = d.hops
 		if plan.Hops > resultformat.MaxHops {

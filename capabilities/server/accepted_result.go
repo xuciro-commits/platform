@@ -107,11 +107,15 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	} else if construction.CallbackFreeTransition(d.tenant.app(app).Manifest(), receipt.GetSubmission().GetSchema().GetName()) {
 		kind = "pure-transition"
 	}
+	plan, refusal := d.tenant.planAcceptedEvent(d.events[0])
+	if refusal != nil {
+		return nil, refusal
+	}
 	result := resultformat.Record{Version: version, Tenant: receipt.GetSubmission().GetTenantId(),
 		Definition: d.definitions[app+"/"+receipt.GetChangeId()],
 		Kind:       kind, App: app, At: submittedAt.UTC(), RequestHash: hash, Receipt: raw, SchemaVersion: d.schemaVersion,
 		Row:   image,
-		Event: d.tenant.planAcceptedEvent(d.events[0]), Authorizations: slices.Clone(d.authorizations)}
+		Event: plan, Authorizations: slices.Clone(d.authorizations)}
 	result.Unique = d.savedUniqueChanges()
 	result.Digest, err = resultformat.DigestRecord(result)
 	if err != nil {

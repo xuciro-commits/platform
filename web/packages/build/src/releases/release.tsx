@@ -272,7 +272,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   };
   const activate = () => {
     if (pendingRef.current) return pendingRef.current.kind === "activate" ? send(pendingRef.current) : undefined;
-    if (!savedReview || !savedID || review?.candidateId !== savedID || !evaluated
+    if (!savedReview || !savedID || review?.candidateId !== savedID
       || (!canActivate && (!upgradePlan || confirmedUpgrade !== upgradePlan.id))) return;
     return send({ kind: "activate", body: { candidateId: savedID, key: crypto.randomUUID(), ...(confirmedUpgrade && confirmedUpgrade === upgradePlan?.id ? { upgradeId: confirmedUpgrade } : {}) } });
   };
@@ -429,7 +429,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         {!savedReview && <Button disabled={locked || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
         {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
         {builder && savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
-          <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Measured function evaluation")}</h3><ContextHelp title={t("Measured function evaluation")}>{t("A saved synthetic plan runs real model calls. A passing report for each included function is required before activation.")}</ContextHelp></div>
+          <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Measured function evaluation")}</h3><ContextHelp title={t("Measured function evaluation")}>{t("Measured evaluations call configured models. Missing or failed reports do not prevent application delivery.")}</ContextHelp></div>
           <label className="grid gap-1 text-xs">{t("Evaluation plan")}
             <Select disabled={locked} value={planID} onChange={(event) => { setPlanID(event.target.value); setReportID(""); }}>
               <option value="">{t("Choose an evaluation plan")}</option>
@@ -440,21 +440,21 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
             <Button disabled={!planID || locked} onClick={evaluate}>{busy ? t("Starting evaluation…") : t("Run measured evaluation")}</Button>
             <Button disabled={locked} onClick={() => { void perform(() => readSaved(savedID, true)); }}>{t("Refresh evaluation reports")}</Button>
           </div>
-          {(reports.isError||candidateQuery.isError) && <p role="alert" className="text-xs text-warning">{t("Evaluation reports are unavailable. Cached results do not grant activation.")}</p>}
+          {(reports.isError||candidateQuery.isError) && <p role="alert" className="text-xs text-warning">{t("Evaluation reports could not be read. No quality result is claimed.")}</p>}
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: <code>{reportID}</code></p>}
           {report && <div role="status"><PropertyList columns={3} items={[[t("Report state"),t(currentReportState??report.state)],[t("Quality"),Math.round(report.quality*100)+"%"],[t("Reported USD cost"),report.costComplete?report.costUsd:t("Unknown")],[t("Peak latency (ms)"),report.peakLatencyMillis],[t("Calls"),report.attempts.length]]}/></div>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
         {builder && savedID && agentNames.length > 0 && <Panel title={t("Agent candidate evaluations")} role="region" aria-label={t("Agent candidate evaluations")} className="grid gap-2">
-          <p className="text-xs text-muted">{t("Each candidate agent must pass its declared cases three times with the current agent model before activation.")}</p>
+          <p className="text-xs text-muted">{t("Run each agent's declared cases three times with the current agent model to measure that configuration. Reports do not determine application delivery.")}</p>
           {agentNames.map(name => <div key={name} className="grid gap-1 text-xs"><div className="flex flex-wrap items-center gap-2"><strong>{name}</strong><Button size="sm" disabled={locked} onClick={() => void evaluateAgent(name)}>{t("Run declared cases")}</Button></div>
             {candidateAI.filter(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name).flatMap(item => item.evaluations.filter(report => report.candidate === savedID).map(report => <PropertyList key={report.id} columns={2} items={[[t("Report"),<code>{report.id}</code>],[t("Report state"),t(report.state)],[t("Model"),report.model],[t("Quality"),Math.round(report.quality*100)+"%"]]}/>))}
           </div>)}
           <Button disabled={locked} onClick={() => void perform(() => readSaved(savedID))}>{t("Refresh evaluation reports")}</Button>
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: {reportID}</p>}
         </Panel>}
-        {!builder && (functionNames.length > 0 || agentNames.length > 0) && !evaluated && <p role="status" className="text-sm text-warning">{t("Required AI evaluations are missing. Ask a builder to complete them before activation.")}</p>}
-        {savedID && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !evaluated || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
+        {(functionNames.length > 0 || agentNames.length > 0) && !evaluated && <p role="status" className="text-sm text-warning">{t("This candidate is not fully evaluated. Configure models and run evaluations when needed; no quality result is claimed.")}</p>}
+        {savedID && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
         {activeID === savedID && savedID && !runningMatches && (function () {
           const application = applications.data?.records.find((item) => joint.some((choice) => choice.kind === "app" && choice.id === item.id));

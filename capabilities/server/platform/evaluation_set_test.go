@@ -39,3 +39,14 @@ func TestEvaluationPolicyKeepsExactDefaultsAndDeclaredFields(t *testing.T) {
 		t.Fatal("a saved criterion changed its result")
 	}
 }
+
+func TestEvaluationSetDefersDefaultModelUntilExecution(t *testing.T) {
+	descriptor := EvaluationSetDescriptor{Name: "quality", Title: "Quality", Function: AssetBinding{Ref: AssetRef{App: "build", Kind: AssetFunction, Name: "advice"}, SourceVersion: "1.function-1"}, Policy: EvaluationPolicy{MinQuality: 1, MaxCostUSD: 0.1, MaxLatencyMillis: 1000, Cases: []EvaluationCase{{Name: "one", Input: json.RawMessage(`{"title":"Sample"}`), Expected: json.RawMessage(`{"summary":"Sample"}`)}}}}
+	if _, err := ReadEvaluationSet(Raw(descriptor)); err != nil {
+		t.Fatal(err)
+	}
+	descriptor.Model = " "
+	if err := descriptor.Check(); err == nil {
+		t.Fatal("whitespace is not a model reference")
+	}
+}

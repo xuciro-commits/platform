@@ -26,55 +26,6 @@ import (
 	"platformserver/platform"
 )
 
-type releaseEnvironmentOwner struct {
-	platform.AssetLifecycleOwner
-	ledger    *platform.Ledger
-	ref       platform.AssetRef
-	requested platform.AssetEnvironmentRequirement
-}
-
-func (o *releaseEnvironmentOwner) Manifest() platform.Manifest {
-	return platform.Manifest{ID: o.ref.App}
-}
-func (o *releaseEnvironmentOwner) AcceptedLedger() *platform.Ledger { return o.ledger }
-func (o *releaseEnvironmentOwner) AssetKinds() []platform.AssetKind {
-	return []platform.AssetKind{platform.AssetConnection}
-}
-func (o *releaseEnvironmentOwner) AssetEnvironmentRequirements(platform.ReleaseAsset) ([]platform.AssetEnvironmentRequirement, error) {
-	return []platform.AssetEnvironmentRequirement{{Ref: o.ref, Profile: "owned-profile", Credential: true}}, nil
-}
-func (o *releaseEnvironmentOwner) ResolveAssetEnvironment(requirement platform.AssetEnvironmentRequirement) (platform.AssetEnvironmentTarget, error) {
-	o.requested = requirement
-	return platform.AssetEnvironmentTarget{TargetRecord: "owned-record", Credential: "local-credential"}, nil
-}
-
-func TestReleaseEnvironmentUsesOwnerDescriptorAndHostCredential(t *testing.T) {
-	ref := platform.AssetRef{App: "connection-owner", Kind: platform.AssetConnection, Name: "external"}
-	owner := &releaseEnvironmentOwner{ref: ref, ledger: platform.NewLedger("environment-target", ref.App, platform.NewCatalog())}
-	registry, err := platform.NewAssetRegistry(runtimeAssetOwner{App: owner, lifecycle: owner})
-	if err != nil {
-		t.Fatal(err)
-	}
-	asset := platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: "1", Body: json.RawMessage(`{"name":"external"}`)}
-	var checked string
-	target := composeTenant(t, "environment-target", nil)
-	target.Secrets = func(name string) ([]byte, bool) { checked = name; return []byte("configured"), true }
-	context, err := target.assetReleaseContextLocked(registry, []platform.ReleaseAsset{asset}, platform.Member{ID: "reviewer"}, time.Now(), false)
-	if err != nil || len(context.Bindings) != 1 || context.Bindings[0].Ref != ref || context.Bindings[0].TargetRecord != "owned-record" || checked != "local-credential" {
-		t.Fatal(context, checked, err)
-	}
-	if owner.requested.Profile != "owned-profile" || !owner.requested.Credential {
-		t.Fatal("host changed owner requirements", owner.requested)
-	}
-	if bytes.Contains(platform.Raw(context.Bindings), []byte("credential")) {
-		t.Fatal("transient credential name entered target bindings")
-	}
-	target.Secrets = func(string) ([]byte, bool) { return nil, false }
-	if _, err := target.assetReleaseContextLocked(registry, []platform.ReleaseAsset{asset}, platform.Member{}, time.Now(), false); err == nil || !strings.Contains(err.Error(), "has no credential") {
-		t.Fatal("host credential absence did not refuse release", err)
-	}
-}
-
 // The two domain tasks share the real source/pipeline/writeback and release
 // owners. Their complete definition closure is delivered into a clean target;
 // source data and environment credentials are never that closure.
@@ -230,6 +181,11 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	decide(t, dev.tenant, "dev-builder", construction.ID, construction.SourceType+".create", construction.SourceType, "dev-source", map[string]any{"name": "feed", "title": "External rows", "connection": "dev-connection", "profile": "json", "url": "rows", "since": "seq", "dataset": "dev-raw"}, at)
 	decide(t, dev.tenant, "dev-builder", construction.ID, construction.SourceType+".publish", construction.SourceType, "dev-source", map[string]any{}, at)
 	dev.tenant.PullSources(at)
+	if sourceReads.Load() != 0 {
+		t.Fatal("publishing a source started an external read")
+	}
+	decide(t, dev.tenant, "dev-builder", construction.ID, construction.SourceType+".pull", construction.SourceType, "dev-source", map[string]any{}, at)
+	dev.tenant.PullSources(at)
 	for _, p := range []struct {
 		id, name, input, output string
 		object                  bool
@@ -243,6 +199,13 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 		}
 		decide(t, dev.tenant, "dev-builder", construction.ID, construction.PipelineType+".create", construction.PipelineType, p.id, definition, at)
 		decide(t, dev.tenant, "dev-builder", construction.ID, construction.PipelineType+".publish", construction.PipelineType, p.id, map[string]any{}, at)
+	}
+	for _, id := range []string{"dev-clean-pipeline", "dev-land-pipeline"} {
+		pipeline, _ := platform.Get[construction.Pipeline](dev.tenant.automation(construction.ID, false), id)
+		if pipeline.Requested || pipeline.Runner != "" || pipeline.Last != nil {
+			t.Fatal("pipeline publication assigned or started an execution", pipeline)
+		}
+		decide(t, dev.tenant, "dev-builder", construction.ID, construction.PipelineType+".run", construction.PipelineType, id, map[string]any{}, at)
 	}
 	dev.tenant.RunPipelines(at)
 	dev.tenant.RunPipelines(at.Add(time.Second))
@@ -292,12 +255,22 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	if devData.Version != 1 {
 		t.Fatal("source fixture did not hold real source data")
 	}
-	before := snapshot(prod.tenant)
-	if _, err := PromoteCandidate(dev.tenant, prod.tenant, candidate.ID, "missing-binding", true, memberOf(t, prod.tenant, "target-builder"), at); err == nil || !strings.Contains(strings.ToLower(err.Error()), "binding") {
-		t.Fatalf("target without a local binding was not refused: %v", err)
+	unconfigured := open(prefix + "-unconfigured")
+	if _, err := PromoteCandidate(dev.tenant, unconfigured.tenant, candidate.ID, "unconfigured-delivery", true, memberOf(t, unconfigured.tenant, "target-builder"), at); err != nil {
+		t.Fatalf("unconfigured target could not receive a complete application: %v", err)
 	}
-	if snapshot(prod.tenant) != before || (targetReads.Load() != 0 || targetWrites.Load() != 0) {
-		t.Fatal("missing binding left target drafts, data, release pointer or outside reads")
+	unconfiguredCaller := unconfigured.tenant.automation(construction.ID, false)
+	unconfiguredSources, _, _ := platform.Find[construction.Source](unconfiguredCaller, platform.Query{})
+	unconfiguredConnections, _, _ := platform.Find[construction.Connection](unconfiguredCaller, platform.Query{})
+	if unconfigured.tenant.ActiveRelease() != candidate.ID || len(unconfiguredSources) != 1 || len(unconfiguredConnections) != 1 || unconfiguredSources[0].Requested || unconfiguredSources[0].Puller != "" || unconfiguredConnections[0].Address != "" || unconfiguredConnections[0].Secret != "" || unconfiguredConnections[0].State == "ready" || targetReads.Load() != 0 || targetWrites.Load() != 0 {
+		t.Fatal("unconfigured delivery copied or used the source environment", unconfiguredSources, unconfiguredConnections)
+	}
+	if reason := refuse(t, unconfigured.tenant, "target-builder", construction.ID, construction.SourceType+".pull", construction.SourceType, unconfiguredSources[0].ID, map[string]any{}, at); !strings.Contains(strings.ToLower(reason), "connection") {
+		t.Fatalf("unconfigured actual source request was not refused clearly: %s", reason)
+	}
+	decide(t, unconfigured.tenant, "user", construction.ID, typ+".create", typ, "LOCAL", map[string]any{"item": "LOCAL-ONLY"}, at)
+	if targetReads.Load() != 0 || targetWrites.Load() != 0 {
+		t.Fatal("independent local work contacted the unavailable integration")
 	}
 	wrong := open(prefix + "-wrong")
 	decide(t, wrong.tenant, "target-builder", construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "wrong-connection", map[string]any{"name": "external", "title": "Wrong binding kind", "kind": "odata", "address": prodServer.URL + "/", "secret": "local-" + wrong.tenant.ID, "allowPrivate": true}, at)
@@ -323,22 +296,43 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	unauthorized := open(prefix + "-unauthorized")
 	connection(unauthorized, "local-connection", prodServer.URL)
 	unauthorizedBefore := snapshot(unauthorized.tenant)
-	if _, err := PromoteCandidate(dev.tenant, unauthorized.tenant, candidate.ID, "missing-execution-right", true, memberOf(t, unauthorized.tenant, "publisher"), at); err == nil {
-		t.Fatal("release publisher acquired original integration execution permissions")
+	if _, err := PromoteCandidate(dev.tenant, unauthorized.tenant, candidate.ID, "missing-owner-publication-right", true, memberOf(t, unauthorized.tenant, "publisher"), at); err == nil {
+		t.Fatal("release publisher bypassed original owner draft/publication permissions")
 	}
 	if snapshot(unauthorized.tenant) != unauthorizedBefore || unauthorized.tenant.ActiveRelease() != "" || (targetReads.Load() != 0 || targetWrites.Load() != 0) {
-		t.Fatal("execution permission refusal exposed target installation")
+		t.Fatal("owner permission refusal exposed target installation")
 	}
 	scoped := open(prefix + "-scoped")
 	connection(scoped, "local-connection", prodServer.URL)
 	scopedMember := memberOf(t, scoped.tenant, "target-builder")
 	scopedMember.Scopes = []string{"build.object.*", "build.page.*", "build.app.*", "build.process.*", "build.connection.*", "build.source.*", "build.dataset.*", "build.pipeline.*", "build.writeback.*", "build.match.*"}
-	scopedBefore := snapshot(scoped.tenant)
-	if _, err := PromoteCandidate(dev.tenant, scoped.tenant, candidate.ID, "missing-data-write-scope", true, scopedMember, at); err == nil {
-		t.Fatal("metadata-scoped builder acquired business data write permissions")
+	if _, err := PromoteCandidate(dev.tenant, scoped.tenant, candidate.ID, "metadata-only-delivery", true, scopedMember, at); err != nil {
+		t.Fatalf("metadata-scoped builder could not deliver without business write scope: %v", err)
 	}
-	if snapshot(scoped.tenant) != scopedBefore || scoped.tenant.ActiveRelease() != "" || (targetReads.Load() != 0 || targetWrites.Load() != 0) {
-		t.Fatal("data write scope refusal exposed target installation")
+	if scoped.tenant.ActiveRelease() != candidate.ID || targetReads.Load() != 0 || targetWrites.Load() != 0 {
+		t.Fatal("metadata-only delivery started integration execution")
+	}
+	scopedPipelines, _, _ := platform.Find[construction.Pipeline](scoped.tenant.automation(construction.ID, false), platform.Query{})
+	for _, pipeline := range scopedPipelines {
+		if pipeline.Requested || pipeline.Runner != "" || pipeline.Last != nil {
+			t.Fatal("metadata-only delivery assigned runtime authority", pipeline)
+		}
+		if pipeline.Name != "landing" {
+			continue
+		}
+		decide(t, scoped.tenant, "target-builder", construction.ID, construction.SchemaDatasetLoad, construction.DatasetType, pipeline.Input, map[string]any{"rows": []map[string]any{{"id": "SCOPED", "item": "MUST-NOT-LAND", "qty": 3}}, "producer": "test-input"}, at)
+		if _, refusal := scoped.tenant.Submit(scopedMember, submission(scoped.tenant, scopedMember, construction.ID, construction.PipelineType+".run", construction.PipelineType, pipeline.ID, map[string]any{}), at); refusal != nil {
+			t.Fatalf("metadata-scoped explicit execution request could not retain its authority: %s", refusal.Message)
+		}
+		scoped.tenant.RunPipelines(at)
+		finished, _ := platform.Get[construction.Pipeline](scoped.tenant.automation(construction.ID, false), pipeline.ID)
+		if finished.Last == nil || finished.Last.Execution == nil || !slices.Equal(finished.Last.Execution.Scopes, scopedMember.Scopes) || finished.Last.Written != 0 || finished.Last.Failed != 1 {
+			t.Fatalf("actual pipeline execution lost the requesting token's business write restriction: %+v", finished)
+		}
+		view, refusal := scoped.tenant.RecordOf(memberOf(t, scoped.tenant, "target-builder"), typ, "SCOPED", at)
+		if refusal == nil && view.Record != nil || targetReads.Load() != 0 || targetWrites.Load() != 0 {
+			t.Fatal("metadata-only execution wrote business data or contacted the external system")
+		}
 	}
 	// A complete binding does not make a later owner/storage failure atomic by
 	// itself. Missing app/page/integration drafts must remain private throughout
@@ -355,7 +349,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 		t.Fatal("later owner validation failure exposed missing drafts or changed existing data")
 	}
 	connection(prod, "prod-connection", prodServer.URL)
-	before = snapshot(prod.tenant)
+	before := snapshot(prod.tenant)
 	prod.fail = true
 	if _, err := PromoteCandidate(dev.tenant, prod.tenant, candidate.ID, "deliver-v1", true, memberOf(t, prod.tenant, "target-builder"), at); err == nil {
 		t.Fatal("append failure reported delivery success")
@@ -410,7 +404,7 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	c := prod.tenant.automation(construction.ID, false)
 	datasets, _, _ := platform.Find[construction.Dataset](c, platform.Query{})
 	sources, _, _ := platform.Find[construction.Source](c, platform.Query{})
-	if len(datasets) != 2 || len(sources) != 1 || sources[0].Connection != "prod-connection" || sources[0].Cursor != "" || sources[0].Last != nil || sources[0].Puller != "target-builder" {
+	if len(datasets) != 2 || len(sources) != 1 || sources[0].Connection != "prod-connection" || sources[0].Cursor != "" || sources[0].Last != nil || sources[0].Puller != "" || sources[0].Requested {
 		t.Fatalf("target did not resolve local references or copied source runtime: datasets=%+v sources=%+v", datasets, sources)
 	}
 	for _, dataset := range datasets {
@@ -424,6 +418,13 @@ func checkIntegrationReleaseAcrossEnvironments(t *testing.T, domain string, stor
 	}
 	decide(t, prod.tenant, "target-builder", construction.ID, construction.SourceType+".pull", construction.SourceType, sources[0].ID, map[string]any{}, at)
 	prod.tenant.PullSources(at)
+	targetPipelines, _, _ := platform.Find[construction.Pipeline](prod.tenant.automation(construction.ID, false), platform.Query{})
+	for _, pipeline := range targetPipelines {
+		if pipeline.Requested || pipeline.Runner != "" || pipeline.Last != nil {
+			t.Fatal("promoted pipeline started before its explicit run", pipeline)
+		}
+		decide(t, prod.tenant, "target-builder", construction.ID, construction.PipelineType+".run", construction.PipelineType, pipeline.ID, map[string]any{}, at)
+	}
 	prod.tenant.RunPipelines(at)
 	prod.tenant.RunPipelines(at.Add(time.Second))
 	view, refusal := prod.tenant.RecordOf(memberOf(t, prod.tenant, "user"), typ, "IN-1", at)

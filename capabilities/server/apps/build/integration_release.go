@@ -711,11 +711,14 @@ func (b *Build) ExecutionSource(live construction.Source) (construction.Source, 
 		return construction.Source{}, err
 	}
 	r := fixed.(construction.Source)
-	r.Record, r.State, r.Puller, r.Cursor, r.Requested, r.Last = live.Record, live.State, live.Puller, live.Cursor, live.Requested, live.Last
+	r.Record, r.State, r.Puller, r.PullerScopes, r.Cursor, r.Requested, r.Last = live.Record, live.State, live.Puller, live.PullerScopes, live.Cursor, live.Requested, live.Last
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }
-func (b *Build) ExecutionConnection(live construction.Connection) (construction.Connection, error) {
+
+// ConnectionConfiguration projects accepted declarations with local settings;
+// delivery and historical reconstruction do not require a live environment.
+func (b *Build) ConnectionConfiguration(live construction.Connection) (construction.Connection, error) {
 	fixed, err := b.acceptedIntegration(live, platform.AssetConnection)
 	if err != nil {
 		return construction.Connection{}, err
@@ -724,21 +727,35 @@ func (b *Build) ExecutionConnection(live construction.Connection) (construction.
 	if r.Kind != live.Kind {
 		return construction.Connection{}, fmt.Errorf("connection binding kind differs from its accepted definition")
 	}
-	if live.Published != "" {
-		var a platform.ReleaseAsset
-		var d construction.ConnectionDefinition
-		_ = json.Unmarshal([]byte(live.Published), &a)
-		if err := construction.ValueDecodeIntegration(a.Body, &d); err != nil {
-			return construction.Connection{}, err
-		}
-		if d.Credential && live.Secret == "" {
-			return construction.Connection{}, fmt.Errorf("connection credential binding is missing")
-		}
-	}
 	r.Record, r.Address, r.Secret, r.AllowPrivate, r.State, r.Requested, r.Last = live.Record, live.Address, live.Secret, live.AllowPrivate, live.State, live.Requested, live.Last
 	r.Marking = construction.HigherMarking(r.Marking, live.Marking)
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
+}
+
+func (b *Build) ExecutionConnection(live construction.Connection) (construction.Connection, error) {
+	connection, err := b.ConnectionConfiguration(live)
+	if err != nil {
+		return construction.Connection{}, err
+	}
+	if connection.Archived || connection.State != "ready" || connection.Address == "" {
+		return construction.Connection{}, fmt.Errorf("connection is not ready; configure and check it before use")
+	}
+	if problem := b.validConnection(connection); problem != nil {
+		return construction.Connection{}, problem
+	}
+	if live.Published != "" {
+		var asset platform.ReleaseAsset
+		var definition construction.ConnectionDefinition
+		_ = json.Unmarshal([]byte(live.Published), &asset)
+		if err := construction.ValueDecodeIntegration(asset.Body, &definition); err != nil {
+			return construction.Connection{}, err
+		}
+		if definition.Credential && live.Secret == "" {
+			return construction.Connection{}, fmt.Errorf("connection credential binding is missing")
+		}
+	}
+	return connection, nil
 }
 func (b *Build) ExecutionDataset(live construction.Dataset) (construction.Dataset, error) {
 	fixed, err := b.acceptedIntegration(live, platform.AssetDataset)
@@ -757,7 +774,7 @@ func (b *Build) ExecutionPipeline(live construction.Pipeline) (construction.Pipe
 		return construction.Pipeline{}, err
 	}
 	r := fixed.(construction.Pipeline)
-	r.Record, r.State, r.Runner, r.Requested, r.Last, r.Marking = live.Record, live.State, live.Runner, live.Requested, live.Last, live.Marking
+	r.Record, r.State, r.Runner, r.RunnerScopes, r.Requested, r.Last, r.Marking = live.Record, live.State, live.Runner, live.RunnerScopes, live.Requested, live.Last, live.Marking
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
 }

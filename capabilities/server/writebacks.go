@@ -76,22 +76,45 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 
 // writebackEffects plans the effects of one accepted decision. It runs inside
 // the input and inside replay, so it only reads records as they stand.
-func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
+func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.Effect, *kernel.Error) {
 	if t.app(construction.ID) == nil {
-		return nil
+		return nil, nil
 	}
 	s := e.Record.GetSubmission()
 	schema := s.GetSchema().GetName()
 	if e.App != construction.ID {
-		return nil
+		return nil, nil
 	}
 	c := t.automation(construction.ID, false)
-	writebacks, _, _ := platform.Find[construction.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	writebacks, _, refusal := platform.Find[construction.Writeback](c, platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	if preparing && refusal != nil {
+		return nil, refusal
+	}
 	var planned []platform.Effect
 	owner := t.app(construction.ID).(host.IntegrationDefinitions)
 	for _, w := range writebacks {
+		// Select the frozen event before resolving its runtime connection:
+		// an unconfigured integration must not block unrelated operations.
+		eventSchema, on := w.Schema(), w.On
+		if w.Published != "" {
+			var asset platform.ReleaseAsset
+			var definition construction.WritebackDefinition
+			if construction.ValueDecodeIntegration([]byte(w.Published), &asset) != nil || construction.ValueDecodeIntegration(asset.Body, &definition) != nil {
+				if preparing {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback publication is unavailable")
+				}
+				continue
+			}
+			eventSchema, on = definition.Object+"."+definition.On, definition.On
+		}
+		if on == "confirmation" || on == "dispatch" || on == "transaction" || eventSchema != schema {
+			continue
+		}
 		w, err := owner.ExecutionWriteback(w)
 		if err != nil {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+			}
 			continue
 		}
 		if w.On == "confirmation" || w.On == "dispatch" || w.On == "transaction" || w.Schema() != schema {
@@ -99,15 +122,33 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 		}
 		conn, ok := platform.Get[construction.Connection](c, w.Connection)
 		if !ok {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The writeback connection is not configured")
+			}
 			continue
 		}
-		conn, err = owner.ExecutionConnection(conn)
+		if preparing {
+			conn, err = owner.ExecutionConnection(conn)
+		} else {
+			conn, err = owner.ConnectionConfiguration(conn)
+		}
 		if err != nil {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+			}
 			continue
 		}
 		req, err := w.Request(conn, s.GetTarget().GetId(), s.GetPayload())
 		if err != nil {
+			if preparing {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+			}
 			continue
+		}
+		if preparing {
+			if refusal := t.checkWritebackCredential(req); refusal != nil {
+				return nil, refusal
+			}
 		}
 		body, _ := json.Marshal(req)
 		at := e.Record.GetRecordedTime().AsTime()
@@ -115,7 +156,18 @@ func (t *Tenant) writebackEffects(e platform.Event) []platform.Effect {
 			Endpoint: construction.WritebackEndpoint + conn.ID, Event: "writeback/" + w.Name, App: construction.ID, Key: e.Record.GetChangeId(), Target: target(s), At: at,
 			State: "pending", Due: at, Body: string(body)})
 	}
-	return planned
+	return planned, nil
+}
+
+// Credential values are resolved only when an actual external request is
+// prepared. Frozen intents retain the reference for later delivery checks.
+func (t *Tenant) checkWritebackCredential(request construction.WritebackRequest) *kernel.Error {
+	if request.Secret != "" {
+		if value, ok := t.credentialValue(request.Secret, "connection/"+request.Connection, request.URL); !ok || strings.TrimSpace(string(value)) == "" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The connection credential is not configured or permitted for this target")
+		}
+	}
+	return nil
 }
 
 // connectionEndpoints are the connections with unsettled writebacks, as the

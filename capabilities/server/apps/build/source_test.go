@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"strings"
 
 	"testing"
 	"time"
@@ -12,8 +13,8 @@ import (
 
 func TestSourceResetEndsPendingInputWithoutMutatingItsHistory(t *testing.T) {
 	prior := construction.SourcePull{Cursor: "2", Execution: &construction.IntegrationExecution{ID: "original", Member: "builder", Pending: true}}
-	source := construction.Source{Cursor: "1", Last: &prior}
-	if err := resetCursor(platform.Caller{}, &source, nil, time.Time{}); err != nil {
+	source := construction.Source{URL: "https://source.example/rows", Cursor: "1", Last: &prior}
+	if err := New("source-reset").resetCursor(platform.Caller{}, &source, nil, time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	if source.Cursor != "" || !source.Requested || source.Last.Execution.Pending || source.Last.Error == "" {
@@ -21,6 +22,28 @@ func TestSourceResetEndsPendingInputWithoutMutatingItsHistory(t *testing.T) {
 	}
 	if !prior.Execution.Pending || prior.Error != "" || source.Last == &prior || source.Last.Execution == prior.Execution {
 		t.Fatal("reset mutated the previous accepted input")
+	}
+}
+
+func TestIntegrationPreparationCannotExpandOrReplaceFrozenTokenScopes(t *testing.T) {
+	member := platform.Member{ID: "runner", Scopes: []string{"build.source.*", "build.dataset.*"}}
+	prepared := construction.IntegrationExecution{ID: "run", Member: member.ID, Scopes: append([]string{}, member.Scopes...), Snapshot: strings.Repeat("ab", 32), Pending: true}
+	if problem := checkIntegrationExecution(nil, &prepared, member); problem != nil {
+		t.Fatal("matching preparation refused", problem)
+	}
+	unscoped := prepared
+	unscoped.Scopes = nil
+	if problem := checkIntegrationExecution(nil, &unscoped, member); problem == nil {
+		t.Fatal("narrow token forged an unbounded preparation")
+	}
+	finished := prepared
+	finished.Pending = false
+	if problem := checkIntegrationExecution(&prepared, &finished, member); problem != nil {
+		t.Fatal("the original bounded execution could not finish", problem)
+	}
+	finished.Scopes = []string{"build.*"}
+	if problem := checkIntegrationExecution(&prepared, &finished, member); problem == nil {
+		t.Fatal("a result replaced its frozen execution scope")
 	}
 }
 

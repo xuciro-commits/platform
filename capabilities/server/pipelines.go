@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"platformserver/internal/host"
+	"slices"
 	"strings"
 	"time"
 
@@ -72,10 +73,15 @@ func (t *Tenant) pipelineResult(member platform.Member, p construction.Pipeline,
 func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 	run := construction.PipelineRun{At: now, DefinitionVersion: p.ExecutionVersion()}
 	member, ok := t.Member(p.Runner)
+	if p.RunnerScopes != "" && json.Unmarshal([]byte(p.RunnerScopes), &member.Scopes) != nil {
+		log.Printf("pipeline execution scopes are invalid")
+		return
+	}
 	var plan integrationPreparation
 	if p.Last != nil && p.Last.Execution != nil && p.Last.Execution.Pending {
 		run = *p.Last
 		member, ok = t.Member(run.Execution.Member)
+		member.Scopes = slices.Clone(run.Execution.Scopes)
 		var err error
 		plan, err = t.integrationPreparation(run.Execution)
 		if err != nil {
@@ -83,7 +89,7 @@ func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 			return
 		}
 	} else if !ok {
-		run.Error = "The publishing member is no longer available"
+		run.Error = "The execution member is no longer available"
 	} else {
 		// Every input, including lookup/join datasets, is frozen under one read.
 		t.mu.Lock()
@@ -170,7 +176,7 @@ func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 			return
 		}
 		if !ok {
-			run.Error = "The publishing member is no longer available"
+			run.Error = "The execution member is no longer available"
 		} else if plan.Enterprise != nil {
 			elements, rels, skipped := plan.Enterprise.Slice(plan.Data)
 			key := "pipeline:" + run.Execution.ID + ":enterprise"
@@ -181,7 +187,7 @@ func (t *Tenant) runPipeline(p construction.Pipeline, now time.Time) {
 					return
 				}
 				if err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-					run.Error = "The pipeline runs as its publisher, who needs the Enterprise admin role to land elements in the model"
+					run.Error = "The pipeline runs as its requesting member, who needs the Enterprise admin role to land elements in the model"
 				} else {
 					run.Error = err.Code.String() + ": " + err.Message
 				}

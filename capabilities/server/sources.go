@@ -92,7 +92,7 @@ func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now
 		return nil, err
 	}
 	identity := sha256.Sum256(platform.Raw([]any{t.ID, plan.Type, plan.ID, revision, now.UTC()}))
-	return &construction.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Pending: true, Snapshot: digest}, nil
+	return &construction.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Scopes: slices.Clone(member.Scopes), Pending: true, Snapshot: digest}, nil
 }
 
 // integrationPending reads the already accepted execution, without journaling
@@ -117,7 +117,7 @@ func (t *Tenant) integrationPending(typ, id string, execution *construction.Inte
 		}
 		current = pipeline.Last.Execution
 	}
-	return current != nil && current.Pending && current.ID == execution.ID && current.Snapshot == execution.Snapshot && current.Member == execution.Member
+	return current != nil && current.Pending && current.ID == execution.ID && current.Snapshot == execution.Snapshot && current.Member == execution.Member && slices.Equal(current.Scopes, execution.Scopes)
 }
 
 func (t *Tenant) integrationPreparation(execution *construction.IntegrationExecution) (integrationPreparation, error) {
@@ -161,10 +161,15 @@ func (t *Tenant) sourceResult(member platform.Member, s construction.Source, pul
 func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 	pull := construction.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
 	member, ok := t.Member(s.Puller)
+	if s.PullerScopes != "" && json.Unmarshal([]byte(s.PullerScopes), &member.Scopes) != nil {
+		log.Printf("source execution scopes are invalid")
+		return
+	}
 	var plan integrationPreparation
 	if s.Last != nil && s.Last.Execution != nil && s.Last.Execution.Pending {
 		pull = *s.Last
 		member, ok = t.Member(pull.Execution.Member)
+		member.Scopes = slices.Clone(pull.Execution.Scopes)
 		var err error
 		plan, err = t.integrationPreparation(pull.Execution)
 		if err != nil {
@@ -172,7 +177,7 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 			return
 		}
 	} else if !ok {
-		pull.Error = "The publishing member is no longer available"
+		pull.Error = "The execution member is no longer available"
 	} else if raw, err := t.readSource(s); err != nil {
 		pull.Error = err.Error()
 	} else {
@@ -224,7 +229,7 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 			return
 		}
 		if !ok {
-			pull.Error = "The publishing member is no longer available"
+			pull.Error = "The execution member is no longer available"
 		} else if plan.Dataset != "" {
 			if plan.Data != nil {
 				key := "source:" + pull.Execution.ID + ":dataset"

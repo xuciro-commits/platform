@@ -100,7 +100,7 @@ type EvaluationSetDescriptor struct {
 }
 
 func (e EvaluationSetDescriptor) Check() error {
-	if !functionName.MatchString(e.Name) || e.Title == "" || len(e.Title) > 256 || e.Function.Ref.Check() != nil || e.Function.Ref.Kind != AssetFunction || e.Function.SourceVersion == "" || strings.TrimSpace(e.Model) == "" || len(e.Model) > 256 {
+	if !functionName.MatchString(e.Name) || e.Title == "" || len(e.Title) > 256 || e.Function.Ref.Check() != nil || e.Function.Ref.Kind != AssetFunction || e.Function.SourceVersion == "" || e.Model != strings.TrimSpace(e.Model) || len(e.Model) > 256 {
 		return fmt.Errorf("evaluation set needs a name, title and pinned function")
 	}
 	return e.Policy.Check()

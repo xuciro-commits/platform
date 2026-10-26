@@ -40,11 +40,12 @@ type Pipeline struct {
 	// OutputEnterprise lands the rows in the enterprise model instead: one element per row.
 	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
 	// Every is a period, or empty: run when an input gains a version, or on request.
-	Every     string       `json:"every,omitempty" title:"Run every"`
-	State     string       `json:"state" field:"readonly"`
-	Runner    string       `json:"runner,omitempty" field:"readonly" title:"Runs as"`
-	Requested bool         `json:"requested,omitempty" field:"readonly"`
-	Last      *PipelineRun `json:"last,omitempty" field:"readonly" type:"json" title:"Last run"`
+	Every        string       `json:"every,omitempty" title:"Run every"`
+	State        string       `json:"state" field:"readonly"`
+	Runner       string       `json:"runner,omitempty" field:"readonly" title:"Runs as"`
+	RunnerScopes string       `json:"runnerScopes,omitempty" field:"readonly" type:"json"`
+	Requested    bool         `json:"requested,omitempty" field:"readonly"`
+	Last         *PipelineRun `json:"last,omitempty" field:"readonly" type:"json" title:"Last run"`
 	// Definition publication is independent of data/runtime versions.
 	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
 	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`

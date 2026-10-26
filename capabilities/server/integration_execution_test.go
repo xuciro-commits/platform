@@ -35,9 +35,7 @@ func TestIntegrationSourceAcceptsReturningValuesAndRetainsRefusals(t *testing.T)
 	}
 	var previous string
 	for n, value := range []string{"A", "B", "A"} {
-		if n > 0 {
-			decide(t, tn, "builder", construction.ID, construction.SourceType+".pull", construction.SourceType, "SOURCE", map[string]any{}, at)
-		}
+		decide(t, tn, "builder", construction.ID, construction.SourceType+".pull", construction.SourceType, "SOURCE", map[string]any{}, at)
 		body = fmt.Sprintf(`[{"id":"R1","value":%q,"seq":%d}]`, value, n+1)
 		tn.PullSources(at.Add(time.Duration(n) * time.Minute))
 		source, _ := platform.Get[construction.Source](tn.automation(construction.ID, false), "SOURCE")
@@ -108,6 +106,7 @@ func TestIntegrationSourceResumesFrozenInputAfterRestart(t *testing.T) {
 				}
 				return persist(e, key, hash)
 			}
+			decide(t, live, "builder", construction.ID, construction.SourceType+".pull", construction.SourceType, "SOURCE", map[string]any{}, at)
 			live.PullSources(at)
 			pending, _ := platform.Get[construction.Source](live.automation(construction.ID, false), "SOURCE")
 			if pending.Last == nil || pending.Last.Execution == nil || !pending.Last.Execution.Pending || pending.Cursor != "" || live.records.types[typ].rows.Len() != 1 {
@@ -161,6 +160,7 @@ func TestIntegrationPipelineRunsWhenLookupVersionChanges(t *testing.T) {
 		"steps": []construction.Step{{Kind: "lookup", Dataset: "labels", Column: "ref", Match: "id", Columns: []string{"note"}}},
 	}, at)
 	decide(t, tn, "builder", construction.ID, construction.PipelineType+".publish", construction.PipelineType, "PIPE", map[string]any{}, at)
+	decide(t, tn, "builder", construction.ID, construction.PipelineType+".run", construction.PipelineType, "PIPE", map[string]any{}, at)
 	previous := ""
 	for n, note := range []string{"A", "B", "A"} {
 		if n > 0 {
@@ -226,6 +226,7 @@ func TestIntegrationPipelineRecoversItsOriginalOutputVersion(t *testing.T) {
 		}
 		return persist(e, key, hash)
 	}
+	decide(t, tn, "builder", construction.ID, construction.PipelineType+".run", construction.PipelineType, "PIPE", map[string]any{}, at)
 	tn.RunPipelines(at)
 	pending, _ := platform.Get[construction.Pipeline](tn.automation(construction.ID, false), "PIPE")
 	if pending.Last == nil || pending.Last.Execution == nil || !pending.Last.Execution.Pending {
@@ -351,6 +352,7 @@ func TestPostgresIntegrationPreparationUsesCurrentReadScope(t *testing.T) {
 		}
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`[{"id":"R1","value":"Updated"}]`))}, nil
 	}
+	decide(t, live, "builder", construction.ID, construction.SourceType+".pull", construction.SourceType, "SOURCE", map[string]any{}, txnAt)
 	live.PullSources(txnAt)
 	view, problem := live.RecordOf(memberOf(t, live, "builder"), construction.SourceType, "SOURCE", txnAt)
 	if problem != nil {

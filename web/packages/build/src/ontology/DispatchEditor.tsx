@@ -4,7 +4,7 @@ import { Button, Checkbox, Disclosure, Input, Panel, Select, Tag, t } from "@pla
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 import { nameOf, type Field } from "./object-model";
 
-type Named = { id: string; name: string; title: string; state: string; object?: string; on?: string; kind?: string };
+type Named = { id: string; name: string; title: string; state: string; object?: string; on?: string; kind?: string; archived?: boolean };
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 const statusNames: Record<string, string> = { accepted: "Accepted by target", running: "In transit", completed: "Completed", stuck: "Stuck", failed: "Failed", unknown: "Outcome unknown" };
 const policyNames: Record<string, string> = { manual: "Human intervention", escalate: "Notify reviewers", compensate: "Send reverse command", retry: "Automatically resend" };
@@ -57,7 +57,7 @@ export function DispatchEditor({ value, onChange, commands, onCommandsChange, ob
     {value && <>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className={fieldClass}>{t("Declared command")}<Select value={value.command} onChange={event => patch({ command: event.target.value })}><option value="">{t("Choose a declared command")}</option>{commands.map(item => <option key={item.name} value={item.name}>{item.title || item.name}</option>)}</Select></label>
-        <label className={fieldClass}>{t("Dispatch target")}<Select value={value.target} onChange={event => patch({ target: event.target.value })}><option value="">{t("Choose a ready external connection")}</option>{connections.data?.records.filter(item => item.state === "ready" && ["http", "odata"].includes(item.kind ?? "")).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></label>
+        <label className={fieldClass}>{t("Dispatch target")}<Select value={value.target} onChange={event => patch({ target: event.target.value })}><option value="">{t("Choose a logical external connection")}</option>{connections.data?.records.filter(item => !item.archived && item.state !== "retired" && ["http", "odata"].includes(item.kind ?? "")).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></label>
         <label className={fieldClass}>{t("Stable business key")}<Select value={value.key} onChange={event => patch({ key: event.target.value })}><option value="$subject">{t("Subject record ID")}</option>{fields.filter(field => ["text", "reference", "choice"].includes(field.type) && field.readOnly).map(field => <option key={field.name} value={`record.${field.name}`}>{field.title || field.name}</option>)}</Select><span className="text-muted">{t("The same key is retained for every send attempt. Use the record ID or an immutable business identifier.")}</span></label>
         <label className={fieldClass}>{t("Business deadline (seconds)")}<Input type="number" min={1} max={604800} value={value.deadlineSeconds} onChange={event => patch({ deadlineSeconds: Number(event.target.value) })} /></label>
       </div>

@@ -108,7 +108,7 @@ test("an application authors AI functions, agents and evaluation sets over saved
   await create("Evaluation set");
   await expect(page.getByRole("combobox", { name: "Candidate kind", exact: true })).toHaveValue("function");
   await page.getByRole("combobox", { name: "Saved function draft", exact: true }).selectOption(fn.id);
-  await expect(page.getByRole("checkbox", { name: "Require a measured release evaluation", exact: true })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Include measured model evaluation", exact: true })).toBeChecked();
   await page.getByRole("textbox", { name: "Test plan name", exact: true }).fill("Saved note summary cases");
   await page.getByRole("textbox", { name: "Evaluation set name", exact: true }).fill(evaluationName);
   await page.getByRole("textbox", { name: "Synthetic input (JSON object)", exact: true }).fill(JSON.stringify({ note: "Synthetic note" }));

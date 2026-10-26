@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"platformkernel/kernel"
 	"platformserver/internal/host"
@@ -68,52 +69,178 @@ func lifecycleBuild() (*Build, *lifecycleRows) {
 	return b, rows
 }
 
-func TestAssetEnvironmentResolutionUsesBuildConnectionRules(t *testing.T) {
+func TestReleaseConnectionTargetsUseLogicalIdentityWithoutEnvironmentReadiness(t *testing.T) {
+	b, _ := lifecycleBuild()
 	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: "external"}
-	requirement := platform.AssetEnvironmentRequirement{Ref: ref, Profile: "http", Credential: true}
-	ready := construction.Connection{Record: platform.Record{ID: "target"}, Name: ref.Name, Kind: "http", State: "ready", Secret: "target-credential"}
+	asset, err := b.integrationAsset(platform.AssetConnection, construction.Connection{Name: ref.Name, Kind: "http", Secret: "source-only"}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, test := range []struct {
 		name string
 		rows []construction.Connection
+		want string
 	}{
-		{"missing", nil},
-		{"archived", func() []construction.Connection { c := ready; c.Archived = true; return []construction.Connection{c} }()},
-		{"different name", func() []construction.Connection { c := ready; c.Name = "other"; return []construction.Connection{c} }()},
-		{"ambiguous", []construction.Connection{ready, ready}},
-		{"not ready", func() []construction.Connection { c := ready; c.State = "draft"; return []construction.Connection{c} }()},
-		{"different kind", func() []construction.Connection { c := ready; c.Kind = "odata"; return []construction.Connection{c} }()},
-		{"missing credential", func() []construction.Connection { c := ready; c.Secret = ""; return []construction.Connection{c} }()},
+		{name: "missing", want: ref.Name},
+		{name: "unconfigured", rows: []construction.Connection{{Record: platform.Record{ID: "local"}, Name: ref.Name, Kind: "http", State: "draft"}}, want: "local"},
+		{name: "archived", rows: []construction.Connection{{Record: platform.Record{ID: "retired", Archived: true}, Name: ref.Name, Kind: "http"}}, want: ref.Name},
+		{name: "ambiguous", rows: []construction.Connection{{Record: platform.Record{ID: "one"}, Name: ref.Name, Kind: "http"}, {Record: platform.Record{ID: "two"}, Name: ref.Name, Kind: "http"}}},
+		{name: "incompatible kind", rows: []construction.Connection{{Record: platform.Record{ID: "local"}, Name: ref.Name, Kind: "odata"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			b, rows := lifecycleBuild()
+			owner, rows := lifecycleBuild()
 			for _, connection := range test.rows {
 				rows.rows[reflect.TypeFor[construction.Connection]()] = append(rows.rows[reflect.TypeFor[construction.Connection]()], connection)
 			}
-			if _, err := b.ResolveAssetEnvironment(requirement); err == nil {
-				t.Fatal("invalid local connection resolved")
+			before := string(platform.Raw(rows.rows[reflect.TypeFor[construction.Connection]()]))
+			restore, err := owner.integrationTargets([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{})
+			if test.want == "" {
+				if err == nil {
+					restore()
+					t.Fatal("ambiguous or incompatible target accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if owner.releaseDraftIDs[ref] != test.want {
+				t.Fatal("delivery replaced logical target identity", owner.releaseDraftIDs)
+			}
+			restore()
+			if string(platform.Raw(rows.rows[reflect.TypeFor[construction.Connection]()])) != before {
+				t.Fatal("delivery changed local configuration")
+			}
+			drafts, err := owner.ReleaseDrafts([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{})
+			if err != nil || len(drafts) != 1 || drafts[0].Type != construction.ConnectionType {
+				t.Fatal("delivery omitted the connection bootstrap", drafts, err)
 			}
 		})
 	}
+}
+
+func TestConnectionExecutionRejectsUnreadyAddressAndCredentialWithoutBlockingDelivery(t *testing.T) {
+	b, _ := lifecycleBuild()
+	connection := construction.Connection{Record: platform.Record{ID: "local"}, Name: "external", Kind: "http", State: "ready", Address: "https://target.example", Secret: "target-only"}
+	asset, err := b.integrationAsset(platform.AssetConnection, connection, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := retainIntegration(connection, asset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection = saved.(construction.Connection)
+	for _, change := range []func(*construction.Connection){
+		func(c *construction.Connection) { c.State = "draft" },
+		func(c *construction.Connection) { c.Address = "" },
+		func(c *construction.Connection) { c.Address = "ftp://target.example" },
+		func(c *construction.Connection) { c.Address = "https://user:password@target.example" },
+		func(c *construction.Connection) { c.Secret = "" },
+	} {
+		invalid := connection
+		change(&invalid)
+		if _, err := b.ConnectionConfiguration(invalid); err != nil {
+			t.Fatal("local readiness blocked declaration projection", err)
+		}
+		if _, err := b.ExecutionConnection(invalid); err == nil {
+			t.Fatal("unready external operation accepted", invalid)
+		}
+	}
+	if _, err := b.ExecutionConnection(connection); err != nil {
+		t.Fatal("configured operation refused", err)
+	}
+}
+
+func TestFirstIntegrationPublicationDoesNotStartSourceOrPipeline(t *testing.T) {
 	b, rows := lifecycleBuild()
-	archived := ready
-	archived.ID, archived.Archived = "archived", true
-	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{archived, ready}
-	before := string(platform.Raw(rows.rows[reflect.TypeFor[construction.Connection]()]))
-	target, err := b.ResolveAssetEnvironment(requirement)
-	if err != nil || target.TargetRecord != ready.ID || target.Credential != ready.Secret {
-		t.Fatal(target, err)
+	connection := construction.Connection{Record: platform.Record{ID: "connection"}, Name: "external", Kind: "http", State: "draft"}
+	input := construction.Dataset{Record: platform.Record{ID: "input"}, Name: "raw", Title: "Raw"}
+	output := construction.Dataset{Record: platform.Record{ID: "output"}, Name: "result", Title: "Result"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{connection}
+	rows.rows[reflect.TypeFor[construction.Dataset]()] = []any{input, output}
+	source := construction.Source{Record: platform.Record{ID: "source"}, Name: "feed", Title: "Feed", Connection: connection.ID, Dataset: input.ID, URL: "rows"}
+	pipeline := construction.Pipeline{Record: platform.Record{ID: "pipeline"}, Name: "transform", Title: "Transform", Input: input.ID, OutputDataset: output.ID}
+	rows.rows[reflect.TypeFor[construction.Source]()] = []any{source}
+	rows.rows[reflect.TypeFor[construction.Pipeline]()] = []any{pipeline}
+	for _, item := range []struct {
+		kind   platform.AssetKind
+		record any
+	}{{platform.AssetSource, source}, {platform.AssetPipeline, pipeline}} {
+		asset, err := b.integrationAsset(item.kind, item.record, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plans, err := b.PrepareReleaseAssets([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{Member: platform.Member{ID: "publisher"}})
+		if err != nil || len(plans) != 1 {
+			t.Fatal("unconfigured integration could not be delivered", plans, err)
+		}
+		if err := b.ValidateAssetInstallation(plans[0]); err != nil {
+			t.Fatal("publication required an external environment or execution grant", err)
+		}
+		var state struct {
+			State, Puller, Runner string
+			Requested             bool
+		}
+		if err := json.Unmarshal(plans[0].Image, &state); err != nil || state.State != "published" || state.Requested || state.Puller != "" || state.Runner != "" {
+			t.Fatal("publication started an integration or assigned its publisher as runner", state, err)
+		}
+		member := platform.Member{ID: "scoped-publisher", Roles: map[string]string{construction.ID: construction.Publisher}, Scopes: []string{integrationType(item.kind) + ".publish"}}
+		if _, err := b.PrepareReleaseAssets([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{Member: member}); err != nil {
+			t.Fatal("publication scope required unrelated business execution permissions", err)
+		}
+		member.Scopes = []string{"build.unrelated.publish"}
+		if _, err := b.PrepareReleaseAssets([]platform.ReleaseAsset{asset}, platform.AssetReleaseContext{Member: member}); err == nil || !strings.Contains(err.Error(), "token does not permit") {
+			t.Fatal("release bypassed owner publication token scope", err)
+		}
 	}
-	if string(platform.Raw(rows.rows[reflect.TypeFor[construction.Connection]()])) != before {
-		t.Fatal("environment resolution changed the owner record")
+}
+
+func TestExplicitIntegrationRequestsRetainTheRequestingTokenScopes(t *testing.T) {
+	b, rows := lifecycleBuild()
+	connection := construction.Connection{Record: platform.Record{ID: "connection"}, Name: "external", Kind: "http", State: "ready", Address: "https://external.example"}
+	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{connection}
+	input := construction.Dataset{Record: platform.Record{ID: "input"}, Name: "raw", Title: "Raw"}
+	output := construction.Dataset{Record: platform.Record{ID: "output"}, Name: "clean", Title: "Clean"}
+	rows.rows[reflect.TypeFor[construction.Dataset]()] = []any{input, output}
+	source := construction.Source{Record: platform.Record{ID: "source"}, Name: "feed", Connection: connection.ID, Dataset: input.ID, URL: "rows"}
+	pipeline := construction.Pipeline{Record: platform.Record{ID: "pipeline"}, Name: "transform", Input: input.ID, OutputDataset: output.ID}
+	member := platform.Member{ID: "runner", Scopes: []string{"build.source.*", "build.pipeline.*", "build.dataset.*"}}
+	caller := platform.NewCaller(rows, member, construction.ID, false, false)
+	if problem := b.requestPull(caller, &source, nil, time.Time{}); problem != nil {
+		t.Fatal(problem)
 	}
-	requirement.Credential = false
-	target, err = b.ResolveAssetEnvironment(requirement)
-	if err != nil || target.Credential != "" {
-		t.Fatal("unneeded credential escaped local owner context", target, err)
+	if problem := requestRun(caller, &pipeline, nil, time.Time{}); problem != nil {
+		t.Fatal(problem)
 	}
-	requirement.Ref.App = "foreign"
-	if _, err := b.ResolveAssetEnvironment(requirement); err == nil {
-		t.Fatal("Build resolved a different owner's connection")
+	want := string(platform.Raw(member.Scopes))
+	if source.Puller != member.ID || source.PullerScopes != want || pipeline.Runner != member.ID || pipeline.RunnerScopes != want {
+		t.Fatal("explicit requests lost their token scopes", source, pipeline)
+	}
+	for _, item := range []struct {
+		kind   platform.AssetKind
+		record any
+	}{{platform.AssetSource, source}, {platform.AssetPipeline, pipeline}} {
+		asset, err := b.integrationAsset(item.kind, item.record, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		saved, err := retainIntegration(item.record, asset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch record := saved.(type) {
+		case construction.Source:
+			fixed, err := b.ExecutionSource(record)
+			if err != nil || fixed.PullerScopes != want {
+				t.Fatal("accepted source projection lost execution scopes", fixed, err)
+			}
+		case construction.Pipeline:
+			fixed, err := b.ExecutionPipeline(record)
+			if err != nil || fixed.RunnerScopes != want {
+				t.Fatal("accepted pipeline projection lost execution scopes", fixed, err)
+			}
+		}
 	}
 }
 
@@ -385,7 +512,7 @@ func TestSourceUpgradePreservesLocalCursorAndRejectsNewIdentity(t *testing.T) {
 	rows.rows[reflect.TypeFor[construction.Connection]()] = []any{conn}
 	dataset := construction.Dataset{Record: platform.Record{ID: "target-data"}, Name: "raw", Title: "Raw"}
 	rows.rows[reflect.TypeFor[construction.Dataset]()] = []any{dataset}
-	source := construction.Source{Record: platform.Record{ID: "target-source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: dataset.ID, URL: "rows", Since: "seq", Cursor: "91", Puller: "target-builder", State: "published"}
+	source := construction.Source{Record: platform.Record{ID: "target-source"}, Name: "feed", Title: "Feed", Connection: conn.ID, Dataset: dataset.ID, URL: "rows", Since: "seq", Cursor: "91", Puller: "original-runner", PullerScopes: `["build.source.*","build.dataset.*"]`, Requested: true, State: "published"}
 	first, err := b.integrationAsset(platform.AssetSource, source, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -402,7 +529,7 @@ func TestSourceUpgradePreservesLocalCursorAndRejectsNewIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := platform.AssetReleaseContext{Member: platform.Member{ID: "target-builder"}, Upgrade: true, Bindings: []platform.AssetEnvironmentBinding{{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetConnection, Name: "sap"}, TargetRecord: conn.ID}}}
+	ctx := platform.AssetReleaseContext{Member: platform.Member{ID: "target-builder"}, Upgrade: true}
 	plans, err := b.PrepareReleaseAssets([]platform.ReleaseAsset{second}, ctx)
 	if err != nil || len(plans) != 1 {
 		t.Fatal(plans, err)
@@ -411,7 +538,7 @@ func TestSourceUpgradePreservesLocalCursorAndRejectsNewIdentity(t *testing.T) {
 		t.Fatal("compatible title upgrade refused", err)
 	}
 	record, err := integrationInstallationRecord(platform.AssetSource, plans[0].Image)
-	if err != nil || record.(construction.Source).Cursor != "91" || record.(construction.Source).Puller != "target-builder" {
+	if err != nil || record.(construction.Source).Cursor != "91" || record.(construction.Source).Puller != "original-runner" || record.(construction.Source).PullerScopes != source.PullerScopes || !record.(construction.Source).Requested {
 		t.Fatal("target runtime cursor/actor not preserved", record, err)
 	}
 	edited.URL = "other-rows"

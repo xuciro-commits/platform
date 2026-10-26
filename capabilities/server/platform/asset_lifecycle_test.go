@@ -42,9 +42,7 @@ func (o *lifecycleFixture) ResolvePinned(AssetRef, string, ...string) (ReleaseAs
 func (o *lifecycleFixture) AssetEnvironmentRequirements(ReleaseAsset) ([]AssetEnvironmentRequirement, error) {
 	return o.requirements, nil
 }
-func (o *lifecycleFixture) ResolveAssetEnvironment(requirement AssetEnvironmentRequirement) (AssetEnvironmentTarget, error) {
-	return AssetEnvironmentTarget{TargetRecord: requirement.Ref.Name}, nil
-}
+
 func (o *lifecycleFixture) BeginAssetBootstrap(assets []ReleaseAsset) (func(), error) {
 	if o.bootstrap != nil {
 		return o.bootstrap(assets)
@@ -140,7 +138,7 @@ func TestAssetRegistryPinsAndOwnsCompleteDescriptorBytes(t *testing.T) {
 		t.Fatal("retained lookup changed its owner")
 	}
 }
-func TestAssetRegistryRequiresExplicitEnvironmentBeforePreparing(t *testing.T) {
+func TestAssetRegistryPreparesDeclarationsWithoutEnvironment(t *testing.T) {
 	owner := newLifecycleFixture("builder", AssetConnection)
 	asset := fixtureLifecycleAsset("builder", AssetConnection, "connection")
 	owner.requirements = []AssetEnvironmentRequirement{{Ref: asset.Ref, Profile: "postgres", Credential: true}}
@@ -149,10 +147,7 @@ func TestAssetRegistryRequiresExplicitEnvironmentBeforePreparing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := registry.PrepareReleaseAssets([]ReleaseAsset{asset}, AssetReleaseContext{}); err == nil || owner.prepared != 0 {
-		t.Fatal("missing binding reached preparation")
-	}
-	context := AssetReleaseContext{Bindings: []AssetEnvironmentBinding{{Ref: asset.Ref, TargetRecord: "target-connection"}}}
+	context := AssetReleaseContext{}
 	plans, err := registry.PrepareReleaseAssets([]ReleaseAsset{asset}, context)
 	if err != nil || owner.prepared != 1 || owner.applied != 0 {
 		t.Fatalf("preparation changed live installation: %v", err)
@@ -163,10 +158,6 @@ func TestAssetRegistryRequiresExplicitEnvironmentBeforePreparing(t *testing.T) {
 	}
 	if err := registry.ApplyInstallation(plans[0], AssetApplyContext{Private: true, Validate: false, Upgrade: true}); err != nil || owner.applied != 1 || !owner.applyContext.Private || owner.applyContext.Validate || !owner.applyContext.Upgrade {
 		t.Fatalf("pure application lost its mode: %v", err)
-	}
-	context.Bindings = append(context.Bindings, context.Bindings[0])
-	if _, err := registry.PrepareReleaseAssets([]ReleaseAsset{asset}, context); err == nil || owner.prepared != 1 {
-		t.Fatal("duplicate binding reached owner preparation")
 	}
 }
 func TestAssetRegistryRejectsForeignPlansAndDraftActions(t *testing.T) {

@@ -129,6 +129,9 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
+	if refusal := h.t.checkWritebackCredential(req); refusal != nil {
+		return refusal
+	}
 	key := p.Key
 	if compensate {
 		key += ":compensate"

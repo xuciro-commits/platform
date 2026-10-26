@@ -1,6 +1,6 @@
 {
   "id": "application.manufacturing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "namespace": "application.manufacturing",
   "title": "Manufacturing",
   "description": "Editable business documents and production declarations; the shared Core owns the general ledger.",
@@ -24582,7 +24582,7 @@
             },
             "sourceVersion": "1.function-1"
           },
-          "model": "configure/model",
+          "model": "",
           "policy": {
             "compareFields": [
               "category",
@@ -24889,7 +24889,7 @@
         }
       }
     ],
-    "guide": "Install into a plain platform tenant and create saved drafts. Grant accountant/controller and the required Core account roles explicitly; installing never grants them. Accounting documents retain accepted business intent. General ledger receipts, numbering, closed-period decisions and reversal remain with Core. Amounts are decimal currency units. Use the normal chart and fiscal-period pages before submitting a journal. Production setup uses the ordinary Core chart. Configure separate stock, work in progress, scrap expense and production variance accounts in a production accounting policy. Grant the production service identity both build:production and Core master-data read access explicitly; installing the package grants neither. Create a finished item and positive material components. Creating a production order freezes the full component structure, cost currency, units, standard unit costs and account references. Later changes apply only to new orders. Each accepted batch consumes materials for good plus scrap, receives good output and keeps scrap/standard-cost differences in the original Core ledger. Negative component inventory is visible as an inventory balance; it is not fabricated as available stock. Business acceptance and Core posting are separate results. An explicit final batch can close a short order while retaining its unproduced quantity.\nConfigure and check productionupstream before publication. Refresh the provider order directory using the normal mesproductionplans Source action before selecting an upstream order; the directory is a proposal and ERP still checks its live remaining quantity. Report actual terminal batches from the shop order, with final selected only when all local batches are terminal. An unknown delivery stays on its original request and batch key. Only a conclusive provider refusal allows a supervisor to select a matching replacement order and enter a reason. Correct creates a linked attempt, preserves the original upstream association and physical good/scrap, starts the replacement and reports the same physical batch identity. Never acknowledge confirmation-only completion actions by hand.\nThe package includes synthetic work-center/resource samples and three portable business plans. Choose a supervisor for assembly and machining planning trials, and an accountant with Core access for decimal accounting. Trials run in the selected candidate and do not initialize live data. Create actual configuration with the normal business pages; installation and restart do not seed it. Assembly and machining may use separate work centers, resources, capability requirements and published routing versions. Existing batches retain their selected routing version. To upgrade, add an optional field and change an action title on the original object draft, check the candidate and confirm its upgrade plan; publish a new routing version for new orders instead of editing released operation instructions. / 生产订单创建时冻结组件、标准成本、单位、币种及科目，后续主数据修改只影响新订单。通过原 Core 页面配置生产在制、报废和差异科目，并显式授予生产服务 Core 主数据读取权限。发布前配置并检查 productionupstream，密钥只填写部署名称 production-upstream。首个实际开工批次经 Flow 与 Confirmation 发起上游开工；现场完工或质量双签报废后，主管在工单选择实际批次报工，良品和报废数量取自现场记录。全部本地批次结束后才可声明终结上游，短产的剩余量继续保留。未知答复按原租户、工单和批次身份回读，拒绝及人工复核保留独立结果，不改写现场事实。库存只由 erpstock 与 erpmove 承担，业务接受和 Core 记账分别显示。 / 刷新上游订单目录后再选择关联；ERP 仍按实时剩余量裁决。未知答复先核对原请求，只有确定拒绝后主管才能填写原因并选择匹配替代订单，新尝试关联原记录且保留实际良品和报废。不得手工调用确认专用完成动作。包内提供合成工作中心与资源样本，以及装配、加工计划和小数凭证验收计划；分别选择主管和具备 Core 权限的会计运行隔离候选试验。样本不会自动写入业务租户。通过正常业务页面配置工作中心、能力与工艺版本；在途批次固定原工艺。新增可选字段和修改动作标题须经原候选升级计划，新订单选择新工艺版本，不直接改已发布工序。 Equipment observations use the independent mesobservations connection. Configure its state-store address and /observations adapter, then publish the interval source. Create equipment with a source device identifier and a supervising unit in the site structure. That unit and its ancestors must have explicit supervisor memberships and Build business grants. The state condition defaults to down and is editable; raw samples remain in the external store. A zero reminder disables overdue reminders; clearing Request a downtime reason suppresses the work request. A supervisor evaluates a complete window from Observations; new events enter the original reason workflow. Operators record unambiguous reasons; supervisors explicitly review split/merged events through their predecessor history. Superseded events retain their reasons and their work is closed. Collections and transactions retain their existing finite limits and refuse excess history rather than truncate it. / 设备观测使用独立的 mesobservations 连接，配置状态存储地址及 /observations 适配器后发布来源。设备配置声明来源标识、site 结构的主管单位、是否请求原因及提醒小时数。组织成员资格与业务角色须分别授权；单位及其上级主管按原组织关系收取任务，其他产线无法读取或填写原因。零小时关闭到期提醒。停机条件默认为 down，可通过观测编辑器修改；原采样保留在外部存储。主管从观测入口接续完整窗口，原 Flow 请求原因与到期提醒。操作员填写归属明确的原因，拆分、合并后由主管沿前驱历史显式复核。退出事件保留原原因，原任务关闭。有限集合超限会拒绝，不截断历史。 AI: configure an enabled application and agent model, then replace configure/model on mesreviewquality and review its declared comparison fields and reference cases. Save the exact candidate and run its function, Upstream order correction and Material planner evaluations before activation. The order page proposes sourced review advice; a supervisor explicitly adopts, amends or rejects it while source revision, expiry and current permissions still apply. Configure and check supplieragent, using a secret name for its complete Authorization header; edit supplierinquiry path for the intended A2A JSON-RPC service. A supplier inquiry uses the original effect/message identity and original writeback answer mapping. It creates no promised lead time from a delivery acknowledgement. Assistants must ask for missing facts and checkpoint corrections or external inquiries. / AI：配置并启用实际的应用与智能体模型，将 mesreviewquality 中的 configure/model 改成该模型，复核比对字段和样例；保存确切候选后运行函数、上游纠错及物料助手评估。工单页面的建议保留来源，主管可修改后采纳或驳回，来源修订、过期和当前权限仍生效。配置并检查 supplieragent，凭据只填保存完整 Authorization 请求头的部署密钥名；按实际 A2A JSON-RPC 地址编辑 supplierinquiry 路径。询问沿原效果与消息身份发送，原回写映射保存供应方答复，不把投递成功等同于交期承诺。纠错和外部询问等待人员确认，未知生产结果必须先按原身份核对。显式授予所需 Build 业务角色及模型访问资格；固定提供方只验证机制，说明文字和真实模型品质另行验收。\nInitialization: the package includes an explicit setup plan for a fresh empty tenant. Review its roles and requests, then run make initialize with the exact package file, target host, tenant and an authorized token. It calls each owner as that person through the original submissions API. Keep the same run key when retrying an interrupted plan. Installing, generating drafts, activating and restarting never execute setup; each owner accepts independently. Assign organization memberships and business roles separately. Conflicting existing identifiers are refused, never overwritten. / 初始化：包内提供新空租户的显式初始化计划。先复核角色要求和请求，再通过 make initialize 指定确切包文件、宿主、租户及有权令牌。各步骤以该人员身份调用原提交接口，跨权威分别接受；中断后须以同一运行键重试。安装、生成草稿、激活及重启均不执行初始化。组织成员资格与业务角色分别显式配置，已有冲突标识拒绝，不覆盖原内容。 MES line access uses the original site structure: configure center lines as enterprise organizations and assign supervisor/operator memberships explicitly. Supervisors read below their assigned units; operators execute batches on their current operation line. Quality keeps the declared cross-line review role. Completed work retains historical enterprise references. Isolated test plans carry synthetic organizations; an empty membership party binds the selected test member and never grants a live role. / MES 产线沿原 site 结构限定：工作中心引用企业组织，主管和操作员的任职须显式配置。主管读取所属单位及下级，操作员执行当前工序产线的批次，质量角色保留已声明的跨线复核资格；完工后保留企业历史引用。隔离验收计划自带合成组织；任职 party 留空表示本次选定成员，不授予正式角色。",
+    "guide": "Install into a plain platform tenant and create saved drafts. Grant accountant/controller and the required Core account roles explicitly; installing never grants them. Accounting documents retain accepted business intent. General ledger receipts, numbering, closed-period decisions and reversal remain with Core. Amounts are decimal currency units. Use the normal chart and fiscal-period pages before submitting a journal. Production accounting uses the ordinary Core ledger; the optional demonstration setup declares its own complete example chart. Configure separate stock, work in progress, scrap expense and production variance accounts in a production accounting policy. Grant the production service identity both build:production and Core master-data read access explicitly; installing the package grants neither. Create a finished item and positive material components. Creating a production order freezes the full component structure, cost currency, units, standard unit costs and account references. Later changes apply only to new orders. Each accepted batch consumes materials for good plus scrap, receives good output and keeps scrap/standard-cost differences in the original Core ledger. Negative component inventory is visible as an inventory balance; it is not fabricated as available stock. Business acceptance and Core posting are separate results. An explicit final batch can close a short order while retaining its unproduced quantity.\nPublish independently of upstream availability. After installation, configure and check productionupstream before using upstream coordination. Refresh the provider order directory using the normal mesproductionplans Source action before selecting an upstream order; the directory is a proposal and ERP still checks its live remaining quantity. Report actual terminal batches from the shop order, with final selected only when all local batches are terminal. An unknown delivery stays on its original request and batch key. Only a conclusive provider refusal allows a supervisor to select a matching replacement order and enter a reason. Correct creates a linked attempt, preserves the original upstream association and physical good/scrap, starts the replacement and reports the same physical batch identity. Never acknowledge confirmation-only completion actions by hand.\nThe package includes synthetic work-center/resource samples and three portable business plans. Choose a supervisor for assembly and machining planning trials, and an accountant with Core access for decimal accounting. Trials run in the selected candidate and do not initialize live data. Create actual configuration with the normal business pages; installation and restart do not seed it. Assembly and machining may use separate work centers, resources, capability requirements and published routing versions. Existing batches retain their selected routing version. To upgrade, add an optional field and change an action title on the original object draft, check the candidate and confirm its upgrade plan; publish a new routing version for new orders instead of editing released operation instructions. / 生产订单创建时冻结组件、标准成本、单位、币种及科目，后续主数据修改只影响新订单。通过原 Core 页面配置生产在制、报废和差异科目，并显式授予生产服务 Core 主数据读取权限。安装发布不依赖上游；安装后在使用上游协同前配置并检查 productionupstream，密钥只填写部署名称 production-upstream。首个实际开工批次经 Flow 与 Confirmation 发起上游开工；现场完工或质量双签报废后，主管在工单选择实际批次报工，良品和报废数量取自现场记录。全部本地批次结束后才可声明终结上游，短产的剩余量继续保留。未知答复按原租户、工单和批次身份回读，拒绝及人工复核保留独立结果，不改写现场事实。库存只由 erpstock 与 erpmove 承担，业务接受和 Core 记账分别显示。 / 刷新上游订单目录后再选择关联；ERP 仍按实时剩余量裁决。未知答复先核对原请求，只有确定拒绝后主管才能填写原因并选择匹配替代订单，新尝试关联原记录且保留实际良品和报废。不得手工调用确认专用完成动作。包内提供合成工作中心与资源样本，以及装配、加工计划和小数凭证验收计划；分别选择主管和具备 Core 权限的会计运行隔离候选试验。样本不会自动写入业务租户。通过正常业务页面配置工作中心、能力与工艺版本；在途批次固定原工艺。新增可选字段和修改动作标题须经原候选升级计划，新订单选择新工艺版本，不直接改已发布工序。 Equipment observations use the independent mesobservations connection. Configure its state-store address and /observations adapter before using the interval source; its declaration can be published while the environment is unconfigured. Create equipment with a source device identifier and a supervising unit in the site structure. That unit and its ancestors must have explicit supervisor memberships and Build business grants. The state condition defaults to down and is editable; raw samples remain in the external store. A zero reminder disables overdue reminders; clearing Request a downtime reason suppresses the work request. A supervisor evaluates a complete window from Observations; new events enter the original reason workflow. Operators record unambiguous reasons; supervisors explicitly review split/merged events through their predecessor history. Superseded events retain their reasons and their work is closed. Collections and transactions retain their existing finite limits and refuse excess history rather than truncate it. / 设备观测使用独立的 mesobservations 连接，观测声明可先发布；安装后在使用前配置状态存储地址及 /observations 适配器。设备配置声明来源标识、site 结构的主管单位、是否请求原因及提醒小时数。组织成员资格与业务角色须分别授权；单位及其上级主管按原组织关系收取任务，其他产线无法读取或填写原因。零小时关闭到期提醒。停机条件默认为 down，可通过观测编辑器修改；原采样保留在外部存储。主管从观测入口接续完整窗口，原 Flow 请求原因与到期提醒。操作员填写归属明确的原因，拆分、合并后由主管沿前驱历史显式复核。退出事件保留原原因，原任务关闭。有限集合超限会拒绝，不截断历史。 AI: configure an enabled application and agent model, leave the evaluation model empty to follow the function or environment default, and review the declared comparison fields and reference cases. Run function, Upstream order correction and Material planner evaluations explicitly against the exact candidate and configured model when evaluating those features; model availability and reports do not block publication. The order page proposes sourced review advice; a supervisor explicitly adopts, amends or rejects it while source revision, expiry and current permissions still apply. Configure and check supplieragent, using a secret name for its complete Authorization header; edit supplierinquiry path for the intended A2A JSON-RPC service. A supplier inquiry uses the original effect/message identity and original writeback answer mapping. It creates no promised lead time from a delivery acknowledgement. Assistants must ask for missing facts and checkpoint corrections or external inquiries. / AI：配置并启用实际的应用与智能体模型，评估模型可留空以跟随函数或环境默认模型，复核比对字段和样例；按确切候选和配置模型显式运行函数、上游纠错及物料助手评估；模型可用性和报告不阻断发布。工单页面的建议保留来源，主管可修改后采纳或驳回，来源修订、过期和当前权限仍生效。配置并检查 supplieragent，凭据只填保存完整 Authorization 请求头的部署密钥名；按实际 A2A JSON-RPC 地址编辑 supplierinquiry 路径。询问沿原效果与消息身份发送，原回写映射保存供应方答复，不把投递成功等同于交期承诺。纠错和外部询问等待人员确认，未知生产结果必须先按原身份核对。显式授予所需 Build 业务角色及模型访问资格；固定提供方只验证机制，说明文字和真实模型品质另行验收。\nOptional demonstration initialization: the package includes an explicit setup plan for a fresh empty tenant; it is not required to install, publish or open an application. The example creates its own SAMPLE chart accounts and does not depend on the platform starting chart. Review its roles and requests, then run make initialize with the exact package file, target host, tenant and an authorized token. It calls each owner as that person through the original submissions API. Keep the same run key when retrying an interrupted plan. Installing, generating drafts, activating and restarting never execute setup; each owner accepts independently. Assign organization memberships and business roles separately. Conflicting existing identifiers are refused, never overwritten. / 可选示例初始化：包内提供新空租户的显式示例计划，不是安装、发布或打开应用的前置；示例完整创建自己的 SAMPLE 科目，不依赖平台起始科目表。先复核角色要求和请求，再通过 make initialize 指定确切包文件、宿主、租户及有权令牌。各步骤以该人员身份调用原提交接口，跨权威分别接受；中断后须以同一运行键重试。安装、生成草稿、激活及重启均不执行初始化。组织成员资格与业务角色分别显式配置，已有冲突标识拒绝，不覆盖原内容。 MES line access uses the original site structure: configure center lines as enterprise organizations and assign supervisor/operator memberships explicitly. Supervisors read below their assigned units; operators execute batches on their current operation line. Quality keeps the declared cross-line review role. Completed work retains historical enterprise references. Isolated test plans carry synthetic organizations; an empty membership party binds the selected test member and never grants a live role. / MES 产线沿原 site 结构限定：工作中心引用企业组织，主管和操作员的任职须显式配置。主管读取所属单位及下级，操作员执行当前工序产线的批次，质量角色保留已声明的跨线复核资格；完工后保留企业历史引用。隔离验收计划自带合成组织；任职 party 留空表示本次选定成员，不授予正式角色。",
     "setup": {
       "roles": [
         {
@@ -24967,14 +24967,54 @@
           "payload": "{\"stereotype\":\"ActualResourceRelationship\",\"source\":\"L2\",\"target\":\"sampleplant\",\"kind\":\"site\"}"
         },
         {
+          "name": "configureassetssummary",
+          "app": "core",
+          "schema": "core.account.create",
+          "target": {
+            "type": "core.account",
+            "id": "sampleassetsaccount"
+          },
+          "payload": "{\"code\":\"SAMPLE-1000\",\"name\":\"Example assets\",\"kind\":\"asset\",\"parent\":\"\",\"posting\":false,\"active\":true}"
+        },
+        {
+          "name": "configureexpensessummary",
+          "app": "core",
+          "schema": "core.account.create",
+          "target": {
+            "type": "core.account",
+            "id": "sampleexpensesaccount"
+          },
+          "payload": "{\"code\":\"SAMPLE-6400\",\"name\":\"Example expenses\",\"kind\":\"expense\",\"parent\":\"\",\"posting\":false,\"active\":true}"
+        },
+        {
+          "name": "configurematerialsaccount",
+          "app": "core",
+          "schema": "core.account.create",
+          "target": {
+            "type": "core.account",
+            "id": "samplematerialsaccount"
+          },
+          "payload": "{\"code\":\"SAMPLE-1403\",\"name\":\"Example raw materials\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
+        },
+        {
+          "name": "configurefinishedaccount",
+          "app": "core",
+          "schema": "core.account.create",
+          "target": {
+            "type": "core.account",
+            "id": "samplefinishedaccount"
+          },
+          "payload": "{\"code\":\"SAMPLE-1405\",\"name\":\"Example finished goods\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
+        },
+        {
           "name": "configure7",
           "app": "core",
           "schema": "core.account.create",
           "target": {
             "type": "core.account",
-            "id": "acc-5001"
+            "id": "samplewipaccount"
           },
-          "payload": "{\"code\":\"5001\",\"name\":\"Work in progress\",\"kind\":\"asset\",\"parent\":\"\",\"posting\":true,\"active\":true}"
+          "payload": "{\"code\":\"SAMPLE-5001\",\"name\":\"Work in progress\",\"kind\":\"asset\",\"parent\":\"SAMPLE-1000\",\"posting\":true,\"active\":true}"
         },
         {
           "name": "configure8",
@@ -24982,9 +25022,9 @@
           "schema": "core.account.create",
           "target": {
             "type": "core.account",
-            "id": "acc-6711"
+            "id": "samplescrapaccount"
           },
-          "payload": "{\"code\":\"6711\",\"name\":\"Production scrap\",\"kind\":\"expense\",\"parent\":\"6400\",\"posting\":true,\"active\":true}"
+          "payload": "{\"code\":\"SAMPLE-6711\",\"name\":\"Production scrap\",\"kind\":\"expense\",\"parent\":\"SAMPLE-6400\",\"posting\":true,\"active\":true}"
         },
         {
           "name": "configure9",
@@ -24992,9 +25032,9 @@
           "schema": "core.account.create",
           "target": {
             "type": "core.account",
-            "id": "acc-6404"
+            "id": "samplevarianceaccount"
           },
-          "payload": "{\"code\":\"6404\",\"name\":\"Production variance\",\"kind\":\"expense\",\"parent\":\"6400\",\"posting\":true,\"active\":true}"
+          "payload": "{\"code\":\"SAMPLE-6404\",\"name\":\"Production variance\",\"kind\":\"expense\",\"parent\":\"SAMPLE-6400\",\"posting\":true,\"active\":true}"
         },
         {
           "name": "configure10",
@@ -25004,7 +25044,7 @@
             "type": "build.erpitem",
             "id": "samplesteel"
           },
-          "payload": "{\"name\":\"Example steel\",\"kind\":\"material\",\"unit\":\"kg\",\"cost\":5,\"currency\":\"CNY\",\"account\":\"acc-1403\",\"active\":true}"
+          "payload": "{\"name\":\"Example steel\",\"kind\":\"material\",\"unit\":\"kg\",\"cost\":5,\"currency\":\"CNY\",\"account\":\"samplematerialsaccount\",\"active\":true}"
         },
         {
           "name": "configure11",
@@ -25014,7 +25054,7 @@
             "type": "build.erpitem",
             "id": "samplepump"
           },
-          "payload": "{\"name\":\"Example pump housing\",\"kind\":\"finished\",\"unit\":\"piece\",\"cost\":12,\"currency\":\"CNY\",\"account\":\"acc-1405\",\"active\":true}"
+          "payload": "{\"name\":\"Example pump housing\",\"kind\":\"finished\",\"unit\":\"piece\",\"cost\":12,\"currency\":\"CNY\",\"account\":\"samplefinishedaccount\",\"active\":true}"
         },
         {
           "name": "configure12",
@@ -25034,7 +25074,7 @@
             "type": "build.erpproductionpolicy",
             "id": "samplestandard"
           },
-          "payload": "{\"name\":\"Example standard cost accounting\",\"wip\":\"acc-5001\",\"scrap\":\"acc-6711\",\"variance\":\"acc-6404\"}"
+          "payload": "{\"name\":\"Example standard cost accounting\",\"wip\":\"samplewipaccount\",\"scrap\":\"samplescrapaccount\",\"variance\":\"samplevarianceaccount\"}"
         },
         {
           "name": "configure14",

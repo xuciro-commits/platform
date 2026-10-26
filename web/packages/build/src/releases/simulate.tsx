@@ -42,7 +42,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const functions = useRecordInventory<FunctionDraft>("build.function");
  const applications=useRecordInventory<Project>("build.app");
   const [kind, setKind] = useState<"object" | "flow" | "function" | "app">(applicationId ? "app" : functionId || evaluationSet ? "function" : processId ? "flow" : "object");
-  const [model, setModel] = useState("fixture/probe");
+  const [model, setModel] = useState(evaluationSet ? "" : "fixture/probe");
   const [planID, setPlanID] = useState(""),[createID,setCreateID]=useState(()=>crypto.randomUUID());
   const [revision, setRevision] = useState(0);
   const [title, setTitle] = useState("");
@@ -134,7 +134,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     // A new root gets a new plan identity; Save must never move the previous
     // asset's plan simply because the user selected a different draft.
     setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");setOrganization("null");setSampleOverride(true);setSample("");setMembers("");setCandidateID("");
-    setModel("fixture/probe"); setEvaluationEnabled(evaluationSet && nextKind === "function");
+    setModel(evaluationSet && nextKind === "function" ? "" : "fixture/probe"); setEvaluationEnabled(evaluationSet && nextKind === "function");
     setMinQuality(1); setMaxCostUsd(0.1); setMaxLatencyMillis(30000);
     setCases([{ name: "synthetic", input: "{}", expected: "{}" }]);
     acceptedPlan.current = undefined;
@@ -152,7 +152,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const load = (plan: TestPlan, initial = false, sourceApply = false) => {
     if (lock.current || inputDrafts?.busy || !initial && !matchesAsset(plan)) return;
     clear(); inputDrafts?.clear(); if (!sourceApply) acceptedPlan.current = plan; setFunctionVersion(plan.functionVersion); setPlanID(plan.id); setRevision(plan.revision);
-    setTitle(plan.title);setSetName(plan.name??""); setRoots(plan.roots ?? []); setIncludeInReleases(!!plan.roots?.length); setKind(plan.roots?.length || plan.application ? "app" : plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.application || plan.function || plan.process || plan.object || (plan.roots?.length ? applicationId : "")); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
+    setTitle(plan.title);setSetName(plan.name??""); setRoots(plan.roots ?? []); setIncludeInReleases(!!plan.roots?.length); setKind(plan.roots?.length || plan.application ? "app" : plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.application || plan.function || plan.process || plan.object || (plan.roots?.length ? applicationId : "")); setModel(plan.model ?? (plan.evaluation?.length ? "" : "fixture/probe")); setMember(plan.as ?? ""); setAt(plan.at);
     setSample(plan.sample??"");setMembers((plan.actors??[]).join(", "));setCandidateID(plan.candidateId??"");
     setSteps(plan.steps); setOrganization(JSON.stringify(plan.organization ?? null, null, 2)); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setSampleOverride(plan.samples !== undefined); setDirty(false);
     const policy = plan.evaluation?.[0];
@@ -412,9 +412,9 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
           <ContextHelp title={t("Model identifier")}>{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</ContextHelp>
         </>}
         {kind === "function" && <div className="grid gap-3 rounded border border-border p-3">
-          <Checkbox checked={evaluationEnabled} onChange={(enabled) => { setEvaluationEnabled(enabled); clear(); }}>{t("Require a measured release evaluation")}</Checkbox>
+          <Checkbox checked={evaluationEnabled} onChange={(enabled) => { setEvaluationEnabled(enabled); setModel(enabled ? "" : "fixture/probe"); clear(); }}>{t("Include measured model evaluation")}</Checkbox>
           {evaluationEnabled && <>
-            <ContextHelp title={t("Require a measured release evaluation")}>{t("These synthetic cases run three times each against the enabled model. Reported USD cost and per-call latency must stay within the limits.")}</ContextHelp>
+            <ContextHelp title={t("Include measured model evaluation")}>{t("These synthetic cases run three times each against the enabled model. Reported USD cost and per-call latency must stay within the limits.")}</ContextHelp>
 			<div className="grid gap-1 text-xs"><span>{t("Quality comparison fields")}</span><p className="text-muted">{t("Empty compares the complete JSON answer. Selected fields measure only those outputs; every output still has to satisfy the complete schema. Unselected explanations are not quality-verified.")}</p><div className="flex flex-wrap gap-3">{[...new Set([...(fn?.output??[]).map(field=>field.name),...compareFields])].map(name=><Checkbox key={name} checked={compareFields.includes(name)} onChange={checked=>{setCompareFields(previous=>checked?[...previous,name]:previous.filter(field=>field!==name));clear();}}>{name}</Checkbox>)}</div></div>
             <div className="grid gap-2 sm:grid-cols-3">
               <label className="grid gap-1 text-xs">{t("Minimum exact-match quality")}<Input draftKey="minimum-exact-match-quality" type="number" min={0.01} max={1} step={0.01} value={minQuality} onChange={(e) => { setMinQuality(Number(e.target.value)); clear(); }} /></label>
