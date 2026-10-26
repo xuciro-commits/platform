@@ -55,7 +55,7 @@ func (b *Build) functionDraftAssets(id string) (before, after []platform.Release
 func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsset) ([]construction.ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, b.functionInventory, platform.AssetFunction, "function", SchemaFunction, "function", b.FunctionReleaseAsset, func(record construction.Function, asset platform.ReleaseAsset, version int) (construction.Function, error) {
 		var frozen construction.Function
-		if version != record.Version+1 || json.Unmarshal(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
+		if version != record.Version+1 || construction.ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
 			return record, fmt.Errorf("function version requires its retained predecessors and matching target definition")
 		}
 		if asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {

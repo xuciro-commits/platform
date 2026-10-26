@@ -78,7 +78,7 @@ func (t *Tenant) bindCapabilityInputs(m platform.Member, q platform.CapabilityIn
 				}
 			}
 		}
-		value, err := binding.Resolve(q.Inputs)
+		value, err := binding.Resolve(&platform.Run{Data: q.Inputs}, subject)
 		if err != nil {
 			return refuse(err.Error())
 		}

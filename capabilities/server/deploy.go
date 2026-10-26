@@ -33,6 +33,9 @@ type Deployment struct {
 	// settings; the console appends to it. Empty: the
 	// binary's development tenant. TemplatesDir holds tenant templates.
 	TenantsFile, TemplatesDir string
+	system                    TenantSpec
+	Release                   int
+	ReleaseDigest             string
 	specs                     *specs
 	Files                     string // http(s)://host:port/bucket of an S3-compatible store; empty: memory
 	Project                   bool
@@ -57,12 +60,6 @@ type Deployment struct {
 	// index the console lists and prechecks. Empty: no packages offered.
 	Packages     string
 	packageIndex *PackageIndex
-	// Release is the system release this binary was built as, and
-	// ReleaseDigest the sha256 of the binary the updater installed. The health
-	// endpoint reports both, so a swap is proved by asking the running host
-	// which release it serves instead of trusting the updater's exit code.
-	Release       int
-	ReleaseDigest string
 	// Rebuild composes a fresh, unstarted tenant with the same durable app and
 	// connector declarations. Required for an in-process recovery retry.
 	Rebuild                 func(id string) (*Tenant, error)
@@ -75,8 +72,6 @@ type Deployment struct {
 	// Seed gives a tenant whose journal is empty its first data, through
 	// ordinary decisions journaled like any other (in memory: every start).
 	Seed func(t *Tenant, now time.Time) error
-	// system is the host-level tenant that owns the system itself (tenants.go).
-	system TenantSpec
 }
 
 // Flags registers the deployment flags on the default flag set.
@@ -341,6 +336,14 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			console.CloseTokenSecretWindows()
 		}
 		fresh[t.ID] = after == 0 && len(entries) == 0
+		if t.procs != nil {
+			if err := t.procs.Check(); err != nil { // running instances need their flow's version
+				t.quarantine(fmt.Errorf("process recovery: %w", err))
+				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				continue
+			}
+		}
+		t.flowArtifactRecoveryComplete(recoveryStarted)
 		if after > 0 {
 			log.Printf("restored %s from the snapshot at %d, then replayed %d entries", t.ID, after, len(entries))
 		} else {
@@ -818,6 +821,7 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 			var outside []func()
 			for _, t := range tenants {
 				outside = append(append(outside, t.dispatches(Now())...), t.turns(Now())...)
+				outside = append(outside, t.continuousSources(Now())...)
 			}
 			outsideRuns.Add(1)
 			go func() { defer outsideRuns.Done(); onLane(outside) }()
@@ -838,6 +842,9 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 					continue
 				}
 				t.Evaluate(Now())
+				t.PullSources(Now())
+				t.CheckConnections(Now())
+				t.RunPipelines(Now())
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())
 				t.SweepUploads(Now())

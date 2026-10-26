@@ -8,13 +8,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"platformserver/internal/systemscope"
 	"regexp"
 	"slices"
 	"strings"
 	"sync"
 	"time"
-
-	"platformserver/internal/systemscope"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -180,10 +179,7 @@ func (d *Deployment) SeatsFor(id string) []Seat {
 	if d.specs == nil {
 		return nil
 	}
-	spec, ok := d.specs.get(id)
-	if !ok && id == systemscope.Tenant {
-		return d.system.Seats
-	}
+	spec, _ := d.specs.get(id)
 	return spec.Seats
 }
 

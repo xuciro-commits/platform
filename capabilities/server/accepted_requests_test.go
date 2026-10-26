@@ -1,0 +1,378 @@
+package platformserver
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	resultformat "platformserver/internal/acceptance/result"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/apps/ai"
+	"platformserver/platform"
+)
+
+type modelResultCart struct {
+	resultCart
+	model string
+}
+
+func (a *modelResultCart) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if s.GetSchema().GetName() == "cart.line.answer" {
+		return a.resultCart.cart.Submit(c, s, at)
+	}
+	return a.ledger.Receive(c, s, at, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		return func(r *pb.ChangeRecord) {
+			c.Put(r, Cart{Record: platform.Record{ID: s.GetTarget().GetId()}, Item: "pen", Status: "asked"})
+			for _, target := range []string{"first", "second"} {
+				c.Request(r, platform.Request{Model: a.model, Target: target,
+					Payload: platform.Prompt{System: "Only classify.", User: target, MaxTokens: 12}, Reply: "cart.line.answer"})
+			}
+		}, nil
+	})
+}
+
+type resultCart struct{ *cart }
+
+func (a *resultCart) AcceptedLedger() *platform.Ledger { return a.ledger }
+
+type resultDepot struct {
+	*depot
+	forbidDecisions bool
+}
+
+func (a *resultDepot) AcceptedLedger() *platform.Ledger { return a.ledger }
+func (a *resultDepot) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if a.forbidDecisions {
+		panic("recovery must not run the provider")
+	}
+	return a.depot.Submit(c, s, at)
+}
+
+func requestsResultTenant(t *testing.T) *Tenant {
+	return requestsResultTenantFor(t, "t")
+}
+
+func requestsResultTenantFor(t *testing.T, id string) *Tenant {
+	t.Helper()
+	source := newRequestsTenant(t, true)
+	tn, err := NewTenant(id, NewConsole(id, seatOf("buyer", "cart:buyer", "stock:keeper")),
+		&resultCart{&cart{ledger: platform.NewLedger(id, "cart", source.app("cart").(*cart).ledger.Catalog, "cart.line")}},
+		&resultDepot{depot: &depot{ledger: platform.NewLedger(id, "stock", source.app("stock").(*depot).ledger.Catalog, "stock.hold")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tn
+}
+
+func TestAcceptedProtocolRequestAndReplyShareCommit(t *testing.T) {
+	tn := requestsResultTenant(t)
+	member := platform.Member{ID: "buyer", Tenant: tn.ID, Roles: map[string]string{"cart": "buyer", "stock": "keeper"}}
+	at := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
+	sub := &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: "cart", IdempotencyKey: "hold-one",
+		Target: &pb.EntityRef{Type: "cart.line", Id: "L1"}, Schema: &pb.SchemaRef{Name: "cart.line.add", Version: 1},
+		Payload: []byte(`{"item":"pen"}`)}
+	fail := true
+	var entries []Entry
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		// All three decisions, including the reply, must still be invisible.
+		if tn.records.types["cart.line"].rows.Len() != 0 || tn.records.types["stock.hold"].rows.Len() != 0 ||
+			len(tn.app("cart").(*resultCart).ledger.RecordsFor(tn.ID)) != 0 ||
+			len(tn.app("stock").(*resultDepot).ledger.RecordsFor(tn.ID)) != 0 {
+			t.Fatal("protocol transaction changed live records before append")
+		}
+		if fail {
+			return nil, errors.New("append failed")
+		}
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	if _, refusal := tn.Submit(member, sub, at); refusal == nil || len(entries) != 0 {
+		t.Fatalf("failed append was acknowledged: %v", refusal)
+	}
+	fail = false
+	first, refusal, issues := tn.submitDiagnosed(member, sub, at)
+	if refusal != nil || len(entries) != 1 {
+		t.Fatalf("protocol transaction did not commit: %+v %s, entries=%d", refusal, platform.Raw(issues), len(entries))
+	}
+	saved, _, err := resultformat.DecodeBatch(entries[0].Body)
+	if err != nil || len(saved.Decisions) != 3 || len(saved.Rows) != 2 {
+		t.Fatalf("request and reply were not one result: %+v, %v", saved, err)
+	}
+	line, errRecord := tn.RecordOf(member, "cart.line", "L1", at)
+	if errRecord != nil || line.Record.(Cart).Status != "held" {
+		t.Fatalf("answer did not see its privately accepted provider record: %+v, %v", line, errRecord)
+	}
+	second, refusal := tn.Submit(member, sub, at.Add(time.Hour))
+	if refusal != nil || !proto.Equal(first, second) || len(entries) != 1 {
+		t.Fatalf("retry reran a protocol decision: %v", refusal)
+	}
+	CheckReplay(t, tn, entries, func() *Tenant {
+		restored := requestsResultTenant(t)
+		restored.app("stock").(*resultDepot).forbidDecisions = true
+		return restored
+	})
+}
+
+func TestAcceptedProtocolRefusalKeepsRequestAndReplyOnly(t *testing.T) {
+	for _, test := range []struct {
+		name, item string
+		keeper     bool
+	}{{"business", "none", true}, {"permission", "pen", false}} {
+		t.Run(test.name, func(t *testing.T) {
+			tn := requestsResultTenant(t)
+			member := platform.Member{ID: "buyer", Tenant: tn.ID, Roles: map[string]string{"cart": "buyer"}}
+			if test.keeper {
+				member.Roles["stock"] = "keeper"
+			}
+			var entries []Entry
+			tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+				entries = append(entries, e)
+				return e.Body, nil
+			}
+			at := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
+			sub := &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: "cart", IdempotencyKey: "ask-refused",
+				Target: &pb.EntityRef{Type: "cart.line", Id: "L1"}, Schema: &pb.SchemaRef{Name: "cart.line.ask", Version: 1},
+				Payload: []byte(fmt.Sprintf(`{"item":%q}`, test.item))}
+			if _, err := tn.Submit(member, sub, at); err != nil || len(entries) != 1 {
+				t.Fatalf("the accepted request's refused answer did not commit: %v", err)
+			}
+			saved, _, err := resultformat.DecodeBatch(entries[0].Body)
+			if err != nil || len(saved.Decisions) != 2 || len(saved.Rows) != 1 ||
+				tn.records.types["stock.hold"].rows.Len() != 0 {
+				t.Fatalf("refused provider left a decision or record: %+v, %v", saved, err)
+			}
+			line, refusal := tn.RecordOf(member, "cart.line", "L1", at)
+			if refusal != nil || line.Record.(Cart).Status != "refused" {
+				t.Fatalf("refused answer was lost: %+v, %v", line, refusal)
+			}
+			CheckReplay(t, tn, entries, func() *Tenant {
+				restored := requestsResultTenant(t)
+				restored.app("stock").(*resultDepot).forbidDecisions = true
+				return restored
+			})
+		})
+	}
+}
+
+func TestJournalAcceptedProtocolCrashBeforeApplication(t *testing.T) {
+	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
+	if dsn == "" {
+		t.Skip("PLATFORM_TEST_DATABASE is not set")
+	}
+	ctx := context.Background()
+	j, err := OpenJournal(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer j.Close()
+	id := fmt.Sprintf("protocol-crash-%d", time.Now().UnixNano())
+	if _, err := j.Pool().Exec(ctx, `DELETE FROM journal WHERE tenant=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	defer j.Pool().Exec(ctx, `DELETE FROM journal WHERE tenant=$1`, id)
+	if _, err := j.Entries(ctx, id, 0); err != nil {
+		t.Fatal(err)
+	}
+	tn := requestsResultTenantFor(t, id)
+	member := platform.Member{ID: "buyer", Tenant: id, Roles: map[string]string{"cart": "buyer", "stock": "keeper"}}
+	at := time.Date(2026, 9, 28, 19, 0, 0, 0, time.UTC)
+	sub := &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: "cart", IdempotencyKey: "pg-request",
+		Target: &pb.EntityRef{Type: "cart.line", Id: "L1"}, Schema: &pb.SchemaRef{Name: "cart.line.add", Version: 1},
+		Payload: []byte(`{"item":"pen"}`)}
+	tn.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+		saved, err := j.AppendAccepted(ctx, id, e, key, hash)
+		if err != nil {
+			t.Fatalf("append: %v", err)
+		}
+		if len(saved) == 0 {
+			t.Fatal("missing committed bytes")
+		}
+		panic("crash after append")
+	}
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("crash was not injected")
+			}
+		}()
+		if _, err := tn.Submit(member, sub, at); err != nil {
+			t.Fatalf("submit before crash: %v", err)
+		}
+	}()
+	if tn.records.types["cart.line"].rows.Len() != 0 || tn.records.types["stock.hold"].rows.Len() != 0 {
+		t.Fatal("crashed process applied the transaction")
+	}
+	other, err := OpenJournal(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	entries, err := other.Entries(ctx, id, 0)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("committed protocol result was lost: %v", err)
+	}
+	restored := requestsResultTenantFor(t, id)
+	restored.app("stock").(*resultDepot).forbidDecisions = true
+	if err := restored.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restored.Submit(member, sub, at.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	line, refusal := restored.RecordOf(member, "cart.line", "L1", at)
+	if refusal != nil || line.Record.(Cart).Status != "held" {
+		t.Fatalf("request/reply did not recover atomically: %+v, %v", line, refusal)
+	}
+}
+
+func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
+	compose := func() *Tenant {
+		source := newRequestsTenant(t, false)
+		tn, err := NewTenant("t", NewConsole("t", seatOf("buyer", "cart:buyer")), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: "local/chosen"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	member := platform.Member{ID: "buyer", Tenant: tn.ID, Roles: map[string]string{"cart": "buyer"}}
+	at := time.Date(2026, 9, 28, 20, 0, 0, 0, time.UTC)
+	sub := &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: "cart", IdempotencyKey: "model-requests",
+		Target: &pb.EntityRef{Type: "cart.line", Id: "L1"}, Schema: &pb.SchemaRef{Name: "cart.line.ask", Version: 1},
+		Payload: []byte(`{"item":"pen"}`)}
+	fail := true
+	var entries []Entry
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		if len(tn.outbound) != 0 || tn.records.types["cart.line"].rows.Len() != 0 {
+			t.Fatal("model request escaped before append")
+		}
+		if fail {
+			return nil, errors.New("append failed")
+		}
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	if _, err := tn.Submit(member, sub, at); err == nil || len(tn.outbound) != 0 {
+		t.Fatal("failed append left a model request")
+	}
+	fail = false
+	receipt, refusal := tn.Submit(member, sub, at)
+	if refusal != nil || len(entries) != 1 || len(tn.outbound) != 2 {
+		t.Fatalf("model requests did not commit with the record: %v, outbound=%d", refusal, len(tn.outbound))
+	}
+	for i, intent := range tn.outbound {
+		var ask modelAsk
+		if json.Unmarshal([]byte(intent.Body), &ask) != nil || intent.Key != fmt.Sprintf("%s#%d", receipt.GetChangeId(), i) ||
+			intent.Endpoint != resultformat.ModelEndpoint || !intent.At.Equal(at) || ask.Model != "local/chosen" ||
+			ask.Record != "cart.line/L1" || ask.Reply != "cart.line.answer" || ask.Prompt.MaxTokens != 12 {
+			t.Fatalf("model intent lost its committed input: %+v, %+v", intent, ask)
+		}
+	}
+	CheckReplay(t, tn, entries, compose)
+	if _, err := tn.Submit(member, sub, at.Add(time.Hour)); err != nil || len(entries) != 1 || len(tn.outbound) != 2 {
+		t.Fatalf("retry duplicated model work: %v", err)
+	}
+}
+
+// A model choice is an accepted input, not a setting read by a later worker.
+// Replay and retry retain it, while disabling that model still stops I/O.
+func TestAcceptedModelDefaultIsPinnedBeforeDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		name, explicit, initial, want string
+	}{
+		{"default", "", "local/echo", "local/echo"},
+		{"explicit", "local/echo", "local/busy", "local/echo"},
+		{"unset", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := fakeModels(t, &calls)
+			at := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
+			compose := func() *Tenant {
+				source := newRequestsTenant(t, false)
+				tn, err := NewTenant("t", NewConsole("t", Seat{Subjects: []string{"buyer"}, Member: platform.Member{
+					ID: "buyer", Roles: map[string]string{"cart": "buyer", PlatformApp: Admin, ai.ID: ai.Admin}}}),
+					ai.New("t"), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: tc.explicit})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return tn
+			}
+			tn := compose()
+			member, _ := tn.Member("buyer")
+			var entries []Entry
+			tn.Record = func(e Entry) { entries = append(entries, e) }
+			tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+				entries = append(entries, e)
+				return e.Body, nil
+			}
+			key := 0
+			submit := func(app, schema, typ, id string, payload any) {
+				t.Helper()
+				key++
+				_, refusal := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID,
+					Authority: app, IdempotencyKey: fmt.Sprint("pin-", key), Target: &pb.EntityRef{Type: typ, Id: id},
+					Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}, at)
+				if refusal != nil {
+					t.Fatal(refusal)
+				}
+			}
+			setting := func(value string) {
+				submit(PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": value})
+			}
+			submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL + "/v1"})
+			for _, name := range []string{"echo", "busy"} {
+				submit(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/"+name, map[string]string{"access": "users"})
+			}
+			if tc.initial != "" {
+				setting(tc.initial)
+			}
+			submit("cart", "cart.line.ask", "cart.line", "L1", map[string]string{"item": "pen"})
+			setting("local/busy")
+			if tc.want == "" {
+				setting("local/echo")
+			}
+			if len(tn.outbound) != 2 || calls.Load() != 0 {
+				t.Fatal("accepting the request called a provider or lost work")
+			}
+			for _, x := range tn.outbound {
+				var ask modelAsk
+				if json.Unmarshal([]byte(x.Body), &ask) != nil || ask.Model != tc.want {
+					t.Fatalf("accepted intent did not pin %q: %+v", tc.want, ask)
+				}
+			}
+			CheckReplay(t, tn, entries, compose)
+			x := tn.outbound[0].Effect
+			out, usage := tn.sendModel(x, at.Add(time.Second))
+			if tc.want == "" {
+				if out.Result != "rejected" || usage != nil || calls.Load() != 0 {
+					t.Fatalf("unbound request acquired a later default: %+v", out)
+				}
+			} else if out.Result != "delivered" || usage == nil || usage.Model != tc.want || calls.Load() != 1 {
+				t.Fatalf("dispatch followed the changed default: %+v, %+v", out, usage)
+			}
+			tn.settleWithUsage(x.ID, out, usage, at.Add(time.Second))
+			if tn.quarantined() || tn.outbound[0].State != out.Result {
+				t.Fatal("model result and reply did not settle together")
+			}
+			CheckReplay(t, tn, entries, compose)
+			if tc.want != "" {
+				submit(ai.ID, ai.SchemaModelDisable, ai.ModelType, tc.want, map[string]string{})
+				out, usage = tn.sendModel(tn.outbound[1].Effect, at.Add(2*time.Second))
+				if out.Result != "rejected" || usage != nil || calls.Load() != 1 {
+					t.Fatal("pinned model bypassed current enablement or fell back")
+				}
+				tn.settleWithUsage(out.Effect, out, usage, at.Add(2*time.Second))
+				CheckReplay(t, tn, entries, compose)
+			}
+		})
+	}
+}

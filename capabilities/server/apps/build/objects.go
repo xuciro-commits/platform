@@ -80,6 +80,9 @@ func (b *Build) Check(o construction.Object, id string, engines ...platform.Rule
 	if err := construction.CheckFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
+	if err := construction.CheckEnterpriseUse(o); err != nil {
+		return err
+	}
 	if err := checkProcess(o, b.conditionLookup); err != nil {
 		return err
 	}
@@ -264,6 +267,7 @@ func entityWith(o construction.Object, creates creator, lookup func(string) (pla
 	entity.Validate = validateOf(o, model, lookup)
 	entity.ValidateAt = numberingOf(o, model)
 	entity.CreateTxn = creation
+	entity.EnterpriseUse = o.EnterpriseUse
 	entity.Protocols = objectProvisions(o, entity)
 	if creationError != nil {
 		legacy := entity.ValidateAt

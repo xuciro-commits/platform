@@ -41,6 +41,9 @@ type Tenant struct {
 	snapshotPosition      int64                        // last captured/restored checkpoint; zero-position diagnostics preserve it
 	simulation            bool                         // isolated builder execution, never authoritative state
 	simulationTrace       func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
+	observationWindows    map[string]observationWindowAttempt
+	confirmationReads     statusReadSchedule
+	dispatchReads         statusReadSchedule
 	// Private control views route callbacks back into their owning decision.
 	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity      host.IdentityDirectory
@@ -53,25 +56,26 @@ type Tenant struct {
 	AcceptResult func(Entry, string, string) ([]byte, error)
 	// Store keeps what is derived outside the journal: vectors and transcripts;
 	// without one they stay in memory.
-	Store       Store
-	memStore    journal.Memory // the Store without one
-	knowledge   host.Glossary  // the knowledge app: documents are searched, terms read
-	index       index          // passages cut from documents and knowledge fields
-	i18n        translator     // says declarations and messages in a language
-	agentRun    string         // the run whose agent is submitting, under mu: its effects name it
-	mu          tenantLane
-	views       viewCache                   // catalog, entities and definitions per rights signature
-	defGen      atomic.Uint64               // moves when the installed definitions do
-	streamMu    sync.Mutex                  // one outside-lane source intake pass per tenant
-	fault       atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
-	apps        []platform.App
-	appIndex    map[string]int          // immutable composition identity; private views replace owners in the same positions
-	committed   committed               // answers by idempotency key (committed.go)
-	releases    releaseStore            // release_store.go
-	console     hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
-	staged      stagedChannel           // the per-call result channel (compute_channel.go)
-	definitions []platform.Definition   // installed code assets; member views are derived on read
-	owner       map[string]platform.App // "action:", "read:" and "input:" names → app
+	Store         Store
+	memStore      journal.Memory // the Store without one
+	knowledge     host.Glossary  // the knowledge app: documents are searched, terms read
+	index         index          // passages cut from documents and knowledge fields
+	i18n          translator     // says declarations and messages in a language
+	agentRun      string         // the run whose agent is submitting, under mu: its effects name it
+	mu            tenantLane
+	views         viewCache                   // catalog, entities and definitions per rights signature
+	defGen        atomic.Uint64               // moves when the installed definitions do
+	streamMu      sync.Mutex                  // one outside-lane source intake pass per tenant
+	fault         atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
+	apps          []platform.App
+	appIndex      map[string]int          // immutable composition identity; private views replace owners in the same positions
+	committed     committed               // answers by idempotency key (committed.go)
+	releases      releaseStore            // release_store.go
+	console       hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
+	staged        stagedChannel           // the per-call result channel (compute_channel.go)
+	definitions   []platform.Definition   // installed code assets; member views are derived on read
+	owner         map[string]platform.App // "action:", "read:" and "input:" names → app
+	flowArtifacts flowArtifactGC
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	audit     auditLog // recent inputs, deliveries, personal reads (audit_log.go)
@@ -110,6 +114,7 @@ type Tenant struct {
 	ai        models          // the AI app: the models the host calls
 	records   *recordStore    // the apps' entity records
 	tasks     host.Tasks      // serves Caller.Assign: the work app
+	procs     host.Processes  // the flow app
 	listeners []string        // platform apps given other apps' events as owned work (host.Listener)
 	agents    AgentRuntime    // AI agents
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
@@ -219,6 +224,12 @@ func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...
 			}
 			t.tasks = x
 		}
+		if x, ok := a.(host.Processes); ok {
+			if t.procs != nil {
+				return nil, fmt.Errorf("tenant %s has two process owners", id)
+			}
+			t.procs = x
+		}
 		if _, ok := a.(host.Listener); ok {
 			t.listeners = append(t.listeners, m.ID)
 		}
@@ -275,7 +286,17 @@ func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
-
+	for _, a := range apps { // flows, once every app is composed
+		if len(a.Manifest().Flows) == 0 {
+			continue
+		}
+		if t.procs == nil {
+			return nil, fmt.Errorf("tenant %s: %s declares flows, and the tenant runs no flow app", id, a.Manifest().ID)
+		}
+		if err := t.procs.Declare(a); err != nil {
+			return nil, fmt.Errorf("tenant %s: %v", id, err)
+		}
+	}
 	{ // interfaces, once every entity is described (A2)
 		manifests := make([]platform.Manifest, len(apps))
 		infos := map[string]platform.EntityInfo{}

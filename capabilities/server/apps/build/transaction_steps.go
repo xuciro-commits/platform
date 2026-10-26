@@ -35,7 +35,7 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 				return fmt.Errorf("Transaction parameters need distinct names")
 			}
 			seen[set.Field] = true
-			expr, err := parameterExpr(set, scope)
+			expr, err := dispatchParameter(set, scope)
 			if err != nil {
 				return err
 			}
@@ -143,7 +143,30 @@ func (b *Build) checkTypedTxnStep(step platform.TxnStep, scope platform.RuleRead
 			}
 		}
 	case "effect":
-		return fmt.Errorf("transaction effects were removed with the integration kinds")
+		if step.Effect == nil || step.Effect.Writeback == "" {
+			return fmt.Errorf("Effect steps need a declared transaction writeback")
+		}
+		if err := parameters(step.Effect.Payload); err != nil {
+			return err
+		}
+		if b.host != nil {
+			record, found := b.host.Record(construction.WritebackType + "/" + step.Effect.Writeback)
+			w, valid := record.(construction.Writeback)
+			if !found || !valid {
+				return fmt.Errorf("Transaction writeback is unavailable")
+			}
+			w, err := b.ExecutionWriteback(w)
+			if err != nil {
+				return err
+			}
+			object := step.Target.Type
+			if object == "" {
+				object = scope.Object
+			}
+			if w.State != "published" || w.On != "transaction" || w.Object != object || len(w.Result) > 0 {
+				return fmt.Errorf("Effect steps require a published transaction-only writeback without answer mutations")
+			}
+		}
 	case "work":
 		w := step.Work
 		if w == nil || !w.Close && strings.TrimSpace(w.Title) == "" || (w.Role == "") == (w.Member == nil) && !w.Close {
@@ -333,7 +356,7 @@ func txnCallValue(call platform.TxnCall, raw json.RawMessage) (platform.ExprValu
 func (b *Build) txnParameters(c platform.Caller, sets []platform.TxnSet, scope platform.RuleReadSpec, subject any, inputs map[string]any, now time.Time) (json.RawMessage, *kernel.Error) {
 	values := map[string]any{}
 	for _, set := range sets {
-		expr, err := parameterExpr(set, scope)
+		expr, err := dispatchParameter(set, scope)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}

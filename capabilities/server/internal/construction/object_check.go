@@ -12,6 +12,25 @@ import (
 // BaseField is the required record reference of an extension object.
 const BaseField = "base"
 
+func CheckEnterpriseUse(o Object) error {
+	if o.EnterpriseUse == nil {
+		return nil
+	}
+	if o.EnterpriseUse.Kind != "boolean" {
+		return fmt.Errorf("current enterprise use must return boolean")
+	}
+	refs := map[string]platform.ExprType{}
+	for _, field := range o.Fields {
+		refs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
+	}
+	if len(o.States) > 0 {
+		refs["state"] = platform.ExprType{Kind: "choice"}
+	}
+	refs["archived"] = platform.ExprType{Kind: "boolean"}
+	_, err := platform.CompileExpr(*o.EnterpriseUse, platform.ExprSchema{Refs: refs})
+	return err
+}
+
 // checkFields refuses a field the platform has no type for, a choice without
 // values, or a reference to an object this tenant has not.
 func CheckFields(fields []Field, known func(string) bool) error {

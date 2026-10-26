@@ -22,9 +22,20 @@ type Host interface {
 	FileHost
 	KnowledgeHost
 	RelationsHost
+	FlowHost
 	WorkHost
 	AgentHost
 	ConsoleHost
+}
+
+// FlowBinding exposes hashes and asset paths, never private definition bytes.
+// Release is empty for development without a matching activated flow asset.
+type FlowBinding struct {
+	Existing     bool
+	Applications []platform.AssetBinding
+	Dependencies string
+	Release      string
+	Assets       []platform.AssetRef
 }
 
 // Listener is a platform app delivered other apps' events as owned work, with
@@ -32,6 +43,60 @@ type Host interface {
 type Listener interface {
 	Interested(names []string, e platform.Event) bool
 	Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *kernel.Error
+}
+
+// Processes is the flow app: it takes the flows every app
+// declares, pins the versions instances took for replay, and hears an agent
+// step's run end.
+type Processes interface {
+	Declare(a platform.App) error
+	// Install registers a flow an app composed at runtime as its next version;
+	// Validate checks one without registering it (#132).
+	Install(a platform.App, fl platform.Flow) error
+	// HasPublishedFlow checks published membership against the original flow owner.
+	HasPublishedFlow(id string) bool
+	// InstallationDraft isolates declarations for a release trial, without running instances.
+	InstallationDraft() Processes
+	Validate(a platform.App, fl platform.Flow) error
+	// HasRunningDependency protects a composed flow's source and transitive
+	// object dependencies while its instances are running, waiting, compensating or stuck.
+	HasRunningDependency(typ string) (bool, error)
+	HasUnboundRunningDependency(typ string) (bool, error)
+	// Check refuses to start when a running instance needs a version the code no longer declares.
+	Check() error
+	// Versions are those new instances took during the input being handled
+	// (then forgotten), journaled with it; Pin gives a replay those of its entry.
+	Versions() map[string]int
+	Pin(versions map[string]int)
+	RunEnded(c platform.Caller, run RunEnd, now time.Time)
+}
+
+// Runs are agent runs a flow's agent step starts and signals.
+type Runs interface {
+	// Start puts a new run with the decision r.
+	Start(c platform.Caller, r *pb.ChangeRecord, run RunStart, now time.Time)
+	Signal(c platform.Caller, r *pb.ChangeRecord, run string, s RunSignal, now time.Time)
+	// Finished are the IDs of a flow instance's finished runs (at step, when
+	// given), oldest first.
+	Finished(c platform.Caller, flow, step string) []string
+}
+
+// RunStart is an agent run a flow's step starts: agent is "<app>.<name>".
+type RunStart struct {
+	ID, Agent, Goal, Ref, Flow, Step string
+	Token                            int
+}
+
+// RunSignal is what people made of a run's result.
+type RunSignal struct {
+	At               time.Time
+	Kind, By, Detail string
+}
+
+// RunEnd is how a flow's agent run ended: done, with its result, or stopped.
+type RunEnd struct {
+	ID, Agent, Flow, State, Result, Stopped string
+	Token                                   int
 }
 
 // Tasks serves Caller.Assign for every app and closes tasks a platform app

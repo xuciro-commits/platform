@@ -28,6 +28,7 @@ type BuildHost interface {
 	Member(id string) (platform.Member, bool)
 	Operation(app, name string, version int) (platform.Operation, int, bool)
 	RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool)
+	BuildProcesses() ProcessDefinitions
 	Record(ref string) (any, bool)
 	ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool)
 	ValidateInstallApplication(a platform.Application) error
@@ -99,6 +100,9 @@ func Attach(app platform.App, h Host) {
 	if owner, ok := app.(AttachedRelations); ok {
 		owner.AttachRelations(h)
 	}
+	if owner, ok := app.(AttachedFlow); ok {
+		owner.AttachFlow(h)
+	}
 	if owner, ok := app.(AttachedWork); ok {
 		owner.AttachWork(h)
 	}
@@ -109,4 +113,12 @@ func Attach(app platform.App, h Host) {
 type Glossary interface {
 	Terms(app string) []platform.KnowledgeTerm
 	TermsFor(declaration string) []string
+}
+
+// ProcessDefinitions is the declaration/compatibility surface used by Build.
+type ProcessDefinitions interface {
+	Install(platform.App, platform.Flow) error
+	Validate(platform.App, platform.Flow) error
+	HasRunningDependency(string) (bool, error)
+	HasUnboundRunningDependency(string) (bool, error)
 }

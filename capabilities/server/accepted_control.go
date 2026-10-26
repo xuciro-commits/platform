@@ -83,7 +83,7 @@ func decodeControl(raw []byte, v any) error {
 }
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
-	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, definitions: t.definitions, records: t.records, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
+	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, definitions: t.definitions, records: t.records, procs: t.procs, tasks: t.tasks, linker: t.linker, directory: t.directory, agents: t.agents, ai: t.ai,
 		bindings: maps.Clone(t.bindings), connectors: newConnectorRoster(t.services.Kernel), work: newWorkBoard(), works: t.forkWorkState()}
 	for _, j := range t.work.jobs {
 		copy := *j

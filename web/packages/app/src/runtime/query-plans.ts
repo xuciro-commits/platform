@@ -1,0 +1,282 @@
+import {builderSection,refineCollection} from "./collection-builder";
+import {collectionInput} from "./collection-input";
+import {validCollectionInput,collectionFieldsVisible,collectionQuery} from "./collection-input";
+import {validCivilDate,validTimestamp} from "@platform/ui/date";
+import {isStringSet,parseDecimal,isDecimal,type NumberValue,type DecimalValue} from "./decimal";
+import type {Api,pageUIManifest} from "@platform/kernel";
+import type { EntityInfo, RecordQuery } from "@platform/ui";
+import type { ResourceValue, VariableResult } from "./variables";
+import type { QueryView } from "./Session";
+import {interfaceWindowSignature} from "./ontology-interface";
+
+/** Resolve only the explicitly selected retained query version. */
+export function boundQueryDefinition(definition: Api.Definition | undefined, binding: Api.AssetBinding | undefined): Api.Definition | undefined {
+ if(!definition||!binding)return undefined;
+ if(definition.version===binding.sourceVersion&&definition.query)return definition;
+ const query=definition.queryVersions?.[binding.sourceVersion];
+ return query?{...definition,version:binding.sourceVersion,query,queryVersions:undefined}:undefined;
+}
+export function variablePlan(page:Api.Page,variableID:string):string|undefined {
+ const variable=page.document?.variables?.[variableID],source=variable?.source;
+ if(source?.kind==="plan")return source.query;
+ if(source?.kind==="query"){if(page.sections?.some(s=>s.id===source.section&&s.widget==="collection-builder"))return undefined;const section=page.sections?.find((s)=>s.id===source.section);const bound=page.document?.variables?.[section?.collectionVariable??""];if(bound?.source?.kind==="plan")return bound.source.query;}
+ return undefined;
+}
+export const planKey = (id: string) => `plan/${id}`;
+type Contract = typeof pageUIManifest.runtime.query;
+export type QueryPlanResult = { status: "value"; object: string; interface?:string;binding?:Api.AssetBinding;query: RecordQuery; signature: string;sortLocked?:boolean;collection?:import("./collection-input").CollectionInput;localQuery?:RecordQuery } | { status: "empty" | "pending" } | { status: "error"; code: string };
+const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
+type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|NumberValue|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
+const failed = (code: string): QueryPlanResult => ({ status: "error", code });
+type QueryGraph={id:string;plans:Record<string,Api.PageQuery>};
+function variableUsesPlan(id:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],seen=new Set<string>()):boolean {
+  if(seen.has(id))return false;seen.add(id);
+  const variable=variables[id];
+  return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.expression?.args.some(arg=>!!arg.variable&&variableUsesPlan(arg.variable,variables,sections,seen));
+}
+
+/** Only an actual contextual view may consume an independent confirmed record producer. */
+function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],graph:QueryGraph):boolean {
+ const plan=graph.plans[graph.id],input=variables[variable];
+ if(plan?.for?.variable!==variable||input?.type!=="record"||input.mode!=="resource"||input.source?.kind!=="record"||!(input.scope==="page"||input.scope==="overlay"&&input.owner===plan.owner&&!!plan.owner))return false;
+ const consumer=sections.some(section=>{const id=section.widget==="avatar-stack"&&section.avatar?.contextVariable===variable&&(input.scope!=="page"||!plan.owner)?section.avatar.contextCollectionVariable:section.widget==="observation"&&section.observation?.kind==="statistics"&&section.recordVariable===variable?section.observationContextVariable:section.widget==="scene-3d"&&section.recordVariable===variable?section.sceneSampleCollectionVariable:undefined;const window=variables[id??""];return window?.mode==="resource"&&window.source?.kind==="plan"&&window.source.query===graph.id;});
+ if(!consumer)return false;
+ const producer=sections.find(section=>section.id===input.source!.section);
+ if(!producer)return false;const port=input.source!.port;if(["graph-explorer","observation"].includes(producer.widget)&&!port)return false;if(port&&!((producer.widget==="graph-explorer"&&producer.graphExplorer?.outputs?.some(o=>o.id===port&&o.variable===variable))||(producer.widget==="observation"&&producer.observation?.kind==="table"&&(port==="row"&&producer.observation.rowOutput===variable||port==="asset"&&producer.observation.assetOutput===variable))))return false;return ["table","record-list","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","record-map","resource-list"].includes(producer.widget)||producer.widget==="graph-explorer"&&!!port||producer.widget==="observation"&&!!port&&producer.observation?.kind==="table";
+}
+
+/** Follow original variables, producer inputs and set operands, rather than downloaded rows. */
+function variableDependsOnQuery(variable:string,target:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],plans:Record<string,Api.PageQuery>):boolean {
+ const seenVariables=new Set<string>(),seenQueries=new Set<string>();
+ const queryDepends=(id:string):boolean=>{
+  if(id===target)return true;if(seenQueries.has(id))return false;seenQueries.add(id);
+  const plan=plans[id];if(!plan)return false;
+  return !!plan.input&&variableDepends(plan.input)||[...(plan.conditions??[]).map(condition=>condition.value),...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.set?.inputs.some(queryDepends);
+ };
+ const variableDepends=(id:string):boolean=>{
+  if(!id||seenVariables.has(id))return false;seenVariables.add(id);const input=variables[id];if(!input)return false;
+  if(input.expression?.args.some(value=>!!value.variable&&variableDepends(value.variable)))return true;
+  const source=input.source;if(!source)return false;
+  if(source.kind==="property"&&!!source.variable&&variableDepends(source.variable))return true;
+  if((source.kind==="plan"||input.mode==="aggregate")&&!!source.query&&queryDepends(source.query))return true;
+  return ["record","records","query","filter"].includes(source.kind)&&sections.filter(section=>section.id===source.section).some(section=>[section.collectionVariable,section.filterVariable,section.recordVariable,section.observationHistoryVariable,section.observationContextVariable,section.sceneSampleCollectionVariable].some(id=>!!id&&variableDepends(id)));
+ };
+ return variableDepends(variable);
+}
+
+/** The user's enum filters as domain terms: only choice fields of the entity,
+ * with values the field declares; anything else is unavailable, not widened. */
+export function enumFilterTerms(filters: Record<string,string[]> | undefined, info?: EntityInfo): unknown[][] {
+  const terms:unknown[][]=[];
+  for(const [name,values] of Object.entries(filters??{})){
+    if(!Array.isArray(values)||values.length===0||values.length>contractMaxFilterValues||!validID.test(name))continue;
+    const field=info?.fields.find(f=>f.name===name&&f.type==="choice");
+    if(!field||values.some(value=>typeof value!=="string"||value===""||new TextEncoder().encode(value).length>4096||field.choices!==undefined&&!field.choices.includes(value)))continue;
+    terms.push([name,"in",values]);
+  }
+  return terms;
+}
+const contractMaxFilterValues=64;
+/** Whether the member asked for any enum filter at all, however malformed. */
+export function hasEnumFilters(filters: Record<string,string[]> | undefined):boolean {
+  return Object.values(filters??{}).some(values=>Array.isArray(values)&&values.length>0);
+}
+/** Whether a window can carry enum filters at all: fixed domains belong to
+ * their named query and interface shapes own their predicates. */
+export function windowFiltersLocked(named: Api.Definition | undefined, base?: {interface?:string}):boolean {
+  return !!base?.interface||Array.isArray(named?.query?.domain)&&named.query.domain.length>0;
+}
+
+export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, pickerTitle?:string): QueryPlanResult {
+  named=plan.query?boundQueryDefinition(named,plan.query):named;
+  if(base.status!=="value" || !view) return base;
+  if(base.interface&&base.binding){
+    if(view.sort!==undefined||view.offset!==undefined&&(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)||view.search!==undefined&&(plan.search||new TextEncoder().encode(view.search).length>4096)||hasEnumFilters(view.filters))return failed("Interface query window is unavailable or incompatible.");
+    const query={...base.query,...view.offset===undefined?{}:{offset:view.offset},...view.search===undefined?{}:{search:view.search}};
+    return {...base,query,signature:interfaceWindowSignature(base.interface,base.binding,query)};
+  }
+  if(base.collection&&base.localQuery){
+   const local=queryView(plan,{...base,query:base.localQuery,collection:undefined,localQuery:undefined},view,info,named,contract,pickerTitle);if(local.status!=="value")return local;
+   const query=collectionQuery(base.collection,local.query,view.sort??plan.sort);return query?{...base,query,signature:JSON.stringify([base.object,query])}:failed("Collection query exceeds its budget or ordering contract.");
+  }
+  const query={...base.query};
+  if(view.offset!==undefined){if(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)return failed("Query window offset exceeds its budget.");query.offset=view.offset;}
+  if(view.search!==undefined){
+   if(new TextEncoder().encode(view.search).length>4096)return failed("Query search requires text.");
+   if(pickerTitle){
+    if(pickerTitle!=="id"&&!info?.fields.some(f=>f.name===pickerTitle&&["text","longtext","choice","reference"].includes(f.type)))return failed("Picker title is unavailable.");
+    if(view.search!==""){
+     const domain=query.domain??[],terms=domain.filter(Array.isArray).length,extra=pickerTitle==="id"?1:2;if(terms+extra>contract.maxConditions)return failed("Picker search exceeds its condition budget.");
+     query.domain=[...domain,...pickerTitle==="id"?[["id","like",view.search]]:["|",[pickerTitle,"like",view.search],["id","like",view.search]]];
+    }
+   }else{if(plan.search)return failed("This plan owns its search parameter.");query.search=view.search;}
+  }
+  if(view.filters!==undefined){
+   if(windowFiltersLocked(named))return failed("The named query owns its conditions.");
+   const terms=enumFilterTerms(view.filters,info);
+   const requested=Object.values(view.filters).filter(values=>Array.isArray(values)&&values.length>0).length;
+   if(terms.length!==requested)return failed("Query filter field is unavailable.");
+   const domain=query.domain??[];
+   if(domain.filter(Array.isArray).length+terms.length>contract.maxConditions)return failed("Query filters exceed the condition budget.");
+   if(terms.length)query.domain=[...domain,...terms];
+  }
+  if(view.sort!==undefined){if(base.sortLocked||named?.query?.sort?.length)return failed("The named query owns its ordering.");if(view.sort.length<1||view.sort.length>contract.maxSort||view.sort.some((key)=>{const field=key.replace(/^-/,"");return !validID.test(field)||!["id","created","changed"].includes(field)&&!info?.fields.some((f)=>f.name===field&&!['references','tags','lines','json'].includes(f.type));}))return failed("Query sort field is unavailable.");query.sort=view.sort;}
+  return {...base,query,signature:JSON.stringify([base.object,query])};
+}
+
+/** Build the finite read shape from member-visible descriptors and explicit
+ * values. It emits the original RecordQuery, never source text or SQL. */
+export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
+  if(plan.interface){
+    const selected=boundQueryDefinition(named,plan.query),declared=selected?.query,ordering=declared?.sort?.length?declared.sort:["id"];
+    if(!plan.query||selected?.ref.app!==plan.query.ref.app||selected.ref.name!==plan.query.ref.name||declared?.interface!==plan.interface||!declared.interfaceShape||plan.object.name||plan.object.app||plan.object.kind||plan.input||plan.for||plan.direction||plan.itemOwner||plan.set||plan.conditions?.length||!Number.isInteger(plan.limit)||plan.limit<1||plan.limit>Math.min(contract.maxLimit,declared.limit||contract.maxLimit)||!Number.isInteger(plan.offset??0)||(plan.offset??0)<0||(plan.offset??0)>contract.maxOffset||plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(ordering))return failed("Interface query window is unavailable or incompatible.");
+    let search:string|undefined;
+    if(plan.search){
+      const binding=plan.search,v=binding.variable?variables[binding.variable]:undefined;
+      if(!!binding.variable===(binding.literal!==undefined)||binding.variable&&(!v||v.type!=="string"||!(v.scope==="page"||v.scope==="application"||v.scope==="overlay"&&v.owner===plan.owner&&!!plan.owner)||variableUsesPlan(binding.variable,variables,sections)))return failed("Query parameter escapes its input scope.");
+      const result=binding.variable?values[binding.variable]:{status:"value" as const,value:binding.literal};
+      if(!result)return {status:"empty"};if(result.status!=="value")return result;
+      if(typeof result.value!=="string"||new TextEncoder().encode(result.value).length>4096)return failed("Query search requires text.");
+      search=result.value;
+    }
+    const query:RecordQuery={sort:ordering,offset:plan.offset??0,limit:plan.limit,...search===undefined?{}:{search}};
+    return {status:"value",object:"",interface:plan.interface,binding:plan.query,sortLocked:true,query,signature:interfaceWindowSignature(plan.interface,plan.query,query)};
+  }
+  if(plan.set)return failed("A set plan requires its source graph.");
+  if(plan.itemOwner&&!plan.query&&!setPredicate)return failed("Item query needs its typed parent record.");
+  if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
+  const field = (name: string) => ["id", "created", "changed"].includes(name) ? { name, type: name === "id" ? "text" : "datetime", ref: undefined } : info.fields.find((field) => field.name === name);
+  const usesPlan = (id:string) => variableUsesPlan(id,variables,sections);
+  const read = (binding: Api.PageValue): QueryValueResult => {
+    if (!!binding.variable === (binding.literal !== undefined)) return { status: "error", code: "Query value needs one variable or literal." };
+    if (!binding.variable) {
+      const value=binding.literal;
+      if (!isStringSet(value)&&!isDecimal(value)&&!["string","boolean","number"].includes(typeof value) || typeof value === "number" && !Number.isFinite(value) || typeof value === "string" && new TextEncoder().encode(value).length>4096) return {status:"error",code:"Query value needs a bounded scalar literal."};
+      return {status:"value",value:value as string|boolean|number|DecimalValue|import("./decimal").StringSetValue};
+    }
+    const variable = variables[binding.variable];
+    const plannedInput=usesPlan(binding.variable)&&!(graph&&recordContextQueryInput(binding.variable,variables,sections,graph)&&!variableDependsOnQuery(binding.variable,graph.id,variables,sections,graph.plans));
+    if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner||variable.scope==="loop-item"&&variable.owner===plan.itemOwner&&!!plan.itemOwner) || plannedInput) return { status: "error", code: "Query parameter escapes its input scope." };
+    return values[binding.variable] ?? { status: "empty" };
+  };
+  const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "string-set"?value.value.values:value.value.kind === "decimal"?value.value:value.value.kind === "record" ? value.value.reference.id : undefined : value.value;
+  const compatible = (name: string, value: QueryValueResult & { status: "value" }) => {
+    const f = field(name), raw = value.value;
+    if (!f || !validID.test(name)) return false;
+    if (isStringSet(raw))return ["text","choice"].includes(f.type);
+    if (isDecimal(raw))return ["integer","decimal"].includes(f.type);
+    if (typeof raw === "object") return raw.kind === "record" && f.type === "reference" && raw.reference.object === f.ref;
+    return f.type === "boolean" ? typeof raw === "boolean" : ["integer", "decimal"].includes(f.type) ? typeof raw === "number" && Number.isFinite(raw)
+      : ["text", "choice", "reference", "date", "datetime"].includes(f.type) && typeof raw === "string" && new TextEncoder().encode(raw).length <= 4096;
+  };
+  const domain: unknown[] = [];
+  let sort = plan.sort ?? ["id"], limit = plan.limit;
+  let traversal:Api.LinkTraversal|undefined;
+  if(plan.query?.ref.kind==="link-type") {
+    const definition=named?.ref.app===plan.query.ref.app&&named.ref.name===plan.query.ref.name?named:undefined;
+    const link=definition?.version===plan.query.sourceVersion?definition.linkType:definition?.linkVersions?.[plan.query.sourceVersion];
+    if(!link||!plan.for?.variable||(plan.direction!=="forward"&&plan.direction!=="reverse"))return failed("The relation version or start record is unavailable.");
+    const start=plan.direction==="forward"?link.parent:link.child,target=plan.direction==="forward"?link.child:link.parent;
+    if(target.name!==plan.object.name||target.app!==plan.object.app)return failed("Relation target object is incompatible.");
+    const value=read(plan.for);if(value.status!=="value")return value;
+    const record=value.value;if(typeof record!=="object"||record.kind!=="record"||record.reference.object!==start.name||!record.reference.id)return failed("Relation start record is incompatible.");
+    traversal={binding:plan.query,direction:plan.direction,id:record.reference.id};
+  } else if (plan.query) {
+    named=plan.query?boundQueryDefinition(named,plan.query):named;
+    if (!named?.query || named.version !== plan.query.sourceVersion || named.ref.app !== plan.query.ref.app || named.ref.name !== plan.query.ref.name || named.ref.kind !== "query" || named.query.object !== plan.object.name) return failed("The named query version is unavailable.");
+    const declaration = named.query;
+    if(plan.itemOwner&&(!declaration.by||!plan.for?.variable||variables[plan.for.variable]?.owner!==plan.itemOwner||variables[plan.for.variable]?.source?.kind!=="item"))return failed("Item query needs its typed parent record.");
+    if (Array.isArray(declaration.domain)) domain.push(...declaration.domain);
+    else if (declaration.domain !== undefined && declaration.domain !== null) return failed("The named query domain is unavailable.");
+    if (domain.some((term) => Array.isArray(term) && !field(String(term[0])))) return failed("A named query field is unavailable.");
+    if (declaration.by) {
+      if (!plan.for) return failed("The named query needs its parent input.");
+      const value = read(plan.for); if (value.status !== "value") return value;
+      if (!compatible(declaration.by, value)) return failed("Query parameter type does not match its field.");
+      if (!scalar(value)) return { status: "empty" };
+      domain.push([declaration.by, "=", scalar(value)]);
+    } else if (plan.for) return failed("The named query has no parent input.");
+    if (declaration.sort?.length) sort = declaration.sort;
+    limit = Math.min(limit, declaration.limit && declaration.limit > 0 ? declaration.limit : 200);
+  } else if (plan.for) return failed("Query parent input requires a named query.");
+  for (const condition of plan.conditions ?? []) {
+    let value = read(condition.value); if (value.status !== "value") return value;
+    const f = field(condition.field);
+    if(!f||!(contract.operators as readonly string[]).includes(condition.op)||["in","not in"].includes(condition.op)!==isStringSet(value.value)||condition.asDecimal&&(!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||!["integer","decimal"].includes(f.type))||!condition.asDecimal&&!compatible(condition.field,value)||condition.op==="like"&&!["text","choice"].includes(f.type)||["boolean","reference"].includes(f.type)&&!["=","!="].includes(condition.op))return failed("Query parameter type does not match its field.");
+    if(condition.asDate&&(condition.asDecimal||condition.asDateTime||!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||f?.type!=="date"))return failed("Query parameter type does not match its field.");
+    if(condition.asDateTime&&(condition.asDate||condition.asDecimal||!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||f?.type!=="datetime"))return failed("Query parameter type does not match its field.");
+    if(condition.optional&&(value.value===""||isStringSet(value.value)&&value.value.values.length===0))continue;
+    if(condition.asDateTime&&(typeof value.value!=="string"||!validTimestamp(value.value)))return failed("Invalid datetime value.");
+    if(condition.asDate&&(typeof value.value!=="string"||!validCivilDate(value.value)))return failed("Invalid date value.");
+    if(condition.asDecimal){if(typeof value.value!=="string")return failed("Query parameter type does not match its field.");const exact=parseDecimal(value.value);if(!exact)return failed("Invalid numeric value.");value={status:"value",value:exact};}
+    if ((["in","not in"].includes(condition.op)!==isStringSet(value.value)) || !compatible(condition.field, value) || !(contract.operators as readonly string[]).includes(condition.op) || condition.op === "like" && !["text", "choice"].includes(f!.type) || ["boolean", "reference"].includes(f!.type) && !["=", "!="].includes(condition.op)) return failed("Query parameter type does not match its field.");
+    domain.push([condition.field, condition.op, scalar(value)]);
+  }
+  if (sort.some((name) => !field(name.replace(/^-/, "")))) return failed("Query sort field is unavailable.");
+  let search: string | undefined;
+  if (plan.search) { const value = read(plan.search); if (value.status !== "value") return value; if (typeof value.value !== "string" || new TextEncoder().encode(value.value).length > 4096) return failed("Query search requires text."); search = value.value; }
+  const query: RecordQuery = { ...(traversal?{traversal}:{}),domain, sort, offset: plan.offset ?? 0, limit, ...(search === undefined ? {} : { search }) };
+  return { status: "value", object: info.type, query, signature: JSON.stringify([info.type, query]) };
+}
+
+/** Compile source predicates, never their downloaded windows. Each root owns
+ * one immutable request signature and the original read/session lifecycle. */
+export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>Api.Definition|undefined,contract:Contract,sections:Api.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:Api.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
+ const compile=(root:string):QueryPlanResult=>{
+  let nodes=0;
+  const target=plans[root];
+  const visit=(id:string,depth:number,path:Set<string>):QueryPlanResult=>{
+   const plan=plans[id];nodes++;
+   if(depth>0&&plan?.query?.ref.kind==="link-type")return failed("A relation cannot be a set predicate source.");
+   if(!plan||path.has(id)||depth>contract.set.maxDepth||nodes>contract.set.maxNodes||plan.object.name!==target?.object.name||plan.object.app!==target?.object.app||plan.owner!==target?.owner||plan.itemOwner!==target?.itemOwner)return failed("Set query sources are missing, cyclic or incompatible.");
+   if(!active(plan.owner))return {status:"empty"};
+   let own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections,!!plan.set,{id,plans});
+   if(plan.input){
+    if(plan.set)return failed("A collection input must be a separate set source.");
+    const declaration=variables[plan.input],producer=builderSection(plan.input,variables,sections,plan.owner);
+    let result=values(plan.owner)[plan.input];
+    if(producer){
+     if(!producer.collectionBuilder?.fields.length||producer.collectionBuilder.fields.some(name=>!entity(plan.object.name)?.fields.some(f=>f.name===name&&["text","choice","integer","decimal"].includes(f.type))))return failed("Collection builder fields are unavailable.");
+     const source=variables[producer.collectionVariable??""];const sourceID=source?.source?.kind==="plan"?source.source.query:undefined;
+     if(!sourceID)return failed("Collection builder source is unavailable.");
+     path.add(id);const base=visit(sourceID,depth+1,path);path.delete(id);
+     if(base.status!=="value")return base;
+     const bindings=(queryID:string,seen=new Set<string>()):Api.AssetBinding[]=>{if(seen.has(queryID))return [];seen.add(queryID);const q=plans[queryID];if(!q)return [];const inherited=q.input?builderSection(q.input,variables,sections,q.owner):undefined;const original=inherited?variables[inherited.collectionVariable??""]?.source?.query:undefined;const inputValue=q.input?values(q.owner)[q.input]:undefined;return [...q.query?[q.query]:[],...q.set?.inputs.flatMap(v=>bindings(v,seen))??[],...original?bindings(original,seen):[],...inputValue?.status==="value"&&typeof inputValue.value==="object"&&inputValue.value.kind==="object-set-input"?inputValue.value.bindings??[]:[]];};
+     const input=collectionInput(plan.object,base.query,Array.from(new Map(bindings(sourceID).map(b=>[JSON.stringify(b),b])).values()),!!base.sortLocked||!!boundQueryDefinition(named(plans[sourceID]!),plans[sourceID]?.query)?.query?.sort?.length);
+     const conditions=builder?.(producer,input)??[];
+     const checked=compileQueryPlan({object:plan.object,owner:plan.owner,limit:1,conditions},variables,values(plan.owner),entity(plan.object.name),undefined,contract,sections);
+     if(checked.status!=="value"||conditions.some(c=>!producer.collectionBuilder?.fields.includes(c.field)))return failed("Collection builder conditions are unavailable.");
+     const refined=refineCollection(input,conditions);if(!refined)return failed("Collection builder exceeds its predicate budget.");
+     result={status:"value",value:refined};
+    }
+    if(!producer&&(declaration?.mode!=="input"||declaration.type!=="object-set"||declaration.scope!=="page"))return failed("Query collection input is unavailable.");
+    if(!result||result.status!=="value")return result??{status:"empty"};
+    const input=result.value;
+    if(!validCollectionInput(input)||depth>0&&!!input.traversal||input.object.app!==plan.object.app||input.object.name!==plan.object.name||!collectionFieldsVisible(input,entity(plan.object.name)))return failed("Query collection input is incompatible.");
+    for(const binding of input.bindings??[]){const descriptor=named({...plan,input:undefined,query:binding});if(binding.ref.kind==="query"){const q=boundQueryDefinition(descriptor,binding);if(!q?.query||q.query.object!==plan.object.name)return failed("Collection query version is unavailable.");}else if(!descriptor||!(descriptor.version===binding.sourceVersion?descriptor.linkType:descriptor.linkVersions?.[binding.sourceVersion]))return failed("Collection relation version is unavailable.");}
+    if(own.status!=="value")return own;
+    const query=collectionQuery(input,own.query,plan.sort);if(!query)return failed("Collection query exceeds its budget or ordering contract.");
+    own={...own,localQuery:own.query,collection:input,query,sortLocked:input.sortLocked,signature:JSON.stringify([own.object,query])};
+   }
+   const sourceView=(result:QueryPlanResult)=>depth>0&&result.status==="value"?queryView(plan,result,view?.(id,result),entity(plan.object.name),named(plan),contract):result;
+   if(!plan.set||own.status!=="value")return sourceView(own);
+   if(!(contract.set.operations as readonly string[]).includes(plan.set.op)||plan.set.inputs.length!==2)return failed("Set query sources are missing, cyclic or incompatible.");
+   path.add(id);const inputs=plan.set.inputs.map(input=>visit(input,depth+1,path));path.delete(id);
+   const error=inputs.find(input=>input.status==="error"),pending=inputs.find(input=>input.status==="pending"),empty=inputs.find(input=>input.status==="empty");
+   if(error||pending||empty)return (error??pending??empty)!;
+   const predicates=inputs.map(input=>{const q=(input as Extract<QueryPlanResult,{status:"value"}>).query;return {domain:q.domain,search:q.search,set:q.set};});
+   const query={...own.query,set:{op:plan.set.op,inputs:predicates}};
+   return sourceView({...own,query,signature:JSON.stringify([own.object,query])});
+  };
+  const result=visit(root,0,new Set());
+  if(result.status==="value"&&result.query.set){
+   let size=0;const check=(p:Api.RecordSetPredicate):boolean=>{
+    size++;if(size>contract.set.maxNodes||Array.isArray(p.domain)&&p.domain.length>contract.set.maxConditions||new TextEncoder().encode(p.search??"").length>contract.set.maxSearchBytes)return false;
+    return !p.set||p.set.inputs.every(check);
+   };
+   if(!check({domain:result.query.domain,search:result.query.search,set:result.query.set})||new TextEncoder().encode(JSON.stringify(result.query)).length>contract.set.maxBytes)return failed("Set query exceeds its predicate budget.");
+  }
+  return result;
+ };
+ return Object.keys(plans).map(id=>[id,compile(id)] as const);
+}

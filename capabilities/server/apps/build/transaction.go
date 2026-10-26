@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -455,6 +454,48 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 				}
 				continue
 			}
+			if step.Effect != nil {
+				w, found := platform.Get[construction.Writeback](c, step.Effect.Writeback)
+				if !found {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction writeback is unavailable")
+				}
+				w, err := b.ExecutionWriteback(w)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+				}
+				conn, found := platform.Get[construction.Connection](c, w.Connection)
+				if !found {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction effect connection is unavailable")
+				}
+				conn, err = b.ExecutionConnection(conn)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+				}
+				payload, problem := b.txnParameters(c, step.Effect.Payload, scope, subject, facts, now)
+				if problem != nil {
+					return problem
+				}
+				target := step.Target
+				if target.Type == "" {
+					target = platform.TxnRef{Type: txn.Subject, ID: subjectID}
+				} else {
+					target, problem = resolve(target, facts, rowID)
+					if problem != nil {
+						return problem
+					}
+				}
+				request, err := w.Request(conn, target.ID, payload)
+				if err != nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
+				}
+				if c.TxnTransport() == nil {
+					return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction effect transport is unavailable")
+				}
+				if problem := c.TxnTransport().QueueTxnEffect(c, receipt, stepKey, target, platform.Raw(request), now); problem != nil {
+					return problem
+				}
+				continue
+			}
 			if step.Work != nil {
 				w := step.Work
 				assignment := platform.Assignment{Title: w.Title, Ref: txn.Subject + "/" + subjectID, Key: txn.Subject + "/" + subjectID + ":" + stepKey, Close: w.Close, Answers: w.Answers}
@@ -586,28 +627,8 @@ func (b *Build) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, txn
 	if err := b.finishProposal(c, receipt, proposal, now); err != nil {
 		return err
 	}
-	return nil
-}
-
-// parameterExpr compiles one transaction parameter into an expression.
-func parameterExpr(set platform.TxnSet, scope platform.RuleReadSpec) (platform.Expr, error) {
-	kind := "text"
-	if set.Expr != nil {
-		kind = set.Expr.Kind
-	} else if input, found := scope.Inputs[strings.TrimPrefix(set.From, "input.")]; found {
-		kind = input.Kind
+	if err := b.openDispatch(c, receipt, txn, spec, subject, values, now); err != nil {
+		return err
 	}
-	if set.Expr == nil && strings.HasPrefix(set.From, "input.") {
-		set.From = strings.TrimPrefix(set.From, "input.")
-	}
-	if slices.Contains([]string{"set", "object", "json", ""}, kind) {
-		return platform.Expr{}, fmt.Errorf("transaction parameters require scalar expressions")
-	}
-	return assignmentExpr(kind, set, scope)
-}
-
-// dispatchSchemaObject used to rename integration references into portable
-// ones. With no integration kinds left a saved object is already portable.
-func (b *Build) dispatchSchemaObject(object construction.Object) (construction.Object, error) {
-	return object, nil
+	return b.openConfirmation(c, receipt, txn, now)
 }

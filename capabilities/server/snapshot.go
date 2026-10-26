@@ -9,6 +9,7 @@ import (
 	"maps"
 	"platformserver/internal/acceptance"
 	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/internal/host"
 	"platformserver/internal/records"
 	"platformserver/journal"
 	"reflect"
@@ -582,7 +583,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 // records of the types they install.
 func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordState) error {
 	needsDefinitions := len(held) > 0 || s.Runtime != nil
-	for typ, kind := range map[string]platform.AssetKind{construction.PropertyTypeType: platform.AssetPropertyType, construction.LinkTypeType: platform.AssetLinkType, construction.QueryType: platform.AssetQuery, construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.FunctionType: platform.AssetFunction, construction.CodeType: platform.AssetCompute, construction.TableType: platform.AssetCompute} {
+	for typ, kind := range map[string]platform.AssetKind{construction.PropertyTypeType: platform.AssetPropertyType, construction.LinkTypeType: platform.AssetLinkType, construction.QueryType: platform.AssetQuery, construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.ProcessType: platform.AssetFlow, construction.FunctionType: platform.AssetFunction, construction.CodeType: platform.AssetCompute, construction.TableType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
 			var meta struct {
 				Published string `json:"published"`
@@ -598,8 +599,18 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 				continue
 			}
 			name := saved.Name
-			if kind == platform.AssetObject {
+			if kind == platform.AssetObject || kind == platform.AssetFlow {
 				name = construction.TypeOf(name)
+			}
+			if kind == platform.AssetFlow {
+				var state struct {
+					Name    string `json:"name"`
+					Version int    `json:"version"`
+				}
+				json.Unmarshal([]byte(meta.Published), &state)
+				owner, ok := t.procs.(host.FlowDefinitionPresence)
+				needsDefinitions = needsDefinitions || !ok || !owner.HasDefinition(construction.ID, state.Name, state.Version)
+				continue
 			}
 
 			ref := platform.AssetRef{App: construction.ID, Kind: kind, Name: name}
@@ -618,6 +629,13 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 		}
 		if len(left) > 0 {
 			return fmt.Errorf("tenant %s: no entity type %s", t.ID, slices.Sorted(maps.Keys(left))[0])
+		}
+	}
+	for typ, et := range t.records.types {
+		for _, row := range et.rows.All() {
+			if err := validateExtractionOrigin(t.records, typ, row.Extraction); err != nil {
+				return err
+			}
 		}
 	}
 

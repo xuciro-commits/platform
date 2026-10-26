@@ -12,6 +12,7 @@ package core
 import (
 	"embed"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -157,6 +158,7 @@ func standard() platform.Standard {
 
 // Entities are the shared master data types.
 func Entities() []platform.Entity {
+	active := platform.ExprReference("boolean", "active")
 	out := []platform.Entity{
 		{Type: PersonType, Title: "Person", Model: Person{}, Display: "name", Synonyms: "employee,staff,contact,worker",
 			Description: "A human the organisation works with: an employee, a contractor, a contact at a partner.", Standard: standard()},
@@ -182,6 +184,11 @@ func Entities() []platform.Entity {
 			// A seed is a replay baseline, so its year cannot follow the wall clock.
 			// Later fiscal periods are created by an accountant's journaled decisions.
 			entities[i].Seed = DefaultPeriods(2026)
+		}
+	}
+	for i := range entities {
+		if slices.Contains([]string{PersonType, SiteType, LocationType}, entities[i].Type) {
+			entities[i].EnterpriseUse = &active
 		}
 	}
 	return entities

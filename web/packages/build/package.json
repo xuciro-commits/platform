@@ -1,0 +1,29 @@
+{
+  "name": "@platform/build",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./catalog": "./src/catalog.ts",
+    "./catalog/examples": "./src/catalog.examples.tsx",
+    "./templates": "./src/workshop/templates.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test src/automate/*.test.mjs src/ontology/*.test.mjs src/releases/*.test.mjs src/workshop/page-editor/*.test.mjs src/projects/*.test.mjs",
+    "build": "true"
+  },
+  "dependencies": {
+    "@platform/app": "workspace:*",
+    "@platform/kernel": "workspace:*",
+    "@platform/ui": "workspace:*",
+    "@tanstack/react-query": "^5.103.2",
+    "lucide-react": "^1.47.0",
+    "react": "^19.3.0",
+    "@platform/catalog": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

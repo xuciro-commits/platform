@@ -24,7 +24,7 @@ func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platfo
 			objects = append(objects, object)
 		}
 	}
-	generated, err := releaseAssets(objects, nil, nil, b.Manifest().Version)
+	generated, err := releaseAssets(objects, nil, nil, nil, b.Manifest().Version)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +48,10 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]construction.JointDraft
 	if err != nil {
 		return nil, err
 	}
+	processes, err := b.processInventory()
+	if err != nil {
+		return nil, err
+	}
 	var out []construction.JointDraftRef
 	seen := map[construction.JointDraftRef]bool{}
 	for _, root := range roots {
@@ -65,8 +69,17 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]construction.JointDraft
 					id = o.ID
 				}
 			}
+		case platform.AssetFlow:
+			for _, p := range processes {
+				if !p.Archived && construction.TypeOf(p.Name) == root.Name {
+					if id != "" {
+						return nil, fmt.Errorf("test root %s is ambiguous", root)
+					}
+					id = p.ID
+				}
+			}
 		default:
-			return nil, fmt.Errorf("test roots use saved objects")
+			return nil, fmt.Errorf("test roots use objects or workflows")
 		}
 		if id == "" {
 			return nil, fmt.Errorf("test root %s has no saved draft", root)
@@ -88,4 +101,34 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]construction.JointDraft
 		return nil, fmt.Errorf("test roots need one to %d saved drafts", construction.JointDraftLimit)
 	}
 	return out, nil
+}
+
+func portableConnectionDraft(asset platform.ReleaseAsset) (construction.Connection, error) {
+	var definition construction.ConnectionDefinition
+	if err := construction.ValueDecodeIntegration(asset.Body, &definition); err != nil {
+		return construction.Connection{}, err
+	}
+	// Site addresses, credentials and concrete protocol settings are filled in
+	// this environment before check/publication, never copied from a package.
+	return construction.Connection{Name: definition.Name, Title: definition.Title, Kind: definition.Kind, Marking: definition.Marking, State: "draft"}, nil
+}
+
+func (b *Build) draftIntegrationTargets(assets []platform.ReleaseAsset) {
+	for _, asset := range assets {
+		if asset.Ref.App != construction.ID || !construction.ValueIntegrationKind(asset.Ref.Kind) {
+			continue
+		}
+		id := asset.Ref.Name
+		rows, err := b.integrationInventory(asset.Ref.Kind)
+		if err == nil {
+			for _, row := range rows {
+				name, _, _, _ := integrationMetadata(row)
+				if name == asset.Ref.Name {
+					id = integrationRecord(row).ID
+					break
+				}
+			}
+		}
+		b.releaseDraftIDs[asset.Ref] = id
+	}
 }

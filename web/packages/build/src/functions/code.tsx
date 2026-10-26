@@ -1,0 +1,185 @@
+import { sourceFieldInput } from "@platform/app";
+import { ContentTabs, ContextHelp, StructuredEditor } from "@platform/ui";
+import { useActionTrial } from "@platform/app";
+import { declarationValue, replaceDeclaration } from "../editor/declaration";
+import { useApplicationWorkspace } from "../projects/application-scope";
+import { ResourceList } from "../editor/ResourceList";
+import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
+import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
+import { apiErrorMessage, type Api } from "@platform/kernel";
+import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
+import { useEffect, useRef, useState } from "react";
+import { JSONEditor, SchemaEditor, schemaDefault } from "../automate/workflow-binding";
+import type { ValueSchema } from "../automate/workflow-model";
+
+type CodeDraft = {
+  abi?: string;
+  id: string; revision: number; name: string; title: string; description: string; language: string; source: string;
+  input: ValueSchema; output: ValueSchema; roles: string[]; limits: Api.OperationLimits;
+  state?: string; version?: number; published?: string; call?: string; module?: string; diagnostics?: string;
+  sourceHash?: string; buildHash?: string; toolchain?: string; builtSource?: string;
+};
+const empty = (): CodeDraft => ({ id: "", revision: 0, name: "", title: "", description: "", language: "go", roles: ["builder", "user"],
+  source: "package main\n\nfunc Run(input Input) (Output, error) {\n\treturn Output{Result: input.Value * 2}, nil\n}\n",
+  input: { type: "object", properties: { value: { type: "integer" } }, required: ["value"] },
+  output: { type: "object", properties: { result: { type: "integer" } }, required: ["result"] },
+  limits: { timeoutMillis: 1000, memoryPages: 1024, maxInputBytes: 65536, maxOutputBytes: 49152 } });
+
+export function CodeFunctions() {
+  const { source, role } = useHost();
+  const { open } = useApplicationWorkspace();
+  if (role("build") !== "builder") return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
+  return <div className="grid gap-3"><PageHeader title={t("Code functions")} help={t("Package a typed Go or TinyGo algorithm for pages and workflows.")}
+    actions={<Button onClick={() => open({ view: "code", params: { id: "new" } })}>{t("New code function")}</Button>} />
+    <ResourceList source={source} type="build.code" fields={["title", "name", "language", "state", "version"]} onOpen={(record) => open({ view: "code", params: { id: record.id } })} />
+  </div>;
+}
+
+export function CodeEditor({ id }: { id: string }) {
+  const { decide, client, role } = useHost(), { open } = useApplicationWorkspace(), invoke = useInvokeCapability();
+  const authoringHost = useHost(), trial = useActionTrial(), declarationFields = authoringHost.source.entity("build.code")?.fields ?? [];
+  const [draft, setDraft] = useState<CodeDraft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
+ const [createID]=useState(()=>crypto.randomUUID());
+ const inputs=useInputDrafts(),dirty=edited||!!inputs?.dirty;
+  const [tab, setTab] = useState<"source" | "contract" | "sdk" | "test">("source"), [sdk, setSDK] = useState("");
+  const testInputs=useInputBuffers();
+  const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState("");
+  const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0), confirmedDraft = useRef<CodeDraft>(empty());
+  const query = useReadQuery<{ record?: CodeDraft }>(`/v1/records/build.code/${encodeURIComponent(id)}`, draft.state === "compiling" ? 1000 : undefined);
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
+    const saved = query.data?.record;
+    if (saved && saved.revision >= baseRevision.current) { baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved); }
+    else setDraft(structuredClone(confirmedDraft.current));
+    setDirty(false); setError(""); setSDK("");
+  }, busy);
+  const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
+  useEffect(() => {
+    const saved = query.data?.record;
+    if (saved && !dirty && !busy && saved.revision >= baseRevision.current && loaded.current !== `${saved.id}:${saved.revision}`) {
+      baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved);
+    }
+  }, [query.data, dirty, busy]);
+  const testSchemaKey = JSON.stringify((() => { try { return JSON.parse(draft.published ?? "").input; } catch { return draft.input; } })());
+  useEffect(() => { setInput(schemaDefault(JSON.parse(testSchemaKey))); setCall(""); setExecutedInput(undefined); }, [testSchemaKey]);
+  const change = (patch: Partial<CodeDraft>) => { if (lock.current) return; setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
+  const perform = async (action: () => Promise<unknown>) => { if (lock.current) return; lock.current = true; setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { lock.current = false; setBusy(false); } };
+  const save = async (): Promise<number | undefined> => {
+    if (inputs?.invalid) return;
+    const submitted = structuredClone(draft), target = submitted.id || createID, expected = submitted.id ? baseRevision.current : 0;
+    const { abi, name, title, description, language, source, input, output, roles, limits } = submitted;
+    if (!await decide(`build.code.${submitted.id ? "edit" : "create"}`, { type: "build.code", id: target }, { ...declarationValue(submitted, declarationFields), abi, name, title, description, language, source, input, output, roles, limits },
+      { expectedRevision: submitted.id ? expected : undefined, quiet: true, onRefused: setError })) return;
+    const revision = expected + 1;
+    baseRevision.current = revision; loaded.current = `${target}:${revision}`;
+    // A code edit must be recompiled; the old module is not evidence that the
+    // current draft can be delivered. The retained publication remains separate.
+    const accepted = { ...submitted, id: target, revision, state: "draft", module: undefined, builtSource: undefined, buildHash: undefined };
+    confirmedDraft.current = structuredClone(accepted); setDraft(accepted); markSaved(); setDirty(false);
+    if (!submitted.id) { open({ view: "code", params: { id: target } }, { ifCurrent: { view: "code", params: { id } }, replace: true }); return revision; }
+    try {
+      const fresh = await query.refetch();
+      if (fresh.isSuccess && fresh.data?.record?.revision === revision) { confirmedDraft.current = structuredClone(fresh.data.record); setDraft(fresh.data.record); }
+      else setError(t("The code function was saved, but its current record could not be reloaded."));
+    } catch { setError(t("The code function was saved, but its current record could not be reloaded.")); }
+    return revision;
+  };
+  const compile = async () => {
+    const target = draft.id;
+    if (!target) return;
+    const revision = dirty ? await save() : baseRevision.current;
+    if (revision === undefined) return;
+    if (!await decide("build.code.compile", { type: "build.code", id: target }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) return;
+    baseRevision.current = revision + 1; loaded.current = `${target}:${revision + 1}`;
+    confirmedDraft.current = { ...confirmedDraft.current, revision: revision + 1, state: "compiling", module: undefined };
+    setDraft(structuredClone(confirmedDraft.current));
+    try { await query.refetch(); }
+    catch { setError(t("Compilation was accepted. Reload the function to read its result.")); }
+  };
+  const previewSDK = async () => {
+    const answer = await client.call<Api.ComputeSDK>("POST", "/v1/build/code/sdk", { abi: draft.abi, input: draft.input, output: draft.output });
+    if (!answer.ok) { setError(apiErrorMessage(answer.body) ?? t("The SDK could not be generated.")); return; }
+    setSDK(answer.body.source); setTab("sdk");
+  };
+  const run = async () => {
+    if(testInputs.invalid)return;
+    setCall(""); setExecutedInput(JSON.parse(JSON.stringify(input)));
+    const answer=await invoke({ref:{app:"build",kind:"compute",name:draft.name},key:crypto.randomUUID(),version:draft.version,inputs:input});
+    setCall(answer.call ?? "");
+  };
+  if (role("build") !== "builder") return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{t("Only a builder can edit code functions.")}</WorkbenchMessage></Workbench>;
+  if (id !== "new" && !draft.id) return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{query.isError ? t("The code function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
+  const invalid = !!inputs?.invalid;
+  let published: CodeDraft | undefined;
+  try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch { /* the owner rejects invalid publications */ }
+  return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "code" }) }, { label: t("Code functions"), onClick: () => open({ view: "code" }) }]} title={draft.title || t("New code function")}
+    status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
+    actions={<>
+        <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
+        <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
+        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
+    </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
+    <ContextHelp title={t("Code function")}><p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p></ContextHelp>
+    {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
+    <StructuredEditor expectedRevision={draft.id ? draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.code:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setDirty(true); setError(""); setSDK(""); }} onTrial={next => trial(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: draft.id || createID }, next, draft.id ? draft.revision : 0)}><fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <Card className="grid min-w-0 content-start gap-3 p-4">
+        <ContentTabs label={t("Code function editor")} value={tab} onChange={(id) => setTab(id as typeof tab)} items={[
+          { id: "source", title: t("Source code"), content: <>
+          <ContextHelp title={t("Source code")}><p className="text-xs text-muted">{t("Implement Run(input Input) (Output, error). The SDK generates the command wrapper from your schema.")}</p></ContextHelp>
+          <label className="grid gap-1 text-xs">{t("Source code")}<Textarea spellCheck={false} rows={22} className="font-mono text-xs leading-6" value={draft.source} onChange={(event) => change({ source: event.target.value })} /></label>
+          </> },
+          { id: "contract", title: t("Input and output"), content: <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Input schema")}</legend><InputDraftProvider scope="input-schema"><SchemaEditor schema={draft.input} onChange={(input) => change({ input })} /></InputDraftProvider></fieldset>
+          <fieldset className="grid content-start gap-3"><legend className="mb-3 text-sm font-semibold">{t("Output schema")}</legend><InputDraftProvider scope="output-schema"><SchemaEditor schema={draft.output} onChange={(output) => change({ output })} /></InputDraftProvider></fieldset>
+          </div> },
+          { id: "sdk", title: t("Generated SDK"), content: <>
+            <Button disabled={busy || invalid} onClick={() => void perform(previewSDK)}>{t("Generate SDK")}</Button>
+            {sdk && <pre className="max-h-[36rem] overflow-auto rounded-lg bg-background p-3 text-xs" aria-label={t("Generated SDK")}>{sdk}</pre>}
+          </> },
+          { id: "test", title: t("Test published version"), content: <>
+          <p className="text-xs text-muted">{t("This calls the installed version with the current member and saves its accepted result.")}</p>
+          <DraftInputs.Provider value={{...testInputs,scope:"test"}}>
+            <JSONEditor label={t("Test input")} value={input} onChange={setInput} schema={published?.input ?? draft.input} rows={6} />
+          </DraftInputs.Provider>
+          <Button disabled={busy || testInputs.invalid || !draft.version} onClick={() => void perform(run)}>{busy ? t("Running function…") : t("Run function")}</Button>
+          <Panel title={t("Function output")} role="status" className="grid gap-2 text-sm">
+            {!call ? <p className="text-muted">{t(busy ? "Running function…" : "Run the function to see its output here.")}</p> : <>
+              <p>{t("State")}: {t(({ pending: "Pending", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled" } as Record<string, string>)[result.data?.state ?? "pending"] ?? result.data?.state ?? "Pending")}</p>
+              {result.isError ? <p role="alert" className="text-danger">{t("The function result could not be loaded.")}</p> : <>
+                {result.data?.output !== undefined && <pre aria-label={t("Function output")} className="overflow-auto rounded bg-background p-3 font-mono text-sm">{JSON.stringify(result.data.output, null, 2)}</pre>}
+                {result.data?.error && <p role="alert" className="text-danger">{result.data.error}</p>}
+              </>}
+              {JSON.stringify(input) !== JSON.stringify(executedInput) && <p className="text-muted">{t("Inputs have changed. Run again to update the output.")}</p>}
+              <Disclosure summary={t("Inputs used for this run")}><pre className="overflow-auto text-xs">{JSON.stringify(executedInput, null, 2)}</pre></Disclosure>
+              <p className="break-all text-xs text-muted">{t("Call")}: {call}</p>
+            </>}
+          </Panel>
+          </> },
+        ]} />
+      </Card>
+      <Panel className="grid content-start gap-3 p-4" aria-label={t("Function settings")}>
+        <label className="grid gap-1 text-xs">{t("Function name")}<Input disabled={!!draft.published} value={draft.name} onChange={(event) => change({ name: event.target.value })} /></label>
+        <label className="grid gap-1 text-xs">{t("Function title")}<Input value={draft.title} onChange={(event) => change({ title: event.target.value })} /></label>
+        <label className="grid gap-1 text-xs">{t("Function description")}<Textarea rows={3} value={draft.description} onChange={(event) => change({ description: event.target.value })} /></label>
+        <label className="grid gap-1 text-xs">{t("Compiler profile")}<Select value={draft.language} onChange={(event) => change({ language: event.target.value })}><option value="go">Go / WASIp1</option><option value="tinygo">TinyGo / WASIp1</option></Select></label>
+        <label className="grid gap-1 text-xs">{t("Compute ABI")}
+          <Select value={draft.abi ?? ""} onChange={(event) => change({ abi: event.target.value, limits: { ...draft.limits, dataInputBytes: undefined, stagedOutputBytes: event.target.value ? 16 * 1024 * 1024 : undefined } })}>
+            <option value="">{t("Inline JSON (v1)")}</option><option value="platform-wasip1-data/v2">{t("Call data channels (v2)")}</option>
+          </Select>
+        </label>
+        {draft.abi === "platform-wasip1-data/v2" && (["dataInputBytes", "stagedOutputBytes"] as const).map((key) => <label key={key} className="grid gap-1 text-xs">
+          {t(key === "dataInputBytes" ? "Read channel bytes (optional)" : "Output channel bytes")}
+          <Input draftKey={`limits:${key}`} type="number" step={1} min={key === "dataInputBytes" ? draft.limits.maxInputBytes + 1 : draft.limits.maxOutputBytes + 1} max={key === "dataInputBytes" ? 64 * 1024 * 1024 : 16 * 1024 * 1024} value={draft.limits[key] ?? ""} onChange={(event) => change({ limits: { ...draft.limits, [key]: event.target.value === "" ? undefined : event.target.valueAsNumber } })} />
+        </label>)}
+        <fieldset className="grid gap-2"><legend className="mb-2 text-xs">{t("Callable by")}</legend>{["builder", "user"].map((value) => <Checkbox key={value} checked={draft.roles.includes(value)} onChange={(enabled) => change({ roles: enabled ? [...new Set([...draft.roles, value])] : draft.roles.filter((old) => old !== value) })}>{value}</Checkbox>)}</fieldset>
+        {(["timeoutMillis", "memoryPages", "maxInputBytes", "maxOutputBytes"] as const).map((key) => <label key={key} className="grid gap-1 text-xs">{t(({ timeoutMillis: "Time limit (ms)", memoryPages: "Memory limit (64 KiB pages)", maxInputBytes: "Maximum input bytes", maxOutputBytes: "Maximum output bytes" })[key])}
+          <Input draftKey={`limits:${key}`} type="number" min={1} max={({ timeoutMillis: 30000, memoryPages: 4096, maxInputBytes: 65536, maxOutputBytes: 49152 })[key]} value={draft.limits[key]} onChange={(event) => change({ limits: { ...draft.limits, [key]: Number(event.target.value) } })} /></label>)}
+        <div className="grid gap-2 border-t border-border pt-3 text-xs" role="status"><span>{t("Build status")}: {t(({ draft: "Draft", compiling: "Compiling", compiled: "Compiled", failed: "Build failed", published: "Published" })[draft.state as "draft"] ?? "Draft")}{dirty ? ` · ${t("Unsaved changes")}` : ""}</span>
+          {!!draft.version && <span>{t("Published version")}: {draft.version}</span>}
+          {draft.module && <span className="break-all">{t("Module digest")}: <code>{draft.module}</code></span>}
+          {draft.toolchain && <span className="break-all">{t("Toolchain")}: <code>{draft.toolchain}</code></span>}
+          {draft.diagnostics && <pre className="whitespace-pre-wrap text-danger">{draft.diagnostics}</pre>}
+        </div>
+      </Panel>
+    </fieldset></StructuredEditor>
+  </div></Workbench>;
+}

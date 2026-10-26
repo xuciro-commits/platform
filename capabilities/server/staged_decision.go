@@ -23,58 +23,59 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // accepted-result transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
-	currentSubmission    *pb.Submission
-	businessRefusals     map[*kernel.Error]platform.BusinessRefusalFact
-	businessFacts        []platform.BusinessRefusalFact
-	simulation           bool
-	definitions          map[string]*resultformat.DecisionDefinition
-	schemaVersion        *platform.SchemaVersion
-	retirements          []migrationRetirement
-	migrationDefinitions []resultformat.ReleaseInstallation
-	authorizations       []resultformat.AuthorizationEvidence
-	iterations           []platform.TxnIteration
-	constraintWrites     map[string]constraintWrite
-	callbackOrigin       *platform.Effect
-	callbackWrites       map[string]callbackWrite
-	control              *controlDecision
-	tenant               *Tenant
-	records              *recordStore
-	logs                 map[*platform.Ledger]platform.ChangeLog
-	events               []platform.Event
-	sequences            map[string]int // private counters, copied before any decision code
-	allocated            map[string]int // counters actually consumed by this decision
-	sequenceBases        map[string]int
-	inputIssues          map[*kernel.Error][]platform.FieldIssue
-	failure              *kernel.Error
-	active               map[string]bool // reject cycles before re-entering an app/ledger lock
-	at                   time.Time
-	probing              bool
-	notices              []platform.Notification
-	noticeBase           int
-	noticeSeq            int
-	noticeBefore         string
-	noticeEffects        []platform.Effect
-	noticeChanged        bool
-	writers              map[string][]string
-	changed              map[string][]string
-	publications         map[string]*resultformat.Publication
-	intents              []platform.Effect
-	transactionSteps     int
-	observations         []resultformat.Observation
-	observed             bool
-	hops                 int
-	requests             []request
-	requestCounts        map[string]int
-	receiving            map[*platform.Ledger]bool
-	privateApps          map[string]platform.App
-	states               map[string]platform.AcceptedStateApp
-	stateBases           map[string]json.RawMessage
-	connectors           platform.Connectors
-	deliveries           []resultformat.ConnectorDelivery
-	operationAnswers     map[string]platform.OperationResult
-	operationCancels     map[string]bool
-	operationInputs      map[string][]*preparedOperationInput
-	observationInput     *resultformat.ObservationDecisionEvidence
+	confirmationCompleting *confirmationCompletion
+	currentSubmission      *pb.Submission
+	businessRefusals       map[*kernel.Error]platform.BusinessRefusalFact
+	businessFacts          []platform.BusinessRefusalFact
+	simulation             bool
+	definitions            map[string]*resultformat.DecisionDefinition
+	schemaVersion          *platform.SchemaVersion
+	retirements            []migrationRetirement
+	migrationDefinitions   []resultformat.ReleaseInstallation
+	authorizations         []resultformat.AuthorizationEvidence
+	iterations             []platform.TxnIteration
+	constraintWrites       map[string]constraintWrite
+	callbackOrigin         *platform.Effect
+	callbackWrites         map[string]callbackWrite
+	control                *controlDecision
+	tenant                 *Tenant
+	records                *recordStore
+	logs                   map[*platform.Ledger]platform.ChangeLog
+	events                 []platform.Event
+	sequences              map[string]int // private counters, copied before any decision code
+	allocated              map[string]int // counters actually consumed by this decision
+	sequenceBases          map[string]int
+	inputIssues            map[*kernel.Error][]platform.FieldIssue
+	failure                *kernel.Error
+	active                 map[string]bool // reject cycles before re-entering an app/ledger lock
+	at                     time.Time
+	probing                bool
+	notices                []platform.Notification
+	noticeBase             int
+	noticeSeq              int
+	noticeBefore           string
+	noticeEffects          []platform.Effect
+	noticeChanged          bool
+	writers                map[string][]string
+	changed                map[string][]string
+	publications           map[string]*resultformat.Publication
+	intents                []platform.Effect
+	transactionSteps       int
+	observations           []resultformat.Observation
+	observed               bool
+	hops                   int
+	requests               []request
+	requestCounts          map[string]int
+	receiving              map[*platform.Ledger]bool
+	privateApps            map[string]platform.App
+	states                 map[string]platform.AcceptedStateApp
+	stateBases             map[string]json.RawMessage
+	connectors             platform.Connectors
+	deliveries             []resultformat.ConnectorDelivery
+	operationAnswers       map[string]platform.OperationResult
+	operationCancels       map[string]bool
+	operationInputs        map[string][]*preparedOperationInput
+	observationInput       *resultformat.ObservationDecisionEvidence
 }
 
 // HoldChanges tracks the stack that owns a private ledger receive. Savepoints
@@ -363,6 +364,16 @@ func (d *stagedDecision) Emit(c platform.Caller, kind, key, entity string, data 
 	d.intents = append(d.intents, planned...)
 	d.tenant.askHeldEffects(c, kind, entity, planned, now)
 	return len(planned), nil
+}
+func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
+	view := d.enterpriseUsageTenant()
+	return view.checkEnterpriseUsage(c, d.records, id, until, deleting, now)
+}
+func (d *stagedDecision) CheckEnterpriseTenantLink(c platform.Caller, id string, revision uint32, now time.Time) *kernel.Error {
+	return d.enterpriseUsageTenant().checkTenantLink(c, id, revision, now)
+}
+func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
+	return d.routingTenant().checkTenantConnection(c, id, now)
 }
 
 func (d *stagedDecision) enterpriseUsageTenant() *Tenant {

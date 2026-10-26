@@ -1,0 +1,7 @@
+name = "KernelProofs"
+version = "0.1.0"
+defaultTargets = ["KernelProofs"]
+
+[[lean_lib]]
+name = "KernelProofs"
+moreLeanArgs = ["-DwarningAsError=true"]

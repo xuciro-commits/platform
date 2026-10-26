@@ -332,6 +332,9 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 			return nil, err
 		}
 	}
+	if err := validateExtractionOrigins(draft); err != nil {
+		return nil, err
+	}
 	if err := t.sequences.check(result.SequenceBases, result.Sequences); err != nil {
 		return nil, err
 	}

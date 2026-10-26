@@ -1,0 +1,120 @@
+import { transactionIssues, transactionIssueText } from "./transaction-edit";
+import { sourceFieldInput } from "@platform/app";
+// One draft session over a `build.object` record, shared by the object type
+// workbench and the action type workbench: both edit the same
+// record through its own action, explicitly save it and publish it; the host checks
+// everything again at publication.
+import { useActionTrial, useHost, useReadQuery } from "@platform/app";
+import { notify, t, useUnsavedChanges } from "@platform/ui";
+import { useEffect, useRef, useState } from "react";
+import { useApplicationWorkspace } from "../projects/application-scope";
+import { useDraftSession } from "../session/DraftSession";
+import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
+import { useAuthoringModel } from "./authoring-model";
+import { declarationValue } from "../editor/declaration";
+
+export function useObjectDraft(id: string, onReset?: () => void) {
+  const { decide, definitions, source } = useHost();
+  const fields = source.entity("build.object")?.fields ?? [];
+  const trial = useActionTrial();
+  const hydrate = (record: ObjectRecord): Process => ({ ...declarationValue(record, fields), states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], implements: record.implements ?? [], extends: record.extends ?? "" });
+  const { entities, drafts } = useAuthoringModel();
+  const { open } = useApplicationWorkspace();
+  const query = useReadQuery<{ record?: ObjectRecord; valueErrors?: Record<string, string> }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
+  const object = query.data?.record;
+  const conversionError = query.data?.valueErrors?.actions;
+  const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
+  const { draft: process, dirty } = session;
+  const baseline = useRef(process);
+  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [refused, setRefused] = useState<string>(); // why the host refused, kept on screen
+  const reset = useRef(onReset); reset.current = onReset;
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
+    if (object) { baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
+    setRefused(undefined); reset.current?.();
+  }, busy);
+  useEffect(() => {
+    if (!object || !loaded.current && query.isFetching || query.isPlaceholderData || dirty || busy || loaded.current === `${object.id}:${object.revision}`) return;
+    baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;
+  }, [object, query.isFetching, query.isPlaceholderData, dirty, busy, session.load]);
+
+  const parent = object ? `build.${object.name}` : "";
+  const savedObjects = new Set((drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => `build.${draft.name}`));
+  const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
+    && (savedObjects.has(entity.type) || definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type)));
+  const issuesOf = (name: string) => { const a = process.actions.find((x) => x.name === name); return a ? actionIssues(a, process, parent, targets, entities) : []; };
+  const issues = [...conversionError ? [conversionError] : [], ...(process.createTransaction ? transactionIssues(process.createTransaction).map(issue => `${t("Creation transaction")}: ${transactionIssueText(issue, t)}`) : []), ...process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`))];
+  const change = (next: Process) => {
+    if(lock.current || conversionError)return;
+    // Inspector rows have no serialized UI ids. Move their buffers with the
+    // original row when a sibling is removed or reordered; renames keep the slot.
+    const indexOf=(before:unknown[],after:unknown[],at:number)=>{const found=after.indexOf(before[at]);return found>=0?found:before.length===after.length?at:-1;};
+    const collections={field:"fields",state:"states",action:"actions",access:"access",constraint:"constraints",recordSet:"sets",protocol:"protocols"} as const;
+    const parts={parameter:"inputs"} as const;
+    const moves=Object.entries(session.inputs.values).flatMap(([key,value])=>{
+      const segments=key.split("/");let changed=false,removed=false;
+      for(let i=0;i<segments.length;i++){
+        const segment=segments[i]!;
+        if(!segment.startsWith("{")&&!segment.startsWith("["))continue;
+        let parsed:unknown;try{parsed=JSON.parse(segment);}catch{continue;}
+        if(Array.isArray(parsed)&&typeof parsed[0]==="number"&&parsed[1]?.kind in parts){
+          const oldAt=parsed[0],at=indexOf(process.actions,next.actions,oldAt);
+          if(at<0){removed=true;break;}
+          const part=parts[parsed[1].kind as keyof typeof parts];
+          const row=indexOf(process.actions[oldAt]?.[part]??[],next.actions[at]?.[part]??[],parsed[1].at);
+          if(row<0){removed=true;break;}
+          segments[i]=JSON.stringify([at,{...parsed[1],at:row}]);changed ||= segments[i]!==segment;
+        }else if(parsed&&typeof parsed==="object"&&"kind" in parsed&&"at" in parsed&&(parsed.kind as string) in collections){
+          const pick=parsed as {kind:keyof typeof collections;at:number},collection=collections[pick.kind];
+          const at=indexOf(process[collection]??[],next[collection]??[],pick.at);
+          if(at<0){removed=true;break;}
+          segments[i]=JSON.stringify({...pick,at});changed ||= segments[i]!==segment;
+        }
+      }
+      return changed||removed?[{key,next:removed?undefined:segments.join("/"),value}]:[];
+    });
+    for(const move of moves)session.inputs.set(move.key);
+    for(const move of moves)if(move.next)session.inputs.set(move.next,move.value);
+    session.edit(() => next);
+  };
+  const save = async () => {
+    setRefused(undefined);
+    if (conversionError) { setRefused(conversionError); return false; }
+    if(session.inputs.invalid){setRefused(t("Correct the input drafts before submitting."));return false;}
+    const expectedRevision = baseRevision.current;
+    const changes = objectChanges(process, baseline.current);
+    if (!Object.keys(changes).length) return true;
+    const ok = await decide("build.object.edit", { type: "build.object", id }, changes, { expectedRevision, onRefused: setRefused });
+    if (ok) {
+      const result = await query.refetch();
+      const confirmed = result.isSuccess && result.data?.record?.revision === expectedRevision + 1 ? result.data.record : undefined;
+      baseRevision.current = expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
+      baseline.current = confirmed ? hydrate(confirmed) : process;
+      session.saved(process, confirmed ? baseline.current : undefined); markSaved();
+    }
+    return ok;
+  };
+  const perform = async (action: () => Promise<unknown>) => {
+    if (lock.current) return; lock.current = true; setBusy(true); setRefused(undefined);
+    try { await action(); } catch { setRefused(t("The object request could not be completed. Your draft is still here.")); }
+    finally { lock.current = false; setBusy(false); }
+  };
+  const publish = async () => {
+    setRefused(undefined);
+    if (issues.length) { setRefused(issues.join(" ")); return; }
+    if (dirty && !(await save())) return; // what is published is what was saved
+    if (await decide("build.object.publish", { type: "build.object", id }, {}, { onRefused: setRefused })) notify.success(t("The object is installed with its states and actions."));
+  };
+  const review = async () => {
+    if (issues.length || (dirty && !await save())) return;
+    open({ view: "release-review", params: { kind: "object", id } });
+  };
+  const roles = process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none");
+  const approverRoles = ["builder", ...(process.access.length ? process.access.map((a) => a.role) : [])];
+  const fromSource = (next: Record<string, unknown>): Process => ({ states: [], actions: [], access: [], fields: [], ...next } as Process);
+  const trialObject = (next: Process) => trial("build.object.edit", { type: "build.object", id }, objectChanges(next, baseline.current), baseRevision.current);
+  const structured = { expectedRevision: baseRevision.current, fieldInput: sourceFieldInput, value: { ...process }, onChange: (next: Record<string, unknown>) => change(fromSource(next)), fields, scope: `build.object:${id}:${source.scope}`, disabled: busy || !!conversionError,
+    onTrial: (next: Record<string, unknown>) => trialObject(fromSource(next)) };
+  return { object, ready: loaded.current.startsWith(`${id}:`), structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
+}

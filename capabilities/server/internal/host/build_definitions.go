@@ -14,11 +14,14 @@ type ConstructionDrafts interface {
 	platform.App
 	CompleteBlueprintAssets([]platform.ReleaseAsset) ([]platform.ReleaseAsset, error)
 	RootDrafts([]platform.AssetRef) ([]construction.JointDraftRef, error)
+	ApplicationDrafts(string) ([]construction.JointDraftRef, error)
 	ReferencedDrafts(platform.AssetKind, string) ([]construction.JointDraftRef, error)
 	SavedDraftChanges(platform.Caller, string, string, string) ([]construction.DraftChange, error)
 	SavedObjectActions(platform.Caller) ([]platform.Action, error)
 	DraftReleaseAssetsMulti([]construction.JointDraftRef, platform.Member) (construction.JointDraftAssets, error)
 	CandidateActions(platform.ReleaseAsset) ([]platform.Action, error)
+	CheckProcess(platform.Caller, construction.Process) *kernel.Error
+	CheckPipeline(platform.Caller, construction.Pipeline) *kernel.Error
 }
 
 // ConstructionDraftReader converts a copied, already authorized object draft
@@ -27,11 +30,23 @@ type ConstructionDraftReader interface {
 	CanonicalObject(construction.Object) (construction.Object, error)
 }
 
+// IntegrationDefinitions resolves accepted typed configuration. It owns no
+// transport or host lock; consumers capture values before outside I/O.
+type IntegrationDefinitions interface {
+	ExecutionSource(construction.Source) (construction.Source, error)
+	ExecutionConnection(construction.Connection) (construction.Connection, error)
+	ExecutionDataset(construction.Dataset) (construction.Dataset, error)
+	ExecutionPipeline(construction.Pipeline) (construction.Pipeline, error)
+	ExecutionWriteback(construction.Writeback) (construction.Writeback, error)
+	ExecutionMatching(construction.Match) (construction.Match, error)
+}
+
 type ConstructionSandbox interface {
 	platform.App
 	AssetDefinitionReader
 	Reinstall() error
 	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)
+	ProcessFromAsset(platform.ReleaseAsset) (construction.Process, error)
 	InstallPropertyTypeAsset(platform.ReleaseAsset) error
 	InstallFunctionAsset(platform.ReleaseAsset) error
 	InstallAgentAsset(platform.ReleaseAsset) error
@@ -72,6 +87,12 @@ type OperationCompletion interface {
 // remain in their immutable composition and never become tenant scripts.
 type NativeFlowAssets interface {
 	NativeFlowAsset(platform.Manifest, string, int, []platform.AssetRef) (platform.ReleaseAsset, error)
+}
+
+// ObservationDefinitions retains only the source declaration. External points
+// and summaries are read transiently by the host transport.
+type ObservationDefinitions interface {
+	ExecutionObservation(construction.Observation) (platform.ObservationDefinition, error)
 }
 
 // AssetDefinitionReader projects the original controlled owner's accepted

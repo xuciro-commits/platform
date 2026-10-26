@@ -208,6 +208,9 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 		if installations, bootstrap, err = to.prepareReleaseLifecycleLocked(candidate, member, now, false); err != nil {
 			return result, err
 		}
+		if err = to.evaluationsReadyLocked(candidate.ID, candidate.Bytes); err != nil {
+			return result, err
+		}
 	}
 	saved := resultformat.Release{Version: 2, Kind: "release-result", Tenant: to.ID, App: construction.ID, Member: member.ID,
 		Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, Bootstrap: bootstrap, From: from.ID}

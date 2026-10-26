@@ -145,6 +145,9 @@ func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time
 	})
 }
 func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
+	if strings.HasPrefix(effect.Endpoint, construction.WritebackEndpoint) {
+		return b.answered(c, effect, out, now)
+	}
 	if effect.Endpoint != "operation" || !strings.HasPrefix(effect.Target, construction.CodeType+"/") {
 		return nil
 	}
@@ -388,7 +391,7 @@ func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) (
 		}
 		if ordinal <= record.Version {
 			retained, err := b.OperationReleaseAsset(asset.Ref.Name, asset.SourceVersion)
-			if err != nil || !equalAsset(retained, asset) {
+			if err != nil || !equalIntegrationAsset(retained, asset) {
 				return nil, fmt.Errorf("retained compute bytes differ")
 			}
 			if len(record.Versions) != record.Version {

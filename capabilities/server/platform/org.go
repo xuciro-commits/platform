@@ -3,6 +3,8 @@ package platform
 import (
 	"slices"
 	"time"
+
+	"platformkernel/kernel"
 )
 
 // The organisation's vocabulary: units of any kind, in any number of
@@ -126,4 +128,91 @@ type ElementInfo struct {
 	Name       string `json:"name"`
 	Kind       string `json:"kind,omitempty"`
 	Owner      string `json:"owner,omitempty"` // "tenant:<id>" when federated in
+}
+
+// Enterprise is the caller's window on the tenant's enterprise model
+// the one place apps ask who sits where, what a site holds and
+// what an organisation can do. Day is the input's day (now), so replays agree.
+type Enterprise struct{ c Caller }
+
+func (c Caller) Enterprise() Enterprise { return Enterprise{c} }
+
+// EnterpriseUsageRuntime checks references through the host's original stores.
+// It supplies no new read or write grant to the calling application.
+type EnterpriseUsageRuntime interface {
+	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *kernel.Error
+	CheckEnterpriseTenantLink(Caller, string, uint32, time.Time) *kernel.Error
+	CheckEnterpriseTenantConnection(Caller, string, time.Time) *kernel.Error
+}
+
+func (e Enterprise) CheckUsage(id, until string, deleting bool, now time.Time) *kernel.Error {
+	if e.c.Replaying {
+		return nil
+	}
+	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
+		return runtime.CheckEnterpriseUsage(e.c, id, until, deleting, now)
+	}
+	return nil
+}
+
+func (e Enterprise) CheckTenantLink(id string, revision uint32, now time.Time) *kernel.Error {
+	if e.c.Replaying {
+		return nil
+	}
+	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
+		return runtime.CheckEnterpriseTenantLink(e.c, id, revision, now)
+	}
+	return nil
+}
+
+func (e Enterprise) CheckTenantConnection(id string, now time.Time) *kernel.Error {
+	if e.c.Replaying {
+		return nil
+	}
+	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
+		return runtime.CheckEnterpriseTenantConnection(e.c, id, now)
+	}
+	return nil
+}
+
+// Units are the organisations the caller belongs to in kind ("" for all),
+// with those below them.
+func (e Enterprise) Units(kind string, now time.Time) []string { return e.c.Units(kind, now) }
+
+// Element is the element id, when it is live on now's day.
+func (e Enterprise) Element(id string, now time.Time) (ElementInfo, bool) {
+	if e.c.rt == nil {
+		return ElementInfo{}, false
+	}
+	return e.c.rt.Element(e.c, id, now)
+}
+
+// Related are the elements joined to element by stereotype on now's day.
+func (e Enterprise) Related(element, stereotype string, outgoing bool, now time.Time) []string {
+	if e.c.rt == nil {
+		return nil
+	}
+	return e.c.rt.Related(e.c, element, stereotype, outgoing, now)
+}
+
+// Capable are the capabilities an organisation or resource has: «Exhibits»
+// (UAF 1.3's pair) and the older «IsCapableToPerform» models kept.
+func (e Enterprise) Capable(element string, now time.Time) []string {
+	out := e.Related(element, "Exhibits", true, now)
+	for _, cap := range e.Related(element, "IsCapableToPerform", true, now) {
+		if !slices.Contains(out, cap) {
+			out = append(out, cap)
+		}
+	}
+	return out
+}
+
+// Located is where an element sits («ActualResourceRelationship» to a location or organisation), nearest first.
+func (e Enterprise) Located(element string, now time.Time) []string {
+	return e.Related(element, "ActualResourceRelationship", true, now)
+}
+
+// Of are the elements the organisation owns («OwnsProcess»: posts, resources, goals, projects).
+func (e Enterprise) Of(organisation string, now time.Time) []string {
+	return e.Related(organisation, "OwnsProcess", true, now)
 }

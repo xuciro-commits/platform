@@ -68,10 +68,8 @@ export class EdgeClient {
     return () => { stops.forEach(stop => stop()); stops.clear(); };
   }
   recordsPath(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}) {
-    // The host reads a complete, scoped set and windows it; every read is the
-    // same POST body, so a set expression and a plain page never diverge.
-    const {domain, ...rest} = q;
-    return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify({...rest, ...(domain === undefined ? {} : {domain})})}`;
+    if (q.set || q.traversal || q.businessTime) return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
+    return `/v1/records/${encodeURIComponent(type)}?${this.readParams(q)}`;
   }
   interfaceRecordsPath(name:string,q:Omit<Query,"domain"> & {domain?:unknown[]}={}) {
     return `/v1/interfaces/${encodeURIComponent(name)}/records?${this.readParams(q)}`;
@@ -388,15 +386,11 @@ export class EdgeClient {
     this.authorities.refresh(await this.get("/v1/declarations"));
   }
 
-  private ensureStorage(): void {
+  private save(): void {
     if (this.closed) throw Error("The workspace identity changed.");
     if (this.storageLoadError) throw this.storageLoadError;
     if (!this.storageKey) throw Error("The workspace identity is not ready.");
-  }
-
-  private save(): void {
-    this.ensureStorage();
-    try { localStorage.setItem(this.storageKey!, JSON.stringify(this.authorities.outbox)); }
+    try { localStorage.setItem(this.storageKey, JSON.stringify(this.authorities.outbox)); }
     catch { throw Error("Local request storage is unavailable. Retry after storage is restored."); }
   }
 
@@ -458,7 +452,7 @@ export class EdgeClient {
    * Each request joins the same sender; a foreground save need not wait for
    * every remaining offline request to finish. */
   async send(key?: string, timeoutMs = 5000): Promise<Entry[]> {
-    this.ensureStorage();
+    this.save();
     const generation = this.generation, answered: Entry[] = [];
     for (const entry of this.authorities.outbox.filter(e => (!key || e.submission.idempotencyKey === key)
       && (e.state === "SUBMISSION_STATE_PENDING" || e.state === "SUBMISSION_STATE_UNKNOWN"))) {
@@ -472,7 +466,7 @@ export class EdgeClient {
   }
 
   private async sendEntry(entry: Entry, timeoutMs: number): Promise<Entry | undefined> {
-    this.ensureStorage();
+    this.save();
     const generation = this.generation;
     if ((entry.state === "SUBMISSION_STATE_PENDING" || entry.state === "SUBMISSION_STATE_UNKNOWN") && navigator.onLine) {
       const { tenantId = "", idempotencyKey = "" } = entry.submission;

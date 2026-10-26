@@ -1,6 +1,6 @@
 # 本地运行与系统自举
 
-本分支提供 `platform-server`、单工作区和独立的 `platform-updater`。工作区的 **Self-hosting / 系统自举** 入口是 `#/sys`；页面中的 **Help: self-hosting / 帮助：系统自举** 可展开操作说明。源码保存、提案、批准、激活是不同步骤。
+本分支提供 `platform-server`、单工作区和独立的 `platform-updater`。工作区 Control Panel 中的 **Self-hosting / 系统自举** 入口是 `#/self-hosting`；页面中的 **Help: self-hosting / 帮助：系统自举** 可展开操作说明。源码保存、提案、批准、激活是不同步骤。
 
 架构与数据归属见 [Architecture](../../docs/Architecture.md#9-自举system-作用域)，当前待验收项见 [WorkQueue](../../docs/WorkQueue.md)。本文说明运行方式；本轮实际观察与未验证项见 WorkQueue，不把历史演练当作当前交付。
 
@@ -29,7 +29,7 @@ make host ARGS='-profile lightweight -data .build/self-hosting/data -tenants /ab
 
 ## 人工修改与 AI 修改
 
-1. 选择获权的 `system` 租户，进入 `#/sys`，展开页内帮助。
+1. 选择获权的 `system` 租户，进入 `#/self-hosting`，展开页内帮助。
 2. 在 **System files / 系统源码** 按路径检索并打开源码；可手工输入新路径。编辑后保存，保存会检查读取时的修订，删除保存墓碑。失败或回执未明时保留输入；在 **Unconfirmed requests / 尚未收到回执的请求** 核对原请求，不复制成另一条请求。
 3. 在 **Prepare a proposal / 准备变更提案** 选择已保存源码及 Build 草稿。草稿沿原记录入口创建、编辑，刷新列表后选入；纯定义提案可以没有源码文件。
 4. 写明标题与理由后提案，由人工发布者审阅冻结内容并批准。后续改动不能悄悄替换已冻结提案。

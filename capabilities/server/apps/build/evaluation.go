@@ -1,0 +1,143 @@
+package build
+
+import "platformserver/internal/construction"
+
+import (
+	"cmp"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
+)
+
+func (*Build) evaluationEntity() platform.Entity {
+	return platform.Entity{Type: construction.EvaluationType, Title: "Function evaluation", Plural: "Function evaluations", Model: construction.Evaluation{}, Display: "function",
+		Description: "A retained candidate-bound report of repeated model calls over synthetic benchmark cases.",
+		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{construction.Builder: platform.ScopeTenant}}}
+}
+
+func evaluationActions() []platform.Action {
+	return []platform.Action{
+		{Schema: construction.SchemaEvaluationStart, Target: construction.EvaluationType, New: true, Capability: "functions", Title: "Start function evaluation",
+			Description: "Run bounded synthetic cases against the candidate's pinned function and model.", Automation: true, Payload: []platform.Field{}},
+		{Schema: construction.SchemaEvaluationAnswer, Target: construction.EvaluationType, Capability: "functions", Title: "Record function evaluation answer",
+			Description: "Save one measured model answer in the candidate evaluation.", Automation: true, Payload: platform.FunctionAnswerFields()},
+	}
+}
+
+func evalEqual(a, b []byte) bool {
+	return (platform.EvaluationPolicy{}).Matches(a, b)
+}
+
+func (b *Build) submitEvaluation(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		if !c.Automation || !c.Staging() {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Function evaluations require the accepted model effect path")
+		}
+		id := s.GetTarget().GetId()
+		run, exists := platform.Get[construction.Evaluation](c, id)
+		if s.GetSchema().GetName() == construction.SchemaEvaluationStart {
+			var start construction.EvaluationStart
+			if exists || json.Unmarshal(s.GetPayload(), &start) != nil || start.Candidate == "" || start.Plan == "" ||
+				start.PlanRevision == 0 || start.PlanDigest == "" || start.Model == "" || start.ModelConfig == "" ||
+				start.Version < 1 || start.Definition.Name != start.Function || start.Definition.Check() != nil ||
+				len(start.Policy.Cases) < 1 || len(start.Policy.Cases) > 5 {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			}
+			installed, _, ok := b.FunctionDefinition(start.Function, start.Version)
+			if start.Set == nil && (!ok || !evalEqual(platform.Raw(installed), platform.Raw(start.Definition))) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The evaluated function version changed")
+			}
+			plan, ok := platform.Get[construction.TestPlan](c, start.Plan)
+			if start.Definition.CheckEvaluationPolicy(start.Policy) != nil || start.Set == nil && (!ok || plan.Revision != start.PlanRevision || plan.Function == "" || len(plan.Evaluation) != 1 || !evalEqual(platform.Raw(plan.Evaluation[0]), platform.Raw(start.Policy))) || start.Set != nil && (start.Set.Ref.App != construction.ID || start.Set.Ref.Kind != platform.AssetEvaluation || start.Set.Ref.Check() != nil || start.Set.SourceVersion == "") {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved evaluation plan changed")
+			}
+			run = construction.Evaluation{Set: start.Set, Record: platform.Record{ID: id}, Candidate: start.Candidate, Function: start.Function,
+				Version: start.Version, Definition: string(platform.Raw(start.Definition)), DefinitionDigest: start.DefinitionDigest,
+				Plan: start.Plan, PlanRevision: start.PlanRevision, PlanDigest: start.PlanDigest,
+				Model: start.Model, ModelConfig: start.ModelConfig, Policy: []construction.EvaluationPolicy{start.Policy}, State: "pending", CostComplete: true}
+			for i, test := range start.Policy.Cases {
+				if start.Definition.ValidateOutput(test.Expected) != nil || len(test.Input) > start.Definition.MaxInputBytes {
+					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				}
+				for repeat := 1; repeat <= construction.EvaluationRepeats; repeat++ {
+					run.Attempts = append(run.Attempts, construction.EvaluationAttempt{Case: test.Name, Repeat: repeat,
+						Call: fmt.Sprintf("%s:%d:%d", id, i+1, repeat)})
+				}
+			}
+			return func(r *pb.ChangeRecord) {
+				c.Put(r, run)
+				for i, attempt := range run.Attempts {
+					c.Request(r, platform.Request{Model: start.Model, Target: attempt.Call, Reply: construction.SchemaEvaluationAnswer,
+						Evaluation: true, EvaluationConfig: start.ModelConfig, EvaluationFunction: &start.Definition,
+						Payload: platform.Prompt{System: start.Definition.SystemPrompt(), User: string(start.Policy.Cases[i/construction.EvaluationRepeats].Input),
+							MaxTokens: start.Definition.MaxTokens}})
+				}
+			}, nil
+		}
+		var answer platform.Answer
+		if !exists || run.State != "pending" || json.Unmarshal(s.GetPayload(), &answer) != nil ||
+			(answer.Outcome != "accepted" && answer.Outcome != "refused") || answer.Call == "" {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+		index := -1
+		for i := range run.Attempts {
+			if run.Attempts[i].Call == answer.Call && run.Attempts[i].Outcome == "" {
+				index = i
+				break
+			}
+		}
+		if index < 0 || answer.InputTokens < 0 || answer.OutputTokens < 0 || answer.CostUSD < 0 || answer.LatencyMillis < 0 {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+		a := &run.Attempts[index]
+		var definition platform.AIFunction
+		if json.Unmarshal([]byte(run.Definition), &definition) != nil || len(run.Policy) != 1 {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+		a.Outcome, a.Reason = answer.Outcome, cmp.Or(answer.Reason, answer.Code)
+		if len(a.Reason) > 1024 {
+			a.Reason = a.Reason[:1024]
+		}
+		a.Metered, a.TokensReported, a.InputTokens, a.OutputTokens = answer.Metered, answer.TokensReported, answer.InputTokens, answer.OutputTokens
+		a.CostReported, a.CostUSD, a.LatencyMillis, a.ServedModel = answer.CostReported, answer.CostUSD, answer.LatencyMillis, answer.ServedModel
+		if answer.Outcome == "accepted" {
+			if len(answer.Text) > definition.MaxOutputBytes {
+				a.Reason = "The model answer exceeded the function byte budget"
+			} else {
+				a.Answer = answer.Text
+				if definition.ValidateOutput([]byte(answer.Text)) == nil {
+					a.Matched = run.Policy[0].Matches([]byte(answer.Text), run.Policy[0].Cases[index/construction.EvaluationRepeats].Expected)
+				} else {
+					a.Reason = "The model answer failed the function output schema"
+				}
+			}
+		}
+		complete, valid, matched := true, true, 0
+		run.CostUSD, run.PeakLatency, run.CostComplete = 0, 0, true
+		for _, attempt := range run.Attempts {
+			complete = complete && attempt.Outcome != ""
+			valid = valid && attempt.Outcome == "accepted" && attempt.Reason == ""
+			if attempt.Matched {
+				matched++
+			}
+			run.CostUSD += attempt.CostUSD
+			if attempt.LatencyMillis > run.PeakLatency {
+				run.PeakLatency = attempt.LatencyMillis
+			}
+			run.CostComplete = run.CostComplete && attempt.Metered && attempt.CostReported
+		}
+		if complete {
+			run.Quality = float64(matched) / float64(len(run.Attempts))
+			run.State = "failed"
+			if valid && run.Quality >= run.Policy[0].MinQuality && run.CostComplete && run.CostUSD <= run.Policy[0].MaxCostUSD &&
+				run.PeakLatency <= run.Policy[0].MaxLatencyMillis {
+				run.State = "passed"
+			}
+		}
+		return func(r *pb.ChangeRecord) { c.Put(r, run) }, nil
+	})
+}

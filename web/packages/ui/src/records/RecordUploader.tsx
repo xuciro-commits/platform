@@ -1,0 +1,12 @@
+import {Button} from "../primitives/button";
+import {FilePicker} from "../primitives/controls";
+import {t} from "../i18n";
+import type {AttachedFile} from "./Records";
+
+export type RecordUploaderProps={label:string;file?:File;currentFile?:Pick<AttachedFile,"id"|"name"|"size"|"contentType">;busy?:boolean;error?:string;enabled?:boolean;onFile?:(file:File)=>void;onUpload?:()=>void|Promise<void>;onClear?:()=>void};
+
+/** Actual selected file and confirmed attachment metadata; storage and retry belong to the caller. */
+export function RecordUploader({label,file,currentFile,busy=false,error,enabled=true,onFile,onUpload,onClear}:RecordUploaderProps) {
+ const writable=enabled&&!busy&&!!onFile&&!!onUpload;
+ return <section aria-label={label} className="grid min-w-0 gap-2"><h2 className="break-words text-sm font-semibold">{label}</h2><div className="grid min-w-0 gap-2 rounded-md border-2 border-dashed border-border bg-surface p-4" onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect=writable?"copy":"none";}} onDrop={event=>{event.preventDefault();if(writable){const next=event.dataTransfer.files[0];if(next)onFile!(next);}}}><p className="break-words text-xs text-muted">{t("Drop one file here or choose a file to attach to the confirmed record.")}</p><FilePicker disabled={!writable} onFile={next=>{if(writable)onFile!(next);}}>{t("Choose file")}</FilePicker></div>{file&&<div className="grid min-w-0 gap-1 text-xs"><p className="break-words">{t("Selected file: {name}",{name:file.name})}</p><p className="break-all text-muted">{file.type||t("Unknown media type")} · {t("{size} bytes",{size:file.size})}</p><div className="flex flex-wrap gap-2"><Button size="sm" variant="primary" disabled={!writable} onClick={()=>{if(writable)void onUpload!();}}>{error?t("Retry attachment"):t("Upload and attach")}</Button>{onClear&&<Button size="sm" variant="ghost" disabled={!enabled||busy} onClick={()=>{if(enabled&&!busy)onClear();}}>{t("Clear selected file")}</Button>}</div></div>}{busy&&<p role="status" className="text-xs text-muted">{t("Uploading and confirming the attachment…")}</p>}{currentFile&&<div className="grid min-w-0 gap-1 rounded-md border border-border p-2 text-xs"><p className="break-words">{t("Confirmed attachment: {name}",{name:currentFile.name})}</p><p className="break-all text-muted">{currentFile.id} · {currentFile.contentType||t("Unknown media type")} · {t("{size} bytes",{size:currentFile.size})}</p></div>}{error&&<p role="alert" className="break-words text-sm text-[var(--tone-danger)]">{error}</p>}</section>;
+}

@@ -145,6 +145,7 @@ type TxnCalls interface {
 type TxnTransport interface {
 	TakeTxnStep() *kernel.Error
 	BeginTxnCalls(Caller, time.Time) (TxnCalls, *kernel.Error)
+	QueueTxnEffect(Caller, *pb.ChangeRecord, string, TxnRef, json.RawMessage, time.Time) *kernel.Error
 	QueueTxnJournal(Caller, *pb.ChangeRecord, string, Journal, string, time.Time) *kernel.Error
 }
 

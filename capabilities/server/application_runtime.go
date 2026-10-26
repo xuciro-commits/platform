@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	resultformat "platformserver/internal/acceptance/result"
 	"slices"
@@ -45,6 +46,7 @@ type ApplicationMonitoring struct {
 	Refused            int                      `json:"refused"`
 	ConstraintFailures int                      `json:"constraintFailures"`
 	RefusalRate        float64                  `json:"refusalRate"`
+	Runs               ApplicationRunSummary    `json:"runs"`
 	MemberQuota        *platform.AIQuota        `json:"memberQuota,omitempty"`
 	AgentBudgets       []ApplicationAgentBudget `json:"agentBudgets"`
 }
@@ -179,7 +181,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 			return out, refusal
 		}
 		out.State = "isolated"
-		out.Artifact = platform.ApplicationArtifact{Ref: ref, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Roles: []platform.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []platform.ApplicationBinding{}}
+		out.Artifact = platform.ApplicationArtifact{Ref: ref, Model: []platform.AssetBinding{}, Rules: []platform.AssetBinding{}, Pages: []platform.AssetBinding{}, Flows: []platform.AssetBinding{}, AI: []platform.AssetBinding{}, Integrations: []platform.AssetBinding{}, Roles: []platform.ApplicationRole{}, Depends: []platform.AssetBinding{}, Environment: []platform.ApplicationBinding{}}
 		out.Recovery = ApplicationRecovery{State: "isolated", Predecessors: "unverified", Quarantined: true, Scope: "tenant"}
 		t.mu.Unlock()
 		return out, nil
@@ -361,7 +363,7 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 		return slices.DeleteFunc(slices.Clone(bindings), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
 	}
 	out.Artifact.Model, out.Artifact.Rules, out.Artifact.Pages = project(artifact.Model), project(artifact.Rules), project(artifact.Pages)
-	out.Artifact.AI, out.Artifact.Integrations = project(artifact.AI), project(artifact.Integrations)
+	out.Artifact.Flows, out.Artifact.AI, out.Artifact.Integrations = project(artifact.Flows), project(artifact.AI), project(artifact.Integrations)
 	out.Artifact.Depends = project(artifact.Depends)
 	out.Artifact.Environment = slices.DeleteFunc(slices.Clone(artifact.Environment), func(binding platform.ApplicationBinding) bool { return !visible[binding.Ref] })
 	out.Artifact.Roles = slices.DeleteFunc(slices.Clone(artifact.Roles), func(role platform.ApplicationRole) bool {
@@ -413,6 +415,16 @@ func (t *Tenant) ApplicationRuntimeOf(m platform.Member, ref platform.AssetRef, 
 			out.Warnings = append(out.Warnings, ApplicationWarning{Kind: "records", Resource: binding.Ref.Name, Actual: int64(data.Records), Expected: data.Expected})
 		}
 	}
+	runs, refusal := t.ApplicationRuns(m, ref, 0, 100, now)
+	if refusal != nil {
+		return out, refusal
+	}
+	out.Runs = runs.Total
+	if artifact.Profile != nil && artifact.Profile.ExpectedRuns > 0 && int64(out.Runs) > artifact.Profile.ExpectedRuns {
+		out.Warnings = append(out.Warnings, ApplicationWarning{Kind: "runs", Actual: int64(out.Runs), Expected: artifact.Profile.ExpectedRuns})
+	}
+	out.Recovery.FailedRuns, out.Recovery.PendingEffects = runs.Summary.Failed, runs.Summary.PendingEffects
+	out.Monitoring.Runs = runs.Summary
 	if len(out.Warnings) > 0 || out.Recovery.FailedRuns > 0 {
 		out.State = "degraded"
 	}
@@ -437,10 +449,11 @@ type ApplicationDiagnostic struct {
 	Type        string                     `json:"type"`
 	Record      string                     `json:"record"`
 	Decisions   []ApplicationDecisionTrace `json:"decisions"`
+	Runs        []ApplicationRun           `json:"runs"`
 }
 
 func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.AssetRef, typ, id string, now time.Time) (ApplicationDiagnostic, *kernel.Error) {
-	out := ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []ApplicationDecisionTrace{}}
+	out := ApplicationDiagnostic{Application: ref, Type: typ, Record: id, Decisions: []ApplicationDecisionTrace{}, Runs: []ApplicationRun{}}
 	runtime, refusal := t.ApplicationRuntimeOf(m, ref, now)
 	if refusal != nil {
 		return out, refusal
@@ -466,6 +479,9 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 		trace := ApplicationDecisionTrace{Change: change.Change, Schema: change.Schema, At: change.At, Versions: []ApplicationVersion{}}
 		if definition := t.committed.decisionDefinition(owner + "/" + change.Change); definition != nil && definition.Definition.Ref.Name == change.Schema {
 			projection := *definition
+			if projection.Observation != nil {
+				projection.Observation = t.visibleObservationEvidence(m, projection.Observation, now)
+			}
 			projection.Dependencies = slices.DeleteFunc(slices.Clone(definition.Dependencies), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
 			projection.Applications = slices.DeleteFunc(slices.Clone(definition.Applications), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
 			trace.Definition, trace.Content = &projection, &projection.Contract
@@ -487,6 +503,19 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 		out.Decisions = append(out.Decisions, trace)
 	}
 	t.mu.Unlock()
-
+	for skip := 0; ; skip += 100 {
+		page, refusal := t.ApplicationRuns(m, ref, skip, 100, now, ApplicationRunFilter{Subject: fmt.Sprintf("%s/%s", typ, id)})
+		if refusal != nil {
+			return out, refusal
+		}
+		for _, run := range page.Runs {
+			if run.Subject == fmt.Sprintf("%s/%s", typ, id) {
+				out.Runs = append(out.Runs, run)
+			}
+		}
+		if skip+len(page.Runs) >= page.Total {
+			break
+		}
+	}
 	return out, nil
 }

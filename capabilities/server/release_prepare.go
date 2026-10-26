@@ -32,7 +32,14 @@ func (t *Tenant) assetReleaseContextLocked(registry *platform.AssetRegistry, ass
 			return context, err
 		}
 		if requirement.Credential {
-			if _, valid := t.secret(target.Credential); !valid {
+			connection, found := platform.Get[construction.Connection](t.automation(requirement.Ref.App, false), target.TargetRecord)
+			valid := false
+			if found {
+				_, valid = t.credentialValue(target.Credential, "connection/"+connection.ID, connection.Address)
+			} else {
+				_, valid = t.secret(target.Credential)
+			}
+			if !valid {
 				return context, fmt.Errorf("target environment binding %s has no credential", requirement.Ref)
 			}
 		}
@@ -243,6 +250,21 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 }
 
 func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]resultformat.ReleaseInstallation, json.RawMessage, error) {
+	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind != platform.AssetEvaluation {
+			continue
+		}
+		descriptor, err := platform.ReadEvaluationSet(asset.Body)
+		if err != nil {
+			return nil, nil, err
+		}
+		if t.ai == nil {
+			return nil, nil, fmt.Errorf("evaluation set %s needs the target AI owner", asset.Ref)
+		}
+		if _, _, refusal := t.ai.Callable(member, descriptor.Model); refusal != nil {
+			return nil, nil, fmt.Errorf("evaluation set %s needs an enabled target model permitted to this member", asset.Ref)
+		}
+	}
 	return t.prepareReleaseInstallationLocked(candidate, member, at, upgrade, true)
 }
 

@@ -998,6 +998,9 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 			}
 			known = slices.ContainsFunc(registered, func(d platform.Definition) bool { return d.Ref == ref })
 		}
+		if ref.Kind == platform.AssetFlow {
+			known = t.procs != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.procs.HasPublishedFlow(ref.Name)
+		}
 		if !known {
 			return fmt.Errorf("application %s: no published resource %s", a.Name, ref)
 		}

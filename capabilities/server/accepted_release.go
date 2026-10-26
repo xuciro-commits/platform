@@ -235,6 +235,9 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if err != nil {
 		return "", err
 	}
+	if err := t.evaluationsReadyLocked(candidateID, raw); err != nil {
+		return "", err
+	}
 	saved := resultformat.Release{Version: 1, Kind: "release-result", Tenant: t.ID, App: construction.ID,
 		Member: m.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidateID,
 		Bytes: slices.Clone(raw), Active: true, Installations: installations, Bootstrap: bootstrap}

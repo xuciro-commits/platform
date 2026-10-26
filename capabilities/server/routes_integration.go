@@ -13,6 +13,7 @@ import (
 
 // routesIntegration serves connectors, protocols, typed capability calls, A2A, MCP and writebacks.
 func (h *Host) routesIntegration(rt *routes) {
+	h.routesObservations(rt)
 	rt.handle(Route{Pattern: "POST /v1/protocols/{protocol}/{version}/{action}/{target}", Summary: "Call a protocol action with a record target and stable Idempotency-Key", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || !json.Valid(body) || r.Header.Get("Idempotency-Key") == "" {
@@ -71,5 +72,12 @@ func (h *Host) routesIntegration(rt *routes) {
 	})
 	rt.public(Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)
 	rt.handle(Route{Pattern: "POST /mcp", Summary: "MCP: the caller's catalog as tools (JSON-RPC)", Body: json.RawMessage{}}, h.mcp)
-
+	rt.handle(Route{Pattern: "GET /v1/integration-effects", Summary: "Build writeback delivery status for builders and integrators, excluding payloads", Answer: []IntegrationEffect{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		out, err := t.integrationEffects(m, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 }

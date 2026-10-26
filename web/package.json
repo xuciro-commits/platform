@@ -8,7 +8,9 @@
   "scripts": {
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
-    "build": "pnpm -r run build"
+    "build": "pnpm -r run build",
+    "catalog:generate": "node ../scripts/catalog.mjs generate",
+    "catalog:check": "node ../scripts/catalog.mjs check"
   },
   "packageManager": "pnpm@12.5.1"
 }

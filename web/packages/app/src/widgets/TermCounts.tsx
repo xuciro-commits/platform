@@ -1,0 +1,23 @@
+import {useMemo} from "react";
+import {ContextHelp,Panel,CollectionCounts,CountTreemap,TagCounts,TermCounts,useChartData,t,type ChartSource,type ChartSpec,type EntityInfo} from "@platform/ui";
+import {pageUIManifest,type Api} from "@platform/kernel";
+import type {QueryWindow} from "./QueryWindowFrame";
+import {termCounts} from "./terms";
+type Presentation={bars?:boolean;steps?:Api.PageAnalysisStep[];treemap?:boolean;tags?:boolean;selected?:string[];enabled?:boolean;onSelect?:(value?:string)=>void};
+export function TermCountsRenderer({object,window,field,info,source,label,...presentation}:{object:string;window?:QueryWindow;field:string;info?:EntityInfo;source?:ChartSource;label:string}&Presentation){
+ const descriptor=info?.fields.find(f=>f.name===field);
+ if(!window||window.error)return <Panel role={window?.error?"alert":"status"}>{t(window?.error??"Query window is unavailable.")}</Panel>;
+ if(!descriptor||!["text","choice"].includes(descriptor.type)||field==="count"||field.includes(":"))return <Panel role="alert">{t("Term count field is unavailable or incompatible.")}</Panel>;
+ const {domain,search,set,archived,traversal}=window.query,spec:ChartSpec={data:{entity:object,domain,search,set,archived,traversal},mark:"bar",encoding:{x:{field,type:"nominal"},y:{aggregate:"count",type:"quantitative"}}};
+ return <CompleteTerms {...presentation} spec={spec} source={source} field={field} label={label}/>;
+}
+function CompleteTerms({spec,source,field,label,treemap,tags,bars,steps,selected,enabled,onSelect}:{spec:ChartSpec;source?:ChartSource;field:string;label:string}&Presentation){
+ const reader=useMemo(()=>source&&({...source,watchAggregate:source.watchAggregate?((object:string,query:Parameters<ChartSource["aggregate"]>[1],changed:()=>void)=>source.watchAggregate!(object,{...query,maxRows:pageUIManifest.runtime.terms.maxGroups},changed)):undefined,aggregate:(object:string,query:Parameters<ChartSource["aggregate"]>[1])=>source.aggregate(object,{...query,maxRows:pageUIManifest.runtime.terms.maxGroups})}),[source]);
+ const {data,error}=useChartData(spec,reader);if(error)return <Panel role="alert">{t("Term counts could not be loaded.")}</Panel>;
+ if(!data)return <p role="status">{t("Loading term counts…")}</p>;
+ const terms=termCounts(data,field,!!bars||!!steps);if(!terms)return <Panel role="alert">{t("Term counts are invalid or exceed their budget.")}</Panel>;
+ if(bars||steps)return <CollectionCounts terms={terms} steps={steps} label={label}/>;
+ if(treemap)return <CountTreemap terms={terms} label={label} selected={selected} enabled={enabled} onSelect={onSelect}/>;
+ if(tags)return <div className="grid min-w-0 gap-2"><ContextHelp title={label||t("Term counts")}>{t("Counts cover all matching authorized records; ties keep host group order.")}</ContextHelp><TagCounts terms={terms} label={label} selected={selected} enabled={enabled} onSelect={onSelect}/></div>;
+ return <div className="grid min-w-0 gap-2"><ContextHelp title={label||t("Term counts")}>{t("Counts cover all matching authorized records; ties keep host group order.")}</ContextHelp><TermCounts terms={terms} label={label}/></div>;
+}

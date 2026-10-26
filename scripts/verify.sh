@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The named verification steps the Makefile composes: each writes
 # its log to .build/verify/<step>.log and prints one line. Run steps by name:
-#   scripts/verify.sh contract format capabilities composition web-check
+#   scripts/verify.sh contract formal format capabilities composition web-check
 # `make check`, `make verify`, `make rehearse` choose the layer; this script is
 # the step bodies, not a second entry point.
 # Needs go, buf and protoc-gen-go; the web steps node and pnpm; deploy a running
@@ -41,6 +41,15 @@ contract() {
   step contract-go check_module contract/go
 }
 
+formal() {
+  local proof_failures=${#failed[@]}
+  step kernel-proofs scripts/formal.sh
+  if ((${#failed[@]} == proof_failures)); then
+    sed -n '1p' .build/verify/kernel-proofs.log
+    cat .build/formal-tools/proof-axioms.log
+  fi
+}
+
 # The TypeScript contract types match the proto contract.
 web_types() {
   step web-types bash -c 'cd web && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; }'
@@ -48,11 +57,18 @@ web_types() {
 
 web_check() {
   web_types
-  step web bash -c 'cd web && pnpm install --frozen-lockfile && pnpm -r run typecheck'
+  step web bash -c 'cd web && pnpm install --frozen-lockfile && pnpm catalog:check && pnpm -r run typecheck && pnpm -r run test && pnpm -r run build'
 }
 
 web() {
+  local web_failures=${#failed[@]}
   web_check
+  # The web/e2e routes against development hosts (needs Go and Chrome or Playwright Chromium)
+  if ((${#failed[@]} == web_failures)); then
+    step web-routes make e2e
+  else
+    echo 'web-routes skipped: build and component checks must pass first.'
+  fi
 }
 
 # Go code is gofmt-formatted (generated code aside), new files included.
@@ -61,12 +77,14 @@ format() {
 }
 
 capabilities() {
+  # Platform mechanisms are checked independently of industry application packages.
   step capability-server check_module capabilities/server -timeout=45m
 }
 
-# No app reaches around the app API.
+# No escape hatch appears without being listed; apps meet through protocols.
 composition_static() {
   step app-boundaries scripts/boundaries.sh
+  step escapes scripts/escapes.sh
 }
 
 composition() {
@@ -77,10 +95,11 @@ deploy() {
   step deploy-rehearsal deploy/local/rehearse.sh
 }
 
-(($#)) || { echo "usage: $0 step...   steps: contract format capabilities composition composition-static web-types web-check web deploy"; exit 2; }
+(($#)) || { echo "usage: $0 step...   steps: contract formal format capabilities composition composition-static web-types web-check web deploy"; exit 2; }
 for target in "$@"; do
 case "$target" in
   contract) contract ;;
+  formal) formal ;;
   web-types) web_types ;;
   web-check) web_check ;;
   web) web ;;

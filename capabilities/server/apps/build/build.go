@@ -57,20 +57,40 @@ func New(tenant string) *Build {
 	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]construction.Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]construction.Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
+	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
+	actions = append(actions, platform.EntityActions(b.processEntity())...)
 	actions = append(actions, platform.EntityActions(b.functionEntity())...)
 	actions = append(actions, platform.EntityActions(b.linkTypeEntity())...)
 	actions = append(actions, platform.Action{Schema: construction.LinkTypeType + ".migrate", Target: construction.LinkTypeType, Title: "Migrate relationships", Description: "Move historical links into the endpoint owner's accepted records", Capability: construction.LinkTypeType, Roles: []string{construction.Builder}, Payload: []platform.Field{}})
 	actions = append(actions, platform.EntityActions(b.propertyTypeEntity())...)
 	actions = append(actions, platform.EntityActions(b.queryEntity())...)
 	actions = append(actions, functionCallActions([]string{construction.Builder, construction.User})...)
+	actions = append(actions, evaluationActions()...)
 	actions = append(actions, platform.EntityActions(b.codeEntity())...)
+	actions = append(actions, platform.EntityActions(b.sourceEntity())...)
+	actions = append(actions, platform.EntityActions(b.connectionEntity())...)
+	actions = append(actions, platform.EntityActions(b.datasetEntity())...)
+	actions = append(actions, platform.EntityActions(b.datasetVersionEntity())...)
+	actions = append(actions, platform.EntityActions(b.pipelineEntity())...)
+	actions = append(actions, platform.EntityActions(b.writebackEntity())...)
+	actions = append(actions, platform.EntityActions(b.matchEntity())...)
+	actions = append(actions, writebackActions()...)
+	actions = append(actions, confirmationActions()...)
+	actions = append(actions, dispatchActions()...)
+	actions = append(actions, datasetActions()...)
+	actions = append(actions, pipelineActions()...)
 	actions = append(actions, platform.EntityActions(b.tableEntity())...)
 	actions = append(actions, platform.EntityActions(b.agentEntity())...)
 	actions = append(actions, platform.EntityActions(b.alertEntity())...)
+	actions = append(actions, sourceActions()...)
 	actions = append(actions, migrationActions()...)
 	actions = append(actions, platform.EntityActions(b.migrationPlanEntity())...)
+	actions = append(actions, platform.EntityActions(b.sampleSetEntity())...)
+	actions = append(actions, platform.EntityActions(b.observationEntity())...)
+	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
-	b.ledger = platform.NewLedger(tenant, construction.ID, platform.NewCatalog(actions...), construction.ObjectType, construction.PageType, construction.AppType, construction.FunctionType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionCallType, construction.CodeType, construction.TableType, AgentType, construction.AlertType, platform.MigrationRunType, MigrationPlanType, platform.OwnedRelationType(construction.ID))
+	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: construction.TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{construction.Builder}, Payload: []platform.Field{}})
+	b.ledger = platform.NewLedger(tenant, construction.ID, platform.NewCatalog(actions...), construction.ObjectType, construction.PageType, construction.AppType, construction.TestPlanType, construction.ProcessType, construction.FunctionType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionCallType, construction.EvaluationType, construction.CodeType, construction.SourceType, construction.ConnectionType, construction.DatasetType, construction.DatasetVersionType, construction.PipelineType, construction.WritebackType, MatchType, construction.TableType, AgentType, construction.AlertType, platform.MigrationRunType, MigrationPlanType, SampleSetType, construction.ObservationType, platform.OwnedRelationType(construction.ID), confirmationType, platform.DispatchType)
 	return b
 }
 
@@ -87,7 +107,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(construction.ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.tableEntity(), b.migrationPlanEntity()}
+	entities := []platform.Entity{platform.RelationEntity(construction.ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.migrationPlanEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	entities = append(entities, migrationEntity())
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
@@ -95,7 +115,7 @@ func (b *Build) Manifest() platform.Manifest {
 	// Every role an object names is a role of this app, which the Console
 	// grants — one that only reads grants no action. Builder and
 	// Publisher are the two roles releases need.
-	roles := []string{construction.User, construction.Builder, construction.Publisher}
+	roles := []string{construction.User, construction.Builder, construction.Publisher, construction.Integrator}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
 			if !slices.Contains(roles, role) {
@@ -105,7 +125,7 @@ func (b *Build) Manifest() platform.Manifest {
 	}
 	slices.Sort(roles)
 	provisions, reads := b.objectProtocols()
-	return platform.Manifest{ID: construction.ID, Title: "Builder", Version: construction.ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Provides: provisions, Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: construction.ID, Title: "Builder", Version: construction.ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.confirmationProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: b.queryDeclarations(), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: construction.ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -157,10 +177,10 @@ const (
 
 // directInstallSchemas are the builder's direct install entries: each installs a
 // definition for operators at once, without a saved candidate.
-var directInstallSchemas = []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver,
+var directInstallSchemas = []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver, construction.SchemaProcess,
 	SchemaPropertyType, construction.SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
 	SchemaTablePublish, SchemaAlertPublish, SchemaAgentPublish,
-}
+	construction.SourceType + ".publish", construction.PipelineType + ".publish", construction.WritebackType + ".publish", MatchType + ".publish"}
 
 // checkReleaseProfile refuses a direct install that a production tenant has
 // retired, naming the schema and the route that replaces it. Replay and
@@ -207,7 +227,7 @@ type ReleaseProfile struct {
 
 // Draft archival never retires installed definitions or retained runtime versions.
 func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kernel.Error {
-	if !c.Holds(c.App, construction.Builder) {
+	if !c.Holds(c.App, construction.Builder) && !(typ == construction.ObservationType && c.Holds(c.App, construction.Integrator)) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	published := false
@@ -220,6 +240,9 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 		published = record.Published != ""
 	case construction.AppType:
 		record, _ := platform.Get[Application](c, id)
+		published = record.Published != ""
+	case construction.ProcessType:
+		record, _ := platform.Get[construction.Process](c, id)
 		published = record.Published != ""
 	case construction.PropertyTypeType:
 		record, _ := platform.Get[PropertyType](c, id)
@@ -241,6 +264,15 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 		published = record.Published != "" || legacyAlert(record)
 	case AgentType:
 		record, _ := platform.Get[Agent](c, id)
+		published = record.Published != ""
+	case construction.ObservationType:
+		record, _ := platform.Get[construction.Observation](c, id)
+		published = record.Published != ""
+	case SampleSetType:
+		record, _ := platform.Get[SampleSetRecord](c, id)
+		published = record.Published != ""
+	case construction.TestPlanType:
+		record, _ := platform.Get[construction.TestPlan](c, id)
 		published = record.Published != ""
 	case construction.CodeType:
 		record, _ := platform.Get[Code](c, id)
@@ -280,8 +312,29 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaCodeCompiled {
 		return b.submitCodeCompiled(c, s, now)
 	}
+	if s.GetSchema().GetName() == construction.SchemaSourcePulled {
+		return b.submitSourcePulled(c, s, now)
+	}
+	if s.GetSchema().GetName() == construction.SchemaConnectionChecked {
+		return b.submitConnectionChecked(c, s, now)
+	}
+	if s.GetSchema().GetName() == construction.SchemaDatasetLoad {
+		return b.submitDatasetLoad(c, s, now)
+	}
+	if s.GetSchema().GetName() == construction.SchemaPipelineRan {
+		return b.submitPipelineRan(c, s, now)
+	}
+	if s.GetSchema().GetName() == construction.SchemaWritebackAnswered {
+		return b.submitWritebackAnswered(c, s, now)
+	}
 	if name := s.GetSchema().GetName(); name == migrationStart || name == migrationAdvance || name == migrationCancel {
 		return b.submitMigration(c, s, now)
+	}
+	if slices.Contains([]string{confirmationAnswer, confirmationReview, confirmationTick}, s.GetSchema().GetName()) {
+		return b.updateConfirmation(c, s, now)
+	}
+	if slices.Contains([]string{platform.DispatchAnswerSchema, platform.DispatchReviewSchema, platform.DispatchTickSchema}, s.GetSchema().GetName()) {
+		return b.updateDispatch(c, s, now)
 	}
 	if s.GetSchema().GetName() == SchemaProposalReview {
 		return b.submitProposalReview(c, s, now)
@@ -289,8 +342,19 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == construction.SchemaFunctionCall || name == construction.SchemaFunctionAnswer {
 		return b.submitFunctionCall(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{construction.ObjectType, construction.PageType, construction.AppType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionType, construction.CodeType, construction.TableType, construction.AlertType, AgentType}, typ) {
+	if s.GetSchema().GetName() == SchemaEvaluationSetPublish {
+		return b.submitTestPlan(c, s, now)
+	}
+	if name := s.GetSchema().GetName(); name == construction.SchemaEvaluationStart || name == construction.SchemaEvaluationAnswer {
+		return b.submitEvaluation(c, s, now)
+	}
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{construction.ObjectType, construction.PageType, construction.AppType, construction.ProcessType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionType, construction.CodeType, construction.TableType, construction.AlertType, AgentType, construction.TestPlanType, SampleSetType, construction.ObservationType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
+			return nil, err
+		}
+	}
+	if name := s.GetSchema().GetName(); (name == construction.TestPlanType+".create" || name == construction.TestPlanType+".edit") && !c.Replaying {
+		if err := b.checkTestPlan(c, s); err != nil {
 			return nil, err
 		}
 	}
@@ -333,7 +397,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agentDraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.tableEntity(), b.migrationPlanEntity()}
+	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.migrationPlanEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}

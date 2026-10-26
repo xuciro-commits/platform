@@ -158,7 +158,8 @@ func (h hostView) ReplayAgentUsage(usage platform.AIUsage) {
 
 var _ host.AgentHost = hostView{}
 
-func (h hostView) AgentTasks() host.TaskClosure { return h.Tasks() }
+func (h hostView) AgentTasks() host.TaskClosure         { return h.Tasks() }
+func (h hostView) AgentFlows() host.AgentFlowCompletion { return h.Processes() }
 
 func aiContextReader(reader *platform.Member) *platform.Member {
 	if reader == nil {

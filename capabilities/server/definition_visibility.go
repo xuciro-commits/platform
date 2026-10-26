@@ -132,6 +132,10 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					continue
 				}
 			}
+		case platform.AssetFlow:
+			if def.Flow == nil || len(m.RolesIn(def.Ref.App)) == 0 {
+				continue
+			}
 		case platform.AssetFunction:
 			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
 			if def.Function == nil || !t.authorizeCapability(caller, def.Ref.App, def.Function.Name, def.Function.Roles, true, authorizationDetails{}).Allow {
@@ -161,6 +165,38 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Operation == nil || !t.authorizeCapability(caller, def.Ref.App, def.Operation.Name, def.Operation.Roles, true, authorizationDetails{}).Allow {
 				continue
 			}
+		case platform.AssetObservation:
+			if def.Observation == nil {
+				continue
+			}
+			if def.OwnerRecord != "" && !t.observationSourceActive(def.OwnerRecord) {
+				continue
+			}
+			declaration := def.Observation
+			caller := platform.NewCaller(runtime{t}, m, def.Ref.App, false, false)
+			if !t.authorizeNative(caller, def.Ref.Name, "read", declaration.Roles, true).Allow {
+				continue
+			}
+			info, found := entities[declaration.Object.Name]
+			if !found {
+				continue
+			}
+			if _, found := info.Field(declaration.DeviceField); !found {
+				continue
+			}
+			visible := *declaration
+			if visible.Decision != nil {
+				readable := true
+				for _, name := range observationDecisionFields(*visible.Decision) {
+					if _, found := info.Field(name); !found {
+						readable = false
+					}
+				}
+				if _, found := actions[visible.Decision.Action.Name]; !found || !readable {
+					visible.Decision = nil
+				}
+			}
+			def.Observation = &visible
 		case platform.AssetInterface:
 			if def.Interface == nil {
 				continue
@@ -235,7 +271,20 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	for _, def := range out {
 		visibleResources[def.Ref] = true
 	}
-	applications := construction.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources}
+	publishedFlows := map[platform.AssetRef]bool{}
+	if m.Holds("build", "builder") && t.procs != nil {
+		for _, registered := range registeredDefinitions {
+			if registered.Application == nil {
+				continue
+			}
+			for _, ref := range registered.Application.Resources {
+				if ref.Kind == platform.AssetFlow {
+					publishedFlows[ref] = t.procs.HasPublishedFlow(ref.Name)
+				}
+			}
+		}
+	}
+	applications := construction.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range registeredDefinitions {
 		if !t.ownerActive(registered.Ref.App) {
 			continue

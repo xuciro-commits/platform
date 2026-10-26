@@ -177,6 +177,9 @@ func (t *Tenant) Texts(app string) []string {
 			}
 		}
 	}
+	for _, f := range m.Flows {
+		parts = append(parts, map[string]any{"title": f.Title})
+	}
 	for _, ag := range m.Agents {
 		parts = append(parts, map[string]any{"title": ag.Title, "description": ag.Description})
 	}

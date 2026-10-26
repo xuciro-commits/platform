@@ -6,7 +6,9 @@
 
 ## 项目
 
-面向 FDE 与客户构建者的业务应用构建平台：交付的是**构建业务系统的能力**，不是我们预先写好的应用。内核契约 → Go 宿主 → 单工作区；当前交付目标是系统自举。
+面向 FDE 与客户构建者的业务应用构建平台：交付的是**构建业务系统的能力**，不是我们预先写好的应用。内核契约 → Go 宿主 → Web 工作区 → 参考应用验证。
+
+系统自身的源码、变更、发布与激活沿原接受结果和独立 updater 完成，详见 Architecture 的自举章节。当前本地组合沿统一宿主提供 8495/8490 两入口，旧业务应用暂不开放，配置、数据与密钥保留。
 
 ## 工作原则
 
@@ -30,16 +32,14 @@
 1. **内核是契约。** `contract/` 不含领域词汇。内核语义变更先改规范与向量，再改 Go 与 Rust/TypeScript 边缘；三端跑同一套向量。`v1` 语义变更在提交信息里写清理由。
 2. **一项决策只改一个权威。** 跨应用只走版本化协议声明，用请求—应答与补偿，不做跨权威原子性。
 3. **写入只走一条路径。** 权威状态的新写入必须经接受结果；新封存结果恢复只应用已保存映像，不重跑规则、不重新授权、不发起外部调用；旧输入的兼容读取责任见 Architecture。历史字节永不重写。
-4. **单一归属，先复用。** 应用只导入 `platformserver/platform`；工作区由 `@pkg/platform` 持有，宿主访问与发件箱复用 `@platform/kernel` 的 `EdgeClient`。缺的能力在归属方扩展；边界由 `scripts/boundaries.sh` 检查。不恢复已退出的 `@platform/ui`、`@platform/app` 或另一套提交客户端。
-5. **生成文件不手改。** `contract/go/gen` 与 `web/packages/kernel/src/gen/host.ts`；宿主 API 类型变了就在 `capabilities/server` 跑 `go run ./cmd/api-types`。
+4. **单一归属，先复用。** 应用只导入 `platformserver/platform`；客户端只用 `@platform/ui` 与 `@platform/app`。缺的能力在归属方扩展；`scripts/boundaries.sh`、`scripts/escapes.sh` 的已知逃逸只减不增。UI 变更前先 `node scripts/catalog.mjs search <关键词>`。
+5. **生成文件不手改。** `contract/go/gen`、`web/packages/kernel/src/gen/host.ts`（宿主 API 类型变了就在 `capabilities/server` 跑 `go run ./cmd/api-types`）、`web/apps/catalog/src/gen`（`node scripts/catalog.mjs generate`）。
 6. **一个语义一个实现。** 规则求值、约束检查、授权判定、依赖解析各一份。替换不是增量：同批删除被替代的路径，不保留两套规则。
 7. **租户扩展只走受控路径。** 受控编译、隔离执行、版本化制品；不在宿主直接执行租户脚本。
-8. **系统修改自己也要走同一条路径。** 平台的源码、变更、发布与激活是 `system` 作用域里的受控记录，人工与 AI 复用原提交和候选 owner。源码基线与发布完整封存，构建不从可变仓库补文件；内核路径由 `internal/systemscope` 冻结。纯定义提案显式批准并热激活；含源码的提案由独立 `platform-updater` 构建与监督换版，混合定义在换版成功时共同安装。构建只跑固定命令，不跑仓库的 Makefile 或 `scripts/`。
-
-9. **业务声明不进入平台实现。** `apps/*` 保留平台能力，行业任务由构建者声明表达。有历史数据的应用退役须保留恢复与迁移责任，不能根据静态删除或测试通过推断真实租户仍可恢复。
-10. **双语文案。** 产品界面英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web 用 `t()` + 包内 `i18n.ts`。业务数据不翻译。
-11. **提交信息**单句祈使句；提交与推送按负责人授权。
-12. **安全。** 不提交密钥与凭据；应用和包只保存凭据引用，实际秘密走平台受控加密托管或部署注入，加密主密钥留在部署环境。
+8. **业务验证走声明式应用包。** 原生参考应用与专用 Solution 宿主已退役：业务任务由 `deploy/packages` 的声明式包表达，不定义平台真理，也不把行业规则写进宿主、平台应用或共享 UI。撞墙时登记为通用缺口并在归属方补齐，不在应用包里绕过。
+9. **双语文案。** 产品界面英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web 用 `t()` + 包内 `i18n.ts`。业务数据不翻译。
+10. **提交信息**单句祈使句；提交与推送按负责人授权。
+11. **安全。** 不提交密钥与凭据；应用和包只保存凭据引用，实际秘密走平台受控加密托管或部署注入，加密主密钥留在部署环境。
 
 开工前从 [规范目录](openspec/README.md#层级与模块) 选择相关模块，读完整需求和场景，再核对实现；不用每次审计全仓。内核精确条款仍以 `contract/spec` 为唯一语义来源，OpenSpec 不复制一份。
 
@@ -58,13 +58,15 @@
 |---|---|
 | 文档、规则、注释 | 链接与引用一致、`git diff --check`；涉及 OpenSpec 时加 `make check-specs`，格式校验不等于业务测试 |
 | 内核规范 / 向量 / 实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘 |
-| Go 宿主 | `make check-go`，再按归属运行 `make test-go PKG=<改动包> RUN=<测试名>` |
-| 自举 | 根宿主、`apps/system`、`internal/systemscope`、`internal/systembuild` 与 `cmd/platform-updater` 的受影响 owner 测试；真实提案、激活和恢复按 [WorkQueue](docs/WorkQueue.md) 验收 |
-| Web | `make check-web PNPM="corepack pnpm"`；实际渲染和双语帮助入口需在运行工作区观察，类型检查不代表界面验收 |
+| Lean 模型 | `scripts/verify.sh formal` |
+| Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改应用 API 或组合时加 `scripts/verify.sh composition` |
+| 应用 / 协议 | 应用通过原包内验收计划维护；平台机制修改运行对应 owner 检查与适用的通用浏览器路线，另跑 `scripts/verify.sh composition` |
+| Web | `make check-web`（生成一致性、Catalog、全部包 tsc）；只在对应包运行受影响的单元测试，`make test` 是完整测试入口 |
+| 成组交付或发布节点 | 选一条浏览器路线 `make e2e SPEC=<name>`；完整浏览器任务用 `make e2e`，发布构建与契约检查用 `make verify` |
 | 结构整理（搬文件、拆函数） | 整块完成后按受影响语言运行构建、类型与原边界检查；有实际行为影响时再选对应测试，不默认跑整个宿主测试、不为搬迁新增测试 |
 | 部署、恢复、存储 | `make rehearse`；需要真实 PostgreSQL 的用例设 `PLATFORM_TEST_DATABASE`，未设置即跳过，**跳过的不能报为通过** |
 
-测试写法：`capabilities/server/system_test.go` 的 `newSystemTenant` 起一个 system 租户，`kit.submit` / `kit.refuses` 走真实提交管线；一个用例守一条不变量（内核闸门、修订冲突、受管 AI 批准拒绝、窗口取消、重放不重建）。不写像素断言，外观与手感靠实际渲染和负责人走查。
+测试写法：浏览器 spec 用 `web/e2e/tests/kit.ts`（`builder`/`editor`/`runtime`/`shots`），一个 spec 一条路线；宿主测试用 `capabilities/server/testkit_test.go`（`composeTenant`/`builderTenant`/`seatOf`/`decide`/`refuse`/`publishObject`）。不手写登录、对象、页面、发布或 `pb.Submission`。不写像素断言、为每种设备复制的路线、或服务端已证明规则的浏览器重测。外观与手感靠截图和负责人走查。
 
 CI 只在 `v*` 标签上运行，不要依赖它发现问题。
 
@@ -80,11 +82,12 @@ CI 只在 `v*` 标签上运行，不要依赖它发现问题。
 ## 开发环境
 
 - 支持 Go 1.27.1、Node ≥ 22.18.0；Web 固定 pnpm 12.5.1。
-- `make lite` 无 Docker 运行当前单工作区（默认 `8495`，数据在 `.build/lite/platform/`）；自动构建换版须另用 `platform-updater serve -watch`，不能把直接启动宿主当作监督进程已经运行。`make local` / `make docker` 以一个宿主提供原来的两个 URL，避免共库的 `system` 权威出现双写。旧业务租户配置与数据留存，不在当前组合中开放，也不代表已完成迁移。启动、身份、密钥与保留责任见 [deploy/local/README.md](deploy/local/README.md)。
+- `make lite` 无 Docker 运行（酒店 8495、制造 8490，数据在 `.build/lite/<solution>/`）；`make local` 热更新；`make docker` 切回容器宿主。账号、地址、密钥与存储的完整说明只在 [deploy/local/README.md](deploy/local/README.md)。
 
 ## 沙箱（无外网、Go 代理被封时）
 
 1. `bash scripts/sandbox-go.sh`，执行它打印的 `export`（`PATH`、`GOTOOLCHAIN=local`、`GOWORK`、`GOPROXY=direct`）。Go 工具链从 PyPI 取，外部工具从 GitHub Releases 或 npm/PyPI 按需取，不入库。新增模块后重跑脚本。
-2. Web：`cd web && corepack pnpm install --frozen-lockfile`，再从根目录 `npm_config_workspace_concurrency=1 make check PNPM="corepack pnpm"`。没装浏览器时写明"未在浏览器观察"，不能拿 tsc 当浏览器证据。
-3. 轻量验证仍使用上表中的当前 owner 和命令；先确认测试实际存在，不能以空匹配、跳过或旧版结果报为通过。
-4. 沙箱会被重置：每个整块做完立即 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再回到第 1 步。
+2. Go 模块依赖：`bash scripts/restore-deps.sh go` 从 GitHub tag 字节级还原 vendor 并按 go.sum 逐 entry 校验（约 1.5 分钟；重跑前 `rm -rf ~/.gopath/pkg/mod/cache/download`）。已知余量：otel 家族 / genproto / proto-otlp 共 10 个模块的 tag 字节与当年代理记录不符，无法在纯 GitHub 环境校验还原——这些模块参与编译的宿主程序在沙箱内不可完整构建；纯 stdlib 包（如 `internal/sink`、`cmd/webhook-sink`）不受影响。有可达 Go 代理的环境直接 `go mod vendor` 即可。
+3. Web：`cd web && corepack pnpm install --frozen-lockfile`，再从根目录 `npm_config_workspace_concurrency=1 make check PNPM="corepack pnpm"`。没装浏览器时写明"未在浏览器观察"，不能拿 tsc 当浏览器证据。
+4. 轻量验证：`go build ./... && go vet ./...`（受第 2 条余量限制时只验证受影响包）；`go test ./apps/<包>/... ./platform/...`；根包按名跑 `go test . -run 'TestLanguages|TestAPIContract'`。
+5. 沙箱会被重置：每个整块做完立即 `git commit && git push origin <会话分支>`；重置后 `git fetch && git reset --hard origin/<分支> && git clean -fd`，再回到第 1 步。

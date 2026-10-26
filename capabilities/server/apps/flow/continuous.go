@@ -1,0 +1,396 @@
+package flow
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"maps"
+	"slices"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/platform"
+)
+
+// Continuous Flow (plan A; ordered by the owner on 2026-10-05).
+//
+// Plan A keeps the original Flow as the only owner that advances state: a
+// continuous instance waits in its own token, and each arriving batch is one
+// decision — a batch frame on the instance carries the consumed cursor, the
+// watermark, the window/aggregate state and the dead letters, and the accepted
+// result commits that frame together with the outputs it produced. A batch that
+// cannot be accepted (unknown predecessor, over budget) changes nothing: the
+// flow refuses it, so the source can back off instead of losing data silently.
+//
+// This is the batch-frame and state half of plan A's landing order. The
+// per-call result channel for results above the inline budget is the host's
+// staged-result facility (compute_channel.go); the worker ABI to use it is a
+// later step and is not claimed here.
+
+// BatchFrame is the continuous instance's own bookkeeping:
+// what has been consumed, the watermark, per-node state and what could not be
+// accepted. It is committed with the accepted result and replayed with it.
+type BatchFrame = platform.FlowBatchFrame
+
+// SourceCheckpoint is the instance's own incremental position; it is accepted
+// with its window state, rather than written onto the import source's cursor.
+type SourceCheckpoint = platform.FlowSourceCheckpoint
+
+// DeadLetter keeps one signal that could not be folded, with its cause, so it
+// can be inspected and replayed under the original authorization.
+type DeadLetter = platform.FlowDeadLetter
+
+// Batch is one accepted batch of a real source: its identity, its predecessor,
+// and the signals it carries with their event times.
+type Batch = platform.FlowBatch
+
+// Signal is one arriving measurement.
+type Signal = platform.FlowSignal
+
+// BatchOutcome is what the flow did with a batch.
+type BatchOutcome = platform.FlowBatchOutcome
+
+// ContinuousWindowInput is the token-local projection passed to the retained
+// Compute entry for one ready window. The full frame remains in its original
+// sealed artifact; only operation inputs may temporarily hold these bytes.
+type ContinuousWindowInput = platform.FlowWindowInput
+
+// ConsumeBatch folds one batch into a continuous instance as one decision.
+func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time.Time) (BatchOutcome, *kernel.Error) {
+	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	if batch.ID == "" {
+		return BatchOutcome{}, invalid
+	}
+	x, ok := platform.Get[FlowInstance](c, id)
+	if !ok {
+		return BatchOutcome{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	d := f.def(x.Flow, x.Version)
+	if d == nil || d.Continuous == nil {
+		return BatchOutcome{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA,
+			Message: "this instance's flow is not continuous"}
+	}
+	if d.Continuous.Entry != "" {
+		return BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A window Compute entry requires the host-prepared source acceptance path")
+	}
+	if d.Continuous.CheckpointEvery > 0 {
+		return BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Periodic checkpoints require the host-prepared Flow frame path")
+	}
+	if ended(x.State) {
+		return BatchOutcome{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: "the instance has ended"}
+	}
+	if x.Batch != nil && x.Batch.Sealed != nil {
+		return BatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A sealed Flow frame is prepared on the host I/O lane")
+	}
+	declared := *d.Continuous
+	if err := admitBatch(x.Batch, declared, batch); err != nil {
+		return BatchOutcome{}, err
+	}
+	if x.Batch != nil && batch.ID == x.Batch.Cursor {
+		// The same batch delivered twice: answer with the frame as it stands.
+		return BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected,
+			StateSize: stateSize(x.Batch.State)}, nil
+	}
+	var folded, rejected int
+	err := f.update(c, id, now, func(_ *session, in *FlowInstance) *kernel.Error {
+		frame := in.Batch
+		if frame == nil {
+			frame = &BatchFrame{State: map[string]json.RawMessage{}}
+			in.Batch = frame
+		}
+		var refusal *kernel.Error
+		folded, rejected, refusal = foldBatch(frame, declared, batch, now)
+		if refusal != nil {
+			return refusal
+		}
+		// The frame's state and the outputs it produced are the accepted
+		// result's data channel: both are committed with this decision.
+		in.Outputs = maps.Clone(in.Outputs)
+		if in.Outputs == nil {
+			in.Outputs = map[string]json.RawMessage{}
+		}
+		for node, state := range frame.State {
+			if len(state) <= 48<<10 {
+				in.Outputs["state:"+node] = slices.Clone(state)
+			} else {
+				// The durable frame owns these bytes. A compact, verifiable
+				// reference keeps token output limits instead of copying a large
+				// window into every ordinary output value.
+				in.Outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: in.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(state)), Size: len(state)})
+			}
+		}
+		for node, raw := range frame.OperatorOutputs {
+			in.Outputs[node] = slices.Clone(raw)
+		}
+		in.Outputs["batch"] = json.RawMessage(fmt.Sprintf(`{"cursor":%q,"consumed":%d,"rejected":%d}`, frame.Cursor, frame.Consumed, frame.Rejected))
+		encoded, err := json.Marshal(in.Outputs)
+		if err != nil || len(encoded) > 60<<10 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
+		}
+		return nil
+	})
+	if err != nil {
+		return BatchOutcome{}, err
+	}
+	x, _ = platform.Get[FlowInstance](c, id)
+	out := BatchOutcome{Consumed: folded, Rejected: rejected}
+	if x.Batch != nil {
+		out.Cursor, out.Watermark, out.StateSize = x.Batch.Cursor, x.Batch.Watermark, stateSize(x.Batch.State)
+	}
+	return out, nil
+}
+
+// BatchStateReference names original instance state, not an arbitrary file or
+// URL. A consumer must read that instance as its member and verify the digest.
+type BatchStateReference = platform.FlowBatchStateReference
+
+// admitBatch is the batch's admission rule, apart from any tenant state: a batch
+// over the declared budget, or one whose predecessor is not the frame's cursor,
+// is refused so the source can retry; the same batch twice is idempotent.
+func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *kernel.Error {
+	if declared.Intake != nil && batch.Source == nil || declared.Intake == nil && batch.Source != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source checkpoint must match the declared intake")
+	}
+	if declared.Intake != nil && batch.Source != nil && (batch.Source.Initialized && batch.Source.Offset != declared.Intake.Offset || declared.Intake.Offset == "latest" && !batch.Source.Initialized) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source checkpoint's initial offset must match the declared intake")
+	}
+	if batch.Bootstrap && (declared.Intake == nil || declared.Intake.Offset != "latest" || len(batch.Signals) != 0 || batch.Source == nil || !batch.Source.Initialized || batch.Source.Offset != "latest" || batch.Tick) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A latest-offset bootstrap must be an empty controlled-source checkpoint")
+	}
+	if batch.Tick {
+		if declared.Intake == nil || declared.Window == nil || batch.Source == nil || batch.Bootstrap || len(batch.Signals) != 0 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A slide tick needs an empty controlled-source window batch")
+		}
+		if frame == nil || frame.Source == nil || !sameSourceCheckpoint(frame.Source, batch.Source) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A slide tick must preserve the accepted source checkpoint")
+		}
+	}
+	if batch.ID == "" {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: "the batch has no identity"}
+	}
+	if declared.Batch > 0 && len(batch.Signals) > declared.Batch {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
+			Message: fmt.Sprintf("the batch carries %d signals, the flow accepts %d", len(batch.Signals), declared.Batch)}
+	}
+	if declared.Batch < 0 || declared.State < 0 || declared.FrameBytes < 0 || declared.CheckpointEvery < 0 || declared.CheckpointEvery > 1_000_000 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Continuous batch budgets and checkpoint intervals must be within their bounds")
+	}
+	digest, err := batchFingerprint(batch)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A batch needs valid JSON signal values")
+	}
+	if frame != nil && frame.Cursor == batch.ID && frame.Fingerprint != "" && frame.Fingerprint != digest {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch identity was reused with different content")
+	}
+	if frame == nil || frame.Cursor == "" || batch.ID == frame.Cursor {
+		return nil
+	}
+	if batch.Predecessor != frame.Cursor {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT,
+			Message: fmt.Sprintf("the batch follows %s, the flow consumed %s", batch.Predecessor, frame.Cursor)}
+	}
+	return nil
+}
+
+func sameSourceCheckpoint(a, b *SourceCheckpoint) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Record == b.Record && a.Config == b.Config && a.Cursor == b.Cursor &&
+		a.Offset == b.Offset && a.Initialized == b.Initialized && slices.Equal(a.Sources, b.Sources)
+}
+
+// foldBatch folds every signal of a batch into the frame's state, keeping late
+// and timeless signals as dead letters instead of dropping them silently.
+func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acceptedAt ...time.Time) (folded, rejected int, refusal *kernel.Error) {
+	if err := admitBatch(frame, declared, batch); err != nil {
+		return 0, 0, err
+	}
+	if err := checkOperators(declared); err != nil {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	if frame.Cursor == batch.ID {
+		return 0, 0, nil
+	}
+	if frame.CheckpointEvery != 0 && frame.CheckpointEvery != declared.CheckpointEvery {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained checkpoint interval differs from this Flow version")
+	}
+	// No cursor, watermark, counter or dead letter is committed before the
+	// whole successor fits its declaration. Original state bytes stay intact.
+	next := *frame
+	next.CheckpointEvery = declared.CheckpointEvery
+	next.State = maps.Clone(frame.State)
+	next.OperatorOutputs = maps.Clone(frame.OperatorOutputs)
+	next.DeadLetters = slices.Clone(frame.DeadLetters)
+	if next.State == nil {
+		next.State = map[string]json.RawMessage{}
+	}
+	if !batch.Bootstrap {
+		if declared.Window != nil {
+			if len(acceptedAt) != 1 || acceptedAt[0].IsZero() {
+				return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An event-time batch needs its accepted decision time")
+			}
+			var err *kernel.Error
+			folded, rejected, err = foldWindow(&next, declared, batch, acceptedAt[0])
+			if err != nil {
+				return 0, 0, err
+			}
+		} else {
+			var recordedAt time.Time
+			if len(acceptedAt) == 1 {
+				recordedAt = acceptedAt[0]
+			}
+			for _, signal := range batch.Signals {
+				switch {
+				case signal.At.IsZero():
+					next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, RecordedAt: recordedAt, Reason: "no event time", Value: string(signal.Value)})
+					rejected++
+				case !next.Watermark.IsZero() && signal.At.Before(next.Watermark):
+					next.DeadLetters = append(next.DeadLetters, DeadLetter{Batch: batch.ID, Key: signal.Key, At: signal.At, RecordedAt: recordedAt, Reason: "late: before the watermark", Value: string(signal.Value)})
+					rejected++
+				default:
+					if err := fold(&next, declared, signal); err != nil {
+						return 0, 0, err
+					}
+					folded++
+				}
+				if signal.At.After(next.Watermark) {
+					next.Watermark = signal.At
+				}
+			}
+		}
+	}
+	var retainedAt time.Time
+	if len(acceptedAt) == 1 {
+		retainedAt = acceptedAt[0]
+	}
+	if !batch.Bootstrap && declared.Aggregate != nil {
+		stats, alerts, err := foldDeclaredOperators(&next, declared, batch.ID, retainedAt)
+		if err != nil {
+			return 0, 0, err
+		}
+		if next.OperatorOutputs == nil {
+			next.OperatorOutputs = map[string]json.RawMessage{}
+		}
+		next.OperatorOutputs[declared.Aggregate.Node] = platform.Raw(stats)
+		if declared.Threshold != nil {
+			next.OperatorOutputs[declared.Threshold.Node] = platform.Raw(alerts)
+		}
+		if declared.Output != nil {
+			next.OperatorOutputs[declared.Output.Name] = platform.Raw(aggregateOutput(stats))
+		}
+	}
+	pruneDeadLetters(&next, declared, retainedAt)
+	for i := range next.DeadLetters {
+		if next.DeadLetters[i].Seq == 0 {
+			next.DeadLetterSequence++
+			next.DeadLetters[i].Seq = next.DeadLetterSequence
+			if declared.Window != nil {
+				next.DeadLetters[i].Node = declared.Window.Node
+			}
+		}
+	}
+	next.Cursor, next.Predecessor = batch.ID, batch.Predecessor
+	if batch.Source != nil {
+		checkpoint := *batch.Source
+		checkpoint.Sources = slices.Clone(batch.Source.Sources)
+		next.Source = &checkpoint
+	}
+	next.Fingerprint, _ = batchFingerprint(batch)
+	next.Consumed += folded
+	next.Rejected += rejected
+	next.StateBytes = stateSize(next.State)
+	if declared.CheckpointEvery > 0 && !batch.Bootstrap && !batch.Tick {
+		next.BatchesSinceCheckpoint++
+		if next.BatchesSinceCheckpoint >= declared.CheckpointEvery {
+			next.BatchesSinceCheckpoint = 0
+			next.CheckpointCursor = next.Cursor
+		}
+	}
+	raw, err := json.Marshal(next)
+	if err != nil {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame cannot be encoded")
+	}
+	if declared.FrameBytes > 0 && len(raw) > declared.FrameBytes {
+		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame exceeds its declared budget")
+	}
+	*frame = next
+	return folded, rejected, nil
+}
+
+// pruneDeadLetters applies explicit retention only as part of an accepted
+// successor frame. Cumulative rejection counters remain even when details age out.
+func pruneDeadLetters(frame *BatchFrame, declared platform.Continuous, now time.Time) {
+	if declared.DeadLetterTTLMs > 0 && !now.IsZero() {
+		cutoff := now.Add(-time.Duration(declared.DeadLetterTTLMs) * time.Millisecond)
+		kept := frame.DeadLetters[:0]
+		for _, letter := range frame.DeadLetters {
+			recorded := letter.RecordedAt
+			if recorded.IsZero() {
+				recorded = letter.At
+			}
+			if !recorded.IsZero() && recorded.Before(cutoff) {
+				frame.DeadLetterDropped++
+				continue
+			}
+			kept = append(kept, letter)
+		}
+		frame.DeadLetters = kept
+	}
+	if limit := declared.DeadLetterMaxRecords; limit > 0 && len(frame.DeadLetters) > limit {
+		dropped := len(frame.DeadLetters) - limit
+		frame.DeadLetterDropped += dropped
+		frame.DeadLetters = slices.Clone(frame.DeadLetters[dropped:])
+	}
+}
+
+// fold preserves the historical scalar count/sum/last profile. It is not the
+// default graph's event-time window, aggregate or threshold implementation.
+func fold(frame *BatchFrame, declared platform.Continuous, signal Signal) *kernel.Error {
+	state := map[string]any{}
+	if raw := frame.State["window"]; len(raw) > 0 {
+		if json.Unmarshal(raw, &state) != nil || state == nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved window state cannot be decoded")
+		}
+	}
+	count, _ := state["count"].(float64)
+	sum, _ := state["sum"].(float64)
+	last := map[string]any{}
+	if prior, ok := state["last"].(map[string]any); ok {
+		last = prior
+	}
+	var value float64
+	if json.Unmarshal(signal.Value, &value) == nil {
+		count, sum = count+1, sum+value
+	}
+	if signal.Key != "" {
+		last[signal.Key] = signal.Value
+	}
+	state["count"], state["sum"], state["last"] = count, sum, last
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The window state cannot be encoded")
+	}
+	if declared.State > 0 && len(raw) > declared.State {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The window state exceeds its declared budget")
+	}
+	frame.State["window"] = raw
+	return nil
+}
+
+func batchFingerprint(batch Batch) (string, error) {
+	raw, err := json.Marshal(batch)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), nil
+}
+
+func stateSize(state map[string]json.RawMessage) int {
+	total := 0
+	for _, raw := range state {
+		total += len(raw)
+	}
+	return total
+}

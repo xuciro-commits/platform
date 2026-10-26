@@ -40,11 +40,13 @@ func Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
 // Host serves tenants; each tenant's directory resolves its members.
 type Host struct {
-	tenants      []*Tenant
-	tenantsFrom  func() []*Tenant // deployment generations; nil for an in-memory host
-	authenticate Authenticate
-	Now          func() time.Time
-	Recover      func(context.Context, string) error // only configured with a durable journal and a tenant factory
+	Release       int
+	ReleaseDigest string
+	tenants       []*Tenant
+	tenantsFrom   func() []*Tenant // deployment generations; nil for an in-memory host
+	authenticate  Authenticate
+	Now           func() time.Time
+	Recover       func(context.Context, string) error // only configured with a durable journal and a tenant factory
 	// Web is the directory of the workspace's build, served at "/"
 	// from the API's origin; empty serves no pages.
 	Web string
@@ -70,11 +72,7 @@ type Host struct {
 	Templates    func() []TenantTemplate
 	CreateTenant func(CreateTenantRequest, string) (*Tenant, error)
 	routes       []Route // as Handler registered them: the API contract's source (api.go)
-	// Release identifies the system release this process serves; a client
-	// that sees it change reloads, because the workspace dist moved with it.
-	Release       int
-	ReleaseDigest string
-	SecondFactor  Attest // nil: the provider does not say
+	SecondFactor Attest  // nil: the provider does not say
 }
 
 // SignWith makes the host take the lightweight provider's tokens and sign the
@@ -115,16 +113,6 @@ func consoleOf(t *Tenant) IdentitySessions {
 	return d
 }
 
-// serves reports whether this host runs a tenant with that id.
-func (h *Host) serves(id string) bool {
-	for _, t := range h.currentTenants() {
-		if t.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
 // TenantHeader names the tenant a request is for, when the caller is a member
 // of several on this host; without it, the first that knows them.
 const TenantHeader = "Platform-Tenant"
@@ -136,12 +124,6 @@ const chatMaxBytes = 1 << 20
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	want := r.Header.Get(TenantHeader)
-	if want != "" && !h.serves(want) {
-		// A client that remembers a tenant this host no longer runs cannot
-		// select one: the name is dropped and the host answers as it would
-		// without the header, rather than refusing an identity it accepts.
-		want = ""
-	}
 	now := h.Now()
 	if strings.HasPrefix(credential, tokenPrefix) { // a personal token
 		for _, t := range h.currentTenants() {
@@ -253,8 +235,7 @@ func (h *Host) Handler() http.Handler {
 		if quarantined > 0 {
 			status = "degraded"
 		}
-		WriteJSON(w, http.StatusOK, map[string]any{"status": status, "tenants": len(tenants), "quarantined": quarantined,
-			"release": h.Release, "releaseDigest": h.ReleaseDigest})
+		WriteJSON(w, http.StatusOK, map[string]any{"status": status, "tenants": len(tenants), "quarantined": quarantined, "release": h.Release, "releaseDigest": h.ReleaseDigest})
 	})
 	if h.Web != "" {
 		// The workspace is one page held in memory: a path that is not a file

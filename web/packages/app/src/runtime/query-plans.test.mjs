@@ -1,0 +1,235 @@
+import {registerHooks} from "node:module";
+registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+const { compileQueryPlan, queryView }=await import("./query-plans.ts");
+const {compileQueryPlans}=await import("./query-plans.ts");
+const contract = JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))).runtime.query;
+const info={type:"sample.note",fields:[{name:"bucket",type:"text"},{name:"active",type:"boolean"},{name:"count",type:"integer"}]};
+const variables={bucket:{scope:"page",type:"string",mode:"state",initial:"A"}};
+const plan={object:{app:"sample",kind:"object",name:info.type},limit:20,conditions:[{field:"bucket",op:"=",value:{variable:"bucket"}}]};
+test("interface page plans retain the exact query version and never fabricate a concrete source",()=>{
+ const binding={ref:{app:"sample",kind:"query",name:"coded"},sourceVersion:"one"};
+ const declaration={name:"coded",object:"",interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[{name:"name",type:"text"}]},implementations:["sample.a","sample.b"],sort:["id"],limit:20};
+ const named={ref:binding.ref,version:"two",query:{...declaration,implementations:["sample.c"]},queryVersions:{one:declaration}};
+ const q={object:{app:"",kind:"",name:""},interface:"sample.coded",query:binding,limit:20,sort:["id"]};
+ const result=compileQueryPlan(q,{}, {},undefined,named,contract);
+ assert.equal(result.status,"value");assert.equal(result.object,"");assert.equal(result.interface,q.interface);assert.deepEqual(result.binding,binding);assert.deepEqual(result.query,{sort:["id"],offset:0,limit:20});
+ const searched=queryView(q,result,{search:"SAME"},undefined,named,contract,"name");
+ assert.equal(searched.status,"value");assert.equal(searched.query.search,"SAME");assert.equal(searched.query.domain,undefined);
+ for(const change of [{object:plan.object},{for:{literal:"SAME"}},{input:"objects"},{conditions:plan.conditions},{sort:["name"]},{limit:21}])assert.equal(compileQueryPlan({...q,...change},{},{},undefined,named,contract).status,"error");
+ assert.equal(compileQueryPlan(q,{},{},undefined,{...named,queryVersions:{}},contract).status,"error");
+ assert.equal(queryView(q,result,{sort:["name"]},undefined,named,contract).status,"error");
+ const search={scope:"application",type:"string",mode:"shared",source:{kind:"application",variable:"search"}};
+ assert.equal(compileQueryPlan({...q,search:{variable:"search"}},{search},{search:{status:"value",value:"SAME"}},undefined,named,contract).query.search,"SAME");
+});
+test("optional typed facets retain fixed conditions and reject malformed or failed input instead of broadening reads",()=>{
+ const variables={picked:{scope:"page",type:"string-set",mode:"state",initial:{kind:"string-set",values:[]}},minimum:{scope:"page",type:"string",mode:"state",initial:""}},q={...plan,conditions:[{field:"active",op:"=",value:{literal:true}},{field:"bucket",op:"in",value:{variable:"picked"},optional:true},{field:"count",op:">=",value:{variable:"minimum"},optional:true,asDecimal:true}]};
+ const compile=(picked,minimum)=>compileQueryPlan(q,variables,{picked,minimum},info,undefined,contract),value=v=>({status:"value",value:v});
+ assert.deepEqual(compile(value({kind:"string-set",values:[]}),value("")).query.domain,[["active","=",true]]);
+ assert.deepEqual(compile(value({kind:"string-set",values:["A","B"]}),value("1.20")).query.domain,[["active","=",true],["bucket","in",["A","B"]],["count",">=",{kind:"decimal",value:"1.2"}]]);
+ for(const status of ["empty","pending","error"])assert.equal(compile({status,code:"Denied"},value("")).status,status);
+ for(const raw of [{kind:"string-set",values:["A","A"]},{kind:"string-set",values:[1]},[]])assert.equal(compile(value(raw),value("")).status,"error");
+ assert.equal(compile(value({kind:"string-set",values:[]}),value("1e3")).status,"error");
+ assert.equal(compile(value({kind:"string-set",values:Array.from({length:65},(_,i)=>String(i))}),value("")).status,"error");
+ for(const field of ["hidden","active"])assert.equal(compileQueryPlan({...q,conditions:[{field,op:"in",optional:true,value:{variable:"picked"}}]},variables,{picked:value({kind:"string-set",values:[]})},info,undefined,contract).status,"error");
+});
+test("query compilation preserves empty/pending/error inputs and rejects hidden fields and result dependencies",()=>{
+  for(const status of ["empty","pending","error"]){const result=compileQueryPlan(plan,variables,{bucket:status==="error"?{status,code:"Denied"}:{status}},info,undefined,contract);assert.equal(result.status,status);}
+  const values={bucket:{status:"value",value:"A"}};
+  assert.deepEqual(compileQueryPlan(plan,variables,values,info,undefined,contract).query,{domain:[["bucket","=","A"]],sort:["id"],offset:0,limit:20});
+  assert.equal(compileQueryPlan(plan,variables,values,{...info,fields:[]},undefined,contract).status,"error");
+  const cycle={...variables,window:{scope:"page",type:"object-set",mode:"resource",source:{kind:"plan",query:"read"}},bucket:{scope:"page",type:"boolean",mode:"derived",expression:{op:"present",args:[{variable:"window"}]}}};
+  assert.equal(compileQueryPlan(plan,cycle,values,info,undefined,contract).status,"error");
+});
+
+test("set plans compile complete fixed predicates, ignore operand windows and propagate unavailable inputs",()=>{
+ const binding={ref:{app:"sample",kind:"query",name:"fixed"},sourceVersion:"q1"},named={ref:binding.ref,version:"q2",query:{object:info.type,domain:[["active","=",false]]},queryVersions:{q1:{object:info.type,domain:[["active","=",true]],limit:1,sort:["-bucket"]}}};
+ const plans={left:{...plan,limit:1,offset:99,query:binding},right:{...plan,conditions:[{field:"count",op:">",value:{literal:0}}],limit:1},combined:{object:plan.object,limit:50,set:{op:"subtract",inputs:["left","right"]}}};
+ const compile=(plans,values)=>Object.fromEntries(compileQueryPlans(plans,variables,()=>values,()=>info,()=>named,contract));
+ const value=compile(plans,{bucket:{status:"value",value:"A"}}).combined;
+ assert.equal(value.status,"value");assert.equal(value.query.limit,50);assert.deepEqual(value.query.sort,["id"]);
+ assert.deepEqual(value.query.set.inputs[0].domain,[["active","=",true],["bucket","=","A"]]);
+ assert.equal(value.query.set.inputs[0].limit,undefined);assert.equal(value.query.set.inputs[0].offset,undefined);assert.equal(value.query.set.inputs[0].sort,undefined);
+ for(const status of ["empty","pending","error"])assert.equal(compile(plans,{bucket:{status,code:"Denied"}}).combined.status,status);
+ assert.equal(compile({...plans,combined:{...plans.combined,set:{op:"union",inputs:["combined","right"]}}},{bucket:{status:"value",value:"A"}}).combined.status,"error");
+ assert.equal(compile({...plans,right:{...plans.right,object:{...plan.object,name:"other"}}},{bucket:{status:"value",value:"A"}}).combined.status,"error");
+ assert.equal(compile({...plans,right:{...plans.right,owner:"other"}},{bucket:{status:"value",value:"A"}}).combined.status,"error");
+ assert.notEqual(compile(plans,{bucket:{status:"value",value:"B"}}).combined.signature,value.signature);
+ const withSearch=Object.fromEntries(compileQueryPlans(plans,variables,()=>({bucket:{status:"value",value:"A"}}),()=>info,p=>p.query?named:undefined,contract,[],()=>true,id=>id==="right"?{search:"current search",offset:25}:undefined)).combined;
+ assert.equal(withSearch.query.set.inputs[1].search,"current search");assert.equal(withSearch.query.set.inputs[1].offset,undefined);assert.notEqual(withSearch.signature,value.signature);
+});
+test("original named query conditions, ordering, limit and version constrain an independent plan",()=>{
+  const binding={ref:{app:"sample",kind:"query",name:"notes"},sourceVersion:"q1"};
+  const named={ref:binding.ref,version:"q1",query:{object:info.type,domain:[["active","=",true]],sort:["-bucket"],limit:5}};
+  const bound={...plan,query:binding},values={bucket:{status:"value",value:"B"}};
+  const result=compileQueryPlan(bound,variables,values,info,named,contract);
+  assert.deepEqual(result.query,{domain:[["active","=",true],["bucket","=","B"]],sort:["-bucket"],offset:0,limit:5});
+  assert.equal(compileQueryPlan(bound,variables,values,info,{...named,version:"q2"},contract).status,"error");
+  assert.equal(compileQueryPlan({...plan,conditions:[{field:"count",op:">",value:{literal:4}}]},variables,{},info,undefined,contract).status,"value");
+});
+
+test("window enum filters fold into the original domain under fixed conditions, budgets and owners",()=>{
+ const choiceInfo={type:info.type,fields:[...info.fields,{name:"state",type:"choice",choices:["open","held","done"]}]};
+ const values={bucket:{status:"value",value:"A"}},base=compileQueryPlan(plan,variables,values,choiceInfo,undefined,contract);
+ // One effective query: the plan's fixed parent condition and the member's
+ // chosen values are issued together, and the signature follows the content.
+ const filtered=queryView(plan,base,{filters:{state:["open","held"]},offset:20},choiceInfo,undefined,contract);
+ assert.deepEqual(filtered.query.domain,[["bucket","=","A"],["state","in",["open","held"]]]);
+ assert.equal(filtered.query.offset,20);assert.notEqual(filtered.signature,base.signature);
+ // Clearing every selection leaves the query exactly as the plan owns it.
+ const cleared=queryView(plan,base,{filters:{}},choiceInfo,undefined,contract);
+ assert.deepEqual(cleared.query.domain,base.query.domain);assert.equal(cleared.signature,base.signature);
+ // Fields that are not declared choices, and values the field does not
+ // declare, are unavailable rather than widened.
+ assert.equal(queryView(plan,base,{filters:{bucket:["A"]}},choiceInfo,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{filters:{state:["open","nope"]}},choiceInfo,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{filters:{state:[1]}},choiceInfo,undefined,contract).status,"error");
+ // Each chosen field costs one condition of the same budget.
+ const manyInfo={type:info.type,fields:Array.from({length:contract.maxConditions+1},(_,i)=>({name:`f${i}`,type:"choice",choices:["x"]}))};
+ const plain=compileQueryPlan({object:plan.object,limit:5},{},{},manyInfo,undefined,contract);
+ for(const count of [contract.maxConditions-1,contract.maxConditions]){
+  const filters=Object.fromEntries(Array.from({length:count},(_,i)=>[`f${i}`,["x"]]));
+  assert.equal(queryView({object:plan.object,limit:5},plain,{filters},manyInfo,undefined,contract).status,"value");
+ }
+ const tooMany=Object.fromEntries(Array.from({length:contract.maxConditions+1},(_,i)=>[`f${i}`,["x"]]));
+ assert.equal(queryView({object:plan.object,limit:5},plain,{filters:tooMany},manyInfo,undefined,contract).status,"error");
+ // A named query that owns its domain, and interface windows, refuse filters.
+ const owned={ref:{app:"sample",kind:"query",name:"owned"},version:"q1",query:{object:info.type,domain:[["active","=",true]]}};
+ const bound={...plan,query:{ref:owned.ref,sourceVersion:"q1"}};
+ const namedBase=compileQueryPlan(bound,variables,values,choiceInfo,owned,contract);
+ assert.equal(queryView(bound,namedBase,{filters:{state:["open"]}},choiceInfo,owned,contract).status,"error");
+ const interfaceBase=compileQueryPlan({object:{app:"",kind:"",name:""},interface:"sample.coded",query:{ref:owned.ref,sourceVersion:"q1"},limit:5},{},{},undefined,{...owned,query:{...owned.query,interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[]}}},contract);
+ assert.equal(interfaceBase.status,"value");
+ assert.equal(queryView({object:{app:"",kind:"",name:""},interface:"sample.coded",query:{ref:owned.ref,sourceVersion:"q1"},limit:5},interfaceBase,{filters:{state:["open"]}},undefined,{...owned,query:{...owned.query,interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[]}}},contract).status,"error");
+});
+
+test("query views preserve domain and limit and reject locked or unauthorized overrides",()=>{
+ const values={bucket:{status:"value",value:"A"}},base=compileQueryPlan(plan,variables,values,info,undefined,contract);
+ const view=queryView(plan,base,{search:"note",offset:20,sort:["-bucket"]},info,undefined,contract);
+ assert.deepEqual(view.query,{domain:[["bucket","=","A"]],sort:["-bucket"],offset:20,limit:20,search:"note"});
+ assert.equal(queryView(plan,base,{sort:["private"]},info,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{offset:contract.maxOffset+1},info,undefined,contract).status,"error");
+ assert.equal(queryView({...plan,search:{literal:"fixed"}},base,{search:"replace"},info,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{sort:["id"]},info,{query:{sort:["-bucket"]}},contract).status,"error");
+});
+
+test("a page binds its retained query while newer and unreadable latest versions cannot replace it",()=>{
+ const ref={app:"sample",kind:"query",name:"notes"},query={object:info.type,domain:[["active","=",true]],sort:["-bucket"],limit:5};
+ const binding={ref,sourceVersion:"q1"},bound={...plan,query:binding},values={bucket:{status:"value",value:"A"}};
+ const definition={ref,version:"q2",query:{...query,domain:[["active","=",false]],sort:["bucket"],limit:1},queryVersions:{q1:query}};
+ const compiled=compileQueryPlan(bound,variables,values,info,definition,contract);
+ assert.equal(compiled.status,"value");assert.equal(compiled.query.limit,5);assert.deepEqual(compiled.query.domain,[["active","=",true],["bucket","=","A"]]);assert.deepEqual(compiled.query.sort,["-bucket"]);
+ assert.equal(compileQueryPlan(bound,variables,values,info,{...definition,query:undefined},contract).status,"value");
+ assert.equal(compileQueryPlan(bound,variables,values,info,{...definition,queryVersions:{}},contract).status,"error");
+ assert.equal(queryView(bound,compiled,{sort:["id"]},info,definition,contract).status,"error");
+});
+
+test("overlay query parameters accept their own locals and reject foreign roots, page leaks and selected plan results",()=>{
+ const locals={local:{scope:"overlay",owner:"picker",type:"string",mode:"state",initial:"A"}},values={local:{status:"value",value:"A"}};
+ const scoped={object:plan.object,owner:"picker",limit:20,search:{variable:"local"}};
+ assert.equal(compileQueryPlan(scoped,locals,values,info,undefined,contract).status,"value");
+ for(const owner of [undefined,"other"])assert.equal(compileQueryPlan({...scoped,owner},locals,values,info,undefined,contract).status,"error");
+ const selected={local:{scope:"overlay",owner:"picker",type:"record",mode:"resource",source:{kind:"record",section:"table"}}};
+ assert.equal(compileQueryPlan(scoped,selected,values,info,undefined,contract,[{id:"table",collectionVariable:"window"}]).status,"error");
+});
+
+function avatarPlans(owner){
+ const asset={app:"sample",kind:"object",name:"sample.asset"},person={app:"sample",kind:"object",name:"sample.person"},scope=owner?{scope:"overlay",owner}:{scope:"page"};
+ const all={ref:{app:"sample",kind:"query",name:"people"},sourceVersion:"q1"},related={ref:{app:"sample",kind:"query",name:"assetPeople"},sourceVersion:"q1"};
+ const plans={assets:{object:asset,limit:2,sort:["id"],conditions:[{field:"active",op:"=",value:{literal:true}}],...(owner?{owner}:{})},all:{object:person,query:all,limit:6,sort:["id"],...(owner?{owner}:{})},related:{object:person,query:related,for:{variable:"active"},limit:6,sort:["id"],...(owner?{owner}:{})}};
+ const variables={assetWindow:{...scope,type:"object-set",mode:"resource",source:{kind:"plan",query:"assets"}},active:{...scope,type:"record",mode:"resource",source:{kind:"record",section:"assetTable"}},all:{...scope,type:"object-set",mode:"resource",source:{kind:"plan",query:"all"}},related:{...scope,type:"object-set",mode:"resource",source:{kind:"plan",query:"related"}}};
+ const sections=[{id:"assetTable",widget:"table",object:asset,collectionVariable:"assetWindow"},{id:"avatars",widget:"avatar-stack",object:person,collectionVariable:"all",avatar:{labelField:"name",contextVariable:"active",contextCollectionVariable:"related"}}];
+ const values={active:{status:"value",value:{kind:"record",reference:{object:asset.name,id:"ASSET-A"}}}};
+ const entity=type=>type===asset.name?{type,fields:[{name:"active",type:"boolean"}]}:type===person.name?{type,fields:[{name:"asset",type:"reference",ref:asset.name},{name:"shift",type:"text"},{name:"name",type:"text"}]}:undefined;
+ const named=plan=>plan.query?{ref:plan.query.ref,version:"q1",query:{object:person.name,...(plan.query.ref.name==="assetPeople"?{by:"asset",domain:[["shift","=","night"]]}:{})}}:undefined;
+ return {plans,variables,sections,values,entity,named};
+}
+const compileAvatar=f=>Object.fromEntries(compileQueryPlans(f.plans,f.variables,()=>f.values,f.entity,f.named,contract,f.sections));
+test("observation statistics consume the declared original asset port and reject history feedback or an invented output",()=>{
+ for(const owner of [undefined,"panel"]){const f=avatarPlans(owner),producer=f.sections[0],consumer=f.sections[1];producer.widget="observation";producer.observation={kind:"table",assetOutput:"active",assetObject:producer.object};f.variables.active.source.port="asset";consumer.widget="observation";delete consumer.avatar;consumer.observation={kind:"statistics"};consumer.recordVariable="active";consumer.observationContextVariable="related";
+  if(owner){f.variables.active.scope="page";delete f.variables.active.owner;delete f.plans.assets.owner;f.variables.assetWindow.scope="page";delete f.variables.assetWindow.owner;}
+  assert.equal(compileAvatar(f).related.status,"value");assert.deepEqual(compileAvatar(f).related.query.domain,[["shift","=","night"],["asset","=","ASSET-A"]]);
+  const port=producer.observation.assetOutput;producer.observation.assetOutput="invented";assert.equal(compileAvatar(f).related.status,"error");producer.observation.assetOutput=port;
+  producer.observationContextVariable="related";assert.equal(compileAvatar(f).related.status,"error");delete producer.observationContextVariable;
+  consumer.observationContextVariable="all";assert.equal(compileAvatar(f).related.status,"error");
+ }
+});
+test("an avatar consumes the confirmed original record from an independent page or overlay plan and preserves the typed named domain",()=>{
+ for(const owner of [undefined,"panel"]){const f=avatarPlans(owner),compiled=compileAvatar(f);assert.equal(compiled.assets.status,"value");assert.deepEqual(compiled.assets.query.domain,[["active","=",true]]);assert.equal(compiled.related.status,"value");assert.deepEqual(compiled.related.query.domain,[["shift","=","night"],["asset","=","ASSET-A"]]);assert.deepEqual(compiled.related.query.sort,["id"]);assert.equal(compiled.related.query.limit,6);
+  for(const status of ["empty","pending","error"])assert.equal(compileAvatar({...f,values:{active:{status,code:"Denied"}}}).related.status,status);
+  assert.equal(compileAvatar({...f,values:{active:{status:"value",value:{kind:"record",reference:{object:"sample.other",id:"ASSET-A"}}}}}).related.status,"error");
+ }
+});
+test("avatar planned parent exceptions reject actual direct, transitive and set feedback and retain unrelated input scope rules",()=>{
+ for(const kind of ["direct","transitive","set","condition","property"]){const f=avatarPlans();
+  if(kind==="direct")f.sections[0].collectionVariable="related";
+  if(kind==="transitive"){f.variables.fromContext={scope:"page",type:"record",mode:"resource",source:{kind:"record",section:"contextTable"}};f.sections.push({id:"contextTable",widget:"table",collectionVariable:"related"});f.plans.assets.for={variable:"fromContext"};}
+  if(kind==="set")f.plans.assets.set={op:"union",inputs:["related","all"]};
+  if(kind==="condition"){f.variables.fromContext={scope:"page",type:"boolean",mode:"derived",expression:{op:"present",args:[{variable:"related"}]}};f.plans.assets.conditions=[{field:"active",op:"=",value:{variable:"fromContext"}}];}
+  if(kind==="property"){f.variables.fromContext={scope:"page",type:"string",mode:"property",source:{kind:"property",variable:"related",field:"name"}};f.sections[0].filterVariable="fromContext";}
+  const result=compileAvatar(f).related;assert.equal(result.status,"error",kind);assert.equal(result.code,"Query parameter escapes its input scope.",kind);
+ }
+ for(const change of [f=>f.sections.pop(),f=>f.sections[0].widget="detail",f=>f.variables.active.mode="state",f=>f.variables.active.scope="application",f=>f.sections[1].avatar.contextVariable="copy",f=>{f.variables.related.source.query="all";}]){const f=avatarPlans();change(f);assert.equal(compileAvatar(f).related.status,"error");}
+ for(const change of [f=>f.variables.active.owner="foreign",f=>{f.variables.active.scope="page";delete f.variables.active.owner;},f=>delete f.plans.related.owner]){const f=avatarPlans("panel");change(f);assert.equal(compileAvatar(f).related.status,"error");}
+ const original=avatarPlans(),related=original.plans.related;
+ assert.equal(compileQueryPlan(related,original.variables,original.values,original.entity(related.object.name),original.named(related),contract,original.sections).status,"error");
+});
+
+test("decimal parameters retain exact tagged conditions and errors never fall back to an old threshold",()=>{
+ const variables={threshold:{scope:"page",type:"decimal",mode:"state",initial:{kind:"decimal",value:"0"}}},plan={object:{app:"sample",kind:"object",name:"sample.note"},limit:10,conditions:[{field:"count",op:">",value:{variable:"threshold"}}]},value={kind:"decimal",value:"1.9999999999999999"};
+ const result=compileQueryPlan(plan,variables,{threshold:{status:"value",value}},info,undefined,contract);assert.equal(result.status,"value");assert.deepEqual(result.query.domain,[["count",">",value]]);
+ assert.equal(compileQueryPlan(plan,variables,{threshold:{status:"error",code:"Invalid numeric value."}},info,undefined,contract).status,"error");
+});
+
+
+test("item queries never broaden an unavailable parent into an object read and set leaves keep the same parent scope",()=>{
+ const object={app:"sample",kind:"object",name:"sample.child"},binding={ref:{app:"sample",kind:"query",name:"children"},sourceVersion:"q1"};
+ const info={type:object.name,fields:[{name:"parent",type:"reference",ref:"sample.parent"}]},variables={parent:{scope:"loop-item",owner:"parents",type:"record",mode:"resource",source:{kind:"item",node:"parents"}}};
+ const named={ref:binding.ref,version:"q1",query:{object:object.name,by:"parent",limit:3}},plan={object,itemOwner:"parents",query:binding,for:{variable:"parent"},limit:3};
+ const values={parent:{status:"value",value:{kind:"record",reference:{object:"sample.parent",id:"A"}}}};
+ assert.deepEqual(compileQueryPlan(plan,variables,values,info,named,contract).query.domain,[["parent","=","A"]]);
+ for(const status of ["empty","pending","error"])assert.equal(compileQueryPlan(plan,variables,{parent:{status,code:"Denied"}},info,named,contract).status,status);
+ assert.equal(compileQueryPlan({...plan,query:undefined,for:undefined},variables,values,info,undefined,contract).status,"error");
+ assert.equal(compileQueryPlan(plan,variables,{parent:{status:"value",value:{kind:"record",reference:{object:"sample.other",id:"A"}}}},info,named,contract).status,"error");
+ const plans={left:plan,right:plan,combined:{object,itemOwner:"parents",limit:3,set:{op:"union",inputs:["left","right"]}}};
+ const compile=plans=>Object.fromEntries(compileQueryPlans(plans,variables,()=>values,()=>info,()=>named,contract)).combined;
+ assert.equal(compile(plans).status,"value");assert.equal(compile({...plans,right:{...plan,query:undefined,for:undefined}}).status,"error");assert.equal(compile({...plans,right:{...plan,itemOwner:"other"}}).status,"error");
+});
+
+test("relation plans keep retained versions and typed starts instead of broadening empty or refused input",()=>{
+ const parent={app:"sample",kind:"object",name:"sample.parent"},child={app:"sample",kind:"object",name:"sample.child"},binding={ref:{app:"sample",kind:"link-type",name:"children"},sourceVersion:"l1"},link={name:"children",parent,child,via:"parent"},definition={ref:binding.ref,version:"l2",linkType:{...link,title:"new"},linkVersions:{l1:link}};
+ const variables={start:{scope:"page",type:"record",mode:"resource",source:{kind:"record",section:"parents"}}},values={start:{status:"value",value:{kind:"record",reference:{object:parent.name,id:"A"}}}},plan={object:child,query:binding,direction:"forward",for:{variable:"start"},limit:1},info={type:child.name,fields:[{name:"parent",type:"reference",ref:parent.name}]};
+ const result=compileQueryPlan(plan,variables,values,info,definition,contract);assert.equal(result.status,"value");assert.deepEqual(result.query.traversal,{binding,direction:"forward",id:"A"});assert.deepEqual(result.query.domain,[]);
+ for(const status of ["empty","pending","error"])assert.equal(compileQueryPlan(plan,variables,{start:{status,code:"Denied"}},info,definition,contract).status,status);
+ assert.equal(compileQueryPlan(plan,variables,values,info,{...definition,linkVersions:{}},contract).status,"error");assert.equal(compileQueryPlan({...plan,object:parent},variables,values,{type:parent.name,fields:[]},definition,contract).status,"error");
+});
+
+test("civil date query text rejects normalization and clears invalid input instead of broadening conditions",()=>{
+ const vars={day:{scope:"page",type:"string",mode:"state",initial:""}},info={type:"sample.note",fields:[{name:"due",type:"date"}]},q={object:{app:"sample",kind:"object",name:"sample.note"},limit:20,conditions:[{field:"due",op:">=",value:{variable:"day"},optional:true,asDate:true}]},compile=day=>compileQueryPlan(q,vars,{day:{status:"value",value:day}},info,undefined,contract);assert.deepEqual(compile("").query.domain,[]);assert.deepEqual(compile("2028-02-29").query.domain,[["due",">=","2028-02-29"]]);for(const date of ["2026-02-30","0000-01-01","2028-02-29T00:00:00Z"]){assert.equal(compile(date).status,"error");assert.equal(compile(date).code,"Invalid date value.");}
+});
+
+test("record picker search adds authorized title or ID predicates while retaining fixed filters and declared search",()=>{
+ const info={type:"sample.note",fields:[{name:"title",type:"text"}]},q={object:{app:"sample",kind:"object",name:"sample.note"},limit:20,sort:["id"],search:{variable:"fixed"}},base={status:"value",object:"sample.note",query:{limit:20,sort:["id"],search:"fixed search",domain:[["bucket","=","A"]]},signature:"base"};const result=queryView(q,base,{search:"Needle"},info,undefined,contract,"title");assert.equal(result.status,"value");assert.equal(result.query.search,"fixed search");assert.deepEqual(result.query.domain,[["bucket","=","A"],"|",["title","like","Needle"],["id","like","Needle"]]);assert.deepEqual(queryView(q,base,{search:""},info,undefined,contract,"title").query.domain,base.query.domain);assert.equal(queryView(q,base,{search:"x"},info,undefined,contract,"hidden").status,"error");
+});
+
+test("datetime conditions preserve original instant text and refuse invalid or ambiguous drafts before reads",()=>{
+ const vars={time:{scope:"page",type:"string",mode:"state",initial:""}},info={type:"sample.note",fields:[{name:"raised",type:"datetime"}]},q={object:{app:"sample",kind:"object",name:"sample.note"},limit:20,conditions:[{field:"raised",op:">=",value:{variable:"time"},optional:true,asDateTime:true}]},compile=value=>compileQueryPlan(q,vars,{time:{status:"value",value}},info,undefined,contract);assert.deepEqual(compile("").query.domain,[]);const raw="2028-02-29T08:30:45.123456789+08:00";assert.deepEqual(compile(raw).query.domain,[["raised",">=",raw]]);for(const value of ["2026-02-30T08:00:00Z","2028-02-29T08:00:00","2028-02-29","2028-02-29T08:00:00-00:00"]){assert.equal(compile(value).status,"error");assert.equal(compile(value).code,"Invalid datetime value.");}for(const flag of ["asDate","asDecimal"]){const mixed={...q,conditions:[{...q.conditions[0],[flag]:true}]};assert.equal(compileQueryPlan(mixed,vars,{time:{status:"value",value:raw}},info,undefined,contract).status,"error");}
+});
+
+test("scene latest samples consume the actual map producer and refuse feedback through its plan",()=>{for(const owner of [undefined,"panel"]){const f=avatarPlans(owner),producer=f.sections[0],scene=f.sections[1];producer.widget="record-map";scene.widget="scene-3d";delete scene.avatar;delete scene.collectionVariable;scene.recordVariable="active";scene.sceneSampleCollectionVariable="related";const results=compileAvatar(f);assert.equal(results.related.status,"value");assert.deepEqual(results.related.query.domain,[["shift","=","night"],["asset","=","ASSET-A"]]);producer.collectionVariable="related";assert.equal(compileAvatar(f).related.status,"error");}});
+
+test("collection builders compose complete predicates, retained versions and independent windows; feedback and invalid current fields fail closed",()=>{
+ const object=plan.object,sections=[{id:"builder",widget:"collection-builder",collectionVariable:"base",collectionOutputVariable:"output",collectionBuilder:{fields:["count","bucket"]}}],vars={base:{scope:"page",mode:"resource",type:"object-set",source:{kind:"plan",query:"base"}},output:{scope:"page",mode:"resource",type:"object-set",source:{kind:"query",section:"builder"}}},plans={base:{object,limit:2,offset:20,conditions:[{field:"active",op:"=",value:{literal:true}}]},consumer:{object,input:"output",limit:3,offset:6}};
+ const compile=(clauses=[],p=plans,i=info)=>Object.fromEntries(compileQueryPlans(p,vars,()=>({}),()=>i,()=>undefined,contract,sections,()=>true,undefined,()=>clauses));
+ const clause={field:"count",op:">=",value:{literal:{kind:"decimal",value:"5"}}},result=compile([clause]).consumer;
+ assert.equal(result.status,"value");assert.deepEqual(result.query.domain,[["active","=",true],["count",">=",{kind:"decimal",value:"5"}]]);assert.equal(result.query.offset,6);assert.equal(result.query.limit,3);assert.equal(result.collection.kind,"object-set-input");assert.equal("records" in result.collection,false);assert.equal("offset" in result.collection,false);
+ assert.equal(compile([{...clause,field:"hidden"}]).consumer.status,"error");assert.equal(compile([{...clause,field:"active"}]).consumer.status,"error");assert.equal(compile([clause],{...plans,base:{...plans.base,input:"output"}}).consumer.status,"error");assert.equal(compile([clause],plans,{...info,fields:info.fields.filter(f=>f.name!=="count")}).consumer.status,"error");
+ const binding={ref:{app:"sample",kind:"query",name:"original"},sourceVersion:"1.query-1"},named={ref:binding.ref,version:binding.sourceVersion,query:{object:object.name,sort:["-count","id"]}},r=Object.fromEntries(compileQueryPlans({...plans,base:{...plans.base,offset:0,query:binding}},vars,()=>({}),()=>info,()=>named,contract,sections,()=>true,undefined,()=>[clause]));assert.equal(r.consumer.status,"value");assert.deepEqual(r.consumer.collection.bindings,[binding]);assert.deepEqual(r.consumer.query.sort,["-count","id"]);assert.equal(r.consumer.sortLocked,true);
+});
+
+test("collection output follows its original overlay owner and inactive roots never compile a broad read",()=>{
+ const object=plan.object,sections=[{id:"builder",widget:"collection-builder",collectionVariable:"base",collectionOutputVariable:"output",collectionBuilder:{fields:["bucket"]}}],vars={base:{scope:"overlay",owner:"modal",mode:"resource",type:"object-set",source:{kind:"plan",query:"base"}},output:{scope:"overlay",owner:"modal",mode:"resource",type:"object-set",source:{kind:"query",section:"builder"}}},plans={base:{object,owner:"modal",limit:2},consumer:{object,owner:"modal",input:"output",limit:3}},compile=(v=vars,p=plans,active=()=>true)=>Object.fromEntries(compileQueryPlans(p,v,()=>({}),()=>info,()=>undefined,contract,sections,active));
+ assert.equal(compile().consumer.status,"value");assert.equal(compile(vars,plans,()=>false).consumer.status,"empty");assert.equal(compile({...vars,output:{...vars.output,owner:"other"}}).consumer.status,"error");assert.equal(compile(vars,{...plans,consumer:{...plans.consumer,owner:undefined}}).consumer.status,"error");
+});

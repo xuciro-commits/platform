@@ -130,6 +130,13 @@ func (s *recordStore) check(c platform.Caller, entity any, now time.Time) *kerne
 	}
 	v := records.Copy(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
+	previous := reflect.Value{}
+	if old := et.rows.Get(records.Header(v).ID); old != nil {
+		previous = old.Value
+	}
+	if err := records.CheckEnterpriseReferences(c.Enterprise(), c.Replaying, et.info.Fields, v, previous, now); err != nil {
+		return err
+	}
 	issues, refusal := records.CheckFields(et.info, entity, v, c.Replaying, s)
 	if len(issues) > 0 {
 		return c.RefuseFields(issues)

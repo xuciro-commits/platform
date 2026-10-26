@@ -8,13 +8,16 @@ import (
 )
 
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver, SchemaPropertyType, construction.SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish}
+	return []string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver, construction.SchemaProcess, SchemaPropertyType, construction.SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
 // publicationImage reads and verifies the already committed record image
 // without rerunning builder action rules or publishing a second decision.
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
 	switch schema {
+	case SchemaEvaluationSetPublish:
+		_, _, err := b.testPlanImage(image)
+		return b.testPlanEntity(), nil, nil, nil, err
 	case SchemaAgentPublish:
 		var record Agent
 		if err := json.Unmarshal(image, &record); err != nil {
@@ -88,6 +91,10 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.checkAlert(alert)
 	}
+	if schema == SchemaEvaluationSetPublish {
+		_, _, err := b.testPlanImage(image)
+		return err
+	}
 	if schema == SchemaTablePublish {
 		tb, err := tableImage(image)
 		if err != nil {
@@ -142,6 +149,16 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallFunction(f.Definition())
 	}
+	if schema == construction.SchemaProcess {
+		p, err := construction.ReadProcessImage(image)
+		if err != nil {
+			return err
+		}
+		if b.host.BuildProcesses() == nil {
+			return fmt.Errorf("tenant has no flow runtime")
+		}
+		return b.host.BuildProcesses().Validate(b, b.flowOf(p))
+	}
 	_, _, pages, app, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
@@ -170,6 +187,10 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if schema == SchemaAlertPublish {
 		_, _, err := alertImage(image)
+		return err
+	}
+	if schema == SchemaEvaluationSetPublish {
+		_, _, err := b.testPlanImage(image)
 		return err
 	}
 	if schema == SchemaTablePublish {
@@ -219,6 +240,16 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 			return err
 		}
 		return b.installFunction(platform.Caller{Replaying: true}, f)
+	}
+	if schema == construction.SchemaProcess {
+		p, err := construction.ReadProcessImage(image)
+		if err != nil {
+			return err
+		}
+		if b.host.BuildProcesses() == nil {
+			return fmt.Errorf("tenant has no flow runtime")
+		}
+		return b.host.BuildProcesses().Install(b, b.flowOf(p))
 	}
 	entity, actions, pages, app, err := b.publicationImage(schema, image)
 	if err != nil {
@@ -292,6 +323,10 @@ func published[T any](definition T) string {
 		value.Versions = nil
 		definition = any(value).(T)
 	case Code:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
+	case construction.Process:
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
@@ -381,6 +416,9 @@ func (b *Build) Reinstall() error {
 		if err := b.host.ValidateInstallPage(descriptor(was)); err != nil {
 			return fmt.Errorf("page %s navigation: %w", p.Name, err)
 		}
+	}
+	if err := b.installProcesses(); err != nil {
+		return err
 	}
 	if err := b.installTables(); err != nil {
 		return err

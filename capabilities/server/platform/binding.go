@@ -13,13 +13,14 @@ import (
 // Binding is a typed data reference, never executable source text. Control
 // edges determine scheduling; bindings only read values already in scope.
 type Binding struct {
-	Source string          `json:"source" enum:"literal,subject,input"`
+	Source string          `json:"source" enum:"literal,input,subject,step,item,index,answer"`
+	Step   string          `json:"step,omitempty"`
 	Path   []string        `json:"path,omitempty"`
 	Value  json.RawMessage `json:"value,omitempty"`
 }
 
 func (b Binding) Check() error {
-	if !slices.Contains([]string{"literal", "subject", "input"}, b.Source) || len(b.Path) > 16 || len(b.Value) > 64<<10 {
+	if !slices.Contains([]string{"literal", "input", "subject", "step", "item", "index", "answer"}, b.Source) || len(b.Path) > 16 || len(b.Value) > 64<<10 {
 		return fmt.Errorf("binding needs a supported source and bounded path/value")
 	}
 	if b.Source == "literal" {
@@ -31,10 +32,13 @@ func (b Binding) Check() error {
 			return err
 		}
 	}
-	if b.Source == "literal" && (!json.Valid(b.Value) || len(b.Path) > 0) {
+	if b.Source == "literal" && (!json.Valid(b.Value) || len(b.Path) > 0 || b.Step != "") {
 		return fmt.Errorf("literal binding needs one JSON value")
 	}
-	if b.Source != "literal" && len(b.Value) > 0 {
+	if b.Source == "step" && b.Step == "" {
+		return fmt.Errorf("step binding needs a node")
+	}
+	if b.Source != "literal" && len(b.Value) > 0 || b.Source != "step" && b.Step != "" {
 		return fmt.Errorf("binding configuration does not match its source")
 	}
 	for _, part := range b.Path {
@@ -47,7 +51,7 @@ func (b Binding) Check() error {
 
 // Resolve reads the current token's durable frame. The definition owner must
 // supply a permission-filtered subject projection, not a private record.
-func (b Binding) Resolve(subject json.RawMessage) (json.RawMessage, error) {
+func (b Binding) Resolve(r *Run, subject json.RawMessage) (json.RawMessage, error) {
 	if err := b.Check(); err != nil {
 		return nil, err
 	}
@@ -56,9 +60,21 @@ func (b Binding) Resolve(subject json.RawMessage) (json.RawMessage, error) {
 	case "literal":
 		raw = b.Value
 	case "input":
-		raw = subject
+		raw = r.Data
 	case "subject":
 		raw = subject
+	case "step":
+		raw = r.Outputs[b.Step]
+	case "item":
+		if len(r.Frames) > 0 {
+			raw = r.Frames[len(r.Frames)-1].Item
+		}
+	case "index":
+		if len(r.Frames) > 0 {
+			raw, _ = json.Marshal(r.Frames[len(r.Frames)-1].Index)
+		}
+	case "answer":
+		raw, _ = json.Marshal(r.Answer)
 	}
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("binding source %s is unavailable in this scope", b.Source)
@@ -116,7 +132,7 @@ func (p Predicate) check(depth int) error {
 	}
 	return nil
 }
-func (p Predicate) Test(subject json.RawMessage) (bool, error) {
+func (p Predicate) Test(r *Run, subject json.RawMessage) (bool, error) {
 	if err := p.Check(); err != nil {
 		return false, err
 	}
@@ -124,7 +140,7 @@ func (p Predicate) Test(subject json.RawMessage) (bool, error) {
 	case "all", "any", "not":
 		result := p.Op == "all"
 		for _, term := range p.Terms {
-			v, err := term.Test(subject)
+			v, err := term.Test(r, subject)
 			if err != nil {
 				return false, err
 			}
@@ -140,14 +156,14 @@ func (p Predicate) Test(subject json.RawMessage) (bool, error) {
 		}
 		return result, nil
 	}
-	left, err := p.Left.Resolve(subject)
+	left, err := p.Left.Resolve(r, subject)
 	if p.Op == "exists" {
 		return err == nil && !bytes.Equal(bytes.TrimSpace(left), []byte("null")), nil
 	}
 	if err != nil {
 		return false, err
 	}
-	right, err := p.Right.Resolve(subject)
+	right, err := p.Right.Resolve(r, subject)
 	if err != nil {
 		return false, err
 	}

@@ -1,0 +1,108 @@
+package platformserver
+
+import "platformserver/internal/construction"
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"platformserver/apps/build"
+	"platformserver/apps/flow"
+	"platformserver/apps/work"
+	"platformserver/platform"
+)
+
+// a tenant that declares the production profile delivers through
+// a saved joint candidate, and the direct install its authoring surfaces offered
+// is refused by the owner — a hidden button is not a retirement. The draft, its
+// versions and the recovery path are untouched, and the development profile
+// keeps the same install implementation.
+func TestProductionProfileRefusesDirectInstallAndKeepsDelivery(t *testing.T) {
+	at := time.Date(2026, 10, 5, 11, 0, 0, 0, time.UTC)
+	compose := func() *Tenant {
+		return composeTenant(t, "release-profile", []Seat{seatOf("builder", "build:builder", "platform:admin"), seatOf("operator", "build:user", "flow:member")},
+			work.New("release-profile"), flow.New("release-profile"), build.New("release-profile"))
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	member := memberOf(t, tn, "builder")
+	must := func(authority, schema, typ, id string, payload any) {
+		t.Helper()
+		decide(t, tn, member.ID, authority, schema, typ, id, payload, at)
+	}
+	profile := func(value string) {
+		t.Helper()
+		must(PlatformApp, SchemaSettingSet, SettingType, construction.ID+"/"+build.SettingReleaseProfile, map[string]string{"value": value})
+	}
+
+	// The default profile is the development/import one the authoring surfaces
+	// have always used: the direct install still installs.
+	must(construction.ID, construction.ObjectType+".create", construction.ObjectType, "DEV", map[string]any{
+		"name": "devsigned", "title": "Signed off", "plural": "Signed off",
+		"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}})
+	must(construction.ID, construction.SchemaPublish, construction.ObjectType, "DEV", struct{}{})
+	if installed, _ := tn.RecordOf(member, construction.ObjectType, "DEV", at); installed.Record.(construction.Object).Published == "" {
+		t.Fatal("the development profile lost its direct install")
+	}
+
+	// The authoring surfaces read the profile from the builder itself, so a
+	// builder without a platform role knows which entry it may offer.
+	if out, err := tn.Read(member, build.ReadReleaseProfile); err != nil || !out.(build.ReleaseProfile).DirectInstall {
+		t.Fatalf("development profile read: %+v %v", out, err)
+	}
+
+	// Declared production: the same entry is refused, and the draft is still a
+	// draft with nothing installed behind it.
+	profile(build.ProfileProduction)
+	must(construction.ID, construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{
+		"name": "prodintake", "title": "Prod intake", "plural": "Prod intakes",
+		"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}})
+	if out, err := tn.Read(member, build.ReadReleaseProfile); err != nil || out.(build.ReleaseProfile).DirectInstall {
+		t.Fatalf("production profile read: %+v %v", out, err)
+	}
+	_, refused := tn.Submit(member, submission(tn, member, construction.ID, construction.SchemaPublish, construction.ObjectType, "O", struct{}{}), at)
+	if refused == nil || refused.Message == "" {
+		t.Fatalf("production accepted a direct install: %v", refused)
+	}
+	draft, _ := tn.RecordOf(member, construction.ObjectType, "O", at)
+	if object := draft.Record.(construction.Object); object.Published != "" || object.Installed != "" {
+		t.Fatalf("the refused install changed the draft: %+v", object)
+	}
+	// The refusal is the profile's, not the draft's: it names what to do instead.
+	for _, want := range []string{"build.object.publish", "/v1/releases/candidates"} {
+		if !strings.Contains(refused.Message, want) {
+			t.Fatalf("refusal does not name %q: %s", want, refused.Message)
+		}
+	}
+
+	// Delivery itself is unchanged: the joint candidate installs the same
+	// definition, and replaying the accepted log keeps it.
+	must(construction.ID, construction.PageType+".create", construction.PageType, "PAGE", map[string]any{
+		"name": "prodintakes", "title": "Prod intakes", "object": "build.prodintake",
+		"sections": []build.Section{{Widget: "table", Fields: []string{"note"}}}})
+	preview, err := tn.PreviewReleaseDrafts(member, []construction.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetPage, ID: "PAGE"}})
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
+		t.Fatalf("production joint preview: %+v %v", preview, err)
+	}
+	if _, err := tn.SaveReleaseCandidates(member, preview.Drafts, preview.CandidateID, "save-production", at); err != nil {
+		t.Fatalf("production save: %v", err)
+	}
+	if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate-production", at); err != nil {
+		t.Fatalf("production activation: %v", err)
+	}
+	reader := memberOf(t, tn, "operator")
+	delivered := false
+	for _, definition := range tn.Definitions(reader) {
+		if definition.Ref.Kind == platform.AssetObject && definition.Ref.Name == "build.prodintake" {
+			delivered = true
+		}
+	}
+	if !delivered {
+		t.Fatal("the joint candidate did not deliver in production")
+	}
+	CheckReplay(t, tn, entries, compose)
+}

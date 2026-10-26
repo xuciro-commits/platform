@@ -216,6 +216,9 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	} else {
 		_, _, err = t.prepareReleaseLifecycleLocked(saved, m, time.Now().UTC(), false)
 	}
+	if err == nil {
+		err = t.evaluationsReadyLocked(id, raw)
+	}
 	reply.CanActivate = err == nil
 	if err != nil {
 		reply.ActivationDiagnostic = err.Error()

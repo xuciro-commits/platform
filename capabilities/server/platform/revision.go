@@ -237,6 +237,22 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 				}
 			}
 		}
+		if ref.Kind == AssetEvaluation {
+			evaluation, err := ReadEvaluationSet(body)
+			if err != nil {
+				return empty, err
+			}
+			function, ok := lookup[evaluation.Function.Ref]
+			var definition AIFunction
+			if !ok || function.SourceVersion != evaluation.Function.SourceVersion || json.Unmarshal(function.Body, &definition) != nil || definition.Check() != nil {
+				return empty, fmt.Errorf("evaluation set needs its pinned function")
+			}
+			for _, test := range evaluation.Policy.Cases {
+				if !definition.EvaluationInput(test.Input) || definition.ValidateOutput(test.Expected) != nil {
+					return empty, fmt.Errorf("evaluation cases differ from the pinned function")
+				}
+			}
+		}
 		if ref.Kind == AssetApp {
 			var application Application
 			if err := json.Unmarshal(body, &application); err != nil {
@@ -283,9 +299,16 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 				}
 			}
 		}
-		if ref.Kind == AssetPage {
+		if ref.Kind == AssetFlow || ref.Kind == AssetPage {
 			var bindings []AssetBinding
-			{
+			if ref.Kind == AssetFlow {
+				var flow FlowReleaseDescriptor
+				if err := json.Unmarshal(body, &flow); err != nil {
+					return empty, err
+				}
+				bindings = append(slices.Clone(flow.Functions), flow.Operations...)
+				bindings = append(bindings, flow.Queries...)
+			} else {
 				var page Page
 				if err := json.Unmarshal(body, &page); err != nil {
 					return empty, err
@@ -350,7 +373,7 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 			seen := map[AssetRef]bool{}
 			for _, binding := range bindings {
 				dependency, ok := lookup[binding.Ref]
-				if !ok || seen[binding.Ref] || binding.Ref.Kind != AssetFunction && binding.Ref.Kind != AssetCompute || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
+				if !ok || seen[binding.Ref] && ref.Kind == AssetFlow || binding.Ref.Kind != AssetFunction && binding.Ref.Kind != AssetCompute && !(ref.Kind == AssetFlow && binding.Ref.Kind == AssetQuery) || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
 					return empty, fmt.Errorf("%s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
 				}
 				seen[binding.Ref] = true

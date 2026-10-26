@@ -13,6 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/driver"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -354,6 +355,8 @@ func packageBinaryKey(tenant, id, version, digest string) string {
 	return "packages/" + tenant + "/" + id + "/" + version + "/" + strings.TrimPrefix(digest, "sha256:") + ".bin"
 }
 
+// ResolveDriver uses this deployment's existing trusted package index. It is
+// also the gateway's artifact resolver; bindings cannot supply program paths.
 func (i *PackageIndex) ResolveDriver(id, version, digest, profile string) (platform.DriverRuntime, error) {
 	p, found := i.find(id, version)
 	if !found || version == "" || p.Runtime == nil {
@@ -366,7 +369,7 @@ func (i *PackageIndex) ResolveDriver(id, version, digest, profile string) (platf
 	if err != nil || strings.TrimPrefix(target.Artifact, "sha256:") != strings.TrimPrefix(digest, "sha256:") {
 		return platform.DriverRuntime{}, fmt.Errorf("this protocol binary does not target the gateway operating system and architecture")
 	}
-	if _, _, err := binaryAt(i.Directory, digest); err != nil {
+	if _, _, err := driver.Binary(i.Directory, digest); err != nil {
 		return platform.DriverRuntime{}, err
 	}
 	return *p.Runtime, nil
@@ -585,7 +588,7 @@ func (d *Console) precheck(p PackageDescriptor, index *PackageIndex) Precheck {
 			out.Problems = append(out.Problems, err.Error())
 		} else {
 			for _, target := range p.Runtime.Targets {
-				if _, _, err := binaryAt(index.Directory, target.Artifact); err != nil {
+				if _, _, err := driver.Binary(index.Directory, target.Artifact); err != nil {
 					out.Problems = append(out.Problems, err.Error())
 				}
 			}
@@ -691,7 +694,7 @@ func (d *Console) sealPackageBytes(descriptor PackageDescriptor, directory strin
 	}
 	if descriptor.Runtime != nil {
 		for _, target := range descriptor.Runtime.Targets {
-			_, binary, err := binaryAt(directory, target.Artifact)
+			_, binary, err := driver.Binary(directory, target.Artifact)
 			if err != nil {
 				return "", err
 			}
@@ -926,33 +929,4 @@ func (d *Console) Contributions() []Contribution {
 	d.mu.Unlock()
 	slices.SortFunc(out, func(a, b Contribution) int { return strings.Compare(a.Key, b.Key) })
 	return out
-}
-
-// binaryAt resolves one artifact by digest beneath the trusted package
-// directory. A binding never supplies a program name, command line or download
-// address, so only bytes the administrator already placed can be installed.
-func binaryAt(directory, digest string) (string, []byte, error) {
-	if !platform.DriverDigest(digest) {
-		return "", nil, fmt.Errorf("invalid driver binary digest")
-	}
-	path := filepath.Join(directory, "artifacts", strings.TrimPrefix(digest, "sha256:"))
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "", nil, err
-	}
-	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 64<<20 {
-		return "", nil, fmt.Errorf("driver binary is absent or exceeds its byte budget")
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return "", nil, err
-	}
-	sum := sha256.Sum256(raw)
-	if hex.EncodeToString(sum[:]) != strings.TrimPrefix(digest, "sha256:") {
-		return "", nil, fmt.Errorf("driver binary content differs from its digest")
-	}
-	if info.Mode().Perm()&0111 == 0 {
-		return "", nil, fmt.Errorf("driver binary is not executable")
-	}
-	return path, raw, nil
 }
