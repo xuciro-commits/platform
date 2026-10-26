@@ -9,7 +9,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 solution=${1:-main} port=${2:-8495}
 [[ -f deploy/local/.env ]] && set -a && source deploy/local/.env && set +a
 bin=".build/dev/$solution-server"
-admin=user:manager@workspace.test
+# Bootstrap subjects are persisted identities, independent of service names.
+admin=user:manager@hotel.test
 if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Port $port is in use; stop the $solution host before starting development (docker compose -f deploy/local/compose.yaml stop $solution-server)." >&2
   exit 1

@@ -60,7 +60,7 @@ services:
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/platform/tenants.json
       - -templates=/etc/templates
-      - -host-admins=user:manager@workspace.test
+      - -host-admins=user:manager@hotel.test
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
