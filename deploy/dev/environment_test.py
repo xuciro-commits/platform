@@ -42,7 +42,7 @@ class EnvironmentModeTests(unittest.TestCase):
             self.assertEqual(environment.selected_mode(), 'docker')
             commands.append(command)
 
-        with patch.object(environment, 'alive', return_value=False), patch.object(environment, '_stop_native_processes'), patch.object(environment, 'run', side_effect=run):
+        with patch.object(environment, 'alive', return_value=False), patch.object(environment, '_stop_native_processes'), patch.object(environment, 'run', side_effect=run), patch.object(environment, 'prepare_database'):
             environment.prepare_docker()
         self.assertTrue(any('rustfs' in command and 'up' in command for command in commands))
         self.assertFalse(any('down' in command or '--volumes' in command for command in commands))
@@ -58,7 +58,7 @@ class EnvironmentModeTests(unittest.TestCase):
         with patch.object(environment, 'LOGS', Path(self.directory.name)), \
                 patch.object(environment, 'alive', return_value=False), patch.object(environment, 'stop'), \
                 patch.object(environment, 'ready', return_value=True), \
-                patch.object(environment, 'run'), patch.object(environment.os, 'access', return_value=True), \
+                patch.object(environment, 'run'), patch.object(environment, 'prepare_database'), patch.object(environment.os, 'access', return_value=True), \
                 patch.dict(environment.os.environ, {'AIR': '/air'}), \
                 patch.object(environment.subprocess, 'Popen', return_value=SimpleNamespace(pid=123, poll=lambda: None)), \
                 patch.object(environment.time, 'sleep', side_effect=advance), \
@@ -69,7 +69,7 @@ class EnvironmentModeTests(unittest.TestCase):
     def test_local_reports_an_exited_supervisor_and_stops_its_children(self):
         with patch.object(environment, 'LOGS', Path(self.directory.name)), \
                 patch.object(environment, 'alive', return_value=False), patch.object(environment, 'stop') as stop, \
-                patch.object(environment, 'run'), patch.object(environment.os, 'access', return_value=True), \
+                patch.object(environment, 'run'), patch.object(environment, 'prepare_database'), patch.object(environment.os, 'access', return_value=True), \
                 patch.dict(environment.os.environ, {'AIR': '/air'}), \
                 patch.object(environment.subprocess, 'Popen', return_value=SimpleNamespace(pid=123, poll=lambda: 1)):
             with self.assertRaises(RuntimeError):

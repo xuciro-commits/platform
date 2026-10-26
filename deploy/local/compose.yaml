@@ -55,7 +55,7 @@ services:
       args: { PLATFORM_REVISION: "${PLATFORM_REVISION:-}" }
     command:
       - -addr=0.0.0.0:8495
-      - -database=postgres://platform:platform-local-only@postgres:5432/platform
+      - -database=postgres://platform:platform-local-only@postgres:5432/${PLATFORM_DATABASE_NAME:-platform_selfhosting}
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/platform/tenants.json

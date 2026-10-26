@@ -22,7 +22,7 @@ export PLATFORM_SECRET_OPENROUTER=${OPENROUTER_API_KEY:-}
 compute=.build/dev/compute
 [[ -S $compute/worker.sock ]] && export PLATFORM_WASM_WORKER_SOCKET=$compute/worker.sock PLATFORM_CODE_BUILDER_SOCKET=$compute/builder.sock
 exec "$bin" -addr "127.0.0.1:$port" \
-  -database "postgres://platform:platform-local-only@127.0.0.1:${PG_PORT:-5433}/platform" \
+  -database "postgres://platform:platform-local-only@127.0.0.1:${PG_PORT:-5433}/${PLATFORM_DATABASE_NAME:-platform_selfhosting}" \
   -oidc-issuer "http://localhost:${IDP_PORT:-8480}/auth/v1/" \
   -oidc-keys "http://localhost:${IDP_PORT:-8480}/auth/v1/oidc/certs" \
   -files "http://127.0.0.1:${FILES_PORT:-9000}/platform" \

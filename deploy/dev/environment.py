@@ -2,6 +2,7 @@
 """Serve one platform authority through the two retained local URLs."""
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE = ROOT / '.build/dev/environment.json'
@@ -241,6 +243,20 @@ def serve():
         write_state({'mode': 'native', 'status': 'stopped'})
 
 
+def prepare_database():
+    # Compose and run.sh share the deployment environment. Resolve the actual
+    # configured database without printing credentials or modifying the archive.
+    config = json.loads(subprocess.check_output(COMPOSE + ['config', '--format', 'json'], cwd=ROOT))
+    argument = next(value for value in config['services']['hospitality-server']['command'] if value.startswith('-database='))
+    name = urllib.parse.urlsplit(argument.removeprefix('-database=')).path.lstrip('/')
+    if not re.fullmatch(r'[a-z][a-z0-9_]{0,62}', name):
+        raise RuntimeError('Local database names must use lowercase letters, digits and underscores.')
+    found = subprocess.check_output(COMPOSE + ['exec', '-T', 'postgres', 'psql', '-U', 'platform', '-d', 'postgres', '-Atc',
+                                   "select 1 from pg_database where datname='" + name + "'"], cwd=ROOT, text=True).strip()
+    if not found:
+        run(COMPOSE + ['exec', '-T', 'postgres', 'createdb', '-U', 'platform', name])
+
+
 def local():
     if alive(read_state()) and ready():
         write_state({**read_state(), 'mode': 'native'})
@@ -253,6 +269,7 @@ def local():
     write_state({'mode': 'native', 'status': 'starting'})
     run(COMPOSE + ['stop', 'hospitality-server', 'wasm-worker', 'code-builder'])
     run(['make', 'infra', 'infra-compute'])
+    prepare_database()
     LOGS.mkdir(parents=True, exist_ok=True)
     with (LOGS / 'environment.log').open('w') as log:
         supervisor = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'serve'], cwd=ROOT,
@@ -277,7 +294,8 @@ def prepare_docker():
     write_state({'mode': 'docker', 'status': 'starting'})
     run(COMPOSE + ['-p', 'platform-dev-compute', '-f', 'deploy/dev/compose.compute.yaml', 'stop',
                    'wasm-worker', 'code-builder'])
-    run(COMPOSE + ['up', '-d', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
+    run(COMPOSE + ['up', '-d', '--wait', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
+    prepare_database()
 
 
 def docker():
