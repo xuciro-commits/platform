@@ -6,7 +6,7 @@
 
 通用接受与提交未知见 [宿主](../../runtime/host/spec.md)，工件与包生命周期见 [应用生命周期](../application-lifecycle/spec.md)，身份与派生数据保护见 [授权](../../runtime/access-control/spec.md)。本模块不提供跨系统 exactly-once、工业实时控制、安全联锁或未经验证的真机兼容承诺。
 
-实现定位（仓库根相对路径）：`capabilities/server/internal/construction/connection.go`、`capabilities/server/internal/construction/source.go`、`capabilities/server/sources.go`、`capabilities/server/pipelines.go`、`capabilities/server/confirmation_reconcile.go`、`capabilities/server/dispatch_effects.go`、`capabilities/server/dispatch_readback.go`、`capabilities/server/observations.go`、`capabilities/server/observation_decision.go`、`capabilities/server/protocol_connections.go`、`capabilities/server/driver/`、`capabilities/server/gateway/`。
+实现定位（仓库根相对路径）：`capabilities/server/internal/construction/connection.go`、`capabilities/server/internal/construction/source.go`、`capabilities/server/sources.go`、`capabilities/server/pipelines.go`、`capabilities/server/confirmation_reconcile.go`、`capabilities/server/dispatch_effects.go`、`capabilities/server/dispatch_readback.go`、`capabilities/server/observations.go`、`capabilities/server/observation_decision.go`。
 
 ## Requirements
 
