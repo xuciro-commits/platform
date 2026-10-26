@@ -93,7 +93,7 @@ make system-export RELEASE=17 OUT=/absolute/path/to/export
 
 新组合默认使用原 PostgreSQL 实例内独立的 `platform_selfhosting` 数据库（可通过 `PLATFORM_DATABASE_NAME` 配置），由本地启动脚本仅在不存在时创建。原 `platform` 数据库的旧日志、初始化状态与检查点完整保留；这避免用新组合强行装载未迁移的旧 `system` 状态，不能视为旧数据迁移通过。新数据库也在原 `pgdata` 卷中，日常更新不会重建它。
 
-当前租户起始配置为 `deploy/local/platform/tenants.json`（可用 `PLATFORM_TENANTS_FILE` 指向原受控配置），复用原 Rauthy 身份；酒店 manager 与制造 sup 可进入空白 `workspace`，manager 作为 host administrator 管理 `system`。这不是业务应用或数据迁移。原 `hospitality/tenants.json`、`manufacturing/tenants.json`、数据库日志与数据卷、对象存储、`.env`、签名及凭据主密钥保持留存；旧租户不装入当前组合，也不尝试用删数据来通过恢复检查。
+当前租户起始配置为 `deploy/local/platform/tenants.json`（可用 `PLATFORM_TENANTS_FILE` 指向原受控配置），复用原 Rauthy 身份；酒店 manager 与制造 sup 可进入空白 `workspace`，manager 作为 host administrator 管理 `system`。这不是业务应用或数据迁移。旧酒店与制造租户的配置、日志、数据卷、对象存储与密钥已按本轮裁决放弃并清除，不再保留也不再承诺迁移、恢复或兼容回退。
 
 更新 main 后运行 `deploy/local/update.sh`。它要求已提交源码，核对唯一 API 进程或镜像的实际版本，并逐个检查两入口的健康与页面资源。原生模式记录在 `.build/dev/environment.json`；启动和停止核对进程归属，不接管陌生端口。它是本地开发交付入口，自动自举换版仍需上文的 updater 监督命令。
 
