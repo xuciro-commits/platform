@@ -191,7 +191,7 @@ func (b *Build) checkSourceConnection(c platform.Caller, s construction.Source) 
 		conn = fixed
 	}
 	if !ok || conn.State != "ready" {
-		return refuse("The connection is not ready; check it first")
+		return refuse("Connection {connection} is not ready; check it first", s.Connection)
 	}
 	switch {
 	case (s.Profile == "odata") != (conn.Kind == "odata"), (s.Profile == "table") != (conn.Kind == "postgres"):

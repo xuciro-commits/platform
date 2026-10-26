@@ -543,7 +543,7 @@ func (b *Build) integrationDraftAssets(kind platform.AssetKind, id string) (befo
 		problem = b.checkMatch(c, r)
 	}
 	if problem != nil {
-		err = fmt.Errorf("%s", problem.Message)
+		err = fmt.Errorf("integration draft %s/%s: %s", kind, id, problem.Message)
 		return
 	}
 	_, version, published, _ := integrationMetadata(record)

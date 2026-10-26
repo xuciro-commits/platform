@@ -1464,7 +1464,7 @@
   "Check result has no connection": "检查结果没有对应连接",
   "A source profile is one of json, csv, odata, table": "数据源读取方式为 json、csv、odata 或 table",
   "An {profile} source reads through a connection": "{profile} 数据源通过连接读取",
-  "The connection is not ready; check it first": "连接尚未就绪；请先检查连接",
+  "Connection {connection} is not ready; check it first": "连接 {connection} 尚未就绪；请先检查连接",
   "A {profile} source needs a matching connection kind": "{profile} 数据源需要匹配的连接种类",
   "An OData source names its entity set": "OData 数据源需要填写实体集名称",
   "A table source names schema.table": "数据库表数据源需要填写 schema.table",

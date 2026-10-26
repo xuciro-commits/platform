@@ -18,6 +18,16 @@ export const merged = (current: JointChoice[], incoming: JointChoice[]): JointCh
   return out;
 };
 
+/** An application review includes the owner's saved dependency drafts, while
+ * retaining every explicit selection and leaving non-application roots alone. */
+export async function applicationDraftSelection(roots: JointChoice[], referenced: (root: JointChoice) => Promise<JointChoice[]>): Promise<JointChoice[]> {
+  let selection = merged([], roots);
+  for (const root of roots.filter(draft => draft.kind === "app")) {
+    selection = merged(selection, await referenced(root));
+  }
+  return selection;
+}
+
 export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app" | "migration";
 /** Entry points check the same complete request that the review will send. */
 export function releaseSelectionProblem(drafts: readonly JointChoice[]): string | undefined {

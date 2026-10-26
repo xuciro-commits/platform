@@ -13,7 +13,7 @@ import { MigrationWorkbench } from "./migration";
 // what the builder checked; the server recomputes the candidate from it.
 export { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue } from "./selection";
 export type { JointChoice, ReleaseKind } from "./selection";
-import { jointKey, merged, ownerDraft, releaseCommandBytes, releaseSelectionProblem, type JointChoice, type ReleaseKind } from "./selection";
+import { applicationDraftSelection, jointKey, merged, ownerDraft, releaseCommandBytes, releaseSelectionProblem, type JointChoice, type ReleaseKind } from "./selection";
 type ReleaseRequest = { kind: "save"; body: Api.ReleaseSaveRequest }
   | { kind: "evaluate"; body: Api.ReleaseEvaluationRequest }
   | { kind: "activate"; body: Api.ReleaseActivateRequest };
@@ -164,19 +164,28 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   if (!mayRelease) {
     return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
   }
+  const readReferenced = async (from: JointChoice): Promise<JointChoice[]> => {
+    const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", ownerDraft(from) satisfies Api.ReleaseDraftsRequest);
+    if (!result.ok) throw new Error(apiErrorMessage(result.body) ?? t("Draft dependencies could not be read."));
+    return result.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
+  };
   const inspect = (drafts?: JointChoice[]) => {
     if (!builder || pendingRef.current || invalidSelection) return;
     const problem = drafts && releaseSelectionProblem(drafts);
     if (problem) { setError(t(problem)); return; }
-    const request: Api.ReleasePreviewRequest = drafts?.length ? { drafts: drafts.map(ownerDraft) } : ownerDraft({ kind, id });
-    if (new TextEncoder().encode(JSON.stringify(request)).length > releaseCommandBytes) { setError(t("The release selection exceeds the original 65536-byte request budget. No drafts were dropped.")); return; }
     return perform(async () => {
       clearReview(); setSavedID(""); setConfirmedUpgrade(""); setCandidateKey("");
       try {
+        const roots = drafts?.length ? drafts : [{ kind, id }];
+        const selection = await applicationDraftSelection(roots, readReferenced);
+        const problem = releaseSelectionProblem(selection);
+        if (problem) { setError(t(problem)); return; }
+        setJoint(selection);
+        const request: Api.ReleasePreviewRequest = { drafts: selection.map(ownerDraft) };
         const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", request);
         if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release review could not be loaded."));
         else { setReview(result.body); setCandidateKey(crypto.randomUUID()); }
-      } catch { setError(t("Release review could not be loaded.")); }
+      } catch (error) { setError(error instanceof Error ? error.message : t("Release review could not be loaded.")); }
     });
   };
   // The original server owner computes dependencies. The view never invents
@@ -186,16 +195,13 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     return perform(async () => {
       setJointNote("");
       try {
-        const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", ownerDraft(from) satisfies Api.ReleaseDraftsRequest);
-        if (!result.ok) setJointNote(apiErrorMessage(result.body) ?? t("Draft dependencies could not be read."));
-        else {
-          const found = result.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
-          const selection = merged(joint, [from, ...found]);
-          if (selection.length > 128) { setJointNote(t("A joint candidate accepts at most 128 drafts. Select a supported application closure.")); return; }
-          setJoint(selection);
-          setJointNote(found.length ? t("Added {count} dependent drafts.", { count: found.length }) : t("Nothing to add: every dependency is installed or already selected."));
-        }
-      } catch { setJointNote(t("Draft dependencies could not be read.")); }
+        const found = await readReferenced(from);
+        const selection = merged(joint, [from, ...found]);
+        const problem = releaseSelectionProblem(selection);
+        if (problem) { setJointNote(t(problem)); return; }
+        setJoint(selection);
+        setJointNote(found.length ? t("Added {count} dependent drafts.", { count: found.length }) : t("Nothing to add: every dependency is installed or already selected."));
+      } catch (error) { setJointNote(error instanceof Error ? error.message : t("Draft dependencies could not be read.")); }
     });
   };
   const send = (request: ReleaseRequest) => perform(async () => {
@@ -307,7 +313,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     <Card className="grid gap-3 p-3" aria-label={t("Deliver drafts together")}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("Deliver drafts together")}</h2>
-        <ContextHelp title={t("Deliver drafts together")}>{t("An object, the page over it and the application holding the page can be delivered as one candidate; nothing has to be published first.")}</ContextHelp>
+        <ContextHelp title={t("Deliver drafts together")}>{t("Checking an application includes its saved dependency drafts. Review the complete selection and resolve any connection or definition problems before saving; nothing has to be published separately.")}</ContextHelp>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={!id || locked} onClick={() => {

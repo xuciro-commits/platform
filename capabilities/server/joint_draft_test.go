@@ -15,11 +15,13 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
+	"sync/atomic"
 )
 
 // M3 (/D2): a new object, a new page over it and an
@@ -156,6 +158,53 @@ func TestJointDraftsDeliverNewObjectPageAndApplication(t *testing.T) {
 		t.Fatalf("the page reused an installed action removed from its selected draft: %+v", removedAction)
 	}
 	CheckReplay(t, tn, entries, compose)
+}
+
+func TestApplicationDraftClosureIncludesUnreadyIntegration(t *testing.T) {
+	at := time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC)
+	const tenant = "draft-closure"
+	tn := builderTenant(t, tenant, work.New(tenant))
+	member := memberOf(t, tn, "builder")
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(server.Close)
+	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "OBJECT", map[string]any{"name": "item", "title": "Item", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.PageType+".create", construction.PageType, "PAGE", map[string]any{"name": "items", "title": "Items", "object": "build.item", "list": []string{"note"}, "detail": []string{"note"}}, at)
+	decide(t, tn, "builder", construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "CONNECTION", map[string]any{"name": "upstream", "title": "Upstream", "kind": "http", "address": server.URL + "/", "allowPrivate": true}, at)
+	decide(t, tn, "builder", construction.ID, construction.SourceType+".create", construction.SourceType, "SOURCE", map[string]any{"name": "feed", "title": "Feed", "connection": "CONNECTION", "url": "items", "object": "build.item", "key": "id", "mapping": []construction.SourceField{{From: "note", To: "note"}}}, at)
+	decide(t, tn, "builder", construction.ID, construction.AppType+".create", construction.AppType, "APP", map[string]any{"name": "items", "title": "Items", "pages": []string{"items"}, "resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetSource, Name: "feed"}}}, at)
+	before := platform.Raw(tn.Definitions(member))
+	closure, err := tn.ReferencedDrafts(member, platform.AssetApp, "APP")
+	if err != nil || len(closure.Drafts) != 4 {
+		t.Fatalf("unready connection prevented dependency discovery: %+v %v", closure, err)
+	}
+	for _, draft := range []construction.JointDraftRef{{Kind: platform.AssetPage, ID: "PAGE"}, {Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetSource, ID: "SOURCE"}, {Kind: platform.AssetConnection, ID: "CONNECTION"}} {
+		if !slices.Contains(closure.Drafts, draft) {
+			t.Fatalf("closure omitted %v: %+v", draft, closure.Drafts)
+		}
+	}
+	selection := append([]construction.JointDraftRef{{Kind: platform.AssetApp, ID: "APP"}}, closure.Drafts...)
+	preview, err := tn.PreviewReleaseDrafts(member, selection)
+	if err != nil || !strings.Contains(preview.Diagnostic, "source/SOURCE") || !strings.Contains(preview.Diagnostic, "Connection CONNECTION is not ready") || len(preview.Drafts) != 5 {
+		t.Fatalf("review did not locate the actual blocker in its complete selection: %+v %v", preview, err)
+	}
+	if requests.Load() != 0 || !bytes.Equal(before, platform.Raw(tn.Definitions(member))) {
+		t.Fatal("discovery or refused preview performed external I/O or changed installed definitions")
+	}
+	connection, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "CONNECTION")
+	if connection.State != "draft" || connection.Published != "" {
+		t.Fatal("discovery published or checked the connection")
+	}
+	decide(t, tn, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "CONNECTION", map[string]any{}, at)
+	tn.CheckConnections(at)
+	preview, err = tn.PreviewApplicationDrafts(member, "APP")
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" || len(preview.Drafts) != 5 {
+		t.Fatalf("first application preview after checking connection: %+v %v", preview, err)
+	}
 }
 
 // Automatic starts must retain the candidate reviewer, rather than requiring a

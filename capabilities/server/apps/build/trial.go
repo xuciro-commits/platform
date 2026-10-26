@@ -75,6 +75,7 @@ func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, erro
 	// These original owner entities supply only identity. Their own draft
 	// compiler supplies dependencies when the traversal reaches that asset.
 	caller := b.host.Automation(platform.Caller{}, construction.ID)
+	integrations := map[construction.JointDraftRef]any{}
 	for _, entity := range b.Manifest().Entities {
 		ref, err := draftAssetRef(entity.Type, "")
 		if err != nil || recordKind(ref.Kind) {
@@ -98,6 +99,9 @@ func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, erro
 					rowKind = testPlanKind(row.(construction.TestPlan))
 				}
 				add(rowKind, head.ID, head.Name)
+				if construction.ValueIntegrationKind(rowKind) {
+					integrations[construction.JointDraftRef{Kind: rowKind, ID: head.ID}] = row
+				}
 			}
 		}
 	}
@@ -160,6 +164,14 @@ func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, erro
 				p.State = "published"
 				assets, err = releaseAssets(nil, nil, nil, []construction.Process{p}, b.Manifest().Version)
 			default:
+				if record, ok := integrations[draft]; ok {
+					// Discovery uses the same portable descriptor as publication,
+					// without requiring the target connection to be ready yet.
+					_, version, _, _ := integrationMetadata(record)
+					asset, problem := b.integrationAsset(draft.Kind, record, version+1)
+					assets, err = []platform.ReleaseAsset{asset}, problem
+					break
+				}
 				declarations := b.jointDeclarations
 				if draft.Kind == platform.AssetEvaluation {
 					plan, found := platform.Get[construction.TestPlan](caller, draft.ID)

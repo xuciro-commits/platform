@@ -1,10 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue, releaseSelectionProblem } from "./selection.ts";
+import { applicationDraftSelection, releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue, releaseSelectionProblem } from "./selection.ts";
 
 const kinds = ["object", "query", "flow", "app", "migration"];
 const choice = (index) => ({ kind: "object", id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}` });
 const choices = (count) => Array.from({ length: count }, (_, index) => choice(index));
+
+test("an application-only review adds the owner closure and preserves other explicit drafts", async () => {
+  const app = { kind: "app", id: "APP" }, extra = choice(1);
+  const dependencies = [{ kind: "page", id: "PAGE" }, { kind: "object", id: "OBJECT" }, { kind: "source", id: "SOURCE" }, { kind: "connection", id: "CONNECTION" }];
+  const selection = await applicationDraftSelection([app, extra], async root => {
+    assert.deepEqual(root, app);
+    return [...dependencies, extra];
+  });
+  assert.deepEqual(selection, [app, extra, ...dependencies]);
+  assert.deepEqual(await applicationDraftSelection([extra], async () => { throw Error("Unselected application read"); }), [extra]);
+});
+
+test("application dependency failures and oversized closures never fall back to the root", async () => {
+  const app = { kind: "app", id: "APP" };
+  await assert.rejects(applicationDraftSelection([app], async () => { throw Error("Dependency unreadable"); }), /Dependency unreadable/);
+  const selection = await applicationDraftSelection([app], async () => choices(128));
+  assert.equal(selection.length, 129);
+  assert.ok(releaseSelectionProblem(selection));
+});
 
 test("release selection accepts 1, 32, 33 and 128 drafts and refuses 129 without truncation", () => {
   for (const count of [1, 32, 33, 128]) {
