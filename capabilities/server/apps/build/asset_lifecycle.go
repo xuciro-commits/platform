@@ -218,6 +218,9 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 	restore := func() { b.releaseDraftIDs = saved }
 	if ctx.DraftsOnly {
 		b.draftIntegrationTargets(assets)
+		for ref, id := range ctx.DraftIDs {
+			b.releaseDraftIDs[ref] = id
+		}
 		return restore, nil
 	}
 	for _, asset := range assets {
@@ -354,6 +357,11 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx platform.Asset
 	}
 	if len(byRef) != 0 {
 		return nil, fmt.Errorf("draft has no candidate owner identity")
+	}
+	for i := range out {
+		if id := ctx.DraftIDs[out[i].Ref]; id != "" {
+			out[i].Name = id
+		}
 	}
 	return out, nil
 }

@@ -401,6 +401,24 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
+	if s.GetSchema().GetName() == construction.AppType+".withdraw" || s.GetSchema().GetName() == construction.AppType+".restore" {
+		for i := range entities {
+			if entities[i].Type == construction.AppType {
+				entities[i].Validate = nil
+			}
+		}
+	}
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive {
+		// Discarding a Build draft does not compile or publish it. The original
+		// archive authorization and retained-publication guard ran above.
+		if _, err := draftAssetRef(typ, ""); err == nil {
+			for i := range entities {
+				if entities[i].Type == typ {
+					entities[i].Validate = nil
+				}
+			}
+		}
+	}
 	if record, err, ok := b.ledger.Generated(c, s, now, nil, entities...); ok {
 		return record, err
 	}

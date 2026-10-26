@@ -256,6 +256,9 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	if err := s.promoteRecords(draft); err != nil {
 		return false, err
 	}
+	if result.Row.Type == construction.AppType {
+		t.defGen.Add(1)
+	}
 	t.committed.saveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
 	t.committed.saveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
 	if changed && publisher != nil {

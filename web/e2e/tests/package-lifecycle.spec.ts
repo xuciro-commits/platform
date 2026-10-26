@@ -42,7 +42,9 @@ test("a new administrator reviews a local package, installs it, uninstalls and r
   await expect(card.getByText("Imported package", { exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Install", exact: true }).click();
   await expect(card.getByText("active", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Create application drafts", exact: true }).click();
+  await card.getByRole("button", { name: "Prepare applications", exact: true }).click();
+  await page.getByRole("button", { name: "Create application drafts", exact: true }).click();
+  await page.getByRole("button", { name: "Edit application", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Imported template application", exact: true }).first()).toBeVisible();
   expect(await builder.record("build.app", applicationName)).toMatchObject({ name: applicationName, state: "draft", pages: [objectName] });
   expect(await builder.record("build.object", objectName)).toMatchObject({ name: objectName, state: "draft", fields: [{ name: "note", title: "Note", type: "text" }] });

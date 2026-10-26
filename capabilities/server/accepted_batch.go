@@ -8,6 +8,7 @@ import (
 	"maps"
 	"platformserver/internal/acceptance"
 	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/internal/construction"
 	"platformserver/internal/records"
 	"reflect"
 	"slices"
@@ -362,6 +363,12 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	}
 	if err := t.records.promoteRecords(draft); err != nil {
 		return false, err
+	}
+	// Application entry availability is owned by its current Build record.
+	// The cached discovery must move with that accepted record as well as with
+	// installed definition bytes, including withdrawal and restoration.
+	if slices.ContainsFunc(result.Rows, func(row resultformat.BatchRow) bool { return row.Type == construction.AppType }) {
+		t.defGen.Add(1)
 	}
 	if err := t.applyExtractionDefinitions(result.Definitions); err != nil {
 		return false, err

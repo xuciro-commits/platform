@@ -16,7 +16,10 @@ func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platfo
 	for _, asset := range input {
 		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetObject {
 			var object construction.Object
-			if err := json.Unmarshal(asset.Body, &object); err != nil || construction.TypeOf(object.Name) != asset.Ref.Name {
+			if err := json.Unmarshal(asset.Body, &object); err != nil {
+				return nil, fmt.Errorf("blueprint object %s: %w", asset.Ref, err)
+			}
+			if construction.TypeOf(object.Name) != asset.Ref.Name {
 				return nil, fmt.Errorf("invalid blueprint object %s", asset.Ref)
 			}
 			object.ID = object.Name

@@ -2571,5 +2571,11 @@
   "Opportunity review advice evaluation": "商机建议评估",
   "Manufacturing review advice evaluation": "制造建议评估",
   "Synthetic organization": "合成组织样本",
-  "Production line": "生产线"
+  "Production line": "生产线",
+  "Entry withdrawn": "入口已撤回",
+  "The application entry is closed; retained definitions, records and independent tasks remain.": "应用入口已关闭，保留原定义、业务记录和独立任务。",
+  "Withdraw application entry": "撤回应用入口",
+  "Restore application entry": "恢复应用入口",
+  "Builder role required": "需要构建者角色",
+  "Expressions": "表达式"
 }

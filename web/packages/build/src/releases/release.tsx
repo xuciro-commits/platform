@@ -28,6 +28,31 @@ const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
 ];
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
+function ReleaseDiagnostic({ diagnostic, application, builder, locked, onAdd }: { diagnostic: string; application?: string; builder: boolean; locked: boolean; onAdd: (choice: JointChoice) => void }) {
+  const { open } = useApplicationWorkspace();
+  const diagnosis = diagnose(diagnostic, { application });
+  return <div role="group" aria-label={t("Release problem")} className="grid min-w-0 gap-2">
+    <p role="alert" className="break-words text-sm text-danger">{diagnosis.text}</p>
+    {diagnosis.text !== diagnostic && <Disclosure summary={t("Technical details")}><p className="break-words text-xs text-muted">{diagnostic}</p></Disclosure>}
+    {diagnosis.fix && <div><Button size="sm" disabled={locked} onClick={() => open({ view: diagnosis.fix!.view, params: diagnosis.fix!.params })}>{diagnosis.fix.label}</Button></div>}
+    {builder && diagnosis.resources?.map(resource => <DiagnosticResource key={`${resource.kind}/${resource.name}`} {...resource} application={application} locked={locked} onAdd={onAdd} />)}
+  </div>;
+}
+
+function DiagnosticResource({ kind, name, application, locked, onAdd }: { kind: "agent" | "query"; name: string; application?: string; locked: boolean; onAdd: (choice: JointChoice) => void }) {
+  const { open } = useApplicationWorkspace();
+  const inventory = useRecordInventory<Record>(`build.${kind}`);
+  const records = inventory.data?.records.filter(record => record.name === name) ?? [];
+  const record = records.length === 1 ? records[0] : undefined;
+  return <div className="flex flex-wrap gap-2">
+    <Button size="sm" disabled={locked || inventory.isLoading} onClick={() => open({ view: kind, params: { ...(record ? { id: record.id } : {}), ...(application ? { application } : {}) } })}>
+      {record ? kind === "query" ? t("Open query") : t("Open agent") : kind === "query" ? t("Find query") : t("Find agent")}
+    </Button>
+    {kind === "query" && record && <Button size="sm" disabled={locked} onClick={() => onAdd({ kind, id: record.id })}>{t("Include query in candidate")}</Button>}
+    {inventory.isError && <p role="status" className="text-xs text-warning">{t("The draft could not be located. Open its list to retry.")}</p>}
+  </div>;
+}
+
 export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], selectionError, embedded = false, candidateID, applicationName }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; selectionError?: string; embedded?: boolean; candidateID?: string; applicationName?: string } = {}) {
   const { client, role } = useHost();
   const builder = role("build") === "builder";
@@ -337,7 +362,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </Card>
     </>}
     {call?.expired && !error && <Panel role="status" className="p-3 text-sm text-muted">{t("The original handoff expired when the view was reopened. Reopen release review from the application to review its current selection.")}</Panel>}
-    {error && <Card className="p-3 text-sm text-danger" role="alert">{error}</Card>}
+    {error && <Card className="p-3"><ReleaseDiagnostic diagnostic={error} application={scope || (kind === "app" ? id : undefined)} builder={builder} locked={locked} onAdd={choice => { setJoint(current => merged(current, [choice])); setError(""); clearReview(); }} /></Card>}
     {pending && <Card role="alert" className="grid gap-2 p-3 text-sm">
       <p>{t("A release request is unconfirmed. It may already have been accepted. Retry its original key and payload; leaving does not cancel accepted work.")}</p>
       <code className="break-all text-xs">{pending.kind} · {pending.body.candidateId} · {pending.body.key}</code>
@@ -382,11 +407,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       </Panel>}
       {builder && savedReview && savedID && activeID && activeID !== savedID && <MigrationWorkbench from={activeID} to={savedID} assets={assets} onChanged={async () => { await inventory.refetch(); await readSaved(savedID); }} onLock={setMigrationLocked} />}
       {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
-      {review.diagnostic && (() => { const d = diagnose(review.diagnostic, { application: scope || (kind === "app" ? id : undefined) }); return <div className="grid gap-2">
-        <p role="alert" className="text-sm text-danger">{d.text}</p>
-        {d.text !== review.diagnostic && <p className="text-xs text-muted"><code>{review.diagnostic}</code></p>}
-        {d.fix && <div><Button size="sm" onClick={() => open({ view: d.fix!.view, params: d.fix!.params })}>{d.fix.label}</Button></div>}
-      </div>; })()}
+      {review.diagnostic && <ReleaseDiagnostic diagnostic={review.diagnostic} application={scope || (kind === "app" ? id : undefined)} builder={builder} locked={locked} onAdd={choice => { setJoint(current => merged(current, [choice])); setError(""); clearReview(); }} />}
       {!review.diagnostic && !(savedReview && runningDiagnostic) && <div className="grid gap-3 sm:grid-cols-3">
         {changed("Added", review.added)}
         {changed("Changed", review.changed)}

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,6 +32,7 @@ type PackageDraftResult struct {
 }
 
 func (h *Host) routesPackageDrafts(rt *routes) {
+	h.routesPackagePreparation(rt)
 	h.routesPackageSources(rt)
 	h.routesComposition(rt)
 	h.routesPackageCleanup(rt)
@@ -124,6 +126,69 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if err != nil {
 		return answer, err
 	}
+	// Archived records retain their history. A new explicit creation keeps the
+	// logical asset name but uses a request-stable target ID when it is occupied.
+	context.DraftIDs = map[platform.AssetRef]string{}
+	commandKey := "package-drafts:" + m.ID + ":" + key
+	priorEdits := map[platform.AssetRef]CompositeEdit{}
+	for batch := 0; ; batch++ {
+		batchKey := "composite:" + commandKey
+		if batch > 0 {
+			batchKey = fmt.Sprintf("%s:%d", batchKey, batch)
+		}
+		raw := t.committed.compositeAnswer(batchKey)
+		if len(raw) == 0 {
+			break
+		}
+		prior, err := decodeAcceptedComposite(raw)
+		if err != nil {
+			return answer, err
+		}
+		for _, edit := range prior.Edits {
+			var payload struct{ Name string }
+			if err := json.Unmarshal(edit.Payload, &payload); err != nil {
+				return answer, err
+			}
+			found := false
+			for _, draft := range drafts {
+				if draft.Type == edit.Target.GetType() && draft.Name == payload.Name {
+					context.DraftIDs[draft.Ref], priorEdits[draft.Ref] = edit.Target.GetId(), edit
+					found = true
+				}
+			}
+			if !found {
+				return answer, fmt.Errorf("package draft key belongs to another request")
+			}
+		}
+	}
+	createRefs := map[platform.AssetRef]bool{}
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(m.ID+"\n"+key)))
+	for _, draft := range drafts {
+		if _, accepted := priorEdits[draft.Ref]; accepted {
+			createRefs[draft.Ref] = true
+			continue
+		}
+		if et := t.records.types[draft.Type]; et != nil {
+			for _, row := range et.rows.All() {
+				if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && businessField(et.info, row.Value, "name") == draft.Name {
+					context.DraftIDs[draft.Ref] = row.Value.FieldByName("Record").Interface().(platform.Record).ID
+				}
+			}
+			if context.DraftIDs[draft.Ref] != "" {
+				continue
+			}
+			if row := et.rows.Get(draft.Name); row != nil && row.Value.FieldByName("Record").Interface().(platform.Record).Archived {
+				context.DraftIDs[draft.Ref] = draft.Name + "-" + digest[:12]
+			}
+		}
+		createRefs[draft.Ref] = true
+	}
+	if len(context.DraftIDs) > 0 {
+		drafts, err = registry.ReleaseDrafts(candidate.Assets, context)
+		if err != nil {
+			return answer, err
+		}
+	}
 	if len(drafts) == 0 || len(drafts) > construction.JointDraftLimit {
 		return answer, fmt.Errorf("an application package needs one to %d owner drafts", construction.JointDraftLimit)
 	}
@@ -145,7 +210,13 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		if err != nil {
 			return PackageDraftResult{}, err
 		}
-		edits = append(edits, CompositeEdit{Schema: draft.Schema, Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Payload: payload})
+		edit := CompositeEdit{Schema: draft.Schema, Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Payload: payload}
+		if prior, ok := priorEdits[draft.Ref]; ok && (!sameCompositePayload(prior.Payload, payload) || prior.Target.GetId() != draft.Name) {
+			return answer, fmt.Errorf("package draft key belongs to another request")
+		}
+		if createRefs[draft.Ref] {
+			edits = append(edits, edit)
+		}
 		answer.Drafts = append(answer.Drafts, PackageDraft{Ref: draft.Ref, Type: draft.Type, ID: draft.Name})
 		if draft.Ref == primary {
 			answer.Application, answer.ApplicationID = primary.Name, draft.Name
@@ -154,7 +225,6 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if answer.ApplicationID == "" {
 		return PackageDraftResult{}, fmt.Errorf("an application package needs at least one root application draft")
 	}
-	commandKey := "package-drafts:" + m.ID + ":" + key
 	contextHash := ""
 	if len(edits) > 64 {
 		contextHash, err = compositeRequestHash(t.ID, m.ID, commandKey, edits)
@@ -186,7 +256,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			}
 			continue
 		}
-		decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until})
+		decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until, Refs: createRefs})
 		if err != nil {
 			return PackageDraftResult{}, err
 		}

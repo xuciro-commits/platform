@@ -396,10 +396,10 @@ export class EdgeClient {
 
   /** Builds and queues a decision about `target`; returns its idempotency key. `expectedRevision`
    *  is the target's revision the user saw (K4 C12): a stale screen is refused, not applied. */
-  draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = [], expectedRevision?: number, schemaVersion?: SchemaVersion, correctionOf?: string): string {
+  draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = [], expectedRevision?: number, schemaVersion?: SchemaVersion, correctionOf?: string, requestKey?: string): string {
     if (this.storageLoadError) throw this.storageLoadError;
     if (!this.storageKey) throw Error("The workspace identity is not ready.");
-    const key = crypto.randomUUID();
+    const key = requestKey ?? crypto.randomUUID();
     const submission: SubmissionJson = {
       tenantId: this.connection.tenant, principalId: this.connection.principal,
       authority: this.authorities.authorityOf(this.connection.tenant, target.type) ?? "",

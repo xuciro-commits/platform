@@ -163,6 +163,17 @@ func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, erro
 				p.Versions = append(slices.Clone(p.Versions), p.Published)
 				p.State = "published"
 				assets, err = releaseAssets(nil, nil, nil, []construction.Process{p}, b.Manifest().Version)
+			case platform.AssetAgent:
+				// Discover tools from the original descriptor before validating
+				// them against the completed joint candidate. Publication checks
+				// here would reject the query drafts we are still collecting.
+				agent, found := platform.Get[Agent](caller, draft.ID)
+				if !found || agent.Archived {
+					return nil, fmt.Errorf("saved agent draft is unavailable")
+				}
+				agent.Version++
+				asset, problem := agentReleaseAsset(agent, b.Manifest().Version)
+				assets, err = []platform.ReleaseAsset{asset}, problem
 			default:
 				if record, ok := integrations[draft]; ok {
 					// Discovery uses the same portable descriptor as publication,

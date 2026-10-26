@@ -15,6 +15,7 @@ import { Organisation } from "./organisation";
 import { Enterprise } from "./enterprise";
 import { Apps, Matrix, Protocols } from "./apps";
 import { PackageHelp } from "./package-sources";
+import { PackagePreparation } from "./package-preparation";
 import { Words } from "./words";
 import { Automation, Deliveries, SystemHealth, Integrations, Endpoints, OutboundEffects, AppSettingsView, Audit } from "./operations";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
@@ -80,6 +81,7 @@ const controlPanelViews: View[] = [
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "permissions", title: () => t("Roles and permissions"), render: () => <Permissions /> },
   { id: "apps", title: () => t("Packages"), render: () => <Apps /> },
+  { id: "package-preparation", title: () => t("Prepare package applications"), render: p => <PackagePreparation key={`${p.id}@${p.version}`} id={p.id ?? ""} version={p.version ?? ""} /> },
   { id: "package-help", title: () => t("Package guide"), render: p => <PackageHelp topic={p.topic} /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
   { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },

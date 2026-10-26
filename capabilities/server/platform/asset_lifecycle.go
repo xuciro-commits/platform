@@ -40,6 +40,7 @@ type AssetEnvironmentTarget struct {
 // the candidate never acquires this principal or the target binding records.
 type AssetReleaseContext struct {
 	DraftsOnly bool
+	DraftIDs   map[AssetRef]string
 	Member     Member
 	At         time.Time
 	Upgrade    bool

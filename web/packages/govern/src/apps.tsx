@@ -2,9 +2,10 @@
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 import { when, type AppInfo, type ProtocolInfo } from "./shared";
 import { PackageSources } from "./package-sources";
+import { PackageRequirements } from "./package-preparation";
 
 export function Apps() {
   const { role } = useHost(), { open } = useWorkspace();
@@ -13,7 +14,8 @@ export function Apps() {
     <>
       <PageHeader title={t("Packages")} help={t("Install, switch versions or uninstall packages. Uninstall keeps application data and history; unchanged versions can be installed again.")} />
       <PackageSources items={packages.data ?? []} />
-      {packages.isError ? <div role="alert"><p>{t("Package inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading packages…")}</p> : <PackageList items={packages.data ?? []} refresh={() => packages.refetch()} />}
+      {packages.isError ? <div role="alert"><p>{t("Package inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading packages…")}</p> : !packages.data?.length ? <p className="text-sm text-muted">{t("This library is empty. Download a package or import a local file to begin.")}</p> : null}
+      <PackageList items={packages.data ?? []} refresh={() => packages.refetch()} />
       {role("platform") === "admin" && <Button variant="link" className="mt-4" onClick={() => open({ view: "matrix" })}>{t("Inspect built-in modules in the capability matrix")}</Button>}
     </>
   );
@@ -29,7 +31,6 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
   const [selection, setSelection] = useState("");
   const [search, setSearch] = useState("");
   const [versions, setVersions] = useState<Record<string, string>>({});
-  const creationKeys = useRef<Record<string, string>>({});
   const cleanup = async (id: string) => {
     setBusy(id); setRefused(current => ({ ...current, [id]: "" }));
     try {
@@ -39,25 +40,11 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
     } catch { setRefused(current => ({ ...current, [id]: t("Resource cleanup is unconfirmed. Retry to check the same resources.") })); }
     finally { setBusy(""); }
   };
-  if (!items.length) return <p className="text-sm text-muted">{t("This library is empty. Download a package or import a local file to begin.")}</p>;
+  if (!items.length) return null;
   const act = async (schema: string, id: string, payload: unknown) => {
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
     await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) }); // the host's own reason stays on the card
     setBusy("");
-  };
-  const createDrafts = async (id: string, version: string) => {
-    const identity = `${id}@${version}`, key = creationKeys.current[identity] ??= crypto.randomUUID();
-    setBusy(id); setRefused(current => ({ ...current, [id]: "" }));
-    try {
-      const response = await client.call<Api.PackageDraftResult>("POST", `/v1/packages/${encodeURIComponent(id)}/drafts`, { version, key });
-      if (!response.ok) {
-        setRefused(current => ({ ...current, [id]: apiErrorMessage(response.body) ?? t("Application drafts could not be created.") }));
-        return;
-      }
-      delete creationKeys.current[identity];
-      open({ view: "project", params: { id: response.body.applicationID } });
-    } catch (error) { setRefused(current => ({ ...current, [id]: apiErrorMessage(error) ?? t("The draft request is unconfirmed. Retry to check the same request.") })); }
-    finally { setBusy(""); }
   };
   const ids = [...new Set(items.map(item => item.descriptor.id || item.installed?.id || ""))];
   const selected = ids.includes(selection) ? selection : undefined;
@@ -97,7 +84,7 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
               {d.blueprint && <Tag label={t("Application blueprint")} tone="info" />}
             </div>
             {(d.description || d.runtime || d.blueprint) && <div className="flex justify-end"><ContextHelp title={d.title || held?.title || id}>{d.description && <p>{d.description}</p>}{d.runtime && <p>{t("Installing makes this exact version available to Connections. Configure and check a connection before publishing it; installation does not enable device writes.")}</p>}{d.blueprint && <p>{t("Install this version, then create editable application drafts from its blueprint. Review and publish those drafts in Application Studio. Creating drafts does not create business records or grant access.")}</p>}</ContextHelp></div>}
-            <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select value={version} disabled={busy === id} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
+            <label className="grid min-w-0 gap-1 text-xs">{t("Exact package version")}<Select aria-label={t("Exact package version")} value={version} disabled={busy === id} onChange={event => setVersions(current => ({ ...current, [id]: event.target.value }))}>
               <option value="">{t("Choose an exact version")}</option>{available.map(item => <option key={item.descriptor.version} value={item.descriptor.version}>{item.descriptor.version}{item.descriptor.version === held?.version ? ` · ${t(state === "retired" ? "Last installed" : "Installed")}` : ""}</option>)}
             </Select></label>
             {!chosen && <p role="status" className="text-sm text-muted">{t("Choose an exact version to review installation.")}</p>}
@@ -131,7 +118,8 @@ function PackageList({ items, refresh }: { items: Api.PackageView[]; refresh: ()
                   </li>)}</ol>
                 </div>
               </Disclosure>}
-              {can("build.app.create") && state === "active" && held?.version === d.version && chosen && <div><Button size="sm" variant="primary" disabled={busy === id} onClick={() => void createDrafts(id, d.version)}>{t("Create application drafts")}</Button></div>}
+              {chosen && <PackageRequirements id={id} version={d.version} />}
+              {can("build.app.create") && chosen && <div><Button size="sm" variant="primary" disabled={busy === id} onClick={() => open({ view: "package-preparation", params: { id, version: d.version } })}>{t("Prepare applications")}</Button></div>}
               {chosen && (next === "install" || different) && !can("platform.package.install") && <p role="status" className="text-muted">{t("Ask an administrator to install {id} version {version}, then return here to create application drafts.", { id, version: d.version })}</p>}
             </div>}
             {chosen && (next === "install" || different) && <div className="flex flex-wrap items-center gap-2 text-xs">

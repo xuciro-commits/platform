@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "This application is unavailable. Reopen it from the application list.": "此应用当前不可用，请从应用列表重新打开。",
   "Tokens": "Token",
   "Workflow": "流程",
   "Model": "模型",

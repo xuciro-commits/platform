@@ -2772,6 +2772,22 @@ export type OrgSeed = {
   memberships: Membership[];
 };
 
+export type PackageAIRequirement = {
+  ref: AssetRef;
+  draftId?: string;
+  model?: string;
+  ready: boolean;
+};
+
+export type PackageApplication = {
+  ref: AssetRef;
+  title: string;
+  draftId?: string;
+  state?: string;
+  published: boolean;
+  pages: string[];
+};
+
 export type PackageArtifactInfo = {
   digest: string;
   mediaType: string;
@@ -2783,6 +2799,16 @@ export type PackageBlueprint = {
   assets: ReleaseAsset[];
   guide?: string;
   setup?: PackageSetup;
+};
+
+export type PackageConnection = {
+  ref: AssetRef;
+  title: string;
+  draftId?: string;
+  kind: string;
+  credential: boolean;
+  configured: boolean;
+  ready: boolean;
 };
 
 export type PackageContribution = {
@@ -2833,6 +2859,19 @@ export type PackageInspectRequest = {
   content?: unknown;
 };
 
+export type PackagePreparation = {
+  package: string;
+  version: string;
+  applications: PackageApplication[];
+  connections: PackageConnection[];
+  ai: PackageAIRequirement[];
+  roles: PackageRoleRequirement[];
+  setup?: PackageSetup;
+  installed: boolean;
+  installedVersion?: string;
+  installationState?: string;
+};
+
 export type PackagePreview = {
   descriptor: PackageDescriptor;
   digest: string;
@@ -2846,6 +2885,12 @@ export type PackageRemoval = {
   ok: boolean;
   needsCleanup: boolean;
   blockers: string[];
+};
+
+export type PackageRoleRequirement = {
+  app: string;
+  role: string;
+  held: boolean;
 };
 
 export type PackageSetup = {
