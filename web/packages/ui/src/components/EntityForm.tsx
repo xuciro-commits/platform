@@ -71,19 +71,17 @@ export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLab
 }) {
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
   // A conditional field (#138) that does not apply is kept in the form's state but not sent.
-  return <InputDraftProvider isolated scope="record-form"><FieldForm preserveCleared schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
+  return <InputDraftProvider isolated scope="record-form"><FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
     sourceFields={sourceFields} fieldInput={fieldInput} onTrial={onTrial} context={context} defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} onValuesChange={onValuesChange ? v => onValuesChange(activeValues(entity, v) as Partial<R>) : undefined} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
 }
 
-function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, onTrial, context, sourceFields, fieldInput, preserveCleared = false }: {
+function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, onTrial, context, sourceFields, fieldInput }: {
   fieldInput?: (field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode;
   onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>; context?: React.ReactNode; sourceFields?:Api.FieldInfo[];
   issues?:Api.FieldIssue[]; schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
   onSubmit: (values: any, event?: unknown) => void | boolean | Promise<void | boolean>; submitLabel?: string; onCancel?: () => void; onBusy?: (busy: boolean) => void; locked?: boolean;
   onValuesChange?: (values: Record<string, unknown>) => void;
   submitDisabled?: boolean;
-  /** Record patches use null to clear; omission means keep the original value. */
-  preserveCleared?: boolean;
 }) {
   const inputs=useInputDrafts();
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
@@ -114,7 +112,12 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
   useEffect(()=>{for(const issue of issues??[])if(issue.path.length===1&&fields.some(f=>f.name===issue.path[0]))setError(issue.path[0]!,{type:"owner",message:issue.message});},[issues,setError]);
   // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
   const current = useWatch({control}) as Record<string, unknown>;
-  const semanticValues=(values:Record<string,unknown>)=>Object.fromEntries(Object.entries(values).map(([key,value])=>[key,!preserveCleared&&visualCleared.current.has(key)&&value===null?undefined:value]));
+  // A cleared structured field is omitted, so "Not set" stays a different value from an
+  // explicit null. A cleared scalar field keeps its null: the host keeps every left-out
+  // field ("Change fields of ...; fields left out keep their value."), and a scalar has
+  // no other way to say "clear me".
+  const structuredFields=new Set(fields.filter(field=>["json","lines"].includes(field.type.type)).map(field=>field.name));
+  const semanticValues=(values:Record<string,unknown>)=>Object.fromEntries(Object.entries(values).map(([key,value])=>[key,visualCleared.current.has(key)&&value===null&&structuredFields.has(key)?undefined:value]));
   const sourceValidate = (values:Record<string,unknown>):Api.FieldIssue[] => {
     const readonly=Object.fromEntries(fields.filter(field=>field.type.readOnly).map(field=>[field.name,(defaultValues as Record<string,unknown>|undefined)?.[field.name]]));
     const found:Api.FieldIssue[] = sourceFields ? structuredIssues(values,sourceFields) : Object.keys(values).filter(key=>!fields.some(field=>field.name===key&&(!field.type.readOnly||JSON.stringify(values[key])===JSON.stringify(readonly[key])))).map(key=>({path:[key],code:"unknown",message:t("This field is not declared.")}));

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/internal/construction"
-	"platformserver/internal/host"
 
 	"reflect"
 	"slices"
@@ -264,7 +263,7 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 	}
 	switch r := record.(type) {
 	case construction.Connection:
-		body = construction.ConnectionDefinition{Name: r.Name, Title: r.Title, Kind: r.Kind, Marking: r.Marking, Credential: r.Secret != "", Protocol: construction.PortableDriverBinding(r.Protocol)}
+		body = construction.ConnectionDefinition{Name: r.Name, Title: r.Title, Kind: r.Kind, Marking: r.Marking, Credential: r.Secret != ""}
 	case construction.Source:
 		if r.Connection == "" || r.Header != "" || strings.Contains(r.URL, "://") || r.AllowPrivate {
 			return asset, fmt.Errorf("portable source %s needs a connection and relative address without inline headers", r.Name)
@@ -595,7 +594,7 @@ func (b *Build) integrationConfiguration(asset platform.ReleaseAsset) (any, erro
 		if d.Name != asset.Ref.Name || !slices.Contains(construction.ConnectionKinds, d.Kind) {
 			return nil, fmt.Errorf("invalid connection definition")
 		}
-		record = construction.Connection{Name: d.Name, Title: d.Title, Kind: d.Kind, Marking: d.Marking, Protocol: d.Protocol}
+		record = construction.Connection{Name: d.Name, Title: d.Title, Kind: d.Kind, Marking: d.Marking}
 	case platform.AssetSource:
 		var d construction.SourceDefinition
 		if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -724,19 +723,6 @@ func (b *Build) ExecutionConnection(live construction.Connection) (construction.
 	r := fixed.(construction.Connection)
 	if r.Kind != live.Kind {
 		return construction.Connection{}, fmt.Errorf("connection binding kind differs from its accepted definition")
-	}
-	if !reflect.DeepEqual(construction.PortableDriverBinding(r.Protocol), construction.PortableDriverBinding(live.Protocol)) {
-		return construction.Connection{}, fmt.Errorf("connection protocol binding differs from its accepted definition")
-	}
-	r.Protocol = live.Protocol
-	if r.Protocol != nil {
-		packages, ok := b.host.(host.DriverPackages)
-		if !ok {
-			return construction.Connection{}, fmt.Errorf("protocol packages are unavailable on this host")
-		}
-		if err := packages.CheckDriverBinding(*r.Protocol); err != nil {
-			return construction.Connection{}, err
-		}
 	}
 	if live.Published != "" {
 		var a platform.ReleaseAsset

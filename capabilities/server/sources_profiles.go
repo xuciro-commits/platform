@@ -267,16 +267,11 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	t.mu.Unlock()
 	for _, c := range conns {
 		check := construction.ConnectionCheck{At: now}
-		if c.Protocol != nil {
-			check = t.checkProtocolConnection(context.Background(), c, now)
-		} else {
-			detail, err := t.checkConnection(c)
-			check.OK, check.Detail = err == nil, detail
-			if err != nil {
-				check.Error = err.Error()
-			}
+		detail, err := t.checkConnection(c)
+		check.OK, check.Detail = err == nil, detail
+		if err != nil {
+			check.Error = err.Error()
 		}
-		check.Samples = nil
 		payload, _ := json.Marshal(map[string]any{"revision": c.Revision, "check": check})
 		caller := t.automation(construction.ID, false)
 		sub := &pb.Submission{TenantId: t.ID, PrincipalId: caller.ID, Authority: construction.ID, IdempotencyKey: fmt.Sprintf("checked:%s:%d:%s", c.ID, c.Revision, now.UTC().Format(time.RFC3339Nano)),

@@ -227,11 +227,7 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	if err != nil {
 		return "", err
 	}
-	migrated, err := t.migrationActivationLocked(candidateID)
-	if err != nil {
-		return "", err
-	}
-	installations, bootstrap, err = t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "" || migrated)
+	installations, bootstrap, err = t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "")
 	if err != nil {
 		return "", err
 	}

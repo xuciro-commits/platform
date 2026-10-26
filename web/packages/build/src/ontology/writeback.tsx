@@ -10,7 +10,7 @@ import type { Api } from "@platform/kernel";
 import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
 // Writebacks retain the connection and request mapping. Explicit business
-// confirmations and device dispatches decide when to send and whether to retry.
+// confirmations and dispatches decide when to send and whether to retry.
 type Field = { from: string; to: string; convert?: string };
 type Answer = { at: string; effect: string; target: string; result: string; detail?: string; answer?: string };
 type Draft = { id: string; revision: number; name: string; title: string; connection: string; object: string; on: string; method?: string; transport?: string; path?: string; mapping: Field[]; result: Field[]; state: string; sent?: number; rejected?: number; failed?: number; answers?: Answer[] };
@@ -23,7 +23,7 @@ export function Writebacks() {
   const { source, role } = useHost(), { open } = useApplicationWorkspace();
   if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Writebacks")} help={t("Declare the connection and request mapping for external writes. Accepted actions, business confirmations and device dispatches keep their own sending and retry rules.")}
+    <PageHeader title={t("Writebacks")} help={t("Declare the connection and request mapping for external writes. Accepted actions, business confirmations and dispatches keep their own sending and retry rules.")}
       actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
     <ResourceList source={source} type="build.writeback" fields={["title", "object", "on", "connection", "sent", "failed", "state"]} onOpen={(record) => open({ view: "writeback", params: { id: record.id } })} />
   </div>;
@@ -80,7 +80,7 @@ export function WritebackEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Writeback name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="grtosap" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Writeback title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("Object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, on: "create", mapping: [], result: [] })}><option value="">{t("Choose an object type")}</option>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
-        <label className={fieldClass}>{t("After action")}<Select value={draft.on} onChange={(e) => patch({ on: e.target.value })}>{verbs.map((v) => <option key={v} value={v}>{v==="confirmation"?t("Only explicit business confirmations"):v==="dispatch"?t("Only declared device dispatches"):v==="transaction"?t("Only explicit transaction effects"):v}</option>)}</Select>
+        <label className={fieldClass}>{t("After action")}<Select value={draft.on} onChange={(e) => patch({ on: e.target.value })}>{verbs.map((v) => <option key={v} value={v}>{v==="confirmation"?t("Only explicit business confirmations"):v==="dispatch"?t("Only declared dispatches"):v==="transaction"?t("Only explicit transaction effects"):v}</option>)}</Select>
           <span className="text-xs text-muted">{t("The decision's payload is what gets sent; create and edit carry the fields, a declared action carries its own payload.")}</span></label>
       </Panel>
       <Panel title={t("Request")} className="grid min-w-0 content-start gap-3">

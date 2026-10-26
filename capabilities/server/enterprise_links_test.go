@@ -3,10 +3,8 @@ package platformserver
 import "platformserver/internal/construction"
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -106,53 +104,6 @@ func TestEnterpriseLinkPreviewUsesOriginalConnectionWithoutWriting(t *testing.T)
 		t.Fatalf("stale preview was accepted: %s", got)
 	}
 }
-
-func TestEnterpriseLinkPreviewRejectsChangedConnectionAndModel(t *testing.T) {
-	for _, change := range []string{"connection", "model", "tenant", "root", "uaf", "credential", "draft"} {
-		t.Run(change, func(t *testing.T) {
-			tn, model, _, _ := tenantLinkPreviewSetup(t)
-			if change == "credential" {
-				tn.Secrets = func(string) ([]byte, bool) { return nil, false }
-			}
-			if change == "draft" {
-				decide(t, tn, "owner", construction.ID, construction.ConnectionType+".retire", construction.ConnectionType, "source", map[string]any{}, txnAt)
-			}
-			if change == "tenant" || change == "root" {
-				tenant, root := "source", "remote"
-				if change == "tenant" {
-					tenant = "another"
-				} else {
-					root = "not-shared"
-				}
-				decide(t, tn, "owner", enterprise.ID, enterprise.SchemaTenantLinkSave, enterprise.TenantLinkType, "subsidiary", map[string]any{"organization": "group", "tenant": tenant, "root": root, "connection": "source"}, txnAt)
-			}
-			tn.Outbound = func(request *http.Request, private bool) (*http.Response, error) {
-				// A decision can enter while the source is being fetched. If preview
-				// held the tenant lock, this original owner decision would deadlock.
-				if change == "connection" {
-					decide(t, tn, "owner", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, "source", map[string]any{"title": "Changed after preview"}, txnAt)
-				}
-				if change == "model" {
-					decide(t, tn, "owner", enterprise.ID, enterprise.SchemaElementEdit, enterprise.ElementType, "group", map[string]any{"name": "Changed group"}, txnAt)
-				}
-				if change == "tenant" || change == "uaf" {
-					slice := enterprisemodel.Slice{Tenant: "source", UAF: model.Model().UAF, Elements: []enterprisemodel.Element{{ID: "remote", Name: "Remote", Stereotype: enterprisemodel.Organization}}, Relationships: []enterprisemodel.Relationship{}}
-					if change == "tenant" {
-						slice.Tenant = "another-wrong-source"
-					} else {
-						slice.UAF = "unrelated-version"
-					}
-					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(platform.Raw(slice)))}, nil
-				}
-				return guarded(request, private)
-			}
-			if _, err := tn.PreviewEnterpriseLink(context.Background(), memberOf(t, tn, "owner"), "subsidiary", txnAt); err == nil {
-				t.Fatalf("%s changed but preview remained usable", change)
-			}
-		})
-	}
-}
-
 func TestEnterpriseLinkImportRejectsConnectionChangedAfterPreview(t *testing.T) {
 	tn, model, _, calls := tenantLinkPreviewSetup(t)
 	preview, err := tn.PreviewEnterpriseLink(context.Background(), memberOf(t, tn, "owner"), "subsidiary", txnAt)

@@ -3,8 +3,8 @@ import { once } from "node:events";
 import { Builder, Editor, Member, expect, fresh, pageUIProfile, test } from "./kit";
 
 for (const fixture of [
-  { industry: "hospitality", baseURL: "http://127.0.0.1:18496", builder: "manager", member: "desk" },
-  { industry: "manufacturing", baseURL: "http://127.0.0.1:18497", builder: "supervisor", member: "operator-l1" },
+  { industry: "primary", baseURL: "http://127.0.0.1:18496", builder: "manager", member: "desk" },
+  { industry: "secondary", baseURL: "http://127.0.0.1:18497", builder: "supervisor", member: "operator-l1" },
 ]) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL, actionTimeout: 10_000 });

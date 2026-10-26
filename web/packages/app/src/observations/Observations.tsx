@@ -21,7 +21,7 @@ export function Observations({ app, name, record }: { app?: string; name?: strin
   const rows = query.data ?? [];
   const selected = rows.find(item => assetKey(item.ref) === picked || !picked && item.ref.app === app && item.ref.name === name) ?? (!name ? rows[0] : undefined);
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title={t("Observations")} help={t("Read current device values or external time-series windows, and apply window decisions to business records.")} actions={can("build.observation.create") && <Button onClick={() => open({ view: "observation-source", params: { id: "new" } })}>{t("New observation source")}</Button>} />
+    <PageHeader title={t("Observations")} help={t("Read external time-series windows and apply window decisions to business records.")} actions={can("build.observation.create") && <Button onClick={() => open({ view: "observation-source", params: { id: "new" } })}>{t("New observation source")}</Button>} />
     {query.isError && <Notice tone="danger" role="alert" message={t("Observation sources could not be loaded.")} />}
     {query.isPending && <p role="status">{t("Loading…")}</p>}
     <label className="grid gap-1 text-xs">{t("Published observation source")}<Select aria-label={t("Published observation source")} value={selected ? assetKey(selected.ref) : ""} onChange={event => pick(event.target.value)}>
@@ -39,7 +39,7 @@ export function ObservationRead({ info, initialRecord = "" }: { info: Api.Observ
   const untilNow = () => new Date().toISOString();
   const [record, setRecord] = useState(initialRecord), [until, setUntil] = useState(untilNow);
   const [since, setSince] = useState(() => new Date(Date.now() - definition.windowSeconds * 1000).toISOString());
-  const [mode, setMode] = useState(definition.intervals?"intervals":info.supportsLatest ? "latest" : "summary"), [limit, setLimit] = useState(500);
+  const [mode, setMode] = useState(definition.intervals?"intervals":"summary"), [limit, setLimit] = useState(500);
   const [result, setResult] = useState<Api.ObservationResult>();
   const [evaluation, setEvaluation] = useState<Api.ObservationEvaluation>();
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -57,7 +57,7 @@ export function ObservationRead({ info, initialRecord = "" }: { info: Api.Observ
     const serial = ++generation.current, captured = scope;
     setBusy(true); setError(""); setEvaluation(undefined); setResult(undefined);
     try {
-      const request = mode === "latest" ? { record, mode } : { record, since, until, mode, limit: mode === "points"||mode==="intervals" ? limit : 0 };
+      const request = { record, since, until, mode, limit: mode === "points"||mode==="intervals" ? limit : 0 };
       const answer = await client.call<Api.ObservationResult>("POST", `${path}/read`, request);
       if (!mounted.current || serial !== generation.current || captured !== currentScope.current) return;
       if (!answer.ok) throw Error(apiErrorMessage(answer.body) ?? t("The observation could not be read."));
@@ -89,27 +89,25 @@ export function ObservationRead({ info, initialRecord = "" }: { info: Api.Observ
   return <div className="grid min-w-0 gap-4">
     <Panel title={definition.title} help={<>
       {definition.description&&<p>{definition.description}</p>}
-      <p>{mode==="latest"?t("Current readings come from the device connection with their quality and timestamps. Use a historical window for business decisions."):t("Raw points and their retention remain in the external store. Reading a window does not create platform records; only accepted decisions and compact values are retained.")}</p>
+      <p>{t("Raw points and their retention remain in the external store. Reading a window does not create platform records; only accepted decisions and compact values are retained.")}</p>
     </>} className="grid gap-3">
       <fieldset disabled={locked} className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1 text-xs"><span>{t("Observation record")}</span><RecordLookup source={source} type={definition.object.name} value={record} onChange={value => setRecord(value ?? "")} ariaLabel={t("Observation record")} /></div>
-        <label className="grid gap-1 text-xs">{t("Observation read mode")}<Select value={mode} onChange={event => setMode(event.target.value)}>{info.supportsLatest && <option value="latest">{t("Current device reading")}</option>}<option value="summary">{t("External summary")}</option><option value="points">{t("Original points")}</option>{definition.intervals&&<option value="intervals">{t("State intervals")}</option>}</Select></label>
-        {mode !== "latest" && <>
+        <label className="grid gap-1 text-xs">{t("Observation read mode")}<Select value={mode} onChange={event => setMode(event.target.value)}><option value="summary">{t("External summary")}</option><option value="points">{t("Original points")}</option>{definition.intervals&&<option value="intervals">{t("State intervals")}</option>}</Select></label>
           <DateTimeInput title={t("Observation since")} label={t("Observation since")} value={since} offset="Z" onChange={setSince} />
           <DateTimeInput title={t("Observation until")} label={t("Observation until")} value={until} offset="Z" onChange={setUntil} />
           <Button onClick={() => { const now = untilNow(); setUntil(now); setSince(new Date(Date.parse(now) - definition.windowSeconds * 1000).toISOString()); }}>{t("Use current decision window")}</Button>
-        </>}
         {(mode === "points"||mode==="intervals") && <label className="grid gap-1 text-xs">{t("Point limit")}<Input type="number" min={1} max={5000} value={limit} onChange={event => setLimit(Number(event.target.value))} /></label>}
       </fieldset>
-      <div className="flex flex-wrap gap-2"><Button disabled={locked || !record || mode !== "latest" && (!since || !until)} onClick={() => void read()}>{mode === "latest" ? t("Read current value") : t("Read observation window")}</Button>{offered && mode !== "latest" && (definition.decision?.mode === "intervals" ? mode === "intervals" : mode !== "intervals") && <Button variant="primary" disabled={busy || !record || !until} onClick={() => void evaluate()}>{pending.current ? t("Retry original observation decision") : t("Evaluate declared decision")}</Button>}{can("build.observation.edit") && <Button variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(info.ref) } })}>{t("Dependencies and capabilities")}</Button>}</div>
+      <div className="flex flex-wrap gap-2"><Button disabled={locked || !record && (!since || !until)} onClick={() => void read()}>{t("Read observation window")}</Button>{offered && (definition.decision?.mode === "intervals" ? mode === "intervals" : mode !== "intervals") && <Button variant="primary" disabled={busy || !record || !until} onClick={() => void evaluate()}>{pending.current ? t("Retry original observation decision") : t("Evaluate declared decision")}</Button>}{can("build.observation.edit") && <Button variant="ghost" onClick={() => open({ view: "lineage", params: { ref: assetKey(info.ref) } })}>{t("Dependencies and capabilities")}</Button>}</div>
       <Disclosure summary={t("Observation source details")}><div className="grid gap-3 py-3">
         <PropertyList columns={3} items={[
           ...metadata,
-          ...(mode!=="latest"?[
+          ...[
             [t("Decision window (seconds)"),String(definition.windowSeconds)] as [string,string],
             [t("External retention (seconds)"),String(definition.expectedRetentionSeconds)] as [string,string],
             [t("Granularity (seconds)"),String(definition.expectedGranularitySeconds)] as [string,string],
-          ]:[]),
+          ],
         ]}/>
       </div></Disclosure>
       {error && <Notice tone="danger" role="alert" message={error} />}
@@ -123,16 +121,6 @@ export function ObservationRead({ info, initialRecord = "" }: { info: Api.Observ
 
 export function ObservationWindowResult({ result }: { result: Api.ObservationResult }) {
   if(result.intervals)return <StateIntervalResult result={result} analysis={result.intervals}/>;
-  if (result.latest) {
-    const sample = result.latest;
-    const quality = ({ good: t("Good quality"), bad: t("Bad quality"), uncertain: t("Uncertain quality"), stale: t("Stale reading") } as Record<string, string>)[sample.quality] ?? sample.quality;
-    return <Panel role="region" aria-label={t("Current device reading")} title={t("Current device reading")} className="grid gap-3">
-      <p className="text-2xl font-semibold tabular-nums">{sample.value === undefined || sample.value === null ? t("No value") : String(sample.value)}{sample.unit && <span className="ml-2 text-sm font-normal text-muted">{sample.unit}</span>}</p>
-      <PropertyList items={[[t("Device"), sample.device], [t("Signal"), sample.signal], [t("Quality"), quality], [t("Observed at"), formatStamp(sample.at)], [t("Received at"), formatStamp(sample.receivedAt)]]} />
-      {sample.quality !== "good" && <Notice tone="warning" role="status" message={sample.reason || quality} />}
-      <Disclosure summary={t("Reading source details")}><PropertyList items={[[t("Connection"), sample.source.connection], [t("Configuration revision"), sample.source.revision], [t("Read generation"), sample.source.generation], ...(sample.source.sequence ? [[t("Sequence"), sample.source.sequence] as [string, string]] : [])]} /></Disclosure>
-    </Panel>;
-  }
   const window = result.window, points = result.points ?? [];
   const statistics: [string, string][] = window.count ? [[t("First"), window.first ?? ""], [t("Latest"), window.last ?? ""], [t("Minimum"), window.min ?? ""], [t("Maximum"), window.max ?? ""], [t("Sum"), window.sum ?? ""], [t("Mean"), window.mean ?? ""]] : [];
   return <div className="grid min-w-0 gap-3">

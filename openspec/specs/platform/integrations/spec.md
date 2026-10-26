@@ -2,11 +2,11 @@
 
 ## Purpose
 
-规定逻辑连接、来源、版本化数据集、管道、效果投递、业务确认、设备派发、观测和协议网关的协作边界。它们复用正式发布、当前授权、Work 与接受结果；技术通信事实不能自动变成业务事实，不新增连接存储、调度器或业务执行权威。
+规定逻辑连接、来源、版本化数据集、管道、效果投递、业务确认、外部派发、观测和外部系统访问的协作边界。它们复用正式发布、当前授权、Work 与接受结果；技术通信事实不能自动变成业务事实，不新增连接存储、调度器或业务执行权威。
 
 通用接受与提交未知见 [宿主](../../runtime/host/spec.md)，工件与包生命周期见 [应用生命周期](../application-lifecycle/spec.md)，身份与派生数据保护见 [授权](../../runtime/access-control/spec.md)。本模块不提供跨系统 exactly-once、工业实时控制、安全联锁或未经验证的真机兼容承诺。
 
-实现定位（仓库根相对路径）：`capabilities/server/internal/construction/connection.go`、`capabilities/server/internal/construction/source.go`、`capabilities/server/sources.go`、`capabilities/server/pipelines.go`、`capabilities/server/confirmation_reconcile.go`、`capabilities/server/dispatch_effects.go`、`capabilities/server/dispatch_readback.go`、`capabilities/server/observations.go`、`capabilities/server/observation_decision.go`、`capabilities/server/protocol_connections.go`、`capabilities/server/driver/`、`capabilities/server/gateway/`。
+实现定位（仓库根相对路径）：`capabilities/server/internal/construction/connection.go`、`capabilities/server/internal/construction/source.go`、`capabilities/server/sources.go`、`capabilities/server/pipelines.go`、`capabilities/server/confirmation_reconcile.go`、`capabilities/server/dispatch_effects.go`、`capabilities/server/dispatch_readback.go`、`capabilities/server/observations.go`、`capabilities/server/observation_decision.go`。
 
 ## Requirements
 
@@ -16,8 +16,8 @@
 
 #### Scenario: 应用迁往另一城市
 
-- **GIVEN** 应用使用稳定逻辑连接和设备身份
-- **WHEN** 管理员为新环境绑定不同网关地址和密钥名
+- **GIVEN** 应用使用稳定的逻辑连接身份
+- **WHEN** 管理员为新环境绑定不同的地址和密钥名
 - **THEN** 业务页面与规则继续引用原逻辑身份
 - **AND** 来源环境凭据不进入导出工件
 
@@ -76,14 +76,14 @@ Confirmation SHALL 记录各参与方接受、拒绝、未知、对账差异及�
 - **THEN** 回锁复核阻止把该读取变成新的业务确认
 - **AND** 原差异与已有裁定不被覆盖
 
-### Requirement: 危险设备动作未知不得自动重发
+### Requirement: 危险的外部动作未知不得自动重发
 
-Dispatch SHALL 区分投递、设备执行、回读结果和人工结束。不能安全重复的动作 MUST 在实际发送前保存未知边界，崩溃、超时或取消等待不得使其恢复为可自动发送；继续处理依靠声明的回读或有权人工决定，补偿也是另一个有独立证据的动作。
+Dispatch SHALL 区分投递、外部执行、回读结果和人工结束。不能安全重复的动作 MUST 在实际发送前保存未知边界，崩溃、超时或取消等待不得使其恢复为可自动发送；继续处理依靠声明的回读或有权人工决定，补偿也是另一个有独立证据的动作。
 
-#### Scenario: 非幂等设备动作发送后崩溃
+#### Scenario: 非幂等动作发送后崩溃
 
 - **GIVEN** 派发已进入一次非安全重发尝试
-- **WHEN** 宿主在收到设备结果前退出并恢复
+- **WHEN** 宿主在收到外部结果前退出并恢复
 - **THEN** 原派发保持未知并等待回读或人工处理
 - **AND** 不从普通重试队列再执行同一物理动作
 
@@ -100,7 +100,7 @@ Observation SHALL 通过有界读取取得明确设备、信号、单位和时�
 
 ### Requirement: 完整窗口必须有覆盖证据
 
-协议来源及声明 requireComplete 的观测 SHALL 检查保留范围、窗口完成时间、截断与质量。MUST 拒绝将只有汇总数值的结果当作完整窗口；旧不可变发布保持其原解释，新发布使用当前声明，不反写旧证据或复制求值器。
+声明 requireComplete 的观测 SHALL 检查保留范围、窗口完成时间、截断与质量。MUST 拒绝将只有汇总数值的结果当作完整窗口；旧不可变发布保持其原解释，新发布使用当前声明，不反写旧证据或复制求值器。
 
 #### Scenario: 请求窗口仍在等待迟到数据
 
@@ -109,38 +109,16 @@ Observation SHALL 通过有界读取取得明确设备、信号、单位和时�
 - **THEN** 系统明确报告未就绪或不合格
 - **AND** 不提前接受完整窗口业务结论
 
-### Requirement: 协议包复用安装而隔离设备 I/O
-
-协议包 SHALL 复用原包许可、确切版本、制品摘要和类型化配置，在独立网关/驱动进程执行技术 I/O。包版本、接口版本、配置修订及设备兼容 MUST 分别核验；只列出实际支持的目标与操作，安装不等于授权设备写入，也不意味着进程是恶意代码沙箱。
-
-#### Scenario: 只读协议 profile 被用于写命令
-
-- **GIVEN** 已安装包只声明读取和采样
-- **WHEN** 连接或派发要求写入设备
-- **THEN** 原配置或执行检查明确拒绝
-- **AND** 不通过通用 HTTP 写入口绕开 profile 能力
-
-### Requirement: 配置切换保留在途请求与旧回读
-
-派发 SHALL 冻结包版本、配置修订、命令映射及尝试身份。切换连接 MUST 停止旧配置的新写入，并保留在途请求需要的原回读映射；不能满足旧会话读取时推迟切换或显式人工结束，不能将旧修订重定向到新地址。取消仅停止等待，不证明网络报文或物理动作撤回。
-
-#### Scenario: 更换点位地址时仍有未知派发
-
-- **GIVEN** 原派发依赖旧配置修订的设备和点地址
-- **WHEN** 管理员发布新的连接修订
-- **THEN** 原派发继续用旧映射回读，或明确保持未知并阻止不安全切换
-- **AND** 新配置不重新解释原指令，也不自动漂移写入节点
-
 ### Requirement: 跨系统协同保持原权威与诚实边界
 
-外部协议协同 SHALL 通过版本化请求、答复与补偿，由各方保存自己的接受事实；网关只返回技术通信事实，不创建告警、工单或业务决定。MUST 区分模拟服务、协议子集、真实设备及客户交付证据；平台不提供跨权威原子提交或安全控制回路。
+外部协议协同 SHALL 通过版本化请求、答复与补偿，由各方保存自己的接受事实；外部系统只返回技术通信事实，不创建告警、工单或业务决定。MUST 区分模拟服务、真实外部系统及客户交付证据；平台不提供跨权威原子提交或安全控制回路。
 
-#### Scenario: 网关命令返回成功
+#### Scenario: 外部系统命令返回成功
 
-- **GIVEN** 网关报告报文已发送或协议已应答
+- **GIVEN** 外部系统报告报文已发送或已应答
 - **WHEN** 系统展示业务处理进度
 - **THEN** 该结果只满足对应投递阶段
-- **AND** 设备完成和业务确认仍等待各自声明的证据
+- **AND** 外部执行完成和业务确认仍等待各自声明的证据
 
 ### Requirement: 声明式外部智能体调用复用原回写与 A2A 通道
 
@@ -156,11 +134,11 @@ Observation SHALL 通过有界读取取得明确设备、信号、单位和时�
 
 - **WHEN** 构建者修改传输方式、映射或当前连接配置
 - **THEN** 原在途请求继续使用原接受内容和部署密钥名
-- **AND** A2A 不能成为设备协议命令的旁路
+- **AND** A2A 不能成为绕过已声明回写与投递语义的旁路
 
 ### Requirement: 状态区间分析使用通用声明与原观测来源
 
-构建者 SHALL 用原观测、规则和流程声明采样来源、状态条件、事件时间、窗口、迟到策略及结果动作，将状态持续区间转为可追溯的业务结果。原始采样存储与完整性仍遵守原观测约定；MUST 保存结果依据的来源、配置和处理版本，不将质量未知、缺失或截断解释为正常状态。行业状态名与通知规则不得成为宿主或驱动的专用分支。
+构建者 SHALL 用原观测、规则和流程声明采样来源、状态条件、事件时间、窗口、迟到策略及结果动作，将状态持续区间转为可追溯的业务结果。原始采样存储与完整性仍遵守原观测约定；MUST 保存结果依据的来源、配置和处理版本，不将质量未知、缺失或截断解释为正常状态。行业状态名与通知规则不得成为宿主的专用分支。
 
 #### Scenario: 在两个行业声明不同状态区间
 
@@ -199,30 +177,3 @@ Observation SHALL 通过有界读取取得明确设备、信号、单位和时�
 - **THEN** 重试沿原身份接续，恢复只应用已保存结果，不重做已经接受的分析或通知
 - **AND** 原始采样和处理状态继续由原来源及流程 owner 管理
 
-### Requirement: 协议能力资源随原使用范围释放
-
-协议驱动 SHALL 使用原版本化接口及确切包、摘要和连接修订参与装配。会话、采样任务、定时器、设备连接和共享子进程明确归属与使用引用；排空或卸载依 `runtime/host` 停止新使用并完成清理。预览结束 MUST 释放其私有资源；最后使用者退出后释放共享进程，不能关闭仍被其他连接或租户使用的资源。
-
-#### Scenario: 关闭一个共用驱动进程的连接
-
-- **GIVEN** 两个有效连接使用同一包版本的驱动进程
-- **WHEN** 第一个连接结束并完成原在途责任
-- **THEN** 其采样、定时器、会话和设备连接被清理，另一连接继续使用原进程
-- **AND** 最后一个使用者退出后才结束并等待进程，不只从目录隐藏连接
-
-#### Scenario: 预览失败或超时
-
-- **WHEN** 预览完成、失败、取消或超过有效期
-- **THEN** 清理本次预览拥有的会话与任务；没有其他使用者时释放其进程
-- **AND** 清理失败可见且能重试，不遗留定期采样或每次重建一个常驻进程
-
-### Requirement: 驱动替换保留原命令核对责任
-
-协议能力替换 SHALL 继续遵守本模块的原配置回读与未知派发语义；未完成责任作为明确的排空阻碍。原修订只保留必要的核对访问，不重新开放新命令或不受限采样。卸载 MUST 保留技术尝试收据及业务关联，不将停进程解释为撤回设备动作，也不因重启重新发送原命令。
-
-#### Scenario: 退役包仍有可能已发送的命令
-
-- **GIVEN** 技术尝试处于结果未知，核对仍需要旧包及点位修订
-- **WHEN** 管理员排空或卸载该驱动
-- **THEN** 阻止新使用并明确展示原核对阻碍，保留必要原绑定或要求显式人工结束
-- **AND** 不能将旧命令转给新驱动重发，原尝试收据在清理或重启后仍可核对

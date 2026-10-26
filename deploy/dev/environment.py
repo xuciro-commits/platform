@@ -247,7 +247,7 @@ def prepare_database():
     # Compose and run.sh share the deployment environment. Resolve the actual
     # configured database without printing credentials or modifying the archive.
     config = json.loads(subprocess.check_output(COMPOSE + ['config', '--format', 'json'], cwd=ROOT))
-    argument = next(value for value in config['services']['hospitality-server']['command'] if value.startswith('-database='))
+    argument = next(value for value in config['services']['platform-server']['command'] if value.startswith('-database='))
     name = urllib.parse.urlsplit(argument.removeprefix('-database=')).path.lstrip('/')
     if not re.fullmatch(r'[a-z][a-z0-9_]{0,62}', name):
         raise RuntimeError('Local database names must use lowercase letters, digits and underscores.')
@@ -267,7 +267,7 @@ def local():
         raise RuntimeError('缺少 Air，请先运行 make setup（只需一次）。')
     stop()
     write_state({'mode': 'native', 'status': 'starting'})
-    run(COMPOSE + ['stop', 'hospitality-server', 'wasm-worker', 'code-builder'])
+    run(COMPOSE + ['stop', 'platform-server', 'wasm-worker', 'code-builder'])
     run(['make', 'infra', 'infra-compute'])
     prepare_database()
     LOGS.mkdir(parents=True, exist_ok=True)

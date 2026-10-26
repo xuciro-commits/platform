@@ -9,7 +9,7 @@ import { resourceKinds, resourceRoute } from "../projects/resources";
 import { releaseDraftsValue, type JointChoice, type ReleaseKind } from "./release";
 import { releaseSelectionProblem } from "./selection";
 
-export const draftChangeKind = (change: Api.DraftChange): ReleaseKind => change.type === "build.app" ? "app" : change.type === "build.migration-plan" ? "migration" : change.type === "build.process" ? "flow"
+export const draftChangeKind = (change: Api.DraftChange): ReleaseKind => change.type === "build.app" ? "app" : change.type === "build.process" ? "flow"
   : resourceKinds.find(kind => kind.type === change.type && (kind.ref ?? kind.kind) === change.ref.kind && (kind.kind !== "automation" || change.variant === "automation") && (kind.kind !== "flow" || change.variant !== "automation"))?.kind as ReleaseKind;
 const changeKey = (change: Api.DraftChange) => `${change.type}/${change.id}`;
 

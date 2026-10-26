@@ -68,17 +68,6 @@ func (h hostView) QueueDispatch(c platform.Caller, r *pb.ChangeRecord, run platf
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Dispatch delivery has no original frozen request")
 	}
 	request.DispatchKey = key
-	if request.Protocol != nil {
-		if run.Attempt == 1 && !run.Compensating {
-			if err := h.t.checkDriverBinding(*request.Protocol); err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
-			}
-		}
-		if request.DriverCommand == nil {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Protocol command has no frozen mapping")
-		}
-		request.DriverDispatch = &platform.DriverDispatchIdentity{Scope: request.Protocol.Scope, RunID: run.ID, AttemptID: run.Intent, BusinessKey: key, Deadline: run.Deadline, BindingRevision: request.Protocol.Revision(), PackageDigest: request.Protocol.Digest}
-	}
 	typ, _, _ := strings.Cut(run.Subject, "/")
 	applications, err := h.t.bindApplications(platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: typ}, run.Release, "")
 	if err != nil {

@@ -23,10 +23,9 @@ import (
 const observationResponseBytes = 1 << 20
 
 type ObservationInfo struct {
-	Ref            platform.AssetRef              `json:"ref"`
-	Version        string                         `json:"version"`
-	Definition     platform.ObservationDefinition `json:"definition"`
-	SupportsLatest bool                           `json:"supportsLatest,omitempty"`
+	Ref        platform.AssetRef              `json:"ref"`
+	Version    string                         `json:"version"`
+	Definition platform.ObservationDefinition `json:"definition"`
 }
 
 type ObservationRead struct {
@@ -61,7 +60,6 @@ type observationReadPlan struct {
 	device     string
 	stamp      string
 	sources    []string
-	retained   bool
 }
 
 func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Error) {
@@ -74,24 +72,10 @@ func (t *Tenant) Observations(m platform.Member) ([]ObservationInfo, *kernel.Err
 	if err != nil {
 		return nil, observationUnavailable(err)
 	}
-	connections, _, refusal := platform.Find[construction.Connection](t.automation(construction.ID, false), platform.Query{Limit: 500})
-	if refusal != nil {
-		return nil, refusal
-	}
-	live := map[string]bool{}
-	if owner, ok := t.app(construction.ID).(host.IntegrationDefinitions); ok {
-		for _, connection := range connections {
-			if connection.State == "ready" && !connection.Archived {
-				if fixed, err := owner.ExecutionConnection(connection); err == nil && fixed.Protocol != nil {
-					live[fixed.Name] = true
-				}
-			}
-		}
-	}
 	out := []ObservationInfo{}
 	for _, definition := range definitions {
 		if definition.Observation != nil {
-			out = append(out, ObservationInfo{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation, SupportsLatest: definition.Observation.Connection.App == construction.ID && live[definition.Observation.Connection.Name]})
+			out = append(out, ObservationInfo{Ref: definition.Ref, Version: definition.Version, Definition: *definition.Observation})
 		}
 	}
 	return out, nil
@@ -283,12 +267,6 @@ func observationDecisionFields(decision platform.ObservationDecision) []string {
 }
 
 func checkObservationRead(q *ObservationRead, now time.Time) error {
-	if q.Mode == "latest" {
-		if !q.Since.IsZero() || !q.Until.IsZero() || q.Limit != 0 {
-			return fmt.Errorf("A current observation does not request a time window or point limit")
-		}
-		return nil
-	}
 	if !slices.Contains([]string{"summary", "points", "intervals"}, q.Mode) || q.Since.IsZero() || q.Until.IsZero() || !q.Since.Before(q.Until) || q.Until.Sub(q.Since) > time.Duration(platform.ObservationMaxWindowSeconds)*time.Second || q.Until.After(now.Add(time.Minute)) {
 		return fmt.Errorf("choose a bounded observation time window and summary or points")
 	}
@@ -308,12 +286,6 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	result := platform.ObservationResult{Ref: plan.info.Ref, Version: plan.info.Version, Object: plan.info.Definition.Object, Record: q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Sources: plan.sources}
 	if q.Mode == "intervals" && plan.info.Definition.Intervals == nil {
 		return result, fmt.Errorf("the observation has no declared state interval analysis")
-	}
-	if q.Mode == "latest" && plan.connection.Protocol == nil {
-		return result, fmt.Errorf("current device reads require a protocol connection")
-	}
-	if err := t.configureProtocol(ctx, plan.connection, plan.retained); err != nil {
-		return result, err
 	}
 	body, err := json.Marshal(struct {
 		Device string    `json:"device"`
@@ -354,8 +326,7 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	var answer struct {
 		Window    platform.ObservationWindow         `json:"window"`
 		Points    []platform.ObservationPoint        `json:"points,omitempty"`
-		Coverage  *platform.DriverCoverage           `json:"coverage,omitempty"`
-		Samples   []platform.DriverSample            `json:"samples,omitempty"`
+		Coverage  *platform.ObservationCoverage      `json:"coverage,omitempty"`
 		Intervals *platform.ObservationIntervalInput `json:"intervals,omitempty"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -367,7 +338,7 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 		return result, fmt.Errorf("observation storage returned trailing data")
 	}
 	if q.Mode == "intervals" {
-		if answer.Intervals == nil || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) > 0 || len(answer.Samples) > 0 || answer.Coverage != nil || !answer.Intervals.Since.Equal(q.Since) || !answer.Intervals.Until.Equal(q.Until) || len(answer.Intervals.Points) > q.Limit {
+		if answer.Intervals == nil || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) > 0 || answer.Coverage != nil || !answer.Intervals.Since.Equal(q.Since) || !answer.Intervals.Until.Equal(q.Until) || len(answer.Intervals.Points) > q.Limit {
 			return result, fmt.Errorf("state observations must match their requested window and bounded point shape")
 		}
 		analysis, err := platform.AnalyzeObservationIntervals(*plan.info.Definition.Intervals, *answer.Intervals, now, t.services.Rules)
@@ -380,27 +351,10 @@ func (t *Tenant) fetchObservation(ctx context.Context, plan observationReadPlan,
 	if answer.Intervals != nil {
 		return result, fmt.Errorf("state intervals cannot replace a numeric observation window")
 	}
-	if q.Mode == "latest" {
-		if len(answer.Samples) != 1 || answer.Window != (platform.ObservationWindow{}) || len(answer.Points) != 0 || answer.Coverage != nil {
-			return result, fmt.Errorf("current observation needs exactly its declared point without a window")
-		}
-		sample := answer.Samples[0]
-		if err := platform.CheckObservationLatest(sample, plan.device, plan.info.Definition.Signal, plan.info.Definition.Unit); err != nil {
-			return result, err
-		}
-		if sample.Source.Connection != plan.connection.Protocol.ConnectionID(plan.connection.ID) || sample.Source.Revision != plan.connection.Protocol.Revision() || sample.Source.Generation == "" {
-			return result, fmt.Errorf("current observation has another connection or configuration revision")
-		}
-		result.Latest = &sample
-		return result, nil
-	}
-	if len(answer.Samples) != 0 {
-		return result, fmt.Errorf("current device readings cannot replace a historical observation window")
-	}
 	if err := platform.CheckObservationWindowRange(answer.Window, q.Since, q.Until, plan.info.Definition.Unit); err != nil {
 		return result, err
 	}
-	if plan.connection.Protocol != nil || plan.info.Definition.RequireComplete {
+	if plan.info.Definition.RequireComplete {
 		if answer.Coverage == nil {
 			return result, fmt.Errorf("observation storage did not declare window coverage")
 		}

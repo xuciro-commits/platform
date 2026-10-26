@@ -542,13 +542,6 @@ func (b *Build) openDispatch(c platform.Caller, receipt *pb.ChangeRecord, txn *p
 			return nil, err
 		}
 		req.Dispatch, req.SafeRetry = id, command.SafeRetry()
-		if req.Protocol != nil {
-			name, _ := req.Body["name"].(string)
-			if name == "" {
-				name = command.Name
-			}
-			req.DriverCommand = &platform.DriverCommandValue{Name: name, Value: req.Body["value"]}
-		}
 		return platform.Raw(req), nil
 	}
 	run.Request, err = prepare(command)

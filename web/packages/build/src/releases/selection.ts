@@ -28,7 +28,7 @@ export async function applicationDraftSelection(roots: JointChoice[], referenced
   return selection;
 }
 
-export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app" | "migration";
+export type ReleaseKind = Exclude<ResourceKind, "action" | "automation"> | "app";
 /** Entry points check the same complete request that the review will send. */
 export function releaseSelectionProblem(drafts: readonly JointChoice[]): string | undefined {
   if (drafts.length > 128) return "A joint candidate accepts at most 128 drafts. Select a supported application closure.";

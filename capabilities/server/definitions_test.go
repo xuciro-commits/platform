@@ -42,6 +42,7 @@ func TestDefinitions(t *testing.T) {
 			tn.definitions[i].Requires = nil // no dependency must still be a JSON array
 		}
 	}
+	tn.setDefinitions(tn.definitions) // direct mutation must move the cache generation
 	if got := find(tn.Definitions(clerk), object); got == nil || got.Requires == nil {
 		t.Fatalf("empty dependencies should be an array: %+v", got)
 	} else if raw, err := json.Marshal(got); err != nil || !strings.Contains(string(raw), `"requires":[]`) {

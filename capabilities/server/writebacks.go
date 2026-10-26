@@ -1,7 +1,6 @@
 package platformserver
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -160,10 +159,6 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		return out
 	}
 	if req.Transport == "a2a" {
-		if req.Protocol != nil {
-			out.Result, out.Detail = "rejected", "A2A cannot send a device protocol command"
-			return out
-		}
 		message := x
 		message.Body = string(platform.Raw(map[string]any{"data": req.Body}))
 		answer := t.sendA2A(Endpoint{ID: "connection/" + req.Connection, URL: req.URL, Secret: req.Secret, AllowPrivate: req.AllowPrivate}, message, true)
@@ -171,18 +166,6 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		return answer
 	}
 	var requestBody any = req.Body
-	if req.Protocol != nil {
-		if req.Dispatch == "" || req.DriverDispatch == nil || req.DriverCommand == nil {
-			out.Result, out.Detail = "rejected", "Protocol command has no original dispatch identity"
-			return out
-		}
-		connection := construction.Connection{Record: platform.Record{ID: req.Connection}, Kind: "http", Address: req.Gateway, Secret: req.Secret, AllowPrivate: req.AllowPrivate, Protocol: req.Protocol}
-		if err := t.configureProtocol(context.Background(), connection, true); err != nil {
-			out.Result, out.Detail = "unknown", err.Error()
-			return out
-		}
-		requestBody = platform.DriverExecute{Dispatch: *req.DriverDispatch, Command: *req.DriverCommand}
-	}
 	body, _ := json.Marshal(requestBody)
 	r, err := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
 	if err != nil {
@@ -228,25 +211,6 @@ func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 		switch {
 		case code >= 200 && code < 300:
 			out.Result = "delivered"
-			if req.Protocol != nil {
-				var execution platform.DriverExecution
-				if json.Unmarshal(answer, &execution) != nil {
-					out.Result, out.Detail = "unknown", "The protocol gateway returned no communication result"
-					return out
-				}
-				switch execution.Sending {
-				case "answered":
-					out.Result = "delivered"
-				case "not-sent", "refused":
-					out.Result = "rejected"
-				default:
-					out.Result = "unknown"
-				}
-				out.Detail = execution.Reason
-				if execution.State == "unknown" {
-					out.Result = "unknown"
-				}
-			}
 		case code >= 400 && code < 500 && code != 408 && code != 429:
 			out.Result, out.Detail = "rejected", resp.Status+": "+clipDetail(answer)
 		default:

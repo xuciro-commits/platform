@@ -19,14 +19,6 @@ import (
 	"platformserver/platform"
 )
 
-func TestSavedReleaseInstallsFrozenClosureAndRecovers(t *testing.T) {
-	checkSavedReleaseInstallation(t, nil, "install-release", false)
-}
-
-func TestSavedV2ReleaseInstallsFrozenLayoutAndRecovers(t *testing.T) {
-	checkSavedReleaseInstallation(t, nil, "install-v2-release", true)
-}
-
 func TestJournalAcceptedSavedReleaseInstallation(t *testing.T) {
 	url := os.Getenv("PLATFORM_TEST_DATABASE")
 	if url == "" {

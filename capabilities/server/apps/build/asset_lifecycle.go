@@ -16,7 +16,7 @@ import (
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
 		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
-		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert,
+		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert,
 	}
 }
 func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVersion ...string) (platform.ReleaseAsset, error) {
@@ -68,9 +68,6 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	}
 	if ref.Kind == platform.AssetAlert {
 		return b.alertPinned(ref, version)
-	}
-	if ref.Kind == platform.AssetMigration {
-		return b.migrationPlanPinned(ref, version)
 	}
 	if ref.Kind == platform.AssetQuery {
 		return b.QueryReleaseAsset(ref.Name, version)
@@ -248,16 +245,6 @@ func (b *Build) integrationTargets(assets []platform.ReleaseAsset, ctx platform.
 				restore()
 				return nil, err
 			}
-			if !reflect.DeepEqual(construction.PortableDriverBinding(conn.Protocol), d.Protocol) {
-				restore()
-				return nil, fmt.Errorf("connection %s needs the same protocol package, profile and logical point shape", asset.Ref)
-			}
-			if conn.Protocol != nil {
-				if err := b.validConnection(conn); err != nil {
-					restore()
-					return nil, fmt.Errorf("connection %s: %s", asset.Ref, err.Message)
-				}
-			}
 			b.releaseDraftIDs[asset.Ref] = target
 		} else {
 			rows, err := b.integrationInventory(asset.Ref.Kind)
@@ -383,10 +370,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 	if err != nil {
 		return nil, err
 	}
-	out, err := b.prepareMigrationPlanInstallations(assets)
-	if err != nil {
-		return nil, err
-	}
+	out := []platform.AssetInstallation{}
 	samples, err := b.prepareSampleSetInstallations(assets)
 	if err != nil {
 		return nil, err
@@ -475,9 +459,6 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	if schema == SchemaSampleSet {
 		return sampleSetInstallation(image)
 	}
-	if schema == SchemaMigrationPlan {
-		return migrationPlanInstallation(image)
-	}
 	typ, _, _ := strings.Cut(schema, ".publish")
 	if schema != typ+".publish" {
 		return platform.AssetInstallation{}, fmt.Errorf("invalid publication schema")
@@ -544,7 +525,7 @@ func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error
 	if decoded.Ref != plan.Ref || decoded.Record != plan.Record {
 		return fmt.Errorf("installation identity differs from its saved image")
 	}
-	if plan.Ref.Kind == platform.AssetMigration || plan.Ref.Kind == platform.AssetSampleSet {
+	if plan.Ref.Kind == platform.AssetSampleSet {
 		return nil
 	}
 	if !construction.ValueIntegrationKind(plan.Ref.Kind) {
@@ -671,7 +652,7 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 			}
 		}
 	}
-	if construction.ValueIntegrationKind(plan.Ref.Kind) || (plan.Ref.Kind == platform.AssetMigration || plan.Ref.Kind == platform.AssetSampleSet) {
+	if construction.ValueIntegrationKind(plan.Ref.Kind) || plan.Ref.Kind == platform.AssetSampleSet {
 		_, err := b.DecodeAssetInstallation(plan.Schema, plan.Image)
 		return err
 	}
@@ -884,7 +865,7 @@ func (b *Build) validateReleaseMember(assets []platform.ReleaseAsset, member pla
 }
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
-	kinds := map[string]platform.AssetKind{construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.ProcessType: platform.AssetFlow, MigrationPlanType: platform.AssetMigration, SampleSetType: platform.AssetSampleSet,
+	kinds := map[string]platform.AssetKind{construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.ProcessType: platform.AssetFlow, SampleSetType: platform.AssetSampleSet,
 		construction.PropertyTypeType: platform.AssetPropertyType, construction.LinkTypeType: platform.AssetLinkType, construction.QueryType: platform.AssetQuery, construction.FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent,
 		construction.CodeType: platform.AssetCompute, construction.TableType: platform.AssetCompute, construction.AlertType: platform.AssetAlert, construction.TestPlanType: platform.AssetTestPlan}
 	kind := kinds[typ]
@@ -904,12 +885,6 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	case platform.AssetSampleSet:
 		d, _, err := decodeSampleAsset(asset)
 		return SampleSetType, SampleSetRecord{Name: d.Name, Title: d.Title, Samples: d.Samples}, err
-	case platform.AssetMigration:
-		d, _, err := decodeMigrationAsset(asset)
-		if err != nil {
-			return "", nil, err
-		}
-		return MigrationPlanType, MigrationPlanRecord{Name: d.Name, Title: d.Title, Plan: d.Plan}, nil
 	case platform.AssetPropertyType:
 		var d platform.PropertyType
 		if err := construction.ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -1025,7 +1000,7 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 // keep their installed descriptors; agent and observation projection remains
 // narrower than this ordinary record visibility check.
 func (*Build) DefinitionMetadataKind(kind platform.AssetKind) bool {
-	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetMigration, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert}, kind)
+	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert}, kind)
 }
 
 func (*Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Definition, error) {

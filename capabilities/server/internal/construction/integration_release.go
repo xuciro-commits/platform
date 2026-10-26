@@ -15,31 +15,11 @@ import (
 // Portable definitions are typed owner contracts. Local identities, addresses,
 // credentials and mutable data/execution observations never enter these shapes.
 type ConnectionDefinition struct {
-	Name       string                  `json:"name"`
-	Title      string                  `json:"title"`
-	Kind       string                  `json:"kind"`
-	Marking    string                  `json:"marking,omitempty"`
-	Credential bool                    `json:"credential,omitempty"`
-	Protocol   *platform.DriverBinding `json:"protocol,omitempty"`
-}
-
-// PortableDriverBinding keeps the logical point/command shape, never site addresses or credentials.
-func PortableDriverBinding(binding *platform.DriverBinding) *platform.DriverBinding {
-	if binding == nil {
-		return nil
-	}
-	var out platform.DriverBinding
-	_ = json.Unmarshal(platform.Raw(binding), &out)
-	out.Scope = ""
-	out.Configuration.Connection = nil
-	out.Configuration.Scenario, out.Configuration.Seed = "", 0
-	for i := range out.Configuration.Devices {
-		out.Configuration.Devices[i].Settings = nil
-	}
-	for i := range out.Configuration.Points {
-		out.Configuration.Points[i].Address = ""
-	}
-	return &out
+	Name       string `json:"name"`
+	Title      string `json:"title"`
+	Kind       string `json:"kind"`
+	Marking    string `json:"marking,omitempty"`
+	Credential bool   `json:"credential,omitempty"`
 }
 
 type SourceDefinition struct {

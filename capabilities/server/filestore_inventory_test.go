@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"github.com/minio/minio-go/v7"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,8 +14,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/minio/minio-go/v7"
 )
 
 func TestFileInventoryPagesKeepActualModificationTimes(t *testing.T) {

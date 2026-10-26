@@ -77,6 +77,7 @@ func TestOwnedAssetDiscoveryUsesMetadataReadAuthority(t *testing.T) {
 	row := tn.records.types[construction.DatasetType].rows.Get("private-dataset-id")
 	row.Value.FieldByName("Published").SetString("{damaged")
 	row.Original = nil
+	tn.setDefinitions(tn.definitions) // direct damage moves the cache generation like any install would
 	if _, err := tn.definitionsFor(builder); err == nil || len(tn.Definitions(builder)) != 0 {
 		t.Fatal("damaged accepted metadata was silently omitted or served stale")
 	}

@@ -20,7 +20,7 @@ import (
 	"platformserver/platform"
 )
 
-const MaxPackageImportBytes = 96 << 20
+const MaxPackageImportBytes = 16 << 20
 const SchemaPackageImport = "platform.package.import"
 const SchemaPackageRemoveSource = "platform.package.remove-source"
 
@@ -37,17 +37,15 @@ type PackageInspectRequest struct {
 }
 
 type PackagePreview struct {
-	Descriptor PackageDescriptor     `json:"descriptor"`
-	Digest     string                `json:"digest"`
-	Origin     string                `json:"origin"`
-	Precheck   Precheck              `json:"precheck"`
-	Artifacts  []PackageArtifactInfo `json:"artifacts"`
+	Descriptor PackageDescriptor `json:"descriptor"`
+	Digest     string            `json:"digest"`
+	Origin     string            `json:"origin"`
+	Precheck   Precheck          `json:"precheck"`
 }
 
 type packageOffer struct {
-	Descriptor PackageDescriptor        `json:"descriptor"`
-	Origin     string                   `json:"origin"`
-	Artifacts  []PackageArchiveArtifact `json:"artifacts,omitempty"`
+	Descriptor PackageDescriptor `json:"descriptor"`
+	Origin     string            `json:"origin"`
 }
 
 func packageOfferKey(tenant, digest string) string {
@@ -109,9 +107,9 @@ func (t *Tenant) inspectPackage(ctx context.Context, request PackageInspectReque
 		origin = address.String()
 	}
 	if len(content) == 0 || len(content) > MaxPackageImportBytes {
-		return preview, fmt.Errorf("A platform package must be non-empty and at most 96 MiB")
+		return preview, fmt.Errorf("A platform package must be non-empty and at most 16 MiB")
 	}
-	descriptor, artifacts, err := decodePackageContent(content)
+	descriptor, err := decodePackageContent(content)
 	if err != nil {
 		return preview, err
 	}
@@ -128,11 +126,11 @@ func (t *Tenant) inspectPackage(ctx context.Context, request PackageInspectReque
 	if refusal != nil {
 		return preview, fmt.Errorf("The package dependencies could not be inspected")
 	}
-	return t.storePackagePreview(ctx, descriptor, origin, precheck, artifacts)
+	return t.storePackagePreview(ctx, descriptor, origin, precheck)
 }
 
-func (t *Tenant) storePackagePreview(ctx context.Context, descriptor PackageDescriptor, origin string, precheck Precheck, artifacts []PackageArchiveArtifact) (PackagePreview, error) {
-	raw, err := json.Marshal(packageOffer{Descriptor: descriptor, Origin: origin, Artifacts: artifacts})
+func (t *Tenant) storePackagePreview(ctx context.Context, descriptor PackageDescriptor, origin string, precheck Precheck) (PackagePreview, error) {
+	raw, err := json.Marshal(packageOffer{Descriptor: descriptor, Origin: origin})
 	if err != nil {
 		return PackagePreview{}, err
 	}
@@ -141,12 +139,12 @@ func (t *Tenant) storePackagePreview(ctx context.Context, descriptor PackageDesc
 	if err = t.files().Put(ctx, packageOfferKey(t.ID, digest), raw, "application/json"); err != nil {
 		return PackagePreview{}, err
 	}
-	return PackagePreview{Descriptor: descriptor, Digest: digest, Origin: origin, Precheck: precheck, Artifacts: packageArtifactInfo(artifacts)}, nil
+	return PackagePreview{Descriptor: descriptor, Digest: digest, Origin: origin, Precheck: precheck}, nil
 }
 
 func (d *Console) packageOffer(digest string) (packageOffer, error) {
 	var offer packageOffer
-	if !platform.DriverDigest(digest) {
+	if !platform.ValidDigest(digest) {
 		return offer, fmt.Errorf("The reviewed package digest is invalid")
 	}
 	raw, err := d.host.GetPackageArtifact(packageOfferKey(d.tenant, digest))
@@ -163,12 +161,12 @@ func (d *Console) packageOffer(digest string) (packageOffer, error) {
 	if err := offer.Descriptor.validate(); err != nil {
 		return offer, err
 	}
-	return offer, checkPackageArtifacts(offer.Descriptor, offer.Artifacts)
+	return offer, nil
 }
 
 func (d *Console) decidePackageSource(_ platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	var input struct{ ID, Digest string }
-	if json.Unmarshal(s.GetPayload(), &input) != nil || input.ID == "" || !platform.DriverDigest(input.Digest) {
+	if json.Unmarshal(s.GetPayload(), &input) != nil || input.ID == "" || !platform.ValidDigest(input.Digest) {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the reviewed package content")
 	}
 	if s.GetSchema().GetName() == SchemaPackageRemoveSource {

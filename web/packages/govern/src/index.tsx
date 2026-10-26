@@ -195,7 +195,7 @@ export const ai = defineApp({
   nav: (host) => [{ label: t("AI assistance"), items: [
     { label: t("Playground"), icon: <MessageSquare />, route: { view: "ai-playground" } },
     { label: t("Usage"), icon: <BarChart3 />, route: { view: "ai-usage" } },
-    ...(host.role("ai") === "admin" ? [{ label: t("AI configuration"), icon: <Bot />, route: { view: "ai-configuration" } }] : []),
+    ...(host.role("ai") === "admin" ? [{ label: t("AI configuration"), icon: <Bot />, route: { view: "ai-configuration" } }, { label: t("Providers and models"), icon: <Bot />, route: { view: "ai-providers" } }] : []),
   ] }],
 });
 

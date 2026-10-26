@@ -59,7 +59,7 @@ func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.Rel
 	}
 	sealed, err := t.releases.candidate(release)
 	if err != nil {
-		return platform.ReleaseCandidate{}, migrationRefusal(err)
+		return platform.ReleaseCandidate{}, conflictRefusal(err)
 	}
 	root := platform.AssetRef{App: app, Kind: platform.AssetAction, Name: action}
 	if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
@@ -69,7 +69,7 @@ func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.Rel
 		}
 	}
 	closed, err := sealed.Closure([]platform.AssetRef{root})
-	return closed, migrationRefusal(err)
+	return closed, conflictRefusal(err)
 }
 
 func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalRequest) (host.WorkHost, *kernel.Error) {
@@ -78,7 +78,7 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	}
 	sealed, err := h.t.releases.candidate(a.Release)
 	if err != nil {
-		return nil, migrationRefusal(err)
+		return nil, conflictRefusal(err)
 	}
 	root := platform.AssetRef{App: a.App, Kind: platform.AssetAction, Name: a.Action}
 	typ, _, _ := strings.Cut(a.Target, "/")
@@ -89,11 +89,11 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	}
 	closed, err := sealed.Closure([]platform.AssetRef{root})
 	if err != nil {
-		return nil, migrationRefusal(err)
+		return nil, conflictRefusal(err)
 	}
 	execution, err := h.retainedExecution(c, a.Release, closed.Assets)
 	if err != nil {
-		return nil, migrationRefusal(err)
+		return nil, conflictRefusal(err)
 	}
 	bound := execution.(host.WorkHost)
 	app, action, known := bound.Action(a.Action)

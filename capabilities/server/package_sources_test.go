@@ -108,30 +108,25 @@ func TestLocalPackageSourceRejectsChangedVersionAndInvalidContent(t *testing.T) 
 	}
 }
 
-func TestPackageArchiveReviewRejectsUnboundAndAlteredArtifacts(t *testing.T) {
+func TestPackageReviewRejectsForeignFormatsAndTamperedOffers(t *testing.T) {
 	tenant := composeTenant(t, "archive-review", []Seat{seatOf("admin", "platform:admin")})
-	archive := PackageArchive{Format: "platform.package.v1", Descriptor: PackageDescriptor{ID: "test.archive", Version: "1", Namespace: "test.archive"}}
-	preview, err := tenant.inspectPackage(context.Background(), PackageInspectRequest{Content: platform.Raw(archive)})
-	if err != nil || preview.Descriptor.ID != archive.Descriptor.ID {
+	descriptor := PackageDescriptor{ID: "test.review", Version: "1", Namespace: "test.review"}
+	preview, err := tenant.inspectPackage(context.Background(), PackageInspectRequest{Content: platform.Raw(descriptor)})
+	if err != nil || preview.Descriptor.ID != descriptor.ID {
 		t.Fatal(preview, err)
 	}
-	archive.Artifacts = []PackageArchiveArtifact{{Digest: "sha256:" + strings.Repeat("0", 64), MediaType: "application/octet-stream", Bytes: []byte("changed")}}
-	if _, err := tenant.inspectPackage(context.Background(), PackageInspectRequest{Content: platform.Raw(archive)}); err == nil {
-		t.Fatal("unbound or corrupt artifact passed review")
-	}
-	archive.Artifacts = nil
-	archive.Format = "platform.package.v2"
-	if _, err := tenant.inspectPackage(context.Background(), PackageInspectRequest{Content: platform.Raw(archive)}); err == nil {
-		t.Fatal("unsupported archive format passed review")
+	foreign := map[string]any{"format": "platform.package.v1", "descriptor": descriptor}
+	if _, err := tenant.inspectPackage(context.Background(), PackageInspectRequest{Content: platform.Raw(foreign)}); err == nil {
+		t.Fatal("a foreign archive format passed review")
 	}
 	if len(testConsoleOf(tenant).PackageViews()) != 0 {
-		t.Fatal("archive review installed state")
+		t.Fatal("review installed state")
 	}
 	offerKey := packageOfferKey(tenant.ID, preview.Digest)
 	if err := tenant.files().Put(context.Background(), offerKey, []byte(`{"changed":true}`), "application/json"); err != nil {
 		t.Fatal(err)
 	}
-	if refusal := refuse(t, tenant, "admin", PlatformApp, SchemaPackageImport, PackageType, archive.Descriptor.ID, map[string]any{"id": archive.Descriptor.ID, "digest": preview.Digest}, time.Now()); refusal == "ok" {
+	if refusal := refuse(t, tenant, "admin", PlatformApp, SchemaPackageImport, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "digest": preview.Digest}, time.Now()); refusal == "ok" {
 		t.Fatal("tampered offer was imported")
 	}
 }

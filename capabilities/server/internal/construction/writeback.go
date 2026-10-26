@@ -73,29 +73,25 @@ func (w Writeback) Schema() string { return w.Object + "." + w.On }
 // WritebackRequest is the frozen request an effect carries: everything the
 // dispatcher needs without reading records, the secret only by name.
 type WritebackRequest struct {
-	Connection        string                           `json:"connection,omitempty"`
-	Confirmation      string                           `json:"confirmation,omitempty"`
-	Dispatch          string                           `json:"dispatch,omitempty"`
-	DispatchKey       string                           `json:"dispatchKey,omitempty"`
-	SafeRetry         bool                             `json:"safeRetry,omitempty"`
-	Party             string                           `json:"party,omitempty"`
-	Compensates       string                           `json:"compensates,omitempty"`
-	Version           int                              `json:"version,omitempty"`
-	Object            string                           `json:"object,omitempty"`
-	DefinitionVersion int                              `json:"definitionVersion,omitempty"`
-	Result            []SourceField                    `json:"result,omitempty"`
-	Writeback         string                           `json:"writeback"`
-	Method            string                           `json:"method"`
-	Transport         string                           `json:"transport,omitempty"`
-	Path              string                           `json:"path,omitempty"`
-	URL               string                           `json:"url"`
-	Secret            string                           `json:"secret,omitempty"`
-	AllowPrivate      bool                             `json:"allowPrivate,omitempty"`
-	Body              map[string]any                   `json:"body"`
-	Protocol          *platform.DriverBinding          `json:"protocol,omitempty"`
-	Gateway           string                           `json:"gateway,omitempty"`
-	DriverDispatch    *platform.DriverDispatchIdentity `json:"driverDispatch,omitempty"`
-	DriverCommand     *platform.DriverCommandValue     `json:"driverCommand,omitempty"`
+	Connection        string         `json:"connection,omitempty"`
+	Confirmation      string         `json:"confirmation,omitempty"`
+	Dispatch          string         `json:"dispatch,omitempty"`
+	DispatchKey       string         `json:"dispatchKey,omitempty"`
+	SafeRetry         bool           `json:"safeRetry,omitempty"`
+	Party             string         `json:"party,omitempty"`
+	Compensates       string         `json:"compensates,omitempty"`
+	Version           int            `json:"version,omitempty"`
+	Object            string         `json:"object,omitempty"`
+	DefinitionVersion int            `json:"definitionVersion,omitempty"`
+	Result            []SourceField  `json:"result,omitempty"`
+	Writeback         string         `json:"writeback"`
+	Method            string         `json:"method"`
+	Transport         string         `json:"transport,omitempty"`
+	Path              string         `json:"path,omitempty"`
+	URL               string         `json:"url"`
+	Secret            string         `json:"secret,omitempty"`
+	AllowPrivate      bool           `json:"allowPrivate,omitempty"`
+	Body              map[string]any `json:"body"`
 }
 
 // Request freezes the request for one accepted decision: the payload mapped to
@@ -104,8 +100,8 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 	if err := CheckWritebackTransport(w.Transport, w.Method); err != nil {
 		return WritebackRequest{}, err
 	}
-	if w.Transport == "a2a" && (conn.Kind != "http" || conn.Protocol != nil) {
-		return WritebackRequest{}, fmt.Errorf("A2A uses an HTTP connection without a device protocol")
+	if w.Transport == "a2a" && conn.Kind != "http" {
+		return WritebackRequest{}, fmt.Errorf("A2A uses an HTTP connection")
 	}
 	ValueDefinitionVersion := 0
 	if w.Published != "" {
@@ -157,12 +153,6 @@ func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) 
 		method = "POST"
 	}
 	request := WritebackRequest{Connection: conn.ID, Version: 1, Object: w.Object, DefinitionVersion: ValueDefinitionVersion, Result: slices.Clone(w.Result), Writeback: w.ID, Method: method, Transport: w.Transport, Path: path, URL: conn.Resolve(path), Secret: conn.Secret, AllowPrivate: conn.AllowPrivate, Body: body}
-	if conn.Protocol != nil {
-		if w.On != "dispatch" || method != "POST" || strings.Trim(path, "/") != "execute" {
-			return WritebackRequest{}, fmt.Errorf("protocol commands use a dispatch-only POST execute writeback")
-		}
-		request.Protocol, request.Gateway = conn.Protocol, conn.Address
-	}
 	return request, nil
 }
 

@@ -104,7 +104,7 @@ test("clearing existing required and optional fields stays visible through valid
   expect(screen.getByText("Enter a value.")).toBeTruthy();
   fireEvent.change(name, { target: { value: "New bolt" } });
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
-  expect(submit).toHaveBeenCalledWith({ name: "New bolt", supplier: undefined });
+  expect(submit).toHaveBeenCalledWith({ name: "New bolt", supplier: null });
   expect(screen.getByRole("alert").textContent).toBe("The request was not confirmed. Your input is retained.");
   expect(name.value).toBe("New bolt");
   expect(supplier.value).toBe("");

@@ -368,9 +368,6 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if kind == platform.AssetSampleSet {
 		return b.sampleSetDraftAssets(id)
 	}
-	if kind == platform.AssetMigration {
-		return b.migrationPlanDraftAssets(id)
-	}
 	if kind == platform.AssetPropertyType {
 		return b.propertyTypeDraftAssets(id)
 	}

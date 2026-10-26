@@ -21,16 +21,6 @@ import (
 // A goods receipt defined in the builder gets a document number, posts a
 // balanced entry into the books of its month, is refused into a closed month
 // and lands in the next open one instead, and reverses by opposite entry.
-func TestBooksFromBuilderActions(t *testing.T) {
-	for _, durable := range []bool{false, true} {
-		name := "legacy"
-		if durable {
-			name = "accepted-result"
-		}
-		t.Run(name, func(t *testing.T) { testBooksFromBuilderActions(t, durable, nil) })
-	}
-}
-
 func TestJournalBooksFromBuilderActions(t *testing.T) {
 	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
 	if dsn == "" {

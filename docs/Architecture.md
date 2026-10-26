@@ -31,7 +31,7 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
   internal/          acceptance agents aistate construction enterprise host records rules
-  cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink（独立调试薄壳）、gateway、compute、code-builder、wasm-worker、storage-files、driver-{modbus,s7,simulator}
+  cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink（独立调试薄壳）、compute、code-builder、wasm-worker、storage-files
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 web/
   apps/workspace     @platform/workspace   唯一工作区：构建/运营/系统三区共用壳（session host shell chrome，角色显隐）
@@ -153,7 +153,7 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 
 应用包的准备入口由 `package_preparation.go` 从原包 owner 的完整描述与当前 Build、AI、成员记录投影，提前列出全部应用、外部连接、模型、角色及初始化；已安装版本读取原封存内容，不以公开视图中收窄后的 JSON 重新编译。准备读取加入原实时查询通道，配置、授权和发布后继续原任务。`package_drafts.go` 复用同名现有草稿，归档后明确重建才分配按原请求固定的新记录 ID；逻辑名及内部记录引用仍交原 owner 绑定。草稿归档不运行发布编译，已发布保留检查不变。已发布应用的入口撤回与恢复保存于原 Build 应用状态；发现缓存随应用记录更新失效，撤回不开放旧正式深链，恢复仍使用保留的发布内容。共享资产、业务记录和独立任务不随入口撤回销毁。包的交付验收覆盖安装、使用、放弃与再建；包安装或单项依赖检查通过不能代替这条完整路径。
 
-运行资源由 `platform.Resources` 在取得时登记逆操作，排空拒绝新使用并等待原引用，逆序清理失败保留责任以供重试；不以共享快照覆盖其他实例的后续变化。`gateway` 对会话和在途打开请求共同计数，退出预览只释放自身引用，最后一个引用退出才回收共享驱动进程；采样循环、驱动读取任务与子进程均有等待退出路径。资源清理不撤销已接受数据、收据、已发送消息或设备事实。这一边界借鉴 [Cordis 论文第 5–6 节](https://arxiv.org/abs/2608.25512)：逆操作正确性仍由提供方负责，接口与清理机制不构成任意第三方代码的沙箱证明。
+运行资源由 `platform.Resources` 在取得时登记逆操作，排空拒绝新使用并等待原引用，逆序清理失败保留责任以供重试；不以共享快照覆盖其他实例的后续变化。共享资源按打开请求计数，单个使用者退出只释放自身引用，最后一个引用退出才回收；外部读取与后台任务均有等待退出路径。资源清理不撤销已接受数据、收据、已发送消息或外部事实。这一边界借鉴 [Cordis 论文第 5–6 节](https://arxiv.org/abs/2608.25512)：逆操作正确性仍由提供方负责，接口与清理机制不构成任意第三方代码的沙箱证明。
 
 工作区按当前有效贡献建立视图与记录入口，贡献退出立即卸载其视图和订阅；其他贡献保留自身输入与组件实例。当前租户的暂停、退役及基础选择保存先复用 Workspace 的未保存输入检查，操作者可返回编辑或明确放弃后继续；治理表单本身仍保留未知请求的原输入以供核对。发布与试验检查使用所选规则实现，已保存发布映像的结构核验使用固定参考语法，不在恢复时调用当前提供方重判业务。
 

@@ -26,7 +26,7 @@ func observationWindowForTest() ObservationWindow {
 
 func TestObservationCurrentPointPreservesQualityAndExactValue(t *testing.T) {
 	at := time.Now().UTC()
-	sample := DriverSample{Device: "D1", Signal: "temperature", Unit: "C", Type: "decimal", Value: "23.50000000000000001", Quality: "good", At: at, ReceivedAt: at}
+	sample := ObservationSample{Device: "D1", Signal: "temperature", Unit: "C", Type: "decimal", Value: "23.50000000000000001", Quality: "good", At: at, ReceivedAt: at}
 	if err := CheckObservationLatest(sample, "D1", "temperature", "C"); err != nil {
 		t.Fatal(err)
 	}
@@ -37,13 +37,13 @@ func TestObservationCurrentPointPreservesQualityAndExactValue(t *testing.T) {
 			t.Fatalf("lost a missing %s reading: %v", quality, err)
 		}
 	}
-	for name, change := range map[string]func(*DriverSample){
-		"other device": func(s *DriverSample) { s.Device = "D2" },
-		"other unit":   func(s *DriverSample) { s.Unit = "F" },
-		"rounded JSON": func(s *DriverSample) { s.Value = 23.5 },
-		"not finite":   func(s *DriverSample) { s.Value = "NaN" },
-		"missing good": func(s *DriverSample) { s.Value = nil },
-		"bad value":    func(s *DriverSample) { s.Quality = "bad" },
+	for name, change := range map[string]func(*ObservationSample){
+		"other device": func(s *ObservationSample) { s.Device = "D2" },
+		"other unit":   func(s *ObservationSample) { s.Unit = "F" },
+		"rounded JSON": func(s *ObservationSample) { s.Value = 23.5 },
+		"not finite":   func(s *ObservationSample) { s.Value = "NaN" },
+		"missing good": func(s *ObservationSample) { s.Value = nil },
+		"bad value":    func(s *ObservationSample) { s.Quality = "bad" },
 	} {
 		invalid := sample
 		change(&invalid)

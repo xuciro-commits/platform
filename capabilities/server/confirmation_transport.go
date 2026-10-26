@@ -157,7 +157,7 @@ func (h hostView) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, ru
 	}
 	execution, err := h.retainedExecution(c, run.Release, run.Assets)
 	if err != nil {
-		return "", migrationRefusal(err)
+		return "", conflictRefusal(err)
 	}
 	bound := execution.(interface {
 		Caller(platform.Caller, platform.Member, string) platform.Caller

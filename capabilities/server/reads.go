@@ -115,8 +115,15 @@ func readApp(app platform.App, c platform.Caller, name string, inputs ...json.Ra
 	if app == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	// Named reads are optional: an app implementing neither reader answers
+	// NOT_FOUND without building a manifest it may not be able to build.
+	parameterized, hasParameterized := app.(platform.ParameterizedReader)
+	_, hasPlain := app.(platform.Reader)
+	if !hasParameterized && !hasPlain {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
 	if fields, declared := app.Manifest().ReadInputs[name]; declared {
-		if reader, ok := app.(platform.ParameterizedReader); ok {
+		if reader, ok := parameterized, hasParameterized; ok {
 			raw := json.RawMessage(`{}`)
 			if len(inputs) > 0 && len(inputs[0]) > 0 {
 				raw = inputs[0]

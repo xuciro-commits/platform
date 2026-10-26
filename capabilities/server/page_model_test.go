@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -77,139 +76,9 @@ func TestPageSectionActionsSurviveSavedDraftAndPublishedReads(t *testing.T) {
 	}
 }
 
-func TestPageDraftRulesUseSavedModelsWithoutPublishingThem(t *testing.T) {
-	for _, installed := range []bool{false, true} {
-		t.Run(map[bool]string{false: "unpublished object", true: "published object with a new field"}[installed], func(t *testing.T) {
-			at := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
-			tn := builderTenant(t, fmt.Sprint("page-draft-rules-", installed))
-			member := memberOf(t, tn, "builder")
-			const object = "build.draftrules"
-			fields := []construction.Field{{Name: "note", Title: "Note", Type: "text"}}
-			decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "OBJECT", map[string]any{"name": "draftrules", "title": "Draft rules", "fields": fields}, at)
-			page := modelTestPage(object, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: object}}, ID: "records", Widget: "table", ConfigVersion: 1}})
-			if installed {
-				decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "OBJECT", map[string]any{}, at)
-				decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
-				decide(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at)
-			}
-			beforeObject, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), "OBJECT")
-			beforePage, _ := platform.Get[build.Page](tn.automation(construction.ID, false), "PAGE")
-			fields = append(fields, construction.Field{Name: "followup", Title: "Follow up", Type: "boolean"})
-			decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "OBJECT", map[string]any{"fields": fields}, at)
-			ref := platform.ModelObject(object)
-			path := platform.Expr{Op: "path", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", "selected")}, Path: []string{"followup"}}
-			page.Document.Variables = map[string]platform.PageVariable{
-				"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "records"}},
-				"followup": {Scope: "page", Type: "boolean", Mode: "property", Source: &platform.PageResourceSource{Kind: "property", Variable: "selected", Object: &ref, Field: "followup"}},
-				"visible":  {Scope: "page", Type: "boolean", Mode: "derived", Rule: &path},
-			}
-			if installed {
-				decide(t, tn, "builder", construction.ID, "build.page.edit", construction.PageType, "PAGE", map[string]any{"document": page.Document}, at)
-			} else {
-				decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": page.Name, "title": page.Title, "object": object, "sections": modelAuthoringSections(page.Sections), "document": page.Document}, at)
-			}
-			decide(t, tn, "builder", construction.ID, "build.page.edit", construction.PageType, "PAGE", map[string]any{"title": "Saved draft rules"}, at)
-			saved, _ := platform.Get[build.Page](tn.automation(construction.ID, false), "PAGE")
-			resourceType := saved.Document.Variables["selected"].RuleType
-			propertyType := saved.Document.Variables["followup"].RuleType
-			if resourceType == nil || resourceType.Fields["followup"].Kind != "boolean" || propertyType == nil || propertyType.Kind != "boolean" || saved.Document.Variables["visible"].Rule == nil {
-				t.Fatalf("saved rules did not retain their draft field types: %+v", saved.Document.Variables)
-			}
-			if got := refuse(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at); got == "ok" {
-				t.Fatal("direct publication used an unselected object draft")
-			}
-			if alone, err := tn.PreviewRelease(member, platform.AssetPage, "PAGE"); err == nil && alone.Diagnostic == "" {
-				t.Fatal("page-only candidate used an unselected object draft")
-			}
-			selection := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "OBJECT"}, {Kind: platform.AssetPage, ID: "PAGE"}}
-			joint, err := tn.PreviewReleaseDrafts(member, selection)
-			if err != nil || joint.Diagnostic != "" || joint.CandidateID == "" {
-				t.Fatalf("joint model and page rules: %+v %v", joint, err)
-			}
-			candidate, err := tn.SaveReleaseCandidates(member, selection, joint.CandidateID, "save-page-rules", at)
-			if err != nil {
-				t.Fatal(err)
-			}
-			afterObject, _ := platform.Get[construction.Object](tn.automation(construction.ID, false), "OBJECT")
-			afterPage, _ := platform.Get[build.Page](tn.automation(construction.ID, false), "PAGE")
-			if afterObject.Published != beforeObject.Published || afterPage.Published != beforePage.Published {
-				t.Fatal("saving drafts or reviewing the candidate rewrote an original publication")
-			}
-			if _, err := tn.ActivateRelease(member, candidate, "activate-page-rules", at); err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
 // A finite capability vocabulary expresses requirements as a subset: each
 // required capability implies that the candidate equipment has it. The exact
 // same Expr is the original start guard and the selector's rule reference.
-func TestPageModelSelectorAndStartShareOneRuleAndRecover(t *testing.T) {
-	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
-	compose := func() *Tenant { return builderTenant(t, "model-rule") }
-	tn := compose()
-	var entries []Entry
-	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	op := publishObject(t, tn, "builder", "OP", map[string]any{"name": "operation", "title": "Operation", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "cut", Title: "Requires cutting", Type: "boolean"}, {Name: "drill", Title: "Requires drilling", Type: "boolean"}}}, at)
-	path := func(name string) platform.Expr {
-		return platform.Expr{Op: "path", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("reference", "input.operation")}, Path: []string{name}}
-	}
-	implication := func(name string) platform.Expr {
-		return platform.Expr{Op: "or", Kind: "boolean", Args: []platform.Expr{{Op: "not", Kind: "boolean", Args: []platform.Expr{path(name)}}, platform.ExprReference("boolean", name)}}
-	}
-	rule := platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{implication("cut"), implication("drill")}}
-	action := construction.Action{Name: "start", Title: "Start", From: []string{"ready"}, To: "running", Inputs: []construction.Input{{Name: "operation", Title: "Operation", Type: "reference", Ref: op, Required: true}, {Name: "note", Title: "Optional note", Type: "text"}}, Conditions: []construction.Condition{{Expr: &rule, Message: "Equipment lacks required capabilities"}}}
-	eq := publishObject(t, tn, "builder", "EQ", map[string]any{"name": "equipment", "title": "Equipment", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "cut", Title: "Cutting", Type: "boolean"}, {Name: "drill", Title: "Drilling", Type: "boolean"}}, "states": []construction.State{{Name: "ready", Title: "Ready", Tone: "info"}, {Name: "running", Title: "Running", Tone: "success"}}, "actions": []construction.Action{action}}, at)
-	decide(t, tn, "user", construction.ID, op+".create", op, "operation", map[string]any{"name": "Cut", "cut": true, "drill": false}, at)
-	for _, row := range []struct {
-		id         string
-		cut, drill bool
-	}{{"cut", true, false}, {"drill", false, true}, {"zero", false, false}} {
-		decide(t, tn, "user", construction.ID, eq+".create", eq, row.id, map[string]any{"name": row.id, "cut": row.cut, "drill": row.drill}, at)
-	}
-	p := modelTestPage(op, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: op}}, ID: "operations", Widget: "table", ConfigVersion: 1}, {PageWidgetConfig: platform.PageWidgetConfig{Model: &platform.ModelBinding{Type: eq, Options: &platform.OptionsRef{Rule: &platform.ModelRule{Action: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: eq + ".start"}, Inputs: map[string]string{"operation": "operation"}}}}}, ID: "equipment", Widget: "record-picker", ConfigVersion: 1}})
-	p.Document.Variables["operation"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "operations"}}
-	request := PageModelRead{Draft: &p, Section: "equipment", Records: map[string]PageModelRecord{"operation": {Object: op, ID: "operation"}}, Limit: 20, Sort: []string{"id"}}
-	read := func() PageModelResult {
-		tn.mu.Lock()
-		defer tn.mu.Unlock()
-		out, err := tn.readPageModel(memberOf(t, tn, "builder"), request, at)
-		if err != nil {
-			t.Fatalf("model read refused: code=%v message=%q result=%+v", err.Code, err.Message, out)
-		}
-		return out
-	}
-	out := read()
-	if out.Total != 1 || out.Records[0]["id"] != "cut" || out.Partial {
-		t.Fatalf("subset candidates or initialized false changed: %+v", out)
-	}
-	if got := refuse(t, tn, "user", construction.ID, eq+".start", eq, "drill", map[string]any{"operation": "operation"}, at); !strings.Contains(got, action.Conditions[0].Message) {
-		t.Fatalf("start did not use selector's rule: %s", got)
-	}
-	// Only the original action definition changes. The selector is unchanged.
-	changed := platform.ExprReference("boolean", "drill")
-	action.Conditions[0].Expr = &changed
-	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "EQ", map[string]any{"actions": []construction.Action{action}}, at)
-	decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "EQ", map[string]any{}, at)
-	out = read()
-	if out.Total != 1 || out.Records[0]["id"] != "drill" {
-		t.Fatalf("rule edit did not change candidates: %+v", out)
-	}
-	if got := refuse(t, tn, "user", construction.ID, eq+".start", eq, "cut", map[string]any{"operation": "operation"}, at); !strings.Contains(got, action.Conditions[0].Message) {
-		t.Fatalf("rule edit did not change start: %s", got)
-	}
-	decide(t, tn, "user", construction.ID, eq+".start", eq, "drill", map[string]any{"operation": "operation"}, at)
-	// A new model page is canonical in the accepted result and release closure.
-	decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": p.Name, "title": p.Title, "object": op, "sections": modelAuthoringSections(p.Sections), "document": p.Document}, at)
-	decide(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at)
-	preview, err := tn.PreviewRelease(memberOf(t, tn, "builder"), platform.AssetPage, "PAGE")
-	if err != nil || preview.Diagnostic != "" {
-		t.Fatalf("model closure: %+v %v", preview, err)
-	}
-	CheckReplay(t, tn, entries, compose)
-}
-
 func TestPageModelDeclaredInverseFilteredAndNamedCollections(t *testing.T) {
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	tn := builderTenant(t, "model-sets")

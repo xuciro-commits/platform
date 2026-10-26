@@ -627,17 +627,6 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		out.Requires = append(out.Requires, samples.Dependencies()...)
-	case AssetMigration:
-		var migration MigrationDescriptor
-		if err := json.Unmarshal(asset.Body, &migration); err != nil {
-			return out, err
-		}
-		if err := migration.Check(); err != nil {
-			return out, err
-		}
-		for _, verb := range []string{"start", "advance", "cancel"} {
-			capability("operation", migration.Name+"."+verb, CapabilityAuthoritative, nil, ValueSchema{}, ValueSchema{}, nil)
-		}
 	case AssetInterface:
 		var shape Interface
 		if err := json.Unmarshal(asset.Body, &shape); err != nil {

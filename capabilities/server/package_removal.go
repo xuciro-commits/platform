@@ -5,6 +5,13 @@ import (
 	"slices"
 )
 
+// PackageRemoval is what a person sees before uninstalling: blockers only.
+type PackageRemoval struct {
+	ID       string   `json:"id"`
+	OK       bool     `json:"ok"`
+	Blockers []string `json:"blockers"`
+}
+
 func (d *Console) packageDependents(id string) []string {
 	installed := d.packagesOf()
 	ids := make([]string, 0, len(installed))
@@ -48,7 +55,6 @@ func (d *Console) packageRemoval(id string) *PackageRemoval {
 	if held := d.packagesOf()[id]; held != nil && held.State == "retired" {
 		return &PackageRemoval{ID: id, OK: true, Blockers: []string{}}
 	}
-	blockers, needs := d.host.PackageBlockers(id, d.cleanupProofs(id))
-	blockers = append(d.packageDependents(id), blockers...)
-	return &PackageRemoval{ID: id, OK: len(blockers) == 0, NeedsCleanup: needs, Blockers: blockers}
+	blockers := d.packageDependents(id)
+	return &PackageRemoval{ID: id, OK: len(blockers) == 0, Blockers: blockers}
 }

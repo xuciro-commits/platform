@@ -105,9 +105,6 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if other := s.byGo[info.Go]; other != nil && other.info.Type != info.Type {
 		return fmt.Errorf("%s: another type is already this Go type", info.Type)
 	}
-	if err := s.migrationDefinitionLocked(info); err != nil {
-		return err
-	}
 	et := &entityType{store: s, info: info, rows: records.Rows{}, knowledge: records.KnowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
@@ -177,13 +174,16 @@ func retainedDefinitionVersions[T any](history map[string]T, previousVersion str
 
 // storeDefinition updates the existing discovery registry; callers own
 // declaration validation, version retention and installation side effects.
+// Every mutation — replace, insert, or reorder — moves the definitions
+// generation so member-scoped definition caches never serve stale versions.
 func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 	if index >= 0 {
 		t.definitions[index] = def
 	} else {
-		t.setDefinitions(append(t.definitions, def))
+		t.definitions = append(t.definitions, def)
 	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	t.setDefinitions(t.definitions)
 }
 
 // installDefinitions puts the installed object, its actions and its pages in

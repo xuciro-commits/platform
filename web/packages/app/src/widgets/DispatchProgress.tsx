@@ -18,7 +18,7 @@ export function DispatchProgress({ type, id }: { type: string; id: string }) {
   const query = useReadQuery<{ records: Api.DispatchRun[] }>(`/v1/records/build.dispatch?domain=${encodeURIComponent(JSON.stringify(domain))}&sort=-startedAt,id&limit=50`);
   if (query.isError) return type === "build.dispatch" ? <p role="alert">{t("This dispatch is unavailable to you.")}</p> : null;
   if (!query.data?.records.length) return type === "build.dispatch" ? <p role="status">{t(query.isPending ? "Loading…" : "The dispatch record could not be found.")}</p> : null;
-  return <div className="grid min-w-0 gap-3" role="region" aria-label={t("Device dispatch progress")}>
+  return <div className="grid min-w-0 gap-3" role="region" aria-label={t("Dispatch progress")}>
     {query.data.records.map(run => <DispatchCard key={run.id} run={run} onChanged={async () => { await query.refetch(); }} />)}
   </div>;
 }
@@ -44,7 +44,7 @@ function DispatchCard({ run, onChanged }: { run: Api.DispatchRun; onChanged: () 
   };
   return <Card className="grid min-w-0 gap-3 p-3">
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-2"><strong className="min-w-0 break-words">{run.command.title || run.command.name}</strong><Tag label={stateName(run.state)} tone={run.state === "cancelled" ? "neutral" : terminalStates.includes(run.state) ? "success" : run.state === "failed" ? "danger" : "warning"} /></div>
-    <ContextHelp title={t("Device dispatch progress")}>{t("Control loops stay in the device, gateway or PLC. The platform dispatches and reads status.")}</ContextHelp>
+    <ContextHelp title={t("Dispatch progress")}>{t("Control loops stay outside the platform. The platform dispatches and reads status.")}</ContextHelp>
     <PropertyList columns={2} items={[
       [t("Dispatch target"),<code className="break-all">{run.target}</code>],
       [t("Stable business key"),<code className="select-all break-all">{run.key}</code>],
@@ -76,7 +76,7 @@ function DispatchCard({ run, onChanged }: { run: Api.DispatchRun; onChanged: () 
       {decision === "retarget" && <label className="grid gap-1 text-xs">{t("New dispatch target")}<Select value={target} onChange={event => setTarget(event.target.value)}><option value="">{t("Choose a ready external connection")}</option>{connections.data?.filter(item => item.id !== run.target).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></label>}
       {(decision === "retry" || decision === "retarget") && <p className="text-xs text-warning">{t(safe ? "A new send attempt keeps the original business key. Confirm the target and reason before proceeding." : "This command is unsafe to resend automatically. Confirm the physical outcome before choosing a manual resend; repeating it may cause the target to act again.")}</p>}
       {decision === "complete" && <p className="text-xs text-muted">{t("Mark complete only after checking the physical result. Record what you checked below.")}</p>}
-      {decision === "cancel" && <p className="text-xs text-muted">{t("Canceling records your business decision. It does not stop a device that is already moving.")}</p>}
+      {decision === "cancel" && <p className="text-xs text-muted">{t("Canceling records your business decision. It does not stop external equipment that is already moving.")}</p>}
       <label className="grid gap-1 text-xs">{t("Decision evidence")}<Textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} maxLength={4096} /></label>
       <Button className="w-fit" variant="primary" disabled={!reason.trim() || decision === "retarget" && !target} onClick={() => void review()}>{t("Record dispatch decision")}</Button>
     </fieldset>}

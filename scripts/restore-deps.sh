@@ -21,7 +21,7 @@ fetch() { # fetch <url> <outfile>
 
 restore_go() {
 python3 - "$PWD" <<'PY'
-import base64, hashlib, io, json, os, re, shutil, sys, tarfile, zipfile
+import base64, hashlib, io, json, os, re, shutil, sys, tarfile, tempfile, zipfile
 from pathlib import Path
 from urllib.request import urlopen, Request
 
@@ -40,6 +40,11 @@ REPOS = {
     "go.yaml.in/yaml/v4": ("yaml/go-yaml", []),
     "go.opentelemetry.io/auto/sdk": ("open-telemetry/opentelemetry-go-instrumentation", ["sdk"]),
     "go.opentelemetry.io/proto/otlp": ("open-telemetry/opentelemetry-proto-go", ["otlp"]),
+    "gopkg.in/yaml.v2": ("yaml/go-yaml", []),
+    "gopkg.in/yaml.v3": ("yaml/go-yaml", []),
+    "gopkg.in/check.v1": ("go-check/check", []),
+    "go.uber.org/goleak": ("uber-go/goleak", []),
+    "gonum.org/v1/gonum": ("gonum/gonum", []),
 }
 
 def repo_for(path):
@@ -85,7 +90,7 @@ def hunt(repo, sub, path, version, want):
         for name, data in src.items():
             if name.endswith("go.mod"):
                 text = data.decode("utf-8", "replace")
-                if re.search(r"^module\s+" + re.escape(path) + r"\s*$", text, re.M):
+                if re.search(r"^module\s+\"?" + re.escape(path) + r"\"?\s*$", text, re.M):
                     found = (name.removeprefix(top).removesuffix("go.mod"), data)
                     break
         if not found:
@@ -115,30 +120,76 @@ def hash_zip(entries):
     return "h1:" + base64.b64encode(h.digest()).decode()
 
 def build(src, top, root):
-    """The module-zip file set: everything under the module root except VCS
-    internals, vendor directories and subtrees owned by a nested module."""
-    nested = [name.removeprefix(top + root).removesuffix("go.mod")
-              for name in src if name != top + root + "go.mod" and name.startswith(top + root) and name.endswith("go.mod")]
+    """The official x/mod/zip file set (cmd/vendor/golang.org/x/mod/zip):
+    everything under the module root except VCS internals, submodules and
+    vendored packages — vendor's *direct* files and vendor/modules.txt stay in
+    until the module's go directive reaches 1.24 — plus the repository LICENSE
+    copied in for subdirectory modules that lack their own (coderepo.go)."""
+    pre = top + root
+    files = {name[len(pre):]: data for name, data in src.items()
+             if name.startswith(pre) and name[len(pre):]}
+    have_gomod = set()
+    for rel in files:
+        if rel.endswith("go.mod"):
+            have_gomod.add(rel.rsplit("/", 1)[0] + "/" if "/" in rel else "")
+    vers = ""
+    if mt := re.search(rb"^go\s+([0-9]+(?:\.[0-9]+)*)", files.get("go.mod", b""), re.M):
+        vers = mt.group(1).decode()
+    def ge124(v):
+        if not v:
+            return False
+        try:
+            t = tuple(int(x) for x in v.split("."))
+        except ValueError:
+            return False
+        return (t + (0, 0))[:2] >= (1, 24)
+    g = ge124(vers)
+    def vendored(p):
+        if g and p == "vendor/modules.txt":
+            return True
+        if p.startswith("vendor/"):
+            i = 7
+        elif "/vendor/" in p:
+            i = p.index("/vendor/") + 7 if g else 7
+        else:
+            return False
+        return "/" in p[i:]
     entries = {}
-    for name, data in src.items():
-        if not name.startswith(top + root):
-            continue  # outside the module root (monorepo siblings and the like)
-        rel = name.removeprefix(top + root)
-        if not rel:
+    for rel, data in files.items():
+        parts = rel.split("/")
+        if any(part in (".git", ".hg", ".svn", ".bzr") for part in parts):
             continue
-        if any(part in (".git", ".hg", ".svn", ".bzr", "vendor") for part in rel.split("/")):
+        if rel == ".hg_archival.txt":
             continue
-        if any(rel.startswith(d) for d in nested):
+        p, insub = rel, False
+        while "/" in p:
+            d = p.rsplit("/", 1)[0] + "/"
+            if d in have_gomod:
+                insub = True
+                break
+            p = d.rstrip("/")
+        if insub:
             continue  # a nested module owns this subtree
+        if vendored(rel):
+            continue
         entries[rel] = data
+    if root and "LICENSE" not in entries and top + "LICENSE" in src:
+        entries["LICENSE"] = src[top + "LICENSE"]
     return entries
 
 
+# Worklist: go.mod's own requirements plus every module recorded in go.sum
+# (the module graph reaches past go.mod — a cold cache must cover go.sum too
+# or `go mod download all` cannot verify offline).
+worklist = set()
 for line in gomod.splitlines():
     m = re.match(r"^\t(\S+) (\S+)", line)
-    if not m or m.group(1) == "platformkernel":
-        continue
-    path, version = m.group(1), m.group(2)
+    if m and m.group(1) != "platformkernel":
+        worklist.add((m.group(1), m.group(2)))
+for path, ver_full in expected:
+    worklist.add((path, ver_full.removesuffix("/go.mod")))
+
+for path, version in sorted(worklist):
     out = cache / path / "@v"
     if (out / f"{version}.zip").is_file() and (out / f"{version}.mod").is_file():
         print(f"cached  {path} {version}")
@@ -167,13 +218,17 @@ for line in gomod.splitlines():
     for name, data in src.items():
         if name.endswith("go.mod"):
             text = data.decode("utf-8", "replace")
-            if re.search(r"^module\s+" + re.escape(path) + r"\s*$", text, re.M):
+            if re.search(r"^module\s+\"?" + re.escape(path) + r"\"?\s*$", text, re.M):
                 rootmod = (name.removeprefix(top).removesuffix("go.mod"), data)
                 break
     if rootmod is None:
-        fails.append(f"{path} {version}: no ref in {repo} ({' , '.join(refs)}) declares module {path}")
-        continue
-    root, go_mod = rootmod
+        if any(name.endswith("go.mod") for name in src):
+            fails.append(f"{path} {version}: no ref in {repo} ({' , '.join(refs)}) declares module {path}")
+            continue
+        # Pre-module tag: cmd/go synthesizes "module <path>\n" as the .mod file.
+        root, go_mod = "", f"module {path}\n".encode()
+    else:
+        root, go_mod = rootmod
     entries = build(src, top, root)
     entries["go.mod"] = go_mod
     entries = {f"{path}@{version}/{k}": v for k, v in entries.items()}
@@ -189,6 +244,14 @@ for line in gomod.splitlines():
         entries = build(src, top, root)
         entries["go.mod"] = go_mod
         entries = {f"{path}@{version}/{k}": v for k, v in entries.items()}
+    want_mod = expected.get((path, version + "/go.mod"))
+    if want_mod:  # go sums /go.mod as Hash1 over a single entry named "go.mod"
+        mh = hashlib.sha256()
+        mh.update(f"{hashlib.sha256(go_mod).hexdigest()}  go.mod\n".encode())
+        calc = "h1:" + base64.b64encode(mh.digest()).decode()
+        if calc != want_mod:
+            fails.append(f"{path} {version}: go.mod hash {calc[:20]} does not match go.sum {want_mod[:20]}")
+            continue
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{version}.mod").write_bytes(go_mod)
     (out / f"{version}.info").write_bytes(json.dumps({"Version": version, "Time": "1970-01-01T00:00:00Z"}).encode())
@@ -204,7 +267,10 @@ if fails:
 shutil.rmtree(tempfile.gettempdir() + "/restore-deps", ignore_errors=True)
 PY
   export GOPROXY=off GOSUMDB=off
-  (cd capabilities/server && go mod download all && go mod vendor)
+  # `download` (not `download all`): the build/test set is what an offline
+  # restore must verify — the full theoretical graph (`all`) reaches hosts
+  # this script's premise says are unreachable (codeberg, vanity domains).
+  (cd capabilities/server && go mod download && go mod vendor)
   echo "vendor/ restored and verified against go.sum."
 }
 

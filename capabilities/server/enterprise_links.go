@@ -53,7 +53,7 @@ func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *kernel.Error) {
 func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (construction.Connection, *kernel.Error) {
 	c = platform.RouteCaller(c, construction.ID)
 	c.Automation = false
-	permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: construction.ConnectionType, Record: id, Fields: []string{"kind", "address", "secret", "allowPrivate", "state", "published", "protocol", "marking"}}, now)
+	permission := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: construction.ConnectionType, Record: id, Fields: []string{"kind", "address", "secret", "allowPrivate", "state", "published", "marking"}}, now)
 	if err := authorizationRefusal(permission); err != nil {
 		return construction.Connection{}, err
 	}
@@ -73,7 +73,7 @@ func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (
 		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The connection owner is unavailable")
 	}
 	fixed, err := owner.ExecutionConnection(connection)
-	if err != nil || fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" || fixed.Protocol != nil {
+	if err != nil || fixed.Archived || fixed.State != "ready" || fixed.Kind != "http" {
 		return construction.Connection{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The tenant source needs a ready HTTP connection")
 	}
 	address, err := url.Parse(fixed.Address)
