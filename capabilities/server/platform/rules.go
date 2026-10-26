@@ -64,6 +64,7 @@ func (NativeRules) NewExprNumericAggregate(op, kind, currency string) (ExprNumer
 }
 
 const ExprVersion = rules.Version
+const ExprMaxDepth = rules.MaxDepth
 const ExprMaxSet = rules.MaxSet
 const ExprMaxContextBytes = rules.MaxContextBytes
 

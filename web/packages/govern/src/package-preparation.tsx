@@ -4,10 +4,8 @@ import { Button, Checkbox, Disclosure, PageHeader, Panel, PropertyList, Tag, t, 
 import { useState } from "react";
 
 export function PackageRequirements({ id, version }: { id: string; version: string }) {
-  const { role } = useHost();
-  const read = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version && role("build") === "builder");
-  if (role("build") !== "builder") return <p className="text-sm">{t("A builder prepares the applications after package installation.")}</p>;
-  if (read.isError) return <p role="alert" className="text-sm text-danger">{t("Application requirements could not be loaded.")}</p>;
+  const read = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
+  if (read.isError) return <div role="alert" className="grid gap-2 text-sm text-danger"><p>{t("Application requirements could not be loaded.")} {read.error.message}</p><div><Button size="sm" onClick={() => void read.refetch()}>{t("Retry")}</Button></div></div>;
   if (!read.data) return <p role="status" className="text-sm text-muted">{t("Loading application requirements…")}</p>;
   const plan = read.data;
   return <div className="grid gap-2 text-sm" aria-label={t("Before using this package")}>
@@ -20,8 +18,10 @@ export function PackageRequirements({ id, version }: { id: string; version: stri
 }
 
 export function PackagePreparation({ id, version }: { id: string; version: string }) {
-  const host = useHost(), { client, decide, can, role } = host, { open } = useWorkspace();
-  const query = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, role("build") === "builder");
+  const host = useHost(), { client, decide, can } = host, { open } = useWorkspace();
+  // The original read authorizes all held grants; a displayed primary role
+  // cannot decide whether a multi-role member may continue this task.
+  const query = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [reviewedSetup, setReviewedSetup] = useState(false);
   const scope = `package-task:${client.connection.server}:${client.connection.tenant}:${client.connection.principal}:${id}@${version}`;
@@ -63,26 +63,28 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
   const missingConfiguration = !!plan && (plan.connections.some(connection => !connection.ready) || plan.ai.some(item => !item.ready));
   const missingDrafts = !!plan?.applications.some(app => !app.draftId);
   const allPublished = !!plan?.applications.length && plan.applications.every(app => app.published);
-  const setupStates = plan?.setup?.steps.map((_, index) => host.outbox.find(entry => entry.submission.idempotencyKey?.endsWith(`:${setupRun}:${index}`))?.state) ?? [];
-  const setupComplete = setupStates.length > 0 && setupStates.every(state => state === "SUBMISSION_STATE_CONFIRMED");
+  const setupEntries = plan?.setup?.steps.map((step, index) => setupRun ? host.outbox.find(entry => entry.submission.tenantId === client.connection.tenant && entry.submission.principalId === client.connection.principal && entry.submission.schema?.name === step.schema && entry.submission.target?.id === step.target?.id && entry.submission.idempotencyKey?.endsWith(`:${setupRun}:${index}`)) : undefined) ?? [];
+  const setupComplete = setupEntries.length > 0 && setupEntries.every(entry => entry?.state === "SUBMISSION_STATE_CONFIRMED");
+  const missingSetupRoles = !!plan?.setup?.roles.some(required => !plan.roles.some(item => item.app === required.app && item.role === required.role && item.available && item.held));
+  const setupStatus = (state?: string) => state === "SUBMISSION_STATE_CONFIRMED" ? "Completed" : ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(state ?? "") ? "Awaiting confirmation" : state ? "Needs attention" : "Not started";
   return <div className="grid min-w-0 grid-cols-1 gap-5 break-words">
     <PageHeader title={t("Prepare package applications")} description={`${id} · ${version}`} actions={<div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void query.refetch()}>{t("Refresh readiness")}</Button><Button onClick={() => open({ view: "apps" })}>{t("Packages")}</Button></div>} />
-    {query.isError && <Panel role="alert" className="grid gap-2"><p>{t("Application requirements could not be loaded.")}</p><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></Panel>}
+    {query.isError && <Panel role="alert" className="grid gap-2"><p>{t("Application requirements could not be loaded.")} {query.error.message}</p><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></Panel>}
     {query.isLoading && <p role="status">{t("Loading application requirements…")}</p>}
     {error && <Panel role="alert" className="break-words text-danger">{error}</Panel>}
     {plan && <>
-      <Panel className="grid min-w-0 grid-cols-1 gap-3" title={t("Applications in this package")}>
+      <Panel className="grid min-w-0 grid-cols-1 gap-3" title={t("Install and create drafts")}>
         <p className="text-sm text-muted">{t("Follow the remaining steps here. Editing definitions is optional; using the application starts after activation.")}</p>
         {!plan.installed && <div className="flex flex-wrap items-center gap-2"><p className="text-sm">{t(plan.installationState === "draining" ? "Finish uninstalling this package in Packages before preparing applications." : "Install this exact package version to begin.")}</p>{plan.installationState !== "draining" && (can(plan.installationState === "active" ? "platform.package.upgrade" : "platform.package.install") ? <Button variant="primary" disabled={busy} onClick={() => void install()}>{plan.installationState === "active" ? t("Switch to {v}", { v: version }) : t("Install package")}</Button> : <p>{t("Ask an administrator to install this package.")}</p>)}</div>}
         <p className="text-sm text-muted">{t("Existing drafts keep your edits. Changing the package version does not overwrite them.")}</p>
         {plan.installed && missingDrafts && <Button variant="primary" disabled={busy} onClick={() => void create()}>{t("Create application drafts")}</Button>}
         {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <strong className="mr-auto">{app.title}</strong><Tag label={t(app.state === "withdrawn" ? "Entry withdrawn" : app.published ? "Published" : app.draftId ? "Draft" : "Not created")} />
-          {app.draftId && <><Button disabled={busy} onClick={() => open({ view: "project", params: { id: app.draftId! } })}>{t("Edit application")}</Button><Button variant={app.published ? "default" : "primary"} disabled={busy || missingConfiguration} onClick={() => open({ view: "release-review", params: { kind: "app", id: app.draftId!, application: app.draftId!, applicationName: app.ref.name } })}>{t(app.published ? "Review release" : "Publish application")}</Button></>}
-          {app.published && app.pages.length > 0 && app.state !== "withdrawn" && <Button variant="primary" onClick={() => openApp(app)}>{t("Open application")}</Button>}
+          {app.draftId && <Button disabled={busy} onClick={() => open({ view: "project", params: { id: app.draftId! } })}>{t("Edit application")}</Button>}
         </div>)}
       </Panel>
-      <Panel title={t("Connections and AI")} className="grid min-w-0 grid-cols-1 gap-3">
+      <Panel title={t("Configure and publish")} className="grid min-w-0 grid-cols-1 gap-3">
+        {!plan.installed || missingDrafts ? <p className="text-sm text-muted">{t("Install the package and create its application drafts before configuring or publishing.")}</p> : null}
         {!plan.connections.length && !plan.ai.length && <p className="text-sm">{t("No external configuration is required. Continue to publication.")}</p>}
         {plan.connections.map(connection => <div key={connection.ref.name} className="grid gap-2 border-b border-border pb-3 text-sm">
           <div className="flex flex-wrap gap-2"><strong>{connection.title || connection.ref.name}</strong><Tag label={t(connection.ready ? "Ready" : "Needs configuration")} tone={connection.ready ? "success" : "warning"} /></div>
@@ -91,17 +93,29 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
         </div>)}
         {plan.ai.map(item => <div key={`${item.ref.kind}/${item.ref.name}`} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto">{item.ref.name}{item.model ? ` · ${item.model}` : ""}</span><Tag label={t(item.ready ? "Model available" : "Needs a model")} tone={item.ready ? "success" : "warning"} />{item.problem && <p className="w-full text-xs text-danger">{item.problem}</p>}{item.ref.kind === "evaluation-set" && item.draftId && <Button onClick={() => open({ view: "evaluation-set", params: { id: item.draftId! } })}>{t("Configure evaluation")}</Button>}</div>)}
         {plan.ai.length > 0 && <div className="flex flex-wrap gap-2"><Button onClick={() => open({ view: "ai-configuration",params:{fromPackage:id,fromVersion:version} })}>{t("Manage AI configuration")}</Button><p className="text-xs text-muted">{t("Run the required evaluations in release review after saving the candidate.")}</p></div>}
+        <div className="grid gap-2 border-t border-border pt-3">
+          <p className="text-sm text-muted">{t("Review the exact candidate and its checks before activation. Return here and refresh readiness after publishing.")}</p>
+          {missingConfiguration && <p className="text-sm text-warning">{t("Finish the required connection and model configuration before publishing.")}</p>}
+          {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto font-medium">{app.title}</span><Tag label={t(app.published ? "Published" : "Not published")} />{app.draftId && <Button variant={app.published ? "default" : "primary"} disabled={busy || !plan.installed || missingConfiguration} onClick={() => open({ view: "release-review", params: { kind: "app", id: app.draftId!, application: app.draftId!, applicationName: app.ref.name } })}>{t(app.published ? "Review release" : "Publish application")}</Button>}</div>)}
+        </div>
       </Panel>
-      <Panel title={t("Access and initial data")} className="grid min-w-0 grid-cols-1 gap-3">
+      <Panel title={t("Assign business access")} className="grid min-w-0 grid-cols-1 gap-3">
         <p className="text-sm">{t("Grant business roles explicitly to the people who will use the application. Package installation does not grant access.")}</p>
-        <ul className="grid gap-2 text-sm">{plan.roles.map(item => <li key={`${item.app}/${item.role}`} className="flex flex-wrap items-center gap-2"><span className="mr-auto">{item.app} · {item.role} · {t(item.held ? "You hold this role" : "Not held by you")}</span>{!item.held && can("platform.member.grant") && <Button size="sm" disabled={busy} onClick={() => void perform(async () => { await decide("platform.member.grant", { type: "platform.member", id: host.me.principalId }, { app: item.app, role: item.role }, { onRefused: setError }); })}>{t("Grant this role to me")}</Button>}</li>)}</ul>
-        <div><Button onClick={() => open({ view: "members" })}>{t("Assign business roles")}</Button></div>
-        {plan.setup && <div className="grid gap-3 border-t border-border pt-3">
+        {!plan.roles.length && <p className="text-sm">{t("This package declares no business role requirements.")}</p>}
+        <ul className="grid gap-2 text-sm">{plan.roles.map(item => <li key={`${item.app}/${item.role}`} className="flex flex-wrap items-center gap-2"><span className="mr-auto">{item.app} · {item.role} · {t(item.held ? "You hold this role" : "Not held by you")}</span>{!item.available ? <p className="w-full text-muted">{t("Publish the application before assigning this role.")}</p> : !item.held && can("platform.member.grant") && <Button size="sm" disabled={busy} onClick={() => void perform(async () => { await decide("platform.member.grant", { type: "platform.member", id: host.me.principalId }, { app: item.app, role: item.role }, { onRefused: setError }); })}>{t("Grant this role to me")}</Button>}</li>)}</ul>
+        {plan.roles.some(item => item.available) && (can("platform.member.grant") ? <div><Button disabled={busy} onClick={() => open({ view: "members" })}>{t("Assign business roles")}</Button></div> : plan.roles.some(item => item.available && !item.held) ? <p className="text-sm text-muted">{t("Ask an administrator to assign the required business roles, then refresh readiness.")}</p> : null)}
+      </Panel>
+      <Panel title={t("Initialize and use")} className="grid min-w-0 grid-cols-1 gap-3">
+        {!allPublished && <p className="text-sm text-muted">{t("Activate all package applications before running initial data requests.")}</p>}
+        {plan.setup?.steps.length ? <div className="grid gap-3">
           <p className="text-sm">{t("After activation, review and run this package's initial data requests. Each step uses your current permissions; existing business records are not overwritten.")}</p>
-          <ol className="grid gap-2 text-sm">{plan.setup.steps.map((step, index) => <li key={step.name}><Disclosure summary={`${index + 1}. ${step.name}`}><PropertyList items={[[t("Action"), step.schema], [t("Target"), step.target?.id ?? ""]]} /><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{step.payload}</pre></Disclosure></li>)}</ol>
+          <ol className="grid gap-2 text-sm">{plan.setup.steps.map((step, index) => <li key={step.name}><Disclosure summary={<span className="flex flex-wrap items-center gap-2"><span>{index + 1}. {step.name}</span><Tag label={t(setupStatus(setupEntries[index]?.state))} /></span>}><PropertyList items={[[t("Action"), step.schema], [t("Target"), step.target?.id ?? ""]]} /><pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{step.payload}</pre>{setupEntries[index]?.reason && <p className="text-danger">{setupEntries[index]!.reason}</p>}</Disclosure></li>)}</ol>
           <Checkbox checked={reviewedSetup} onChange={setReviewedSetup}>{t("I reviewed the initial data requests.")}</Checkbox>
-          {setupComplete ? <p role="status">{t("Initial data is ready.")}</p> : <Button disabled={busy || !allPublished || !reviewedSetup || plan.setup.roles.some(required => !plan.roles.find(role => role.app === required.app && role.role === required.role)?.held)} onClick={() => void initialize()}>{t(setupRun ? "Continue initialization" : "Create initial data")}</Button>}
-        </div>}
+          {!setupComplete && missingSetupRoles && <p className="text-sm text-muted">{t("Your initialization roles must be available and assigned before continuing.")}</p>}
+          {setupRun && !setupComplete && <p className="text-sm text-muted">{t("Continue checks the original requests. Confirmed steps are skipped; unanswered steps keep their original inputs and keys.")}</p>}
+          {setupComplete ? <p role="status">{t("Initial data is ready.")}</p> : <Button disabled={busy || !plan.installed || !allPublished || !reviewedSetup || missingSetupRoles} onClick={() => void initialize()}>{t(setupRun ? "Continue initialization" : "Create initial data")}</Button>}
+        </div> : <p className="text-sm">{t("This package requires no initial data requests.")}</p>}
+        <div className="grid gap-2 border-t border-border pt-3">{plan.applications.map(app => app.published && app.pages.length > 0 && app.state !== "withdrawn" ? <div key={app.ref.name} className="flex flex-wrap items-center gap-2"><span className="mr-auto font-medium text-sm">{app.title}</span><Button variant="primary" disabled={busy} onClick={() => openApp(app)}>{t("Open application")}</Button></div> : null)}</div>
       </Panel>
     </>}
   </div>;

@@ -2808,6 +2808,7 @@ export type PackageRoleRequirement = {
   app: string;
   role: string;
   held: boolean;
+  available: boolean;
 };
 
 export type PackageSetup = {

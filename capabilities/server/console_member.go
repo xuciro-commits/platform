@@ -45,15 +45,20 @@ func (d *Console) migrateGrants(m *platform.Member) {
 	}
 }
 
-// deriveRoles projects a member's grants onto Roles: the primary role per
-// app among the grants active today (the app's first declared role held),
-// for the places that ask for one.
+// deriveRoles preserves a still-held primary role when adding grants. Losing
+// that grant selects the app's first declared role still active today. The
+// full grant set continues to own authorization.
 func (d *Console) deriveRoles(m *platform.Member, today string) {
 	active := slices.DeleteFunc(slices.Clone(m.Grants), func(g platform.Grant) bool { return !g.Active(today) })
+	previous := m.Roles
 	m.Roles = map[string]string{}
 	for _, g := range active {
 		if m.Roles[g.App] == "" {
-			m.Roles[g.App] = d.primaryRole(g.App, active)
+			if role := previous[g.App]; slices.ContainsFunc(active, func(held platform.Grant) bool { return held.App == g.App && held.Role == role }) {
+				m.Roles[g.App] = role
+			} else {
+				m.Roles[g.App] = d.primaryRole(g.App, active)
+			}
 		}
 	}
 }

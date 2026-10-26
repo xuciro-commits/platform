@@ -110,12 +110,25 @@ func (s ValueSchema) check(depth int, remaining *int) error {
 // DecodeValue rejects duplicate keys before unmarshalling, retains integer
 // precision, and accepts exactly one bounded UTF-8 JSON value.
 func DecodeValue(raw []byte, limit int) (any, error) {
+	return decodeBoundedValue(raw, limit, 16)
+}
+
+// ValidateRecordJSON checks stored JSON, which also carries typed declarations.
+// Each rule level uses an object and an args array; the enclosing declaration
+// needs its own space. Rule compilation still enforces its original node/depth
+// limits, while ordinary compute values retain their smaller syntax budget.
+func ValidateRecordJSON(raw []byte) error {
+	_, err := decodeBoundedValue(raw, 64<<10, 2*ExprMaxDepth+16)
+	return err
+}
+
+func decodeBoundedValue(raw []byte, limit, maxDepth int) (any, error) {
 	if len(raw) == 0 || len(raw) > limit || !utf8.Valid(raw) {
 		return nil, fmt.Errorf("JSON value exceeds its byte bound or is not UTF-8")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
-	v, err := decodeValue(d, 0)
+	v, err := decodeValue(d, 0, maxDepth)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +137,8 @@ func DecodeValue(raw []byte, limit int) (any, error) {
 	}
 	return v, nil
 }
-func decodeValue(d *json.Decoder, depth int) (any, error) {
-	if depth > 16 {
+func decodeValue(d *json.Decoder, depth, maxDepth int) (any, error) {
+	if depth > maxDepth {
 		return nil, fmt.Errorf("JSON value exceeds its nesting bound")
 	}
 	t, err := d.Token()
@@ -151,7 +164,7 @@ func decodeValue(d *json.Decoder, depth int) (any, error) {
 			if _, found := m[name]; found {
 				return nil, fmt.Errorf("duplicate JSON field %s", name)
 			}
-			m[name], err = decodeValue(d, depth+1)
+			m[name], err = decodeValue(d, depth+1, maxDepth)
 			if err != nil {
 				return nil, err
 			}
@@ -166,7 +179,7 @@ func decodeValue(d *json.Decoder, depth int) (any, error) {
 	case '[':
 		a := []any{}
 		for d.More() {
-			v, err := decodeValue(d, depth+1)
+			v, err := decodeValue(d, depth+1, maxDepth)
 			if err != nil {
 				return nil, err
 			}

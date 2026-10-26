@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"platformserver/apps/ai"
@@ -13,6 +14,107 @@ import (
 	"platformserver/apps/core"
 	"platformserver/platform"
 )
+
+func TestInstalledManufacturingPackageCreatesAllDraftsWithoutPublishingOrGranting(t *testing.T) {
+	const id = "package-declarations"
+	tn := composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "platform:admin", "core:steward")}, build.New(id), core.New(id), ai.New(id), NewAgents(id))
+	index, err := LoadPackageIndex("../../deploy/packages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testConsoleOf(tn).BindPackageIndex(index)
+	decide(t, tn, "builder", PlatformApp, SchemaPackageInstall, PackageType, "application.manufacturing", map[string]any{"id": "application.manufacturing", "version": "0.1.0"}, txnAt)
+	var accepted []Entry
+	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+		accepted = append(accepted, entry)
+		return entry.Body, nil
+	}
+	member := memberOf(t, tn, "builder")
+	answer, err := tn.CreatePackageDrafts(member, "application.manufacturing", "0.1.0", "create-original", txnAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(answer.Drafts) != 104 || tn.ActiveRelease() != "" || memberOf(t, tn, "builder").Holds("build", "accountant") {
+		t.Fatalf("incomplete drafts or unexpected activation/grant: %d drafts, release %s", len(answer.Drafts), tn.ActiveRelease())
+	}
+	move, ok := platform.Get[construction.Object](tn.automation(construction.ID, false), "erpmove")
+	if !ok || len(move.Constraints) != 12 || move.Published != "" {
+		t.Fatal("the original constrained draft was lost or published")
+	}
+	before := len(accepted)
+	retried, err := tn.CreatePackageDrafts(member, "application.manufacturing", "0.1.0", "create-original", txnAt)
+	if err != nil || !slices.Equal(retried.Drafts, answer.Drafts) || len(accepted) != before {
+		t.Fatalf("same-key retry changed the draft task: %v", err)
+	}
+}
+
+func TestPackageBusinessRoleBecomesGrantableOnlyAfterDefinitionsActivate(t *testing.T) {
+	const id = "package-role-order"
+	object := platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.roleentry"}
+	application, err := platform.ApplicationReleaseAsset("build", "1", platform.Application{Name: "roledesk", Title: "Role desk", Pages: []string{"roleentry"}, Resources: []platform.AssetRef{object}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor := PackageDescriptor{ID: "example.role-order", Version: "1.0.0", Namespace: "example.role-order", Blueprint: &PackageBlueprint{Roots: []platform.AssetRef{application.Ref}, Assets: []platform.ReleaseAsset{
+		{Ref: object, ContractVersion: 1, SourceVersion: "1", Body: platform.Raw(map[string]any{"type": object.Name, "name": "roleentry", "title": "Role entry", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}, "access": []construction.Access{{Role: "accountant", Read: "all", Create: true}}})}, application,
+	}}}
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "role-order.json"), platform.Raw(descriptor), 0600); err != nil {
+		t.Fatal(err)
+	}
+	index, err := LoadPackageIndex(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tn := composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "platform:admin")}, build.New(id))
+	testConsoleOf(tn).BindPackageIndex(index)
+	decide(t, tn, "builder", PlatformApp, SchemaPackageInstall, PackageType, descriptor.ID, map[string]any{"id": descriptor.ID, "version": descriptor.Version}, txnAt)
+	member := memberOf(t, tn, "builder")
+	check := func(available, held bool) {
+		t.Helper()
+		plan, refused := tn.PackagePreparation(memberOf(t, tn, "builder"), descriptor.ID, descriptor.Version, txnAt)
+		if refused != nil {
+			t.Fatal(refused)
+		}
+		role := slices.IndexFunc(plan.Roles, func(role PackageRoleRequirement) bool { return role.App == "build" && role.Role == "accountant" })
+		if role < 0 || plan.Roles[role].Available != available || plan.Roles[role].Held != held {
+			t.Fatalf("incorrect preparation role state: %+v", plan.Roles)
+		}
+	}
+	check(false, false)
+	if reason := refuse(t, tn, "builder", PlatformApp, SchemaGrant, MemberType, "builder", map[string]any{"app": "build", "role": "accountant"}, txnAt); !strings.Contains(reason, "not declared") {
+		t.Fatalf("undeclared role was not explained: %s", reason)
+	}
+	answer, err := tn.CreatePackageDrafts(member, descriptor.ID, descriptor.Version, "create", txnAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(false, false)
+	selection := make([]construction.JointDraftRef, 0, len(answer.Drafts))
+	for _, draft := range answer.Drafts {
+		selection = append(selection, construction.JointDraftRef{Kind: draft.Ref.Kind, ID: draft.ID})
+	}
+	preview, err := tn.PreviewReleaseDrafts(member, selection)
+	if err != nil || preview.Diagnostic != "" {
+		t.Fatalf("preview: %+v %v", preview, err)
+	}
+	if _, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "save", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	check(true, false)
+	decide(t, tn, "builder", PlatformApp, SchemaGrant, MemberType, "builder", map[string]any{"app": "build", "role": "accountant"}, txnAt)
+	check(true, true)
+	if member := memberOf(t, tn, "builder"); member.Roles["build"] != "builder" || !member.Holds("build", "accountant") {
+		t.Fatal("adding business access removed the original builder task", member.Roles)
+	}
+	decide(t, tn, "builder", PlatformApp, SchemaRevoke, MemberType, "builder", map[string]any{"app": "build", "role": "builder"}, txnAt)
+	if member := memberOf(t, tn, "builder"); member.Roles["build"] != "accountant" || member.Holds("build", "builder") {
+		t.Fatal("revoking the primary role retained it", member.Roles)
+	}
+}
 
 func TestPackageBlueprintAgentQueryDraftsFormApplicationCandidate(t *testing.T) {
 	at := txnAt

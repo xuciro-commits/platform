@@ -55,9 +55,10 @@ type PackageAIRequirement struct {
 	Ready   bool              `json:"ready"`
 }
 type PackageRoleRequirement struct {
-	App  string `json:"app"`
-	Role string `json:"role"`
-	Held bool   `json:"held"`
+	App       string `json:"app"`
+	Role      string `json:"role"`
+	Held      bool   `json:"held"`
+	Available bool   `json:"available"`
 }
 type packageDraftState struct {
 	platform.Record
@@ -158,7 +159,8 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 			if name == "" || slices.ContainsFunc(out.Roles, func(r PackageRoleRequirement) bool { return r.App == app && r.Role == name }) {
 				return
 			}
-			out.Roles = append(out.Roles, PackageRoleRequirement{App: app, Role: name, Held: m.Holds(app, name)})
+			owner := (hostView{t: t}).App(app)
+			out.Roles = append(out.Roles, PackageRoleRequirement{App: app, Role: name, Held: m.Holds(app, name), Available: owner != nil && slices.Contains(owner.Manifest().AllRoles(), name)})
 		}
 		for _, root := range blueprint.Roots {
 			if root.Kind != platform.AssetApp {

@@ -1,5 +1,10 @@
 {
   "Expressions": "表达式",
+  "Application {app} is not active in this tenant.": "应用 {app} 尚未在此租户启用。",
+  "Role {role} is not declared by application {app}. Publish its definitions before granting business roles.": "应用 {app} 尚未声明角色 {role}。请先发布其定义，再授予业务角色。",
+  "{field}: {reason}": "{field}：{reason}",
+  "JSON value exceeds its nesting bound": "JSON 内容超过嵌套深度限制",
+  "JSON value exceeds its byte bound or is not UTF-8": "JSON 内容超过字节限制，或不是有效的 UTF-8 编码",
   "Deployment credential is missing. Configure it in the host environment or use a platform-managed credential.": "部署凭据不存在。请在宿主环境配置，或改用平台托管凭据。",
   "Credential is disabled. Enable or replace it in Credentials.": "凭据已停用。请在凭据页面启用或替换。",
   "Credential is saved but is not authorized for this service and address. Edit its allowed uses in Credentials.": "凭据已保存，但未授权给当前服务和地址。请在凭据页面修改允许用途。",

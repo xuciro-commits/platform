@@ -216,7 +216,10 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 					action, _ := app.Manifest().Actions.Action(draft.Schema)
 					return nil, nil, fmt.Errorf("create target draft %s/%s needs the %s role and matching token scope: %w", draft.Type, draft.Name, strings.Join(action.Roles, " role or "), rejected)
 				}
-				return nil, nil, fmt.Errorf("create target draft %s/%s: %s: %w", draft.Type, draft.Name, rejected.Message, rejected)
+				if rejected.Message != "" {
+					return nil, nil, fmt.Errorf("create target draft %s/%s: %s: %w", draft.Type, draft.Name, rejected.Message, rejected)
+				}
+				return nil, nil, fmt.Errorf("create target draft %s/%s: %w", draft.Type, draft.Name, rejected)
 			}
 			receipt = answer
 		}

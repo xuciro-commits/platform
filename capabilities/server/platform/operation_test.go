@@ -1,6 +1,38 @@
 package platform
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestRecordJSONAllowsDeclaredRuleStructureWithinItsOriginalLimits(t *testing.T) {
+	expr := ExprLiteralValue("boolean", true)
+	for range ExprMaxDepth {
+		expr = Expr{Op: "not", Kind: "boolean", Args: []Expr{expr}}
+	}
+	raw := Raw([]Constraint{{Name: "rule", Kind: "expression", Fields: []string{"value"}, Expr: &expr, Message: "Rule"}})
+	if _, err := DecodeValue(raw, 64<<10); err == nil {
+		t.Fatal("ordinary value decoding lost its smaller syntax budget")
+	}
+	if err := ValidateRecordJSON(raw); err != nil {
+		t.Fatalf("declared rule structure was rejected: %v", err)
+	}
+	if _, err := CompileExpr(expr, ExprSchema{}); err != nil {
+		t.Fatalf("rule at its original depth limit was rejected: %v", err)
+	}
+	expr = Expr{Op: "not", Kind: "boolean", Args: []Expr{expr}}
+	if _, err := CompileExpr(expr, ExprSchema{}); err == nil {
+		t.Fatal("record syntax budget expanded the rule compiler's depth limit")
+	}
+	for _, invalid := range []string{
+		`{"same":1,"same":2}`, `{} {}`, `"` + strings.Repeat("a", 64<<10) + `"`,
+		strings.Repeat("[", 2*ExprMaxDepth+17) + "0" + strings.Repeat("]", 2*ExprMaxDepth+17),
+	} {
+		if ValidateRecordJSON([]byte(invalid)) == nil {
+			t.Fatal("record JSON accepted a duplicate, trailing value, oversized or overdeep input")
+		}
+	}
+}
 
 func TestVariantSchemaUsesItsDiscriminatorAndNullableType(t *testing.T) {
 	schema := ValueSchema{Type: "variant", Nullable: true, Discriminator: "kind", Variants: map[string]ValueSchema{

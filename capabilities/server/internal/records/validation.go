@@ -121,8 +121,8 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			if err != nil {
 				return nil, invalid
 			}
-			if _, err := platform.DecodeValue(raw, 64<<10); err != nil {
-				return nil, invalid
+			if err := platform.ValidateRecordJSON(raw); err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field}: {reason}", f.Name, err.Error())
 			}
 		case "date":
 			if _, err := time.Parse(time.DateOnly, fv.String()); !fv.IsZero() && err != nil {
