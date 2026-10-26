@@ -20,9 +20,9 @@ import (
 const anthropicMaxTokens = 16000 // when the caller names no limit (a non-streaming call)
 
 func (t *Tenant) anthropicClient(pv platform.AIProvider) (anthropic.Client, *AIError) {
-	key, ok := t.credentialValue(pv.Secret, "ai/"+pv.ID, pv.BaseURL)
-	if !ok {
-		return anthropic.Client{}, &AIError{Detail: "secret " + pv.Secret + " missing"}
+	key, _, err := t.resolveCredential(pv.Secret, "ai/"+pv.ID, pv.BaseURL)
+	if err != nil {
+		return anthropic.Client{}, &AIError{Detail: err.Error()}
 	}
 	return anthropic.NewClient(option.WithAPIKey(string(key)), option.WithBaseURL(pv.BaseURL),
 		option.WithHTTPClient(t.aiHTTP(pv)), option.WithMaxRetries(0), option.WithRequestTimeout(aiTimeout)), nil

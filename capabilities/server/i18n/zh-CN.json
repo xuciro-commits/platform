@@ -1,5 +1,9 @@
 {
   "Expressions": "表达式",
+  "Deployment credential is missing. Configure it in the host environment or use a platform-managed credential.": "部署凭据不存在。请在宿主环境配置，或改用平台托管凭据。",
+  "Credential is disabled. Enable or replace it in Credentials.": "凭据已停用。请在凭据页面启用或替换。",
+  "Credential is saved but is not authorized for this service and address. Edit its allowed uses in Credentials.": "凭据已保存，但未授权给当前服务和地址。请在凭据页面修改允许用途。",
+  "Saved credential cannot be decrypted. Check the host encryption key or replace the credential in Credentials.": "无法解密已保存的凭据。请检查宿主加密密钥，或在凭据页面替换。",
   "Choose one package source: a URL or a local package file": "请选择一种包来源：网址或本地文件",
   "Use an HTTPS address for a platform package, without embedded credentials": "请使用平台包的 HTTPS 地址，不要在地址中包含凭据",
   "The package could not be downloaded; check its address and try again": "无法下载包，请检查地址后重试",
@@ -2542,5 +2546,11 @@
   "Opportunity review advice evaluation": "商机建议评估",
   "Manufacturing review advice evaluation": "制造建议评估",
   "Synthetic organization": "合成组织样本",
-  "Production line": "生产线"
+  "Production line": "生产线",
+  "Entry withdrawn": "入口已撤回",
+  "The application entry is closed; retained definitions, records and independent tasks remain.": "应用入口已关闭，保留原定义、业务记录和独立任务。",
+  "Withdraw application entry": "撤回应用入口",
+  "Restore application entry": "恢复应用入口",
+  "Builder role required": "需要构建者角色",
+  "Expressions": "表达式"
 }

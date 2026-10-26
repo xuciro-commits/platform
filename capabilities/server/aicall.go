@@ -549,9 +549,9 @@ func (t *Tenant) aiSend(ctx context.Context, pv platform.AIProvider, method, pat
 	req, _ := http.NewRequestWithContext(ctx, method, pv.BaseURL+path, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if pv.Secret != "" {
-		key, ok := t.credentialValue(pv.Secret, "ai/"+pv.ID, pv.BaseURL)
-		if !ok {
-			return nil, &AIError{Detail: "secret " + pv.Secret + " missing"}
+		key, _, err := t.resolveCredential(pv.Secret, "ai/"+pv.ID, pv.BaseURL)
+		if err != nil {
+			return nil, &AIError{Detail: err.Error()}
 		}
 		req.Header.Set("Authorization", "Bearer "+string(key))
 	}

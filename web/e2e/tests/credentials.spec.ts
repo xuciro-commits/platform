@@ -50,6 +50,10 @@ test("an administrator manages a credential and edits its AI provider without lo
     await expect(editCredential.getByLabel("Secret value", { exact: true })).toHaveValue("");
     secret = "browser-credential-second";
     await editCredential.getByLabel("Secret value", { exact: true }).fill(secret);
+    await editCredential.getByLabel("Allowed origin", { exact: true }).fill("");
+    await expect(editCredential.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await editCredential.getByRole("combobox", { name: "Consumer ID", exact: true }).selectOption(name);
+    await expect(editCredential.getByLabel("Allowed origin", { exact: true })).toHaveValue(origin);
     await editCredential.getByRole("button", { name: "Save", exact: true }).click();
     await expect(editCredential).not.toBeVisible();
     await expect.poll(async () => (await builder.read<any>("credentials")).credentials.find((item: any) => item.id === credential)?.version).toBe(2);
@@ -76,6 +80,7 @@ test("an administrator manages a credential and edits its AI provider without lo
     await providerCard.getByRole("button", { name: "Check connection", exact: true }).click();
     await expect(providerCard.getByRole("status")).not.toHaveText("Checking…");
     await expect(providerCard.getByRole("status")).not.toHaveText("Connection verified");
+    await expect(providerCard.getByRole("status")).toHaveText("Credential is disabled. Enable or replace it in Credentials.");
     expect(calls).toBe(before);
   } finally { service.close(); await once(service, "close"); }
 });

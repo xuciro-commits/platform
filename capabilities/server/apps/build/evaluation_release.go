@@ -301,6 +301,9 @@ func (b *Build) testPlanDraft(asset platform.ReleaseAsset) (construction.TestPla
 			break
 		}
 	}
+	if id := b.releaseDraftIDs[descriptor.Function.Ref]; id != "" {
+		functionID = id
+	}
 	ordinal, ok := strings.CutPrefix(descriptor.Function.SourceVersion, b.Manifest().Version+".function-")
 	version, err := strconv.Atoi(ordinal)
 	if !ok || err != nil || version < 1 {

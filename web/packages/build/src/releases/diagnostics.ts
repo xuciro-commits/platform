@@ -4,7 +4,7 @@
 // came. The host's checks stay the authority; nothing here guesses a repair.
 import { t } from "@platform/ui";
 
-export type Diagnosis = { text: string; fix?: { label: string; view: string; params: Record<string, string> } };
+export type Diagnosis = { text: string; fix?: { label: string; view: string; params: Record<string, string> }; resources?: { kind: "agent" | "query"; name: string }[] };
 
 type Rule = { match: RegExp; text: (m: RegExpMatchArray) => string; fix?: (m: RegExpMatchArray, ids: { application?: string }) => Diagnosis["fix"] };
 
@@ -39,6 +39,11 @@ const rules: Rule[] = [
 
 /** Reads a host diagnostic; `ids.application` is the module the review was opened from. */
 export function diagnose(diagnostic: string, ids: { application?: string }): Diagnosis {
+  const query = diagnostic.match(/The agent (\S+) uses query (\S+), which is not published/);
+  if (query) return {
+    text: t("Agent {agent} needs query {query}, which is unavailable in this candidate. Include its saved draft, or correct the agent's query reference.", { agent: query[1]!, query: query[2]! }),
+    resources: [{ kind: "query", name: query[2]! }, { kind: "agent", name: query[1]! }],
+  };
   for (const rule of rules) {
     const m = diagnostic.match(rule.match);
     if (m) return { text: rule.text(m), fix: rule.fix?.(m, ids) };

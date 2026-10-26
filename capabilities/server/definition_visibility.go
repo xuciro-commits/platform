@@ -289,6 +289,9 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		if !t.ownerActive(registered.Ref.App) {
 			continue
 		}
+		if t.applicationEntryWithdrawn(registered.Ref) {
+			continue
+		}
 		if def, ok := construction.ProjectApplication(registered, applications); ok {
 			out = append(out, def)
 		}
@@ -307,4 +310,24 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		out[i].Provides = t.visibleProvides(out[i], m, entities)
 	}
 	return out
+}
+
+// The mutable Build application owns entry availability. Retained definition
+// bytes, independent asset permissions and already accepted work stay intact.
+func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
+	if ref.App != construction.ID || ref.Kind != platform.AssetApp {
+		return false
+	}
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	entity := t.records.types[construction.AppType]
+	if entity == nil {
+		return false
+	}
+	for _, row := range entity.rows.All() {
+		if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && businessField(entity.info, row.Value, "name") == ref.Name {
+			return businessField(entity.info, row.Value, "state") == "withdrawn"
+		}
+	}
+	return false
 }

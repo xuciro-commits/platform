@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Delete application draft": "删除应用草稿",
+  "Reusable assets and history are kept.": "可复用资产和历史会保留。",
+  "Withdraw application entry": "撤回应用入口",
+  "Restore application entry": "恢复应用入口",
+  "Only the application entry changes. Definitions, business records and independent tasks remain.": "只变更应用入口，保留定义、业务记录和独立任务。",
+  "Agent {agent} needs query {query}, which is unavailable in this candidate. Include its saved draft, or correct the agent's query reference.": "智能体 {agent} 需要查询 {query}，但当前候选中无法使用该查询。请加入它的已保存草稿，或修正智能体的查询引用。",
+  "Release problem": "发布问题",
+  "Open query": "打开查询",
+  "Open agent": "打开智能体",
+  "Find query": "查找查询",
+  "Find agent": "查找智能体",
+  "Include query in candidate": "将查询加入候选",
+  "The draft could not be located. Open its list to retry.": "未能定位草稿，请打开列表重试。",
   "Workspace resources": "当前分区资源",
   "Synthetic organization": "合成组织样本",
   "Synthetic organization (JSON)": "合成组织样本（JSON）",

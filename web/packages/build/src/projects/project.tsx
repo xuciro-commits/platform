@@ -30,6 +30,7 @@ import { StudioGuide } from "./studio-guide";
 import { installedStudioID, installedStudioRef, studioApplications } from "./studio-applications";
 import { InstalledApplicationHome } from "./InstalledApplicationHome";
 import { ExtensionSettings } from "./ExtensionSettings";
+import { ApplicationLifecycleControls } from "./application-lifecycle";
 
 /** Every project the builder may open, with what each holds. */
 export function ProjectsList() {
@@ -67,6 +68,7 @@ export function ProjectsList() {
           <p className="text-xs text-muted">{item.project ? t(item.project.extends ? "Application extension" : "Build application") : t(item.definition?.source === "code" || item.ref.app !== "build" ? "Native code" : "Published application")} · {item.ref.app}</p>
           <p className="text-xs text-muted">{t("{pages} pages · {resources} resources", { pages: (item.project ?? item.definition?.application)?.pages?.length ?? 0, resources: (item.project ?? item.definition?.application)?.resources?.length ?? 0 })}</p>
         </Button>
+        {item.project && <div className="mt-2 flex justify-end"><ApplicationLifecycleControls project={item.project} /></div>}
       </li>)}
     </ul>
     {create.dialog}
@@ -304,6 +306,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     <Workbench storageKey="project" crumbs={[{ label: t("Applications"), onClick: () => open({ view: "projects" }) }]} title={project.title || project.name}
       status={<DraftStatus state={project.state} problems={problems.length} />} saving={savingState(dirty, saving, error)}
       actions={<>
+        {builder && <ApplicationLifecycleControls project={project} disabled={saving || !!pendingPatch || !!createdResource || !!retireIntent} before={confirmDiscard} />}
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
         {builder && <Button size="sm" disabled={locked} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{unpublished.length}</span>}</Button>}
         {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={locked} onChange={(event) => {

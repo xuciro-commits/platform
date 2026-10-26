@@ -59,6 +59,7 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview: reque
   const showSessionControls = holders.length > 0 && (preview || holders.length > 1 || Object.keys(definition?.application?.variables ?? {}).length > 0);
   const collapsed=useSyncExternalStore(session?.subscribe??emptySubscribe,session?.headerSnapshot??(()=>undefined),()=>undefined);
   const navigate = (application: string, instance: string) => { const params:Record<string,string> = { ...route.params, ...sessionParams(application, instance) }; delete params.call; workspace.open({ ...route, params }); };
+  if (!preview && requested?.includes(":") && !definition) return <Panel role="alert">{t("This application is unavailable. Reopen it from the application list.")}</Panel>;
   return <AuthoringPreview.Provider value={preview}><ApplicationContext.Provider value={context}><div className="min-w-0 max-w-full">
     {showSessionControls && <div className="mb-3 flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <Select aria-label={t("Page application")} value={id} onChange={(event) => navigate(event.target.value, instance)}><option value="">{t("Choose an application")}</option>{holders.map((d) => <option key={idOf(d)} value={idOf(d)}>{d.application?.title}</option>)}</Select>

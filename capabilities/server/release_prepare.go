@@ -57,6 +57,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 type ownerDraftRequest struct {
 	Key         string
 	From, Until int
+	Refs        map[platform.AssetRef]bool
 }
 
 func assetDraftPayload(info platform.EntityInfo, image json.RawMessage) (json.RawMessage, error) {
@@ -81,6 +82,9 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	drafts, err := registry.ReleaseDrafts(candidate.Assets, context)
 	if err != nil {
 		return nil, nil, err
+	}
+	if request != nil && request.Refs != nil {
+		drafts = slices.DeleteFunc(drafts, func(draft platform.AssetDraft) bool { return !request.Refs[draft.Ref] })
 	}
 	if request != nil && request.Until != 0 {
 		if !context.DraftsOnly || request.From < 0 || request.Until > len(drafts) || request.From >= request.Until || request.Until-request.From > 64 {
@@ -173,8 +177,12 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 			return nil, nil, fmt.Errorf("asset draft %s has no owner identity", draft.Type)
 		}
 		matches := 0
+		logicalName := draft.Ref.Name
+		if draft.Ref.Kind == platform.AssetObject || draft.Ref.Kind == platform.AssetFlow {
+			logicalName = strings.TrimPrefix(logicalName, construction.ID+".")
+		}
 		for _, row := range et.rows.All() {
-			if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && row.Value.FieldByIndex(nameField.Index).String() == draft.Name {
+			if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
 				matches++
 			}
 		}

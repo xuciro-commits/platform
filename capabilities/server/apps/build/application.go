@@ -39,7 +39,7 @@ type Application struct {
 	Resources []platform.AssetRef   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
 	Concepts  []platform.AppConcept `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
 	Groups    []construction.Group  `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
-	State     string                `json:"state" field:"readonly" choices:"draft,published"`
+	State     string                `json:"state" field:"readonly" choices:"draft,published,withdrawn"`
 	// Published is the application as it was last handed over: what people open,
 	// and what a restore puts back.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -74,28 +74,32 @@ func (b *Build) applicationEntity() platform.Entity {
 		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{construction.Builder}, Capability: "applications"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being put together; nobody has it yet."},
-				{Name: "published", Title: "Published", Tone: "success", Description: "In the launcher of everyone who may open one of its pages."}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Hand it over", From: []string{"draft", "published"}, To: []string{"published"},
-				Roles: []string{construction.Builder}, Capability: "applications", Payload: []platform.Field{},
-				Description: "Put the application in people's launcher as it stands. Handed over again, it takes its new pages and name.",
-				Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
-					application, ok := record.(*Application)
-					if !ok {
-						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-					}
-					if c.Staging() {
-						if err := b.checkApplication(*application); err != nil {
-							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+				{Name: "published", Title: "Published", Tone: "success", Description: "In the launcher of everyone who may open one of its pages."},
+				{Name: "withdrawn", Title: "Entry withdrawn", Tone: "warning", Description: "The application entry is closed; retained definitions, records and independent tasks remain."}},
+			Transitions: []platform.Transition{
+				{Name: "withdraw", Title: "Withdraw application entry", From: []string{"published"}, To: []string{"withdrawn"}, Roles: []string{construction.Builder}, Capability: "applications", Payload: []platform.Field{}},
+				{Name: "restore", Title: "Restore application entry", From: []string{"withdrawn"}, To: []string{"published"}, Roles: []string{construction.Builder}, Capability: "applications", Payload: []platform.Field{}},
+				{Name: "publish", Title: "Hand it over", From: []string{"draft", "published", "withdrawn"}, To: []string{"published"},
+					Roles: []string{construction.Builder}, Capability: "applications", Payload: []platform.Field{},
+					Description: "Put the application in people's launcher as it stands. Handed over again, it takes its new pages and name.",
+					Do: func(c platform.Caller, record any, _ json.RawMessage, now time.Time) *kernel.Error {
+						application, ok := record.(*Application)
+						if !ok {
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 						}
-						if err := b.host.ValidateInstallApplication(applicationDescriptor(*application)); err != nil {
-							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+						if c.Staging() {
+							if err := b.checkApplication(*application); err != nil {
+								return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+							}
+							if err := b.host.ValidateInstallApplication(applicationDescriptor(*application)); err != nil {
+								return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+							}
+						} else if err := b.hand(c, *application); err != nil {
+							return err
 						}
-					} else if err := b.hand(c, *application); err != nil {
-						return err
-					}
-					application.Published = published(*application)
-					return nil
-				}}}}}
+						application.Published = published(*application)
+						return nil
+					}}}}}
 }
 
 // hand installs the application: the host checks that every page it names is

@@ -87,7 +87,7 @@ func checkCredentialDefinition(w CredentialWrite) error {
 	}
 	for _, binding := range w.Bindings {
 		kind, id, ok := strings.Cut(binding.Consumer, "/")
-		if !ok || id == "" || !slices.Contains([]string{"ai", "connection", "endpoint"}, kind) || credentialOrigin(binding.Origin) != binding.Origin {
+		if !ok || strings.TrimSpace(id) == "" || !slices.Contains([]string{"ai", "connection", "endpoint"}, kind) || credentialOrigin(binding.Origin) == "" || credentialOrigin(binding.Origin) != binding.Origin {
 			return fmt.Errorf("Each use needs a consumer and an exact network origin without credentials")
 		}
 	}
@@ -177,38 +177,48 @@ func (d *Console) decideCredential(c platform.Caller, s *pb.Submission, now time
 
 // credentialValue is shared by AI, connections and effects. A managed name never
 // falls back to the process environment when disabled, unbound or unreadable.
-func (t *Tenant) resolveCredential(name, consumer, address string) ([]byte, string, bool) {
+func (t *Tenant) resolveCredential(name, consumer, address string) ([]byte, string, error) {
+	deployment := func(reference, kind string) ([]byte, string, error) {
+		value, ok := t.secret(reference)
+		if !ok {
+			return nil, kind, fmt.Errorf("Deployment credential is missing. Configure it in the host environment or use a platform-managed credential.")
+		}
+		return value, kind, nil
+	}
 	owner, available := t.app(PlatformApp).(host.Credentials)
 	if !available {
-		value, ok := t.secret(name)
-		return value, "", ok
+		return deployment(name, "")
 	}
 	record, found := owner.Credential(name)
 	if !found {
-		value, ok := t.secret(name)
-		return value, "", ok
+		return deployment(name, "")
 	}
 	origin := credentialOrigin(address)
-	if record.State != "active" || !slices.ContainsFunc(record.Bindings, func(b CredentialBinding) bool { return b.Consumer == consumer && b.Origin == origin }) {
-		return nil, "", false
+	if record.State != "active" {
+		return nil, "", fmt.Errorf("Credential is disabled. Enable or replace it in Credentials.")
+	}
+	if !slices.ContainsFunc(record.Bindings, func(b CredentialBinding) bool { return b.Consumer == consumer && b.Origin == origin }) {
+		return nil, "", fmt.Errorf("Credential is saved but is not authorized for this service and address. Edit its allowed uses in Credentials.")
 	}
 	if record.Source == "deployment" {
-		value, ok := t.secret(record.Reference)
-		return value, record.Kind, ok
+		return deployment(record.Reference, record.Kind)
 	}
 	value, err := openCredential(t.ID, CredentialWrite{CredentialDefinition: record.CredentialDefinition, ExpectedVersion: record.SealedVersion, Sealed: record.Sealed})
-	return value, record.Kind, err == nil
+	if err != nil {
+		return nil, record.Kind, fmt.Errorf("Saved credential cannot be decrypted. Check the host encryption key or replace the credential in Credentials.")
+	}
+	return value, record.Kind, nil
 }
 func (t *Tenant) credentialValue(name, consumer, address string) ([]byte, bool) {
-	value, _, ok := t.resolveCredential(name, consumer, address)
-	return value, ok
+	value, _, err := t.resolveCredential(name, consumer, address)
+	return value, err == nil
 }
 func (t *Tenant) credentialHeader(name, consumer, address string) ([]byte, bool) {
-	value, kind, ok := t.resolveCredential(name, consumer, address)
-	if ok && kind == "bearer" {
+	value, kind, err := t.resolveCredential(name, consumer, address)
+	if err == nil && kind == "bearer" {
 		value = []byte("Bearer " + string(value))
 	}
-	return value, ok
+	return value, err == nil
 }
 
 func (h *Host) routesCredentials(rt *routes) {
