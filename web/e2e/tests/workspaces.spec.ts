@@ -353,8 +353,9 @@ test("task workspaces preserve platform applications and hand off a controlled r
   await document.getByRole("button", { name: "Create", exact: true }).click();
   await expect(document.getByRole("button", { name: "Retry confirmation", exact: true })).toBeVisible();
   expect(await builder.record("knowledge.document", documentID)).toMatchObject({ title: documentTitle, text: "Check the receipt number before accepting delivery.", source: "Receiving desk", apps: ["build"] });
-  await expect(document.getByRole("textbox", { name: "Title *", exact: true })).toHaveValue(documentTitle);
-  await expect(document.getByRole("textbox", { name: "Title *", exact: true })).toBeDisabled();
+  await document.getByText("Original request inputs", { exact: true }).click();
+  await expect(document.locator("pre")).toContainText(documentTitle);
+  await expect(document.getByRole("textbox", { name: "Title *", exact: true })).toHaveCount(0);
   await document.getByRole("button", { name: "Retry confirmation", exact: true }).click();
   await expect(document).toHaveCount(0);
   expect(documentRequests).toHaveLength(2);

@@ -4,7 +4,7 @@ import {useCallback,useEffect,useRef,useState,type ReactNode} from "react";
 import type {Api,Entry,EdgeClient} from "@platform/kernel";
 import {useQuery} from "@tanstack/react-query";
 import {useHost,useReadQuery,type Host} from "@platform/app";
-import {t as translate,Panel,Button,Form,Input,Textarea,Checkbox,Disclosure,DataTable} from "@platform/ui";
+import {t as translate,Panel,Button,Form,Input,Textarea,Checkbox,Disclosure,DataTable,useUnsavedChanges} from "@platform/ui";
 
 const Empty=({children}:{children:ReactNode})=><p className="text-muted">{children}</p>;
 const Loading=({what}:{what:string})=><p className="text-muted">{translate("Loading…")} {what}</p>;
@@ -40,8 +40,8 @@ function useLiveRead<T>(path:string){
  return {data:load.data,loading:load.isLoading,error:load.error?.message,reload};
 }
 
-function useLoad<T>(load:()=>Promise<T>,key:readonly unknown[]){
- const {client}=useHost(),query=useQuery<T>({queryKey:[client.connection.token,client.connection.tenant,"self-hosting",...key],queryFn:load,retry:false});
+function useLoad<T>(load:()=>Promise<T>,key:readonly unknown[],refreshAutomatically=true){
+ const {client}=useHost(),query=useQuery<T>({queryKey:[client.connection.token,client.connection.tenant,"self-hosting",...key],queryFn:load,retry:false,staleTime:refreshAutomatically?0:"static"});
  const reload=useCallback(()=>{void query.refetch();},[query.refetch]);
  return {data:query.data,error:query.error?.message,loading:query.isLoading,reload};
 }
@@ -155,16 +155,17 @@ function ChangeReview({change}:{change:ChangeRow}){
 function Files({act,may}:{act:Act;may:(schema:string)=>boolean}){
  const host=useHost(),t=useText(),[search,setSearch]=useState(""),[query,setQuery]=useState(""),[offset,setOffset]=useState(0),[path,setPath]=useState(""),[opened,setOpened]=useState(""),[selected,setSelected]=useState<string[]>([]),[preparing,setPreparing]=useState(false),limit=50;
  const selectionLocked=act.busy||preparing||host.client.authorities.outbox.some(entry=>unanswered(entry)&&entry.submission.schema?.name==="system.change.propose");
+ const {confirmDiscard}=useUnsavedChanges(false,()=>{},act.busy),openFile=(path:string)=>{if(path===opened)return;confirmDiscard(()=>{setPath(path);setOpened(path);});};
  const files=useLiveRead<FileRow[]>(`/v1/system-files?${new URLSearchParams({search:query,offset:String(offset),limit:String(limit)})}`);
  const choose=(file:string,include:boolean)=>{if(selectionLocked)return;setSelected(current=>include?[...new Set([...current,file])]:current.filter(path=>path!==file));};
  return <>
   <Panel title={t("System files")}>
    <Form className="search row" onSubmit={()=>{setQuery(search);setOffset(0);}}><Input aria-label={t("Find files")} value={search} onChange={event=>setSearch(event.target.value)}/><Button type="submit">{t("Search")}</Button></Form>
-   <Form className="flex flex-wrap gap-2" onSubmit={()=>{setOpened(path.trim());}}><label className="grid gap-1"><span>{t("Path")}</span><Input value={path} onChange={event=>setPath(event.target.value)} spellCheck={false}/></label><Button type="submit" disabled={!path.trim()||act.busy}>{t("Open or create file")}</Button></Form>
+   <Form className="flex flex-wrap gap-2" onSubmit={()=>openFile(path.trim())}><label className="grid gap-1"><span>{t("Path")}</span><Input value={path} onChange={event=>setPath(event.target.value)} spellCheck={false}/></label><Button type="submit" disabled={!path.trim()||act.busy}>{t("Open or create file")}</Button></Form>
    {files.loading&&!files.data?<Loading what={t("System files")}/>:files.error?<Problem>{files.error}</Problem>:!files.data?.length?<Empty>{t("No source file matches this page. Enter a path to create a new file.")}</Empty>:<DataTable data={files.data} getRowId={file=>file.path} columns={[
  {id:"include",header:t("Include"),cell:({row:{original:file}})=><Checkbox ariaLabel={`${t("Include")} ${file.path}`} disabled={selectionLocked||file.editable===false||!may("system.change.propose")} checked={selected.includes(file.path)} onChange={checked=>choose(file.path,checked)}/>},
  {accessorKey:"path",header:t("Path")},{accessorKey:"revision",header:t("Revision")},
- {id:"open",header:"",cell:({row:{original:file}})=><Button onClick={()=>{setPath(file.path);setOpened(file.path);}}>{t("Open")}</Button>}
+ {id:"open",header:"",cell:({row:{original:file}})=><Button onClick={()=>openFile(file.path)}>{t("Open")}</Button>}
  ]}/>}
    <div className="row pager"><Button disabled={offset===0} onClick={()=>setOffset(current=>Math.max(0,current-limit))}>{t("Previous")}</Button><span className="muted small">{offset+1}–{offset+(files.data?.length??0)}</span><Button disabled={(files.data?.length??0)<limit} onClick={()=>setOffset(current=>current+limit)}>{t("Next")}</Button></div>
   </Panel>
@@ -174,20 +175,22 @@ function Files({act,may}:{act:Act;may:(schema:string)=>boolean}){
 }
 function SourceFile({path,act,maySave,include}:{path:string;act:Act;maySave:boolean;include:()=>void}){
  const host=useHost(),t=useText(),completed=host.client.authorities.outbox.findLast(entry=>entry.submission.schema?.name==="system.file.save"&&entry.submission.target?.id===path&&entry.state==="SUBMISSION_STATE_CONFIRMED")?.submission.idempotencyKey;
+ // Automatic refreshes must not replace an editor's expected revision or input.
  const file=useLoad(async()=>{
   try{return await host.client.get<FileRow>(fileRead(path),true);}
   catch(error){if(String(error).includes("HTTP 404"))return {path,content:"",revision:0,digest:"",size:0,editable:true};throw error;}
- },["system-file",path,completed]);
+ },["system-file",path,completed],false);
  return file.error?<Panel title={path}><Problem>{file.error}</Problem><Button onClick={file.reload}>{t("Refresh")}</Button></Panel>:!file.data?<Loading what={path}/>:<FileEditor key={`${path}:${file.data.revision}:${file.data.digest}:${!!file.data.deleted}`} file={file.data} act={act} maySave={maySave} include={include} reload={file.reload} loading={file.loading}/>;
 }
 function FileEditor({file,act,maySave,include,reload,loading}:{file:FileRow;act:Act;maySave:boolean;include:()=>void;reload:()=>void;loading:boolean}){
  const host=useHost(),t=useText(),[content,setContent]=useState(file.content??""),[deleted,setDeleted]=useState(!!file.deleted),pending=host.client.authorities.outbox.some(entry=>unanswered(entry)&&entry.submission.schema?.name==="system.file.save"&&entry.submission.target?.id===file.path),locked=act.busy||pending||loading||!maySave||file.editable===false,dirty=content!==(file.content??"")||deleted!==!!file.deleted;
+ const {confirmOwnDiscard}=useUnsavedChanges(dirty,()=>{setContent(file.content??"");setDeleted(!!file.deleted);},act.busy||pending);
  return <Panel title={file.path} actions={<span className="muted small">{t(file.revision?"Revision":file.digest?"Running source":"New file")} {file.revision||""}</span>}>
   {file.editable===false?<Note>{t("Frozen kernel file: reading is allowed, self-hosting edits are not.")}</Note>:null}
   <Form className="form source-editor" onSubmit={()=>{void act.run("system.file.save",file.path,{path:file.path,content,revision:file.revision,deleted}).then(outcome=>{if(outcome.ok)include();});}}>
    <label className="grid gap-1"><span>{t("Content")}</span><Textarea rows={16} value={content} readOnly={locked||deleted} onChange={event=>setContent(event.target.value)} spellCheck={false}/></label>
    {maySave&&file.editable!==false?<Checkbox checked={deleted} disabled={act.busy||pending||loading} onChange={setDeleted}>{t("Delete this file in the proposed version")}</Checkbox>:null}
-   <div className="flex flex-wrap gap-2">{maySave&&file.editable!==false?<Button type="submit" disabled={locked||(!dirty&&file.revision!==0)}>{t(act.busy?"Sending…":"Save file")}</Button>:null}<Button type="button" disabled={act.busy||pending||loading} onClick={()=>{setContent(file.content??"");setDeleted(!!file.deleted);reload();}}>{t("Reload file and discard edits")}</Button></div>
+   <div className="flex flex-wrap gap-2">{maySave&&file.editable!==false?<Button type="submit" disabled={locked||(!dirty&&file.revision!==0)}>{t(act.busy?"Sending…":"Save file")}</Button>:null}<Button type="button" disabled={act.busy||pending||loading} onClick={()=>confirmOwnDiscard(reload)}>{t("Reload file and discard edits")}</Button></div>
   </Form>
  </Panel>;
 }

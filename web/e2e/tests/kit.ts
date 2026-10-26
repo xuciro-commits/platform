@@ -232,7 +232,8 @@ export class Editor {
   }
   async visual() {
     const mode = this.page.locator('[data-structured-editor^="build.page:"] > div > [role="group"]');
-    await mode.getByRole("button", { name: "Visual", exact: true }).click();
+    const visual = mode.getByRole("button", { name: "Visual", exact: true });
+    if (await visual.getAttribute("aria-pressed") !== "true") await visual.click();
   }
   async select(widgetTitle: string) {
     await this.visual();

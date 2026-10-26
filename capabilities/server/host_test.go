@@ -188,6 +188,9 @@ func TestHostHTTPAndConsole(t *testing.T) {
 			t.Errorf("%s %s: %d %s", c.method, c.path, status, body)
 		}
 	}
+	if status, body := call("GET", "/v1/deliveries", "ana-token", ""); status != 200 || body != "[]" {
+		t.Fatalf("empty delivery attempts: %d %s", status, body)
+	}
 	// Grant bo a role in a: on the next request bo's catalog offers both notes.
 	if status, body := submit("ana-token", "ana", SchemaGrant, MemberType, "g1", `{"app":"a","role":"writer"}`); status != 200 {
 		t.Fatalf("grant: %d %s", status, body)

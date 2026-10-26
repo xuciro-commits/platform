@@ -30,6 +30,8 @@ export type View = {
 export type MenuItem = { label: string; shortcut?: string; onSelect: () => void; disabled?: boolean };
 export type Menu = { label: string; items: MenuItem[] };
 export type ShellCommand = { id: string; label: string; group?: string; shortcut?: string; run: () => void };
+type SearchHit = { id: string; label: string; detail?: string; open: () => void };
+type RecordSearch = (text: string) => Promise<SearchHit[]>;
 export type Session = {
   tenant: string; principal: string; detail?: string;
   /** The member's display name, shown over the principal when set. */
@@ -299,13 +301,22 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const [openTabs, setOpenTabs] = useState<{ key: string; title: string }[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [typed, setTyped] = useState("");
-  const [found, setFound] = useState<{ id: string; label: string; detail?: string; open: () => void }[]>([]);
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const [recordSearch, setRecordSearch] = useState<{ source: RecordSearch; text: string; attempt: number; hits?: SearchHit[]; error?: string }>();
+  const searching = paletteOpen && !!search && typed.trim().length >= 2;
+  const answer = searching && recordSearch?.source === search && recordSearch.text === typed && recordSearch.attempt === searchAttempt ? recordSearch : undefined;
+  const found = answer?.hits ?? [];
+  const searchPending = searching && answer?.hits === undefined && answer?.error === undefined;
   useEffect(() => { // records for what is typed, a moment after typing stops
-    if (!search || typed.trim().length < 2) { setFound([]); return; }
+    if (!searching || !search) { setRecordSearch(undefined); return; }
     let live = true;
-    const wait = setTimeout(() => { void search(typed).then((hits) => { if (live) setFound(hits); }).catch(() => undefined); }, 200);
+    setRecordSearch(undefined);
+    const wait = setTimeout(() => {
+      void search(typed).then((hits) => { if (live) setRecordSearch({ source: search, text: typed, attempt: searchAttempt, hits }); })
+        .catch((error) => { if (live) setRecordSearch({ source: search, text: typed, attempt: searchAttempt, error: error instanceof Error ? error.message : String(error) }); });
+    }, 200);
     return () => { live = false; clearTimeout(wait); };
-  }, [search, typed]);
+  }, [search, typed, searching, searchAttempt]);
   // What the member comes back to: recent routes and starred applications, per shell.
   const navKey = `${storageKey}:nav`;
   const [memory, setMemory] = useState<{ recent: RecentEntry[]; favorites: string[] }>(() => {
@@ -832,14 +843,19 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       </div>
       <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
         overlayClassName="fixed inset-0 z-40 bg-overlay"
-        contentClassName="fixed left-1/2 top-[15%] z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-border bg-surface shadow-2xl">
+        contentClassName="fixed left-1/2 top-[15%] z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-border bg-surface text-foreground shadow-2xl">
         <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search records, go to, open, run…")} className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
+        {searchPending && <p role="status" className="px-3 py-2 text-sm text-muted">{t("Searching records…")}</p>}
+        {answer?.error !== undefined && <div role="alert" className="grid gap-1 border-b border-border px-3 py-2 text-sm">
+          <p className="text-danger">{t("Record search failed.")} {answer.error}</p>
+          <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => setSearchAttempt(attempt => attempt + 1)}>{t("Retry")}</Button>
+        </div>}
         <Command.List className="max-h-80 overflow-auto p-1">
-          <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>
+          {!searchPending && answer?.error === undefined && <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>}
           {found.length > 0 && (
             <Command.Group heading={t("Records")} className={paletteGroup}>
               {found.map((hit) => (
-                <Command.Item key={hit.id} value={`record ${typed} ${hit.label} ${hit.id}`} className={paletteItem}
+                <Command.Item key={hit.id} value={`record ${answer!.text} ${hit.label} ${hit.id}`} className={paletteItem}
                   onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
               ))}
             </Command.Group>

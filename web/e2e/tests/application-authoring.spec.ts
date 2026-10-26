@@ -140,7 +140,7 @@ test("an application authors related drafts and a template before its first rele
   await editor.inspector.getByRole("combobox", { name: "Variable mode", exact: true }).selectOption("property");
   await editor.inspector.getByRole("combobox", { name: "Record property field", exact: true }).selectOption("followup");
   await editor.save();
-  await expect.poll(async () => Object.values((await builder.record("build.page", pageID)).document.variables)).toContainEqual(
+  await expect.poll(async () => Object.values((await builder.record("build.page", pageID)).document.variables ?? {})).toContainEqual(
     expect.objectContaining({ title: "Follow-up text", type: "string", source: expect.objectContaining({ field: "followup" }) }),
   );
   const stillPublished = await operator.definitions<any>();
@@ -220,6 +220,8 @@ test("authoring previews stay read-only with and without a published application
     else await editor.open(builder, id);
     const previewButton = page.getByRole("button", { name: "Preview", exact: true });
     if (await previewButton.getAttribute("aria-pressed") !== "true") await previewButton.click();
+    await expect(editor.tree).not.toBeVisible();
+    await expect(page.locator(`[data-structured-editor^="build.page:${id}:"]:visible`).getByRole("group", { name: "Editing mode", exact: true }).first().getByRole("button", { name: "Source editor", exact: true })).toBeDisabled();
     const canvas = page.locator(`[data-structured-editor^="build.page:${id}:"]:visible [data-canvas-scroll]`);
     await expect(canvas).toHaveCount(1);
     await expect(canvas.getByText("The form does not submit while you compose.", { exact: true })).toBeVisible();

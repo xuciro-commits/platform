@@ -143,6 +143,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   entries.current = all;
   const registry = useRef(definitions); // tab titles read current definitions without replacing registered views
   registry.current = definitions;
+  const recordRoutes = useRef(host?.opens); recordRoutes.current = host?.opens;
+  const searchRecords = useCallback(async (text: string) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
+    .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: `${hit.type} · ${hit.id}`,
+      open: () => { const view = recordRoutes.current?.get(hit.type); location.hash = routeToHash(view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } })), [client, identityScope, host?.source.scope]);
   const app = all.find((a) => a.id === current);
   // Shared record renderers may be hosted by a platform application. Their
   // explicit business context still selects the prepared application version.
@@ -305,9 +309,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
             { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },
           ] : []), ...(app?.commands?.(host) ?? [])]}
-        search={async (text) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
-          .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
-            open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
+        search={searchRecords}
         status={<div className="flex items-center gap-2 text-xs text-muted">
           <Button size="sm" variant="ghost" aria-label={t("Offline applications")} className="max-w-64 truncate" onClick={()=>setOfflineOpen(true)}>{!online||client.usingPrepared?preparedAt?t("Saved {time}",{time:new Date(preparedAt).toLocaleString()}):t("Offline work"):t("Offline applications")}</Button>
           {connectionUnavailable && <span role="status" title={String(meQuery.error)}>{t("Live updates unavailable")}</span>}

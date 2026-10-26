@@ -27,9 +27,10 @@ test("nested menus expose original routes, can collapse, and reopen for the acti
   expect(navigationLinks(items)[0]!.route).toBe(original);
 });
 
-// The real Dockview model/renderer runs in jsdom. Only ResizeObserver and the
-// OS-window call are stubbed; these are logic checks, not viewport/browser UX.
+// The real Dockview model/renderer runs in jsdom. Browser layout/scroll APIs
+// and the OS-window call are stubbed; these are logic checks, not browser UX.
 const observed = vi.hoisted(() => ({ dock: undefined as DockviewApi | undefined }));
+const scrollIntoView = Element.prototype.scrollIntoView;
 vi.mock("dockview-react", async (load) => {
   const actual = await load<typeof import("dockview-react")>();
   return { ...actual, DockviewReact: (props: IDockviewReactProps) => <actual.DockviewReact {...props} onReady={(event) => {
@@ -81,14 +82,68 @@ beforeEach(() => {
   localStorage.clear(); history.replaceState(null, "", "/#/flow?id=A"); setLanguage("en"); discard.mockClear();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }));
+  Element.prototype.scrollIntoView = vi.fn();
 });
-afterEach(() => { cleanup(); toast.dismiss(); vi.restoreAllMocks(); vi.unstubAllGlobals(); observed.dock = undefined; });
+afterEach(() => { cleanup(); toast.dismiss(); vi.restoreAllMocks(); vi.unstubAllGlobals(); observed.dock = undefined;
+  if (scrollIntoView) Element.prototype.scrollIntoView = scrollIntoView; else Reflect.deleteProperty(Element.prototype, "scrollIntoView");
+});
 
 const start = async (props: Parameters<typeof Shell>[0] = {}) => {
   render(<Shell {...props} />);
   return await screen.findByRole("textbox", { name: "Draft A" });
 };
 const choose = (id: string) => act(() => api.applications!.onSelect(id));
+
+test("command search clears earlier records while loading, reports failure, and retries the current words", async () => {
+  const open = vi.fn(), search = vi.fn<(text: string) => Promise<{ id: string; label: string; open: () => void }[]>>()
+    .mockResolvedValueOnce([{ id: "A", label: "Alpha record", open }])
+    .mockRejectedValueOnce(new Error("HTTP 503"))
+    .mockResolvedValueOnce([{ id: "B", label: "Banana record", open }]);
+  render(<Workspace product="Search" storageKey="workspace:search" views={views} home={{ view: "home" }} nav={[]} search={search} />);
+  await screen.findByLabelText("Draft A");
+  act(() => api.palette());
+  const input = screen.getByPlaceholderText("Search records, go to, open, run…");
+  fireEvent.change(input, { target: { value: "alpha" } });
+  await screen.findByText("Alpha record");
+  fireEvent.change(input, { target: { value: "banana" } });
+  expect(screen.queryByText("Alpha record")).toBeNull();
+  expect(screen.getByText("Searching records…")).toBeTruthy();
+  expect(screen.queryByText("No results")).toBeNull();
+  const problem = (await screen.findByText("Record search failed. HTTP 503")).closest('[role="alert"]') as HTMLElement;
+  expect(screen.queryByText("Alpha record")).toBeNull();
+  fireEvent.click(within(problem).getByRole("button", { name: "Retry" }));
+  fireEvent.click(await screen.findByText("Banana record"));
+  expect(search.mock.calls.map(([text]) => text)).toEqual(["alpha", "banana", "banana"]);
+  expect(open).toHaveBeenCalledOnce();
+});
+
+test("command search ignores a late answer from earlier words or a replaced read source", async () => {
+  type Hits = { id: string; label: string; open: () => void }[];
+  let finishOld!: (hits: Hits) => void, finishEarlier!: (hits: Hits) => void;
+  const search = vi.fn<(text: string) => Promise<Hits>>()
+    .mockImplementationOnce(() => new Promise(resolve => { finishEarlier = resolve; }))
+    .mockResolvedValueOnce([{ id: "B", label: "Banana record", open: vi.fn() }])
+    .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }));
+  const props = { product: "Search", storageKey: "workspace:search", views, home: { view: "home" }, nav: [] };
+  const view = render(<Workspace {...props} search={search} />);
+  await screen.findByLabelText("Draft A");
+  act(() => api.palette());
+  const input = screen.getByPlaceholderText("Search records, go to, open, run…");
+  fireEvent.change(input, { target: { value: "alpha" } });
+  await waitFor(() => expect(search).toHaveBeenCalledWith("alpha"));
+  fireEvent.change(input, { target: { value: "banana" } });
+  await screen.findByText("Banana record");
+  await act(async () => finishEarlier([{ id: "A", label: "Alpha record", open: vi.fn() }]));
+  expect(screen.queryByText("Alpha record")).toBeNull();
+  fireEvent.change(input, { target: { value: "cherry" } });
+  await waitFor(() => expect(search).toHaveBeenCalledWith("cherry"));
+  const replacement = vi.fn().mockResolvedValue([{ id: "C", label: "Current source record", open: vi.fn() }]);
+  view.rerender(<Workspace {...props} search={replacement} />);
+  await act(async () => finishOld([{ id: "old", label: "Previous source record", open: vi.fn() }]));
+  expect(screen.queryByText("Previous source record")).toBeNull();
+  await screen.findByText("Current source record");
+  expect(replacement).toHaveBeenCalledWith("cherry");
+});
 
 test("maintenance waits for sibling drafts and can be cancelled without losing input", async () => {
   const input = await start();

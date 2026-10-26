@@ -132,7 +132,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! });  };
   // A native input event can already be in flight when autosave locks the UI.
   // The draft history preserves it when the older submission is acknowledged.
-  const edit: typeof session.edit = (update, key) => { setSourceApplied(false); session.edit((old) => {
+  const edit: typeof session.edit = (update, key) => { if (preview) return; setSourceApplied(false); session.edit((old) => {
     const next = typeof update === "function" ? update(old) : { ...old, ...update };
     // Profile changes are explicit reviewed commands; ordinary editing retains
     // the original profile even when a layout helper returns the latest one.
@@ -146,7 +146,7 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
     });
     return { ...next, ...synchronizeLoopBindings({...document,uiProfile:pageEditingProfile({...next,document,sections})}, sections) };
   }, key); };
-  const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setRefused(undefined); };
+  const history = (direction: "undo" | "redo") => { if (lock.current || preview) return; session[direction](); setRefused(undefined); };
   const diagnostics = pageDraftDiagnostics(session.draft, { object: page?.object ?? "", entity: authoringEntity, catalog, definitions });
   const problemList: WorkbenchProblem[] = [
     ...diagnostics.map(issue => ({ id: issue.id, text: t(issue.code, issue.values), subject: issue.subject, locate: () => {
@@ -337,11 +337,11 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   return <>
     <Workbench storageKey="page" crumbs={crumbs} title={title || page.title}
       status={<DraftStatus state={page.state} problems={problemList.length} />} saving={savingState(dirty, saving, refused)}
-      history={{ canUndo: session.canUndo && !busy, canRedo: session.canRedo && !busy, undo: () => history("undo"), redo: () => history("redo") }}
+      history={{ canUndo: session.canUndo && !busy && !preview, canRedo: session.canRedo && !busy && !preview, undo: () => history("undo"), redo: () => history("redo") }}
       actions={<>
-        <Button size="sm" variant={preview ? "primary" : "ghost"} aria-pressed={preview} onClick={() => { setPreview(!preview); select({ kind: "page" }); }}><Play />{t("Preview")}</Button>
+        <Button size="sm" variant={preview ? "primary" : "ghost"} aria-pressed={preview} onClick={() => { setPreview(!preview); setCompatibilityOpen(false); select({ kind: "page" }); }}><Play />{t("Preview")}</Button>
         <ActionMenu label={t("More page commands")} icon={<MoreHorizontal />} commands={[
-          { id: "compatibility", label: t("Review page compatibility…"), disabled: busy, run: () => setCompatibilityOpen(true) },
+          { id: "compatibility", label: t("Review page compatibility…"), disabled: busy || preview, run: () => setCompatibilityOpen(true) },
           ...(page.state === "published" ? [{ id: "open", label: t("Open published page"), icon: <ExternalLink />, run: () => open({ view: "page", params: { app: "build", kind: "page", name: page.name } }) }] : []),
         ]} />
         <ResourceControls type="build.page" record={page} dirty={dirty} busy={busy} invalid={invalid} empty={nothing} onSave={() => void save()} onReview={() => void review()} onInstall={() => void publish()} onCancel={discardChanges} route={canvasRoute} />
@@ -350,6 +350,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         const command = event.metaKey || event.ctrlKey;
         const typing = (event.target as HTMLElement).closest("input,textarea,select,[contenteditable=true]");
         if (command && event.key.toLowerCase() === "s") { event.preventDefault(); if (dirty && !busy) void save(); }
+        if (preview) return;
         if (!typing && !busy && !incompatible && event.altKey && nodeID && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); canvasEdit(canvasMove(document, nodeID, event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1, sections)); return; }
         if (!typing && !busy && nodeID && (event.key === "Delete" || event.key === "Backspace")) { event.preventDefault(); runSelectionCommand("delete"); return; }
         if (!typing && event.key === "Escape" && nodeID) { const parent = Object.entries(document.nodes).find(([, n]) => n.children?.includes(nodeID))?.[0]; if (parent && parent !== document.root) canvasSelect(parent); else select({ kind: "page" }); return; }
@@ -360,7 +361,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
         if (event.key.toLowerCase() === "c" && nodeID && !window.getSelection()?.toString()) { event.preventDefault(); runSelectionCommand("copy"); }
         if (event.key.toLowerCase() === "v" && nodeID && session.clipboard) { event.preventDefault(); runSelectionCommand("paste"); }
       }}
-      left={{ label: t("Page structure"), open: leftOpen, onOpenChange: setLeftOpen, value: leftTab, onChange: setLeftTab, tabs: [
+      left={preview ? undefined : { label: t("Page structure"), open: leftOpen, onOpenChange: setLeftOpen, value: leftTab, onChange: setLeftTab, tabs: [
         { id: "layers", title: t("Layers"), content: <div className="grid content-start">
           {module && <ModuleTree context={module} compact />}
           <LayoutTree document={document} sections={sections} chosen={chosen} container={container} title={title || page.title}
@@ -383,8 +384,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       ] }}>
       {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
-      {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setRefused(undefined); }} />}
-      <StructuredEditor validate={widgetDeclarationIssues} expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue({ ...session.draft, sections: sections.map(canonicalModelSection) }, declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...emptyDraft(), ...next }) as PageDraft); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current || preview) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setRefused(undefined); }} />}
+      <StructuredEditor validate={widgetDeclarationIssues} expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue({ ...session.draft, sections: sections.map(canonicalModelSection) }, declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible || preview} onChange={next => { if (preview) return; setSourceApplied(true); session.edit(() => ({ ...emptyDraft(), ...next }) as PageDraft); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
         <CanvasEditor model={canvasModel(document, sections, { ...Object.fromEntries(Object.entries(widgetTitles).map(([id, title]) => [id, title()])), rows: t("Rows"), columns: t("Columns"), tabs: t("Tabs"), flow: t("Flow layout"), toolbar: t("Toolbar"), loop: t("Loop") })} selected={preview ? undefined : nodeID} revision={session.draft} zoom={zoom / 100} disabled={busy || incompatible || preview}
           commands={selectionCommands} icon={canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : <LayoutGlyph kind={document.nodes[nodeID ?? ""]?.kind ?? "rows"} />}
           onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id, delta) => canvasEdit(canvasMove(document, id, delta, sections))}

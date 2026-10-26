@@ -41,7 +41,7 @@ export function CanvasEditor({
  const visible=useViewVisible();
  const root=useRef<HTMLDivElement>(null),current=useRef({model,selected,onSelect,onDrop,onMove,resize,onResize,onResetSize,zoom,disabled});
  current.current={model,selected,onSelect,onDrop,onMove,resize,onResize,onResetSize,zoom,disabled};
- const cancel=useRef<()=>void>(()=>{}),[drag,setDrag]=useState<State>(),[selectionBox,setSelectionBox]=useState<CanvasRect>(),[resizeLabel,setResizeLabel]=useState(''),[resizeGuide,setResizeGuide]=useState<CanvasRect>();
+ const cancel=useRef<()=>void>(()=>{}),[drag,setDrag]=useState<State>(),[selectionBox,setSelectionBox]=useState<CanvasRect>(),[viewport,setViewport]=useState<CanvasRect>(),[resizeLabel,setResizeLabel]=useState(''),[resizeGuide,setResizeGuide]=useState<CanvasRect>();
  const elements=(id:string)=>Array.from(root.current?.querySelectorAll<HTMLElement>('[data-canvas-node]')??[]).filter(el=>el.dataset.canvasNode===id);
  const element=(id:string)=>elements(id).find(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0;});
  const region=(id:string)=>element(id)?.closest<HTMLElement>('.platform-layout-region')??element(id);
@@ -49,11 +49,19 @@ export function CanvasEditor({
  useEffect(()=>{cancel.current();},[revision,disabled]);
  useEffect(()=>()=>cancel.current(),[]);
  useEffect(()=>{
-  if(!selected||!visible){setSelectionBox(undefined);return;} // a hidden canvas stops measuring; the box returns with the view
+  if(!selected||!visible||disabled){setSelectionBox(undefined);setViewport(undefined);return;}
   let frame=0;
-  const tick=()=>{const el=selected?region(selected):undefined,next=el?rect(el):undefined;setSelectionBox(old=>same(old,next)?old:next);frame=requestAnimationFrame(tick);};
-  frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);
- },[selected,visible]);
+  const measure=()=>{frame=0;const el=region(selected),next=el?rect(el):undefined,scroller=root.current?.querySelector('[data-canvas-scroll]'),clip=scroller?visibleRect(scroller):undefined;setSelectionBox(old=>same(old,next)?old:next);setViewport(old=>same(old,clip)?old:clip);};
+  const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
+  // Layout, scrolling and draft edits move the selection chrome. A stationary
+  // selection needs no animation loop or repeated DOM searches.
+  const sizes=new ResizeObserver(schedule);
+  const observe=()=>{sizes.disconnect();for(let el:Element|null=root.current;el;el=el.parentElement)sizes.observe(el);root.current?.querySelectorAll('[data-canvas-node],.platform-layout-region').forEach(el=>sizes.observe(el));};
+  const changes=new MutationObserver(records=>{if(records.some(record=>record.type==='childList'))observe();schedule();});
+  observe();if(root.current)changes.observe(root.current,{subtree:true,childList:true,attributes:true,characterData:true});
+  window.addEventListener('scroll',schedule,true);window.addEventListener('resize',schedule);schedule();
+  return()=>{cancelAnimationFrame(frame);sizes.disconnect();changes.disconnect();window.removeEventListener('scroll',schedule,true);window.removeEventListener('resize',schedule);};
+ },[selected,visible,disabled,revision,zoom]);
  const resolve=(payload:CanvasPayload,x:number,y:number):Target|undefined=>{
   const nodes=current.current.model,excluded=new Set<string>();
   const walk=(id:string)=>{if(excluded.has(id))return;excluded.add(id);for(const child of nodes[id]?.children??[])walk(child);};
@@ -128,7 +136,6 @@ export function CanvasEditor({
   cancel.current=abort;window.addEventListener('pointermove',preview);window.addEventListener('pointerup',up);window.addEventListener('pointercancel',abort);window.addEventListener('keydown',key,true);window.addEventListener('blur',abort);
  };
  const node=selected?model[selected]:undefined,siblings=node?.parent?model[node.parent]?.children??[]:[],index=selected?siblings.indexOf(selected):-1,horizontal=!!node?.parent&&!!model[node.parent]?.horizontal;
- const scroller=root.current?.querySelector('[data-canvas-scroll]'),viewport=scroller?visibleRect(scroller):undefined;
  const clipped=viewport&&selectionBox&&(selectionBox.x+selectionBox.width<=viewport.x||selectionBox.x>=viewport.x+viewport.width||selectionBox.y+selectionBox.height<=viewport.y||selectionBox.y>=viewport.y+viewport.height);
  const clipPath=viewport?`polygon(${viewport.x}px ${viewport.y}px, ${viewport.x+viewport.width}px ${viewport.y}px, ${viewport.x+viewport.width}px ${viewport.y+viewport.height}px, ${viewport.x}px ${viewport.y+viewport.height}px)`:undefined;
  const selection=selectionBox&&node&&!disabled&&!drag&&!clipped?<>

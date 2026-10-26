@@ -52,7 +52,7 @@ func (l *auditLog) delivered(d Delivery) {
 func (l *auditLog) recentDeliveries() []Delivery {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return slices.Clone(l.deliveries)
+	return append([]Delivery{}, l.deliveries...)
 }
 
 func (l *auditLog) readPersonal(r PersonalRead) {
