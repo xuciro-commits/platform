@@ -44,34 +44,37 @@ const (
 // AgentRunRecord is one run of an agent.
 type AgentRunRecord struct {
 	platform.Record
-	Applications      []platform.AssetBinding `json:"applications,omitempty" field:"readonly" type:"json"`
-	Release           string                  `json:"release,omitempty" field:"readonly" title:"Startup release" source:"record"`
-	DefinitionVersion string                  `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition" source:"record"`
-	Agent             string                  `json:"agent" field:"readonly,search" source:"record"` // "<app>.<name>"
-	Title             string                  `json:"title" field:"readonly,search" source:"record"`
-	Goal              string                  `json:"goal" field:"readonly" type:"longtext" source:"record"`
-	Ref               string                  `json:"ref,omitempty" field:"readonly" source:"record"`
-	Seen              string                  `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
-	OnBehalf          string                  `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of" source:"record"`
-	Acts              bool                    `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
-	Language          string                  `json:"language,omitempty" field:"readonly" source:"record"`         // the person's, which the agent answers in
-	Flow              string                  `json:"flow,omitempty" field:"readonly" source:"record"`             // the flow instance whose step started it
-	Token             int                     `json:"token,omitempty" field:"readonly"`
-	Step              string                  `json:"step,omitempty" field:"readonly" source:"record"` // that step's name
-	State             string                  `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
-	Model             string                  `json:"model,omitempty" field:"readonly" source:"record"`
-	Steps             []RunStep               `json:"steps" field:"readonly" type:"json"`
-	Pending           []ToolCall              `json:"pending,omitempty" field:"readonly"` // accepted calls still awaiting their own result
-	StepsUsed         int                     `json:"stepsUsed" field:"readonly" title:"Model turns"`
-	TokensUsed        int                     `json:"tokensUsed" field:"readonly" title:"Tokens"`
-	ActionsUsed       int                     `json:"actionsUsed" field:"readonly" title:"Actions"`
-	Cost              float64                 `json:"cost,omitempty" field:"readonly"`
-	Result            string                  `json:"result,omitempty" field:"readonly" type:"longtext"`
-	Task              string                  `json:"task,omitempty" field:"readonly" source:"record"`
-	Stopped           string                  `json:"stopped,omitempty" field:"readonly" title:"Why it stopped" source:"record"`
-	Draft             []Draft                 `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
-	Citations         []Citation              `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
-	Signals           []Signal                `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
+	Applications      []platform.AssetBinding  `json:"applications,omitempty" field:"readonly" type:"json"`
+	Release           string                   `json:"release,omitempty" field:"readonly" title:"Startup release" source:"record"`
+	DefinitionVersion string                   `json:"definitionVersion,omitempty" field:"readonly" title:"Startup agent definition" source:"record"`
+	Agent             string                   `json:"agent" field:"readonly,search" source:"record"` // "<app>.<name>"
+	Title             string                   `json:"title" field:"readonly,search" source:"record"`
+	Goal              string                   `json:"goal" field:"readonly" type:"longtext" source:"record"`
+	Ref               string                   `json:"ref,omitempty" field:"readonly" source:"record"`
+	Seen              string                   `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
+	OnBehalf          string                   `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of" source:"record"`
+	Acts              bool                     `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
+	Language          string                   `json:"language,omitempty" field:"readonly" source:"record"`         // the person's, which the agent answers in
+	Flow              string                   `json:"flow,omitempty" field:"readonly" source:"record"`             // the flow instance whose step started it
+	Token             int                      `json:"token,omitempty" field:"readonly"`
+	Step              string                   `json:"step,omitempty" field:"readonly" source:"record"` // that step's name
+	State             string                   `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
+	Model             string                   `json:"model,omitempty" field:"readonly" source:"record"`
+	ModelBinding      *platform.AIModelBinding `json:"modelBinding,omitempty" field:"readonly" source:"record" type:"json"`
+	Protocol          map[int]json.RawMessage  `json:"protocol,omitempty" field:"readonly" type:"json" read:"-"` // adapter continuations are never a member-readable trace
+
+	Steps       []RunStep  `json:"steps" field:"readonly" type:"json"`
+	Pending     []ToolCall `json:"pending,omitempty" field:"readonly"` // accepted calls still awaiting their own result
+	StepsUsed   int        `json:"stepsUsed" field:"readonly" title:"Model turns"`
+	TokensUsed  int        `json:"tokensUsed" field:"readonly" title:"Tokens"`
+	ActionsUsed int        `json:"actionsUsed" field:"readonly" title:"Actions"`
+	Cost        float64    `json:"cost,omitempty" field:"readonly"`
+	Result      string     `json:"result,omitempty" field:"readonly" type:"longtext"`
+	Task        string     `json:"task,omitempty" field:"readonly" source:"record"`
+	Stopped     string     `json:"stopped,omitempty" field:"readonly" title:"Why it stopped" source:"record"`
+	Draft       []Draft    `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
+	Citations   []Citation `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
+	Signals     []Signal   `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
 	// Withheld is set for a reader who may no longer read something the run
 	// derived its trace from; it is never journaled (#130).
 	Withheld bool `json:"withheld,omitempty" field:"readonly" title:"Part of this trace is no longer readable to you"`
@@ -215,6 +218,7 @@ func (a *Agents) Manifest() platform.Manifest {
 		Settings: []platform.Setting{
 			{Name: SettingAgentModel, Title: "Model for agents", Type: "text", Default: "",
 				Description: "The enabled model agents call, <provider>/<model>; it must call tools. Empty: agents stop and hand their goal to a person."},
+			{Name: SettingAgentModel + "-options", Title: "Agent model options", Type: "text", Default: "", Description: "Input, generation and thinking overrides configured in AI configuration."},
 			{Name: SettingAgentDaily, Title: "Tokens per agent per day", Type: "integer", Default: "200000",
 				Description: "An agent that has used this many tokens today stops its runs until tomorrow."},
 			{Name: SettingPublished, Title: "Published over A2A", Type: "text", Default: "",
@@ -574,6 +578,20 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 		State: "running", Steps: []RunStep{}}
 	recorded := captureBinding
 	if recorded {
+		name := a.automation(AgentApp, false).Setting(SettingAgentModel)
+		options := platform.ModelOptions{}
+		if d := a.def(agent); d != nil {
+			if d.Model != "" {
+				name = d.Model
+			}
+			options = d.ModelOptions
+		}
+		binding, _, err := a.host.ResolveAgentModel(name, options)
+		if err != nil && name != "" {
+			return run, err
+		}
+		run.ModelBinding = &binding
+		run.Model = binding.Model
 		run.Release = a.host.ActiveRelease()
 	}
 	if d := a.def(agent); d != nil && recorded {
@@ -676,6 +694,9 @@ func (a *Agents) definitionVersion(d *agentDef) string {
 		version = owner.Manifest().Version
 	}
 	parts := []any{d.app, version, d.Name, d.Title, d.Instructions, d.Tools, d.Budget}
+	if d.Model != "" || d.ModelOptions != (platform.ModelOptions{}) {
+		parts = append(parts, d.Model, d.ModelOptions)
+	}
 	if b, ok := a.host.App(d.app).(host.DynamicAgentDefinitions); ok {
 		parts = append(parts, b.AgentVersion(d.Name))
 	}

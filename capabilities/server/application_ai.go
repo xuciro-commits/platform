@@ -50,7 +50,13 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 			if json.Unmarshal(asset.Body, &definition) != nil || definition.Check() != nil {
 				return nil, conflictRefusal(fmt.Errorf("invalid agent declaration"))
 			}
-			item := ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: t.setting(t.automation(AgentApp, false), SettingAgentModel), HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []ApplicationAIEvaluation{}}
+			item := ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []ApplicationAIEvaluation{}}
+			currentConfig := ""
+			if binding, pv, err := t.resolveModel("agent", definition.Model, definition.ModelOptions); err == nil {
+				item.Model = binding.Model
+				model, _, _ := t.ai.Model(binding.Model)
+				currentConfig, _ = modelConfigurationDigest(model, pv, &binding)
+			}
 			for _, tool := range definition.Tools {
 				if strings.HasPrefix(tool, "query:") || strings.HasPrefix(tool, "read:") {
 					continue
@@ -79,6 +85,9 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 							state = "passed"
 						}
 					}
+					if report.State == "done" && (currentConfig == "" || report.ModelConfig != currentConfig) {
+						state = "Configuration changed; evaluate again"
+					}
 					item.Evaluations = append(item.Evaluations, ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Score, CostUSD: report.Cost})
 				}
 			}
@@ -93,6 +102,12 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 			return nil, conflictRefusal(err)
 		}
 		item := ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, Adoptions: []string{}, Checkpoints: []string{}, Evaluations: []ApplicationAIEvaluation{}}
+		currentConfig := ""
+		if binding, pv, err := t.resolveModel("generation", definition.Model, definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens})); err == nil {
+			item.Model = binding.Model
+			model, _, _ := t.ai.Model(binding.Model)
+			currentConfig, _ = modelConfigurationDigest(model, pv, &binding)
+		}
 		if definition.Proposal != nil {
 			item.Placement = "propose"
 			item.HandoffRole = definition.Proposal.HandoffRole
@@ -130,7 +145,11 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 				}
 				for _, report := range rows {
 					if report.Function == asset.Ref.Name && report.Version == version && !report.Archived {
-						item.Evaluations = append(item.Evaluations, ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: report.State, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
+						state := report.State
+						if (state == "passed" || state == "failed") && (currentConfig == "" || report.ModelConfig != currentConfig) {
+							state = "Configuration changed; evaluate again"
+						}
+						item.Evaluations = append(item.Evaluations, ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
 					}
 				}
 				offset += len(rows)

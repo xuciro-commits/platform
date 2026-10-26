@@ -23,7 +23,10 @@ type AIModel struct {
 	Model    string `json:"model"`  // the provider's model ID
 	Access   string `json:"access"` // everyone, users
 	// DailyTokens caps the tokens the whole tenant spends on the model a day; 0: none.
-	DailyTokens int `json:"dailyTokens,omitempty"`
+	DailyTokens  int                `json:"dailyTokens,omitempty"`
+	Capabilities *ModelCapabilities `json:"capabilities,omitempty"`
+	Defaults     ModelOptions       `json:"defaults,omitzero"`
+	Revision     int                `json:"revision,omitempty"`
 }
 
 type AILimit struct {

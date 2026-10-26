@@ -116,7 +116,11 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if refusal != nil {
 		return "", fmt.Errorf("the plan model is not enabled")
 	}
-	config, err := acceptance.Digest([]any{model, provider})
+	binding, _, refusal := t.resolveModel("generation", model.Name(), definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens}))
+	if refusal != nil {
+		return "", fmt.Errorf("model options: %s", refusal.Message)
+	}
+	config, err := modelConfigurationDigest(model, provider, &binding)
 	if err != nil {
 		return "", err
 	}
@@ -260,7 +264,11 @@ func (t *Tenant) evaluationsReadyLocked(candidateID string, raw []byte) error {
 			if refusal != nil {
 				continue
 			}
-			config, err := acceptance.Digest([]any{model, provider})
+			binding, _, problem := t.resolveModel("generation", model.Name(), definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens}))
+			if problem != nil {
+				continue
+			}
+			config, err := modelConfigurationDigest(model, provider, &binding)
 			if err != nil || config != report.ModelConfig || !report.CostComplete ||
 				report.Quality < report.Policy[0].MinQuality || report.CostUSD > report.Policy[0].MaxCostUSD ||
 				report.PeakLatency > report.Policy[0].MaxLatencyMillis ||

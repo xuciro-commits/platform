@@ -86,9 +86,9 @@ func reviewTenant(t *testing.T) (*Tenant, func(authority, schema, typ, id string
 		}
 		return record
 	}
-	submit(PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "local/stand-in"})
 	submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://local.test/v1"})
 	submit(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/stand-in", map[string]string{"access": "everyone"})
+	submit(PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "local/stand-in"})
 	return tn, submit
 }
 

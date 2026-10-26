@@ -18,6 +18,7 @@ import { PackageHelp } from "./package-sources";
 import { PackagePreparation } from "./package-preparation";
 import { Words } from "./words";
 import { Automation, Deliveries, SystemHealth, Integrations, Endpoints, OutboundEffects, AppSettingsView, Audit } from "./operations";
+import { AIConfiguration } from "./ai-configuration";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
 import { Credentials } from "./credentials";
 import { Flows, Agents, AgentRuns, AgentMemories, Evaluations } from "./processes";
@@ -186,14 +187,15 @@ export const ai = defineApp({
   for: (host) => !!host.role("ai"),
   home: { view: "ai-playground" },
   views: [
-    { id: "ai-playground", title: () => t("AI playground"), render: () => <AIPlayground /> },
+    { id: "ai-playground", title: () => t("AI playground"), render: p => <AIPlayground initialModel={p.model} /> },
     { id: "ai-usage", title: () => t("AI usage"), render: () => <AIUsage /> },
+    { id:"ai-configuration",title:()=>t("AI configuration"),render:p=> <AIConfiguration initialSection={p.section} fromPackage={p.fromPackage} fromVersion={p.fromVersion} /> },
     { id: "ai-providers", title: () => t("Providers and models"), render: () => <AIProviders /> },
   ],
   nav: (host) => [{ label: t("AI assistance"), items: [
     { label: t("Playground"), icon: <MessageSquare />, route: { view: "ai-playground" } },
     { label: t("Usage"), icon: <BarChart3 />, route: { view: "ai-usage" } },
-    ...(host.role("ai") === "admin" ? [{ label: t("Providers and models"), icon: <Bot />, route: { view: "ai-providers" } }] : []),
+    ...(host.role("ai") === "admin" ? [{ label: t("AI configuration"), icon: <Bot />, route: { view: "ai-configuration" } }, { label: t("Providers and models"), icon: <Bot />, route: { view: "ai-providers" } }] : []),
   ] }],
 });
 

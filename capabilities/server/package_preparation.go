@@ -48,6 +48,7 @@ type PackageConnection struct {
 	Ready      bool              `json:"ready"`
 }
 type PackageAIRequirement struct {
+	Problem string            `json:"problem,omitempty"`
 	Ref     platform.AssetRef `json:"ref"`
 	DraftID string            `json:"draftId,omitempty"`
 	Model   string            `json:"model,omitempty"`
@@ -61,6 +62,8 @@ type PackageRoleRequirement struct {
 type packageDraftState struct {
 	platform.Record
 	Name, Title, State, Address, Secret, Published, Model string
+	ModelOptions                                          platform.ModelOptions `json:"modelOptions,omitempty"`
+	MaxTokens                                             int                   `json:"maxTokens,omitempty"`
 	Pages                                                 []string
 }
 
@@ -90,6 +93,9 @@ func (h *Host) routesPackagePreparation(rt *routes) {
 		if err != nil {
 			Reply(w, nil, err)
 			return
+		}
+		for i := range value.AI {
+			value.AI[i].Problem = t.i18n.Say(t.Language(m, r), value.AI[i].Problem)
 		}
 		WriteJSON(w, http.StatusOK, value)
 	})
@@ -208,28 +214,41 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 					return fail(err)
 				}
 				var def struct {
-					Model string `json:"model"`
+					Model        string                `json:"model"`
+					ModelOptions platform.ModelOptions `json:"modelOptions,omitempty"`
+					MaxTokens    int                   `json:"maxTokens,omitempty"`
 				}
 				if err := json.Unmarshal(asset.Body, &def); err != nil {
 					return fail(err)
 				}
-				model := state.Model
-				if model == "" {
-					model = def.Model
+				model, options, tokens := def.Model, def.ModelOptions, def.MaxTokens
+				if state.ID != "" {
+					model, options, tokens = state.Model, state.ModelOptions, state.MaxTokens
 				}
-				if model == "" {
-					if asset.Ref.Kind == platform.AssetAgent {
-						model = t.setting(t.automation(AgentApp, false), SettingAgentModel)
-					} else {
-						model = t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel)
+				purpose := "generation"
+				if asset.Ref.Kind == platform.AssetAgent {
+					purpose = "agent"
+				}
+				if asset.Ref.Kind == platform.AssetFunction {
+					options = options.Override(platform.ModelOptions{MaxTokens: tokens})
+				}
+				binding, _, refusal := t.resolveModel(purpose, model, options)
+				ready, problem := refusal == nil, ""
+				if refusal != nil {
+					problem = refusal.Message
+					if problem == "" {
+						problem = "The selected model is disabled or missing"
+					}
+				} else {
+					model = binding.Model
+					_, _, refusal = t.ai.Callable(m, model)
+					ready = refusal == nil
+					if refusal != nil {
+						problem = "Ask an AI administrator to grant access to this model"
 					}
 				}
-				ready := false
-				if model != "" && t.ai != nil {
-					_, _, problem := t.ai.Callable(m, model)
-					ready = problem == nil
-				}
-				out.AI = append(out.AI, PackageAIRequirement{Ref: asset.Ref, DraftID: state.ID, Model: model, Ready: ready})
+
+				out.AI = append(out.AI, PackageAIRequirement{Ref: asset.Ref, DraftID: state.ID, Model: model, Ready: ready, Problem: problem})
 			}
 		}
 		if out.Setup != nil {

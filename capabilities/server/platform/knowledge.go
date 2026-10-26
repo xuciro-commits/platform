@@ -5,6 +5,7 @@ const (
 	KnowledgeDocumentType          = "knowledge.document"
 	KnowledgeTermType              = "knowledge.term"
 	SettingKnowledgeEmbeddingModel = "embedding-model"
+	SettingKnowledgeEmbeddingNext  = "embedding-next-model"
 )
 
 // Document is a text people upload for agents and members to find.

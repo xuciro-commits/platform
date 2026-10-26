@@ -1,4 +1,5 @@
 import { ContextHelp, StructuredEditor } from "@platform/ui";
+import type {Api} from "@platform/kernel";
 import { useDefinitionDraft } from "../session/definition-draft";
 // Agents a builder declares over the ontology: instructions, the
 // published actions and queries they may use, a budget, checkpoints and the
@@ -8,12 +9,12 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useAuthoringModel } from "../ontology/authoring-model";
-import { useHost, useRecordInventory } from "@platform/app";
+import { useHost, ModelPicker, ModelOptionsEditor, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Textarea, Toggles, Workbench, t } from "@platform/ui";
 import { Plus, Trash2 } from "lucide-react";
 
 type Case = { name: string; goal: string; ref?: string; expect?: string; asks?: boolean; takes?: string[]; avoids?: string[] };
-type Draft = { id: string; revision: number; name: string; title: string; description: string; instructions: string; tools: string[]; steps?: number; tokens?: number; actions?: number; cost?: number;
+type Draft = { id: string; revision: number; name: string; title: string; description: string; instructions: string; model?:string; modelOptions?:Api.ModelOptions; tools: string[]; steps?: number; tokens?: number; actions?: number; cost?: number;
   checkpoints?: string[]; handoffRole?: string; cases?: Case[]; state?: string; version?: number; published?: string };
 type QueryRecord = { id: string; name: string; title: string; published?: string; archived?: boolean };
 const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", description: "", instructions: "", tools: [], cases: [] });
@@ -43,10 +44,12 @@ export function AgentEditor({ id }: { id: string }) {
     id, type: "build.agent", kind: "agent", view: "agent", empty,
     normalize: record => ({ ...record, tools: record.tools ?? [], cases: record.cases ?? [] }),
     failure: t("The agent could not be saved. Your draft is still here."),
-    payload: ({ name, title, description, instructions, tools, steps, tokens, actions, cost, checkpoints, handoffRole, cases }) =>
-      ({ name, title, description, instructions, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] }),
+    payload: ({ name, title, description, instructions, model, modelOptions, tools, steps, tokens, actions, cost, checkpoints, handoffRole, cases }) =>
+      ({ name, title, description, instructions, model:model??"", modelOptions:modelOptions??{}, tools, steps: steps || 0, tokens: tokens || 0, actions: actions || 0, cost: cost || 0, checkpoints: checkpoints ?? [], handoffRole: handoffRole ?? "", cases: cases ?? [] }),
   });
   const { draft, query, dirty, busy, error, setError, patch: change, perform, save, discardChanges } = editor;
+  const selection=useReadQuery<Api.ModelSelection>("/v1/ai/model-selection?purpose=agent").data;
+  const selectedModel=selection?.models.find(row=>`${row.model.provider}/${row.model.model}`===(draft.model||selection.default));
   const issues: string[] = [];
   if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !(draft.title ?? "").trim() || !(draft.description ?? "").trim()) issues.push(t("Give the agent a lower-case name, a title and a description."));
   if (!(draft.instructions ?? "").trim()) issues.push(t("Write its instructions."));
@@ -81,6 +84,8 @@ export function AgentEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Agent name")}<Input disabled={!!draft.published} value={draft.name} placeholder="expediter" onChange={(e) => change({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Agent title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
         <label className={fieldClass}>{t("What it does for others")}<Textarea rows={2} value={draft.description} onChange={(e) => change({ description: e.target.value })} /></label>
+        <ModelPicker value={draft.model??""} onChange={model=>change({model})} purpose="agent" />
+        <ModelOptionsEditor value={draft.modelOptions??{}} onChange={modelOptions=>change({modelOptions})} capabilities={selectedModel?.model.capabilities} />
         <label className={fieldClass}>{t("Instructions")}<Textarea rows={8} value={draft.instructions} placeholder={t("The job, the order of work, what to check first, when to ask a person.")} onChange={(e) => change({ instructions: e.target.value })} /></label>
         <label className={fieldClass}>{t("Hands over to")}<Select value={draft.handoffRole ?? ""} onChange={(e) => change({ handoffRole: e.target.value || undefined })}>
           <option value="">{t("The builder")}</option>{roles.filter((r) => r !== "builder").map((r) => <option key={r} value={r}>{r}</option>)}</Select>

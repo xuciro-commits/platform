@@ -164,6 +164,12 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if ask.Model == "" {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function needs a bound model")
 	}
+	resolved, _, modelErr := t.resolveModel("generation", ask.Model, f.ModelOptions.Override(platform.ModelOptions{MaxTokens: f.MaxTokens}))
+	if modelErr != nil {
+		return platform.FunctionCall{}, platform.Effect{}, modelErr
+	}
+	ask.Binding = &resolved
+	ask.ConfigurationError = ""
 	ask.Function = &functionBinding{Owner: owner, Definition: f, Call: call, Member: member.ID}
 	body, _ := json.Marshal(ask)
 	x.Body = string(body)

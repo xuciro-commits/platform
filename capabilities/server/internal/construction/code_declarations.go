@@ -213,7 +213,7 @@ func AgentDescriptor(agent platform.Agent) (platform.AgentReleaseDescriptor, err
 	if err != nil {
 		return platform.AgentReleaseDescriptor{}, err
 	}
-	descriptor := platform.AgentReleaseDescriptor{Name: agent.Name, Title: agent.Title, Description: agent.Description, Instructions: agent.Instructions, Tools: slices.Clone(agent.Tools), Budget: agent.Budget, Checkpoints: slices.Clone(agent.Checkpoints), Native: true, Guard: agent.Guard != nil, Handoff: agent.To != nil, Cases: raw}
+	descriptor := platform.AgentReleaseDescriptor{Model: agent.Model, ModelOptions: agent.ModelOptions, Name: agent.Name, Title: agent.Title, Description: agent.Description, Instructions: agent.Instructions, Tools: slices.Clone(agent.Tools), Budget: agent.Budget, Checkpoints: slices.Clone(agent.Checkpoints), Native: true, Guard: agent.Guard != nil, Handoff: agent.To != nil, Cases: raw}
 	return descriptor, descriptor.Check()
 }
 

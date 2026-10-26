@@ -1,11 +1,11 @@
 // Settings: AI providers, the playground and usage.
-import { useHost, MemberSelect, useReadQuery as useRead } from "@platform/app";
-import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
+import { useHost, ModelPicker, ModelOptionsEditor, MemberSelect, useReadQuery as useRead } from "@platform/app";
+import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { CredentialEditor } from "./credentials";
-import { when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
+import { modelReferenceTitle, when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
 
 // AI providers: providers and models are decisions of the ai app;
 // catalogs are read live from each provider; calls go through the host, which
@@ -26,6 +26,9 @@ export function AIProviders() {
   const enabled = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const vendors = useRead<Vendor[]>("/v1/ai/vendors").data ?? [];
   const { client, decide, can } = useHost();
+  const {open:go}=useWorkspace();
+  const [removing,setRemoving]=useState<string>();
+  const references=useRead<Api.ModelSelection>("/v1/ai/model-selection?purpose=generation").data;
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string>();
   const credentials = useRead<Api.CredentialCatalog>("/v1/credentials").data;
@@ -48,16 +51,16 @@ export function AIProviders() {
     setCatalog(r.ok ? { models: r.body } : { error: r.body.error?.detail ?? `HTTP ${r.status}` });
   };
   const enable = (provider: string, model: string, access: string) =>
-    decide("ai.model.enable", { type: "ai.model", id: `${provider}/${model}` }, { access });
+    decide("ai.model.enable", { type: "ai.model", id: `${provider}/${model}` }, { access, capabilities:catalog.models?.find(item=>item.id===model)?.capabilities });
   const shown = (catalog.models ?? []).filter((m) => (!freeOnly || m.free) && m.id.toLowerCase().includes(filter.toLowerCase()));
   const columns: ColumnDef<CatalogModel, any>[] = [
     { accessorKey: "id", header: t("Model"), cell: ({ row: { original: m } }) => <span className="flex items-center gap-2"><span className="font-mono text-xs">{m.id}</span>{m.free && <Tag label="free" tone="success" />}</span> },
-    { accessorKey: "context", header: t("Context"), meta: { width: 100, align: "right" }, cell: (c) => (c.getValue() ? `${Math.round(c.getValue() / 1000)}k` : "") },
+    { accessorKey: "context", header: t("Context"), meta: { width: 100, align: "right" }, cell: (c) => (c.getValue() ? `${c.getValue().toLocaleString()} ${t("tokens")}` : t("Unknown")) },
     { id: "access", header: t("Enabled for"), meta: { width: 260 }, cell: ({ row: { original: m } }) => {
       const on = enabled.find((x) => x.provider === open && x.model === m.id);
       return <span className="flex gap-1">
-        {["everyone", "users"].map((a) => <Button key={a} size="sm" variant={on?.access === a ? "primary" : undefined} onClick={() => void enable(open!, m.id, a)}>{a === "users" ? "ai users" : a}</Button>)}
-        {on && <Button size="sm" variant="danger" onClick={() => void decide("ai.model.disable", { type: "ai.model", id: `${open}/${m.id}` }, {})}>{t("Off")}</Button>}
+        {["everyone", "users"].map((a) => <Button key={a} size="sm" variant={on?.access === a ? "primary" : undefined} onClick={() => void enable(open!, m.id, a)}>{t(a === "users" ? "AI members only" : "Everyone in this tenant")}</Button>)}
+        {on && <Button size="sm" variant="danger" onClick={() => go({view:"ai-configuration",params:{section:"models"}})}>{t("Review model")}</Button>}
       </span>;
     } },
   ];
@@ -77,9 +80,9 @@ export function AIProviders() {
                 <Button size="sm" onClick={() => {setEditing(p.id);setDraft({kind:p.kind,id:p.id,vendor:p.vendor??"openrouter",baseUrl:p.baseUrl,secret:p.secret??""});setAdding(true);}}>{t("Edit")}</Button>
                 <Button size="sm" onClick={() => void check(p.id)}>{t("Check connection")}</Button>
                 <Button size="sm" onClick={() => void load(p.id)}>{t("Models")}</Button>
-                <Button size="sm" variant="danger" onClick={() => void decide("ai.provider.remove", { type: "ai.provider", id: p.id }, {})}>{t("Remove")}</Button>
+                <Button size="sm" variant="danger" onClick={() => setRemoving(p.id)}>{t("Remove")}</Button>
               </span>
-              {checks[p.id] && <p role="status" className="w-full text-xs text-muted">{checks[p.id]}</p>}
+              {checks[p.id] && <><p role="status" className="w-full text-xs text-muted">{checks[p.id]}</p>{checks[p.id]===t("Connection verified")&&<p className="w-full text-xs text-muted">{t("The model catalog was read. Generation, tools and structured results have not been tested.")}</p>}</>}
             </Card>
           ))}
         </div>
@@ -142,22 +145,29 @@ export function AIProviders() {
           </span>
         </div>
       </Dialog>
+      <Dialog open={!!removing} onOpenChange={value=>{if(!value)setRemoving(undefined)}} title={t("Remove AI service")}>
+        <p className="text-sm">{t("Removing this service disables its models. References and usage history remain.")}</p>
+        <ul className="my-3 grid gap-2 text-sm">{references?.models.filter(row=>row.model.provider===removing).map(row=><li key={row.model.model}>{row.model.model} · {row.references?.map(modelReferenceTitle).join(", ")||t("No purpose default")}</li>)}</ul>
+        <div className="flex justify-end gap-2"><Button onClick={()=>setRemoving(undefined)}>{t("Cancel")}</Button><Button variant="danger" onClick={async()=>{if(removing && await decide("ai.provider.remove",{type:"ai.provider",id:removing},{}))setRemoving(undefined)}}>{t("Remove service")}</Button></div>
+      </Dialog>
       <CredentialEditor open={!!credential} initial={credential} onClose={()=>setCredential(undefined)} onSaved={name=>setDraft(current=>({...current,secret:name}))} />
     </>
   );
 }
 
 // The playground calls an enabled model as the signed-in member, through the host.
-export function AIPlayground() {
+export function AIPlayground({initialModel=""}:{initialModel?:string}) {
   const models = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const { client } = useHost();
   const queries = useQueryClient();
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState(initialModel);
+  const [options,setOptions]=useState<Api.ModelOptions>({});
   const [system, setSystem] = useState("");
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [turns, setTurns] = useState<{ prompt: string; answer?: string; error?: string; usage?: Usage }[]>([]);
-  const chosen = model || (models[0] ? `${models[0].provider}/${models[0].model}` : "");
+  const chosen = model;
+  const selected=models.find(item=>`${item.provider}/${item.model}`===chosen);
   const send = async () => {
     setBusy(true);
     const messages = [...(system ? [{ role: "system", content: system }] : []), { role: "user", content: prompt }];
@@ -165,7 +175,7 @@ export function AIPlayground() {
     const turn: { prompt: string; answer?: string; error?: string; usage?: Usage } = { prompt, answer: "" };
     const show = () => setTurns([{ ...turn }, ...turns]);
     show();
-    const r = await client.stream<{ error?: { detail?: string; code?: string } }>("/v1/ai/chat", { model: chosen, messages, maxTokens: 1024, stream: true }, (event, data) => {
+    const r = await client.stream<{ error?: { detail?: string; code?: string } }>("/v1/ai/chat", { model: chosen, messages, options, stream: true }, (event, data) => {
       const d = data as { content?: string; usage?: Usage; detail?: string; code?: string };
       if (event === "delta") turn.answer += d.content ?? "";
       if (event === "done" || event === "error") turn.usage = d.usage;
@@ -180,19 +190,17 @@ export function AIPlayground() {
     <>
       <PageHeader title={t("AI playground")} help={t("Call a model you may use, as yourself: the host checks access, calls the provider and meters the call. Prompts and answers are not kept.")} />
       <div className="grid max-w-3xl gap-2 text-sm">
-        {models.length === 0 ? <p className="text-muted">{t("No model is enabled for you.")}</p> : (
-          <Select aria-label={t("Model")} value={chosen} onChange={(e) => setModel(e.target.value)}>
-            {models.map((m) => <option key={`${m.provider}/${m.model}`} value={`${m.provider}/${m.model}`}>{m.provider}/{m.model} · {m.access}</option>)}
-          </Select>
-        )}
+        <ModelPicker value={model} onChange={setModel} purpose="generation" inherit={false} />
+        <ModelOptionsEditor value={options} onChange={setOptions} capabilities={selected?.capabilities} />
+        <p className="text-xs text-muted">{t("This sends only the prompt below to the selected service and may incur charges. No business record is attached automatically.")}</p>
         <Input aria-label={t("System")} placeholder={t("System instructions (optional)")} value={system} onChange={(e) => setSystem(e.target.value)} />
         <Textarea aria-label={t("Prompt")} rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t("Ask something")} />
-        <span className="flex justify-end"><Button variant="primary" disabled={!chosen || !prompt || busy} onClick={() => void send()}>{busy ? t("Waiting…") : t("Send")}</Button></span>
+        <span className="flex justify-end"><Button variant="primary" disabled={!chosen || !prompt || busy} onClick={() => void send()}>{busy ? t("Waiting…") : t("Send trial · may incur charges")}</Button></span>
         {turns.map((turn, i) => (
           <Card key={i} className="p-3">
-            <p className="mb-2 text-xs text-muted">{turn.prompt}</p>
+            <p className="mb-2 text-xs text-muted">{turn.prompt}</p><p className="mb-2 text-xs text-muted">{t("Generation trial only. Tool calling and structured results require their own evaluations.")}</p>
             {turn.error ? <p className="text-[var(--tone-danger)]">{turn.error}</p> : <p className="whitespace-pre-wrap">{turn.answer}</p>}
-            {turn.usage && <Disclosure summary={t("AI usage")}><PropertyList columns={3} items={[[t("Model"), turn.usage.served ?? turn.usage.model], [t("Tokens in"), turn.usage.input], [t("Tokens out"), turn.usage.output], [t("Duration"), `${turn.usage.millis} ms`], [t("Cost (USD)"), turn.usage.cost === undefined ? "—" : turn.usage.cost.toFixed(6)]]} /></Disclosure>}
+            {turn.usage && <Disclosure summary={t("AI usage")}><PropertyList columns={3} items={[[t("Model"), turn.usage.served ?? turn.usage.model], [t("Tokens in"), turn.usage.input], [t("Tokens out"), turn.usage.output], [t("Duration"), `${turn.usage.millis} ms`], [t("Cost (USD)"), turn.usage.costReported ? (turn.usage.cost??0).toFixed(6) : t("Unknown cost")]]} /></Disclosure>}
           </Card>
         ))}
       </div>
@@ -210,7 +218,7 @@ export function AIUsage() {
     { accessorKey: "failed", header: t("Failed"), meta: { width: 70, align: "right" } },
     { accessorKey: "input", header: t("Tokens in"), meta: { width: 100, align: "right" } },
     { accessorKey: "output", header: t("Tokens out"), meta: { width: 100, align: "right" } },
-    { accessorKey: "cost", header: t("Cost (USD)"), meta: { width: 110, align: "right" }, cell: (c) => c.getValue().toFixed(6) },
+    { accessorKey: "cost", header: t("Cost (USD)"), meta: { width: 110, align: "right" }, cell: ({row:{original:row}}) => row.costUnknown===row.calls && row.calls>0 ? t("Unknown cost") : `${row.cost.toFixed(6)}${row.costUnknown>0?` + ${t("Unknown cost")}`:""}` },
   ];
   const calls: ColumnDef<Usage, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => when(c.getValue()) },
@@ -237,7 +245,7 @@ export function AIUsage() {
     <>
       <PageHeader title={t("AI usage")} help={t("Every model call, metered from the journal: per day, member and model. Administrators of the ai app see everyone's; others see their own.")} />
       <div className="grid gap-3 sm:grid-cols-4">
-        {[[t("Calls"), String(sum((row) => row.calls))], [t("Tokens in"), sum((row) => row.input).toLocaleString()], [t("Tokens out"), sum((row) => row.output).toLocaleString()], [t("Cost (USD)"), `$${sum((row) => row.cost).toFixed(2)}`]].map(([label, value]) => (
+        {[[t("Calls"), String(sum((row) => row.calls))], [t("Tokens in"), sum((row) => row.input).toLocaleString()], [t("Tokens out"), sum((row) => row.output).toLocaleString()], [t("Reported cost (USD)"), sum(row=>row.costUnknown)>0 && sum(row=>row.cost)===0?t("Unknown cost"):`$${sum((row) => row.cost).toFixed(2)}${sum(row=>row.costUnknown)>0?" + "+t("Unknown cost"):""}`]].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-border bg-surface px-3 py-2">
             <p className="text-xs text-muted">{label}</p>
             <p className="text-lg font-semibold tabular-nums">{value}</p>

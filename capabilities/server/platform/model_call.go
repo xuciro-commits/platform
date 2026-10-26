@@ -3,10 +3,11 @@ package platform
 import "encoding/json"
 
 type Message struct {
-	Role       string     `json:"role"` // system, user, assistant, tool
-	Content    string     `json:"content"`
-	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
-	ToolCallID string     `json:"toolCallId,omitempty"` // a tool turn: the call it answers
+	Role       string          `json:"role"` // system, user, assistant, tool
+	Content    string          `json:"content"`
+	ToolCalls  []ToolCall      `json:"toolCalls,omitempty"`
+	ToolCallID string          `json:"toolCallId,omitempty"` // a tool turn: the call it answers
+	Protocol   json.RawMessage `json:"-"`                    // protected adapter continuation, never a public reasoning field
 }
 
 type Tool struct {
@@ -37,11 +38,13 @@ type ChatStreamEvent struct {
 }
 
 type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Tools       []Tool    `json:"tools,omitempty"`
-	MaxTokens   int       `json:"maxTokens,omitempty"`
-	Temperature *float64  `json:"temperature,omitempty"`
+	Model       string          `json:"model"`
+	Messages    []Message       `json:"messages"`
+	Tools       []Tool          `json:"tools,omitempty"`
+	MaxTokens   int             `json:"maxTokens,omitempty"`
+	Temperature *float64        `json:"temperature,omitempty"`
+	Options     ModelOptions    `json:"options,omitzero"`
+	Binding     *AIModelBinding `json:"-"` // supplied only by the accepting owner, never trusted from HTTP
 	// PromptCache opts into an explicit cache breakpoint for providers that
 	// require one. It does not disable providers' automatic prompt caching.
 	PromptCache bool `json:"promptCache,omitempty"`
@@ -54,9 +57,10 @@ type ChatRequest struct {
 }
 
 type ChatAnswer struct {
-	Content   string     `json:"content"`
-	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
-	Usage     AIUsage    `json:"usage"`
+	Content   string          `json:"content"`
+	ToolCalls []ToolCall      `json:"toolCalls,omitempty"`
+	Usage     AIUsage         `json:"usage"`
+	Protocol  json.RawMessage `json:"-"`
 }
 
 type AIError struct {

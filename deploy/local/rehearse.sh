@@ -28,6 +28,6 @@ docker exec "$container" pg_isready -U platform -d rehearsal >/dev/null
 port=$(docker port "$container" 5432/tcp)
 port=${port##*:}
 PLATFORM_TEST_DATABASE="postgres://platform:rehearsal-local@127.0.0.1:$port/rehearsal" \
-  make test-go PKG=. RUN='TestSystemDefinitionsPostgresCheckpointRestoresSharedRuntime'
+  make test-go PKG=. RUN='TestSystemDefinitionsPostgresCheckpointRestoresSharedRuntime|TestAIModelConfigurationPostgresCheckpoint|TestJournalAcceptedJointFunctionActivationCrash|TestJournalAcceptedFunctionCrashBeforeApplication'
 make test-go PKG=. RUN='TestSelfHosting|TestSystemDefinitions|TestMixedSystem|TestNamed|TestParameterized|TestUnparameterized|TestCatalogCache'
 printf 'Current composition build, self-hosting and isolated PostgreSQL checkpoint/recovery checks passed.\n'

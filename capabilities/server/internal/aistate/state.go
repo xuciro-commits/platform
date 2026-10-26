@@ -53,6 +53,12 @@ func (s State) Validate() error {
 			model.Access != "everyone" && model.Access != "users" || model.DailyTokens < 0 {
 			return fmt.Errorf("accepted AI state has an invalid model")
 		}
+		if model.Revision < 0 {
+			return fmt.Errorf("accepted AI state has an invalid revision")
+		}
+		if _, err := model.Resolve("", platform.ModelOptions{}, 0); err != nil {
+			return fmt.Errorf("accepted AI model: %w", err)
+		}
 		models[model.Name()] = true
 	}
 	for member, limit := range s.Limits {

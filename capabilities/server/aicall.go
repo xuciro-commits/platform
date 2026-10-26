@@ -12,12 +12,10 @@ import (
 	"io"
 	"maps"
 	"net/http"
-	"platformserver/internal/acceptance"
 	resultformat "platformserver/internal/acceptance/result"
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -159,12 +157,53 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 
 // call calls a model once, outside the tenant's lock; the caller meters it.
 func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *AIError) {
-	// The platform's ceiling on one answer, at the one place every call passes:
-	// a caller may ask for less, never for more; asking for nothing takes the
-	// ceiling, so no adapter's own default outgrows the tenant's setting
-	// (review AI-03).
-	if ceiling := t.mostTokens(); ceiling > 0 {
-		req.MaxTokens = min(cmp.Or(req.MaxTokens, ceiling), ceiling)
+	var binding platform.AIModelBinding
+	var configErr error
+	purpose := "generation"
+	if m.Agent {
+		purpose = "agent"
+	}
+	if req.Binding != nil && req.Binding.Purpose != "" {
+		purpose = req.Binding.Purpose
+	}
+	if req.Binding != nil {
+		binding = *req.Binding
+		frozen := platform.AIModel{Provider: model.Provider, Model: model.Model, Capabilities: binding.Capabilities, Defaults: binding.Options, Revision: binding.Revision}
+		_, configErr = frozen.Resolve(purpose, platform.ModelOptions{}, t.mostTokens())
+		if configErr == nil {
+			model.Defaults = platform.ModelOptions{}
+			_, configErr = model.Resolve(purpose, binding.Options, t.mostTokens())
+		}
+	} else {
+		options := req.Options
+		if req.MaxTokens > 0 {
+			options.MaxTokens = req.MaxTokens
+		}
+		if ceiling := t.mostTokens(); ceiling > 0 && options.MaxTokens > ceiling && req.Options.MaxTokens == 0 {
+			options.MaxTokens = ceiling
+		}
+		binding, configErr = model.Resolve(purpose, options, t.mostTokens())
+	}
+	if binding.Provider != nil && (binding.Provider.Wire != pv.Wire || binding.Provider.Vendor != pv.Vendor || binding.Provider.BaseURL != pv.BaseURL) {
+		configErr = fmt.Errorf("The provider protocol or address changed; start a new request")
+	}
+	req.MaxTokens, req.Options = binding.Options.MaxTokens, binding.Options
+	req.Binding = &binding
+	// The token counter is conservative and includes instructions, tools and
+	// protected continuation. Never silently truncate a tool/result pair.
+	input, _ := json.Marshal(struct {
+		Messages []map[string]any
+		Tools    []Tool
+	}{openAIMessages(req.Messages), req.Tools})
+	estimated := estimateTokens(string(input))
+	if configErr == nil && binding.Capabilities != nil && binding.Capabilities.InputTokens != nil && estimated > *binding.Capabilities.InputTokens {
+		configErr = fmt.Errorf("Input exceeds the model input limit; shorten the prompt or history")
+	}
+	if configErr == nil && req.Options.InputTokens > 0 && estimated > req.Options.InputTokens {
+		configErr = fmt.Errorf("Input exceeds the configured token budget; shorten the prompt or history")
+	}
+	if configErr == nil && binding.Capabilities != nil && binding.Capabilities.ContextTokens != nil && estimated+req.MaxTokens > *binding.Capabilities.ContextTokens {
+		configErr = fmt.Errorf("Input and generation exceed the model context window; shorten the input or generation budget")
 	}
 	started := time.Now()
 	complete := t.complete
@@ -173,8 +212,15 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 	}
 	span := outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
-	answer, u, failure := complete(pv, model.Model, req)
-	if !u.TokensReported {
+	var answer ChatAnswer
+	var u platform.AIUsage
+	var failure *AIError
+	if configErr != nil {
+		failure = &AIError{Status: 400, Detail: configErr.Error()}
+	} else {
+		answer, u, failure = complete(pv, model.Model, req)
+	}
+	if !u.TokensReported && configErr == nil {
 		// A provider that says nothing about usage must not be booked as
 		// spending nothing: the platform books a conservative estimate of the
 		// request and the answer, marked as one, so daily caps and run budgets
@@ -240,6 +286,12 @@ func openAIMessages(ms []Message) []map[string]any {
 	out := make([]map[string]any, 0, len(ms))
 	for _, m := range ms {
 		msg := map[string]any{"role": m.Role, "content": m.Content}
+		if len(m.Protocol) > 0 {
+			var reasoning string
+			if json.Unmarshal(m.Protocol, &reasoning) == nil {
+				msg["reasoning_content"] = reasoning
+			}
+		}
 		if len(m.ToolCalls) > 0 {
 			calls := []map[string]any{}
 			for _, c := range m.ToolCalls {
@@ -267,7 +319,20 @@ func (t *Tenant) complete(pv platform.AIProvider, model string, req ChatRequest)
 		body["tools"] = tools
 	}
 	if req.MaxTokens > 0 {
-		body["max_tokens"] = req.MaxTokens
+		if pv.Vendor == "openai" {
+			body["max_completion_tokens"] = req.MaxTokens
+		} else {
+			body["max_tokens"] = req.MaxTokens
+		}
+	}
+	if req.Options.Thinking != "" {
+		body["thinking"] = map[string]any{"type": req.Options.Thinking}
+	}
+	if req.Options.Effort != "" {
+		body["reasoning_effort"] = req.Options.Effort
+	}
+	if (pv.Vendor == "deepseek" || req.Binding != nil && req.Binding.Capabilities != nil && req.Binding.Capabilities.Adapter == "deepseek") && req.Options.Thinking != "disabled" && req.Temperature != nil {
+		return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: 400, Detail: "Temperature cannot be combined with DeepSeek thinking"}
 	}
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
@@ -353,6 +418,7 @@ func completion(status int, answer []byte, model string) (ChatAnswer, platform.A
 			FinishReason string `json:"finish_reason"`
 			Message      struct {
 				Content   string `json:"content"`
+				Reasoning string `json:"reasoning_content"`
 				ToolCalls []struct {
 					ID       string `json:"id"`
 					Function struct {
@@ -386,6 +452,9 @@ func completion(status int, answer []byte, model string) (ChatAnswer, platform.A
 	}
 	msg := out.Choices[0].Message
 	reply := ChatAnswer{Content: msg.Content}
+	if msg.Reasoning != "" {
+		reply.Protocol, _ = json.Marshal(msg.Reasoning)
+	}
 	if len(msg.ToolCalls) > 0 && out.Choices[0].FinishReason == "length" {
 		return reply, u, &AIError{Status: http.StatusBadGateway, Detail: "the model's tool calls were cut off"}
 	}
@@ -424,6 +493,7 @@ func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[s
 		return reply, u, failure
 	}
 	var content strings.Builder
+	var reasoning strings.Builder
 	var u platform.AIUsage
 	calls := map[int]ToolCall{}
 	complete := false
@@ -444,6 +514,7 @@ func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[s
 			Choices []struct {
 				Delta struct {
 					Content   string `json:"content"`
+					Reasoning string `json:"reasoning_content"`
 					ToolCalls []struct {
 						Index    int    `json:"index"`
 						ID       string `json:"id"`
@@ -482,6 +553,7 @@ func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[s
 			streamText(req, chunk.Choices[0].Delta.Content)
 		}
 		if len(chunk.Choices) > 0 {
+			reasoning.WriteString(chunk.Choices[0].Delta.Reasoning)
 			choice := chunk.Choices[0]
 			for _, call := range choice.Delta.ToolCalls {
 				if call.Index < 0 {
@@ -514,6 +586,9 @@ func (t *Tenant) completeStream(pv platform.AIProvider, model string, body map[s
 		return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "the model's tool calls were cut off"}
 	}
 	answer := ChatAnswer{Content: content.String()}
+	if reasoning.Len() > 0 {
+		answer.Protocol, _ = json.Marshal(reasoning.String())
+	}
 	for _, index := range slices.Sorted(maps.Keys(calls)) {
 		if index != len(answer.ToolCalls) {
 			return ChatAnswer{Content: content.String()}, u, &AIError{Status: http.StatusBadGateway, Detail: "invalid tool call index"}
@@ -586,86 +661,6 @@ type doer func(*http.Request) (*http.Response, error)
 
 func (d doer) Do(r *http.Request) (*http.Response, error) { return d(r) }
 
-// CatalogModel is a model a provider offers.
-type CatalogModel struct {
-	ID      string `json:"id"`
-	Name    string `json:"name,omitempty"`
-	Context int    `json:"context,omitempty"`
-	Free    bool   `json:"free,omitempty"` // priced at zero, as OpenRouter reports
-}
-
-var catalogs = struct {
-	sync.Mutex
-	byKey map[string]cachedCatalog
-}{byKey: map[string]cachedCatalog{}}
-
-type cachedCatalog struct {
-	at     time.Time
-	models []CatalogModel
-}
-
-// ProviderModels reads a provider's catalog live (GET /models), cached ten
-// minutes; it is volatile, never journaled. Administrators only.
-func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool) ([]CatalogModel, *kernel.Error, *AIError) {
-	if t.ai == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
-	}
-	caller := platform.NewCaller(runtime{t}, m, platform.AIApp, false, false)
-	if refusal := authorizationRefusal(t.authorizeNative(caller, "GET /v1/ai/providers/{provider}/models", "read", []string{platform.AIAdmin}, true)); refusal != nil {
-		return nil, refusal, nil
-	}
-	pv, ok := t.ai.Provider(provider)
-	if !ok {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
-	}
-	key := t.ID + "/" + pv.ID + "/" + pv.BaseURL
-	catalogs.Lock()
-	c, cached := catalogs.byKey[key]
-	catalogs.Unlock()
-	if cached && !refresh && time.Since(c.at) < 10*time.Minute {
-		return c.models, nil, nil
-	}
-	if pv.Wire == "anthropic" {
-		models, failure := t.anthropicModels(pv)
-		if failure != nil {
-			return nil, nil, failure
-		}
-		catalogs.Lock()
-		catalogs.byKey[key] = cachedCatalog{at: time.Now(), models: models}
-		catalogs.Unlock()
-		return models, nil, nil
-	}
-	status, answer, failure := t.aiRequest(pv, http.MethodGet, "/models", nil, 30*time.Second)
-	if failure != nil {
-		return nil, nil, failure
-	}
-	var out struct {
-		Data []struct {
-			ID      string `json:"id"`
-			Name    string `json:"name"`
-			Context int    `json:"context_length"`
-			Pricing *struct {
-				Prompt     string `json:"prompt"`
-				Completion string `json:"completion"`
-			} `json:"pricing"`
-		} `json:"data"`
-	}
-	if status >= 300 || json.Unmarshal(answer, &out) != nil {
-		return nil, nil, &AIError{Status: status, Detail: fmt.Sprintf("catalog: %s", strings.TrimSpace(string(answer[:min(len(answer), 200)])))}
-	}
-	models := []CatalogModel{}
-	for _, d := range out.Data {
-		x := CatalogModel{ID: d.ID, Name: d.Name, Context: d.Context}
-		x.Free = d.Pricing != nil && d.Pricing.Prompt == "0" && d.Pricing.Completion == "0"
-		models = append(models, x)
-	}
-	slices.SortFunc(models, func(a, b CatalogModel) int { return strings.Compare(a.ID, b.ID) })
-	catalogs.Lock()
-	catalogs.byKey[key] = cachedCatalog{at: time.Now(), models: models}
-	catalogs.Unlock()
-	return models, nil, nil
-}
-
 // Apps' model requests. An accepted decision's Request of a
 // model becomes owned work of the built-in model destination: kept in the
 // outbound queue with the effects, sent on the I/O lane through the door every
@@ -676,15 +671,17 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 
 // modelAsk is a model request as the outbound queue keeps it.
 type modelAsk struct {
-	Model              string               `json:"model"`
-	Prompt             platform.Prompt      `json:"prompt"`
-	Reply              string               `json:"reply"`
-	Record             string               `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
-	Call               string               `json:"call"`
-	Function           *functionBinding     `json:"function,omitempty"`
-	Evaluation         bool                 `json:"evaluation,omitempty"`
-	EvaluationConfig   string               `json:"evaluationConfig,omitempty"`
-	EvaluationFunction *platform.AIFunction `json:"evaluationFunction,omitempty"`
+	Model              string                   `json:"model"`
+	Binding            *platform.AIModelBinding `json:"binding,omitempty"`
+	ConfigurationError string                   `json:"configurationError,omitempty"`
+	Prompt             platform.Prompt          `json:"prompt"`
+	Reply              string                   `json:"reply"`
+	Record             string                   `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
+	Call               string                   `json:"call"`
+	Function           *functionBinding         `json:"function,omitempty"`
+	Evaluation         bool                     `json:"evaluation,omitempty"`
+	EvaluationConfig   string                   `json:"evaluationConfig,omitempty"`
+	EvaluationFunction *platform.AIFunction     `json:"evaluationFunction,omitempty"`
 }
 
 func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
@@ -699,12 +696,28 @@ func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Re
 // allocates no work and never calls a provider.
 func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect) platform.Effect {
 	prompt, _ := q.Payload.(platform.Prompt)
+	options := platform.ModelOptions{MaxTokens: prompt.MaxTokens}
+	if q.EvaluationFunction != nil {
+		options = q.EvaluationFunction.ModelOptions.Override(options)
+	}
 	s := rec.GetSubmission()
 	// Resolve the administrator's default in the accepted decision. A queued
 	// request must not switch models when settings change before dispatch or
 	// retry. An empty binding stays empty and is refused without provider I/O.
 	model := cmp.Or(q.Model, t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel))
-	body, _ := json.Marshal(modelAsk{Model: model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction})
+	var binding *platform.AIModelBinding
+	failure := ""
+	if c.Staging() && !c.Replaying {
+		if resolved, _, err := t.resolveModel("generation", model, options); err != nil {
+			failure = err.Message
+			if failure == "" {
+				failure = "The selected model is disabled or missing"
+			}
+		} else {
+			binding = &resolved
+		}
+	}
+	body, _ := json.Marshal(modelAsk{Model: model, Binding: binding, ConfigurationError: failure, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction})
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	n := 0
@@ -741,6 +754,10 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 			return out, nil
 		}
 	}
+	if ask.ConfigurationError != "" {
+		out.Result, out.Detail = "rejected", ask.ConfigurationError
+		return out, nil
+	}
 	model := ask.Model
 	if model == "" {
 		out.Result, out.Detail = "rejected", "no model is set for apps"
@@ -771,7 +788,16 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 			out.Result, out.Detail = "rejected", "the evaluation function binding changed"
 			return out, nil
 		}
-		config, digestErr := acceptance.Digest([]any{enabled, pv})
+		var evaluatedBinding *platform.AIModelBinding
+		if ask.Binding != nil {
+			current, _, refusal := t.resolveModel("generation", model, ask.EvaluationFunction.ModelOptions.Override(platform.ModelOptions{MaxTokens: ask.EvaluationFunction.MaxTokens}))
+			if refusal != nil {
+				out.Result, out.Detail = "rejected", refusal.Message
+				return out, nil
+			}
+			evaluatedBinding = &current
+		}
+		config, digestErr := modelConfigurationDigest(enabled, pv, evaluatedBinding)
 		if digestErr != nil || ask.EvaluationConfig == "" || ask.EvaluationConfig != config {
 			out.Result, out.Detail = "rejected", "the evaluation model configuration changed"
 			return out, nil
@@ -785,7 +811,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "retry", why
 		return out, nil
 	}
-	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, Run: x.ID}, now)
+	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, Binding: ask.Binding, Run: x.ID}, now)
 	switch {
 	case failure != nil && unavailable(failure):
 		out.Result, out.Detail = "retry", failure.Detail

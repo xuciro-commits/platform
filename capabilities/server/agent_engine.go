@@ -20,6 +20,7 @@ import (
 
 // stepBody is an agent entry: what the model chose at one step.
 type stepBody struct {
+	Protocol  json.RawMessage  `json:"protocol,omitempty"`
 	Run       string           `json:"run"`
 	Calls     []ToolCall       `json:"calls,omitempty"`  // complete new model response; Tool remains the legacy single-call encoding
 	CallID    string           `json:"callId,omitempty"` // continuing an already accepted response
@@ -114,7 +115,7 @@ func (t *Tenant) take(x turn, now time.Time) {
 			t.meter(t.agents.AgentPrincipal(x.Run.Agent), answer.Usage)
 			return
 		}
-		body := stepBody{Run: x.Run.ID, Content: answer.Content, Usage: answer.Usage}
+		body := stepBody{Run: x.Run.ID, Content: answer.Content, Protocol: answer.Protocol, Usage: answer.Usage}
 		if failure != nil {
 			body.Failure = failure.Detail
 		} else if len(answer.ToolCalls) > 0 {
@@ -197,6 +198,10 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 		d := a.def(run.Agent)
 		reader := a.reader(run)
 		name := c.Setting(SettingAgentModel)
+		if run.ModelBinding != nil {
+			name = run.ModelBinding.Model
+		}
+
 		switch {
 		case d == nil:
 			x.Stop = "the agent is no longer declared"
@@ -232,6 +237,7 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 			}
 			x.Model, x.Provider, x.Request = model, pv, a.prompt(c, d, run, name, now)
 			x.Request.Run = run.ID
+			x.Request.Binding = run.ModelBinding
 		}
 		a.busy[run.ID] = true
 		out = append(out, x)
@@ -264,7 +270,20 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 	for name, tool := range d.tools {
 		input.Tools[name] = tool.tool
 	}
-	return input.Request(model)
+	request := input.Request(model)
+	step := 0
+	for i := range request.Messages {
+		if request.Messages[i].Role == "assistant" {
+			for step < len(run.Steps) && len(run.Steps[step].Calls) == 0 {
+				step++
+			}
+			if raw := run.Protocol[step]; len(raw) > 0 {
+				request.Messages[i].Protocol = raw
+			}
+			step++
+		}
+	}
+	return request
 }
 
 // reader is the person a run works for, or nil for an app's automation. It
@@ -408,6 +427,12 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		if normalized, err := agents.NormalizeStepJSON(b.Observation); err == nil {
 			b.Observation = normalized
 		}
+	}
+	if len(b.Protocol) > 0 {
+		if run.Protocol == nil {
+			run.Protocol = map[int]json.RawMessage{}
+		}
+		run.Protocol[len(run.Steps)] = b.Protocol
 	}
 	d := a.def(run.Agent)
 	step := RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output,

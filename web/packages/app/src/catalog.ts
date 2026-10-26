@@ -97,9 +97,13 @@ export const entries: CatalogEntry[] = [
   asset("tenant-references", "Tenant reference selection", "Choose an application, role, protocol or member from the tenant's existing directory.", ["AppSelect", "RoleSelect", "ProtocolSelect", "MemberSelect"], "TenantReferencesExample", {
     source: "web/packages/app/src/semantic/References.tsx", tags: ["reference", "directory", "role"], dependencies: ["ui/input"],
   }),
+  asset("ai-model-selection", "AI model reference and options", "Choose a purpose-compatible enabled model and configure supported input, generation and thinking options.", ["ModelPicker", "ModelOptionsEditor"], "ModelSelectionExample", {
+    source:"web/packages/app/src/semantic/ModelPicker.tsx",tags:["ai","reference","configuration"],dependencies:["ui/input"],
+    constraints:["Compatibility and effective configuration come from the original AI owner. Unknown metadata is not a claim of support. Selection never calls a provider."],
+  }),
 ];
 
 /** Nonvisual public API, attached to the existing public owner rather than visual cards. */
-export const api = ["boundQueryDefinition", "interfaceQueryForSection", "useTenantApps", "AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useTransition", "useReadQuery", "useRead", "useRecordInventory",
+export const api = ["modelOptionLabel","ModelPurpose","boundQueryDefinition", "interfaceQueryForSection", "useTenantApps", "AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useTransition", "useReadQuery", "useRead", "useRecordInventory",
   "useDefinitions", "useCapabilities", "useDependencies", "useProvidedCapabilities", "DependencyDescriptor", "DependencyRead", "ProvidedCapability", "useInvokeCapability", "assetKey", "findDefinition", "definitionPresentation", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "PlatformAppCategory", "categoryOf", "SavedView", "newId",
   "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed", "pageDocumentFromSections", "createWidgetRegistry", "createWidgetDefinitions", "WidgetRegistry", "widgetContracts", "widgetContract", "pageUIProfile", "supportsPageUIProfile", "searchInputObjects", "parsePageDecimal", "isPageDecimal", "isPageDecimalDraft", "PageDecimalValue", "pageVariableContract", "pageVariableValues", "pageVariableDiagnostics", "pageLayoutDiagnostics", "PageVariableValue", "WidgetImplementation", "WidgetContract", "WidgetID", "semanticModelView", "semanticPropertyTypes", "assetBindingKey", "SemanticPropertyType", "propertyKey", "relationKey", "PropertyRef", "ReferenceRelationRef", "SemanticRelation", "SemanticModelView"];

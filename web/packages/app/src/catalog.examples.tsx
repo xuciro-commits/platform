@@ -1,5 +1,6 @@
 export {ProfessionalGraphExample,ProfessionalMatrixExample} from "./composites/catalog-examples";
 import "./i18n";
+import { ModelPicker,ModelOptionsEditor } from "./semantic/ModelPicker";
 import { AppSelect, RoleSelect, ProtocolSelect, MemberSelect } from "./semantic/References";
 import { useEffect,useMemo,useRef,useState } from "react";
 import { Panel, t } from "@platform/ui";
@@ -115,3 +116,11 @@ const runtimeExampleReads={
 };
 export const ApplicationRunsExample=()=> <CatalogFixture reads={runtimeExampleReads}><ApplicationRuns owner="catalog" name="sample"/></CatalogFixture>;
 export const OperationRunExample=()=> <CatalogFixture reads={runtimeExampleReads}><OperationRunView id="SAMPLE-CALL"/></CatalogFixture>;
+
+export function ModelSelectionExample() {
+  const [model,setModel]=useState("");
+  const [options,setOptions]=useState<Api.ModelOptions>({});
+  return <CatalogFixture reads={{"/v1/ai/model-selection?purpose=generation":{purpose:"generation",default:"example/text",options:{},models:[{model:{provider:"example",model:"text",access:"users"},effective:{model:"example/text",options:{maxTokens:1024}}}]}}}>
+    <div className="grid gap-3"><ModelPicker value={model} onChange={setModel} purpose="generation" /><ModelOptionsEditor value={options} onChange={setOptions} /></div>
+  </CatalogFixture>;
+}

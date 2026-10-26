@@ -10,7 +10,7 @@ import { joinProjectResource } from "../projects/membership";
 import { refKey, resourceKinds, resourceRef, resourceRoute } from "../projects/resources";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
-import { AppSelect, useHost, useRecordInventory } from "@platform/app";
+import { AppSelect, ModelPicker, useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, Panel, PageHeader, PropertyList, Select, StatusTag, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
@@ -408,7 +408,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
         </label>
         }
         {(kind === "function" || process?.steps.some((step) => step.kind === "ai")) && <>
-          <label className="grid gap-1 text-xs">{t("Model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>
+          {evaluationEnabled && kind==="function" ? <ModelPicker value={model} onChange={value=>{setModel(value);clear()}} purpose="generation" inherit={false} /> : <label className="grid gap-1 text-xs">{t("Fixture model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>}
           <ContextHelp title={t("Model identifier")}>{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</ContextHelp>
         </>}
         {kind === "function" && <div className="grid gap-3 rounded border border-border p-3">

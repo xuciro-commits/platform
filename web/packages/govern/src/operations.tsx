@@ -9,7 +9,7 @@ import { when, type AppSettings, type AuditEntry, type Connector, type Delivery,
 
 /** A read's own phases at the point of display: the original wait, refusal or
  * failure with its nearby retry — only a successful read may say "none". */
-function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children: (data: T) => ReactNode }) {
+export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children: (data: T) => ReactNode }) {
   if (query.isPending) return <p role="status" className="text-sm text-muted">{t("Loading…")}</p>;
   if (query.isError && query.data === undefined) return <div role="alert" className="grid justify-items-start gap-1 text-sm">
     <p className="text-danger">{humanizeKernelError(query.error instanceof Error ? query.error.message : String(query.error))}</p>
@@ -248,7 +248,8 @@ export function OutboundEffects() {
 // App settings: typed values each app declares; a change is a platform decision.
 export function AppSettingsView() {
   const settings = useRead<AppSettings[]>("/v1/settings");
-  const { decide } = useHost();
+  const { decide,me } = useHost();
+  const {open:go}=useWorkspace();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const set = (app: string, s: SettingValue, value: string) =>
     decide("platform.setting.set", { type: "platform.setting", id: `${app}/${s.name}` }, { value });
@@ -259,7 +260,7 @@ export function AppSettingsView() {
       {rows.filter((a) => a.app !== "platform").length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
       <div className="grid max-w-3xl gap-3">
         {rows.filter((a) => a.app !== "platform").map((a) => ( // the tenant's own settings are the Organisation page's
-          <Panel key={a.app} title={<span className="font-mono">{a.app}</span>}>
+          <Panel key={a.app} title={me.apps.find(app=>app.id===a.app)?.title??a.app}>
             <div className="grid gap-3">
               {a.settings.map((s) => {
                 const key = `${a.app}/${s.name}`;
@@ -269,7 +270,7 @@ export function AppSettingsView() {
                       <div className="flex items-center justify-between gap-2"><span className="font-medium">{s.title}</span>{s.description && <ContextHelp title={s.title}>{s.description}</ContextHelp>}</div>
                       {s.value !== s.default && <p className="text-xs text-muted">{t("default")}: {s.default}</p>}
                     </div>
-                    {s.type === "boolean" || s.type === "choice" ? (
+                    {["ai/app-model","ai/app-model-options","agent/model","agent/model-options","knowledge/embedding-model","knowledge/embedding-next-model"].includes(key) ? <span className="grid gap-1"><span className="break-words text-xs text-muted">{key.endsWith("-options")&&s.value?t("Configured in AI configuration"):key==="agent/model"&&s.value==="@generation"?t("Use application generation model"):s.value || t("Not configured")}</span><Button onClick={()=>go({view:"ai-configuration"})}>{t("Manage AI configuration")}</Button></span> : s.type === "boolean" || s.type === "choice" ? (
                       <Select aria-label={s.title} value={s.value} onChange={(e) => void set(a.app, s, e.target.value)}>
                         {(s.type === "boolean" ? ["true", "false"] : s.choices ?? []).map((c) => <option key={c} value={c}>{s.type === "boolean" ? (c === "true" ? t("On") : t("Off")) : c}</option>)}
                       </Select>

@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -101,7 +102,7 @@ func New(tenant string) *AI {
 			Description: "Remove a provider; its models are disabled. Recorded usage stays.", Payload: []platform.Field{}},
 		platform.Action{Schema: SchemaModelEnable, Target: ModelType, Capability: "models", Title: "Enable model", Roles: admin,
 			Description: "Let members call a provider's model (target <provider>/<model>): everyone in the tenant, or members holding a role in the ai app.",
-			Payload:     []platform.Field{f("access", "string", "everyone or users", true), f("dailyTokens", "integer", "Tokens the whole tenant may spend on it a day; 0: no cap", false)}},
+			Payload:     []platform.Field{f("access", "string", "everyone or users", true), f("dailyTokens", "integer", "Tokens the whole tenant may spend on it a day; 0: no cap", false), f("capabilities", "object", "Reviewed provider capabilities and provenance", false), f("defaults", "object", "Default input, generation and thinking options", false), f("expectedRevision", "integer", "Configuration revision being edited", false)}},
 		platform.Action{Schema: SchemaModelDisable, Target: ModelType, Capability: "models", Title: "Disable model", Roles: admin,
 			Description: "Stop calls to a model.", Payload: []platform.Field{}},
 		platform.Action{Schema: SchemaLimitSet, Target: LimitType, New: true, Capability: "limits", Title: "Set AI limit", Roles: admin,
@@ -150,10 +151,11 @@ func (a *AI) Manifest() platform.Manifest {
 				Description: "What each person may spend on models a day, unless an AI limit says otherwise; 0: no limit. Agents have their own, in the Agents settings."},
 			{Name: SettingAppModel, Title: "Model apps ask", Type: "text", Default: "",
 				Description: "The enabled model (<provider>/<model>) an app's request asks when it names none, such as a ticket's summary; empty: such requests are refused."},
+			{Name: SettingAppModel + "-options", Title: "Application model options", Type: "text", Default: "", Description: "Input, generation and thinking overrides configured in AI configuration."},
 			{Name: SettingPerMinute, Title: "Calls per minute", Type: "integer", Default: "60",
 				Description: "How many model calls each person or agent may make a minute, unless an AI limit says otherwise; 0: no limit."},
 			{Name: SettingMaxTokens, Title: "Most tokens one answer", Type: "integer", Default: "8192",
-				Description: "The most tokens one model answer may ask for; a call asking for more is capped to this. 0: whatever the provider's own default allows."}}}
+				Description: "Organization-wide generation budget per call. New model options must fit within it; 0 uses the provider limit."}}}
 }
 
 func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
@@ -183,6 +185,9 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 		var p struct {
 			Kind, Vendor, BaseURL, Secret, Access string
 			DailyTokens, PerMinute                int
+			Capabilities                          *platform.ModelCapabilities
+			Defaults                              *platform.ModelOptions
+			ExpectedRevision                      *int
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
@@ -240,9 +245,40 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 			if model == "" || p.Access != "everyone" && p.Access != "users" {
 				return nil, invalid
 			}
-			return func(*pb.ChangeRecord) {
+			next := Model{Provider: provider, Model: model}
+			if i := slices.IndexFunc(a.models, func(m Model) bool { return m.Name() == id }); i >= 0 {
+				next = a.models[i]
+			}
+			if p.ExpectedRevision != nil && *p.ExpectedRevision != next.Revision {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Model configuration changed; reload before saving")
+			}
+			next.Access, next.DailyTokens = p.Access, p.DailyTokens
+			if next.DailyTokens < 0 {
+				return nil, invalid
+			}
+			if p.Capabilities != nil {
+				next.Capabilities = p.Capabilities
+			}
+			if p.Defaults != nil {
+				next.Defaults = *p.Defaults
+			}
+			ceiling := 0
+			if !c.Replaying {
+				ceiling, _ = strconv.Atoi(c.Setting(SettingMaxTokens))
+			}
+			if _, err := next.Resolve("", platform.ModelOptions{}, ceiling); err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			if c := next.Capabilities; c != nil {
+				pv, _ := a.provider(provider)
+				if c.Adapter == "deepseek" && pv.Wire != "openai" || c.Adapter == "anthropic-adaptive" && pv.Wire != "anthropic" {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model options do not match the provider protocol")
+				}
+			}
+			return func(record *pb.ChangeRecord) {
+				next.Revision = int(record.GetRevision())
 				a.models = slices.DeleteFunc(a.models, func(m Model) bool { return m.Name() == id })
-				a.models = append(a.models, Model{Provider: provider, Model: model, Access: p.Access, DailyTokens: max(p.DailyTokens, 0)})
+				a.models = append(a.models, next)
 			}, nil
 		case SchemaModelDisable:
 			if !slices.ContainsFunc(a.models, func(m Model) bool { return m.Name() == id }) {

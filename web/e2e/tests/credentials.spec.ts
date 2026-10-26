@@ -36,7 +36,7 @@ test("an administrator manages a credential and edits its AI provider without lo
     await providerCard.getByRole("button", { name: "Check connection", exact: true }).click();
     await expect(providerCard.getByRole("status")).toHaveText("Connection verified");
     await providerCard.getByRole("button", { name: "Models", exact: true }).click();
-    await page.getByRole("row").filter({ hasText: "example" }).getByRole("button", { name: "ai users", exact: true }).click();
+    await page.getByRole("row").filter({ hasText: "example" }).getByRole("button", { name: "AI members only", exact: true }).click();
     await providerCard.getByRole("button", { name: "Edit", exact: true }).click();
     const editProvider = page.getByRole("dialog", { name: "Edit AI provider", exact: true });
     await editProvider.getByRole("textbox", { name: "Base URL", exact: true }).fill(origin + "/v2");
