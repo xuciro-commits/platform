@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Choose an AI provider": "请选择 AI 提供方",
+  "Choose the service and enter its allowed origin before saving. Choosing an AI provider fills its exact ID and origin.": "保存前请选择服务并填写允许访问的源地址。选择 AI 提供方后，会自动填入准确的标识和源地址。",
   "Grant this role to me": "将此角色授予我",
   "A builder prepares the applications after package installation.": "包安装后由构建者准备其中的应用。",
   "Application requirements could not be loaded.": "无法加载应用的使用条件。",

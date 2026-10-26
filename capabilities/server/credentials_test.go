@@ -204,6 +204,44 @@ func TestCredentialSharedAIAndConnectionUse(t *testing.T) {
 	}
 }
 
+func TestCredentialBindingRejectsEmptyOriginAndRepairsSavedUse(t *testing.T) {
+	t.Setenv("PLATFORM_CREDENTIAL_KEY", testCredentialKey)
+	tn := credentialTenant(t, "credential-binding-repair")
+	config := CredentialWrite{CredentialDefinition: CredentialDefinition{ID: "DeepseekApiKey", Title: "Model key", Kind: "api-key", Source: "managed", Bindings: []CredentialBinding{{Consumer: "ai/Deepseek", Origin: ""}}}}
+	handler := NewHost(Tokens(map[string]string{"admin": "admin"}), tn).Handler()
+	request := httptest.NewRequest("POST", "/v1/credentials/seal", bytes.NewReader(platform.Raw(CredentialSealRequest{CredentialWrite: config, Value: "binding-test-key"})))
+	request.Header.Set("Authorization", "Bearer admin")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || strings.Contains(response.Body.String(), "binding-test-key") {
+		t.Fatalf("empty origin was accepted or exposed a value: status %d", response.Code)
+	}
+	config.Bindings[0].Origin = "https://api.example.test"
+	sealed := sealCredential(t, tn, "admin", config, "binding-test-key")
+	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, config.ID, sealed, txnAt)
+	provider := platform.AIProvider{ID: "deepseek", Secret: config.ID, BaseURL: "https://api.example.test/v1"}
+	calls := 0
+	tn.AIClient = func(request *http.Request) (*http.Response, error) {
+		calls++
+		if request.Header.Get("Authorization") != "Bearer binding-test-key" {
+			t.Fatal("binding repair lost the saved key")
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"data":[]}`))}, nil
+	}
+	if _, failure := tn.aiSend(context.Background(), provider, "GET", "/models", nil); failure == nil || !strings.Contains(failure.Detail, "not authorized") || strings.Contains(failure.Detail, "missing") || calls != 0 {
+		t.Fatalf("binding mismatch was reported as a missing key or sent it: %v", failure)
+	}
+	config.ExpectedVersion = 1
+	config.Bindings[0].Consumer = "ai/deepseek"
+	rebound := sealCredential(t, tn, "admin", config, "")
+	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, config.ID, rebound, txnAt)
+	answer, failure := tn.aiSend(context.Background(), provider, "GET", "/models", nil)
+	if failure != nil || calls != 1 {
+		t.Fatalf("saved key was unavailable after binding repair: %v", failure)
+	}
+	answer.Body.Close()
+}
+
 func TestCredentialJournalCheckpointAndFullRecovery(t *testing.T) {
 	t.Setenv("PLATFORM_CREDENTIAL_KEY", testCredentialKey)
 	for _, backend := range journalsUnderTest(t) {

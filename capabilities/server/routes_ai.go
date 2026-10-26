@@ -50,7 +50,7 @@ func (h *Host) routesAI(rt *routes) {
 			case failure != nil && failure.Quota && !started:
 				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 			case failure != nil:
-				event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail, "usage": answer.Usage})
+				event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail), "usage": answer.Usage})
 			default:
 				event("done", map[string]any{"usage": answer.Usage, "toolCalls": answer.ToolCalls})
 			}
@@ -63,7 +63,7 @@ func (h *Host) routesAI(rt *routes) {
 		case failure != nil && failure.Quota:
 			WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 		case failure != nil:
-			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail}, "usage": answer.Usage})
+			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}, "usage": answer.Usage})
 		default:
 			WriteJSON(w, http.StatusOK, answer)
 		}
@@ -74,7 +74,7 @@ func (h *Host) routesAI(rt *routes) {
 		case err != nil:
 			Reply(w, nil, err)
 		case failure != nil:
-			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail}})
+			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 		default:
 			WriteJSON(w, http.StatusOK, models)
 		}

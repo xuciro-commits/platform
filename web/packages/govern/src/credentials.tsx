@@ -2,16 +2,19 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Card, Dialog, Input, PageHeader, Select, Tag, t } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
+import type { Provider } from "./shared";
 
 const blank = (): Api.CredentialWrite => ({ id: "", title: "", kind: "api-key", source: "managed", bindings: [{ consumer: "ai/", origin: "" }], expectedVersion: 0 });
 export function CredentialEditor({ open, onClose, initial, onSaved }: { open: boolean; onClose: () => void; initial?: Api.CredentialWrite; onSaved?: (name: string) => void }) {
-  const { client, decide } = useHost();
+  const { client, decide, role } = useHost();
+  const providers = useRead<Provider[]>("/v1/ai-providers", undefined, open && role("ai") === "admin").data;
   const [draft, setDraft] = useState<Api.CredentialWrite>(blank);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const saved = useRef<{ write: Api.CredentialWrite; key?: string } | undefined>(undefined);
+  const incompleteBinding = draft.bindings.some(binding => !binding.consumer.split("/").slice(1).join("/").trim() || !binding.origin.trim());
   useEffect(() => { if (open) { setDraft(initial ?? blank()); setValue(""); setError(""); setPending(false); saved.current = undefined; } }, [open, initial]);
   const save = async () => {
     setBusy(true); setError("");
@@ -53,14 +56,18 @@ export function CredentialEditor({ open, onClose, initial, onSaved }: { open: bo
         const [kind, ...id] = binding.consumer.split("/");
         return <div key={index} className="grid gap-2 rounded border p-2">
           <label className="grid gap-1">{t("Consumer type")}<Select aria-label={t("Consumer type")} value={kind} onChange={event => changeBinding(index, { consumer: `${event.target.value}/${id.join("/")}` })}><option value="ai">{t("AI provider")}</option><option value="connection">{t("Connection")}</option><option value="endpoint">{t("Endpoint")}</option></Select></label>
-          <label className="grid gap-1">{t("Consumer ID")}<Input aria-label={t("Consumer ID")} value={id.join("/")} onChange={event => changeBinding(index, { consumer: `${kind}/${event.target.value}` })} /></label>
+          <label className="grid gap-1">{t("Consumer ID")}{kind === "ai" && providers ? <Select aria-label={t("Consumer ID")} value={id.join("/")} onChange={event => {
+            const provider = providers.find(provider => provider.id === event.target.value);
+            changeBinding(index, { consumer: `ai/${event.target.value}`, origin: provider ? new URL(provider.baseUrl).origin : "" });
+          }}><option value="">{t("Choose an AI provider")}</option>{id.join("/") && !providers.some(provider => provider.id === id.join("/")) && <option value={id.join("/")}>{id.join("/")}</option>}{providers.map(provider => <option key={provider.id} value={provider.id}>{provider.id}</option>)}</Select> : <Input aria-label={t("Consumer ID")} value={id.join("/")} onChange={event => changeBinding(index, { consumer: `${kind}/${event.target.value}` })} />}</label>
           <label className="grid gap-1">{t("Allowed origin")}<Input aria-label={t("Allowed origin")} placeholder="https://api.example.com" value={binding.origin} onChange={event => changeBinding(index, { origin: event.target.value })} /></label>
           {draft.bindings.length > 1 && <Button size="sm" onClick={() => setDraft({ ...draft, bindings: draft.bindings.filter((_, i) => i !== index) })}>{t("Remove use")}</Button>}
         </div>;
       })}{draft.bindings.length < 32 && <Button size="sm" onClick={() => setDraft({ ...draft, bindings: [...draft.bindings, { consumer: "connection/", origin: "" }] })}>{t("Add use")}</Button>}</fieldset>
+      {incompleteBinding && <p role="status" className="text-sm text-muted">{t("Choose the service and enter its allowed origin before saving. Choosing an AI provider fills its exact ID and origin.")}</p>}
       {error && <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>}
       {pending && <p className="text-xs text-muted">{t("The result is pending. Retry the original encrypted request before editing.")}</p>}
-      <div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => { setValue(""); onClose(); }}>{t("Cancel")}</Button><Button variant="primary" disabled={busy || !draft.id || !draft.title} onClick={() => void save()}>{t(pending ? "Retry" : "Save")}</Button></div>
+      <div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => { setValue(""); onClose(); }}>{t("Cancel")}</Button><Button variant="primary" disabled={busy || !draft.id || !draft.title || (!pending && incompleteBinding)} onClick={() => void save()}>{t(pending ? "Retry" : "Save")}</Button></div>
     </div>
   </Dialog>;
 }
