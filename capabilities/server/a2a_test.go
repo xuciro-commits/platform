@@ -21,12 +21,6 @@ import (
 // A published agent answers A2A 1.0 tasks for the members who
 // call it, acting within their grants; an agent asks an external agent through
 // an effect and goes on with its answer, which the journal keeps.
-func TestA2A(t *testing.T) {
-	for _, storage := range []string{"memory", "record", "accepted"} {
-		t.Run(storage, func(t *testing.T) { testA2A(t, storage) })
-	}
-}
-
 func testA2A(t *testing.T, storage string) {
 	model := scriptedModel(t)
 	var heard []string

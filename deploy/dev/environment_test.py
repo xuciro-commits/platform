@@ -214,7 +214,7 @@ class EnvironmentModeTests(unittest.TestCase):
         self.assertEqual(environment.read_state(), {'mode': 'native', 'status': 'stopped'})
 
     def test_running_image_must_match_the_binary_inode_not_only_its_path(self):
-        binary = Path(self.directory.name) / 'hospitality-server'
+        binary = Path(self.directory.name) / 'main-server'
         binary.write_bytes(b'new build')
         inode = binary.stat().st_ino
         for image, expected in [(inode, True), (inode + 1, False)]:

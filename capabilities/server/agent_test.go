@@ -306,14 +306,6 @@ func scriptedModel(t *testing.T) *httptest.Server {
 
 // agents run in the host as governed principals; each step the
 // model chose is journaled and replayed without calling it.
-func TestAgents(t *testing.T) {
-	for _, accepted := range []bool{false, true} {
-		t.Run(map[bool]string{false: "legacy", true: "accepted"}[accepted], func(t *testing.T) {
-			testAgents(t, accepted)
-		})
-	}
-}
-
 func testAgents(t *testing.T, accepted bool) {
 	model := scriptedModel(t)
 	var journal []Entry

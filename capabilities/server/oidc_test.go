@@ -6,14 +6,13 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"github.com/go-jose/go-jose/v4"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"platformserver/idp"
 	"testing"
 	"time"
-
-	"github.com/go-jose/go-jose/v4"
 )
 
 // TestOIDC signs tokens the way Rauthy does (EdDSA, typ Bearer; client

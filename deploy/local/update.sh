@@ -73,7 +73,7 @@ fi
 python3 deploy/dev/environment.py prepare-docker
 pnpm --dir web/apps/workspace build
 docker compose -f deploy/local/compose.yaml config --quiet
-docker compose -f deploy/local/compose.yaml up -d --no-deps --build hospitality-server
+docker compose -f deploy/local/compose.yaml up -d --no-deps --build platform-server
 python3 - <<'PY'
 from pathlib import Path
 import datetime, hashlib, json, os, re, subprocess, time, urllib.request
@@ -84,7 +84,7 @@ html = (dist / 'index.html').read_bytes()
 assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html.decode())))
 compose = ['docker', 'compose', '-f', 'deploy/local/compose.yaml']
 hosts = []
-for service, port in [('hospitality-server', 8495), ('hospitality-server', 8490)]:
+for service, port in [('platform-server', 8495), ('platform-server', 8490)]:
     container = subprocess.check_output([*compose, 'ps', '-q', service], text=True).strip()
     image = subprocess.check_output(['docker', 'inspect', '--format', '{{.Image}}', container], text=True).strip()
     stamped = subprocess.check_output(['docker', 'image', 'inspect', '--format', '{{index .Config.Labels "org.opencontainers.image.revision"}}', image], text=True).strip()

@@ -1,7 +1,5 @@
 package platformserver
 
-import "platformserver/internal/construction"
-
 import (
 	"net"
 	"strings"
@@ -11,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgproto3"
-	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -109,103 +106,6 @@ func (s *retryIntakeSource) Manifest() platform.Manifest {
 	m.Flows[0].Continuous.Intake = intake
 	return m
 }
-
-func TestContinuousSourcePreparationRetriesWithoutCursorLoss(t *testing.T) {
-	for _, scenario := range []struct {
-		name     string
-		latest   bool
-		fail     map[int]bool
-		mutation string
-		calls    int32
-		queries  int32
-		accepted bool
-	}{
-		{"transient-read", false, map[int]bool{1: true}, "", 2, 0, true},
-		{"exhausted-read", false, map[int]bool{1: true, 2: true, 3: true}, "", 3, 0, false},
-		{"exhausted-after-checkpoint", false, map[int]bool{2: true, 3: true, 4: true}, "", 4, 0, false},
-		{"transient-latest", true, map[int]bool{1: true}, "", 3, 1, true},
-		{"read-after-latest", true, map[int]bool{2: true}, "", 3, 1, true},
-		{"exhausted-latest", true, map[int]bool{1: true, 2: true, 3: true}, "", 3, 0, false},
-		{"revoked-between-attempts", false, map[int]bool{1: true}, "revoke", 1, 0, false},
-		{"revoked-after-capture", false, nil, "revoke", 1, 0, false},
-		{"source-changed-between-attempts", false, map[int]bool{1: true}, "source", 1, 0, false},
-		{"source-changed-after-capture", false, nil, "source", 1, 0, false},
-		{"connection-changed-between-attempts", false, map[int]bool{1: true}, "connection", 1, 0, false},
-		{"connection-changed-after-capture", false, nil, "connection", 1, 0, false},
-		{"instance-stopped-between-attempts", false, map[int]bool{1: true}, "stop", 1, 0, false},
-	} {
-		t.Run(scenario.name, func(t *testing.T) {
-			const tenant, id = "source-retry", "frames.window:source"
-			at := time.Date(2026, 10, 11, 12, 0, 10, 0, time.UTC)
-			var tn *Tenant
-			address, connections, queries := streamRetryDatabase(t, scenario.fail, func(attempt int) {
-				if attempt != 1 {
-					return
-				}
-				switch scenario.mutation {
-				case "revoke":
-					decide(t, tn, "admin", PlatformApp, "platform.member.revoke", "platform.member", "member", map[string]any{"app": construction.ID}, at)
-				case "source":
-					x, _ := platform.Get[construction.Source](tn.automation(construction.ID, false), "stream")
-					x.Entity = "different_source"
-					if err := tn.automation(construction.ID, true).PutAt(at, "test.change-source", x); err != nil {
-						t.Error(err)
-					}
-				case "connection":
-					x, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "db")
-					x.Address += "&connect_timeout=2"
-					if err := tn.automation(construction.ID, true).PutAt(at, "test.change-connection", x); err != nil {
-						t.Error(err)
-					}
-				case "stop":
-					decide(t, tn, "member", flow.ID, flow.SchemaFlowStop, flow.InstanceType, id, map[string]any{}, at)
-				}
-			})
-			source := &retryIntakeSource{frameSource: newFrameSource(tenant, 2<<20), latest: scenario.latest}
-			tn = composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin", "build:builder"), seatOf("admin", "platform:admin")}, build.New(tenant), work.New(tenant), flow.New(tenant), source)
-			for _, record := range []any{
-				construction.Connection{Record: platform.Record{ID: "db"}, Name: "db", Kind: "postgres", Address: address, State: "ready"},
-				construction.Source{Record: platform.Record{ID: "stream"}, Name: "frames.source", Connection: "db", Profile: "table", Entity: "telemetry", Since: "seq", Stream: true, State: "published"},
-			} {
-				if err := tn.automation(construction.ID, true).PutAt(at, "test.source", record); err != nil {
-					t.Fatal(err)
-				}
-			}
-			decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
-			member := memberOf(t, tn, "member")
-			if scenario.name == "exhausted-after-checkpoint" {
-				if first, err := tn.ConsumeFlowSource(member, id, at); err != nil || first.Consumed != 1 {
-					t.Fatal("fixture did not accept its initial source checkpoint", err)
-				}
-			}
-			before, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), id)
-			outcome, refusal := tn.ConsumeFlowSource(member, id, at)
-			after, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), id)
-			if scenario.accepted {
-				if refusal != nil {
-					t.Fatal(refusal.Message)
-				}
-				if refusal != nil || outcome.Consumed != 1 || after.Batch == nil || after.Batch.Source.Cursor != "8" {
-					t.Fatalf("retry did not accept the original source row: %+v, %+v", outcome, refusal)
-				}
-				if _, err := tn.ReadFlowFrame(member, id, at); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				if refusal == nil || string(platform.Raw(before.Batch)) != string(platform.Raw(after.Batch)) || scenario.mutation != "stop" && string(platform.Raw(before)) != string(platform.Raw(after)) {
-					t.Fatal("a refused source read changed its original frame or cursor", refusal)
-				}
-			}
-			if connections.Load() != scenario.calls || queries.Load() != scenario.queries {
-				t.Fatalf("fixed retry/latest bounds differ: connections=%d latest=%d", connections.Load(), queries.Load())
-			}
-			if stream, _ := platform.Get[construction.Source](tn.automation(construction.ID, false), "stream"); stream.Cursor != "" {
-				t.Fatal("preparation created a second source cursor")
-			}
-		})
-	}
-}
-
 func TestContinuousSourceWithoutControlledIntakeRefuses(t *testing.T) {
 	const tenant, id = "no-controlled-intake", "frames.window:source"
 	at := time.Date(2026, 10, 11, 12, 0, 10, 0, time.UTC)

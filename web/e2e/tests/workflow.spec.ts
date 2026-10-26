@@ -3,8 +3,8 @@ import { Builder, Member, expect, fresh, test } from "./kit";
 test.use({ actionTimeout: 15_000 });
 
 for (const fixture of [
-  { industry: "hospitality", baseURL: "http://127.0.0.1:18496", builder: "manager", operator: "desk", operatorID: "desk-1", answer: "approve", state: "Done" },
-  { industry: "manufacturing", baseURL: "http://127.0.0.1:18497", builder: "supervisor", operator: "operator-l1", operatorID: "op-l1", answer: "reject", state: "Rejected" },
+  { industry: "primary", baseURL: "http://127.0.0.1:18496", builder: "manager", operator: "desk", operatorID: "desk-1", answer: "approve", state: "Done" },
+  { industry: "secondary", baseURL: "http://127.0.0.1:18497", builder: "supervisor", operator: "operator-l1", operatorID: "op-l1", answer: "reject", state: "Rejected" },
 ]) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });

@@ -4,12 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"os"
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 func TestPostgresStateReadKeepsOneAppliedView(t *testing.T) {

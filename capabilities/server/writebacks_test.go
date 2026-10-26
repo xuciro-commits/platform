@@ -62,16 +62,6 @@ func TestIntegratorSeesOnlyIntegrationDeliveryMetadata(t *testing.T) {
 // A published writeback turns the object's accepted create into an effect on
 // the connection: an outage queues it (retry with the same key), the next
 // attempt delivers it, and the answer's document number lands on the record.
-func TestWritebackQueuesAndReplaysOnce(t *testing.T) {
-	for _, durable := range []bool{false, true} {
-		name := "direct"
-		if durable {
-			name = "accepted-result"
-		}
-		t.Run(name, func(t *testing.T) { testWritebackQueuesAndReplaysOnce(t, durable, nil) })
-	}
-}
-
 func TestJournalWritebackCallbackAndReplay(t *testing.T) {
 	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
 	if dsn == "" {

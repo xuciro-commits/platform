@@ -673,8 +673,6 @@ register("zh-CN", {
   "shown": "已显示",
   "until": "至",
   "— top level": "— 顶层",
-  "manufacturing": "制造",
-  "hospitality": "酒店",
   "services": "服务",
   "trade": "贸易",
   "other": "其他",

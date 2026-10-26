@@ -47,7 +47,7 @@ services:
       - ./rauthy/bootstrap:/app/bootstrap:ro
       - rauthy:/app/data
 
-  hospitality-server:
+  platform-server:
     group_add: ["${TENANTS_GID:-20}"]
     build:
       context: ../..
@@ -60,11 +60,11 @@ services:
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/platform/tenants.json
       - -templates=/etc/templates
-      - -host-admins=user:manager@hotel.test
+      - -host-admins=user:manager@workspace.test
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
-    ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495", "127.0.0.1:${MANUFACTURING_PORT:-8490}:8495"]
+    ports: ["127.0.0.1:${PLATFORM_PORT:-8495}:8495", "127.0.0.1:${PLATFORM_COMPAT_PORT:-8490}:8495"]
     volumes: ["${PLATFORM_TENANTS_FILE:-./platform/tenants.json}:/etc/platform/tenants.json", ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
     # Webhook signing secrets, referenced by name from endpoints; local-only.
     environment: { PLATFORM_CREDENTIAL_KEY: "${PLATFORM_CREDENTIAL_KEY:-}", PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",

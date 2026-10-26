@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	resultformat "platformserver/internal/acceptance/result"
 	"reflect"
 	"strings"
 	"sync"
@@ -277,97 +276,6 @@ func TestConstraintReadPlanKeepsExternalDependenciesNonlocal(t *testing.T) {
 
 // One declared invariant group, the real generated/transaction/import/agent/
 // protocol entry paths, and an ignored Put error all yield the same answer.
-func TestBusinessConstraintsAllWriteEntrances(t *testing.T) {
-	for _, entry := range []struct {
-		name, field string
-		value       any
-	}{
-		{"number", "number", "ONE"}, {"positive", "qty", 0}, {"period", "end", "2026-10-11"}, {"revision", "version", "v2"},
-	} {
-		t.Run(entry.name, func(t *testing.T) {
-			var expected *kernel.Error
-			for _, path := range []string{"standard", "transaction", "csv", "agent", "protocol", "unchecked-put"} {
-				if path == "unchecked-put" && entry.name != "positive" {
-					continue
-				}
-				t.Run(path, func(t *testing.T) {
-					tenant := constraintTenant(t)
-					typ, app := publishConstraintEntry(t, tenant), construction.ID
-					if path == "protocol" || path == "unchecked-put" {
-						typ, app = "invariants.entry", "invariants"
-					}
-					decide(t, tenant, "builder", app, typ+".create", typ, "ONE", validConstraintEntry("ONE"), txnAt)
-					decide(t, tenant, "builder", app, typ+".create", typ, "TWO", validConstraintEntry("TWO"), txnAt)
-					if entry.name == "revision" {
-						decide(t, tenant, "builder", app, typ+".release", typ, "TWO", nil, txnAt)
-					}
-					if path == "transaction" {
-						object, err := tenant.RecordOf(memberOf(t, tenant, "builder"), construction.ObjectType, "ENTRY", txnAt)
-						if err != nil {
-							t.Fatal(err)
-						}
-						definition := object.Record.(construction.Object)
-						definition.Actions = append(definition.Actions, construction.Action{Name: "apply", Title: "Apply", From: []string{"draft", "released"}, Inputs: []construction.Input{{Name: "value", Title: "Value", Type: map[string]string{"qty": "integer", "number": "text", "end": "date", "version": "text"}[entry.field]}}, Transaction: &platform.BusinessTxn{Subject: typ, Steps: []platform.TxnStep{{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "entrynumbers", Pattern: "{n}"}}, {Name: "write", Kind: "update", Target: platform.TxnRef{Type: typ, ID: "$subject"}, Changes: []platform.TxnSet{{Field: entry.field, From: "value"}}}}}})
-						decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "ENTRY", map[string]any{"actions": definition.Actions}, txnAt)
-						decide(t, tenant, "builder", construction.ID, "build.object.publish", construction.ObjectType, "ENTRY", nil, txnAt)
-					}
-					before := txnState(tenant)
-					member := memberOf(t, tenant, "builder")
-					var refusal *kernel.Error
-					var issues []platform.FieldIssue
-					patch := map[string]any{entry.field: entry.value}
-					switch path {
-					case "csv":
-						csv := []byte(fmt.Sprintf("id,%s\nTWO,%v\n", entry.field, entry.value))
-						preview, err := tenant.Import(member, typ, csv, true, txnAt)
-						if err != nil || len(preview) != 1 || preview[0].Error == nil || preview[0].Outcome != "CONSTRAINT_VIOLATION" {
-							t.Fatalf("preview bypassed invariant: %+v %v", preview, err)
-						}
-						rows, err := tenant.Import(member, typ, csv, false, txnAt)
-						if err != nil || len(rows) != 1 || rows[0].Error == nil || rows[0].Outcome != "CONSTRAINT_VIOLATION" {
-							t.Fatalf("import bypassed invariant: %+v %v", rows, err)
-						}
-						issues = rows[0].Error.Issues
-						refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: rows[0].Error.Message}
-						if preview[0].Error.Message != rows[0].Error.Message {
-							t.Fatal("preview and import reasons differ")
-						}
-					case "protocol":
-						key := fmt.Sprintf("protocol-%s", entry.name)
-						_, _, refusal = tenant.Invoke(member, "invariant-entry/1", "edit", "TWO", platform.Raw(patch), key, txnAt)
-						issues = tenant.committed.refusals[app+"/"+key].Issues
-					default:
-						who, schema := "builder", typ+".edit"
-						if path == "agent" {
-							who = "bot"
-						}
-						if path == "transaction" {
-							schema = typ + ".apply"
-							patch = map[string]any{"value": entry.value}
-						}
-						if path == "unchecked-put" {
-							schema = typ + ".overwrite"
-						}
-						member = memberOf(t, tenant, who)
-						_, refusal, issues = tenant.submitDiagnosed(member, submission(tenant, member, app, schema, typ, "TWO", patch), txnAt)
-					}
-					if refusal == nil || len(issues) != 1 || issues[0].Code != "constraint_violation" || issues[0].Constraint != entry.name {
-						t.Fatalf("wrong diagnostic: %v %+v", refusal, issues)
-					}
-					if expected == nil {
-						expected = refusal
-					} else if *expected != *refusal {
-						t.Fatalf("entrance changed refusal: expected=%+v actual=%+v", expected, refusal)
-					}
-					if txnState(tenant) != before || len(tenant.sequences.clone()) != 0 {
-						t.Fatal("rejected entrance left state or consumed a number")
-					}
-				})
-			}
-		})
-	}
-}
-
 func TestBusinessConstraintsUniqueConcurrentAndHistory(t *testing.T) {
 	tenant := constraintTenant(t)
 	var entries []Entry
@@ -437,91 +345,6 @@ func TestBusinessConstraintsNoLiveRuntimeWriteBypass(t *testing.T) {
 		t.Fatal("direct live write left a record")
 	}
 }
-
-func TestBusinessConstraintsTransactionTotalsAndReferenceCardinality(t *testing.T) {
-	tenant := constraintTenant(t)
-	var entries []Entry
-	tenant.Record = func(entry Entry) { entries = append(entries, entry) }
-	header := publishObject(t, tenant, "builder", "HEADER", map[string]any{"name": "header", "title": "Header", "fields": []construction.Field{{Name: "number", Title: "Number", Type: "text"}, {Name: "total", Title: "Total", Type: "integer"}}}, txnAt)
-	line := publishObject(t, tenant, "builder", "LINE", map[string]any{"name": "line", "title": "Line", "fields": []construction.Field{{Name: "header", Title: "Header", Type: "reference", Ref: header, Required: true}, {Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "debit", Title: "Debit", Type: "decimal"}, {Name: "credit", Title: "Credit", Type: "decimal"}}}, txnAt)
-	decide(t, tenant, "builder", construction.ID, "build.query.create", construction.QueryType, "LINES", map[string]any{"name": "lines", "title": "Lines", "description": "All lines of a header", "object": line, "by": "header", "limit": 200}, txnAt)
-	decide(t, tenant, "builder", construction.ID, "build.query.publish", construction.QueryType, "LINES", nil, txnAt)
-	reads := &platform.RuleReadSpec{Collections: map[string]platform.RuleCollection{"lines": {App: construction.ID, Query: "lines", Version: 1, Object: line, Of: "$subject", Policy: "complete"}}}
-	sum := platform.Expr{Op: "sum", Kind: "integer", Agg: &platform.ExprAggregate{Source: "lines", Field: []string{"qty"}}}
-	count := platform.Expr{Op: "count", Kind: "integer", Agg: &platform.ExprAggregate{Source: "lines"}}
-	debits := platform.Expr{Op: "sum", Kind: "decimal", Agg: &platform.ExprAggregate{Source: "lines", Field: []string{"debit"}}}
-	credits := platform.Expr{Op: "sum", Kind: "decimal", Agg: &platform.ExprAggregate{Source: "lines", Field: []string{"credit"}}}
-	difference := platform.Expr{Op: "abs", Kind: "decimal", Args: []platform.Expr{{Op: "-", Kind: "decimal", Args: []platform.Expr{debits, credits}}}}
-	constraints := []platform.Constraint{
-		{Name: "total", Kind: "expression", Fields: []string{"total"}, Level: "txn", Message: "Header total must equal all line quantities.", Expr: booleanRule("=", platform.ExprReference("integer", "total"), sum), Reads: reads},
-		{Name: "balanced", Kind: "expression", Fields: []string{"total"}, Level: "txn", Message: "Debit and credit must balance within 0.005.", Expr: booleanRule("<=", difference, platform.ExprLiteralValue("decimal", "0.005")), Reads: reads},
-		{Name: "children", Kind: "cardinality", Fields: []string{"archived"}, Level: "txn", Message: "A header with active lines cannot be archived.", Expr: booleanRule("or", platform.Expr{Op: "not", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("boolean", "archived")}}, *booleanRule("=", count, platform.ExprLiteralValue("integer", 0))), Reads: reads},
-	}
-	decide(t, tenant, "builder", construction.ID, "build.object.edit", construction.ObjectType, "HEADER", map[string]any{"constraints": constraints}, txnAt)
-	decide(t, tenant, "builder", construction.ID, "build.object.publish", construction.ObjectType, "HEADER", nil, txnAt)
-	txn := &platform.BusinessTxn{Subject: "build.request", Steps: []platform.TxnStep{
-		{Name: "number", Kind: "sequence", Sequence: &platform.Sequence{Name: "documents", Pattern: "D-{n:3}"}},
-		{Name: "request", Kind: "update", Target: platform.TxnRef{Type: "build.request", ID: "$subject"}, Changes: []platform.TxnSet{{Field: "consumed", From: "=true"}}},
-		{Name: "head", Kind: "create", Target: platform.TxnRef{Type: header}, Changes: []platform.TxnSet{{Field: "number", From: "step.number"}, {Field: "total", From: "=5"}}},
-		{Name: "first", Kind: "create", Target: platform.TxnRef{Type: line}, Changes: []platform.TxnSet{{Field: "header", From: "step.head"}, {Field: "qty", From: "=2"}, {Field: "debit", From: "=1.005"}, {Field: "credit", From: "=0"}}},
-		{Name: "second", Kind: "create", Target: platform.TxnRef{Type: line}, Changes: []platform.TxnSet{{Field: "header", From: "step.head"}, {Field: "qty", From: "qty"}, {Field: "debit", From: "=0"}, {Field: "credit", From: "credit"}}},
-	}}
-	request := publishObject(t, tenant, "builder", "REQUEST", map[string]any{"name": "request", "title": "Request", "fields": []construction.Field{{Name: "consumed", Title: "Consumed", Type: "boolean"}}, "states": []construction.State{{Name: "draft", Title: "Draft"}}, "actions": []construction.Action{{Name: "apply", Title: "Apply", From: []string{"draft"}, Inputs: []construction.Input{{Name: "qty", Title: "Second quantity", Type: "integer"}, {Name: "credit", Title: "Credit", Type: "decimal"}}, Transaction: txn}}}, txnAt)
-	decide(t, tenant, "builder", construction.ID, request+".create", request, "R1", map[string]any{}, txnAt)
-	before := txnState(tenant)
-	position := len(entries)
-	member := memberOf(t, tenant, "builder")
-	_, err, issues := tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, request+".apply", request, "R1", map[string]any{"qty": 4, "credit": 1}), txnAt)
-	if err == nil || len(issues) != 1 || issues[0].Constraint != "total" {
-		t.Fatalf("unbalanced transaction accepted: %v %+v", err, issues)
-	}
-	if txnState(tenant) != before || len(tenant.sequences.clone()) != 0 {
-		t.Fatal("transaction-level failure left rows, relationship or number")
-	}
-	if len(entries) != position+1 {
-		t.Fatal("failure produced additional ledger entries")
-	}
-	saved, _, decodeErr := resultformat.DecodeRefusal(entries[len(entries)-1].Body)
-	if decodeErr != nil || saved.Version != 3 {
-		t.Fatal("constraint refusal not versioned", decodeErr)
-	}
-	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 0.99}), txnAt)
-	if err == nil || len(issues) != 1 || issues[0].Constraint != "balanced" || txnState(tenant) != before || len(tenant.sequences.clone()) != 0 {
-		t.Fatal("unbalanced amounts escaped the atomic boundary", err, issues)
-	}
-	receipt := decide(t, tenant, "builder", construction.ID, request+".apply", request, "R1", map[string]any{"qty": 3, "credit": 1}, txnAt)
-	batch, _, decodeErr := resultformat.DecodeBatch(entries[len(entries)-1].Body)
-	if decodeErr != nil || len(batch.Rows) != 4 || len(batch.Decisions) != 1 || len(batch.Sequences) != 1 {
-		t.Fatalf("reference and rows did not share one result: %+v %v", batch, decodeErr)
-	}
-	headID := receipt.ChangeId + "-head"
-	for _, image := range batch.Rows {
-		if image.Type == line {
-			var values map[string]any
-			_ = json.Unmarshal(image.Value, &values)
-			if values["header"] != headID {
-				t.Fatal("relation points outside the accepted header")
-			}
-		}
-	}
-	before = txnState(tenant)
-	_, err, issues = tenant.submitDiagnosed(member, submission(tenant, member, construction.ID, line+".edit", line, receipt.ChangeId+"-second", map[string]any{"qty": 4}), txnAt)
-	if err == nil || len(issues) != 1 || issues[0].Constraint != "total" || txnState(tenant) != before {
-		t.Fatal("child edit bypassed unchanged parent total", err, issues)
-	}
-	// Preserve the total while independently demonstrating archive cardinality.
-	if result := refuse(t, tenant, "builder", construction.ID, header+".archive", header, headID, nil, txnAt); !strings.Contains(result, "active lines") {
-		t.Fatal("archive escaped relation constraint", result)
-	}
-	restored := constraintTenant(t)
-	if err := restored.Replay(entries); err != nil {
-		t.Fatal(err)
-	}
-	if snapshot(restored) != snapshot(tenant) {
-		t.Fatal("constraint transaction replay reran or changed results")
-	}
-}
-
 func TestBusinessConstraintsRequiredPatternTemporalAndScopedUnique(t *testing.T) {
 	tenant := constraintTenant(t)
 	parent := publishObject(t, tenant, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, txnAt)

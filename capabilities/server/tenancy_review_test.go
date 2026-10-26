@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-jose/go-jose/v4"
 	resultformat "platformserver/internal/acceptance/result"
 
 	"net/http"
@@ -23,6 +22,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	"github.com/go-jose/go-jose/v4"
 	"platformserver/apps/enterprise"
 	"platformserver/idp"
 	"platformserver/platform"

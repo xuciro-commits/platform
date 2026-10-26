@@ -19,11 +19,11 @@ AIR_VERSION ?= v1.67.4
 OPENSPEC_VERSION := 1.14.3
 COMPOSE := docker compose -f deploy/local/compose.yaml
 INFRA := postgres rauthy rustfs
-SOLUTION ?= hospitality
-PORT.hospitality := 8495
-PORT.manufacturing := 8490
-WEB_PORT.hospitality := 5176
-WEB_PORT.manufacturing := 5175
+SOLUTION ?= main
+PORT.main := 8495
+PORT.compat := 8490
+WEB_PORT.main := 5176
+WEB_PORT.compat := 5175
 WEB_PORT ?= $(WEB_PORT.$(SOLUTION))
 LITE_HOST ?= 127.0.0.1
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
@@ -65,7 +65,7 @@ infra-down: ## 停止基础服务容器（保留数据卷）
 	$(COMPOSE) stop
 
 .PHONY: dev
-dev: ## 基于容器 PostgreSQL 与 Rauthy，在 air 下热重载运行宿主（SOLUTION 默认为 hospitality，可选 manufacturing）
+dev: ## 基于容器 PostgreSQL 与 Rauthy，在 air 下热重载运行宿主（SOLUTION 默认为 main，可选 compat）
 	@test -x "$(AIR)" || { echo 'run make setup to install air'; exit 1; }
 	mkdir -p .build/dev
 	SOLUTION=$(SOLUTION) "$(AIR)" -c deploy/dev/air.toml -- $(SOLUTION) $(PORT.$(SOLUTION))
@@ -174,8 +174,8 @@ build: ## 构建当前系统架构的工作区制品与通用宿主二进制，�
 
 .PHONY: images
 images: ## 构建通用宿主 Docker 镜像并打上 VERSION 标签（两个配置实例共用同一镜像）
-	PLATFORM_REVISION=$$(git rev-parse HEAD) $(COMPOSE) build hospitality-server manufacturing-server
-	docker tag platform-hospitality-server platform/platform-server:$(VERSION)
+	PLATFORM_REVISION=$$(git rev-parse HEAD) $(COMPOSE) build platform-server
+	docker tag platform-platform-server platform/platform-server:$(VERSION)
 
 .PHONY: rehearse
 rehearse: ## 当前组合与自举的隔离 PostgreSQL 恢复检查

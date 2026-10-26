@@ -6,10 +6,10 @@
 # Usage: deploy/dev/run.sh <solution> <port>
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
-solution=${1:-hospitality} port=${2:-8495}
+solution=${1:-main} port=${2:-8495}
 [[ -f deploy/local/.env ]] && set -a && source deploy/local/.env && set +a
 bin=".build/dev/$solution-server"
-admin=user:manager@hotel.test
+admin=user:manager@workspace.test
 if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Port $port is in use; stop the $solution host before starting development (docker compose -f deploy/local/compose.yaml stop $solution-server)." >&2
   exit 1

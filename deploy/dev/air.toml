@@ -1,5 +1,5 @@
 # air (installed by make setup) rebuilds and restarts the
-# common platform host when Go sources change. `make dev SOLUTION=hospitality`
+# common platform host when Go sources change. `make dev SOLUTION=main`
 # exports SOLUTION for build.sh and passes the solution and port after `--`
 # to run.sh, which starts the binary with the flags of the containers'
 # infrastructure.

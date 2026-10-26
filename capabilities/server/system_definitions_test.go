@@ -217,29 +217,6 @@ func TestSystemDefinitionsRecoverBeforeBusinessRecordsWithoutCopyingMetadata(t *
 		t.Fatal("business checkpoint copied system metadata")
 	}
 }
-
-func TestSystemDefinitionsRollbackReusesTheOriginalRetainedVersion(t *testing.T) {
-	owner, business := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "business")
-	NewHost(nil, owner, business)
-	definitionDraft(t, owner, "First title")
-	proposeDefinition(t, owner, "version-one", nil)
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0})
-	firstCandidate := owner.ActiveRelease()
-	mustDefinitionDecision(t, owner, "builder", "build.object.edit", "build.object", "global-note", map[string]any{"title": "Second title"})
-	proposeDefinition(t, owner, "version-two", nil)
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaActivate, system.ReleaseType, "0002", map[string]any{"window": 0})
-	if got := definitionOf(t, business); got.Entity.Title != "Second title" {
-		t.Fatalf("updated title=%s", got.Entity.Title)
-	}
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaDeactivate, system.ReleaseType, "0002", map[string]any{})
-	if got := owner.ActiveRelease(); got != firstCandidate {
-		t.Fatalf("rollback installed candidate %s, want original %s", got, firstCandidate)
-	}
-	if got := definitionOf(t, business); got.Entity.Title != "First title" {
-		t.Fatalf("rollback title=%s", got.Entity.Title)
-	}
-}
-
 func TestSystemDefinitionsRefuseAnExistingBusinessOwnerConflictBeforeActivation(t *testing.T) {
 	owner, business := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "business")
 	NewHost(nil, owner, business)

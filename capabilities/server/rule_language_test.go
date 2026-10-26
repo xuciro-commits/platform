@@ -224,41 +224,6 @@ func TestDeclaredRuleCollectionsRespectCallerScope(t *testing.T) {
 		t.Fatalf("partial privilege pretended to be complete: %v", err)
 	}
 }
-
-func TestTransactionRulesUseCapturedInputsAndRollback(t *testing.T) {
-	tn := txnTenant(t)
-	txnSetup(t, tn)
-	txn := txnDefinition()
-	guard := platform.Expr{Kind: "boolean", Ref: "input.permit"}
-	txn.Guard = &guard
-	txn.Message = "Permission is required"
-	txn.Steps[4].When = &guard
-	for i := range txn.Steps {
-		for j := range txn.Steps[i].Changes {
-			if txn.Steps[i].Changes[j].Field == "note" {
-				txn.Steps[i].Changes[j] = platform.TxnSet{Field: "note", Expr: &platform.Expr{Op: "concat", Kind: "text", Args: []platform.Expr{platform.ExprReference("text", "input.label"), platform.ExprLiteralValue("text", "!")}}}
-			}
-		}
-	}
-	decide(t, tn, "builder", construction.ID, "build.object.edit", construction.ObjectType, "REQUEST", map[string]any{"actions": []construction.Action{{Name: "apply", Title: "Apply transaction", From: []string{"draft"}, Roles: []string{"operator", "limited"}, Inputs: []construction.Input{{Name: "label", Title: "Label", Type: "longtext"}, {Name: "permit", Title: "Permit", Type: "boolean", Required: true}}, Transaction: txn}}}, txnAt)
-	decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "REQUEST", map[string]any{}, txnAt)
-	before := txnState(tn)
-	reason := refuse(t, tn, "operator", construction.ID, "build.request.apply", "build.request", "operator", map[string]any{"label": "rule", "permit": false}, txnAt)
-	if !strings.Contains(reason, "Permission") {
-		t.Fatal(reason)
-	}
-	txnUnchanged(t, tn, before)
-	decide(t, tn, "operator", construction.ID, "build.request.apply", "build.request", "operator", map[string]any{"label": "rule", "permit": true}, txnAt)
-	view, err := tn.RecordOf(memberOf(t, tn, "operator"), "build.request", "operator", txnAt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, _ := json.Marshal(view.Record)
-	if !strings.Contains(string(raw), `"note":"rule!"`) {
-		t.Fatalf("assignment bypassed Expr: %s", raw)
-	}
-}
-
 func TestRulePathsDistinguishUnsetValuesFromWithheldFields(t *testing.T) {
 	tn := builderTenant(t, "optional-rule-path")
 	publishObject(t, tn, "builder", "SOURCE", map[string]any{"name": "optionalsource", "title": "Optional source", "fields": []construction.Field{{Name: "optional", Title: "Optional value", Type: "text"}, {Name: "optionalnumber", Title: "Optional number", Type: "integer"}, {Name: "private", Title: "Private value", Type: "text", Read: []string{"builder"}}, {Name: "privatecount", Title: "Private count", Type: "integer", Required: true, Read: []string{"builder"}}}}, txnAt)

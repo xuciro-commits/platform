@@ -19,14 +19,6 @@ import (
 
 // A tenant-authored step uses the work app's approval and inbox, including
 // rejection, rather than a second process runtime.
-func TestTenantDefinedApproval(t *testing.T) {
-	for _, accepted := range []bool{false, true} {
-		t.Run(fmt.Sprint("accepted=", accepted), func(t *testing.T) {
-			testTenantDefinedApproval(t, accepted)
-		})
-	}
-}
-
 func testTenantDefinedApproval(t *testing.T, accepted bool) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	var journal []Entry

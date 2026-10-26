@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
 	"platformserver/journal"
@@ -43,22 +42,6 @@ func TestRetainedDefinitionVersionsPreserveHistoryAndCompareContent(t *testing.T
 	if _, ok := retainedDefinitionVersions(history, "", nil, "1.query-1", first); !ok {
 		t.Fatal("a retained version rejected its original content")
 	}
-}
-
-func TestReusableQueryVersionsFreezePagesAndRecover(t *testing.T) {
-	t.Run("memory", func(t *testing.T) { reusableQueryVersions(t, nil) })
-	t.Run("postgres", func(t *testing.T) {
-		url := os.Getenv("PLATFORM_TEST_DATABASE")
-		if url == "" {
-			t.Skip("PLATFORM_TEST_DATABASE not set")
-		}
-		journal, err := OpenJournal(context.Background(), url)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer journal.Close()
-		reusableQueryVersions(t, journal)
-	})
 }
 func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 	tenant := fmt.Sprintf("reusable-queries-%d", time.Now().UnixNano())

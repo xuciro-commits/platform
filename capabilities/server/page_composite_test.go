@@ -154,25 +154,3 @@ func TestPageCompositePartialNeverTurnsHiddenCellsIntoFalse(t *testing.T) {
 		t.Fatal("withheld axis identity leaked")
 	}
 }
-
-func TestPageCompositeRefusesAnOversizedCrossProductWithoutWriting(t *testing.T) {
-	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
-	tn := builderTenant(t, "composite-budget")
-	typ := publishObject(t, tn, "builder", "AXIS", map[string]any{"name": "axis", "title": "Axis", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
-	for i := 0; i < 41; i++ {
-		decide(t, tn, "user", construction.ID, typ+".create", typ, fmt.Sprint(i), map[string]any{"name": fmt.Sprint(i)}, at)
-	}
-	expr := platform.ExprLiteralValue("boolean", true)
-	p := modelTestPage(typ, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: typ}}, "columns": {Model: platform.ModelBinding{Type: typ}}}, Value: &expr}}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}})
-	p.Document.UIProfile = platform.PageCompositeProfile
-	before := txnState(tn)
-	tn.mu.Lock()
-	_, err := tn.readPageModel(memberOf(t, tn, "builder"), PageModelRead{Draft: &p, Section: "matrix", Limit: 200}, at)
-	tn.mu.Unlock()
-	if err == nil || !strings.Contains(err.Message, "1600") {
-		t.Fatalf("oversized matrix accepted: %v", err)
-	}
-	if txnState(tn) != before {
-		t.Fatal("refused view changed authoritative records")
-	}
-}

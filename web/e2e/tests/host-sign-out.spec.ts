@@ -23,12 +23,12 @@ test("a rejected host member can sign out after refresh and choose another accou
     if (sessionStorage.getItem("test:session-seeded")) return;
     sessionStorage.setItem("test:session-seeded", "true");
     sessionStorage.setItem("oidc:session", JSON.stringify({ accessToken: "rejected-access-token", idToken,
-      email: "manager@hotel.test", expiresAt: Date.now() + 3_600_000 }));
+      email: "manager@workspace.test", expiresAt: Date.now() + 3_600_000 }));
     sessionStorage.setItem("workspace:identity", "previous-development-identity");
     sessionStorage.setItem("workspace:tenant", "previous-tenant");
   }, { idToken });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "manager@hotel.test is not a member of this host." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "manager@workspace.test is not a member of this host." })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Sign out and switch account", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText("Could not reach the sign-in provider. Retry signing out.");

@@ -6,9 +6,9 @@
     "seats": [
       {
         "subjects": [
-          "user:manager@hotel.test"
+          "user:manager@workspace.test"
         ],
-        "id": "builder-hotel",
+        "id": "builder-manager",
         "grants": [
           {
             "app": "platform",
@@ -38,9 +38,9 @@
       },
       {
         "subjects": [
-          "user:sup@plant.test"
+          "user:sup@workspace.test"
         ],
-        "id": "builder-plant",
+        "id": "builder-sup",
         "grants": [
           {
             "app": "platform",
