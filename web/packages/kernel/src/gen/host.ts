@@ -411,17 +411,8 @@ export type ApplicationHeaderItem = {
 };
 
 export type ApplicationMaintenance = {
-  migrations: ApplicationMigration[];
-  retired: ApplicationRetirement[];
   extensions: ApplicationExtension[];
   retention: ApplicationRetention[];
-};
-
-export type ApplicationMigration = {
-  id: string;
-  state: string;
-  from: string;
-  to: string;
 };
 
 export type ApplicationMonitoring = {
@@ -469,14 +460,6 @@ export type ApplicationRetention = {
   category: string;
   duration: string;
   state: string;
-};
-
-export type ApplicationRetirement = {
-  type: string;
-  name: string;
-  kind: string;
-  state: string;
-  migration: string;
 };
 
 export type ApplicationRole = {
@@ -1083,7 +1066,6 @@ export type Connection = {
   name: string;
   title: string;
   kind: "http" | "odata" | "postgres";
-  protocol?: DriverBinding;
   address: string;
   secret?: string;
   allowPrivate?: boolean;
@@ -1101,8 +1083,6 @@ export type ConnectionCheck = {
   ok: boolean;
   error?: string;
   detail?: string;
-  samples?: DriverSample[];
-  bindingRevision?: string;
 };
 
 export type ConnectionKind = {
@@ -1110,10 +1090,6 @@ export type ConnectionKind = {
   title: string;
   kind: string;
   addressPlaceholder?: string;
-  package?: string;
-  version?: string;
-  digest?: string;
-  profile?: DriverProfile;
 };
 
 export type ConnectionKindPage = {
@@ -1484,103 +1460,6 @@ export type DraftChangeField = {
   name: string;
   before?: unknown;
   after?: unknown;
-};
-
-export type DriverBinding = {
-  scope?: string;
-  package: string;
-  version: string;
-  digest: string;
-  profile: string;
-  configuration: DriverConfiguration;
-};
-
-export type DriverCommand = {
-  id: string;
-  point: string;
-  min?: string;
-  max?: string;
-};
-
-export type DriverConfiguration = {
-  connection?: Record<string, unknown>;
-  devices: DriverDevice[];
-  points: DriverPoint[];
-  commands?: DriverCommand[];
-  scenario?: string;
-  seed?: number;
-};
-
-export type DriverCoverage = {
-  availableSince: string;
-  completeUntil: string;
-  truncated: boolean;
-  good: number;
-  bad: number;
-  uncertain: number;
-  stale: number;
-};
-
-export type DriverDevice = {
-  id: string;
-  title: string;
-  settings?: Record<string, unknown>;
-};
-
-export type DriverPoint = {
-  id: string;
-  device: string;
-  address: string;
-  type: string;
-  dataType?: string;
-  unit?: string;
-  scale?: string;
-  offset?: string;
-  intervalMS: number;
-};
-
-export type DriverProfile = {
-  id: string;
-  title: string;
-  description?: string;
-  operations: string[];
-  simulation?: boolean;
-  scenarios?: string[];
-  connectionFields?: Field[];
-  deviceFields?: Field[];
-};
-
-export type DriverRuntime = {
-  abi: string;
-  targets: DriverTarget[];
-  profiles: DriverProfile[];
-};
-
-export type DriverSample = {
-  device: string;
-  signal: string;
-  type: string;
-  value?: unknown;
-  unit?: string;
-  quality: string;
-  at: string;
-  receivedAt: string;
-  reason?: string;
-  source: DriverSampleSource;
-};
-
-export type DriverSampleSource = {
-  connection: string;
-  revision: string;
-  generation: string;
-  sequence?: string;
-  clock?: string;
-};
-
-export type DriverTarget = {
-  os: string;
-  arch: string;
-  artifact: string;
 };
 
 export type Edge = {
@@ -2179,7 +2058,6 @@ export type InputOptions = {
 };
 
 export type InstalledPackage = {
-  runtime?: DriverRuntime;
   id: string;
   version: string;
   namespace: string;
@@ -2430,26 +2308,6 @@ export type Metamodel = {
   contracts: Contract[];
 };
 
-export type MigrateField = {
-  from?: string;
-  to: string;
-  expr?: Expr;
-};
-
-export type MigrateStep = {
-  kind: "add" | "default" | "rename" | "split" | "merge" | "retype" | "extract" | "retire" | "retire-action" | "rebind";
-  types: string[];
-  fields?: MigrateField[];
-  expr?: Expr;
-  batch: number;
-  onFailure?: "reject" | "quarantine";
-  mapping?: Record<string, string>;
-  action?: string;
-  redirect?: string;
-  target?: string;
-  identity?: Expr;
-};
-
 export type MigrationManifest = {
   at: string;
   from: string;
@@ -2459,47 +2317,11 @@ export type MigrationManifest = {
   types: MigrationType[];
 };
 
-export type MigrationPlan = {
-  from: string;
-  to: string;
-  scope: MigrationScope;
-  steps: MigrateStep[];
-};
-
 export type MigrationResult = {
   from: string;
   to: string;
   key: string;
   types: MigrationType[];
-};
-
-export type MigrationReview = {
-  id: string;
-  at: string;
-  from: string;
-  to: string;
-  types: MigrationReviewType[];
-  steps: number;
-  issues: MigrationReviewIssue[];
-};
-
-export type MigrationReviewIssue = {
-  type: string;
-  record: string;
-  step: number;
-  reason: string;
-};
-
-export type MigrationReviewType = {
-  type: string;
-  records: number;
-  sourceShape: string;
-  targetShape: string;
-};
-
-export type MigrationScope = {
-  type: string;
-  where?: Expr;
 };
 
 export type MigrationType = {
@@ -2591,6 +2413,16 @@ export type Notification = {
   withheld?: boolean;
 };
 
+export type ObservationCoverage = {
+  availableSince: string;
+  completeUntil: string;
+  truncated: boolean;
+  good: number;
+  bad: number;
+  uncertain: number;
+  stale: number;
+};
+
 export type ObservationDecision = {
   mode?: "summary" | "intervals";
   when: Expr;
@@ -2645,7 +2477,6 @@ export type ObservationInfo = {
   ref: AssetRef;
   version: string;
   definition: ObservationDefinition;
-  supportsLatest?: boolean;
 };
 
 export type ObservationInterval = {
@@ -2699,9 +2530,30 @@ export type ObservationResult = {
   points?: ObservationPoint[];
   sources: string[];
   matched?: boolean;
-  coverage?: DriverCoverage;
-  latest?: DriverSample;
+  coverage?: ObservationCoverage;
+  latest?: ObservationSample;
   intervals?: ObservationIntervalResult;
+};
+
+export type ObservationSample = {
+  device: string;
+  signal: string;
+  type: string;
+  value?: unknown;
+  unit?: string;
+  quality: string;
+  at: string;
+  receivedAt: string;
+  reason?: string;
+  source: ObservationSampleSource;
+};
+
+export type ObservationSampleSource = {
+  connection: string;
+  revision: string;
+  generation: string;
+  sequence?: string;
+  clock?: string;
 };
 
 export type ObservationUnknown = {
@@ -2772,12 +2624,6 @@ export type OrgSeed = {
   memberships: Membership[];
 };
 
-export type PackageArtifactInfo = {
-  digest: string;
-  mediaType: string;
-  size: number;
-};
-
 export type PackageBlueprint = {
   roots: AssetRef[];
   assets: ReleaseAsset[];
@@ -2795,7 +2641,6 @@ export type PackageContribution = {
 
 export type PackageDescriptor = {
   blueprint?: PackageBlueprint;
-  runtime?: DriverRuntime;
   id: string;
   version: string;
   title?: string;
@@ -2838,13 +2683,11 @@ export type PackagePreview = {
   digest: string;
   origin: string;
   precheck: Precheck;
-  artifacts: PackageArtifactInfo[];
 };
 
 export type PackageRemoval = {
   id: string;
   ok: boolean;
-  needsCleanup: boolean;
   blockers: string[];
 };
 

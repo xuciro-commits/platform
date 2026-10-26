@@ -7,7 +7,6 @@ import { useApplicationScope, useApplicationWorkspace } from "../projects/applic
 import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../projects/resources";
 import { diagnose } from "./diagnostics";
 import { useEffect, useRef, useState } from "react";
-import { MigrationWorkbench } from "./migration";
 
 // One selected saved draft in a joint candidate. The selection is
 // what the builder checked; the server recomputes the candidate from it.
@@ -24,7 +23,6 @@ type EvaluationReport = { id: string; candidate: string; function: string; state
 const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
   ...resourceKinds.filter((item) => item.kind !== "action" && item.kind !== "automation").map((item) => ({ kind: item.kind as ReleaseKind, type: item.type, label: item.plural })),
   { kind: "app", type: "build.app", label: "Applications" },
-  { kind: "migration", type: "build.migration-plan", label: "Migration plans" },
 ];
 export const releaseKinds: ReleaseKind[] = kinds.map((item) => item.kind);
 
@@ -58,13 +56,12 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const reviewedEvaluation = useRef("");
   const [error, setError] = useState(selectionError ? t(selectionError) : "");
   const [busy, setBusy] = useState(false);
-  const [migrationLocked, setMigrationLocked] = useState(false);
   const lock = useRef(false);
   const [pending, setPending] = useState<ReleaseRequest>();
   const pendingRef = useRef(pending); pendingRef.current = pending;
   const rememberRequest = (request?: ReleaseRequest) => { pendingRef.current = request; setPending(request); };
   const { confirmDiscard } = useUnsavedChanges(!!pending, () => rememberRequest(), busy);
-  const locked = busy || !!pending || migrationLocked;
+  const locked = busy || !!pending;
   // One existing task view owns the captured HTTP request. No new outbox or
   // release authority: a retry sends exactly its original key and payload.
   const perform = async (job: () => Promise<void>) => {
@@ -380,7 +377,6 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         <ul className="grid gap-1 text-xs">{upgradePlan.additions.map(addition => <li key={`${addition.type}/${addition.field}`}>{addition.type} · {addition.field} · {t(addition.kind)} · {t("{count} existing records", { count: addition.records })}</li>)}</ul>
         <Checkbox disabled={locked} checked={confirmedUpgrade === upgradePlan.id} onChange={checked => setConfirmedUpgrade(checked ? upgradePlan.id : "")}>{t("Confirm this optional field upgrade plan")}</Checkbox>
       </Panel>}
-      {builder && savedReview && savedID && activeID && activeID !== savedID && <MigrationWorkbench from={activeID} to={savedID} assets={assets} onChanged={async () => { await inventory.refetch(); await readSaved(savedID); }} onLock={setMigrationLocked} />}
       {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
       {review.diagnostic && (() => { const d = diagnose(review.diagnostic, { application: scope || (kind === "app" ? id : undefined) }); return <div className="grid gap-2">
         <p role="alert" className="text-sm text-danger">{d.text}</p>

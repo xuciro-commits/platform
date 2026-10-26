@@ -127,10 +127,6 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		result.Iterations = slices.Clone(d.iterations)
 		result.Version = 5
 	}
-	if len(d.migrationDefinitions) > 0 {
-		result.Definitions = slices.Clone(d.migrationDefinitions)
-		result.Version = 6
-	}
 	if len(d.businessFacts) > 0 {
 		result.Business = slices.Clone(d.businessFacts)
 		result.Version = 7
@@ -255,12 +251,6 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
 	}
 	draft := t.records.forkRecords()
-	if len(result.Definitions) > 0 {
-		draft, err = t.prepareExtractionDefinitions(result, receipt, draft)
-		if err != nil {
-			return nil, err
-		}
-	}
 	if err := t.validateAcceptedControl(result.Control); err != nil {
 		return nil, err
 	}
@@ -332,9 +322,6 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 			return nil, err
 		}
 	}
-	if err := validateExtractionOrigins(draft); err != nil {
-		return nil, err
-	}
 	if err := t.sequences.check(result.SequenceBases, result.Sequences); err != nil {
 		return nil, err
 	}
@@ -361,9 +348,6 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 		}
 	}
 	if err := t.records.promoteRecords(draft); err != nil {
-		return false, err
-	}
-	if err := t.applyExtractionDefinitions(result.Definitions); err != nil {
 		return false, err
 	}
 	if err := t.applyAcceptedControl(result.Control); err != nil {
@@ -431,11 +415,6 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result resultformat.Batch, l
 		prior := et.rows.Get(image.ID)
 		if prior != nil && !reflect.DeepEqual(prior.Extraction, image.Extraction) {
 			return fmt.Errorf("record extraction origin changed")
-		}
-		if result.Version == 1 {
-			if restored := legacyAgentContextPredecessor(prior, image); restored != nil {
-				prior = restored
-			}
 		}
 		before := ""
 		baseHistory, revision := 0, uint32(0)

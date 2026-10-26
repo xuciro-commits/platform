@@ -34,7 +34,7 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 
 // routesBuild serves the builder: composites, code SDK, process checks, releases, queries and simulation.
 func (h *Host) routesBuild(rt *routes) {
-	h.routesProtocolConnections(rt)
+	h.routesConnectionKinds(rt)
 	h.routesPackageDrafts(rt)
 	rt.authorized(Route{Pattern: "GET /v1/build/drafts/actions", Summary: "Describe saved object actions for authoring without installing them or granting execution", Answer: []platform.CapabilityDescriptor{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		actions, err := t.DraftActionCapabilities(m)
@@ -145,24 +145,6 @@ func (h *Host) routesBuild(rt *routes) {
 			return
 		}
 		WriteJSON(w, http.StatusOK, h.withPromotions(t.ID, answer))
-	})
-	rt.authorized(Route{Pattern: "POST /v1/releases/migrations/review", Summary: "Review explicit migration steps between sealed releases without changing data", Body: platform.MigrationPlan{}, Answer: MigrationReview{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		body, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
-		if err != nil || len(body) > 1<<20 {
-			w.WriteHeader(http.StatusRequestEntityTooLarge)
-			return
-		}
-		var plan platform.MigrationPlan
-		if err := json.Unmarshal(body, &plan); err != nil {
-			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		answer, err := t.ReviewMigrationPlan(m, plan, Now())
-		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
 	})
 	rt.authorized(Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder and publisher review of sealed definitions against actual running definitions", Answer: SavedReleaseReview{}}, construction.ID, []string{construction.Builder, construction.Publisher}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, err := t.ReviewSavedRelease(m, r.PathValue("id"))

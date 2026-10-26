@@ -110,7 +110,7 @@ func (t *Tenant) validateAcceptedStates(states []resultformat.State) error {
 			return err
 		}
 		hash, err := acceptance.Digest(prior)
-		if err != nil || hash != state.Before && !t.legacyConsolePredecessor(state, prior) && !t.legacyCoreSeedPredecessor(state, prior) {
+		if err != nil || hash != state.Before {
 			return fmt.Errorf("accepted state predecessor differs for %s", state.App)
 		}
 	}

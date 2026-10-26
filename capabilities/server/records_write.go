@@ -73,9 +73,6 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	if et == nil || r == nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	if err := s.migrationWriteLocked(et.info, r); err != nil {
-		return err
-	}
 	v := records.Copy(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
 	records.EmptyLists(v)

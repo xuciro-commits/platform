@@ -1,6 +1,6 @@
 # Platform · 业务应用构建平台
 
-面向 FDE 与客户构建者，提供数据接入、语义建模、动作/流程/AI、操作界面、受控发布与后续修改。语言中立的内核契约在 contract/，Go 宿主在 capabilities/server/，通用宿主的装配在 capabilities/server/composition/，Web 工作区在 web/；业务应用是 deploy/packages/ 里的声明式包，由构建者安装、发布与修改。
+面向 FDE 与客户构建者，提供数据接入、语义建模、动作/流程/AI、操作界面、受控发布与后续修改。语言中立的内核契约在 contract/，Go 宿主在 capabilities/server/，通用宿主的装配在 capabilities/server/composition/，Web 工作区在 web/；业务应用是部署提供的声明式包，由构建者安装、发布与修改。
 
 产品宗旨见 [Intent](docs/Intent.md)，系统结构见 [Architecture](docs/Architecture.md)，模块行为与不变量见 [OpenSpec 规范目录](openspec/README.md)，当前工作见 [WorkQueue](docs/WorkQueue.md)。开发从 [AGENTS](AGENTS.md) 开始；内核语义与一致性向量从 [契约入口](contract/README.md) 查阅。
 

@@ -207,7 +207,6 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 	for key, fact := range fork.businessRefusals {
 		fork.businessRefusals[key] = resultformat.CloneBusinessFact(fact)
 	}
-	fork.migrationDefinitions = slices.Clone(d.migrationDefinitions)
 	fork.callbackWrites = maps.Clone(d.callbackWrites)
 	if d.callbackOrigin != nil {
 		origin := *d.callbackOrigin

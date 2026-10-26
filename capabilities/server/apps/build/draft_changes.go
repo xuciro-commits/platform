@@ -138,8 +138,6 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 				asset, err = alertReleaseAsset(r, max(1, r.DefinitionVersion))
 			case SampleSetRecord:
 				asset, err = sampleSetAsset(r, max(1, r.DefinitionVersion))
-			case MigrationPlanRecord:
-				asset, err = migrationPlanAsset(r, max(1, r.DefinitionVersion))
 			case construction.TestPlan:
 				asset, err = b.testPlanAsset(r, max(1, r.DefinitionVersion))
 			default:

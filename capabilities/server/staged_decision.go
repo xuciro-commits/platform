@@ -30,8 +30,6 @@ type stagedDecision struct {
 	simulation             bool
 	definitions            map[string]*resultformat.DecisionDefinition
 	schemaVersion          *platform.SchemaVersion
-	retirements            []migrationRetirement
-	migrationDefinitions   []resultformat.ReleaseInstallation
 	authorizations         []resultformat.AuthorizationEvidence
 	iterations             []platform.TxnIteration
 	constraintWrites       map[string]constraintWrite

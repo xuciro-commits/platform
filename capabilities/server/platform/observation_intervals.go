@@ -35,7 +35,7 @@ type ObservationIntervalInput struct {
 	Until    time.Time               `json:"until"`
 	Revision string                  `json:"revision"`
 	Points   []ObservationStatePoint `json:"points"`
-	Coverage *DriverCoverage         `json:"coverage,omitempty"`
+	Coverage *ObservationCoverage    `json:"coverage,omitempty"`
 }
 
 type ObservationInterval struct {

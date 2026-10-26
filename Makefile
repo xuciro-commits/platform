@@ -26,10 +26,6 @@ WEB_PORT.hospitality := 5176
 WEB_PORT.manufacturing := 5175
 WEB_PORT ?= $(WEB_PORT.$(SOLUTION))
 LITE_HOST ?= 127.0.0.1
-GATEWAY_LISTEN ?= 127.0.0.1:8510
-GATEWAY_PACKAGES ?= $(ROOT)/.build/protocol/packages
-GATEWAY_STATE ?= $(ROOT)/.build/protocol/state
-PROTOCOL_VERSION ?= 0.1.5
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
 
@@ -93,15 +89,6 @@ dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依
 .PHONY: web
 web: ## 在 Vite 下热重载运行工作区（HMR），将 /v1 反向代理到对应解决方案宿主
 	cd web && PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
-
-.PHONY: packages
-packages: ## 构建独立网关与本机协议能力包，并加入受控应用包
-	GO="$(GO)" PROTOCOL_VERSION="$(PROTOCOL_VERSION)" GATEWAY_PACKAGES="$(GATEWAY_PACKAGES)" python3 scripts/package-artifacts.py
-
-.PHONY: gateway
-gateway: packages ## 启动本地协议网关（默认 8510；需环境变量 GATEWAY_TOKEN，技术收据保留在 .build/protocol/state）
-	@test -n "$$GATEWAY_TOKEN" || { echo 'Set GATEWAY_TOKEN in the environment before running make gateway'; exit 1; }
-	@.build/protocol/bin/gateway -listen "$(GATEWAY_LISTEN)" -packages "$(GATEWAY_PACKAGES)" -state "$(GATEWAY_STATE)" -token-env GATEWAY_TOKEN
 
 .PHONY: setup
 setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright 浏览器内核
@@ -167,11 +154,6 @@ test-web: ## 运行 Web 单元测试；可用 PKG=@platform/ui 与 RUN=文件名
 	cd web && $(PNPM) $(if $(PKG),--filter '$(PKG)',-r) run test $(if $(RUN),'$(RUN)')
 
 .PHONY: e2e
-ifneq ($(if $(strip $(SPEC)),$(filter protocol-packages,$(SPEC)),all),)
-e2e: packages
-e2e: export PLATFORM_PACKAGES_DIR ?= $(GATEWAY_PACKAGES)
-e2e: export PROTOCOL_VERSION := $(PROTOCOL_VERSION)
-endif
 e2e: ## 在开发宿主上运行 web/e2e 浏览器路线；可用 SPEC=page-notice 缩小范围
 	cd web && $(PNPM) --dir apps/workspace build
 	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts) $(E2E_ARGS)

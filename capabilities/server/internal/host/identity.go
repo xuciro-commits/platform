@@ -41,13 +41,6 @@ type AppCatalog interface {
 	Manifest(app string) platform.Manifest // cached: governance reads it per request
 }
 
-// PackageCleanupOwner projects the installed generation and accepted technical
-// receipts; transport cleanup never receives the owner's mutable maps.
-type PackageCleanupOwner interface {
-	PackageCleanupState(string) (state, generation string, proofs map[string]string)
-	RetainedPackageRuntime(string) (bool, error)
-}
-
 // ConsoleHost supplies only tenant governance projections and artifact storage.
 // Member/session/access decisions remain in the identity owner.
 type ConsoleHost interface {
@@ -61,7 +54,6 @@ type ConsoleHost interface {
 	PutPackageArtifact(key string, raw []byte) error
 	GetPackageArtifact(key string) ([]byte, error)
 	BaseModules() []platform.CapabilityModule
-	PackageBlockers(string, map[string]string) ([]string, bool)
 }
 
 type ConsoleAttached interface{ AttachConsole(ConsoleHost) }

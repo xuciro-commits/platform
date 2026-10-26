@@ -6,7 +6,7 @@ import { ChainGraph, useHost, useOpenRecord, useReadQuery, useRecordInventory } 
 import {refusalCategoryName} from "../actions/refusal";
 
 type Run = Api.ApplicationRun;
-const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation", function: "AI function", effect: "External effect", job: "Scheduled job", dispatch: "Device dispatch" } as Record<string, string>)[kind] ?? kind);
+const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", compute: "Calculation", function: "AI function", effect: "External effect", job: "Scheduled job", dispatch: "Dispatch" } as Record<string, string>)[kind] ?? kind);
 const stateName = (state: string) => t(({ running: "Working", waiting: "Waiting", done: "Done", stopped: "Stopped", stuck: "Stuck", completed: "Completed", pending: "Pending", failed: "Failed", blocked: "Blocked", canceled: "Canceled", cancelled: "Canceled", ready: "Ready", rejected: "Rejected", delivered: "Delivered", retrying: "Retrying", held: "Held", discarded: "Discarded", scheduled: "Scheduled", accepted: "Accepted by target", unknown: "Outcome unknown", compensating: "Compensating", compensated: "Compensated" } as Record<string,string>)[state] ?? state);
 const placementName = (placement: string) => t(({assist:"Read-only assistance",propose:"Business proposal",act:"Authorized actions",autonomous:"Autonomous within granted scope"} as Record<string,string>)[placement] ?? placement);
 
@@ -238,8 +238,6 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
       {id:"active",header:t("State"),cell:cell=>cell.row.original.active?t("Current content version"):t("Previous content version")},
       {accessorKey:"at",header:t("Time")},
      ]} getRowId={version=>version.release+":"+version.version} height={180} searchable={false}/>
-     {!!runtime.maintenance.migrations.length&&<div className="grid gap-2"><h3 className="text-sm font-medium">{t("Migration")}</h3><PropertyList items={runtime.maintenance.migrations.map(migration=>[migration.id,t(migration.state)])}/></div>}
-     {!!runtime.maintenance.retired.length&&<div className="grid gap-2"><h3 className="text-sm font-medium">{t("Retirement")}</h3><PropertyList items={runtime.maintenance.retired.map(item=>[item.type+"/"+item.name,t(item.state)])}/></div>}
      {!!runtime.maintenance.extensions.length&&<div className="grid gap-2"><h3 className="text-sm font-medium">{t("Extensions")}</h3><PropertyList items={runtime.maintenance.extensions.map(item=>[item.resource.ref.name,item.base])}/></div>}
      {!!runtime.maintenance.retention.length&&<div className="grid gap-2">
       <div className="flex items-center gap-2"><h3 className="text-sm font-medium">{t("Retention declaration")}</h3><ContextHelp title={t("Retention declaration")}>{t("Retention is declared; automatic deletion is not enabled by this declaration.")}</ContextHelp></div>

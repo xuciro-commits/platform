@@ -38,8 +38,6 @@ func definitionFamilyOf(record any) definitionFamily {
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case SampleSetRecord:
 		return definitionFamily{r.Record, r.Name, r.State, r.DefinitionVersion, r.Published, r.Versions}
-	case MigrationPlanRecord:
-		return definitionFamily{r.Record, r.Name, r.State, r.DefinitionVersion, r.Published, r.Versions}
 	}
 	panic("unsupported retained definition")
 }

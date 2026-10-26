@@ -18,19 +18,6 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 	if out.Timezone == "" {
 		out.Timezone = d.tenantDefault(SettingTimezone)
 	}
-	if d.enterpriseRoles() {
-		if role := out.Roles["org"]; role != "" {
-			if _, explicit := out.Roles["enterprise"]; !explicit {
-				out.Roles["enterprise"] = role
-			}
-			delete(out.Roles, "org")
-		}
-		for i := range out.Grants {
-			if out.Grants[i].App == "org" {
-				out.Grants[i].App = "enterprise"
-			}
-		}
-	}
 	today := out.Today(time.Now())
 	if out.Status == platform.MemberInvited && !d.lastSeen[out.ID].IsZero() {
 		out.Status = "" // signing in accepts the invitation

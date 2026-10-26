@@ -14,7 +14,6 @@ import (
 
 func TestPortableDefinitionsKeepPinnedHistoryAndInstallationBytes(t *testing.T) {
 	sample := SampleSetRecord{Name: "example", Title: "Example", Samples: []platform.SampleRecords{{Type: "build.receipt", Records: []json.RawMessage{json.RawMessage(`{"id":"R","item":"sample"}`)}}}}
-	migration := MigrationPlanRecord{Name: "example", Title: "Example", Plan: platform.MigrationPlan{From: "sha256-v1:" + strings.Repeat("1", 64), To: "sha256-v1:" + strings.Repeat("2", 64), Scope: platform.MigrationScope{Type: "build.receipt"}, Steps: []platform.MigrateStep{{Kind: "rename", Types: []string{"build.receipt"}, Batch: 1, Fields: []platform.MigrateField{{From: "item", To: "title"}}}}}}
 	for _, tc := range []struct {
 		prefix      string
 		kind        platform.AssetKind
@@ -26,7 +25,6 @@ func TestPortableDefinitionsKeepPinnedHistoryAndInstallationBytes(t *testing.T) 
 		typ, schema string
 	}{
 		{"samples", platform.AssetSampleSet, &sample, sample.descriptor(), (*Build).sampleSetAssets, (*Build).sampleSetPinned, sampleSetInstallation, SampleSetType, SchemaSampleSet},
-		{"migration", platform.AssetMigration, &migration, migration.descriptor(), (*Build).migrationPlanAssets, (*Build).migrationPlanPinned, migrationPlanInstallation, MigrationPlanType, SchemaMigrationPlan},
 	} {
 		t.Run(tc.prefix, func(t *testing.T) {
 			b, rows := lifecycleBuild()

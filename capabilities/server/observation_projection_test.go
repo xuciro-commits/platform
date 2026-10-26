@@ -85,7 +85,7 @@ func TestObservationIntervalProjectionFlowIdentityAndPureRecovery(t *testing.T) 
 				if json.NewDecoder(request.Body).Decode(&q) != nil || q.Mode != "intervals" {
 					t.Fatal("interval decision requested another read")
 				}
-				input := platform.ObservationIntervalInput{Since: q.Since, Until: q.Until, Revision: fmt.Sprint("revision-", calls), Coverage: &platform.DriverCoverage{AvailableSince: q.Since, CompleteUntil: q.Until, Good: 6, Truncated: incomplete}}
+				input := platform.ObservationIntervalInput{Since: q.Since, Until: q.Until, Revision: fmt.Sprint("revision-", calls), Coverage: &platform.ObservationCoverage{AvailableSince: q.Since, CompleteUntil: q.Until, Good: 6, Truncated: incomplete}}
 				for i, matching := range values {
 					value := "run"
 					if matching {

@@ -105,9 +105,6 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 	if other := s.byGo[info.Go]; other != nil && other.info.Type != info.Type {
 		return fmt.Errorf("%s: another type is already this Go type", info.Type)
 	}
-	if err := s.migrationDefinitionLocked(info); err != nil {
-		return err
-	}
 	et := &entityType{store: s, info: info, rows: records.Rows{}, knowledge: records.KnowledgeBearing(info)}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {

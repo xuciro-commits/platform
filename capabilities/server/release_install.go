@@ -139,23 +139,13 @@ func (t *Tenant) assetInstallationView(recordView *recordStore) (*Tenant, error)
 	return draft, nil
 }
 
-func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool, reviewed ...platform.MigrationPlan) error {
-	declared := func(typ, action string) bool {
-		for _, plan := range reviewed {
-			for _, step := range plan.Steps {
-				if action == "" && slices.Contains(step.Types, typ) || action != "" && step.Kind == "retire-action" && step.Action == action && slices.Contains(step.Types, typ) {
-					return true
-				}
-			}
-		}
-		return false
-	}
+func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
 	for typ, old := range t.records.types {
 		next := draft.records.types[typ]
 		if next == nil || old.rows.Len() == 0 {
 			continue
 		}
-		if !sameStoredFields(old.info, next.info) && !declared(typ, "") && (!upgrade || optionalStoredAddition(old.info, next.info) == nil && !t.migratedStorageLocked(old.info, next.info)) {
+		if !sameStoredFields(old.info, next.info) && (!upgrade || optionalStoredAddition(old.info, next.info) == nil) {
 			return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", typ)
 		}
 	}
@@ -167,9 +157,7 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool, reviewed ...p
 					action = strings.TrimSuffix(action, suffix)
 				}
 			}
-			if !declared(definition.Action.Target, action) && !t.completedActionRetirement(action) {
-				return fmt.Errorf("retiring action %s needs an upgrade plan", definition.Ref.Name)
-			}
+			return fmt.Errorf("retiring action %s is not part of a supported upgrade; keep the action in the new release", definition.Ref.Name)
 		}
 	}
 	return nil

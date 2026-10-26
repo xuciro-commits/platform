@@ -30,7 +30,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	}
 	for _, read := range []func() ([]platform.ReleaseAsset, error){
 		b.functionAssets, b.agentAssets, b.queryAssets, b.linkTypeAssets, b.propertyTypeAssets,
-		b.CodeReleaseAssets, b.alertAssets, b.integrationAssets, b.migrationPlanAssets, b.testPlanAssets, b.sampleSetAssets,
+		b.CodeReleaseAssets, b.alertAssets, b.integrationAssets, b.testPlanAssets, b.sampleSetAssets,
 	} {
 		owned, err := read()
 		if err != nil {

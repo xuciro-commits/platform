@@ -127,11 +127,8 @@ func (b *Build) checkWritebackConnection(c platform.Caller, w construction.Write
 	if conn.Kind != "http" && conn.Kind != "odata" {
 		return refuse("A writeback goes through an http or OData connection")
 	}
-	if w.Transport == "a2a" && (conn.Kind != "http" || conn.Protocol != nil) {
-		return refuse("A2A uses an HTTP connection without a device protocol")
-	}
-	if conn.Protocol != nil && (w.On != "dispatch" || w.Method != "" && w.Method != "POST" || strings.Trim(w.Path, "/") != "execute") {
-		return refuse("Protocol commands use a dispatch-only POST execute writeback")
+	if w.Transport == "a2a" && conn.Kind != "http" {
+		return refuse("A2A uses an HTTP connection")
 	}
 	return nil
 }

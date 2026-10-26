@@ -17,7 +17,7 @@ func intervalFixture(kind string, values ...string) (ObservationIntervals, Obser
 	if kind == "boolean" {
 		policy.When = ExprReference("boolean", "sample.value")
 	}
-	input := ObservationIntervalInput{Since: since, Until: since.Add(time.Duration(len(values)*10) * time.Second), Revision: "source-revision-1", Coverage: &DriverCoverage{AvailableSince: since, CompleteUntil: since.Add(time.Duration(len(values)*10) * time.Second), Good: int64(len(values))}}
+	input := ObservationIntervalInput{Since: since, Until: since.Add(time.Duration(len(values)*10) * time.Second), Revision: "source-revision-1", Coverage: &ObservationCoverage{AvailableSince: since, CompleteUntil: since.Add(time.Duration(len(values)*10) * time.Second), Good: int64(len(values))}}
 	for i, value := range values {
 		at := since.Add(time.Duration(i*10) * time.Second)
 		input.Points = append(input.Points, ObservationStatePoint{At: at, ReceivedAt: at, Quality: "good", Value: value})

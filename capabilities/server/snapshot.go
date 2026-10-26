@@ -631,13 +631,6 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 			return fmt.Errorf("tenant %s: no entity type %s", t.ID, slices.Sorted(maps.Keys(left))[0])
 		}
 	}
-	for typ, et := range t.records.types {
-		for _, row := range et.rows.All() {
-			if err := validateExtractionOrigin(t.records, typ, row.Extraction); err != nil {
-				return err
-			}
-		}
-	}
 
 	return nil
 }

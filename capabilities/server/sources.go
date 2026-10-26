@@ -411,13 +411,7 @@ func (t *Tenant) readSource(s construction.Source) ([]map[string]any, error) {
 	return t.readSourceWithConnection(s, conn)
 }
 
-func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construction.Connection, retained ...bool) ([]map[string]any, error) {
-	if conn != nil && conn.Protocol != nil {
-		readOnly := len(retained) > 0 && retained[0]
-		if err := t.configureProtocol(context.Background(), *conn, readOnly); err != nil {
-			return nil, err
-		}
-	}
+func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construction.Connection) ([]map[string]any, error) {
 	switch s.Profile {
 	case "odata":
 		return t.readOData(s, *conn)

@@ -70,23 +70,8 @@ type ApplicationRuntime struct {
 }
 
 type ApplicationMaintenance struct {
-	Migrations []ApplicationMigration  `json:"migrations"`
-	Retired    []ApplicationRetirement `json:"retired"`
-	Extensions []ApplicationExtension  `json:"extensions"`
-	Retention  []ApplicationRetention  `json:"retention"`
-}
-type ApplicationMigration struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
-	From  string `json:"from"`
-	To    string `json:"to"`
-}
-type ApplicationRetirement struct {
-	Type      string `json:"type"`
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	State     string `json:"state"`
-	Migration string `json:"migration"`
+	Extensions []ApplicationExtension `json:"extensions"`
+	Retention  []ApplicationRetention `json:"retention"`
 }
 type ApplicationExtension struct {
 	Resource platform.AssetBinding  `json:"resource"`
@@ -102,7 +87,7 @@ type ApplicationRetention struct {
 // Original migration records and installed extension declarations remain the
 // authorities. A declared retention duration does not invent a deletion job.
 func (t *Tenant) applicationMaintenanceLocked(m platform.Member, artifact platform.ApplicationArtifact, now time.Time) (ApplicationMaintenance, *kernel.Error) {
-	out := ApplicationMaintenance{Migrations: []ApplicationMigration{}, Retired: []ApplicationRetirement{}, Extensions: []ApplicationExtension{}, Retention: []ApplicationRetention{}}
+	out := ApplicationMaintenance{Extensions: []ApplicationExtension{}, Retention: []ApplicationRetention{}}
 	models := map[string]bool{}
 	for _, binding := range artifact.Model {
 		if binding.Ref.Kind == platform.AssetObject {
@@ -121,36 +106,6 @@ func (t *Tenant) applicationMaintenanceLocked(m platform.Member, artifact platfo
 				extension.Source = &source
 			}
 			out.Extensions = append(out.Extensions, extension)
-		}
-	}
-	page, refusal := t.recordSelectionFrom(t.records, m, platform.MigrationRunType, platform.Query{Archived: true}, now)
-	if refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED && refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
-		return out, refusal
-	}
-	for _, raw := range page.Records {
-		var run platform.MigrationRun
-		if json.Unmarshal(platform.Raw(raw), &run) != nil {
-			continue
-		}
-		candidate, err := t.releases.candidate(run.Plan.To)
-		if err != nil || !slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == artifact.Ref }) {
-			continue
-		}
-		out.Migrations = append(out.Migrations, ApplicationMigration{ID: run.ID, State: run.State, From: run.Plan.From, To: run.Plan.To})
-		for _, step := range run.Plan.Steps {
-			for _, typ := range step.Types {
-				if !models[typ] {
-					continue
-				}
-				if step.Kind == "retire-action" {
-					out.Retired = append(out.Retired, ApplicationRetirement{Type: typ, Name: step.Action, Kind: "action", State: run.State, Migration: run.ID})
-				}
-				if step.Kind == "retire" {
-					for _, field := range step.Fields {
-						out.Retired = append(out.Retired, ApplicationRetirement{Type: typ, Name: field.From, Kind: "field", State: run.State, Migration: run.ID})
-					}
-				}
-			}
 		}
 	}
 	if artifact.Profile != nil {

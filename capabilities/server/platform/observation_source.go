@@ -60,14 +60,14 @@ type ObservationResult struct {
 	Points    []ObservationPoint         `json:"points,omitempty"`
 	Sources   []string                   `json:"sources"`
 	Matched   *bool                      `json:"matched,omitempty"`
-	Coverage  *DriverCoverage            `json:"coverage,omitempty"`
-	Latest    *DriverSample              `json:"latest,omitempty"`
+	Coverage  *ObservationCoverage       `json:"coverage,omitempty"`
+	Latest    *ObservationSample         `json:"latest,omitempty"`
 	Intervals *ObservationIntervalResult `json:"intervals,omitempty"`
 }
 
 // A current reading carries its quality and time. It is never a window summary
 // and cannot enter the window decision evaluator.
-func CheckObservationLatest(sample DriverSample, device, signal, unit string) error {
+func CheckObservationLatest(sample ObservationSample, device, signal, unit string) error {
 	if sample.Device != device || sample.Signal != signal || sample.Unit != unit || sample.At.IsZero() || sample.ReceivedAt.IsZero() || !slices.Contains([]string{"good", "bad", "uncertain", "stale"}, sample.Quality) || !slices.Contains([]string{"integer", "decimal", "number"}, sample.Type) {
 		return fmt.Errorf("current observation differs from its declared numeric point, unit or quality")
 	}
@@ -97,7 +97,7 @@ func CheckObservationLatest(sample DriverSample, device, signal, unit string) er
 }
 
 // CheckObservationCoverage validates the source's completeness claim without reconstructing limited points.
-func CheckObservationCoverage(coverage DriverCoverage, window ObservationWindow) error {
+func CheckObservationCoverage(coverage ObservationCoverage, window ObservationWindow) error {
 	if coverage.AvailableSince.IsZero() || coverage.CompleteUntil.IsZero() || coverage.AvailableSince.After(window.Since) || coverage.CompleteUntil.Before(window.Until) || coverage.Truncated {
 		return fmt.Errorf("observation window is not complete or is outside available storage")
 	}

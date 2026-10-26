@@ -421,7 +421,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
     download:collaboration.download.bind(collaboration),
   };
   if (type === "build.dispatch") return <div className="grid min-w-0 max-w-5xl gap-3">
-    <PageHeader title={t("Device dispatch")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" })}>{t("Back to inbox")}</Button>} />
+    <PageHeader title={t("Dispatch")} actions={<Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" })}>{t("Back to inbox")}</Button>} />
     <DispatchProgress type={type} id={id} />
     <Disclosure summary={t("Technical details")}>
       <RecordPage source={source} type={type} id={id} fields={fields} recordTabs={["properties", "history"]} onOpen={(target, record) => openRecord({ type: target, id: record.id })} />

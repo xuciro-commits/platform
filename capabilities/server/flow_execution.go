@@ -218,11 +218,11 @@ func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb
 func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info platform.EntityInfo, value *records.Row) (*records.Row, *kernel.Error) {
 	raw, err := value.Image()
 	if err != nil {
-		return nil, migrationRefusal(err)
+		return nil, conflictRefusal(err)
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {
-		return nil, migrationRefusal(fmt.Errorf("retained record cannot be decoded"))
+		return nil, conflictRefusal(fmt.Errorf("retained record cannot be decoded"))
 	}
 	var prior map[string]json.RawMessage
 	for _, old := range info.Fields {
@@ -234,7 +234,7 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 				source := records.ProjectionFor(value.Projection, r.release)
 				shape, _ := acceptance.Digest(info.Fields)
 				if source == nil || source.Shape != shape || json.Unmarshal(source.Value, &prior) != nil {
-					return nil, migrationRefusal(fmt.Errorf("retained field %s.%s has no saved source image", info.Type, old.Name))
+					return nil, conflictRefusal(fmt.Errorf("retained field %s.%s has no saved source image", info.Type, old.Name))
 				}
 			}
 			fields[old.Name] = prior[old.Name]
@@ -243,7 +243,7 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	decoded := reflect.New(info.Go)
 	raw, _ = json.Marshal(fields)
 	if err := json.Unmarshal(raw, decoded.Interface()); err != nil {
-		return nil, migrationRefusal(err)
+		return nil, conflictRefusal(err)
 	}
 	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
 }
@@ -312,7 +312,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 		for typ, info := range r.shapes {
 			current := store.types[typ]
 			if current == nil {
-				return nil, migrationRefusal(fmt.Errorf("retained object %s has no current storage", typ))
+				return nil, conflictRefusal(fmt.Errorf("retained object %s has no current storage", typ))
 			}
 			source := &retainedRows{runtime: r, current: current.info, info: info, rows: origins[typ].rows}
 			delete(store.byGo, current.info.Go)
@@ -398,7 +398,7 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 		}
 	}
 	raw, marshalErr := json.Marshal(fields)
-	return raw, migrationRefusal(marshalErr)
+	return raw, conflictRefusal(marshalErr)
 }
 func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string, path []string, at time.Time) (output json.RawMessage, refs []string, refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -483,17 +483,14 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	id := records.Header(records.Copy(old.info.Go, entity)).ID
 	var input, before, result map[string]json.RawMessage
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
-		return migrationRefusal(fmt.Errorf("retained action wrote an invalid record"))
+		return conflictRefusal(fmt.Errorf("retained action wrote an invalid record"))
 	}
 	if prior := old.rows.Get(id); prior != nil {
 		_ = json.Unmarshal(jsonOf(prior.Value.Interface()), &before)
 	}
-	mappedBefore, mappedInput, extractions, mappingErr := r.mapRetainedWrite(c.ID, old.info.Type, before, input)
+	mappedBefore, mappedInput, mappingErr := r.mapRetainedWrite(old.info.Type, before, input)
 	if mappingErr != nil {
-		return migrationRefusal(mappingErr)
-	}
-	if err := r.applyRetainedExtractions(c, receipt, extractions); err != nil {
-		return err
+		return conflictRefusal(mappingErr)
 	}
 	if prior := current.rows.Get(id); prior != nil {
 		raw, _ := prior.Image()
@@ -515,7 +512,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		// The original owner still computes its declared readonly metadata.
 		// Turning a formerly writable field readonly retires that old write.
 		if target.ReadOnly && !lifecycle && (!declared || !original.ReadOnly) {
-			return migrationRefusal(fmt.Errorf("retained action writes a retired field %s", target.Name))
+			return conflictRefusal(fmt.Errorf("retained action writes a retired field %s", target.Name))
 		}
 		result[target.Name] = mappedInput[name]
 		fields = append(fields, target.Name)
@@ -533,7 +530,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	decoded := reflect.New(current.info.Go)
 	raw, _ := json.Marshal(result)
 	if json.Unmarshal(raw, decoded.Interface()) != nil {
-		return migrationRefusal(fmt.Errorf("retained action result does not match current storage"))
+		return conflictRefusal(fmt.Errorf("retained action result does not match current storage"))
 	}
 	if refusal := r.stagedDecision.Check(c, decoded.Elem().Interface()); refusal != nil {
 		return refusal
@@ -547,9 +544,31 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if source := records.ProjectionFor(updated.Projection, r.release); source != nil {
 		source.Value = jsonOf(input)
 		if err := records.RefreshProjection(updated.Projection, updated.Value.Interface()); err != nil {
-			return migrationRefusal(err)
+			return conflictRefusal(err)
 		}
 		current.setRow(id, &updated)
 	}
 	return nil
+}
+
+// mapRetainedWrite folds a write aimed at a retained declaration shape into
+// the current stored values: aliases stay on their target, and every other
+// changed field must still match the retained declaration's type.
+func (r *flowExecutionRuntime) mapRetainedWrite(typ string, before, after map[string]json.RawMessage) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
+	before, after = maps.Clone(before), maps.Clone(after)
+	declared := r.shapes
+	current := r.records.types[typ]
+	for _, target := range current.info.Fields {
+		if string(before[target.Name]) == string(after[target.Name]) {
+			continue
+		}
+		if target.AliasOf != "" {
+			continue
+		}
+		field, found := declared[typ].Field(target.Name)
+		if !found || field.Type != target.Type || field.Ref != target.Ref {
+			return nil, nil, fmt.Errorf("retained write %s lacks its declared field conversion", target.Name)
+		}
+	}
+	return before, after, nil
 }

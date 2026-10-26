@@ -274,15 +274,6 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 	}) {
 		return nil, nil, fmt.Errorf("agent artifacts require the target's original agent runtime")
 	}
-	migrated := false
-	if activating {
-		var err error
-		migrated, err = t.migrationActivationLocked(candidate.ID)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	upgrade = upgrade || migrated
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -330,11 +321,6 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 	}
 	if activating {
 		if err := t.validateAssetStorage(trial, upgrade); err != nil {
-			return nil, nil, err
-		}
-	}
-	if migrated {
-		if err := t.validateMigratedRecordsLocked(trial, member, at); err != nil {
 			return nil, nil, err
 		}
 	}

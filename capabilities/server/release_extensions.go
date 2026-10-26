@@ -2,7 +2,10 @@ package platformserver
 
 import (
 	"fmt"
+	"reflect"
+	"slices"
 
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -82,4 +85,42 @@ func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]
 		result = append(result, row)
 	}
 	return result, nil
+}
+
+// releaseAssetShapes describes the object entities a set of release assets
+// declares, per owning app.
+func (t *Tenant) releaseAssetShapes(available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
+	shapes := map[string]platform.EntityInfo{}
+	for _, owner := range t.apps {
+		compiler, ok := owner.(host.ReleaseExecutionOwner)
+		if !ok {
+			continue
+		}
+		assets := []platform.ReleaseAsset{}
+		for _, asset := range available {
+			if asset.Ref.App == owner.Manifest().ID {
+				assets = append(assets, asset)
+			}
+		}
+		if len(assets) == 0 {
+			continue
+		}
+		bound, err := compiler.ForkReleaseExecution(assets)
+		if err != nil {
+			return nil, err
+		}
+		for _, entity := range bound.Manifest().Entities {
+			if !slices.ContainsFunc(assets, func(a platform.ReleaseAsset) bool {
+				return a.Ref.Kind == platform.AssetObject && a.Ref.Name == entity.Type
+			}) {
+				continue
+			}
+			info, err := platform.Describe(owner.Manifest().ID, entity, func(reflect.Type) string { return "" })
+			if err != nil {
+				return nil, err
+			}
+			shapes[info.Type] = info
+		}
+	}
+	return shapes, nil
 }

@@ -48,7 +48,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		if asset.Ref.Kind == platform.AssetAgent {
 			var definition platform.AgentReleaseDescriptor
 			if json.Unmarshal(asset.Body, &definition) != nil || definition.Check() != nil {
-				return nil, migrationRefusal(fmt.Errorf("invalid agent declaration"))
+				return nil, conflictRefusal(fmt.Errorf("invalid agent declaration"))
 			}
 			item := ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: t.setting(t.automation(AgentApp, false), SettingAgentModel), HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []ApplicationAIEvaluation{}}
 			for _, tool := range definition.Tools {
@@ -90,7 +90,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		}
 		definition, version, err := functionAssetDefinition(asset)
 		if err != nil {
-			return nil, migrationRefusal(err)
+			return nil, conflictRefusal(err)
 		}
 		item := ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, Adoptions: []string{}, Checkpoints: []string{}, Evaluations: []ApplicationAIEvaluation{}}
 		if definition.Proposal != nil {

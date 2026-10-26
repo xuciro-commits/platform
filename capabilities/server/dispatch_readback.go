@@ -132,10 +132,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 		} else if connection.Secret != "" && len(t.authorization(connection)) == 0 {
 			problem = fmt.Errorf("The dispatch status credential is unavailable in this environment")
 		} else {
-			rows, problem = t.readSourceWithConnection(source, &connection, true)
-			if connection.Protocol != nil {
-				rows = slices.DeleteFunc(rows, func(row map[string]any) bool { return row["runID"] != run.ID || row["attemptID"] != run.Intent })
-			}
+			rows, problem = t.readSourceWithConnection(source, &connection)
 		}
 	case policy.Observation != "":
 		var definition platform.ObservationDefinition
@@ -144,7 +141,7 @@ func (t *Tenant) readDispatchStatus(run platform.DispatchRun, at time.Time) plat
 			problem = fmt.Errorf("The original dispatch observation is unavailable")
 			break
 		}
-		plan := observationReadPlan{info: ObservationInfo{Ref: platform.AssetRef{App: definition.Object.App, Kind: platform.AssetObservation, Name: definition.Name}, Definition: definition}, connection: connection, device: run.Device, retained: true}
+		plan := observationReadPlan{info: ObservationInfo{Ref: platform.AssetRef{App: definition.Object.App, Kind: platform.AssetObservation, Name: definition.Name}, Definition: definition}, connection: connection, device: run.Device}
 		for _, asset := range run.Assets {
 			if asset.Ref == plan.info.Ref {
 				plan.info.Version = asset.SourceVersion

@@ -83,14 +83,12 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.agentEntity())...)
 	actions = append(actions, platform.EntityActions(b.alertEntity())...)
 	actions = append(actions, sourceActions()...)
-	actions = append(actions, migrationActions()...)
-	actions = append(actions, platform.EntityActions(b.migrationPlanEntity())...)
 	actions = append(actions, platform.EntityActions(b.sampleSetEntity())...)
 	actions = append(actions, platform.EntityActions(b.observationEntity())...)
 	actions = append(actions, connectionActions()...)
 	actions = append(actions, codeActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: construction.TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{construction.Builder}, Payload: []platform.Field{}})
-	b.ledger = platform.NewLedger(tenant, construction.ID, platform.NewCatalog(actions...), construction.ObjectType, construction.PageType, construction.AppType, construction.TestPlanType, construction.ProcessType, construction.FunctionType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionCallType, construction.EvaluationType, construction.CodeType, construction.SourceType, construction.ConnectionType, construction.DatasetType, construction.DatasetVersionType, construction.PipelineType, construction.WritebackType, MatchType, construction.TableType, AgentType, construction.AlertType, platform.MigrationRunType, MigrationPlanType, SampleSetType, construction.ObservationType, platform.OwnedRelationType(construction.ID), confirmationType, platform.DispatchType)
+	b.ledger = platform.NewLedger(tenant, construction.ID, platform.NewCatalog(actions...), construction.ObjectType, construction.PageType, construction.AppType, construction.TestPlanType, construction.ProcessType, construction.FunctionType, construction.PropertyTypeType, construction.LinkTypeType, construction.QueryType, construction.FunctionCallType, construction.EvaluationType, construction.CodeType, construction.SourceType, construction.ConnectionType, construction.DatasetType, construction.DatasetVersionType, construction.PipelineType, construction.WritebackType, MatchType, construction.TableType, AgentType, construction.AlertType, SampleSetType, construction.ObservationType, platform.OwnedRelationType(construction.ID), confirmationType, platform.DispatchType)
 	return b
 }
 
@@ -107,8 +105,7 @@ func (b *Build) Manifest() platform.Manifest {
 	if b.installationCatalog != nil {
 		catalog = b.installationCatalog
 	}
-	entities := []platform.Entity{platform.RelationEntity(construction.ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.migrationPlanEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
-	entities = append(entities, migrationEntity())
+	entities := []platform.Entity{platform.RelationEntity(construction.ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -327,9 +324,6 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == construction.SchemaWritebackAnswered {
 		return b.submitWritebackAnswered(c, s, now)
 	}
-	if name := s.GetSchema().GetName(); name == migrationStart || name == migrationAdvance || name == migrationCancel {
-		return b.submitMigration(c, s, now)
-	}
 	if slices.Contains([]string{confirmationAnswer, confirmationReview, confirmationTick}, s.GetSchema().GetName()) {
 		return b.updateConfirmation(c, s, now)
 	}
@@ -397,7 +391,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agentDraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.migrationPlanEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}

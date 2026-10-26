@@ -235,7 +235,7 @@ func TestCustomerExtensionsSurviveNativePackageUpgradeAndRecovery(t *testing.T) 
 	}
 }
 
-func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
+func TestCustomerExtensionConflictRequiresExplicitResolution(t *testing.T) {
 	const id = "extension-conflict"
 	live := extensionTenant(t, id, "1", "", false)
 	var entries []Entry
@@ -269,24 +269,21 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 	fields = append(fields, construction.Field{Name: "localgrade", Title: "Local customer grade", Type: "text", Search: true})
 	decide(t, upgraded, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "extension", map[string]any{"fields": fields}, txnAt)
 	to = saveExtensionDraft(t, upgraded, "extension", "resolved-package")
-	plan := platform.MigrationPlan{From: from, To: to, Scope: platform.MigrationScope{Type: "build.materialextra"}, Steps: []platform.MigrateStep{{Kind: "rename", Types: []string{"build.materialextra"}, Batch: 2, Fields: []platform.MigrateField{{From: "customergrade", To: "localgrade"}}}}}
-	m := memberOf(t, upgraded, "builder")
-	migration, err := upgraded.ReviewMigrationPlan(m, plan, txnAt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decide(t, upgraded, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "M", map[string]any{"plan": plan, "review": migration.ID, "reviewedAt": migration.At}, txnAt)
-	decide(t, upgraded, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
-	if _, err := upgraded.ActivateRelease(m, to, "early", txnAt); err == nil {
-		t.Fatal("partial conflict resolution activated")
-	}
 	recovered := extensionTenant(t, id, "3", "customergrade", false)
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
 	recovered.AcceptResult = persist
-	decide(t, recovered, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "M", map[string]any{}, txnAt)
-	if _, err := recovered.ActivateRelease(memberOf(t, recovered, "builder"), to, "resolved", txnAt); err != nil {
+	m := memberOf(t, recovered, "builder")
+	saved, err := platform.ReadCandidate(to, recovered.releases.raw(to))
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradePlan, err := recovered.releaseUpgradePlanLocked(saved, m)
+	if err != nil || upgradePlan == nil || len(upgradePlan.Additions) != 1 {
+		t.Fatalf("single-field upgrade plan: %+v %v", upgradePlan, err)
+	}
+	if _, err := recovered.ActivateReleaseWithUpgrade(m, to, "resolved", upgradePlan.ID, txnAt); err != nil {
 		t.Fatal(err)
 	}
 	for rowID, old := range before {
@@ -294,8 +291,8 @@ func TestCustomerExtensionConflictRequiresAnExplicitMigration(t *testing.T) {
 		_ = json.Unmarshal(old, &original)
 		raw, _ := recovered.records.types["build.materialextra"].rows.Get(rowID).Image()
 		_ = json.Unmarshal(raw, &current)
-		if current["localgrade"] != original["customergrade"] || current["inspectiondue"] != original["inspectiondue"] {
-			t.Fatal("conflict resolution lost a customer field")
+		if current["customergrade"] != original["customergrade"] || current["inspectiondue"] != original["inspectiondue"] {
+			t.Fatal("conflict resolution moved or lost stored values")
 		}
 	}
 	decide(t, recovered, "user", construction.ID, "build.materialextra.review", "build.materialextra", "M1", map[string]any{}, txnAt)

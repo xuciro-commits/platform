@@ -28,7 +28,7 @@ const domains = [
   ] },
   { id: "release", title: "Release", description: "Samples, evaluation, candidates and delivery", groups: [
     { id: "tests", title: "Tests and evaluation", kinds: ["sample-set", "test-plan", "evaluation-set"] },
-    { id: "delivery", title: "Release and migration", kinds: ["migration"], links: [{ title: "Changes", view: "changes" }, { title: "Release review", view: "release-review" }, { title: "Release history", view: "release-history" }] },
+    { id: "delivery", title: "Release", kinds: [], links: [{ title: "Changes", view: "changes" }, { title: "Release review", view: "release-review" }, { title: "Release history", view: "release-history" }] },
   ] },
 ] as const;
 export type StudioArea = typeof domains[number]["id"];

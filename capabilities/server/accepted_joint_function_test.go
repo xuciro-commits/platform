@@ -379,15 +379,6 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if _, err := PromoteCandidate(recovered, target, next.CandidateID, "stage-upgrade", false, targetMember, at.Add(2*time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	plan := platform.MigrationPlan{From: preview.CandidateID, To: next.CandidateID, Scope: platform.MigrationScope{Type: "build.intake"}, Steps: []platform.MigrateStep{{Kind: "rename", Types: []string{"build.intake"}, Batch: 1, Fields: []platform.MigrateField{{From: "note", To: "memo"}}}}}
-	migration, err := target.ReviewMigrationPlan(targetMember, plan, at.Add(2*time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
-	decide(t, target, "builder", construction.ID, "build.migration.start", platform.MigrationRunType, "MIGRATE", map[string]any{"plan": plan, "review": migration.ID, "reviewedAt": migration.At}, at.Add(2*time.Second))
-	for i := 0; i < 3; i++ {
-		decide(t, target, "builder", construction.ID, "build.migration.advance", platform.MigrationRunType, "MIGRATE", map[string]any{}, at.Add(3*time.Second))
-	}
 	plans, _, refusal := platform.Find[construction.TestPlan](target.automation(construction.ID, false), platform.Query{})
 	if refusal != nil {
 		t.Fatal(refusal)
@@ -417,17 +408,29 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	target.Evaluate(at.Add(4 * time.Second))
-	if _, err := target.ActivateRelease(targetMember, next.CandidateID, "activate-upgrade", at.Add(5*time.Second)); err != nil {
+	nextRaw := target.releases.raw(next.CandidateID)
+	if nextRaw == nil {
+		t.Fatal("staged upgrade candidate missing")
+	}
+	nextCandidate, err := platform.ReadCandidate(next.CandidateID, nextRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradePlan, err := target.releaseUpgradePlanLocked(nextCandidate, targetMember)
+	if err != nil || upgradePlan == nil || len(upgradePlan.Additions) != 1 {
+		t.Fatalf("single-field upgrade plan: %+v %v", upgradePlan, err)
+	}
+	if _, err := target.ActivateReleaseWithUpgrade(targetMember, next.CandidateID, "activate-upgrade", upgradePlan.ID, at.Add(5*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	upgraded, refusal := target.ApplicationRuntimeOf(targetMember, root, at.Add(5*time.Second))
-	if refusal != nil || upgraded.Previous != sourceRuntime.Artifact.Version || len(upgraded.Maintenance.Migrations) != 1 || upgraded.Maintenance.Migrations[0].State != "complete" || len(upgraded.Warnings) == 0 {
+	if refusal != nil || upgraded.Previous != sourceRuntime.Artifact.Version || len(upgraded.Warnings) == 0 {
 		t.Fatalf("complete artifact lost its migration or operating evidence: %+v %v", upgraded, refusal)
 	}
 	for i := 0; i < 3; i++ {
 		view, refusal := target.RecordOf(targetMember, "build.intake", fmt.Sprintf("ROW-%d", i), at.Add(5*time.Second))
-		if refusal != nil || !bytes.Contains(platform.Raw(view.Record), []byte(fmt.Sprintf(`"memo":"Original %d"`, i))) {
-			t.Fatalf("target migration lost a record: %v", refusal)
+		if refusal != nil || !bytes.Contains(platform.Raw(view.Record), []byte(fmt.Sprintf("Original %d", i))) {
+			t.Fatalf("target upgrade lost a record: %v", refusal)
 		}
 	}
 	targetLog, err := reopened.Entries(ctx, targetID, 0)

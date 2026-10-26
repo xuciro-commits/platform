@@ -30,7 +30,7 @@ func TestObservationStateIntervalReadUsesPublishedSourceAndKeepsPointsOutsideTen
 		if json.NewDecoder(request.Body).Decode(&q) != nil || q.Device != "boiler-1" || q.Signal != "state" || q.Mode != "intervals" || q.Limit != 20 {
 			t.Fatal("state read lost its original bounded source", q)
 		}
-		input := platform.ObservationIntervalInput{Since: q.Since, Until: q.Until, Revision: "collector-17", Coverage: &platform.DriverCoverage{AvailableSince: q.Since, CompleteUntil: q.Until, Good: 4}}
+		input := platform.ObservationIntervalInput{Since: q.Since, Until: q.Until, Revision: "collector-17", Coverage: &platform.ObservationCoverage{AvailableSince: q.Since, CompleteUntil: q.Until, Good: 4}}
 		for i, value := range []string{"run", "down", "down", "run"} {
 			sampleAt := q.Since.Add(time.Duration(i*10) * time.Second)
 			input.Points = append(input.Points, platform.ObservationStatePoint{At: sampleAt, ReceivedAt: sampleAt, Quality: "good", Value: value})

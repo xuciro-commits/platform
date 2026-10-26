@@ -32,8 +32,8 @@ export function DispatchEditor({ value, onChange, commands, onCommandsChange, ob
   const readings = Object.entries(value?.readback.states ?? {});
   const changeState = (index: number, external: string, state: string) => read({ states: Object.fromEntries(readings.map((entry, at) => at === index ? [external, state] : entry)) });
   const safe = !!command && (command.idempotent || command.receiverDeduplicates);
-  return <Panel title={t("Device and black-box dispatch")} className="grid min-w-0 gap-3">
-    <p className="rounded-md border border-border bg-row-hover p-3 text-sm">{t("Control loops, safety interlocks and emergency stops stay in the device, gateway or PLC. The platform only dispatches commands and reads status.")}</p>
+  return <Panel title={t("External and black-box dispatch")} className="grid min-w-0 gap-3">
+    <p className="rounded-md border border-border bg-row-hover p-3 text-sm">{t("Control loops, safety interlocks and emergency stops stay outside the platform. The platform only dispatches commands and reads status.")}</p>
     <Checkbox checked={!!value} onChange={enabled => onChange(enabled ? initial() : undefined)}>{t("Dispatch a declared command after this transaction")}</Checkbox>
     {(!!value || commands.length > 0) && <Disclosure summary={t("Object command declarations ({n})", { n: commands.length })} defaultOpen={!!value && !commands.length}>
       <div className="grid min-w-0 gap-3 pt-2">
@@ -50,7 +50,7 @@ export function DispatchEditor({ value, onChange, commands, onCommandsChange, ob
           {item.receiverDeduplicates && <p className="text-xs text-warning">{t("Resending depends on the target honoring the stable business key. The platform cannot guarantee physical execution or exactly-once delivery.")}</p>}
           <Button size="sm" variant="ghost" className="w-fit" onClick={() => onCommandsChange(commands.filter((_, at) => at !== index))}>{t("Remove command declaration")}</Button>
         </div>)}
-        {!publishedWrites.length && <p className="text-xs text-muted">{t("Publish a writeback for this object with 'Only declared device dispatches' selected, then choose it here.")}</p>}
+        {!publishedWrites.length && <p className="text-xs text-muted">{t("Publish a writeback for this object with 'Only declared dispatches' selected, then choose it here.")}</p>}
         <Button size="sm" className="w-fit" onClick={() => onCommandsChange([...commands, { name: nameOf("command", commands.map(item => item.name)), title: "", endpointKind: "endpoint", writeback: "", idempotent: false }])}>{t("Add command declaration")}</Button>
       </div>
     </Disclosure>}
