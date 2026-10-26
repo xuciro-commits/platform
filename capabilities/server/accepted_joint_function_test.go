@@ -362,9 +362,9 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		decide(t, target, "operator", construction.ID, "build.intake.create", "build.intake", fmt.Sprintf("ROW-%d", i), map[string]any{"note": fmt.Sprintf("Original %d", i)}, at.Add(time.Second))
 	}
-	// The complete artifact moves again through the same migration owner; a
-	// target with rows must not silently install the changed write semantics.
-	decide(t, recovered, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "O", map[string]any{"fields": []map[string]any{{"name": "note", "title": "Original note", "type": "text", "readOnly": true, "aliasOf": "memo", "sourceType": "user-input"}, {"name": "memo", "title": "Memo", "type": "text", "sourceType": "user-input"}}}, at.Add(2*time.Second))
+	// Add a field through the current upgrade owner, preserving the original
+	// field and its data; this path does not rename or convert stored values.
+	decide(t, recovered, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "O", map[string]any{"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text", "sourceType": "user-input"}, {"name": "memo", "title": "Memo", "type": "text", "sourceType": "user-input"}}}, at.Add(2*time.Second))
 	upgradeDrafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetApp, ID: "APP"}}
 	next, err := recovered.PreviewReleaseDrafts(recoveredBuilder, upgradeDrafts)
 	if err != nil || next.Diagnostic != "" {
@@ -374,7 +374,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := PromoteCandidate(recovered, target, next.CandidateID, "unsafe-upgrade", true, targetMember, at.Add(2*time.Second)); err == nil || target.ActiveRelease() != preview.CandidateID {
-		t.Fatal("target installed a storage change without its migration")
+		t.Fatal("target installed a storage change without its reviewed upgrade")
 	}
 	if _, err := PromoteCandidate(recovered, target, next.CandidateID, "stage-upgrade", false, targetMember, at.Add(2*time.Second)); err != nil {
 		t.Fatal(err)
@@ -425,11 +425,11 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	}
 	upgraded, refusal := target.ApplicationRuntimeOf(targetMember, root, at.Add(5*time.Second))
 	if refusal != nil || upgraded.Previous != sourceRuntime.Artifact.Version || len(upgraded.Warnings) == 0 {
-		t.Fatalf("complete artifact lost its migration or operating evidence: %+v %v", upgraded, refusal)
+		t.Fatalf("complete artifact lost its upgrade or operating evidence: %+v %v", upgraded, refusal)
 	}
 	for i := 0; i < 3; i++ {
 		view, refusal := target.RecordOf(targetMember, "build.intake", fmt.Sprintf("ROW-%d", i), at.Add(5*time.Second))
-		if refusal != nil || !bytes.Contains(platform.Raw(view.Record), []byte(fmt.Sprintf("Original %d", i))) {
+		if refusal != nil || !bytes.Contains(platform.Raw(view.Record), []byte(fmt.Sprintf(`"note":"Original %d"`, i))) {
 			t.Fatalf("target upgrade lost a record: %v", refusal)
 		}
 	}
