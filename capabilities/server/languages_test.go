@@ -182,12 +182,15 @@ func TestTenantWords(t *testing.T) {
 
 func TestAppScopedEntityTranslation(t *testing.T) {
 	tenant := "app-scoped"
-	tn, err := NewTenant(tenant, NewConsole(tenant, Seat{Subjects: []string{"u"}, Member: platform.Member{ID: "u", Roles: map[string]string{core.ID: core.Steward, "crm": "sales"}}}),
-		core.New(tenant), newTestCRMApp(tenant))
+	sample := newStock(tenant)
+	manifest := sample.Manifest()
+	manifest.Entities[0].Title = "Account"
+	manifest.Languages = platform.Languages{"zh-CN": {"Account": "样本", "Accounts": "样本"}}
+	tn, err := NewTenant(tenant, NewConsole(tenant, seatOf("u", "core:steward", "stock:clerk")), core.New(tenant), definitionStock{stock: sample, manifest: manifest})
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw := tn.i18n.Translate(tn.Entities(platform.Member{ID: "u", Roles: map[string]string{core.ID: core.Steward, "crm": "sales"}}), "zh-CN")
+	raw := tn.i18n.Translate(tn.Entities(platform.Member{ID: "u", Roles: map[string]string{core.ID: core.Steward, "stock": "clerk"}}), "zh-CN")
 	items := raw.([]any)
 	byType := map[string]map[string]any{}
 	for _, item := range items {
@@ -197,8 +200,8 @@ func TestAppScopedEntityTranslation(t *testing.T) {
 	if got := byType["core.account"]; got == nil || got["title"] != "科目" || got["plural"] != "科目" {
 		t.Errorf("core.account: want title=科目, plural=科目; got %v", got)
 	}
-	if got := byType["crm.account"]; got == nil || got["title"] != "客户" || got["plural"] != "客户" {
-		t.Errorf("crm.account: want title=客户, plural=客户; got %v", got)
+	if got := byType["stock.bin"]; got == nil || got["title"] != "样本" || got["plural"] != "样本" {
+		t.Errorf("stock.bin: want title=样本, plural=样本; got %v", got)
 	}
 	if got := byType["core.location"]; got == nil || got["title"] != "库位" || got["plural"] != "库位" {
 		t.Errorf("core.location: want title=库位, plural=库位; got %v", got)

@@ -66,204 +66,92 @@ func TestAgentUnknownQueryFailsComposition(t *testing.T) {
 	}
 }
 
-// CRM test structures for HTTP test
-type CRMTestAccount struct {
-	platform.Record
-	Name string `json:"name" field:"required,search"`
+// Page and query checks use published owner declarations, not a second app.
+func queryBindingTenant(t *testing.T, id string) *Tenant {
+	t.Helper()
+	tn := composeTenant(t, id, []Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user"), seatOf("other", "platform:auditor")}, build.New(id))
+	publishObject(t, tn, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text", Required: true}}}, txnAt)
+	publishObject(t, tn, "builder", "CHILD", map[string]any{"name": "child", "title": "Child", "fields": []construction.Field{
+		{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.parent", Inverse: "children", Required: true},
+		{Name: "title", Title: "Title", Type: "text", Required: true}, {Name: "enabled", Title: "Enabled", Type: "boolean"},
+	}}, txnAt)
+	return tn
 }
 
-type CRMTestOpportunity struct {
-	platform.Record
-	Account platform.Ref[CRMTestAccount] `json:"account" field:"required" inverse:"opportunities"`
-	Title   string                       `json:"title" field:"required,search"`
-	Stage   string                       `json:"stage" choices:"open,won,lost"`
-}
-
-type testCRMApp struct {
-	ledger *platform.Ledger
-}
-
-func newTestCRMApp(tenant string) *testCRMApp {
-	actions := []platform.Action{
-		{Schema: "crm.account.create", Target: "crm.account", Title: "Create", Description: "Create account", Payload: []platform.Field{{Name: "name", Type: "string"}}, Roles: []string{"sales", "sales-manager"}},
-		{Schema: "crm.opportunity.open", Target: "crm.opportunity", Title: "Open", Description: "Open opportunity", Payload: []platform.Field{{Name: "title", Type: "string"}, {Name: "account", Type: "string"}}, Roles: []string{"sales", "sales-manager"}},
-	}
-	return &testCRMApp{
-		ledger: platform.NewLedger(tenant, "crm", platform.NewCatalog(actions...), "crm.account", "crm.opportunity"),
-	}
-}
-
-func (c *testCRMApp) AcceptedLedger() *platform.Ledger { return c.ledger }
-
-func (c *testCRMApp) Manifest() platform.Manifest {
-	return platform.Manifest{
-		ID:      "crm",
-		Version: "1",
-		Actions: c.ledger.Catalog,
-		Entities: []platform.Entity{
-			{Type: "crm.account", Title: "Account", Model: CRMTestAccount{}, Standard: platform.Standard{Create: true, Roles: []string{"sales", "sales-manager"}}},
-			{Type: "crm.opportunity", Title: "Opportunity", Model: CRMTestOpportunity{}, Standard: platform.Standard{Create: true, Roles: []string{"sales", "sales-manager"}}},
-		},
-		Queries: []platform.NamedQuery{
-			{Name: "open-opportunities", Title: "Open opportunities", Object: "crm.opportunity", By: "account", Domain: json.RawMessage(`[["stage","=","open"]]`)},
-		},
-		Languages: platform.Languages{"zh-CN": {"Account": "客户", "Accounts": "客户"}},
-	}
-}
-func (c *testCRMApp) Snapshot() (json.RawMessage, error)       { return c.ledger.Snapshot() }
-func (c *testCRMApp) Restore(raw json.RawMessage) error        { return c.ledger.Restore(raw) }
-func (c *testCRMApp) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
-func (c *testCRMApp) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, nil
-}
-func (c *testCRMApp) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, nil
-}
-func (c *testCRMApp) Submit(caller platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return c.ledger.Receive(caller, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		id := s.GetTarget().GetId()
-		switch s.GetSchema().GetName() {
-		case "crm.account.create":
-			var p struct{ Name string }
-			json.Unmarshal(s.GetPayload(), &p)
-			acc := CRMTestAccount{Name: p.Name}
-			acc.ID = id
-			return func(r *pb.ChangeRecord) { caller.Put(r, acc) }, nil
-		case "crm.opportunity.open":
-			var p struct{ Title, Account string }
-			json.Unmarshal(s.GetPayload(), &p)
-			opp := CRMTestOpportunity{Title: p.Title, Account: platform.Ref[CRMTestAccount](p.Account), Stage: "open"}
-			opp.ID = id
-			return func(r *pb.ChangeRecord) { caller.Put(r, opp) }, nil
-		}
-		return func(*pb.ChangeRecord) {}, nil
-	})
+func publishBindingQuery(t *testing.T, tn *Tenant) {
+	t.Helper()
+	decide(t, tn, "builder", "build", "build.query.create", construction.QueryType, "QUERY", platform.NamedQuery{Name: "enabledchildren", Title: "Enabled children", Description: "Filter related records", Object: "build.child", By: "parent", Domain: json.RawMessage(`[["enabled","=",true]]`), Limit: 20}, txnAt)
+	decide(t, tn, "builder", "build", build.SchemaQuery, construction.QueryType, "QUERY", map[string]any{}, txnAt)
 }
 
 func TestNamedQueryHTTP(t *testing.T) {
-	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
-	crmApp := newTestCRMApp("t-crm-http")
-	seatSales := Seat{Subjects: []string{"alice"}, Member: platform.Member{ID: "alice", Roles: map[string]string{"crm": "sales"}}}
-	seatOther := Seat{Subjects: []string{"bob"}, Member: platform.Member{ID: "bob", Roles: map[string]string{"other": "user"}}}
-	console := NewConsole("t-crm-http", seatSales, seatOther)
-	tn, err := NewTenant("t-crm-http", console, crmApp)
-	if err != nil {
-		t.Fatal(err)
+	tn := queryBindingTenant(t, "named-query-http")
+	publishBindingQuery(t, tn)
+	for _, id := range []string{"A", "B"} {
+		decide(t, tn, "builder", "build", "build.parent.create", "build.parent", id, map[string]any{"name": id}, txnAt)
 	}
-
-	sales, _ := tn.Member("alice")
-	// Seed ACME account and an opportunity for ACME
-	accRaw, _ := json.Marshal(map[string]any{"name": "ACME Corp"})
-	if _, kerr := tn.Submit(sales, &pb.Submission{
-		TenantId: "t-crm-http", PrincipalId: "alice", Authority: "crm",
-		IdempotencyKey: "seed-acc-1", Target: &pb.EntityRef{Type: "crm.account", Id: "ACME"},
-		Schema: &pb.SchemaRef{Name: "crm.account.create", Version: 1}, Payload: accRaw,
-	}, now); kerr != nil {
-		t.Fatalf("seed account: %v", kerr)
+	for _, row := range []struct {
+		id, parent string
+		enabled    bool
+	}{{"included", "A", true}, {"filtered", "A", false}, {"different-parent", "B", true}} {
+		decide(t, tn, "builder", "build", "build.child.create", "build.child", row.id, map[string]any{"parent": row.parent, "title": row.id, "enabled": row.enabled}, txnAt)
 	}
-
-	oppRaw, _ := json.Marshal(map[string]any{"title": "Big deal", "account": "ACME"})
-	if _, kerr := tn.Submit(sales, &pb.Submission{
-		TenantId: "t-crm-http", PrincipalId: "alice", Authority: "crm",
-		IdempotencyKey: "seed-opp-1", Target: &pb.EntityRef{Type: "crm.opportunity", Id: "OPP-1"},
-		Schema: &pb.SchemaRef{Name: "crm.opportunity.open", Version: 1}, Payload: oppRaw,
-	}, now); kerr != nil {
-		t.Fatalf("seed opp: %v", kerr)
-	}
-
-	h := NewHost(Tokens(map[string]string{"alice-token": "alice", "bob-token": "bob"}), tn)
-	call := func(token, path string) (int, string) {
+	handler := NewHost(Tokens(map[string]string{"reader-token": "user", "other-token": "other"}), tn).Handler()
+	call := func(token, path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-		rec := httptest.NewRecorder()
-		h.Handler().ServeHTTP(rec, req)
-		return rec.Code, strings.TrimSpace(rec.Body.String())
+		req.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
 	}
-
-	// 1. GET /v1/queries/crm/open-opportunities?for=ACME (200 with records)
-	status, body := call("alice-token", "/v1/queries/crm/open-opportunities?for=ACME")
-	if status != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", status, body)
-	}
+	response := call("reader-token", "/v1/queries/build/enabledchildren?for=A")
 	var page RecordPage
-	if err := json.Unmarshal([]byte(body), &page); err != nil {
-		t.Fatalf("decode page: %v", err)
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &page) != nil || page.Total != 1 || len(page.Records) != 1 {
+		t.Fatalf("scoped named query: %d %s", response.Code, response.Body.String())
 	}
-	if page.Total != 1 || len(page.Records) != 1 {
-		t.Fatalf("expected 1 record, got total %d, records %d: %s", page.Total, len(page.Records), body)
+	if toMap(page.Records[0])["id"] != "included" {
+		t.Fatalf("parent or filter escaped: %+v", page.Records)
 	}
-
-	// 2. missing ?for (400)
-	status, body = call("alice-token", "/v1/queries/crm/open-opportunities")
-	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing ?for, got %d: %s", status, body)
+	for _, test := range []struct {
+		path   string
+		status int
+	}{
+		{"/v1/queries/build/enabledchildren", http.StatusBadRequest},
+		{"/v1/queries/build/unknown?for=A", http.StatusNotFound},
+	} {
+		if answer := call("reader-token", test.path); answer.Code != test.status {
+			t.Fatalf("%s: %d %s", test.path, answer.Code, answer.Body.String())
+		}
 	}
-
-	// 3. unknown name (404)
-	status, body = call("alice-token", "/v1/queries/crm/unknown?for=ACME")
-	if status != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown query, got %d: %s", status, body)
+	denied := call("other-token", "/v1/queries/build/enabledchildren?for=A")
+	if denied.Code != http.StatusForbidden && denied.Code != http.StatusNotFound {
+		t.Fatalf("member without owner access: %d %s", denied.Code, denied.Body.String())
 	}
-
-	// 4. non-CRM member (403/404, no records in body)
-	status, body = call("bob-token", "/v1/queries/crm/open-opportunities?for=ACME")
-	if status != http.StatusForbidden && status != http.StatusNotFound {
-		t.Fatalf("expected 403 or 404 for non-CRM member, got %d: %s", status, body)
-	}
+	body := denied.Body.String()
 	if strings.Contains(body, `"records"`) && !strings.Contains(body, `"records":[]`) && !strings.Contains(body, `"records":null`) {
-		t.Fatalf("expected no records in body, got: %s", body)
+		t.Fatalf("refusal exposed records: %s", body)
 	}
 }
 
 func TestReleaseCandidateIncludesQueryAsset(t *testing.T) {
-	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
-	crmApp := newTestCRMApp("t-rc-test")
-	seatDana := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{construction.ID: construction.Builder, "crm": "sales-manager"}}}
-	b := build.New("t-rc-test")
-	tn, err := NewTenant("t-rc-test", NewConsole("t-rc-test", seatDana), b, crmApp)
+	tn := queryBindingTenant(t, "query-candidate")
+	publishBindingQuery(t, tn)
+	decide(t, tn, "builder", "build", "build.page.create", construction.PageType, "PAGE", map[string]any{
+		"name": "relatedrows", "title": "Related rows", "object": "build.parent",
+		"sections": []map[string]any{{"widget": "table", "object": "build.child", "query": "build.enabledchildren", "fields": []string{"title"}}},
+	}, txnAt)
+	decide(t, tn, "builder", "build", construction.SchemaRelease, construction.PageType, "PAGE", map[string]any{}, txnAt)
+	candidate, err := tn.ReleaseCandidate([]platform.AssetRef{{App: "build", Kind: platform.AssetPage, Name: "relatedrows"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	dana, _ := tn.Member("dana")
-	// Create builder page with a section using the query
-	pagePayload, _ := json.Marshal(map[string]any{
-		"name": "itemspage", "title": "Items", "object": "crm.account",
-		"sections": []map[string]any{
-			{"widget": "table", "object": "crm.opportunity", "query": "crm.open-opportunities", "fields": []string{"title"}},
-		},
-	})
-	if _, kerr := tn.Submit(dana, &pb.Submission{
-		TenantId: "t-rc-test", PrincipalId: "dana", Authority: construction.ID,
-		IdempotencyKey: "p-create-1", Target: &pb.EntityRef{Type: construction.PageType, Id: "P1"},
-		Schema: &pb.SchemaRef{Name: construction.PageType + ".create", Version: 1}, Payload: pagePayload,
-	}, now); kerr != nil {
-		t.Fatalf("create page: %v (%s)", kerr, kerr.Message)
-	}
-
-	// Publish the page
-	if _, kerr := tn.Submit(dana, &pb.Submission{
-		TenantId: "t-rc-test", PrincipalId: "dana", Authority: construction.ID,
-		IdempotencyKey: "p-pub-1", Target: &pb.EntityRef{Type: construction.PageType, Id: "P1"},
-		Schema: &pb.SchemaRef{Name: construction.SchemaRelease, Version: 1}, Payload: []byte(`{}`),
-	}, now); kerr != nil {
-		t.Fatalf("publish page: %v (%s)", kerr, kerr.Message)
-	}
-
-	candidate, err := tn.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "itemspage"}})
-	if err != nil {
-		t.Fatalf("ReleaseCandidate: %v", err)
-	}
 	found := false
 	for _, asset := range candidate.Assets {
-		if asset.Ref.Kind == platform.AssetQuery {
+		if asset.Ref == (platform.AssetRef{App: "build", Kind: platform.AssetQuery, Name: "enabledchildren"}) {
 			found = true
-			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected candidate.Assets to include AssetQuery, but got: %+v", candidate.Assets)
+		t.Fatal("page closure omitted its declared query")
 	}
 }
