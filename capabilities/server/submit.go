@@ -46,6 +46,20 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
+	// Signal dead-letter replay prepares its retained batch (outside I/O)
+	// before the decision path; business-action replay continues inside the
+	// Flow app's own submission handling.
+	// flow.SchemaFlowReplay, named literally so the runtime never imports the
+	// concrete Flow app (the boundary check): the constant lives in apps/flow/flow.go.
+	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
+		record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, contentVersion...)
+		if handled {
+			if refusal != nil && report != nil {
+				report(refusal, nil)
+			}
+			return record, refusal
+		}
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if refusal := t.recordReadRefusal(); refusal != nil {

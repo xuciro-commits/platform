@@ -1,4 +1,5 @@
 {
+  "Expressions": "表达式",
   "Choose one package source: a URL or a local package file": "请选择一种包来源：网址或本地文件",
   "Use an HTTPS address for a platform package, without embedded credentials": "请使用平台包的 HTTPS 地址，不要在地址中包含凭据",
   "The package could not be downloaded; check its address and try again": "无法下载包，请检查地址后重试",

@@ -67,6 +67,25 @@ func (t *Tenant) capabilities(m platform.Member) []platform.CapabilityDescriptor
 		default:
 			continue
 		}
+		// Disclosure applies the owner's current policies every time: they
+		// are not part of any cache key, so a deny hides the capability
+		// immediately, matching the retained-version path below.
+		var permission string
+		var allowed []string
+		switch {
+		case d.Action != nil:
+			permission, allowed = d.Ref.Name, d.Action.Roles
+		case d.Function != nil:
+			permission, allowed = d.Function.Name, d.Function.Roles
+		case d.Operation != nil:
+			permission, allowed = d.Operation.Name, d.Operation.Roles
+		}
+		if permission != "" {
+			caller := platform.NewCaller(runtime{t}, m, d.Ref.App, false, false)
+			if !t.authorizeCapability(caller, d.Ref.App, permission, allowed, true, authorizationDetails{}).Allow {
+				continue
+			}
+		}
 		c.Side = provided.Side
 		c.Parameters = slices.Clone(provided.Parameters)
 		if provided.Inputs.Type != "" {

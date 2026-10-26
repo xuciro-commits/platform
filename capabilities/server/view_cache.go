@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -178,6 +179,12 @@ type manifestEntry struct {
 var manifestCacheSize atomic.Int64
 
 func (t *Tenant) manifestOf(a platform.App, gen uint64) platform.Manifest {
+	// The cache is keyed by the app value itself; an app whose value type is
+	// uncomparable (a struct carrying manifest slices or maps) can never be a
+	// map key, so it skips memoization instead of panicking.
+	if key := reflect.ValueOf(a); !key.IsValid() || !key.Type().Comparable() {
+		return a.Manifest()
+	}
 	if entry, ok := manifestCache.Load(a); ok {
 		if cached := entry.(manifestEntry); cached.gen == gen {
 			return cached.manifest
