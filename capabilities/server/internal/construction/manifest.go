@@ -56,6 +56,14 @@ func CheckManifest(m platform.Manifest, runsJobs bool) error {
 			return fmt.Errorf("read %q is opened to everyone but not declared", r)
 		}
 	}
+	for name, fields := range m.ReadInputs {
+		if !slices.Contains(m.Reads, name) {
+			return fmt.Errorf("read %q declares inputs but is not declared", name)
+		}
+		if err := platform.CheckInputs(fields); err != nil {
+			return fmt.Errorf("read %q: %w", name, err)
+		}
+	}
 	for name, source := range m.ReadSources {
 		if !slices.Contains(m.Reads, name) || !slices.Contains([]string{"record", "user-input", "external-input"}, source) {
 			return fmt.Errorf("read %q has an undeclared name or invalid original source type %q", name, source)

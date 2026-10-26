@@ -364,7 +364,7 @@ func (g *DependencyGraph) CheckReadBindings(asset ReleaseAsset) error {
 		}
 	}
 	for _, ref := range reads {
-		if ref.Kind == AssetAction || ref.Kind == AssetFlow || ref.Kind == AssetFunction || ref.Kind == AssetWriteback || ref.Kind == AssetSource || ref.Kind == AssetPipeline {
+		if ref.Kind == AssetAction || ref.Kind == AssetFunction || ref.Kind == AssetWriteback || ref.Kind == AssetSource || ref.Kind == AssetPipeline {
 			return fmt.Errorf("%s read binding %s is not pure", asset.Ref, ref)
 		}
 		capabilities := g.nodes[ref].Provides

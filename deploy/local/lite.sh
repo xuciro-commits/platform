@@ -5,13 +5,9 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 root=$(pwd)
 
-solution=${1:-hospitality}
-case "$solution" in
-  hospitality) default_port=8495 ;;
-  manufacturing) default_port=8490 ;;
-  *) echo "Unknown solution: $solution" >&2; exit 1 ;;
-esac
-port=${2:-$default_port}
+# One host: the platform's own workspace, no industry instance.
+solution=platform
+port=${1:-8495}
 if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
   echo "Invalid port: $port (expected 1–65535)" >&2
   exit 1
@@ -30,8 +26,8 @@ echo "==> Building the workspace / 构建工作台..."
 # must see web/package.json before choosing the pinned pnpm version.
 (cd web && "${pnpm[@]}" --dir apps/workspace build)
 
-echo "==> Building the platform host / 编译通用宿主..."
-# Both deployments run this one binary; only -tenants, -addr and -data differ.
+echo "==> Building the host / 编译平台宿主..."
+# Both deployments use the same platform module.
 (cd capabilities/server && "$go" build -o "$root/$bin" ./cmd/platform-server)
 
 if [[ ! -f "$data_dir/idp.key" ]]; then
@@ -57,8 +53,7 @@ fi
 exec "$bin" \
   -profile lightweight \
   -data "$data_dir" \
-  -tenants "deploy/local/$solution/tenants.json" \
-  -packages deploy/packages \
+  -tenants "deploy/local/platform/tenants.json" \
   -templates deploy/templates \
   -addr "$bind:$port" \
   -web "$web_dist"

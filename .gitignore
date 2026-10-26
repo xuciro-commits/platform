@@ -16,8 +16,6 @@ dist/
 # Local secrets (never committed)
 .env
 
-# Generated trusted rule runtime (scripts/rule-browser.mjs)
-web/public/rules/
 
 # Python bytecode: `make check-local` and the deploy rehearsal scripts write it
 # under deploy/ and scripts/, which update.sh's committed-source gate watches.
@@ -26,3 +24,6 @@ __pycache__/
 # Toolchains and vendored dependencies
 tools/
 capabilities/server/vendor/
+
+# Retired browser rule-engine build artifacts
+web/public/rules/

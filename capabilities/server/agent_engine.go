@@ -493,7 +493,6 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		}
 		c.Put(r, run) // before its flow goes on, which may keep a signal on it
 		if run.State == "done" {
-			a.ended(c, r, run, now)
 		}
 	}
 }
@@ -563,13 +562,24 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		about, _ := args["about_person"].(bool)
 		return a.remember(c, run, str("fact"), about && run.OnBehalf != "", now)
 	case "read":
+		declared := args
+		if inputs, ok := args["inputs"].(map[string]any); ok {
+			declared = inputs
+		}
+		values := map[string]any{}
+		for _, field := range tool.inputs {
+			if value, ok := declared[field.Name]; ok {
+				values[field.Name] = value
+			}
+		}
+		inputs, _ := json.Marshal(values)
 		var view host.AgentObservation
 		var err *kernel.Error
 		if m := a.reader(*run); m != nil {
-			view, err = h.AgentRead(*m, tool.schema)
+			view, err = h.AgentRead(*m, tool.schema, inputs)
 		} else {
 			var out any
-			out, err = readApp(h.App(d.app), h.Automation(c, d.app), tool.schema)
+			out, err = readApp(h.App(d.app), h.Automation(c, d.app), tool.schema, inputs)
 			view.Body, _ = json.Marshal(out)
 			view.Sources = h.AgentSources(out)
 		}
@@ -604,9 +614,18 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		return fmt.Sprintf("sent %s/%s to %d receivers; waiting for the answer", d.app, tool.schema, n), nil
 	}
 	target := str("target")
-	if tool.target != "" && target != "" {
-		step.Sources = append(step.Sources, tool.target+"/"+target)
+	trackTarget := func() {
+		if tool.target == "" || target == "" {
+			return
+		}
+		ref := tool.target + "/" + target
+		if _, exists := h.Record(ref); exists && !slices.Contains(step.Sources, ref) {
+			step.Sources = append(step.Sources, ref)
+		}
 	}
+	// Some owners accept a logical target rather than a stored row ID. Only
+	// real rows are record dependencies, before or after the nested decision.
+	trackTarget()
 	body := agents.ActionPayload(raw, step.CallID != "")
 	if d.Guard != nil {
 		if err := d.Guard(h.Automation(c, d.app), a.run(*run), tool.schema, target, body); err != nil {
@@ -614,7 +633,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		}
 	}
 	key := fmt.Sprintf("agent:%s:%d", run.ID, len(run.Steps)+1)
-	agent := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.app, true)
+	agent := platform.AgentCaller(c, a.AgentPrincipal(run.Agent), d.app, run.ID)
 	person := a.reader(*run)
 	mustConfirm := slices.Contains(d.Checkpoints, tool.schema)
 	if tool.kind == "action" {
@@ -655,6 +674,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
+		trackTarget()
 		run.ActionsUsed++
 		return "done: " + schema + " " + target, nil
 	}
@@ -684,6 +704,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	if err != nil {
 		return "refused: " + err.Error(), nil
 	}
+	trackTarget()
 	run.ActionsUsed++
 	return "done: " + tool.schema + " " + target + " (" + record.GetChangeId() + ")", nil
 }
@@ -708,47 +729,10 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord
 		run.Task = ""
 	}
 	if run.Flow != "" {
-		a.ended(c, r, *run, now)
 		return
 	}
 	c.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".",
 		Ref: RunType + "/" + run.ID, To: a.recipients(c, a.def(run.Agent), *run), Key: "agent:" + run.ID + ":stopped"})
-}
-
-// ended hands a flow's run back to its flow.
-func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord, now time.Time) {
-	processes := a.host.AgentFlows()
-	if run.Flow != "" && processes != nil {
-		processes.RunEnded(c, host.RunEnd{ID: run.ID, Agent: run.Agent, Flow: run.Flow, State: run.State, Result: run.Result, Stopped: run.Stopped, Token: run.Token}, now)
-	}
-}
-
-// Start, Signal and Finished serve flows' agent steps (internal/host.Runs).
-func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s host.RunStart, now time.Time) {
-	run, err := a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now, !c.Replaying && c.Staging())
-	if err != nil {
-		c.FailDecision(err)
-		return
-	}
-	a.host.Automation(c, AgentApp).Put(r, run)
-}
-
-func (a *Agents) Signal(c platform.Caller, r *pb.ChangeRecord, run string, s host.RunSignal, now time.Time) {
-	a.RecordAgentSignal(c, r, run, Signal{At: s.At, Kind: s.Kind, By: s.By, Detail: s.Detail}, now)
-}
-
-func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
-	where := []any{[]any{"flow", "=", flow}, []any{"state", "=", "done"}}
-	if step != "" {
-		where = append(where, []any{"step", "=", step})
-	}
-	domain, _ := json.Marshal(where)
-	runs, _, _ := platform.Find[AgentRunRecord](a.host.Automation(c, AgentApp), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
-	var out []string
-	for _, run := range runs {
-		out = append(out, run.ID)
-	}
-	return out
 }
 
 // Interested and Listen take the events agents wait on (internal/host.Listener).

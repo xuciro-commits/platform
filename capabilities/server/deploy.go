@@ -17,6 +17,7 @@ import (
 	"platformserver/journal"
 	"platformserver/platform"
 	"platformserver/platform/authz"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -56,6 +57,12 @@ type Deployment struct {
 	// index the console lists and prechecks. Empty: no packages offered.
 	Packages     string
 	packageIndex *PackageIndex
+	// Release is the system release this binary was built as, and
+	// ReleaseDigest the sha256 of the binary the updater installed. The health
+	// endpoint reports both, so a swap is proved by asking the running host
+	// which release it serves instead of trusting the updater's exit code.
+	Release       int
+	ReleaseDigest string
 	// Rebuild composes a fresh, unstarted tenant with the same durable app and
 	// connector declarations. Required for an in-process recovery retry.
 	Rebuild                 func(id string) (*Tenant, error)
@@ -68,6 +75,8 @@ type Deployment struct {
 	// Seed gives a tenant whose journal is empty its first data, through
 	// ordinary decisions journaled like any other (in memory: every start).
 	Seed func(t *Tenant, now time.Time) error
+	// system is the host-level tenant that owns the system itself (tenants.go).
+	system TenantSpec
 }
 
 // Flags registers the deployment flags on the default flag set.
@@ -91,6 +100,8 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Mint, "mint-token", "", "print an access token for this subject and stop (<user:email> or <client:id>, as the seats name them)")
 	flag.DurationVar(&d.TokenTTL, "token-ttl", 12*time.Hour, "how long a minted token is accepted")
 	flag.StringVar(&d.Packages, "packages", os.Getenv("PLATFORM_PACKAGES_DIR"), "directory of package descriptors the console offers (empty: no packages)")
+	flag.IntVar(&d.Release, "release", 0, "the system release this binary serves (0: a development build)")
+	flag.StringVar(&d.ReleaseDigest, "release-digest", "", "sha256 of this binary as the system release recorded it")
 	return d
 }
 
@@ -149,6 +160,9 @@ func (d *Deployment) makeKey() error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(filepath.Dir(d.idpKeyPath()), 0o700); err != nil {
+		return err
+	}
 	return idp.SaveKey(d.idpKeyPath(), key)
 }
 
@@ -178,7 +192,18 @@ func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error)
 // profile's journal is a file, not a second set of semantics, so a restart
 // replays and a damaged journal quarantines exactly as it does on PostgreSQL.
 func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
-	for _, t := range tenants {
+	ordered := slices.Clone(tenants)
+	slices.SortStableFunc(ordered, func(a, b *Tenant) int {
+		if a.ID == "system" && b.ID != "system" {
+			return -1
+		}
+		if b.ID == "system" && a.ID != "system" {
+			return 1
+		}
+		return 0
+	})
+	(&Host{}).bindSystemDefinitions(ordered)
+	for _, t := range ordered {
 		recoveryStarted := time.Now().UTC()
 		var statePosition int64
 		var stateActive bool
@@ -316,14 +341,6 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			console.CloseTokenSecretWindows()
 		}
 		fresh[t.ID] = after == 0 && len(entries) == 0
-		if t.procs != nil {
-			if err := t.procs.Check(); err != nil { // running instances need their flow's version
-				t.quarantine(fmt.Errorf("process recovery: %w", err))
-				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
-				continue
-			}
-		}
-		t.flowArtifactRecoveryComplete(recoveryStarted)
 		if after > 0 {
 			log.Printf("restored %s from the snapshot at %d, then replayed %d entries", t.ID, after, len(entries))
 		} else {
@@ -606,6 +623,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		}
 	}
 	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.Issuer == ""
+	host.Release, host.ReleaseDigest = d.Release, d.ReleaseDigest
 	if signer != nil {
 		// The host serves its seats as signed tokens, and takes only those: the
 		// delivery path's development tokens are not accepted here.
@@ -800,7 +818,6 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 			var outside []func()
 			for _, t := range tenants {
 				outside = append(append(outside, t.dispatches(Now())...), t.turns(Now())...)
-				outside = append(outside, t.continuousSources(Now())...)
 			}
 			outsideRuns.Add(1)
 			go func() { defer outsideRuns.Done(); onLane(outside) }()
@@ -821,9 +838,6 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 					continue
 				}
 				t.Evaluate(Now())
-				t.PullSources(Now())
-				t.CheckConnections(Now())
-				t.RunPipelines(Now())
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())
 				t.SweepUploads(Now())

@@ -536,16 +536,17 @@ func (t *Tenant) setting(c platform.Caller, name string) string {
 	if a == nil {
 		return ""
 	}
-	i := slices.IndexFunc(a.Manifest().Settings, func(s platform.Setting) bool { return s.Name == name })
-	if i < 0 {
-		return ""
-	}
-	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
+	// A read takes no queue lock: the settings snapshot is lock-free, and a
+	// write replaces it whole.
 	if v, ok := t.settings.get(app + "/" + name); ok {
 		return v
 	}
-	return a.Manifest().Settings[i].Default
+	settings := t.manifestOf(a, t.definitionsFingerprint()).Settings
+	i := slices.IndexFunc(settings, func(s platform.Setting) bool { return s.Name == name })
+	if i < 0 {
+		return ""
+	}
+	return settings[i].Default
 }
 
 // AppSettings are an app's declared settings with their current values.
@@ -644,12 +645,6 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 	}
 	if !a.Manifest().Settings[i].Accepts(p.Value) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	if !c.Replaying && id == "platform/enterpriseRoot" && p.Value != "" {
-		element, ok := c.Enterprise().Element(p.Value, now)
-		if !ok || element.Stereotype != "ActualOrganization" || element.Owner != "" {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an active local organization for this tenant")
-		}
 	}
 	return func(*pb.ChangeRecord) { t.settings.set(id, p.Value) }, nil
 }

@@ -1,32 +1,23 @@
 {
+  "name": "workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p ."
+  },
   "dependencies": {
-    "@platform/app": "workspace:*",
-    "@platform/build": "workspace:*",
-    "@platform/catalog-app": "workspace:*",
+    "@pkg/platform": "workspace:*",
     "@platform/kernel": "workspace:*",
-    "@platform/platform": "workspace:*",
-    "@platform/ui": "workspace:*",
-    "@tanstack/react-query": "^5.103.2",
-    "lucide-react": "^1.47.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
-  },
-  "name": "@platform/workspace",
-  "private": true,
-  "scripts": {
-    "build": "node ../../../scripts/rule-browser.mjs && vite build",
-    "dev": "node ../../../scripts/rule-browser.mjs && vite",
-    "test": "node --test src/host/*.test.mjs src/shell/*.test.mjs",
-    "typecheck": "tsc -p ."
-  },
-  "type": "module"
+  }
 }

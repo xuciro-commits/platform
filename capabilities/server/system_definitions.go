@@ -1,0 +1,446 @@
+package platformserver
+
+import (
+	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/internal/construction"
+	"platformserver/internal/host"
+	"platformserver/internal/systemscope"
+	"platformserver/platform"
+)
+
+func systemDefinitionRefusal(err error) *kernel.Error {
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "System definitions: {reason}", err.Error())
+}
+
+func (h hostView) FreezeSystemDefinitions(c platform.Caller, refs []platform.AssetRef, now time.Time) (json.RawMessage, *kernel.Error) {
+	if h.t.ID != systemscope.Tenant || c.Tenant != systemscope.Tenant || c.App != systemscope.App {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system authority freezes system definitions")
+	}
+	owner, ok := h.t.app(construction.ID).(host.ConstructionDrafts)
+	if !ok {
+		if len(refs) == 0 {
+			return nil, nil
+		}
+		return nil, systemDefinitionRefusal(fmt.Errorf("the definition owner is unavailable"))
+	}
+	if len(refs) == 0 {
+		if raw := h.t.releases.raw(h.t.releases.active); len(raw) > 0 {
+			return platform.Raw(platform.SystemDefinitionCandidate{ID: h.t.releases.active, Bytes: raw}), nil
+		}
+		roots := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetApp, Name: construction.ID}}
+		for _, definition := range h.t.definitions {
+			if definition.Source != "code" {
+				roots = append(roots, definition.Ref)
+			}
+		}
+		candidate, err := h.t.releaseCandidateLocked(roots)
+		if err != nil {
+			return nil, systemDefinitionRefusal(err)
+		}
+		return platform.Raw(platform.SystemDefinitionCandidate{ID: candidate.ID, Bytes: candidate.Bytes}), nil
+	}
+	// Resolve logical names through the existing authorized draft projection,
+	// including pages, applications, functions and agents, not only objects.
+	changes, err := owner.SavedDraftChanges(h.t.caller(c.Member, owner, false), "", "", "")
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	var drafts []construction.JointDraftRef
+	for _, ref := range refs {
+		var selected *construction.DraftChange
+		for i := range changes {
+			if changes[i].Ref == ref {
+				if selected != nil {
+					return nil, systemDefinitionRefusal(fmt.Errorf("ambiguous draft %s", ref))
+				}
+				selected = &changes[i]
+			}
+		}
+		if selected == nil {
+			return nil, systemDefinitionRefusal(fmt.Errorf("saved draft %s is unavailable", ref))
+		}
+		draft := construction.JointDraftRef{Kind: ref.Kind, ID: selected.ID}
+		if !slices.Contains(drafts, draft) {
+			drafts = append(drafts, draft)
+		}
+		dependencies, err := owner.ReferencedDrafts(ref.Kind, selected.ID)
+		if err != nil {
+			return nil, systemDefinitionRefusal(err)
+		}
+		for _, dependency := range dependencies {
+			if !slices.Contains(drafts, dependency) {
+				drafts = append(drafts, dependency)
+			}
+		}
+	}
+	preview, candidate, err := h.t.previewReleaseLocked(drafts, c.Member)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	if preview.Diagnostic != "" {
+		return nil, systemDefinitionRefusal(fmt.Errorf("%s", preview.Diagnostic))
+	}
+	// A system version includes the previously installed system definitions as
+	// well as the selected changes. Business runtimes can reconstruct it from
+	// this one accepted version, without replaying another tenant's history.
+	available, err := h.t.releaseAssetsLocked(nil, false)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	byRef := map[platform.AssetRef]platform.ReleaseAsset{}
+	for _, asset := range available {
+		if !slices.Contains(preview.Removed, asset.Ref) {
+			byRef[asset.Ref] = asset
+		}
+	}
+	for _, asset := range candidate.Assets {
+		byRef[asset.Ref] = asset
+	}
+	roots := []platform.AssetRef{}
+	for _, definition := range h.t.definitions {
+		if definition.Source != "code" && !slices.Contains(preview.Removed, definition.Ref) {
+			if _, exists := byRef[definition.Ref]; exists {
+				roots = append(roots, definition.Ref)
+			}
+		}
+	}
+	for _, asset := range candidate.Assets {
+		if !slices.Contains(roots, asset.Ref) {
+			roots = append(roots, asset.Ref)
+		}
+	}
+	available = nil
+	for _, asset := range byRef {
+		available = append(available, asset)
+	}
+	candidate, err = h.t.candidateWithBindings(roots, available, nil)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	raw, err := json.Marshal(platform.SystemDefinitionCandidate{ID: candidate.ID, Bytes: candidate.Bytes})
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	return raw, nil
+}
+
+func (h hostView) PrepareSystemDefinitions(c platform.Caller, raw json.RawMessage, key string, now time.Time) (json.RawMessage, *kernel.Error) {
+	if h.t.ID != systemscope.Tenant || c.Tenant != systemscope.Tenant || c.App != systemscope.App {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system authority activates system definitions")
+	}
+	var frozen platform.SystemDefinitionCandidate
+	if err := json.Unmarshal(raw, &frozen); err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	candidate, err := platform.ReadCandidate(frozen.ID, frozen.Bytes)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	for _, definition := range h.t.definitions {
+		if definition.Source == "code" {
+			continue
+		}
+		if !slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == definition.Ref }) {
+			return nil, systemDefinitionRefusal(fmt.Errorf("retiring system definition %s needs its original owner's retirement plan", definition.Ref))
+		}
+	}
+	installations, bootstrap, err := h.t.prepareReleaseLifecycleLocked(candidate, c.Member, now, false)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	saved := resultformat.Release{Version: 4, Kind: "release-result", Tenant: h.t.ID, App: construction.ID, Member: c.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: candidate.Bytes, Active: true, Installations: installations, Bootstrap: bootstrap}
+	saved.RequestHash, err = resultformat.ReleaseRequestHash(h.t.ID, c.ID, saved.Key, candidate.ID, true)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	projection, err := h.t.systemDefinitionProjection(saved)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	if peers := h.t.systemDefinitionState.peers.Load(); peers != nil {
+		for _, tenant := range peers.tenants {
+			if tenant == h.t {
+				continue
+			}
+			if err := tenant.checkSystemDefinitionProjection(projection); err != nil {
+				return nil, systemDefinitionRefusal(fmt.Errorf("tenant %s: %w", tenant.ID, err))
+			}
+		}
+	}
+	image, err := resultformat.EncodeRelease(saved)
+	if err != nil {
+		return nil, systemDefinitionRefusal(err)
+	}
+	return image, nil
+}
+
+func (h hostView) ValidateSystemDefinitions(raw json.RawMessage) error {
+	saved, err := resultformat.DecodeRelease(raw)
+	if err != nil {
+		return err
+	}
+	if h.t.ID != systemscope.Tenant || saved.Tenant != h.t.ID || saved.App != construction.ID || !saved.Active || !strings.HasPrefix(saved.Key, "activate:system:") {
+		return fmt.Errorf("invalid system definition installation")
+	}
+	return nil
+}
+func (h hostView) ApplySystemDefinitions(raw json.RawMessage) error {
+	if err := h.ValidateSystemDefinitions(raw); err != nil {
+		return err
+	}
+	saved, err := h.t.applyAcceptedRelease(raw)
+	if err != nil {
+		return err
+	}
+	projection, err := h.t.systemDefinitionProjection(saved)
+	if err != nil {
+		return err
+	}
+	h.t.systemDefinitions.Store(projection)
+	return nil
+}
+
+// This is a derived immutable runtime view of the system authority's accepted
+// release, never another registry, journal, or set of owner metadata rows.
+type systemDefinitionProjection struct {
+	id            string
+	assets        []platform.ReleaseAsset
+	installations []resultformat.ReleaseInstallation
+}
+
+type systemDefinitionPeers struct{ tenants []*Tenant }
+
+type systemDefinitionState struct {
+	peers     atomic.Pointer[systemDefinitionPeers]
+	source    atomic.Pointer[Tenant]
+	published atomic.Pointer[systemDefinitionProjection]
+	applied   string
+}
+
+func (t *Tenant) systemDefinitionProjection(saved resultformat.Release) (*systemDefinitionProjection, error) {
+	candidate, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	projection := &systemDefinitionProjection{id: candidate.ID, installations: slices.Clone(saved.Installations)}
+	code := map[platform.AssetRef]bool{}
+	for _, definition := range t.definitions {
+		if definition.Source == "code" {
+			code[definition.Ref] = true
+		}
+	}
+	for _, asset := range candidate.Assets {
+		if !code[asset.Ref] {
+			projection.assets = append(projection.assets, asset)
+		}
+	}
+	return projection, nil
+}
+
+// Startup snapshots already retain the original release results. Reconstruct
+// the cache from their exact accepted images, without preparing a new release.
+func (t *Tenant) restoreSystemDefinitionProjection() error {
+	if t.ID != systemscope.Tenant || t.releases.active == "" {
+		return nil
+	}
+	for key, raw := range t.committed.allAnswers() {
+		if !strings.HasPrefix(key, "release:activate:system:") {
+			continue
+		}
+		saved, err := resultformat.DecodeRelease(raw)
+		if err != nil {
+			return err
+		}
+		if saved.CandidateID != t.releases.active {
+			continue
+		}
+		projection, err := t.systemDefinitionProjection(saved)
+		if err != nil {
+			return err
+		}
+		t.systemDefinitions.Store(projection)
+		return nil
+	}
+	return nil
+}
+
+func (h *Host) bindSystemDefinitions(tenants []*Tenant) {
+	var system *Tenant
+	for _, tenant := range tenants {
+		if tenant.ID == systemscope.Tenant {
+			system = tenant
+			break
+		}
+	}
+	if system == nil {
+		return
+	}
+	system.systemDefinitionState.peers.Store(&systemDefinitionPeers{tenants: slices.Clone(tenants)})
+	for _, tenant := range tenants {
+		if tenant != system {
+			tenant.systemDefinitionState.source.Store(system)
+		}
+	}
+}
+
+func (t *Tenant) applySystemDefinitionProjection() error {
+	system := t.systemDefinitionState.source.Load()
+	if system == nil {
+		return nil
+	}
+	projection := system.systemDefinitions.Load()
+	if projection == nil || projection.id == t.systemDefinitionState.applied {
+		return nil
+	}
+	view, err := t.assetInstallationView(t.records)
+	if err != nil {
+		return err
+	}
+	if err := view.installSystemDefinitionProjection(projection, true); err != nil {
+		return err
+	}
+	if err := t.validateAssetStorage(view, false); err != nil {
+		return err
+	}
+	if err := t.anchorReleaseRecords(view.records); err != nil {
+		return err
+	}
+	if err := t.records.promoteRecords(view.records); err != nil {
+		return err
+	}
+	// Validation ran against private owners. The original owners install the
+	// same saved images to extend their original ledger declarations as well.
+	if err := t.installSystemDefinitionProjection(projection, false); err != nil {
+		return err
+	}
+	t.systemDefinitionState.published.Store(projection)
+	t.systemDefinitionState.applied = projection.id
+	return nil
+}
+
+func (t *Tenant) installSystemDefinitionProjection(projection *systemDefinitionProjection, private bool) error {
+	registry, err := t.newAssetRegistryLocked(true)
+	if err != nil {
+		return err
+	}
+	refs := map[platform.AssetRef]bool{}
+	for _, asset := range projection.assets {
+		refs[asset.Ref] = true
+	}
+	for _, definition := range t.definitions {
+		if refs[definition.Ref] && definition.Source != "system" {
+			return fmt.Errorf("system definition %s conflicts with a tenant-owned definition", definition.Ref)
+		}
+	}
+	end, err := registry.BeginBootstrap(projection.assets)
+	if err != nil {
+		return err
+	}
+	defer end()
+	t.installingSet = true
+	defer func() { t.installingSet = false }()
+	for _, installation := range projection.installations {
+		if installation.Ref == nil || !refs[*installation.Ref] {
+			continue
+		}
+		plan, err := t.installationPlan(registry, installation)
+		if err != nil {
+			return err
+		}
+		if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Private: private}); err != nil {
+			return err
+		}
+		if reader, ok := t.app(plan.Ref.App).(host.AssetDefinitionReader); ok && (reader.DefinitionMetadataKind(plan.Ref.Kind) || plan.Ref.Kind == platform.AssetAgent) {
+			var asset platform.ReleaseAsset
+			for _, original := range projection.assets {
+				if original.Ref == plan.Ref {
+					asset = original
+					break
+				}
+			}
+			definition, err := reader.DefinitionDescriptor(asset)
+			if err != nil {
+				return err
+			}
+			t.setDefinitions(append(slices.DeleteFunc(slices.Clone(t.definitions), func(d platform.Definition) bool { return d.Ref == definition.Ref }), definition))
+		}
+	}
+	if err := t.validateAssetSet(); err != nil {
+		return err
+	}
+	for i := range t.definitions {
+		if refs[t.definitions[i].Ref] {
+			t.definitions[i].Source = "system"
+			t.definitions[i].OwnerRecord = ""
+		}
+	}
+	t.setDefinitions(t.definitions)
+	return nil
+}
+
+// A shared declaration is an immutable prerequisite of local releases. Its
+// exact accepted descriptor stays with the system owner, like native assets.
+func (t *Tenant) sharedSystemAssets(app string) []platform.ReleaseAsset {
+	projection := t.systemDefinitionState.published.Load()
+	if projection == nil {
+		return nil
+	}
+	var out []platform.ReleaseAsset
+	for _, asset := range projection.assets {
+		if asset.Ref.App == app {
+			out = append(out, asset)
+		}
+	}
+	return out
+}
+
+func (h hostView) SystemDefinitionReadOnly(ref platform.AssetRef) bool {
+	for _, definition := range h.t.definitions {
+		if definition.Ref == ref && definition.Source == "system" {
+			return true
+		}
+	}
+	return false
+}
+
+// A publisher's accepted installation is the only embedded release in these
+// publication schemas. SQL and replay reuse its original release result.
+func systemDefinitionInstallation(schema string, image json.RawMessage) (json.RawMessage, error) {
+	if schema != systemscope.SchemaActivate && schema != systemscope.SchemaFinished && schema != systemscope.SchemaRollback {
+		return nil, nil
+	}
+	var saved struct {
+		Installation json.RawMessage `json:"installation"`
+	}
+	if err := json.Unmarshal(image, &saved); err != nil {
+		return nil, err
+	}
+	return saved.Installation, nil
+}
+
+// Compatibility checks retain the existing tenant's own rows and grants.
+// They prepare only a private runtime and never append a business decision.
+func (t *Tenant) checkSystemDefinitionProjection(projection *systemDefinitionProjection) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.recordReadError != nil {
+		return t.recordReadError
+	}
+	view, err := t.assetInstallationView(t.records)
+	if err != nil {
+		return err
+	}
+	if err := view.installSystemDefinitionProjection(projection, true); err != nil {
+		return err
+	}
+	return t.validateAssetStorage(view, false)
+}

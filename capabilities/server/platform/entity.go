@@ -54,9 +54,6 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
-	// EnterpriseUse says whether this record still actively uses its enterprise references.
-	// Nil keeps every unarchived record current; history always protects deletion.
-	EnterpriseUse    *Expr
 	Protocols        []Provision
 	CreateTxn        *BusinessTxn
 	ApplyCreateTxn   func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
@@ -451,7 +448,6 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
-	EnterpriseUse   *Expr               `json:"enterpriseUse,omitempty"`
 	Versioning      *Versioning         `json:"versioning,omitempty"`
 	VersionPins     []VersionPinBinding `json:"versionPins,omitempty"`
 	Sets            []RecordSet         `json:"sets,omitempty"`
@@ -505,7 +501,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	info.RecordFormat, info.RecordImages = e.RecordFormat, slices.Clone(e.RecordImages)
 	if err := checkRecordImageFormats(info); err != nil {
 		return EntityInfo{}, err
@@ -616,26 +612,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			return EntityInfo{}, fmt.Errorf("field %s needs one compatible direct read alias target", alias.Name)
 		}
 	}
-	if _, err := info.CompileEnterpriseUse(); err != nil {
-		return EntityInfo{}, fmt.Errorf("entity %s: %w", e.Type, err)
-	}
 	return info, nil
-}
-
-// CompileEnterpriseUse permits only this record's fields, using the same pure
-// expression compiler as other owner rules.
-func (info EntityInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram, error) {
-	if info.EnterpriseUse == nil {
-		return nil, nil
-	}
-	if info.EnterpriseUse.Kind != "boolean" {
-		return nil, fmt.Errorf("current enterprise use must return boolean")
-	}
-	refs := map[string]ExprType{"archived": {Kind: "boolean"}}
-	for _, field := range info.Fields {
-		refs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
-	}
-	return ruleEngineOf(engines).CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
 }
 
 // ApplyFieldAliases copies only declared compatible fields. Owners use the
@@ -653,6 +630,32 @@ func (info EntityInfo) HasReadSources() bool {
 	return len(info.Derived) > 0 || slices.ContainsFunc(info.Fields, func(field FieldInfo) bool { return field.AliasOf != "" })
 }
 
+// payloadColumns renders a child table's columns the way a flat payload lists
+// them: the same name, type and choices the form edits each cell with.
+func payloadColumns(columns []FieldInfo) []Field {
+	if len(columns) == 0 {
+		return nil
+	}
+	out := make([]Field, 0, len(columns))
+	for _, column := range columns {
+		if column.ReadOnly {
+			continue
+		}
+		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
+			"references": "string[]", "tags": "string[]", "money": "money", "json": "json", "lines": "lines"}[column.Type]
+		if typ == "" {
+			typ = "string"
+		}
+		field := Field{Name: column.Name, Type: typ, Required: column.Required && column.When == nil, Description: column.Title,
+			Choices: column.Choices, Constraints: column.Constraints, Range: column.Range, Fields: payloadColumns(column.Fields)}
+		if column.Ref == "enterprise.element" {
+			field.Ref, field.Stereotype, field.Stereotypes = column.Ref, column.Stereotype, slices.Clone(column.Stereotypes)
+		}
+		out = append(out, field)
+	}
+	return out
+}
+
 // EntityActions are the catalog entries an entity type's declaration
 // generates: its standard create, edit and archive, and its transitions.
 func EntityActions(e Entity) []Action {
@@ -666,7 +669,7 @@ func EntityActions(e Entity) []Action {
 			continue
 		}
 		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
-			"references": "string[]", "tags": "string[]", "money": "money", "json": "json"}[f.Type]
+			"references": "string[]", "tags": "string[]", "money": "money", "json": "json", "lines": "lines"}[f.Type]
 		if typ == "" {
 			typ = "string"
 		}
@@ -680,7 +683,8 @@ func EntityActions(e Entity) []Action {
 		if f.Example != "" {
 			description += ", e.g. " + f.Example
 		}
-		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, Range: f.Range, Group: f.Group}
+		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, Range: f.Range, Group: f.Group,
+			Fields: payloadColumns(f.Fields)}
 		if f.Ref == "enterprise.element" {
 			field.Ref, field.Stereotype, field.Stereotypes = f.Ref, f.Stereotype, slices.Clone(f.Stereotypes)
 		}
@@ -904,7 +908,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			ft = ft.Elem() // optional scalar values retain their declared field kind
 		}
 		switch {
-		case refined == "json" && (ft.Kind() == reflect.Map || ft.Kind() == reflect.Struct || ft == reflect.TypeOf(json.RawMessage{})):
+		case refined == "json" && (ft.Kind() == reflect.Map || ft.Kind() == reflect.Struct || ft.Kind() == reflect.Slice || ft.Kind() == reflect.Array):
 			f.Type = "json" // governed structured definitions; each owner validates its schema
 		case ft.Implements(refIface):
 			f.Type = "reference"
@@ -1016,7 +1020,12 @@ func describeDerived(info *EntityInfo, e Entity) error {
 			list, last, entered := strings.Cut(d.From, ".")
 			if entered {
 				f, ok := info.Field(list)
-				if !ok || f.Type != "lines" {
+				jsonList := false
+				if ok && f.Type == "json" {
+					fieldType := info.Go.FieldByIndex(f.Index).Type
+					jsonList = fieldType.Kind() == reflect.Slice && elementOf(info.Go, f.Index).Kind() == reflect.Struct
+				}
+				if !ok || f.Type != "lines" && !jsonList {
 					return fail("%q enters %q, which is not a list of records the type holds", d.From, list)
 				}
 				out.List, holder, at = f.Index, elementOf(info.Go, f.Index), list+"."

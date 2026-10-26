@@ -72,7 +72,7 @@ type Section struct {
 	// Query is a named query "<app>.<name>" the section lists.
 	Query        string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like build.open-visits"`
 	Fields       []string                    `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
-	Actions      []string                    `json:"actions,omitempty" help:"For actions: the schemas it offers"`
+	Actions      []string                    `json:"actions,omitzero" help:"For actions: the schemas it offers; omitted inherits the page, empty forbids section writes"`
 	Group        string                      `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
 	ChartVariant string                      `json:"chartVariant,omitempty"`
 	Mark         string                      `json:"mark,omitempty"`
@@ -230,7 +230,7 @@ func descriptor(p Page) platform.Page {
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
 		section := platform.Section{PageWidgetConfig: s.PageWidgetConfig, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
-			Group: s.Group, Mark: s.Mark, ChartVariant: s.ChartVariant, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
+			Group: s.Group, Mark: s.Mark, ChartVariant: s.ChartVariant, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Operation: s.Operation, Inputs: s.Inputs}
 		section.RecordLinks, section.Buttons = slices.Clone(s.RecordLinks), slices.Clone(s.Buttons)
 		section.TableColumns = slices.Clone(s.TableColumns)
 		if s.InlineEdit != nil {
@@ -247,6 +247,9 @@ func descriptor(p Page) platform.Page {
 		if s.Query != "" {
 			owner, name, _ := strings.Cut(s.Query, ".")
 			section.Query = platform.AssetRef{App: owner, Kind: platform.AssetQuery, Name: name}
+		}
+		if s.Actions != nil {
+			section.Actions = make([]platform.AssetRef, 0, len(s.Actions))
 		}
 		for _, schema := range s.Actions {
 			owner, _, _ := strings.Cut(schema, ".")

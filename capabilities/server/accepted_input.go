@@ -155,12 +155,8 @@ func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, n
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	principal, _ := json.Marshal(m)
-	var versions map[string]int
-	if t.procs != nil {
-		versions = draft.flowVersions()
-	}
 	committed, err := t.acceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
-		Principal: principal, Body: raw, At: now, Versions: versions}, key, hash)
+		Principal: principal, Body: raw, At: now}, key, hash)
 	if err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

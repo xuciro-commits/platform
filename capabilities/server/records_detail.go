@@ -115,12 +115,6 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (Rec
 			view.Files = page.Records
 		}
 	}
-	if t.procs != nil {
-		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
-		if page, err := t.recordsRead(m, platform.FlowInstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
-			view.Processes = page.Records
-		}
-	}
 	if typ != platform.WorkTaskType && t.app(platform.WorkApp) != nil {
 		domain, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}, []any{"state", "=", "open"}})
 		if page, err := t.recordsRead(m, platform.WorkTaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now); err == nil {

@@ -21,6 +21,8 @@
 | 产品体验 | [工作区与构建编辑](specs/experience/workspace/spec.md) | 单一工作区、应用入口、共享 UI、草稿会话和专业编辑器 |
 | 产品体验 | [专业可视化](specs/experience/professional-visualization/spec.md) | 地图、三维、图像标注的坐标、身份、资源与业务交互 |
 
+`platform-self-hosting` 正在落地：它把系统自身的源码、变更、发布与激活收进宿主级 `system` 作用域，并新增模块 [自举](changes/platform-self-hosting/specs/platform/self-hosting/spec.md)；归档时该模块进入上表。
+
 层是导航与归属分类，不是新的服务边界，也不要求每层独立部署。模块依赖允许跨层引用；代码依赖仍按 [Architecture](../docs/Architecture.md) 与现有边界检查执行。一次变化可以涉及多个既有模块，不为容纳一项变化另建模块。
 
 ## 文档各管什么

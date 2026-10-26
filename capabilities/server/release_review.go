@@ -67,6 +67,11 @@ type ReleasePage struct {
 	ActiveID   string           `json:"activeId"`
 }
 
+// ReleaseCandidateSaved is the candidate a tenant just froze.
+type ReleaseCandidateSaved struct {
+	ID string `json:"id"`
+}
+
 type SavedReleaseReview struct {
 	AI                   []ApplicationAI          `json:"ai,omitempty"`
 	Preview              ReleasePreview           `json:"preview"`
@@ -210,9 +215,6 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 		}
 	} else {
 		_, _, err = t.prepareReleaseLifecycleLocked(saved, m, time.Now().UTC(), false)
-	}
-	if err == nil {
-		err = t.evaluationsReadyLocked(id, raw)
 	}
 	reply.CanActivate = err == nil
 	if err != nil {

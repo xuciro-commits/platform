@@ -20,6 +20,16 @@ func viewOf(m platform.Member, et *entityType) (*entityType, []platform.FieldInf
 
 // Entities are the entity types m may read: those of apps m holds a role in.
 func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
+	gen, key := t.definitionsFingerprint(), rights(m)
+	if out, ok := t.cachedEntities(m, gen, key); ok {
+		return out
+	}
+	out := t.entityView(m)
+	t.storeEntities(gen, key, out)
+	return out
+}
+
+func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
 	out := []platform.EntityInfo{}

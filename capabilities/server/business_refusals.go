@@ -180,7 +180,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		}
 		add(&sub, e)
 	}
-	for _, raw := range storedValues(&t.committed, "answer", t.committed.answers, "business") {
+	for _, raw := range t.committed.allAnswers() {
 		var kind struct{ Kind string }
 		if json.Unmarshal(raw, &kind) != nil || kind.Kind != "record-batch" {
 			continue

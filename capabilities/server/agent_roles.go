@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
 	"platformserver/platform"
 	"time"
 )
@@ -12,7 +11,6 @@ import (
 // AgentRuntime is the runtime consumer contract of the agent owner. It exposes
 // immutable turns and decisions, never definitions or mutable bookkeeping.
 type AgentRuntime interface {
-	host.Runs
 	platform.App
 	DeclareAgentApp(platform.App) error
 	DueAgentTurns(time.Time) []AgentTurn

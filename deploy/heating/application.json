@@ -1,0 +1,408 @@
+{
+  "application": {
+    "name": "heating",
+    "title": "Heating",
+    "description": "Buildings, zones, meters and the work that keeps them warm.",
+    "icon": "thermometer",
+    "pages": [
+      "buildings",
+      "zones",
+      "workorders",
+      "meters",
+      "readings"
+    ]
+  },
+  "objects": [
+    {
+      "id": "obj-heating-building",
+      "name": "building",
+      "title": "Building",
+      "plural": "Buildings",
+      "description": "A heated building.",
+      "fields": [
+        {
+          "name": "address",
+          "title": "Address",
+          "type": "text",
+          "required": true,
+          "search": true
+        },
+        {
+          "name": "floors",
+          "title": "Floors",
+          "type": "integer"
+        },
+        {
+          "name": "commissioned",
+          "title": "Commissioned",
+          "type": "date"
+        },
+        {
+          "name": "note",
+          "title": "Note",
+          "type": "longtext"
+        }
+      ]
+    },
+    {
+      "id": "obj-heating-zone",
+      "name": "zone",
+      "title": "Heating zone",
+      "plural": "Heating zones",
+      "description": "A riser or loop serving parts of a building.",
+      "fields": [
+        {
+          "name": "building",
+          "title": "Building",
+          "type": "reference",
+          "ref": "build.building",
+          "required": true,
+          "inverse": "zones"
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "choice",
+          "choices": "riser,loop,radiator",
+          "required": true
+        },
+        {
+          "name": "supplytemp",
+          "title": "Supply temperature",
+          "type": "decimal"
+        },
+        {
+          "name": "returntemp",
+          "title": "Return temperature",
+          "type": "decimal"
+        },
+        {
+          "name": "active",
+          "title": "In service",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "id": "obj-heating-meter",
+      "name": "meter",
+      "title": "Meter",
+      "plural": "Meters",
+      "description": "A heat or water meter on a zone.",
+      "fields": [
+        {
+          "name": "serial",
+          "title": "Serial",
+          "type": "text",
+          "required": true,
+          "search": true
+        },
+        {
+          "name": "zone",
+          "title": "Zone",
+          "type": "reference",
+          "ref": "build.zone",
+          "required": true,
+          "inverse": "meters"
+        },
+        {
+          "name": "kind",
+          "title": "Kind",
+          "type": "choice",
+          "choices": "heat,water",
+          "required": true
+        },
+        {
+          "name": "installed",
+          "title": "Installed on",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": "obj-heating-reading",
+      "name": "reading",
+      "title": "Reading",
+      "plural": "Readings",
+      "description": "What a meter showed at a moment.",
+      "fields": [
+        {
+          "name": "meter",
+          "title": "Meter",
+          "type": "reference",
+          "ref": "build.meter",
+          "required": true,
+          "inverse": "readings"
+        },
+        {
+          "name": "takenat",
+          "title": "Taken",
+          "type": "datetime",
+          "required": true,
+          "search": true
+        },
+        {
+          "name": "energy",
+          "title": "Energy (kWh)",
+          "type": "decimal"
+        },
+        {
+          "name": "volume",
+          "title": "Volume (m3)",
+          "type": "decimal"
+        },
+        {
+          "name": "note",
+          "title": "Note",
+          "type": "longtext"
+        }
+      ]
+    },
+    {
+      "id": "obj-heating-workorder",
+      "name": "workorder",
+      "title": "Work order",
+      "plural": "Work orders",
+      "description": "A job on a zone, from the call to the fix.",
+      "fields": [
+        {
+          "name": "zone",
+          "title": "Zone",
+          "type": "reference",
+          "ref": "build.zone",
+          "required": true,
+          "inverse": "workorders"
+        },
+        {
+          "name": "summary",
+          "title": "Summary",
+          "type": "text",
+          "required": true,
+          "search": true
+        },
+        {
+          "name": "priority",
+          "title": "Priority",
+          "type": "choice",
+          "choices": "low,normal,urgent",
+          "required": true
+        },
+        {
+          "name": "assignee",
+          "title": "Assignee",
+          "type": "text"
+        },
+        {
+          "name": "reported",
+          "title": "Reported",
+          "type": "datetime"
+        },
+        {
+          "name": "resolution",
+          "title": "Resolution",
+          "type": "longtext"
+        }
+      ],
+      "states": [
+        {
+          "name": "open",
+          "title": "Open",
+          "tone": "warning",
+          "description": "Reported, nobody on it yet."
+        },
+        {
+          "name": "assigned",
+          "title": "Assigned",
+          "tone": "info",
+          "description": "Someone is on it."
+        },
+        {
+          "name": "done",
+          "title": "Done",
+          "tone": "success",
+          "description": "Fixed and closed."
+        },
+        {
+          "name": "cancelled",
+          "title": "Cancelled",
+          "tone": "neutral",
+          "description": "Not needed after all."
+        }
+      ],
+      "actions": [
+        {
+          "name": "assign",
+          "title": "Assign",
+          "from": [
+            "open",
+            "assigned"
+          ],
+          "to": "assigned",
+          "inputs": [
+            {
+              "name": "assignee",
+              "title": "Assignee",
+              "type": "text",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "complete",
+          "title": "Complete",
+          "from": [
+            "assigned"
+          ],
+          "to": "done",
+          "inputs": [
+            {
+              "name": "resolution",
+              "title": "Resolution",
+              "type": "longtext",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "cancel",
+          "title": "Cancel",
+          "from": [
+            "open",
+            "assigned"
+          ],
+          "to": "cancelled"
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "id": "pg-heating-buildings",
+      "name": "buildings",
+      "title": "Buildings",
+      "description": "The buildings this organisation heats.",
+      "object": "build.building",
+      "list": [
+        "address",
+        "floors",
+        "commissioned"
+      ],
+      "detail": [
+        "address",
+        "floors",
+        "commissioned",
+        "note"
+      ],
+      "actions": [
+        "build.building.create",
+        "build.building.edit",
+        "build.building.archive"
+      ]
+    },
+    {
+      "id": "pg-heating-zones",
+      "name": "zones",
+      "title": "Heating zones",
+      "description": "Risers and loops, with their temperatures.",
+      "object": "build.zone",
+      "list": [
+        "building",
+        "kind",
+        "supplytemp",
+        "returntemp",
+        "active"
+      ],
+      "detail": [
+        "building",
+        "kind",
+        "supplytemp",
+        "returntemp",
+        "active"
+      ],
+      "actions": [
+        "build.zone.create",
+        "build.zone.edit",
+        "build.zone.archive"
+      ]
+    },
+    {
+      "id": "pg-heating-workorders",
+      "name": "workorders",
+      "title": "Work orders",
+      "description": "What is broken, who is on it, and how it was fixed.",
+      "object": "build.workorder",
+      "list": [
+        "summary",
+        "priority",
+        "assignee",
+        "state"
+      ],
+      "detail": [
+        "zone",
+        "summary",
+        "priority",
+        "assignee",
+        "reported",
+        "resolution",
+        "state"
+      ],
+      "actions": [
+        "build.workorder.create",
+        "build.workorder.edit",
+        "build.workorder.assign",
+        "build.workorder.complete",
+        "build.workorder.cancel",
+        "build.workorder.archive"
+      ]
+    },
+    {
+      "id": "pg-heating-meters",
+      "name": "meters",
+      "title": "Meters",
+      "description": "Heat and water meters on the zones.",
+      "object": "build.meter",
+      "list": [
+        "serial",
+        "zone",
+        "kind",
+        "installed"
+      ],
+      "detail": [
+        "serial",
+        "zone",
+        "kind",
+        "installed"
+      ],
+      "actions": [
+        "build.meter.create",
+        "build.meter.edit",
+        "build.meter.archive"
+      ]
+    },
+    {
+      "id": "pg-heating-readings",
+      "name": "readings",
+      "title": "Readings",
+      "description": "What the meters showed, when.",
+      "object": "build.reading",
+      "list": [
+        "meter",
+        "takenat",
+        "energy",
+        "volume"
+      ],
+      "detail": [
+        "meter",
+        "takenat",
+        "energy",
+        "volume",
+        "note"
+      ],
+      "actions": [
+        "build.reading.create",
+        "build.reading.edit",
+        "build.reading.archive"
+      ]
+    }
+  ]
+}

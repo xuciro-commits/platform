@@ -20,7 +20,7 @@ func Copy(t reflect.Type, v any) reflect.Value {
 // EmptyLists makes every nil list of a record an empty one, nested ones too,
 // so a record never reads null where its type says a list: a page reading
 // levels[level] or start.join got null from a Go nil slice (the owner's
-// testing, 2026-09-27). Lists marked omitempty are left out, as their tag says.
+// testing, 2026-09-27). Optional lists keep their declared omission semantics.
 func EmptyLists(v reflect.Value) {
 	switch v.Kind() {
 	case reflect.Struct:
@@ -36,7 +36,7 @@ func EmptyLists(v reflect.Value) {
 				continue
 			}
 			x := v.Field(i)
-			if x.Kind() == reflect.Slice && x.IsNil() && !strings.Contains(f.Tag.Get("json"), "omitempty") && x.CanSet() {
+			if x.Kind() == reflect.Slice && x.IsNil() && !strings.Contains(f.Tag.Get("json"), "omitempty") && !strings.Contains(f.Tag.Get("json"), "omitzero") && x.CanSet() {
 				x.Set(reflect.MakeSlice(x.Type(), 0, 0))
 				continue
 			}

@@ -37,12 +37,15 @@ type UnitGrantUsage struct {
 type AppCatalog interface {
 	Apps() []platform.App
 	App(id string) platform.App
+	AppIDs() []string                      // cached: governance reads it per request
+	Manifest(app string) platform.Manifest // cached: governance reads it per request
 }
 
 // PackageCleanupOwner projects the installed generation and accepted technical
 // receipts; transport cleanup never receives the owner's mutable maps.
 type PackageCleanupOwner interface {
 	PackageCleanupState(string) (state, generation string, proofs map[string]string)
+	RetainedPackageRuntime(string) (bool, error)
 }
 
 // ConsoleHost supplies only tenant governance projections and artifact storage.

@@ -78,12 +78,6 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 					bindings = append(bindings, *f.Property)
 				}
 			}
-		} else if ref.Kind == platform.AssetEvaluation {
-			descriptor, err := platform.ReadEvaluationSet(asset.Body)
-			if err != nil {
-				return err
-			}
-			bindings = append(bindings, descriptor.Function)
 		} else if ref.Kind == platform.AssetFlow {
 			var flow platform.FlowReleaseDescriptor
 			if err := json.Unmarshal(asset.Body, &flow); err != nil {

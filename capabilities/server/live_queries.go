@@ -263,6 +263,14 @@ func (t *Tenant) liveVersion(query string) string {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["enterprise"], generation)
 	}
 	owner := "platform"
+	// Named reads follow the app that declares them, including installed apps.
+	if name, ok := strings.CutPrefix(p, "/v1/"); ok && !strings.Contains(name, "/") {
+		t.mu.Lock()
+		if app := t.owner["read:"+name]; app != nil {
+			owner = app.Manifest().ID
+		}
+		t.mu.Unlock()
+	}
 	switch p {
 	case "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/changes", "/v1/build/drafts/actions", "/v1/release-profile", "/v1/capabilities", "/v1/page-model/rules":
 		owner = "build"

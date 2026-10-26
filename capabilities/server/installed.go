@@ -66,15 +66,34 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 			t.owner["read:"+name] = t.app(id)
 		}
 	}
-	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
+	kept := slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
 		return def.Ref.App == id && def.Source == "tenant" && def.Action != nil && def.Action.Target == info.Type && !slices.ContainsFunc(actions, func(action platform.Action) bool { return action.Schema == def.Ref.Name })
 	})
-	t.definitions = slices.DeleteFunc(t.definitions, func(def platform.Definition) bool {
+	kept = slices.DeleteFunc(kept, func(def platform.Definition) bool {
 		return def.Ref.App == id && def.Protocol != nil && slices.ContainsFunc(def.Requires, func(ref platform.AssetRef) bool {
 			return ref.Kind == platform.AssetAction && strings.HasPrefix(ref.Name, e.Type+".")
 		})
 	})
+	if len(kept) != len(t.definitions) {
+		t.setDefinitions(kept)
+	}
 	return t.installDefinitions(id, info, actions, pages, e.Protocols...)
+}
+
+// decodeRowImage reads one saved row into the current declaration. A type
+// declared again may name fewer fields than the row carries: the ones it
+// dropped are left out and the rest keep their value, so a re-declared type
+// never refuses the rows it already holds.
+func decodeRowImage(info platform.EntityInfo, raw json.RawMessage, projection *records.Projection, release, format string) (json.RawMessage, error) {
+	decode, err := records.DecodeFormattedImage(info, raw, projection, release, format)
+	if err == nil {
+		return decode, nil
+	}
+	pruned, pruneErr := records.PruneImage(info, raw)
+	if pruneErr != nil {
+		return nil, err
+	}
+	return records.DecodeFormattedImage(info, pruned, projection, release, format)
 }
 
 // install declares a type, or declares it again: the rows are carried into the
@@ -111,7 +130,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 				return err
 			}
 			v := reflect.New(info.Go).Elem()
-			decode, err := records.DecodeFormattedImage(info, raw, r.Projection, s.readRelease, r.Format)
+			decode, err := decodeRowImage(info, raw, r.Projection, s.readRelease, r.Format)
 			if err != nil {
 				return err
 			}
@@ -162,7 +181,7 @@ func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 	if index >= 0 {
 		t.definitions[index] = def
 	} else {
-		t.definitions = append(t.definitions, def)
+		t.setDefinitions(append(t.definitions, def))
 	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 }
@@ -179,11 +198,17 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 		if describeErr != nil {
 			return
 		}
+		// A definition read again replaces the one installed before it: a
+		// published object takes its new fields. The generation moves with it,
+		// so every cached catalog, entity view and encoded answer is rebuilt
+		// rather than serving the declaration this one replaced.
 		if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
-			t.definitions[i] = def
+			next := slices.Clone(t.definitions)
+			next[i] = def
+			t.setDefinitions(next)
 			return
 		}
-		t.definitions = append(t.definitions, def)
+		t.setDefinitions(append(t.definitions, def))
 	}
 	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
 	entity := info
@@ -242,6 +267,12 @@ func (t *Tenant) reinstall() error {
 		return err
 	}
 	t.installingSet = before
+	if t.systemDefinitionState.source.Load() != nil {
+		t.systemDefinitionState.applied = ""
+		if err := t.applySystemDefinitionProjection(); err != nil {
+			return err
+		}
+	}
 	return t.validateAssetSet()
 }
 
@@ -966,9 +997,6 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 				return err
 			}
 			known = slices.ContainsFunc(registered, func(d platform.Definition) bool { return d.Ref == ref })
-		}
-		if ref.Kind == platform.AssetFlow {
-			known = t.procs != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.procs.HasPublishedFlow(ref.Name)
 		}
 		if !known {
 			return fmt.Errorf("application %s: no published resource %s", a.Name, ref)

@@ -64,9 +64,19 @@
 // captured-access checks; their evidence and resend policies stay distinct.
 // Race tests do not prove freedom from deadlock.
 //
-// The pipeline is Tenant.Submit (host.go) → accepted_*.go (one file per result kind) →
-// replay.go; snapshot.go carries every component's state. Routes live in
-// routes.go and routes_*.go, one file per API area. Sub-packages: platform/
-// (the apps' only API), apps/ (platform apps), journal/ (durable stores),
-// idp/ (identity providers), internal/host (host-side interfaces).
+// Package direction rule (B3): tools (cmd/ one-shot binaries and scripts/)
+// may import domains; a domain file group owns its result kinds and state and
+// imports only platform/, internal/* and journal/ — never another domain's
+// private files; the host shell (host.go) composes the domains and is the
+// only place allowed to reach across them. routes_*.go are the shell's API
+// surface: they call domains, and domains never call routes.
+//
+// The pipeline is Tenant.Submit (submit.go) → accepted_*.go (one file per
+// result kind) → replay.go; snapshot.go carries every component's state.
+// Reads and connector inputs live in reads.go, accepted-event planning and
+// delivery in events.go, and the member-facing facade (catalog, declarations,
+// apps, directory) in facade.go. Routes live in routes.go and routes_*.go,
+// one file per API area. Sub-packages: platform/ (the apps' only API), apps/
+// (platform apps), journal/ (durable stores), idp/ (identity providers),
+// internal/host (host-side interfaces).
 package platformserver

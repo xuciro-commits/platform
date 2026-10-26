@@ -124,7 +124,7 @@ func (t *Tenant) acceptAgentStep(b stepBody, at time.Time) {
 		return
 	}
 	principal, _ := json.Marshal(member)
-	committed, err := t.acceptResult(Entry{App: AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, r.Key, r.RequestHash)
+	committed, err := t.acceptResult(Entry{App: AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at}, r.Key, r.RequestHash)
 	if err != nil {
 		return
 	}

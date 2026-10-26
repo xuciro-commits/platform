@@ -5,9 +5,7 @@ import (
 	"platformserver/internal/acceptance"
 	"slices"
 	"strings"
-	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/internal/construction"
 	"platformserver/internal/host"
 	"platformserver/platform"
@@ -71,36 +69,6 @@ func (a *Agents) evaluationDefinition(candidate, agent string) (*agentDef, strin
 		return nil, "", fmt.Errorf("the candidate agent needs declared evaluation cases")
 	}
 	return d, digest, nil
-}
-
-func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
-	if t.agents == nil {
-		return "", fmt.Errorf("the agent capability is unavailable")
-	}
-	identity, err := acceptance.Digest([]string{t.ID, m.ID, request.CandidateID, request.Agent, request.Key})
-	if err != nil {
-		return "", err
-	}
-	id := "eval-" + identity[:32]
-	if prior, ok := platform.Get[Evaluation](t.automation(AgentApp, false), id); ok {
-		if prior.Candidate != request.CandidateID || prior.Agent != request.Agent || prior.Created.By != m.ID {
-			return "", fmt.Errorf("the original evaluation request differs")
-		}
-		return id, nil
-	}
-	model := t.setting(t.automation(AgentApp, false), SettingAgentModel)
-	if model == "" {
-		return "", fmt.Errorf("set the agent model before evaluating a candidate")
-	}
-	sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: AgentApp,
-		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: EvaluationType, Id: id},
-		Schema: &pb.SchemaRef{Name: SchemaEvalStart, Version: 1}, Payload: platform.Raw(map[string]any{"agent": request.Agent, "model": model, "suite": true, "candidate": request.CandidateID})}
-	// This builder-only endpoint queues the original evaluator as the actual
-	// builder, so its authorized reads/probes retain that person's identity.
-	if _, refusal := t.submitAccepted(t.agents, m, sub, now, true); refusal != nil {
-		return "", fmt.Errorf("agent evaluation was refused: %s", refusal.Message)
-	}
-	return id, nil
 }
 
 func (t *Tenant) agentEvaluationsReadyLocked(candidate platform.ReleaseCandidate) error {

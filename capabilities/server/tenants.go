@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"platformserver/internal/systemscope"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
@@ -129,7 +132,47 @@ func (d *Deployment) Tenants(development TenantSpec) []TenantSpec {
 	if err := d.specs.load(d.TenantsFile, development); err != nil {
 		log.Fatalf("tenants: %v", err)
 	}
-	return d.specs.all()
+	d.system = d.systemSpec(development)
+	list := d.specs.all()
+	if _, ok := d.specs.get(systemscope.Tenant); ok {
+		return list
+	}
+	return append(list, d.system)
+}
+
+// systemSpec is the host-level tenant that owns the system itself. It is not
+// created, renamed or deleted through the console: the host always serves it,
+// with the host administrators as the people who may change the system.
+func (d *Deployment) systemSpec(development TenantSpec) TenantSpec {
+	roles := map[string]string{
+		"platform": Admin, "system": "publisher", "build": "builder",
+		platform.AIApp: platform.AIAdmin, AgentApp: AgentAdmin,
+	}
+	seats := []Seat{}
+	if d.HostAdmins != "" {
+		for _, subject := range strings.Split(d.HostAdmins, ",") {
+			subject = strings.TrimSpace(subject)
+			if subject == "" {
+				continue
+			}
+			seats = append(seats, Seat{Subjects: []string{subject}, Member: platform.Member{ID: "operator", Roles: roles}})
+		}
+	}
+	if len(seats) == 0 {
+		for _, seat := range development.Seats {
+			merged := platform.Member{ID: seat.Member.ID, Roles: maps.Clone(seat.Member.Roles)}
+			if merged.Roles == nil {
+				merged.Roles = map[string]string{}
+			}
+			for app, role := range roles {
+				if _, held := merged.Roles[app]; !held {
+					merged.Roles[app] = role
+				}
+			}
+			seats = append(seats, Seat{Subjects: seat.Subjects, Member: merged})
+		}
+	}
+	return TenantSpec{ID: systemscope.Tenant, Name: "Platform", Seats: seats}
 }
 
 // SeatsFor are the configured seats of a tenant, for the binary's Rebuild.
@@ -137,7 +180,10 @@ func (d *Deployment) SeatsFor(id string) []Seat {
 	if d.specs == nil {
 		return nil
 	}
-	spec, _ := d.specs.get(id)
+	spec, ok := d.specs.get(id)
+	if !ok && id == systemscope.Tenant {
+		return d.system.Seats
+	}
 	return spec.Seats
 }
 

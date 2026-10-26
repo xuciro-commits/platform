@@ -33,7 +33,6 @@ type PackageDraftResult struct {
 func (h *Host) routesPackageDrafts(rt *routes) {
 	h.routesPackageSources(rt)
 	h.routesComposition(rt)
-	h.routesPackageCleanup(rt)
 	rt.authorized(Route{Pattern: "POST /v1/packages/{id}/drafts", Summary: "Create original Build drafts from an installed package; publication and permissions stay separate", Body: PackageDraftRequest{}, Answer: PackageDraftResult{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request PackageDraftRequest
 		if !decodeReleaseBody(w, r, &request) {
@@ -186,7 +185,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			}
 			continue
 		}
-		decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until})
+		_, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until})
 		if err != nil {
 			return PackageDraftResult{}, err
 		}
@@ -196,7 +195,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			return PackageDraftResult{}, err
 		}
 		principal, _ := json.Marshal(m)
-		committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
+		committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at}, saved.Key, saved.RequestHash)
 		if err != nil {
 			return PackageDraftResult{}, err
 		}

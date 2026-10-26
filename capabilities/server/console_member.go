@@ -77,11 +77,9 @@ func (d *Console) primaryRole(app string, grants []platform.Grant) string {
 		return slices.ContainsFunc(grants, func(g platform.Grant) bool { return g.App == app && g.Role == role })
 	}
 	if d.host != nil {
-		if a := d.host.App(app); a != nil {
-			for _, role := range a.Manifest().AllRoles() {
-				if held(role) {
-					return role
-				}
+		for _, role := range d.host.Manifest(app).AllRoles() {
+			if held(role) {
+				return role
 			}
 		}
 	}

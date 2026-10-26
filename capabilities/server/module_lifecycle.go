@@ -110,9 +110,6 @@ func (t *Tenant) deactivateOwners(disabled []string) error {
 		if _, ok := app.(host.Tasks); ok {
 			t.tasks = nil
 		}
-		if _, ok := app.(host.Processes); ok {
-			t.procs = nil
-		}
 		if _, ok := app.(AgentRuntime); ok {
 			t.agents = nil
 		}

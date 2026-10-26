@@ -45,9 +45,6 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 	application.Groups = groups
 	application.Header = application.VisibleHeader()
 	application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
-		if ref.Kind == platform.AssetFlow {
-			return !m.Holds("build", "builder") || !projection.PublishedFlows[ref]
-		}
 		return !visibleResources[ref]
 	})
 	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {

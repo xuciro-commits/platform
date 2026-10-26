@@ -18,9 +18,10 @@ import (
 // both built once per language. It needs nothing of the tenant but its apps.
 type translator struct {
 	apps         func() []platform.App
-	tenant       func() map[string]map[string]string // the tenant's own words, last
-	dictionaries sync.Map                            // language → map[string]string
-	patternCache sync.Map                            // language → []pattern
+	manifest     func(platform.App) platform.Manifest // cached; nil reads the app directly
+	tenant       func() map[string]map[string]string  // the tenant's own words, last
+	dictionaries sync.Map                             // language → map[string]string
+	patternCache sync.Map                             // language → []pattern
 }
 
 // A pattern is a dictionary key with {placeholders}, such as "Downtime on
@@ -52,7 +53,11 @@ func (x *translator) languages() []string {
 	}
 	add(PlatformLanguages)
 	for _, a := range x.apps() {
-		add(a.Manifest().Languages)
+		if x.manifest != nil {
+			add(x.manifest(a).Languages)
+		} else {
+			add(a.Manifest().Languages)
+		}
 	}
 	if x.tenant != nil {
 		for lang := range x.tenant() {

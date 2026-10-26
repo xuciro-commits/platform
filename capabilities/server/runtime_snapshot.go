@@ -89,12 +89,6 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	if console, ok := t.app(PlatformApp).(IdentityRecovery); ok {
 		console.CloseTokenSecretWindows()
 	}
-	if t.procs != nil {
-		if err = t.procs.Check(); err != nil {
-			return fmt.Errorf("process recovery: %w", err)
-		}
-	}
-	t.flowArtifactRecoveryComplete(started)
 	t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
 	t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
 	t.attachJournal(ctx, j)

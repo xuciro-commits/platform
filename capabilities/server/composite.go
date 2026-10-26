@@ -224,24 +224,24 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []CompositeEdit,
 		}
 		sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: construction.ID, IdempotencyKey: key + "#" + strconv.Itoa(i), Target: edit.Target, Schema: &pb.SchemaRef{Name: edit.Schema, Version: 1}, Payload: edit.Payload}
 		if refusal := t.delegatedBound(m, sub); refusal != nil {
-			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s)", i+1, edit.Schema, refusal.Error())
+			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s): %s", i+1, edit.Schema, refusal.Error(), refusal.Message)
 			break
 		}
 		r, refusal := platform.Decide(platform.NewCaller(draft, m, construction.ID, false, false), app, sub, now)
 		if refusal != nil {
-			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s)", i+1, edit.Schema, refusal.Error())
+			saved.Refusal = fmt.Sprintf("edit %d: %s refused (%s): %s", i+1, edit.Schema, refusal.Error(), refusal.Message)
 			break
 		}
 		receipt = r
 	}
 	if saved.Refusal == "" {
 		if refusal := draft.answerRequests(now); refusal != nil {
-			saved.Refusal = refusal.Error()
+			saved.Refusal = fmt.Sprintf("%s: %s", refusal.Error(), refusal.Message)
 		}
 	}
 	if saved.Refusal == "" {
 		if refusal := draft.stageObservers(); refusal != nil {
-			saved.Refusal = refusal.Error()
+			saved.Refusal = fmt.Sprintf("%s: %s", refusal.Error(), refusal.Message)
 		}
 	}
 	if saved.Refusal == "" {
@@ -255,7 +255,7 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []CompositeEdit,
 		return CompositeAnswer{}, err
 	}
 	principal, _ := json.Marshal(m)
-	committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now, Versions: draft.flowVersions()}, saved.Key, saved.RequestHash)
+	committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, saved.Key, saved.RequestHash)
 	if err != nil {
 		return CompositeAnswer{}, err
 	}
@@ -282,9 +282,15 @@ func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedCompo
 	return compositeAnswer(applied)
 }
 
+// Only a saved terminal refusal lets the client correct an intent with a new
+// key. Append/application failures may already be durable and remain unknown.
+type compositeRefusal string
+
+func (r compositeRefusal) Error() string { return string(r) }
+
 func compositeAnswer(saved acceptedComposite) (CompositeAnswer, error) {
 	if saved.Refusal != "" {
-		return CompositeAnswer{}, fmt.Errorf("%s", saved.Refusal)
+		return CompositeAnswer{}, compositeRefusal(saved.Refusal)
 	}
 	return CompositeAnswer{Key: strings.TrimPrefix(saved.Key, "composite:"), Applied: len(saved.Edits), Digest: saved.Digest}, nil
 }
@@ -354,7 +360,7 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedComposite, error) {
 	if err := t.records.promoteRecords(draft.records); err != nil {
 		return saved, err
 	}
-	t.definitions = draft.definitions
+	t.setDefinitions(draft.definitions)
 	t.committed.saveComposite(saved.Key, saved.Digest)
 	t.audit.remember(AuditEntry{At: saved.At, Member: saved.Member, App: construction.ID, Action: "composite", Target: saved.Key})
 	return saved, nil

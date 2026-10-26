@@ -60,7 +60,7 @@ type AgentRunRecord struct {
 	Step              string                  `json:"step,omitempty" field:"readonly" source:"record"` // that step's name
 	State             string                  `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
 	Model             string                  `json:"model,omitempty" field:"readonly" source:"record"`
-	Steps             []RunStep               `json:"steps" field:"readonly"`
+	Steps             []RunStep               `json:"steps" field:"readonly" type:"json"`
 	Pending           []ToolCall              `json:"pending,omitempty" field:"readonly"` // accepted calls still awaiting their own result
 	StepsUsed         int                     `json:"stepsUsed" field:"readonly" title:"Model turns"`
 	TokensUsed        int                     `json:"tokensUsed" field:"readonly" title:"Tokens"`
@@ -126,6 +126,7 @@ type RunStep struct {
 }
 
 type agentTool struct {
+	inputs []platform.Field
 	query  platform.NamedQuery
 	kind   string // action, protocol, query, read, context, search, ask, finish
 	schema string // the action, "<protocol>#<action>" or the read's name
@@ -336,7 +337,9 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 				if !slices.Contains(m.Reads, read) {
 					return fmt.Errorf("agent %s reads %s, not a read of %s", id, read, m.ID)
 				}
-				tool = agentTool{kind: "read", schema: read, tool: Tool{Description: "Read " + read + " of " + m.ID + ".", Properties: map[string]any{"rationale": rationale()}, Required: []string{"rationale"}}}
+				fields := m.ReadInputs[read]
+				schema := platform.ActionInputSchema(platform.Action{Payload: fields}, nil, nil)
+				tool = agentTool{kind: "read", schema: read, inputs: fields, tool: Tool{Description: "Read " + read + " of " + m.ID + ".", Properties: map[string]any{"inputs": schema, "rationale": rationale()}, Required: []string{"inputs", "rationale"}}}
 			default:
 				var action platform.Action
 				kind := "action"
@@ -364,11 +367,8 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 				}
 				info, _ := a.host.Entity(action.Target)
 				schema := platform.ActionInputSchema(action, &info, nil)
-				props := schema["properties"].(map[string]any)
-				props["target"] = map[string]any{"type": "string", "description": "The ID of the " + cmp.Or(action.Target, "record") + " the action is about"}
-				props["rationale"] = rationale()
-				required := append(schema["required"].([]string), "target", "rationale")
-				tool = agentTool{kind: kind, schema: name, target: action.Target, tool: Tool{Description: action.Title + ": " + action.Description, Properties: props, Required: required}}
+				props := map[string]any{"target": map[string]any{"type": "string", "description": "The ID of the " + cmp.Or(action.Target, "record") + " the action is about"}, "rationale": rationale(), "payload": schema}
+				tool = agentTool{kind: kind, schema: name, target: action.Target, tool: Tool{Description: action.Title + ": " + action.Description, Properties: props, Required: []string{"target", "rationale", "payload"}}}
 			}
 			tool.tool.Name = agentToolName(name)
 			d.tools[tool.tool.Name] = tool

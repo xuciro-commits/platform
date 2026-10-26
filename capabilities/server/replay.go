@@ -18,13 +18,7 @@ import (
 func (t *Tenant) Replay(entries []Entry) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.procs != nil {
-		defer t.procs.Pin(nil)
-	}
 	for i, e := range entries {
-		if t.procs != nil {
-			t.procs.Pin(e.Versions)
-		}
 		var m platform.Member
 		a := t.app(e.App)
 		if a == nil || json.Unmarshal(e.Principal, &m) != nil {

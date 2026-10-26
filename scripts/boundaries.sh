@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
-# Dependency boundaries inside the platform host (see docs/Architecture.md):
-#   1. the runtime imports no concrete platform app; an app reaches the runtime
-#      only through the app API (platformserver/platform) and internal/host.
-#      Binaries (cmd/) compose tenants and may import the runtime, and so may
-#      test harnesses (packages named *test, like httptest);
-#   2. a platform app (capabilities/server/apps/<id>) never imports the host
-#      runtime or a sibling app;
-#   3. code outside platform never touches .Changes or .changes directly: all
-#      reads and decisions go through locked methods (RecordsFor, Receive, etc.).
-# Business applications are declarative packages in deploy/packages, installed
-# through Build; there is no second app tree to scan. The retired external app
-# and protocol modules left no directory behind, so this script guards the one
-# host module that remains.
+# Platform owners consume the public API and named private host roles.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
@@ -20,8 +8,6 @@ fail() { echo "boundary: $*" >&2; exit 1; }
 # omitted by current OS/build tags. No count allowance or migration exception.
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 
-# A platform app reaches the runtime through the app API and internal/host, never
-# through the host runtime itself; only cmd/ binaries and test harnesses may.
 hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./apps/... 2>/dev/null | grep -E ' platformserver( |$)' || true)
 [[ -z $hits ]] || fail "a platform app imports the host runtime, not the app API and internal/host:"$'\n'"$hits"
 
@@ -39,4 +25,4 @@ selection=$(grep -nE 'type (ResultApp|AcceptedActionApp|AcceptedWorker) interfac
 [[ -z $selection ]] || fail "submission admission has optional legacy selectors:"$'\n'"$selection"
 
 platformapps=$(cd capabilities/server && go list ./apps/... 2>/dev/null | wc -l | tr -d ' ')
-echo "boundaries ok: $platformapps platform apps as packages, one host module"
+echo "boundaries ok: $platformapps platform owners as packages"

@@ -25,7 +25,11 @@ func (l *tenantLane) Lock() { l.lockContext(context.Background()) }
 func (l *tenantLane) lockContext(ctx context.Context) {
 	l.lock.Lock()
 	if l.tenant != nil {
+		l.tenant.recordReadError = nil
 		l.tenant.openRecordRead(ctx)
+		if l.tenant.recordReadError == nil && !l.tenant.quarantined() {
+			l.tenant.recordReadError = l.tenant.applySystemDefinitionProjection()
+		}
 	}
 }
 func (l *tenantLane) Unlock() {
@@ -85,7 +89,7 @@ func (t *Tenant) recordReadRefusal() *kernel.Error {
 	return nil
 }
 func recordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	if !t.currentReadScopes {
+	if !t.currentReadScopes && t.systemDefinitionState.source.Load() == nil {
 		return read()
 	}
 	return coordinatedRecordRead(t, ctx, read)
@@ -130,10 +134,6 @@ func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now 
 	return recordRead(t, context.Background(), func() (Aggregate, *kernel.Error) { return t.aggregateRead(m, typ, q, now) })
 }
 
-func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (Chain, *kernel.Error) { return t.chainRead(m, ref, now) })
-}
-
 func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {
 	return recordRead(t, context.Background(), func() (ContextView, *kernel.Error) { return t.contextRead(reader, typ, id, now) })
 }
@@ -148,16 +148,6 @@ func (t *Tenant) RunQueryWindow(m platform.Member, app, name, of, version string
 
 func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
 	return recordRead(t, context.Background(), func() ([]byte, *kernel.Error) { return t.exportRead(m, typ, q, now) })
-}
-
-func (t *Tenant) EnterpriseReferences(m platform.Member, element string, offset, limit int, now time.Time) ([]EnterpriseReferenceGroup, *kernel.Error) {
-	return recordRead(t, context.Background(), func() ([]EnterpriseReferenceGroup, *kernel.Error) {
-		return t.enterpriseReferencesRead(m, element, offset, limit, now)
-	})
-}
-
-func (t *Tenant) EnterpriseUsage(m platform.Member, id, until string, now time.Time) (EnterpriseUsage, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (EnterpriseUsage, *kernel.Error) { return t.enterpriseUsageRead(m, id, until, now) })
 }
 
 func (t *Tenant) InterfaceRecords(m platform.Member, name string, query platform.Query, now time.Time) (InterfaceRecordPage, *kernel.Error) {

@@ -16,7 +16,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/internal/construction"
-	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/platform"
 )
 
@@ -74,9 +73,6 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []platform.AIModel{}},
 	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: platform.AIUsageReport{}},
 	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships (a projection of the enterprise model)", Answer: platform.OrgSeed{}},
-	{Pattern: "GET /v1/enterprise", Summary: "The tenant's enterprise model: kinds, elements, relationships and views", Answer: enterprisemodel.Model{}},
-	{Pattern: "GET /v1/enterprise-metamodel", Summary: "The UAF metamodel, Enterprise Core profile and grid cells the modeler draws from", Answer: enterprisemodel.Metamodel{}},
-	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []platform.FlowDefinition{}},
 	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []platform.RelationLink{}},
 	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []platform.RelationNote{}},
 }
@@ -142,11 +138,7 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	s.of(reflect.TypeFor[platform.InputOptions]())
 	s.of(reflect.TypeFor[platform.ImageRegionsRequest]())
 	s.of(reflect.TypeFor[construction.Table]())
-	s.of(reflect.TypeFor[construction.Source]())
-	s.of(reflect.TypeFor[construction.Connection]())
 	s.of(reflect.TypeFor[platform.BusinessTxn]())
-	s.of(reflect.TypeFor[platform.ConfirmationRun]())
-	s.of(reflect.TypeFor[platform.DispatchRun]())
 	paths := map[string]any{}
 	for _, r := range h.routes {
 		method, path, _ := strings.Cut(r.Pattern, " ")
@@ -289,10 +281,6 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 				"RelationLink": "Link", "RelationNote": "Note",
 			}[name]; public != "" {
 				name = public
-			}
-		case "platformserver/internal/enterprise":
-			if name == "Model" {
-				name = "EnterpriseModel"
 			}
 		}
 		if name == "" || strings.Contains(name, "[") {

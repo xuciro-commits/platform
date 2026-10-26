@@ -1,6 +1,5 @@
-# The platform host's two deployments on their production path, locally (#87, #92):
-# Two instances of the same platform-server, configured with application packages. PostgreSQL
-# keeps the journal, Rauthy issues identities, each host replays the journal on start. Each host serves the workspace, built first:
+# One platform authority, exposed through both retained local URLs. PostgreSQL
+# keeps the journal and Rauthy retains the original identities. Build the workspace first:
 # `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
 name: platform
@@ -48,39 +47,6 @@ services:
       - ./rauthy/bootstrap:/app/bootstrap:ro
       - rauthy:/app/data
 
-  manufacturing-server:
-    # Permit the non-root host to append tenants.json through its owning group.
-    group_add: ["${TENANTS_GID:-20}"]
-    build:
-      context: ../..
-      dockerfile: capabilities/server/cmd/platform-server/Dockerfile
-      args: { PLATFORM_REVISION: "${PLATFORM_REVISION:-}" }
-    command:
-      - -addr=0.0.0.0:8490
-      - -database=postgres://platform:platform-local-only@postgres:5432/platform
-      - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
-      - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
-      - -tenants=/etc/manufacturing/tenants.json
-      - -packages=/etc/packages
-      - -templates=/etc/templates
-      - -host-admins=user:sup@plant.test
-      - -web=/web
-      - -project
-      - -files=http://rustfs:9000/platform
-    ports: ["127.0.0.1:${MANUFACTURING_PORT:-8490}:8490"]
-    volumes: ["${MANUFACTURING_TENANTS_FILE:-./manufacturing/tenants.json}:/etc/manufacturing/tenants.json", ../templates:/etc/templates:ro, ../packages:/etc/packages:ro, compute-sockets:/run/platform-compute]
-    environment: { PLATFORM_CREDENTIAL_KEY: "${PLATFORM_CREDENTIAL_KEY:-}", PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
-      PLATFORM_SECRET_PRODUCTION_UPSTREAM: "${PLATFORM_SECRET_PRODUCTION_UPSTREAM:-}",
-      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
-      PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
-    depends_on:
-      postgres: { condition: service_healthy }
-      rauthy: { condition: service_started }
-      rustfs: { condition: service_started }
-      wasm-worker: { condition: service_healthy }
-      code-builder: { condition: service_healthy }
-    restart: on-failure
-
   hospitality-server:
     group_add: ["${TENANTS_GID:-20}"]
     build:
@@ -92,15 +58,14 @@ services:
       - -database=postgres://platform:platform-local-only@postgres:5432/platform
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
-      - -tenants=/etc/hospitality/tenants.json
-      - -packages=/etc/packages
+      - -tenants=/etc/platform/tenants.json
       - -templates=/etc/templates
       - -host-admins=user:manager@hotel.test
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
-    ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
-    volumes: ["${HOSPITALITY_TENANTS_FILE:-./hospitality/tenants.json}:/etc/hospitality/tenants.json", ../templates:/etc/templates:ro, ../packages:/etc/packages:ro, compute-sockets:/run/platform-compute]
+    ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495", "127.0.0.1:${MANUFACTURING_PORT:-8490}:8495"]
+    volumes: ["${PLATFORM_TENANTS_FILE:-./platform/tenants.json}:/etc/platform/tenants.json", ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
     # Webhook signing secrets, referenced by name from endpoints; local-only.
     environment: { PLATFORM_CREDENTIAL_KEY: "${PLATFORM_CREDENTIAL_KEY:-}", PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
       PLATFORM_SECRET_LODGING_UPSTREAM: "${PLATFORM_SECRET_LODGING_UPSTREAM:-}",
@@ -157,11 +122,6 @@ services:
     stop_grace_period: 15s
     restart: on-failure
 
-  # A webhook receiver, mail server, model server and supplier's agent for local endpoints and the rehearsal.
-  webhook-sink:
-    build: { context: ../.., dockerfile: capabilities/server/cmd/webhook-sink/Dockerfile }
-    environment: { WEBHOOK_SECRET: sinkLocalOnly0000000000000000000000000000000000000000000000000000 }
-    ports: ["127.0.0.1:${SINK_PORT:-8497}:8080"]
 
 volumes:
   pgdata:

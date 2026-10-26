@@ -155,9 +155,7 @@ func (d *Console) TenantRecord() TenantRecord {
 	if out.Name == "" {
 		out.Name = d.tenant
 	}
-	for _, a := range h.Apps() {
-		out.Apps = append(out.Apps, a.Manifest().ID)
-	}
+	out.Apps = append(out.Apps, h.AppIDs()...)
 	d.mu.Lock()
 	out.Members = len(d.members)
 	d.mu.Unlock()

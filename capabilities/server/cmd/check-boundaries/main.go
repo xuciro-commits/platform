@@ -21,8 +21,6 @@ func main() {
 	root := flag.String("root", "../..", "repository root")
 	flag.Parse()
 	var failures []string
-	// The host module is the only Go app tree: the external app and protocol
-	// modules are retired, and business applications are declarative packages.
 	for _, area := range []string{"capabilities/server"} {
 		err := filepath.WalkDir(filepath.Join(*root, area), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {

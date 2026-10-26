@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"platformserver/internal/construction"
+	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
 
@@ -75,7 +76,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (resultformat.Release, error) 
 		} else if err := t.records.promoteRecords(draft.records); err != nil {
 			return saved, err
 		}
-		t.definitions = draft.definitions
+		t.setDefinitions(draft.definitions)
 		for key, app := range draft.owner {
 			draft.owner[key] = t.app(app.Manifest().ID)
 		}
@@ -178,6 +179,9 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 }
 
 func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key, upgradeID string, now time.Time) (string, error) {
+	if t.ID == systemscope.Tenant {
+		return "", fmt.Errorf("system definitions activate through an approved Platform change")
+	}
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
@@ -229,9 +233,6 @@ func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key,
 	}
 	installations, bootstrap, err = t.prepareReleaseLifecycleLocked(candidate, m, now, upgradeID != "" || migrated)
 	if err != nil {
-		return "", err
-	}
-	if err := t.evaluationsReadyLocked(candidateID, raw); err != nil {
 		return "", err
 	}
 	saved := resultformat.Release{Version: 1, Kind: "release-result", Tenant: t.ID, App: construction.ID,

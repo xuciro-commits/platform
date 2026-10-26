@@ -34,7 +34,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			err = fmt.Errorf("tenant %s recovery panicked: %v", id, failure)
 		}
 	}()
-	recoveryStarted := time.Now().UTC()
 	selection := old.desiredRuntime()
 	if missingRuntime(selection) {
 		return fmt.Errorf("tenant %s needs a compatible provider selection before recovery", id)
@@ -55,17 +54,13 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 		return fmt.Errorf("tenant %s recovery factory has different app composition or restore formats: %v", id, err)
 	}
 	fresh.Files, fresh.Secrets, fresh.Outbound, fresh.AIClient = old.Files, old.Secrets, old.Outbound, old.AIClient
+	fresh.systemDefinitionState.source.Store(old.systemDefinitionState.source.Load())
 	entries, err := journal.Entries(ctx, id, 0)
 	if err != nil {
 		return fmt.Errorf("read tenant %s from the beginning: %w", id, err)
 	}
 	if err := fresh.recoverEntries(entries); err != nil {
 		return fmt.Errorf("recover tenant %s: %w", id, err)
-	}
-	if fresh.procs != nil {
-		if err := fresh.procs.Check(); err != nil {
-			return fmt.Errorf("process recovery for tenant %s: %w", id, err)
-		}
 	}
 	var projection *Projection
 	if pgPool, pg := journalPool(journal); d.Project && pg {
@@ -87,7 +82,6 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 			return fmt.Errorf("write repaired tenant %s checkpoint: %w", id, err)
 		}
 	}
-	fresh.flowArtifactRecoveryComplete(recoveryStarted)
 	if err := fresh.migrateRuntimeState(ctx, journal); err != nil {
 		return fmt.Errorf("recover tenant %s runtime state: %w", id, err)
 	}
@@ -98,6 +92,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if err := registry.replace(id, old, fresh); err != nil {
 		return err
 	}
+	(&Host{}).bindSystemDefinitions(registry.list())
 	if projection != nil {
 		d.runProjection(registry, fresh, projection)
 	}

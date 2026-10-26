@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild and verify the two configured platform hosts without clearing data.
+# Rebuild one platform authority and verify both retained URLs without clearing data.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 if [[ -n $(git status --porcelain -- capabilities/server contract web deploy scripts Makefile) ]]; then
@@ -35,8 +35,15 @@ environment.stop()
 subprocess.run(['make', 'local'], cwd=root, check=True)
 revision = os.environ['PLATFORM_REVISION']
 hosts = []
+listeners = environment.native_listeners()
+if not listeners:
+    raise SystemExit('The selected local processes are not listening yet')
 for solution, api, port in environment.SOLUTIONS:
-    metadata = subprocess.check_output(['go', 'version', '-m', str(root / '.build/dev' / (solution + '-server'))], text=True)
+    binary = root / '.build/dev' / (environment.SOLUTIONS[0][0] + '-server')
+    api_pid = listeners[solution]['api']
+    if not environment.running_binary(api_pid, binary):
+        raise SystemExit(f'{solution}: API listener {api_pid} is not running the current binary')
+    metadata = subprocess.check_output(['go', 'version', '-m', str(binary)], text=True)
     if 'vcs.revision=' + revision not in metadata or 'vcs.modified=true' in metadata:
         raise SystemExit(f'{solution}: local binary differs from the committed revision')
     base = f'http://localhost:{port}'
@@ -53,7 +60,10 @@ for solution, api, port in environment.SOLUTIONS:
         with urllib.request.urlopen(base + asset, timeout=10) as response:
             if not response.read():
                 raise SystemExit(f'{solution}: empty workspace resource {asset}')
-    hosts.append({'service': solution + '-server', 'url': base, 'revision': revision, 'mode': 'native', 'health': health, 'matchedAssets': len(assets)})
+    current = environment.native_listeners()
+    if not current or current[solution]['api'] != api_pid or not environment.running_binary(api_pid, binary):
+        raise SystemExit(f'{solution}: API listener changed during verification; retry the local update')
+    hosts.append({'service': solution + '-server', 'url': base, 'revision': revision, 'mode': 'native', 'apiPID': api_pid, 'health': health, 'matchedAssets': len(assets)})
     print(f'{base}: {revision[:12]}, healthy, Vite + {len(assets)} resources verified')
 report = {'revision': revision, 'mode': 'native', 'checkedAtUTC': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'hosts': hosts}
 (root / '.build/local-update' / (revision + '.json')).write_text(json.dumps(report, indent=2) + '\n')
@@ -63,7 +73,7 @@ fi
 python3 deploy/dev/environment.py prepare-docker
 pnpm --dir web/apps/workspace build
 docker compose -f deploy/local/compose.yaml config --quiet
-docker compose -f deploy/local/compose.yaml up -d --no-deps --build hospitality-server manufacturing-server
+docker compose -f deploy/local/compose.yaml up -d --no-deps --build hospitality-server
 python3 - <<'PY'
 from pathlib import Path
 import datetime, hashlib, json, os, re, subprocess, time, urllib.request
@@ -71,10 +81,10 @@ root = Path.cwd()
 revision = os.environ['PLATFORM_REVISION']
 dist = root / 'web/apps/workspace/dist'
 html = (dist / 'index.html').read_bytes()
-assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html.decode())) | {'/popout.html'})
+assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+)"', html.decode())))
 compose = ['docker', 'compose', '-f', 'deploy/local/compose.yaml']
 hosts = []
-for service, port in [('hospitality-server', 8495), ('manufacturing-server', 8490)]:
+for service, port in [('hospitality-server', 8495), ('hospitality-server', 8490)]:
     container = subprocess.check_output([*compose, 'ps', '-q', service], text=True).strip()
     image = subprocess.check_output(['docker', 'inspect', '--format', '{{.Image}}', container], text=True).strip()
     stamped = subprocess.check_output(['docker', 'image', 'inspect', '--format', '{{index .Config.Labels "org.opencontainers.image.revision"}}', image], text=True).strip()

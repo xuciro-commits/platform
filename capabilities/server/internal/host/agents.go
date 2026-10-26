@@ -37,14 +37,13 @@ type AgentHost interface {
 	Entity(string) (platform.EntityInfo, bool)
 	ActiveRelease() string
 	AgentTasks() TaskClosure
-	AgentFlows() AgentFlowCompletion
 	ProtocolActions(string) []platform.Action
 	ProtocolProvider(string) (platform.App, string, bool)
 	InvokeDecision(platform.Caller, string, string, string, []byte, string, string, time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)
 	AgentContext(*platform.Member, string, string, time.Time) (AgentObservation, *kernel.Error)
 	AgentSearch(*platform.Member, string, time.Time) AgentObservation
 	AgentQuery(platform.Member, platform.NamedQuery, string, time.Time) (AgentObservation, *kernel.Error)
-	AgentRead(platform.Member, string) (AgentObservation, *kernel.Error)
+	AgentRead(platform.Member, string, ...json.RawMessage) (AgentObservation, *kernel.Error)
 	AgentSources(any) []string
 	AgentKnowledge(*platform.Member, string, string, int, time.Time) json.RawMessage
 	AgentAppReader(string) *platform.Member
@@ -77,7 +76,4 @@ type AgentEvaluationDefinitions interface {
 // it cannot install, pin or redeclare a flow through either collaborator.
 type TaskClosure interface {
 	Close(platform.Caller, *pb.ChangeRecord, string)
-}
-type AgentFlowCompletion interface {
-	RunEnded(platform.Caller, RunEnd, time.Time)
 }

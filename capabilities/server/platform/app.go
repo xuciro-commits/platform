@@ -150,7 +150,12 @@ type Caller struct {
 	rt               Runtime
 	creationDepth    int
 	transactionInput *pb.Submission
+	agentRun         string
 }
+
+// AgentRun is the invocation bound by the agent owner, never a client-supplied
+// correlation label. Changing the acting principal drops this binding.
+func (c Caller) AgentRun() string { return c.agentRun }
 
 // TransactionInput is invocation context; writes retain their original receipt.
 func (c Caller) TransactionInput(receipt *pb.ChangeRecord) *pb.Submission {
@@ -282,6 +287,15 @@ func RouteCaller(c Caller, app string) Caller {
 // Approval execution and platform work must not acquire a live runtime here.
 func ActingCaller(parent Caller, m Member, app string, automation bool) Caller {
 	return NewCaller(parent.rt, m, app, parent.Replaying, automation)
+}
+
+// AgentCaller binds a managed agent's action to its original execution.
+func AgentCaller(parent Caller, m Member, app, run string) Caller {
+	c := ActingCaller(parent, m, app, true)
+	if m.Agent {
+		c.agentRun = run
+	}
+	return c
 }
 
 // Attempt delegates the handling of a nested business refusal to the decision
@@ -454,6 +468,9 @@ type Manifest struct {
 	Version string
 	Actions *Catalog
 	Reads   []string
+	// ReadInputs declares optional parameters of named reads. The original
+	// reader owns their meaning; HTTP and agent tools share this declaration.
+	ReadInputs map[string][]Field
 	// ReadSources declares original non-entity results, such as an owner's
 	// configuration or retained definitions. Copied/generated business content
 	// instead declares source/from on its fields (from names a Go ref field,
@@ -481,7 +498,6 @@ type Manifest struct {
 	Functions     []AIFunction            // typed, bounded inference through existing model effects
 	Operations    []Operation             // typed native or controlled Wasm computation
 	Observations  []ObservationDefinition // external summaries and result-only business decisions
-	Flows         []Flow                  // long-running processes the host runs for the app
 	Agents        []Agent                 // AI agents the host runs for the app
 	Sequences     []Sequence              // numbers of its documents, without gaps
 	// Roles are roles that grant no action but open something else, such as
@@ -516,6 +532,11 @@ type App interface {
 // Reader serves the named reads declared by an app's manifest.
 type Reader interface {
 	Read(c Caller, name string) (any, *kernel.Error)
+}
+
+// ParameterizedReader serves named reads with the manifest's declared inputs.
+type ParameterizedReader interface {
+	ReadInput(c Caller, name string, inputs json.RawMessage) (any, *kernel.Error)
 }
 
 // InputReceiver handles the connector inputs declared by an app's manifest.

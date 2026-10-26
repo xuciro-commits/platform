@@ -36,8 +36,6 @@ func definitionFamilyOf(record any) definitionFamily {
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case LinkType:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
-	case SampleSetRecord:
-		return definitionFamily{r.Record, r.Name, r.State, r.DefinitionVersion, r.Published, r.Versions}
 	case MigrationPlanRecord:
 		return definitionFamily{r.Record, r.Name, r.State, r.DefinitionVersion, r.Published, r.Versions}
 	}
@@ -275,7 +273,7 @@ func prepareDefinitionPublications[T any](b *Build, assets []platform.ReleaseAss
 			same := err == nil
 			if same {
 				if kind == platform.AssetFunction {
-					same = equalIntegrationAsset(prior, asset)
+					same = equalAsset(prior, asset)
 				} else {
 					var retained, candidate any
 					same = json.Unmarshal(prior.Body, &retained) == nil && json.Unmarshal(asset.Body, &candidate) == nil && reflect.DeepEqual(retained, candidate)

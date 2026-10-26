@@ -69,3 +69,12 @@ func (d *Console) decidePackageCleanup(s *pb.Submission) (func(*pb.ChangeRecord)
 		d.packageCleanups[input.ID] = proof
 	}, nil
 }
+
+func (d *Console) RetainedPackageRuntime(id string) (bool, error) {
+	held := d.packagesOf()[id]
+	if held == nil || held.Artifact == "" {
+		return false, nil
+	}
+	descriptor, err := d.sealedPackageDescriptor(id, held.Version, held.Artifact)
+	return descriptor.Runtime != nil, err
+}

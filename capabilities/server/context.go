@@ -27,15 +27,7 @@ type ContextView struct {
 	References []string               `json:"references"` // "<field>: <type>/<id>"
 	Related    []Related              `json:"related"`
 	Links      []string               `json:"links"`
-	Flows      []FlowSummary          `json:"flows"`
 	Tasks      []TaskSummary          `json:"tasks"`
-}
-
-type FlowSummary struct {
-	ID    string                   `json:"id"`
-	Flow  string                   `json:"flow"`
-	State string                   `json:"state"`
-	Trace []platform.FlowTraceLine `json:"trace"` // the last lines: why it moved
 }
 
 type TaskSummary struct {
@@ -73,7 +65,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 	if err != nil {
 		return ContextView{}, err
 	}
-	out := ContextView{Type: typ, Record: view.Record, History: view.History, Related: view.Related, References: []string{}, Links: []string{}, Flows: []FlowSummary{}, Tasks: []TaskSummary{}}
+	out := ContextView{Type: typ, Record: view.Record, History: view.History, Related: view.Related, References: []string{}, Links: []string{}, Tasks: []TaskSummary{}}
 	if len(out.History) > 20 {
 		out.History = out.History[:20]
 	}
@@ -99,20 +91,6 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 		for _, ref := range t.linker.Links(t.caller(m, t.linker.(platform.App), false), typ+"/"+id) {
 			if t.readable(m, ref, now) {
 				out.Links = append(out.Links, ref)
-			}
-		}
-	}
-	if t.procs != nil {
-		key, _ := json.Marshal([]any{[]any{"key", "=", id}})
-		instances, err := t.recordsRead(m, platform.FlowInstanceType, platform.Query{Domain: key, Sort: []string{"id"}}, now)
-		if err == nil {
-			for _, record := range instances.Records {
-				x := record.(platform.FlowInstance)
-				trace := x.Trace
-				if len(trace) > 8 {
-					trace = trace[len(trace)-8:]
-				}
-				out.Flows = append(out.Flows, FlowSummary{ID: x.ID, Flow: x.Flow, State: x.State, Trace: trace})
 			}
 		}
 	}

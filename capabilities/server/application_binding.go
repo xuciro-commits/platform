@@ -86,8 +86,6 @@ func checkApplicationBindings(bindings []platform.AssetBinding) error {
 func checkRunApplicationBindings(record any) error {
 	var bindings []platform.AssetBinding
 	switch run := record.(type) {
-	case platform.FlowInstance:
-		bindings = run.Applications
 	case AgentRunRecord:
 		bindings = run.Applications
 	case construction.FunctionRun:

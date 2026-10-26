@@ -64,9 +64,6 @@ func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, a
 func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.AuthzRequest, decision platform.AuthzDecision) {
 	c.Member = d.tenant.authorizationMember(c.Member)
 	d.authorizations = append(d.authorizations, resultformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
-	if d.TraceEnabled() {
-		d.RecordDecisionTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
-	}
 }
 
 // Native entry facts are host declarations, not an authorization bypass.
@@ -403,9 +400,6 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 			}
 		}()
 		context.Derived = authz.Gate{Allowed: readable, Reason: "The original source is outside the caller's permissions"}
-	}
-	if q.Kind == "export" && t.restricted(q.Type) {
-		context.Markings = authz.Gate{Reason: "Restricted data does not leave as CSV"}
 	}
 	slices.Sort(context.Withheld)
 	context.Withheld = slices.Compact(context.Withheld)

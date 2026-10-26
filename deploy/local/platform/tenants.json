@@ -1,0 +1,73 @@
+[
+  {
+    "id": "workspace",
+    "name": "Workspace",
+    "template": "blank",
+    "seats": [
+      {
+        "subjects": [
+          "user:manager@hotel.test"
+        ],
+        "id": "builder-hotel",
+        "grants": [
+          {
+            "app": "platform",
+            "role": "admin"
+          },
+          {
+            "app": "agent",
+            "role": "admin"
+          },
+          {
+            "app": "ai",
+            "role": "admin"
+          },
+          {
+            "app": "build",
+            "role": "builder"
+          },
+          {
+            "app": "core",
+            "role": "steward"
+          },
+          {
+            "app": "work",
+            "role": "admin"
+          }
+        ]
+      },
+      {
+        "subjects": [
+          "user:sup@plant.test"
+        ],
+        "id": "builder-plant",
+        "grants": [
+          {
+            "app": "platform",
+            "role": "admin"
+          },
+          {
+            "app": "agent",
+            "role": "admin"
+          },
+          {
+            "app": "ai",
+            "role": "admin"
+          },
+          {
+            "app": "build",
+            "role": "builder"
+          },
+          {
+            "app": "core",
+            "role": "steward"
+          },
+          {
+            "app": "work",
+            "role": "admin"
+          }
+        ]
+      }
+    ]
+  }
+]

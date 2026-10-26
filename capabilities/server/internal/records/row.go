@@ -418,4 +418,24 @@ func DecodeFormattedImage(info platform.EntityInfo, value json.RawMessage, proje
 	return platform.DecodeRecordImage(info, format, decoded)
 }
 
+// PruneImage keeps the fields a declaration still has. A type declared again
+// may have fewer fields than the rows it carries: the removed ones are left
+// out of the current value, and the record identity is kept as it was.
+func PruneImage(info platform.EntityInfo, raw json.RawMessage) (json.RawMessage, error) {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	kept := map[string]bool{"id": true, "revision": true, "created": true, "changed": true, "archived": true, "versionPins": true}
+	for _, field := range info.Fields {
+		kept[field.Name] = true
+	}
+	for name := range object {
+		if !kept[name] {
+			delete(object, name)
+		}
+	}
+	return json.Marshal(object)
+}
+
 func rowJSON(value any) json.RawMessage { raw, _ := json.Marshal(value); return raw }

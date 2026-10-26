@@ -1,7 +1,6 @@
 package platformserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -46,7 +45,7 @@ func (t *Tenant) registerDefinitions() error {
 		if seen[def.Ref] {
 			return fmt.Errorf("asset %s is declared twice", def.Ref)
 		}
-		if def.Flow == nil {
+		{
 			var err error
 			def, err = t.describeDefinition(def)
 			if err != nil {
@@ -54,7 +53,7 @@ func (t *Tenant) registerDefinitions() error {
 			}
 		}
 		seen[def.Ref] = true
-		t.definitions = append(t.definitions, def)
+		t.setDefinitions(append(t.definitions, def))
 		return nil
 	}
 	for _, et := range t.records.sortedTypes() {
@@ -172,30 +171,8 @@ func (t *Tenant) registerDefinitions() error {
 				return err
 			}
 		}
-		latest := map[string]platform.Flow{}
-		for _, flow := range manifest.Flows {
-			if old, ok := latest[flow.Name]; !ok || old.Version < flow.Version {
-				latest[flow.Name] = flow
-			}
-		}
-		for _, flow := range latest {
-			asset, err := t.nativeFlowAsset(app, flow.Name, flow.Version)
-			if err != nil {
-				return err
-			}
-			var descriptor platform.FlowReleaseDescriptor
-			if json.Unmarshal(asset.Body, &descriptor) != nil {
-				return fmt.Errorf("native flow descriptor is invalid")
-			}
-			var definition platform.FlowDefinition
-			if json.Unmarshal(descriptor.Definition, &definition) != nil {
-				return fmt.Errorf("native flow definition is invalid")
-			}
-			if err := add(platform.Definition{Ref: asset.Ref, Source: "code", Version: asset.SourceVersion, ContractVersion: 1, Requires: asset.Requires, Provides: asset.Provides, Flow: &definition}); err != nil {
-				return err
-			}
-		}
 	}
+
 	for _, app := range t.apps {
 		manifest := app.Manifest()
 		pages, resources := []string{}, []platform.AssetRef{}
@@ -238,6 +215,16 @@ func uniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 // fields and actions are filtered through the existing read/catalog paths at
 // request time, so role and field changes are never cached in the registry.
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
+	gen, key := t.definitionsFingerprint(), rights(m)
+	if out, ok := t.cachedDefinitions(m, gen, key); ok {
+		return out
+	}
+	out := t.buildDefinitions(m)
+	t.storeDefinitions(gen, key, out)
+	return out
+}
+
+func (t *Tenant) buildDefinitions(m platform.Member) []platform.Definition {
 	definitions, err := t.definitionsFor(m)
 	if err != nil {
 		return []platform.Definition{}
