@@ -40,6 +40,18 @@ func (t *Tenant) completeAnthropic(pv platform.AIProvider, model string, req Cha
 	if req.Temperature != nil {
 		params.Temperature = anthropic.Float(*req.Temperature)
 	}
+	switch req.Options.Thinking {
+	case "adaptive":
+		params.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}}
+	case "disabled":
+		params.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+	}
+	if req.Options.Effort != "" {
+		params.OutputConfig.Effort = anthropic.OutputConfigEffort(req.Options.Effort)
+	}
+	if req.Options.Thinking == "adaptive" && req.Temperature != nil {
+		return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: 400, Detail: "Temperature cannot be combined with adaptive thinking"}
+	}
 	for _, x := range req.Tools { // custom tools: an agent's catalog actions, reads and built-ins
 		tool := anthropic.ToolParam{Name: x.Name, Description: anthropic.String(x.Description),
 			InputSchema: anthropic.ToolInputSchemaParam{Properties: x.Properties, Required: x.Required, ExtraFields: map[string]any{"additionalProperties": false}}}
@@ -61,6 +73,11 @@ func (t *Tenant) completeAnthropic(pv platform.AIProvider, model string, req Cha
 		case "assistant":
 			flush()
 			var blocks []anthropic.ContentBlockParamUnion
+			if len(m.Protocol) > 0 {
+				if err := json.Unmarshal(m.Protocol, &blocks); err != nil {
+					return ChatAnswer{}, platform.AIUsage{}, &AIError{Status: 400, Detail: "Invalid protected model continuation"}
+				}
+			}
 			if m.Content != "" {
 				blocks = append(blocks, anthropic.NewTextBlock(m.Content))
 			}
@@ -111,6 +128,13 @@ func anthropicAnswer(resp anthropic.Message, model string) (ChatAnswer, platform
 	var text []string
 	for _, block := range resp.Content {
 		switch block.Type {
+		case "thinking", "redacted_thinking":
+			// Keep signed blocks only in protected session state; text/stream
+			// projections never receive private reasoning.
+			var blocks []json.RawMessage
+			_ = json.Unmarshal(answer.Protocol, &blocks)
+			blocks = append(blocks, json.RawMessage(block.RawJSON()))
+			answer.Protocol, _ = json.Marshal(blocks)
 		case "text":
 			text = append(text, block.Text)
 		case "tool_use":
@@ -227,7 +251,11 @@ func (t *Tenant) anthropicModels(pv platform.AIProvider) ([]CatalogModel, *AIErr
 	pages := client.Models.ListAutoPaging(ctx, anthropic.ModelListParams{})
 	for pages.Next() {
 		m := pages.Current()
-		models = append(models, CatalogModel{ID: m.ID, Name: m.DisplayName, Context: int(m.MaxInputTokens)})
+		model, err := catalogModel(pv, json.RawMessage(m.RawJSON()), time.Now().UTC())
+		if err != nil {
+			return nil, &AIError{Status: 502, Detail: err.Error()}
+		}
+		models = append(models, model)
 	}
 	if err := pages.Err(); err != nil {
 		return nil, anthropicFailure(err)

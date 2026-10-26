@@ -47,11 +47,12 @@ type Evaluation struct {
 	Cost  float64    `json:"cost,omitempty" field:"readonly" title:"Model cost, USD"`
 	Cases []EvalCase `json:"cases" field:"readonly"`
 	// Suite runs the agent's declared cases instead of its past runs.
-	Suite            bool              `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
-	Candidate        string            `json:"candidate,omitempty" field:"readonly" title:"Release candidate"`
-	DefinitionDigest string            `json:"definitionDigest,omitempty" field:"readonly" title:"Evaluated definition"`
-	ModelConfig      string            `json:"modelConfig,omitempty" field:"readonly" title:"Evaluated model configuration"`
-	Inputs           []EvaluationInput `json:"inputs,omitempty" field:"readonly"`
+	Suite            bool                     `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
+	Candidate        string                   `json:"candidate,omitempty" field:"readonly" title:"Release candidate"`
+	DefinitionDigest string                   `json:"definitionDigest,omitempty" field:"readonly" title:"Evaluated definition"`
+	Binding          *platform.AIModelBinding `json:"binding,omitempty" field:"readonly" type:"json"`
+	ModelConfig      string                   `json:"modelConfig,omitempty" field:"readonly" title:"Evaluated model configuration"`
+	Inputs           []EvaluationInput        `json:"inputs,omitempty" field:"readonly"`
 }
 
 // EvaluationInput pins the historical run revision selected for a dry rerun.
@@ -247,7 +248,20 @@ func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time, checkpoint func(*Ev
 	config := ""
 	if err == nil {
 		var problem error
-		config, problem = acceptance.Digest([]any{model, pv})
+		if ev.Binding != nil {
+			options := platform.ModelOptions{}
+			if d != nil {
+				options = d.ModelOptions
+			}
+			current, _, refusal := h.ResolveAgentModel(ev.Model, options)
+			if refusal != nil {
+				definitionErr = fmt.Errorf("the evaluation model options are invalid")
+			}
+			config, problem = modelConfigurationDigest(model, pv, &current)
+			model.Defaults = ev.Binding.Options
+		} else {
+			config, problem = modelConfigurationDigest(model, pv, nil)
+		}
 		if problem != nil || ev.ModelConfig != "" && config != ev.ModelConfig {
 			definitionErr = fmt.Errorf("the evaluation's model configuration changed")
 		}
@@ -475,18 +489,27 @@ func (a *Agents) suite(ev Evaluation, d *agentDef, model platform.AIModel, pv pl
 // why the model could not go on; an asked run's question is its Result.
 func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (AgentRunRecord, string) {
 	h := a.host
-	dry := AgentRunRecord{Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
+	dry := AgentRunRecord{Protocol: map[int]json.RawMessage{}, Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
 	for dry.StepsUsed < room.Steps && dry.TokensUsed < room.Tokens {
 		endRead := h.BeginAgentRead()
 		req := a.prompt(a.automation(AgentApp, false), d, dry, model.Name(), now)
 		endRead()
 		req.Run = run.ID + ":evaluation"
+		binding, problem := model.Resolve("agent", platform.ModelOptions{}, 0)
+		if problem != nil {
+			return dry, problem.Error()
+		}
+		binding.Provider = &pv
+		req.Binding = &binding
 		if why := h.ReserveAgentModel(who, model, now); why != "" {
 			return dry, why
 		}
 		answer, failure := h.CallAgentModel(pv, model, who, req, now)
 		if err := h.MeterAgentUsage(who, answer.Usage); err != nil {
 			return dry, "the model usage was not accepted: " + err.Error()
+		}
+		if len(answer.Protocol) > 0 {
+			dry.Protocol[len(dry.Steps)] = answer.Protocol
 		}
 		dry.StepsUsed++
 		dry.TokensUsed += answer.Usage.Input + answer.Usage.Output
@@ -618,7 +641,11 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		if refusal != nil {
 			return nil, refusal
 		}
-		config, err = acceptance.Digest([]any{model, provider})
+		binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions)
+		if refusal != nil {
+			return nil, refusal
+		}
+		config, err = modelConfigurationDigest(model, provider, &binding)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 		}
@@ -629,6 +656,14 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	if p.Suite && len(d.Cases) == 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
 	}
-	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite, Candidate: p.Candidate, DefinitionDigest: digest, ModelConfig: config}
+	binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions)
+	if refusal != nil {
+		return nil, refusal
+	}
+	if config == "" {
+		model, pv, _ := a.host.AgentModel(p.Model)
+		config, _ = modelConfigurationDigest(model, pv, &binding)
+	}
+	ev := Evaluation{Binding: &binding, Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite, Candidate: p.Candidate, DefinitionDigest: digest, ModelConfig: config}
 	return func(r *pb.ChangeRecord) { a.host.Automation(c, AgentApp).Put(r, ev) }, nil
 }

@@ -20,6 +20,8 @@ type Agent struct {
 	// where its instructions stay private.
 	Description  string
 	Instructions string
+	Model        string
+	ModelOptions ModelOptions
 	// Tools are the app's actions, protocol actions "<protocol id>#<action>" it
 	// consumes, its reads as "read:<name>", and its effect kinds as
 	// "emit:<kind>": the agent sends one and waits for the receiver's answer

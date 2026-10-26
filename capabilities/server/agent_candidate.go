@@ -73,6 +73,26 @@ func (a *Agents) evaluationDefinition(candidate, agent string) (*agentDef, strin
 	return d, digest, nil
 }
 
+func (t *Tenant) candidateAgentModel(candidate, name string) (string, platform.ModelOptions, error) {
+	app, _, err := (hostView{t: t}).AgentEvaluationApp(candidate, name)
+	if err != nil {
+		return "", platform.ModelOptions{}, err
+	}
+	defs := app.Manifest().Agents
+	if len(defs) != 1 {
+		return "", platform.ModelOptions{}, fmt.Errorf("candidate agent is unavailable")
+	}
+	model := defs[0].Model
+	if model == "" {
+		model = t.setting(t.automation(AgentApp, false), SettingAgentModel)
+	}
+	binding, _, problem := t.resolveModel("agent", model, defs[0].ModelOptions)
+	if problem != nil {
+		return "", platform.ModelOptions{}, fmt.Errorf("%s", problem.Message)
+	}
+	return binding.Model, defs[0].ModelOptions, nil
+}
+
 func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEvaluationRequest, now time.Time) (string, error) {
 	if t.agents == nil {
 		return "", fmt.Errorf("the agent capability is unavailable")
@@ -88,7 +108,10 @@ func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEv
 		}
 		return id, nil
 	}
-	model := t.setting(t.automation(AgentApp, false), SettingAgentModel)
+	model, _, err := t.candidateAgentModel(request.CandidateID, request.Agent)
+	if err != nil {
+		return "", err
+	}
 	if model == "" {
 		return "", fmt.Errorf("set the agent model before evaluating a candidate")
 	}
@@ -116,12 +139,19 @@ func (t *Tenant) agentEvaluationsReadyLocked(candidate platform.ReleaseCandidate
 		if err != nil {
 			return err
 		}
-		modelName := t.setting(t.automation(AgentApp, false), SettingAgentModel)
+		modelName, options, err := t.candidateAgentModel(candidate.ID, name)
+		if err != nil {
+			return err
+		}
 		model, provider, refusal := t.ai.Model(modelName)
 		if refusal != nil {
 			return fmt.Errorf("agent %s requires an enabled model", name)
 		}
-		config, err := acceptance.Digest([]any{model, provider})
+		binding, _, refusal := t.resolveModel("agent", modelName, options)
+		if refusal != nil {
+			return fmt.Errorf("agent %s has invalid model options: %s", name, refusal.Message)
+		}
+		config, err := modelConfigurationDigest(model, provider, &binding)
 		if err != nil {
 			return err
 		}

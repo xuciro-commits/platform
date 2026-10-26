@@ -104,6 +104,10 @@ func (h hostView) ScopeAgentRun(run string) func() {
 	h.t.agentRun = run
 	return func() { h.t.agentRun = previous }
 }
+func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
+	return h.t.resolveModel("agent", name, options)
+}
+
 func (h hostView) AgentModel(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {
 	if h.t.ai == nil {
 		return platform.AIModel{}, platform.AIProvider{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "AI capability unavailable")

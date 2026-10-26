@@ -57,6 +57,7 @@ type AgentHost interface {
 	AgentUsage() []platform.AIUsage
 	BeginAgentRead() func()
 	ScopeAgentRun(string) func()
+	ResolveAgentModel(string, platform.ModelOptions) (platform.AIModelBinding, platform.AIProvider, *kernel.Error)
 	AgentModel(string) (platform.AIModel, platform.AIProvider, *kernel.Error)
 	ReserveAgentModel(platform.Member, platform.AIModel, time.Time) string
 	AgentProviderAvailable(string, time.Time) bool

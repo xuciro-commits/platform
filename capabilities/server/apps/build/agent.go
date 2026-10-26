@@ -25,15 +25,17 @@ const SchemaAgentPublish = AgentType + ".publish"
 // against its version.
 type Agent struct {
 	platform.Record
-	Name         string   `json:"name" field:"required,search" help:"Lower-case letters and digits; the agent is build.<name>"`
-	Title        string   `json:"title" field:"required,search"`
-	Description  string   `json:"description" field:"required" type:"longtext" help:"What it does for others; people and other agents see this"`
-	Instructions string   `json:"instructions" field:"required" type:"longtext" help:"Its private instructions: the job, the order of work, when to ask"`
-	Tools        []string `json:"tools" field:"aside" help:"Actions of published objects (build.<object>.<action>) and queries (query:<name>) it may use"`
-	Steps        int      `json:"steps,omitempty" title:"Model turns per run" help:"Default 10"`
-	Tokens       int      `json:"tokens,omitempty" title:"Tokens per run" help:"Default 40000"`
-	Actions      int      `json:"actions,omitempty" title:"Actions per run" help:"Default 3"`
-	Cost         float64  `json:"cost,omitempty" title:"USD per run" help:"0: no cap"`
+	Name         string                `json:"name" field:"required,search" help:"Lower-case letters and digits; the agent is build.<name>"`
+	Title        string                `json:"title" field:"required,search"`
+	Description  string                `json:"description" field:"required" type:"longtext" help:"What it does for others; people and other agents see this"`
+	Instructions string                `json:"instructions" field:"required" type:"longtext" help:"Its private instructions: the job, the order of work, when to ask"`
+	Model        string                `json:"model,omitempty" field:"aside"`
+	ModelOptions platform.ModelOptions `json:"modelOptions,omitzero" field:"aside" type:"json"`
+	Tools        []string              `json:"tools" field:"aside" help:"Actions of published objects (build.<object>.<action>) and queries (query:<name>) it may use"`
+	Steps        int                   `json:"steps,omitempty" title:"Model turns per run" help:"Default 10"`
+	Tokens       int                   `json:"tokens,omitempty" title:"Tokens per run" help:"Default 40000"`
+	Actions      int                   `json:"actions,omitempty" title:"Actions per run" help:"Default 3"`
+	Cost         float64               `json:"cost,omitempty" title:"USD per run" help:"0: no cap"`
 	// Checkpoints are the tools whose use always waits for a person, even when
 	// the agent could act: the irreversible ones (post, ship, pay).
 	Checkpoints []string    `json:"checkpoints,omitempty" field:"aside" help:"Tools that always wait for a person to confirm"`
@@ -258,7 +260,7 @@ func (b *Build) agentDeclarations() []platform.Agent {
 func (a Agent) Definition() platform.Agent {
 	checkpoints := slices.Clone(a.Checkpoints)
 	role := a.HandoffRole
-	d := platform.Agent{Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools), Checkpoints: checkpoints,
+	d := platform.Agent{Model: a.Model, ModelOptions: a.ModelOptions, Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools), Checkpoints: checkpoints,
 		Budget: platform.Budget{Steps: a.Steps, Tokens: a.Tokens, Actions: a.Actions, Cost: a.Cost},
 		Guard: func(c platform.Caller, r platform.AgentRun, action, target string, payload json.RawMessage) *kernel.Error {
 			if slices.Contains(checkpoints, action) && r.OnBehalf == "" {

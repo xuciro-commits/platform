@@ -62,9 +62,9 @@ func TestApplicationProposalAdoption(t *testing.T) {
 	function := map[string]any{"name": "inspect", "title": "Inspect", "description": "Suggest a classification", "object": "build.inspection", "fields": []string{"temperature"}, "instructions": "Classify only supplied facts", "output": []platform.Field{{Name: "verdict", Type: "string", Required: true, Description: "Proposed classification", Choices: []string{"pass", "hold"}}, {Name: "confidence", Type: "decimal", Required: true, Description: "Confidence"}}, "maxInputBytes": 4096, "maxOutputBytes": 1024, "maxTokens": 256, "roles": []string{construction.Builder, construction.User, "reviewer"}, "model": "local/probe", "proposal": platform.ProposalPolicy{HandoffRole: "reviewer", ConfidenceField: "confidence", MinimumConfidence: 0.7, ExpiresAfterSeconds: 3600}}
 	decide(t, tn, "builder", construction.ID, "build.function.create", construction.FunctionType, "FUNCTION", function, at)
 	decide(t, tn, "builder", construction.ID, build.SchemaFunction, construction.FunctionType, "FUNCTION", map[string]any{}, at)
-	decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]any{"value": "local/probe"}, at)
 	decide(t, tn, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://localhost:1", "wire": "openai"}, at)
 	decide(t, tn, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]any{"access": "users"}, at)
+	decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]any{"value": "local/probe"}, at)
 	resources := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: "build.inspection"}, {App: construction.ID, Kind: platform.AssetFunction, Name: "inspect"}}
 	decide(t, tn, "builder", construction.ID, "build.app.create", construction.AppType, "APP", map[string]any{"name": "quality", "title": "Quality", "resources": resources}, at)
 	decide(t, tn, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, "APP", map[string]any{}, at)
@@ -294,9 +294,9 @@ func TestApplicationAgentCandidateEvaluationGate(t *testing.T) {
 	entries := []Entry{}
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	publishObject(t, tn, "builder", "O", map[string]any{"name": "case", "title": "Case", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-	decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/probe"}, at)
 	decide(t, tn, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://localhost:1", "wire": "openai"}, at)
 	decide(t, tn, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]any{"access": "users"}, at)
+	decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/probe"}, at)
 	decide(t, tn, "builder", construction.ID, "build.agent.create", build.AgentType, "AG", map[string]any{"name": "assistant", "title": "Assistant", "description": "Review a case", "instructions": "Report Ready", "tools": []string{"build.case.edit"}, "cases": []build.AgentCase{{Name: "answer", Goal: "Give a result", Expect: "Ready"}}}, at)
 	decide(t, tn, "builder", construction.ID, "build.app.create", construction.AppType, "APP", map[string]any{"name": "cases", "title": "Cases", "resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetAgent, Name: "assistant"}}}, at)
 	m := memberOf(t, tn, "builder")
@@ -358,6 +358,21 @@ func TestApplicationAgentCandidateEvaluationGate(t *testing.T) {
 		t.Fatal("evaluation survived a changed model")
 	}
 	decide(t, tn, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/probe"}, at)
+	decide(t, tn, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]any{"access": "users", "defaults": platform.ModelOptions{MaxTokens: 128}}, at)
+	if problem := tn.agentEvaluationsReadyLocked(candidate); problem == nil {
+		t.Fatal("evaluation survived a changed generation budget")
+	}
+	changed, problem := tn.ReviewSavedRelease(m, saved)
+	if problem != nil {
+		t.Fatal(problem)
+	}
+	for _, item := range changed.AI {
+		for _, evaluation := range item.Evaluations {
+			if evaluation.State == "passed" {
+				t.Fatal("readiness displayed obsolete evidence as passed")
+			}
+		}
+	}
 	CheckReplay(t, tn, entries, compose)
 	// A real agent turn retains the application's frozen resource binding.
 	decide(t, tn, "operator", AgentApp, SchemaRunStart, RunType, "RUN", map[string]any{"agent": "build.assistant", "goal": "Give a result"}, at)

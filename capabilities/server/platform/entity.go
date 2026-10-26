@@ -369,7 +369,8 @@ type FieldInfo struct {
 	// Field security, from the tags read:"role,role" and
 	// write:"role": the app's roles that read the field, and those that set it
 	// through generated actions; empty: every role that reads the record.
-	// Who may not read a field may not set it either.
+	// Who may not read a field may not set it either. read:"-" reserves
+	// runtime continuation bytes for owner automation and persisted images.
 	Read  []string `json:"read,omitempty"`
 	Write []string `json:"write,omitempty"`
 	// Personal marks personal data, tag personal:"contact",
@@ -993,7 +994,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 
 // Reads reports whether a member holding role in the field's app reads it.
 func (f FieldInfo) Reads(role string) bool {
-	return len(f.Read) == 0 || slices.Contains(f.Read, role)
+	return !slices.Contains(f.Read, "-") && (len(f.Read) == 0 || slices.Contains(f.Read, role))
 }
 
 // Writes reports whether a member holding role sets it through generated actions.

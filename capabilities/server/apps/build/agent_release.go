@@ -20,7 +20,7 @@ func agentReleaseAsset(a Agent, source string) (platform.ReleaseAsset, error) {
 	if string(cases) == "null" {
 		cases = []byte("[]")
 	}
-	descriptor := platform.AgentReleaseDescriptor{Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools), Budget: a.Definition().Budget, Checkpoints: slices.Clone(a.Checkpoints), HandoffRole: a.HandoffRole, Cases: cases}
+	descriptor := platform.AgentReleaseDescriptor{Model: a.Model, ModelOptions: a.ModelOptions, Name: a.Name, Title: a.Title, Description: a.Description, Instructions: a.Instructions, Tools: slices.Clone(a.Tools), Budget: a.Definition().Budget, Checkpoints: slices.Clone(a.Checkpoints), HandoffRole: a.HandoffRole, Cases: cases}
 	if err := descriptor.Check(); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
@@ -38,7 +38,7 @@ func decodeAgentAsset(asset platform.ReleaseAsset) (Agent, error) {
 	if !found || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != versionText || asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetAgent || asset.ContractVersion != 1 || json.Unmarshal(asset.Body, &descriptor) != nil || descriptor.Native || descriptor.Name != asset.Ref.Name || descriptor.Check() != nil || platform.CheckAssetDependencies(asset) != nil {
 		return Agent{}, fmt.Errorf("invalid builder agent asset")
 	}
-	record := Agent{Name: descriptor.Name, Title: descriptor.Title, Description: descriptor.Description, Instructions: descriptor.Instructions, Tools: slices.Clone(descriptor.Tools), Steps: descriptor.Budget.Steps, Tokens: descriptor.Budget.Tokens, Actions: descriptor.Budget.Actions, Cost: descriptor.Budget.Cost, Checkpoints: slices.Clone(descriptor.Checkpoints), HandoffRole: descriptor.HandoffRole, Version: version, State: "published"}
+	record := Agent{Model: descriptor.Model, ModelOptions: descriptor.ModelOptions, Name: descriptor.Name, Title: descriptor.Title, Description: descriptor.Description, Instructions: descriptor.Instructions, Tools: slices.Clone(descriptor.Tools), Steps: descriptor.Budget.Steps, Tokens: descriptor.Budget.Tokens, Actions: descriptor.Budget.Actions, Cost: descriptor.Budget.Cost, Checkpoints: slices.Clone(descriptor.Checkpoints), HandoffRole: descriptor.HandoffRole, Version: version, State: "published"}
 	if len(descriptor.Cases) > 0 {
 		if err := json.Unmarshal(descriptor.Cases, &record.Cases); err != nil {
 			return Agent{}, err

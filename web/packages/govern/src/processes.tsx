@@ -1,9 +1,8 @@
 // Settings: flows, agents and their evaluations.
-import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
+import { Records, ModelPicker, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t, Chart} from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
-import { type AIModel } from "./shared";
 
 // Flows: the flows the tenant's apps declare, their instances, and
 // one instance drawn with the path it took and why; administrators retry,
@@ -66,7 +65,6 @@ export function AgentMemories() {
 export function Evaluations() {
   const { decide, can } = useHost();
   const agents = useRead<AgentInfo[]>("/v1/agents").data ?? [];
-  const models = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const [agent, setAgent] = useState("");
   const [model, setModel] = useState("");
   const [suite, setSuite] = useState(false),[evaluation,setEvaluation]=useState(()=>newId("EVAL"));
@@ -79,10 +77,7 @@ export function Evaluations() {
           <Select aria-label={t("Agent")} className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
-          <Select aria-label={t("Candidate model")} className="w-80" value={model} onChange={(e) => setModel(e.target.value)}>
-            <option value="">{t("Candidate model…")}</option>
-            {models.map((m) => <option key={`${m.provider}/${m.model}`} value={`${m.provider}/${m.model}`}>{m.provider}/{m.model}</option>)}
-          </Select>
+          <ModelPicker value={model} onChange={setModel} purpose="agent" inherit={false} label={t("Candidate model")} />
           <span title={t("The agent's declared cases, three runs each, instead of its past runs")}>
             <Checkbox className="text-sm" checked={suite} onChange={setSuite}>{t("Declared cases")}</Checkbox>
           </span>

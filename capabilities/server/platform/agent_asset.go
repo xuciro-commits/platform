@@ -14,6 +14,8 @@ type AgentReleaseDescriptor struct {
 	Name         string              `json:"name"`
 	Title        string              `json:"title"`
 	Description  string              `json:"description"`
+	Model        string              `json:"model,omitempty"`
+	ModelOptions ModelOptions        `json:"modelOptions,omitzero"`
 	Instructions string              `json:"instructions"`
 	Tools        []string            `json:"tools"`
 	ToolBindings map[string]AssetRef `json:"toolBindings,omitempty"`

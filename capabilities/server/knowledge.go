@@ -55,13 +55,14 @@ const (
 
 // index is the passages cut from the tenant's documents and knowledge fields.
 type index struct {
-	mu          sync.Mutex
-	vectorMu    sync.Mutex // serialize derived source updates across search and embedding work
-	vectorModel string
-	vectorDirty map[string]bool
-	docs        map[string]string   // source key → the revision indexed
-	chunks      map[string][]*chunk // by source key
-	texts       map[string]string   // attached text files by content hash
+	mu             sync.Mutex
+	vectorMu       sync.Mutex // serialize derived source updates across search and embedding work
+	vectorModel    string
+	embeddingError string
+	vectorDirty    map[string]bool
+	docs           map[string]string   // source key → the revision indexed
+	chunks         map[string][]*chunk // by source key
+	texts          map[string]string   // attached text files by content hash
 	// walked says the tenant was read once in full; after that the index
 	// follows the records the store marks dirty (#130), so a
 	// search costs nothing when nothing changed.
@@ -435,6 +436,9 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 	t.sync()
 	asked := slices.Compact(slices.Sorted(slices.Values(words(q))))
 	model := t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingModel)
+	if t.embeddingNeedsRebuild(model) {
+		model = ""
+	}
 	k.mu.Lock()
 	// The passages holding a word of the question, and the corpus totals BM25
 	// needs; with an embedding model every passage is a candidate, because
@@ -542,7 +546,7 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 	if query != nil {
 		cos := map[*chunk]float64{}
 		if databaseSearch {
-			cos = t.nearestKnowledge(model, query, reader, app, limit, now)
+			cos = t.nearestKnowledge(t.vectorSpace(model), query, reader, app, limit, now)
 		} else {
 			// The lightweight file/memory profile retains its bounded local
 			// store; PostgreSQL search never enters this corpus-vector path.
@@ -550,7 +554,7 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 			for i, c := range all {
 				hashes[i] = c.hash
 			}
-			vectors := t.store().Vectors(t.ID, model, hashes)
+			vectors := t.store().Vectors(t.ID, t.vectorSpace(model), hashes)
 			for _, c := range all {
 				if v := vectors[c.hash]; v != nil {
 					cos[c] = cosine(query, v)
@@ -616,11 +620,27 @@ func (t *Tenant) Embed(now time.Time) {
 	if t.knowledge == nil || t.ai == nil {
 		return
 	}
-	model := t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingModel)
+	model := t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingNext)
+	if model == "" {
+		model = t.setting(t.automation(platform.KnowledgeApp, false), platform.SettingKnowledgeEmbeddingModel)
+		if t.embeddingNeedsRebuild(model) {
+			return
+		}
+	}
 	if model == "" {
 		return
 	}
+	space := t.vectorSpace(model)
 	t.sync()
+	k.mu.Lock()
+	k.embeddingError = ""
+	k.mu.Unlock()
+	fail := func(err error) {
+		k.mu.Lock()
+		k.embeddingError = err.Error()
+		k.mu.Unlock()
+		t.operationsChanged(platform.KnowledgeApp)
+	}
 	k.mu.Lock()
 	var hashes []string
 	texts := map[string]string{}
@@ -636,23 +656,34 @@ func (t *Tenant) Embed(now time.Time) {
 	slices.Sort(hashes)
 	var missing []string
 	if search, ok := t.store().(journal.VectorIndex); ok {
-		if err := t.syncVectorSources(search, model); err != nil {
+		if err := t.syncVectorSources(search, space); err != nil {
 			return
 		}
 		var err error
-		missing, err = search.MissingVectors(context.Background(), t.ID, model, hashes)
+		missing, err = search.MissingVectors(context.Background(), t.ID, space, hashes)
 		if err != nil {
 			return
 		}
 	} else {
-		have := t.store().Vectors(t.ID, model, hashes)
+		have := t.store().Vectors(t.ID, space, hashes)
 		for _, h := range hashes {
 			if have[h] == nil {
 				missing = append(missing, h)
 			}
 		}
 	}
+	expected := 0
+	for _, vector := range t.store().Vectors(t.ID, space, hashes) {
+		if len(vector) > 0 {
+			expected = len(vector)
+			break
+		}
+	}
 	for len(missing) > 0 {
+		if t.vectorSpace(model) != space {
+			fail(fmt.Errorf("Model configuration changed; rebuild with the current revision"))
+			return
+		}
 		batch := missing[:min(embedBatch, len(missing))]
 		missing = missing[len(batch):]
 		var in []string
@@ -661,13 +692,26 @@ func (t *Tenant) Embed(now time.Time) {
 		}
 		vs, err := t.embed(model, in, now)
 		if err != nil {
+			fail(err)
 			return // tried again on the next round
+		}
+		if err := consistentVectors(vs, expected); err != nil {
+			fail(err)
+			return
+		}
+		if expected == 0 && len(vs) > 0 {
+			expected = len(vs[0])
+		}
+		if t.vectorSpace(model) != space {
+			fail(fmt.Errorf("Model configuration changed; rebuild with the current revision"))
+			return
 		}
 		saved := map[string][]float32{}
 		for i, h := range batch {
 			saved[h] = vs[i]
 		}
-		t.store().SaveVectors(t.ID, model, saved)
+		t.store().SaveVectors(t.ID, space, saved)
+		t.operationsChanged(platform.KnowledgeApp)
 	}
 }
 
@@ -678,6 +722,9 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	t.mu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("the model %s is not enabled", name)
+	}
+	if _, problem := model.Resolve("embedding", platform.ModelOptions{}, 0); problem != nil {
+		return nil, problem
 	}
 	if pv.Wire == "anthropic" {
 		return nil, fmt.Errorf("the provider %s does not embed", pv.ID)
@@ -729,6 +776,9 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 		if d.Index >= 0 && d.Index < len(vs) {
 			vs[d.Index] = d.Embedding
 		}
+	}
+	if err := consistentVectors(vs, 0); err != nil {
+		return nil, err
 	}
 	return vs, nil
 }

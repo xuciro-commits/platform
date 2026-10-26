@@ -26,10 +26,20 @@ export type AIFunction = {
   instructions: string;
   output: Field[];
   model?: string;
+  modelOptions?: ModelOptions;
   maxInputBytes: number;
   maxOutputBytes: number;
   maxTokens: number;
   roles: string[];
+};
+
+export type AIModelBinding = {
+  purpose?: string;
+  model: string;
+  options: ModelOptions;
+  revision?: number;
+  capabilities?: ModelCapabilities;
+  provider?: Provider;
 };
 
 export type AIQuota = {
@@ -130,6 +140,8 @@ export type AgentReleaseDescriptor = {
   name: string;
   title: string;
   description: string;
+  model?: string;
+  modelOptions?: ModelOptions;
   instructions: string;
   tools: string[];
   toolBindings?: Record<string, AssetRef>;
@@ -165,6 +177,8 @@ export type AgentRunRecord = {
   step?: string;
   state: "running" | "waiting" | "done" | "stopped";
   model?: string;
+  modelBinding?: AIModelBinding;
+  protocol?: Record<string, unknown>;
   steps: RunStep[];
   pending?: ToolCall[];
   stepsUsed: number;
@@ -872,6 +886,8 @@ export type CatalogModel = {
   name?: string;
   context?: number;
   free?: boolean;
+  priceKnown?: boolean;
+  capabilities?: ModelCapabilities;
 };
 
 export type Chain = {
@@ -907,6 +923,7 @@ export type ChatRequest = {
   tools?: Tool[];
   maxTokens?: number;
   temperature?: number;
+  options?: ModelOptions;
   promptCache?: boolean;
   stream?: boolean;
 };
@@ -2259,6 +2276,17 @@ export type Kind = {
   owner?: string;
 };
 
+export type KnowledgeIndexStatus = {
+  needsRebuild?: boolean;
+  active: string;
+  preparing: string;
+  total: number;
+  completed: number;
+  dimensions?: number;
+  ready: boolean;
+  problem?: string;
+};
+
 export type Layer = {
   name: string;
   allowed: boolean;
@@ -2514,6 +2542,9 @@ export type Model = {
   model: string;
   access: string;
   dailyTokens?: number;
+  capabilities?: ModelCapabilities;
+  defaults?: ModelOptions;
+  revision?: number;
 };
 
 export type ModelBinding = {
@@ -2525,6 +2556,39 @@ export type ModelBinding = {
   label?: Expr;
   options?: OptionsRef;
   visibility?: "hide" | "mark";
+};
+
+export type ModelCapabilities = {
+  source: string;
+  observedAt: string;
+  purposes?: string[];
+  inputTokens?: number;
+  outputTokens?: number;
+  contextTokens?: number;
+  tools?: boolean;
+  structured?: boolean;
+  thinkingModes?: string[];
+  effortLevels?: string[];
+  declaredThinkingModes?: string[];
+  parameters?: string[];
+  inputModalities?: string[];
+  outputModalities?: string[];
+  adapter?: string;
+};
+
+export type ModelChoice = {
+  model: Model;
+  effective?: AIModelBinding;
+  problem?: string;
+  purposeUnknown?: boolean;
+  references?: string[];
+};
+
+export type ModelOptions = {
+  inputTokens?: number;
+  maxTokens?: number;
+  thinking?: string;
+  effort?: string;
 };
 
 export type ModelRecordSet = {
@@ -2543,6 +2607,15 @@ export type ModelRelation = {
 export type ModelRule = {
   action: AssetRef;
   inputs?: Record<string, string>;
+};
+
+export type ModelSelection = {
+  purpose: string;
+  default: string;
+  defaultProblem?: string;
+  resolvedDefault?: string;
+  options: ModelOptions;
+  models: ModelChoice[];
 };
 
 export type ModelViewBinding = {
@@ -2773,6 +2846,7 @@ export type OrgSeed = {
 };
 
 export type PackageAIRequirement = {
+  problem?: string;
   ref: AssetRef;
   draftId?: string;
   model?: string;

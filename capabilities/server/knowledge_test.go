@@ -113,10 +113,11 @@ func TestKnowledge(t *testing.T) {
 	do("ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
 	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/embed", map[string]string{"access": "users"})
 	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/chat", map[string]string{"access": "users"})
-	do("ana", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-model", map[string]string{"value": "lm/embed"})
+	expect("prepare index", do("ana", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-next-model", map[string]string{"value": "lm/embed"}), "ok")
 	tn.Embed(now)
 	tn.Embed(now)
 	expect("embedded once", fmt.Sprint(embeds), "1")
+	expect("activate prepared index", do("ana", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-model", map[string]string{"value": "lm/embed"}), "ok")
 	expect("by meaning too", found("cy", "password key card")+fmt.Sprint(" ", embeds, " ", tn.ai.Spent("app:knowledge", now) > 0), "knowledge.document/RULES#1 2 true") // the query was embedded, and metered
 
 	// An agent's search: journaled with its step, cited on the run.

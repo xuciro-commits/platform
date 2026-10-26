@@ -12,6 +12,27 @@ import (
 
 // routesAI serves model calls and the AI catalog.
 func (h *Host) routesAI(rt *routes) {
+	rt.handle(Route{Pattern: "GET /v1/ai/knowledge-index", Summary: "Original knowledge vector index preparation and current retrieval mode", Answer: KnowledgeIndexStatus{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		status, err := t.KnowledgeIndexStatus(m)
+		if err != nil {
+			Reply(w, nil, err)
+		} else {
+			status.Problem = t.i18n.Say(t.Language(m, r), status.Problem)
+			WriteJSON(w, http.StatusOK, status)
+		}
+	})
+	rt.handle(Route{Pattern: "GET /v1/ai/model-selection", Summary: "Purpose-compatible models and effective configuration from the original AI and settings owners", Answer: ModelSelection{}, Query: []Param{{"purpose", "generation, agent or embedding"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		selection, err := t.ModelSelection(m, r.URL.Query().Get("purpose"))
+		if err != nil {
+			Reply(w, nil, err)
+		} else {
+			selection.DefaultProblem = t.i18n.Say(t.Language(m, r), selection.DefaultProblem)
+			for i := range selection.Models {
+				selection.Models[i].Problem = t.i18n.Say(t.Language(m, r), selection.Models[i].Problem)
+			}
+			WriteJSON(w, http.StatusOK, selection)
+		}
+	})
 	rt.handle(Route{Pattern: "POST /v1/ai/chat", Summary: "Call a model the caller may use; the call is metered", Body: ChatRequest{}, Answer: ChatAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req ChatRequest
 		// A chat body carries a conversation and its tool declarations; the

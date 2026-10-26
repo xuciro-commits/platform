@@ -646,13 +646,34 @@ func (t *Tenant) decideSetting(c platform.Caller, s *pb.Submission, now time.Tim
 	if !a.Manifest().Settings[i].Accepts(p.Value) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	if !c.Replaying {
+		if err := t.checkEmbeddingSetting(id, p.Value); err != nil {
+			return nil, err
+		}
+		if err := t.checkModelSetting(id, p.Value); err != nil {
+			return nil, err
+		}
+	}
 	if !c.Replaying && id == "platform/enterpriseRoot" && p.Value != "" {
 		element, ok := c.Enterprise().Element(p.Value, now)
 		if !ok || element.Stereotype != "ActualOrganization" || element.Owner != "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an active local organization for this tenant")
 		}
 	}
-	return func(*pb.ChangeRecord) { t.settings.set(id, p.Value) }, nil
+	// The active embedding space is accepted metadata of this same setting
+	// decision. Recovery applies its saved image; it never recalculates it.
+	bindEmbedding := id == platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingModel && !c.Replaying && c.Staging()
+	space := ""
+	if bindEmbedding && p.Value != "" {
+		space = t.vectorSpace(p.Value)
+	}
+	return func(*pb.ChangeRecord) {
+		t.settings.set(id, p.Value)
+		if bindEmbedding {
+			t.settings.set(embeddingActiveSpace, space)
+			t.settings.set(platform.KnowledgeApp+"/"+platform.SettingKnowledgeEmbeddingNext, "")
+		}
+	}, nil
 }
 
 func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {

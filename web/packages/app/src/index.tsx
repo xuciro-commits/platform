@@ -42,6 +42,7 @@ export { pageDocumentFromSections } from "./pages/pageDocument";
 export { semanticModelView, semanticPropertyTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
 export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect } from "./semantic/Selector";
 export { AppSelect, RoleSelect, ProtocolSelect, MemberSelect, useTenantApps } from "./semantic/References";
+export { ModelPicker, ModelOptionsEditor, modelOptionLabel, type ModelPurpose } from "./semantic/ModelPicker";
 export { DependencyGraph } from "./semantic/DependencyGraph";
 export { useDependencies, useProvidedCapabilities, type DependencyDescriptor, type DependencyRead, type ProvidedCapability } from "./semantic/dependencies";
 

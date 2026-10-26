@@ -20,6 +20,7 @@ type Function struct {
 	Instructions   string                   `json:"instructions" field:"required" type:"longtext"`
 	Output         []platform.Field         `json:"output" field:"aside" title:"Output fields"`
 	Model          string                   `json:"model,omitempty"`
+	ModelOptions   platform.ModelOptions    `json:"modelOptions,omitzero" type:"json"`
 	MaxInputBytes  int                      `json:"maxInputBytes" field:"required" title:"Maximum input bytes"`
 	MaxOutputBytes int                      `json:"maxOutputBytes" field:"required" title:"Maximum output bytes"`
 	MaxTokens      int                      `json:"maxTokens" field:"required" title:"Maximum tokens"`
@@ -35,5 +36,5 @@ type Function struct {
 func (f Function) Definition() platform.AIFunction {
 	return platform.AIFunction{Proposal: f.Proposal, Conversation: f.Conversation, Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object,
 		Fields: f.Fields, Instructions: f.Instructions, Output: f.Output, Model: f.Model,
-		MaxInputBytes: f.MaxInputBytes, MaxOutputBytes: f.MaxOutputBytes, MaxTokens: f.MaxTokens, Roles: f.Roles}
+		MaxInputBytes: f.MaxInputBytes, MaxOutputBytes: f.MaxOutputBytes, MaxTokens: f.MaxTokens, ModelOptions: f.ModelOptions, Roles: f.Roles}
 }

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:c3929b7ca2dd9e81",
+  "revision": "sha256:c0810b336d4b091c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -119,6 +119,86 @@
         "ui/page-header",
         "ui/panels",
         "ui/status"
+      ]
+    },
+    {
+      "id": "app/ai-model-selection",
+      "owner": "@platform/app",
+      "name": "AI model reference and options",
+      "summary": "Choose a purpose-compatible enabled model and configure supported input, generation and thinking options.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "ai",
+        "reference",
+        "configuration"
+      ],
+      "source": "web/packages/app/src/semantic/ModelPicker.tsx",
+      "exports": [
+        "ModelPicker",
+        "ModelOptionsEditor"
+      ],
+      "example": "ModelSelectionExample",
+      "constraints": [
+        "Compatibility and effective configuration come from the original AI owner. Unknown metadata is not a claim of support. Selection never calls a provider."
+      ],
+      "dependencies": [
+        "ui/input"
+      ],
+      "props": [
+        {
+          "name": "value",
+          "type": "string",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "onChange",
+          "type": "(value: string) => void",
+          "optional": false,
+          "isCallback": true,
+          "isSlot": false
+        },
+        {
+          "name": "purpose",
+          "type": "ModelPurpose",
+          "optional": false,
+          "isCallback": false,
+          "isSlot": false
+        },
+        {
+          "name": "inherit",
+          "type": "boolean",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "true"
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "optional": true,
+          "isCallback": false,
+          "isSlot": false,
+          "defaultValue": "t(\"Model\")"
+        }
+      ],
+      "composed": [
+        "ui/button",
+        "ui/input"
+      ],
+      "relatedTypes": [
+        {
+          "name": "ModelPurpose",
+          "kind": "type",
+          "signature": "export type ModelPurpose = \"generation\" | \"agent\" | \"embedding\";"
+        }
       ]
     },
     {
@@ -12484,6 +12564,7 @@
       "A matrix is bounded to 1600 cells; both axes retain record identities. Hidden inputs never become a false or zero cell.": "矩阵最多含 1600 个单元格；两轴保留记录身份。隐藏输入不会被显示为假值或零。",
       "A runtime call needs the actual host, a published owner revision and the current member’s permissions.": "运行调用需要实际宿主、已发布能力版本及当前成员的权限。",
       "A tenant object must be created, tested and published in the connected Application Studio.": "租户对象须在已连接的应用工坊创建、测试和发布。",
+      "AI model reference and options": "AI 模型引用与参数",
       "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions.": "动作条件将已声明的记录路径或输入与固定值或兼容字段比较；关联读取和审批重试均走原动作及申请人当前权限。",
       "Activate stable scoped presentation controls through caller-owned bindings.": "通过调用方拥有的绑定激活具有稳定身份的作用域呈现控件。",
       "Agent run and execution chain": "智能体运行与执行链",
@@ -12541,6 +12622,7 @@
       "Chart": "图表",
       "Checkbox": "复选框",
       "Checked": "已选中",
+      "Choose a purpose-compatible enabled model and configure supported input, generation and thinking options.": "选择适合用途的已启用模型，并配置受支持的输入、生成和思考参数。",
       "Choose a shared icon by group or translated name.": "按分组或翻译后的名称选择共享图标。",
       "Choose an application, role, protocol or member from the tenant's existing directory.": "从租户现有目录选择应用、角色、协议或成员。",
       "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",
@@ -12553,6 +12635,7 @@
       "Compact property inspector": "紧凑属性检查器",
       "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
       "Compare two to four complete original records with typed differences, stable identities and original field formatting.": "对比两到四条完整原记录，保留类型差异、稳定身份及原字段格式。",
+      "Compatibility and effective configuration come from the original AI owner. Unknown metadata is not a claim of support. Selection never calls a provider.": "适用性与生效配置来自原 AI 归属方。未知资料不代表支持，选择模型不会调用供应商。",
       "Complete typed count matrix": "完整类型化计数矩阵",
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
       "Compose each offered task with its authorized original request and caller-owned approval decisions.": "将每条待办任务与其已授权原请求及调用方控制的审批决策组合。",
@@ -12979,6 +13062,7 @@
       "web/packages/app/src/pages/pages.tsx",
       "web/packages/app/src/pages/sections.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
+      "web/packages/app/src/semantic/ModelPicker.tsx",
       "web/packages/app/src/widgets/Button.tsx",
       "web/packages/app/src/widgets/CollectionBuilder.tsx",
       "web/packages/app/src/widgets/CompositeViews.tsx",
@@ -13071,6 +13155,7 @@
       "web/packages/build/src/workshop/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/govern/src/account.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
       "web/packages/govern/src/ai.tsx",
       "web/packages/govern/src/apps.tsx",
       "web/packages/govern/src/credentials.tsx",
@@ -13276,6 +13361,7 @@
       "web/packages/build/src/workshop/page-editor/widgets/InspectorFrame.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/govern/src/account.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
       "web/packages/govern/src/ai.tsx",
       "web/packages/govern/src/apps.tsx",
       "web/packages/govern/src/credentials.tsx",
@@ -13308,6 +13394,7 @@
       "web/packages/app/src/composites/catalog-examples.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/observations/Observations.tsx",
+      "web/packages/app/src/semantic/ModelPicker.tsx",
       "web/packages/app/src/widgets/ConfirmationProgress.tsx",
       "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
@@ -13370,6 +13457,7 @@
       "web/packages/build/src/releases/release.tsx",
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/govern/src/account.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
       "web/packages/govern/src/ai.tsx",
       "web/packages/govern/src/apps.tsx",
       "web/packages/govern/src/credentials.tsx",
@@ -13399,6 +13487,7 @@
     "ui/context-help": [
       "web/packages/app/src/actions/actions.tsx",
       "web/packages/app/src/automation/application-runs.tsx",
+      "web/packages/app/src/semantic/ModelPicker.tsx",
       "web/packages/app/src/widgets/DispatchProgress.tsx",
       "web/packages/app/src/widgets/Histogram.tsx",
       "web/packages/app/src/widgets/ProposalReview.tsx",
@@ -13499,6 +13588,7 @@
       "web/packages/app/src/composites/catalog-examples.tsx",
       "web/packages/app/src/observations/Observations.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
+      "web/packages/app/src/semantic/ModelPicker.tsx",
       "web/packages/app/src/semantic/References.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/app/src/widgets/CollectionAnalysis.tsx",
@@ -13625,6 +13715,7 @@
       "web/packages/build/src/workshop/page-editor/widgets/WorkViewsInspector.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/govern/src/account.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
       "web/packages/govern/src/ai.tsx",
       "web/packages/govern/src/apps.tsx",
       "web/packages/govern/src/credentials.tsx",
@@ -13771,6 +13862,7 @@
       "web/packages/build/src/projects/project.tsx",
       "web/packages/build/src/workshop/ModuleWorkbench.tsx",
       "web/packages/build/src/workshop/page-editor/CompatibilityReview.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
       "web/packages/govern/src/ai.tsx",
       "web/packages/govern/src/credentials.tsx",
       "web/packages/govern/src/enterprise/TenantLinks.tsx",
@@ -13870,6 +13962,7 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/template-ui.tsx",
       "web/packages/govern/src/account.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
       "web/packages/govern/src/ai.tsx",
       "web/packages/govern/src/apps.tsx",
       "web/packages/govern/src/credentials.tsx",
@@ -13908,6 +14001,7 @@
       "web/packages/build/src/releases/simulate.tsx",
       "web/packages/build/src/workshop/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/workshop/page-editor/VariablesPanel.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
       "web/packages/govern/src/ai.tsx",
       "web/packages/govern/src/apps.tsx",
       "web/packages/govern/src/host.tsx",
@@ -14005,6 +14099,15 @@
     "app/work-views": [
       "web/packages/app/src/automation/use-run-control.ts",
       "web/packages/app/src/widgets/WorkViews.tsx"
+    ],
+    "app/ai-model-selection": [
+      "web/packages/app/src/catalog.examples.tsx",
+      "web/packages/build/src/functions/agent.tsx",
+      "web/packages/build/src/functions/function.tsx",
+      "web/packages/build/src/releases/simulate.tsx",
+      "web/packages/govern/src/ai-configuration.tsx",
+      "web/packages/govern/src/ai.tsx",
+      "web/packages/govern/src/processes.tsx"
     ],
     "app/tenant-references": [
       "web/packages/app/src/catalog.examples.tsx",
@@ -14773,6 +14876,7 @@
         "isPageDecimal",
         "isPageDecimalDraft",
         "isPageDefinition",
+        "modelOptionLabel",
         "newId",
         "pageDocumentFromSections",
         "pageLayoutDiagnostics",
@@ -14822,6 +14926,7 @@
         "Host",
         "Me",
         "Memory",
+        "ModelPurpose",
         "ObservationStatisticsRead",
         "ObservationStatisticsRequest",
         "OpenInPlace",

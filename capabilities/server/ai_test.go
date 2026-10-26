@@ -194,7 +194,7 @@ func TestAIProviders(t *testing.T) {
 	}
 	// Models a member may call; removing a provider disables its models.
 	models, _ := tn.Read(cy, "ai-models")
-	if fmt.Sprint(models) != "[{lm busy everyone 0}]" {
+	if visible := models.([]platform.AIModel); len(visible) != 1 || visible[0].Name() != "lm/busy" || visible[0].Access != "everyone" || visible[0].Revision != 1 {
 		t.Fatalf("cy's models %v", models)
 	}
 	CheckReplay(t, tn, journal, build)
@@ -267,7 +267,7 @@ func TestAnthropicProvider(t *testing.T) {
 	decide(ai.SchemaModelEnable, ai.ModelType, "claude/claude-opus-5", `{"access":"everyone"}`, "k2")
 	decide(ai.SchemaModelEnable, ai.ModelType, "claude/claude-busy", `{"access":"everyone"}`, "k3")
 	catalog, kerr, failure := tn.ProviderModels(ana, "claude", true)
-	if kerr != nil || failure != nil || len(catalog) != 1 || catalog[0].Name != "Claude Opus 5" || catalog[0].Context != 1000000 {
+	if kerr != nil || failure != nil || len(catalog) != 1 || catalog[0].Name != "Claude Opus 5" || catalog[0].Capabilities == nil || catalog[0].Capabilities.InputTokens == nil || *catalog[0].Capabilities.InputTokens != 1000000 || catalog[0].Capabilities.ContextTokens != nil {
 		t.Fatalf("catalog %+v %v %v", catalog, kerr, failure)
 	}
 	answer, kerr, failure := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", Messages: []Message{

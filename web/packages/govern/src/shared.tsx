@@ -1,6 +1,6 @@
 // Shared answer types and display helpers for Settings.
 import type { Api } from "@platform/kernel";
-import { formatStamp } from "@platform/ui";
+import { formatStamp, t } from "@platform/ui";
 
 // What the host answers with is generated from its Go types.
 export type Member = Api.MemberView;
@@ -30,3 +30,8 @@ export type AIModel = Api.Model;
 export type CatalogModel = Api.CatalogModel;
 export type Usage = Api.Usage;
 export type Total = Api.Total;
+
+export function modelReferenceTitle(reference:string):string {
+  const labels:Record<string,string>={"ai/app-model":"Application generation","agent/model":"Agent tasks","knowledge/embedding-model":"Knowledge search"};
+  return labels[reference]?t(labels[reference]):reference;
+}

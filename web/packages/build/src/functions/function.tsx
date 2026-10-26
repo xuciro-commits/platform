@@ -6,7 +6,7 @@ import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "..
 import { CandidateTest } from "../releases/simulate";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.
-import { useHost, useRecordInventory } from "@platform/app";
+import { useHost, ModelPicker, ModelOptionsEditor, useRecordInventory, useReadQuery } from "@platform/app";
 import { type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Input, FlowCanvas, PageHeader, Panel, Select, Textarea, Workbench, t,
   type FlowNode, type FlowCatalog } from "@platform/ui";
@@ -14,7 +14,7 @@ import { useState } from "react";
 import { type WorkflowObject } from "../automate/workflow-model";
 
 type FunctionDraft = { proposal?:Api.ProposalPolicy; conversation?:boolean; id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
-  instructions: string; output: Api.Field[]; model?: string; maxInputBytes: number; maxOutputBytes: number; maxTokens: number;
+  instructions: string; output: Api.Field[]; model?: string; modelOptions?:Api.ModelOptions; maxInputBytes: number; maxOutputBytes: number; maxTokens: number;
   roles: string[]; version?: number; published?: string };
 type Source = WorkflowObject & { archived?: boolean; fields: { name: string; title: string; type: string; aiInput?:boolean;read?: string[] }[] };
 type Stage = "settings" | "source" | "model" | "output";
@@ -44,10 +44,12 @@ export function FunctionEditor({ id }: { id: string }) {
   const editor = useDefinitionDraft<FunctionDraft>({
     id, type: "build.function", kind: "function", view: "function", empty, normalize: loaded,
     failure: t("The function could not be saved or loaded. Your draft is still here."), onDiscard: () => setChosen("settings"),
-    payload: ({proposal,conversation,name,title,description,object,fields,instructions,output,model,maxInputBytes,maxOutputBytes,maxTokens,roles}) =>
-      ({proposal:proposal??null,conversation:conversation??false,name,title,description,object,fields,instructions,output,model:model??"",maxInputBytes,maxOutputBytes,maxTokens,roles}),
+    payload: ({proposal,conversation,name,title,description,object,fields,instructions,output,model,modelOptions,maxInputBytes,maxOutputBytes,maxTokens,roles}) =>
+      ({proposal:proposal??null,conversation:conversation??false,name,title,description,object,fields,instructions,output,model:model??"",modelOptions:modelOptions??{},maxInputBytes,maxOutputBytes,maxTokens,roles}),
   });
   const {draft,query,dirty,busy,error,setError,patch:change,perform,discardChanges,confirmDiscard}=editor;
+  const modelSelection=useReadQuery<Api.ModelSelection>("/v1/ai/model-selection?purpose=generation").data;
+  const modelChoice=modelSelection?.models.find(row=>`${row.model.provider}/${row.model.model}`===(draft.model||modelSelection.default));
   const source = objects.find((object) => `build.${object.name}` === draft.object);
   const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)&&field.aiInput!==false) ?? [];
   const roles = [...new Set(["builder", ...(source?.access?.length ? source.access.filter((access) => access.read !== "none").map((access) => access.role) : ["user"])])];
@@ -126,11 +128,12 @@ export function FunctionEditor({ id }: { id: string }) {
           <label className="grid gap-1 text-xs">{t("Maximum input bytes")}<Input draftKey="maximum-input-bytes" type="number" min={1} max={32768} value={draft.maxInputBytes} onChange={(e) => change({ maxInputBytes: Number(e.target.value) })} /></label>
         </>}
         {chosen === "model" && <>
-          <label className="grid gap-1 text-xs">{t("Model identifier (empty: application default)")}<Input value={draft.model ?? ""} onChange={(e) => change({ model: e.target.value })} placeholder="provider/model" /></label>
+          <ModelPicker value={draft.model??""} onChange={model=>change({model})} purpose="generation" />
+          <ModelOptionsEditor generationLimit={4096} value={{...draft.modelOptions,maxTokens:draft.maxTokens}} onChange={({maxTokens,...modelOptions})=>change({modelOptions,maxTokens:maxTokens??draft.maxTokens})} capabilities={modelChoice?.model.capabilities} />
           <Checkbox disabled={!!draft.proposal} checked={draft.conversation??false} onChange={conversation=>change({conversation})}>{t("Accept conversation questions and retained call history")}</Checkbox>
           {draft.conversation&&<ContextHelp title={t("Conversation input")}><p className="text-xs text-muted">{t("Conversation input contains the authorized record, current question and up to eight completed calls. The full input still uses the original byte and token budgets.")}</p></ContextHelp>}
           <label className="grid gap-1 text-xs">{t("Model instructions")}<Textarea rows={8} value={draft.instructions} onChange={(e) => change({ instructions: e.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Maximum tokens")}<Input draftKey="maximum-tokens" type="number" min={1} max={4096} value={draft.maxTokens} onChange={(e) => change({ maxTokens: Number(e.target.value) })} /></label>
+
         </>}
         {chosen === "output" && <>
           <label className="grid gap-1 text-xs">{t("Maximum output bytes")}<Input draftKey="maximum-output-bytes" type="number" min={1} max={32768} value={draft.maxOutputBytes} onChange={(e) => change({ maxOutputBytes: Number(e.target.value) })} /></label>

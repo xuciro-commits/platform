@@ -63,7 +63,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const [id, setId] = useState(initialID);
   const [review, setReview] = useState<Api.ReleasePreview>();
   const [assets, setAssets] = useState<Api.ReleaseAsset[]>([]);
-	const [candidateAI, setCandidateAI] = useState<Api.ApplicationAI[]>([]);
+	const [savedCandidateAI, setCandidateAI] = useState<Api.ApplicationAI[]>([]);
   const [candidateKey, setCandidateKey] = useState("");
   const [savedID, setSavedID] = useState("");
   const [offset, setOffset] = useState(0);
@@ -141,7 +141,10 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const report = reports.isError ? undefined : reports.data?.records.find((item) => item.id === reportID);
   // The application a release review was opened from is the natural root of a
   // joint selection: its pages come before its own draft.
-  const passedFunctions = (reports.isError ? [] : reports.data?.records ?? []).filter((item) => item.candidate === savedID && item.state === "passed").map((item) => item.function);
+  const candidateQuery=useReadQuery<Api.SavedReleaseReview>(`/v1/releases/candidates/${encodeURIComponent(savedID)}`,undefined,!!savedID&&mayRelease);
+  const candidateAI=candidateQuery.isError?[]:candidateQuery.data?.ai??savedCandidateAI;
+  const passedFunctions=candidateAI.filter(item=>item.resource.ref.kind==="function"&&item.evaluations.some(report=>report.candidate===savedID&&report.state==="passed")).map(item=>item.resource.ref.name);
+  const currentReportState=candidateQuery.isError?"Evaluation reports are unavailable.":candidateAI.flatMap(item=>item.evaluations).find(item=>item.id===report?.id)?.state??report?.state;
   const agentNames = (review?.included ?? []).filter(ref => ref.app === "build" && ref.kind === "agent").map(ref => ref.name);
   const evaluated = functionNames.every((name) => passedFunctions.includes(name)) && agentNames.every(name => candidateAI.some(item => item.resource.ref.kind === "agent" && item.resource.ref.name === name && item.evaluations.some(report => report.candidate === savedID && report.state === "passed")));
   useEffect(() => {
@@ -441,9 +444,9 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
             <Button disabled={!planID || locked} onClick={evaluate}>{busy ? t("Starting evaluation…") : t("Run measured evaluation")}</Button>
             <Button disabled={locked} onClick={() => { void perform(() => readSaved(savedID, true)); }}>{t("Refresh evaluation reports")}</Button>
           </div>
-          {reports.isError && <p role="alert" className="text-xs text-warning">{t("Evaluation reports are unavailable. Cached results do not grant activation.")}</p>}
+          {(reports.isError||candidateQuery.isError) && <p role="alert" className="text-xs text-warning">{t("Evaluation reports are unavailable. Cached results do not grant activation.")}</p>}
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: <code>{reportID}</code></p>}
-          {report && <div role="status"><PropertyList columns={3} items={[[t("Report state"),t(report.state)],[t("Quality"),Math.round(report.quality*100)+"%"],[t("Reported USD cost"),report.costComplete?report.costUsd:t("Unknown")],[t("Peak latency (ms)"),report.peakLatencyMillis],[t("Calls"),report.attempts.length]]}/></div>}
+          {report && <div role="status"><PropertyList columns={3} items={[[t("Report state"),t(currentReportState??report.state)],[t("Quality"),Math.round(report.quality*100)+"%"],[t("Reported USD cost"),report.costComplete?report.costUsd:t("Unknown")],[t("Peak latency (ms)"),report.peakLatencyMillis],[t("Calls"),report.attempts.length]]}/></div>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
         {builder && savedID && agentNames.length > 0 && <Panel title={t("Agent candidate evaluations")} role="region" aria-label={t("Agent candidate evaluations")} className="grid gap-2">

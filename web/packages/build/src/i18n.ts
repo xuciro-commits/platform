@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Configuration changed; evaluate again": "配置已变化，请重新评估",
   "Delete application draft": "删除应用草稿",
   "Reusable assets and history are kept.": "可复用资产和历史会保留。",
   "Withdraw application entry": "撤回应用入口",

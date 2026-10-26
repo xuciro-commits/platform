@@ -33,6 +33,7 @@ type AIFunction struct {
 	Instructions   string          `json:"instructions"`
 	Output         []Field         `json:"output"`
 	Model          string          `json:"model,omitempty"`
+	ModelOptions   ModelOptions    `json:"modelOptions,omitzero"`
 	MaxInputBytes  int             `json:"maxInputBytes"`
 	MaxOutputBytes int             `json:"maxOutputBytes"`
 	MaxTokens      int             `json:"maxTokens"`
@@ -100,7 +101,7 @@ func (f AIFunction) Check() error {
 		len(f.Instructions) == 0 || len(f.Instructions) > 8192 || len(f.Fields) == 0 || len(f.Fields) > 32 ||
 		len(f.Output) == 0 || len(f.Output) > 16 || len(f.Roles) == 0 ||
 		f.MaxInputBytes < 1 || f.MaxInputBytes > 32<<10 || f.MaxOutputBytes < 1 || f.MaxOutputBytes > 32<<10 ||
-		f.MaxTokens < 1 || f.MaxTokens > 4096 {
+		f.MaxTokens < 1 || f.MaxTokens > 4096 || f.ModelOptions.MaxTokens != 0 && f.ModelOptions.MaxTokens != f.MaxTokens {
 		return fmt.Errorf("function %s needs named, typed inputs/outputs, roles and bounded instructions/bytes/tokens", f.Name)
 	}
 	if f.Proposal != nil {
