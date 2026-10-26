@@ -179,7 +179,10 @@ func (d *Deployment) SeatsFor(id string) []Seat {
 	if d.specs == nil {
 		return nil
 	}
-	spec, _ := d.specs.get(id)
+	spec, found := d.specs.get(id)
+	if !found && id == systemscope.Tenant {
+		return d.system.Seats
+	}
 	return spec.Seats
 }
 
