@@ -70,4 +70,27 @@ func TestSystemDefinitionsPostgresCheckpointRestoresSharedRuntime(t *testing.T) 
 	if database.Position("pg-business") != 1 {
 		t.Fatal("projection wrote into the business journal")
 	}
+	pool, ok := journalPool(database)
+	if !ok {
+		t.Fatal("PostgreSQL pool unavailable")
+	}
+	projection, err := Project(ctx, pool, recoveredOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "web/projection-check.ts"
+	for revision := 0; revision < 2; revision++ {
+		mustDefinitionDecision(t, recoveredOwner, "builder", system.SchemaFileSave, system.FileType, "source-edit", map[string]any{"path": path, "content": "export const n = 1;", "revision": revision})
+	}
+	if err = projection.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var revision int
+	if err = pool.QueryRow(ctx, `select revision from tenant_system.system_file where path=$1`, path).Scan(&revision); err != nil {
+		t.Fatal(err)
+	}
+	if revision != 2 {
+		t.Fatalf("projected revision = %d; declared file revision was shadowed by its embedded record", revision)
+	}
+
 }

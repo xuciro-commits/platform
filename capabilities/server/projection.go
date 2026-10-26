@@ -81,6 +81,11 @@ func columns(info platform.EntityInfo) []column {
 		{"changed_by", "text", func(v reflect.Value) any { return records.Header(v).Changed.By }},
 		{"archived", "boolean", func(v reflect.Value) any { return records.Header(v).Archived }},
 	}
+	// A declared JSON field shadows an embedded Record field in the public
+	// image. Project it once, under the same name and visibility rule.
+	out = slices.DeleteFunc(out, func(c column) bool {
+		return slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return ident(f.Name) == c.name })
+	})
 	for _, f := range info.Fields {
 		if len(f.Read) > 0 { // a field some roles may not read is not copied where no role applies
 			continue
