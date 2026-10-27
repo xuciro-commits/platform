@@ -27,6 +27,9 @@ const (
 	kindLOC   = "loc"
 	kindDup   = "dup"
 	kindUI    = "ui"
+	// scopeTotal guards the sum over the area, so a scope may not grow just
+	// because another shrank.
+	scopeTotal = "*"
 )
 
 // growth is one measured quantity of one scope.
@@ -108,12 +111,12 @@ func scanTree(root, area string) (*measures, error) {
 		return nil, err
 	}
 	out := &measures{}
+	totalFiles, totalLOC := 0, 0
 	for dir, stat := range perPackage {
-		if stat == nil {
-			continue // a directory of tests only
-		}
 		out.files = append(out.files, growth{kindFiles, dir, stat.files})
 		out.loc = append(out.loc, growth{kindLOC, dir, stat.loc})
+		totalFiles += stat.files
+		totalLOC += stat.loc
 	}
 	sort.Slice(out.files, func(i, j int) bool { return out.files[i].scope < out.files[j].scope })
 	sort.Slice(out.loc, func(i, j int) bool { return out.loc[i].scope < out.loc[j].scope })
@@ -132,6 +135,13 @@ func scanTree(root, area string) (*measures, error) {
 		out.ui = append(out.ui, growth{kindUI, f, perFileUI[f]})
 	}
 	sort.Slice(out.ui, func(i, j int) bool { return out.ui[i].scope < out.ui[j].scope })
+	// Totals close the loophole the per-scope ceilings leave: a scope may not
+	// grow just because another shrank, and declarations may not be relocated
+	// to a different file or package to dodge their own ceiling.
+	out.files = append([]growth{{kindFiles, scopeTotal, totalFiles}}, out.files...)
+	out.loc = append([]growth{{kindLOC, scopeTotal, totalLOC}}, out.loc...)
+	out.dup = append([]growth{{kindDup, scopeTotal, len(out.dup)}}, out.dup...)
+	out.ui = append([]growth{{kindUI, scopeTotal, len(perFileUI)}}, out.ui...)
 	return out, nil
 }
 
