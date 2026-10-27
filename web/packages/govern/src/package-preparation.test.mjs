@@ -76,6 +76,21 @@ test("preparation reads expose their actual error and retry the original read", 
   await click("Retry"); expect(state.query.refetch).toHaveBeenCalledTimes(2);
 });
 
+test("forbidden preparation explains the builder handoff and offers authorized member management", async () => {
+  state.query = { isError: true, isLoading: false, error: Error("/v1/packages/sample/preparation: HTTP 403"), refetch: vi.fn() };
+  render(PackageRequirements);
+  expect(container.textContent).toContain("Continue with a builder account");
+  await click("Members");
+  expect(state.open).toHaveBeenCalledWith({ view: "members" });
+  state.host.can = () => false;
+  render();
+  expect(container.textContent).toContain("Continue with a builder account");
+  expect(button("Members")).toBeUndefined();
+  await click("Retry");
+  expect(state.query.refetch).toHaveBeenCalledOnce();
+  expect(state.host.decide).not.toHaveBeenCalled();
+});
+
 test("a builder whose primary role changes after a business grant keeps the authorized preparation task", () => {
   state.host.role = () => "accountant";
   state.host.me.profile = { roles: { build: "accountant" }, grants: [{ app: "build", role: "accountant" }, { app: "build", role: "builder" }] };

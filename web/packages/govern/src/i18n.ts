@@ -1387,6 +1387,7 @@ register("zh-CN", {
   "Reads available to all members": "全体成员可读取",
   "This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.": "当前是系统自举工作区。发布业务应用前，请从账号菜单切换到业务工作区。系统定义须通过已批准的平台变更发布。",
   "Open self-hosting": "打开系统自举",
+  "This account cannot prepare application drafts in this workspace. Continue with a builder account, or ask an administrator to assign the builder role.": "当前账号不能在此工作区准备应用草稿。请使用构建者账号继续，或联系管理员授予构建角色。",
 });
 
 register("zh-CN", {

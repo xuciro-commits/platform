@@ -3,10 +3,20 @@ import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Checkbox, Disclosure, PageHeader, Panel, PropertyList, Tag, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 
+function PreparationReadProblem({ error, retry }: { error: Error; retry: () => void }) {
+  const { can } = useHost(), { open } = useWorkspace();
+  const forbidden = /HTTP 403\b/.test(error.message);
+  return <div role="alert" className="grid gap-2 text-sm text-danger">
+    <p>{t(forbidden ? "This account cannot prepare application drafts in this workspace. Continue with a builder account, or ask an administrator to assign the builder role." : "Application requirements could not be loaded.")}</p>
+    {forbidden ? <Disclosure summary={t("Technical details")}><p className="break-words text-xs">{error.message}</p></Disclosure> : <p className="break-words">{error.message}</p>}
+    <div className="flex flex-wrap gap-2"><Button size="sm" onClick={retry}>{t("Retry")}</Button>{forbidden && can("platform.member.grant") && <Button size="sm" onClick={() => open({ view: "members" })}>{t("Members")}</Button>}</div>
+  </div>;
+}
+
 export function PackageRequirements({ id, version }: { id: string; version: string }) {
   const { me } = useHost();
   const read = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
-  if (read.isError) return <div role="alert" className="grid gap-2 text-sm text-danger"><p>{t("Application requirements could not be loaded.")} {read.error.message}</p><div><Button size="sm" onClick={() => void read.refetch()}>{t("Retry")}</Button></div></div>;
+  if (read.isError) return <PreparationReadProblem error={read.error} retry={() => void read.refetch()} />;
   if (!read.data) return <p role="status" className="text-sm text-muted">{t("Loading application requirements…")}</p>;
   const plan = read.data;
   return <div className="grid gap-2 text-sm" aria-label={t("Before using this package")}>
@@ -75,7 +85,7 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
       <p>{t("This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.")}</p>
       <div><Button onClick={() => open({ view: "self-hosting" })}>{t("Open self-hosting")}</Button></div>
     </Panel>}
-    {query.isError && <Panel role="alert" className="grid gap-2"><p>{t("Application requirements could not be loaded.")} {query.error.message}</p><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></Panel>}
+    {query.isError && <PreparationReadProblem error={query.error} retry={() => void query.refetch()} />}
     {query.isLoading && <p role="status">{t("Loading application requirements…")}</p>}
     {error && <Panel role="alert" className="break-words text-danger">{error}</Panel>}
     {plan && <>
