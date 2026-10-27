@@ -55,14 +55,16 @@ def web_sources() -> list[Path]:
 # --- measures -------------------------------------------------------------
 
 def asset_kind_fanout() -> dict[str, int]:
-    """Why: a kind is spread across the host by hand; the file count is the patch
-    surface. One module per kind keeps this at 1-3."""
+    """Why: the host enumerating a kind is the patch. Count only files outside
+    the definition API — inside it, a scanner per kind is the intended shape and
+    splitting those files must not move the measure."""
     definition = read(SERVER / "platform/definition.go")
     kinds = re.findall(r'Asset\w+\s+AssetKind\s*=\s*"([a-z0-9-]+)"', definition)
+    files = [f for f in go_files(SERVER) if not str(f).startswith(str(SERVER / "platform"))]
     out: dict[str, int] = {}
     for kind in sorted(set(kinds)):
         needle = f'"{kind}"'
-        out[kind] = sum(1 for f in go_files(SERVER) if needle in read(f))
+        out[kind] = sum(1 for f in files if needle in read(f))
     return out
 
 
