@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/host"
@@ -437,4 +436,237 @@ func (t *Tenant) installAcceptedWork(finished *pb.Work) {
 		all = append(all, finished)
 	}
 	t.works.Restore(all)
+}
+
+// An agent answer includes the tool decision, resulting run/evaluation record
+// and measured spend in one accepted result; recovery never invokes the tool.
+type acceptedAgent struct {
+	Version     int             `json:"version"`
+	Kind        string          `json:"kind"`
+	Tenant      string          `json:"tenant"`
+	App         string          `json:"app"`
+	Member      string          `json:"member"`
+	Key         string          `json:"key"`
+	At          time.Time       `json:"at"`
+	RequestHash string          `json:"requestHash"`
+	Digest      string          `json:"digest"`
+	Step        stepBody        `json:"step"`
+	UsageBefore string          `json:"usageBefore,omitempty"`
+	Changes     json.RawMessage `json:"changes"`
+}
+
+func digestAgent(r acceptedAgent) (string, error) { r.Digest = ""; return acceptance.Digest(r) }
+func agentHash(r acceptedAgent) (string, error) {
+	return acceptance.Digest([]any{r.Tenant, r.Member, r.Step, r.UsageBefore})
+}
+func decodeAcceptedAgent(raw []byte) (acceptedAgent, error) {
+	var r acceptedAgent
+	if len(raw) == 0 || len(raw) > acceptance.MaxResultBytes {
+		return r, fmt.Errorf("agent result is empty or too large")
+	}
+	if err := acceptance.DecodeJSON(raw, &r, "agent result"); err != nil {
+		return r, err
+	}
+	hash, err := agentHash(r)
+	digest, digestErr := digestAgent(r)
+	batch, receipt, batchErr := resultformat.DecodeBatch(r.Changes)
+	if err != nil || digestErr != nil || batchErr != nil || r.Version != 1 || r.Kind != "agent-result" || r.Tenant == "" || r.App != AgentApp || r.Member == "" || r.At.IsZero() || r.Step.Run == "" || r.RequestHash != hash || r.Digest != digest ||
+		batch.Tenant != r.Tenant || batch.App != AgentApp || !batch.At.Equal(r.At) || receipt.GetSubmission().GetPrincipalId() != r.Member || r.Key != "agent:"+receipt.GetSubmission().GetIdempotencyKey() {
+		return r, fmt.Errorf("agent result has inconsistent identity or changes")
+	}
+	if r.Step.Evaluation == nil && r.Step.Usage.Model != "" {
+		if !resultformat.ValidUsage(r.Step.Usage) || r.UsageBefore == "" || r.Step.Usage.Member != r.Member {
+			return r, fmt.Errorf("agent result has invalid usage")
+		}
+	} else if r.UsageBefore != "" {
+		return r, fmt.Errorf("agent result has unexpected usage")
+	}
+	return r, nil
+}
+
+func (t *Tenant) acceptAgentStep(b stepBody, at time.Time) {
+	defer func() {
+		if p := recover(); p != nil {
+			t.quarantine(fmt.Errorf("agent answer cannot stage: %v", p))
+		}
+	}()
+	draft := t.newStagedDecision()
+	draft.at = at
+	agent := draft.stateApp(t.agents).(AgentRuntime)
+	// Authorization and source fences have been rechecked by agentStep while
+	// holding the tenant lock, after the outside model call has completed.
+	run, _ := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
+	if b.Evaluation != nil {
+		run.Agent = b.Evaluation.Agent
+	}
+	member := agent.AgentPrincipal(run.Agent)
+	if b.Evaluation != nil && b.Evaluation.Candidate != "" {
+		// A candidate's agent need not be installed as a principal yet. Only
+		// its original owner records the dry report; it executes no AI tool.
+		member = platform.Member{ID: "app:" + AgentApp, Tenant: t.ID}
+	}
+	c := platform.NewCaller(draft, member, AgentApp, false, true)
+	r := acceptedAgent{Version: 1, Kind: "agent-result", Tenant: t.ID, App: AgentApp, Member: member.ID, At: at.UTC(), Step: b}
+	var err error
+	if b.Evaluation == nil && b.Usage.Model != "" {
+		r.UsageBefore, err = t.usagePredecessor()
+		if err != nil {
+			t.quarantine(err)
+			return
+		}
+	}
+	refusal := agent.ApplyAgentStepCaller(c, b, at)
+	if refusal == nil {
+		refusal = draft.failure
+	}
+	if refusal == nil {
+		refusal = draft.answerRequests(at)
+	}
+	if refusal == nil {
+		refusal = draft.stageObservers()
+	}
+	if refusal != nil || len(draft.events) == 0 {
+		t.quarantine(fmt.Errorf("agent answer has no complete decision: %v", refusal))
+		return
+	}
+	last := draft.events[len(draft.events)-1]
+	r.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
+	if err != nil {
+		t.quarantine(err)
+		return
+	}
+	r.Key = "agent:" + last.Record.GetSubmission().GetIdempotencyKey()
+	r.RequestHash, err = agentHash(r)
+	if err == nil {
+		r.Digest, err = digestAgent(r)
+	}
+	var raw []byte
+	if err == nil {
+		raw, err = json.Marshal(r)
+	}
+	if err == nil {
+		_, err = decodeAcceptedAgent(raw)
+	}
+	if err != nil {
+		t.quarantine(err)
+		return
+	}
+	principal, _ := json.Marshal(member)
+	committed, err := t.acceptResult(Entry{App: AgentApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: draft.flowVersions()}, r.Key, r.RequestHash)
+	if err != nil {
+		return
+	}
+	saved, err := decodeAcceptedAgent(committed)
+	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
+		t.quarantine(fmt.Errorf("committed agent answer differs: %v", err))
+		return
+	}
+	if _, err = t.applyAcceptedAgent(committed); err != nil {
+		t.quarantine(err)
+		return
+	}
+	t.acceptedResultApplied()
+	t.enqueue(saved.At)
+	t.changedOwner(AgentApp)
+}
+
+func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedAgent, error) {
+	r, err := decodeAcceptedAgent(raw)
+	if err != nil {
+		return r, err
+	}
+	if r.Tenant != t.ID || t.agents == nil {
+		return r, fmt.Errorf("agent result belongs to another tenant")
+	}
+	if r.UsageBefore != "" {
+		before, err := t.usagePredecessor()
+		if err != nil || before != r.UsageBefore {
+			return r, fmt.Errorf("agent usage predecessor differs: %v", err)
+		}
+	}
+	batch, _, _ := resultformat.DecodeBatch(r.Changes)
+	if applied, err := t.applyAcceptedBatch(t.agents.AcceptedLedger(), r.Changes); err != nil || !applied {
+		return r, fmt.Errorf("agent result application: %v (applied=%t)", err, applied)
+	}
+	if r.UsageBefore != "" {
+		t.ai.Meter(r.Step.Usage)
+	}
+	t.publishAcceptedBatch(batch)
+	return r, nil
+}
+
+// A direct model call has no owned effect. Its immutable usage observation is
+// accepted before changing the meter, using the same predecessor as effects.
+
+func (t *Tenant) usagePredecessor() (string, error) {
+	if t.ai == nil {
+		return "", fmt.Errorf("usage needs an AI meter")
+	}
+	raw, err := t.ai.Snapshot()
+	if err != nil {
+		return "", err
+	}
+	return acceptance.Digest(raw)
+}
+
+func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
+	// Usage observes a completed call. Its principal is the meter owner; a
+	// later revocation of the attributed caller cannot erase an incurred cost.
+	c := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + platform.AIApp, Tenant: m.Tenant}, platform.AIApp, false, true)
+	decision := t.authorizeNative(c, "usage:observe", "derive", nil, m.ID != "" && m.ID == u.Member && resultformat.ValidUsage(u))
+	if refusal := authorizationRefusal(decision); refusal != nil {
+		return refusal
+	}
+	before, err := t.usagePredecessor()
+	if err != nil || m.Tenant != t.ID || m.ID != u.Member || !resultformat.ValidUsage(u) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
+	}
+	r := resultformat.Usage{Version: 1, Kind: "usage-result", Tenant: t.ID, App: platform.AIApp, Member: m.ID, At: u.At.UTC(), Before: before, Usage: u}
+	r.Authorizations = []resultformat.AuthorizationEvidence{{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Action: "usage:observe"}, Decision: decision, Roles: slices.Clone(c.RolesHere())}}
+	r.RequestHash, err = resultformat.UsageHash(before, u)
+	if err != nil {
+		return unknown()
+	}
+	r.Key = "usage:" + r.RequestHash
+	r.Digest, err = resultformat.DigestUsage(r)
+	if err != nil {
+		return unknown()
+	}
+	raw, err := json.Marshal(r)
+	if err != nil {
+		return unknown()
+	}
+	if _, err := resultformat.DecodeUsage(raw); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage cannot be accepted")
+	}
+	principal, _ := json.Marshal(m)
+	committed, err := t.acceptResult(Entry{App: platform.AIApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, r.Key, r.RequestHash)
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")
+	}
+	saved, err := resultformat.DecodeUsage(committed)
+	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
+		t.quarantine(fmt.Errorf("committed model usage differs: %v", err))
+		return unknown()
+	}
+	if _, err := t.applyAcceptedUsage(committed); err != nil {
+		t.quarantine(err)
+		return unknown()
+	}
+	t.acceptedResultApplied()
+	t.operationsChanged(platform.AIApp)
+	return nil
+}
+
+func (t *Tenant) applyAcceptedUsage(raw []byte) (resultformat.Usage, error) {
+	r, err := resultformat.DecodeUsage(raw)
+	if err != nil {
+		return r, err
+	}
+	before, err := t.usagePredecessor()
+	if err != nil || r.Tenant != t.ID || before != r.Before {
+		return r, fmt.Errorf("model usage predecessor differs: %v", err)
+	}
+	t.ai.Meter(r.Usage)
+	return r, nil
 }

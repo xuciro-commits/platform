@@ -2,7 +2,7 @@
 # Recorded debt may only shrink: lower a cap, drop a dup/ui entry, as the
 # corresponding files are merged or deleted. checkBudgetDrift fails when this
 # file grows compared with the committed HEAD revision.
-cap capabilities/server 263
+cap capabilities/server 242
 cap capabilities/server/apps/build 73
 cap capabilities/server/internal/construction 42
 cap capabilities/server/platform 166

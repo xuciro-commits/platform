@@ -1,27 +1,163 @@
 package platformserver
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"maps"
 	"platformserver/internal/acceptance"
 	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/construction"
 	"platformserver/internal/records"
 	"reflect"
 	"slices"
 	"strings"
 	"time"
 
+	"bytes"
+	"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-
+	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-
+	"platformserver/internal/construction"
+	"platformserver/journal"
 	"platformserver/platform"
 )
+
+// Capture the same full record image and predecessor for connector inputs,
+// effect answers and callback observations, in the supplied stable order.
+func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]resultformat.InputRow, error) {
+	d.records.mu.Lock()
+	defer d.records.mu.Unlock()
+	d.records.parent.mu.Lock()
+	defer d.records.parent.mu.Unlock()
+	if refs == nil {
+		refs = slices.Sorted(maps.Keys(d.records.writes))
+	}
+	var rows []resultformat.InputRow
+	for _, ref := range refs {
+		if exclude[ref] {
+			continue
+		}
+		typ, id, ok := strings.Cut(ref, "/")
+		et := d.records.types[typ]
+		if !ok || et == nil || et.info.App != owner || et.rows.Get(id) == nil {
+			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
+		}
+		var prior *records.Row
+		if old := d.records.parent.types[typ]; old != nil {
+			prior = old.rows.Get(id)
+		}
+		image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
+		if err != nil {
+			return nil, err
+		}
+		row := resultformat.InputRow{Image: image, App: owner}
+		row.Before, err = records.Predecessor(typ, id, prior)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+// prepareAcceptedDirectRows verifies and forks record changes caused by a
+// top-level input without a child ledger decision (connector facts or an
+// external effect's answer). The caller promotes only after all other owners
+// of the same result have passed their predecessor checks.
+func (t *Tenant) prepareAcceptedDirectRows(rows []resultformat.InputRow, member string, at time.Time) (*recordStore, error) {
+	return t.prepareAcceptedDirectRowsOn(t.records, rows, member, at)
+}
+
+func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []resultformat.InputRow, member string, at time.Time) (*recordStore, error) {
+	draft := base.forkRecords()
+	draft.mu.Lock()
+	defer draft.mu.Unlock()
+	for _, image := range rows {
+		et := draft.types[image.Type]
+		if et == nil || et.info.App != image.App {
+			return nil, fmt.Errorf("direct result needs missing record type %s", image.Type)
+		}
+		prior := et.rows.Get(image.ID)
+		before, previousHistory, revision := "", 0, uint32(0)
+		if image.HistoryRef != nil {
+			if err := records.CheckHistoryPredecessor(image.Image, prior); err != nil {
+				return nil, err
+			}
+			var err error
+			before, err = records.Predecessor(image.Type, image.ID, prior)
+			if err != nil {
+				return nil, err
+			}
+			if before != image.Before {
+				return nil, fmt.Errorf("direct record image predecessor differs")
+			}
+			if prior != nil {
+				revision = records.Header(prior.Value).Revision
+			}
+		} else {
+			if prior != nil {
+				row, err := records.FullImage(image.Type, image.ID, prior)
+				if err != nil {
+					return nil, err
+				}
+				before, err = acceptance.Digest(row)
+				if err != nil {
+					return nil, err
+				}
+				previousHistory, revision = len(prior.RecordHistory()), records.Header(prior.Value).Revision
+			}
+			if image.Before != before || len(image.History) <= previousHistory {
+				return nil, fmt.Errorf("direct record predecessor differs")
+			}
+			if prior != nil {
+				old, err := acceptance.Digest(image.History[:previousHistory])
+				actual, actualErr := acceptance.Digest(prior.RecordHistory())
+				if err != nil || actualErr != nil || old != actual {
+					return nil, fmt.Errorf("direct record history predecessor differs")
+				}
+			}
+		}
+		for _, change := range image.History[previousHistory:] {
+			if change.Change != "" || change.Schema == "" || change.By != member || !change.At.Equal(at) {
+				return nil, fmt.Errorf("direct record has a foreign change")
+			}
+		}
+		value := reflect.New(et.info.Go).Elem()
+		decode, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, draft.readRelease, image.Format)
+		if err != nil {
+			return nil, err
+		}
+		if err := acceptance.DecodeJSON(decode, value.Addr().Interface(), "direct record"); err != nil {
+			return nil, err
+		}
+		if err := checkRunApplicationBindings(value.Interface()); err != nil {
+			return nil, err
+		}
+		rec := records.Header(value)
+		last := image.History[len(image.History)-1]
+		if rec.ID != image.ID || rec.Revision != revision || rec.Changed != (platform.Stamp{
+			By: member, At: at, Change: ""}) ||
+			prior != nil && rec.Created != records.Header(prior.Value).Created ||
+			prior == nil && rec.Created != (platform.Stamp{By: member,
+				At: image.History[0].At, Change: ""}) ||
+			last.Schema == "" {
+			return nil, fmt.Errorf("direct record image differs from history")
+		}
+		recovered := &records.Row{Value: value, Format: image.Format, History: records.CopyHistory(image.History), Projection: records.CloneProjection(image.Projection), Extraction: image.Extraction}
+		if image.HistoryRef != nil {
+			if err := records.AppendRowHistory(recovered, prior, image.History); err != nil {
+				return nil, err
+			}
+		}
+		recovered.RetainOriginal(image.Value)
+		et.setRow(image.ID, recovered)
+		draft.writes[image.Type+"/"+image.ID] = true
+		if et.knowledge {
+			draft.dirty.Set(image.Type+"/"+image.ID, true)
+		}
+	}
+	return draft, nil
+}
 
 func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
 	if err := d.checkFinalConstraints(); err != nil {
@@ -548,4 +684,298 @@ func (t *Tenant) publishAcceptedBatch(result resultformat.Batch) {
 		t.publishAccepted(platform.Event{App: decision.Event.App, Record: r, Changed: decision.Event.Changed},
 			decision.Event, 2)
 	}
+}
+
+func uniqueReplacements(changes map[string]map[string]string) []journal.StateUnique {
+	out := make([]journal.StateUnique, 0, len(changes))
+	for _, ref := range slices.Sorted(maps.Keys(changes)) {
+		typ, id, _ := strings.Cut(ref, "/")
+		out = append(out, journal.StateUnique{Type: typ, ID: id, Keys: changes[ref]})
+	}
+	return out
+}
+
+func (d *stagedDecision) savedUniqueChanges() []journal.StateUnique {
+	d.records.mu.Lock()
+	defer d.records.mu.Unlock()
+	return uniqueReplacements(d.records.uniqueChanges())
+}
+
+func validateUniqueReplacements(store *recordStore, saved []journal.StateUnique) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	expected := store.uniqueChanges()
+	if len(saved) != len(expected) {
+		return fmt.Errorf("record unique-key replacements differ")
+	}
+	seen := map[string]bool{}
+	for _, row := range saved {
+		ref := row.Type + "/" + row.ID
+		keys, ok := expected[ref]
+		if !ok || seen[ref] || !maps.Equal(keys, row.Keys) {
+			return fmt.Errorf("record unique-key replacement differs for %s", ref)
+		}
+		seen[ref] = true
+	}
+	return nil
+}
+
+// Callback observations have no new kernel change receipt. Their authority is
+// the host-delivered, already accepted effect and the exact owner callback,
+// with the same direct-row preimage/history checks as connector/effect results.
+type callbackWrite struct {
+	Source  platform.Effect
+	History int
+}
+
+func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]resultformat.CallbackRow, error) {
+	var rows []resultformat.CallbackRow
+	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
+		if published[ref] {
+			continue
+		}
+		callback, ok := d.callbackWrites[ref]
+		if !ok {
+			return nil, fmt.Errorf("batch event omits a written record outside an effect callback")
+		}
+		direct, err := captureDirectRows(d, callback.Source.App, []string{ref}, nil, "effect answer")
+		if err != nil || len(direct) != 1 {
+			return nil, fmt.Errorf("callback row cannot be captured: %v", err)
+		}
+		historyCount := len(direct[0].History)
+		if direct[0].HistoryRef != nil {
+			historyCount += direct[0].HistoryRef.Base
+		}
+		if historyCount != callback.History {
+			return nil, fmt.Errorf("callback row has a write outside its source callback")
+		}
+		if _, err := d.tenant.prepareAcceptedDirectRows(direct, "app:"+callback.Source.App, d.at); err != nil {
+			return nil, err
+		}
+		rows = append(rows, resultformat.CallbackRow{Row: direct[0], Source: callback.Source})
+	}
+	return rows, nil
+}
+
+// Validate sources and direct rows in private views before any ledger or
+// business/control state in the containing result is promoted.
+func (t *Tenant) prepareCallbackRows(target *recordStore, rows []resultformat.CallbackRow, at time.Time) error {
+	seen := map[string]bool{}
+	for _, callback := range rows {
+		row, source := callback.Row, callback.Source
+		ref := row.Type + "/" + row.ID
+		if seen[ref] || row.App == "" || source.ID == "" || source.App != row.App {
+			return fmt.Errorf("callback row has an invalid source or owner")
+		}
+		seen[ref] = true
+		if _, ok := t.app(row.App).(platform.Answerer); !ok {
+			return fmt.Errorf("callback row has no effect answer owner")
+		}
+		t.opsMu.Lock()
+		var current platform.Effect
+		for _, effect := range t.outbound {
+			if effect.ID == source.ID {
+				current = effect.Effect
+				break
+			}
+		}
+		t.opsMu.Unlock()
+		actual, err := acceptance.Digest(current)
+		expected, expectedErr := acceptance.Digest(source)
+		if current.ID == "" || err != nil || expectedErr != nil || actual != expected {
+			return fmt.Errorf("callback row source effect predecessor differs")
+		}
+		private, err := t.prepareAcceptedDirectRows([]resultformat.InputRow{row}, "app:"+row.App, at)
+		if err != nil {
+			return err
+		}
+		typ, id, _ := strings.Cut(ref, "/")
+		private.mu.Lock()
+		image := private.types[typ].rows.Get(id)
+		private.mu.Unlock()
+		target.mu.Lock()
+		target.types[typ].setRow(id, image)
+		target.writes[ref] = true
+		if target.types[typ].knowledge {
+			target.dirty.Set(ref, true)
+		}
+		target.mu.Unlock()
+	}
+	return nil
+}
+
+func (d *stagedDecision) savedChangePlan() (resultformat.ChangePlan, error) {
+	plan := resultformat.ChangePlan{Notices: d.savedNotices(), Intents: slices.Clone(d.intents),
+		Deliveries: slices.Clone(d.deliveries), Sequences: maps.Clone(d.allocated),
+		SequenceBases: maps.Clone(d.sequenceBases), Unique: d.savedUniqueChanges()}
+	var err error
+	plan.States, err = d.savedStates()
+	if err == nil {
+		plan.Control, err = d.savedControl()
+	}
+	return plan, err
+}
+
+func (r acceptedWork) ChangePlan() resultformat.ChangePlan {
+	return resultformat.ChangePlan{At: r.At, Changes: r.Changes, States: r.States,
+		Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 3}
+}
+
+// This preparation changes no live owner. In particular a valid child cannot
+// advance its ledger before the outer result's remaining owners are checked.
+type preparedAcceptedChanges struct {
+	plan    resultformat.ChangePlan
+	records *recordStore
+	child   *preparedAcceptedBatch
+}
+
+func (t *Tenant) prepareAcceptedChanges(plan resultformat.ChangePlan) (*preparedAcceptedChanges, error) {
+	if err := t.validateAcceptedControl(plan.Control); err != nil {
+		return nil, err
+	}
+	if err := t.validateAcceptedNotices(plan.Notices); err != nil {
+		return nil, err
+	}
+	if err := t.validateAcceptedIntents(plan.Intents); err != nil {
+		return nil, err
+	}
+	if err := t.validateAcceptedStates(plan.States); err != nil {
+		return nil, err
+	}
+	if err := t.validateControlDeliveries(plan.Control, plan.Deliveries); err != nil {
+		return nil, err
+	}
+	if err := t.sequences.check(plan.SequenceBases, plan.Sequences); err != nil {
+		return nil, err
+	}
+	prepared := &preparedAcceptedChanges{plan: plan}
+	var err error
+	if len(plan.Changes) > 0 {
+		batch, _, err := resultformat.DecodeBatch(plan.Changes)
+		if err != nil || batch.Tenant != t.ID || !batch.At.Equal(plan.At) {
+			return nil, fmt.Errorf("accepted result has an invalid child decision: %v", err)
+		}
+		owner := t.app(batch.App)
+		if owner == nil {
+			return nil, fmt.Errorf("accepted result needs missing child authority")
+		}
+		direct := make(map[string]bool, len(plan.Rows))
+		for _, row := range plan.Rows {
+			direct[row.Type+"/"+row.ID] = true
+		}
+		for _, row := range batch.Rows {
+			if direct[row.Type+"/"+row.ID] {
+				return nil, fmt.Errorf("accepted result writes the same direct and child record")
+			}
+		}
+		for _, row := range batch.DirectRows {
+			if direct[row.Row.Type+"/"+row.Row.ID] {
+				return nil, fmt.Errorf("accepted result writes the same direct and child record")
+			}
+		}
+		prepared.child, err = t.prepareAcceptedBatch(owner.AcceptedLedger(), plan.Changes)
+		if err != nil || prepared.child == nil {
+			return nil, fmt.Errorf("accepted child result: %v (already applied=%t)", err, prepared.child == nil)
+		}
+	}
+	if len(plan.Rows) > 0 {
+		base := t.records
+		if prepared.child != nil {
+			base = prepared.child.records
+		}
+		prepared.records, err = t.prepareAcceptedDirectRowsOn(base, plan.Rows, plan.Member, plan.At)
+		if err != nil {
+			return nil, err
+		}
+		if prepared.child != nil {
+			// Flatten this private fork onto the child's original live parent.
+			// Keep its write set as well as the outer direct observations, so
+			// promotion applies both together and invalidates every changed row.
+			prepared.records.parent = base.parent
+			prepared.records.baseGeneration = base.baseGeneration
+			maps.Copy(prepared.records.writes, base.writes)
+			prepared.child.records = prepared.records
+			prepared.records = nil
+		}
+	}
+	if plan.CheckUnique {
+		records := prepared.records
+		if prepared.child != nil {
+			records = prepared.child.records
+		}
+		if records == nil {
+			records = t.records.forkRecords()
+		}
+		if err := validateUniqueReplacements(records, plan.Unique); err != nil {
+			return nil, err
+		}
+	}
+	return prepared, nil
+}
+
+func (p *preparedAcceptedChanges) apply(t *Tenant) error {
+	if p.child != nil {
+		if applied, err := t.promoteAcceptedBatch(p.child); err != nil || !applied {
+			return fmt.Errorf("accepted child application: %v (applied=%t)", err, applied)
+		}
+
+	}
+	if p.records != nil {
+		if err := t.records.promoteRecords(p.records); err != nil {
+			return err
+		}
+	}
+	if err := t.applyAcceptedControl(p.plan.Control); err != nil {
+		return err
+	}
+	if err := t.applyAcceptedStates(p.plan.States); err != nil {
+		return err
+	}
+	if err := t.applyAcceptedDeliveries(p.plan.Deliveries); err != nil {
+		return err
+	}
+	t.applyAcceptedNotices(p.plan.Notices)
+	t.installAcceptedIntents(p.plan.Intents)
+	t.sequences.set(p.plan.Sequences)
+	return nil
+}
+
+func (p *preparedAcceptedChanges) publish(t *Tenant) {
+	if p.child != nil {
+		t.publishAcceptedBatch(p.child.result)
+	}
+}
+
+func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	ids := map[string]bool{}
+	for _, x := range intents {
+		if err := checkApplicationBindings(x.Applications); err != nil {
+			return err
+		}
+		kind, ok := strings.CutPrefix(x.Event, x.App+"/")
+		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, x.App, kind, x.Key, x.Endpoint)
+		if kind == "model" && x.Endpoint == resultformat.ModelEndpoint {
+			id = fmt.Sprintf("%s:%s:model:%s", t.ID, x.App, x.Key)
+		}
+		if !ok || kind == "" || x.App == "" || t.app(x.App) == nil || x.Key == "" || x.Endpoint == "" ||
+			x.ID != id ||
+			ids[x.ID] || x.State != "pending" && x.State != "held" || x.At.IsZero() || !x.Due.Equal(x.At) ||
+			x.Attempts != 0 || !x.Last.IsZero() || x.Error != "" || x.Digest != "" ||
+			x.State == "held" && x.Agent == "" || slices.ContainsFunc(t.outbound, func(e *effect) bool { return e.ID == x.ID }) {
+			return fmt.Errorf("accepted result has an invalid or duplicate outbound intent")
+		}
+		ids[x.ID] = true
+	}
+	return nil
+}
+
+func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	for _, planned := range intents {
+		t.outbound = append(t.outbound, &effect{Effect: planned, span: t.current()})
+	}
+	t.trimEffects()
 }

@@ -1,19 +1,234 @@
 package platformserver
 
 import (
+	"cmp"
 	"encoding/json"
 	"platformserver/internal/acceptance"
 	resultformat "platformserver/internal/acceptance/result"
-	"reflect"
 	"slices"
 	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"reflect"
 )
+
+func resultRequestHash(raw []byte) (string, error) {
+	identity, err := acceptedIdentity(raw)
+	return identity.Hash, err
+}
+
+func acceptedIdentity(raw []byte) (resultIdentity, error) {
+	var identity resultIdentity
+	var envelope struct{ Kind string }
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return identity, err
+	}
+	identity.Scope = "submission"
+	if envelope.Kind == "host-result" {
+		r, e := decodeAcceptedHostControl(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "host"
+		return identity, e
+	}
+	if envelope.Kind == "composite-result" {
+		r, e := decodeAcceptedComposite(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "composite"
+		return identity, e
+	}
+	if envelope.Kind == "usage-result" {
+		r, e := resultformat.DecodeUsage(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "usage"
+		return identity, e
+	}
+	if envelope.Kind == "agent-result" {
+		r, e := decodeAcceptedAgent(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "agent"
+		return identity, e
+	}
+	if envelope.Kind == "operation-claim" {
+		result, err := decodeOperationClaim(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
+		return identity, err
+	}
+	if envelope.Kind == "refusal" {
+		result, sub, err := resultformat.DecodeRefusal(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, sub.GetIdempotencyKey(), result.RequestHash
+		return identity, err
+	}
+	if envelope.Kind == "record-batch" {
+		result, receipt, err := resultformat.DecodeBatch(raw)
+		if err != nil {
+			return identity, err
+		}
+		sub, err := resultformat.BatchSubmission(result, receipt)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, sub.GetIdempotencyKey(), result.RequestHash
+		return identity, err
+	}
+	if envelope.Kind == "work-result" {
+		result, err := decodeAcceptedWork(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
+		identity.Scope = "work"
+		return identity, err
+	}
+	if envelope.Kind == "input-result" {
+		result, err := resultformat.DecodeInput(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
+		identity.Scope = "input"
+		return identity, err
+	}
+	if envelope.Kind == "effect-result" {
+		result, err := resultformat.DecodeEffect(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, PlatformApp, result.Key, result.RequestHash
+		identity.Scope = "effect"
+		return identity, err
+	}
+	if envelope.Kind == "release-result" {
+		result, err := resultformat.DecodeRelease(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
+		return identity, err
+	}
+	result, receipt, err := resultformat.DecodeRecord(raw)
+	identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, receipt.GetSubmission().GetIdempotencyKey(), result.RequestHash
+	return identity, err
+}
+
+// Escalation consumes durable business facts in a later Work decision. Nothing
+// from the rejected transaction's private records or effects is promoted.
+func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Time) ([]platform.RefusalEscalationRequest, *kernel.Error) {
+	if !c.Staging() || !c.Automation || c.App != platform.WorkApp || c.ID != "app:"+platform.WorkApp || c.Replaying || c.Tenant != d.tenant.ID {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")
+	}
+	type event struct {
+		key  string
+		fact platform.BusinessRefusalFact
+	}
+	type group struct {
+		app, subject, action, code string
+		policy                     platform.RefusalEscalation
+	}
+	groups := map[group][]event{}
+	seen := map[string]bool{}
+	add := func(key string, fact platform.BusinessRefusalFact) {
+		if fact.Escalation == nil || fact.Escalation.Check() != nil || fact.At.After(at) {
+			return
+		}
+		app, _, _ := strings.Cut(fact.Action, ".")
+		g := group{app: app, subject: fact.Subject, action: fact.Action, code: fact.Code, policy: *fact.Escalation}
+		identity := app + "/" + key + "/" + fact.Subject + "/" + fact.Action + "/" + fact.Code
+		if seen[identity] {
+			return // one submitted intent, even when a foreach flags many rows
+		}
+		seen[identity] = true
+		groups[g] = append(groups[g], event{key: key, fact: fact})
+	}
+	for key, r := range storedValues(&d.tenant.committed, "refusal", d.tenant.committed.refusals, "business") {
+		if r.Business != nil {
+			add(key, *r.Business)
+		}
+	}
+	for key, raw := range storedValues(&d.tenant.committed, "answer", d.tenant.committed.answers, "business") {
+		var envelope struct{ Kind string }
+		if json.Unmarshal(raw, &envelope) != nil || envelope.Kind != "record-batch" {
+			continue
+		}
+		r, _, err := resultformat.DecodeBatch(raw)
+		if err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted refusal history cannot be read")
+		}
+		for _, fact := range r.Business {
+			add(key, fact)
+		}
+	}
+	var pending []platform.RefusalEscalationRequest
+	for g, events := range groups {
+		slices.SortFunc(events, func(a, b event) int {
+			if c := a.fact.At.Compare(b.fact.At); c != 0 {
+				return c
+			}
+			return strings.Compare(a.key, b.key)
+		})
+		start := 0
+		for index, current := range events {
+			if !current.fact.At.Before(events[start].fact.At.Add(time.Duration(g.policy.WindowSeconds) * time.Second)) {
+				start = index
+			}
+			if index-start+1 != g.policy.Count {
+				continue
+			}
+			key, err := acceptance.Digest([]any{g.app, g.subject, g.action, g.code, g.policy, events[start].key})
+			if err != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The refusal escalation identity cannot be frozen")
+			}
+			request := platform.RefusalEscalationRequest{Key: key, App: g.app, Subject: g.subject, Action: g.action, Code: g.code, Message: current.fact.Message, Count: g.policy.Count, First: events[start].fact.At, Last: current.fact.At}
+			if _, exists := platform.Get[platform.WorkTask](c, request.TaskID()); exists {
+				continue // closed tasks also retain their permanent refusal identity
+			}
+			business := platform.NewCaller(d, platform.Member{ID: "app:" + g.app, Tenant: c.Tenant}, g.app, false, true)
+			request.Candidates = d.recipients(business, at, []platform.Recipient{{AppRole: g.policy.ReviewerRole}})
+			request.Candidates = slices.DeleteFunc(request.Candidates, func(id string) bool {
+				m, known := (hostView{t: d.tenant, decision: d}).Member(id)
+				return !known || !m.Active() || !d.Readable(platform.NewCaller(d, m, g.app, false, false), g.subject)
+			})
+			slices.Sort(request.Candidates)
+			if len(request.Candidates) > 0 {
+				pending = append(pending, request)
+			}
+		}
+	}
+	slices.SortFunc(pending, func(a, b platform.RefusalEscalationRequest) int {
+		if c := a.Last.Compare(b.Last); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.Key, b.Key)
+	})
+	return pending[:min(len(pending), 32)], nil
+}
+
+func (d *stagedDecision) BusinessRefused(answer *kernel.Error, fact platform.BusinessRefusalFact) {
+	if answer == nil {
+		return
+	}
+	app, _, _ := strings.Cut(fact.Action, ".")
+	if err := resultformat.ValidateBusinessFact(app, fact); err != nil {
+		d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal evidence exceeds its declared bounds")
+		return
+	}
+	if d.businessRefusals == nil {
+		d.businessRefusals = map[*kernel.Error]platform.BusinessRefusalFact{}
+	}
+	d.businessRefusals[answer] = resultformat.CloneBusinessFact(fact)
+	d.InputRefused(answer, []platform.FieldIssue{{Code: "business_refusal", BusinessCode: fact.Code, Record: fact.Subject, Message: fact.Message, Translations: maps.Clone(fact.Translations), Path: []string{"$business"}}})
+}
+
+func (d *stagedDecision) CaptureBusinessRefusal(c platform.Caller, receipt *pb.ChangeRecord, fact platform.BusinessRefusalFact) *kernel.Error {
+	if !c.Staging() || c.Replaying || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || fact.Member != c.ID || !fact.At.Equal(d.at) || fact.Subject != target(receipt.GetSubmission()) || fact.Action != receipt.GetSubmission().GetSchema().GetName() || fact.Level == "block" {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal evidence must belong to its original decision")
+	}
+	if err := resultformat.ValidateBusinessFact(c.App, fact); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	if len(d.businessFacts) >= 64 {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal evidence exceeds its declared bounds")
+	}
+	d.businessFacts = append(d.businessFacts, resultformat.CloneBusinessFact(fact))
+	return nil
+}
+
+func (d *stagedDecision) RefuseBusinessCondition(c platform.Caller, code, message string, original any, inputs map[string]any, at time.Time) *kernel.Error {
+	sub := d.currentSubmission
+	if sub == nil || sub.GetAuthority() != c.App || sub.GetPrincipalId() != c.ID {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", message)
+	}
+	fact := platform.BusinessRefusalFact{Level: "block", Code: code, Message: message, Subject: target(sub), Action: sub.GetSchema().GetName(), Member: c.ID, At: at.UTC(), Original: platform.Raw(original), Inputs: map[string]json.RawMessage{}}
+	for name, v := range inputs {
+		fact.Inputs[name] = platform.Raw(v)
+	}
+	return c.RefuseBusiness(fact)
+}
 
 type BusinessInputChange struct {
 	Field  string          `json:"field"`
@@ -293,4 +508,16 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 		f.Inputs = nil
 	}
 	return f
+}
+
+// conflictRefusal reports err as a conflict refusal, passing an existing
+// refusal through and nil as nil.
+func conflictRefusal(err error) *kernel.Error {
+	if err == nil {
+		return nil
+	}
+	if refusal, ok := err.(*kernel.Error); ok {
+		return refusal
+	}
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 }
