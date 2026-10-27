@@ -19,6 +19,8 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repository root")
+	ceilingsPath := flag.String("ceilings", "cmd/check-boundaries/boundaries.tsv", "structure ratchet ceilings within the repository root")
+	update := flag.Bool("update", false, "record the current counts as the new ceilings")
 	flag.Parse()
 	var failures []string
 	for _, area := range []string{"capabilities/server"} {
@@ -54,6 +56,26 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	measures, err := scanTree(*root, "capabilities/server")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "boundary:", err)
+		os.Exit(1)
+	}
+	if *update {
+		if err := writeCeilings(*ceilingsPath, measures); err != nil {
+			fmt.Fprintln(os.Stderr, "boundary:", err)
+			os.Exit(1)
+		}
+		fmt.Println("ceilings recorded:", len(measures.files)+len(measures.loc)+len(measures.dup)+len(measures.ui))
+		return
+	}
+	ceilings, err := readCeilings(*ceilingsPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "boundary:", err)
+		os.Exit(1)
+	}
+	guarded, counted := ratchet(measures, ceilings)
+	failures = append(failures, guarded...)
 	sort.Strings(failures)
 	for _, failure := range failures {
 		fmt.Fprintln(os.Stderr, "boundary:", failure)
@@ -61,7 +83,7 @@ func main() {
 	if len(failures) != 0 {
 		os.Exit(1)
 	}
-	fmt.Println("source boundaries ok: every production Go file checked")
+	fmt.Printf("source boundaries ok: every production Go file checked; %d ratchet ceilings held\n", counted)
 }
 
 func checkFile(path string, file *ast.File, set *token.FileSet) []string {

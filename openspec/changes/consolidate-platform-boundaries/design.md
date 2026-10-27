@@ -86,3 +86,61 @@ workspace 壳 → ui/app/kernel
 - B4 结论复核：`@platform/platform` 全仓引用为零（lockfile 历史条目随重生成消失）；基础层公共面未动；无新旧双轨。
 - 依赖冻结承诺复核：`git diff main..HEAD -- go.mod go.sum` 为空；pnpm-lock 无版本变更（仅 govern 改名结构）——5.2 冻结巡检据此勾选。
 - deployment 差量逐条对照 B2 实现：三运行服务拓扑、进程内可选接收能力（声明启用/未声明不监听/端口与签名语义不变）、compute 与驱动隔离保留——无打折实现。剩余 3.1/3.2（目录化搬迁）、6.1/6.2/6.3（宿主验证与升级轮）如实留待代理可用环境，change 保持活动。
+
+## B3 收敛对照清单（2026-10-27 实测，任务 3.1/3.2 的执行依据）
+
+本轮由负责人提出的「防 AI 腐化」审查触发。以下数字全部为 `go list` / `wc` / `grep` 实测，非估计；上限已固化进 `cmd/check-boundaries/boundaries.tsv`（175 条，只降不升）。
+
+### 实测基线
+
+| 范围 | 实测 |
+|---|---|
+| `capabilities/server/` 根目录 | 263 个非测试 src / 61,043 行，另有 200 个测试文件 |
+| `capabilities/server/platform/` | 166 个非测试 src / 25,250 行 |
+| 其中 `page_*.go` | 78 个 / 9,273 行，最短 9 行（`page_treemap.go`） |
+| `accepted_*.go`（根目录） | 23 个 src / 43 个含测试 |
+| `internal/construction/` | 42 个 / 5,443 行，被 240 个文件导入（136 宿主 + 102 `apps/build`） |
+| `internal/host/` | 15 个 / 689 行（人均 46 行），被 80 个文件导入 |
+| 跨包同名文件 | 82 个名字出现在 ≥2 个包（`release.go`/`query.go`/`function.go` 各 4 包） |
+| 全仓 Go | 197,436 行，其中非测试 140,147 行 |
+| `internal/enterprise/uaf/` | Go 代码仅 342 行；1.5 MB 是 `spec/*.xmi`（1.3 MB，仅生成器读取）+ `gen/uaf-1.3.json`（208 KB，`go:embed` 进二进制） |
+
+### 刀一：`platform/page_*.go` 塌缩（78 → 39，净 −39 文件）
+
+widget 名词当前泄漏在四处，加一个组件要改后端四个文件——这是「每组件一文件」的根因，先修根因：
+
+| 泄漏点 | 现状 | 收敛后 |
+|---|---|---|
+| `page_widgets.go` | 生成表，限额单一来源 | 保持，仍是唯一声明处 |
+| `page_variables.go` | 每 widget 一个匿名限额 struct（9 处具名） | 由生成表提供，删除手写重复 |
+| `definition.go` | `PageWidgetConfig` 每 widget 一个具名字段（8 处） | 改为按 widget 键的开放配置 + 类型化访问器，JSON 线上格式不变 |
+| `page_<widget>.go` | 每 widget 一个文件放 `checkXxx` | 并入表驱动 registry |
+
+分类实测（78 个文件）：
+
+- **A 类 18 个 / 541 行**——只含 `checkXxx`，无类型：直接并入 `page_widget_checks.go`（registry：`map[string]func(*PageDocument, Section) error`）。
+- **B 类 23 个 / 961 行**——`checkXxx` + 该 widget 的 struct：类型并入 `definition.go`，check 并入 registry。
+- **C 类 37 个 / 7,771 行**——含实质逻辑（`page_variables` 803、`page_document` 738、`page_queries` 636、`page_model` 604）：保留为各自领域的实现，不机械合并。
+
+结果 41 个文件塌缩为 2 个。**语义零损失**：`PageModelProfile`（现值 `platform.page.v2.110`）与已入库页面文档的校验强度不变——不采用「把 widget 配置退化为对后端不透明的 `json.RawMessage` 并删除校验」的方案，那会让后端不再拒绝坏页面，坏定义直入 release，并破坏既有租户应用。
+
+### 刀二：`accepted_*` 收敛为验收管线
+
+23 个 `accepted_*.go` 按「谁产生、谁消费」归并为单一管线 + 领域注册表；`business_refusal_*.go` / `conflict_refusal.go` / `apps/build/transaction_refusal.go` 收敛为一个拒止引擎。接受结果格式、提交管线顺序、单写者锁义务不变（与既有 3.1 约束一致）。
+
+### 刀三：`internal/host` 与 `internal/construction` 归位，不删除
+
+审查建议 `git rm -rf` 这两个目录，实测不可行且方向错误：
+
+- `internal/host` 承载的不是胶水，而是宿主对 app 的接口契约（`Host`/`Processes`/`Tasks`/`Linker`/`Directory`）；`Host` 接口本身是 `boundaries.sh` 「app 不得导入宿主运行时」这条保证的支点。删除会让 80 个导入方失去归属。
+- 真正的病灶是**同一份契约被切成 15 个小文件、且与 `platform` 分成两包**。收敛方式：按 `host` 现有分组并成一个契约文件，归属讨论记为待裁决（并入 `platform` 会使 `platform` 反向依赖宿主类型，需先验证不破坏规则 4）。
+- `internal/construction` 42 个文件 / 5,443 行与 `apps/build` 存在成对同名文件（`formula.go`、`table.go`、`writeback.go`、`observation.go`、`release.go`、`function.go`）——这才是「传话筒」的实证范围。逐个判定：纯转换删除，有校验价值的下沉到唯一归属方。棘轮的 `dup` 条目会逐条逼平这 82 项。
+
+### 刀四：UAF 1.3 剥离（负责人 2026-10-27 改口）
+
+负责人撤销 2026-10-24「合并保留」中的企业建模保留范围，改为剥离。执行路径走已批准的 `platform/business-models` 收敛（企业模型收敛为最小组织目录：单位、结构、任职）：先解除 `apps/enterprise`（`enterprise.go`、`relationship_decisions.go`、`sdk.go`）与 `internal/enterprise`（`model.go`、`lifecycle.go`、`profile.go`、`relations.go`、`discovery.go`）对 UAF 元模型的依赖，再同批删除 `internal/enterprise/uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/`，包括 `go:embed` 的 208 KB 生成数据。不以「文件已无人用」为由先删后补：`Directory` 接口的 `Element`/`Related`/`Calendar` 语义必须在同一批内有确定归属（保留或删除需同步 `host` 侧声明）。
+
+### 核实后判定为「已满足，不重复施工」的两项
+
+- 「业务包直调外部大模型 SDK」：全仓仅 `anthropic.go` 一个文件导入 `anthropic-sdk-go`，红线已成立；只加棘轮防回退，不重构。
+- 「`internal/rules` 应为纯函数包」：`go list -deps ./internal/rules` 无 `database/sql` / `net/http` / `pgx`，已纯净；`cmd/wasm-worker` 与 `internal/rules` 的接线是端侧下放的实际缺口，属 `platform-self-hosting` 的体验线范围，不在本 change。

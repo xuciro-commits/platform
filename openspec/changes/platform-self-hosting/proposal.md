@@ -16,7 +16,7 @@
 - 新增 **platform-updater** 独立进程：物化已批准 release 到独立工作树、构建宿主与工作区、启动新版本体检、排空切换、失败自动回滚；宿主不编译、不重启自己。
 - 新增 **AI 入口**：`system.architect` 智能体以受管主体读取/检索/写入临时工作树，产出 `system.change`；模型走现有 AI 提供方，预算与轮数受限，不能批准自己的提案。
 - 新增 **人工入口**：system 租户的单工作区提供 Platform 系统作者入口，定义继续复用原 Build 草稿与通用决定表单；System changes 展示冻结文件前后内容、选中定义、构建日志、批准与可取消的切换窗口，源码编辑与定义可放入同一提案。旧 Studio/Catalog 包已退出，不保留第二套编辑与发布实现。
-- **合并保留**：按负责人本次确认保留 Arena 的完整工作区、Studio、治理、Catalog、通用平台能力与对应检查；撤回早期删除这些模块和整体重写工作区的范围。自举接入原 Control Panel，复用共享 UI 与原提交客户端。旧行业应用暂不开放，原数据与恢复责任保留，不把分支合并当作旧业务迁移或完整运行验收。
+- **合并保留**：按负责人本次确认保留 Arena 的完整工作区、Studio、治理、Catalog、通用平台能力与对应检查；撤回早期删除这些模块和整体重写工作区的范围。 **决策变更（2026-10-27）**：负责人撤销其中的企业建模保留范围——UAF 1.3 元模型（`internal/enterprise/uaf`、`uafgen`、`cmd/uaf-gen`、`docs/standards/uaf`）从核心主干剥离，`platform/business-models` 收敛为最小组织目录（单位、结构、任职）；工作区、Studio、治理、Catalog 与对应检查仍属保留范围。剥离实施与依赖它的 `consolidate-platform-boundaries` 3b.5 共用一次改动。自举接入原 Control Panel，复用共享 UI 与原提交客户端。旧行业应用暂不开放，原数据与恢复责任保留，不把分支合并当作旧业务迁移或完整运行验收。
 
 ## Capabilities
 

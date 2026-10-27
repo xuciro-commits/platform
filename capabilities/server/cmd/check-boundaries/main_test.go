@@ -3,6 +3,7 @@ package main
 import (
 	"go/parser"
 	"go/token"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +56,70 @@ func TestSourceBoundaryRules(t *testing.T) {
 				t.Fatalf("blocked=%t findings=%v", tc.blocked, failures)
 			}
 		})
+	}
+}
+
+func TestVisualWidgetDeclarations(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		want         int
+	}{
+		{"widget type and its field", "package platform\ntype PageSpacer struct{ Spacer *float64 }", 2},
+		{"check method", "package platform\nfunc (d *PageDocument) checkTreemap(s Section) error { return nil }", 1},
+		{"compound name names the widget", "package platform\ntype PageButtonGroup struct{} ", 1},
+		{"reading an existing widget field is not a declaration", "package platform\nfunc f(s Section) any { return s.Spacer }", 0},
+		{"unrelated name containing no widget", "package platform\ntype PageVariables struct{ Gaugeless int }", 1},
+		{"no widget", "package platform\ntype PageModel struct{ Fields []FieldRef }", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "x.go", tc.source, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := visualWidgetDeclarations(file); got != tc.want {
+				t.Fatalf("got %d want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRatchetOnlyDecreases(t *testing.T) {
+	// A new scope, a grown scope and an unrecorded step down all fail;
+	// only the recorded count passes.
+	ceilings := map[string]int{
+		kindFiles + "\tcapabilities/server/platform":             2,
+		kindFiles + "\tcapabilities/server/journal":              3,
+		kindDup + "\tformula.go":                                 2,
+		kindUI + "\tcapabilities/server/platform/page_spacer.go": 2,
+	}
+	measures := &measures{
+		files: []growth{{kindFiles, "capabilities/server/platform", 2}, {kindFiles, "capabilities/server/apps/build", 1}, {kindFiles, "capabilities/server/journal", 9}},
+		dup:   []growth{{kindDup, "formula.go", 3}},
+		ui:    []growth{{kindUI, "capabilities/server/platform/page_spacer.go", 1}},
+	}
+	failures, counted := ratchet(measures, ceilings)
+	if counted != 5 {
+		t.Fatalf("counted %d want 5", counted)
+	}
+	wanted := []string{
+		"capabilities/server/apps/build is new", // a package that appeared
+		"capabilities/server/journal grew to 9", // a package that gained files
+		"formula.go grew to 3",                  // a name that spread to another package
+		"is down to 1; record the new ceiling",  // a fix that forgot to lower its ceiling
+	}
+	for _, want := range wanted {
+		found := false
+		for _, failure := range failures {
+			if strings.Contains(failure, want) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing %q in %v", want, failures)
+		}
+	}
+	if len(failures) != len(wanted) {
+		t.Fatalf("unexpected findings: %v", failures)
 	}
 }

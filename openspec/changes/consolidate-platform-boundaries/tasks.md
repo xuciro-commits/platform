@@ -20,6 +20,15 @@
 - [ ] 3.2 每域搬迁后运行 `make check` + `make test-go PKG=<改动包>`；`boundaries.sh` / `escapes.sh` 已知逃逸数只减不增；对外 `platformserver/platform` 导入面不变。
   - 注：本轮为同包文件组织，`platformserver/platform` 导入面零变化；`boundaries.sh` 全过、`escapes.sh` 已知逃逸维持 2 项（web 侧存量，未新增）。`make check`/`test-go` 随目录化搬迁在代理可用环境执行。追记（2026-10-26）：前提已解除，沙箱现可离线执行全部门槛（已实测全绿）。
 
+## 3b. B3 结构棘轮与收敛（2026-10-27 新增）
+
+- [x] 3b.1 升级 `cmd/check-boundaries`：目录级棘轮检查——每包非测试文件数与行数上限、跨包同名文件数上限、后端视觉组件声明数上限，冻结为 `boundaries.tsv`（175 条，只降不升；改进未降上限同样失败）。不新增脚本与数据文件：`boundaries.sh` 与 `escapes.sh` 已在调用同一二进制，上限表随其源码同目录维护。
+  - 注：实测三类越界均可拦截——新建 `page_donut.go` 触发 files+ui 双失败；跨包复制 `formula.go` 触发 dup 3>2 失败；删 `page_treemap.go` 未降上限触发 "record the new ceiling" 失败。`go vet` + `go test ./cmd/check-boundaries`（含 `TestVisualWidgetDeclarations`、`TestRatchetOnlyDecreases`）通过。
+- [ ] 3b.2 刀一：`platform/page_*.go` 表驱动塌缩（A 类 18 + B 类 23 → `page_widget_checks.go` registry + `definition.go` 类型归位；`page_variables.go` 手写限额表改由生成表提供）。`PageModelProfile` 与已入库页面文档的校验强度不变；`definition_page_projection.go` 与 `cmd/api-types` 生成物同批更新。
+- [ ] 3b.3 刀二：`accepted_*.go`（23）归并为验收管线 + 领域注册表；`business_refusal_*` / `conflict_refusal` / `apps/build/transaction_refusal` 收敛为单一拒止引擎。接受结果格式与提交管线顺序不变，43 个同名测试文件随之归并。
+- [ ] 3b.4 刀三：`internal/host` 15 个契约文件归位为单一契约文件（不删除，理由见 design.md 刀三）；`internal/construction` 与 `apps/build` 六组成对同名文件逐个判定归属，`dup` 上限同批下降。
+- [ ] 3b.5 刀四（负责人改口后新增）：企业模型收敛为最小组织目录并剥离 UAF 1.3——解除 `apps/enterprise` 与 `internal/enterprise` 对 `internal/enterprise/uaf` 的依赖后，同批删除 `uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/`（含 208 KB `go:embed` 生成数据）。与 `platform-self-hosting` 的 `business-models` 收敛共用一次实施，不重复改 `host.Directory` 语义。
+
 ## 4. B4 Web 包重划（等体验线 M2 三区定版后启动）
 
 - [x] 4.1 按 design 映射迁移区层包（`@platform/govern` 归位、运营界面归属整理），基础包 `@platform/ui` / `@platform/kernel` / `@platform/app` 名称与公共面稳定。

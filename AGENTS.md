@@ -40,6 +40,8 @@
 9. **双语文案。** 产品界面英文原文 + 简体中文：应用 `i18n/zh-CN.json`，Web 用 `t()` + 包内 `i18n.ts`。业务数据不翻译。
 10. **提交信息**单句祈使句；提交与推送按负责人授权。
 11. **安全。** 不提交密钥与凭据；应用和包只保存凭据引用，实际秘密走平台受控加密托管或部署注入，加密主密钥留在部署环境。
+12. **结构棘轮只降不升。** `capabilities/server/cmd/check-boundaries/boundaries.tsv` 冻结每个包的非测试文件数与行数、跨包同名文件数与后端视觉组件声明数。新增文件、扩大重复、或删了却没降上限，都算构建失败。收敛时同批 `-update` 记录新上限；不要用一次性百分比配额代替归属判断。
+13. **后端不感知视觉组件。** 布局与图表组件（spacer、separator、button group、kanban、gantt、heatmap、sparkline、treemap、gauge）的名称、字段与专用校验不进 Go 宿主：组件限额由 `platform/page_widgets.go` 的生成表声明一次，呈现归 `@platform/ui`。需要新的视觉组件时改表，不加文件。
 
 开工前从 [规范目录](openspec/README.md#层级与模块) 选择相关模块，读完整需求和场景，再核对实现；不用每次审计全仓。内核精确条款仍以 `contract/spec` 为唯一语义来源，OpenSpec 不复制一份。
 
