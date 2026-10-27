@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"platformserver/internal/enterprise/uafgen"
+	"platformserver/tools/uaf/uafgen"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 }
 
 func run(check bool) error {
-	base := filepath.Join("internal", "enterprise", "uaf")
+	base := "."
 	generated, err := uafgen.Generate(os.DirFS(filepath.Join(base, "spec")))
 	if err != nil {
 		return err

@@ -85,7 +85,7 @@ workspace 壳 → ui/app/kernel
 
 | 动作 | 源 | 目标 |
 |---|---|---|
-| 剥离 UAF 1.3 | `internal/enterprise/uaf/`（4 个 .go，1.5 MB）、`uafgen/`（2）、`cmd/uaf-gen/`、`docs/standards/uaf/` | 移出主干，归档为可选外部导入工具 |
+| 剥离 UAF 1.3 | `internal/enterprise/uaf/`（4 个 .go，1.5 MB）、`uafgen/`（2）、`cmd/uaf-gen/`、`docs/standards/uaf/` | ✅ 已移出主干为独立模块 `tools/uaf/`（`go.mod` + `replace`），运行时经 `platformserver/tools/uaf` 导入 |
 | 收缩自举范围 | `platform-self-hosting` | 仅只读/追加型运营数据（`audit_log.go`、`enterprise_usage.go`、蒸馏样本集、任务监控队列）可自举；租户/身份 `idp/`/`credentials.go`/`model_configuration.go` 属系统控制面，禁止交给动态 Page/App 引擎自举 |
 
 ### 目录收敛目标结构

@@ -1,6 +1,6 @@
 package enterprise
 
-import "platformserver/internal/enterprise/uaf"
+import "platformserver/tools/uaf"
 
 // The Enterprise Core Profile: the UAF stereotypes a tenant
 // meets first, with the words people use for them and the description views

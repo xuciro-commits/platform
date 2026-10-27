@@ -4,8 +4,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	enterprisemodel "platformserver/internal/enterprise"
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
+	"platformserver/tools/uaf"
 	"slices"
 	"strings"
 )

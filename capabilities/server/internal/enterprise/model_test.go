@@ -1,7 +1,7 @@
 package enterprise
 
 import (
-	"platformserver/internal/enterprise/uaf"
+	"platformserver/tools/uaf"
 	"testing"
 )
 

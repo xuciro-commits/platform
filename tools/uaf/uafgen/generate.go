@@ -8,7 +8,7 @@ import (
 	"io/fs"
 	"strings"
 
-	"platformserver/internal/enterprise/uaf"
+	"platformserver/tools/uaf"
 )
 
 // Generate compiles every retained profile and identifies both original OMG

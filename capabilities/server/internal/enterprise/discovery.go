@@ -1,8 +1,8 @@
 package enterprise
 
 import (
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
+	"platformserver/tools/uaf"
 )
 
 const (

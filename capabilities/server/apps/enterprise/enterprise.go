@@ -17,8 +17,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
+	"platformserver/tools/uaf"
 )
 
 const (

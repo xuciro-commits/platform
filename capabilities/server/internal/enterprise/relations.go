@@ -32,7 +32,7 @@ import (
 	"sort"
 	"strings"
 
-	"platformserver/internal/enterprise/uaf"
+	"platformserver/tools/uaf"
 )
 
 // Pair is one end combination, by stereotype name; "*" is any element.

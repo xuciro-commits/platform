@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
+	"platformserver/tools/uaf"
 )
 
 // The typed SDK over this app's declarations: the same pipeline

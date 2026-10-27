@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"platformserver/internal/enterprise/uaf"
+	"platformserver/tools/uaf"
 )
 
 // ends reads a plain endpoint rule: which end it constrains, and the

@@ -133,14 +133,15 @@ func checkFile(path string, file *ast.File, set *token.FileSet) []string {
 			strings.HasPrefix(path, "capabilities/server/internal/agents/") ||
 			strings.HasPrefix(path, "capabilities/server/internal/records/") ||
 			strings.HasPrefix(path, "capabilities/server/internal/acceptance/") ||
-			strings.HasPrefix(path, "capabilities/server/internal/enterprise/")
+			strings.HasPrefix(path, "capabilities/server/internal/enterprise/") ||
+			strings.HasPrefix(path, "tools/uaf/")
 		if pure && (name == "platformserver/internal/host" || strings.HasPrefix(name, "platformserver/internal/host/")) {
 			report(imported, "pure internal module depends on host coordination")
 		}
-		if name == "platformserver/internal/enterprise/uafgen" {
+		if name == "platformserver/tools/uaf/uafgen" {
 			report(imported, "runtime imports generation-only UAF parser")
 		}
-		if strings.HasPrefix(path, "capabilities/server/internal/enterprise/uaf/") && name == "encoding/xml" {
+		if strings.HasPrefix(path, "tools/uaf/") && name == "encoding/xml" {
 			report(imported, "UAF runtime model depends on XML parsing")
 		}
 		if app != "" {

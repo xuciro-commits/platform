@@ -11,11 +11,11 @@ import (
 	"reflect"
 	"testing"
 
-	"platformserver/internal/enterprise/uaf"
+	"platformserver/tools/uaf"
 )
 
 func TestGeneratedReleasesPreserveTheCompleteOriginalProfiles(t *testing.T) {
-	source := os.DirFS(filepath.Join("..", "uaf", "spec"))
+	source := os.DirFS(filepath.Join("..", "spec"))
 	first, err := Generate(source)
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestGeneratedReleasesPreserveTheCompleteOriginalProfiles(t *testing.T) {
 		t.Fatalf("generated releases were omitted from runtime: %v", err)
 	}
 	for name, raw := range first {
-		checkedIn, err := os.ReadFile(filepath.Join("..", "uaf", "gen", name))
+		checkedIn, err := os.ReadFile(filepath.Join("..", "gen", name))
 		if err != nil || !bytes.Equal(checkedIn, raw) {
 			t.Fatalf("%s is stale; run make generate-uaf: %v", name, err)
 		}

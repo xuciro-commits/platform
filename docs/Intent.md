@@ -23,7 +23,7 @@
 3. **病灶三：后端越界充当“前端 DOM 保姆”（Backend UI Coupling）**
    `capabilities/server/platform/` 下存在 60+ 个 `page_*.go` 文件（甚至包含 `page_spacer.go`, `page_separator.go`, `page_button_group.go`, `page_treemap.go` 等纯视觉排版组件）[cite: 1]。用 Go 后端校验前端像素级 UI 组件，不仅锁死了前后端迭代，更导致 AI 生成页面时 Token 消耗暴增 5 倍以上[cite: 1]。
 4. **病灶四：自举死锁与重甲包袱（Self-Hosting Deadlock & UAF Armor）**
-   在平台边界尚未固化时强推全量 UI 自举（`platform-self-hosting`），极易因 Schema 演进导致系统控制面锁死；同时在核心包内塞入数兆大小的 `internal/enterprise/uaf/`（OMG UAF 1.3 规范），严重污染上下文与编译速度[cite: 1]。
+   在平台边界尚未固化时强推全量 UI 自举（`platform-self-hosting`），极易因 Schema 演进导致系统控制面锁死；同时在核心包内塞入数兆大小的 UAF 1.3 规范（原 `internal/enterprise/uaf/`，现已剥离为独立可选模块 `tools/uaf/`），严重污染上下文与编译速度[cite: 1]。
 
 ---
 

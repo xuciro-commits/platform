@@ -67,3 +67,7 @@ require (
 )
 
 replace platformkernel => ../../contract/go
+
+require platformserver/tools/uaf v0.0.0
+
+replace platformserver/tools/uaf => ../../tools/uaf
