@@ -14,6 +14,25 @@ export class OfflineReadError extends Error { readonly name="OfflineReadError"; 
 /** The host saved a terminal refusal for this exact composite key. */
 export class CompositeRefusalError extends Error { readonly name="CompositeRefusalError"; }
 
+/** A response the host refused. `status` and `code` are the protocol; the
+ * message stays for people (F-23), so no caller parses it to decide anything. */
+export class HttpError extends Error {
+  readonly name = "HttpError";
+  constructor(readonly status: number, readonly path: string, readonly code?: string, readonly detail?: string) {
+    super(`${path}: HTTP ${status}`);
+  }
+  /** The same failure when it arrives as `unknown`; `undefined` for every other error. */
+  static of(error: unknown): HttpError | undefined { return error instanceof HttpError ? error : undefined; }
+  /** The host has no member for this identity. */
+  static unauthenticated(error: unknown): boolean { return HttpError.of(error)?.status === 401; }
+  /** The member exists but may not do this. */
+  static forbidden(error: unknown): boolean { return HttpError.of(error)?.status === 403; }
+  /** The record is absent, or absent for this member: callers keep one refusal for both. */
+  static missing(error: unknown): boolean { const status = HttpError.of(error)?.status; return status === 404 || status === 403 || status === 401; }
+  /** The tenant is stopped and must go through recovery. */
+  static unavailable(error: unknown): boolean { return HttpError.of(error)?.status === 503; }
+}
+
 /** The HTTP edge accepts both the host's structured refusal and a plain
  * diagnostic. Callers render only text, never the error object itself. */
 export function apiErrorMessage(body: unknown): string | undefined {
@@ -166,7 +185,19 @@ export class EdgeClient {
 
   /** Why a read failed, for a status line: a host on its production path refuses development tokens. */
   static problem(error: unknown): string {
-    return /HTTP 401/.test(String(error)) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
+    return HttpError.unauthenticated(error) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
+  }
+
+  /** The host's own refusal: status is the protocol; its code and text come from the body when it has them. */
+  private async refusal(response: Response, path: string): Promise<HttpError> {
+    let code: string | undefined, detail: string | undefined;
+    try {
+      const body = await response.clone().json() as { error?: string | { code?: string; message?: string; detail?: string } };
+      const error = body?.error;
+      if (typeof error === "string") detail = error;
+      else { code = error?.code; detail = error?.detail ?? error?.message; }
+    } catch { /* a body that is not JSON leaves the status alone */ }
+    return new HttpError(response.status, path, code, detail);
   }
 
   /** The bearer token, the tenant once known (a person may be a member of several on one host), and the page's language, in which the host serves declarations. */
@@ -191,14 +222,14 @@ export class EdgeClient {
     let cached:{value:T}|undefined;
     try{cached=fresh?undefined:this.live.read<T>(key);}catch(error){if(String(error).includes("live connection unavailable"))return prepared();throw error;}
     if(cached)return cached.value;
-    const [path, body] = key.split("\n");
+    const [path = "", body] = key.split("\n");
     const headers=this.headers(body !== undefined),signal=this.sending.signal;
     const read=async():Promise<T>=>{
       let response:Response;
       try{response=await fetch(this.connection.server + path, { headers, signal, ...(body !== undefined ? { method: "POST", body } : {}) });}
       catch{if(signal.aborted)throw Error("The workspace identity changed.");return prepared();}
       if(generation!==this.generation)throw Error("The workspace identity changed.");
-      if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+      if (!response.ok) throw await this.refusal(response, path);
       const current = fresh ? undefined : this.live.read<T>(key); if (current) return current.value;
       const value = await response.json() as T;
       if(generation!==this.generation)throw Error("The workspace identity changed.");
@@ -239,7 +270,8 @@ export class EdgeClient {
     for (let wait = 1000; !signal.aborted; wait = Math.min(wait * 2, 30000)) {
       try {
         const response = await fetch(this.connection.server + "/v1/changes", { headers: this.headers(), signal });
-        if (!response.ok || !response.body) throw new Error(`/v1/changes: HTTP ${response.status}`);
+        if (!response.ok) throw await this.refusal(response, "/v1/changes");
+        if (!response.body) throw new Error("/v1/changes: the host sent no stream");
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
         let buffer = "";
         for (;;) {
@@ -368,7 +400,7 @@ export class EdgeClient {
     if(binding.ref.kind!=="link-type"||!binding.sourceVersion||!id)throw new Error("Link traversal needs an exact version and start record");
     const path=`/v1/link-types/${[binding.ref.app,binding.ref.name,binding.sourceVersion,direction,id].map(encodeURIComponent).join("/")}`;
     const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(query)});
-    if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;
+    if(!response.ok)throw await this.refusal(response,path);return response.json() as Promise<T>;
   }
 
   /** Groups and measures of an entity type's records within the caller's scope: `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */

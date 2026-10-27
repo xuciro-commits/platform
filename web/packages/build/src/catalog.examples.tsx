@@ -23,7 +23,11 @@ const objectReads = {
     id: "OBJECT-SAMPLE", revision: 1, name: "sample", title: "Sample record", state: "draft",
     fields: [{ name: "title", title: "Title", type: "text", required: true }, { name: "quantity", title: "Quantity", type: "integer" }],
     states: [{ name: "draft", title: "Draft", tone: "warning" }, { name: "ready", title: "Ready", tone: "success" }],
-    actions: [{ name: "review", title: "Review", from: ["draft"], to: "ready", inputs: [], sets: [], conditions: [], roles: [] }], access: [],
+    actions: [{ name: "review", title: "Review", from: ["draft"], inputs: [], roles: [], transaction: {
+      subject: "build.sample",
+      steps: [{ name: "subject", kind: "update", target: { type: "build.sample", id: "$subject" },
+        changes: [{ field: "state", expr: { op: "", kind: "choice", lit: { value: "ready" } } }] }],
+    } }], access: [],
   } },
 };
 const logicReads = {

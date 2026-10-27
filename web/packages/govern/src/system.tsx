@@ -1,3 +1,4 @@
+import { HttpError } from "@platform/kernel";
 // The self-hosting console consumes the original source, change and activation
 // reads. All decisions and uncertain answers stay in the kernel outbox.
 import {useCallback,useEffect,useRef,useState,type ReactNode} from "react";
@@ -178,7 +179,7 @@ function SourceFile({path,act,maySave,include}:{path:string;act:Act;maySave:bool
  // Automatic refreshes must not replace an editor's expected revision or input.
  const file=useLoad(async()=>{
   try{return await host.client.get<FileRow>(fileRead(path),true);}
-  catch(error){if(String(error).includes("HTTP 404"))return {path,content:"",revision:0,digest:"",size:0,editable:true};throw error;}
+  catch(error){if(HttpError.missing(error))return {path,content:"",revision:0,digest:"",size:0,editable:true};throw error;}
  },["system-file",path,completed],false);
  return file.error?<Panel title={path}><Problem>{file.error}</Problem><Button onClick={file.reload}>{t("Refresh")}</Button></Panel>:!file.data?<Loading what={path}/>:<FileEditor key={`${path}:${file.data.revision}:${file.data.digest}:${!!file.data.deleted}`} file={file.data} act={act} maySave={maySave} include={include} reload={file.reload} loading={file.loading}/>;
 }

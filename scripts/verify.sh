@@ -85,6 +85,9 @@ capabilities() {
 composition_static() {
   step app-boundaries scripts/boundaries.sh
   step escapes scripts/escapes.sh
+  # The shapes that let one capability be patched in five places, each against
+  # a baseline that may only fall. Zero-tolerance items must stay at zero.
+  step architecture python3 scripts/architecture.py
 }
 
 composition() {

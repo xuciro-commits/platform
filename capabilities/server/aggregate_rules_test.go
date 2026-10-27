@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"platformserver/internal/rules"
+	"platformserver/platform/rules"
 	"platformserver/platform"
 )
 

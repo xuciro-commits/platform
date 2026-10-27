@@ -1,0 +1,62 @@
+# Every pull request gets an answer in minutes: the host builds and vets, the
+# code is formatted, the boundaries, escapes and architecture measures pass,
+# and every web package type-checks. The full evidence (contract, proofs,
+# composition, browser routes) stays on the v* tag in release.yml; this gate
+# exists so a patch that grows the architecture surface is refused before
+# review rather than at release.
+name: check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (host, boundaries, architecture, web types)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: capabilities/server/go.mod
+          cache: true
+          cache-dependency-path: capabilities/server/go.sum
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # The architecture baseline, boundaries and escapes read the tree, not a
+      # build: they answer first and cheaply.
+      - name: Architecture measures
+        run: python3 scripts/architecture.py
+
+      - name: Boundaries and escapes
+        run: bash scripts/boundaries.sh && bash scripts/escapes.sh
+
+      - name: Host build and vet
+        working-directory: capabilities/server
+        run: go build ./... && go vet ./...
+
+      - name: Format
+        run: bash scripts/verify.sh format
+
+      - name: Web types and generation
+        run: bash scripts/verify.sh web-types && cd web && pnpm -r run typecheck
+
+      - name: Specs
+        run: make check-specs

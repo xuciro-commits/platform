@@ -6,7 +6,7 @@
 // host (what they may read and decide) and the shell (where it is shown).
 import "./i18n";
 import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@platform/app";
-import { EdgeClient, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
+import { EdgeClient, HttpError, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark } from "lucide-react";
@@ -17,7 +17,8 @@ import { usePlatformHost } from "./host/usePlatformHost";
 import { IDENTITY_KEY, TENANT_KEY, forget, preferred, remember, remembered, type Identity } from "./session/identity";
 import { HostOnly, type HostAdmin } from "./HostOnly";
 import { Recovery, ReleaseInformation, SignInProblem } from "./session/Problems";
-import { resolveLegacyRoute, shellViews } from "./shell/legacy";
+import { resolveLegacyRoute } from "./shell/legacy";
+import { shellViews } from "./shell/views";
 import { categories, portalEntry } from "./shell/registry";
 import { pageApplication, tenantApps } from "./tenantApps";
 import { routeApplication, sharedViewApplication } from "./shell/navigation";
@@ -63,8 +64,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const connectionUnavailable = meQuery.isError && (meQuery.error instanceof OfflineReadError || /live connection unavailable/.test(String(meQuery.error)));
   const me = meQuery.isError && !connectionUnavailable ? undefined : meQuery.data;
   // A subject the host names an administrator may be a member of no tenant: the console still opens for them.
-  const noMember = meQuery.isError && /HTTP 401/.test(String(meQuery.error));
-  const needsHostConsole = noMember || meQuery.isError && /HTTP 503/.test(String(meQuery.error));
+  const noMember = meQuery.isError && HttpError.unauthenticated(meQuery.error);
+  const needsHostConsole = noMember || meQuery.isError && HttpError.unavailable(meQuery.error);
   const hostAdminQuery = useQuery({ queryKey: [token, "host-only"], queryFn: () => client.get<HostAdmin>("/v1/host/me"), enabled: needsHostConsole, retry: false });
   const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
   useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
@@ -229,8 +230,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   if (meQuery.error && !(connectionUnavailable && me)) {
     if (needsHostConsole && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
     if (needsHostConsole && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
-    if (/HTTP 503/.test(String(meQuery.error))) return <Recovery client={client} token={token} tenant={tenant} />;
-    const problem = /HTTP 401/.test(String(meQuery.error))
+    if (HttpError.unavailable(meQuery.error)) return <Recovery client={client} token={token} tenant={tenant} />;
+    const problem = HttpError.unauthenticated(meQuery.error)
       ? signedIn ? t("{email} is not a member of this host.", { email: signedIn.session.email }) : t("This host does not accept this identity.")
       : meQuery.error instanceof OfflineReadError ? t(meQuery.error.message) : t("The host is unreachable.");
     return <SignInProblem problem={problem} email={signedIn?.session.email} signingOut={signingOut} error={signOutError} onSignOut={() => void leaveSession()} />;

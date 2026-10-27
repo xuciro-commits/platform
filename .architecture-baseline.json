@@ -1,0 +1,88 @@
+{
+  "action_legacy_fields": 8,
+  "app_size": {
+    "ai": {
+      "files": 2,
+      "lines": 609
+    },
+    "build": {
+      "files": 73,
+      "lines": 18338
+    },
+    "core": {
+      "files": 2,
+      "lines": 667
+    },
+    "enterprise": {
+      "files": 7,
+      "lines": 1516
+    },
+    "files": {
+      "files": 2,
+      "lines": 199
+    },
+    "flow": {
+      "files": 13,
+      "lines": 4875
+    },
+    "knowledge": {
+      "files": 1,
+      "lines": 113
+    },
+    "relations": {
+      "files": 1,
+      "lines": 406
+    },
+    "system": {
+      "files": 2,
+      "lines": 982
+    },
+    "work": {
+      "files": 5,
+      "lines": 1054
+    }
+  },
+  "asset_kind_fanout": {
+    "action": 51,
+    "agent": 25,
+    "alert": 2,
+    "app": 51,
+    "compute": 18,
+    "connection": 13,
+    "dataset": 4,
+    "evaluation-set": 1,
+    "flow": 20,
+    "function": 18,
+    "interface": 4,
+    "link-type": 1,
+    "matching": 1,
+    "object": 43,
+    "observation": 13,
+    "page": 31,
+    "pipeline": 2,
+    "property-type": 1,
+    "protocol": 9,
+    "query": 24,
+    "sample-set": 1,
+    "source": 39,
+    "test-plan": 1,
+    "writeback": 6
+  },
+  "describe_asset_lines": 651,
+  "effective_merge_methods": 4,
+  "platform_dynamic": {
+    "map_any": 56,
+    "reflect_calls": 125
+  },
+  "root_construction_importers": 59,
+  "root_package": {
+    "exported": 313,
+    "files": 263,
+    "lines": 61306,
+    "prefixes": 146,
+    "singleton_prefixes": 116,
+    "tenant_methods": 131
+  },
+  "route_params_used": 37,
+  "string_error_sites": 22
+}

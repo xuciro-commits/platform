@@ -2,6 +2,8 @@
 
 解释**当前真实存在的系统**：分层、模块、写入路径、数据归属与实现位置。稳定行为与不变量集中在 [OpenSpec 模块规范](../openspec/README.md)，内核精确语义仍归 [contract/spec](../contract/spec/README.md)。下一步做什么归 [WorkQueue](WorkQueue.md)，为什么做归 [Intent](Intent.md)，工作方式归 [AGENTS](../AGENTS.md)。发现代码与规范冲突时明确指出并修正；自动检查、实际运行、使用体验和生产容量分别确认，不能互相代替。
 
+**本文只解释结构与实现位置。** 规范性约束各自只有一个权威：工作方式与硬规则在 [AGENTS](../AGENTS.md)，模块行为与不变量在 [OpenSpec](../openspec/README.md)，内核语义在 `contract/spec`。本文不复述它们；结构性的形状判据由 [`scripts/architecture.py`](../scripts/architecture.py) 执行。
+
 ## 1. 分层
 
 | 层 | 内容 | 位置 | 变更条件 |
@@ -26,11 +28,11 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   reads.go events.go facade.go   读取与连接器输入 / 事件计划与投递 / 成员门面
   accepted_*.go      一种接受结果一个文件
   routes_*.go        一个 API 区域一个文件（壳的 API 面，域不反向调用）
-  platform/          应用唯一可导入的 API
+  platform/          应用唯一可导入的 API（含 platform/rules：唯一的规则求值实现）
   apps/<id>/         平台应用
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
-  internal/          acceptance agents aistate construction enterprise host records rules
+  internal/          acceptance agents aistate construction enterprise host records
   cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink（独立调试薄壳）、compute、code-builder、wasm-worker、storage-files
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 web/
@@ -43,7 +45,7 @@ web/
   packages/build     @platform/build       统一构建台（Model/Behavior/Interface/Connections/Release；三区中的构建区）
   packages/govern    @platform/govern      系统区：治理与运维（Control Panel/Runs/Data Connection/Agents/AI/Knowledge/Host Console）
   e2e                @platform/e2e         Playwright 路线，spec 只经 tests/kit.ts
-scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
+scripts/             architecture boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples
 docs/                Intent Architecture WorkQueue standards/uaf
 openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
@@ -61,7 +63,7 @@ openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 | `internal/agents`、`internal/aistate` | 已授权上下文编排、预算及纯计量变换；真实模型调用和运行仍归原应用/宿主 |
 | `internal/host` | 宿主消费者所需的具名窄角色；不另存构建模型或复制应用执行器 |
 
-Build 的有界区间、完整明细记账与余额结果引用仍由 `apps/build/transaction*.go` 的原事务解释器执行；集合迭代可沿类型化引用读取同一归属记录的完整声明集合，保存实际读取顺序，仍使用原权限与预算。纯日期/小时运算归 `internal/rules`，关闭期间策略归 Core。原事务编辑器直接编辑这些声明，生成的宿主类型与浏览器规则模块由原工具产生。联合发布在隔离安装视图登记完整候选后检查跨对象引用，不要求构建者先发布临时对象。
+Build 的有界区间、完整明细记账与余额结果引用仍由 `apps/build/transaction*.go` 的原事务解释器执行；集合迭代可沿类型化引用读取同一归属记录的完整声明集合，保存实际读取顺序，仍使用原权限与预算。纯日期/小时运算归 `platform/rules`，关闭期间策略归 Core。原事务编辑器直接编辑这些声明，生成的宿主类型与浏览器规则模块由原工具产生。联合发布在隔离安装视图登记完整候选后检查跨对象引用，不要求构建者先发布临时对象。
 
 对象计算字段、业务约束与事务分别保存自己的集合读取绑定；原构建器可选择声明集合或查询的确切版本、主体记录键和完整/可见范围，表达式源码与可视化写同一草稿。查询主体键可以显式读取获权的 `$subject.field`；记录 `id` 是只读身份元数据，不伪装为可授权业务字段。Build 自己的原生确认记录仍由原权限投影，声明查询不赋予其他应用的内部读取权。已类型化草稿的正规化不要求依赖先发布，完整候选检查承担最终类型、集合和归属检查。
 
@@ -110,6 +112,16 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 - **结果未知**：外部效果不承诺跨系统 exactly-once。允许幂等重送的操作沿原键重试；危险设备动作未知时转入回读或人工处理，不能套用自动重发。请求已送达、设备已执行、业务已确认是不同状态，各自保存证据。
 - **确认完成**：声明可将完成动作限定为原 Confirmation 收据调用；普通目录不展示该动作，直接提交也不能伪造收据。原完成调用仍复核申请者的当前角色和记录权限，不提升为自动化身份。联合发布解析同一候选中的 Writeback/Source，运行使用原冻结请求及来源核对。
 - **历史兼容**：旧日志、定义版本、映像格式、拒绝答复、幂等冲突及在途实例保留读取责任，退役不等于删除。旧格式先按原规则验证原字节，再由映像归属方显式转换；未知格式拒绝，不关闭严格解码、不改写原历史。新格式切换不自动允许旧二进制回退。
+
+### 兼容读取登记表
+
+每个读取已退役格式的解码器登记在这里：它读的是什么、属于谁、什么条件可以删。`scripts/architecture.py` 要求源码中的 `legacy*` 文件与本表完全一致——新增解码器不登记即失败，删除后不同步即失败。**登记不是延长寿命**：退役条件满足时，解码器与本行在同一次改动里删除，历史责任转由存储迁移或已保存映像承担。
+
+| 解码器 | 读取的已退役格式 | 所有者 | 退役条件 |
+|---|---|---|---|
+| `capabilities/server/apps/build/transaction_legacy.go` | 动作的旧形状（集合、条件、过账、账簿、反转、目标状态、编号），以及只有旧字段的历史发布映像 | Build | 构建器、模板与示例全部只产事务形状；统计不到旧形状生产者后，先删旧字段，再删本文件 |
+| `capabilities/server/internal/enterprise/legacy_views.go` | UAF 视图的八格 `grid` 单元格 | Enterprise | 现役租户视图全部带 `viewpoint`，且存储侧迁移完成；已保存历史映像仍按原字节读取 |
+| `web/apps/workspace/src/shell/legacy.ts` | 退役路由、旧 view 名、旧 `surface` 投影与两条同名 `flow` 视图 | Workspace 壳 | 已发布应用不再深链到退役 view，且保存的标签页完成一次读取转换 |
 
 ## 6. 执行边界
 

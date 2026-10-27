@@ -6,7 +6,7 @@
 
 本模块不定义存储协议、发布过程或另一套授权引擎，分别见 [存储](../../runtime/storage/spec.md)、[应用生命周期](../application-lifecycle/spec.md)、[授权](../../runtime/access-control/spec.md)。完整 UAF 约束执行、企业实例 XMI 导入和真实行业容量不属于当前保证。
 
-实现定位（仓库根相对路径）：`capabilities/server/internal/construction/`、`capabilities/server/internal/rules/`、`capabilities/server/apps/build/transaction*.go`、`capabilities/server/business_constraints.go`、`capabilities/server/business_version.go`、`capabilities/server/owned_relations.go`、`capabilities/server/internal/enterprise/`、`capabilities/server/apps/enterprise/`、`capabilities/server/apps/core/`、`capabilities/server/apps/files/`、`capabilities/server/apps/relations/`。
+实现定位（仓库根相对路径）：`capabilities/server/internal/construction/`、`capabilities/server/platform/rules/`、`capabilities/server/apps/build/transaction*.go`、`capabilities/server/business_constraints.go`、`capabilities/server/business_version.go`、`capabilities/server/owned_relations.go`、`capabilities/server/internal/enterprise/`、`capabilities/server/apps/enterprise/`、`capabilities/server/apps/core/`、`capabilities/server/apps/files/`、`capabilities/server/apps/relations/`。
 
 ## Requirements
 

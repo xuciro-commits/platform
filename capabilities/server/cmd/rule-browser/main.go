@@ -5,7 +5,7 @@ package main
 
 import (
 	"encoding/json"
-	"platformserver/internal/rules"
+	"platformserver/platform/rules"
 	"syscall/js"
 )
 

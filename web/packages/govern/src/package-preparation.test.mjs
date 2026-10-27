@@ -1,3 +1,4 @@
+import { HttpError } from "@platform/kernel";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { webcrypto } from "node:crypto";
@@ -76,8 +77,15 @@ test("preparation reads expose their actual error and retry the original read", 
   await click("Retry"); expect(state.query.refetch).toHaveBeenCalledTimes(2);
 });
 
-test("forbidden preparation explains the builder handoff and offers authorized member management", async () => {
+test("a refusal is read from its status, never from its message", () => {
   state.query = { isError: true, isLoading: false, error: Error("/v1/packages/sample/preparation: HTTP 403"), refetch: vi.fn() };
+  render(PackageRequirements);
+  expect(container.textContent).not.toContain("Continue with a builder account");
+  expect(container.textContent).toContain("Application requirements could not be loaded.");
+});
+
+test("forbidden preparation explains the builder handoff and offers authorized member management", async () => {
+  state.query = { isError: true, isLoading: false, error: new HttpError(403, "/v1/packages/sample/preparation"), refetch: vi.fn() };
   render(PackageRequirements);
   expect(container.textContent).toContain("Continue with a builder account");
   await click("Members");

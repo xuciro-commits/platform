@@ -1,11 +1,11 @@
 import { useHost, useReadQuery } from "@platform/app";
-import { apiErrorMessage, type Api } from "@platform/kernel";
+import { apiErrorMessage, HttpError, type Api } from "@platform/kernel";
 import { Button, Checkbox, Disclosure, PageHeader, Panel, PropertyList, Tag, t, useWorkspace } from "@platform/ui";
 import { useState } from "react";
 
 function PreparationReadProblem({ error, retry }: { error: Error; retry: () => void }) {
   const { can } = useHost(), { open } = useWorkspace();
-  const forbidden = /HTTP 403\b/.test(error.message);
+  const forbidden = HttpError.forbidden(error);
   return <div role="alert" className="grid gap-2 text-sm text-danger">
     <p>{t(forbidden ? "This account cannot prepare application drafts in this workspace. Continue with a builder account, or ask an administrator to assign the builder role." : "Application requirements could not be loaded.")}</p>
     {forbidden ? <Disclosure summary={t("Technical details")}><p className="break-words text-xs">{error.message}</p></Disclosure> : <p className="break-words">{error.message}</p>}

@@ -2,7 +2,7 @@ package platform
 
 import (
 	"encoding/json"
-	"platformserver/internal/rules"
+	"platformserver/platform/rules"
 )
 
 // Expr is the one versioned, side-effect-free business rule tree.

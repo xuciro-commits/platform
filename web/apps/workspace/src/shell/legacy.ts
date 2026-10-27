@@ -1,13 +1,14 @@
-// Old entry points: routes written before the shell had an
-// Applications portal still open. They are decoded here, never produced.
+// Old entry points: links written before the shell had an Applications portal,
+// and saved tabs from before a view moved. They are decoded here, never
+// produced. Every target names a view declared in ./views.ts and only the
+// parameters that view declares; a name this file invents is a check failure.
+import { HttpError } from "@platform/kernel";
 import type { Route } from "@platform/ui";
+import { keepParams } from "./views";
 import type { Projection } from "./registry";
 
-/** The views the shell owns; opening one keeps the current application. */
-export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage", "observations"];
-
 type Params = Record<string, string>;
-const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));
+const keep = (target: string, params: Params | undefined, ...names: string[]): Params => keepParams(target, names, params);
 
 /** Routes that no longer exist, redirected to their replacement. */
 const retired: Record<string, Route | ((params?: Params) => Route)> = {
@@ -15,15 +16,15 @@ const retired: Record<string, Route | ((params?: Params) => Route)> = {
   launcher: { view: "portal" },
   // Builder views: the Application editor became the Workshop module, pages open inside it,
   // the process editor is the object type, workflows are flows, candidate tests moved into the editors.
-  applications: (params) => params?.surface === "studio" || !params?.surface ? { view: "projects", params: keep(params, "surface") } : { view: "portal" },
-  application: (params) => ({ view: "project", params: keep(params, "id", "surface") }),
+  applications: (params) => params?.surface === "studio" || !params?.surface ? { view: "projects", params: keep("projects", params, "surface") } : { view: "portal" },
+  application: (params) => ({ view: "project", params: keep("project", params, "id", "surface") }),
   studio: { view: "projects" },
   pages: { view: "module" },
-  compose: (params) => ({ view: "module", params: { ...keep(params, "application"), ...(params?.id ? { page: params.id } : {}) } }),
-  model: (params) => ({ view: "object-type", params: keep(params, "object", "tab", "application") }),
-  process: (params) => ({ view: "object-type", params: keep(params, "id", "field", "action", "access", "application") }),
-  workflow: (params) => ({ view: "flow", params: keep(params, "id", "application") }),
-  "catalog-example": (params) => ({ view: "catalog", params: { ...keep(params, "id"), expand: "1" } }),
+  compose: (params) => ({ view: "module", params: { ...keep("module", params, "application"), ...(params?.id ? { page: params.id } : {}) } }),
+  model: (params) => ({ view: "object-type", params: keep("object-type", params, "object", "tab", "application") }),
+  process: (params) => ({ view: "object-type", params: keep("object-type", params, "id", "field", "action", "access", "application") }),
+  workflow: (params) => ({ view: "flow", params: keep("flow", params, "id", "application") }),
+  "catalog-example": (params) => ({ view: "catalog", params: { ...keep("catalog", params, "id"), expand: "1" } }),
   governance: { view: "catalog" },
   "candidate-test": (params): Route => {
     if (params?.processId) return { view: "flow", params: { id: params.processId } };
@@ -50,12 +51,12 @@ export const projectionOfSurface = (surface?: string): Projection | undefined =>
 export function resolveLegacyRoute(route: Route, context: {
   builder: boolean; application?: string; read: (type: string, id: string) => Promise<unknown>;
 }): Route | Promise<Route> {
-  const retired = legacyRoute(route);
-  if (retired) return retired;
+  const target = legacyRoute(route);
+  if (target) return target;
   const params = route.params;
   if (route.view === "automation" && !params?.id && !params?.application && params?.surface !== "studio"
     && (params?.surface === "tenant" || context.application === "runs" || !context.builder)) {
-    return { ...route, view: "automation-operations", params: keep(params, "tab") };
+    return { ...route, view: "automation-operations", params: keep("automation-operations", params, "tab") };
   }
   if (route.view !== "flow" || !params?.id || params.id === "new" || params.surface === "studio") return route;
   const id = params.id;
@@ -67,12 +68,12 @@ export function resolveLegacyRoute(route: Route, context: {
     };
     if (context.builder) {
       try { if (readableRecord(await context.read("build.process", id))) return route; }
-      catch (error) { if (!/HTTP (401|403|404)\b/.test(String(error))) throw error; }
+      catch (error) { if (!HttpError.missing(error)) throw error; }
     }
     try {
       return readableRecord(await context.read("flow.instance", id)) ? { ...route, view: "flow-instance" } : route;
     } catch (error) {
-      if (!/HTTP (401|403|404)\b/.test(String(error))) throw error;
+      if (!HttpError.missing(error)) throw error;
       return route; // missing or unreadable records keep the original refusal
     }
   })();
