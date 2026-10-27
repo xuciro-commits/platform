@@ -3,13 +3,14 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
+	"platformkernel/kernel"
 	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/platform"
 	"testing"
 	"time"
-
-	"platformkernel/kernel"
-	"platformserver/platform"
 )
+
+// accepted_callback_rows_test.go consolidated into this owner
 
 type neverAnswerStock struct{ *answerStock }
 

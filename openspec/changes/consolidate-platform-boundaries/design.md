@@ -128,6 +128,23 @@ widget 名词当前泄漏在四处，加一个组件要改后端四个文件—�
 
 23 个 `accepted_*.go` 按「谁产生、谁消费」归并为单一管线 + 领域注册表；`business_refusal_*.go` / `conflict_refusal.go` / `apps/build/transaction_refusal.go` 收敛为一个拒止引擎。接受结果格式、提交管线顺序、单写者锁义务不变（与既有 3.1 约束一致）。
 
+### 刀二处方修正：`accepted_*` 不是冗余，合并成单文件会制造上帝包
+
+审查处方写的是「23 个 `accepted_*.go` 抽象合并为统一的泛型/表驱动管道，砍掉 20+ 个冗余文件」。实测否决该形状：
+
+| 事实 | 数据 |
+|---|---|
+| 23 个 `accepted_*.go` 总量 | 4,881 行，平均 212 行，96 个方法 |
+| 最大的几个 | `accepted_control` 567、`accepted_batch` 551、`accepted_work` 440、`accepted_release` 428、`accepted_notices` 384 |
+| 性质 | 每个是一个领域的接受结果应用逻辑（代理、审批、批次、控制、效应、发布、工作），不是 `Struct A -> Struct B` 转发 |
+
+合成一个 `acceptance_pipeline.go` 会得到约 4,900 行的单文件——正是本 change 要消灭的「上帝包」形状。因此改为：
+
+- **只塌真正的碎片**：`<100` 行且与邻居同属一个管线阶段的 11 个文件，按阶段并入其归属文件（状态与行 / 输入与准入 / 效应），共 −11 文件。
+- **拒止收敛为 `refusals.go`**：根包内 5 个拒止文件本就在同一职责上分片（分类、事实、升级、冲突、接受侧呈现），合并为 1 个（−4 文件）。
+- **保留 ≥150 行的领域文件**：它们的拆分是正当的领域边界，问题在**命名前缀是阶段而非领域**（`accepted_` 让人无法按域定位），该问题由 3.1 的目录化搬迁解决，而不是靠合并掩盖。
+- **`apps/build/transaction_refusal.go` 不动**：并入根包会让 app 实现成为宿主依赖，违反 AGENTS 规则 4 与 `boundaries.sh` 的导入方向检查。
+
 ### 刀三：`internal/host` 与 `internal/construction` 归位，不删除
 
 审查建议 `git rm -rf` 这两个目录，实测不可行且方向错误：
