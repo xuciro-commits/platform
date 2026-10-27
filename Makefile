@@ -17,17 +17,16 @@ PNPM ?= pnpm
 AIR ?= $(shell command -v air 2>/dev/null || printf '%s/bin/air' "$$($(GO) env GOPATH)")
 AIR_VERSION ?= v1.67.4
 OPENSPEC_VERSION := 1.14.3
-COMPOSE := docker compose -f deploy/local/compose.yaml
+COMPOSE := docker compose --env-file deploy/local/.env -f deploy/local/compose.yaml
+NATIVE_COMPOSE := $(COMPOSE) -f deploy/dev/compose.native.yaml
 INFRA := postgres rauthy rustfs
-SOLUTION ?= main
-PORT.main := 8495
-PORT.compat := 8490
-WEB_PORT.main := 5176
-WEB_PORT.compat := 5175
-WEB_PORT ?= $(WEB_PORT.$(SOLUTION))
 LITE_HOST ?= 127.0.0.1
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 DIST := .build/release
+
+.PHONY: bootstrap
+bootstrap: ## 首次生成私有本地配置；重复执行只校验，账号见 .build/local/credentials.md
+	python3 deploy/local/bootstrap.py
 
 .PHONY: initialize
 initialize: ## 按包内显式计划初始化新租户；凭据从 PLATFORM_INITIALIZE_TOKEN 取，安装/启动不执行
@@ -42,21 +41,21 @@ system-export: ## 导出自举发布的完整工作树：RELEASE=<n> [OUT=<目�
 help: ## 显示命令帮助列表
 	@awk 'BEGIN{FS=":.*## "} /^## /{printf "\n%s\n", substr($$0,4)} /^[a-zA-Z0-9_.-]+:.*## /{printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-## dev - 本地开发（无需构建镜像；Docker 仅用于 PostgreSQL、Rauthy、RustFS 与 Webhook Sink）
+## dev - 本地开发（Docker 或原生热更新，共用一个平台入口）
 
 .PHONY: local docker
-local: ## 一键切到本地热更新：自动停 Docker 宿主，启动基础设施、一个 Air 宿主与两入口 Vite；入口仍为 8495/8490
+local: bootstrap ## 启动一个 Air API 和一个 Vite；平台与登录共用 8495
 	AIR="$(AIR)" python3 deploy/dev/environment.py local
 
-docker: ## 一键切回 Docker：自动停本地 Air/Vite，重建并校验统一宿主的两入口；保留全部数据卷
+docker: bootstrap ## 切到 Docker 单入口平台；保留新环境数据
 	python3 deploy/dev/environment.py docker
 
 .PHONY: infra
-infra: ## 启动基础服务容器（数据持久化保留在 platform_* 数据卷中）
-	$(COMPOSE) up -d $(INFRA)
+infra: bootstrap ## 启动基础服务容器（数据持久化保留在 platform_* 数据卷中）
+	$(NATIVE_COMPOSE) up -d --wait $(INFRA)
 
 .PHONY: infra-compute
-infra-compute: ## 启动计算与编译支持（Wasm worker 与代码构建器，socket 位于 .build/dev/compute）
+infra-compute: bootstrap ## 启动计算与编译支持（Wasm worker 与代码构建器，socket 位于 .build/dev/compute）
 	mkdir -p .build/dev/compute
 	$(COMPOSE) -p platform-dev-compute -f deploy/dev/compose.compute.yaml up -d wasm-worker code-builder
 
@@ -65,10 +64,10 @@ infra-down: ## 停止基础服务容器（保留数据卷）
 	$(COMPOSE) stop
 
 .PHONY: dev
-dev: ## 基于容器 PostgreSQL 与 Rauthy，在 air 下热重载运行宿主（SOLUTION 默认为 main，可选 compat）
+dev: bootstrap ## 单独运行内部 Air API（18495），配合 make web
 	@test -x "$(AIR)" || { echo 'run make setup to install air'; exit 1; }
 	mkdir -p .build/dev
-	SOLUTION=$(SOLUTION) "$(AIR)" -c deploy/dev/air.toml -- $(SOLUTION) $(PORT.$(SOLUTION))
+	"$(AIR)" -c deploy/dev/air.toml
 
 .PHONY: host
 host: ## 运行通用平台宿主；ARGS 传入租户、身份和部署参数，不编译原生行业应用
@@ -77,18 +76,18 @@ host: ## 运行通用平台宿主；ARGS 传入租户、身份和部署参数，
 	.build/host/platform-server $(ARGS)
 
 .PHONY: lite
-lite: ## 一键启动轻量持久化宿主（无 Docker；LITE_HOST=0.0.0.0 可用于受信任网络预览）
-	GO="$(GO)" PNPM="$(PNPM)" LITE_HOST="$(LITE_HOST)" deploy/local/lite.sh $(SOLUTION) $(PORT.$(SOLUTION))
+lite: bootstrap ## 一键启动轻量持久化宿主（无 Docker；LITE_HOST=0.0.0.0 可用于受信任网络预览）
+	GO="$(GO)" PNPM="$(PNPM)" LITE_HOST="$(LITE_HOST)" deploy/local/lite.sh
 
 .PHONY: dev-light
-dev-light: ## 轻量内存模式运行宿主（使用开发令牌，完全不依赖 Docker）
+dev-light: bootstrap ## 轻量内存模式运行宿主（使用开发令牌，完全不依赖 Docker）
 	@test -x "$(AIR)" || { echo 'run make setup to install air'; exit 1; }
 	mkdir -p .build/dev
-	SOLUTION=$(SOLUTION) PLATFORM_DEV_LIGHT=1 "$(AIR)" -c deploy/dev/air.toml -- $(SOLUTION) $(PORT.$(SOLUTION))
+	PLATFORM_DEV_LIGHT=1 "$(AIR)" -c deploy/dev/air.toml
 
 .PHONY: web
-web: ## 在 Vite 下热重载运行工作区（HMR），将 /v1 反向代理到对应解决方案宿主
-	cd web && PLATFORM_HOST=http://127.0.0.1:$(PORT.$(SOLUTION)) $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port $(WEB_PORT)
+web: bootstrap ## 单独运行 Vite 单入口（8495），API 与认证代理到18495
+	cd web && PLATFORM_HOST=http://127.0.0.1:18495 $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port 8495
 
 .PHONY: setup
 setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright 浏览器内核
@@ -173,7 +172,7 @@ build: ## 构建当前系统架构的工作区制品与通用宿主二进制，�
 	ls -l $(DIST)
 
 .PHONY: images
-images: ## 构建通用宿主 Docker 镜像并打上 VERSION 标签（两个配置实例共用同一镜像）
+images: bootstrap ## 构建平台宿主 Docker 镜像并打上 VERSION 标签
 	PLATFORM_REVISION=$$(git rev-parse HEAD) $(COMPOSE) build platform-server
 	docker tag platform-platform-server platform/platform-server:$(VERSION)
 
@@ -189,5 +188,5 @@ tag: ## 标记正式版本：make tag VERSION=v0.12.0（推送标签将触发发
 	git push origin $(VERSION)
 
 .PHONY: local-update
-local-update: ## 在 HEAD 基础上原地重建负责人本地运行的两台宿主（保留现有数据）
+local-update: bootstrap ## 更新单一平台入口并核对版本（保留现有数据）
 	deploy/local/update.sh

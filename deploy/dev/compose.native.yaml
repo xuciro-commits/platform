@@ -1,0 +1,8 @@
+# Only native Go needs host-loopback access to infrastructure.
+services:
+  postgres:
+    ports: ["127.0.0.1:${PG_PORT:-5433}:5432"]
+  rauthy:
+    ports: ["127.0.0.1:${IDP_PORT:-8480}:8080"]
+  rustfs:
+    ports: ["127.0.0.1:${FILES_PORT:-9000}:9000"]

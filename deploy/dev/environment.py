@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Serve one platform authority through the two retained local URLs."""
+"""Run one Platform API and its single public workspace entry."""
+import importlib.util
 import json
 import os
-import re
 from pathlib import Path
 import shutil
 import signal
@@ -15,12 +15,28 @@ import urllib.parse
 ROOT = Path(__file__).resolve().parents[2]
 STATE = ROOT / '.build/dev/environment.json'
 LOGS = STATE.parent
-COMPOSE = ['docker', 'compose', '-f', 'deploy/local/compose.yaml']
-SOLUTIONS = [('hospitality', 18495, 8495), ('manufacturing', 18495, 8490)]
+COMPOSE = ['docker', 'compose', '--env-file', 'deploy/local/.env', '-f', 'deploy/local/compose.yaml']
+NATIVE_COMPOSE = [*COMPOSE, '-f', 'deploy/dev/compose.native.yaml']
+API_PORT = 18495
 
 
 def run(command):
     subprocess.run(command, cwd=ROOT, check=True)
+
+
+def configuration():
+    spec = importlib.util.spec_from_file_location('local_bootstrap', ROOT / 'deploy/local/bootstrap.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.bootstrap(root=ROOT)
+
+
+def ports(state):
+    return [('api', API_PORT), ('web', state.get('webPort', 8495))]
+
+
+def public_url(state):
+    return state.get('url', 'http://localhost:8495').rstrip('/')
 
 
 def read_state():
@@ -37,7 +53,7 @@ def write_state(state):
 
 def selected_mode():
     state = read_state()
-    return state.get('mode') or ('native' if alive(state) else 'docker')
+    return state.get('mode', 'docker')
 
 
 def stamp(pid):
@@ -54,8 +70,7 @@ def _processes():
 
 def _matches(process, table):
     current = table.get(process.get('pid'))
-    # Older state also included the command after these five start-time fields.
-    return bool(current and process.get('stamp') and current[1] == ' '.join(process['stamp'].split()[:5]))
+    return bool(current and process.get('stamp') and current[1] == process['stamp'])
 
 
 def _descends(pid, parent, table):
@@ -89,19 +104,17 @@ def native_listeners(state=None, table=None):
     if not _matches(state, table):
         raise RuntimeError('本地监督进程尚未运行。')
     bound, waiting = {}, False
-    for solution, api, web in SOLUTIONS:
-        bound[solution] = {}
-        for kind, port in [('api', api), ('web', web)]:
-            child = next((item for item in state.get('children', []) if item['solution'] == (SOLUTIONS[0][0] if kind == 'api' else solution) and item['kind'] == kind), {})
-            if not _matches(child, table) or table[child['pid']][0] != state['pid']:
-                raise RuntimeError(f'{solution} {kind} 不属于当前本地监督进程。')
-            listeners = _listeners(port)
-            if not listeners:
-                waiting = True
-            elif len(listeners) != 1 or not _descends(next(iter(listeners)), child['pid'], table):
-                raise RuntimeError(f'端口 {port} 由其他进程占用（PID {sorted(listeners)}），不是当前 {solution} {kind}。')
-            else:
-                bound[solution][kind] = next(iter(listeners))
+    for kind, port in ports(state):
+        child = next((item for item in state.get('children', []) if item['kind'] == kind), {})
+        if not _matches(child, table) or table[child['pid']][0] != state['pid']:
+            raise RuntimeError(f'Platform {kind} 不属于当前本地监督进程。')
+        listeners = _listeners(port)
+        if not listeners:
+            waiting = True
+        elif len(listeners) != 1 or not _descends(next(iter(listeners)), child['pid'], table):
+            raise RuntimeError(f'端口 {port} 由其他进程占用（PID {sorted(listeners)}），不是当前 Platform {kind}。')
+        else:
+            bound[kind] = next(iter(listeners))
     return None if waiting else bound
 
 
@@ -119,24 +132,26 @@ def running_binary(pid, binary):
     return False
 
 
-def _healthy():
+def _healthy(state=None):
+    base = public_url(read_state() if state is None else state)
     try:
-        for _, _, port in SOLUTIONS:
-            with urllib.request.urlopen(f'http://localhost:{port}/healthz', timeout=2) as response:
-                health = json.load(response)
-            if health.get('status') != 'ok' or health.get('quarantined') != 0:
+        with urllib.request.urlopen(base + '/healthz', timeout=2) as response:
+            health = json.load(response)
+        if health.get('status') != 'ok' or health.get('quarantined') != 0:
+            return False
+        with urllib.request.urlopen(base + '/', timeout=2) as response:
+            if b'/@vite/client' not in response.read():
                 return False
-            with urllib.request.urlopen(f'http://localhost:{port}/', timeout=2) as response:
-                if b'/@vite/client' not in response.read():
-                    return False
-        return True
+        with urllib.request.urlopen(base + '/auth/v1/.well-known/openid-configuration', timeout=2) as response:
+            identity = json.load(response)
+        return identity.get('issuer') == base + '/auth/v1/'
     except (OSError, ValueError):
         return False
 
 
 def ready(state=None):
     try:
-        return bool(native_listeners(state)) and _healthy()
+        return bool(native_listeners(state)) and _healthy(state)
     except (OSError, RuntimeError):
         return False
 
@@ -168,10 +183,9 @@ def _stop_native_processes(roots, known=None, grace=8, first_signal=signal.SIGIN
     # Air starts its host in a separate process group. Check its captured
     # descendants, never kill an unrelated listener that acquired the port.
     table = _processes()
-    for _, api, web in SOLUTIONS:
-        for port in (api, web):
-            if any(_matches(known.get(pid, {}), table) for pid in _listeners(port)):
-                raise RuntimeError(f'当前本地环境仍占用端口 {port}，未切换宿主。')
+    for _, port in ports(read_state()):
+        if any(_matches(known.get(pid, {}), table) for pid in _listeners(port)):
+            raise RuntimeError(f'当前本地环境仍占用端口 {port}，未切换宿主。')
 
 
 def stop():
@@ -182,6 +196,7 @@ def stop():
 
 
 def serve():
+    config = configuration()
     children = []
     known = {}
     bound, last_probe = {}, 0
@@ -194,30 +209,29 @@ def serve():
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGINT, interrupt)
     pid = os.getpid()
-    state = {'mode': 'native', 'pid': pid, 'stamp': stamp(pid), 'status': 'starting', 'children': []}
+    state = {'mode': 'native', 'pid': pid, 'stamp': stamp(pid), 'status': 'starting', 'url': config['PLATFORM_PUBLIC_URL'], 'webPort': int(config['PLATFORM_PORT']), 'children': []}
     write_state(state)
     try:
-        for _, api, web in SOLUTIONS:
-            for port in (api, web):
-                listeners = _listeners(port)
-                if listeners:
-                    raise RuntimeError(f'端口 {port} 已被占用（PID {sorted(listeners)}）；请先停止对应宿主，本地启动不会接管其他进程。')
+        for _, port in ports(state):
+            listeners = _listeners(port)
+            if listeners:
+                raise RuntimeError(f'端口 {port} 已被占用（PID {sorted(listeners)}）；请先停止对应宿主，本地启动不会接管其他进程。')
         air = os.environ.get('AIR') or shutil.which('air')
         node = shutil.which('node')
         vite = ROOT / 'web/apps/workspace/node_modules/vite/bin/vite.js'
         if not air or not node or not vite.is_file():
             raise RuntimeError('缺少 Air、Node 或 Vite，请先运行 make setup。')
-        for solution, api, web in SOLUTIONS:
-            commands = [('web', [node, str(vite), '--host', '127.0.0.1', '--port', str(web)], ROOT / 'web/apps/workspace')]
-            if solution == SOLUTIONS[0][0]:
-                commands.insert(0, ('api', [air, '-c', 'deploy/dev/air.toml', '--', solution, str(api)], ROOT))
-            for kind, command, cwd in commands:
-                env = {**os.environ, 'SOLUTION': solution, 'PLATFORM_HOST': f'http://127.0.0.1:{api}'}
-                with (LOGS / f'{solution}-{kind}.log').open('w') as log:
-                    child = subprocess.Popen(command, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-                    children.append(child)
-                    state['children'].append({'solution': solution, 'kind': kind, 'pid': child.pid, 'stamp': stamp(child.pid)})
-                    write_state(state)
+        commands = [
+            ('api', [air, '-c', 'deploy/dev/air.toml'], ROOT),
+            ('web', [node, str(vite), '--host', '127.0.0.1', '--port', str(state['webPort'])], ROOT / 'web/apps/workspace'),
+        ]
+        env = {**os.environ, **config, 'PLATFORM_HOST': f'http://127.0.0.1:{API_PORT}'}
+        for kind, command, cwd in commands:
+            with (LOGS / f'platform-{kind}.log').open('w') as log:
+                child = subprocess.Popen(command, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                children.append(child)
+                state['children'].append({'kind': kind, 'pid': child.pid, 'stamp': stamp(child.pid)})
+                write_state(state)
         while not interrupted:
             table = _processes()
             known = {pid: item for pid, item in known.items() if _matches(item, table)}
@@ -230,8 +244,8 @@ def serve():
                 listeners = native_listeners(state, table)
                 last_probe = now
                 bound = {pid: {'pid': pid, 'stamp': table[pid][1]}
-                         for ports in (listeners or {}).values() for pid in ports.values()}
-                status = 'ready' if listeners and _healthy() else 'starting'
+                         for pid in (listeners or {}).values()}
+                status = 'ready' if listeners and _healthy(state) else 'starting'
                 if state['status'] != status:
                     state['status'] = status
                     write_state(state)
@@ -243,24 +257,11 @@ def serve():
         write_state({'mode': 'native', 'status': 'stopped'})
 
 
-def prepare_database():
-    # Compose and run.sh share the deployment environment. Resolve the actual
-    # configured database without printing credentials or modifying the archive.
-    config = json.loads(subprocess.check_output(COMPOSE + ['config', '--format', 'json'], cwd=ROOT))
-    argument = next(value for value in config['services']['platform-server']['command'] if value.startswith('-database='))
-    name = urllib.parse.urlsplit(argument.removeprefix('-database=')).path.lstrip('/')
-    if not re.fullmatch(r'[a-z][a-z0-9_]{0,62}', name):
-        raise RuntimeError('Local database names must use lowercase letters, digits and underscores.')
-    found = subprocess.check_output(COMPOSE + ['exec', '-T', 'postgres', 'psql', '-U', 'platform', '-d', 'postgres', '-Atc',
-                                   "select 1 from pg_database where datname='" + name + "'"], cwd=ROOT, text=True).strip()
-    if not found:
-        run(COMPOSE + ['exec', '-T', 'postgres', 'createdb', '-U', 'platform', name])
-
-
 def local():
-    if alive(read_state()) and ready():
+    config = configuration()
+    if alive(read_state()) and ready() and public_url(read_state()) == config['PLATFORM_PUBLIC_URL'].rstrip('/'):
         write_state({**read_state(), 'mode': 'native'})
-        print('本地热更新已运行：统一工作区 http://localhost:8495 · 兼容入口 http://localhost:8490')
+        print('本地热更新已运行：Platform ' + config['PLATFORM_PUBLIC_URL'])
         return
     air = os.environ.get('AIR') or shutil.which('air')
     if not air or not os.access(air, os.X_OK):
@@ -269,7 +270,6 @@ def local():
     write_state({'mode': 'native', 'status': 'starting'})
     run(COMPOSE + ['stop', 'platform-server', 'wasm-worker', 'code-builder'])
     run(['make', 'infra', 'infra-compute'])
-    prepare_database()
     LOGS.mkdir(parents=True, exist_ok=True)
     with (LOGS / 'environment.log').open('w') as log:
         supervisor = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'serve'], cwd=ROOT,
@@ -280,7 +280,7 @@ def local():
                 raise RuntimeError((LOGS / 'environment.log').read_text())
             state = read_state()
             if state.get('pid') == supervisor.pid and state.get('status') == 'ready' and ready(state):
-                print('本地热更新已就绪：统一工作区 http://localhost:8495 · 兼容入口 http://localhost:8490')
+                print('本地热更新已就绪：Platform ' + config['PLATFORM_PUBLIC_URL'])
                 print('Go 自动编译重启，前端 HMR；日志：.build/dev/；切回容器：make docker')
                 return
             time.sleep(0.5)
@@ -290,17 +290,17 @@ def local():
 
 
 def prepare_docker():
+    configuration()
     stop()
     write_state({'mode': 'docker', 'status': 'starting'})
-    run(COMPOSE + ['-p', 'platform-dev-compute', '-f', 'deploy/dev/compose.compute.yaml', 'stop',
-                   'wasm-worker', 'code-builder'])
-    run(COMPOSE + ['up', '-d', '--wait', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
-    prepare_database()
+    run(COMPOSE + ['-p', 'platform-dev-compute', '-f', 'deploy/dev/compose.compute.yaml', 'down'])
+    run(COMPOSE + ['up', '-d', '--wait', '--force-recreate', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
 
 
 def docker():
+    configuration()
     dirty = subprocess.check_output(['git', 'status', '--porcelain', '--', 'capabilities/server', 'apps',
-                                    'solutions', 'protocols', 'contract', 'web/packages', 'web/apps/workspace/src'],
+                                    'protocols', 'contract', 'web/packages', 'web/apps/workspace/src'],
                                    cwd=ROOT, text=True)
     if dirty:
         raise RuntimeError('请先提交源码再切到 Docker，以便核对镜像版本；本地环境仍保留运行。')

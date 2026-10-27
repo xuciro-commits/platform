@@ -6,13 +6,40 @@
 
 ## 启动工作区
 
-需要 Go 1.27.1、Node ≥ 22.18.0、固定的 pnpm 12.5.1。在仓库根目录安装依赖：
+需要 Go 1.27.1、Node ≥ 22.18.0、固定 pnpm 12.5.1，以及运行中的 Docker。
 
 ```bash
 make setup PNPM="corepack pnpm"
+make bootstrap
+make docker
 ```
 
-`make lite PNPM="corepack pnpm"` 会构建工作区和宿主，默认监听 `http://127.0.0.1:8495`，数据目录为 `.build/lite/platform/`。它保留日志、文件及签名密钥，以前台宿主直接提供服务；它没有自动启动 updater 或监督换版。`LITE_HOST=0.0.0.0` 可用于受信任网络预览。
+唯一产品入口为 **http://localhost:8495**，平台页面、应用、API 与登录共用此地址。Docker 模式只发布这一端口；PostgreSQL、Rauthy、RustFS 和计算服务在内部网络运行。无需访问单独的登录端口，也不为业务应用建立端口或专用容器。
+
+首次 `make bootstrap` 生成新的空白租户、账号密码和各服务独立的随机密钥。账号密码见本地私有文件 [credentials.md](../../.build/local/credentials.md)，机器可读对应文件为 `.build/local/accounts.json`；它们权限为0600，不进入版本库。
+
+| 账号 | 用途与初始权限 |
+|---|---|
+| `admin@platform.test` | 平台、AI、企业与工作治理，发布资格；独立配置的宿主管理员 |
+| `builder@platform.test` | 构建与集成；没有宿主管理资格 |
+| `user@platform.test` | 普通测试成员；没有默认业务角色 |
+
+三个账号密码各不相同，均只供本机开发测试。Rauthy管理员可能在首次登录时要求完成个人资料；其管理后台也通过同源 `/auth` 提供。账号没有预装业务包、业务授权、AI提供方或示例数据；按实际测试需要显式配置。
+
+实际配置在忽略的 `deploy/local/.env` 与 `.build/local/`：包含原租户文件、Rauthy bootstrap、账号说明和主密钥。重复 `make bootstrap` 只验证并复用，不覆盖密钥；文件缺失或不一致会拒绝继续，先恢复原文件或明确执行新的整体重建，不能混合旧数据和新密钥。
+
+日常命令：
+
+```bash
+make local         # 切到一个 Air API + 一个 Vite 的热更新模式，入口仍8495
+make docker        # 切回Docker单入口，保留数据和密钥
+make local-update  # 交付当前已提交版本，检查版本、健康、同源登录和页面资源
+make infra-down    # 停止容器，不删除卷
+```
+
+热更新使用回环18495作为内部API，原生开发 overlay 才向本机回环映射数据库5433、身份服务8480和对象存储9000，浏览器继续只访问8495。`make dev` 与 `make web` 可分别运行API和Vite；通常直接使用 `make local`。服务日志在 `.build/dev/`，Compose 项目为 `platform`，卷以本地生成的 `PLATFORM_DATA_NAMESPACE` 命名。
+
+`make lite` 是独立的无Docker轻量运行形态，默认8495，数据在 `.build/lite/platform/`，沿原签名角色卡登录；它不是上述密码登录环境，不自动启动updater或监督换版。不要与另一个平台同时占用同一端口。
 
 自举环境须配置 `system` 租户和明确角色：构建者持有 `system:builder`，人工发布者持有 `system:publisher`；编辑元对象还需原 `build:builder`。人工发布者可以批准自己的人工提案；受管 AI 即使被错误授予发布角色仍不能批准，AI 提案须人工批准。初始席位只用于空日志，已有成员授权仍以接受结果为准；更改起始 JSON 不会重写既有授权。
 
@@ -87,17 +114,15 @@ make system-export RELEASE=17 OUT=/absolute/path/to/export
 
 `/healthz` 可核对进程、发布号、二进制摘要和隔离租户数量；具体租户仍需获权调用 `/v1/health`。健康、源摘要、页面资源和实际操作都要核对，超时、重启或单一 200 不构成交付完成。
 
-## 本地更新与旧业务归档
+## 更新、重建与旧环境退出
 
-负责人已选择采用新工作区，旧应用暂不开放。`make local` / `make docker` 和 `deploy/local/update.sh` 以同一个宿主提供 `8495`、`8490` 两入口；两个 URL 看到同一组业务工作区与 `system` 租户。不能在同一数据库中另起一个包含 `system` 的独立写入宿主。
+日常更新必须保留 `.env`、私有配置目录、数据卷和租户身份。`deploy/local/update.sh` 要求源码已提交，沿选定Docker或原生模式更新，验证实际版本、租户健康、同源OIDC发现及页面字节；不能把进程重启当作完成交付。
 
-新组合默认使用原 PostgreSQL 实例内独立的 `platform_selfhosting` 数据库（可通过 `PLATFORM_DATABASE_NAME` 配置），由本地启动脚本仅在不存在时创建。原 `platform` 数据库的旧日志、初始化状态与检查点完整保留；这避免用新组合强行装载未迁移的旧 `system` 状态，不能视为旧数据迁移通过。新数据库也在原 `pgdata` 卷中，日常更新不会重建它。
+本次 new start 经负责人明确授权，退出本项目旧容器、旧卷（包括历史review卷）、所有旧本地运行状态与恢复副本、旧账号/权限/AI配置和旧密钥。新环境从随机命名的空白租户开始；不迁移旧数据，不沿用酒店/制造账号或固定口令。平台源码、可安装声明包和其他项目资源保留。旧浏览器凭据不能登录新身份服务，未确认请求不能跨新租户身份恢复；若标签仍记着已退出的租户，退出登录再重新进入。
 
-当前业务租户身份及起始账号在 `deploy/local/platform/tenants.json`（可用 `PLATFORM_TENANTS_FILE` 指向原受控配置）。`manager@hotel.test` 与 `sup@plant.test` 保留原身份，manager 作为 host administrator 管理 `system`。业务工作区重建应分配新的租户身份，防止旧浏览器保存的未确认请求或离线内容进入空白环境；原账号、AI 服务和平台密钥可以按明确范围保留，经原配置入口恢复。业务状态的退出不重建共享 PostgreSQL、Rauthy 或 RustFS 数据卷，不清除 `system` 状态；日常更新也不删除这些数据。浏览器仍记着已退出的租户时，退出登录再重新进入。
+这不是普通启动的兜底行为。以后需要重建时，先停止当前平台并按实际Compose标签和挂载核对范围，再明确退出对应卷及 `.build`/`.env`，最后生成全新配置。禁止使用全局Docker prune；不得删除其他项目数据，不能为了修复恢复错误擅自重建。
 
-更新 main 后运行 `deploy/local/update.sh`。它要求已提交源码，核对唯一 API 进程或镜像的实际版本，并逐个检查两入口的健康与页面资源。原生模式记录在 `.build/dev/environment.json`；启动和停止核对进程归属，不接管陌生端口。它是本地开发交付入口，自动自举换版仍需上文的 updater 监督命令。
-
-`make rehearse` 运行当前组合的构建、自举 owner 与真实 PostgreSQL 检查点/恢复检查。数据库属于独立临时容器，退出时移除，不访问日常卷。原 Flow、设备和旧工作区演练入口已随其实现退出；该检查不等于旧业务迁移、完整页面运行时或浏览器验收。旧日志恢复与跨库移交仍须按原 owner 另行验收。
+`make rehearse` 使用独立临时PostgreSQL，验证当前组合的构建、自举与检查点/恢复，不访问日常卷。轻量角色卡、自动浏览器的机制夹具与上述真实密码账号分别用于各自运行形态；自动测试账号不会进入本地IdP或授予真实业务权限。
 
 源码工具把动作 `payload`、具名读取 `inputs` 与工具的 `target` / `rationale` 分开，避免业务字段同名冲突。`agent.run` 的 JSON 步骤保留真实来源，逻辑文件路径不会冒充记录 ID；旧的已接受日志不重写。首次运行前，在 AI 中启用支持工具调用的模型，并在 Settings 的 `agent/model` 选择它；给 `ai/app-model` 设置默认值并不能替代智能体模型设置。
 

@@ -1,7 +1,5 @@
-# One platform authority, exposed through both retained local URLs. PostgreSQL
-# keeps the journal and Rauthy retains the original identities. Build the workspace first:
-# `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
-# Ports are parameters so rehearse.sh can run a second, disposable project.
+# One Platform product entry, including OIDC at /auth.
+# Generate private local configuration with make bootstrap before starting.
 name: platform
 
 services:
@@ -11,66 +9,68 @@ services:
       dockerfile: deploy/local/Dockerfile.postgres
     image: platform-postgres:18-vector
     environment:
-      POSTGRES_DB: platform
+      POSTGRES_DB: ${PLATFORM_DATABASE_NAME:?run make bootstrap}
       POSTGRES_USER: platform
-      POSTGRES_PASSWORD: platform-local-only
-    ports: ["127.0.0.1:${PG_PORT:-5433}:5432"]
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make bootstrap}
     volumes: [pgdata:/var/lib/postgresql]
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "platform", "-d", "platform"]
+      test: ["CMD", "pg_isready", "-U", "platform", "-d", "${PLATFORM_DATABASE_NAME}"]
       interval: 2s
       retries: 30
 
-  # File bytes: RustFS, an S3-compatible object store; the journal keeps
-  # only each file's hash. Its console is on FILES_CONSOLE_PORT (platform / platform-files-local-only).
+  # File bytes remain on the private Compose network.
   rustfs:
     image: rustfs/rustfs:latest@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff # pinned; RustFS publishes often
     environment:
-      RUSTFS_ACCESS_KEY: platform
-      RUSTFS_SECRET_KEY: platform-files-local-only
+      RUSTFS_ACCESS_KEY: ${PLATFORM_S3_ACCESS_KEY:?run make bootstrap}
+      RUSTFS_SECRET_KEY: ${PLATFORM_S3_SECRET_KEY:?run make bootstrap}
       RUSTFS_VOLUMES: /data
       RUSTFS_ADDRESS: 0.0.0.0:9000
-      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ENABLE: "false"
       RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
-    ports: ["127.0.0.1:${FILES_PORT:-9000}:9000", "127.0.0.1:${FILES_CONSOLE_PORT:-9001}:9001"]
     volumes: [files:/data]
 
   rauthy:
     image: ghcr.io/sebadob/rauthy:0.36.2
     command: ["serve"]
+    # Read private host-generated bootstrap files; only this local IdP runs as root.
+    user: "0:0"
     environment:
-      PUB_URL: localhost:${IDP_PORT:-8480}
-      RP_ORIGIN: http://localhost:${IDP_PORT:-8480}
-    ports: ["127.0.0.1:${IDP_PORT:-8480}:8080"]
+      PUB_URL: localhost:${PLATFORM_PORT:-8495}
+      RP_ORIGIN: ${PLATFORM_PUBLIC_URL:?run make bootstrap}
     volumes:
-      - ./rauthy/config.toml:/app/config.toml:ro
-      - ./rauthy/bootstrap:/app/bootstrap:ro
+      - ${PLATFORM_LOCAL_ROOT}/rauthy/config.toml:/app/config.toml:ro
+      - ${PLATFORM_LOCAL_ROOT}/rauthy/bootstrap:/app/bootstrap:ro
       - rauthy:/app/data
 
   platform-server:
-    group_add: ["${TENANTS_GID:-20}"]
+    user: "${PLATFORM_RUN_UID}:${PLATFORM_RUN_GID}"
     build:
       context: ../..
       dockerfile: capabilities/server/cmd/platform-server/Dockerfile
       args: { PLATFORM_REVISION: "${PLATFORM_REVISION:-}" }
     command:
       - -addr=0.0.0.0:8495
-      - -database=postgres://platform:platform-local-only@postgres:5432/${PLATFORM_DATABASE_NAME:-platform_selfhosting}
-      - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
+      - -database=postgres://platform:${POSTGRES_PASSWORD}@postgres:5432/${PLATFORM_DATABASE_NAME}
+      - -oidc-issuer=${PLATFORM_PUBLIC_URL}/auth/v1/
+      - -oidc-proxy=http://rauthy:8080
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -tenants=/etc/platform/tenants.json
       - -templates=/etc/templates
-      - -host-admins=user:manager@hotel.test
+      - -host-admins=${PLATFORM_HOST_ADMINS}
       - -web=/web
       - -project
       - -files=http://rustfs:9000/platform
-    ports: ["127.0.0.1:${PLATFORM_PORT:-8495}:8495", "127.0.0.1:${PLATFORM_COMPAT_PORT:-8490}:8495"]
-    volumes: ["${PLATFORM_TENANTS_FILE:-./platform/tenants.json}:/etc/platform/tenants.json", ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
-    # Webhook signing secrets, referenced by name from endpoints; local-only.
-    environment: { PLATFORM_CREDENTIAL_KEY: "${PLATFORM_CREDENTIAL_KEY:-}", PLATFORM_PERSONAL_TOKEN_KEY: "${PLATFORM_PERSONAL_TOKEN_KEY:-}", PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
-     
-      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
-      PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
+    ports: ["127.0.0.1:${PLATFORM_PORT:-8495}:8495"]
+    volumes: ["${PLATFORM_TENANTS_FILE}:/etc/platform/tenants.json", ../templates:/etc/templates:ro, ../packages:/etc/packages:ro, compute-sockets:/run/platform-compute]
+    environment:
+      PLATFORM_CREDENTIAL_KEY: ${PLATFORM_CREDENTIAL_KEY:?run make bootstrap}
+      PLATFORM_PERSONAL_TOKEN_KEY: ${PLATFORM_PERSONAL_TOKEN_KEY:?run make bootstrap}
+      PLATFORM_S3_ACCESS_KEY: ${PLATFORM_S3_ACCESS_KEY}
+      PLATFORM_S3_SECRET_KEY: ${PLATFORM_S3_SECRET_KEY}
+      PLATFORM_PACKAGES_DIR: /etc/packages
+      PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock
+      PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
@@ -125,10 +125,10 @@ services:
 
 volumes:
   pgdata:
-    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_pgdata
+    name: ${PLATFORM_DATA_NAMESPACE:?run make bootstrap}_pgdata
   rauthy:
-    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_rauthy
+    name: ${PLATFORM_DATA_NAMESPACE:?run make bootstrap}_rauthy
   files:
-    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_files
+    name: ${PLATFORM_DATA_NAMESPACE:?run make bootstrap}_files
   compute-sockets:
-    name: ${PLATFORM_DATA_NAMESPACE:-${COMPOSE_PROJECT_NAME}}_compute-sockets
+    name: ${PLATFORM_DATA_NAMESPACE:?run make bootstrap}_compute-sockets

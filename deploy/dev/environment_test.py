@@ -21,6 +21,9 @@ class EnvironmentModeTests(unittest.TestCase):
         state = patch.object(environment, 'STATE', Path(self.directory.name) / 'environment.json')
         state.start()
         self.addCleanup(state.stop)
+        config = patch.object(environment, 'configuration', return_value={'PLATFORM_PUBLIC_URL': 'http://localhost:8495', 'PLATFORM_PORT': '8495'})
+        config.start()
+        self.addCleanup(config.stop)
 
     def test_native_selection_survives_a_dead_supervisor_and_stop(self):
         environment.write_state({'mode': 'native', 'pid': 123, 'stamp': 'previous process'})
@@ -28,11 +31,6 @@ class EnvironmentModeTests(unittest.TestCase):
             environment.stop()
             self.assertEqual(environment.selected_mode(), 'native')
         self.assertNotIn('pid', environment.read_state())
-
-    def test_a_running_legacy_native_environment_keeps_its_selection(self):
-        environment.write_state({'pid': 123, 'stamp': 'legacy process'})
-        with patch.object(environment, 'alive', return_value=True):
-            self.assertEqual(environment.selected_mode(), 'native')
 
     def test_docker_preparation_remembers_selection_before_starting_dependencies(self):
         environment.write_state({'mode': 'native', 'status': 'stopped'})
@@ -42,10 +40,10 @@ class EnvironmentModeTests(unittest.TestCase):
             self.assertEqual(environment.selected_mode(), 'docker')
             commands.append(command)
 
-        with patch.object(environment, 'alive', return_value=False), patch.object(environment, '_stop_native_processes'), patch.object(environment, 'run', side_effect=run), patch.object(environment, 'prepare_database'):
+        with patch.object(environment, 'alive', return_value=False), patch.object(environment, '_stop_native_processes'), patch.object(environment, 'run', side_effect=run):
             environment.prepare_docker()
         self.assertTrue(any('rustfs' in command and 'up' in command for command in commands))
-        self.assertFalse(any('down' in command or '--volumes' in command for command in commands))
+        self.assertFalse(any('--volumes' in command for command in commands))
 
     def test_local_waits_for_live_supervisor_readiness_without_a_startup_deadline(self):
         ticks = [0]
@@ -58,7 +56,7 @@ class EnvironmentModeTests(unittest.TestCase):
         with patch.object(environment, 'LOGS', Path(self.directory.name)), \
                 patch.object(environment, 'alive', return_value=False), patch.object(environment, 'stop'), \
                 patch.object(environment, 'ready', return_value=True), \
-                patch.object(environment, 'run'), patch.object(environment, 'prepare_database'), patch.object(environment.os, 'access', return_value=True), \
+                patch.object(environment, 'run'), patch.object(environment.os, 'access', return_value=True), \
                 patch.dict(environment.os.environ, {'AIR': '/air'}), \
                 patch.object(environment.subprocess, 'Popen', return_value=SimpleNamespace(pid=123, poll=lambda: None)), \
                 patch.object(environment.time, 'sleep', side_effect=advance), \
@@ -69,7 +67,7 @@ class EnvironmentModeTests(unittest.TestCase):
     def test_local_reports_an_exited_supervisor_and_stops_its_children(self):
         with patch.object(environment, 'LOGS', Path(self.directory.name)), \
                 patch.object(environment, 'alive', return_value=False), patch.object(environment, 'stop') as stop, \
-                patch.object(environment, 'run'), patch.object(environment, 'prepare_database'), patch.object(environment.os, 'access', return_value=True), \
+                patch.object(environment, 'run'), patch.object(environment.os, 'access', return_value=True), \
                 patch.dict(environment.os.environ, {'AIR': '/air'}), \
                 patch.object(environment.subprocess, 'Popen', return_value=SimpleNamespace(pid=123, poll=lambda: 1)):
             with self.assertRaises(RuntimeError):
@@ -77,22 +75,19 @@ class EnvironmentModeTests(unittest.TestCase):
         self.assertEqual(stop.call_count, 2)
 
     def native_fixture(self):
-        table = {100: (1, 'supervisor'), 101: (100, 'hotel-air'), 102: (100, 'hotel-vite'),
-                 104: (100, 'plant-vite'), 201: (101, 'hotel-api')}
-        children = [{'solution': solution, 'kind': kind, 'pid': pid, 'stamp': table[pid][1]}
-                    for solution, kind, pid in [('hospitality', 'api', 101), ('hospitality', 'web', 102),
-                                                ('manufacturing', 'web', 104)]]
+        table = {100: (1, 'supervisor'), 101: (100, 'platform-air'), 102: (100, 'platform-vite'), 201: (101, 'platform-api')}
+        children = [{'kind': kind, 'pid': pid, 'stamp': table[pid][1]} for kind, pid in [('api', 101), ('web', 102)]]
         state = {'mode': 'native', 'pid': 100, 'stamp': 'supervisor', 'status': 'ready', 'children': children}
-        listeners = {18495: {201}, 8495: {102}, 8490: {104}}
+        listeners = {18495: {201}, 8495: {102}}
         return state, table, listeners
 
     def healthy_response(self, url, **_):
-        body = json.dumps({'status': 'ok', 'quarantined': 0}).encode() if url.endswith('/healthz') else b'<script src="/@vite/client"></script>'
+        body = json.dumps({'status': 'ok', 'quarantined': 0}).encode() if url.endswith('/healthz') else json.dumps({'issuer': 'http://localhost:8495/auth/v1/'}).encode() if url.endswith('openid-configuration') else b'<script src="/@vite/client"></script>'
         return io.BytesIO(body)
 
     def test_ready_requires_the_current_airs_real_listener_even_when_an_orphan_is_healthy(self):
         state, table, listeners = self.native_fixture()
-        table[201] = (1, 'hotel-api')
+        table[201] = (1, 'platform-api')
         with patch.object(environment, '_processes', return_value=table), \
                 patch.object(environment, '_listeners', side_effect=lambda port: listeners[port]), \
                 patch.object(environment.urllib.request, 'urlopen', side_effect=self.healthy_response) as read:
@@ -105,9 +100,8 @@ class EnvironmentModeTests(unittest.TestCase):
                 patch.object(environment, '_listeners', side_effect=lambda port: listeners[port]), \
                 patch.object(environment.urllib.request, 'urlopen', side_effect=self.healthy_response) as read:
             self.assertTrue(environment.ready(state))
-            self.assertEqual(environment.native_listeners(state)['hospitality']['api'], 201)
-            self.assertEqual(environment.native_listeners(state)['manufacturing']['api'], 201)
-        self.assertEqual(read.call_count, 4)
+            self.assertEqual(environment.native_listeners(state)['api'], 201)
+        self.assertEqual(read.call_count, 3)
 
     def test_ready_rejects_another_startup_that_reused_a_child_pid(self):
         state, table, listeners = self.native_fixture()
@@ -187,7 +181,7 @@ class EnvironmentModeTests(unittest.TestCase):
                 patch.object(environment, 'stamp', side_effect=lambda pid: table[pid][1]), \
                 patch.object(environment, '_processes', return_value=table), \
                 patch.object(environment, '_listeners', return_value=set()), \
-                patch.object(environment, 'native_listeners', side_effect=lambda *_: {'hospitality': {'api': 201 if 201 in table else 203, 'web': 102}, 'manufacturing': {'api': 201 if 201 in table else 203, 'web': 104}}) as listeners, \
+                patch.object(environment, 'native_listeners', side_effect=lambda *_: {'api': 201 if 201 in table else 203, 'web': 102}) as listeners, \
                 patch.object(environment, '_healthy', return_value=True) as healthy, \
                 patch.object(environment, 'run') as run, \
                 patch.object(environment.shutil, 'which', side_effect=lambda name: {'air': '/air', 'node': '/node'}[name]), \
@@ -198,10 +192,10 @@ class EnvironmentModeTests(unittest.TestCase):
                 patch.object(environment.time, 'monotonic', side_effect=lambda: ticks[0] / 2), \
                 patch.object(environment, '_stop_native_processes') as cleanup:
             environment.serve()
-        self.assertEqual([call.args[0][0] for call in start.call_args_list], ['/air', '/node', '/node'])
+        self.assertEqual([call.args[0][0] for call in start.call_args_list], ['/air', '/node'])
         self.assertTrue(str(start.call_args_list[1].args[0][1]).endswith('/vite/bin/vite.js'))
-        self.assertEqual(start.call_args_list[0].kwargs['env']['SOLUTION'], 'hospitality')
-        self.assertEqual(start.call_args_list[2].kwargs['env']['PLATFORM_HOST'], 'http://127.0.0.1:18495')
+        self.assertNotIn('SOLUTION', start.call_args_list[0].kwargs['env'])
+        self.assertEqual(start.call_args_list[1].kwargs['env']['PLATFORM_HOST'], 'http://127.0.0.1:18495')
         run.assert_not_called()
         self.assertEqual(cleanup.call_args.args[0], state['children'])
         self.assertIn(203, cleanup.call_args.args[1])

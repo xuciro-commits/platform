@@ -4,10 +4,13 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 root=$(pwd)
+python3 deploy/local/bootstrap.py
+set -a
+source deploy/local/.env
+set +a
 
 # One host: the platform's own workspace, no industry instance.
-solution=platform
-port=${1:-8495}
+port=${PLATFORM_PORT:-8495}
 if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
   echo "Invalid port: $port (expected 1–65535)" >&2
   exit 1
@@ -16,8 +19,8 @@ bind=${LITE_HOST:-127.0.0.1}
 go=${GO:-go}
 read -r -a pnpm <<< "${PNPM:-pnpm}"
 
-data_dir=".build/lite/$solution"
-bin=".build/lite/$solution-server"
+data_dir=".build/lite/platform"
+bin=".build/lite/platform-server"
 web_dist="web/apps/workspace/dist"
 mkdir -p "$data_dir"
 
@@ -37,7 +40,7 @@ fi
 
 cat <<EOF
 
-Platform · $solution · lightweight / 轻量持久化
+Platform · lightweight / 轻量持久化
   Workspace / 工作台: http://$bind:$port
   Data / 数据目录:    $data_dir
   Sign in with the workspace's signed role cards / 使用工作台签名角色卡登录。
@@ -53,7 +56,7 @@ fi
 exec "$bin" \
   -profile lightweight \
   -data "$data_dir" \
-  -tenants "deploy/local/platform/tenants.json" \
+  -tenants "$PLATFORM_TENANTS_FILE" \
   -templates deploy/templates \
   -addr "$bind:$port" \
   -web "$web_dist"

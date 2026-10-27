@@ -1,15 +1,11 @@
-# air (installed by make setup) rebuilds and restarts the
-# common platform host when Go sources change. `make dev SOLUTION=main`
-# exports SOLUTION for build.sh and passes the solution and port after `--`
-# to run.sh, which starts the binary with the flags of the containers'
-# infrastructure.
+# Rebuild and restart the single native Platform API.
 root = "."
 tmp_dir = ".build/dev"
 
 [build]
 cmd = "deploy/dev/build.sh"
 entrypoint = ["deploy/dev/run.sh"]
-include_dir = ["capabilities/server", "protocols", "contract/go"]
+include_dir = ["capabilities/server", "contract/go"]
 include_ext = ["go", "json"]
 exclude_dir = ["web", "node_modules", "capabilities/server/vendor", ".build", "docs", "deploy", "contract/lean", "contract/proto"]
 exclude_regex = ["_test\\.go$"]

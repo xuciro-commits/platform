@@ -28,6 +28,7 @@ import (
 // development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
 	Addr, Database, Issuer, Keys, Web string
+	IdentityProxy                     string // explicit upstream for the public /auth path
 	HostAdmins                        string // explicit authenticated subjects; tenant roles do not imply host authority
 	// TenantsFile lists the host's tenants with their seats and starting
 	// settings; the console appends to it. Empty: the
@@ -82,6 +83,7 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Issuer, "oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: development tokens, the token is the subject)")
 	flag.StringVar(&d.HostAdmins, "host-admins", "", "comma-separated authenticated subjects allowed to administer this host; empty: no host administrators")
 	flag.StringVar(&d.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
+	flag.StringVar(&d.IdentityProxy, "oidc-proxy", "", "fixed identity service upstream exposed at /auth on this host")
 	flag.StringVar(&d.Files, "files", "", "S3-compatible store of file bytes, http(s)://host:port/bucket, keys from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY (empty: memory)")
 	flag.StringVar(&d.TenantsFile, "tenants", "", "JSON file with the host's tenants, their seats and starting settings; the host console appends to it (empty: the built-in development tenant)")
 	flag.StringVar(&d.TemplatesDir, "templates", "", "directory of tenant templates the host console offers (empty: none)")
@@ -112,6 +114,14 @@ func (d *Deployment) idpKeyPath() string {
 // explicit, its dependencies are required, and flags of the other profile are
 // refused rather than ignored.
 func (d *Deployment) validate() error {
+	if d.IdentityProxy != "" {
+		if d.Issuer == "" {
+			return fmt.Errorf("-oidc-proxy requires -oidc-issuer")
+		}
+		if _, err := identityUpstream(d.IdentityProxy); err != nil {
+			return err
+		}
+	}
 	switch d.Profile {
 	case "", "delivery":
 		d.Profile = "delivery"
@@ -124,7 +134,7 @@ func (d *Deployment) validate() error {
 			return fmt.Errorf("-profile lightweight needs -data <directory>: a lightweight host keeps its journal, file bytes and signing key there")
 		}
 		for name, set := range map[string]bool{"-database": d.Database != "", "-files": d.Files != "", "-oidc-issuer": d.Issuer != "",
-			"-oidc-keys": d.Keys != "", "-project": d.Project} {
+			"-oidc-keys": d.Keys != "", "-oidc-proxy": d.IdentityProxy != "", "-project": d.Project} {
 			if set {
 				return fmt.Errorf("%s is not part of the lightweight profile: its state is the -data directory", name)
 			}
@@ -649,7 +659,11 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 // listen serves host until the process is told to stop or the listener fails;
 // requests in flight finish, then atExit runs (the final snapshots).
 func (d *Deployment) listen(ctx context.Context, host *Host, atExit func(context.Context) error) error {
-	server := &http.Server{Addr: d.Addr, Handler: host.Handler()}
+	handler, err := identityProxyHandler(d.IdentityProxy, host.Handler())
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Addr: d.Addr, Handler: handler}
 	stop, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	failed := make(chan error, 1)

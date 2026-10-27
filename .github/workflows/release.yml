@@ -3,8 +3,7 @@
 # are the developer's layers. The job is the same `make verify`, then
 # the artifacts: the workspace build and the common platform host for linux
 # amd64/arm64, attached to the GitHub Release of the tag, and the one host
-# image pushed to GHCR under the tag. The two local entries (8495/8490) are
-# configurations of that same host, not separate binaries.
+# image pushed to GHCR under the tag. All applications share one platform entry.
 name: release
 
 on:

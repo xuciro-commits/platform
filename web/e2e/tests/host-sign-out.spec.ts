@@ -19,14 +19,14 @@ test("a rejected host member can sign out after refresh and choose another accou
   });
   await page.route(`${issuer}authorize?**`, route => route.fulfill({ contentType: "text/html", body: "<h1>Choose an account</h1>" }));
   // Seed only this tab's rejected session, as an identity provider callback would.
-  await page.addInitScript(({ idToken }) => {
+  await page.addInitScript(({ idToken, issuer }) => {
     if (sessionStorage.getItem("test:session-seeded")) return;
     sessionStorage.setItem("test:session-seeded", "true");
-    sessionStorage.setItem("oidc:session", JSON.stringify({ accessToken: "rejected-access-token", idToken,
+    sessionStorage.setItem("oidc:session", JSON.stringify({ issuer, clientId: "workspace-test", accessToken: "rejected-access-token", idToken,
       email: "manager@workspace.test", expiresAt: Date.now() + 3_600_000 }));
     sessionStorage.setItem("workspace:identity", "previous-development-identity");
     sessionStorage.setItem("workspace:tenant", "previous-tenant");
-  }, { idToken });
+  }, { idToken, issuer });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "manager@workspace.test is not a member of this host." })).toBeVisible();
   await page.reload();
