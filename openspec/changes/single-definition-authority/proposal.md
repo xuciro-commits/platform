@@ -25,7 +25,7 @@
 | 7 | 路由无 schema：`Route = {view: string; params?: Record<string,string>}`，24 处手取参数，退役别名表靠猜 | 新增**视图参数表**（每个 view 的合法参数集，单一来源）；`shell/legacy.ts` 的退役项必须解析到表中已声明的 view；未声明 view 注册即失败 |
 | 8 | 规则三份权威：AGENTS 17 条硬规则、Architecture 656 词、specs 4,460 词互相复述 | 规则单一权威：Architecture 只留结构，不再复述规则；spec 的 `Requirement:` 标题全仓唯一；每个 spec 的「来源」路径必须存在 |
 | 9 | 没有门：CI 只在 `v*` tag 跑；兼容分支无退役登记 | 新增 `pull_request` 工作流跑 `make check`；新增**兼容读取登记表**：每个历史解码器登记格式、所有者、退役条件，未登记的新解码器即失败 |
-| 10 | 应用边界按历史切：build 18,265 行/73 文件，knowledge 112 行/1 文件，事务引擎住在 app 里 | 每个应用的职责与体量进基线（只降）；新增应用必须同时有 `doc.go` 职责声明与基线条目 |
+| 10 | 应用边界按历史切：build 18,265 行/73 文件，knowledge 112 行/1 文件，事务引擎住在 app 里 | 每个应用的体量与文件数进基线（只降），新的应用或膨胀会立刻被看见；职责声明与拆分是后续批次 |
 
 ## Capabilities
 
@@ -48,4 +48,5 @@
 - `web/packages/ui/src/shell/route.ts` 新增视图参数表；`web/apps/workspace/src/chrome.tsx` 的视图注册改为从表读取。
 - `web/packages/build/src/catalog.examples.tsx` 改为只产 `transaction` 形状。
 - 文档：`docs/Architecture.md` 删除与 AGENTS/spec 重复的规范性复述，改为链接；`AGENTS.md` 增加判据入口一行。
+- `internal/rules` 移入 `platform/rules`：`platform` 引用宿主的 `internal` 实现本身就是反的，规则求值是被公开 API 转发的唯一实现。
 - 不改内核契约、提交管线、接受结果格式、存储格式与授权判定；租户数据与发布内容不变。

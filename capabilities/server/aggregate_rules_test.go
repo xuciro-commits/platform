@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"platformserver/platform/rules"
 	"platformserver/platform"
+	"platformserver/platform/rules"
 )
 
 func TestAggregateUsesTheExactRuleFold(t *testing.T) {
