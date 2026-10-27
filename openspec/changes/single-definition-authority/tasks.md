@@ -56,10 +56,27 @@
 
   注：未在浏览器观察任何界面；本次改动不涉及渲染结构，只涉及错误判定与路由声明，浏览器证据留待下一次界面路线。
 
-## 6.4 仍未做的两件与它们的前置条件
+## 6.4 仍未做的两件：证据与可选项
 
-- **从结构体删除 8 个旧字段**：需要先决定「历史输入重放时对象如何字节级保留旧形状」。今天重放会把解码后的对象重新编码写回，若字段从结构体消失，写回的字节就变了，与「恢复只应用已保存映像、历史字节不重写」冲突。选项是把旧形状保留为解码器私有字段并在重放时原样回写（等价于今天的可观测行为，但结构体只有一种对外的形状），或明确做一次存储格式迁移。这不是机械改动，必须由负责人选一条。
-- **`internal/construction` 的对象模型迁到 `platform.Entity`**：5,372 行、根包 59 个文件与 `apps/build` 71 个文件的导入面。`root_construction_importers` 已把这一项量化并冻结在 59，任何增长都会失败；下降需要一个独立的 change，先把 `platform.Entity` 扩到能承担对象模型，再逐文件迁移。
+### 一、从 `construction.Action` 删除 8 个旧字段
+
+为什么这不是机械改动，三条互相独立的证据：
+
+1. **结构体就是存储形状。** 记录以解码后的值驻留（`records.go` 的 `entityType.rows records.Rows` 存的是 `reflect.Value`），生成动作修改记录时 `platform/ledger.go:533` 先把当前结构体 `json.Marshal` 成 base，合并补丁后 `v = reflect.New(t)` 再解码。字段一旦从结构体消失，下一次编辑就把它从存储里抹掉——不是「重放时写回」那么窄，而是任何一次编辑。
+2. **新保存已经把旧形状迁移走了，只剩历史映像还带它。** `apps/build/transaction_legacy.go` 的 `migrateObjectTransactions` 在每次新保存时把 8 个字段编译成 `platform.BusinessTxn`，然后 `action.Sets, action.Creates, action.Posts, action.Conditions = nil, ...` 清空；注释写明「历史发布映像在内存里编译，保留原始不可变字节」。所以这 8 个字段今天的真实职责是**解码不可变的历史映像**。
+3. **读者是语义的，不是复制的。** `actions.go`（执行）、`posts.go`（校验）、`journal.go`（分类）、`transaction_legacy.go`（编译）都按字段值做判断，不能换成一个不透明 blob。
+
+可选项（需要负责人选一条）：
+
+- **A 保留并改名（推荐）**：字段留作历史解码面，但把「只用于历史映像」写进类型名，读者从 `a.Posts` 改成 `a.History.Posts` 一类显式表达。改动集中在 13 个读者，无存储风险，行为不变；`action_legacy_fields` 仍然是 8（诚实保留，不上报为下降）。理由来自证据 2：这 8 个字段的剩余职责是永久的——解码不可变的历史字节。
+- **B 一次性迁移历史映像**：把发布映像里的旧形状改写成 `BusinessTxn` 并重写存储，然后才谈得上删字段和删读者。能真正删掉旧形状，代价是改写「不可变」的历史字节，需要版本门、回滚路径和一次数据盘点（有多少对象还带旧形状，现无数据可测）。
+- **C 只冻结**：即今天的状态——生产者归零、8 个字段冻结、13 个读者登记、新增读取点立即失败。
+
+### 二、`internal/construction` 对象模型
+
+- 这条按你之前的口径排除在本批之外：你要求 `internal/` 重构与删除 `transaction_legacy.go` 保持高风险、不先动。不是判断它不可做。
+- 目标其实已经有一半：`internal/construction/object_shape.go` 的 `CompileObjectShape` 已经在产出 `platform.Entity`，运行时形状早就统一在 `platform.Entity` 上，`construction` 是编译它的声明层。
+- 所以剩下的是一次**包搬迁**（`internal/construction` → 顶层包），130 个导入方（根包 59、`apps/build` 71 个文件）分几次改完，`root_construction_importers` 记录每次下降；不需要「先扩 `platform.Entity`」，`object_shape.go` 证明它够用。
 
 ## 已知遗留（不是本 change 引入）
 
