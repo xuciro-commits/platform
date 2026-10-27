@@ -2,11 +2,7 @@
 
 只放当前要交付的工作。完成即移除；被替代的条目删除，不留记录。为什么做归 [Intent](Intent.md)，系统结构归 [Architecture](Architecture.md)，行为约定归 [OpenSpec 模块规范](../openspec/README.md)，工作方式归 [AGENTS](../AGENTS.md)。
 
-## 0. 全新单入口开发测试环境
-
-按负责人明确要求，在 [start-clean-single-entry-development](../openspec/changes/start-clean-single-entry-development/) 收敛单入口与同源登录，退出本项目旧卷、数据、账号、权限、AI配置和密钥，建立私有随机凭据的空白基线。完成实际登录、权限和重启验证后移除此项，继续原自举范围。
-
-## 1. 自举：系统修改自己
+## 1. 自举：系统修改自己（唯一当前目标）
 
 平台要能让 AI 与人在运行时修改平台自身：AI 用一句提示词提出变更，人在工作区里审阅、批准并激活，宿主按新版本重启后继续服务同一份数据。这一块交付完之前，不加业务场景、不补行业样例。
 
