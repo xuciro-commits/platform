@@ -29,7 +29,9 @@
 - [ ] 3b.2b 把 `page_document.go` 内联的 `checks` 切片改为按 widget 名索引的注册表，删除 41 处 `if s.Widget != "..." { return nil }` 自我守卫；新增组件只登记一行。`definition.go` 与 `page_variables.go` 的具名字段是 `pageui/widgets.json` 的类型化 schema（唯一声明点，不是重复），保持不变，由 `ui` 上限冻结不得增长。
 - [x] 3b.3 刀二：`accepted_*.go` 碎片归位与拒止收敛（按实测修正处方，见 design.md「刀二处方修正」）。
   - 注：拒止收敛为 `refusals.go`（并入 `business_refusals`、`accepted_refusal`、`business_refusal_facts`、`business_refusal_escalation`、`conflict_refusal` 及 2 个测试）；`accepted_*` 按管线阶段归位——状态与行（`store`/`rows`/`callback_rows`/`unique`/`usage`→`accepted_state`）、输入与准入（`requests`/`intents`/`approval`/`connectors`→`accepted_input`）、效应（`observation`→`accepted_effect`）。根包非测试文件 263→249、全仓 644→630，`accepted_*` 23→12、拒止 5→1。`apps/build/transaction_refusal.go` 保留原包：并入根包会让 app 的实现成为宿主依赖，违反 AGENTS 规则 4，记为不采纳。接受结果格式与提交管线顺序未变。`go build ./...`、`go vet ./...`、`gofmt`、`boundaries.sh`、`escapes.sh` 通过；`go test ./platform/ ./apps/build/ ./internal/...` 通过；根包 `-run 'Refusal|Accept|Release|Conflict|Business'` 的失败集合与刀一提交后基线逐字一致（仅既有失败 `TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft`），本轮零新增失败。
-- [ ] 3b.4 刀三：`internal/host` 15 个契约文件归位为单一契约文件（不删除，理由见 design.md 刀三）；`internal/construction` 与 `apps/build` 六组成对同名文件逐个判定归属，`dup` 上限同批下降。
+- [x] 3b.4a 刀三：`internal/host` 15 个契约文件归位为单一 `host.go`（不删除，理由见 design.md「刀三」）。
+  - 注：包内合并，导入路径与消费方零改动；守恒核对通过——顶层声明 67→67、接口方法 220→220；包文档注释保留在 `package host` 之前。副产物：`dup` 聚合上限 82→78（`books.go`、`confirmation.go`、`dispatch.go`、`flow.go` 等由 3 包缩回 2 包），`internal/host` 文件数 15→1，同批记入 `boundaries.tsv`。`go build ./...`、`go vet`、`gofmt`、`go test ./apps/...`、`boundaries.sh`、`escapes.sh` 全绿。
+- [ ] 3b.4b `internal/construction` 与 `apps/build` 六组成对同名文件（`formula.go`、`table.go`、`writeback.go`、`observation.go`、`release.go`、`function.go`）逐个判定归属，`dup` 上限同批下降。
 - [ ] 3b.5 刀四（负责人改口后新增）：企业模型收敛为最小组织目录并剥离 UAF 1.3——解除 `apps/enterprise` 与 `internal/enterprise` 对 `internal/enterprise/uaf` 的依赖后，同批删除 `uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/`（含 208 KB `go:embed` 生成数据）。与 `platform-self-hosting` 的 `business-models` 收敛共用一次实施，不重复改 `host.Directory` 语义。
 
 ## 4. B4 Web 包重划（等体验线 M2 三区定版后启动）
