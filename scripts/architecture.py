@@ -209,8 +209,9 @@ def legacy_registry_drift() -> list[str]:
     """Why: a compatibility decoder without a retirement condition is permanent."""
     found = {str(p.relative_to(ROOT)) for p in list(SERVER.rglob("*legacy*.go")) + list(WEB.rglob("*legacy*.ts"))
              if "node_modules" not in str(p) and "/gen/" not in str(p)}
+    # The registry rows are file paths; a measure named in another table is not one.
     listed = set(re.findall(r"^\| `([^`]+)`", read(ROOT / "docs/Architecture.md"), re.M))
-    listed = {p for p in listed if "legacy" in p}
+    listed = {p for p in listed if "legacy" in p and "/" in p and p.endswith((".go", ".ts"))}
     problems = [f"decoder not registered in docs/Architecture.md: {p}" for p in sorted(found - listed)]
     problems += [f"registered but missing: {p}" for p in sorted(listed - found)]
     return problems
