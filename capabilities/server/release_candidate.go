@@ -293,14 +293,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if !ok {
 		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
-	var drafts []construction.JointDraftRef
-	var err error
-	if kind == platform.AssetApp {
-		drafts, err = owner.ApplicationDrafts(id)
-		drafts = slices.DeleteFunc(drafts, func(draft construction.JointDraftRef) bool { return draft.Kind == kind && draft.ID == id })
-	} else {
-		drafts, err = owner.ReferencedDrafts(kind, id)
-	}
+	drafts, err := owner.ReferencedDrafts(kind, id)
 	if err != nil {
 		return ReleaseDraftClosure{}, err
 	}

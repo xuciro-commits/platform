@@ -3501,6 +3501,7 @@ register("zh-CN", {
   "Nothing to publish yet: the project has no resources.": "还没有可发布的内容：项目里还没有资源。",
   "Contents": "内容",
   "Changes save automatically.": "更改会自动保存。",
+  "Visual changes save automatically. After applying source, save the settings.": "可视化更改会自动保存。应用源码后，请保存设置。",
   "{n} problems": "{n} 个问题",
   "Review and publish…": "审查并发布…",
   "Install directly (no release)": "直接安装（不经发布）",

@@ -408,18 +408,28 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	return assets.Before, assets.After, prior, next, hadPrior, nil
 }
 
-// ReferencedDrafts lists the saved record drafts a chosen draft depends on and
-// that are not installed yet, so a builder can select them for one joint
-// candidate instead of publishing dependencies first.
-//
-// Records only — objects, pages, applications and workflows. A draft whose
-// non-record dependency (an AI function, query or code function) is still a
-// draft is reported by that owner's own check, and the builder selects it by
-// hand. A dependency that is already published needs no entry: the candidate
-// closes over its installed version.
+// ReferencedDrafts selects changed or unpublished application dependencies;
+// unchanged declarations retain their installed versions. For other record
+// roots it discovers unpublished objects, pages and workflows. Their non-record
+// dependencies remain with the original owner's publication check.
 func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]construction.JointDraftRef, error) {
 	if id == "" {
 		return nil, fmt.Errorf("a saved draft is required")
+	}
+	if kind == platform.AssetApp {
+		// Publication selects changed declarations, while trials intentionally
+		// substitute every reachable draft. Unchanged dependencies retain the
+		// installed versions already pinned by their consumers.
+		changes, err := b.SavedDraftChanges(b.host.Automation(platform.Caller{}, construction.ID), "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		selected := map[construction.JointDraftRef]bool{{Kind: kind, ID: id}: true}
+		for _, change := range changes {
+			selected[construction.JointDraftRef{Kind: change.Ref.Kind, ID: change.ID}] = true
+		}
+		drafts, err := b.applicationDrafts(id, selected)
+		return slices.DeleteFunc(drafts, func(draft construction.JointDraftRef) bool { return draft.Kind == kind && draft.ID == id }), err
 	}
 	if !recordKind(kind) {
 		return nil, fmt.Errorf("%s drafts have no record dependencies to select", kind)

@@ -1,5 +1,7 @@
 import { expect, pageUIProfile, runtime, shots, test } from "./kit";
 
+test.use({ actionTimeout: 10_000 });
+
 test("a released application keeps its language, grouped navigation and responsive record workspace", async ({ page, builder, operator }, info) => {
   test.setTimeout(120_000);
   const object = await builder.object({ title: "Experience record", fields: [{ name: "note", title: "Specimen note", type: "text" }] });
@@ -35,8 +37,24 @@ test("a released application keeps its language, grouped navigation and responsi
   const application = await builder.application({
     title: "Experience application", pages: [workspace.name, reference.name],
     groups: [{ title: "Current work", pages: [workspace.name] }, { title: "Reference material", pages: [reference.name] }],
-    languages: { "zh-CN": words },
   });
+  await builder.open(page, `/project?id=${application.id}`);
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  const settingsEditor = page.locator(`[data-structured-editor^="build.app:${application.id}:"]`);
+  const sourceMode = settingsEditor.getByRole("button", { name: "Source editor", exact: true });
+  await sourceMode.click();
+  const source = settingsEditor.getByRole("textbox", { name: "Configuration source", exact: true });
+  const settings = { ...JSON.parse(await source.inputValue()), languages: { "zh-CN": words } };
+  await source.fill(JSON.stringify(settings, null, 2));
+  await settingsEditor.getByRole("button", { name: "Apply source", exact: true }).click();
+  await expect(sourceMode).toHaveAttribute("aria-pressed", "true");
+  if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: info.outputPath("application-settings-source.png") });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(async () => (await builder.record("build.app", application.id)).languages).toEqual(settings.languages);
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Reload current project settings", exact: true }).click();
+  await expect(sourceMode).toHaveAttribute("aria-pressed", "true");
+  expect(JSON.parse(await source.inputValue()).languages).toEqual(settings.languages);
   const candidate = await builder.candidate([{ kind: "page", id: workspace.id }, { kind: "page", id: reference.id }, { kind: "app", id: application.id }]);
   await builder.decide("build.app.edit", { type: "build.app", id: application.id }, { languages: { "zh-CN": { ...words, "Record workspace": "未发布的草稿名称" } } });
   await builder.activate(candidate);

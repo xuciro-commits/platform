@@ -1,7 +1,9 @@
 package platformserver
 
 import (
+	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -72,5 +74,55 @@ func TestApplicationDeliveryBeforeExternalConfiguration(t *testing.T) {
 	}
 	if len(tn.Effects(at)) != 0 {
 		t.Fatal("refused operation queued an external request")
+	}
+
+	// A presentation update reuses the function version already pinned by its
+	// evaluation plan. Automatic dependency discovery must not republish every
+	// unchanged draft and force a new function version into the closure.
+	original, err := tn.releases.candidate(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	functionRef := platform.AssetRef{App: "build", Kind: platform.AssetFunction, Name: function.Name}
+	originalFunction := original.Assets[slices.IndexFunc(original.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == functionRef })]
+	submit(construction.AppType+".edit", construction.AppType, "APP", map[string]any{"description": "Updated presentation"})
+	closure, err = tn.ReferencedDrafts(member, platform.AssetApp, "APP")
+	if err != nil || len(closure.Drafts) != 0 {
+		t.Fatalf("unchanged published dependencies were selected again: %+v %v", closure, err)
+	}
+	selection = []construction.JointDraftRef{{Kind: platform.AssetApp, ID: "APP"}}
+	preview, err = tn.PreviewReleaseDrafts(member, selection)
+	if err != nil || preview.Diagnostic != "" {
+		t.Fatalf("presentation update rejected original pinned versions: %+v %v", preview, err)
+	}
+	updated, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "save-presentation", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.ActivateRelease(member, updated, "activate-presentation", at); err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := tn.releases.candidate(updated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retainedFunction := candidate.Assets[slices.IndexFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == functionRef })]
+	if retainedFunction.SourceVersion != originalFunction.SourceVersion || !bytes.Equal(retainedFunction.Body, originalFunction.Body) {
+		t.Fatal("presentation update changed the unchanged pinned function")
+	}
+	trialDrafts, err := tn.app("build").(*build.Build).ApplicationDrafts("APP")
+	if err != nil || !slices.Contains(trialDrafts, construction.JointDraftRef{Kind: platform.AssetFunction, ID: "FUNCTION"}) {
+		t.Fatalf("release discovery narrowed the full trial: %+v %v", trialDrafts, err)
+	}
+	// A real function edit must still be selected, and its incompatible pin
+	// must still refuse the candidate until its consumer is updated explicitly.
+	submit(construction.FunctionType+".edit", construction.FunctionType, "FUNCTION", map[string]any{"instructions": "Changed advice instructions"})
+	closure, err = tn.ReferencedDrafts(member, platform.AssetApp, "APP")
+	if err != nil || !slices.Contains(closure.Drafts, construction.JointDraftRef{Kind: platform.AssetFunction, ID: "FUNCTION"}) {
+		t.Fatalf("changed dependency disappeared from publication: %+v %v", closure, err)
+	}
+	preview, err = tn.PreviewReleaseDrafts(member, append(selection, closure.Drafts...))
+	if err != nil || !strings.Contains(preview.Diagnostic, "differs from the version pinned by its dependents") {
+		t.Fatalf("actual function edit bypassed the retained pin: %+v %v", preview, err)
 	}
 }

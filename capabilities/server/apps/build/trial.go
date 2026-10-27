@@ -15,6 +15,12 @@ import (
 // every reachable saved draft, including changes to installed dependencies.
 // The application boundary is its declared resources, never all tenant drafts.
 func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, error) {
+	return b.applicationDrafts(id, nil)
+}
+
+// selectDrafts is nil for a full trial. A release supplies the original
+// changed-draft projection and reuses published edges for every other asset.
+func (b *Build) applicationDrafts(id string, selectDrafts map[construction.JointDraftRef]bool) ([]construction.JointDraftRef, error) {
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
 		return nil, err
@@ -25,6 +31,15 @@ func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, erro
 	}
 	index := map[platform.AssetRef]construction.JointDraftRef{}
 	graph := map[platform.AssetRef][]platform.AssetRef{}
+	if selectDrafts != nil {
+		installed, err := b.ReleaseAssets()
+		if err != nil {
+			return nil, err
+		}
+		for _, asset := range installed {
+			graph[asset.Ref] = asset.Requires
+		}
+	}
 	var root platform.AssetRef
 	add := func(kind platform.AssetKind, id, name string) {
 		index[platform.AssetRef{App: construction.ID, Kind: kind, Name: name}] = construction.JointDraftRef{Kind: kind, ID: id}
@@ -131,6 +146,10 @@ func (b *Build) ApplicationDrafts(id string) ([]construction.JointDraftRef, erro
 		if !ok {
 			continue
 		} // immutable native dependency
+		if selectDrafts != nil && !selectDrafts[draft] {
+			queue = append(queue, graph[ref]...)
+			continue
+		}
 		if !selected[draft] {
 			if len(out) >= construction.JointDraftLimit {
 				return nil, fmt.Errorf("Application trial exceeds %d saved drafts", construction.JointDraftLimit)

@@ -446,7 +446,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           </div>
         </Dialog>}
         {tab === "roles" && <ProjectRoles owned={owned} />}
-        {tab === "settings" && settings && <StructuredEditor expectedRevision={baseline.current?.revision ?? project.revision} fieldInput={sourceFieldInput} value={declarationValue(settings, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${declarationHost.source.scope}`} readOnly={!builder} disabled={saving || !!pendingPatch || !!createdResource} onChange={next => { editSettings({ ...next, title: next.title as string, name: next.name as string, description: next.description as string ?? "", icon: next.icon as string ?? "boxes", profile: next.profile as Api.ApplicationProfile ?? {}, entry: next.entry as string ?? "", replacements: next.replacements as NonNullable<Api.Application["replacements"]> ?? [] }); setSourceApplied(true); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, baseline.current?.values ?? {}), baseline.current?.revision ?? project.revision)}><fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
+        {tab === "settings" && settings && <div className="grid gap-3"><StructuredEditor expectedRevision={baseline.current?.revision ?? project.revision} fieldInput={sourceFieldInput} value={declarationValue(settings, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${declarationHost.source.scope}`} readOnly={!builder} disabled={saving || !!pendingPatch || !!createdResource} onChange={next => { editSettings({ ...next, title: next.title as string, name: next.name as string, description: next.description as string ?? "", icon: next.icon as string ?? "boxes", profile: next.profile as Api.ApplicationProfile ?? {}, entry: next.entry as string ?? "", replacements: next.replacements as NonNullable<Api.Application["replacements"]> ?? [] }); setSourceApplied(true); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, baseline.current?.values ?? {}), baseline.current?.revision ?? project.revision)}><fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           <ExtensionSettings value={settings} pages={project.pages ?? []} disabled={!builder} onChange={extension => editSettings({ ...settings, ...extension, entry: extension.entry ?? "", replacements: extension.replacements ?? [] })} />
           <label className="grid gap-1 text-xs">{t("Title")}<Input value={settings.title} disabled={!builder} onChange={(event) => editSettings({ ...settings, title: event.target.value })} /></label>
           <label className="grid gap-1 text-xs">{t("Name")}<Input value={settings.name} disabled={!builder} onChange={(event) => editSettings({ ...settings, name: event.target.value })} /></label>
@@ -473,13 +473,15 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
             <label className="grid gap-1 text-xs">{t("Maximum acceptable data loss period")}<Input value={settings.profile.rpo ?? ""} placeholder="1h" disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, rpo: event.target.value } })} /></label>
             <label className="grid gap-1 text-xs">{t("Target recovery time")}<Input value={settings.profile.rto ?? ""} placeholder="4h" disabled={!builder} onChange={event => editSettings({ ...settings, profile: { ...settings.profile, rto: event.target.value } })} /></label>
           </PanelSection>
+        </fieldset></StructuredEditor>
+        <fieldset disabled={saving || !!pendingPatch || !!createdResource} className="grid max-w-xl gap-3 p-4">
           {error && <p role="alert" className="text-xs text-danger">{error}</p>}
-          <p className="text-xs text-muted">{t("Changes save automatically.")}</p>
+          <p className="text-xs text-muted">{t("Visual changes save automatically. After applying source, save the settings.")}</p>
           <div className="flex gap-2">
             <Button size="sm" disabled={!dirty || saving} onClick={() => void saveSettings()}>{t("Save")}</Button>
             <Button size="sm" variant="ghost" disabled={saving} onClick={() => confirmDiscard(() => { baseline.current = undefined; setEdited(false); if (project) setSettings(fromRecord(project)); void query.refetch(); })}>{t("Reload current project settings")}</Button>
           </div>
-        </fieldset></StructuredEditor>}
+        </fieldset></div>}
       </div>
     </Workbench>
   </>;
