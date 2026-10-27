@@ -41,6 +41,18 @@
 - [x] 6.2 升级轮（重构完成后独立执行）：Go / pnpm / 镜像摘要逐项升级并逐项验证，失败逐包回退定位。
 - [ ] 6.3 `openspec-sync-specs` 同步 `runtime/deployment` 已落地差量，更新 Architecture 代码地图与 AGENTS 工作方式小节；`make check-specs` 通过后归档本 change。
 
+## 7. 反 AI 腐化手术（2026-10-27 增补，B3 升级）
+
+- [x] 7.1 守门员升级：`cmd/check-boundaries/main.go` 新增包内文件数上限、跨包同名禁令、后端 UI 零感知、债务只减不增四条规则；`boundaries.budget` 冻结当前债务（4 cap / 78 dup / 75 ui）；`scripts/boundaries.sh` 维持唯一入口，新增测试覆盖四条规则与 ratchet。
+- [ ] 7.2 物理消灭 `internal/construction/`（42 个非测试文件）：删除纯类型转换与包装转发，把仍有值的校验逻辑内聚回 `apps/build`/`platform` 对应域，`git rm -rf internal/construction`；同步删除 `boundaries.budget` 中对应的 `dup` 条目。
+- [ ] 7.3 清空 `internal/host/`（15 个非测试文件）：协调逻辑并入宿主壳后删除目录；`scripts/boundaries.sh`、`scripts/escapes.sh` 已知逃逸只减不增。
+- [ ] 7.4 收敛 `accepted_*.go`（23 个非测试）：抽象为泛型/表驱动 `acceptance_pipeline.go` + 领域注册表，按结果族归档到 `kernel`/`engine`/`studio`；`capabilities/server` 根目录文件数降至预算内。
+- [ ] 7.5 收敛 refusal（5 个非测试）：`business_refusal_*.go`/`conflict_refusal.go`/`accepted_refusal.go` 合并为 `kernel/refusal_engine.go`（拒止事实、升级、冲突表驱动）。
+- [ ] 7.6 后端 Page 契约极简化：`platform/page_*.go` 78 → 3（仅 `page_model.go`/`page_queries.go`/`page_rules.go`），收敛为 5 要素；根包 8 个 page 文件合并为单一来源；同步前端 `pageui/widgets.json` 与 `host.ts` 重生成。
+- [ ] 7.7 拆分上帝包：`capabilities/server/` 根按 `kernel`/`engine`/`studio`/`aigateway` 四边界目录化；`platform/` 保留公共契约面；每迁一域跑 `make check` + `make test-go PKG=<包>`。
+- [ ] 7.8 每批手术以「净删除行数」与「包内聚度」验收；不新增 `v2_`/`simplified_` 文件，新增文件须同批合并/删除 ≥2 个旧冗余文件。
+- [ ] 7.9 战役 3（AI 网关）与战役 4（UAF/自举收缩）各自落到独立 change，不在本 change 混做。
+
 ## Workflow follow-up
 
 - 里程碑顺序与 B4 等待点经负责人批准后登记 `docs/WorkQueue.md`；与 `redesign-product-experience` 的里程碑对齐交付时点。

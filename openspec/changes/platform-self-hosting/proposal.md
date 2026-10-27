@@ -18,6 +18,12 @@
 - 新增 **人工入口**：system 租户的单工作区提供 Platform 系统作者入口，定义继续复用原 Build 草稿与通用决定表单；System changes 展示冻结文件前后内容、选中定义、构建日志、批准与可取消的切换窗口，源码编辑与定义可放入同一提案。旧 Studio/Catalog 包已退出，不保留第二套编辑与发布实现。
 - **合并保留**：按负责人本次确认保留 Arena 的完整工作区、Studio、治理、Catalog、通用平台能力与对应检查；撤回早期删除这些模块和整体重写工作区的范围。自举接入原 Control Panel，复用共享 UI 与原提交客户端。旧行业应用暂不开放，原数据与恢复责任保留，不把分支合并当作旧业务迁移或完整运行验收。
 
+## Self-Hosting Scope Guard（2026-10-27 增补）
+
+负责人批准按 `docs/Intent.md` 宪章收紧自举范围，防止「自举死锁」：**只有只读/追加型运营数据**可以自举到平台的 `books/records`——即 `audit_log.go` 审计日志、`enterprise_usage.go` 用量统计、蒸馏样本集与任务监控队列。
+
+**系统级控制面不得交给动态 Page/App 引擎自举**：租户开通（`tenants`）、身份认证（`idp/`）、凭据管理（`credentials.go`）、模型路由配置（`model_configuration.go`）必须保持静态、确定性的系统控制面。这些面的损坏会让系统无法登录或无法修复——一旦把它们变成可被动态页面改写的数据，就构成不可恢复的死锁。相关路径在 `internal/systemscope` 的保存前与构建前闸门中增列为禁区，AI 与人同样受限。
+
 ## Capabilities
 
 ### New Capabilities

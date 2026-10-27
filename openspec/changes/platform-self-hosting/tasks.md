@@ -27,6 +27,7 @@
 - [x] 3.3 `system.release` 与 `system.activation`：不可变发布、二进制/前端/工具链摘要、上一版本、可取消窗口；同一时刻只有一个未完成的 `requested` 激活；窗口结束允许换版，不释放未完成请求，激活成功时旧激活标 `superseded`。
 - [x] 3.4 `internal/systemscope`：保存前与构建前各执行一次，冻结契约、提交入口、接受结果、重放、快照、日志、内部格式、授权与身份提供方，拒绝 `.git`、绝对路径、`..`、密钥。
 - [x] 3.5 表驱动用例：内核闸门、修订冲突、同内容单副本、重放不重建、窗口取消、自批拒绝。
+- [ ] 3.6 自举范围收紧（2026-10-27 增补）：明确只有只读/追加型运营数据（`audit_log.go`、`enterprise_usage.go`、蒸馏样本集、任务监控队列）可自举；在 `internal/systemscope` 中把 `tenants`、`idp/`、`credentials.go`、`model_configuration.go` 增列为禁区并补回归用例；同步 `docs/Architecture.md` 第 9 节与 `AGENTS.md` 硬规则。
 
 ## 4. updater 与构建激活
 

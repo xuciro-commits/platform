@@ -41,6 +41,66 @@ workspace 壳 → ui/app/kernel
 ```
 分层严格无环、无越界：`kernel → catalog → ui → app → {build, platform, workspace}`。含义：`@platform/app` 实为运行时组件层（build 与治理都重度依赖它），不是「运营区专属包」。B4 的正确切法是：基础层（kernel/catalog/ui/app）名称与公共面稳定；区层只重命名归位 `@platform/platform → @platform/govern`（系统区），构建区即 `@platform/build`；运营区界面由 app 的运行时部分 + workspace 壳承担，**不**为运营区新建包（那会把 build 变成跨区依赖方）。此结论替代原 design 第 5 条中「运营界面归属整理」的模糊表述。
 
+## 反 AI 腐化手术：文件删除、合并与目录收敛对照清单（2026-10-27 实测）
+
+实测基线：HEAD `457202d`。所有数字由目录扫描与 `go run ./cmd/check-boundaries -root ../.. -update-budget` 核对，不是估计值。
+
+### 守门规则（已落地到 `cmd/check-boundaries/main.go`）
+
+| 规则 | 判定 | 当前债务（`boundaries.budget`） |
+|---|---|---|
+| 包内文件数上限 | 单包非测试 `.go` ≤ 25；超限目录须记 `cap` | 4 个目录：`platformserver` 263 / `platform` 166 / `apps/build` 73 / `internal/construction` 42 |
+| 跨包同名禁令 | 同一 `.go` 基名出现在 ≥2 个包即违规（`doc`/`main` 除外） | 78 个基名 |
+| 后端 UI 零感知 | `platform/page_*.go` 除三契约文件外，或任何 Go 文件名/顶层声明含显式视觉组件名 | 75 个文件 |
+| 债务只减不增 | `boundaries.budget` 相对 HEAD 不得增长 | ratchet，`checkBudgetDrift` 断言 |
+
+### 战役 1：拍平套娃与拆分上帝包
+
+| 动作 | 源 | 目标 | 预计删除 |
+|---|---|---|---|
+| 目录化收敛 `accepted_*` | `capabilities/server/accepted_*.go`（23 个非测试） | 泛型/表驱动 `acceptance_pipeline.go` + 领域注册表，按结果族归档到 `kernel`/`engine`/`studio` | 23 → 8 |
+| 收敛 refusal | `business_refusal_escalation.go`、`business_refusal_facts.go`、`business_refusals.go`、`conflict_refusal.go`、`accepted_refusal.go` | `kernel/refusal_engine.go`（拒止事实、升级、冲突合并为表驱动） | 5 → 1 |
+| 清空 `internal/construction/` | 42 个非测试文件 | 有价值的校验逻辑内聚回 `apps/build`/`platform` 对应域，目录 `git rm -rf` | 42 → 0 |
+| 清空 `internal/host/` | 15 个非测试文件 | 协调逻辑并入宿主壳，目录删除 | 15 → 0 |
+| 拆分上帝包 | `capabilities/server/` 根（263 个非测试文件，package `platformserver`） | 四边界：`kernel`（K1–K9 事实/事务/幂等/journal）、`engine`（flow 状态机/rules/work/authz ReBAC）、`studio`（blueprint/draft/simulate/release）、`aigateway`（mcp/模型路由/配额熔断/蒸馏）；`platform/` 保留公共契约面 | 263 → ≤120（目标） |
+
+### 战役 2：砍掉后端 `page_*.go`
+
+| 动作 | 源 | 目标 | 预计删除 |
+|---|---|---|---|
+| 后端 Page 契约极简化 | `capabilities/server/platform/page_*.go`（78 个非测试） | 仅保留 `page_model.go`、`page_queries.go`、`page_rules.go`；收敛为 5 要素 `DataBinding`/`ActionTrigger`/`InputSchema`/`ScopeVisibility`/不透明 `WidgetSpec json.RawMessage` | 78 → 3 |
+| 根包 page 残留合并 | `capabilities/server/page_{bindings,composite,compute,content,exploration,model,navigation,queries}.go`（8 个非测试） | 与 platform 契约合并为单一来源，`host.ts` 重生成 | 8 → 3 |
+| 规则/公式端侧下放 | `internal/rules/{compile,eval}.go`、`formula.go` | 保持 100% 纯内存纯函数（零 DB/网络 IO），既可服务端校验又可经 `cmd/wasm-worker` 构建为浏览器端 WASM | 不改文件数，只锁依赖 |
+
+### 战役 3：AI 网关双锁 + 蒸馏（落到独立 change）
+
+| 动作 | 源 | 目标 |
+|---|---|---|
+| 设计态/运行态隔离 | `anthropic.go`、`aicall.go`、`model_configuration.go` | 云旗舰模型仅 `studio` 设计态可调用；运行态默认走规则引擎或本地 7B/14B |
+| 内部能力 MCP 化 | `agent_engine.go` | 废除对内部 Go 结构的特权直调，统一走 `mcp.go` Tool 接口 |
+| 双锁闸门 | `mcp.go`、`aicall.go`、`authorization_decision.go`、`record_read_scope.go`、`breakers.go`、`quota.go` | ReBAC 权限锁 + 算力熔断锁；熔断后降级到 `work_board.go` 人工待办队列 |
+| 蒸馏落盘 | `agent_candidate.go`→`simulate_candidate.go`→`business_refusal_facts.go`→`accepted_agent.go` | 新增 `DistillationSink`：一次通过落 SFT 正样本；拒止后修正通过落 DPO 偏好样本；JSONL 导出 |
+
+### 战役 4：卸除 UAF 重甲、收缩自举（落到 `platform-self-hosting`）
+
+| 动作 | 源 | 目标 |
+|---|---|---|
+| 剥离 UAF 1.3 | `internal/enterprise/uaf/`（4 个 .go，1.5 MB）、`uafgen/`（2）、`cmd/uaf-gen/`、`docs/standards/uaf/` | 移出主干，归档为可选外部导入工具 |
+| 收缩自举范围 | `platform-self-hosting` | 仅只读/追加型运营数据（`audit_log.go`、`enterprise_usage.go`、蒸馏样本集、任务监控队列）可自举；租户/身份 `idp/`/`credentials.go`/`model_configuration.go` 属系统控制面，禁止交给动态 Page/App 引擎自举 |
+
+### 目录收敛目标结构
+
+```
+capabilities/server/
+  kernel/        K1–K9 事实、事务、幂等、journal、refusal_engine
+  engine/        flow 状态机、rules、work、authz（ReBAC）
+  studio/        blueprint、draft、simulate、release
+  aigateway/     mcp、模型路由、quota/breakers、distillation
+  platform/      公共契约面（page_model / page_queries / page_rules 等）
+  apps/<app>/    应用包（build / enterprise / flow / work / ...）
+  internal/      sink、records、acceptance、rules 等纯内部模块
+```
+
 ## Decisions
 
 1. **cmd 分类清单。** `cmd/` 增加 README 表（或等价的 doc.go 段落）：运行服务 platform-server / gateway / compute；运维工具 storage-files（停机校验）、rule-browser（规则浏览）；代码生成与检查 api-types / check-boundaries / uaf-gen；webhook-sink 收编后降级为平台能力代码 + 其 `main.go` 保留为独立调试入口或删除（按 B1 审计决定，倾向删除独立部署）。分类同步 Architecture 代码地图。

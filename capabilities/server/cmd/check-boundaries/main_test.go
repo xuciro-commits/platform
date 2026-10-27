@@ -3,6 +3,10 @@ package main
 import (
 	"go/parser"
 	"go/token"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -55,5 +59,94 @@ func TestSourceBoundaryRules(t *testing.T) {
 				t.Fatalf("blocked=%t findings=%v", tc.blocked, failures)
 			}
 		})
+	}
+}
+
+func TestAntiBloatRules(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel string) {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("package x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < defaultFileCap+1; i++ {
+		write(filepath.Join("capabilities/server", "pkg", "f"+strconv.Itoa(i)+".go"))
+	}
+	write(filepath.Join("capabilities/server", "other", "f0.go"))
+	write(filepath.Join("capabilities/server", "ui", "page_kanban.go"))
+
+	empty := newBudget()
+	findings := append(append(append([]string{}, checkFileCaps(root, empty)...), checkDuplicateBasenames(root, empty)...), checkUIComponents(root, empty)...)
+	if len(findings) != 3 {
+		t.Fatalf("expected 3 debt findings, got %d: %v", len(findings), findings)
+	}
+
+	frozen := collectBudget(root)
+	cleared := append(append(append([]string{}, checkFileCaps(root, frozen)...), checkDuplicateBasenames(root, frozen)...), checkUIComponents(root, frozen)...)
+	if len(cleared) != 0 {
+		t.Fatalf("frozen budget should clear recorded debt, got %v", cleared)
+	}
+
+	// A new file beyond the frozen count must fail the ratchet.
+	write(filepath.Join("capabilities/server", "pkg", "extra.go"))
+	if got := checkFileCaps(root, frozen); len(got) != 1 {
+		t.Fatalf("expected the extra file to exceed the frozen budget, got %v", got)
+	}
+}
+
+func TestBudgetDrift(t *testing.T) {
+	root := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	run("init", "-q")
+	rel := "capabilities/server/cmd/check-boundaries/boundaries.budget"
+	if err := os.MkdirAll(filepath.Join(root, filepath.Dir(rel)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, rel)
+	if err := os.WriteFile(path, []byte("cap capabilities/server 10\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", rel)
+	run("commit", "-q", "-m", "base")
+
+	if err := os.WriteFile(path, []byte("cap capabilities/server 11\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := checkBudgetDrift(root, rel); len(got) != 1 {
+		t.Fatalf("expected the grown budget to be reported, got %v", got)
+	}
+
+	if err := os.WriteFile(path, []byte("cap capabilities/server 9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := checkBudgetDrift(root, rel); len(got) != 0 {
+		t.Fatalf("expected the shrunk budget to pass, got %v", got)
+	}
+}
+
+func TestUIToken(t *testing.T) {
+	for _, name := range []string{"page_spacer.go", "PageKanban", "page_record_gantt.go", "HeatmapCard"} {
+		if !uiToken(name) {
+			t.Errorf("expected %q to be flagged as a front-end visual component", name)
+		}
+	}
+	for _, name := range []string{"page_model.go", "page_queries.go", "page_rules.go", "accepted_result.go"} {
+		if uiToken(name) {
+			t.Errorf("expected %q to be a backend contract name", name)
+		}
 	}
 }

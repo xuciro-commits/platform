@@ -14,6 +14,17 @@
 - **依赖策略。** 重构期间全部依赖版本冻结；提供 `scripts/restore-deps.sh` 从 GitHub 直连批量还原 Go 模块与前端依赖（`GOPROXY=direct`，扩展 `scripts/sandbox-go.sh` 思路），沙箱重置后一条命令还原；全部里程碑完成后单独做一轮依赖升级并独立验证。
 - 不改内核契约、提交管线语义、接受结果格式、存储格式与授权判定；既有租户数据卷、密钥与应用配置原样保留。
 
+## Anti-Bloat Mandate（2026-10-27 增补）
+
+负责人批准把 `docs/Intent.md` 的《Platform Core Intent & Anti-Bloat Engineering Constitution》作为本 change 的最高约束：衡量标准改为**净删除行数与包内聚度**，不再以新增文件或功能清单为进展。本 change 的 B3 由「同包文件组织」升级为「反 AI 腐化手术」，新增四条硬约束并由 `cmd/check-boundaries` 锁死：
+
+- **包内文件数上限。** 单个 package 目录非测试 `.go` 文件不得超过 25 个；已超限目录在 `boundaries.budget` 记递减配额，只减不增。
+- **跨包同名禁令。** 同一 `.go` 基名不得出现在两个以上包中（当前 78 个基名记为债务，随手术逐项清除）。
+- **后端 UI 零感知。** `capabilities/server/platform/` 下除 `page_model.go`、`page_queries.go`、`page_rules.go` 外不得有 `page_*.go`；显式前端视觉组件名（`spacer`/`separator`/`button_group`/`kanban`/`gantt`/`heatmap`/`sparkline`/`treemap`/`gauge`）不得出现在任何 Go 文件名或顶层声明中。
+- **债务只减不增。** `boundaries.budget` 相对 HEAD 不得增长（配额上调或新增 dup/ui 条目即判失败）。
+
+四战役、文件级对照清单与目录收敛目标见 design.md「反 AI 腐化手术」节；任务拆分见 tasks.md 第 7 节。战役 3（AI 网关）与战役 4（UAF/自举收缩）各自落到独立 change，不在本 change 混做。
+
 ## Capabilities
 
 ### New Capabilities
