@@ -153,9 +153,18 @@ widget 名词当前泄漏在四处，加一个组件要改后端四个文件—�
 - 真正的病灶是**同一份契约被切成 15 个小文件、且与 `platform` 分成两包**。收敛方式：按 `host` 现有分组并成一个契约文件，归属讨论记为待裁决（并入 `platform` 会使 `platform` 反向依赖宿主类型，需先验证不破坏规则 4）。
 - `internal/construction` 42 个文件 / 5,443 行与 `apps/build` 存在成对同名文件（`formula.go`、`table.go`、`writeback.go`、`observation.go`、`release.go`、`function.go`）——这才是「传话筒」的实证范围。逐个判定：纯转换删除，有校验价值的下沉到唯一归属方。棘轮的 `dup` 条目会逐条逼平这 82 项。
 
-### 刀四：UAF 1.3 剥离（负责人 2026-10-27 改口）
+### 刀四：UAF 1.3 剥离——本轮冻结接触面，实施留给 business-models 收敛
 
-负责人撤销 2026-10-24「合并保留」中的企业建模保留范围，改为剥离。执行路径走已批准的 `platform/business-models` 收敛（企业模型收敛为最小组织目录：单位、结构、任职）：先解除 `apps/enterprise`（`enterprise.go`、`relationship_decisions.go`、`sdk.go`）与 `internal/enterprise`（`model.go`、`lifecycle.go`、`profile.go`、`relations.go`、`discovery.go`）对 UAF 元模型的依赖，再同批删除 `internal/enterprise/uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/`，包括 `go:embed` 的 208 KB 生成数据。不以「文件已无人用」为由先删后补：`Directory` 接口的 `Element`/`Related`/`Calendar` 语义必须在同一批内有确定归属（保留或删除需同步 `host` 侧声明）。
+负责人 2026-10-27 改口，撤销此前「企业建模保留范围」，要求剥离 UAF 1.3。本轮把该项做完了一半：先把要拆的东西量清楚并锁死，不在同一批里同时改校验语义。
+
+实测纠正审查处方的两个前提：
+
+- **不是「数兆重甲」**：`internal/enterprise/uaf/` 的 Go 代码只有 342 行；1.5 MB 里 1.3 MB 是仅 `cmd/uaf-gen` 读取的 `spec/*.xmi` 标准原件（用于 SHA256 溯源），真正编进二进制的是 `//go:embed` 的 `gen/uaf-1.3.json` 208 KB。
+- **不是装饰，是校验目录**：UAF 元模型支撑 `Metamodel.Is`（元素类型判定）、`Relationship`（该 stereotype 是否为关系）、`Properties`（元素属性 schema，用于 `checkProperties` 拒止用户提交的属性载荷）、`Stereotype.Client/Supplier`（关系两端合法性，经 `endRules`/`Contracts`/`Allowed`）。租户记录里保存的就是这些 stereotype 名。因此「删目录」等价于「静默丢掉企业模型的确定性拒止」并需要既有记录的解释方案——这正是本宪章要防的破坏性删除。
+
+已落地的安全一半：`check-boundaries` 新增 `uaf` 棘轮，把依赖 UAF 的文件集合冻结为 8 个上限（`apps/enterprise` 3、`internal/enterprise` 4、`cmd/uaf-gen` 1；`uaf/`、`uafgen/` 自身豁免）。实测：给 `platform/action_input_schema.go` 加一条可编译的 `internal/enterprise/uaf` 导入即触发 `uaf: * grew to 9, ceiling 8`。此后 UAF 只能被拆除，不能被新代码依赖。
+
+留待实施（须与 `platform-self-hosting` 的 `platform/business-models` 收敛同批，不可拆开）：以平台自有的最小组织目录词表（单位、结构、任职 + 关系端点规则）替换 OMG 目录作为校验来源 → 解除上述 8 处依赖（每解除一处，`uaf` 上限同批下降）→ 同批删除 `uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/` 与 Makefile `check-uaf`（`check-go` 依赖它）→ 因 `apps/enterprise/sdk.go` 参与 `cmd/api-types` 生成 `host.ts`，须同批 `go run ./cmd/api-types` 与 `make check-web` → 已入库 enterprise 记录的 stereotype 取值须给出解释或迁移说明。本轮不在缺浏览器与 PostgreSQL 演练证据的情况下改这一步。
 
 ### 核实后判定为「已满足，不重复施工」的两项
 

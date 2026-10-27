@@ -32,7 +32,9 @@
 - [x] 3b.4a 刀三：`internal/host` 15 个契约文件归位为单一 `host.go`（不删除，理由见 design.md「刀三」）。
   - 注：包内合并，导入路径与消费方零改动；守恒核对通过——顶层声明 67→67、接口方法 220→220；包文档注释保留在 `package host` 之前。副产物：`dup` 聚合上限 82→78（`books.go`、`confirmation.go`、`dispatch.go`、`flow.go` 等由 3 包缩回 2 包），`internal/host` 文件数 15→1，同批记入 `boundaries.tsv`。`go build ./...`、`go vet`、`gofmt`、`go test ./apps/...`、`boundaries.sh`、`escapes.sh` 全绿。
 - [ ] 3b.4b `internal/construction` 与 `apps/build` 六组成对同名文件（`formula.go`、`table.go`、`writeback.go`、`observation.go`、`release.go`、`function.go`）逐个判定归属，`dup` 上限同批下降。
-- [ ] 3b.5 刀四（负责人改口后新增）：企业模型收敛为最小组织目录并剥离 UAF 1.3——解除 `apps/enterprise` 与 `internal/enterprise` 对 `internal/enterprise/uaf` 的依赖后，同批删除 `uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/`（含 208 KB `go:embed` 生成数据）。与 `platform-self-hosting` 的 `business-models` 收敛共用一次实施，不重复改 `host.Directory` 语义。
+- [x] 3b.5a 刀四前置：冻结 UAF 接触面。`check-boundaries` 新增 `uaf` 棘轮（8 个文件上限，`uaf/`/`uafgen/` 自身豁免），实测可编译的新导入即触发 `uaf: * grew to 9, ceiling 8`；UAF 此后只能缩小。
+  - 注：同时纠正审查处方两处前提——UAF 的 Go 代码 342 行（非「数兆」），1.5 MB 中 1.3 MB 是仅供 `cmd/uaf-gen` 溯源的标准原件，进二进制的只有 208 KB `go:embed` JSON；且它是企业模型的校验目录（`Is`/`Relationship`/`Properties`/`Stereotype.Client/Supplier`），裸删等于静默移除确定性拒止。
+- [ ] 3b.5b 刀四实施：以平台自有的最小组织目录词表替换 OMG 目录作为校验来源，解除上述 8 处依赖（逐处同批降 `uaf` 上限），再删 `uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/` 与 Makefile `check-uaf`（`check-go` 依赖它）。`apps/enterprise/sdk.go` 参与 `cmd/api-types` 生成 `host.ts`，须同批 `go run ./cmd/api-types` + `make check-web`；已入库 enterprise 记录的 stereotype 取值须给出解释或迁移说明。本项与 `platform-self-hosting` 的 `platform/business-models` 收敛是同一件事，不拆成两批，也不在缺浏览器与真实 PostgreSQL 演练证据时先行改校验语义。
 
 ## 4. B4 Web 包重划（等体验线 M2 三区定版后启动）
 

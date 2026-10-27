@@ -43,7 +43,7 @@ files	capabilities/server/internal/systemscope	1
 files	capabilities/server/journal	17
 files	capabilities/server/platform	130
 files	capabilities/server/platform/authz	1
-loc	*	136927
+loc	*	136975
 loc	capabilities/server	61171
 loc	capabilities/server/apps/ai	609
 loc	capabilities/server/apps/build	18338
@@ -56,7 +56,7 @@ loc	capabilities/server/apps/relations	406
 loc	capabilities/server/apps/system	982
 loc	capabilities/server/apps/work	1054
 loc	capabilities/server/cmd/api-types	35
-loc	capabilities/server/cmd/check-boundaries	514
+loc	capabilities/server/cmd/check-boundaries	562
 loc	capabilities/server/cmd/code-builder	31
 loc	capabilities/server/cmd/install-bundle	217
 loc	capabilities/server/cmd/platform-server	98
@@ -171,3 +171,12 @@ ui	capabilities/server/platform/page_variables.go	9
 ui	capabilities/server/platform/page_widget_analysis.go	8
 ui	capabilities/server/platform/page_widget_layout.go	5
 ui	capabilities/server/platform/page_widget_records.go	2
+uaf	*	8
+uaf	capabilities/server/apps/enterprise/enterprise.go	1
+uaf	capabilities/server/apps/enterprise/relationship_decisions.go	1
+uaf	capabilities/server/apps/enterprise/sdk.go	1
+uaf	capabilities/server/cmd/uaf-gen/main.go	1
+uaf	capabilities/server/internal/enterprise/discovery.go	1
+uaf	capabilities/server/internal/enterprise/lifecycle.go	1
+uaf	capabilities/server/internal/enterprise/profile.go	1
+uaf	capabilities/server/internal/enterprise/relations.go	1
