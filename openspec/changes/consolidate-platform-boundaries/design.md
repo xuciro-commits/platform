@@ -191,3 +191,17 @@ widget 名词当前泄漏在四处，加一个组件要改后端四个文件—�
 
 - 「业务包直调外部大模型 SDK」：全仓仅 `anthropic.go` 一个文件导入 `anthropic-sdk-go`，红线已成立；只加棘轮防回退，不重构。
 - 「`internal/rules` 应为纯函数包」：`go list -deps ./internal/rules` 无 `database/sql` / `net/http` / `pgx`，已纯净；`cmd/wasm-worker` 与 `internal/rules` 的接线是端侧下放的实际缺口，属 `platform-self-hosting` 的体验线范围，不在本 change。
+
+## 垂类退出的实测边界（2026-10-27 试切回执）
+
+本轮把集成 8 个 AssetKind 与观测定义整块切下（61 文件 / 13,858 行暂存），据编译器回灌修正口径：
+
+1. **先前的「~210 行分支手术」作废**：宽松正则把 `integration.` 包引用误计。按真实常量名，通用机器只含 21 行分支（revision 1、dependencies 6、definition 8、definitions 1、release_candidate 1、asset_lifecycle 1、dependency_graph 3）。
+2. 五个**必须同时处理**的耦合，缺一条树就不绿：
+   - `internal/construction/integration_release.go` 是**共享严格解码词汇**：`ValueDecodeIntegration` 被 blueprint / evaluation_release / function_release / joint_release / trial 复用；`ConnectionDefinition` 被 `package_preparation.go` 用。删文件即删保留垂类的解码器。
+   - `continuous_frames.go` 的 `streamSourceLocked` / `readContinuousSource` 让 **flow 连续摄取绑定 `construction.Source`/`Connection`**（记录 schema，不是 AssetKind）。`Flow.Continuous` 属保留的流转垂类，切它等于削掉流转能力。
+   - `confirmation_reconcile.go:101` `t.readSourceWithConnection`、`confirmation_transport.go:46-50` 的 `construction.Writeback`/`AssetWriteback`：确认线读来源/回写状态。
+   - `apps/build/public.go` 有 ~30 行公开别名指向构造类型；`api.go:145-146` 把 `construction.Source`/`Connection` 注册进**生成的应用 API**，删则须重跑 `cmd/api-types` 并重生成 `web/packages/kernel/src/gen/host.ts`。
+   - `internal/acceptance/result` 的 `DecisionDefinition.Observation` 与 `ObservationDecisionEvidence` 是**已存接受结果的线格式**（含 `Version < 10` legacy 判定）：按 K8 同一原则，历史类型保留、产生它的引擎退出；`Ref.Kind` 比较要改成字面量 `"observation"` 而非已删常量。
+3. 页面模型 `platform/page_observation.go`（322）与 `observation_intervals.go` 的值类型必须留：`docs/WorkQueue.md` 禁止机械删生成契约字段。
+4. `web/apps/catalog`（16,323）与 `web/packages/catalog`（253）经 `scripts/catalog.mjs` + `pnpm-lock` + `AGENTS.md` 第 5 条证实为活；`contract/lean` + `scripts/formal.sh` 被 `scripts/verify.sh:46` 与 release CI cache key 引用；`deploy/packages`（2.5 MB）是 `deploy/dev/run.sh` 与 `package_drafts_test.go` 在读的声明式包；`internal/host` 有 84 个 importer。**这四条 `spec-debt` 是文档口径错报，撤回声明而非删文件**：`platform-self-hosting` 与 `consolidate-platform-boundaries` 的 Removed/已删除条目须改为「保留」并写明理由。
