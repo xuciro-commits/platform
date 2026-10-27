@@ -52,6 +52,22 @@ openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 .agents/skills/      官方 OpenSpec 核心工作流（CLI 生成）
 ```
 
+**形状账本。** 下面十项度量由 `scripts/architecture.py` 执行，值存在 `.architecture-baseline.json`。它们只记录「同一件事被写了几遍」，不记录业务规模；任一项上升即失败，下降也失败（要求同批下调基线），标为零容忍的项必须恒为 0。
+
+| 度量 | 它拦的是什么 | 当前 |
+|---|---|---|
+| `asset_kind_fanout` | 宿主列举一种定义：`platform/` 之外有多少文件提到该 kind | 每种 1–41 |
+| `describe_asset_lines` | 一个函数认识所有 kind | 58 行 |
+| `root_construction_importers` | 宿主知道某个应用的定义模型 | 59 文件 |
+| `action_legacy_fields` | 同一结构体两套形状 | 8 个旧字段 |
+| `effective_merge_methods` | 读取期合并对象默认与动作覆盖 | 4 个 |
+| `root_package` | 根包没有归属：文件数、前缀数、单例前缀、导出符号、`Tenant` 方法 | 263 / 146 / 116 / 817 / 131 |
+| `platform_dynamic` | 反射与无类型 map 让校验写不成一次 | 582 / 111 |
+| `app_size` | 一个应用吸收另一个应用的职责 | build 73 文件 |
+| `string_error_sites` | 前端按错误文本判语义 | 22 |
+| `route_params_used` | 路由参数靠手取 | 37 |
+| 零容忍 | 种类生产者、HTTP 文本匹配、未声明视图、退役参数、兼容登记漂移、重复需求、规格悬空引用、`platform`→`internal`、`internal`→`apps` | 0 |
+
 内部模块按职责分工，不各自建立提交或执行入口：
 
 | 模块 | 实际责任 |
