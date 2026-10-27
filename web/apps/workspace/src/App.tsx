@@ -260,7 +260,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     // Workspace restores the target's active tab, or its home when no layout exists.
   };
   const sessionOptions = [
-    ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: `${t("Tenant")} ${tenant}` })) : []),
+    ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: tenant === "system" ? t("System self-hosting") : `${t("Tenant")} ${tenant}` })) : []),
     ...(signedIn ? [{ id: "sign-out", label: t("Sign out {email}", { email: signedIn.session.email }) }]
       : identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` }))),
   ];
@@ -320,7 +320,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
               release.data?.id ? <>{t("Last activated release")}: <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
           </Button>
         </div>}
-        session={{ tenant: me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
+        session={{ tenant: me!.tenantId === "system" ? t("System self-hosting") : me!.tenant?.name || me!.tenantId, principal: me!.principalId, name: me!.account?.displayName, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch,
           onAccount: all.some((a) => a.id === "platform") ? () => { chosen.current = { id: "platform", from: activeRoute && routeToHash(activeRoute) }; select("platform"); location.hash = routeToHash({ view: "account" }); } : undefined }} />
       <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} />

@@ -96,6 +96,29 @@ func definitionOf(t *testing.T, tenant *Tenant) platform.Definition {
 	return definitions[index]
 }
 
+func TestSystemSavedReleaseReviewUsesTheActivationBoundary(t *testing.T) {
+	tenant := definitionOwnerTenant(t, "system")
+	definitionDraft(t, tenant, "System-only definition")
+	member := memberOf(t, tenant, "builder")
+	preview, err := tenant.PreviewRelease(member, platform.AssetObject, "global-note")
+	if err != nil || preview.Diagnostic != "" {
+		t.Fatalf("preview: %s %v", preview.Diagnostic, err)
+	}
+	if _, err := tenant.SaveReleaseCandidate(member, platform.AssetObject, "global-note", preview.CandidateID, "save", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	review, err := tenant.ReviewSavedRelease(member, preview.CandidateID)
+	if err != nil || review.CanActivate || review.ActivationDiagnostic != systemReleaseActivationDiagnostic || review.RunningDiagnostic != "" || len(review.Preview.Added) == 0 {
+		t.Fatalf("system candidate must explain the approved-change path before activation: %+v %v", review, err)
+	}
+	if _, err := tenant.ActivateRelease(member, preview.CandidateID, "activate", txnAt); err == nil || err.Error() != review.ActivationDiagnostic {
+		t.Fatalf("review and activation disagree: %v", err)
+	}
+	if tenant.ActiveRelease() != "" {
+		t.Fatal("ordinary activation changed the system release")
+	}
+}
+
 func TestSystemDefinitionsFreezeThenInstallAndRemainReadOnlyInBusinessTenants(t *testing.T) {
 	owner, business := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "business")
 	NewHost(nil, owner, business)

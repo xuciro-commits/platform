@@ -1385,6 +1385,8 @@ register("zh-CN", {
   "The member's record and history stay. A named successor takes over what they own.": "保留成员记录及历史；指定接任人后，由其接管成员拥有的内容。",
   "This cannot be undone. Add the member again if they return.": "此操作无法撤销；成员返回时需要重新添加。",
   "Reads available to all members": "全体成员可读取",
+  "This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.": "当前是系统自举工作区。发布业务应用前，请从账号菜单切换到业务工作区。系统定义须通过已批准的平台变更发布。",
+  "Open self-hosting": "打开系统自举",
 });
 
 register("zh-CN", {

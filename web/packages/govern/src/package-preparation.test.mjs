@@ -42,6 +42,16 @@ test("package preparation keeps publication before business role assignment and 
   expect(state.host.decide).toHaveBeenCalledWith("platform.member.grant", { type: "platform.member", id: "builder" }, { app: "build.sample", role: "operator" }, expect.any(Object));
 });
 
+test("system package preparation explains the workspace and uses the approved self-hosting path", async () => {
+  state.host.me.tenantId = "system";
+  render();
+  expect(container.textContent).toContain("To publish a business application, switch to a business workspace using the account menu.");
+  expect(button("Publish application")).toBeUndefined();
+  await click("Open self-hosting");
+  expect(state.open).toHaveBeenCalledWith({ view: "self-hosting" });
+  expect(state.host.decide).not.toHaveBeenCalled();
+});
+
 test("unconfigured services do not block publication or require sample initialization for application access", async () => {
   state.query.data.connections = [{ ref: { app: "build", kind: "connection", name: "external" }, title: "External service", draftId: "connection", kind: "http", credential: true, configured: false, ready: false }];
   state.query.data.ai = [{ ref: { app: "build", kind: "function", name: "summary" }, ready: false, problem: "No model configured" }];

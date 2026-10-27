@@ -1,4 +1,7 @@
 {
+  "PullerScopes": "拉取者令牌范围",
+  "RunnerScopes": "执行者令牌范围",
+  "System definitions activate through an approved Platform change. Publish business applications in a business workspace.": "系统定义须通过已批准的平台变更激活。业务应用请在业务工作区发布。",
   "Expressions": "表达式",
   "Application {app} is not active in this tenant.": "应用 {app} 尚未在此租户启用。",
   "Role {role} is not declared by application {app}. Publish its definitions before granting business roles.": "应用 {app} 尚未声明角色 {role}。请先发布其定义，再授予业务角色。",

@@ -4,11 +4,13 @@ import { Button, Checkbox, Disclosure, PageHeader, Panel, PropertyList, Tag, t, 
 import { useState } from "react";
 
 export function PackageRequirements({ id, version }: { id: string; version: string }) {
+  const { me } = useHost();
   const read = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
   if (read.isError) return <div role="alert" className="grid gap-2 text-sm text-danger"><p>{t("Application requirements could not be loaded.")} {read.error.message}</p><div><Button size="sm" onClick={() => void read.refetch()}>{t("Retry")}</Button></div></div>;
   if (!read.data) return <p role="status" className="text-sm text-muted">{t("Loading application requirements…")}</p>;
   const plan = read.data;
   return <div className="grid gap-2 text-sm" aria-label={t("Before using this package")}>
+    {me.tenantId === "system" && <p role="status">{t("This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.")}</p>}
     <p className="font-medium">{t("Before using this package")}</p>
     <p>{t("Applications: {names}", { names: plan.applications.map(app => app.title).join(", ") })}</p>
     <p>{plan.connections.length ? t("Configure {count} external connections in this environment.", { count: plan.connections.length }) : t("No external connection is required.")}</p>
@@ -19,6 +21,7 @@ export function PackageRequirements({ id, version }: { id: string; version: stri
 
 export function PackagePreparation({ id, version }: { id: string; version: string }) {
   const host = useHost(), { client, decide, can } = host, { open } = useWorkspace();
+  const systemScope = host.me.tenantId === "system";
   // The original read authorizes all held grants; a displayed primary role
   // cannot decide whether a multi-role member may continue this task.
   const query = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
@@ -68,6 +71,10 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
   const setupStatus = (state?: string) => state === "SUBMISSION_STATE_CONFIRMED" ? "Completed" : ["SUBMISSION_STATE_PENDING", "SUBMISSION_STATE_SENDING", "SUBMISSION_STATE_UNKNOWN"].includes(state ?? "") ? "Awaiting confirmation" : state ? "Needs attention" : "Not started";
   return <div className="grid min-w-0 grid-cols-1 gap-5 break-words">
     <PageHeader title={t("Prepare package applications")} description={`${id} · ${version}`} actions={<div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void query.refetch()}>{t("Refresh readiness")}</Button><Button onClick={() => open({ view: "apps" })}>{t("Packages")}</Button></div>} />
+    {systemScope && <Panel role="status" className="grid gap-2 text-sm">
+      <p>{t("This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.")}</p>
+      <div><Button onClick={() => open({ view: "self-hosting" })}>{t("Open self-hosting")}</Button></div>
+    </Panel>}
     {query.isError && <Panel role="alert" className="grid gap-2"><p>{t("Application requirements could not be loaded.")} {query.error.message}</p><Button onClick={() => void query.refetch()}>{t("Retry")}</Button></Panel>}
     {query.isLoading && <p role="status">{t("Loading application requirements…")}</p>}
     {error && <Panel role="alert" className="break-words text-danger">{error}</Panel>}
@@ -86,7 +93,7 @@ export function PackagePreparation({ id, version }: { id: string; version: strin
         <p className="text-sm text-muted">{t("Publish the complete application independently. Configure external services afterward for the features you use.")}</p>
         <div className="grid gap-2 border-t border-border pt-3">
           <p className="text-sm text-muted">{t("Review the exact candidate and its checks before activation. Return here and refresh readiness after publishing.")}</p>
-          {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto font-medium">{app.title}</span><Tag label={t(app.published ? "Published" : "Not published")} />{app.draftId && <Button variant={app.published ? "default" : "primary"} disabled={busy || !plan.installed} onClick={() => open({ view: "release-review", params: { kind: "app", id: app.draftId!, application: app.draftId!, applicationName: app.ref.name } })}>{t(app.published ? "Review release" : "Publish application")}</Button>}</div>)}
+          {plan.applications.map(app => <div key={app.ref.name} className="flex flex-wrap items-center gap-2 text-sm"><span className="mr-auto font-medium">{app.title}</span><Tag label={t(app.published ? "Published" : "Not published")} />{app.draftId && <Button variant={app.published ? "default" : "primary"} disabled={busy || !plan.installed} onClick={() => open(systemScope ? { view: "self-hosting" } : { view: "release-review", params: { kind: "app", id: app.draftId!, application: app.draftId!, applicationName: app.ref.name } })}>{t(systemScope ? "Open self-hosting" : app.published ? "Review release" : "Publish application")}</Button>}</div>)}
         </div>
       </Panel>
       <Panel title={t("Configure services when needed")} className="grid min-w-0 grid-cols-1 gap-3">

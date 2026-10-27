@@ -178,9 +178,11 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 	return t.ActivateReleaseWithUpgrade(m, candidateID, key, "", now)
 }
 
+const systemReleaseActivationDiagnostic = "System definitions activate through an approved Platform change. Publish business applications in a business workspace."
+
 func (t *Tenant) ActivateReleaseWithUpgrade(m platform.Member, candidateID, key, upgradeID string, now time.Time) (string, error) {
 	if t.ID == systemscope.Tenant {
-		return "", fmt.Errorf("system definitions activate through an approved Platform change")
+		return "", fmt.Errorf("%s", systemReleaseActivationDiagnostic)
 	}
 	if err := t.admits(m); err != nil {
 		return "", err
@@ -275,8 +277,20 @@ func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform
 	// Rebuild the same closure from what runs now: equal content yields the
 	// same canonical ID; anything else is reported by asset path.
 	roots := make([]platform.AssetRef, 0, len(saved.Assets))
+	installed := make(map[platform.AssetRef]bool, len(available))
+	for _, asset := range available {
+		installed[asset.Ref] = true
+	}
 	for _, asset := range saved.Assets {
-		roots = append(roots, asset.Ref)
+		// A first release has no running counterpart for its new assets.
+		// Keep them absent from the comparison so CandidateDiff reports them
+		// as additions; missing dependencies of installed roots still refuse.
+		if installed[asset.Ref] {
+			roots = append(roots, asset.Ref)
+		}
+	}
+	if len(roots) == 0 {
+		return platform.ReleaseCandidate{}, nil
 	}
 	return t.candidateWithBindings(roots, available, nil)
 }

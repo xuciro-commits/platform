@@ -12,8 +12,63 @@ import (
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/core"
+	"platformserver/apps/flow"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
+
+func TestManufacturingApplicationDraftClosureActivates(t *testing.T) {
+	const id = "manufacturing-application-release"
+	tn := composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "platform:admin", "core:steward"), seatOf("user")}, build.New(id), core.New(id), ai.New(id), flow.New(id), work.New(id), NewAgents(id))
+	index, err := LoadPackageIndex("../../deploy/packages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testConsoleOf(tn).BindPackageIndex(index)
+	decide(t, tn, "builder", PlatformApp, SchemaPackageInstall, PackageType, "application.manufacturing", map[string]any{"id": "application.manufacturing", "version": "0.1.1"}, txnAt)
+	member := memberOf(t, tn, "builder")
+	if _, err := tn.CreatePackageDrafts(member, "application.manufacturing", "0.1.1", "drafts", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	closure, err := tn.ReferencedDrafts(member, platform.AssetApp, "mesapp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	selection := append([]construction.JointDraftRef{{Kind: platform.AssetApp, ID: "mesapp"}}, closure.Drafts...)
+	preview, err := tn.PreviewReleaseDrafts(member, selection)
+	if err != nil || preview.Diagnostic != "" {
+		t.Fatalf("preview: %s %v", preview.Diagnostic, err)
+	}
+	if _, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "save", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	review, err := tn.ReviewSavedRelease(member, preview.CandidateID)
+	if err != nil || !review.CanActivate {
+		t.Fatalf("saved candidate: activation=%s running=%s %v", review.ActivationDiagnostic, review.RunningDiagnostic, err)
+	}
+	if review.RunningDiagnostic != "" || len(review.Preview.Added) == 0 {
+		t.Fatalf("first activation must show additions, not a comparison failure: %s", review.RunningDiagnostic)
+	}
+	if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", txnAt); err != nil {
+		t.Fatal(err)
+	}
+	review, err = tn.ReviewSavedRelease(member, preview.CandidateID)
+	if err != nil || !review.Active || !review.RunningMatches {
+		t.Fatalf("activated candidate: active=%v matches=%v activation=%s running=%s %v", review.Active, review.RunningMatches, review.ActivationDiagnostic, review.RunningDiagnostic, err)
+	}
+	for _, app := range tn.Applications(memberOf(t, tn, "user")) {
+		if app.Name == "mesapp" {
+			t.Fatal("activation granted application access")
+		}
+	}
+	decide(t, tn, "builder", PlatformApp, SchemaGrant, MemberType, "user", map[string]any{"app": "build", "role": "supervisor"}, txnAt)
+	apps := tn.Applications(memberOf(t, tn, "user"))
+	if !slices.ContainsFunc(apps, func(app ApplicationView) bool { return app.Name == "mesapp" && len(app.Pages) > 0 }) {
+		t.Fatal("explicitly authorized user cannot discover the activated application")
+	}
+	decide(t, tn, "user", "build", "build.mesrouting.create", "build.mesrouting", "routing", map[string]any{"code": "ROUTE-1", "name": "Local routing", "version": 1, "from": "2026-10-26"}, txnAt)
+	decide(t, tn, "user", "build", "build.mesrouting.edit", "build.mesrouting", "routing", map[string]any{"name": "Updated local routing"}, txnAt)
+}
 
 func TestInstalledManufacturingPackageCreatesAllDraftsWithoutPublishingOrGranting(t *testing.T) {
 	const id = "package-declarations"

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"platformserver/internal/construction"
+	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
 
@@ -200,6 +201,8 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	running, err := t.runningReleaseLocked(saved)
 	if err != nil {
 		reply.RunningDiagnostic = err.Error()
+	} else if running.ID == "" {
+		reply.Preview.Added = append(reply.Preview.Added, reply.Preview.Included...)
 	} else {
 		reply.Preview.CurrentID = running.ID
 		reply.RunningMatches = running.ID == id
@@ -207,6 +210,10 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 		if err != nil {
 			return reply, err
 		}
+	}
+	if t.ID == systemscope.Tenant {
+		reply.ActivationDiagnostic = systemReleaseActivationDiagnostic
+		return reply, nil
 	}
 	if reply.RunningMatches {
 		err = t.checkExtensionSet()

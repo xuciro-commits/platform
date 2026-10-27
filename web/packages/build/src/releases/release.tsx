@@ -52,7 +52,8 @@ function DiagnosticResource({ kind, name, application, locked, onAdd }: { kind: 
 }
 
 export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], selectionError, embedded = false, candidateID, applicationName }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; selectionError?: string; embedded?: boolean; candidateID?: string; applicationName?: string } = {}) {
-  const { client, role } = useHost();
+  const { client, role, me, refresh } = useHost();
+  const systemScope = me.tenantId === "system";
   const builder = role("build") === "builder";
   const mayRelease = builder || role("build") === "publisher";
   const scope = useApplicationScope();
@@ -247,10 +248,13 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       setError(message); return;
     }
     rememberRequest();
-    notify.success(t("Release request confirmed."));
+    notify.success(t(request.kind === "save" ? "Candidate saved. Activate it to publish the application." : request.kind === "activate" ? "Release activated." : "Evaluation started."));
     try {
       if (request.kind === "evaluate") { setReportID(answer.body.id); await reports.refetch(); }
-      else { setSavedID(answer.body.id); await inventory.refetch(); await readSaved(answer.body.id); }
+      else {
+        if (request.kind === "activate") await refresh?.();
+        setSavedID(answer.body.id); await inventory.refetch(); await readSaved(answer.body.id);
+      }
     } catch { setError(t("The release request was accepted, but its refreshed review is unavailable.")); }
 
   });
@@ -285,6 +289,10 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     </div>
   );
   return <div className="grid gap-3">
+    {systemScope && <Panel role="status" className="grid gap-2 text-sm">
+      <p>{t("This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.")}</p>
+      <div><Button onClick={() => open({ view: "self-hosting" })}>{t("Open self-hosting")}</Button></div>
+    </Panel>}
     {!embedded && <PageHeader title={t("Release review")} help={t(builder ? "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators." : "Review sealed candidate definitions and activate a release. Definition editing belongs to builders.")}
       actions={builder && scope && <Button onClick={() => open({ view: "project", params: { id: scope } })}>{t("Back to project")}</Button>} />}
     {scopeUnresolved && !builder && <Panel role="status" className="p-3 text-sm text-muted">{t("This handoff points at a builder draft, which a publisher does not read. Reopen release review from a saved candidate or a named application.")}</Panel>}
@@ -454,7 +462,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
           {reportID && <p className="break-all text-xs">{t("Evaluation report")}: {reportID}</p>}
         </Panel>}
         {(functionNames.length > 0 || agentNames.length > 0) && !evaluated && <p role="status" className="text-sm text-warning">{t("This candidate is not fully evaluated. Configure models and run evaluations when needed; no quality result is claimed.")}</p>}
-        {savedID && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
+        {savedID && !systemScope && <Button variant="default" disabled={locked || !savedReview || review.candidateId !== savedID || activeID === savedID || !canActivate && !(upgradePlan && confirmedUpgrade === upgradePlan.id)} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
         {activeID === savedID && savedID && !runningMatches && (function () {
           const application = applications.data?.records.find((item) => joint.some((choice) => choice.kind === "app" && choice.id === item.id));

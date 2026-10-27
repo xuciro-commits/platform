@@ -132,6 +132,7 @@ register("zh-CN", {
   "Field": "字段",
   "Every entity type of the apps you hold a role in, with the host's search, sort and pages. Records change only through their apps' actions.": "你有角色的各应用的所有实体类型，带宿主提供的搜索、排序和分页。记录只能通过所属应用的动作修改。",
   "Host unreachable": "无法连接宿主",
+  "System self-hosting": "系统自举",
   "Tenant recovery": "租户恢复",
   "This tenant is quarantined. Business inputs and work are stopped; other tenants can continue.": "此租户已隔离，业务输入与受属工作已停止；其他租户可以继续运行。",
   "Only a tenant administrator can view recovery diagnostics and retry.": "只有此租户的管理员能查看恢复诊断并重试。",

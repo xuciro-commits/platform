@@ -2998,6 +2998,11 @@ register("zh-CN", {
   "Window starts at": "窗口起点",
   "Window ends at": "窗口终点",
   "Decision evidence": "业务决定依据",
+  "Candidate saved. Activate it to publish the application.": "候选已保存。还需激活，应用才会发布。",
+  "Release activated.": "发布已激活。",
+  "Evaluation started.": "评测已启动。",
+  "This is the system self-hosting workspace. To publish a business application, switch to a business workspace using the account menu. System definitions require an approved Platform change.": "当前是系统自举工作区。发布业务应用前，请从账号菜单切换到业务工作区。系统定义须通过已批准的平台变更发布。",
+  "Open self-hosting": "打开系统自举",
 });
 
 // Catalog content belongs to this owner and uses the same source-text keys.
