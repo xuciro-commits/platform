@@ -31,7 +31,7 @@ export function SystemDefinitionReferences({ type, search, title, description }:
 }
 
 /** Original declarations and reference fields are inspectable without creating drafts. */
-export function SystemDefinitionsList({ definitions, relations = [], search = "", title = "System definitions", description }: { definitions: Definition[]; relations?: SemanticRelation[]; search?: string; title?: string; description?: string }) {
+function SystemDefinitionsList({ definitions, relations = [], search = "", title = "System definitions", description }: { definitions: Definition[]; relations?: SemanticRelation[]; search?: string; title?: string; description?: string }) {
   const { me } = useHost(), { open } = useApplicationWorkspace();
   const items: ({ definition: Definition } | { relation: SemanticRelation })[] = [
     ...definitions.map(definition => ({ definition })), ...relations.map(relation => ({ relation })),

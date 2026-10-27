@@ -35,7 +35,7 @@ import { t } from "../i18n";
 
 /** A stable low-saturation category tone per select value; danger stays semantic. */
 const categoryTones = ["info", "success", "warning", "purple", "teal", "pink", "orange", "neutral"] as const;
-export function choiceTone(value: string) {
+function choiceTone(value: string) {
   let hash = 0;
   for (let at = 0; at < value.length; at++) hash = (hash * 31 + value.charCodeAt(at)) | 0;
   return categoryTones[Math.abs(hash) % categoryTones.length]!;

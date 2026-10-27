@@ -66,7 +66,7 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
 
 /** The user's enum filters as domain terms: only choice fields of the entity,
  * with values the field declares; anything else is unavailable, not widened. */
-export function enumFilterTerms(filters: Record<string,string[]> | undefined, info?: EntityInfo): unknown[][] {
+function enumFilterTerms(filters: Record<string,string[]> | undefined, info?: EntityInfo): unknown[][] {
   const terms:unknown[][]=[];
   for(const [name,values] of Object.entries(filters??{})){
     if(!Array.isArray(values)||values.length===0||values.length>contractMaxFilterValues||!validID.test(name))continue;
@@ -78,7 +78,7 @@ export function enumFilterTerms(filters: Record<string,string[]> | undefined, in
 }
 const contractMaxFilterValues=64;
 /** Whether the member asked for any enum filter at all, however malformed. */
-export function hasEnumFilters(filters: Record<string,string[]> | undefined):boolean {
+function hasEnumFilters(filters: Record<string,string[]> | undefined):boolean {
   return Object.values(filters??{}).some(values=>Array.isArray(values)&&values.length>0);
 }
 /** Whether a window can carry enum filters at all: fixed domains belong to
