@@ -30,7 +30,7 @@
 
 - [x] 3.4 旧形状的读取点必须被记录且只能缩小。
 
-  注：`legacy_action_readers` 记录 13 个仍同时懂两种形状的文件（`apps/build` 7 个、根包 3 个、`construction` 与 `platform` 各 1–2 个）。新文件读取旧字段即失败；缩小后必须同批下调。实测反向验证：新建一个读取 `a.Posts` 的探针文件立刻失败。
+  注：`legacy_action_readers` 记录 13 个仍同时懂两种形状的文件（`apps/build` 8 个、宿主根包 2 个、`internal/construction` 1 个、`platform` 2 个）。新文件读取旧字段即失败；缩小后必须同批下调。实测反向验证：新建一个读取 `a.Posts` 的探针文件立刻失败。
 
 ## 4. 前端
 
