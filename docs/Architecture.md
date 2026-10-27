@@ -31,7 +31,7 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
   internal/          acceptance agents aistate construction enterprise host records rules
-  cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink（独立调试薄壳）、compute、code-builder、wasm-worker、storage-files
+  cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、rule-browser、webhook-sink（独立调试薄壳）、compute、code-builder、wasm-worker、storage-files
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 web/
   apps/workspace     @platform/workspace   唯一工作区：构建/运营/系统三区共用壳（session host shell chrome，角色显隐）
@@ -45,7 +45,7 @@ web/
   e2e                @platform/e2e         Playwright 路线，spec 只经 tests/kit.ts
 scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples
-docs/                Intent Architecture WorkQueue standards/uaf
+docs/                Intent Architecture WorkQueue
 openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 .agents/skills/      官方 OpenSpec 核心工作流（CLI 生成）
 ```

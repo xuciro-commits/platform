@@ -123,9 +123,6 @@ func checkFile(path string, file *ast.File, set *token.FileSet) []string {
 		if pure && (name == "platformserver/internal/host" || strings.HasPrefix(name, "platformserver/internal/host/")) {
 			report(imported, "pure internal module depends on host coordination")
 		}
-		if name == "platformserver/internal/enterprise/uafgen" {
-			report(imported, "runtime imports generation-only UAF parser")
-		}
 		if strings.HasPrefix(path, "capabilities/server/internal/enterprise/uaf/") && name == "encoding/xml" {
 			report(imported, "UAF runtime model depends on XML parsing")
 		}

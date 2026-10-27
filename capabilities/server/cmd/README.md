@@ -23,4 +23,3 @@
 |---|---|
 | `api-types/` | 从宿主 API 生成 `web/packages/kernel/src/gen/host.ts` |
 | `check-boundaries/` | 源码导入边界检查（含 build tags 排除的代码） |
-| `uaf-gen/` | 从保留的 OMG 原件生成 UAF 运行元模型 |

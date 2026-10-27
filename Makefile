@@ -101,9 +101,10 @@ setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright �
 openspec: ## 调用固定版本的官方 OpenSpec CLI，例如 make openspec ARGS='list --specs'
 	OPENSPEC_TELEMETRY=0 npm exec --yes --package @fission-ai/openspec@$(OPENSPEC_VERSION) -- openspec $(ARGS)
 
-check-specs: ## 校验模块规范、活动变更及归档任务的 OpenSpec 格式
+check-specs: ## 校验模块规范、活动变更及归档任务的 OpenSpec 格式，并核对声明、规范与源码一致
 	$(MAKE) openspec ARGS='validate --all --strict --no-interactive'
 	$(MAKE) openspec ARGS='validate --archived --strict --no-interactive'
+	python3 scripts/spec-debt.py
 
 .PHONY: check
 check: check-go check-web check-local ## 执行宿主、边界、Web 类型及本地环境选择检查
@@ -122,16 +123,9 @@ ui-capture: ## 只读批量截取当前开发工作区并打包；CONFIG=本地�
 	node scripts/capture-ui.mjs $(if $(CONFIG),--config "$(CONFIG)") $(if $(OUT),--out "$(OUT)") $(ARGS)
 
 .PHONY: check-go
-check-go: check-uaf ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
+check-go: ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./...
 	scripts/verify.sh format composition-static
-
-.PHONY: generate-uaf check-uaf
-generate-uaf: ## 从完整 OMG XMI 原件生成 UAF 运行元模型
-	cd capabilities/server && $(GO) run ./cmd/uaf-gen
-
-check-uaf: ## 只读检查 UAF 运行元模型与标准原件一致
-	cd capabilities/server && $(GO) run ./cmd/uaf-gen -check
 
 .PHONY: check-web
 check-web: ## 检查生成代码类型一致性、Catalog 资产库及全部 Web 包类型检查

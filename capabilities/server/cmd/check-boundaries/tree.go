@@ -33,10 +33,10 @@ const (
 	scopeTotal = "*"
 )
 
-// uafImports are the packages an external standard metamodel may reach. The
+// uafImports is the package an external standard metamodel may reach. The
 // enterprise app may shrink this set only by removing a dependency on it; no
-// new importer, and no new file inside the generator, is admitted.
-var uafImports = []string{"platformserver/internal/enterprise/uaf", "platformserver/internal/enterprise/uafgen"}
+// new importer is admitted.
+var uafImports = []string{"platformserver/internal/enterprise/uaf"}
 
 // growth is one measured quantity of one scope.
 type growth struct {
@@ -297,13 +297,9 @@ func writeCeilings(path string, measures *measures) error {
 // file. The owning packages are exempt: they are the dependency, not a new
 // consumer of it.
 func uafDependents(path string, file *ast.File) int {
-	for _, owned := range []string{
-		"capabilities/server/internal/enterprise/uaf/",
-		"capabilities/server/internal/enterprise/uafgen/",
-	} {
-		if strings.HasPrefix(path, owned) {
-			return 0
-		}
+	// the owning package is the dependency itself, not a new consumer of it
+	if strings.HasPrefix(path, "capabilities/server/internal/enterprise/uaf/") {
+		return 0
 	}
 	found := 0
 	for _, imported := range file.Imports {

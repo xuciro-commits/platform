@@ -34,6 +34,8 @@
 - [ ] 3b.4b `internal/construction` 与 `apps/build` 六组成对同名文件（`formula.go`、`table.go`、`writeback.go`、`observation.go`、`release.go`、`function.go`）逐个判定归属，`dup` 上限同批下降。
 - [x] 3b.5a 刀四前置：冻结 UAF 接触面。`check-boundaries` 新增 `uaf` 棘轮（8 个文件上限，`uaf/`/`uafgen/` 自身豁免），实测可编译的新导入即触发 `uaf: * grew to 9, ceiling 8`；UAF 此后只能缩小。
   - 注：同时纠正审查处方两处前提——UAF 的 Go 代码 342 行（非「数兆」），1.5 MB 中 1.3 MB 是仅供 `cmd/uaf-gen` 溯源的标准原件，进二进制的只有 208 KB `go:embed` JSON；且它是企业模型的校验目录（`Is`/`Relationship`/`Properties`/`Stereotype.Client/Supplier`），裸删等于静默移除确定性拒止。
+- [x] 3b.5c 剥离 UAF 生成链（零运行时语义）：删除 `cmd/uaf-gen/`、`internal/enterprise/uafgen/`、`docs/standards/uaf/`（1.4 MB OMG 原件），摘除 Makefile `generate-uaf`/`check-uaf` 与 `check-go` 依赖，删除 `check-boundaries` 的 uafgen 导入规则与 `ui`/`uaf` 相应豁免，同步 `cmd/README.md` 与 Architecture 代码地图。
+  - 注：运行时元模型继续读已 `go:embed` 的 `gen/uaf-1.3.json`，行为不变；被移除的是"从标准原件再生成"的能力，即宪章要求的"降级为可选外部导入工具"。实测：`go build ./...`、`go vet ./...`、`gofmt`、`boundaries.sh`、`escapes.sh`、`go test ./platform/ ./apps/... ./internal/...`（16 包全绿）通过；`uaf` 聚合上限 8→7、`dup` 的 `profile.go` 3→2，同批记入 `boundaries.tsv`；`scripts/spec-debt.py` 报出的 phantom-deletion 由 21 处降至 12 处。
 - [ ] 3b.5b 刀四实施：以平台自有的最小组织目录词表替换 OMG 目录作为校验来源，解除上述 8 处依赖（逐处同批降 `uaf` 上限），再删 `uaf/`、`uafgen/`、`cmd/uaf-gen/`、`docs/standards/uaf/` 与 Makefile `check-uaf`（`check-go` 依赖它）。`apps/enterprise/sdk.go` 参与 `cmd/api-types` 生成 `host.ts`，须同批 `go run ./cmd/api-types` + `make check-web`；已入库 enterprise 记录的 stereotype 取值须给出解释或迁移说明。本项与 `platform-self-hosting` 的 `platform/business-models` 收敛是同一件事，不拆成两批，也不在缺浏览器与真实 PostgreSQL 演练证据时先行改校验语义。
 
 ## 4. B4 Web 包重划（等体验线 M2 三区定版后启动）
