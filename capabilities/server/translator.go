@@ -12,16 +12,67 @@ import (
 	"platformserver/platform"
 )
 
-// translator is the component that says declaration texts and messages in a
-// language: the dictionaries merged from the platform's and the
-// apps' in the order the tenant runs them, and the patterns derived from them,
-// both built once per language. It needs nothing of the tenant but its apps.
+// translator derives immutable dictionaries and patterns from installed
+// declarations. Application snapshots arrive from the definition owner, so
+// translation never reaches back into the tenant's decision lock.
 type translator struct {
 	apps         func() []platform.App
-	manifest     func(platform.App) platform.Manifest // cached; nil reads the app directly
-	tenant       func() map[string]map[string]string  // the tenant's own words, last
-	dictionaries sync.Map                             // language → map[string]string
-	patternCache sync.Map                             // language → []pattern
+	manifest     func(platform.App) platform.Manifest
+	tenant       func() map[string]map[string]string
+	mu           sync.Mutex
+	applications map[string]platform.Languages
+	dictionaries map[dictionaryKey]*translationDictionary
+}
+
+type dictionaryKey struct{ app, lang string }
+type translationDictionary struct {
+	words    map[string]string
+	once     sync.Once
+	patterns []pattern
+}
+
+func (x *translator) appManifest(a platform.App) platform.Manifest {
+	if x.manifest != nil {
+		return x.manifest(a)
+	}
+	return a.Manifest()
+}
+
+// installApplications projects only published application declarations. A
+// conflicting text has no winner, irrespective of application order.
+func (x *translator) installApplications(definitions []platform.Definition) {
+	applications := map[string]platform.Languages{}
+	conflicts := map[string]platform.Languages{}
+	for _, d := range definitions {
+		if d.Application == nil {
+			continue
+		}
+		if applications[d.Ref.App] == nil {
+			applications[d.Ref.App] = platform.Languages{}
+			conflicts[d.Ref.App] = platform.Languages{}
+		}
+		for lang, words := range d.Application.Languages {
+			if applications[d.Ref.App][lang] == nil {
+				applications[d.Ref.App][lang] = map[string]string{}
+				conflicts[d.Ref.App][lang] = map[string]string{}
+			}
+			merged, ambiguous := applications[d.Ref.App][lang], conflicts[d.Ref.App][lang]
+			for source, translation := range words {
+				if ambiguous[source] != "" {
+					continue
+				}
+				if previous, exists := merged[source]; exists && previous != translation {
+					delete(merged, source)
+					ambiguous[source] = "conflict"
+				} else {
+					merged[source] = translation
+				}
+			}
+		}
+	}
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.applications, x.dictionaries = applications, nil
 }
 
 // A pattern is a dictionary key with {placeholders}, such as "Downtime on
@@ -53,79 +104,86 @@ func (x *translator) languages() []string {
 	}
 	add(PlatformLanguages)
 	for _, a := range x.apps() {
-		if x.manifest != nil {
-			add(x.manifest(a).Languages)
-		} else {
-			add(a.Manifest().Languages)
-		}
+		add(x.appManifest(a).Languages)
 	}
+	x.mu.Lock()
+	for _, languages := range x.applications {
+		add(languages)
+	}
+	x.mu.Unlock()
 	if x.tenant != nil {
-		for lang := range x.tenant() {
-			if !slices.Contains(out, lang) {
-				out = append(out, lang)
-			}
-		}
+		add(x.tenant())
 	}
 	slices.Sort(out)
 	return out
 }
 
-// Dictionary is the tenant's dictionary for a language: the platform's, then
-// each app's in the order the tenant runs them.
+// Dictionary is the shared dictionary. App-scoped reads additionally prefer
+// their owner's declarations; tenant wording always has the last word.
 func (x *translator) Dictionary(lang string) map[string]string {
-	if lang == "" {
-		return nil
+	return x.dictionary("", lang).words
+}
+
+func (x *translator) dictionary(app, lang string) *translationDictionary {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	key := dictionaryKey{app, lang}
+	if cached := x.dictionaries[key]; cached != nil {
+		return cached
 	}
-	if d, ok := x.dictionaries.Load(lang); ok {
-		return d.(map[string]string)
-	}
-	d := map[string]string{}
-	for k, v := range PlatformLanguages[lang] {
-		d[k] = v
-	}
-	for _, a := range x.apps() {
-		for k, v := range a.Manifest().Languages[lang] {
-			d[k] = v
+	words := map[string]string{}
+	add := func(dict map[string]string) {
+		for source, translation := range dict {
+			words[source] = translation
 		}
 	}
-	if x.tenant != nil {
-		for k, v := range x.tenant()[lang] {
-			d[k] = v
+	if lang != "" {
+		add(PlatformLanguages[lang])
+		for _, a := range x.apps() {
+			manifest := x.appManifest(a)
+			add(manifest.Languages[lang])
+			add(x.applications[manifest.ID][lang])
+		}
+		if app != "" {
+			for _, a := range x.apps() {
+				manifest := x.appManifest(a)
+				if manifest.ID == app {
+					add(manifest.Languages[lang])
+					break
+				}
+			}
+			add(x.applications[app][lang])
+		}
+		if x.tenant != nil {
+			add(x.tenant()[lang])
 		}
 	}
-	x.dictionaries.Store(lang, d)
+	d := &translationDictionary{words: words}
+	if x.dictionaries == nil {
+		x.dictionaries = map[dictionaryKey]*translationDictionary{}
+	}
+	x.dictionaries[key] = d
 	return d
 }
 
-// reset forgets the built dictionaries and patterns: the tenant's words changed.
+// reset forgets derived dictionaries after the tenant's words change.
 func (x *translator) reset() {
-	x.dictionaries.Clear()
-	x.patternCache.Clear()
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.dictionaries = nil
 }
 
-// SayInApp says a text in a language, looking up the app's own dictionary
-// first, then falling back to Say across all dictionaries.
 func (x *translator) SayInApp(app, lang, s string) string {
-	if app != "" && lang != "" && s != "" && x.apps != nil {
-		for _, a := range x.apps() {
-			if a.Manifest().ID == app {
-				dict := a.Manifest().Languages[lang]
-				if tr, ok := dict[s]; ok && tr != "" {
-					return tr
-				}
-				if tr, ok := dict[strings.ToUpper(s[:1])+s[1:]]; ok && tr != "" {
-					return tr
-				}
-				break
-			}
-		}
-	}
-	return x.Say(lang, s)
+	return x.say(app, lang, s, 0)
 }
 
 // Translate returns v, as JSON, with every declaration text said in a
 // language: exactly, or by a pattern (a generated action's "Create {thing}").
 func (x *translator) Translate(v any, lang string) any {
+	return x.translate(v, "", lang)
+}
+
+func (x *translator) translate(v any, app, lang string) any {
 	if lang == "" {
 		return v
 	}
@@ -137,8 +195,8 @@ func (x *translator) Translate(v any, lang string) any {
 	if json.Unmarshal(raw, &tree) != nil {
 		return v
 	}
-	walkTextsWithApp(tree, "", func(app, s string) string { return x.SayInApp(app, lang, s) })
-	walkChoicesWithApp(tree, "", func(app string, m map[string]any, choices []any) {
+	walkTextsWithApp(tree, app, func(app, s string) string { return x.SayInApp(app, lang, s) })
+	walkChoicesWithApp(tree, app, func(app string, m map[string]any, choices []any) {
 		titles := make([]any, len(choices))
 		for i, c := range choices {
 			s, _ := c.(string)
@@ -152,8 +210,8 @@ func (x *translator) Translate(v any, lang string) any {
 // lookup is a text's entry in a language's dictionary; a text in lower case,
 // as generated sentences hold a title ("Create purchase request"), finds its
 // title's entry too.
-func (x *translator) lookup(lang, s string) (string, bool) {
-	dict := x.Dictionary(lang)
+func (x *translator) lookup(app, lang, s string) (string, bool) {
+	dict := x.dictionary(app, lang).words
 	if tr, ok := dict[s]; ok && tr != "" {
 		return tr, true
 	}
@@ -168,11 +226,15 @@ func (x *translator) lookup(lang, s string) (string, bool) {
 // says tells whether a language can say a text: by its entry, or by a
 // pattern whose values it can say in turn (numbers and names need none).
 func (x *translator) says(lang, s string, depth int) bool {
-	if _, ok := x.lookup(lang, s); ok || depth > maxSay || !strings.ContainsFunc(s, unicode.IsLetter) {
+	return x.saysInApp("", lang, s, depth)
+}
+
+func (x *translator) saysInApp(app, lang, s string, depth int) bool {
+	if _, ok := x.lookup(app, lang, s); ok || depth > maxSay || !strings.ContainsFunc(s, unicode.IsLetter) {
 		return ok || depth <= maxSay
 	}
-	for _, p := range x.patterns(lang) {
-		if _, ok := x.split(lang, p, s, depth); ok {
+	for _, p := range x.patterns(app, lang) {
+		if _, ok := x.split(app, lang, p, s, depth); ok {
 			return true
 		}
 	}
@@ -180,12 +242,12 @@ func (x *translator) says(lang, s string, depth int) bool {
 }
 
 // split is the first way s fills p whose every value the language can say.
-func (x *translator) split(lang string, p pattern, s string, depth int) ([]string, bool) {
+func (x *translator) split(app, lang string, p pattern, s string, depth int) ([]string, bool) {
 	if !p.re.MatchString(s) {
 		return nil, false
 	}
 	for _, values := range p.splits(s, 32) {
-		if !slices.ContainsFunc(values, func(v string) bool { return !x.says(lang, v, depth+1) }) {
+		if !slices.ContainsFunc(values, func(v string) bool { return !x.saysInApp(app, lang, v, depth+1) }) {
 			return values, true
 		}
 	}
@@ -193,32 +255,32 @@ func (x *translator) split(lang string, p pattern, s string, depth int) ([]strin
 }
 
 // patterns are the dictionary's keys with placeholders, the most specific first.
-func (x *translator) patterns(lang string) []pattern {
-	if p, ok := x.patternCache.Load(lang); ok {
-		return p.([]pattern)
-	}
-	var out []pattern
-	for key, tr := range x.Dictionary(lang) {
-		idx := placeholder.FindAllStringSubmatchIndex(key, -1)
-		if len(idx) == 0 {
-			continue
+func (x *translator) patterns(app, lang string) []pattern {
+	d := x.dictionary(app, lang)
+	d.once.Do(func() {
+		var out []pattern
+		for key, tr := range d.words {
+			idx := placeholder.FindAllStringSubmatchIndex(key, -1)
+			if len(idx) == 0 {
+				continue
+			}
+			expr, names, parts, last, fixed := "^", []string{}, []string{}, 0, 0
+			for _, m := range idx {
+				parts = append(parts, key[last:m[0]])
+				expr += regexp.QuoteMeta(key[last:m[0]]) + "(.+)"
+				fixed += m[0] - last
+				names = append(names, key[m[2]:m[3]])
+				last = m[1]
+			}
+			expr += regexp.QuoteMeta(key[last:]) + "$"
+			parts = append(parts, key[last:])
+			fixed += len(key) - last
+			out = append(out, pattern{re: regexp.MustCompile("(?s)" + expr), names: names, parts: parts, out: tr, fixed: fixed})
 		}
-		expr, names, parts, last, fixed := "^", []string{}, []string{}, 0, 0
-		for _, m := range idx {
-			parts = append(parts, key[last:m[0]])
-			expr += regexp.QuoteMeta(key[last:m[0]]) + "(.+)"
-			fixed += m[0] - last
-			names = append(names, key[m[2]:m[3]])
-			last = m[1]
-		}
-		expr += regexp.QuoteMeta(key[last:]) + "$"
-		parts = append(parts, key[last:])
-		fixed += len(key) - last
-		out = append(out, pattern{re: regexp.MustCompile("(?s)" + expr), names: names, parts: parts, out: tr, fixed: fixed})
-	}
-	slices.SortFunc(out, func(a, b pattern) int { return b.fixed - a.fixed })
-	x.patternCache.Store(lang, out)
-	return out
+		slices.SortFunc(out, func(a, b pattern) int { return b.fixed - a.fixed })
+		d.patterns = out
+	})
+	return d.patterns
 }
 
 // said is a refusal with its message in a language (F-23); the code stays.
@@ -233,21 +295,21 @@ func (x *translator) said(err *kernel.Error, lang string) *kernel.Error {
 // the translation of the first pattern it matches, with the matched values
 // said in turn (a state, an action's title, a nested text). What nothing
 // matches stays as written.
-func (x *translator) Say(lang, s string) string { return x.say(lang, s, 0) }
+func (x *translator) Say(lang, s string) string { return x.say("", lang, s, 0) }
 
-func (x *translator) say(lang, s string, depth int) string {
+func (x *translator) say(app, lang, s string, depth int) string {
 	if lang == "" || s == "" || depth > maxSay {
 		return s
 	}
-	if tr, ok := x.lookup(lang, s); ok {
+	if tr, ok := x.lookup(app, lang, s); ok {
 		return tr
 	}
 	// The most specific pattern with a split the language can say wholly; else
 	// the first that matches at all, with what it cannot say left as written.
 	var p pattern
 	var filled []string
-	for _, q := range x.patterns(lang) {
-		if found, ok := x.split(lang, q, s, depth); ok {
+	for _, q := range x.patterns(app, lang) {
+		if found, ok := x.split(app, lang, q, s, depth); ok {
 			p, filled = q, found
 			break
 		}
@@ -258,7 +320,7 @@ func (x *translator) say(lang, s string, depth int) string {
 	if filled != nil {
 		values := map[string]string{}
 		for i, name := range p.names {
-			values[name] = x.say(lang, filled[i], depth+1)
+			values[name] = x.say(app, lang, filled[i], depth+1)
 		}
 		return placeholder.ReplaceAllStringFunc(p.out, func(x string) string {
 			if v, ok := values[x[1:len(x)-1]]; ok {

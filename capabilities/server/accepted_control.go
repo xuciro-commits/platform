@@ -94,6 +94,7 @@ func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error)
 	t.opsMu.Unlock()
 	view.connectors.kernel.Restore(nil, marks)
 	view.i18n = translator{apps: func() []platform.App { return view.apps }, tenant: view.words.clone}
+	view.i18n.installApplications(view.definitions)
 	for _, kind := range []string{"connectors", "settings", "bindings", "work", "endpoints", "effects", "words"} {
 		if err := view.installControl(kind, images[kind]); err != nil {
 			return nil, err

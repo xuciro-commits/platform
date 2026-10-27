@@ -156,7 +156,7 @@ export class Builder extends Member {
     return { id, name };
   }
   /** An application draft over original published resources; publication stays explicit. */
-  async application(spec: {name?:string;title:string;pages?:string[];resources?:unknown[];profile?:unknown;extends?:{app:string;kind:string;name:string};entry?:string;replacements?:{view:string;page:string}[]}): Promise<{id:string;name:string}> {
+  async application(spec: {name?:string;title:string;pages?:string[];groups?:Api.Application["groups"];languages?:Api.Application["languages"];resources?:unknown[];profile?:unknown;extends?:{app:string;kind:string;name:string};entry?:string;replacements?:{view:string;page:string}[]}): Promise<{id:string;name:string}> {
     const name=spec.name??slug("app"),id=fresh("APP");
     await this.decide("build.app.create",{type:"build.app",id},{...spec,name,pages:spec.pages??[]});
     return {id,name};

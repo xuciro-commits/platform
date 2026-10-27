@@ -307,6 +307,7 @@ export type AppSettings = {
 };
 
 export type Application = {
+  languages?: Record<string, Record<string, string>>;
   profile?: ApplicationProfile;
   header?: ApplicationHeader;
   uiProfile?: string;

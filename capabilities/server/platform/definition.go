@@ -291,6 +291,7 @@ var Filterable = []string{"choice", "boolean", "reference"}
 // name, an icon from the platform's set, and the pages it holds in order. It
 // grants nothing; each page is offered to whoever may read what it shows.
 type Application struct {
+	Languages    Languages                    `json:"languages,omitempty"`
 	Profile      *ApplicationProfile          `json:"profile,omitempty"`
 	Header       *ApplicationHeader           `json:"header,omitempty"`
 	UIProfile    string                       `json:"uiProfile,omitempty"`
@@ -319,6 +320,9 @@ type Application struct {
 // CheckResources checks explicit non-navigation resource membership. Assets
 // keep their existing owner and may be shared by several applications.
 func (a Application) CheckResources() error {
+	if err := a.CheckLanguages(); err != nil {
+		return err
+	}
 	if err := a.CheckExtension(); err != nil {
 		return err
 	}

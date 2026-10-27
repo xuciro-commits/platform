@@ -26,17 +26,19 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     const icon = <IconGlyph name={application.icon} />; // the kit's vocabulary
     const id = `${definition.ref.app}:${application.name}`;
     const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
-    const item = (name: string) => ({ label: pages.get(name)?.title ?? name, icon, route: route(name) });
-    // Its pages under their headings (17b): those in no group first, under the
-    // application's own name, then each group in the order the builder chose.
+    const item = (name: string) => ({ label: pages.get(name)?.title ?? name, route: route(name) });
+    // The original application groups become the shell's expandable menus.
+    // Unassigned pages retain their original order and direct entry.
     const groups = (application.groups ?? []).map((g) => ({ label: g.title, pages: g.pages.filter((name) => held.includes(name)) }))
       .filter((g) => g.pages.length > 0);
     const grouped = new Set(groups.flatMap((g) => g.pages));
-    const sections = [{ label: application.title, pages: held.filter((name) => !grouped.has(name)) }, ...groups].filter((g) => g.pages.length > 0);
+    const ungrouped = held.filter((name) => !grouped.has(name));
+    const menu = [...ungrouped.map(item), ...groups.map(group => ({ label: group.label, items: group.pages.map(item) }))];
+    const firstPage = ungrouped[0] ?? groups[0]?.pages[0];
     const operations = { app: definition.ref.app, name: application.name, application: id };
     const overview: Route = { view: "application-overview", params: operations };
     const nav = (): NavSection[] => [
-      ...sections.map((g) => ({ label: g.label, items: g.pages.map(item) })),
+      ...(menu.length ? [{ label: application.title, items: menu }] : []),
       { label: t("Run and diagnose"), items: [
         ...(!held.length ? [{ label: t("Application overview"), icon: <LayoutDashboard />, route: overview }] : []),
         { label: t("Application runs"), icon: <BarChart3 />, route: { view: "application-runs", params: operations } },
@@ -48,7 +50,7 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
       description: application.description,
       category: held.length ? "business" : "operate",
       icon,
-      home: sections.length ? route(sections[0]!.pages[0]!) : overview,
+      home: firstPage ? route(firstPage) : overview,
       views: [], // its pages are the workspace's own page view
       nav,
     }];

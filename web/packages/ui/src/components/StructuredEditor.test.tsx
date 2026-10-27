@@ -122,6 +122,16 @@ test('a revision change invalidates an in-flight trial even when values and targ
   expect(screen.queryByText('Business trial passed. Nothing was saved; submission checks again.')).toBeNull();
 });
 
+test('a confirmed saved revision clears the source application notice',()=>{
+  const value={name:'Same'},change=vi.fn();
+  const editor=(revision:number)=><InputDraftProvider><StructuredEditor value={value} scope="same" expectedRevision={revision} onChange={change}/></InputDraftProvider>;
+  const view=render(editor(1));
+  fireEvent.click(screen.getByRole('button',{name:'Apply source'}));
+  expect(screen.getByText('Source applied to this draft. Nothing has been saved.')).toBeTruthy();
+  view.rerender(editor(2));
+  expect(screen.queryByText('Source applied to this draft. Nothing has been saved.')).toBeNull();
+});
+
 test('RecordForm submits complete declared source input through its original action and retains it on refusal',async()=>{
   const entity=defineEntity<{name:string}>({name:'Draft',primary:'name',fields:{name:text({label:'Name',required:true})}});
   const fields:Api.FieldInfo[]=[{name:'name',title:'Name',type:'text',required:true},{name:'advanced',title:'Advanced',type:'json'},{name:'count',title:'Count',type:'integer'},{name:'enabled',title:'Enabled',type:'boolean'},{name:'clear',title:'Clear',type:'text'},{name:'rows',title:'Rows',type:'json'}];

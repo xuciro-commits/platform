@@ -47,6 +47,7 @@ func (t *Tenant) definitionsFingerprint() uint64 { return t.defGen.Load() }
 func (t *Tenant) setDefinitions(definitions []platform.Definition) {
 	t.definitions = definitions
 	t.defGen.Add(1)
+	t.i18n.installApplications(definitions)
 }
 
 // generation resets the cache when the definitions moved and answers whether

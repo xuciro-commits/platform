@@ -21,6 +21,7 @@ import (
 // Application is an application this organisation hands to its people.
 type Application struct {
 	platform.Record
+	Languages    platform.Languages                    `json:"languages,omitempty" field:"aside" type:"json" title:"Application translations"`
 	Profile      *platform.ApplicationProfile          `json:"profile,omitempty" field:"aside" type:"json" title:"Application profile" help:"Expected records and runs, retention and recovery declarations; actual guarantees require environment evidence"`
 	Header       *platform.ApplicationHeader           `json:"header,omitempty" field:"aside" type:"json" title:"Application header"`
 	UIProfile    string                                `json:"uiProfile,omitempty" field:"aside" title:"UI profile"`
@@ -53,6 +54,9 @@ func (b *Build) applicationEntity() platform.Entity {
 				return nil
 			}
 			a := record.(*Application)
+			if err := applicationDescriptor(*a).CheckLanguages(); err != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
 			if err := applicationDescriptor(*a).CheckExtension(); err != nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 			}
@@ -120,7 +124,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
+	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
 }
 
 // checkApplication refuses an application people could not open: a name that is

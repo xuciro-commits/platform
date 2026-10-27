@@ -115,7 +115,10 @@ func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any,
 		if choices, ok := x["choices"].([]any); ok {
 			f(app, x, choices)
 		}
-		for _, child := range x {
+		for key, child := range x {
+			if key == "languages" {
+				continue
+			}
 			walkChoicesWithApp(child, app, f)
 		}
 	case []any:
@@ -142,6 +145,9 @@ func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
 			app, _, _ = strings.Cut(schema, ".")
 		}
 		for k, child := range x {
+			if k == "languages" {
+				continue
+			}
 			if s, ok := child.(string); ok && translated[k] {
 				x[k] = f(app, s)
 				continue

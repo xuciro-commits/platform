@@ -50,7 +50,13 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
-		WriteJSON(w, http.StatusOK, value)
+		// Model fields are declarations; records, model bindings and permission
+		// evidence retain their original values, even for a field named title.
+		owner, _, _ := strings.Cut(value.Object, ".")
+		WriteJSON(w, http.StatusOK, struct {
+			PageModelResult
+			Fields any `json:"fields"`
+		}{value, t.i18n.translate(value.Fields, owner, t.Language(m, r))})
 	})
 	rt.recordRead(Route{Pattern: "GET /v1/page-model/rules", Summary: "List original action criteria available to the builder model inspector", Answer: []PageModelRule{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 

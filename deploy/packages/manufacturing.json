@@ -1,6 +1,6 @@
 {
   "id": "application.manufacturing",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "namespace": "application.manufacturing",
   "title": "Manufacturing",
   "description": "Editable business documents and production declarations; the shared Core owns the general ledger.",
@@ -22148,26 +22148,57 @@
                 "kind": "rows",
                 "children": [
                   "create",
-                  "records",
-                  "record",
-                  "advice"
-                ]
+                  "workspace"
+                ],
+                "gap": 12
               },
               "records": {
                 "kind": "widget",
-                "section": "records"
+                "section": "records",
+                "size": {
+                  "weight": 3,
+                  "minWidth": 420,
+                  "maxHeight": 640,
+                  "scroll": "auto"
+                }
               },
               "record": {
                 "kind": "widget",
-                "section": "record"
+                "section": "record",
+                "title": "Order details"
               },
               "advice": {
                 "kind": "widget",
-                "section": "advice"
+                "section": "advice",
+                "title": "Review advice panel"
               },
               "create": {
                 "kind": "widget",
                 "section": "create"
+              },
+              "workspace": {
+                "kind": "columns",
+                "title": "Order workspace",
+                "gap": 16,
+                "children": [
+                  "records",
+                  "orderpanel"
+                ]
+              },
+              "orderpanel": {
+                "kind": "tabs",
+                "title": "Order details",
+                "activeVariable": "orderTab",
+                "children": [
+                  "record",
+                  "advice"
+                ],
+                "size": {
+                  "weight": 2,
+                  "minWidth": 320,
+                  "maxHeight": 640,
+                  "scroll": "auto"
+                }
               }
             },
             "variables": {
@@ -22179,6 +22210,12 @@
                   "kind": "record",
                   "section": "records"
                 }
+              },
+              "orderTab": {
+                "scope": "page",
+                "type": "string",
+                "mode": "state",
+                "initial": "record"
               }
             }
           }
@@ -22288,22 +22325,22 @@
           "title": "Manufacturing execution",
           "icon": "factory",
           "pages": [
+            "mesorder",
+            "mesbatch",
             "mesissue",
             "messignature",
-            "mescapability",
-            "mescenter",
-            "mesresource",
-            "messkill",
             "mesrouting",
             "mesoperation",
             "mesrequirement",
-            "mesorder",
-            "mesbatch",
-            "mesproductionstart",
-            "mesproductionresult",
-            "mesupstreamorder",
+            "mescenter",
+            "mesresource",
+            "mescapability",
+            "messkill",
             "mesdevice",
             "mesdowntime",
+            "mesupstreamorder",
+            "mesproductionstart",
+            "mesproductionresult",
             "mesleadtime"
           ],
           "resources": [
@@ -22537,7 +22574,315 @@
               "kind": "query",
               "name": "supplieranswers"
             }
-          ]
+          ],
+          "groups": [
+            {
+              "title": "Production execution",
+              "pages": [
+                "mesorder",
+                "mesbatch"
+              ]
+            },
+            {
+              "title": "Quality and exceptions",
+              "pages": [
+                "mesissue",
+                "messignature"
+              ]
+            },
+            {
+              "title": "Routing and resources",
+              "pages": [
+                "mesrouting",
+                "mesoperation",
+                "mesrequirement",
+                "mescenter",
+                "mesresource",
+                "mescapability",
+                "messkill"
+              ]
+            },
+            {
+              "title": "Equipment and downtime",
+              "pages": [
+                "mesdevice",
+                "mesdowntime"
+              ]
+            },
+            {
+              "title": "External coordination",
+              "pages": [
+                "mesupstreamorder",
+                "mesproductionstart",
+                "mesproductionresult",
+                "mesleadtime"
+              ]
+            }
+          ],
+          "languages": {
+            "zh-CN": {
+              "mesrequirements": "工序能力要求查询",
+              "Complete equipment capability matching input.": "设备能力匹配所需的完整输入。",
+              "messkills": "资源能力查询",
+              "Coordinate the first active execution batch": "协调首个已开工的执行批次",
+              "Upstream production plan": "上游生产计划",
+              "Upstream order identity": "上游订单标识",
+              "Production order reference": "生产订单编号",
+              "Product identity": "产品标识",
+              "Planned quantity": "计划数量",
+              "Upstream state": "上游状态",
+              "Submitted document values and their original parent stay fixed.": "已提交单据的值及其原始归属不可更改。",
+              "Upstream production plans": "上游生产计划",
+              "Available upstream production plans": "可用上游生产计划",
+              "Complete currently imported upstream plans. The provider still decides each command.": "当前已导入的完整上游计划。各项指令仍由上游提供方决定是否接受。",
+              "Exact original coordination outcomes": "原始协同结果",
+              "Only the current member visible receipts for the exact coordination subject.": "仅包含当前成员可见、与该协同事项完全对应的回执。",
+              "Start corrected upstream production": "启动更正后的上游生产",
+              "Start a corrected upstream association": "启动更正后的上游关联",
+              "Upstream start coordination": "上游开工协同",
+              "Shop order": "工单",
+              "Execution batch": "执行批次",
+              "Upstream production order": "上游生产订单",
+              "Stable shop identity": "固定工单标识",
+              "Production line": "产线",
+              "Queued": "待处理",
+              "Pending": "处理中",
+              "Confirmed": "已确认",
+              "The first execution batch starts upstream production once.": "首个执行批次仅启动一次上游生产。",
+              "Send the original production request": "发送原始生产请求",
+              "The declared business conditions are not satisfied.": "尚未满足所声明的业务条件。",
+              "Upstream production provider": "上游生产提供方",
+              "Keep the confirmed coordination outcome": "保存已确认的协同结果",
+              "The coordination retains its original shop, upstream binding and actual execution facts.": "协同须保留原始工单、上游关联及实际执行事实。",
+              "Production result coordination": "生产结果协同",
+              "Stable result identity": "固定结果标识",
+              "Actual good quantity": "实际良品数量",
+              "Actual scrap quantity": "实际报废数量",
+              "Close upstream order": "关闭上游订单",
+              "Coordination attempt": "协同尝试",
+              "Original rejected coordination": "原始被拒协同",
+              "Correction reason": "更正原因",
+              "Corrected upstream plan": "更正后的上游计划",
+              "Exact coordination subject": "确切协同事项",
+              "Original coordination subject": "原始协同事项",
+              "Needsstart": "待上游开工",
+              "Starting": "开工中",
+              "Superseded": "已被替代",
+              "Each execution batch has one result for each accepted coordination attempt.": "每个执行批次在每次已接受的协同尝试中仅有一个结果。",
+              "A refused coordination has one original successor.": "被拒协同仅有一个直接后继。",
+              "Only a superseded coordination has one original linked correction.": "仅已被替代的协同可关联一个直接更正记录。",
+              "Correct the refused upstream association": "更正被拒的上游关联",
+              "Correct only a conclusively refused request, with a fitting upstream plan and a reason. Retain unknown requests for original-key reconciliation.": "仅可更正已明确被拒的请求，须选择匹配的上游计划并填写原因。结果未知的请求应保留原标识继续核对。",
+              "Start the corrected upstream association": "启动更正后的上游关联",
+              "Corrected upstream production plan": "更正后的上游生产计划",
+              "Keep corrected upstream start": "保存更正后的上游开工结果",
+              "A result retains its actual physical batch.": "结果须保留实际生产批次。",
+              "The first result retains its original upstream association.": "首次结果须保留原始上游关联。",
+              "A correction retains the actual batch and a readable conclusive refusal; unknown results cannot change targets.": "更正须保留实际批次及可读取的明确拒绝结果；结果未知时不可更换目标。",
+              "Production start": "生产开工",
+              "Production confirm": "生产确认",
+              "Accepted upstream batches": "已接受的上游批次",
+              "Upstream batch receipts": "上游批次回执",
+              "Equipment capability": "设备能力",
+              "Name": "名称",
+              "Capability code": "能力代码",
+              "A capability code identifies one capability.": "每个能力代码仅对应一项能力。",
+              "Work center": "工作中心",
+              "Production resource": "生产资源",
+              "Active": "活动",
+              "Resource capability": "资源能力",
+              "Capability": "能力",
+              "A resource holds each capability once.": "同一资源的每项能力仅可登记一次。",
+              "Routing version": "工艺路线版本",
+              "Routing code": "工艺路线代码",
+              "Business version": "业务版本",
+              "Effective from": "生效日期",
+              "Effective until": "失效日期",
+              "First operation": "首道工序",
+              "Draft": "草稿",
+              "Published": "已发布",
+              "Publish routing version": "发布工艺路线版本",
+              "A routing needs a bounded set of operations and its first business operation.": "工艺路线须有数量受限的工序集合，并指定首道业务工序。",
+              "Routing operation": "工艺工序",
+              "Operation number": "工序编号",
+              "Next operation": "下道工序",
+              "Operator instructions": "操作说明",
+              "A routing version has one operation for each business number.": "同一工艺路线版本中的工序编号不可重复。",
+              "Next operations stay in this routing and advance their business number.": "下道工序须属于同一工艺路线，且工序编号递增。",
+              "Operation capability requirement": "工序能力要求",
+              "Operation": "工序",
+              "Required capability": "所需能力",
+              "An operation requires each capability once.": "同一工序的每项能力要求仅可登记一次。",
+              "Shop order reference": "工单编号",
+              "Product": "产品",
+              "Completed good quantity": "已完成良品数量",
+              "Completed scrap quantity": "已完成报废数量",
+              "Adopted review advice": "已采纳的审核建议",
+              "Advice category": "建议类别",
+              "Needs review": "需要审核",
+              "Released": "已下达",
+              "Completed": "已完成",
+              "A shop order plans a positive whole-unit quantity.": "工单计划数量须为正整数。",
+              "The complete batch split retains its original routing and planned quantity.": "完整拆批须保留原始工艺路线及计划数量。",
+              "Each shop order has a distinct business reference.": "每张工单的业务编号须唯一。",
+              "The shop order retains its original first-start coordination.": "工单须保留原始首次开工协同。",
+              "Release the complete batch split": "下达全部拆分批次",
+              "The complete batch quantities must equal the shop order.": "所有批次数量之和须等于工单数量。",
+              "Complete the whole shop order": "完成整张工单",
+              "Every batch must finish with its original good or scrap result.": "每个批次均须完成，并保留原始良品或报废结果。",
+              "Coordinate the first active batch": "协调首个已开工批次",
+              "Refresh the upstream plans and choose an open order for this product with enough planned quantity.": "请刷新上游计划，选择该产品尚未关闭且计划数量充足的订单。",
+              "First active execution batch": "首个已开工的执行批次",
+              "Report an actual completed batch": "上报实际已完成批次",
+              "Production result requested": "已请求生产结果",
+              "Report the actual good/scrap result after upstream start is confirmed; closing upstream requires all local batches terminal.": "上游开工确认后，上报实际良品及报废结果；关闭上游订单前，所有本地批次均须结束。",
+              "Completed execution batch": "已完成的执行批次",
+              "Adopt review advice": "采纳审核建议",
+              "Proposal": "提案",
+              "Review advice": "审核建议",
+              "Batch reference": "批次编号",
+              "Batch quantity": "批次数量",
+              "Fixed routing version": "固定工艺路线版本",
+              "Current operation": "当前工序",
+              "Current resource": "当前资源",
+              "Current operator": "当前操作员",
+              "Good quantity": "良品数量",
+              "Scrap quantity": "报废数量",
+              "Accepted exception count": "已接受异常数",
+              "Current exception": "当前异常",
+              "Reviewed by": "审核人",
+              "Approved by": "批准人",
+              "Disposition": "处置方式",
+              "Rework operation": "返工工序",
+              "Needs upstream start": "需要上游开工",
+              "Hold": "暂停",
+              "Done": "已完成",
+              "Scrapped": "已报废",
+              "Good and scrap quantities cannot exceed this fixed batch.": "良品与报废数量之和不可超过固定批次数量。",
+              "The current operation belongs to the fixed routing version.": "当前工序须属于固定的工艺路线版本。",
+              "Exception counts and distinct signatures must match their actual accepted records.": "异常数量及不同签名须与实际已接受的记录一致。",
+              "A terminal batch accounts for all of its units as good or scrap.": "批次结束时，全部数量均须计入良品或报废。",
+              "A shop order has one execution batch for each batch reference.": "同一工单的每个批次编号仅对应一个执行批次。",
+              "New batches use their draft shop order and the published routing first operation.": "新批次须关联草稿工单，并使用已发布工艺路线的首道工序。",
+              "Start this operation": "开始当前工序",
+              "Complete the active operation or report an exception": "完成当前工序或上报异常",
+              "The resource must belong to this work center and hold every required capability.": "资源须属于当前工作中心，并具备全部所需能力。",
+              "Complete this operation": "完成当前工序",
+              "Operation completed": "工序已完成",
+              "Review and report the completed production batch": "审核并上报已完成的生产批次",
+              "Only the actual active operator completes this operation.": "仅当前实际操作员可完成此工序。",
+              "Report a production exception": "上报生产异常",
+              "Operation paused by an exception": "工序因异常暂停",
+              "Review the production exception and propose its disposition": "审核生产异常并提出处置方式",
+              "Exception code": "异常代码",
+              "Sign reviewed disposition": "签署处置审核",
+              "Review once, and choose an existing operation at or before the held operation in its fixed routing.": "仅可审核一次；请选择固定工艺路线中暂停工序本身或其之前的已有工序。",
+              "Rework operation (only for rework)": "返工工序（仅返工时填写）",
+              "Sign approved disposition": "签署处置批准",
+              "Disposition approved by a second person": "处置已由第二人批准",
+              "A different quality member approves the original reviewed disposition.": "须由另一名质量人员批准原始已审核处置。",
+              "Production exception": "生产异常",
+              "Exception number": "异常序号",
+              "Reported operation": "上报工序",
+              "Reported by": "上报人",
+              "Reported at": "上报时间",
+              "A batch has one exception for each accepted exception number.": "同一批次的每个已接受异常序号仅对应一条异常。",
+              "An exception records the current operation and the next number of its actual batch.": "异常须记录实际批次的当前工序及下一异常序号。",
+              "Disposition signature": "处置签名",
+              "Signature meaning": "签名含义",
+              "Signed by": "签署人",
+              "Signed at": "签署时间",
+              "An exception has one signature for each meaning.": "同一异常的每种签名含义仅可签署一次。",
+              "The two signatures belong to different people.": "两次签名须由不同人员签署。",
+              "A signature belongs to the actual held batch and its current exception.": "签名须属于实际暂停的批次及其当前异常。",
+              "Production exceptions": "生产异常",
+              "Disposition signatures": "处置签名",
+              "Equipment capabilities": "设备能力",
+              "Work centers": "工作中心",
+              "Resources": "资源",
+              "Resource capabilities": "资源能力",
+              "Routing versions": "工艺路线版本",
+              "Routing operations": "工艺工序",
+              "Operation requirements": "工序要求",
+              "Shop orders": "工单",
+              "Record and business actions": "工单详情与操作",
+              "Manufacturing review advice": "生产审核建议",
+              "Execution batches": "执行批次",
+              "Manufacturing execution": "制造执行",
+              "Observed equipment": "观测设备",
+              "Source device identifier": "来源设备标识",
+              "Supervising unit": "主管单位",
+              "Request a downtime reason": "要求填写停机原因",
+              "Reason reminder after (hours)": "原因提醒间隔（小时）",
+              "A reminder is disabled at zero or due within seven days.": "提醒间隔为零时停用，启用时须在七天以内。",
+              "Ready": "就绪",
+              "Record observed downtime": "记录观测到的停机",
+              "Read the declared observation source to record state intervals.": "读取已声明的观测来源，记录设备状态区间。",
+              "Downtime event": "停机事件",
+              "Observation source": "观测来源",
+              "Source version": "来源版本",
+              "Source revision": "来源修订",
+              "Processing version": "处理版本",
+              "Known from": "已知开始时间",
+              "Known until": "已知结束时间",
+              "Start remains open": "起点尚未确定",
+              "End remains open": "终点尚未确定",
+              "Superseded interval": "已被替代的区间",
+              "Requires review": "需要复核",
+              "Reason": "原因",
+              "Needs a reason": "待填写原因",
+              "Reason recorded": "已记录原因",
+              "An accepted observation is required to create an interval.": "创建区间须依据已接受的观测结果。",
+              "Record downtime reason": "填写停机原因",
+              "Choose a current interval; corrected intervals require supervisor review.": "请选择当前有效区间；更正后的区间须由主管复核。",
+              "Review corrected downtime": "复核更正后的停机",
+              "Request downtime review": "请求停机复核",
+              "Downtime needs a reason": "停机待填写原因",
+              "Observed boundaries and provenance change only through the original source.": "观测边界及来源信息仅可通过原始来源更改。",
+              "Downtime predecessors": "停机前序事件",
+              "Keeps the original interval and human reason when a correction splits or merges it.": "更正拆分或合并区间时，保留原始区间及人工填写的原因。",
+              "Equipment state store": "设备状态存储",
+              "Equipment state intervals": "设备状态区间",
+              "Request a reason for new downtime": "请求填写新增停机的原因",
+              "Equipment observations": "设备观测",
+              "Downtime": "停机",
+              "Downtime events": "停机事件",
+              "Downtime detail": "停机详情",
+              "Predecessor events": "前序事件",
+              "Original human decision": "原始人工决定",
+              "Suggest useful next steps from readable record facts; a person reviews and adopts the result.": "依据可读取的记录事实提出后续建议，由人工审核并采纳。",
+              "Explain useful next steps using only the supplied facts.": "仅依据已提供的事实说明后续可行步骤。",
+              "Whether the record can be treated as routine or needs review.": "该记录可按常规处理，还是需要审核。",
+              "Whether a person must resolve missing facts or uncertainty.": "是否需要人工补充缺失事实或消除不确定性。",
+              "Confidence from zero to one; it does not authorize business changes.": "置信度范围为零到一，不代表已获准更改业务。",
+              "Manufacturing review advice evaluation": "生产审核建议评估",
+              "Supplier inquiry": "供应商询问",
+              "An authorized supplier inquiry and the original external answer; delivery alone is not a promised lead time.": "已获授权的供应商询问及原始外部答复；仅送达询问不代表已承诺交期。",
+              "Product or material": "产品或物料",
+              "Question": "问题",
+              "Supplier answer": "供应商答复",
+              "Supplier inquiries": "供应商询问",
+              "Production execution": "生产执行",
+              "Quality and exceptions": "质量与异常",
+              "Routing and resources": "工艺与资源",
+              "Equipment and downtime": "设备与停机",
+              "External coordination": "外部协同",
+              "Order workspace": "工单工作区",
+              "Order details": "工单详情",
+              "Review advice panel": "审核建议",
+              "Downtime workspace": "停机工作区",
+              "Current interval": "当前区间",
+              "History": "历史记录",
+              "Source and versions": "来源与版本",
+              "rework": "返工",
+              "scrap": "报废",
+              "use-as-is": "让步接收",
+              "reviewed": "已审核",
+              "approved": "已批准",
+              "routine": "常规",
+              "review": "待审核"
+            }
+          }
         }
       },
       {
@@ -24350,11 +24695,7 @@
                 "openend",
                 "review",
                 "retired",
-                "reason",
-                "source",
-                "sourceversion",
-                "sourcerevision",
-                "processingversion"
+                "reason"
               ],
               "selection": "current",
               "actions": [
@@ -24398,6 +24739,19 @@
                 "review"
               ],
               "selection": "previous"
+            },
+            {
+              "id": "provenance",
+              "widget": "detail",
+              "configVersion": 1,
+              "title": "Source and versions",
+              "fields": [
+                "source",
+                "sourceversion",
+                "sourcerevision",
+                "processingversion"
+              ],
+              "selection": "current"
             }
           ],
           "selections": [
@@ -24426,19 +24780,23 @@
               "root": {
                 "kind": "rows",
                 "children": [
-                  "current",
-                  "detail",
-                  "predecessors",
-                  "previousdetail"
+                  "workspace"
                 ]
               },
               "current": {
                 "kind": "widget",
-                "section": "current"
+                "section": "current",
+                "size": {
+                  "weight": 3,
+                  "minWidth": 420,
+                  "maxHeight": 640,
+                  "scroll": "auto"
+                }
               },
               "detail": {
                 "kind": "widget",
-                "section": "detail"
+                "section": "detail",
+                "title": "Current interval"
               },
               "predecessors": {
                 "kind": "widget",
@@ -24447,6 +24805,45 @@
               "previousdetail": {
                 "kind": "widget",
                 "section": "previousdetail"
+              },
+              "workspace": {
+                "kind": "columns",
+                "title": "Downtime workspace",
+                "gap": 16,
+                "children": [
+                  "current",
+                  "eventpanel"
+                ]
+              },
+              "eventpanel": {
+                "kind": "tabs",
+                "title": "Downtime detail",
+                "activeVariable": "downtimeTab",
+                "children": [
+                  "detail",
+                  "history",
+                  "provenance"
+                ],
+                "size": {
+                  "weight": 2,
+                  "minWidth": 320,
+                  "maxHeight": 640,
+                  "scroll": "auto"
+                }
+              },
+              "history": {
+                "kind": "rows",
+                "title": "History",
+                "gap": 16,
+                "children": [
+                  "predecessors",
+                  "previousdetail"
+                ]
+              },
+              "provenance": {
+                "kind": "widget",
+                "title": "Source and versions",
+                "section": "provenance"
               }
             },
             "variables": {
@@ -24467,6 +24864,12 @@
                   "kind": "plan",
                   "query": "predecessors"
                 }
+              },
+              "downtimeTab": {
+                "scope": "page",
+                "type": "string",
+                "mode": "state",
+                "initial": "detail"
               }
             },
             "queries": {

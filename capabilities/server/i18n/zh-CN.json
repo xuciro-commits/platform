@@ -1,4 +1,9 @@
 {
+  "Application translations": "应用翻译",
+  "application translations exceed 32 languages": "应用翻译超过 32 种语言",
+  "application translations need a language tag": "应用翻译需要语言标签",
+  "application translations need nonempty texts of at most 4096 bytes": "应用翻译文本不能为空且每项不能超过 4096 字节",
+  "application translations exceed 10000 entries": "应用翻译超过 10000 项",
   "PullerScopes": "拉取者令牌范围",
   "RunnerScopes": "执行者令牌范围",
   "System definitions activate through an approved Platform change. Publish business applications in a business workspace.": "系统定义须通过已批准的平台变更激活。业务应用请在业务工作区发布。",

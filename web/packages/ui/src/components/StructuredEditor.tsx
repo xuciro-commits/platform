@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Api } from '@platform/kernel';
 import { Button } from '../primitives/button';
 import { Select, Textarea } from '../primitives/input';
@@ -22,6 +22,7 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
   // formatted. Keep its source within the original 512 KiB asset body limit.
   const input = useDraftInput('source:'+scope,formatStructuredSource(value,format),false,512*1024), buffers=useInputDrafts();
   const [issues,setIssues]=useState<Api.FieldIssue[]>([]),[message,setMessage]=useState(''),[running,setRunning]=useState(false);
+  useEffect(()=>setMessage(''),[scope,expectedRevision]);
   const [trial,setTrial]=useState<{signature:string;result:Api.Simulation}>();
   const [fieldPath,setFieldPath]=useState('');
   const fieldEntries=(items:Api.FieldInfo[],prefix=''):{field:Api.FieldInfo;path:string;prefix:string}[]=>items.filter(field=>!field.readOnly).sort((a,b)=>Number(!!b.required)-Number(!!a.required)).flatMap(field=>[{field,path:prefix+field.name,prefix},...(field.fields?fieldEntries(field.fields,prefix+field.name+'.[].'):[])]);

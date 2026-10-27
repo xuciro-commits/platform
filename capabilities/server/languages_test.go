@@ -206,4 +206,11 @@ func TestAppScopedEntityTranslation(t *testing.T) {
 	if got := byType["core.location"]; got == nil || got["title"] != "库位" || got["plural"] != "库位" {
 		t.Errorf("core.location: want title=库位, plural=库位; got %v", got)
 	}
+	tn.words.set("zh-CN", "Account", "租户科目")
+	tn.i18n.reset()
+	for _, app := range []string{core.ID, "stock"} {
+		if got := tn.i18n.SayInApp(app, "zh-CN", "Account"); got != "租户科目" {
+			t.Errorf("%s ignored tenant override of native dictionary: %s", app, got)
+		}
+	}
 }
