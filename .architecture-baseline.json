@@ -70,6 +70,21 @@
   },
   "describe_asset_lines": 58,
   "effective_merge_methods": 4,
+  "legacy_action_readers": [
+    "capabilities/server/apps/build/actions.go",
+    "capabilities/server/apps/build/creates.go",
+    "capabilities/server/apps/build/journal.go",
+    "capabilities/server/apps/build/objects.go",
+    "capabilities/server/apps/build/posts.go",
+    "capabilities/server/apps/build/rules.go",
+    "capabilities/server/apps/build/transaction_check.go",
+    "capabilities/server/apps/build/transaction_legacy.go",
+    "capabilities/server/books.go",
+    "capabilities/server/internal/construction/journal.go",
+    "capabilities/server/platform/asset_scanners.go",
+    "capabilities/server/platform/revision.go",
+    "capabilities/server/simulate_candidate.go"
+  ],
   "platform_dynamic": {
     "map_any": 56,
     "reflect_calls": 125
@@ -77,10 +92,10 @@
   "root_construction_importers": 59,
   "root_package": {
     "exported": 313,
-    "files": 263,
-    "lines": 61306,
-    "prefixes": 146,
-    "singleton_prefixes": 116,
+    "files": 264,
+    "lines": 61467,
+    "prefixes": 147,
+    "singleton_prefixes": 117,
     "tenant_methods": 131
   },
   "route_params_used": 37,

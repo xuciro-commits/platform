@@ -23,6 +23,7 @@
 contract/            proto/ spec/ vectors/ go/ lean/       内核契约与参考实现
 capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   doc.go             组件地图、包方向规则、锁义务、管道入口（改宿主前先读）
+  domains.go         根包每个文件的归属域（新增文件未认领即失败）
   host.go            Tenant 装配壳：身份、能力组装、app/caller 接线、审计类型
   submit.go          提交管线：Submit → submitAccepted → decideAccepted
   reads.go events.go facade.go   读取与连接器输入 / 事件计划与投递 / 成员门面
@@ -66,7 +67,8 @@ openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 | `app_size` | 一个应用吸收另一个应用的职责 | build 73 文件 |
 | `string_error_sites` | 前端按错误文本判语义 | 22 |
 | `route_params_used` | 路由参数靠手取 | 37 |
-| 零容忍 | 种类生产者、HTTP 文本匹配、未声明视图、退役参数、兼容登记漂移、重复需求、规格悬空引用、`platform`→`internal`、`internal`→`apps` | 0 |
+| `legacy_action_readers` | 还有多少文件必须同时懂旧形状与新形状 | 13 |
+| 零容忍 | 根包文件未认领、域超五分之一、种类生产者、HTTP 文本匹配、未声明视图、退役参数、兼容登记漂移、重复需求、规格悬空引用、`platform`→`internal`、`internal`→`apps` | 0 |
 
 内部模块按职责分工，不各自建立提交或执行入口：
 

@@ -24,9 +24,13 @@
 
   注：检查当场发现一处真实违例——`platform/rules.go` 引用 `internal/rules`。已把规则求值实现移到 `platform/rules`（3 个导入方，9 个文件搬迁），`platform` 不再引用 `internal/*`；`go test ./platform/...` 通过。
 - [x] 3.2 根包四项规模、`Tenant` 方法数、`platform` 的 `reflect.`/`map[string]any`、各应用体量进基线。
-- [ ] 3.3 根包每个文件必须被 `doc.go` 的域表认领。
+- [x] 3.3 根包每个文件必须被域表认领。
 
-  注：未做。263 个文件逐项归域是独立的搬迁批次，先有基线挡住增长；`root_package.singleton_prefixes` = 116 已把这一项量化，认领表作为下一批入口。
+  注：新增 `capabilities/server/domains.go`：263 个文件按 129 个前缀归入 15 个域（最大 `records` 46 文件，占 17%）。检查为三项：目录里每个文件的前缀都被认领、每个认领还有文件、任一域不得超过该包文件的五分之一。实测反向验证：新建未认领文件即失败。代价是该包多一个文件（147 前缀），基线的 `root_package.files/prefixes/singleton_prefixes` 因此上调 1——这是本 change 唯一一次允许上升，理由是它承载的正是「不许再有无主文件」这条判据。
+
+- [x] 3.4 旧形状的读取点必须被记录且只能缩小。
+
+  注：`legacy_action_readers` 记录 13 个仍同时懂两种形状的文件（`apps/build` 7 个、根包 3 个、`construction` 与 `platform` 各 1–2 个）。新文件读取旧字段即失败；缩小后必须同批下调。实测反向验证：新建一个读取 `a.Posts` 的探针文件立刻失败。
 
 ## 4. 前端
 
@@ -51,6 +55,11 @@
 - [x] 6.3 `make check-specs`（含归档）通过；本 change 的差量在归档时同步进 `runtime/host`、`platform/business-models`、`experience/workspace`、`runtime/deployment`。
 
   注：未在浏览器观察任何界面；本次改动不涉及渲染结构，只涉及错误判定与路由声明，浏览器证据留待下一次界面路线。
+
+## 6.4 仍未做的两件与它们的前置条件
+
+- **从结构体删除 8 个旧字段**：需要先决定「历史输入重放时对象如何字节级保留旧形状」。今天重放会把解码后的对象重新编码写回，若字段从结构体消失，写回的字节就变了，与「恢复只应用已保存映像、历史字节不重写」冲突。选项是把旧形状保留为解码器私有字段并在重放时原样回写（等价于今天的可观测行为，但结构体只有一种对外的形状），或明确做一次存储格式迁移。这不是机械改动，必须由负责人选一条。
+- **`internal/construction` 的对象模型迁到 `platform.Entity`**：5,372 行、根包 59 个文件与 `apps/build` 71 个文件的导入面。`root_construction_importers` 已把这一项量化并冻结在 59，任何增长都会失败；下降需要一个独立的 change，先把 `platform.Entity` 扩到能承担对象模型，再逐文件迁移。
 
 ## 已知遗留（不是本 change 引入）
 

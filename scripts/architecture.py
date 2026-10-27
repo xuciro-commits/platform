@@ -60,7 +60,10 @@ def asset_kind_fanout() -> dict[str, int]:
     splitting those files must not move the measure."""
     definition = read(SERVER / "platform/definition.go")
     kinds = re.findall(r'Asset\w+\s+AssetKind\s*=\s*"([a-z0-9-]+)"', definition)
-    files = [f for f in go_files(SERVER) if not str(f).startswith(str(SERVER / "platform"))]
+    # domains.go is a declaration table, not a file that handles a kind: its keys
+    # happen to share names with several kinds.
+    files = [f for f in go_files(SERVER)
+             if not str(f).startswith(str(SERVER / "platform")) and f.name != "domains.go"]
     out: dict[str, int] = {}
     for kind in sorted(set(kinds)):
         needle = f'"{kind}"'
@@ -217,6 +220,41 @@ def legacy_registry_drift() -> list[str]:
     return problems
 
 
+def legacy_action_readers() -> list[str]:
+    """Why: a retired shape is contained by the files allowed to read it. A new
+    reader is a new place that must know both shapes; this list may only fall."""
+    pattern = re.compile(r"\b(?:a|action|act|of|other)\.(?:Sets|Creates|Posts|Conditions|Journal|Reverses|ToInput)\b"
+                         r"|\bo\.Numbering\b|\.EffectivePosts\(|\.EffectiveJournal\(")
+    out = []
+    for f in go_files(SERVER):
+        if pattern.search(read(f)):
+            out.append(str(f.relative_to(ROOT)))
+    return sorted(out)
+
+
+def root_file_ownership() -> list[str]:
+    """Why: a file whose responsibility nobody has claimed is how a package grows
+    116 single-use prefixes while each file still looks reasonable. Every root
+    file names a domain in domains.go; every entry still has files."""
+    # gofmt aligns the values; only the pair matters.
+    declared = dict(re.findall(r'^\t"([a-z0-9-]+)":\s+"([a-z]+)",$',
+                               read(SERVER / "domains.go"), re.M))
+    files = [f for f in SERVER.glob("*.go") if not f.name.endswith("_test.go")]
+    def prefix(path: Path) -> str:
+        base = path.name[:-3]
+        return base.split("_")[0] if "_" in base else base
+    used = {prefix(f) for f in files}
+    problems = [f"{p}.go has no owner in capabilities/server/domains.go" for p in sorted(used - set(declared))]
+    problems += [f"domains.go claims {p}, which has no files" for p in sorted(set(declared) - used)]
+    # A domain must not silently swell: the largest may hold a sixth of the files.
+    counts = Counter(declared[prefix(f)] for f in files if prefix(f) in declared)
+    for domain, count in counts.items():
+        if count > 0.20 * len(files):
+            problems.append(f"domain {domain} owns {count} of {len(files)} root files; "
+                            "a fifth of the package is not one responsibility")
+    return problems
+
+
 def platform_imports_internal() -> list[str]:
     """Why: the application API is the only surface an app may use; the moment it
     reads a host internal package, every app inherits that internal shape."""
@@ -265,6 +303,7 @@ def missing_spec_sources() -> list[str]:
 
 
 MEASURES = {
+    "legacy_action_readers": legacy_action_readers,
     "asset_kind_fanout": asset_kind_fanout,
     "describe_asset_lines": describe_asset_lines,
     "root_construction_importers": root_construction_importers,
@@ -278,6 +317,7 @@ MEASURES = {
 }
 
 ZERO = {
+    "root_file_ownership": root_file_ownership,
     "platform_imports_internal": platform_imports_internal,
     "internal_imports_apps": internal_imports_apps,
     "legacy_shape_producers": legacy_shape_producers,
@@ -288,6 +328,15 @@ ZERO = {
     "duplicate_requirements": duplicate_requirements,
     "missing_spec_sources": missing_spec_sources,
 }
+
+
+def compare_set(name: str, now: list[str], was: list[str]) -> list[str]:
+    """A file set: a new reader fails, and a removed one must be recorded."""
+    problems = [f"{name}: {path} reads the retired shape; it is not in the recorded set"
+                for path in sorted(set(now) - set(was or []))]
+    problems += [f"{name}: {path} no longer reads it; lower the recorded set"
+                 for path in sorted(set(was or []) - set(now))]
+    return problems
 
 
 def compare(name: str, now, was):
@@ -335,7 +384,11 @@ def main() -> int:
 
     failures: list[str] = []
     for name, measure in MEASURES.items():
-        failures += [f"{name}: {text}" for text in compare(name, now[name], was.get(name))]
+        value, before = now[name], was.get(name)
+        if isinstance(value, list):
+            failures += compare_set(name, value, before)
+        else:
+            failures += [f"{name}: {text}" for text in compare(name, value, before)]
 
     for name, value in zero_now.items():
         if isinstance(value, list):
@@ -354,7 +407,6 @@ def main() -> int:
               "\n  fix the shape rather than the number. A measure below it means: lower the baseline here.", file=sys.stderr)
         return 1
 
-    total = sum(sum(v.values()) if isinstance(v, dict) else v for v in now.values() if not isinstance(v, dict))
     print(f"architecture ok: {len(MEASURES)} measures at baseline, {len(ZERO)} zero-tolerance at 0")
     return 0
 
