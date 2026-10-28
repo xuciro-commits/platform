@@ -340,8 +340,8 @@ func TestAIFunctionUsesAcceptedInputAndStrictOutput(t *testing.T) {
 		{output, 20, false, true},
 		{`{"summary":"bad","category":"routine","review":"false"}`, 20, false, false},
 		{`{"summary":"bad","category":"routine","review":false,"extra":1}`, 20, false, false},
-		{output, 257, false, false},
 		{output, 20, true, false},
+		{output, 257, false, false},
 	} {
 		if i > 0 {
 			must("stock", "stock.item.advise", "stock.item", "I1", map[string]any{})

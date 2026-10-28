@@ -38,6 +38,9 @@ type ChatStreamEvent struct {
 }
 
 type ChatRequest struct {
+	RequestHash string          `json:"-"`
+	Call        string          `json:"-"` // stable host-owned attempt identity
+	RunTokens   int             `json:"-"` // remaining run budget, supplied by its owner
 	Model       string          `json:"model"`
 	Messages    []Message       `json:"messages"`
 	Tools       []Tool          `json:"tools,omitempty"`

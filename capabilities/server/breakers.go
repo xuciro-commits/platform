@@ -28,8 +28,8 @@ type breakers struct {
 }
 
 // allow reports whether work for dest may go now: closed, or open and past its
-// pause, which lets one probe through.
-func (b *breakers) allow(dest string, now time.Time) bool {
+// pause. claim takes the one half-open probe; a readiness check does not.
+func (b *breakers) allow(dest string, now time.Time, claim bool) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	x := b.m[dest]
@@ -39,7 +39,7 @@ func (b *breakers) allow(dest string, now time.Time) bool {
 	case x.probing || now.Before(x.until):
 		return false
 	}
-	x.probing = true
+	x.probing = claim
 	return true
 }
 

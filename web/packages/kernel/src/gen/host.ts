@@ -47,13 +47,30 @@ export type AIModelBinding = {
 };
 
 export type AIQuota = {
+  reservedTokens: number;
+  unsettledCalls: number;
   dailyTokens: number;
   usedTokens: number;
   perMinute: number;
   usedCalls: number;
 };
 
+export type AIReservation = {
+  requestHash?: string;
+  call: string;
+  at: string;
+  member: string;
+  agent?: boolean;
+  model: string;
+  run?: string;
+  input: number;
+  output: number;
+  accounted?: number;
+  state: string;
+};
+
 export type AIUsage = {
+  reservations?: AIReservation[];
   applications?: AIApplicationTotal[];
   calls: Usage[];
   totals: Total[];
@@ -5109,6 +5126,7 @@ export type Upload = {
 };
 
 export type Usage = {
+  call?: string;
   applications?: AssetBinding[];
   resource?: AssetRef;
   run?: string;

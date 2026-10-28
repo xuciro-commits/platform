@@ -59,7 +59,6 @@ type AgentHost interface {
 	ScopeAgentRun(string) func()
 	ResolveAgentModel(string, platform.ModelOptions, string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error)
 	AgentModel(string) (platform.AIModel, platform.AIProvider, *kernel.Error)
-	ReserveAgentModel(platform.Member, platform.AIModel, time.Time) string
 	AgentProviderAvailable(string, time.Time) bool
 	CallAgentModel(platform.AIProvider, platform.AIModel, platform.Member, platform.ChatRequest, time.Time) (platform.ChatAnswer, *platform.AIError)
 	MeterAgentUsage(platform.Member, platform.AIUsage) *kernel.Error

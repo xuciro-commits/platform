@@ -294,7 +294,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	// Apps' model requests go to the built-in model destination;
 	// the model door keeps each provider's own breaker.
 	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: resultformat.ModelEndpoint, Kind: resultformat.ModelEndpoint}) {
-		if ep.Kind != resultformat.ModelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now) {
+		if ep.Kind != resultformat.ModelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now, true) {
 			continue
 		}
 		// A held effect waits for its approval outside the endpoint's order.

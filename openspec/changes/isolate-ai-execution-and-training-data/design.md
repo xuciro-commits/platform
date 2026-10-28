@@ -2,7 +2,7 @@
 
 ## Context
 
-审计基线为 `457202dfd7d5`。负责人已授权实现，当前provider传输与阶段准入已落地，其他目录和行为仍按tasks推进。主模块 [AI 与知识](../../specs/platform/ai-knowledge/spec.md)、[访问控制](../../specs/runtime/access-control/spec.md)、[接受与恢复](../../specs/runtime/host/spec.md) 仍描述当前实现；动机见 proposal。
+审计基线为 `457202dfd7d5`。负责人已授权实现，当前provider传输、阶段准入与原AI owner在途Token预占已落地，Work交接、其他目录和行为仍按tasks推进。主模块 [AI 与知识](../../specs/platform/ai-knowledge/spec.md)、[访问控制](../../specs/runtime/access-control/spec.md)、[接受与恢复](../../specs/runtime/host/spec.md) 仍描述当前实现；动机见 proposal。
 
 ### 已核实的实现与真实缺口
 

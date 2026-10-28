@@ -27,6 +27,19 @@ func (t *Tenant) usagePredecessor() (string, error) {
 }
 
 func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Error {
+	if u.Call != "" {
+		for _, prior := range t.ai.Usage() {
+			if prior.Call != u.Call {
+				continue
+			}
+			a, _ := acceptance.Digest(prior)
+			b, _ := acceptance.Digest(u)
+			if a != b {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT, "The model usage differs from its accepted reading")
+			}
+			return nil
+		}
+	}
 	// Usage observes a completed call. Its principal is the meter owner; a
 	// later revocation of the attributed caller cannot erase an incurred cost.
 	c := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + platform.AIApp, Tenant: m.Tenant}, platform.AIApp, false, true)

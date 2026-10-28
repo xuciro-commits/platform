@@ -313,7 +313,7 @@ func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time, checkpoint func(*Ev
 		endRead()
 		x := EvalCase{Run: input.Run, Verdict: "fails", Candidate: "the evaluation's historical run revision changed"}
 		if known && run.Revision == input.Revision {
-			x = a.rerun(d, run, model, pv, who, now)
+			x = a.rerun(ev.ID, d, run, model, pv, who, now)
 		}
 		ev.Cases = append(ev.Cases, x)
 		evaluationScore(&ev)
@@ -366,7 +366,7 @@ func evaluationScore(ev *Evaluation) {
 }
 
 // rerun runs one past run's goal dry with the candidate and judges it.
-func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) EvalCase {
+func (a *Agents) rerun(evaluation string, d *agentDef, run AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) EvalCase {
 	last := run.Signals[len(run.Signals)-1]
 	x := EvalCase{Run: run.ID, Signal: last.Kind}
 	changed := func(i int) string {
@@ -390,7 +390,7 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model platform.AIModel, 
 		}
 		x.Reference = "not: " + strings.Join(bad, "; ")
 	}
-	dry, failed := a.dryRun(d, run, model, pv, who, now, d.Budget)
+	dry, failed := a.dryRun(evaluation, d, run, model, pv, who, now, d.Budget)
 	x.Steps, x.Tokens, x.Cost = dry.StepsUsed, dry.TokensUsed, dry.Cost
 	if failed != "" {
 		x.Verdict, x.Candidate = "fails", failed
@@ -442,7 +442,7 @@ func (a *Agents) suite(ev Evaluation, d *agentDef, model platform.AIModel, pv pl
 			miss := "over the evaluation's budget"
 			if room.Steps > 0 && room.Tokens > 0 && (ceiling.Cost == 0 || room.Cost > 0) {
 				run := AgentRunRecord{Record: platform.Record{ID: fmt.Sprintf("%s:%s:%d", ev.ID, c.Name, i+1)}, Agent: ev.Agent, Goal: c.Goal, Ref: c.Ref, OnBehalf: who.ID}
-				dry, failed := a.dryRun(d, run, model, pv, who, now, minBudget(d.Budget, room))
+				dry, failed := a.dryRun(ev.ID, d, run, model, pv, who, now, minBudget(d.Budget, room))
 				x.Steps, x.Tokens, x.Cost = x.Steps+dry.StepsUsed, x.Tokens+dry.TokensUsed, x.Cost+dry.Cost
 				spent.Steps, spent.Tokens, spent.Cost = spent.Steps+dry.StepsUsed, spent.Tokens+dry.TokensUsed, spent.Cost+dry.Cost
 				got, _, result := decision(d, dry.Steps, dry.Result, func(int) string { return "" })
@@ -490,23 +490,43 @@ func (a *Agents) suite(ev Evaluation, d *agentDef, model platform.AIModel, pv pl
 // dryRun runs a goal with the candidate, dry: reads the run made answer as
 // then, other reads read now, actions are probed and never taken. failed says
 // why the model could not go on; an asked run's question is its Result.
-func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (AgentRunRecord, string) {
+func (a *Agents) dryRun(evaluation string, d *agentDef, run AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (AgentRunRecord, string) {
 	h := a.host
 	dry := AgentRunRecord{Protocol: map[int]json.RawMessage{}, Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
+	priorTokens := 0
+	for _, usage := range h.AgentUsage() {
+		if usage.Run == evaluation+":"+run.ID+":evaluation" {
+			priorTokens += usage.Input + usage.Output
+		}
+	}
 	for dry.StepsUsed < room.Steps && dry.TokensUsed < room.Tokens {
 		endRead := h.BeginAgentRead()
 		req := a.prompt(a.automation(AgentApp, false), d, dry, model.Name(), now)
 		endRead()
-		req.Run = run.ID + ":evaluation"
+		req.Run = evaluation + ":" + run.ID + ":evaluation"
 		binding, _, problem := h.ResolveAgentModel(model.Name(), model.Defaults, platform.AIStageDesign)
 		if problem != nil {
 			return dry, problem.Error()
 		}
 		req.Binding = &binding
-		if why := h.ReserveAgentModel(who, model, now); why != "" {
-			return dry, why
+		// A completed, metered trial without an accepted checkpoint may be
+		// retried as another attempt. A lost, unmetered attempt retains the same
+		// identity and remains blocked by its original reservation after restart.
+		attempt := 0
+		for _, usage := range h.AgentUsage() {
+			if usage.Run == req.Run {
+				attempt++
+			}
+		}
+		req.Call = fmt.Sprintf("evaluation:%s:%d:%d", req.Run, dry.StepsUsed, attempt)
+		req.RunTokens = room.Tokens - priorTokens - dry.TokensUsed
+		if req.RunTokens <= 0 {
+			return dry, "The model request exceeds the remaining run token budget"
 		}
 		answer, failure := h.CallAgentModel(pv, model, who, req, now)
+		if answer.Usage.Model == "" && failure != nil {
+			return dry, failure.Detail
+		}
 		if err := h.MeterAgentUsage(who, answer.Usage); err != nil {
 			return dry, "the model usage was not accepted: " + err.Error()
 		}

@@ -1,6 +1,6 @@
 // Settings: AI providers, the playground and usage.
 import { useHost, ModelPicker, ModelOptionsEditor, MemberSelect, useReadQuery as useRead } from "@platform/app";
-import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t } from "@platform/ui";
+import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Panel, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -175,7 +175,7 @@ export function AIPlayground({initialModel=""}:{initialModel?:string}) {
     const turn: { prompt: string; answer?: string; error?: string; usage?: Usage } = { prompt, answer: "" };
     const show = () => setTurns([{ ...turn }, ...turns]);
     show();
-    const r = await client.stream<{ error?: { detail?: string; code?: string } }>("/v1/ai/chat", { model: chosen, messages, options, stream: true }, (event, data) => {
+    const r = await client.stream<{ error?: { detail?: string; code?: string } }>("/v1/build/ai/chat", { model: chosen, messages, options, stream: true }, (event, data) => {
       const d = data as { content?: string; usage?: Usage; detail?: string; code?: string };
       if (event === "delta") turn.answer += d.content ?? "";
       if (event === "done" || event === "error") turn.usage = d.usage;
@@ -193,6 +193,7 @@ export function AIPlayground({initialModel=""}:{initialModel?:string}) {
         <ModelPicker value={model} onChange={setModel} purpose="generation" inherit={false} />
         <ModelOptionsEditor value={options} onChange={setOptions} capabilities={selected?.capabilities} />
         <p className="text-xs text-muted">{t("This sends only the prompt below to the selected service and may incur charges. No business record is attached automatically.")}</p>
+        <p className="text-xs text-muted">{t("Design trials require builder access as well as model access.")}</p>
         <Input aria-label={t("System")} placeholder={t("System instructions (optional)")} value={system} onChange={(e) => setSystem(e.target.value)} />
         <Textarea aria-label={t("Prompt")} rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t("Ask something")} />
         <span className="flex justify-end"><Button variant="primary" disabled={!chosen || !prompt || busy} onClick={() => void send()}>{busy ? t("Waiting…") : t("Send trial · may incur charges")}</Button></span>
@@ -209,7 +210,7 @@ export function AIPlayground({initialModel=""}:{initialModel?:string}) {
 }
 
 export function AIUsage() {
-  const usage = useRead<{ calls: Usage[]; totals: Total[] }>("/v1/ai-usage").data;
+  const usage = useRead<Api.AIUsage>("/v1/ai-usage").data;
   const totals: ColumnDef<Total, any>[] = [
     { accessorKey: "day", header: t("Day"), meta: { width: 110 } },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
@@ -219,6 +220,13 @@ export function AIUsage() {
     { accessorKey: "input", header: t("Tokens in"), meta: { width: 100, align: "right" } },
     { accessorKey: "output", header: t("Tokens out"), meta: { width: 100, align: "right" } },
     { accessorKey: "cost", header: t("Cost (USD)"), meta: { width: 110, align: "right" }, cell: ({row:{original:row}}) => row.costUnknown===row.calls && row.calls>0 ? t("Unknown cost") : `${row.cost.toFixed(6)}${row.costUnknown>0?` + ${t("Unknown cost")}`:""}` },
+  ];
+  const reservations: ColumnDef<Api.AIReservation, any>[] = [
+    { accessorKey: "model", header: t("Model"), meta: { width: 150 } },
+    { accessorKey: "state", header: t("Status"), meta: { width: 180 }, cell: ({ row: { original: r } }) => <Tag label={r.state === "exceeded" ? t("Provider exceeded token bound") : r.state === "unknown" ? t("Usage not reported") : t("Awaiting usage confirmation")} tone={r.state === "exceeded" ? "danger" : "warning"} /> },
+    { accessorKey: "at", header: t("When"), cell: (c) => when(c.getValue()) },
+    { accessorKey: "member", header: t("Member") },
+    { id: "reserved", header: t("Reserved tokens"), cell: ({ row: { original: r } }) => Math.max(0, r.input + r.output - (r.accounted ?? 0)).toLocaleString() },
   ];
   const calls: ColumnDef<Usage, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => when(c.getValue()) },
@@ -257,6 +265,9 @@ export function AIUsage() {
         <Chart spec={{ title: t("Cost by model"), data: { values: byModel(totals2) }, mark: { type: "arc", donut: true }, encoding: { theta: { field: "cost", type: "quantitative" }, color: { field: "model", type: "nominal" } } }} height={180} />
       </div>}
       <DataTable data={totals2} columns={totals} getRowId={(t) => `${t.day}${t.member}${t.model}`} height={220} searchable={false} empty={t("No calls yet")} />
+      {(usage?.reservations?.length ?? 0) > 0 && <Panel className="mt-4" title={t("Unsettled model calls")} aria-label={t("Unsettled model calls")} description={t("These calls retain their token reservation until usage is confirmed. Waiting or restarting does not prove that a provider charged nothing.")}>
+        <DataTable data={usage?.reservations ?? []} columns={reservations} getRowId={(r) => r.call} height={200} searchable={false} />
+      </Panel>}
       <AILimits />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Recent calls")}</h2>
       <DataTable data={usage?.calls ?? []} columns={calls} getRowId={(u) => `${u.at}${u.member}${u.model}${u.millis}`} height="calc(100dvh - 470px)" empty={t("No calls yet")} />

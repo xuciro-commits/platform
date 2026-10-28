@@ -3,6 +3,8 @@ package platformserver
 import (
 	"cmp"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
@@ -65,7 +67,7 @@ type models interface {
 	Provider(id string) (platform.AIProvider, bool)
 	Meter(u platform.AIUsage)
 	Spent(member string, now time.Time) int
-	Reserve(m platform.Member, model platform.AIModel, d platform.AIDefaults, now time.Time) string
+	Reservation(string) (platform.AIReservation, bool)
 	Usage() []platform.AIUsage
 	Quota(platform.Member, platform.AIDefaults, time.Time) platform.AIQuota
 }
@@ -80,19 +82,51 @@ func (t *Tenant) limits() platform.AIDefaults {
 		PerMinute: number(platform.AIApp, platform.AISettingPerMinute)}
 }
 
-// reserve takes the door every model call passes — members', agents',
-// evaluations' and embeddings': it refuses with why, or lets the call start
-// and counts it in flight until its usage is metered, both under one lock.
-// Calls that start together would each pass the same limit without it.
-func (t *Tenant) reserve(m platform.Member, model platform.AIModel, now time.Time) string {
-	if t.ai == nil {
-		return ""
+// reserveCall saves the original meter owner's liability before external I/O.
+// Call identities belong to a run turn/effect attempt, never to HTTP payloads.
+func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req ChatRequest, input, output int, now time.Time) *AIError {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.businessStopped() || t.recordReadRefusal() != nil {
+		return &AIError{Status: 503, Detail: "Model dispatch is stopped until the tenant recovers"}
 	}
-	return t.ai.Reserve(m, model, t.limits(), now)
+	if prior, ok := t.ai.Reservation(req.Call); ok {
+		if prior.Member != m.ID || prior.Model != model.Name() || prior.Input != input || prior.Output != output || prior.RequestHash != req.RequestHash {
+			return &AIError{Status: 409, Detail: "The model call identity already has different input"}
+		}
+		return &AIError{Status: 409, Detail: "The model call already has an unsettled or saved result; reconcile it before retrying"}
+	}
+	r := platform.AIReservation{RequestHash: req.RequestHash, Call: req.Call, At: now, Member: m.ID, Agent: m.Agent, Model: model.Name(), Run: req.Run, Input: input, Output: output, State: "pending"}
+	body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Defaults: t.limits(), RunTokens: req.RunTokens})
+	owner, ok := t.ai.(platform.AcceptedInputApp)
+	if !ok {
+		return &AIError{Status: 503, Detail: "The AI meter cannot accept a reservation"}
+	}
+	_, refusal := t.inputAccepted(owner, platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
+	if refusal != nil {
+		failure := &AIError{Status: 503, Detail: cmp.Or(refusal.Message, refusal.Error())}
+		if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+			failure.Status, failure.Quota = 429, true
+		}
+		return failure
+	}
+	return nil
 }
 
-// mostTokens is the most tokens one answer may ask for (platform setting); 0:
-// the provider's own default. An answer a caller asks to be longer is capped.
+func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	r, ok := t.ai.Reservation(call)
+	if !ok {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model reservation is unavailable")
+	}
+	body, _ := json.Marshal(platform.AIReserveInput{Reservation: r, Cancel: true})
+	_, refusal := t.inputAccepted(t.ai.(platform.AcceptedInputApp), platform.Member{ID: "app:" + platform.AIApp, Tenant: t.ID}, platform.AIReserveCall, body, now)
+	return refusal
+}
+
+// mostTokens is the platform generation ceiling. Zero leaves the reviewed
+// model limit in force; an unbounded call cannot acquire a reservation.
 func (t *Tenant) mostTokens() int {
 	n, _ := strconv.Atoi(t.setting(t.automation(platform.AIApp, false), platform.AISettingMaxTokens))
 	return n
@@ -120,7 +154,6 @@ func (t *Tenant) chatForStage(m platform.Member, req ChatRequest, now time.Time,
 	}
 	var model platform.AIModel
 	var pv platform.AIProvider
-	var preparationFailure *AIError
 	_, refusal := recordRead(t, context.Background(), func() (struct{}, *kernel.Error) {
 		if stage == platform.AIStageDesign {
 			c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
@@ -161,27 +194,19 @@ func (t *Tenant) chatForStage(m platform.Member, req ChatRequest, now time.Time,
 			return struct{}{}, err
 		}
 		req.Binding = &binding
-		if !t.breakers.allow("ai:"+pv.ID, now) {
-			preparationFailure = &AIError{Status: http.StatusServiceUnavailable, Detail: "the provider " + pv.ID + " failed repeatedly; its calls wait until it answers again"}
-			return struct{}{}, nil
-		}
-		if why := t.reserve(m, model, now); why != "" {
-			preparationFailure = &AIError{Status: http.StatusTooManyRequests, Detail: why, Quota: true}
-		}
 		return struct{}{}, nil
 	})
 	if refusal != nil {
 		return ChatAnswer{}, refusal, nil
 	}
-	if preparationFailure != nil {
-		return ChatAnswer{}, nil, preparationFailure
-	}
 	if len(delta) > 0 {
 		req.Delta = delta[0]
 	}
 	answer, failure := t.call(pv, model, m, req, now)
-	if err := t.meter(m, answer.Usage); err != nil {
-		return ChatAnswer{}, err, nil
+	if answer.Usage.Model != "" {
+		if err := t.meter(m, answer.Usage); err != nil {
+			return ChatAnswer{}, err, nil
+		}
 	}
 	return answer, nil, failure
 }
@@ -243,22 +268,56 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 	if configErr == nil && binding.Capabilities != nil && binding.Capabilities.ContextTokens != nil && estimated+req.MaxTokens > *binding.Capabilities.ContextTokens {
 		configErr = fmt.Errorf("Input and generation exceed the model context window; shorten the input or generation budget")
 	}
+	if configErr == nil && req.MaxTokens <= 0 {
+		configErr = fmt.Errorf("Set a positive generation token limit before calling this model")
+	}
+	if configErr != nil {
+		return ChatAnswer{}, &AIError{Status: 400, Detail: configErr.Error()}
+	}
+	if !t.breakers.allow("ai:"+pv.ID, now, false) {
+		return ChatAnswer{}, &AIError{Status: 503, Detail: "the provider " + pv.ID + " failed repeatedly"}
+	}
+	if req.Call == "" {
+		req.Call = "chat:" + rand.Text()
+	}
+	inputBound := len(input) + 32*(len(req.Messages)+len(req.Tools))
+	protected := []json.RawMessage{}
+	for _, message := range req.Messages {
+		inputBound += len(message.Protocol)
+		protected = append(protected, message.Protocol)
+	}
+	identity, _ := json.Marshal([]any{json.RawMessage(input), binding, protected})
+	req.RequestHash = fmt.Sprintf("%x", sha256.Sum256(identity))
+	if failure := t.reserveCall(m, model, req, inputBound, req.MaxTokens, now); failure != nil {
+		return ChatAnswer{}, failure
+	}
+	// Readiness does not consume the half-open probe. Claim it only after
+	// the reservation has been accepted; a competing probe releases this call.
+	if !t.breakers.allow("ai:"+pv.ID, now, true) {
+		if refusal := t.releaseCall(req.Call, now); refusal != nil {
+			return ChatAnswer{}, &AIError{Status: 503, Detail: refusal.Error()}
+		}
+		return ChatAnswer{}, &AIError{Status: 503, Detail: "the provider " + pv.ID + " failed repeatedly"}
+	}
 	started := time.Now()
-	complete := t.modelProvider(pv).Complete
+	dispatched := false
+	provider := t.modelProvider(pv, func() { dispatched = true })
+	complete := provider.Complete
 	if pv.Wire == "anthropic" {
-		complete = t.modelProvider(pv).CompleteAnthropic
+		complete = provider.CompleteAnthropic
 	}
 	span := outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"),
 		attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
-	var answer ChatAnswer
-	var u platform.AIUsage
-	var failure *AIError
-	if configErr != nil {
-		failure = &AIError{Status: 400, Detail: configErr.Error()}
-	} else {
-		answer, u, failure = complete(pv, model.Model, req)
+	answer, u, failure := complete(pv, model.Model, req)
+	t.breakers.report("ai:"+pv.ID, failure == nil || !unavailable(failure), now)
+	if !dispatched {
+		end(span, "not dispatched")
+		if refusal := t.releaseCall(req.Call, now); refusal != nil {
+			return ChatAnswer{}, &AIError{Status: 503, Detail: refusal.Error()}
+		}
+		return answer, failure
 	}
-	if !u.TokensReported && configErr == nil {
+	if !u.TokensReported {
 		// A provider that says nothing about usage must not be booked as
 		// spending nothing: the platform books a conservative estimate of the
 		// request and the answer, marked as one, so daily caps and run budgets
@@ -277,13 +336,17 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 		}
 		u.Input = max(u.Input, knownCache)
 	}
+	if u.TokensReported && (u.Input > inputBound || u.Output > req.MaxTokens) {
+		failure = &AIError{Status: http.StatusUnprocessableEntity, Detail: "The provider reported usage above the reserved token bound"}
+		answer.ToolCalls, answer.Protocol = nil, nil
+	}
 	span.SetAttributes(attribute.Int("gen_ai.usage.input_tokens", u.Input), attribute.Int("gen_ai.usage.output_tokens", u.Output))
 	if failure != nil {
 		end(span, failure.Detail)
 	} else {
 		end(span, "ok")
 	}
-	t.breakers.report("ai:"+pv.ID, failure == nil || !unavailable(failure), now)
+	u.Call, u.Run = req.Call, req.Run
 	u.At, u.Member, u.Agent, u.Model, u.Millis, u.Outcome = now, m.ID, m.Agent, model.Name(), time.Since(started).Milliseconds(), "ok"
 	if failure != nil {
 		u.Outcome = failure.Detail
@@ -322,7 +385,7 @@ func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
 // functions with their arguments as a string, tool results with their call.
 // Provider transport receives only the original controlled credential and
 // outbound capabilities; adapters never receive a Tenant or business writer.
-func (t *Tenant) modelProvider(pv platform.AIProvider) providers.Client {
+func (t *Tenant) modelProvider(pv platform.AIProvider, dispatch ...func()) providers.Client {
 	send := t.AIClient
 	if send == nil {
 		dialer := guardedDialer(pv.Kind == "local")
@@ -330,6 +393,9 @@ func (t *Tenant) modelProvider(pv platform.AIProvider) providers.Client {
 		send = client.Do
 	}
 	return providers.Client{HTTP: doer(func(request *http.Request) (*http.Response, error) {
+		if len(dispatch) > 0 {
+			dispatch[0]()
+		}
 		response, err := send(request)
 		return redactCredentialFailure(response, request), err
 	}), Credential: func(provider platform.AIProvider) ([]byte, error) {
@@ -502,15 +568,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 			return out, nil
 		}
 	}
-	if !t.breakers.allow("ai:"+pv.ID, now) {
-		out.Result, out.Detail = "retry", "the provider "+pv.ID+" failed repeatedly"
-		return out, nil
-	}
-	if why := t.reserve(m, enabled, now); why != "" {
-		out.Result, out.Detail = "retry", why
-		return out, nil
-	}
-	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, Binding: ask.Binding, Run: x.ID}, now)
+	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, Binding: ask.Binding, Run: x.ID, Call: fmt.Sprintf("effect:%s:%d", x.ID, x.Attempts)}, now)
 	switch {
 	case failure != nil && unavailable(failure):
 		out.Result, out.Detail = "retry", failure.Detail
@@ -526,6 +584,9 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 			definition.ValidateOutput([]byte(answer.Content)) != nil) {
 			out.Result, out.Detail, out.Answer = "rejected", "The AI function answer failed its type or budget checks", nil
 		}
+	}
+	if answer.Usage.Model == "" {
+		return out, nil
 	}
 	return out, &answer.Usage
 }

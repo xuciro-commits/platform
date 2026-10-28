@@ -209,7 +209,7 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 - **接受与恢复**：原system ledger、候选不透明字节、摘要和SQL安装映像不重写。`built`、`finished`、`cancel` 只核对既有工作。定义准备仅允许原requested激活ID与原release的同一候选；旧混合激活可以如实回报并应用原保存定义，不能将历史恢复解释为新授权或重新请求构建。
 - **静态监督**：`platform-updater build/activate/watch` 和 `serve -watch` 退出新工作；`internal/systembuild`只保留不可变源码、摘要校验和导出，动态物化/编译器已删除。`serve`继续监督原current.json选择，保留健康、排空、回滚前驱及未知回执；`reconcile`只续报原保留结果，不编译或自动挑选发布。无法证明未执行的requested工作保持原状，要求核对实际版本后显式处理。
 - **制品与维护**：保留 `.build/system/{sources,bin,web,releases,builds}` 与 `current.json`，不自动清理运行或回滚依赖。已有已完成版本重启失败时可以恢复保留前驱并留下静态维护状态，不自动新建动态回滚请求。`swap/finish/export`沿原ID、真实制品和稳定请求键操作；具体步骤归[部署指南](../deploy/local/README.md)。
-- **模型准入**：普通Chat、Agent、AI函数和在线知识嵌入属于运行态；获权Studio Chat、原评估及隔离构建试用属于设计态。接收owner固定阶段、实际模型、源站和策略摘要，provider调用前再复核。运行态只允许部署注入的本地/边缘源站；动态provider的kind、模型名称和客户端Binding字段不能创建该资格。原AI应用仍持配置与用量，SDK/裸HTTP只在`aigateway/providers`。在途Token预占、统一写提议及训练导出仍按活动变更继续落实，不能将阶段准入当作它们已完成。
+- **模型准入**：普通Chat、Agent、AI函数和在线知识嵌入属于运行态；获权Studio Chat、原评估及隔离构建试用属于设计态。接收owner固定阶段、实际模型、源站和策略摘要，provider调用前再复核。运行态只允许部署注入的本地/边缘源站；动态provider的kind、模型名称和客户端Binding字段不能创建该资格。原AI应用仍持配置与用量，SDK/裸HTTP只在`aigateway/providers`。派发前通过原AI owner的私有接受输入保存保守输入和最大输出Token预占，按运行步骤/效果尝试身份结算；未发送的请求沿同一入口释放，响应丢失、未知用量和重启保留未结算责任。用量页分别展示等待确认、未报告和超额；超额报告如实入账，其工具输出不能执行，后续模型调用被阻止。预占不宣称精确分词或供应方物理费用绝不超额。预算/熔断后的完整Work交接、未知用量人工核对、统一写提议及训练导出仍按活动变更落实。
 - **客户端换版提示**：原 `/healthz` 代码发布号与二进制摘要核对、手动刷新及保留输入继续生效，独立于Build已安装候选身份。
 
 当前实施范围和未完成验收只归 [WorkQueue](WorkQueue.md) 与活动change；旧自举成功演练不能证明收缩后的全部架构任务已完成。动态运营投影限制、UAF外移、页面五要素和四职责完全收敛尚未全量落地。

@@ -23,7 +23,7 @@ type checkpointDesk struct {
 func (d *checkpointDesk) Manifest() platform.Manifest {
 	m := d.desk.Manifest()
 	m.Version, m.Flows = d.version, nil
-	m.Agents = []platform.Agent{{Name: "review", Title: "Review", Instructions: "Answer the goal.", Budget: platform.Budget{Steps: 1, Tokens: 100}, Cases: []platform.Case{
+	m.Agents = []platform.Agent{{Name: "review", Title: "Review", Instructions: "Answer the goal.", Budget: platform.Budget{Steps: 1, Tokens: 10000}, Cases: []platform.Case{
 		{Name: "first", Goal: "first"}, {Name: "second", Goal: "second"},
 	}}}
 	return m
@@ -65,7 +65,7 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 		return e.Body, nil
 	}
 	decide(t, live, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}, at)
-	decide(t, live, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/model", map[string]any{"access": "users"}, at)
+	decide(t, live, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/model", map[string]any{"access": "users", "defaults": platform.ModelOptions{MaxTokens: 64}}, at)
 	request := map[string]any{"agent": "desk.review", "model": "local/model", "suite": true}
 	if got := refuse(t, live, "viewer", AgentApp, SchemaEvalStart, EvaluationType, "denied", request, at); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("non-administrator queued an evaluation: %s", got)

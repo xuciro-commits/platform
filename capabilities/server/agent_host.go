@@ -119,11 +119,8 @@ func (h hostView) AgentModel(name string) (platform.AIModel, platform.AIProvider
 	}
 	return h.t.ai.Model(name)
 }
-func (h hostView) ReserveAgentModel(member platform.Member, model platform.AIModel, now time.Time) string {
-	return h.t.reserve(member, model, now)
-}
 func (h hostView) AgentProviderAvailable(provider string, now time.Time) bool {
-	return h.t.breakers.allow("ai:"+provider, now)
+	return h.t.breakers.allow("ai:"+provider, now, false)
 }
 func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AIModel, member platform.Member, request platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
 	_, refusal := recordRead(h.t, context.Background(), func() (struct{}, *kernel.Error) {

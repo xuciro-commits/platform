@@ -24,24 +24,24 @@ func TestIOLane(t *testing.T) {
 	// goes through; a failed probe doubles the pause; a success closes it.
 	var b breakers
 	for range breakerAfter {
-		if !b.allow("x", t0) {
+		if !b.allow("x", t0, true) {
 			t.Fatal("closed breaker refused")
 		}
 		b.report("x", false, t0)
 	}
-	if b.allow("x", t0.Add(breakerPause-time.Second)) {
+	if b.allow("x", t0.Add(breakerPause-time.Second), true) {
 		t.Fatal("an open breaker let work through")
 	}
-	if !b.allow("x", t0.Add(breakerPause)) || b.allow("x", t0.Add(breakerPause)) {
+	if !b.allow("x", t0.Add(breakerPause), true) || b.allow("x", t0.Add(breakerPause), true) {
 		t.Fatal("after the pause exactly one probe goes through")
 	}
 	b.report("x", false, t0.Add(breakerPause))
-	if b.allow("x", t0.Add(2*breakerPause)) || !b.allow("x", t0.Add(3*breakerPause)) {
+	if b.allow("x", t0.Add(2*breakerPause), true) || !b.allow("x", t0.Add(3*breakerPause), true) {
 		t.Fatal("a failed probe doubles the pause")
 	}
 	b.report("x", true, t0.Add(3*breakerPause))
-	probe1 := b.allow("x", t0.Add(3*breakerPause))
-	probe2 := b.allow("x", t0.Add(3*breakerPause))
+	probe1 := b.allow("x", t0.Add(3*breakerPause), true)
+	probe2 := b.allow("x", t0.Add(3*breakerPause), true)
 	if !probe1 || !probe2 {
 		t.Fatal("a success closes the breaker")
 	}

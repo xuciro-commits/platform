@@ -8,7 +8,7 @@
 
 - [结构拍平与完整文件对照](../openspec/changes/consolidate-platform-boundaries/)：删除五层传话路径，合并接受/拒绝管线；单包生产 Go 文件上限和存量递减配额，核对全后端文件数及净 LOC。
 - [页面安全契约与前端呈现解耦](../openspec/changes/decouple-page-presentation-contract/)：先迁移绑定、权限、原件和旧页解释，再移除 Go 视觉专用类型及校验；复用现有浏览器规则 WASM。
-- [AI 执行隔离与训练数据](../openspec/changes/isolate-ai-execution-and-training-data/)：在已落实的可信阶段上，补齐原 AI owner 在途 Token 预算、提议确认及合格样本派生，不再造计量、授权或执行路径。
+- [AI 执行隔离与训练数据](../openspec/changes/isolate-ai-execution-and-training-data/)：在已落实的可信阶段与原 AI owner 在途 Token 预占上，补齐 Work 交接、提议确认及合格样本派生，不再造计量、授权或执行路径。
 - [自举收缩与 UAF 退出](../openspec/changes/platform-self-hosting/)：全量自举新写已冻结，继续核对旧激活、退出完整UAF依赖和落实运营只读/追加边界；保留原组织权威及历史。
 
 先完成静态维护及自举冻结的安全交接，再按同一文件清单分批迁移；交叉文件只改一次。目标是非测试后端 Go 文件减少超过一半，重命名、删除测试和把代码挪出统计目录不能冒充净代码减少。最终实现路径、批次和验收归 change，不在这里复制任务。

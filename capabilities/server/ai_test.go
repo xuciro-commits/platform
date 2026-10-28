@@ -1,7 +1,9 @@
 package platformserver
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -324,7 +326,7 @@ func TestAILimits(t *testing.T) {
 		}
 	}
 	chat := func(who string) string {
-		_, err, failure := tn.Chat(member(who), ChatRequest{Model: "local/echo", Messages: []Message{{Role: "user", Content: "hello"}}}, now)
+		_, err, failure := tn.Chat(member(who), ChatRequest{Model: "local/echo", MaxTokens: 11, Messages: []Message{{Role: "user", Content: "hello"}}}, now)
 		switch {
 		case err != nil:
 			return err.Error()
@@ -343,17 +345,17 @@ func TestAILimits(t *testing.T) {
 	}
 	decide(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL + "/v1"})
 	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]string{"access": "everyone"})
-	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "40"})
+	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "136"})
 
-	// Each call of bo's costs 16 tokens: two leave him under 40, the third
-	// takes him past it, and the fourth is refused without reaching the model.
+	// Each call costs 16 reported tokens. The fourth cannot reserve its
+	// input bound and maximum output within the remaining daily budget.
 	for i := 0; i < 3; i++ {
 		expect("bo's call", chat("bo"), "ok")
 	}
 	before := calls.Load()
-	expect("past the day", chat("bo"), "quota: bo used its 40 tokens for today")
+	expect("past the day", chat("bo"), "quota: bo used its 136 tokens for today")
 	quota := tn.ai.Quota(member("bo"), tn.limits(), now)
-	if quota.DailyTokens != 40 || quota.UsedTokens != 48 || quota.UsedCalls != 3 {
+	if quota.DailyTokens != 136 || quota.UsedTokens != 48 || quota.UsedCalls != 3 {
 		t.Fatalf("quota view differs from admission: %+v", quota)
 	}
 	expect("the model was not called", fmt.Sprint(calls.Load()-before), "0")
@@ -362,7 +364,7 @@ func TestAILimits(t *testing.T) {
 	if quota := tn.ai.Quota(member("bo"), tn.limits(), now); quota.DailyTokens != 1000 || quota.UsedTokens != 64 {
 		t.Fatalf("quota did not follow the original limit override: %+v", quota)
 	}
-	expect("said in Chinese", tn.i18n.Say("zh-CN", "bo used its 40 tokens for today"), "bo 今天的 40 个 token 已用完")
+	expect("said in Chinese", tn.i18n.Say("zh-CN", "bo used its 136 tokens for today"), "bo 今天的 136 个 token 已用完")
 
 	// Calls a minute, whatever the tokens.
 	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingPerMinute, map[string]string{"value": "2"})
@@ -386,14 +388,227 @@ func TestAILimits(t *testing.T) {
 	if err != nil || failure != nil {
 		t.Fatalf("stream: %v %v", err, failure)
 	}
-	expect("streamed", fmt.Sprint(pieces, " ", answer.Content, " ", answer.Usage.Input+answer.Usage.Output, " ", len(journal)-usage), "[echo:  stream] echo: stream 18 1")
+	expect("streamed", fmt.Sprint(pieces, " ", answer.Content, " ", answer.Usage.Input+answer.Usage.Output, " ", len(journal)-usage), "[echo:  stream] echo: stream 18 2")
 
 	// A server that does not stream answers at once, and the answer comes as one piece.
 	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/flat", map[string]string{"access": "everyone"})
 	pieces = nil
-	answer, _, failure = tn.Chat(member("bo"), ChatRequest{Model: "local/flat", Messages: []Message{{Role: "user", Content: "hi"}}}, now.Add(2*time.Minute),
+	answer, _, failure = tn.Chat(member("bo"), ChatRequest{Model: "local/flat", MaxTokens: 8, Messages: []Message{{Role: "user", Content: "hi"}}}, now.Add(2*time.Minute),
 		func(piece string) { pieces = append(pieces, piece) })
 	expect("flat", fmt.Sprint(pieces, " ", failure == nil), "[echo: hi] true")
 
 	CheckReplay(t, tn, journal, build)
+}
+
+func TestAIReservationAdmissionSettlementAndRecovery(t *testing.T) {
+	at := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
+	started, release := make(chan struct{}, 4), make(chan struct{}, 4)
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		started <- struct{}{}
+		<-release
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}`)
+	}))
+	defer server.Close()
+	approveTestInference(t, server.URL, "local")
+	const id = "reservation-concurrent"
+	build := func() *Tenant {
+		return composeTenant(t, id, []Seat{seatOf("ana", "ai:admin", "platform:admin")}, ai.New(id))
+	}
+	tenant := build()
+	ana := memberOf(t, tenant, "ana")
+	decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": server.URL}, at)
+	decide(t, tenant, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone", "dailyTokens": 160}, at)
+	request := ChatRequest{Call: "original-call", Model: "local/echo", MaxTokens: 10, Messages: []Message{{Role: "user", Content: "hello"}}}
+	done := make(chan error, 1)
+	go func() {
+		_, err, failure := tenant.Chat(ana, request, at)
+		if err != nil {
+			done <- err
+		} else if failure != nil {
+			done <- failure
+		} else {
+			done <- nil
+		}
+	}()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("first call did not reach the provider")
+	}
+	q := tenant.ai.Quota(ana, tenant.limits(), at)
+	if q.UnsettledCalls != 1 || q.ReservedTokens <= 10 || q.UsedTokens != 0 {
+		t.Errorf("inflight call was not reserved: %+v", q)
+	}
+	second := request
+	second.Call = "other-call"
+	_, err, failure := tenant.Chat(ana, second, at.Add(2*time.Minute))
+	if err != nil || failure == nil || !failure.Quota || calls.Load() != 1 {
+		t.Errorf("concurrent call escaped the token cap after a minute: %v %v calls=%d", err, failure, calls.Load())
+	}
+	duplicate := request
+	duplicate.Messages = []Message{{Role: "user", Content: "other"}}
+	if _, err, failure := tenant.Chat(ana, duplicate, at); err != nil || failure == nil || !strings.Contains(failure.Detail, "different input") || calls.Load() != 1 {
+		t.Errorf("same-key changed input was accepted: %v %v", err, failure)
+	}
+	// Snapshot while actual I/O is still unresolved. Restore must keep its
+	// liability, and cannot dispatch the call just because the process changed.
+	snapshot, _, snapshotErr := tenant.Snapshot(func() int64 { return 0 })
+	if snapshotErr != nil {
+		t.Error(snapshotErr)
+	}
+	restored := build()
+	if err := restored.Restore(snapshot); err != nil {
+		t.Error(err)
+	}
+	if actual := restored.ai.Quota(ana, restored.limits(), at.Add(24*time.Hour)); actual.ReservedTokens != q.ReservedTokens || actual.UnsettledCalls != 1 {
+		t.Errorf("recovery or midnight forgot unresolved cost: %+v", actual)
+	}
+	release <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	q = tenant.ai.Quota(ana, tenant.limits(), at)
+	if q.ReservedTokens != 0 || q.UnsettledCalls != 0 || q.UsedTokens != 3 {
+		t.Fatal("reported usage failed to replace its own reservation", q)
+	}
+	// Reservation failure is durable before any external call can occur.
+	tenant.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append unavailable") }
+	_, _, failure = tenant.Chat(ana, second, at.Add(time.Minute))
+	if failure == nil || calls.Load() != 1 || tenant.ai.Quota(ana, tenant.limits(), at).UnsettledCalls != 0 {
+		t.Fatal("failed reservation append escaped to provider", failure)
+	}
+}
+
+func TestAIReservationUnknownAndOverreportedUsage(t *testing.T) {
+	at := time.Date(2026, 10, 28, 11, 0, 0, 0, time.UTC)
+	for _, kind := range []string{"unknown", "exceeded"} {
+		t.Run(kind, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				if kind == "unknown" {
+					fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}]}`)
+				} else {
+					fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":2,"completion_tokens":50,"cost":0.25}}`)
+				}
+			}))
+			defer server.Close()
+			approveTestInference(t, server.URL, "local")
+			id := "reservation-" + kind
+			build := func() *Tenant { return composeTenant(t, id, []Seat{seatOf("ana", "ai:admin")}, ai.New(id)) }
+			tenant := build()
+			ana := memberOf(t, tenant, "ana")
+			decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": server.URL}, at)
+			decide(t, tenant, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone"}, at)
+			var entries []Entry
+			before, _, err := tenant.Snapshot(func() int64 { return 0 })
+			if err != nil {
+				t.Fatal(err)
+			}
+			tenant.Record = func(e Entry) { entries = append(entries, e) }
+			req := ChatRequest{Run: "bounded-run", RunTokens: 160, Call: "original-call", Model: "local/echo", MaxTokens: 10, Messages: []Message{{Role: "user", Content: "hello"}}}
+			answer, kerr, failure := tenant.Chat(ana, req, at)
+			if kerr != nil || (kind == "unknown" && failure != nil) || (kind == "exceeded" && failure == nil) {
+				t.Fatal(kerr, failure)
+			}
+			r, ok := tenant.ai.Reservation(req.Call)
+			if !ok || r.State != kind {
+				t.Fatalf("unknown or excess usage was silently released: %+v", r)
+			}
+			if kind == "unknown" && (!answer.Usage.TokensEstimated || answer.Usage.CostReported || tenant.ai.Quota(ana, tenant.limits(), at).ReservedTokens == 0) {
+				t.Fatal("unknown usage or cost was called free", answer.Usage)
+			}
+			if kind == "exceeded" && tenant.ai.Quota(ana, tenant.limits(), at).ReservedTokens != 0 {
+				t.Fatal("known excess usage retained a fictional token liability")
+			}
+			if kind == "exceeded" && (answer.Usage.Output != 50 || answer.Usage.Cost != 0.25) {
+				t.Fatal("provider excess was hidden", answer.Usage)
+			}
+			for _, next := range []ChatRequest{req, {Call: "other-call", Model: req.Model, MaxTokens: 10, Messages: req.Messages}} {
+				if next.Call != "original-call" {
+					next.Run, next.RunTokens = req.Run, 160-answer.Usage.Input-answer.Usage.Output
+				}
+				if _, kerr, failure := tenant.Chat(ana, next, at.Add(2*time.Minute)); kerr != nil || failure == nil || calls.Load() != 1 {
+					t.Fatal("duplicate call or provider excess was redispatched", kerr, failure, calls.Load())
+				}
+			}
+			if err := tenant.meter(ana, answer.Usage); err != nil || len(tenant.ai.Usage()) != 1 {
+				t.Fatal("retry metered a call twice", err)
+			}
+			image, _ := tenant.ai.(*ai.AI).AcceptedState()
+			recovered := build()
+			if err := recovered.Restore(before); err != nil {
+				t.Fatal(err)
+			}
+			if err := recovered.Replay(entries); err != nil {
+				t.Fatal(err)
+			}
+			actual, _ := recovered.ai.(*ai.AI).AcceptedState()
+			if !bytes.Equal(image, actual) {
+				t.Fatal("replay changed reservation/usage", string(actual))
+			}
+			if _, kerr := tenant.Input(ana, platform.AIReserveCall, []byte(`{}`), at); kerr == nil {
+				t.Fatal("administrator acquired the private meter input")
+			}
+		})
+	}
+}
+
+func TestAIReservationReleasesOnlyUndispatchedCalls(t *testing.T) {
+	at := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	tenant := composeTenant(t, "reservation-release", []Seat{seatOf("ana", "ai:admin", "platform:admin")}, ai.New("reservation-release"))
+	ana := memberOf(t, tenant, "ana")
+	approveTenantInference(t, tenant, "http://localhost:1", "local")
+	decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://localhost:1", "secret": "unconfigured-model-key"}, at)
+	decide(t, tenant, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone"}, at)
+	tenant.AIClient = func(*http.Request) (*http.Response, error) {
+		t.Fatal("missing credentials reached external I/O")
+		return nil, nil
+	}
+	req := ChatRequest{Model: "local/echo", MaxTokens: 10, Messages: []Message{{Role: "user", Content: "hello"}}}
+	if _, err, failure := tenant.Chat(ana, req, at); err != nil || failure == nil {
+		t.Fatal("missing credentials were not reported", err, failure)
+	}
+	if q := tenant.ai.Quota(ana, tenant.limits(), at); q.ReservedTokens != 0 || q.UnsettledCalls != 0 || q.UsedCalls != 0 || len(tenant.ai.Usage()) != 0 {
+		t.Fatal("undispatched call was charged or retained", q)
+	}
+	decide(t, tenant, "ana", PlatformApp, SchemaSettingSet, SettingType, "ai/"+ai.SettingMaxTokens, map[string]string{"value": "0"}, at)
+	req.MaxTokens = 0
+	if _, err, failure := tenant.Chat(ana, req, at); err != nil || failure == nil || !strings.Contains(failure.Detail, "positive generation") {
+		t.Fatal("unbounded call acquired a reservation", err, failure)
+	}
+	if q := tenant.ai.Quota(ana, tenant.limits(), at); q.UnsettledCalls != 0 {
+		t.Fatal("invalid request left a reservation", q)
+	}
+}
+
+func TestAIHalfOpenProbeSurvivesReadinessAndBudgetRefusal(t *testing.T) {
+	at := time.Date(2026, 10, 28, 13, 0, 0, 0, time.UTC)
+	var calls atomic.Int32
+	server := fakeModels(t, &calls)
+	tenant := composeTenant(t, "probe-reservation", []Seat{seatOf("ana", "ai:admin")}, ai.New("probe-reservation"))
+	decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": server.URL}, at)
+	decide(t, tenant, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone", "dailyTokens": 1}, at)
+	for range breakerAfter {
+		tenant.breakers.report("ai:local", false, at)
+	}
+	ready := at.Add(breakerPause)
+	for range 2 {
+		if !tenant.breakers.allow("ai:local", ready, false) {
+			t.Fatal("readiness consumed a probe")
+		}
+	}
+	req := ChatRequest{Model: "local/echo", MaxTokens: 16, Messages: []Message{{Role: "user", Content: "hello"}}}
+	if _, _, failure := tenant.Chat(memberOf(t, tenant, "ana"), req, ready); failure == nil || !failure.Quota || calls.Load() != 0 {
+		t.Fatal("budget refusal consumed a provider call", failure)
+	}
+	decide(t, tenant, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone"}, ready)
+	if _, err, failure := tenant.Chat(memberOf(t, tenant, "ana"), req, ready); err != nil || failure != nil || calls.Load() != 1 {
+		t.Fatal("half-open provider could not recover", err, failure, calls.Load())
+	}
+	if len(tenant.Breakers(ready)) != 0 {
+		t.Fatal("successful probe did not close the breaker")
+	}
 }

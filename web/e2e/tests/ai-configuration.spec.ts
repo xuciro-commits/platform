@@ -12,7 +12,8 @@ test("configure a service, select purpose defaults, send an explicit trial and r
     let text = ""; for await (const chunk of request) text += chunk;
     const body = JSON.parse(text); calls.push(body);
     response.setHeader("Content-Type", "text/event-stream");
-    response.end('data: {"choices":[{"delta":{"content":"Trial completed"},"finish_reason":"stop"}]}\n\ndata: {"choices":[],"usage":{"prompt_tokens":8,"completion_tokens":2}}\n\ndata: [DONE]\n\n');
+    const usage = calls.length === 1 ? 'data: {"choices":[],"usage":{"prompt_tokens":8,"completion_tokens":2}}\n\n' : "";
+    response.end('data: {"choices":[{"delta":{"content":"Trial completed"},"finish_reason":"stop"}]}\n\n' + usage + 'data: [DONE]\n\n');
   });
   service.listen(0, "127.0.0.1"); await once(service, "listening");
   try {
@@ -77,7 +78,7 @@ test("configure a service, select purpose defaults, send an explicit trial and r
     await expect(page.getByText(`${agent} · ${name}/text`,{exact:true})).toBeVisible();
     await page.getByRole("button",{name:"Manage AI configuration",exact:true}).click();
     await page.getByRole("button",{name:"Return to package preparation",exact:true}).click();
-    await expect(page.getByText("Model package application",{exact:true})).toBeVisible();
+    await expect(page.locator("section").filter({has:page.getByRole("heading",{name:"Install and create drafts",exact:true})}).getByText("Model package application",{exact:true})).toBeVisible();
     expect(calls).toHaveLength(0);
     await builder.open(page, `/ai-playground?model=${encodeURIComponent(`${name}/text`)}`);
     await page.getByRole("textbox", { name: "Prompt", exact: true }).fill("A synthetic trial without business data");
@@ -85,6 +86,14 @@ test("configure a service, select purpose defaults, send an explicit trial and r
     await expect(page.getByText("Trial completed", { exact: true })).toBeVisible();
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ model: "text", max_tokens: 512, thinking: { type: "enabled" }, reasoning_effort: "high" });
+    await page.getByRole("button", { name: "Send trial · may incur charges", exact: true }).click();
+    await expect.poll(() => calls.length).toBe(2);
+    await builder.open(page, "/ai-usage");
+    const unsettled = page.getByRole("region", { name: "Unsettled model calls", exact: true });
+    await expect(unsettled).toBeVisible();
+    await expect(unsettled).toContainText("Usage not reported");
+    await expect(unsettled).toContainText(`${name}/text`);
+    await shots(page, unsettled, "ai-unsettled-usage", info);
     await builder.open(page, "/ai-configuration?section=models");
     await page.getByRole("button", { name: "Disable", exact: true }).click();
     const removal = page.getByRole("dialog", { name: "Disable model", exact: true });
@@ -105,6 +114,8 @@ test("configure a service, select purpose defaults, send an explicit trial and r
     await page.reload();
     await expect(page.getByRole("heading", { name: "AI 配置", exact: true })).toBeVisible();
     await shots(page, page.locator("body"), "ai-configuration-zh-dark", info);
+    await builder.open(page, "/ai-usage");
+    await expect(page.getByRole("region", { name: "未结算模型调用", exact: true })).toContainText("提供方未报告用量");
   } finally {
     service.closeAllConnections(); service.close();
     const me = await builder.read<any>("me").catch(()=>undefined);

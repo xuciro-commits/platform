@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -733,15 +734,38 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if pv.Wire == "anthropic" {
 		return nil, fmt.Errorf("the provider %s does not embed", pv.ID)
 	}
-	if !t.breakers.allow("ai:"+pv.ID, now) {
+	if !t.breakers.allow("ai:"+pv.ID, now, false) {
 		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
 	}
-	if why := t.reserve(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, model, now); why != "" {
-		return nil, fmt.Errorf("%s", why)
+	inputTokens := 0
+	for _, text := range input {
+		inputTokens += len(text) + 32
+	}
+	call := "embedding:" + rand.Text()
+	identity, _ := json.Marshal(input)
+	digest := fmt.Sprintf("%x", sha256.Sum256(identity))
+	if why := t.reserveCall(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, model, ChatRequest{Call: call, RequestHash: digest}, inputTokens, 0, now); why != nil {
+		return nil, why
+	}
+	if !t.breakers.allow("ai:"+pv.ID, now, true) {
+		if refusal := t.releaseCall(call, now); refusal != nil {
+			return nil, refusal
+		}
+		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
 	}
 	started := time.Now()
-	status, answer, failure := t.modelProvider(pv).Embeddings(pv, model.Model, input)
+	dispatched := false
+	status, answer, failure := t.modelProvider(pv, func() { dispatched = true }).Embeddings(pv, model.Model, input)
 	t.breakers.report("ai:"+pv.ID, failure == nil && status < 500 && status != http.StatusTooManyRequests, now)
+	if !dispatched {
+		if why := t.releaseCall(call, now); why != nil {
+			return nil, why
+		}
+		if failure != nil {
+			return nil, failure
+		}
+		return nil, fmt.Errorf("The embedding call was not dispatched")
+	}
 	var out struct {
 		Data []struct {
 			Embedding []float32 `json:"embedding"`
@@ -753,7 +777,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 			Prompt *int `json:"prompt_tokens"`
 		} `json:"usage"`
 	}
-	u := platform.AIUsage{At: now, Member: "app:" + platform.KnowledgeApp, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
+	u := platform.AIUsage{Call: call, At: now, Member: "app:" + platform.KnowledgeApp, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
 	switch {
 	case failure != nil:
 		u.Outcome = failure.Detail
@@ -773,6 +797,9 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	}
 	if u.Outcome != "ok" {
 		return nil, fmt.Errorf("%s", u.Outcome)
+	}
+	if u.TokensReported && u.Input > inputTokens {
+		return nil, fmt.Errorf("The provider reported usage above the reserved token bound")
 	}
 	vs := make([][]float32, len(input))
 	for _, d := range out.Data {

@@ -38,7 +38,7 @@ const (
 	SettingDailyTokens = platform.AISettingDailyTokens // tokens per person per day; 0: none
 	SettingPerMinute   = platform.AISettingPerMinute   // calls per person or agent per minute; 0: none
 	SettingAppModel    = platform.AISettingAppModel    // the model apps ask when they name none
-	SettingMaxTokens   = platform.AISettingMaxTokens   // the most tokens one answer may ask for; 0: the provider's default
+	SettingMaxTokens   = platform.AISettingMaxTokens   // generation ceiling; 0: require a reviewed model limit
 	Admin              = platform.AIAdmin
 	User               = platform.AIUser // may call models open to users
 )
@@ -72,13 +72,10 @@ type AI struct {
 	usage     []Usage
 	// Tokens per day ("<day>|<member>", "<day>|model:<name>") and each
 	// caller's calls of the last minute, derived from usage as it is metered.
-	daily  map[string]int
-	recent map[string][]time.Time
-	// inflight are the calls that passed the door and whose usage is not
-	// metered yet: a call in flight counts against its caller's minute, so
-	// calls that start together cannot each pass the same limit.
-	inflight map[string][]time.Time
-	ledger   *platform.Ledger
+	daily        map[string]int
+	recent       map[string][]time.Time
+	reservations map[string]platform.AIReservation
+	ledger       *platform.Ledger
 }
 
 // New is a tenant's AI app.
@@ -87,7 +84,7 @@ func New(tenant string) *AI {
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, inflight: map[string][]time.Time{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
+	return &AI{limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]platform.AIReservation{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -120,7 +117,7 @@ func (a *AI) SnapshotFormat() string { return "ai.state.v1" }
 func (a *AI) Snapshot() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.ledger.SnapshotWith(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily})
+	return a.ledger.SnapshotWith(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily, Reservations: a.reservations})
 }
 
 func (a *AI) Restore(raw json.RawMessage) error {
@@ -138,7 +135,13 @@ func (a *AI) Restore(raw json.RawMessage) error {
 		a.daily = map[string]int{}
 	}
 	a.recent = map[string][]time.Time{}
-	a.inflight = map[string][]time.Time{} // calls in flight do not survive a restore
+	for _, u := range a.usage {
+		a.recent[u.Member] = append(a.recent[u.Member], u.At)
+	}
+	a.reservations = s.Reservations
+	if a.reservations == nil {
+		a.reservations = map[string]platform.AIReservation{}
+	}
 	return nil
 }
 
@@ -155,7 +158,7 @@ func (a *AI) Manifest() platform.Manifest {
 			{Name: SettingPerMinute, Title: "Calls per minute", Type: "integer", Default: "60",
 				Description: "How many model calls each person or agent may make a minute, unless an AI limit says otherwise; 0: no limit."},
 			{Name: SettingMaxTokens, Title: "Most tokens one answer", Type: "integer", Default: "8192",
-				Description: "Organization-wide generation budget per call. New model options must fit within it; 0 uses the provider limit."}}}
+				Description: "Organization-wide generation budget per call. New model options must fit within it; 0 requires a reviewed model limit."}}}
 }
 
 func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
@@ -327,15 +330,11 @@ func (a *AI) allows(m platform.Member, x Model) bool {
 func (a *AI) Meter(u Usage) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	state := aistate.State{Usage: a.usage, Daily: a.daily}
+	state := aistate.State{Usage: a.usage, Daily: a.daily, Reservations: a.reservations}
 	state.Meter(u)
-	a.usage, a.daily = state.Usage, state.Daily
+	a.usage, a.daily, a.reservations = state.Usage, state.Daily, state.Reservations
 	a.recent[u.Member] = append(slices.DeleteFunc(a.recent[u.Member], func(t time.Time) bool { return u.At.Sub(t) >= time.Minute }), u.At)
-	// The call this usage belongs to is no longer in flight: its booking is
-	// released by the meter reading that replaces it, in the same lock.
-	if calls := a.inflight[u.Member]; len(calls) > 0 {
-		a.inflight[u.Member] = calls[1:]
-	}
+
 }
 
 // Usage is the usage kept, oldest first.
@@ -349,18 +348,29 @@ func (a *AI) Usage() []Usage {
 // tokens a day for people and for agents, and calls a minute; 0: none.
 type Defaults = platform.AIDefaults
 
-// allowLocked says why m may not call model now, or "" when it may: the
-// model's daily cap for the tenant, then m's tokens today and calls this
-// minute, against m's own limit or the defaults. Apps (app:<id>) take only
-// their own. Calls already in flight count against the minute: they passed the
-// door but their usage is not metered yet. Only Reserve takes the door.
-func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, now time.Time) string {
+// allowLocked includes every unresolved liability, even after a day boundary.
+// A clock tick is not evidence that an external request incurred no cost.
+func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, r platform.AIReservation, now time.Time) string {
 	day := now.UTC().Format(time.DateOnly)
-	if model.DailyTokens > 0 && a.daily[day+"|model:"+model.Name()] >= model.DailyTokens {
+	memberReserved, modelReserved := 0, 0
+	for _, pending := range a.reservations {
+		remaining := max(0, pending.Input+pending.Output-pending.Accounted)
+		if pending.Model == model.Name() {
+			if pending.State == "exceeded" {
+				return "A provider exceeded the reserved token bound; reconcile its usage before calling this model again"
+			}
+			modelReserved += remaining
+		}
+		if pending.Member == m.ID {
+			memberReserved += remaining
+		}
+	}
+	tokens := r.Input + r.Output
+	if model.DailyTokens > 0 && tokens > model.DailyTokens-a.daily[day+"|model:"+model.Name()]-modelReserved {
 		return fmt.Sprintf("The tenant used the %d tokens a day of %s", model.DailyTokens, model.Name())
 	}
 	daily, perMinute := a.effectiveLimitsLocked(m, d)
-	if daily > 0 && a.daily[day+"|"+m.ID] >= daily {
+	if daily > 0 && tokens > daily-a.daily[day+"|"+m.ID]-memberReserved {
 		return fmt.Sprintf("%s used its %d tokens for today", m.ID, daily)
 	}
 	if perMinute > 0 && a.callsLocked(m.ID, now) >= perMinute {
@@ -388,43 +398,44 @@ func (a *AI) Quota(m platform.Member, d Defaults, now time.Time) platform.AIQuot
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	daily, perMinute := a.effectiveLimitsLocked(m, d)
-	return platform.AIQuota{DailyTokens: daily, PerMinute: perMinute, UsedTokens: a.daily[now.UTC().Format(time.DateOnly)+"|"+m.ID], UsedCalls: a.callsLocked(m.ID, now)}
-}
-
-// callsLocked is the caller's calls this minute: the ones already metered and
-// the ones in flight.
-func (a *AI) callsLocked(member string, now time.Time) int {
-	recent := slices.DeleteFunc(slices.Clone(a.recent[member]), func(t time.Time) bool { return now.Sub(t) >= time.Minute })
-	inflight := slices.DeleteFunc(slices.Clone(a.inflight[member]), func(t time.Time) bool { return now.Sub(t) >= time.Minute })
-	return len(recent) + len(inflight)
-}
-
-// Reserve is the door one model call passes, taken atomically with the call's
-// registration: it refuses with why, or lets the call start and counts it as in
-// flight until its usage is metered. It is what every model call takes instead
-// of a bare Allow — calls that start together would each pass the same limit
-// otherwise.
-func (a *AI) Reserve(m platform.Member, model Model, d Defaults, now time.Time) string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.pruneInflightLocked(now)
-	if why := a.allowLocked(m, model, d, now); why != "" {
-		return why
-	}
-	a.inflight[m.ID] = append(a.inflight[m.ID], now)
-	return ""
-}
-
-// pruneInflightLocked forgets calls in flight beyond a minute: a call the
-// process died before metering must not hold its caller's limits forever.
-func (a *AI) pruneInflightLocked(now time.Time) {
-	for member, calls := range a.inflight {
-		if left := slices.DeleteFunc(calls, func(t time.Time) bool { return now.Sub(t) >= time.Minute }); len(left) == 0 {
-			delete(a.inflight, member)
-		} else {
-			a.inflight[member] = left
+	quota := platform.AIQuota{DailyTokens: daily, PerMinute: perMinute, UsedTokens: a.daily[now.UTC().Format(time.DateOnly)+"|"+m.ID], UsedCalls: a.callsLocked(m.ID, now)}
+	for _, r := range a.reservations {
+		if r.Member == m.ID {
+			quota.ReservedTokens += max(0, r.Input+r.Output-r.Accounted)
+			quota.UnsettledCalls++
 		}
 	}
+	return quota
+}
+
+func (a *AI) callsLocked(member string, now time.Time) int {
+	n := 0
+	for _, at := range a.recent[member] {
+		if now.Sub(at) < time.Minute {
+			n++
+		}
+	}
+	for _, r := range a.reservations {
+		if r.Member == member && r.State == "pending" && now.Sub(r.At) < time.Minute {
+			n++
+		}
+	}
+	return n
+}
+
+// Reservation returns the original immutable identity or unresolved liability.
+func (a *AI) Reservation(call string) (platform.AIReservation, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	r, ok := a.reservations[call]
+	if !ok {
+		for _, u := range a.usage {
+			if u.Call != "" && u.Call == call {
+				return platform.AIReservation{Call: call, Member: u.Member, Model: u.Model, State: "settled"}, true
+			}
+		}
+	}
+	return r, ok
 }
 
 // Total is usage summed per day, member and model.
@@ -512,7 +523,14 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 			t.Failed++
 		}
 	}
-	return AIUsage{Calls: calls, Totals: totals, Applications: byApplication}, nil
+	reservations := []platform.AIReservation{}
+	for _, r := range a.reservations {
+		if admin || r.Member == c.ID {
+			reservations = append(reservations, r)
+		}
+	}
+	slices.SortFunc(reservations, func(a, b platform.AIReservation) int { return strings.Compare(a.Call, b.Call) })
+	return AIUsage{Calls: calls, Totals: totals, Applications: byApplication, Reservations: reservations}, nil
 }
 
 // AIUsage is model calls metered from the journal, and their totals per day, member and model.

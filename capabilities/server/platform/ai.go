@@ -36,6 +36,7 @@ type AILimit struct {
 }
 
 type AIUsage struct {
+	Call         string         `json:"call,omitempty"` // original reservation identity, never supplied by model output
 	Applications []AssetBinding `json:"applications,omitempty"`
 	Resource     *AssetRef      `json:"resource,omitempty"`
 	Run          string         `json:"run,omitempty"`
@@ -63,12 +64,41 @@ type AIUsage struct {
 
 type AIDefaults struct{ People, Agents, PerMinute int }
 
+// AIReservation is an unsettled call in the original AI meter. Unknown usage
+// retains its remaining liability; no elapsed-time cleanup proves it was free.
+type AIReservation struct {
+	RequestHash string    `json:"requestHash,omitempty"`
+	Call        string    `json:"call"`
+	At          time.Time `json:"at"`
+	Member      string    `json:"member"`
+	Agent       bool      `json:"agent,omitempty"`
+	Model       string    `json:"model"`
+	Run         string    `json:"run,omitempty"`
+	Input       int       `json:"input"`
+	Output      int       `json:"output"`
+	Accounted   int       `json:"accounted,omitempty"` // reservation covered by metering or final settlement
+	State       string    `json:"state"`               // pending, unknown, exceeded
+}
+
+// AIReserveInput is written only by the host, through the original accepted
+// input boundary. It is deliberately absent from the public input manifest.
+type AIReserveInput struct {
+	Cancel      bool          `json:"cancel,omitempty"`
+	Reservation AIReservation `json:"reservation"`
+	Defaults    AIDefaults    `json:"defaults"`
+	RunTokens   int           `json:"runTokens,omitempty"`
+}
+
+const AIReserveCall = "ai-reserve-call"
+
 // AIQuota is an original owner counter/limit projection, not an app quota.
 type AIQuota struct {
-	DailyTokens int `json:"dailyTokens"`
-	UsedTokens  int `json:"usedTokens"`
-	PerMinute   int `json:"perMinute"`
-	UsedCalls   int `json:"usedCalls"`
+	ReservedTokens int `json:"reservedTokens"`
+	UnsettledCalls int `json:"unsettledCalls"`
+	DailyTokens    int `json:"dailyTokens"`
+	UsedTokens     int `json:"usedTokens"`
+	PerMinute      int `json:"perMinute"`
+	UsedCalls      int `json:"usedCalls"`
 }
 
 type AITotal struct {
@@ -101,6 +131,7 @@ type AIApplicationTotal struct {
 }
 
 type AIUsageReport struct {
+	Reservations []AIReservation      `json:"reservations,omitempty"`
 	Applications []AIApplicationTotal `json:"applications,omitempty"`
 	Calls        []AIUsage            `json:"calls"`
 	Totals       []AITotal            `json:"totals"`

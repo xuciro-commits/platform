@@ -18,6 +18,7 @@ import (
 )
 
 func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testing.T) {
+	approveTestInference(t, "http://localhost:1234", "local")
 	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
 	if dsn == "" {
 		t.Skip("PLATFORM_TEST_DATABASE not set")
@@ -78,20 +79,36 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 		}
 	}
 	check(live, 0)
-	direct := platform.AIUsage{At: at.Add(time.Second), Member: "ana", Model: "local/model", Input: 7, Output: 2, TokensReported: true}
+	model, _, problem := live.ai.Model("local/model")
+	if problem != nil {
+		t.Fatal(problem)
+	}
+	reserve := func(m platform.Member, call string) {
+		t.Helper()
+		if why := live.reserveCall(m, model, ChatRequest{Call: call}, 30, 20, at); why != nil {
+			t.Fatal(why)
+		}
+	}
+	reserve(memberOf(t, live, "ana"), "direct-call")
+	check(live, 0)
+	direct := platform.AIUsage{Call: "direct-call", At: at.Add(time.Second), Member: "ana", Model: "local/model", Input: 7, Output: 2, TokensReported: true}
 	if refusal := live.meter(memberOf(t, live, "ana"), direct); refusal != nil {
 		t.Fatal(refusal)
 	}
+	check(live, 1)
+	reserve(platform.Member{ID: "app:desk", Tenant: id}, "effect-call")
+	reserve(live.agents.AgentPrincipal("desk.triage"), "agent-call")
+	reserve(memberOf(t, live, "ana"), "unanswered-call")
 	check(live, 1)
 	// Save an owner-only checkpoint before effect and agent usage. Both later
 	// readings must apply once from their original accepted-result suffix.
 	if _, err = live.checkpointRuntime(ctx, j, "usage-checkpoint"); err != nil {
 		t.Fatal(err)
 	}
-	effectUsage := platform.AIUsage{At: at.Add(2 * time.Second), Member: "app:desk", Model: "local/model", Input: 11, Output: 3, TokensReported: true}
+	effectUsage := platform.AIUsage{Call: "effect-call", At: at.Add(2 * time.Second), Member: "app:desk", Model: "local/model", Input: 11, Output: 3, TokensReported: true}
 	live.settleWithUsage("usage-model-effect", platform.Outcome{Effect: "usage-model-effect", Result: "delivered"}, &effectUsage, effectUsage.At)
 	check(live, 2)
-	agentUsage := platform.AIUsage{At: at.Add(3 * time.Second), Member: live.agents.AgentPrincipal("desk.triage").ID, Agent: true, Model: "local/model", Input: 13, Output: 5, TokensReported: true}
+	agentUsage := platform.AIUsage{Call: "agent-call", At: at.Add(3 * time.Second), Member: live.agents.AgentPrincipal("desk.triage").ID, Agent: true, Model: "local/model", Input: 13, Output: 5, TokensReported: true}
 	live.applyAgentStep(stepBody{Run: "R1", Content: "saved answer", Usage: agentUsage}, agentUsage.At, false)
 	check(live, 3)
 	entries, err := j.Entries(ctx, id, 0)
@@ -111,6 +128,12 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 		if !kinds[kind] {
 			t.Fatal("test did not exercise the original accepted result", kind)
 		}
+	}
+	if r, ok := live.ai.Reservation("unanswered-call"); !ok || r.State != "pending" {
+		t.Fatal("unfinished call lost its liability", r)
+	}
+	if q := live.ai.Quota(memberOf(t, live, "ana"), live.limits(), at); q.UnsettledCalls != 1 || q.ReservedTokens != 50 {
+		t.Fatal("settlement cleared another call", q)
 	}
 	expected, err := live.ai.(*ai.AI).AcceptedState()
 	if err != nil {

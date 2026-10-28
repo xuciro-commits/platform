@@ -15,11 +15,12 @@ import (
 const UsageKept = 5000
 
 type State struct {
-	Providers []platform.AIProvider       `json:"providers"`
-	Models    []platform.AIModel          `json:"models"`
-	Limits    map[string]platform.AILimit `json:"limits,omitempty"`
-	Usage     []platform.AIUsage          `json:"usage"`
-	Daily     map[string]int              `json:"daily,omitempty"`
+	Providers    []platform.AIProvider             `json:"providers"`
+	Models       []platform.AIModel                `json:"models"`
+	Limits       map[string]platform.AILimit       `json:"limits,omitempty"`
+	Usage        []platform.AIUsage                `json:"usage"`
+	Daily        map[string]int                    `json:"daily,omitempty"`
+	Reservations map[string]platform.AIReservation `json:"reservations,omitempty"`
 }
 
 // Decode validates the original saved format without accepting unknown fields
@@ -69,11 +70,17 @@ func (s State) Validate() error {
 	if len(s.Usage) > UsageKept {
 		return fmt.Errorf("accepted AI state exceeds retained usage")
 	}
+	for key, r := range s.Reservations {
+		if key == "" || key != r.Call || r.Member == "" || r.Model == "" || r.At.IsZero() || r.Input < 0 || r.Output < 0 || r.Accounted < 0 ||
+			(r.State != "pending" && r.State != "unknown" && r.State != "exceeded") {
+			return fmt.Errorf("accepted AI state has an invalid reservation")
+		}
+	}
 	return nil
 }
 
-// Meter updates only persistent usage and daily totals. Callers own the state;
-// the AI instance separately updates its transient reservations.
+// Meter applies the original usage reading and settles only its reservation.
+// SQL projection and the live AI owner apply this same pure transformation.
 func (s *State) Meter(u platform.AIUsage) {
 	if s.Daily == nil {
 		s.Daily = map[string]int{}
@@ -93,6 +100,18 @@ func (s *State) Meter(u platform.AIUsage) {
 	}
 	s.Daily[day+"|"+u.Member] += u.Input + u.Output
 	s.Daily[day+"|model:"+u.Model] += u.Input + u.Output
+	if r, ok := s.Reservations[u.Call]; ok && r.Member == u.Member && r.Model == u.Model {
+		switch {
+		case u.TokensReported && (u.Input > r.Input || u.Output > r.Output):
+			r.State, r.Accounted = "exceeded", max(r.Input+r.Output, u.Input+u.Output)
+			s.Reservations[u.Call] = r
+		case u.TokensReported:
+			delete(s.Reservations, u.Call)
+		default:
+			r.State, r.Accounted = "unknown", u.Input+u.Output
+			s.Reservations[u.Call] = r
+		}
+	}
 }
 
 // ApplyUsageState decodes into private values and applies the same meter used

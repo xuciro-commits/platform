@@ -112,12 +112,18 @@ func (t *Tenant) take(x turn, now time.Time) {
 		// not run its tool then. What it cost is
 		// still journaled and metered, so spend stays accounted for.
 		if !t.stillRunning(x.Run.ID) {
-			t.meter(t.agents.AgentPrincipal(x.Run.Agent), answer.Usage)
+			if answer.Usage.Model != "" {
+				t.meter(t.agents.AgentPrincipal(x.Run.Agent), answer.Usage)
+			}
 			return
 		}
 		body := stepBody{Run: x.Run.ID, Content: answer.Content, Protocol: answer.Protocol, Usage: answer.Usage}
 		if failure != nil {
-			body.Failure = failure.Detail
+			if failure.Quota {
+				body.Stop = failure.Detail
+			} else {
+				body.Failure = failure.Detail
+			}
 		} else if len(answer.ToolCalls) > 0 {
 			var err error
 			body.Calls, err = agents.CompleteToolCalls(answer.ToolCalls, x.Run.ID, x.Run.StepsUsed+1)
@@ -235,12 +241,10 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 			if !h.AgentProviderAvailable(pv.ID, now) {
 				continue
 			}
-			if why := h.ReserveAgentModel(a.AgentPrincipal(run.Agent), model, now); why != "" {
-				x.Stop = why
-				break
-			}
 			x.Model, x.Provider, x.Request = model, pv, a.prompt(c, d, run, name, now)
 			x.Request.Run = run.ID
+			x.Request.Call = fmt.Sprintf("agent:%s:%d", run.ID, run.StepsUsed)
+			x.Request.RunTokens = d.Budget.Tokens - run.TokensUsed
 			x.Request.Binding = run.ModelBinding
 		}
 		a.busy[run.ID] = true

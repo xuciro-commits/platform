@@ -234,7 +234,14 @@ func TestChatToolStreamMetersOnceAndReportsAcceptanceFailure(t *testing.T) {
 		t.Fatalf("stream was metered incorrectly: %+v", usage)
 	}
 	CheckReplay(t, tn, entries, build)
-	tn.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append failed") }
+	tn.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
+		var envelope struct{ Kind string }
+		_ = json.Unmarshal(entry.Body, &envelope)
+		if envelope.Kind == "usage-result" {
+			return nil, errors.New("append failed")
+		}
+		return entry.Body, nil
+	}
 	body = chat()
 	if !strings.Contains(body, "event: error") || strings.Contains(body, "event: done") || len(tn.ai.Usage()) != 1 {
 		t.Fatalf("failed usage acceptance became a successful stream: %s", body)

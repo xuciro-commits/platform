@@ -414,18 +414,17 @@ func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// A provider that reports no usage: with a small token budget, the run must
-	// still run out of tokens (the estimate is what counts).
+	// A budget too small for the input plus bounded output stops before I/O.
 	def.Budget = platform.Budget{Steps: 5, Tokens: 120, Actions: 3}
 	seed("1")
 	calls := 0
 	tenant.AIClient = func(*http.Request) (*http.Response, error) { calls++; return wireAnswer(t, "", nil), nil }
 	tenant.Think(now.Add(time.Second))
 	run, _ := platform.Get[AgentRunRecord](tenant.automation(AgentApp, false), "R1")
-	if run.State != "stopped" || !strings.Contains(run.Stopped, "over its budget") || run.TokensUsed == 0 {
+	if run.State != "stopped" || !strings.Contains(run.Stopped, "remaining run token budget") || run.TokensUsed != 0 {
 		t.Fatalf("a budget that ignored unreported usage: %+v", run)
 	}
-	if calls != 1 {
+	if calls != 0 {
 		t.Fatalf("calls made past the budget: %d", calls)
 	}
 	// A provider that reports a cost over the USD budget stops the run, and
