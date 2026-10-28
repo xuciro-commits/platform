@@ -1,9 +1,10 @@
+import type {PageUI} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { pageUIProfile, SemanticObjectSelect } from "@platform/app";
 import { ContextHelp, Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
 import { layoutID } from "../page-layout";
 
-export function InterfacePanel({ document, object, onChange }: { document: Api.PageDocument; object: Api.AssetRef; onChange: (document: Api.PageDocument) => void }) {
+export function InterfacePanel({ document, object, onChange }: { document: PageUI.PageDocument; object: Api.AssetRef; onChange: (document: PageUI.PageDocument) => void }) {
   const iface = document.interface ?? { version: 1 }, variables = document.variables ?? {};
   const update = (next: Api.PageInterface, values = variables) => onChange({ ...document, uiProfile: pageUIProfile, interface: next, variables: values });
   const patch = (direction: "inputs" | "outputs", id: string, value: Partial<Api.PagePort>) => update({ ...iface, [direction]: { ...iface[direction], [id]: { ...iface[direction]![id]!, ...value } } });

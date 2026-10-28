@@ -1,4 +1,5 @@
-import {pageUIManifest} from "@platform/kernel";
+import {pageUIManifest} from "@platform/app/page-contract";
+
 import { ContextHelp,Select,Toggles,t} from "@platform/ui";
 import {TableInspector,type TableInspectorPorts} from "./TableInspector";
 import type {AuthoringSection} from "../draft";

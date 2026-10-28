@@ -1,8 +1,9 @@
-import {pageUIManifest} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+
 import {t} from "../i18n";
 export type TermCount={value:string|null;count:number};
 export function validTermCounts(terms:TermCount[]) {
- return Array.isArray(terms)&&terms.length<=pageUIManifest.runtime.terms.maxGroups&&terms.every(term=>term&&typeof term==="object"&&!Array.isArray(term)&&(term.value===null||typeof term.value==="string")&&Number.isSafeInteger(term.count)&&term.count>0)&&new Set(terms.map(term=>JSON.stringify(term.value))).size===terms.length;
+ return Array.isArray(terms)&&terms.length<=renderingLimits.runtime.terms.maxGroups&&terms.every(term=>term&&typeof term==="object"&&!Array.isArray(term)&&(term.value===null||typeof term.value==="string")&&Number.isSafeInteger(term.count)&&term.count>0)&&new Set(terms.map(term=>JSON.stringify(term.value))).size===terms.length;
 }
 /** Original complete counts, stable row identity and caller-owned read scope. */
 export function TermCounts({terms,label}:{terms:TermCount[];label:string}){

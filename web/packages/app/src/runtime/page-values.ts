@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import {validCollectionInput} from "./collection-input";
 import {isDecimal} from "./decimal";
 import type { Api } from "@platform/kernel";
@@ -22,7 +23,7 @@ export function portValues(ports: Ports, values: Record<string, VariableResult>)
     return [[id, typeof value === "object" ? value.kind === "object-set-input"?value:value.kind === "decimal"?value:value.kind === "record" ? value.reference : undefined : value]];
   }));
 }
-export function navigationValues(bindings: Record<string, Api.PageValue>, values: Record<string, VariableResult>) {
+export function navigationValues(bindings: Record<string, PageUI.PageValue>, values: Record<string, VariableResult>) {
   const result: Record<string, unknown> = {};
   for (const [id, binding] of Object.entries(bindings)) {
     if (binding.variable) {

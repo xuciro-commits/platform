@@ -1,8 +1,8 @@
-import type {Api} from "@platform/kernel";
+import type * as PageUI from "../pageui/types";
 import {compareDecimal,isDecimal,parseDecimal} from "./decimal";
 import type {VariableResult} from "./variables";
 type AlertResult={status:"message";text:string}|{status:"clear"|"pending"|"empty"}|{status:"error";code:string};
-export function evaluateAlert(value:VariableResult|undefined,config:Api.PageAlertBanner|undefined,limits:{maxMessageBytes:number;tones:readonly string[]}):AlertResult {
+export function evaluateAlert(value:VariableResult|undefined,config:PageUI.PageAlertBanner|undefined,limits:{maxMessageBytes:number;tones:readonly string[]}):AlertResult {
  const threshold=config&&parseDecimal(config.threshold);
  if(!config||!threshold||threshold.value!==config.threshold||!limits.tones.includes(config.tone)||!config.message||new TextEncoder().encode(config.message).length>limits.maxMessageBytes)return {status:"error",code:"Alert configuration is unavailable or incompatible."};
  if(!value||value.status==="empty")return {status:"empty"};

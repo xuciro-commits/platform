@@ -2,6 +2,22 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Expected a tagged object.": "需要带标签的对象。",
+  "Choose a declared variant tag.": "请选择已声明的变体标签。",
+  "Expected an object.": "需要对象。",
+  "Required field: {name}": "必填字段：{name}",
+  "Unknown field: {name}": "未声明字段：{name}",
+  "Expected an array.": "需要数组。",
+  "The array exceeds its limit.": "数组超出数量限制。",
+  "Expected text.": "需要文本。",
+  "Choose a declared option.": "请选择已声明的选项。",
+  "The text exceeds its limit.": "文本超出长度限制。",
+  "Expected true or false.": "需要 true 或 false。",
+  "Expected a number.": "需要数字。",
+  "Expected a safe integer.": "需要可精确表示的整数。",
+  "Enter a number within the allowed range.": "请输入允许范围内的数值。",
+  "Unsupported widget configuration: {widget}, version {version}. Your page draft is preserved.": "不支持的组件配置：{widget}，版本 {version}。页面草稿已保留。",
+  "This page uses an unsupported format or UI profile. Your page draft is preserved.": "此页面的格式或界面版本不受支持，页面草稿已保留。",
  "connection is not ready; configure and check it before use": "连接尚未就绪，请在使用前配置并检查。",
  "Connection {connection} does not exist": "连接 {connection} 不存在。",
  "The observation connection is unavailable": "观测连接不可用。",

@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import {useHost,useProvidedCapabilities} from "@platform/app";
 import {Select,Textarea,t} from "@platform/ui";
 import type {Api} from "@platform/kernel";
@@ -6,7 +7,7 @@ import type {TableInspectorPorts} from "./TableInspector";
 type Props=Omit<TableInspectorPorts,"section"|"onChange">&{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void};
 export function AIInspector({section,document,overlay,onChange}:Props){
  const available=useProvidedCapabilities("function").data??[];
- const {definitions}=useHost(),c=section.ai,update=(patch:Partial<Api.PageAI>)=>onChange({ai:{kind:"analyst",...c,...patch}}),functions=definitions.filter(d=>d.ref.app==="build"&&!!d.function&&available.some(item=>item.ref.app===d.ref.app&&item.ref.name===d.ref.name&&item.version===d.version)),fn=functions.find(d=>d.ref.name===section.function?.name&&Number(d.version.match(/\.function-(\d+)$/)?.[1])===section.function?.version),owned=(v:Api.PageVariable)=>v.scope===(overlay?"overlay":"page")&&v.owner===overlay;
+ const {definitions}=useHost(),c=section.ai,update=(patch:Partial<PageUI.PageAI>)=>onChange({ai:{kind:"analyst",...c,...patch}}),functions=definitions.filter(d=>d.ref.app==="build"&&!!d.function&&available.some(item=>item.ref.app===d.ref.app&&item.ref.name===d.ref.name&&item.version===d.version)),fn=functions.find(d=>d.ref.name===section.function?.name&&Number(d.version.match(/\.function-(\d+)$/)?.[1])===section.function?.version),owned=(v:Api.PageVariable)=>v.scope===(overlay?"overlay":"page")&&v.owner===overlay;
  // Authoring stores the same original function name; asPage expands its owner.
  return <><label className="grid gap-1 text-xs">{t("AI presentation")}<Select value={c?.kind??"analyst"} onChange={e=>onChange({ai:{kind:e.target.value,...e.target.value==="chatbot"?{replyField:"summary",questionVariable:"",suggestions:[]}:{} }})}>{["analyst","generated","chatbot"].map(kind=><option key={kind} value={kind}>{t(kind)}</option>)}</Select></label>
  <label className="grid gap-1 text-xs">{t("Original AI record")}<Select value={section.recordVariable??""} onChange={e=>onChange({recordVariable:e.target.value||undefined})}><option value="">{t("Choose a confirmed record resource")}</option>{Object.entries(document.variables??{}).filter(([,v])=>v.type==="record"&&(owned(v)&&v.mode==="resource"&&v.source?.kind==="record"||v.scope==="application"&&v.mode==="shared"&&v.source?.kind==="application"&&!!v.source.object)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>

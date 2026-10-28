@@ -1,9 +1,9 @@
+import type * as PageUI from "../pageui/types";
 import {Panel,RecordSparkline,t,type EntityInfo} from "@platform/ui";
-import type {Api} from "@platform/kernel";
 import {isDecimal,isNumber} from "../runtime/decimal";
 import type {VariableResult} from "../runtime/variables";
 import {QueryWindowFrame,type QueryWindow} from "./QueryWindowFrame";
-export function SparklineRenderer({value,window,info,fields,title}:{value?:VariableResult;window?:QueryWindow;info?:EntityInfo;fields?:Api.PageSparkline;title:string}) {
+export function SparklineRenderer({value,window,info,fields,title}:{value?:VariableResult;window?:QueryWindow;info?:EntityInfo;fields?:PageUI.PageSparkline;title:string}) {
  if(!fields)return <Panel role="alert">{t("Sparkline KPI configuration is unavailable.")}</Panel>;
  if(value?.status==="error")return <Panel role="alert">{t(value.code)}</Panel>;
  if(value?.status!=="value"&&value?.status!=="empty")return <p role="status" className="text-xs text-muted">{t("Sparkline value is unavailable or loading.")}</p>;

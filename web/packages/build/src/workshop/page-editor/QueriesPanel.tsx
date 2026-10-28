@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import type {AuthoringSection} from "./draft";
 import { useEffect, useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -6,7 +7,7 @@ import { ContextHelp, Button, Card, Checkbox, Input, PropertyList, Select, t } f
 import { overlayOwner } from "../page-layout";
 import { layoutID } from "../page-layout";
 
-export function QueriesPanel({ document, object, values, onChange, onPreviewOwner, application=false,sections=[] }: { sections?:AuthoringSection[];application?:boolean; onPreviewOwner?:(owner?:string)=>void; document: Api.PageDocument; object: Api.AssetRef; values: Record<string,PageVariableValue>; onChange:(document:Api.PageDocument)=>void }) {
+export function QueriesPanel({ document, object, values, onChange, onPreviewOwner, application=false,sections=[] }: { sections?:AuthoringSection[];application?:boolean; onPreviewOwner?:(owner?:string)=>void; document: PageUI.PageDocument; object: Api.AssetRef; values: Record<string,PageVariableValue>; onChange:(document:PageUI.PageDocument)=>void }) {
   const { definitions } = useHost(), [chosen,choose] = useState("");
   const capabilityQuery = useProvidedCapabilities("query", "pure");
   const namedQueries=definitions.flatMap((d)=>{
@@ -62,7 +63,7 @@ export function QueriesPanel({ document, object, values, onChange, onPreviewOwne
   </Card>;
 }
 
-function QueryValue({label,value,document,owner,itemOwner,onChange,application=false}:{application?:boolean;owner?:string;itemOwner?:string;label:string;value:Api.PageValue;document:Api.PageDocument;onChange:(value:Api.PageValue)=>void}) {
+function QueryValue({label,value,document,owner,itemOwner,onChange,application=false}:{application?:boolean;owner?:string;itemOwner?:string;label:string;value:PageUI.PageValue;document:PageUI.PageDocument;onChange:(value:PageUI.PageValue)=>void}) {
   const type=isPageDecimalDraft(value.literal)?"decimal":typeof value.literal;
   const available=Object.entries(document.variables??{}).filter(([,v])=>(["page","application"].includes(v.scope)||v.scope==="overlay"&&v.owner===owner&&!!owner||v.scope==="loop-item"&&v.owner===itemOwner&&!!itemOwner)&&(application?["string","boolean","decimal"]:["string","boolean","record","decimal","string-set"]).includes(v.type));
   return <div className="grid gap-2"><label className="grid gap-1 text-xs">{t(label)}<Select value={value.variable??""} onChange={(event)=>onChange(event.target.value?{variable:event.target.value}:{literal:""})}><option value="">{t("Literal")}</option>{available.map(([id,v])=><option key={id} value={id}>{v.title||id} · {t(v.type)}</option>)}</Select></label>

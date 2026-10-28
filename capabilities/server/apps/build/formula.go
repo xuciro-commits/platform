@@ -21,10 +21,6 @@ func formulaExpr(fields []construction.Field, f construction.Field) (platform.Ex
 		}
 		return *f.FormulaExpr, nil
 	}
-	node, err := construction.ValueParseFormula(f.Formula)
-	if err != nil {
-		return platform.Expr{}, err
-	}
 	types := map[string]string{}
 	for _, operand := range fields {
 		if operand.Formula == "" && operand.FormulaExpr == nil && (operand.Type == "integer" || operand.Type == "decimal" || operand.Type == "money") {
@@ -34,7 +30,7 @@ func formulaExpr(fields []construction.Field, f construction.Field) (platform.Ex
 			}
 		}
 	}
-	e, err := node.Expr(types)
+	e, err := platform.LowerFormula(f.Formula, types)
 	if err != nil {
 		return e, err
 	}

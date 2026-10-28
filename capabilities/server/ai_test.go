@@ -12,7 +12,9 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/aigateway/providers"
 	"platformserver/apps/ai"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -53,6 +55,7 @@ func fakeModels(t *testing.T, calls *atomic.Int32) *httptest.Server {
 		fmt.Fprintf(w, `{"model":"echo-v2","choices":[{"message":{"role":"assistant","content":%q}}],"usage":{"prompt_tokens":%d,"completion_tokens":%d,"cost":0.0001}}`,
 			"echo: "+last, len(last), len(last)+6)
 	}))
+	approveTestInference(t, s.URL, "lm", "local")
 	t.Cleanup(s.Close)
 	return s
 }
@@ -68,13 +71,13 @@ func TestModelUsageDistinguishesUnreportedAndZeroCost(t *testing.T) {
 		{"reported free", `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":2,"cost":0}}`, true, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, usage, failure := completion(200, []byte(test.body), "probe")
+			_, usage, failure := providers.Completion(200, []byte(test.body), "probe")
 			if failure != nil || usage.TokensReported != test.tokens || usage.CostReported != test.cost {
 				t.Fatalf("provider usage presence changed: %+v %v", usage, failure)
 			}
 		})
 	}
-	_, _, failure := completion(200, []byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"cost":-1}}`), "probe")
+	_, _, failure := providers.Completion(200, []byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"cost":-1}}`), "probe")
 	if failure == nil {
 		t.Fatal("negative provider cost was accepted as a release measurement")
 	}
@@ -241,8 +244,8 @@ func TestAnthropicProvider(t *testing.T) {
 	}))
 	defer api.Close()
 	target, _ := url.Parse(api.URL)
-	console := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin}}})
-	tn, err := NewTenant("t-1", console, ai.New("t-1"))
+	console := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin, "build": "builder"}}})
+	tn, err := NewTenant("t-1", console, ai.New("t-1"), build.New("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,19 +273,19 @@ func TestAnthropicProvider(t *testing.T) {
 	if kerr != nil || failure != nil || len(catalog) != 1 || catalog[0].Name != "Claude Opus 5" || catalog[0].Capabilities == nil || catalog[0].Capabilities.InputTokens == nil || *catalog[0].Capabilities.InputTokens != 1000000 || catalog[0].Capabilities.ContextTokens != nil {
 		t.Fatalf("catalog %+v %v %v", catalog, kerr, failure)
 	}
-	answer, kerr, failure := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", Messages: []Message{
-		{Role: "system", Content: "be brief"}, {Role: "user", Content: "hi"}, {Role: "assistant", Content: "hello"}, {Role: "user", Content: "again"}}}, now)
+	answer, kerr, failure := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-opus-5", Messages: []Message{
+		{Role: "system", Content: "be brief"}, {Role: "user", Content: "hi"}, {Role: "assistant", Content: "hello"}, {Role: "user", Content: "again"}}}, now, platform.AIStageDesign)
 	if kerr != nil || failure != nil || answer.Content != "be brief|again|3|8192" || answer.Usage.Input != 12 || answer.Usage.Output != 7 {
 		t.Fatalf("answer %+v %v %v", answer, kerr, failure)
 	}
 	// The platform's ceiling, not the adapter's own default, is what an answer
 	// asking for more is capped to (review AI-03); a smaller ask is kept.
-	capped, _, _ := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 100000, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now)
-	small, _, _ := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 512, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now)
+	capped, _, _ := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 100000, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now, platform.AIStageDesign)
+	small, _, _ := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 512, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now, platform.AIStageDesign)
 	if !strings.HasSuffix(capped.Content, "|8192") || !strings.HasSuffix(small.Content, "|512") {
 		t.Fatalf("max tokens ceiling: %q, %q", capped.Content, small.Content)
 	}
-	if _, _, failure := tn.Chat(ana, ChatRequest{Model: "claude/claude-busy", Messages: []Message{{Role: "user", Content: "x"}}}, now); failure == nil ||
+	if _, _, failure := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-busy", Messages: []Message{{Role: "user", Content: "x"}}}, now, platform.AIStageDesign); failure == nil ||
 		failure.Status != 429 || failure.Detail != "rate limited" {
 		t.Fatalf("a rate limit: %+v", failure)
 	}

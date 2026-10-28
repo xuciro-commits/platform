@@ -1,7 +1,6 @@
-# 本地运行与系统自举
+# 本地运行与静态系统维护
 
-本分支提供 `platform-server`、单工作区和独立的 `platform-updater`。工作区 Control Panel 中的 **Self-hosting / 系统自举** 入口是 `#/self-hosting`；页面中的 **Help: self-hosting / 帮助：系统自举** 可展开操作说明。源码保存、提案、批准、激活是不同步骤。
-
+平台提供单一工作区与独立的静态监督工具。原 `#/self-hosting` 路由保留为 **System history / 系统历史**：只读查看源码、变更、发布和原激活结果，并按原请求键核对未知回执。全量动态自举的新源码保存、提案、批准、构建和激活已冻结；平台代码通过普通静态部署更新。
 架构与数据归属见 [Architecture](../../docs/Architecture.md#9-自举system-作用域)，当前待验收项见 [WorkQueue](../../docs/WorkQueue.md)。本文说明运行方式；本轮实际观察与未验证项见 WorkQueue，不把历史演练当作当前交付。
 
 ## 启动工作区
@@ -41,64 +40,41 @@ make infra-down    # 停止容器，不删除卷
 
 `make lite` 是独立的无Docker轻量运行形态，默认8495，数据在 `.build/lite/platform/`，沿原签名角色卡登录；它不是上述密码登录环境，不自动启动updater或监督换版。不要与另一个平台同时占用同一端口。
 
-自举环境须配置 `system` 租户和明确角色：构建者持有 `system:builder`，人工发布者持有 `system:publisher`；编辑元对象还需原 `build:builder`。人工发布者可以批准自己的人工提案；受管 AI 即使被错误授予发布角色仍不能批准，AI 提案须人工批准。初始席位只用于空日志，已有成员授权仍以接受结果为准；更改起始 JSON 不会重写既有授权。
+## 推断部署许可
 
-业务应用应在账号菜单中的业务工作区（本地默认为 Development）安装、生成草稿和发布。**系统自举**工作区只沿已批准的平台变更激活定义，普通候选发布不能绕过这条边界。管理员在业务工作区默认持有发布角色，编辑与生成草稿使用构建者账号，或由管理员明确授予构建角色；系统工作区的角色不会带到业务工作区。保存候选只冻结内容，激活后仍需明确授予使用者业务角色，应用才会按其页面读取权限出现在入口中。
+云端生成只允许获权设计任务；生产Chat、Agent、AI函数和在线知识嵌入需要部署认可的本地或边缘服务。提供方的 `kind=local`、模型名称和客户端阶段标记均不授予该许可。部署启动时从 `PLATFORM_AI_INFERENCE_POLICY` 读取明确的提供方ID与HTTP源站，默认没有运行态许可：
 
-使用独立数据目录启动源码可读的自举宿主：
-
-```bash
-make host ARGS='-profile lightweight -data .build/self-hosting/data -idp-new-key'
-make host ARGS='-profile lightweight -data .build/self-hosting/data -tenants /absolute/path/to/tenants.json -source-root . -web web/apps/workspace/dist -addr 127.0.0.1:8495'
+```json
+{"runtime":[{"provider":"factory-inference","origin":"http://inference.internal:8000","location":"edge"}]}
 ```
 
-运行前须有 `web/apps/workspace/dist`；可在 `web/` 运行 `corepack pnpm --dir apps/workspace build` 构建。`tenants.json` 使用现有 `TenantSpec` 格式，包含上述 `system` 席位；不要把旧业务环境的租户文件当成自举角色配置。轻量身份沿该目录原签名角色卡登录，命令行调用可用同一宿主的 `-mint-token <subject>` 取得实际令牌。`-idp-new-key` 只用于首次建立目录，不能为日常启动替换已有签名密钥。
+以上是配置格式示例，不是本机已有服务。`provider` 必须与AI配置中的实际ID一致，`origin` 只有协议、主机和可选端口，不含路径、凭据或查询参数；`location` 仅接受 `local` 或 `edge`。在原维护会话的启动环境中导出实际审阅后的JSON，例如 `export PLATFORM_AI_INFERENCE_POLICY='<实际JSON>'`，再沿原更新方式重启生效；需要持久化时使用部署管理器的环境配置。不要编辑bootstrap生成并校验摘要的`deploy/local/.env`，也不要把许可保存到应用包或动态设置。Docker与原生模式都传递该变量，不会自动认可本地提供方。
 
-`-source-root` 可以是种子源码目录，也可以是已封存源码容器目录（包含 `manifest.json` 和 `files/`，不是 `files/` 本身）。初次从种子捕获完整源码，以后按摘要使用 `.build/system/sources/<digest>/`。它不开放任意主机文件读取；凭据、`.git`、`.build`、依赖和构建缓存被排除，冻结内核只读。
+请求会固定模型、阶段、源站及策略摘要；许可或提供方地址变化后，原在途调用明确停止，不能静默更换默认模型。已接受结果仍恢复原映像。此许可核对的是部署认可的调用边界，不宣称能从服务URL证明其物理硬件、模型参数量或成本。
 
-## 人工修改与 AI 修改
+## 静态控制与历史维护
 
-1. 选择获权的 `system` 租户，进入 `#/self-hosting`，展开页内帮助。
-2. 在 **System files / 系统源码** 按路径检索并打开源码；可手工输入新路径。编辑后保存，保存会检查读取时的修订，删除保存墓碑。失败或回执未明时保留输入；在 **Unconfirmed requests / 尚未收到回执的请求** 核对原请求，不复制成另一条请求。
-3. 在 **Prepare a proposal / 准备变更提案** 选择已保存源码及 Build 草稿。草稿沿原记录入口创建、编辑，刷新列表后选入；纯定义提案可以没有源码文件。
-4. 写明标题与理由后提案，由人工发布者审阅冻结内容并批准。后续改动不能悄悄替换已冻结提案。
-5. 纯定义提案生成 `kind=definitions` 发布，点击激活即沿原 owner 热安装，不编译、不重启，也没有代码换版的可取消窗口。含源码的提案等待 updater 构建，再由发布者显式激活；混合提案的定义在代码换版成功时共同安装。
-6. 代码激活在窗口内可以取消。窗口结束后由监督进程实际换版；界面的激活记录和 `/healthz` 是结果核对入口，按钮收到接受回执不等于换版已完成。
+租户、身份、凭据、AI模型配置与宿主恢复使用原静态控制面板及原授权，不依赖动态Page/App。业务应用继续在业务工作区安装、生成草稿和发布；安装后仍需明确授予使用者业务角色。系统工作区的角色不会带入业务工作区。
 
-工作区初始化、每 30 秒及窗口重新聚焦时会核对实际代码发布号与二进制摘要。换版后出现手动刷新提示，当前输入保留；保存编辑后再点“Refresh the page / 刷新页面”。它不会自动重载整工作区，纯定义热激活也不会误触发代码换版提示。
+既有 `system` 租户、原席位、已接受结果和不可变定义安装映像保留。原 `builder`/`publisher` 角色不再开放新的动态源码或定义自举。恢复只应用原接受映像，不重跑构建或向模型请求代码。`-source-root` 仍可读取种子或封存源码，返回的所有文件均只读，凭据、Git状态及缓存不进入源码索引。
 
-**Ask for a change / 提出修改需求** 会启动真实 `system.architect`。它通过参数化源码读取工具查找和打开文件，使用原动作保存与提案；运行记录链接可核对实际工具轨迹。必须先配置真实可用的 AI 提供方和授权模型；固定替身、来源字段 `origin=prompt` 或仅创建 run 都不能证明模型完成了修改。
+工作区保留旧文件内容、冻结差异、发布和激活证据。请求结果未知时只核对原请求键，不复制成新提案或激活。`/healthz` 的实际代码发布号与摘要独立于记录中的已请求状态；收到请求回执不等于版本已切换。
 
-## 构建与监督换版
+### 保留结果与监督器
 
-updater 使用 `PLATFORM_TOKEN` 中的实际 system 发布者令牌；不把令牌写进包、提案或源码。命令从仓库根执行，`-root` 使用本仓库的绝对路径：
+`platform-updater build/activate/watch` 和 `serve -watch` 已停用。使用原发布者令牌处理既有维护责任，令牌沿 `PLATFORM_TOKEN` 注入，不进入包、源码或文档：
 
 ```bash
 cd capabilities/server
-go run ./cmd/platform-updater watch -root /absolute/path/to/platform -host http://127.0.0.1:8495 -once
+go run ./cmd/platform-updater reconcile -root /absolute/path/to/platform -host http://127.0.0.1:8495
+go run ./cmd/platform-updater serve -root /absolute/path/to/platform -profile lightweight -data /absolute/path/to/data -tenants /absolute/path/to/tenants.json -addr 127.0.0.1:8495 -host http://127.0.0.1:8495
 ```
 
-`watch` 构建已批准的代码提案并保留结果，再处理已经请求且窗口结束的激活。它不会替发布者发起激活，也不能单独代替监督进程。构建回报丢失时复用已保留制品和原提交键；不要通过新建变更来核对不明回执。
+`reconcile` 是显式的一次性核对，不订阅新工作。它按原请求键续报已留存构建结果；原批准工作没有构建制品时报告未开始并终结失败，不运行编译器。已有 requested 激活不能仅凭缺少选择文件推断未执行：先核对实际运行版本与证据，再显式选择或回报；不自动改为取消或失败。
 
-监督命令使用原数据目录、租户配置和监听地址：
+`serve` 继续使用原 `.build/system/current.json`、数据目录、租户配置和部署参数监督已选择版本，保留健康检查、排空、原未知回执与回滚前驱。额外宿主参数放在 `--` 之后；不能覆盖原发布、摘要、源码或数据身份。已有版本重启失败时仍保留前驱和维护状态，不自动创建新的动态回滚请求。
 
-```bash
-cd capabilities/server
-go run ./cmd/platform-updater serve -root /absolute/path/to/platform -profile lightweight -data /absolute/path/to/data -tenants /absolute/path/to/tenants.json -addr 127.0.0.1:8495 -host http://127.0.0.1:8495 -watch
-```
-
-原宿主的额外部署参数可放在 `serve` 命令的 `--` 之后传入，例如 `-host-admins`、`-database`、`-oidc-issuer`；凭据沿环境引用或原受控配置提供。发布号、摘要、源码、工作区、数据与租户路径仍由监督启动路径持有，不能用额外参数覆盖成另一发布。
-
-首次从直接启动的宿主进入监督模式时，先完成首个源码提案的批准与构建，再在工作区请求激活并等待可取消窗口结束。使用该请求的真实 activation ID 建立首个监督选择：
-
-```bash
-cd capabilities/server
-go run ./cmd/platform-updater swap -root /absolute/path/to/platform -host http://127.0.0.1:8495 -activation ACTUAL_ACTIVATION_ID
-```
-
-`swap` 沿权威激活读取并校验本地制品后写入 `.build/system/current.json`；它不证明新版本已成功启动，也不自行创建激活。随后停止直接启动的宿主，以同一数据目录、租户配置和监听地址运行上面的 `serve -watch`；监督进程启动首发、探活并回报同一激活。首发没有已保留的旧监督版本可自动回滚，失败时停止并核对原数据及原宿主。已有 `current.json` 时继续使用原选择核对来源，不覆盖成任意版本。直接宿主与监督宿主不能同时占用同一端口或数据目录。
-
-代码换版由监督进程核对真实 activation ID、来源发布、可取消窗口和当前状态，再排空旧进程、启动候选并检查健康。失败保留证据并回滚；`current.json` 保留未完成回报，重启后继续原激活。发现租户隔离或缺失制品时不能以进程启动成功代替恢复成功。
+只有核实原激活身份、实际版本和保留制品后，才使用 `swap -activation ACTUAL_ACTIVATION_ID` 处理原请求，或用 `finish -activation ACTUAL_ACTIVATION_ID -result active|rolled-back|aborted -evidence TEXT` 如实回报其结果。这些命令不创建新激活。缺少或冲突的证据必须保留并交给维护者，不删除 `current.json`、源文件、制品、密钥或数据来解除阻塞。
 
 ## 源码导出与备份
 
@@ -124,8 +100,6 @@ make system-export RELEASE=17 OUT=/absolute/path/to/export
 
 这不是普通启动的兜底行为。以后需要重建时，先停止当前平台并按实际Compose标签和挂载核对范围，再明确退出对应卷及 `.build`/`.env`，最后生成全新配置。禁止使用全局Docker prune；不得删除其他项目数据，不能为了修复恢复错误擅自重建。
 
-`make rehearse` 使用独立临时PostgreSQL，验证当前组合的构建、自举与检查点/恢复，不访问日常卷。轻量角色卡、自动浏览器的机制夹具与上述真实密码账号分别用于各自运行形态；自动测试账号不会进入本地IdP或授予真实业务权限。
+`make rehearse` 使用独立临时PostgreSQL，验证当前组合、静态维护与检查点/恢复，不访问日常卷。轻量角色卡、自动浏览器的机制夹具与上述真实密码账号分别用于各自运行形态；自动测试账号不会进入本地IdP或授予真实业务权限。
 
-源码工具把动作 `payload`、具名读取 `inputs` 与工具的 `target` / `rationale` 分开，避免业务字段同名冲突。`agent.run` 的 JSON 步骤保留真实来源，逻辑文件路径不会冒充记录 ID；旧的已接受日志不重写。首次运行前，在 AI 中启用支持工具调用的模型，并在 Settings 的 `agent/model` 选择它；给 `ai/app-model` 设置默认值并不能替代智能体模型设置。
-
-候选的原始字节和摘要共同保存，不把规范候选展开为可重排的 SQL JSON。完整系统变更还受原接受结果字节预算约束；文件/批次的路径闸门上限不保证一次提交均可接受，超限需按实际修改范围拆成独立提案。
+历史候选的原始字节和摘要继续共同保留；不能把封存候选展开成可重排的SQL JSON，或为退出自举重写历史。模型配置仍从静态AI配置入口维护，新的AI阶段与预算政策按当前AI规范及实施状态生效。

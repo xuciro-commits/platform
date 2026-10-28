@@ -1,11 +1,12 @@
-import {pageUIManifest} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+
 import type {AttachedFile} from "./Records";
 
 export function attachmentIdentity(attachment:AttachedFile,scope?:string){return JSON.stringify([scope,attachment.id,attachment.name,attachment.size,attachment.contentType,attachment.hash]);}
 export function attachmentBytesError(attachment:AttachedFile,blob:Blob):string|undefined {
  if(!attachment||typeof attachment.id!=="string"||!attachment.id||typeof attachment.name!=="string"||!attachment.name.trim()||typeof attachment.contentType!=="string"||!Number.isSafeInteger(attachment.size)||attachment.size<0||attachment.archived)return "Attachment metadata is unavailable or incompatible.";
  if(!blob||typeof blob.arrayBuffer!=="function"||blob.size!==attachment.size)return "Attachment bytes do not match the confirmed metadata.";
- if(blob.size>pageUIManifest.runtime.collaboration.maxPreviewBytes)return "Attachment bytes exceed the preview budget.";
+ if(blob.size>renderingLimits.runtime.collaboration.maxPreviewBytes)return "Attachment bytes exceed the preview budget.";
  return undefined;
 }
 export function mediaType(value:string){return value.split(";",1)[0]!.trim().toLowerCase();}

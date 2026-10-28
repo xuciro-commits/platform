@@ -1,26 +1,32 @@
 # cmd 分类清单
 
-`cmd/` 按部署相关性分三类（`openspec/changes/consolidate-platform-boundaries` B1.1 的产出，随实现演进维护）。**运行服务**是唯一计入部署拓扑的程序；工具二进制不作为部署服务运行、不出现在默认 compose 服务清单。
+命令按实际生命周期分类，目录数量不代表默认服务数量。当前产品只有一个Platform入口，应用、API与登录共用默认8495；隔离执行通过内部socket接线，不为业务应用增加宿主或固定端口。
 
-## 运行服务（2 个程序）
+## 宿主与隔离执行
 
-| 程序 | 职责 | 部署归属 |
-|---|---|---|
-| `platform-server/` | 通用宿主：租户装配、提交管线、Web API；`PLATFORM_SINK_ADDRESS` 声明时内嵌本地替身（webhook/邮件/模型样本，`internal/sink`） | compose 双实例 8490/8495 |
-| `compute/` | Dockerfile 构建受控执行隔离对：`wasm-worker`（最小特权 Wasm 执行）+ `code-builder`（唯一允许创建离线编译 guest 的固定命令驱动） | compose worker + builder 两服务；合并即削弱受控执行边界，有意保留 |
+| 程序或目录 | 职责与部署归属 |
+|---|---|
+| `platform-server/` | 唯一平台宿主，按部署配置监听8495；仅显式配置`PLATFORM_SINK_ADDRESS`时内嵌本地调试替身 |
+| `wasm-worker/` | 独立受控WASIp1执行进程，经Unix socket接受原命令/数据ABI；不承担浏览器规则求值 |
+| `code-builder/` | 固定命令驱动，唯一获准创建离线编译guest的受控构建进程，经Unix socket接线 |
+| `compute/` | 构建上述执行镜像的Dockerfile目录，不是另一个Go服务；worker/builder的权限和故障边界保留 |
 
-## 运维工具（不进部署拓扑）
+## 静态维护与调试
 
 | 程序 | 职责 |
 |---|---|
-| `storage-files/` | 停机状态下校验整个文件存储（恢复核验） |
-| `rule-browser/` | 以与宿主同一受信规则实现浏览规则求值（诊断） |
-| `webhook-sink/` | 本地替身的独立调试入口（部署内已由 platform-server 内嵌，见 `internal/sink`） |
+| `platform-updater/` | 监督原保留发布、探活、排空、回滚前驱、原回执核对及源码导出；`build/activate/watch`和`serve -watch`已冻结，不再消费新动态自举 |
+| `install-bundle/` | 使用真实令牌沿原构建动作提交对象、页面与应用声明，不建立第二安装路径或独立服务 |
+| `storage-files/` | 停机状态下核验原文件存储 |
+| `webhook-sink/` | 本地替身的独立调试入口；默认产品部署不另启该服务 |
 
-## 代码生成与检查工具（开发机）
+维护步骤、账号、地址和私有配置唯一说明见[本地环境指南](../../../../deploy/local/README.md)。监督状态和制品不能通过删除来解除未知回执。
+
+## 生成与检查
 
 | 程序 | 职责 |
 |---|---|
-| `api-types/` | 从宿主 API 生成 `web/packages/kernel/src/gen/host.ts` |
-| `check-boundaries/` | 源码导入边界检查（含 build tags 排除的代码） |
-| `uaf-gen/` | 从保留的 OMG 原件生成 UAF 运行元模型 |
+| `api-types/` | 从真实宿主API生成Web契约类型及企业SDK |
+| `check-boundaries/` | 检查导入、授权边界、文件预算、同名路径、视觉声明及模型协议归属；包含条件编译文件，存量基线只能递减 |
+| `rule-browser/` | 将同一个纯规则实现编译为浏览器WASM，供本地公式/表单联动使用；构建入口为`scripts/rule-browser.mjs` |
+| `uaf-gen/` | 当前仍从保留的OMG原件生成UAF元模型；外移与运行去依赖尚在活动变更中，不能提前删掉历史解释责任 |

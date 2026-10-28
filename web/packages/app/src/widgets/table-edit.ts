@@ -1,4 +1,5 @@
-import {pageUIManifest,type ActionDeclaration} from "@platform/kernel";
+import {pageUIManifest} from "../pageui/manifest";
+import {type ActionDeclaration} from "@platform/kernel";
 import type {EntityInfo} from "@platform/ui";
 const tableEditing=pageUIManifest.runtime.tableEditing;
 

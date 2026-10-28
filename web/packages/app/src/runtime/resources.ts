@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import type { Api } from "@platform/kernel";
 import type { PageSessionSnapshot } from "./Session";
 import { variablePlan } from "./query-plans";
@@ -6,10 +7,10 @@ import {interfaceQueryForSection} from "./ontology-interface";
 import {modelWindowKey,modelWindowWidget} from './model-bindings';
 
 export const recordSlot = (object: string, name?: string, overlay?:string) => `${overlay?`overlay:${overlay}/`:""}${name ? `selection:${name}` : "object"}/${object}`;
-export const recordOutputSlot=(page:Api.Page,section:Api.Section,port:string)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-output/${section.id??""}/${port}`;
-export function recordOutputObject(page:Api.Page,section:Api.Section,port:string,variable?:string):Api.AssetRef|undefined {if(section.widget==="graph-explorer")return section.graphExplorer?.outputs?.find(o=>o.id===port&&(!variable||o.variable===variable))?.object;const c=section.observation;if(section.widget!=="observation"||c?.kind!=="table")return;const id=port==="row"?c.rowOutput:port==="asset"?c.assetOutput:undefined;if(!id||variable&&variable!==id)return;if(port==="asset")return c.assetObject;const v=page.document?.variables?.[section.collectionVariable??""];return v?.source?.kind==="plan"?page.document?.queries?.[v.source.query??""]?.object:undefined;}
+export const recordOutputSlot=(page:PageUI.Page,section:PageUI.Section,port:string)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-output/${section.id??""}/${port}`;
+export function recordOutputObject(page:PageUI.Page,section:PageUI.Section,port:string,variable?:string):Api.AssetRef|undefined {if(section.widget==="graph-explorer")return section.graphExplorer?.outputs?.find(o=>o.id===port&&(!variable||o.variable===variable))?.object;const c=section.observation;if(section.widget!=="observation"||c?.kind!=="table")return;const id=port==="row"?c.rowOutput:port==="asset"?c.assetOutput:undefined;if(!id||variable&&variable!==id)return;if(port==="asset")return c.assetObject;const v=page.document?.variables?.[section.collectionVariable??""];return v?.source?.kind==="plan"?page.document?.queries?.[v.source.query??""]?.object:undefined;}
 
-export function recordResourceSlot(page:Api.Page,variable:string|undefined):string|undefined {
+export function recordResourceSlot(page:PageUI.Page,variable:string|undefined):string|undefined {
  const declaration=page.document?.variables?.[variable??""];if(Number((page.document?.uiProfile??"").split(".").at(-1))>=98&&declaration?.type==="record"&&declaration.mode==="shared"&&declaration.source?.kind==="application"&&declaration.source.object)return `input/${variable}`;
  const source=declaration?.source,producer=page.sections?.find(s=>s.id===source?.section);
  if(!source||source.kind!=="record"||!producer)return;
@@ -18,12 +19,12 @@ export function recordResourceSlot(page:Api.Page,variable:string|undefined):stri
 }
 
 /** Presentation ownership comes from the one layout document. */
-export function sectionOverlay(page:Api.Page,section:string):string|undefined {
+export function sectionOverlay(page:PageUI.Page,section:string):string|undefined {
  const document=page.document;if(!document)return undefined;
  const find=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const node=document.nodes[id];return node?.section===section||[...(node?.children??[]),...(document.unusedWidgets??[]).filter(entry=>entry.parent===id).map(entry=>entry.node)].some(child=>find(child,seen));};
  return Object.entries(document.overlays??{}).find(([,overlay])=>find(overlay.root))?.[0];
 }
-export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):string {
+export function selectionSlot(page:PageUI.Page,section:PageUI.Section,parent=false):string {
  const object=parent?(section.parentSelection?page.selections?.find((s)=>s.name===section.parentSelection)?.object.name??"":page.object.name):section.object?.name||page.object.name;
  const name=parent?section.parentSelection:section.selection,owner=sectionOverlay(page,section.id??"");
  if(!parent&&interfaceQueryForSection(page,section))return `${owner?`overlay:${owner}/`:""}interface-record/${section.id??""}`;
@@ -34,16 +35,16 @@ export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):st
  const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","resource-list","record-calendar","record-picker","record-leaderboard","record-scatter","record-map","layered-graph","model-matrix"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
  return recordSlot(object,name,local?owner:undefined);
 }
-export const selectionSetSlot=(page:Api.Page,section:Api.Section)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-set/${section.id??""}`;
+export const selectionSetSlot=(page:PageUI.Page,section:PageUI.Section)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-set/${section.id??""}`;
 export const filterSlot=(object:string,owner?:string)=>`${owner?`overlay:${owner}/`:""}${object}`;
-export function filterOwner(page:Api.Page,section:Api.Section):string|undefined {
+export function filterOwner(page:PageUI.Page,section:PageUI.Section):string|undefined {
  return Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?sectionOverlay(page,section.id??""):undefined;
 }
 export function filtersForOwner(filters:PageSessionSnapshot["filters"],owner?:string) {
  const prefix=owner?`overlay:${owner}/`:"";
  return Object.fromEntries(Object.entries(filters).filter(([key])=>owner?key.startsWith(prefix):!key.startsWith("overlay:")).map(([key,fields])=>[owner?key.slice(prefix.length):key,fields]));
 }
-export function filterSessionBindings(page:Api.Page) {
+export function filterSessionBindings(page:PageUI.Page) {
  const selections=new Map<string,Set<string>>(),queries=new Map<string,Set<string>>();
  for(const section of page.sections??[]){
   if(section.widget!=="table"||section.collectionVariable)continue;
@@ -53,7 +54,7 @@ export function filterSessionBindings(page:Api.Page) {
  }
  return {filterSelections:selections,filterQueries:queries};
 }
-export function overlaySessionScopes(page:Api.Page) {
+export function overlaySessionScopes(page:PageUI.Page) {
  const document=page.document;
  return new Map(Object.entries(document?.overlays??{}).map(([owner,overlay])=>{
   const nodes=new Set<string>();const collect=(id:string)=>{if(nodes.has(id))return;nodes.add(id);document?.nodes[id]?.children?.forEach(collect);};collect(overlay.root);
@@ -70,7 +71,7 @@ export function overlaySessionScopes(page:Api.Page) {
 /** Resource outputs refer to the original section binding. No second query
  * definition, policy or mutable record object is stored in the document.
  */
-export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot): Record<string, VariableResult> {
+export function resourceVariables(page: PageUI.Page, snapshot: PageSessionSnapshot): Record<string, VariableResult> {
   return Object.fromEntries(Object.entries(page.document?.variables ?? {}).flatMap(([id, variable]) => {
     const source = variable.source;
     if (variable.mode !== "resource" || !source || !["page","overlay"].includes(variable.scope) || variablePlan(page,id)!==undefined) return [];

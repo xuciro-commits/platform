@@ -26,7 +26,7 @@ func TestFrozenKernelOwnersAndTheirParents(t *testing.T) {
 	}
 }
 
-func TestApplicationAndPresentationPathsRemainEditable(t *testing.T) {
+func TestDynamicSourceWritesRemainFrozen(t *testing.T) {
 	for _, name := range []string{
 		"capabilities/server/apps/system/system.go", "capabilities/server/apps/build/objects.go",
 		"capabilities/server/platform/definition.go", "capabilities/server/platform/revision.go",
@@ -36,8 +36,8 @@ func TestApplicationAndPresentationPathsRemainEditable(t *testing.T) {
 		"scripts/build.mjs", "Makefile", "docs/Architecture.md",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if reason := Verdict(name); reason != "" {
-				t.Fatalf("application path %q was frozen: %s", name, reason)
+			if reason := Verdict(name); reason == "" {
+				t.Fatalf("dynamic source path %q remained writable", name)
 			}
 		})
 	}
@@ -67,7 +67,7 @@ func TestSourcePathsHaveOneRecordIdentity(t *testing.T) {
 			t.Fatalf("alias %q can bypass file revisions", name)
 		}
 	}
-	if Verdict("web/x.ts") != "" {
-		t.Fatal("canonical source path refused")
+	if Verdict("web/x.ts") == "" {
+		t.Fatal("canonical source path remained writable")
 	}
 }

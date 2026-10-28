@@ -13,7 +13,8 @@
     "./action-defaults": "./src/widgets/action-defaults.ts",
     "./query-inventory": "./src/runtime/query-inventory.ts",
     "./rules": "./src/runtime/rule-engine.ts",
-    "./model": "./src/runtime/model-bindings.ts"
+    "./model": "./src/runtime/model-bindings.ts",
+    "./page-contract": "./src/pageui/contract.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

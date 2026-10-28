@@ -1,14 +1,15 @@
+import {renderingLimits} from "../gen/presentation-limits";
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
 import { t } from "../i18n";
-import {pageUIManifest} from "@platform/kernel";
+
 
 export type NotificationItem = { id: string; title: string; body?: string; at: string; read: boolean; app?: string;ref?:string };
 export type NotificationListProps<T extends NotificationItem>={items:readonly T[];onRead?:(notice:T)=>void|Promise<void>;onOpen?:(notice:T)=>void;empty?:string;label?:string;enabled?:boolean;busyIDs?:readonly string[];errors?:Readonly<Record<string,string>>;total?:number;loadedCount?:number;limit?:number};
 
 // A member's notifications, newest first: unread ones stand out and can be marked read.
 export function NotificationList<T extends NotificationItem>({items,onRead,onOpen,empty=t("Nothing new"),label,enabled=true,busyIDs=[],errors={},total,loadedCount=items.length,limit}:NotificationListProps<T>) {
-  if(!Array.isArray(items)||new Set(items.map(notice=>notice?.id)).size!==items.length||items.some(notice=>!notice||typeof notice.id!=="string"||!notice.id||typeof notice.title!=="string"||typeof notice.at!=="string"||!notice.at||typeof notice.read!=="boolean"||[notice.body,notice.app,notice.ref].some(value=>value!==undefined&&typeof value!=="string"))||limit!==undefined&&(!Number.isSafeInteger(limit)||limit<1||limit>pageUIManifest.runtime.workViews.maxNotificationsWindow)||!Number.isSafeInteger(loadedCount)||loadedCount<items.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount))return <p role="alert">{t("The notification window is unavailable or incompatible.")}</p>;
+  if(!Array.isArray(items)||new Set(items.map(notice=>notice?.id)).size!==items.length||items.some(notice=>!notice||typeof notice.id!=="string"||!notice.id||typeof notice.title!=="string"||typeof notice.at!=="string"||!notice.at||typeof notice.read!=="boolean"||[notice.body,notice.app,notice.ref].some(value=>value!==undefined&&typeof value!=="string"))||limit!==undefined&&(!Number.isSafeInteger(limit)||limit<1||limit>renderingLimits.runtime.workViews.maxNotificationsWindow)||!Number.isSafeInteger(loadedCount)||loadedCount<items.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount))return <p role="alert">{t("The notification window is unavailable or incompatible.")}</p>;
   const visible=limit===undefined?items:items.slice(0,limit),range=limit!==undefined||total!==undefined||loadedCount!==items.length;
   return (
    <div className="grid min-w-0 gap-2">{range&&<p role="status" className="text-xs text-muted">{total===undefined?t("Showing {shown} of {loaded} loaded notifications; the complete total is unavailable.",{shown:visible.length,loaded:loadedCount}):t("Showing {shown} of {total} notifications.",{shown:visible.length,total})}</p>}{visible.length===0?<p role="status" className="text-sm text-muted">{empty}</p>:<ul aria-label={label??t("Notifications")} className="grid min-w-0 max-w-3xl gap-1.5">

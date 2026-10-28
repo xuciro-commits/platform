@@ -1,4 +1,6 @@
-import {pageUIManifest} from '@platform/kernel/host-contract';
+import {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
+
 import type {Api} from '@platform/kernel';
 import type {EntityInfo} from '@platform/ui';
 
@@ -27,8 +29,8 @@ export function modelEntity(info:EntityInfo|undefined,model:Api.ModelBinding|und
  for(const ref of model.fields??[]){if((ref.path?.length??0)<2)continue;const field=modelField(model.type,ref.path!,lookup);if(field&&!fields.some(f=>f.name===modelFieldKey(ref)))fields.push({...field,name:modelFieldKey(ref),title:ref.path!.join(' → '),readOnly:true});}
  return {...info,fields};
 }
-export const primaryModel=(section:Pick<Api.Section,'widget'|'model'|'composite'>)=>section.model??section.composite?.bindings[section.widget==='model-matrix'?'rows':'nodes']?.model;
-export const sectionModels=(section:Pick<Api.Section,'model'|'composite'>)=>[...section.model?[section.model]:[],...Object.values(section.composite?.bindings??{}).map(b=>b.model)];
+export const primaryModel=(section:Pick<PageUI.Section,'widget'|'model'|'composite'>)=>section.model??section.composite?.bindings[section.widget==='model-matrix'?'rows':'nodes']?.model;
+export const sectionModels=(section:Pick<PageUI.Section,'model'|'composite'>)=>[...section.model?[section.model]:[],...Object.values(section.composite?.bindings??{}).map(b=>b.model)];
 export function materializeModelSection<T extends ModelSection>(section:T,lookup:Lookup,authoring=false):T {
  if(section.composite){const model=primaryModel(section);return model?{...section,object:authoring?model.type:{app:model.type.split('.')[0]??'',kind:'object',name:model.type}}:section;}
  const model=section.model;if(!model)return section;
@@ -63,8 +65,8 @@ export function foldModelPorts<T extends ModelSection>(section:T,lookup:Lookup):
  for(const slot of modelBindingContract.fieldSlots){const current=modelPort(section,slot);if(current===modelPort(expected,slot))continue;model.fields=(model.fields??[]).filter(f=>f.slot!==slot);if(typeof current!=='string'||!current||current==='count')continue;const parts=current.split(':'),name=parts.length>1?(slot==='measure'?parts[1]!:parts[0]!):current,transform=parts.length>1?(slot==='measure'?parts[0]:parts[1]):undefined;model.fields.push({...name.includes('.')?{path:name.split('.')}:{name},slot,...transform?{transform}:{}});}
  canonical.model=model;return canonical;
 }
-export const modelWindowKey=(section:Pick<Api.Section,'id'>)=>`model/${section.id??''}`;
-export const modelWindowWidget=(section:Pick<Api.Section,'model'|'widget'|'composite'>)=>(!!section.composite&&['layered-graph','model-matrix'].includes(section.widget))||!!section.model&&['table','detail','record-picker','record-card','record-list','record-chart','record-events','record-calendar','record-gantt','record-leaderboard','record-scatter','record-timeline','kanban','record-map','histogram','term-counts','tag-counts','sparkline-kpi'].includes(section.widget);
+export const modelWindowKey=(section:Pick<PageUI.Section,'id'>)=>`model/${section.id??''}`;
+export const modelWindowWidget=(section:Pick<PageUI.Section,'model'|'widget'|'composite'>)=>(!!section.composite&&['layered-graph','model-matrix'].includes(section.widget))||!!section.model&&['table','detail','record-picker','record-card','record-list','record-chart','record-events','record-calendar','record-gantt','record-leaderboard','record-scatter','record-timeline','kanban','record-map','histogram','term-counts','tag-counts','sparkline-kpi'].includes(section.widget);
 
 /** Follows only declared single-record references. Every hop is an original
  * source.get(), so row and field authorization remain with the host. */

@@ -75,6 +75,17 @@ func NewExprNumericAggregate(op, kind, currency string) (ExprNumericAggregate, e
 func CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error) {
 	return rules.Compile(expr, schema)
 }
+
+// LowerFormula preserves old arithmetic syntax using the original pure engine.
+func LowerFormula(text string, fields map[string]string) (Expr, error) {
+	kinds := make(map[string]string, len(fields))
+	for name, kind := range fields {
+		kinds[name] = RuleFieldKind(kind)
+	}
+	return rules.LowerFormula(text, kinds)
+}
+func FormulaFields(text string) (map[string]bool, error) { return rules.FormulaFields(text) }
+
 func ExprLiteralValue(kind string, value any) Expr { return rules.LiteralOf(kind, value) }
 func ExprReference(kind, name string) Expr         { return rules.RefOf(kind, name) }
 func ExprPresent(kind string, value any) ExprValue { return rules.Present(kind, value) }

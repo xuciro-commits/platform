@@ -1,8 +1,9 @@
+import {pageUIManifest} from "../pageui/manifest";
 import {scalarAssignable,type ScalarValue} from "./decimal";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { RecordSource } from "@platform/ui";
 import { PageSessionStore, type SelectionPlan } from "./Session";
-import { pageUIManifest, type Api } from "@platform/kernel";
+import {type Api} from "@platform/kernel";
 import { compileVariables, evaluateVariables, type VariableResult } from "./variables";
 
 export const pageVariableContract = pageUIManifest.runtime;

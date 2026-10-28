@@ -1,12 +1,13 @@
+import {renderingLimits} from "../gen/presentation-limits";
 import {useState} from "react";
-import {pageUIManifest} from "@platform/kernel";
+
 import {t} from "../i18n";
 import type {EntityInfo,EntityRecord} from "./Records";
 
 /** Original window order and identity determine X. Missing values break the line; they never become zero. */
-export function recordSparklinePoints(records:EntityRecord[],info:EntityInfo,field:string,maxPoints:number=pageUIManifest.runtime.sparkline.maxPoints) {
+export function recordSparklinePoints(records:EntityRecord[],info:EntityInfo,field:string,maxPoints:number=renderingLimits.runtime.sparkline.maxPoints) {
  const descriptor=info.fields.find(f=>f.name===field);
- if(!descriptor||!["integer","decimal"].includes(descriptor.type)||!Number.isInteger(maxPoints)||maxPoints<1||maxPoints>pageUIManifest.runtime.sparkline.maxPoints||records.length>maxPoints||records.some(r=>typeof r.id!=="string"||!r.id||r.id.length>1024)||new Set(records.map(r=>r.id)).size!==records.length)return;
+ if(!descriptor||!["integer","decimal"].includes(descriptor.type)||!Number.isInteger(maxPoints)||maxPoints<1||maxPoints>renderingLimits.runtime.sparkline.maxPoints||records.length>maxPoints||records.some(r=>typeof r.id!=="string"||!r.id||r.id.length>1024)||new Set(records.map(r=>r.id)).size!==records.length)return;
  const points=records.map((record,index)=>({id:record.id,index,value:record[field]==null?null:record[field]}));
  if(points.some(p=>p.value!==null&&(typeof p.value!=="number"||!Number.isFinite(p.value)||descriptor.type==="integer"&&!Number.isSafeInteger(p.value))))return;
  const values=points.flatMap(p=>typeof p.value==="number"?[p.value]:[]),min=Math.min(0,...values),max=Math.max(1,...values);if(!Number.isFinite(max-min))return;

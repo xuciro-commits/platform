@@ -124,6 +124,12 @@ func TestDependencyDiscoveryIncludesOriginalDatasetConfigurations(t *testing.T) 
 	}
 	decide(t, tn, "integrator", construction.ID, construction.PipelineType+".publish", construction.PipelineType, "PIPELINE", map[string]any{}, at)
 	tn.RunPipelines(at)
+	beforeRun, _ := platform.Get[construction.Dataset](tn.automation(construction.ID, false), "CLEAN")
+	if beforeRun.Version != 0 {
+		t.Fatal("publishing a pipeline executed it before an explicit request")
+	}
+	decide(t, tn, "integrator", construction.ID, construction.PipelineType+".run", construction.PipelineType, "PIPELINE", map[string]any{}, at)
+	tn.RunPipelines(at)
 	c := tn.automation(construction.ID, false)
 	raw, _ := platform.Get[construction.Dataset](c, "RAW")
 	clean, _ := platform.Get[construction.Dataset](c, "CLEAN")

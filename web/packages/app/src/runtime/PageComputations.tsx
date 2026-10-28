@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
 import type {Api} from '@platform/kernel';
 import {useHost,useInvokeCapability} from '../index';
@@ -6,7 +7,7 @@ import type {PageSessionStore,PageSessionSnapshot} from './Session';
 import type {VariableResult} from './variables';
 import {PageComputeStore,createComputeResourceReader} from './compute-resources';
 type Application={identity?:string;readScope?:string;resources:Record<string,VariableResult>;recordReferences:Record<string,{object:string;id:string}|undefined>};
-export function usePageComputations(page:Api.Page,session:PageSessionStore,snapshot:PageSessionSnapshot,application:Application,live:boolean){
+export function usePageComputations(page:PageUI.Page,session:PageSessionStore,snapshot:PageSessionSnapshot,application:Application,live:boolean){
  const {client,source}=useHost(),invoke=useInvokeCapability(true),original=useRef({client,invoke}),admitted=useRef(new Set<string>());original.current={client,invoke};
  const [store]=useState(()=>new PageComputeStore((active,identity)=>createComputeResourceReader({describe:binding=>original.current.client.get<Api.CapabilityDescriptor>(`/v1/capabilities/${encodeURIComponent(binding.ref.app)}/compute/${encodeURIComponent(binding.ref.name)}?version=${Number(binding.sourceVersion.match(/\.compute-(\d+)$/)?.[1]??0)}`),invoke:request=>original.current.invoke(request),read:call=>original.current.client.get<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`)},()=>active()&&admitted.current.has(identity))));
  useSyncExternalStore(store.subscribe,store.snapshot,store.snapshot);

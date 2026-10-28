@@ -1,5 +1,6 @@
+import {renderingLimits} from "../gen/presentation-limits";
 import {timestampNanoseconds,validCivilDate} from "../components/date";
-import {pageUIManifest} from "@platform/kernel";
+
 import {entityFrom,type EntityInfo,type EntityRecord,type RecordSource} from "./Records";
 import {t} from "../i18n";
 
@@ -24,7 +25,7 @@ function originalValue(type:string,value:unknown):string|number|boolean|bigint|n
 
 /** Compare complete, caller-confirmed original records using permission-filtered field metadata. */
 export function RecordComparison({records,info,fields,labelField,source,onOpenReference}:{records:EntityRecord[];info:EntityInfo;fields:string[];labelField:string;source?:RecordSource;onOpenReference?:(type:string,id:string)=>void}) {
- const label=info.fields.find(f=>f.name===labelField),definitions=fields.map(name=>info.fields.find(f=>f.name===name)),limits=pageUIManifest.runtime.recordComparison;
+ const label=info.fields.find(f=>f.name===labelField),definitions=fields.map(name=>info.fields.find(f=>f.name===name)),limits=renderingLimits.runtime.recordComparison;
  if(labelField!=="id"&&(!label||!titleTypes.includes(label.type))||fields.length<limits.minFields||fields.length>limits.maxFields||new Set(fields).size!==fields.length||definitions.some(f=>!f||!fieldTypes.includes(f.type)))return <p role="alert">{t("Record comparison fields or title are unavailable or incompatible.")}</p>;
  if(records.length>limits.maxRecords)return <p role="alert">{t("Select no more than four records to compare. All selected records are retained.")}</p>;
  if(records.some(record=>!record||typeof record.id!=="string"||!record.id.trim()||record.archived===true)||new Set(records.map(record=>record.id)).size!==records.length)return <p role="alert">{t("Record comparison identities are unavailable or incompatible.")}</p>;

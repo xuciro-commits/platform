@@ -59,7 +59,7 @@ func definitionDecision(tenant *Tenant, who, schema, typ, id string, payload any
 		}
 	}
 	tenant.mu.Unlock()
-	submission := &pb.Submission{TenantId: tenant.ID, PrincipalId: who, Authority: authority, IdempotencyKey: fmt.Sprintf("definitions-%d", systemDefinitionTestKeys.Add(1)), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
+	submission := &pb.Submission{TenantId: tenant.ID, PrincipalId: who, Authority: authority, IdempotencyKey: fmt.Sprintf("definitions-current-%d", systemDefinitionTestKeys.Add(1)), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
 	if version != "" {
 		return tenant.submit(member, submission, time.Now().UTC(), nil, version)
 	}
@@ -74,11 +74,6 @@ func mustDefinitionDecision(t *testing.T, tenant *Tenant, who, schema, typ, id s
 func definitionDraft(t *testing.T, tenant *Tenant, title string) {
 	t.Helper()
 	mustDefinitionDecision(t, tenant, "builder", "build.object.create", "build.object", "global-note", map[string]any{"name": "globalnote", "title": title, "plural": "Global notes", "fields": []map[string]any{{"name": "title", "title": "Title", "type": "text"}}})
-}
-func proposeDefinition(t *testing.T, tenant *Tenant, id string, files []map[string]any) {
-	t.Helper()
-	mustDefinitionDecision(t, tenant, "builder", system.SchemaPropose, system.ChangeType, id, map[string]any{"title": "System object", "rationale": "Share an owner-built object through the system release", "assets": []platform.AssetRef{{App: "build", Kind: platform.AssetObject, Name: "build.globalnote"}}, "files": files})
-	mustDefinitionDecision(t, tenant, "publisher", system.SchemaApprove, system.ChangeType, id, map[string]any{})
 }
 func definitionOf(t *testing.T, tenant *Tenant) platform.Definition {
 	t.Helper()
@@ -119,62 +114,40 @@ func TestSystemSavedReleaseReviewUsesTheActivationBoundary(t *testing.T) {
 	}
 }
 
-func TestSystemDefinitionsFreezeThenInstallAndRemainReadOnlyInBusinessTenants(t *testing.T) {
+func restoreSystemDefinitions(t *testing.T, owner *Tenant, name string) []Entry {
+	t.Helper()
+	entries := retainedSystemHistory(t, name)
+	if err := owner.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	return entries
+}
+
+func TestSystemDefinitionsRetainedHistoryRemainsReadOnlyInBusinessTenants(t *testing.T) {
 	owner, business := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "business")
 	NewHost(nil, owner, business)
-	var businessEntries []Entry
-	business.Record = func(entry Entry) { businessEntries = append(businessEntries, entry) }
-	definitionDraft(t, owner, "Original title")
-	proposeDefinition(t, owner, "definition-one", nil)
-	// A later draft edit must not mutate the approved canonical candidate.
-	mustDefinitionDecision(t, owner, "builder", "build.object.edit", "build.object", "global-note", map[string]any{"title": "Unapproved later title"})
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0})
+	var entries []Entry
+	business.Record = func(e Entry) { entries = append(entries, e) }
+	restoreSystemDefinitions(t, owner, "definitions-active")
 	definition := definitionOf(t, business)
-	if definition.Source != "system" || definition.Entity == nil || definition.Entity.Title != "Original title" {
-		t.Fatalf("shared definition = %#v", definition)
+	if definition.Source != "system" || definition.Entity.Title != "Retained system title" {
+		t.Fatalf("shared definition=%#v", definition)
 	}
-	if len(businessEntries) != 0 {
-		t.Fatal("runtime projection wrote into the business journal")
-	}
-	if metadata := business.records.types[construction.ObjectType]; metadata.rows.Len() != 0 {
-		t.Fatal("system metadata rows were copied into the business tenant")
+	if len(entries) != 0 || business.records.types[construction.ObjectType].rows.Len() != 0 {
+		t.Fatal("projection wrote system metadata into business owner")
 	}
 	if _, refusal := definitionDecision(business, "builder", "build.object.create", "build.object", "shadow", map[string]any{"name": "globalnote", "title": "Shadow", "fields": []any{}}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-		t.Fatalf("local shadow was not refused: %v", refusal)
+		t.Fatalf("shadow accepted: %v", refusal)
 	}
-	before := len(businessEntries) // the refused shadow has its own durable refusal
+	before := len(entries)
 	mustDefinitionDecision(t, business, "builder", "build.globalnote.create", "build.globalnote", "note-one", map[string]any{"title": "Local data"})
-	if len(businessEntries) != before+1 {
-		t.Fatalf("business decision added %d journal entries, want one", len(businessEntries)-before)
+	if len(entries) != before+1 {
+		t.Fatal("ordinary business write did not retain its original owner")
 	}
 }
 
-func TestMixedSystemChangeInstallsDefinitionsOnlyAfterSuccessfulFinished(t *testing.T) {
-	owner := definitionOwnerTenant(t, "system")
-	definitionDraft(t, owner, "Mixed version")
-	proposeDefinition(t, owner, "mixed", []map[string]any{{"path": "docs/system-copy.md", "content": "new source"}})
-	if _, exists := owner.records.types["build.globalnote"]; exists {
-		t.Fatal("approval installed a mixed definition before building")
-	}
-	manifest := map[string]string{"docs/system-copy.md": systemscope.Digest([]byte("new source"))}
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaBuilt, system.ChangeType, "mixed", map[string]any{"ok": true, "binary": "binary-proof", "web": "web-proof", "sourceDigest": systemscope.Manifest(manifest), "manifest": manifest})
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0})
-	if _, exists := owner.records.types["build.globalnote"]; exists {
-		t.Fatal("the activation request installed definitions before the updater finished")
-	}
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaFinished, system.ActivationType, "0001", map[string]any{"result": system.StateActive, "evidence": "new process healthy"})
-	if _, exists := owner.records.types["build.globalnote"]; !exists {
-		t.Fatal("successful finished did not install the frozen definition")
-	}
-}
-
-func TestSystemDefinitionActivationStorageDeltaContainsOriginalReleaseInstallations(t *testing.T) {
-	owner := definitionOwnerTenant(t, "system")
-	var entries []Entry
-	owner.Record = func(entry Entry) { entries = append(entries, entry) }
-	definitionDraft(t, owner, "Stored title")
-	proposeDefinition(t, owner, "stored", nil)
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0})
+func TestSystemDefinitionsRetainedStorageDeltaKeepsOriginalInstallations(t *testing.T) {
+	entries := retainedSystemHistory(t, "definitions-active")
 	delta, err := acceptedStorageDelta(entries[len(entries)-1].Body)
 	if err != nil {
 		t.Fatal(err)
@@ -186,19 +159,16 @@ func TestSystemDefinitionActivationStorageDeltaContainsOriginalReleaseInstallati
 		}
 	}
 	if !found {
-		t.Fatal("SQL delta omitted the original definition owner's accepted publication replacement")
+		t.Fatal("retained SQL delta omitted original definition installation")
 	}
 }
 
-func TestSystemDefinitionsRecoverBeforeBusinessRecordsWithoutCopyingMetadata(t *testing.T) {
+func TestSystemDefinitionsRetainedRecoveryPrecedesBusinessRecords(t *testing.T) {
 	owner, business := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "business")
 	NewHost(nil, owner, business)
-	var ownerEntries, businessEntries []Entry
-	owner.Record = func(entry Entry) { ownerEntries = append(ownerEntries, entry) }
-	business.Record = func(entry Entry) { businessEntries = append(businessEntries, entry) }
-	definitionDraft(t, owner, "Recoverable title")
-	proposeDefinition(t, owner, "recovery", nil)
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0})
+	ownerEntries := restoreSystemDefinitions(t, owner, "definitions-active")
+	var businessEntries []Entry
+	business.Record = func(e Entry) { businessEntries = append(businessEntries, e) }
 	mustDefinitionDecision(t, business, "builder", "build.globalnote.create", "build.globalnote", "local-note", map[string]any{"title": "Kept by the business owner"})
 	freshOwner, freshBusiness := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "business")
 	NewHost(nil, freshOwner, freshBusiness)
@@ -208,14 +178,8 @@ func TestSystemDefinitionsRecoverBeforeBusinessRecordsWithoutCopyingMetadata(t *
 	if err := freshBusiness.Replay(businessEntries); err != nil {
 		t.Fatal(err)
 	}
-	if freshBusiness.records.types["build.globalnote"].rows.Get("local-note") == nil {
-		t.Fatal("business replay lost its own record")
-	}
-	if freshBusiness.records.types["build.object"].rows.Len() != 0 {
-		t.Fatal("business recovery copied system metadata")
-	}
-	if got := definitionOf(t, freshBusiness); got.Source != "system" || got.Entity.Title != "Recoverable title" {
-		t.Fatalf("recovered definition=%#v", got)
+	if freshBusiness.records.types["build.globalnote"].rows.Get("local-note") == nil || freshBusiness.records.types["build.object"].rows.Len() != 0 {
+		t.Fatal("replay lost business data or copied system metadata")
 	}
 	ownerState, _, err := owner.Snapshot(func() int64 { return int64(len(ownerEntries)) })
 	if err != nil {
@@ -233,24 +197,54 @@ func TestSystemDefinitionsRecoverBeforeBusinessRecordsWithoutCopyingMetadata(t *
 	if err := snapshotBusiness.Restore(businessState); err != nil {
 		t.Fatal(err)
 	}
-	if snapshotBusiness.records.types["build.globalnote"].rows.Get("local-note") == nil {
-		t.Fatal("business checkpoint lost its own record")
-	}
-	if snapshotBusiness.records.types["build.object"].rows.Len() != 0 {
-		t.Fatal("business checkpoint copied system metadata")
+	if snapshotBusiness.records.types["build.globalnote"].rows.Get("local-note") == nil || snapshotBusiness.records.types["build.object"].rows.Len() != 0 {
+		t.Fatal("checkpoint lost business data or copied system metadata")
 	}
 }
-func TestSystemDefinitionsRefuseAnExistingBusinessOwnerConflictBeforeActivation(t *testing.T) {
-	owner, business := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "business")
-	NewHost(nil, owner, business)
-	definitionDraft(t, business, "Business-owned title")
-	mustDefinitionDecision(t, business, "builder", "build.object.publish", "build.object", "global-note", map[string]any{})
-	definitionDraft(t, owner, "Shared title")
-	proposeDefinition(t, owner, "conflict", nil)
-	if _, refusal := definitionDecision(owner, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{"window": 0}); refusal == nil {
-		t.Fatal("a conflicting global definition was activated")
+
+func TestSystemDefinitionsFreezeRefusesNewCandidatesAndUnrelatedPreparation(t *testing.T) {
+	owner := definitionOwnerTenant(t, "system")
+	definitionDraft(t, owner, "New draft")
+	if _, refusal := definitionDecision(owner, "builder", system.SchemaPropose, system.ChangeType, "new", map[string]any{"title": "New", "rationale": "New", "assets": []platform.AssetRef{{App: "build", Kind: platform.AssetObject, Name: "build.globalnote"}}}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("definition-only proposal accepted: %v", refusal)
 	}
-	if got := definitionOf(t, business); got.Source == "system" || got.Entity.Title != "Business-owned title" {
-		t.Fatalf("business owner was overwritten: %#v", got)
+}
+
+func TestSystemDefinitionsFreezeReconcilesOnlyOriginalMixedActivation(t *testing.T) {
+	owner := definitionOwnerTenant(t, "system")
+	restoreSystemDefinitions(t, owner, "mixed-requested")
+	publisher, _ := owner.Member("publisher")
+	caller := platform.As(system.ID, publisher)
+	if _, refusal := (hostView{t: owner}).FreezeSystemDefinitions(caller, nil, time.Now()); refusal == nil {
+		t.Fatal("direct freeze capability remained writable")
+	}
+	var original []byte
+	for _, release := range readReleases(t, owner) {
+		if release.Version == 1 {
+			original = release.Candidate
+		}
+	}
+	if len(original) == 0 {
+		t.Fatal("retained candidate missing")
+	}
+	for _, key := range []string{"system:invented", "new:0001"} {
+		if _, refusal := (hostView{t: owner}).PrepareSystemDefinitions(caller, original, key, time.Now()); refusal == nil {
+			t.Fatalf("unrelated activation %s prepared definitions", key)
+		}
+	}
+	if _, refusal := (hostView{t: owner}).PrepareSystemDefinitions(caller, platform.Raw(platform.SystemDefinitionCandidate{ID: "invented", Bytes: []byte("invented")}), "system:0001", time.Now()); refusal == nil {
+		t.Fatal("retained activation accepted a different candidate")
+	}
+	if _, exists := owner.records.types["build.globalnote"]; exists {
+		t.Fatal("requested mixed release installed before original outcome")
+	}
+	mustDefinitionDecision(t, owner, "publisher", system.SchemaFinished, system.ActivationType, "0001", map[string]any{"result": system.StateActive, "evidence": "static maintenance verified original healthy process"})
+	if _, exists := owner.records.types["build.globalnote"]; !exists {
+		t.Fatal("original successful outcome lost its frozen installation")
+	}
+	fresh := definitionOwnerTenant(t, "system")
+	restoreSystemDefinitions(t, fresh, "mixed-active")
+	if _, exists := fresh.records.types["build.globalnote"]; !exists {
+		t.Fatal("accepted mixed installation did not replay")
 	}
 }

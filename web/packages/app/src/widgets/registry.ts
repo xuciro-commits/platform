@@ -1,4 +1,5 @@
-import { pageUIManifest } from "@platform/kernel";
+import {pageUIManifest} from "../pageui/manifest";
+
 import type { ComponentType } from "react";
 
 export const pageUIProfile = pageUIManifest.uiProfile;

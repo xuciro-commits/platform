@@ -1,4 +1,5 @@
-import {pageUIManifest} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+
 import {timestampParts,validCivilDate} from "../components/date";
 import {entityFrom,type EntityInfo,type EntityRecord} from "./Records";
 import {t} from "../i18n";
@@ -23,7 +24,7 @@ function initials(label:string):string {
 
 /** The caller supplies the original authorized first window and its complete total. */
 export function RecordAvatarStack({records,info,labelField,detailFields=[],total,label}:RecordAvatarStackProps) {
- const limits=pageUIManifest.runtime.contextViews,title=info.fields.find(field=>field.name===labelField),details=detailFields.map(name=>name==="id"?{name,title:t("ID"),type:"text" as const}:info.fields.find(field=>field.name===name));
+ const limits=renderingLimits.runtime.contextViews,title=info.fields.find(field=>field.name===labelField),details=detailFields.map(name=>name==="id"?{name,title:t("ID"),type:"text" as const}:info.fields.find(field=>field.name===name));
  if(!Array.isArray(records)||records.length>limits.maxAvatarWindow||!Number.isSafeInteger(total)||total<records.length||new Set(records.map(record=>record?.id)).size!==records.length||records.some(record=>!record||typeof record.id!=="string"||!record.id||record.archived===true||!Number.isSafeInteger(record.revision)||record.revision<0)||labelField!=="id"&&(!title||!titleTypes.includes(title.type))||detailFields.length>limits.maxDetailFields||detailFields.includes(labelField)||new Set(detailFields).size!==detailFields.length||details.some(field=>!field||!scalarTypes.includes(field.type)))return <p role="alert">{t("Avatar records, fields or total are unavailable or incompatible.")}</p>;
  const originalRecords:readonly EntityRecord[]=records;
  if(originalRecords.some(record=>labelField!=="id"&&!scalar(title!.type,record[labelField])||details.some(field=>!scalar(field!.type,record[field!.name]))))return <p role="alert">{t("Avatar values are incompatible with their original fields.")}</p>;

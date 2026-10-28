@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import { sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
@@ -164,7 +165,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const ungrouped = pages.filter((item) => !grouped.includes(item.name));
   const movePage = (name: string, offset: number) => { const list = [...(draft.pages ?? [])]; const at = list.indexOf(name); const to = at + offset; if (at < 0 || to < 0 || to >= list.length) return; [list[at], list[to]] = [list[to]!, list[at]!]; edit({ pages: list }); };
   const removePage = (name: string) => edit({ pages: (draft.pages ?? []).filter((item) => item !== name), groups: (draft.groups ?? []).map((group) => ({ ...group, pages: group.pages.filter((item) => item !== name) })).filter((group) => group.pages.length), replacements: draft.replacements?.filter(item => item.page !== name) });
-  const document: Api.PageDocument = { formatVersion: 2, uiProfile: draft.uiProfile ?? pageUIProfile, root: "root", nodes: {}, variables: draft.variables, queries: draft.queries };
+  const document: PageUI.PageDocument = { formatVersion: 2, uiProfile: draft.uiProfile ?? pageUIProfile, root: "root", nodes: {}, variables: draft.variables, queries: draft.queries };
   const inspector: Record<ModuleFocus, ReactNode> = {
     navigation: <div className="grid gap-3 p-3 text-xs">
       <p className="text-muted">{t("Pages appear in the module's navigation in this order. Groups collect pages under a heading.")}</p>

@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 
 	"platformserver"
-	"platformserver/apps/enterprise"
+	enterprise "platformserver/engine/organization"
 )
 
 func main() {

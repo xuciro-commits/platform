@@ -55,7 +55,9 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 			if binding, pv, err := t.resolveModel("agent", definition.Model, definition.ModelOptions); err == nil {
 				item.Model = binding.Model
 				model, _, _ := t.ai.Model(binding.Model)
-				currentConfig, _ = modelConfigurationDigest(model, pv, &binding)
+				if pinned, refusal := t.modelStage(binding, pv, platform.AIStageDesign); refusal == nil {
+					currentConfig, _ = modelConfigurationDigest(model, pv, &pinned)
+				}
 			}
 			for _, tool := range definition.Tools {
 				if strings.HasPrefix(tool, "query:") || strings.HasPrefix(tool, "read:") {
@@ -106,7 +108,9 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		if binding, pv, err := t.resolveModel("generation", definition.Model, definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens})); err == nil {
 			item.Model = binding.Model
 			model, _, _ := t.ai.Model(binding.Model)
-			currentConfig, _ = modelConfigurationDigest(model, pv, &binding)
+			if pinned, refusal := t.modelStage(binding, pv, platform.AIStageDesign); refusal == nil {
+				currentConfig, _ = modelConfigurationDigest(model, pv, &pinned)
+			}
 		}
 		if definition.Proposal != nil {
 			item.Placement = "propose"

@@ -12,8 +12,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	enterprisemodel "platformserver/engine/organization"
 	"platformserver/internal/construction"
-	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )

@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Cloud models are available for authorized design tasks. Production inference and knowledge embeddings require a deployment-approved local or edge service; marking a provider as local does not grant approval.": "云端模型可用于获权的设计任务。生产推断和知识嵌入必须使用部署认可的本地或边缘服务；将提供方标为本地不会获得许可。",
+  "System history": "系统历史",
+  "Release history": "发布历史",
+  "System source editing, proposals, approvals, builds and new activations are frozen. Existing records and release evidence remain available for diagnosis.": "系统源码编辑、提案、批准、构建和新激活已冻结。已有记录与发布证据仍可用于诊断。",
+  "Use the static control panel for authorized configuration and the host console for maintenance. Opening a historical record does not start a build or activation.": "获权配置请使用静态控制面板，维护请使用宿主控制台。查看历史记录不会发起构建或激活。",
+  "The host may already have saved these requests. Checking keeps their original keys and inputs; new system work is refused.": "宿主可能已经保存这些请求。核对会保留原请求键与输入；新的系统变更会被拒绝。",
+  "No system change is recorded.": "暂无系统变更记录。",
+  "No source file matches this page.": "当前页没有匹配的源码文件。",
+  "This retained file is marked as deleted.": "此保留文件已标记为删除。",
   "Configuration changed; evaluate again": "配置已变化，请重新评估",
   "Reset purpose options": "重置用途参数",
   "Try available models": "试用可用模型",

@@ -164,7 +164,15 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if ask.Model == "" {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function needs a bound model")
 	}
-	resolved, _, modelErr := t.resolveModel("generation", ask.Model, f.ModelOptions.Override(platform.ModelOptions{MaxTokens: f.MaxTokens}))
+	resolved, provider, modelErr := t.resolveModel("generation", ask.Model, f.ModelOptions.Override(platform.ModelOptions{MaxTokens: f.MaxTokens}))
+	if modelErr != nil {
+		return platform.FunctionCall{}, platform.Effect{}, modelErr
+	}
+	stage := platform.AIStageRuntime
+	if t.simulation {
+		stage = platform.AIStageDesign
+	}
+	resolved, modelErr = t.modelStage(resolved, provider, stage)
 	if modelErr != nil {
 		return platform.FunctionCall{}, platform.Effect{}, modelErr
 	}

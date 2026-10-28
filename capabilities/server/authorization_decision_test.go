@@ -17,6 +17,7 @@ import (
 )
 
 func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T) {
+	approveTestInference(t, "http://candidate.invalid", "probe")
 	const id = "capability-owner-authorization"
 	at := txnAt
 	tenant := composeTenant(t, id, []Seat{

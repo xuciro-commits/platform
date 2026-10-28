@@ -1,15 +1,10 @@
-// Package system is the platform's self-hosting app: the host-level `system`
-// tenant keeps its own source files, changes, releases and activations as
-// ordinary records, so a person or an AI agent iterates the system through the
-// same submit, accept, install path as any other application.
-//
-// The kernel is frozen. `internal/systemscope` refuses every path that carries
-// the kernel, the submission pipeline, accepted results, the journal, records
-// or identity; the app runs that gate when a change is proposed, so a prompt
-// cannot ask for what a person cannot write either.
+// Package system retains the platform's accepted source, release and activation
+// history. New self-hosting work is frozen; static maintenance may reconcile
+// outcomes already requested before the freeze.
 package system
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -22,6 +17,11 @@ import (
 	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
+
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
 	ID             = systemscope.App
@@ -164,19 +164,16 @@ type Activation struct {
 	Installation json.RawMessage `json:"installation,omitempty" field:"readonly" type:"json" source:"record"`
 }
 
-// System is the tenant's self-hosting app.
+// System retains the original system authority and its deployment history.
 type System struct {
 	mu             sync.Mutex
 	ledger         *platform.Ledger
 	source         *platform.SystemSource
 	definitionHost platform.SystemDefinitionHost
-	// Roles is what a deployment may grant: a builder edits and proposes, a
-	// publisher approves, builds and activates. Managed agents only edit and
-	// propose, even if a deployment accidentally grants a publisher role.
 }
 
-// New is a tenant's system app. Its records are meaningful in the system
-// tenant; other tenants refuse writes and read empty collections.
+// New retains the original system declarations for accepted history. Only
+// reports about existing work remain writable through static maintenance.
 func New(tenant string, sources ...*platform.SystemSource) *System {
 	any := []string{Builder, Publisher}
 	publish := []string{Publisher}
@@ -222,7 +219,7 @@ func entity(typ, title string, model any, display string) platform.Entity {
 }
 
 func (s *System) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Platform", Version: "1", Actions: s.ledger.Catalog,
+	return platform.Manifest{Languages: languages, ID: ID, Title: "Platform", Version: "1", Actions: s.ledger.Catalog,
 		Entities: []platform.Entity{
 			// Blobs hold file bytes keyed by digest; they have no actions of
 			// their own and are written only as part of a file save.
@@ -236,17 +233,11 @@ func (s *System) Manifest() platform.Manifest {
 			"system-releases": "record", "system-activations": "record"},
 		Roles: []string{Builder, Publisher},
 		Agents: []platform.Agent{{
-			Name:  "architect",
-			Title: "System architect",
-			Description: "Reads the system's own source and proposes one reviewed change at a time. " +
-				"It cannot approve, build or activate what it proposes.",
-			Instructions: "You iterate the platform itself. Read the files you need, then write only the " +
-				"files the request really requires and propose one change with a title, a rationale and " +
-				"the reason each file changes. Never propose kernel paths (contract/, the submission " +
-				"pipeline, accepted results, the journal, records, authorization or identity): the kernel " +
-				"moves by version release only. One change, one purpose. A person approves and builds it.",
-			Tools:  []string{"read:system-files", "read:system-file", SchemaFileSave, SchemaPropose},
-			Budget: platform.Budget{Steps: 20, Tokens: 60000, Actions: 8, Cost: 2},
+			Name: "architect", Title: "System history assistant",
+			Description:  "Reads retained system source and release history. System self-hosting writes are frozen.",
+			Instructions: "Read the retained system history to explain the deployed version. Never edit, propose, approve, build or activate system changes. Direct maintenance to the static system entry.",
+			Tools:        []string{"read:system-files", "read:system-file"},
+			Budget:       platform.Budget{Steps: 20, Tokens: 60000, Cost: 2},
 		}},
 	}
 }
@@ -289,11 +280,11 @@ func (s *System) ReadInput(c platform.Caller, name string, input json.RawMessage
 		byPath := map[string]FileView{}
 		if s.source != nil {
 			for _, file := range s.source.Files {
-				byPath[file.Path] = FileView{Path: file.Path, Digest: file.Digest, Size: file.Size, Editable: file.Editable}
+				byPath[file.Path] = FileView{Path: file.Path, Digest: file.Digest, Size: file.Size, Editable: false}
 			}
 		}
 		for _, file := range files {
-			view := FileView{Path: file.Path, Digest: file.Digest, Size: file.Size, Revision: file.Revision, Deleted: file.Deleted, By: file.By, Editable: systemscope.Verdict(file.Path) == ""}
+			view := FileView{Path: file.Path, Digest: file.Digest, Size: file.Size, Revision: file.Revision, Deleted: file.Deleted, By: file.By, Editable: false}
 			if name == "system-file" && query.Path == file.Path && !file.Deleted {
 				if blob, ok := platform.Get[Blob](c, blobID(file.Digest)); ok {
 					view.Content = blob.Content
@@ -345,22 +336,14 @@ func (s *System) Submit(c platform.Caller, submission *pb.Submission, now time.T
 		if c.Tenant != systemscope.Tenant {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system tenant may change the system")
 		}
-		if c.Agent && submission.GetSchema().GetName() != SchemaFileSave && submission.GetSchema().GetName() != SchemaPropose {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "An agent may only edit files and propose a system change")
+		if c.Agent {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System self-hosting is frozen; use static maintenance to reconcile retained work")
 		}
 		switch submission.GetSchema().GetName() {
-		case SchemaFileSave:
-			return s.save(c, submission, now)
-		case SchemaPropose:
-			return s.propose(c, submission, now)
-		case SchemaApprove:
-			return s.approve(c, submission, now)
+		case SchemaFileSave, SchemaPropose, SchemaApprove, SchemaActivate, SchemaDeactivate:
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System self-hosting is frozen; use static maintenance to reconcile retained work")
 		case SchemaBuilt:
 			return s.built(c, submission, now)
-		case SchemaActivate:
-			return s.activate(c, submission, now)
-		case SchemaDeactivate:
-			return s.rollback(c, submission, now)
 		case SchemaCancel:
 			return s.cancel(c, submission, now)
 		case SchemaFinished:
@@ -376,204 +359,6 @@ func (s *System) ForkDecision() (platform.App, error) {
 }
 
 var _ platform.DecisionForkApp = (*System)(nil)
-
-func (s *System) save(c platform.Caller, submission *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	var p struct {
-		Path     string
-		Content  string
-		Revision int
-		Deleted  bool
-	}
-	if json.Unmarshal(submission.GetPayload(), &p) != nil || strings.TrimSpace(p.Path) == "" {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A file needs a path")
-	}
-	if err := systemscope.Check([]string{p.Path}); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The kernel gate refused {path}: {reason}", p.Path, err.Error())
-	}
-	id := fileID(p.Path)
-	existing, known := platform.Get[File](c, id)
-	current := 0
-	if known {
-		current = existing.Revision
-	}
-	if p.Revision != current {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT,
-			"{path} is at revision {current}; reload it before saving", p.Path, current)
-	}
-	file := File{Path: p.Path, Revision: current + 1, Deleted: p.Deleted, By: c.ID}
-	if known {
-		file.Record = existing.Record
-	} else {
-		file.Record = platform.Record{ID: id}
-	}
-	puts := []any{}
-	if !p.Deleted {
-		if err := systemscope.CheckContent(p.Path, p.Content); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		if err := systemscope.CheckBudget(map[string]int{p.Path: len(p.Content)}); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		digest := systemscope.Digest([]byte(p.Content))
-		file.Digest, file.Size = digest, len(p.Content)
-		if _, exists := platform.Get[Blob](c, blobID(digest)); !exists {
-			puts = append(puts, Blob{Record: platform.Record{ID: blobID(digest)}, Digest: digest, Content: p.Content, Size: len(p.Content)})
-		}
-	}
-	puts = append(puts, file) // the blob is written first so a failed put never leaves a file without bytes
-	return func(r *pb.ChangeRecord) {
-		for _, v := range puts {
-			c.Put(r, v)
-		}
-	}, nil
-}
-
-func (s *System) propose(c platform.Caller, submission *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	var p struct {
-		Title, Rationale, Origin, Prompt string
-		Base                             *int
-		Assets                           []platform.AssetRef
-		Files                            []struct {
-			Path     string
-			Content  *string
-			Deleted  bool
-			Revision *int
-		}
-	}
-	if json.Unmarshal(submission.GetPayload(), &p) != nil || strings.TrimSpace(p.Title) == "" || strings.TrimSpace(p.Rationale) == "" {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A change needs a title and a rationale")
-	}
-	if p.Origin == "" {
-		p.Origin = "ui"
-	}
-	if p.Origin != "ui" && p.Origin != "prompt" {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A change comes from the interface or a prompt")
-	}
-	if len(p.Files) == 0 && len(p.Assets) == 0 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A change needs files or definition drafts")
-	}
-	if len(p.Files) > 0 && s.source == nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The running source baseline is unavailable; configure -source-root")
-	}
-	base := s.runningSourceBase(c)
-	if p.Base != nil && *p.Base != base {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The running system release changed; reload the source baseline")
-	}
-	if c.Agent && p.Origin != "prompt" {
-		p.Origin = "prompt"
-	}
-	sizes := make(map[string]int, len(p.Files))
-	byPath := make(map[string]string, len(p.Files))
-	frozen := make([]ChangeFile, 0, len(p.Files))
-	seen := map[string]bool{}
-	retainedBytes := 0
-	baseline := map[string]platform.SystemSourceFile{}
-	if s.source != nil {
-		for _, file := range s.source.Files {
-			baseline[file.Path] = file
-		}
-	}
-	for _, input := range p.Files {
-		f := ChangeFile{Path: input.Path, Deleted: input.Deleted, Revision: input.Revision, Before: &SourceImage{}}
-		sizes[f.Path] = 0
-		if seen[f.Path] {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A change contains the same path twice: {path}", f.Path)
-		}
-		seen[f.Path] = true
-		if strings.TrimSpace(f.Path) == "" {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Every file needs a path")
-		}
-		if err := systemscope.Check([]string{f.Path}); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The kernel gate refused {error}", err.Error())
-		}
-		if file, exists := baseline[f.Path]; exists {
-			content, err := s.source.Read(f.Path)
-			if err != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source baseline is unavailable: {reason}", err.Error())
-			}
-			f.Before = &SourceImage{Digest: file.Digest, Content: content}
-			retainedBytes += len(content)
-		}
-		saved, known := platform.Get[File](c, fileID(f.Path))
-		revision := 0
-		if known {
-			revision = saved.Revision
-		}
-		if f.Revision != nil && *f.Revision != revision {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{path} is at revision {current}; reload it before proposing", f.Path, revision)
-		}
-		if f.Deleted {
-			f.Content, f.Digest = "", ""
-			byPath[f.Path] = "deleted"
-			frozen = append(frozen, f)
-			continue
-		}
-		if input.Content != nil {
-			f.Content = *input.Content
-		} else if known && !saved.Deleted {
-			if blob, stored := platform.Get[Blob](c, blobID(saved.Digest)); stored {
-				f.Content = blob.Content
-			} else {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The saved file has no retained content")
-			}
-		} else if s.source != nil {
-			content, err := s.source.Read(f.Path)
-			if err != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Supply the content of new file {path}", f.Path)
-			}
-			f.Content = content
-		}
-		if err := systemscope.CheckContent(f.Path, f.Content); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-		}
-		f.Digest = systemscope.Digest([]byte(f.Content))
-		sizes[f.Path] = len(f.Content)
-		retainedBytes += len(f.Content)
-		byPath[f.Path] = f.Digest
-		frozen = append(frozen, f)
-	}
-	if err := systemscope.CheckBudget(sizes); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	if retainedBytes > systemscope.MaxChangeBytes {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The source comparison exceeds the system change byte budget")
-	}
-	change := Change{Record: platform.Record{ID: submission.GetTarget().GetId()}, Title: p.Title, Rationale: p.Rationale,
-		Origin: p.Origin, Prompt: p.Prompt, Base: base, Files: frozen, Assets: p.Assets, State: StateDraft,
-		Manifest: systemscope.Manifest(byPath)}
-	if s.source != nil {
-		change.SourceDigest = s.source.Digest
-	}
-	if c.Agent {
-		change.Agent = c.ID
-		change.Run = c.AgentRun()
-	}
-	if err := s.freezeDefinitions(c, &change, now); err != nil {
-		return nil, err
-	}
-	return func(r *pb.ChangeRecord) { c.Put(r, change) }, nil
-}
-
-func (s *System) approve(c platform.Caller, submission *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	change, known := platform.Get[Change](c, submission.GetTarget().GetId())
-	if !known || change.State != StateDraft {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a draft change can be approved")
-	}
-	if change.Agent != "" && change.Agent == c.ID {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A proposal is not approved by the agent that proposed it")
-	}
-	change.State, change.ApprovedBy, change.ApprovedAt = StateApproved, c.ID, now
-	release, err := s.approveDefinitions(c, &change, now)
-	if err != nil {
-		return nil, err
-	}
-	return func(r *pb.ChangeRecord) {
-		c.Put(r, change)
-		if release != nil {
-			c.Put(r, *release)
-		}
-	}, nil
-}
 
 func (s *System) runningSourceBase(c platform.Caller) int {
 	if releases, _, err := platform.Find[Release](c, platform.Query{Sort: []string{"-version"}}); err == nil {
@@ -633,63 +418,6 @@ func (s *System) built(c platform.Caller, submission *pb.Submission, now time.Ti
 	return func(r *pb.ChangeRecord) { c.Put(r, change); c.Put(r, release) }, nil
 }
 
-// pendingActivation is independent of the cancellation window. An elapsed
-// window permits a swap; it never turns an unfinished request into a free slot.
-func pendingActivation(c platform.Caller) bool {
-	pending, _, _ := platform.Find[Activation](c, platform.Query{Archived: true})
-	return slices.ContainsFunc(pending, func(a Activation) bool { return a.Result == StateRequested })
-}
-
-func activationID(c platform.Caller, release int, rollback bool, key string) string {
-	id := fmt.Sprintf("%04d", release)
-	if rollback {
-		id += "-r"
-	}
-	if _, exists := platform.Get[Activation](c, id); exists {
-		id += "-" + systemscope.Digest([]byte(key))[:12]
-	}
-	return id
-}
-
-func (s *System) activate(c platform.Caller, submission *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	var p struct{ Window *int }
-	if body := submission.GetPayload(); len(body) > 0 && json.Unmarshal(body, &p) != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The activation request is unreadable")
-	}
-	window := 30
-	if p.Window != nil {
-		window = *p.Window
-	}
-	if window < 0 || window > 600 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The window is between 0 and 600 seconds")
-	}
-	if pendingActivation(c) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Another activation is still requested; wait for its recorded outcome")
-	}
-	release, known := platform.Get[Release](c, submission.GetTarget().GetId())
-	if !known || release.State != StatePublished {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only a published release is activated")
-	}
-	current := s.runningSourceBase(c)
-	if release.Previous != current {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The release baseline is no longer active; propose the change again")
-	}
-	activation := Activation{Record: platform.Record{ID: activationID(c, release.Version, false, submission.GetIdempotencyKey())}, Release: release.Version, From: current, Result: StateRequested, Window: window, By: c.ID, At: now}
-	release.State = StateRequested
-	if err := s.prepareDefinitionActivation(c, &activation, &release, now); err != nil {
-		return nil, err
-	}
-	puts := []any{release, activation}
-	if activation.Result == StateActive {
-		puts = append(puts, s.superseded(c, activation)...)
-	}
-	return func(r *pb.ChangeRecord) {
-		for _, v := range puts {
-			c.Put(r, v)
-		}
-	}, nil
-}
-
 func (s *System) cancel(c platform.Caller, submission *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	var p struct{ Reason, ActivationID string }
 	if json.Unmarshal(submission.GetPayload(), &p) != nil {
@@ -719,60 +447,6 @@ func (s *System) cancel(c platform.Caller, submission *pb.Submission, now time.T
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The release has no matching open activation")
 }
 
-func (s *System) rollback(c platform.Caller, submission *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
-	var p struct {
-		Window        *int
-		TargetVersion *int
-	}
-	if body := submission.GetPayload(); len(body) > 0 && json.Unmarshal(body, &p) != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The rollback request is unreadable")
-	}
-	window := 30
-	if p.Window != nil {
-		window = *p.Window
-	}
-	if window < 0 || window > 600 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The window is between 0 and 600 seconds")
-	}
-	if pendingActivation(c) {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Another activation is still requested; wait for its recorded outcome")
-	}
-	release, known := platform.Get[Release](c, submission.GetTarget().GetId())
-	if !known || release.State != StateActive || release.Previous == 0 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Only an active release with a predecessor rolls back")
-	}
-	target := release.Previous
-	if p.TargetVersion != nil {
-		target = *p.TargetVersion
-	}
-	previous, known := platform.Get[Release](c, fmt.Sprintf("%04d", release.Previous))
-	for known && previous.Version > target && previous.Previous > 0 {
-		previous, known = platform.Get[Release](c, fmt.Sprintf("%04d", previous.Previous))
-	}
-	if !known || previous.Version != target {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The requested rollback target is not a retained ancestor release")
-	}
-	activation := Activation{Record: platform.Record{ID: activationID(c, release.Version, true, submission.GetIdempotencyKey())}, Release: previous.Version, From: release.Version, Result: StateRequested, Window: window, By: c.ID, At: now}
-	// Definition-only rollback uses the same accepted installation mechanism.
-	if release.Kind == "definitions" && release.SourceDigest == previous.SourceDigest {
-		if err := s.prepareDefinitionRollback(c, &activation, &release, &previous, now); err != nil {
-			return nil, err
-		}
-	}
-	puts := []any{activation, release}
-	if activation.Result == StateActive {
-		puts = append(puts, previous)
-		puts = append(puts, s.superseded(c, activation, release.Version)...)
-	}
-	return func(r *pb.ChangeRecord) {
-		for _, v := range puts {
-			c.Put(r, v)
-		}
-	}, nil
-}
-
-// superseded updates only older active entries. Terminal outcomes and unrelated
-// published releases are historical evidence and are never rewritten.
 func (s *System) superseded(c platform.Caller, current Activation, handled ...int) []any {
 	var puts []any
 	releases, _, _ := platform.Find[Release](c, platform.Query{Archived: true})
@@ -833,9 +507,3 @@ func (s *System) finished(c platform.Caller, submission *pb.Submission, now time
 
 // blobID is one content's stable record identity.
 func blobID(digest string) string { return "b" + digest[:16] }
-
-// fileID is one path's stable record identity.
-func fileID(path string) string {
-	sum := systemscope.Digest([]byte(path))
-	return "f" + sum[:16]
-}

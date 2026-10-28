@@ -1,5 +1,6 @@
+import {pageUIManifest} from "../pageui/manifest";
 import {t} from '@platform/ui';
-import {pageUIManifest} from '@platform/kernel';
+
 import {defineWidgetPlugin} from './plugin';
 import type {WidgetBindingContext} from './bindings';
 import type {InputProps} from './Input';

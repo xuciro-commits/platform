@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	enterprisemodel "platformserver/internal/enterprise"
+	enterprisemodel "platformserver/engine/organization"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )

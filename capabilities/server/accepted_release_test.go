@@ -223,7 +223,7 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 		}
 	}
 	readReview()
-	if review.RunningMatches || review.RunningDiagnostic == "" || review.Active {
+	if review.RunningMatches || review.Active || review.Preview.CurrentID != "" || len(review.Preview.Added) != len(review.Preview.Included) {
 		t.Fatalf("uninstalled saved draft was reported as running: %+v", review)
 	}
 	if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,

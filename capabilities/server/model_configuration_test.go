@@ -11,13 +11,69 @@ import (
 	"testing"
 	"time"
 
+	"platformserver/aigateway"
+	"platformserver/aigateway/providers"
 	"platformserver/apps/ai"
+	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
 	"platformserver/journal"
 	"platformserver/platform"
 )
+
+func TestInferenceStagesRequireTrustedOwnerAndDeployment(t *testing.T) {
+	requests := 0
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"answer"}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}`)
+	}))
+	defer service.Close()
+	t.Setenv("PLATFORM_AI_INFERENCE_POLICY", "{}")
+	tenant := composeTenant(t, "inference-stages", []Seat{seatOf("builder", "ai:admin", "build:builder"), seatOf("reader", "ai:admin")}, ai.New("inference-stages"), build.New("inference-stages"))
+	at := time.Now().UTC()
+	decide(t, tenant, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": service.URL}, at)
+	decide(t, tenant, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/model", map[string]string{"access": "everyone"}, at)
+	request := ChatRequest{Model: "local/model", Messages: []Message{{Role: "user", Content: "input"}}, Binding: &platform.AIModelBinding{Stage: platform.AIStageDesign}}
+	builder, reader := memberOf(t, tenant, "builder"), memberOf(t, tenant, "reader")
+	if _, refusal, _ := tenant.Chat(builder, request, at); refusal == nil || requests != 0 {
+		t.Fatal("provider kind or client stage granted runtime inference", refusal, requests)
+	}
+	if _, refusal, _ := tenant.DesignChat(reader, request, at); refusal == nil || requests != 0 {
+		t.Fatal("an ordinary model grant became a design grant", refusal, requests)
+	}
+	if answer, refusal, failure := tenant.DesignChat(builder, request, at); refusal != nil || failure != nil || answer.Content != "answer" || requests != 1 {
+		t.Fatalf("trusted design call failed: %+v %v %v calls=%d", answer, refusal, failure, requests)
+	}
+	approveTenantInference(t, tenant, service.URL, "local")
+	if _, refusal, failure := tenant.Chat(reader, request, at); refusal != nil || failure != nil || requests != 2 {
+		t.Fatal("approved runtime origin could not execute", refusal, failure, requests)
+	}
+}
+
+func TestInferencePolicyPinsCanonicalOriginAndRevision(t *testing.T) {
+	sites := []platform.AIInferenceSite{{Provider: "b", Origin: "https://b.example", Location: "edge"}, {Provider: "a", Origin: "https://a.example", Location: "local"}}
+	provider := platform.AIProvider{ID: "a", BaseURL: "https://a.example/v1"}
+	binding, err := aigateway.Bind(platform.AIInferencePolicy{Runtime: sites}, provider, platform.AIModelBinding{Model: "a/model"}, platform.AIStageRuntime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reordered := platform.AIInferencePolicy{Runtime: []platform.AIInferenceSite{sites[1], sites[0]}}
+	if err := aigateway.Check(reordered, provider, binding); err != nil {
+		t.Fatal("policy identity depended on approval order", err)
+	}
+	provider.BaseURL = "https://different.example/v1"
+	if err := aigateway.Check(reordered, provider, binding); err == nil {
+		t.Fatal("provider origin changed under a pinned request")
+	}
+	if _, err := aigateway.Bind(reordered, provider, platform.AIModelBinding{}, ""); err == nil {
+		t.Fatal("unknown execution stage was admitted")
+	}
+	reordered.Runtime[0].Location = "cloud"
+	if err := aigateway.CheckPolicy(reordered); err == nil {
+		t.Fatal("runtime policy approved a cloud location")
+	}
+}
 
 func TestKnowledgeConfigurationResumesPreparedVectorsAfterRestart(t *testing.T) {
 	at := time.Now().UTC()
@@ -40,6 +96,7 @@ func TestKnowledgeConfigurationResumesPreparedVectorsAfterRestart(t *testing.T) 
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": data, "usage": map[string]int{"prompt_tokens": len(body.Input)}})
 	}))
 	defer service.Close()
+	approveTestInference(t, service.URL, "local")
 	build := func() *Tenant {
 		tn := composeTenant(t, "vector-restart", []Seat{seatOf("admin", "platform:admin", "ai:admin", "knowledge:editor")}, ai.New("vector-restart"), knowledge.New("vector-restart"))
 		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
@@ -107,13 +164,14 @@ func TestAnthropicAdaptiveConfigurationProtectsThinkingState(t *testing.T) {
 		fmt.Fprint(w, `{"id":"m","type":"message","role":"assistant","model":"fixture","content":[{"type":"thinking","thinking":"private reasoning","signature":"signed"},{"type":"text","text":"visible"}],"stop_reason":"end_turn","usage":{"input_tokens":8,"output_tokens":2}}`)
 	}))
 	defer service.Close()
+	approveTestInference(t, service.URL, "local")
 	tn := composeTenant(t, "anthropic-options", []Seat{seatOf("admin", "ai:admin")}, ai.New("anthropic-options"))
 	tn.Secrets = func(string) ([]byte, bool) { return []byte("synthetic-credential"), true }
 	request := ChatRequest{Options: platform.ModelOptions{Thinking: "adaptive", Effort: "high"}, MaxTokens: 128, Messages: []Message{
 		{Role: "assistant", Content: "previous", Protocol: json.RawMessage(`[{"type":"thinking","thinking":"retained private state","signature":"signed"}]`)},
 		{Role: "user", Content: "continue"},
 	}}
-	answer, _, failure := tn.completeAnthropic(platform.AIProvider{ID: "local", Kind: "local", BaseURL: service.URL, Wire: "anthropic", Secret: "fixture"}, "fixture", request)
+	answer, _, failure := tn.modelProvider(platform.AIProvider{ID: "local", Kind: "local", BaseURL: service.URL, Wire: "anthropic", Secret: "fixture"}).CompleteAnthropic(platform.AIProvider{ID: "local", Kind: "local", BaseURL: service.URL, Wire: "anthropic", Secret: "fixture"}, "fixture", request)
 	if failure != nil {
 		t.Fatal(failure)
 	}
@@ -134,13 +192,14 @@ func TestAnthropicAdaptiveConfigurationProtectsThinkingState(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"content":[{"type":"redacted_thinking","data":"protected"},{"type":"text","text":"visible"}],"usage":{"input_tokens":1,"output_tokens":1}}`), &message); err != nil {
 		t.Fatal(err)
 	}
-	redacted, _, failure := anthropicAnswer(message, "")
+	redacted, _, failure := providers.AnthropicAnswer(message, "")
 	if failure != nil || !strings.Contains(string(redacted.Protocol), "protected") {
 		t.Fatal("redacted continuation was lost", failure)
 	}
 }
 
 func TestAIModelConfigurationPostgresCheckpoint(t *testing.T) {
+	approveTestInference(t, "http://127.0.0.1:1", "local")
 	dsn := os.Getenv("PLATFORM_TEST_DATABASE")
 	if dsn == "" {
 		t.Skip("PLATFORM_TEST_DATABASE needs an isolated PostgreSQL database")
@@ -209,6 +268,7 @@ func TestAIModelConfigurationPostgresCheckpoint(t *testing.T) {
 }
 
 func TestAgentAcceptedConfigurationSurvivesDefaultChanges(t *testing.T) {
+	approveTestInference(t, "http://127.0.0.1:1", "local")
 	at := time.Now()
 	build := func() *Tenant {
 		return composeTenant(t, "agent-binding", []Seat{seatOf("admin", "platform:admin", "ai:admin", "agent:admin", "desk:clerk")}, ai.New("agent-binding"), NewAgents("agent-binding"), newDesk("agent-binding"), work.New("agent-binding"), flow.New("agent-binding"))
@@ -261,6 +321,7 @@ func TestModelConfigurationDirectoryAndAcceptedBinding(t *testing.T) {
 		fmt.Fprint(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":4,"completion_tokens":2}}`)
 	}))
 	defer service.Close()
+	approveTestInference(t, service.URL, "local")
 	build := func() *Tenant {
 		return composeTenant(t, "model-config", []Seat{seatOf("admin", "platform:admin", "ai:admin"), seatOf("user", "ai:user")}, ai.New("model-config"))
 	}
@@ -313,7 +374,7 @@ func TestModelConfigurationConstraintsAndProtectedContinuation(t *testing.T) {
 	if err != nil || b.Options.MaxTokens != 1024 {
 		t.Fatal("inherited generation budget did not respect reported limits", b, err)
 	}
-	reply, _, failure := completion(200, []byte(`{"choices":[{"message":{"content":"visible","reasoning_content":"private","tool_calls":[{"id":"c","function":{"name":"tool","arguments":"{}"}}]}}]}`), "m")
+	reply, _, failure := providers.Completion(200, []byte(`{"choices":[{"message":{"content":"visible","reasoning_content":"private","tool_calls":[{"id":"c","function":{"name":"tool","arguments":"{}"}}]}}]}`), "m")
 	if failure != nil || len(reply.Protocol) == 0 {
 		t.Fatal("protected continuation was lost", failure)
 	}
@@ -321,7 +382,7 @@ func TestModelConfigurationConstraintsAndProtectedContinuation(t *testing.T) {
 	if strings.Contains(string(public), "private") {
 		t.Fatal("reasoning leaked through public answer")
 	}
-	wire := openAIMessages([]Message{{Role: "assistant", Content: reply.Content, ToolCalls: reply.ToolCalls, Protocol: reply.Protocol}})
+	wire := providers.OpenAIMessages([]Message{{Role: "assistant", Content: reply.Content, ToolCalls: reply.ToolCalls, Protocol: reply.Protocol}})
 	if wire[0]["reasoning_content"] != "private" {
 		t.Fatal("tool continuation omitted provider reasoning state")
 	}
@@ -333,7 +394,7 @@ func TestModelConfigurationConstraintsAndProtectedContinuation(t *testing.T) {
 	}))
 	defer stream.Close()
 	tn := composeTenant(t, "continuation", []Seat{seatOf("admin", "platform:admin", "agent:admin")}, NewAgents("continuation"))
-	answer, _, failure := tn.complete(platform.AIProvider{ID: "local", Kind: "local", BaseURL: stream.URL, Wire: "openai", Vendor: "openai"}, "m", ChatRequest{MaxTokens: 64, Stream: true, Messages: []Message{{Role: "user", Content: "hello"}}})
+	answer, _, failure := tn.modelProvider(platform.AIProvider{ID: "local", Kind: "local", BaseURL: stream.URL, Wire: "openai", Vendor: "openai"}).Complete(platform.AIProvider{ID: "local", Kind: "local", BaseURL: stream.URL, Wire: "openai", Vendor: "openai"}, "m", ChatRequest{MaxTokens: 64, Stream: true, Messages: []Message{{Role: "user", Content: "hello"}}})
 	if failure != nil || string(answer.Protocol) != `"private"` {
 		t.Fatal("stream continuation lost", failure)
 	}

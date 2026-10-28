@@ -210,12 +210,10 @@ func (b *Build) normalizeObjectRules(o *construction.Object) error {
 	for i := range o.Fields {
 		f := &o.Fields[i]
 		if f.Formula != "" {
-			node, parseErr := construction.ValueParseFormula(f.Formula)
+			used, parseErr := platform.FormulaFields(f.Formula)
 			if parseErr != nil {
 				return parseErr
 			}
-			used := map[string]bool{}
-			node.Fields(used)
 			for _, operand := range o.Fields {
 				if operand.Type == "money" && used[operand.Name] {
 					return fmt.Errorf("field %s legacy money formula needs an explicit currency-aware Expr", f.Name)

@@ -6,7 +6,7 @@ import { defineConfig } from "@playwright/test";
 
 const port = 18496;
 const fullSuite = !process.argv.some(argument => argument.includes(".spec."));
-const maintenance = fullSuite || process.argv.some(argument => argument.includes("package-lifecycle")) ? " -host-admins=manager" : "";
+const maintenance = fullSuite || process.argv.some(argument => argument.includes("package-lifecycle") || argument.includes("static-maintenance")) ? " -host-admins=manager" : "";
 
 export default defineConfig({
   testDir: "tests",

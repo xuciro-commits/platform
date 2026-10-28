@@ -1,4 +1,5 @@
-import {pageUIManifest} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+
 import {Button} from "../primitives/button";
 import {t} from "../i18n";
 
@@ -7,7 +8,7 @@ export type BreadcrumbTrailProps={items:readonly BreadcrumbTrailItem[];currentID
 
 /** Stable original navigation identities; the caller owns navigation and selection clearing. */
 export function BreadcrumbTrail({items,currentID,onActivate,onCurrentActivate,enabled=true,label}:BreadcrumbTrailProps) {
- const budget=pageUIManifest.runtime.contextViews.maxLabelBytes,bytes=(value:string)=>new TextEncoder().encode(value).length;
+ const budget=renderingLimits.runtime.contextViews.maxLabelBytes,bytes=(value:string)=>new TextEncoder().encode(value).length;
  if(!Array.isArray(items)||items.length===0||new Set(items.map(item=>item?.id)).size!==items.length||!items.some(item=>item?.id===currentID)||items.some(item=>!item||typeof item.id!=="string"||!item.id||typeof item.label!=="string"||bytes(item.label)>budget||item.detail!==undefined&&(typeof item.detail!=="string"||bytes(item.detail)>budget)))return <p role="alert">{t("The original breadcrumb trail is unavailable or incompatible.")}</p>;
  const originalItems:readonly BreadcrumbTrailItem[]=items;
  return <nav aria-label={label??t("Breadcrumbs")} className="min-w-0 max-w-full"><ol className="flex min-w-0 max-w-full flex-wrap items-center gap-1 text-xs">{originalItems.map((item,index)=>{

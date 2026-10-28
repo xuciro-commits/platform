@@ -1,10 +1,10 @@
+import type * as PageUI from "../pageui/types";
 import {DerivedMean,Panel,RecordScatter,Select,t,type EntityInfo,type ChartSource} from "@platform/ui";
-import type {Api} from "@platform/kernel";
 import {TermCountsRenderer} from "./TermCounts";
 import {QueryWindowFrame,type QueryWindow} from "./QueryWindowFrame";
 import type {VariableResult} from "../runtime/variables";
 
-type Props={config?:Api.PageCollectionAnalysis;object:string;info?:EntityInfo;window?:QueryWindow;source?:ChartSource;label:string;values:Record<string,VariableResult>;xVariable?:string;yVariable?:string;countVariable?:string;meanVariable?:string;onAxis?:(id:string,value:string)=>void;enabled?:boolean};
+type Props={config?:PageUI.PageCollectionAnalysis;object:string;info?:EntityInfo;window?:QueryWindow;source?:ChartSource;label:string;values:Record<string,VariableResult>;xVariable?:string;yVariable?:string;countVariable?:string;meanVariable?:string;onAxis?:(id:string,value:string)=>void;enabled?:boolean};
 const scalar=(v?:VariableResult)=>v?.status==="value"&&typeof v.value==="string"?v.value:undefined;
 /** Original complete statistics and authorized windows share the canonical owners. */
 export function CollectionAnalysisRenderer({config,object,info,window,source,label,values,xVariable,yVariable,countVariable,meanVariable,onAxis,enabled=true}:Props) {

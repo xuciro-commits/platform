@@ -1,7 +1,8 @@
+import type {PageUI} from "@platform/app";
 import type {Api} from "@platform/kernel";
 
 /** The original build.page authoring shape, shared by editing and migration. */
-export type AuthoringSection = Omit<Api.Section, "object" | "query" | "actions" | "function" | "inlineEdit"> & {
+export type AuthoringSection = Omit<PageUI.Section, "object" | "query" | "actions" | "function" | "inlineEdit"> & {
   object?: string; query?: string; actions?: string[];
   function?: Api.FunctionRef;
   inlineEdit?: { action: string; fields: string[] };
@@ -9,7 +10,7 @@ export type AuthoringSection = Omit<Api.Section, "object" | "query" | "actions" 
 
 /** Preview resolves only the five authoring bindings; widget configuration
  * stays in the original generated section contract. */
-export function previewSection(section: AuthoringSection): Api.Section {
+export function previewSection(section: AuthoringSection): PageUI.Section {
   const { object, query, actions, function: fn, inlineEdit, ...configuration } = section;
   return {
     ...configuration,
@@ -21,4 +22,4 @@ export function previewSection(section: AuthoringSection): Api.Section {
   };
 }
 
-export type PageDraft = {name?:string;object?:string;list?:string[];detail?:string[];actions?:string[];sections:AuthoringSection[];document:Api.PageDocument;selections:Api.SelectionVariable[];title:string;description:string};
+export type PageDraft = {name?:string;object?:string;list?:string[];detail?:string[];actions?:string[];sections:AuthoringSection[];document:PageUI.PageDocument;selections:PageUI.SelectionVariable[];title:string;description:string};

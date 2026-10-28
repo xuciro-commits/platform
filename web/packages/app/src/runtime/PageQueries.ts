@@ -1,15 +1,17 @@
+import {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
 import {activeQueryPlans} from "./query-inventory";
 import {collectionInput, type CollectionInput} from "./collection-input";
 import {usePageAggregates} from "./PageAggregates";
 import { useEffect, useRef, useState } from "react";
-import { pageUIManifest, type Api } from "@platform/kernel";
+import {type Api} from "@platform/kernel";
 import { findDefinition, useHost } from "../index";
 import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session";
 import type { VariableResult } from "./variables";
 import { boundQueryDefinition, compileQueryPlans, queryView, variablePlan, planKey, windowFiltersLocked } from "./query-plans";
 import {interfaceWindowSignature} from "./ontology-interface";
 
-export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot, overlays:Record<string,Record<string,VariableResult>>={}, editingOverlay?:string,itemOwner?:string,keepOnUnmount=false) {
+export function usePageQueries(page: PageUI.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot, overlays:Record<string,Record<string,VariableResult>>={}, editingOverlay?:string,itemOwner?:string,keepOnUnmount=false) {
   const reader=session.readSource();
   const { source, definitions } = useHost(), activePlans=page.document?activeQueryPlans(page.document,page.sections??[],pageUIManifest.runtime.query.inventoryUIProfile):new Set<string>(), plans = Object.fromEntries(Object.entries(page.document?.queries??{}).filter(([id,plan])=>activePlans.has(id)&&(plan.itemOwner??undefined)===itemOwner));
   const pickerTitle=(id:string)=>(page.sections??[]).find(s=>s.widget==="record-picker"&&page.document?.variables?.[s.collectionVariable??""]?.source?.query===id)?.recordPicker?.labelField;
@@ -27,7 +29,7 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   const builderIdentity=JSON.stringify([source.scope,reader.scope,page.document,page.sections]),builderEpoch=useRef({identity:builderIdentity,generation:0});
   if(builderEpoch.current.identity!==builderIdentity)builderEpoch.current={identity:builderIdentity,generation:builderEpoch.current.generation+1};
   const builderBases:Record<string,CollectionInput>={};
-  const builderKey=(s:Api.Section,input:CollectionInput)=>JSON.stringify([builderEpoch.current.generation,source.scope,reader.scope,page.document,page.sections,s.id,s.collectionBuilder,s.collectionVariable,s.collectionOutputVariable,snapshot.scalars[page.document?.overlays?.[page.document?.variables?.[s.collectionOutputVariable??""]?.owner??""]?.openVariable??""]===true?session.overlayEpoch(page.document!.variables![s.collectionOutputVariable!]!.owner??""):0,input]);
+  const builderKey=(s:PageUI.Section,input:CollectionInput)=>JSON.stringify([builderEpoch.current.generation,source.scope,reader.scope,page.document,page.sections,s.id,s.collectionBuilder,s.collectionVariable,s.collectionOutputVariable,snapshot.scalars[page.document?.overlays?.[page.document?.variables?.[s.collectionOutputVariable??""]?.owner??""]?.openVariable??""]===true?session.overlayEpoch(page.document!.variables![s.collectionOutputVariable!]!.owner??""):0,input]);
   const virtual=Object.fromEntries((page.sections??[]).filter(s=>s.widget==="collection-builder").flatMap(s=>{const v=page.document?.variables?.[s.collectionVariable??""],q=v?.source?.kind==="plan"?plans[v.source.query??""]:undefined;return q?[[`builder/${s.id}`,{owner:q.owner,object:q.object,input:s.collectionOutputVariable,limit:1} as Api.PageQuery]]:[];}));
   const allPlans={...plans,...virtual};
   const builderSections=(page.sections??[]).filter(s=>s.widget!=="collection-builder"||!page.document?.unusedWidgets?.some(entry=>page.document?.nodes[entry.node]?.section===s.id));

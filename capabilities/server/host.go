@@ -146,6 +146,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 }
 
 func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
+	if err := bindAIInferencePolicy(&services); err != nil {
+		return nil, err
+	}
 	if err := services.Check(); err != nil {
 		return nil, err
 	}

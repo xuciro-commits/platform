@@ -1,9 +1,11 @@
+import type {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
 import {builderSection,refineCollection} from "./collection-builder";
 import {collectionInput} from "./collection-input";
 import {validCollectionInput,collectionFieldsVisible,collectionQuery} from "./collection-input";
 import {validCivilDate,validTimestamp} from "@platform/ui/date";
 import {isStringSet,parseDecimal,isDecimal,type NumberValue,type DecimalValue} from "./decimal";
-import type {Api,pageUIManifest} from "@platform/kernel";
+import type {Api} from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
 import type { QueryView } from "./Session";
@@ -16,7 +18,7 @@ export function boundQueryDefinition(definition: Api.Definition | undefined, bin
  const query=definition.queryVersions?.[binding.sourceVersion];
  return query?{...definition,version:binding.sourceVersion,query,queryVersions:undefined}:undefined;
 }
-export function variablePlan(page:Api.Page,variableID:string):string|undefined {
+export function variablePlan(page:PageUI.Page,variableID:string):string|undefined {
  const variable=page.document?.variables?.[variableID],source=variable?.source;
  if(source?.kind==="plan")return source.query;
  if(source?.kind==="query"){if(page.sections?.some(s=>s.id===source.section&&s.widget==="collection-builder"))return undefined;const section=page.sections?.find((s)=>s.id===source.section);const bound=page.document?.variables?.[section?.collectionVariable??""];if(bound?.source?.kind==="plan")return bound.source.query;}
@@ -29,14 +31,14 @@ const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|NumberValue|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 type QueryGraph={id:string;plans:Record<string,Api.PageQuery>};
-function variableUsesPlan(id:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],seen=new Set<string>()):boolean {
+function variableUsesPlan(id:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],seen=new Set<string>()):boolean {
   if(seen.has(id))return false;seen.add(id);
   const variable=variables[id];
   return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.expression?.args.some(arg=>!!arg.variable&&variableUsesPlan(arg.variable,variables,sections,seen));
 }
 
 /** Only an actual contextual view may consume an independent confirmed record producer. */
-function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],graph:QueryGraph):boolean {
+function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],graph:QueryGraph):boolean {
  const plan=graph.plans[graph.id],input=variables[variable];
  if(plan?.for?.variable!==variable||input?.type!=="record"||input.mode!=="resource"||input.source?.kind!=="record"||!(input.scope==="page"||input.scope==="overlay"&&input.owner===plan.owner&&!!plan.owner))return false;
  const consumer=sections.some(section=>{const id=section.widget==="avatar-stack"&&section.avatar?.contextVariable===variable&&(input.scope!=="page"||!plan.owner)?section.avatar.contextCollectionVariable:section.widget==="observation"&&section.observation?.kind==="statistics"&&section.recordVariable===variable?section.observationContextVariable:section.widget==="scene-3d"&&section.recordVariable===variable?section.sceneSampleCollectionVariable:undefined;const window=variables[id??""];return window?.mode==="resource"&&window.source?.kind==="plan"&&window.source.query===graph.id;});
@@ -46,7 +48,7 @@ function recordContextQueryInput(variable:string,variables:Record<string,Api.Pag
 }
 
 /** Follow original variables, producer inputs and set operands, rather than downloaded rows. */
-function variableDependsOnQuery(variable:string,target:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],plans:Record<string,Api.PageQuery>):boolean {
+function variableDependsOnQuery(variable:string,target:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],plans:Record<string,Api.PageQuery>):boolean {
  const seenVariables=new Set<string>(),seenQueries=new Set<string>();
  const queryDepends=(id:string):boolean=>{
   if(id===target)return true;if(seenQueries.has(id))return false;seenQueries.add(id);
@@ -126,7 +128,7 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 
 /** Build the finite read shape from member-visible descriptors and explicit
  * values. It emits the original RecordQuery, never source text or SQL. */
-export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
+export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:PageUI.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
   if(plan.interface){
     const selected=boundQueryDefinition(named,plan.query),declared=selected?.query,ordering=declared?.sort?.length?declared.sort:["id"];
     if(!plan.query||selected?.ref.app!==plan.query.ref.app||selected.ref.name!==plan.query.ref.name||declared?.interface!==plan.interface||!declared.interfaceShape||plan.object.name||plan.object.app||plan.object.kind||plan.input||plan.for||plan.direction||plan.itemOwner||plan.set||plan.conditions?.length||!Number.isInteger(plan.limit)||plan.limit<1||plan.limit>Math.min(contract.maxLimit,declared.limit||contract.maxLimit)||!Number.isInteger(plan.offset??0)||(plan.offset??0)<0||(plan.offset??0)>contract.maxOffset||plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(ordering))return failed("Interface query window is unavailable or incompatible.");
@@ -147,7 +149,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
   if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
   const field = (name: string) => ["id", "created", "changed"].includes(name) ? { name, type: name === "id" ? "text" : "datetime", ref: undefined } : info.fields.find((field) => field.name === name);
   const usesPlan = (id:string) => variableUsesPlan(id,variables,sections);
-  const read = (binding: Api.PageValue): QueryValueResult => {
+  const read = (binding: PageUI.PageValue): QueryValueResult => {
     if (!!binding.variable === (binding.literal !== undefined)) return { status: "error", code: "Query value needs one variable or literal." };
     if (!binding.variable) {
       const value=binding.literal;
@@ -221,7 +223,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
 
 /** Compile source predicates, never their downloaded windows. Each root owns
  * one immutable request signature and the original read/session lifecycle. */
-export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>Api.Definition|undefined,contract:Contract,sections:Api.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:Api.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
+export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>Api.Definition|undefined,contract:Contract,sections:PageUI.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:PageUI.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
  const compile=(root:string):QueryPlanResult=>{
   let nodes=0;
   const target=plans[root];

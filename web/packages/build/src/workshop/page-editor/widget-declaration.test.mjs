@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {registerHooks} from 'node:module';
 import test from 'node:test';
 
-const manifest=JSON.parse(readFileSync(new URL('../../../../../../capabilities/server/platform/pageui/widgets.json',import.meta.url)));
+const manifest=JSON.parse(readFileSync(new URL('../../../../app/src/pageui/widgets.json',import.meta.url)));
 registerHooks({resolve(specifier,context,next){
  if(specifier==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)};`),shortCircuit:true};
  if(specifier==='@platform/ui')return {url:'data:text/javascript,'+encodeURIComponent('export const t=(s,values={})=>s.replace(/\\{(\\w+)\\}/g,(_,key)=>values[key]??key);'),shortCircuit:true};
@@ -12,7 +12,7 @@ registerHooks({resolve(specifier,context,next){
   throw error;
  }
 }});
-const {widgetDeclarationIssues}=await import('./widget-declaration.ts');
+const {widgetDeclarationIssues}=await import('../../../../app/src/pageui/contract.ts');
 const section=(widget,values={})=>({widget,configVersion:1,...values});
 const issues=(...sections)=>widgetDeclarationIssues({sections});
 

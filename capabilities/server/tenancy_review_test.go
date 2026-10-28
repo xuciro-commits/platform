@@ -23,7 +23,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"github.com/go-jose/go-jose/v4"
-	"platformserver/apps/enterprise"
+	enterprise "platformserver/engine/organization"
 	"platformserver/idp"
 	"platformserver/platform"
 )

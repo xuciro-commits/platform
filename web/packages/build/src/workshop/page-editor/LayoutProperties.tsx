@@ -1,5 +1,6 @@
+import {pageUIManifest} from "@platform/app/page-contract";
+import type {PageUI} from "@platform/app";
 import {loopOwner,overlayOwner,variableAccessible,type LayoutKind} from "../page-layout";
-import {pageUIManifest,type Api} from "@platform/kernel";
 import {widgetContract} from "@platform/app";
 import {Button,Checkbox,Disclosure,Input,Select,InspectorField,InspectorSection,SegmentedChoice,t} from "@platform/ui";
 import {AlignHorizontalJustifyStart,AlignHorizontalJustifyCenter,AlignHorizontalJustifyEnd,AlignHorizontalSpaceBetween,Columns2,Rows3,PanelTop,WrapText,ToolCase,Repeat,BetweenHorizontalStart,SquareDashed,RotateCcw} from "lucide-react";
@@ -19,7 +20,7 @@ function NumberProperty({id,path,label,value,min,max,onChange,prefix,optional=fa
 }
 
 export function LayoutProperties({ document, id, sections=[],onChange, onPatch, onUngroup,ungroupDisabled }: {
-  document: Api.PageDocument; id: string; sections?:Label[];onChange: (kind: LayoutKind) => void; onPatch: (id: string, patch: Partial<Api.PageLayoutNode>) => void; onUngroup: () => void;ungroupDisabled?:boolean;
+  document: PageUI.PageDocument; id: string; sections?:Label[];onChange: (kind: LayoutKind) => void; onPatch: (id: string, patch: Partial<PageUI.PageLayoutNode>) => void; onUngroup: () => void;ungroupDisabled?:boolean;
 }) {
   const inputs=useContext(DraftInputs);
   const node = document.nodes[id];
@@ -62,13 +63,13 @@ export function LayoutProperties({ document, id, sections=[],onChange, onPatch, 
 }
 
 /** Dimensions belong to the stable layout node, including widget leaves. */
-export function LayoutSizing({document,id,onPatch}:{document:Api.PageDocument;id:string;onPatch:(id:string,patch:Partial<Api.PageLayoutNode>)=>void}) {
+export function LayoutSizing({document,id,onPatch}:{document:PageUI.PageDocument;id:string;onPatch:(id:string,patch:Partial<PageUI.PageLayoutNode>)=>void}) {
  const inputs=useContext(DraftInputs),node=document.nodes[id];if(!node)return null;
- const limits=pageUIManifest.layout,update=(key:keyof Api.PageLayoutSize,value:number|string|undefined)=>{
-  const size={...node.size,[key]:value};for(const key of Object.keys(size)as(keyof Api.PageLayoutSize)[])if(size[key]===undefined)delete size[key];
+ const limits=pageUIManifest.layout,update=(key:keyof PageUI.PageLayoutSize,value:number|string|undefined)=>{
+  const size={...node.size,[key]:value};for(const key of Object.keys(size)as(keyof PageUI.PageLayoutSize)[])if(size[key]===undefined)delete size[key];
   onPatch(id,{size:Object.keys(size).length?size:undefined});
  };
- const dimension=(key:keyof Api.PageLayoutSize,label:string,prefix:string)=><NumberProperty id={id} path={`size.${key}`} label={t(label)} prefix={prefix} min={limits.minSize} max={limits.maxSize} value={node.size?.[key] as number|undefined} optional placeholder={t("Automatic")} onChange={value=>update(key,value)}/>;
+ const dimension=(key:keyof PageUI.PageLayoutSize,label:string,prefix:string)=><NumberProperty id={id} path={`size.${key}`} label={t(label)} prefix={prefix} min={limits.minSize} max={limits.maxSize} value={node.size?.[key] as number|undefined} optional placeholder={t("Automatic")} onChange={value=>update(key,value)}/>;
  const constrained=!!(node.size?.minWidth||node.size?.maxWidth||node.size?.minHeight||node.size?.maxHeight||node.size?.weight);
  return <div className="grid content-start"><InspectorSection title={t("Region sizing")} actions={<Button size="icon" variant="ghost" aria-label={t("Reset region sizing")} title={t("Reset region sizing")} onClick={()=>{for(const key of Object.keys(inputs?.values??{}))if(key.startsWith(`${inputs?.scope??""}/layout:${id}/size.`)||key===`${inputs?.scope??""}/layout:${id}/gap`)inputs?.set(key);onPatch(id,{size:undefined,gap:undefined});}}><RotateCcw/></Button>}>
   <div className="grid grid-cols-2 gap-2">{dimension('width','Width (px)','W')}{dimension('height','Height (px)','H')}</div>

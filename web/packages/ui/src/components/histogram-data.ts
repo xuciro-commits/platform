@@ -1,11 +1,12 @@
-import {pageUIManifest,type Api} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+import {type Api} from "@platform/kernel";
 type Rational={n:bigint;d:bigint};
 function bound(text:unknown):Rational|undefined{
  if(typeof text!=="string"||text.length>1024)return;let m=/^(-?(?:0|[1-9][0-9]*))\/([1-9][0-9]*)$/.exec(text);if(m)return {n:BigInt(m[1]!),d:BigInt(m[2]!)};m=/^(-?)(0|[1-9][0-9]*)(?:\.([0-9]+))?$/.exec(text);if(!m)return;return {n:BigInt(`${m[1]}${m[2]}${m[3]??""}`),d:10n**BigInt(m[3]?.length??0)};
 }
 const compare=(a:Rational,b:Rational)=>{const x=a.n*b.d-b.n*a.d;return x<0n?-1:x>0n?1:0;};
 export function validHistogram(value:Api.HistogramResult|undefined,field?:string,bins?:number):value is Api.HistogramResult{
- if(!value||typeof value.field!=="string"||!value.field||field!==undefined&&value.field!==field||bins!==undefined&&value.requestedBins!==bins||!Number.isInteger(value.requestedBins)||value.requestedBins<1||value.requestedBins>pageUIManifest.runtime.histogram.maxBins||!Number.isSafeInteger(value.valid)||value.valid<0||!Number.isSafeInteger(value.missing)||value.missing<0||!Number.isSafeInteger(value.valid+value.missing)||!Array.isArray(value.buckets))return false;
+ if(!value||typeof value.field!=="string"||!value.field||field!==undefined&&value.field!==field||bins!==undefined&&value.requestedBins!==bins||!Number.isInteger(value.requestedBins)||value.requestedBins<1||value.requestedBins>renderingLimits.runtime.histogram.maxBins||!Number.isSafeInteger(value.valid)||value.valid<0||!Number.isSafeInteger(value.missing)||value.missing<0||!Number.isSafeInteger(value.valid+value.missing)||!Array.isArray(value.buckets))return false;
  if(!value.valid)return value.buckets.length===0&&value.minimum===""&&value.maximum==="";
  const min=bound(value.minimum),max=bound(value.maximum);if(!min||!max||compare(min,max)>0)return false;const constant=compare(min,max)===0;
  const edge=(i:number):Rational=>{const k=BigInt(value.requestedBins);return {n:min.n*max.d*k+(max.n*min.d-min.n*max.d)*BigInt(i),d:min.d*max.d*k};};

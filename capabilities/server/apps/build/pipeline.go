@@ -192,7 +192,7 @@ func checkStep(c platform.Caller, s construction.Step) error {
 			return fmt.Errorf("needs a target column")
 		}
 		if s.FormulaExpr == nil {
-			_, err := construction.ValueParseFormula(s.Formula)
+			_, err := platform.FormulaFields(s.Formula)
 			return err
 		}
 		schema := platform.ExprSchema{Refs: map[string]platform.ExprType{}}

@@ -15,11 +15,11 @@ import (
 	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/core"
-	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
+	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 )
 

@@ -37,9 +37,11 @@ func TestMatchingRuleConvergesMaterials(t *testing.T) {
 	submit(construction.PipelineType+".create", construction.PipelineType, "P2", `{"name":"mesparts","title":"MES parts","input":"mes","outputObject":"build.material","key":"part_id"}`)
 	submit(construction.PipelineType+".publish", construction.PipelineType, "P2", `{}`)
 	submit(construction.SchemaDatasetLoad, construction.DatasetType, "sap", `{"rows":[{"matnr":"000000123","partno":"000000123","description":"Hex bolt M8"},{"matnr":"000000456","partno":"000000456","description":"Washer"}]}`)
+	submit(construction.PipelineType+".run", construction.PipelineType, "P1", `{}`)
 	tn.RunPipelines(at)
 	later := at.Add(time.Hour)
 	decide(t, tn, member.ID, construction.ID, construction.SchemaDatasetLoad, construction.DatasetType, "mes", json.RawMessage(`{"rows":[{"part_id":"MES-1","partno":"M-123","description":"BOLT HEX M8 (MES)","weight":0.012},{"part_id":"MES-2","partno":"789","description":"Nut"}]}`), later)
+	decide(t, tn, member.ID, construction.ID, construction.PipelineType+".run", construction.PipelineType, "P2", map[string]any{}, later)
 	tn.RunPipelines(later)
 	page, rerr := tn.Records(member, "build.material", platform.Query{Limit: 50, Sort: []string{"id"}}, later)
 	if rerr != nil {

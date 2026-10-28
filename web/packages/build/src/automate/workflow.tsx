@@ -21,7 +21,7 @@ import { MoreHorizontal, Play, Plus, Search, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor } from "./workflow-binding";
-import { schemaIssue } from "../shared/value-schema";
+import { schemaIssue } from "@platform/app/page-contract";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
 import { bindingPortLabel, capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle, workflowStepClass,
   type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";

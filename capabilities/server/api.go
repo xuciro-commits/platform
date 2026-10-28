@@ -15,8 +15,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	enterprisemodel "platformserver/engine/organization"
 	"platformserver/internal/construction"
-	enterprisemodel "platformserver/internal/enterprise"
 	"platformserver/platform"
 )
 
@@ -290,7 +290,7 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 			}[name]; public != "" {
 				name = public
 			}
-		case "platformserver/internal/enterprise":
+		case "platformserver/engine/organization":
 			if name == "Model" {
 				name = "EnterpriseModel"
 			}
@@ -492,7 +492,6 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 		fmt.Fprintf(&b, "\nexport type %s = %s;\n", name, tsOf(d, 0))
 	}
 	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts. */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
-	b.WriteString("\n/** Authoring narrows manifest-owned properties and ports by widget; Section retains the installed wire format. */\nexport type { PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor } from '../widget-authoring';\n")
 	limits, _ := json.Marshal(map[string]int{"maxRegions": platform.MaxImageRegions, "maxLabelBytes": platform.MaxImageRegionLabelBytes, "maxIDBytes": platform.MaxImageRegionIDBytes})
 	fmt.Fprintf(&b, "\n/** Files owns normalized raster region bounds. */\nexport const imageRegionLimits = %s as const;\n", limits)
 	return b.String()

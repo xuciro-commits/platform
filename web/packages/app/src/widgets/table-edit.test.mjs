@@ -1,7 +1,7 @@
 import {registerHooks} from "node:module";
 import {readFileSync} from "node:fs";
-const manifest=JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url)));
-registerHooks({resolve(specifier,context,next){if(specifier==="@platform/kernel")return {url:"data:text/javascript,"+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)}`),shortCircuit:true};try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
+const manifest=JSON.parse(readFileSync(new URL("../pageui/widgets.json",import.meta.url)));
+registerHooks({resolve(specifier,context,next){if(specifier==="@platform/kernel")return {url:"data:text/javascript,"+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)}`),shortCircuit:true};try{return next(specifier,context)}catch(error){if((specifier.startsWith("./")||specifier.startsWith("../"))&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
 import assert from "node:assert/strict";
 import test from "node:test";
 const {tableEditableFields,sectionWriteActions,defaultTableEdit}=await import("./table-edit.ts");

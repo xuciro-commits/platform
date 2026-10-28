@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import {collectionInput,collectionQuery,validCollectionInput,type CollectionInput} from './collection-input';
 import type {Api} from '@platform/kernel';
 import type {EntityInfo,Filter} from '@platform/ui';
@@ -18,7 +19,7 @@ export function builderConditions(filters:Filter[],fields:string[],info:EntityIn
    const decimal=parseDecimal(value);if(!decimal||field.type==='integer'&&decimal.value.includes('.'))return;
    value=decimal;
   }else if(typeof value!=='string'||new TextEncoder().encode(value).length>4096||field.type==='choice'&&!field.choices?.includes(value))return;
-  result.push({field:f.field,op:operators[f.operator]!,value:{literal:value as Api.PageValue['literal']}});
+  result.push({field:f.field,op:operators[f.operator]!,value:{literal:value as PageUI.PageValue['literal']}});
  }
  return result;
 }
@@ -29,7 +30,7 @@ export function refineCollection(input:CollectionInput,conditions:Api.PageQueryC
  const output=collectionInput(input.object,query,input.bindings,input.sortLocked);
  return validCollectionInput(output)?output:undefined;
 }
-export function builderSection(input:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],owner?:string):Api.Section|undefined {
+export function builderSection(input:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],owner?:string):PageUI.Section|undefined {
  const v=variables[input];if(v?.writable||v?.source&&Object.keys(v.source).some(key=>!['kind','section'].includes(key))||v?.type!=='object-set'||v.mode!=='resource'||v.source?.kind!=='query'||v.owner!==owner||v.scope!==(owner?'overlay':'page'))return;
  return sections.find(s=>s.widget==='collection-builder'&&s.id===v.source!.section&&s.collectionOutputVariable===input&&s.collectionBuilder);
 }

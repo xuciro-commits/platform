@@ -3,7 +3,7 @@ import test from "node:test";
 import {readFileSync} from "node:fs";
 import {registerHooks} from "node:module";
 
-const manifest=JSON.parse(readFileSync(new URL("../../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url)));
+const manifest=JSON.parse(readFileSync(new URL("../../../../app/src/pageui/widgets.json",import.meta.url)));
 const loaded=[];
 // Isolate React scheduling and inspector UI; exercise the production assembly,
 // shared contract gate and lazy loader without evaluating editor dependencies.

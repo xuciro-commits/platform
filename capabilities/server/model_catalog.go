@@ -4,8 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -70,47 +68,19 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	if ok && !refresh && time.Since(cached.at) < 10*time.Minute {
 		return cached.models, nil, nil
 	}
-	var models []CatalogModel
-	if pv.Wire == "anthropic" {
-		var failure *AIError
-		models, failure = t.anthropicModels(pv)
-		if failure != nil {
-			return nil, nil, failure
-		}
-	} else {
-		models = []CatalogModel{}
-		path := "/models"
-		seen := map[string]bool{}
-		for {
-			status, raw, failure := t.aiRequest(pv, http.MethodGet, path, nil, 30*time.Second)
-			if failure != nil {
-				return nil, nil, failure
-			}
-			var page struct {
-				Data    []json.RawMessage `json:"data"`
-				HasMore bool              `json:"has_more"`
-				LastID  string            `json:"last_id"`
-			}
-			if status >= 300 || json.Unmarshal(raw, &page) != nil {
-				return nil, nil, &AIError{Status: status, Detail: fmt.Sprintf("catalog: %s", strings.TrimSpace(string(raw[:min(len(raw), 200)])))}
-			}
-			for _, item := range page.Data {
-				model, err := catalogModel(pv, item, time.Now().UTC())
-				if err != nil {
-					return nil, nil, &AIError{Status: 502, Detail: err.Error()}
-				}
-				models = append(models, model)
-			}
-			if !page.HasMore {
-				break
-			}
-			if page.LastID == "" || seen[page.LastID] {
-				return nil, nil, &AIError{Status: 502, Detail: "The provider returned an invalid catalog cursor"}
-			}
-			seen[page.LastID] = true
-			path = "/models?after_id=" + url.QueryEscape(page.LastID)
-		}
+	entries, failure := t.modelProvider(pv).Models(pv)
+	if failure != nil {
+		return nil, nil, failure
 	}
+	models := []CatalogModel{}
+	for _, entry := range entries {
+		model, err := catalogModel(pv, entry, time.Now().UTC())
+		if err != nil {
+			return nil, nil, &AIError{Status: 502, Detail: err.Error()}
+		}
+		models = append(models, model)
+	}
+
 	slices.SortFunc(models, func(a, b CatalogModel) int { return strings.Compare(a.ID, b.ID) })
 	catalogs.Lock()
 	catalogs.byKey[key] = cachedCatalog{at: time.Now(), models: models}

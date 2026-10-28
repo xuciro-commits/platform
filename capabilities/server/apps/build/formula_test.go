@@ -23,7 +23,7 @@ func TestFormula(t *testing.T) {
 	if err := checkFormulas([]construction.Field{{Name: "a", Type: "integer", Formula: "b + 1"}}); err == nil {
 		t.Fatal("an unknown operand passed")
 	}
-	if _, err := construction.ValueParseFormula("1 +"); err == nil {
+	if _, err := platform.FormulaFields("1 +"); err == nil {
 		t.Fatal("a broken formula parsed")
 	}
 	type rec struct {

@@ -1,8 +1,9 @@
+import type {PageUI} from "@platform/app";
 import type {Api} from "@platform/kernel";
 
-type Producer=Pick<Api.Section,"id"|"widget"|"collectionVariable"|"graphExplorer"|"observation">&{object?:string|Api.AssetRef};
+type Producer=Pick<PageUI.Section,"id"|"widget"|"collectionVariable"|"graphExplorer"|"observation">&{object?:string|Api.AssetRef};
 /** Resolve the original typed record declaration, without reading or casting records. */
-export function originalRecordObject(document:Api.PageDocument,sections:Producer[],variable:string,root?:Api.AssetRef):Api.AssetRef|undefined {
+export function originalRecordObject(document:PageUI.PageDocument,sections:Producer[],variable:string,root?:Api.AssetRef):Api.AssetRef|undefined {
  const v=document.variables?.[variable];if(v?.type!=="record")return;
  if(v.source?.object)return v.source.object;
  const input=Object.values(document.interface?.inputs??{}).find(p=>p.variable===variable);if(input?.object)return input.object;

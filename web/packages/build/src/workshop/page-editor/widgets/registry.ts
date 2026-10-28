@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import { createWidgetDefinitions,widgetContracts } from "@platform/app";
 import {lazyInspector} from "./lazy-inspector";
 import type {ComponentType} from "react";
@@ -6,7 +7,7 @@ import type {EntityInfo} from "@platform/ui";
 import type {AuthoringSection} from "../draft";
 import type {ButtonInspectorPorts} from "./ButtonInspector";
 
-export type WidgetBindingInspectorPorts={section:AuthoringSection;sections:AuthoringSection[];document:Api.PageDocument;object:string;info?:EntityInfo;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void;onResourcesChange:(patch:Partial<AuthoringSection>,variables:Record<string,Api.PageVariable>)=>void};
+export type WidgetBindingInspectorPorts={section:AuthoringSection;sections:AuthoringSection[];document:PageUI.PageDocument;object:string;info?:EntityInfo;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void;onResourcesChange:(patch:Partial<AuthoringSection>,variables:Record<string,Api.PageVariable>)=>void};
 
 const CollectionBuilderInspector=lazyInspector(()=>import("./CollectionBuilderInspector").then(module=>module.CollectionBuilderInspector));
 const MapInspector=lazyInspector(()=>import("./SpatialInspectors").then(module=>module.MapInspector));

@@ -1,7 +1,10 @@
+import {pageUIManifest} from "../pageui/manifest";
+import {pagePresentationIssues} from "../pageui/contract";
+import type * as PageUI from "../pageui/types";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, test } from "vitest";
 import { StrictMode, useState, type ReactNode } from "react";
-import { pageUIManifest, type Api, type EdgeClient } from "@platform/kernel";
+import {type Api, type EdgeClient} from "@platform/kernel";
 import { ApplicationPage, ApplicationSessionsProvider, ComposedPage, HostContext, useHost, type Definition, type Host } from "../index";
 import { CatalogFixture, FixtureClient, sampleDefinitions, samplePage, sampleObject, sampleRecords, sampleSource } from "../catalog.fixtures";
 import { usePageEffects } from "./PageNavigation";
@@ -124,8 +127,10 @@ test("an embedded published page inherits its author's preview boundary", async 
   class EmbeddedClient extends RecordingClient {
     override async pageContent() { return { ...samplePage, contentVersion, page }; }
   }
-  const parent = { ...page, sections: [{ id: "embedded", widget: "embedded-page", configVersion: 1, title: "Nested workspace",
+  const parent = { ...page, document: {formatVersion:2, uiProfile:pageUIManifest.uiProfile, root:"embedded", nodes:{embedded:{kind:"widget",section:"embedded"}}}, sections: [{ id: "embedded", widget: "embedded-page", configVersion: 1, title: "Nested workspace",
     embedding: { kind: "module", page: { ref: samplePage.ref, sourceVersion: samplePage.version }, contentVersion, interfaceVersion: 0 } }] };
+  expect(pagePresentationIssues(page)).toEqual([]);
+  expect(pagePresentationIssues(parent)).toEqual([]);
   await renderedPage(
     <CatalogFixture client={new EmbeddedClient(spy.events)} decide={spy.decide} definitions={[...sampleDefinitions, appDefinition]}>
       <ApplicationSessionsProvider><ApplicationPage pageRef={samplePage.ref} route={previewRoute} preview>
@@ -327,7 +332,7 @@ test("preview never invokes a code capability and a late live result does not st
 
 test("an automatic compute resource cannot invoke after its delayed descriptor returns to preview", async () => {
   const spy = makeSpy(), client: EdgeClient = new FixtureClient({}), binding: Api.AssetBinding = { ref: { app: "catalog", kind: "compute", name: "sample" }, sourceVersion: "1.compute-1" };
-  const computed: Api.Page = { ...samplePage.page, layout: "composed", sections: [{ id: "records", widget: "table", configVersion: 1 }, { id: "result", widget: "gauge", configVersion: 1, gaugeValueVariable: "computed", gauge: { max: 100 } }], document: {
+  const computed: PageUI.Page = { ...samplePage.page, layout: "composed", sections: [{ id: "records", widget: "table", configVersion: 1 }, { id: "result", widget: "gauge", configVersion: 1, gaugeValueVariable: "computed", gauge: { max: 100 } }], document: {
     formatVersion: 2, uiProfile: pageUIManifest.uiProfile, root: "root", nodes: { root: { kind: "rows", children: ["records", "result"] }, records: { kind: "widget", section: "records" }, result: { kind: "widget", section: "result" } }, variables: {
       selected: { scope: "page", mode: "resource", type: "record", source: { kind: "record", section: "records" } }, computed: { scope: "page", mode: "resource", type: "number", source: { kind: "compute", compute: { operation: binding, recordVariable: "selected", inputs: { quantity: { source: "subject", path: ["quantity"] } } } } },
     },

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/aigateway"
 	"platformserver/internal/acceptance"
 	"platformserver/platform"
 	"strconv"
@@ -181,4 +182,16 @@ func modelConfigurationDigest(model platform.AIModel, provider platform.AIProvid
 		identity = append(identity, *binding)
 	}
 	return acceptance.Digest(identity)
+}
+
+func (t *Tenant) modelStage(binding platform.AIModelBinding, provider platform.AIProvider, stage string) (platform.AIModelBinding, *kernel.Error) {
+	policy := platform.AIInferencePolicy{}
+	if t.services.AIInference != nil {
+		policy = *t.services.AIInference
+	}
+	pinned, err := aigateway.Bind(policy, provider, binding, stage)
+	if err != nil {
+		return pinned, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
+	}
+	return pinned, nil
 }

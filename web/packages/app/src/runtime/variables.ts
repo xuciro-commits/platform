@@ -1,6 +1,7 @@
+import type {pageUIManifest} from "../pageui/manifest";
 import {checkRule,evaluateRule,lowerPageRule,pageRuleKind,pageRuleFits,pageRuleSchema,ruleDependencies,type RuleContext,type RuleValue} from "./rule-engine";
 import {isNumber,isStringSet,isDecimal,parseDecimal,decimalDraft,type ScalarValue} from "./decimal";
-import type { Api, pageUIManifest } from "@platform/kernel";
+import type {Api} from "@platform/kernel";
 import type { QueryWindow, RecordReference } from "./Session";
 
 type Contract = typeof pageUIManifest.runtime;

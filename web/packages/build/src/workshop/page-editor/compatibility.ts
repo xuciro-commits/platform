@@ -1,6 +1,6 @@
+import type {PageUI} from "@platform/app";
 import {pageUIProfile,supportsPageUIProfile,widgetContract,pageVariableContract} from "@platform/app";
 import {queryInventoryBudget} from "@platform/app/query-inventory";
-import type {Api} from "@platform/kernel";
 import type {PageDraft} from "./draft";
 
 type CompatibilityIssue={section:string;widget:string;version?:number;code:"unknown-widget"|"unsupported-config"};
@@ -32,7 +32,7 @@ export function pageCompatibility(draft:PageDraft){
   upgrade:canUpgrade?Object.freeze({baseline:JSON.stringify(draft),from:draft.document.uiProfile,to:pageUIProfile}) satisfies ProfileUpgrade:undefined};
 }
 
-function budget(draft:PageDraft){return queryInventoryBudget(draft.document,draft.sections as unknown as Api.Section[],pageVariableContract.query);}
+function budget(draft:PageDraft){return queryInventoryBudget(draft.document,draft.sections as unknown as PageUI.Section[],pageVariableContract.query);}
 
 /** Apply only the reviewed profile change to an unchanged local draft. The host
  * still validates bindings and permissions when saving and freezing a candidate. */

@@ -1,9 +1,10 @@
+import type {PageUI} from "@platform/app";
 import type {Api,ActionDeclaration} from "@platform/kernel";
 import type {EntityInfo} from "@platform/ui";
 import {actionTableParameters} from "@platform/app/action-table";
 import {loopOwner,overlayOwner} from "../page-layout";
 import type {AuthoringSection} from "./draft";
-export function recordWorkProblem(document:Api.PageDocument,s:AuthoringSection,pageObject:string,entity:(name:string)=>EntityInfo|undefined,catalog:ActionDeclaration[],definitions:Api.Definition[]):boolean {
+export function recordWorkProblem(document:PageUI.PageDocument,s:AuthoringSection,pageObject:string,entity:(name:string)=>EntityInfo|undefined,catalog:ActionDeclaration[],definitions:Api.Definition[]):boolean {
  const tiles=s.recordList?.layout==="tiles";if(!["action-table","notepad"].includes(s.widget)&&!tiles)return !!s.actionTable||!!s.notepadVariable;
  const leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined;
  if(!leaf||loopOwner(document,leaf)||Number(document.uiProfile.split(".").at(-1))<81)return true;

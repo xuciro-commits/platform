@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import type {Api} from "@platform/kernel";
 import {loopOwner,overlayOwner} from "../page-layout";
 import {collaborationRecordSource} from "./collaboration";
@@ -7,7 +8,7 @@ const explorationWidgets=["resource-list","asset-directory","graph-explorer","ve
 const sameAsset=(a:Api.AssetRef|undefined,b:Api.AssetRef|undefined)=>!!a&&!!b&&a.app===b.app&&a.kind===b.kind&&a.name===b.name;
 function retainedExplorationAsset(definitions:Api.Definition[],b:Api.AssetBinding|undefined){if(!b?.sourceVersion)return undefined;const d=definitions.find(d=>sameAsset(d.ref,b.ref));return d&&(d.version===b.sourceVersion||b.ref.kind==="link-type"&&d.linkVersions?.[b.sourceVersion]||b.ref.kind==="query"&&d.queryVersions?.[b.sourceVersion]||b.ref.kind==="property"&&d.propertyVersions?.[b.sourceVersion])?d:undefined;}
 export function retainedExplorationLink(definitions:Api.Definition[],b:Api.AssetBinding|undefined){const d=retainedExplorationAsset(definitions,b);return b?.ref.kind==="link-type"?(d?.linkVersions?.[b.sourceVersion]??(d?.version===b.sourceVersion?d.linkType:undefined)):undefined;}
-export function explorationViewProblem(document:Api.PageDocument,sections:AuthoringSection[],s:AuthoringSection,pageObject:string,entity:(name:string)=>Info|undefined,definitions:Api.Definition[]):boolean {
+export function explorationViewProblem(document:PageUI.PageDocument,sections:AuthoringSection[],s:AuthoringSection,pageObject:string,entity:(name:string)=>Info|undefined,definitions:Api.Definition[]):boolean {
  if(!explorationWidgets.includes(s.widget))return false;
  if(s.resourceList&&s.widget!=="resource-list"||s.assetDirectory&&s.widget!=="asset-directory"||s.graphExplorer&&s.widget!=="graph-explorer"||s.vertexGraph&&s.widget!=="vertex-graph")return true;
  const leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined,scope=owner?"overlay":"page",object=s.object||pageObject,info=entity(object),title=(o:string,f:string)=>f==="id"||!!entity(o)?.fields.some(v=>v.name===f&&["text","longtext","choice","reference"].includes(v.type));

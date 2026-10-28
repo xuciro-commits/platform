@@ -228,12 +228,16 @@ func (a *Agents) DueAgentTurns(now time.Time) []AgentTurn {
 				x.Stop = "the model " + name + " is not enabled"
 				break
 			}
-			if why := h.ReserveAgentModel(a.AgentPrincipal(run.Agent), model, now); why != "" { // the door every call passes
-				x.Stop = why
+			if run.ModelBinding == nil || run.ModelBinding.Stage != platform.AIStageRuntime {
+				x.Stop = "the run has no trusted execution stage; start a new run"
 				break
 			}
 			if !h.AgentProviderAvailable(pv.ID, now) {
-				continue // its provider's breaker is open: the run waits
+				continue
+			}
+			if why := h.ReserveAgentModel(a.AgentPrincipal(run.Agent), model, now); why != "" {
+				x.Stop = why
+				break
 			}
 			x.Model, x.Provider, x.Request = model, pv, a.prompt(c, d, run, name, now)
 			x.Request.Run = run.ID

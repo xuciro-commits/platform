@@ -1,7 +1,8 @@
+import {pageUIManifest} from "../pageui/manifest";
 import {collectionInput} from "./collection-input";
 import {usePageAggregates} from "./PageAggregates";
 import {useEffect} from "react";
-import {pageUIManifest,type Api} from "@platform/kernel";
+import {type Api} from "@platform/kernel";
 import {useHost,findDefinition} from "../index";
 import type {ApplicationSession} from "./ApplicationSessions";
 import {compileQueryPlans,queryView,boundQueryDefinition,planKey,windowFiltersLocked} from "./query-plans";

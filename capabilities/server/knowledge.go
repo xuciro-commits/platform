@@ -723,8 +723,12 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if err != nil {
 		return nil, fmt.Errorf("the model %s is not enabled", name)
 	}
-	if _, problem := model.Resolve("embedding", platform.ModelOptions{}, 0); problem != nil {
+	binding, problem := model.Resolve("embedding", platform.ModelOptions{}, 0)
+	if problem != nil {
 		return nil, problem
+	}
+	if _, refusal := t.modelStage(binding, pv, platform.AIStageRuntime); refusal != nil {
+		return nil, refusal
 	}
 	if pv.Wire == "anthropic" {
 		return nil, fmt.Errorf("the provider %s does not embed", pv.ID)
@@ -735,9 +739,8 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if why := t.reserve(platform.Member{ID: "app:" + platform.KnowledgeApp, Tenant: t.ID}, model, now); why != "" {
 		return nil, fmt.Errorf("%s", why)
 	}
-	body, _ := json.Marshal(map[string]any{"model": model.Model, "input": input})
 	started := time.Now()
-	status, answer, failure := t.aiRequest(pv, http.MethodPost, "/embeddings", body, aiTimeout)
+	status, answer, failure := t.modelProvider(pv).Embeddings(pv, model.Model, input)
 	t.breakers.report("ai:"+pv.ID, failure == nil && status < 500 && status != http.StatusTooManyRequests, now)
 	var out struct {
 		Data []struct {

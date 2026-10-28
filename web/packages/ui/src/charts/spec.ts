@@ -1,3 +1,4 @@
+import type {MetricPresentationOptions} from "../presentation";
 import type {Api} from "@platform/kernel";
 // The platform's visualization spec: what a chart shows, never how a
 // library draws it. After the Grammar of Graphics and Vega-Lite: data, a mark,
@@ -41,7 +42,7 @@ export type ChartData =
 export type ChartSpec = {
   /** Unaggregated inline rows retain identity and order, including repeated labels. */
   rowIdentity?: string;
-  metric?:Api.PageMetricPresentation;
+  metric?:MetricPresentationOptions;
   title?: string;
   description?: string;
   data: ChartData;

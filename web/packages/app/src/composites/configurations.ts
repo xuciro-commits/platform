@@ -1,11 +1,12 @@
+import type * as PageUI from "../pageui/types";
 import type {Api} from '@platform/kernel';
 
 type Source={type:string;fields:Api.FieldInfo[];records:Record<string,unknown>[]};
-type Configuration={page:Api.Page;sources:Record<string,Source>;answer:Api.PageCompositeResult};
+type Configuration={page:PageUI.Page;sources:Record<string,Source>;answer:Api.PageCompositeResult};
 const field=(name:string,type:Api.FieldInfo['type']='text',ref?:string):Api.FieldInfo=>({name,title:name,type,...name==='name'?{search:true}:{},...ref?{ref}:{}});
 const view=(type:string,roles:Record<string,Api.FieldRef>={}):Api.ModelViewBinding=>({model:{type},roles});
 const ref=(name:string):Api.FieldRef=>({name});
-function page(name:string,title:string,object:string,sections:Api.Section[]):Api.Page{
+function page(name:string,title:string,object:string,sections:PageUI.Section[]):PageUI.Page{
  return {name,title,object:{app:object.split('.')[0]!,kind:'object',name:object},layout:'composed',listFields:[],detailFields:[],actions:[],sections,document:{formatVersion:2,uiProfile:'platform.page.v2.111',root:'root',nodes:{root:{kind:'rows',children:sections.map(s=>s.id!)},...Object.fromEntries(sections.map(s=>[s.id!,{kind:'widget',section:s.id}]))},variables:{}}};
 }
 

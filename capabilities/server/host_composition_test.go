@@ -11,6 +11,41 @@ import (
 	"time"
 )
 
+func TestStaticHostMaintenanceWithoutDynamicDefinitions(t *testing.T) {
+	tenant := composeTenant(t, "system", []Seat{seatOf("operator", "platform:admin")})
+	host := NewHost(Tokens(map[string]string{"operator-token": "operator", "ops-token": "ops", "viewer-token": "viewer"}), tenant)
+	host.HostAdmins = map[string]bool{"ops": true}
+	handler := host.Handler()
+	get := func(path, token string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.Header.Set(TenantHeader, tenant.ID)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	for _, isolated := range []bool{false, true} {
+		if isolated {
+			tenant.quarantine(errors.New("dynamic definitions could not be recovered"))
+		}
+		for _, path := range []string{"/healthz", "/v1/host/me", "/v1/host/overview", "/v1/host/tenants/system"} {
+			if w := get(path, "ops-token"); w.Code != http.StatusOK {
+				t.Fatalf("static maintenance %s isolated=%t: %d %s", path, isolated, w.Code, w.Body.String())
+			}
+		}
+		if w := get("/v1/health", "operator-token"); w.Code != http.StatusOK {
+			t.Fatalf("tenant diagnostics isolated=%t: %d %s", isolated, w.Code, w.Body.String())
+		}
+		if w := get("/v1/host/overview", "viewer-token"); w.Code != http.StatusUnauthorized {
+			t.Fatalf("maintenance leaked to a non-administrator: %d", w.Code)
+		}
+	}
+	if w := get("/v1/me", "operator-token"); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("dynamic tenant remained available after isolation: %d", w.Code)
+	}
+}
+
 func TestFoundationalSelectionPreservesAcceptedStateAndNeedsMaintenanceRestart(t *testing.T) {
 	ctx := context.Background()
 	store, err := OpenFileJournal(t.TempDir())

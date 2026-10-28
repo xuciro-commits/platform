@@ -1,9 +1,10 @@
+import type {PageUI} from "@platform/app";
 import type {Api} from "@platform/kernel";
 import type {EntityInfo} from "@platform/ui";
 import {loopOwner,overlayOwner} from "../page-layout";
 import type {AuthoringSection} from "./draft";
 
-export function collectionAnalysisProblem(document:Api.PageDocument,s:AuthoringSection,pageObject:string,entity:(name:string)=>EntityInfo|undefined,definitions:Api.Definition[]):boolean {
+export function collectionAnalysisProblem(document:PageUI.PageDocument,s:AuthoringSection,pageObject:string,entity:(name:string)=>EntityInfo|undefined,definitions:Api.Definition[]):boolean {
  if(s.widget!=="collection-analysis")return !!s.analysis||!!s.analysisXVariable||!!s.analysisYVariable||!!s.analysisCountVariable||!!s.analysisMeanVariable;
  const c=s.analysis,v=document.variables?.[s.collectionVariable??""],q=document.queries?.[v?.source?.query??""],leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined,object=s.object||pageObject,info=entity(object);
  if(!c||!leaf||loopOwner(document,leaf)||Number(document.uiProfile.split(".").at(-1))<80||!info||v?.type!=="object-set"||v.mode!=="resource"||v.source?.kind!=="plan"||v.scope!==(owner?"overlay":"page")||v.owner!==owner||!q||q.owner!==owner||q.itemOwner||q.object.name!==object||info.app!==q.object.app||s.selection||s.selectionVariable||s.selectionSetVariable||s.recordVariable||s.filterVariable||s.parentSelection||s.relation||s.query||s.fields?.length||s.actions?.length||s.function||s.operation||s.inlineEdit||Object.keys(s.inputs??{}).length)return true;

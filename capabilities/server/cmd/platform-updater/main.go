@@ -1,18 +1,6 @@
-// Command platform-updater builds and swaps the platform's own releases. It is
-// the only process that runs a compiler or replaces the running host: the host
-// records a request and reports the outcome, and never rebuilds itself.
-//
-// Three steps, each a separate invocation, so an operator (or a Make target)
-// sees exactly what happened:
-//
-//	platform-updater build    -host URL -token T -change <id>
-//	platform-updater activate -host URL -token T -release <n>
-//	platform-updater swap     -root DIR -host URL -token T -activation ID
-//
-// A build reads the approved change from the system tenant, materializes its
-// frozen files into a fresh work tree, builds with the fixed commands, and
-// reports the evidence back as a decision. `swap` stages a requested activation;
-// the supervisor probes it, replaces the host, and recovers on failure.
+// Command platform-updater supervises retained platform releases and reconciles
+// unfinished results. Dynamic source builds and new activation requests are
+// frozen; maintenance keeps their original identities and sealed artifacts.
 package main
 
 import (
@@ -28,14 +16,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
-	"strconv"
 	"strings"
 	"time"
 
-	"platformserver/internal/host"
 	"platformserver/internal/systembuild"
 	"platformserver/internal/systemscope"
+	"platformserver/platform"
 )
 
 func main() {
@@ -44,18 +30,16 @@ func main() {
 	}
 	var err error
 	switch os.Args[1] {
-	case "build":
-		err = build(os.Args[2:])
-	case "activate":
-		err = activate(os.Args[2:])
+	case "build", "activate", "watch":
+		err = errors.New("dynamic self-hosting is frozen; use reconcile for retained results or serve for the selected release")
 	case "finish":
 		err = finish(os.Args[2:])
 	case "swap":
 		err = swap(os.Args[2:])
 	case "serve":
 		err = serve(os.Args[2:])
-	case "watch":
-		err = watch(os.Args[2:])
+	case "reconcile":
+		err = reconcile(os.Args[2:])
 	case "export":
 		err = export(os.Args[2:])
 	default:
@@ -68,22 +52,19 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `platform-updater build    -root DIR -host URL -token T -change ID
-platform-updater activate -host URL -token T -release N
-platform-updater finish   -host URL -token T -activation ID -result active|rolled-back|aborted -evidence TEXT
-platform-updater swap     -root DIR -host URL -token T -activation ID
-platform-updater serve    -root DIR -addr HOST:PORT [-web DIR] [-data DIR] [-tenants FILE] [-host URL -token T] [-- HOST_ARGS...]
-platform-updater watch    -root DIR -host URL -token T [-every 5s]
-platform-updater export   -root DIR -release N [-out DIR]
+	fmt.Fprint(os.Stderr, `platform-updater finish    -host URL -token T -activation ID -result active|rolled-back|aborted -evidence TEXT
+platform-updater swap      -root DIR -host URL -token T -activation ID
+platform-updater serve     -root DIR -addr HOST:PORT [-web DIR] [-data DIR] [-tenants FILE] [-host URL -token T] [-- HOST_ARGS...]
+platform-updater reconcile -root DIR -host URL -token T
+platform-updater export    -root DIR -release N [-out DIR]
 
-build compiles an approved change and reports what it produced.
-activate asks the host for a window before the swap.
-swap selects a requested release, including the first release on a new host.
-serve runs the host, and replaces it when a newer release is installed.
-watch builds every approved change and swaps every requested activation it
-      sees, so an approval in the Platform becomes a release with no terminal.
-finish reports a swap's outcome to the system tenant.
-export verifies and copies the release's complete sealed source tree.
+Dynamic source builds, approvals and new activations are frozen.
+swap stages an already requested activation for explicit maintenance.
+serve supervises the selected release and completes its original outcome.
+reconcile reports retained build results and terminates unstarted old work;
+          it never compiles source or selects another release.
+finish reports an existing activation's observed outcome to its original owner.
+export verifies and copies a release's complete sealed source tree.
 `)
 	os.Exit(2)
 }
@@ -168,11 +149,6 @@ func (c client) call(method, path string, body any, out any) error {
 	return nil
 }
 
-// submit sends one decision for the system app and returns the accepted record.
-func (c client) submit(schema, typ, id, authority string, payload map[string]any) (map[string]any, error) {
-	return c.submitKey(schema, typ, id, authority, randomKey(), payload)
-}
-
 func (c client) submitKey(schema, typ, id, authority, key string, payload map[string]any) (map[string]any, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -193,53 +169,17 @@ func (c client) submitKey(schema, typ, id, authority, key string, payload map[st
 	return out, callErr
 }
 
-func build(args []string) error {
-	flags := flag.NewFlagSet("build", flag.ExitOnError)
-	root := flags.String("root", ".", "repository root the build reuses toolchain and caches from")
+// Reconciliation is an explicit maintenance pass, not a subscription to new work.
+func reconcile(args []string) error {
+	flags := flag.NewFlagSet("reconcile", flag.ExitOnError)
+	root := flags.String("root", ".", "repository root holding retained results")
 	hostURL := flags.String("host", "http://127.0.0.1:8495", "host base URL")
-	token := flags.String("token", os.Getenv("PLATFORM_TOKEN"), "access token of a system publisher")
-	changeID := flags.String("change", "", "the approved change id")
+	token := flags.String("token", os.Getenv("PLATFORM_TOKEN"), "system publisher token")
 	flags.Parse(args)
-	if *changeID == "" {
-		return errors.New("build needs -change")
-	}
-	c := client{host: *hostURL, token: *token, tenant: systemscope.Tenant}
-	change, err := readChange(c, *changeID)
-	if err != nil {
-		return err
-	}
-	if change.State != "approved" {
-		return fmt.Errorf("change %s is %s, not approved", change.ID, change.State)
-	}
-	return buildFor(c, *root, change)
+	return reconcileRetained(client{host: *hostURL, token: *token, tenant: systemscope.Tenant}, *root)
 }
 
-// watch is the loop that closes self-hosting: an approval is a record, and
-// this process turns records into releases without anybody typing a command.
-// It builds each approved change once, then the release a publisher asks for.
-// The supervisor still owns the swap: watch only writes what it decided, the
-// same file `swap` writes. The supervisor owns candidate health checks.
-func watch(args []string) error {
-	flags := flag.NewFlagSet("watch", flag.ExitOnError)
-	root := flags.String("root", ".", "repository root")
-	hostURL := flags.String("host", "http://127.0.0.1:8495", "host base URL")
-	token := flags.String("token", os.Getenv("PLATFORM_TOKEN"), "access token of a system publisher")
-	every := flags.Duration("every", 5*time.Second, "how often to look for work")
-	once := flags.Bool("once", false, "handle the work visible now, then exit")
-	flags.Parse(args)
-	c := client{host: *hostURL, token: *token, tenant: systemscope.Tenant}
-	for {
-		if err := watchOnce(c, *root); err != nil {
-			fmt.Fprintln(os.Stderr, "platform-updater watch:", err)
-		}
-		if *once {
-			return nil
-		}
-		time.Sleep(*every)
-	}
-}
-
-func watchOnce(c client, root string) error {
+func reconcileRetained(c client, root string) error {
 	if err := reportPending(c, filepath.Join(root, ".build", "system", "current.json")); err != nil {
 		return err
 	}
@@ -250,13 +190,13 @@ func watchOnce(c client, root string) error {
 	for _, change := range changes {
 		switch change.State {
 		case "approved":
-			if err := buildFor(c, root, change); err != nil {
+			if err := resumeBuild(c, root, change); err != nil {
 				return fmt.Errorf("build %s: %w", change.ID, err)
 			}
 		case "published":
 			// The accepted build may precede a crash while arranging its
 			// versioned paths. Its final manifest marks completed installation;
-			// do not rehash every historical source tree on each watch tick.
+			// do not rehash every historical source tree on each maintenance pass.
 			if _, err := os.Stat(filepath.Join(root, ".build", "system", "releases", fmt.Sprintf("%04d.json", change.Release))); err == nil {
 				continue
 			} else if !os.IsNotExist(err) {
@@ -277,66 +217,40 @@ func watchOnce(c client, root string) error {
 	if err := c.call("GET", "/v1/system-activations", nil, &activations); err != nil {
 		return err
 	}
-	slices.SortFunc(activations, func(a, b activationView) int { return b.At.Compare(a.At) })
+	selected, err := readState(filepath.Join(root, ".build", "system", "current.json"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	for _, activation := range activations {
-		if activation.Result != "requested" {
+		if activation.Result != "requested" || activation.ID == selected.Activation {
 			continue
 		}
-		if !activation.ready(time.Now()) {
-			return nil
-		}
-		return stageActivation(c, root, activation)
+		// A missing selection is not proof that no host already switched.
+		// Keep the request intact until static maintenance verifies the actual
+		// process and submits an explicit outcome for this exact activation.
+		return fmt.Errorf("activation %s is requested but not selected; verify the actual running release before using finish or swap", activation.ID)
 	}
 	return nil
 }
 
-// buildFor compiles one approved change and reports what it produced, using
-// the same path as the `build` command.
-func buildFor(c client, root string, change changeView) error {
+// Resume only a retained result under its original request identity. An old
+// approval without a retained result is terminated without running a compiler.
+func resumeBuild(c client, root string, change changeView) error {
 	result, err := retainedBuild(root, change)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if os.IsNotExist(err) {
-		if change.SourceDigest == "" {
-			result = host.SystemBuildResult{Diagnostics: fmt.Sprintf("change %s has no frozen source baseline; propose it again", change.ID)}
-		} else {
-			files := map[string]string{}
-			var deleted []string
-			for _, f := range change.Files {
-				if f.Deleted {
-					deleted = append(deleted, f.Path)
-					continue
-				}
-				files[f.Path] = f.Content
-			}
-			result, err = systembuild.Build(systembuild.Config{Root: root, Work: filepath.Join(root, ".build", "system", "work")},
-				host.SystemBuildRequest{Change: change.ID, Base: change.Base, Source: filepath.Join(root, ".build", "system", "sources", change.SourceDigest), SourceDigest: change.SourceDigest, Files: files, Deleted: deleted})
-			if err != nil {
-				result.OK, result.Diagnostics = false, err.Error()
-			}
-		}
-		result, err = retainBuild(root, change, result)
-		if err != nil {
-			return err
-		}
+		result = platform.SystemBuildResult{Diagnostics: "Dynamic self-hosting is frozen; this build was not started."}
 	}
 	if _, err := c.submitKey("system.change.built", systemscope.ChangeType, change.ID, systemscope.App, "system-build:"+buildIdentity(change), map[string]any{
 		"ok": result.OK, "binary": result.Binary, "web": result.Web, "toolchain": result.Toolchain, "diagnostics": result.Diagnostics,
 		"manifest": result.Manifest, "sourceDigest": result.SourceDigest,
 	}); err != nil {
-		if !refusedDecision(err) {
-			return err
-		}
-		// A definitive refusal is evidence, not a transport retry. Close an
-		// otherwise still-approved build with the original owner's failure action.
-		current, readErr := readChange(c, change.ID)
-		if readErr != nil || current.State != "approved" {
-			return err
-		}
-		diagnostic := "The build result was refused: " + err.Error()
-		_, failureErr := c.submitKey("system.change.built", systemscope.ChangeType, change.ID, systemscope.App, "system-build-refused:"+buildIdentity(change), map[string]any{"ok": false, "diagnostics": diagnostic})
-		return failureErr
+		// Preserve the actual saved result, even when the owner refuses it.
+		// Maintenance must resolve that disagreement, not replace success with
+		// a fabricated failure under another request identity.
+		return err
 	}
 	if !result.OK {
 		fmt.Printf("build %s: failed after %s: %s\n", change.ID, result.Duration.Round(time.Second), truncate(result.Diagnostics, 2000))
@@ -354,16 +268,16 @@ func buildFor(c client, root string, change changeView) error {
 // A build is retained before its accepted result is submitted. A lost reply or
 // process restart reuses these exact artifacts rather than rebuilding.
 type savedBuild struct {
-	Change   string                 `json:"change"`
-	Manifest string                 `json:"manifest"`
-	Result   host.SystemBuildResult `json:"result"`
+	Change   string                     `json:"change"`
+	Manifest string                     `json:"manifest"`
+	Result   platform.SystemBuildResult `json:"result"`
 }
 
 func buildIdentity(change changeView) string {
 	return systemscope.Digest([]byte(fmt.Sprintf("%s\n%d\n%s\n%s", change.ID, change.Base, change.SourceDigest, change.Manifest)))
 }
 
-func retainedBuild(root string, change changeView) (host.SystemBuildResult, error) {
+func retainedBuild(root string, change changeView) (platform.SystemBuildResult, error) {
 	var saved savedBuild
 	raw, err := os.ReadFile(filepath.Join(root, ".build", "system", "builds", buildIdentity(change), ".build", "result.json"))
 	if err != nil {
@@ -383,7 +297,7 @@ func retainedBuild(root string, change changeView) (host.SystemBuildResult, erro
 	return saved.Result, nil
 }
 
-func verifyBuild(result host.SystemBuildResult) error {
+func verifyBuild(result platform.SystemBuildResult) error {
 	if result.Binary == "" || result.Web == "" || result.SourceDigest == "" {
 		return errors.New("a release needs a binary, workspace, and complete source snapshot")
 	}
@@ -400,41 +314,6 @@ func verifyBuild(result host.SystemBuildResult) error {
 	return systembuild.VerifySource(result.Source, result.SourceDigest)
 }
 
-func retainBuild(root string, change changeView, result host.SystemBuildResult) (host.SystemBuildResult, error) {
-	dir := filepath.Join(root, ".build", "system", "builds")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return result, err
-	}
-	target := filepath.Join(dir, buildIdentity(change))
-	temp, err := os.MkdirTemp(dir, ".build-")
-	if err != nil {
-		return result, err
-	}
-	defer os.RemoveAll(temp)
-	if err := os.MkdirAll(filepath.Join(temp, ".build"), 0o755); err != nil {
-		return result, err
-	}
-	if result.OK {
-		if err := verifyBuild(result); err != nil {
-			return result, err
-		}
-		if err := copyFile(filepath.Join(result.Work, ".build", "platform-server"), filepath.Join(temp, ".build", "platform-server"), 0o755); err != nil {
-			return result, err
-		}
-		if err := copyTree(filepath.Join(result.Work, "web", "apps", "workspace", "dist"), filepath.Join(temp, "web", "apps", "workspace", "dist")); err != nil {
-			return result, err
-		}
-	}
-	result.Work = target
-	if err := writeJSON(filepath.Join(temp, ".build", "result.json"), savedBuild{change.ID, change.Manifest, result}); err != nil {
-		return result, err
-	}
-	if err := os.Rename(temp, target); err != nil {
-		return result, err
-	}
-	return result, nil
-}
-
 type releaseManifest struct {
 	Release      int               `json:"release"`
 	Binary       string            `json:"binary"`
@@ -448,7 +327,7 @@ type releaseManifest struct {
 
 // keep publishes versioned paths from already retained artifacts. Repeating it
 // completes interrupted copies; the manifest is written last.
-func keep(root string, version int, result host.SystemBuildResult) error {
+func keep(root string, version int, result platform.SystemBuildResult) error {
 	dir := filepath.Join(root, ".build", "system")
 	stamp := fmt.Sprintf("%04d", version)
 	record := filepath.Join(dir, "releases", stamp+".json")
@@ -466,7 +345,6 @@ func keep(root string, version int, result host.SystemBuildResult) error {
 	if err := installArtifacts(root, version, filepath.Join(result.Work, ".build", "platform-server"), filepath.Join(result.Work, "web", "apps", "workspace", "dist"), releaseManifest{version, result.Binary, result.Web, result.Toolchain, result.Work, result.Source, result.SourceDigest, result.Manifest}); err != nil {
 		return err
 	}
-	pruneReleases(root, 5)
 	return nil
 }
 
@@ -554,57 +432,6 @@ func resolveRelease(c client, root string, version int) (releaseState, error) {
 	return state, fmt.Errorf("release %d source %s has no retained code artifacts", version, digest)
 }
 
-// pruneReleases keeps the newest few releases on disk. The running release and
-// the one it could roll back to are never pruned, whatever their age: a release
-// that cannot be started again is not a rollback target.
-func pruneReleases(root string, newest int) {
-	dir := filepath.Join(root, ".build", "system")
-	entries, err := os.ReadDir(filepath.Join(dir, "releases"))
-	if err != nil {
-		return
-	}
-	versions := make([]int, 0, len(entries))
-	for _, entry := range entries {
-		name := strings.TrimSuffix(entry.Name(), ".json")
-		if n, err := strconv.Atoi(name); err == nil {
-			versions = append(versions, n)
-		}
-	}
-	slices.Sort(versions)
-	slices.Reverse(versions)
-	protected := map[int]bool{}
-	if raw, err := os.ReadFile(filepath.Join(dir, "current.json")); err == nil {
-		var state releaseState
-		if json.Unmarshal(raw, &state) == nil {
-			protected[state.Release] = true
-			protected[state.Serving] = true
-			if state.PendingRollback != nil {
-				protected[state.PendingRollback.Release] = true
-			}
-			if state.Previous != nil {
-				protected[state.Previous.Release] = true
-			}
-		}
-	}
-	for i, version := range versions {
-		if i < newest || protected[version] {
-			continue
-		}
-		stamp := fmt.Sprintf("%04d", version)
-		// The retained pre-publication copy has the same lifetime as the
-		// installed release. Otherwise watch would resurrect a pruned release.
-		if raw, err := os.ReadFile(filepath.Join(dir, "releases", stamp+".json")); err == nil {
-			var manifest releaseManifest
-			if json.Unmarshal(raw, &manifest) == nil && filepath.Clean(filepath.Dir(manifest.Work)) == filepath.Join(dir, "builds") {
-				_ = os.RemoveAll(manifest.Work)
-			}
-		}
-		_ = os.Remove(filepath.Join(dir, "releases", stamp+".json"))
-		_ = os.Remove(filepath.Join(dir, "bin", "platform-server-"+stamp))
-		_ = os.RemoveAll(filepath.Join(dir, "web", stamp))
-	}
-}
-
 // releaseOf finds the release a change published.
 func (c client) releaseOf(change string) (int, error) {
 	var releases []struct {
@@ -688,21 +515,6 @@ func copyTree(source, target string) error {
 	})
 }
 
-func activate(args []string) error {
-	flags := flag.NewFlagSet("activate", flag.ExitOnError)
-	hostURL := flags.String("host", "http://127.0.0.1:8495", "host base URL")
-	token := flags.String("token", os.Getenv("PLATFORM_TOKEN"), "access token of a system publisher")
-	release := flags.Int("release", 0, "the release version")
-	flags.Parse(args)
-	if *release == 0 {
-		return errors.New("activate needs -release")
-	}
-	c := client{host: *hostURL, token: *token, tenant: systemscope.Tenant}
-	_, err := c.submit("system.release.activate", systemscope.ReleaseType, fmt.Sprintf("%04d", *release), systemscope.App,
-		map[string]any{"window": 30})
-	return err
-}
-
 func finish(args []string) error {
 	flags := flag.NewFlagSet("finish", flag.ExitOnError)
 	hostURL := flags.String("host", "http://127.0.0.1:8495", "host base URL")
@@ -715,8 +527,8 @@ func finish(args []string) error {
 		return errors.New("finish needs -activation and -result")
 	}
 	c := client{host: *hostURL, token: *token, tenant: systemscope.Tenant}
-	_, err := c.submit("system.release.finished", systemscope.ActivationType, *activation, systemscope.App,
-		map[string]any{"result": *result, "evidence": *evidence})
+	_, err := c.submitKey("system.release.finished", systemscope.ActivationType, *activation, systemscope.App,
+		"system-finished:"+*activation+":"+*result, map[string]any{"result": *result, "evidence": *evidence})
 	return err
 }
 

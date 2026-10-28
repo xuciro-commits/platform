@@ -241,6 +241,9 @@ func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time, checkpoint func(*Ev
 	} else if d != nil {
 		digest = a.evaluationVersion(d)
 	}
+	if ev.Binding == nil || ev.Binding.Stage != platform.AIStageDesign {
+		definitionErr = fmt.Errorf("the evaluation has no trusted execution stage; start a new evaluation")
+	}
 	if definitionErr == nil && ev.DefinitionDigest != "" && digest != ev.DefinitionDigest {
 		definitionErr = fmt.Errorf("the evaluation's saved declaration differs")
 	}
@@ -253,7 +256,7 @@ func (a *Agents) EvaluateAgent(ev Evaluation, now time.Time, checkpoint func(*Ev
 			if d != nil {
 				options = d.ModelOptions
 			}
-			current, _, refusal := h.ResolveAgentModel(ev.Model, options)
+			current, _, refusal := h.ResolveAgentModel(ev.Model, options, platform.AIStageDesign)
 			if refusal != nil {
 				definitionErr = fmt.Errorf("the evaluation model options are invalid")
 			}
@@ -495,11 +498,10 @@ func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model platform.AIModel,
 		req := a.prompt(a.automation(AgentApp, false), d, dry, model.Name(), now)
 		endRead()
 		req.Run = run.ID + ":evaluation"
-		binding, problem := model.Resolve("agent", platform.ModelOptions{}, 0)
+		binding, _, problem := h.ResolveAgentModel(model.Name(), model.Defaults, platform.AIStageDesign)
 		if problem != nil {
 			return dry, problem.Error()
 		}
-		binding.Provider = &pv
 		req.Binding = &binding
 		if why := h.ReserveAgentModel(who, model, now); why != "" {
 			return dry, why
@@ -641,7 +643,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		if refusal != nil {
 			return nil, refusal
 		}
-		binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions)
+		binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions, platform.AIStageDesign)
 		if refusal != nil {
 			return nil, refusal
 		}
@@ -656,7 +658,7 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	if p.Suite && len(d.Cases) == 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
 	}
-	binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions)
+	binding, _, refusal := a.host.ResolveAgentModel(p.Model, d.ModelOptions, platform.AIStageDesign)
 	if refusal != nil {
 		return nil, refusal
 	}

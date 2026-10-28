@@ -1,3 +1,5 @@
+import {pagePresentationIssues} from "../pageui/contract";
+import type * as PageUI from "../pageui/types";
 import {usePageComposite} from "../runtime/PageComposite";
 import {usePageModel} from "../runtime/PageModel";
 import {materializeModelSection,modelWindowKey,modelWindowWidget,sectionModels} from "../runtime/model-bindings";
@@ -21,7 +23,6 @@ import {
   Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord} from "@platform/ui";
 import { Component, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HostContext, useHost,useOpenRecord, findDefinition, type Definition } from "../index";
-import type { Api } from "@platform/kernel";
 import { supportsPageUIProfile } from "../widgets/registry";
 import { useApplicationContext, useApplicationVariables, AuthoringPreview} from "../runtime/ApplicationRuntime";
 import { resolvePageLiveMode } from "../runtime/live-mode";
@@ -43,7 +44,7 @@ type Bound = import("../widgets/bindings").WidgetBindingContext;
 
 /** Composing: the section in hand, and choosing another by clicking it. */
 type Composing = { slotViews?:Readonly<Record<string,ReactNode>>; chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
-  wrapLayout?: (id: string, node: Api.PageLayoutNode, body: ReactNode) => ReactNode };
+  wrapLayout?: (id: string, node: PageUI.PageLayoutNode, body: ReactNode) => ReactNode };
 
 const objectOf = (page: Page, section: Section) => (!interfaceQueryForSection(page,section)?section.model?.type:undefined) || section.object?.name || page.object.name;
 const parentTypeOf = (page: Page, section: Section) => section.parentSelection
@@ -107,6 +108,8 @@ type ComposedPageProps = {
 } & Composing;
 export function ComposedPage(props: ComposedPageProps) {
   const { me,source } = useHost();const application=useApplicationContext();const previewRoute=useContext(AuthoringPreview);
+  const issues=pagePresentationIssues(props.page);
+  if(issues.length)return <Panel role="alert"><ul>{issues.map((issue,index)=><li key={index}><code>{issue.path.join(".")}</code>: {issue.message}</li>)}</ul></Panel>;
   const effective={...props.page,sections:props.page.sections?.map(section=>{const value=materializeModelSection(section,source.entity);return interfaceQueryForSection(props.page,section)?{...value,object:undefined}:value;})};
   return <PageEmbeddingBoundary page={props.page}><PageSession key={JSON.stringify([me?.tenantId, me?.principalId, props.definitionKey, props.page, application?.identity])} {...props} live={resolvePageLiveMode(props.live,application?.preview===true,previewRoute)} page={effective} /></PageEmbeddingBoundary>;
 }

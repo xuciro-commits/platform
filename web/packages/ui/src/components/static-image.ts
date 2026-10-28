@@ -1,4 +1,5 @@
-import {pageUIManifest} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+
 
 export type StaticImageConfig={url?:string;caption?:string;height?:number};
 const forbidden=/[\p{White_Space}\p{Cc}\\]/u;
@@ -6,7 +7,7 @@ const bytes=(value:string)=>new TextEncoder().encode(value).length;
 
 /** A configured public URL, before browser URL repair. Empty URLs belong to the explicit placeholder. */
 export function validStaticImageURL(value:unknown):value is string {
- if(typeof value!=="string"||!value||bytes(value)>pageUIManifest.runtime.contextViews.maxURLBytes||forbidden.test(value))return false;
+ if(typeof value!=="string"||!value||bytes(value)>renderingLimits.runtime.contextViews.maxURLBytes||forbidden.test(value))return false;
  let decoded:string;try{decoded=decodeURIComponent(value);}catch{return false;}
  if(forbidden.test(decoded))return false;
  if(value.startsWith("/"))return !value.startsWith("//")&&!decoded.startsWith("//");
@@ -18,7 +19,7 @@ export function validStaticImageURL(value:unknown):value is string {
 /** Shared by the presenter and source compiler; it never loads or rewrites a URL. */
 export function validStaticImage(value:unknown):value is StaticImageConfig {
  if(!value||typeof value!=="object"||Array.isArray(value))return false;
- const config=value as Record<string,unknown>,limits=pageUIManifest.runtime.contextViews;
+ const config=value as Record<string,unknown>,limits=renderingLimits.runtime.contextViews;
  return Object.keys(config).every(key=>["url","caption","height"].includes(key))
   &&(config.url===undefined||config.url===""||validStaticImageURL(config.url))
   &&(config.caption===undefined||typeof config.caption==="string"&&bytes(config.caption)<=limits.maxCaptionBytes)

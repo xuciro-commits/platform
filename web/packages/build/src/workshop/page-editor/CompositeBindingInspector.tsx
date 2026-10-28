@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import {useState} from 'react';
 import type {Api} from '@platform/kernel';
 import {widgetContract,type Definition} from '@platform/app';
@@ -8,7 +9,7 @@ import {ExpressionEditor,literalExpression} from '../../editor/ExpressionEditor'
 import type {AuthoringSection} from './draft';
 
 type Port={id:string;required?:boolean;roles:Record<string,{kinds:readonly string[];required?:boolean;target?:string}>};
-export function CompositeBindingInspector({section,sections,document,object,selections,lookup,definitions,onChange}:{section:AuthoringSection;sections:AuthoringSection[];document:Api.PageDocument;object:string;selections:Api.SelectionVariable[];lookup:(type:string)=>EntityInfo|undefined;definitions:readonly Definition[];onChange:(patch:Partial<AuthoringSection>)=>void}){
+export function CompositeBindingInspector({section,sections,document,object,selections,lookup,definitions,onChange}:{section:AuthoringSection;sections:AuthoringSection[];document:PageUI.PageDocument;object:string;selections:PageUI.SelectionVariable[];lookup:(type:string)=>EntityInfo|undefined;definitions:readonly Definition[];onChange:(patch:Partial<AuthoringSection>)=>void}){
  const contract=widgetContract(section.widget),ports:readonly Port[]=contract&&'modelPorts' in contract?contract.modelPorts:[];
  const config=section.composite??{bindings:{}},[active,setActive]=useState(ports[0]?.id??'');
  const port=ports.find(p=>p.id===active)??ports[0],binding=port?config.bindings[port.id]:undefined;

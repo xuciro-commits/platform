@@ -1,7 +1,7 @@
+import type * as PageUI from "../pageui/types";
 import {Panel,RecordLeaderboard,t,type EntityInfo,type EntityRecord} from "@platform/ui";
-import type {Api} from "@platform/kernel";
 import type {QueryWindow} from "./QueryWindowFrame";
-export function LeaderboardRenderer({window,info,fields,selected,onSelect}:{window?:QueryWindow;info?:EntityInfo;fields?:Api.PageLeaderboard;selected?:EntityRecord;onSelect:(record?:EntityRecord)=>void}) {
+export function LeaderboardRenderer({window,info,fields,selected,onSelect}:{window?:QueryWindow;info?:EntityInfo;fields?:PageUI.PageLeaderboard;selected?:EntityRecord;onSelect:(record?:EntityRecord)=>void}) {
  if(!fields||!info||!window)return <Panel role="status">{t("Ranking window is unavailable.")}</Panel>;
  const expected=[`${fields.ascending?"":"-"}${fields.valueField}`,"id"];
  if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;

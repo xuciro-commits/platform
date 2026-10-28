@@ -2,7 +2,7 @@ import {registerHooks} from 'node:module';
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-const manifest=JSON.parse(readFileSync(new URL('../../../../../capabilities/server/platform/pageui/widgets.json',import.meta.url)));
+const manifest=JSON.parse(readFileSync(new URL('../pageui/widgets.json',import.meta.url)));
 registerHooks({resolve(s,c,next){if(s==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)}`),shortCircuit:true};if(s==='@platform/ui')return {url:'data:text/javascript,export const t=s=>s;',shortCircuit:true};try{return next(s,c)}catch(e){if(s.startsWith('./')||s.startsWith('../'))return next(s+'.ts',c);throw e;}}});
 const {defineWidgetPlugin}=await import('./plugin.ts');
 const {createWidgetDefinitions,createWidgetRegistry,widgetContracts}=await import('./registry.ts');

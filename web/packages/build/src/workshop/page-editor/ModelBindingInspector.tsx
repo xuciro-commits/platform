@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import {modelBindingContract,materializeModelSection,modelField} from '@platform/app/model';
 import type {Api} from '@platform/kernel';
 import {apiErrorMessage} from '@platform/kernel';
@@ -8,7 +9,7 @@ import {ExpressionEditor,literalExpression} from '../../editor/ExpressionEditor'
 import type {AuthoringSection} from './draft';
 import {useAuthoringModel} from '../../ontology/authoring-model';
 
-export function ModelBindingInspector({section,sections,document,object,selections,lookup,definitions,onChange,allowRelation=true}:{allowRelation?:boolean;section:AuthoringSection;sections:AuthoringSection[];document:Api.PageDocument;object:string;selections:Api.SelectionVariable[];lookup:(type:string)=>EntityInfo|undefined;definitions:readonly Definition[];onChange:(patch:Partial<AuthoringSection>)=>void}){
+export function ModelBindingInspector({section,sections,document,object,selections,lookup,definitions,onChange,allowRelation=true}:{allowRelation?:boolean;section:AuthoringSection;sections:AuthoringSection[];document:PageUI.PageDocument;object:string;selections:PageUI.SelectionVariable[];lookup:(type:string)=>EntityInfo|undefined;definitions:readonly Definition[];onChange:(patch:Partial<AuthoringSection>)=>void}){
  const authoring=useAuthoringModel(),drafts=(authoring.drafts.data?.records??[]).filter(draft=>!draft.archived).map(draft=>({name:`build.${draft.name}`,title:draft.title}));
  const {source}=useHost();
  const rules=useReadQuery<Api.PageModelRule[]>('/v1/page-model/rules');

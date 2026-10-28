@@ -8,6 +8,5 @@ export { codeChallenge, currentSession, keepFresh, signIn, signOut, type OidcCon
 // The host API contract: types generated from the host's Go types.
 export type * as Api from "./gen/host";
 export { pageUIManifest, imageRegionLimits } from "./gen/host";
-export type {PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor} from './widget-authoring';
 // The typed enterprise SDK: query/ref/write contracts over the model's own declarations.
 export * from "./gen/enterprise-sdk";

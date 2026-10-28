@@ -37,13 +37,34 @@ type ModelOptions struct {
 	Effort      string `json:"effort,omitempty"`
 }
 
+const (
+	AIStageDesign  = "design"
+	AIStageRuntime = "runtime"
+)
+
+// AIInferenceSite is an operator-reviewed deployment binding. Provider kinds,
+// names and tenant-authored payloads do not create these permissions.
+type AIInferenceSite struct {
+	Provider string `json:"provider"`
+	Origin   string `json:"origin"`
+	Location string `json:"location"`
+}
+
+type AIInferencePolicy struct {
+	Runtime []AIInferenceSite `json:"runtime,omitempty"`
+}
+
 type AIModelBinding struct {
-	Purpose      string             `json:"purpose,omitempty"`
-	Model        string             `json:"model"`
-	Options      ModelOptions       `json:"options"`
-	Revision     int                `json:"revision,omitempty"`
-	Capabilities *ModelCapabilities `json:"capabilities,omitempty"`
-	Provider     *AIProvider        `json:"provider,omitempty"`
+	Stage             string             `json:"stage,omitempty"`
+	PolicyRevision    string             `json:"policyRevision,omitempty"`
+	ProviderOrigin    string             `json:"providerOrigin,omitempty"`
+	InferenceLocation string             `json:"inferenceLocation,omitempty"`
+	Purpose           string             `json:"purpose,omitempty"`
+	Model             string             `json:"model"`
+	Options           ModelOptions       `json:"options"`
+	Revision          int                `json:"revision,omitempty"`
+	Capabilities      *ModelCapabilities `json:"capabilities,omitempty"`
+	Provider          *AIProvider        `json:"provider,omitempty"`
 }
 
 func (o ModelOptions) Override(v ModelOptions) ModelOptions {

@@ -1,4 +1,5 @@
-import {pageUIManifest} from "@platform/kernel";
+import {pageUIManifest} from "../pageui/manifest";
+
 import type {AggregateData,TermCount} from "@platform/ui";
 /** Refuse malformed or duplicate groups; ties retain original host group order. */
 export function termCounts(data:AggregateData,field:string,preserveOrder=false):TermCount[]|undefined {

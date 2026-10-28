@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -22,124 +23,29 @@ func systemDefinitionRefusal(err error) *kernel.Error {
 }
 
 func (h hostView) FreezeSystemDefinitions(c platform.Caller, refs []platform.AssetRef, now time.Time) (json.RawMessage, *kernel.Error) {
-	if h.t.ID != systemscope.Tenant || c.Tenant != systemscope.Tenant || c.App != systemscope.App {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system authority freezes system definitions")
-	}
-	owner, ok := h.t.app(construction.ID).(host.ConstructionDrafts)
-	if !ok {
-		if len(refs) == 0 {
-			return nil, nil
-		}
-		return nil, systemDefinitionRefusal(fmt.Errorf("the definition owner is unavailable"))
-	}
-	if len(refs) == 0 {
-		if raw := h.t.releases.raw(h.t.releases.active); len(raw) > 0 {
-			return platform.Raw(platform.SystemDefinitionCandidate{ID: h.t.releases.active, Bytes: raw}), nil
-		}
-		roots := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetApp, Name: construction.ID}}
-		for _, definition := range h.t.definitions {
-			if definition.Source != "code" {
-				roots = append(roots, definition.Ref)
-			}
-		}
-		candidate, err := h.t.releaseCandidateLocked(roots)
-		if err != nil {
-			return nil, systemDefinitionRefusal(err)
-		}
-		return platform.Raw(platform.SystemDefinitionCandidate{ID: candidate.ID, Bytes: candidate.Bytes}), nil
-	}
-	// Resolve logical names through the existing authorized draft projection,
-	// including pages, applications, functions and agents, not only objects.
-	changes, err := owner.SavedDraftChanges(h.t.caller(c.Member, owner, false), "", "", "")
-	if err != nil {
-		return nil, systemDefinitionRefusal(err)
-	}
-	var drafts []construction.JointDraftRef
-	for _, ref := range refs {
-		var selected *construction.DraftChange
-		for i := range changes {
-			if changes[i].Ref == ref {
-				if selected != nil {
-					return nil, systemDefinitionRefusal(fmt.Errorf("ambiguous draft %s", ref))
-				}
-				selected = &changes[i]
-			}
-		}
-		if selected == nil {
-			return nil, systemDefinitionRefusal(fmt.Errorf("saved draft %s is unavailable", ref))
-		}
-		draft := construction.JointDraftRef{Kind: ref.Kind, ID: selected.ID}
-		if !slices.Contains(drafts, draft) {
-			drafts = append(drafts, draft)
-		}
-		dependencies, err := owner.ReferencedDrafts(ref.Kind, selected.ID)
-		if err != nil {
-			return nil, systemDefinitionRefusal(err)
-		}
-		for _, dependency := range dependencies {
-			if !slices.Contains(drafts, dependency) {
-				drafts = append(drafts, dependency)
-			}
-		}
-	}
-	preview, candidate, err := h.t.previewReleaseLocked(drafts, c.Member)
-	if err != nil {
-		return nil, systemDefinitionRefusal(err)
-	}
-	if preview.Diagnostic != "" {
-		return nil, systemDefinitionRefusal(fmt.Errorf("%s", preview.Diagnostic))
-	}
-	// A system version includes the previously installed system definitions as
-	// well as the selected changes. Business runtimes can reconstruct it from
-	// this one accepted version, without replaying another tenant's history.
-	available, err := h.t.releaseAssetsLocked(nil, false)
-	if err != nil {
-		return nil, systemDefinitionRefusal(err)
-	}
-	byRef := map[platform.AssetRef]platform.ReleaseAsset{}
-	for _, asset := range available {
-		if !slices.Contains(preview.Removed, asset.Ref) {
-			byRef[asset.Ref] = asset
-		}
-	}
-	for _, asset := range candidate.Assets {
-		byRef[asset.Ref] = asset
-	}
-	roots := []platform.AssetRef{}
-	for _, definition := range h.t.definitions {
-		if definition.Source != "code" && !slices.Contains(preview.Removed, definition.Ref) {
-			if _, exists := byRef[definition.Ref]; exists {
-				roots = append(roots, definition.Ref)
-			}
-		}
-	}
-	for _, asset := range candidate.Assets {
-		if !slices.Contains(roots, asset.Ref) {
-			roots = append(roots, asset.Ref)
-		}
-	}
-	available = nil
-	for _, asset := range byRef {
-		available = append(available, asset)
-	}
-	candidate, err = h.t.candidateWithBindings(roots, available, nil)
-	if err != nil {
-		return nil, systemDefinitionRefusal(err)
-	}
-	raw, err := json.Marshal(platform.SystemDefinitionCandidate{ID: candidate.ID, Bytes: candidate.Bytes})
-	if err != nil {
-		return nil, systemDefinitionRefusal(err)
-	}
-	return raw, nil
+	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System self-hosting is frozen; use static maintenance to reconcile retained work")
 }
 
 func (h hostView) PrepareSystemDefinitions(c platform.Caller, raw json.RawMessage, key string, now time.Time) (json.RawMessage, *kernel.Error) {
 	if h.t.ID != systemscope.Tenant || c.Tenant != systemscope.Tenant || c.App != systemscope.App {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system authority activates system definitions")
 	}
-	var frozen platform.SystemDefinitionCandidate
-	if err := json.Unmarshal(raw, &frozen); err != nil {
-		return nil, systemDefinitionRefusal(err)
+	// A successful report may finish only its original pre-freeze activation.
+	// It cannot turn an old candidate into a new deployment request.
+	activationID, original := strings.CutPrefix(key, "system:")
+	activationValue, known := h.t.held(systemscope.ActivationType + "/" + activationID)
+	var activation struct {
+		Release int
+		Result  string
+	}
+	if !original || !known || json.Unmarshal(platform.Raw(activationValue), &activation) != nil || activation.Result != systemscope.StateRequested {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System self-hosting is frozen; only retained activation outcomes may be reconciled")
+	}
+	releaseValue, known := h.t.held(fmt.Sprintf("%s/%04d", systemscope.ReleaseType, activation.Release))
+	var release struct{ Candidate json.RawMessage }
+	var retained, frozen platform.SystemDefinitionCandidate
+	if !known || json.Unmarshal(platform.Raw(releaseValue), &release) != nil || json.Unmarshal(release.Candidate, &retained) != nil || json.Unmarshal(raw, &frozen) != nil || retained.ID != frozen.ID || !bytes.Equal(retained.Bytes, frozen.Bytes) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The retained activation must use its original system candidate")
 	}
 	candidate, err := platform.ReadCandidate(frozen.ID, frozen.Bytes)
 	if err != nil {

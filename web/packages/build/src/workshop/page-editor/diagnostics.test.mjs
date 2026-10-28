@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import test from "node:test";
 
-const manifest = JSON.parse(readFileSync(new URL("../../../../../../capabilities/server/platform/pageui/widgets.json", import.meta.url)));
+const manifest = JSON.parse(readFileSync(new URL("../../../../app/src/pageui/widgets.json", import.meta.url)));
 const app = new URL("../../../../app/src/", import.meta.url);
 const ui = new URL("../../../../ui/src/", import.meta.url);
 const runtime = `export {pageUIProfile,supportsPageUIProfile,widgetContract} from ${JSON.stringify(new URL("widgets/registry.ts", app).href)};
@@ -21,6 +21,7 @@ registerHooks({ resolve(specifier, context, next) {
   if (specifier === "@platform/ui") return { url: `data:text/javascript,${encodeURIComponent(`
 export {validTimestampOffset} from ${JSON.stringify(new URL("components/date.ts", ui).href)};
 export {validChoiceInput} from ${JSON.stringify(new URL("components/choice.ts", ui).href)};
+export const t=(s,v={})=>s.replace(/\\{(\\w+)\\}/g,(_,k)=>v[k]??k);
 const rendering=()=>{throw Error("Unexpected rendering calculation in diagnostic case");};
 export const rangeGrid=rendering,gaugeModel=rendering,progressRatio=rendering,ganttRange=rendering;`)}`, shortCircuit: true };
   try { return next(specifier, context); }

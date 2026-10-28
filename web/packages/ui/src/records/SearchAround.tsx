@@ -1,4 +1,5 @@
-import {pageUIManifest} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+
 import {Button} from "../primitives/button";
 import {t} from "../i18n";
 import type {EntityInfo,EntityRecord} from "./Records";
@@ -11,7 +12,7 @@ export type SearchAroundProps={path:readonly SearchAroundPathEntry[];relations:r
 
 /** Every path step, relationship count and result remains controlled by the authorized traversal owner. */
 export function SearchAround({path,relations,activeRelation,window,onBack,onRelation,onTraverse,onSelect,selectionEnabled=true,selected,selectionPending,selectionError,enabled=true,pending,error,label}:SearchAroundProps) {
- const limits=pageUIManifest.runtime.exploration,titles=Array.isArray(path)?path.map(originalRecordTitle):[],results=window?.records;
+ const limits=renderingLimits.runtime.exploration,titles=Array.isArray(path)?path.map(originalRecordTitle):[],results=window?.records;
  if(!Array.isArray(path)||path.length>limits.maxPath||titles.some(title=>title===undefined)||!Array.isArray(relations)||relations.length>2*limits.maxRelations||new Set(relations.map(relation=>relation?.id)).size!==relations.length||relations.some(relation=>!relation||typeof relation.id!=="string"||!relation.id||typeof relation.label!=="string"||relation.total!==undefined&&(!Number.isSafeInteger(relation.total)||relation.total<0))||window&&(!Array.isArray(results)||results.length>limits.maxWindow||!Number.isSafeInteger(window.total)||window.total<results.length||new Set(results.map(record=>record?.id)).size!==results.length||results.some(record=>originalRecordTitle({object:window.info.type,record,info:window.info,labelField:window.labelField})===undefined)))return <p role="alert">{t("The original exploration path, relations or window is unavailable or incompatible.")}</p>;
  if(!path.length)return <p role="status">{t("Select a confirmed record to start Search Around.")}</p>;
  const originalPath:readonly SearchAroundPathEntry[]=path,originalRelations:readonly SearchAroundRelation[]=relations,current=path.at(-1)!,active=relations.find(relation=>relation.id===activeRelation),occurrences=new Map<string,number>(),ready=enabled&&!pending&&!error&&!!active&&!active.pending&&!active.error;

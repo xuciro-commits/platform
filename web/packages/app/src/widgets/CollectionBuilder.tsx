@@ -1,14 +1,14 @@
+import type * as PageUI from "../pageui/types";
 import {useState} from 'react';
 import {Button,FilterBar,Panel,entityFrom,field as fieldTypes,t,type Filter} from '@platform/ui';
-import type {Api} from '@platform/kernel';
 import {useHost} from '../index';
 import type {usePageQueries} from '../runtime/PageQueries';
 import {builderOperators,builderConditions} from '../runtime/collection-builder';
 
-export function CollectionBuilderRenderer({config,builder,enabled=true}:{config?:Api.PageCollectionBuilder;builder?:ReturnType<typeof usePageQueries>['builders'][string];live:boolean;enabled?:boolean}) {
+export function CollectionBuilderRenderer({config,builder,enabled=true}:{config?:PageUI.PageCollectionBuilder;builder?:ReturnType<typeof usePageQueries>['builders'][string];live:boolean;enabled?:boolean}) {
  return <CollectionBuilderEditor key={builder?.key??''} config={config} builder={builder} enabled={enabled}/>;
 }
-function CollectionBuilderEditor({config,builder,enabled}:{config?:Api.PageCollectionBuilder;builder?:ReturnType<typeof usePageQueries>['builders'][string];enabled:boolean}){
+function CollectionBuilderEditor({config,builder,enabled}:{config?:PageUI.PageCollectionBuilder;builder?:ReturnType<typeof usePageQueries>['builders'][string];enabled:boolean}){
  const {source}=useHost(),[filters,setFilters]=useState<Filter[]>([]),input=builder?.result,descriptor=input?.status==='value'&&'value' in input&&typeof input.value==='object'&&input.value?.kind==='object-set-input'?input.value:undefined,info=descriptor?source.entity(descriptor.object.name):undefined;
  if(!info||!descriptor||!config)return <Panel role={input?.status==='error'?'alert':'status'}>{t('Collection builder source is unavailable.')}</Panel>;
  const fields=config.fields,original=entityFrom(info),entity={...original,fields:Object.fromEntries(fields.filter(name=>!!original.fields[name]).map(name=>{const f=info.fields.find(f=>f.name===name)!,field=original.fields[name]!;return [name,{...field,...['integer','decimal'].includes(f.type)?{editor:fieldTypes.text({label:field.label}).editor}:{},operators:builderOperators(f.type).map(id=>({id,label:t({is:'is',isNot:'is not',gte:'at least',lte:'at most',contains:'contains'}[id]!),needsArg:true}))}];}))},conditions=builderConditions(filters,fields,info);

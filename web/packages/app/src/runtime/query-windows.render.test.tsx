@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Api } from "@platform/kernel";
@@ -42,7 +43,7 @@ test("an application interface window exposes the original compiler's fixed orde
 
 test("page query controls retain the same owner and fixed predicates after an enum selection",()=>{
  const from=source(),session=new PageSessionStore(from,{objects:new Map(),children:new Map(),queryParents:new Map()});
- const page:Api.Page={name:"query-samples",title:"Query samples",layout:"composed",object,listFields:[],detailFields:[],actions:[],sections:[{id:"list",widget:"table",configVersion:1,collectionVariable:"rows"}],document:{formatVersion:2,uiProfile:"platform.page.v2.103",root:"root",nodes:{root:{kind:"rows",children:["list"]},list:{kind:"widget",section:"list"}},variables:{rows:variable("page")},queries:{items:plan}}};
+ const page:PageUI.Page={name:"query-samples",title:"Query samples",layout:"composed",object,listFields:[],detailFields:[],actions:[],sections:[{id:"list",widget:"table",configVersion:1,collectionVariable:"rows"}],document:{formatVersion:2,uiProfile:"platform.page.v2.103",root:"root",nodes:{root:{kind:"rows",children:["list"]},list:{kind:"widget",section:"list"}},variables:{rows:variable("page")},queries:{items:plan}}};
  const {result,rerender}=renderHook(()=>usePageQueries(page,{},session,session.snapshot()));
  act(()=>result.current.windows.items!.onChange({filters:{state:["held"]},offset:0}));rerender();
  const window=result.current.windows.items!;

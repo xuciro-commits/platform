@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"platformserver/apps/ai"
-	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
+	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"

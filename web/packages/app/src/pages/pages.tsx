@@ -1,3 +1,4 @@
+import {pageUIManifest} from "../pageui/manifest";
 // Bounded page composition. The descriptor comes from the
 // host's installed definition registry. Live operation and the local preview
 // use the same list/detail layout and the UI kit's record components.
@@ -7,7 +8,7 @@ import {
 } from "@platform/ui";
 import { useMemo, useState } from "react";
 import type { ListState, RecordEditPort } from "@platform/ui";
-import { pageUIManifest } from "@platform/kernel";
+
 import { NewActions, PayloadFields } from "../actions/actions";
 import { ImportControl, SaveViewDialog } from "../widgets/list-operations";
 import { defaultTableEdit, tableEditableFields } from "../widgets/table-edit";

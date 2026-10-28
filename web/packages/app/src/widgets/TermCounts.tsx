@@ -1,9 +1,10 @@
+import {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
 import {useMemo} from "react";
 import {ContextHelp,Panel,CollectionCounts,CountTreemap,TagCounts,TermCounts,useChartData,t,type ChartSource,type ChartSpec,type EntityInfo} from "@platform/ui";
-import {pageUIManifest,type Api} from "@platform/kernel";
 import type {QueryWindow} from "./QueryWindowFrame";
 import {termCounts} from "./terms";
-type Presentation={bars?:boolean;steps?:Api.PageAnalysisStep[];treemap?:boolean;tags?:boolean;selected?:string[];enabled?:boolean;onSelect?:(value?:string)=>void};
+type Presentation={bars?:boolean;steps?:PageUI.PageAnalysisStep[];treemap?:boolean;tags?:boolean;selected?:string[];enabled?:boolean;onSelect?:(value?:string)=>void};
 export function TermCountsRenderer({object,window,field,info,source,label,...presentation}:{object:string;window?:QueryWindow;field:string;info?:EntityInfo;source?:ChartSource;label:string}&Presentation){
  const descriptor=info?.fields.find(f=>f.name===field);
  if(!window||window.error)return <Panel role={window?.error?"alert":"status"}>{t(window?.error??"Query window is unavailable.")}</Panel>;

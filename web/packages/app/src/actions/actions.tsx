@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import {useActionTrial} from "./trial";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
 import {OfflineReadError,type Api} from "@platform/kernel";
@@ -227,17 +228,17 @@ export {ActionDialog as DeclaredActionDialog};
 
 /** One explicit record action. Ordinary revisions retain the opened form's
  * baseline; identity, declaration and caller scope replace it completely. */
-export function InlineActionForm({type,schema,record,live=true,scope,defaults=[],ready=true}:{type:string;schema:string;record?:EntityRecord;live?:boolean;scope?:string;defaults?:Api.PageActionParameter[];ready?:boolean}) {
+export function InlineActionForm({type,schema,record,live=true,scope,defaults=[],ready=true}:{type:string;schema:string;record?:EntityRecord;live?:boolean;scope?:string;defaults?:PageUI.PageActionParameter[];ready?:boolean}) {
  const {catalog,source}=useHost(),declared=catalog.find(a=>a.schema===schema&&a.target===type&&!a.new);
  if(!declared||!validActionDefaults(source.entity(type),declared,defaults))return <Panel role="alert">{t("The inline action is unavailable.")}</Panel>;
  if(live&&!record)return <p className="text-sm text-muted">{t("Select a record to act on it.")}</p>;
  return <InlineActionInstance key={JSON.stringify([source.scope,scope,type,schema,record?.id,declared,defaults,live])} type={type} record={record} declared={declared} live={live} defaults={defaults} ready={ready}/>;
 }
-function InlineActionInstance({type,record,declared,live,defaults,ready}:{type:string;record?:EntityRecord;declared:ActionDeclaration;live:boolean;defaults:Api.PageActionParameter[];ready:boolean}) {
+function InlineActionInstance({type,record,declared,live,defaults,ready}:{type:string;record?:EntityRecord;declared:ActionDeclaration;live:boolean;defaults:PageUI.PageActionParameter[];ready:boolean}) {
  const {source}=useHost(),[round,setRound]=useState(0),reset=()=>setRound(r=>r+1);
  return <InlineActionRound key={round} record={record} declared={declared} type={type} info={source.entity(type)} live={live} reset={reset} defaults={defaults} ready={ready}/>;
 }
-function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}:{type:string;record?:EntityRecord;declared:ActionDeclaration;info?:EntityInfo;live:boolean;reset:()=>void;defaults:Api.PageActionParameter[];ready:boolean}) {
+function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}:{type:string;record?:EntityRecord;declared:ActionDeclaration;info?:EntityInfo;live:boolean;reset:()=>void;defaults:PageUI.PageActionParameter[];ready:boolean}) {
  const [initial]=useState(()=>originalActionDefaults(info,declared,defaults,record)),[baseline]=useState(record),[submitted,setSubmitted]=useState(false);
  const transition=info?.lifecycle?.transitions.find(step=>step.schema===declared.schema);
  if(initial===undefined)return <Panel role="alert">{t("The inline action defaults are unavailable.")}</Panel>;

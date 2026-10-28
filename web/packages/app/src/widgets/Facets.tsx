@@ -1,10 +1,10 @@
+import type * as PageUI from "../pageui/types";
 import {useEffect,useRef,useState} from "react";
 import {FacetChoices,Input,Panel,t,type RecordList,type RecordSource} from "@platform/ui";
-import type {Api} from "@platform/kernel";
 import {isStringSet,type ScalarValue} from "../runtime/decimal";
 import type {VariableResult} from "../runtime/variables";
 
-export function Facets({section,source,object,window,values,onChange,scope}:{section:Pick<Api.Section,'facets'|'filterSearchVariable'|'title'>;source:RecordSource;object:string;window?:NonNullable<Parameters<typeof RecordList>[0]["window"]>;values:Record<string,VariableResult>;onChange:(id:string,value:ScalarValue)=>void;scope:string}){
+export function Facets({section,source,object,window,values,onChange,scope}:{section:Pick<PageUI.Section,'facets'|'filterSearchVariable'|'title'>;source:RecordSource;object:string;window?:NonNullable<Parameters<typeof RecordList>[0]["window"]>;values:Record<string,VariableResult>;onChange:(id:string,value:ScalarValue)=>void;scope:string}){
  const grouped=(section.facets??[]).filter(f=>["checkbox","histogram"].includes(f.kind));
  const query=window?.query,key=JSON.stringify([scope,source.scope,source.revision,object,query,grouped.map(f=>f.field)]),current=useRef(source);current.current=source;
  const [state,setState]=useState<{key:string;options?:Record<string,{value:string;count:number}[]>;error?:string}>();

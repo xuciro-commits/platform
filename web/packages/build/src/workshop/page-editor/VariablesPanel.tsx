@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import {pageSugar} from "../../editor/rule-text";
 import {originalRecordObject} from "./record-binding";
 import type { Api } from "@platform/kernel";
@@ -6,14 +7,14 @@ import { Button, Card, Checkbox, Input, PropertyList, Select, t, type EntityInfo
 import { useState } from "react";
 import { layoutID, loopOwner, overlayOwner, variableAccessible } from "../page-layout";
 
-type Variables = NonNullable<Api.PageDocument["variables"]>;
+type Variables = NonNullable<PageUI.PageDocument["variables"]>;
 const initial = (type: string) => type==="number"?{kind:"number",value:0}: type === "string-set"?{kind:"string-set",values:[]}:type === "decimal"?{kind:"decimal",value:"0"}:type === "boolean" ? false : "";
 const expression = (op: string): Api.PageExpression => {
   const contract = pageVariableContract.operators.find((item) => item.id === op)!;
   return { op, args: Array.from({ length: contract.minArgs }, () => ({ literal: initial(contract.input) })) };
 };
 
-export function VariablesPanel({ document, sections, values, onChange, object, application = false, entity }: { object?:Api.AssetRef; application?: boolean; entity?: (type: string) => EntityInfo | undefined; document: Api.PageDocument; sections: (Pick<Api.Section,"id"|"widget"|"title"|"graphExplorer"|"observation"|"collectionVariable">&{object?:string|Api.AssetRef})[]; values: Record<string, PageVariableValue>; onChange: (document: Api.PageDocument) => void }) {
+export function VariablesPanel({ document, sections, values, onChange, object, application = false, entity }: { object?:Api.AssetRef; application?: boolean; entity?: (type: string) => EntityInfo | undefined; document: PageUI.PageDocument; sections: (Pick<PageUI.Section,"id"|"widget"|"title"|"graphExplorer"|"observation"|"collectionVariable">&{object?:string|Api.AssetRef})[]; values: Record<string, PageVariableValue>; onChange: (document: PageUI.PageDocument) => void }) {
   const { definitions,source } = useHost();
   const fields = (object?: string) => (entity ?? source.entity)(object ?? "")?.fields ?? [];
   const shared = Object.fromEntries(definitions.flatMap((d) => Object.entries(d.application?.variables ?? {})));
@@ -123,7 +124,7 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
   </Card>;
 }
 
-function Argument({ value, variables, document, onChange }: { value: Api.PageValue; variables: Variables; document: Api.PageDocument; onChange: (value: Api.PageValue) => void }) {
+function Argument({ value, variables, document, onChange }: { value: PageUI.PageValue; variables: Variables; document: PageUI.PageDocument; onChange: (value: PageUI.PageValue) => void }) {
   const number=isPageDecimalDraft(value.literal),text = typeof value.literal !== "boolean";
   const children = Object.values(document.nodes).filter((node) => node.kind === "tabs").flatMap((node) => node.children ?? []);
   return <>
@@ -140,7 +141,7 @@ function Argument({ value, variables, document, onChange }: { value: Api.PageVal
   </>;
 }
 
-export function NodeBindings({ document, id, button, input, onChange }: { document: Api.PageDocument; id: string; button?: boolean; input?: boolean; onChange: (patch: Partial<Api.PageLayoutNode>) => void }) {
+export function NodeBindings({ document, id, button, input, onChange }: { document: PageUI.PageDocument; id: string; button?: boolean; input?: boolean; onChange: (patch: Partial<PageUI.PageLayoutNode>) => void }) {
   const node = document.nodes[id], owner = loopOwner(document, id), overlay = overlayOwner(document, id);
   const visible = Object.entries(document.variables ?? {}).filter(([, variable]) => variableAccessible(variable, owner, overlay));
   const eligible = visible.filter(([, variable]) => variable.type === "boolean");

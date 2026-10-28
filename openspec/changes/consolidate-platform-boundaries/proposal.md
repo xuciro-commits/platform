@@ -2,28 +2,33 @@
 
 ## Why
 
-负责人判定架构边界不清晰是重构双线中的另一条：`capabilities/server/cmd/` 有 14 个二进制，运行进程、运维工具与代码生成工具混在同一目录，部署面看起来比实际大；Go 宿主 ~20 万行以 `host.go` + `accepted_*.go` + `routes_*.go` 大文件组织，新人无法把整体装进脑子；前端 6 包边界与体验线（`redesign-product-experience`）定版的构建 / 运营 / 系统三区脱节；依赖升级长期悬置，沙箱无 Go 代理时还原依赖靠手工。
+当前宿主模块有679个非测试Go文件，root263、公共API166、Build73、construction42、host15；同一责任跨草稿、编译、执行、格式与装配散落，但名称相同不代表这些语义全部重复。原变更以“一种结果一个文件”和目录化搬迁收尾，未解决实际owner与类型转换，且双端口、三服务及已失效的等待条件仍在规划中。
 
-事实核对：实际部署的运行服务只有 3 组——platform-server（双实例 8490/8495）、gateway 及其托管的 driver 子进程、compute 栈（code-builder + wasm-worker 隔离对）；webhook-sink 仅为本地栈与演练的接收端。其余（api-types、check-boundaries、uaf-gen、rule-browser、storage-files 校验工具）从不参与部署拓扑。混乱主要来自分类缺失而非进程过多。
+按负责人新意图，本变更升级为四场减脂工作的结构主线：先用真实基线阻止继续膨胀，再按原owner逐块消除转发与重复。后端非测试文件至少减半是待实施的交付约束，不能用重命名、移走生成物或删除验证来代替行为正确。
 
 ## What Changes
 
-- **cmd 分类与进程收敛。** `cmd/` 按「运行服务 / 运维工具 / 代码生成工具」分类并写明部署归属；webhook-sink 收编为 platform-server 的可选进程内能力（composition 显式声明，端口 8497 语义保留），本地 compose 少一个独立服务。运行服务收敛为 3 个程序：platform-server、gateway、compute。**有意不合并**：wasm-worker 与 code-builder 的隔离对是租户代码的受控执行安全边界，driver 子进程是设备会话的崩溃隔离边界，合并会削弱 `runtime/deployment` 既有保证。
-- **Go 宿主分域拆分。** `host.go`、`routes_*.go`、`accepted_*.go` 大文件按应用域拆为可导航的包结构；单写者锁义务、提交管线顺序与对外行为不变；`scripts/boundaries.sh`、`scripts/escapes.sh` 已知逃逸只减不增。
-- **Web 包按三区重划。** 依赖体验线 M2 的三区定版：`@platform/ui`、`@platform/kernel`、`@platform/app` 三个基础包名与公共面保持稳定，构建 / 运营 / 系统三区各自的界面代码归入对应区包；映射在 design.md，随体验线定版对齐。
-- **依赖策略。** 重构期间全部依赖版本冻结；提供 `scripts/restore-deps.sh` 从 GitHub 直连批量还原 Go 模块与前端依赖（`GOPROXY=direct`，扩展 `scripts/sandbox-go.sh` 思路），沙箱重置后一条命令还原；全部里程碑完成后单独做一轮依赖升级并独立验证。
-- 不改内核契约、提交管线语义、接受结果格式、存储格式与授权判定；既有租户数据卷、密钥与应用配置原样保留。
+- 实施构建守门：每package非测试Go≤25；4个超额包按当前基线递减；全仓同名组、退役目录、视觉AST、模型调用入口及纯rules I/O均受静态检查。既有债务只准减少，基线文件不得扩大或保留已删除条目。守门通过不代表存量已经符合目标。
+- 按 **kernel（接受、持久化、恢复）/engine（流程、规则、权限）/studio（设计、编译、发布）/aigateway（模型协议、阶段、预算）** 内聚，保留 `platform` 为应用唯一公共API；四职责互不直接导入，以既有窄typed角色由composition装配，不能让apps反向导入旧root或新职责实现。
+- `accepted_*.go` 的23个运行协调文件收敛为三个职责文件，净减少20条旧路径；保留所有原格式、结果族、回调、批次、控制、发布、SQL与旧输入责任。泛型/表驱动只消除机械调度，不创建统一业务裁决者或第二个接受入口。
+- 42个construction与73个Build文件内聚为同一studio Build owner，重复声明和传话筒同批删除；保留真正的作者到运行描述编译，以及剥离凭据、地址、状态的安全投影。15个host文件中的有用窄接口并入既有platform角色文件，Attach及私有fork重接线只归composition，不能把聚合Host搬成公共超级接口。
+- [逐文件对照清单](file-consolidation.md)覆盖679个生产源文件、29组Build/construction同名差异和目标包预算。当前映射有215个目标路径；最终跨变更去重后必须≤339且每包≤25，若行为所需结构超出则先修订规划，不能放宽权限/格式/测试凑数。
+- 页面视觉解耦、端侧纯规则由 [页面变更](../decouple-page-presentation-contract/proposal.md) 负责；AI阶段、MCP与蒸馏由 [AI变更](../isolate-ai-execution-and-training-data/proposal.md) 负责；UAF外移及静态控制面由 [自举收缩](../platform-self-hosting/proposal.md) 负责。本变更不重复其语义实现。
+- 既有12项完成记录保留并标记为历史；双宿主/三服务默认拓扑、全量自举和“等待Go代理才能拆包”等旧目标撤回。当前本地入口是同一Platform默认8495，独立受控编译/Worker边界按实际配置保留。
 
 ## Capabilities
 
 ### New Capabilities
 
-无。
+无。四个目录是实现职责，不是四个新的业务权威或永久规范模块。
 
 ### Modified Capabilities
 
-- `runtime/deployment`：默认进程拓扑收敛、cmd 分类归属与开发工具排除、可选进程内能力的显式声明方式。
+- `runtime/host`：原权威、结果族与窄角色在职责内聚时保留；装配不得反向变为另一个运行时。
+- `runtime/deployment`：结构守门与递减债务，按实际单入口及工具/隔离执行职责描述部署，不再硬编码过时三服务拓扑。
 
 ## Impact
 
-修改 `capabilities/server/cmd/`（分类与 webhook-sink 收编）、`capabilities/server/composition/`（能力声明）、`capabilities/server/` 宿主内部文件组织、`deploy/local/compose.yaml` 与 `lite.sh`（服务清单）、`scripts/`（restore-deps、boundaries、escapes）、`Makefile`、AGENTS 与 Architecture 的代码地图。端口 8490/8495/8497 对外语义不变；compose 服务数量减少；演练（`make rehearse`）与恢复操作边界不变。工作方式变化（包导入规则、工具清单）同步进 AGENTS；两个 change 的里程碑在 `docs/WorkQueue.md` 统一排序，边界线 B4（Web 包重划）等待体验线 M2 三区定版后启动。
+涉及679文件的规划映射、原接受与记录机制、Build编译发布、公共API及composition；负责人已授权分步实现；守门、系统冻结、原组织owner及部分页面/AI边界已落实，具体完成范围见各tasks。其余迁移、文件减半和完整收口仍未完成。
+
+每批报告真实生产LOC净变化、纯移动、生成物、外移与行为验证；完整格式、历史、当前权限、恢复、pinned版本及静态修复入口是验收前提。归档前必须完成跨变更最终计数及适用真实恢复和浏览器路线，不能凭目录图或绿的规划检查宣布减半已完成。

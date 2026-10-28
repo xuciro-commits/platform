@@ -1,10 +1,12 @@
+import {pageUIManifest} from "@platform/app/page-contract";
+import type {PageUI} from "@platform/app";
 import type { Api, ActionDeclaration } from "@platform/kernel";
 import { pageLayoutDiagnostics, pageVariableContract, pageVariableDiagnostics, parsePageDecimal, widgetContract } from "@platform/app";
 import { searchInputObjects } from "@platform/app/search";
 import { validActionDefaults } from "@platform/app/action-defaults";
 import { validExternalFrame } from "@platform/ui/external-frame";
 import { validTimestampOffset, validChoiceInput, rangeGrid, gaugeModel, progressRatio, ganttRange, type EntityInfo } from "@platform/ui";
-import { pageUIManifest } from "@platform/kernel";
+
 import { materializeModelSection } from "@platform/app/model";
 import { variableAccessible, overlayOwner, loopOwner } from "../page-layout";
 import { pageCompatibility } from "./compatibility";
@@ -31,7 +33,7 @@ export function pageDraftDiagnostics(draft: PageDraft, { object, entity: authori
   const add = (code: string, target: PageDiagnostic["target"], subject?: string, values?: Record<string, number>) => issues.push({ id: `diagnostic:${issues.length}`, code, target, subject, values });
   const bytes = (value: string) => new TextEncoder().encode(value).length;
   const nodes = Object.entries(document.nodes);
-  const leaves = new Map<string | undefined, [string, Api.PageLayoutNode][]>();
+  const leaves = new Map<string | undefined, [string, PageUI.PageLayoutNode][]>();
   for (const entry of nodes) if (entry[1].kind === "widget") {
     const previous = leaves.get(entry[1].section) ?? [];
     previous.push(entry); leaves.set(entry[1].section, previous);
@@ -41,7 +43,7 @@ export function pageDraftDiagnostics(draft: PageDraft, { object, entity: authori
   const compatibility = pageCompatibility(draft);
   if (!compatibility.supported || compatibility.issues.length) add("This draft needs a newer workspace version. Its saved content has been preserved.", { kind: "compatibility" });
   if (!compatibility.current.valid || Object.values(document.queries ?? {}).some(query => query.limit < 1 || query.limit > pageVariableContract.query.maxLimit || query.conditions?.some(condition => !condition.field))) add("Each query needs a field for every condition and a limit within the budget.", { kind: "queries" });
-  const selectionNames = new Map<string, Api.SelectionVariable>();
+  const selectionNames = new Map<string, PageUI.SelectionVariable>();
   let invalidSelection = false;
   for (const selection of selections) {
     invalidSelection ||= !/^[a-z][a-z0-9_-]{0,63}$/.test(selection.name) || selectionNames.has(selection.name);

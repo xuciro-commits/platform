@@ -1,11 +1,11 @@
-import type {Api} from "@platform/kernel";
+import type {RecordEventsOptions} from "../presentation";
 import {t} from "../i18n";
 import {Tag,type Tone} from "../components/StatusTag";
 import type {EntityInfo,EntityRecord} from "./Records";
 import {timelineTime} from "./RecordTimeline";
 
 const tones=["neutral","info","success","warning","danger"];
-export function recordEventRows(records:EntityRecord[],info:EntityInfo,fields:Api.PageRecordEvents,maxEvents=30) {
+export function recordEventRows(records:EntityRecord[],info:EntityInfo,fields:RecordEventsOptions,maxEvents=30) {
  const time=info.fields.find(f=>f.name===fields.timeField),title=info.fields.find(f=>f.name===fields.titleField),severity=info.fields.find(f=>f.name===fields.severityField);
  if(!time||!["date","datetime"].includes(time.type)||fields.titleField!=="id"&&(!title||!["text","longtext","choice","reference"].includes(title.type))||severity?.type!=="choice"||!Number.isInteger(maxEvents)||maxEvents<1||maxEvents>30||fields.tones.length>32||new Set(fields.tones.map(t=>t.value)).size!==fields.tones.length||fields.tones.some(t=>!severity.choices?.includes(t.value)||!tones.includes(t.tone)))return;
  const rows=records.slice(0,maxEvents).map(record=>{const stamp=timelineTime(record[fields.timeField],time.type as "date"|"datetime"),value=String(record[fields.severityField]??""),tone=(fields.tones.find(t=>t.value===value)?.tone??"neutral") as Tone;return {id:record.id,title:fields.titleField==="id"?record.id:String(record[fields.titleField]??record.id),time:stamp===undefined?undefined:time.type==="date"?new Date(stamp).toISOString().slice(0,10):new Date(stamp).toISOString().replace(".000Z","Z"),severity:severity.choiceTitles?.[severity.choices?.indexOf(value)??-1]??value,tone};});
@@ -14,7 +14,7 @@ export function recordEventRows(records:EntityRecord[],info:EntityInfo,fields:Ap
 }
 
 /** The caller owns the authorized ordered window and business-time mapping. */
-export function RecordEvents({records,info,fields,maxEvents=30}:{records:EntityRecord[];info:EntityInfo;fields:Api.PageRecordEvents;maxEvents?:number}) {
+export function RecordEvents({records,info,fields,maxEvents=30}:{records:EntityRecord[];info:EntityInfo;fields:RecordEventsOptions;maxEvents?:number}) {
  const rows=recordEventRows(records,info,fields,maxEvents);
  if(!rows)return <p role="alert" className="text-sm text-danger">{t("Event fields or tone mappings are unavailable or incompatible.")}</p>;
  const color:Record<Tone,string>={neutral:"bg-muted",info:"bg-[var(--tone-info)]",success:"bg-[var(--tone-success)]",warning:"bg-[var(--tone-warning)]",danger:"bg-[var(--tone-danger)]",purple:"bg-[var(--tone-purple)]",pink:"bg-[var(--tone-pink)]",teal:"bg-[var(--tone-teal)]",orange:"bg-[var(--tone-orange)]"};

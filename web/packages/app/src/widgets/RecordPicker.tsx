@@ -1,8 +1,8 @@
+import type * as PageUI from "../pageui/types";
 import {Button,ContextHelp,InterfaceRecordLookup,Panel,RecordLookup,t,type RecordSource,type EntityRecord,type InterfaceRecordData} from "@platform/ui";
 import type {VariableResult} from "../runtime/variables";
-import type {Api} from "@platform/kernel";
 import type {QueryWindow} from "./QueryWindowFrame";
-export function RecordPickerRenderer({source,window,type,fields,title,selected,enabled,value,onSelect,confirmation,interfaceReference,onInterfaceSelect,onOpen}:{source?:RecordSource;confirmation?:"empty"|"pending"|"value"|"error";value?:VariableResult;window?:QueryWindow;type:string;fields?:Api.PageRecordPicker;title:string;selected?:EntityRecord;enabled?:boolean;onSelect:(record?:EntityRecord)=>void;interfaceReference?:{object:string;id:string};onInterfaceSelect?:(row?:InterfaceRecordData)=>void;onOpen?:(type:string,record:EntityRecord)=>void}){
+export function RecordPickerRenderer({source,window,type,fields,title,selected,enabled,value,onSelect,confirmation,interfaceReference,onInterfaceSelect,onOpen}:{source?:RecordSource;confirmation?:"empty"|"pending"|"value"|"error";value?:VariableResult;window?:QueryWindow;type:string;fields?:PageUI.PageRecordPicker;title:string;selected?:EntityRecord;enabled?:boolean;onSelect:(record?:EntityRecord)=>void;interfaceReference?:{object:string;id:string};onInterfaceSelect?:(row?:InterfaceRecordData)=>void;onOpen?:(type:string,record:EntityRecord)=>void}){
  if(!source||!fields||!window)return <Panel role="status">{t("Record picker window is unavailable.")}</Panel>;
  if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
  if(window.query.limit!==20||!!window.query.offset||JSON.stringify(window.query.sort)!==JSON.stringify(["id"]))return <Panel role="alert">{t("Record picker window bounds or ordering changed.")}</Panel>;

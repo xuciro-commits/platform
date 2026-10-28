@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import {validStaticImage} from "@platform/ui/static-image";
 import type {Api} from "@platform/kernel";
 import {loopOwner,overlayOwner} from "../page-layout";
@@ -5,7 +6,7 @@ import {collaborationRecordSource} from "./collaboration";
 import type {AuthoringSection} from "./draft";
 type Info={fields:{name:string;type:string;ref?:string}[]};
 const title=["text","longtext","choice","reference"],scalar=[...title,"integer","decimal","money","date","datetime","boolean"],field=(info:Info|undefined,name:string,caption:boolean)=>name==="id"||!!info?.fields.some(f=>f.name===name&&(caption?title:scalar).includes(f.type));
-export function contextViewProblem(document:Api.PageDocument,sections:AuthoringSection[],s:AuthoringSection,object:string,entity:(type:string)=>Info|undefined,definitions:Api.Definition[]):boolean {
+export function contextViewProblem(document:PageUI.PageDocument,sections:AuthoringSection[],s:AuthoringSection,object:string,entity:(type:string)=>Info|undefined,definitions:Api.Definition[]):boolean {
  if(!["breadcrumb","avatar-stack","static-image"].includes(s.widget))return false;
  const leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined;
  if(!leaf||loopOwner(document,leaf)||s.fields?.length||s.actions?.length||s.selection||s.selectionVariable||s.selectionSetVariable||s.recordSetVariable||s.filterVariable||s.relation||s.parentSelection||s.query||s.inlineEdit||s.function||s.operation||Object.keys(s.inputs??{}).length)return true;

@@ -54,6 +54,7 @@ func TestKnowledge(t *testing.T) {
 		fmt.Fprintf(w, `{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c","type":"function","function":{"name":%q,"arguments":%q}}]}}],"usage":{"prompt_tokens":40,"completion_tokens":8}}`, name, string(raw))
 	}))
 	defer model.Close()
+	approveTestInference(t, model.URL, "lm")
 	var journal []Entry
 	build := func() *Tenant {
 		seat := func(id string, roles map[string]string) Seat {

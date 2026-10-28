@@ -32,6 +32,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [tenant, setTenant] = useState(remembered(TENANT_KEY) ?? "");
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
+  const [maintenanceRequested, setMaintenanceRequested] = useState(false);
   const client = useMemo(() => new EdgeClient({ server: "", token, tenant, principal: "" }), [token, tenant]);
   const queries=useQueryClient();
   const [online,setOnline]=useState(navigator.onLine),[offlineOpen,setOfflineOpen]=useState(false);
@@ -64,8 +65,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const me = meQuery.isError && !connectionUnavailable ? undefined : meQuery.data;
   // A subject the host names an administrator may be a member of no tenant: the console still opens for them.
   const noMember = meQuery.isError && /HTTP 401/.test(String(meQuery.error));
-  const needsHostConsole = noMember || meQuery.isError && /HTTP 503/.test(String(meQuery.error));
+  const needsHostConsole = maintenanceRequested || noMember || meQuery.isError && /HTTP 503/.test(String(meQuery.error));
   const hostAdminQuery = useQuery({ queryKey: [token, "host-only"], queryFn: () => client.get<HostAdmin>("/v1/host/me"), enabled: needsHostConsole, retry: false });
+  useEffect(() => {
+    if (maintenanceRequested && hostAdminQuery.data) location.hash = routeToHash({view:"host-overview"});
+  }, [maintenanceRequested, hostAdminQuery.data?.subject]);
   const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
   useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
@@ -226,6 +230,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     return views;
   }, [activeContributions]);
 
+  if (maintenanceRequested && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
+  if (maintenanceRequested && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
   if (meQuery.error && !(connectionUnavailable && me)) {
     if (needsHostConsole && hostAdminQuery.isPending) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
     if (needsHostConsole && hostAdminQuery.data) return <HostOnly client={client} token={token} admin={hostAdminQuery.data} email={signedIn?.session.email} onSignOut={signedIn ? () => void leaveSession() : undefined} />;
@@ -239,7 +245,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     <div className="grid max-w-md gap-2 text-center">
       <p role={alert ? "alert" : "status"} className={alert ? "text-danger" : "text-muted"}>{message}</p>
       {detail && <p className="break-words text-xs text-muted">{detail}</p>}
-      <div className="flex justify-center gap-2"><Button size="sm" onClick={retry}>{t("Retry")}</Button><Button size="sm" variant="ghost" onClick={() => void leaveSession()}>{t("Sign out")}</Button></div>
+      {maintenanceRequested && hostAdminQuery.isError && <p role="alert" className="text-danger">{t("Host maintenance is unavailable. Check your administrator access and connection.")}</p>}
+      <div className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={retry}>{t("Retry")}</Button><Button size="sm" variant="default" onClick={() => { setMaintenanceRequested(true); if (maintenanceRequested) void hostAdminQuery.refetch(); }}>{t("Open host maintenance")}</Button><Button size="sm" variant="ghost" onClick={() => void leaveSession()}>{t("Sign out")}</Button></div>
     </div>
   </main>;
   if (declared.phase === "error") return bootstrap(t("The host's declarations could not load, so the workspace cannot tell what you may see and do."), undefined, () => setDeclareAttempt((n) => n + 1));

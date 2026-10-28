@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import type {RecordGanttOptions} from "../presentation";
 import {Tag,type Tone} from "../components/StatusTag";
 import {t} from "../i18n";
 import {timelineTime} from "./RecordTimeline";
@@ -9,7 +9,7 @@ export function ganttRange(start:string,end:string) {
  const a=timelineTime(start,"date"),b=timelineTime(end,"date");
  return a!==undefined&&b!==undefined&&!start.startsWith("0000")&&!end.startsWith("0000")&&a<b?{start:a,end:b}:undefined;
 }
-export function recordGanttRows(records:EntityRecord[],info:EntityInfo,fields:Api.PageRecordGantt,maxRows=20) {
+export function recordGanttRows(records:EntityRecord[],info:EntityInfo,fields:RecordGanttOptions,maxRows=20) {
  const start=info.fields.find(f=>f.name===fields.startField),end=info.fields.find(f=>f.name===fields.endField),title=info.fields.find(f=>f.name===fields.titleField),status=info.fields.find(f=>f.name===fields.statusField),range=ganttRange(fields.rangeStart,fields.rangeEnd);
  if(!range||!start||!end||!["date","datetime"].includes(start.type)||!["date","datetime"].includes(end.type)||fields.titleField!=="id"&&(!title||!["text","longtext","choice","reference"].includes(title.type))||status?.type!=="choice"||!Number.isInteger(maxRows)||maxRows<1||maxRows>20||fields.tones.length>32||new Set(fields.tones.map(t=>t.value)).size!==fields.tones.length||fields.tones.some(t=>!status.choices?.includes(t.value)||!supportedTones.includes(t.tone)))return;
  const rows=records.slice(0,maxRows).map(record=>{
@@ -23,7 +23,7 @@ export function recordGanttRows(records:EntityRecord[],info:EntityInfo,fields:Ap
 }
 
 /** Original ordered window in; a fixed viewport out. No scheduling writes. */
-export function RecordGantt({records,info,fields,maxRows=20}:{records:EntityRecord[];info:EntityInfo;fields:Api.PageRecordGantt;maxRows?:number}) {
+export function RecordGantt({records,info,fields,maxRows=20}:{records:EntityRecord[];info:EntityInfo;fields:RecordGanttOptions;maxRows?:number}) {
  const model=recordGanttRows(records,info,fields,maxRows);
  if(!model)return <p role="alert">{t("Gantt fields, range or tone mappings are unavailable or incompatible.")}</p>;
  const color:Record<Tone,string>={neutral:"bg-muted",info:"bg-[var(--tone-info)]",success:"bg-[var(--tone-success)]",warning:"bg-[var(--tone-warning)]",danger:"bg-[var(--tone-danger)]",purple:"bg-[var(--tone-purple)]",pink:"bg-[var(--tone-pink)]",teal:"bg-[var(--tone-teal)]",orange:"bg-[var(--tone-orange)]"};

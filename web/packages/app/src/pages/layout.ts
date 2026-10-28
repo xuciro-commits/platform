@@ -1,7 +1,8 @@
-import {pageUIManifest,type Api} from "@platform/kernel";
+import {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
 
 /** Application API diagnostics; the host remains the save/publish authority. */
-export function pageLayoutDiagnostics(document:Api.PageDocument,sections:Pick<Api.Section,"id"|"widget"|"configVersion">[]=[]):{node:string;code:string}[] {
+export function pageLayoutDiagnostics(document:PageUI.PageDocument,sections:Pick<PageUI.Section,"id"|"widget"|"configVersion">[]=[]):{node:string;code:string}[] {
  const limits=pageUIManifest.layout,issues:{node:string;code:string}[]=[];
  const parents=new Map<string,string>();
  for(const [id,n]of Object.entries(document.nodes))for(const child of n.children??[]){if(parents.has(child))issues.push({node:child,code:"Slot and layout nodes need one parent."});parents.set(child,id);}

@@ -1,10 +1,10 @@
-import type {Api} from "@platform/kernel";
+import type {SceneConfigOptions, SceneLayerOptions, SceneMappingOptions} from "../presentation";
 import type {EntityInfo,EntityRecord} from "../records/Records";
 
 export type SceneInput={record:EntityRecord;info:EntityInfo};
-export type SceneMapping=Api.PageSceneMapping;
-export type SceneLayer=Api.PageSceneLayer;
-export type SceneConfig=Api.PageSceneConfig;
+export type SceneMapping=SceneMappingOptions;
+export type SceneLayer=SceneLayerOptions;
+export type SceneConfig=SceneConfigOptions;
 export const sceneLimits={maxBytes:16<<20,maxJSONBytes:1<<20,maxNodes:512,maxMeshes:256,maxMaterials:128,maxVertices:250000,maxIndices:1500000,maxTexturePixels:16000000,maxLayers:32,maxMappings:64} as const;
 const hex=(color?:string)=>color===undefined||/^#[\da-fA-F]{6}$/.test(color);
 export function validSceneConfig(c:SceneConfig):boolean{

@@ -1,4 +1,5 @@
-import {pageUIManifest} from "@platform/kernel/host-contract";
+import {pageUIManifest} from "../pageui/manifest";
+
 import type {Api} from "@platform/kernel";
 import type {EntityInfo,RecordQuery} from "@platform/ui";
 import {isDecimal} from "./decimal";

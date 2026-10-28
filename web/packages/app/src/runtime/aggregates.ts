@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import type {AggregateData,AggregateQuery,RecordQuery} from "@platform/ui";
 import type {VariableResult} from "./variables";
 
@@ -28,7 +29,7 @@ export function aggregateValue(data:AggregateData,requested:string|readonly stri
 }
 
 /** Preview uses the same declaration budget as saved pages, before any read. */
-export function aggregateBudget(variables:Record<string,import("@platform/kernel").Api.PageVariable>,plans:Record<string,import("@platform/kernel").Api.PageQuery>,nodes:Record<string,import("@platform/kernel").Api.PageLayoutNode>,contract:{maxVariables:number;maxExpandedReads:number}) {
+export function aggregateBudget(variables:Record<string,import("@platform/kernel").Api.PageVariable>,plans:Record<string,import("@platform/kernel").Api.PageQuery>,nodes:Record<string,PageUI.PageLayoutNode>,contract:{maxVariables:number;maxExpandedReads:number}) {
  const declarations=Object.values(variables).filter(v=>v.mode==="aggregate");if(declarations.length>contract.maxVariables)return false;
  const parents=new Map<string,string>();for(const [id,node] of Object.entries(nodes))for(const child of node.children??[]){if(parents.has(child))return false;parents.set(child,id);}
  let total=0;

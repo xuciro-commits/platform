@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Open host maintenance": "打开宿主维护",
+  "Host maintenance is unavailable. Check your administrator access and connection.": "无法打开宿主维护，请检查管理员权限和连接。",
   "Open an application or continue your work.": "打开应用，或继续之前的工作。",
   "Workspace tasks": "工作入口",
   "Operate": "运营",

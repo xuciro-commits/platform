@@ -1,8 +1,9 @@
-import {pageUIManifest} from "@platform/kernel";
+import {renderingLimits} from "../gen/presentation-limits";
+
 import {Button} from "../primitives/button";
 import {t} from "../i18n";
 import type {AggregateData} from "./spec";
-const limits=pageUIManifest.runtime.heatmap;
+const limits=renderingLimits.runtime.heatmap;
 type Value=string|number|boolean|null;
 type Axis={key:string;value:Value};
 const identity=(value:Value)=>JSON.stringify([value===null?"missing":typeof value,value]);

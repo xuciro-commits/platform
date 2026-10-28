@@ -3,7 +3,7 @@ import test from "node:test";
 import {readFileSync} from "node:fs";
 import {registerHooks} from "node:module";
 import {copyLayout,pasteLayout} from "./clipboard.ts";
-const contract=JSON.parse(readFileSync(new URL("../../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url)));
+const contract=JSON.parse(readFileSync(new URL("../../../../app/src/pageui/widgets.json",import.meta.url)));
 const interfaceAPI=new URL("../../../../app/src/runtime/ontology-interface.ts",import.meta.url).href;
 registerHooks({resolve(s,c,next){if(s==="@platform/app")return {url:"data:text/javascript,"+encodeURIComponent(`export {interfaceQueryForSection} from ${JSON.stringify(interfaceAPI)};export const pageUIProfile=${JSON.stringify(contract.uiProfile)};export const pageVariableContract=${JSON.stringify(contract.runtime)};`),shortCircuit:true};try{return next(s,c)}catch(e){if(s.startsWith("./")||s.startsWith("../"))return next(`${s}.ts`,c);throw e;}}});
 const {synchronizeLoopBindings}=await import("../page-layout.ts");

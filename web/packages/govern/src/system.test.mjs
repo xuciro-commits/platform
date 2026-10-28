@@ -3,51 +3,63 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const state=vi.hoisted(()=>({host:undefined,files:undefined}));
-vi.mock("@platform/app",()=>({useHost:()=>state.host,useReadQuery:path=>({data:path.startsWith("/v1/system-files?")?Object.values(state.files):[],isLoading:false,refetch:vi.fn()})}));
-import { Workspace, setLanguage } from "@platform/ui";
+const state=vi.hoisted(()=>({host:undefined,files:undefined,reads:undefined,error:undefined,refetch:vi.fn()}));
+vi.mock("@platform/app",()=>({useHost:()=>state.host,useReadQuery:path=>({data:path.startsWith("/v1/system-files?")?Object.values(state.files):state.reads[path],error:state.error,isLoading:false,refetch:state.refetch})}));
+import { setLanguage } from "@platform/ui";
+import "./i18n.ts";
 import { SystemConsole } from "./system.tsx";
 
 let root,container,queries;
-const click=async text=>{const button=[...document.querySelectorAll("button")].find(button=>button.textContent===text);expect(button).toBeDefined();await act(async()=>button.click());};
+const click=async text=>{let button;await waitFor(()=>{button=[...document.querySelectorAll("button")].find(button=>button.textContent===text);expect(button).toBeDefined();});await act(async()=>button.click());};
 const waitFor=async assertion=>{let error;for(let step=0;step<100;step++){await act(async()=>{await vi.runOnlyPendingTimersAsync();});try{assertion();return;}catch(problem){error=problem;}}throw error;};
-const content=()=>container.querySelector("textarea[rows='16']");
-const expectContent=value=>waitFor(()=>expect(content()?.value).toBe(value));
-const input=async value=>{await act(async()=>{const editor=content();Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value").set.call(editor,value);editor.dispatchEvent(new Event("input",{bubbles:true}));});};
-const open=async path=>{const input=[...container.querySelectorAll("label")].find(label=>label.textContent==="Path").querySelector("input");await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,path);input.dispatchEvent(new Event("input",{bubbles:true}));});await click("Open or create file");};
-const start=()=>waitFor(()=>expect([...container.querySelectorAll("label")].some(label=>label.textContent==="Path")).toBe(true));
+const render=()=>act(()=>root.render(createElement(QueryClientProvider,{client:queries},createElement(SystemConsole))));
 beforeEach(()=>{
  vi.useFakeTimers();localStorage.clear();history.replaceState(null,"","/#/self-hosting");setLanguage("en");
  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);
  vi.stubGlobal("ResizeObserver",class{observe(){}unobserve(){}disconnect(){}});
+ vi.spyOn(HTMLElement.prototype,"offsetHeight","get").mockReturnValue(480);vi.spyOn(HTMLElement.prototype,"offsetWidth","get").mockReturnValue(1200);
  vi.stubGlobal("matchMedia",query=>({matches:false,media:query,addEventListener(){},removeEventListener(){}}));
- state.files=Object.fromEntries(["a.ts","b.ts"].map(path=>[path,{path,content:`saved ${path}`,revision:1,digest:path,size:10,editable:true}]));
- state.host={catalog:[{schema:"system.file.save",target:"system.file"}],source:{scope:"test"},client:{connection:{token:"manager",tenant:"system"},authorities:{outbox:[]},enableLiveReads:()=>()=>{},get:vi.fn(async path=>state.files[new URL(path,"http://localhost").searchParams.get("path")])},refresh:vi.fn(),decide:vi.fn()};
+ state.files={"a.ts":{path:"a.ts",content:"retained source",revision:4,digest:"source-digest",size:15,editable:true}};
+ state.reads={"/v1/system-changes":[{id:"original-change",title:"Retained change",state:"draft",rationale:"Original reason",release:2,files:[{path:"a.ts",digest:"frozen-digest",content:"frozen source",before:{digest:"prior-digest",content:"prior source"}}]}],"/v1/system-releases":[{id:"2",version:2,state:"published",change:"original-change"}],"/v1/system-activations":[{id:"original-activation",release:2,result:"requested",at:"2026-10-27T10:00:00Z",window:600}]};
+ state.error=undefined;state.refetch.mockClear();
+ state.host={catalog:["system.file.save","system.change.propose","system.change.approve","system.release.activate","system.release.cancel","agent.run.start"].map(schema=>({schema,target:"system.file"})),source:{scope:"test"},client:{connection:{token:"manager",tenant:"system"},authorities:{outbox:[]},enableLiveReads:()=>()=>{},get:vi.fn(async path=>state.files[new URL(path,"http://localhost").searchParams.get("path")]),send:vi.fn()},refresh:vi.fn(),decide:vi.fn()};
  queries=new QueryClient({defaultOptions:{queries:{retry:false}}});container=document.createElement("div");document.body.append(container);root=createRoot(container);
- act(()=>root.render(createElement(QueryClientProvider,{client:queries},createElement(Workspace,{product:"System",storageKey:"system:test",views:[{id:"self-hosting",title:()=>"Self-hosting",render:()=>createElement(SystemConsole)}],home:{view:"self-hosting"},nav:[]}))));
+ render();
 });
-afterEach(async()=>{await act(async()=>{root?.unmount();queries?.clear();focusManager.setFocused(undefined);onlineManager.setOnline(true);await vi.runOnlyPendingTimersAsync();});document.body.replaceChildren();vi.useRealTimers();vi.unstubAllGlobals();});
+afterEach(async()=>{await act(async()=>{root?.unmount();queries?.clear();focusManager.setFocused(undefined);onlineManager.setOnline(true);await vi.runOnlyPendingTimersAsync();});document.body.replaceChildren();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();});
 
-test("source switching preserves edits until the original workspace discard is confirmed",async()=>{
- await start();await open("a.ts");await expectContent("saved a.ts");await input("unsaved source");expect(content().value).toBe("unsaved source");
- await open("b.ts");expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Unsaved changes");
- await click("Keep editing");expect(content().value).toBe("unsaved source");
- await open("b.ts");await click("Discard changes");await expectContent("saved b.ts");
- await open("a.ts");await expectContent("saved a.ts");
-});
-
-test("focus, reconnection and host refresh preserve edits until the original reload is confirmed",async()=>{
- await start();await open("a.ts");await expectContent("saved a.ts");await input("keep source");state.files["a.ts"]={...state.files["a.ts"],content:"new saved source",revision:2,digest:"new"};
- await act(async()=>{focusManager.setFocused(false);focusManager.setFocused(true);onlineManager.setOnline(false);onlineManager.setOnline(true);await queries.invalidateQueries();await vi.runOnlyPendingTimersAsync();});
- expect(content().value).toBe("keep source");await click("Reload file and discard edits");await click("Keep editing");expect(content().value).toBe("keep source");
- await click("Reload file and discard edits");await click("Discard changes");await expectContent("new saved source");
+test("even an old writable catalog cannot expose source, proposal or activation controls",async()=>{
+ await waitFor(()=>expect(container.textContent).toContain("System source editing, proposals, approvals, builds and new activations are frozen."));
+ for(const label of ["Save file","Open or create file","Propose selected changes","Approve","Activate","Cancel activation","Run the architect"]){expect([...container.querySelectorAll("button")].some(button=>button.textContent===label)).toBe(false);}
+ expect(container.querySelector("textarea")).toBeNull();
+ expect(container.querySelector('a[href="#/control-panel"]')).not.toBeNull();expect(container.querySelector('a[href="#/host-overview"]')).not.toBeNull();
+ expect(state.host.decide).not.toHaveBeenCalled();
 });
 
-test("an unanswered source save blocks switching without losing its input or request",async()=>{
- await start();await open("a.ts");await expectContent("saved a.ts");await input("pending source");
- const entry={state:"SUBMISSION_STATE_UNKNOWN",submission:{idempotencyKey:"original",schema:{name:"system.file.save"},target:{id:"a.ts"}}};
- state.host.decide.mockImplementation(async(_schema,_target,_values,options)=>{state.host.client.authorities.outbox.push(entry);options.onOutcome(entry);return false;});
- await click("Save file");await waitFor(()=>expect(container.textContent).toContain("Unconfirmed requests"));await open("b.ts");
- expect(content().value).toBe("pending source");expect(document.querySelector('[role="dialog"]')).toBeNull();
- expect(state.host.client.authorities.outbox).toEqual([entry]);expect(state.host.decide).toHaveBeenCalledOnce();
+test("reviewing original frozen files and source retains their content without creating work",async()=>{
+ await click("Review");await act(async()=>[...container.querySelectorAll("button")].find(summary=>summary.textContent.startsWith("a.ts")).click());expect(container.textContent).toContain("frozen source");expect(container.textContent).toContain("prior source");expect(container.textContent).toContain("original-change");
+ await click("Open");await waitFor(()=>expect(container.textContent).toContain("retained source"));
+ expect(container.textContent).toContain("source-digest");expect(container.querySelector("textarea")).toBeNull();
+ expect(state.host.client.get).toHaveBeenCalledWith("/v1/system-file?path=a.ts",true);
+ expect(state.host.decide).not.toHaveBeenCalled();expect(state.host.client.send).not.toHaveBeenCalled();
+});
+
+test("missing retained source stays an error instead of becoming a new editable file",async()=>{
+ state.host.client.get.mockRejectedValue(Error("HTTP 404: retained file unavailable"));
+ await click("Open");await waitFor(()=>expect([...container.querySelectorAll('[role="alert"]')].map(alert=>alert.textContent).join(" ")).toContain("HTTP 404"));
+ expect(container.querySelector("textarea")).toBeNull();expect(state.host.decide).not.toHaveBeenCalled();
+});
+
+test("checking an unknown activation sends only its original key and does not mint a new decision",async()=>{
+ const entry={state:"SUBMISSION_STATE_UNKNOWN",submission:{idempotencyKey:"original-request",schema:{name:"system.release.activate"},target:{id:"2"},values:{window:600}}};
+ state.host.client.authorities.outbox.push(entry);state.host.client.send.mockImplementation(async key=>{expect(key).toBe("original-request");entry.state="SUBMISSION_STATE_CONFIRMED";});
+ render();await click("Check the original request");
+ expect(state.host.client.send).toHaveBeenCalledExactlyOnceWith("original-request");expect(state.host.client.authorities.outbox).toEqual([entry]);
+ expect(state.host.decide).not.toHaveBeenCalled();expect(state.refetch).toHaveBeenCalled();
+});
+
+test("freeze explanation is bilingual while retained source content remains unchanged",async()=>{
+ await act(async()=>setLanguage("zh-CN"));render();
+ expect(container.textContent).toContain("系统历史");expect(container.textContent).toContain("系统源码编辑、提案、批准、构建和新激活已冻结");
+ expect(container.textContent).toContain("Retained change");
 });

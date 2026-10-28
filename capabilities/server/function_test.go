@@ -108,6 +108,7 @@ func TestJournalAcceptedFunctionCrashBeforeApplication(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": `{"summary":"Saved advice","category":"review","review":true}`}}}, "usage": map[string]int{"prompt_tokens": 10, "completion_tokens": 12}})
 	}))
 	defer provider.Close()
+	approveTestInference(t, provider.URL, "local")
 	live := compose()
 	live.Record = func(e Entry) {
 		if err := journal.Append(ctx, id, e); err != nil {
@@ -211,6 +212,7 @@ func functionTenant(t *testing.T, instructions string, fields []string) *Tenant 
 
 func functionTenantFor(t *testing.T, id, instructions string, fields []string) *Tenant {
 	t.Helper()
+	approveTestInference(t, "http://localhost:1", "local")
 	a := &functionStock{stock: newStock(id), function: platform.RecordAdviceFunction("stock.item", fields, []string{"clerk", "lead"})}
 	if instructions != "" {
 		a.function.Instructions = instructions
@@ -284,6 +286,7 @@ func TestAIFunctionUsesAcceptedInputAndStrictOutput(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": message}}, "usage": map[string]int{"prompt_tokens": 10, "completion_tokens": reply.Tokens}})
 	}))
 	defer server.Close()
+	approveTenantInference(t, tn, server.URL, "local")
 	must(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL})
 	must(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/chosen", map[string]string{"access": "users"})
 	must(PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "local/chosen"})

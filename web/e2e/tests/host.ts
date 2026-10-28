@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import type { APIRequestContext, Page } from "@playwright/test";
 
 // The editor writes the current profile from the shared application API descriptor.
-export const pageUIProfile = JSON.parse(readFileSync(new URL("../../../capabilities/server/platform/pageui/widgets.json", import.meta.url), "utf8")).uiProfile as string;
+export const pageUIProfile = JSON.parse(readFileSync(new URL("../../packages/app/src/pageui/widgets.json", import.meta.url), "utf8")).uiProfile as string;
 
 let n = 0;
 

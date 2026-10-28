@@ -1,8 +1,9 @@
+import type {PageUI} from "@platform/app";
 import {queryInventoryBudget} from "@platform/app/query-inventory";
 import type {Api} from "@platform/kernel";
 
-type Section = {tablePresentation?:Api.PageTablePresentation;collectionBuilder?:Api.PageCollectionBuilder;collectionOutputVariable?:string;map?:Api.PageRecordMap;scene?:Api.PageSceneConfig;sceneSampleCollectionVariable?:string;sceneSampleVariable?:string;scenePartVariable?:string;ai?:Api.PageAI;externalFrame?:Api.PageExternalFrame;embedding?:Api.PageEmbedding;observation?:Api.PageObservation;observationHistoryVariable?:string;observationContextVariable?:string;observationSignalVariable?:string;observationThresholdVariable?:string;observationRowsVariable?:string;observationCountVariable?:string;observationMeanVariable?:string;notepadVariable?:string;analysisXVariable?:string;analysisYVariable?:string;analysisCountVariable?:string;analysisMeanVariable?:string;graphExplorer?:Api.PageGraphExplorer;avatar?:{contextVariable?:string;contextCollectionVariable?:string};commentDraftVariable?:string;fileVariable?:string;pdfPageVariable?:string;recordSetVariable?:string;sparklineDecimalVariable?:string;sparklineNumberVariable?:string;groupValueVariable?:string;groupSetVariable?:string;rowValueVariable?:string;rowSetVariable?:string;columnValueVariable?:string;columnSetVariable?:string;pickerValueVariable?:string;alertValueVariable?:string;dateVariable?:string;choiceSetVariable?:string;choiceVariable?:string;booleanVariable?:string;rangeMinVariable?:string;rangeMaxVariable?:string;statisticsVariable?:string;gaugeValueVariable?:string;progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
-type Draft<S extends Section> = {document:Api.PageDocument;sections:S[];selections:Api.SelectionVariable[]};
+type Section = {tablePresentation?:PageUI.PageTablePresentation;collectionBuilder?:PageUI.PageCollectionBuilder;collectionOutputVariable?:string;map?:PageUI.PageRecordMap;scene?:PageUI.PageSceneConfig;sceneSampleCollectionVariable?:string;sceneSampleVariable?:string;scenePartVariable?:string;ai?:PageUI.PageAI;externalFrame?:PageUI.PageExternalFrame;embedding?:PageUI.PageEmbedding;observation?:Api.PageObservation;observationHistoryVariable?:string;observationContextVariable?:string;observationSignalVariable?:string;observationThresholdVariable?:string;observationRowsVariable?:string;observationCountVariable?:string;observationMeanVariable?:string;notepadVariable?:string;analysisXVariable?:string;analysisYVariable?:string;analysisCountVariable?:string;analysisMeanVariable?:string;graphExplorer?:PageUI.PageGraphExplorer;avatar?:{contextVariable?:string;contextCollectionVariable?:string};commentDraftVariable?:string;fileVariable?:string;pdfPageVariable?:string;recordSetVariable?:string;sparklineDecimalVariable?:string;sparklineNumberVariable?:string;groupValueVariable?:string;groupSetVariable?:string;rowValueVariable?:string;rowSetVariable?:string;columnValueVariable?:string;columnSetVariable?:string;pickerValueVariable?:string;alertValueVariable?:string;dateVariable?:string;choiceSetVariable?:string;choiceVariable?:string;booleanVariable?:string;rangeMinVariable?:string;rangeMaxVariable?:string;statisticsVariable?:string;gaugeValueVariable?:string;progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:PageUI.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
+type Draft<S extends Section> = {document:PageUI.PageDocument;sections:S[];selections:PageUI.SelectionVariable[]};
 export type LayoutClipboard<S extends Section> = {draft:Draft<S>;root:string;object:string;overlay?:string};
 export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget" | "tab-binding" | "overlay-entry";
 type Result<T> = {value:T;issue?:never} | {issue:ClipboardIssue;value?:never};
@@ -11,7 +12,7 @@ const nodeFields=["valueVariable","activeVariable","visibleWhen","enabledWhen"] 
 const sectionFields=["collectionOutputVariable","sceneSampleCollectionVariable","sceneSampleVariable","scenePartVariable","observationHistoryVariable","observationContextVariable","observationSignalVariable","observationThresholdVariable","observationRowsVariable","observationCountVariable","observationMeanVariable","notepadVariable","analysisXVariable","analysisYVariable","analysisCountVariable","analysisMeanVariable","commentDraftVariable","fileVariable","pdfPageVariable","recordSetVariable","sparklineDecimalVariable","sparklineNumberVariable","groupValueVariable","groupSetVariable","rowValueVariable","rowSetVariable","columnValueVariable","columnSetVariable","pickerValueVariable","alertValueVariable","dateVariable","choiceSetVariable","choiceVariable","booleanVariable","rangeMinVariable","rangeMaxVariable","statisticsVariable","gaugeValueVariable","progressValueVariable","progressTotalVariable","countVariable","recordVariable","selectionVariable","collectionVariable","filterVariable","filterSearchVariable","selectionSetVariable"] as const;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const layoutKinds=["rows","columns","tabs","flow","toolbar","loop"];
-function inMainPage(document:Api.PageDocument,id:string,wholeLoop=false):boolean {
+function inMainPage(document:PageUI.PageDocument,id:string,wholeLoop=false):boolean {
  const seen=new Set<string>();let at:string|undefined=id;
  while(at&&!seen.has(at)){
   if(document.nodes[at]?.kind==="loop"&&!(wholeLoop&&at===id))return false;
@@ -58,7 +59,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const sectionIDs=new Set(sections.map(s=>s.id!));
  const events=(original.events??[]).filter(e=>sectionIDs.has(e.source));
  const variables=new Set<string>(),queries=new Set<string>(),missing={value:false};
- const valueRefs=(value:Api.PageValue|undefined)=>value?.variable?[value.variable]:[];
+ const valueRefs=(value:PageUI.PageValue|undefined)=>value?.variable?[value.variable]:[];
  const queryRefs=(query:Api.PageQuery)=>[...query.input?[query.input]:[],...valueRefs(query.search),...valueRefs(query.for),...(query.conditions??[]).flatMap(c=>valueRefs(c.value))];
  const addQuery=(id:string)=>{if(queries.has(id))return;const q=original.queries?.[id];if(!q){missing.value=true;return;}queries.add(id);queryRefs(q).forEach(addVariable);q.set?.inputs.forEach(addQuery);};
  const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.source?.compute)addVariable(v.source.compute.recordVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
@@ -118,9 +119,9 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const nodeMap=new Map([...nodes].map(id=>[id,newID("node")])),sectionMap=new Map([...sectionIDs].map(id=>[id,newID("section")]));
  const variableMap=new Map([...clonedVariables].map(id=>[id,newID("value")])),queryMap=new Map([...clonedQueries].map(id=>[id,newID("query")]));
  const overlayID=overlay?newID("overlay"):undefined;
- const remapValue=(value:Api.PageValue):Api.PageValue=>({...value,...(value.variable?{variable:variableMap.get(value.variable)??value.variable}:{})});
+ const remapValue=(value:PageUI.PageValue):PageUI.PageValue=>({...value,...(value.variable?{variable:variableMap.get(value.variable)??value.variable}:{})});
  const tabValue=(variable:string,value:unknown)=>typeof value==="string"&&tabSelectors.get(variable)?.has(value)?nodeMap.get(value)!:value;
- const selectionMap=new Map<string,string>(),addedSelections:Api.SelectionVariable[]=[];
+ const selectionMap=new Map<string,string>(),addedSelections:PageUI.SelectionVariable[]=[];
  const slot=(type:string,name?:string)=>JSON.stringify([type,name??""]);
  for(const s of sections)if(limits.selectionWriters.includes(s.widget)&&!s.selectionVariable){const type=s.object||object,key=slot(type,s.selection);if(!selectionMap.has(key)){const name=newID("selection");selectionMap.set(key,name);addedSelections.push({name,object:{app:type.split(".")[0]!,kind:"object",name:type}});}}
  const rewritten=sections.map(source=>{const s=structuredClone(source);s.id=sectionMap.get(s.id!)!;
@@ -171,7 +172,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  return {value:{draft:next,root:nodeMap.get(clip.root)!,shared:[...new Set(shared)]}};
 }
 
-function withinLoopBudgets(document:Api.PageDocument,limits:Limits,sections:Section[]):boolean {
+function withinLoopBudgets(document:PageUI.PageDocument,limits:Limits,sections:Section[]):boolean {
  const owners=new Map<string,string|undefined>();
  const visit=(id:string,owner?:string)=>{if(owners.has(id))return;owners.set(id,owner);const n=document.nodes[id];for(const child of [...(n?.children??[]),...(document.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)])visit(child,n?.kind==="loop"?id:owner);};
  visit(document.root);Object.values(document.overlays??{}).forEach(o=>visit(o.root));
@@ -179,5 +180,5 @@ function withinLoopBudgets(document:Api.PageDocument,limits:Limits,sections:Sect
  const loops=Object.entries(document.nodes).filter(([,n])=>n.kind==="loop"),items=loops.reduce((sum,[id,n])=>sum+(n.loop?.limit??Infinity)*factor(owners.get(id)),0);
  if(loops.length>limits.loop.maxContainers||items>limits.loop.maxTotalItems||loops.some(([id])=>!Number.isFinite(factor(id))))return false;
  const reads=Object.values(document.queries??{}).reduce((sum,q)=>sum+q.limit*factor(q.itemOwner),0),aggregates=Object.values(document.variables??{}).filter(v=>v.mode==="aggregate"),expanded=[...new Set(aggregates.map(v=>JSON.stringify([v.source?.query??"",["aggregate","statistics"].includes(v.source?.kind??"")?`${v.source?.kind}:${v.source?.measure}`:"count"])))].reduce((sum,key)=>sum+factor(document.queries?.[JSON.parse(key)[0]]?.itemOwner),0);
- return (limits.query.inventoryUIProfile?queryInventoryBudget(document,sections as unknown as Api.Section[],limits.query as Required<typeof limits.query>).valid:reads<=limits.query.maxTotalLimit)&&aggregates.length<=limits.aggregate.maxVariables&&expanded<=limits.aggregate.maxExpandedReads;
+ return (limits.query.inventoryUIProfile?queryInventoryBudget(document,sections as unknown as PageUI.Section[],limits.query as Required<typeof limits.query>).valid:reads<=limits.query.maxTotalLimit)&&aggregates.length<=limits.aggregate.maxVariables&&expanded<=limits.aggregate.maxExpandedReads;
 }

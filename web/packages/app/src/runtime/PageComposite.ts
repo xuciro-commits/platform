@@ -1,4 +1,5 @@
-import {pageUIManifest} from '@platform/kernel/host-contract';
+import {pageUIManifest} from "../pageui/manifest";
+
 import {useEffect,useRef,useState} from 'react';
 import type {Api} from '@platform/kernel';
 import type {RecordSource} from '@platform/ui';

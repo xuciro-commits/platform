@@ -1,0 +1,7 @@
+{
+  "System self-hosting is frozen; use static maintenance to reconcile retained work": "系统自举已冻结；请通过静态维护入口核对已有工作结果",
+  "System self-hosting is frozen; only retained activation outcomes may be reconciled": "系统自举已冻结；仅允许核对原有激活结果",
+  "The retained activation must use its original system candidate": "已有激活必须使用原始系统候选",
+  "System history assistant": "系统历史助手",
+  "Reads retained system source and release history. System self-hosting writes are frozen.": "读取保留的系统源码与发布历史。系统自举写入已冻结。"
+}

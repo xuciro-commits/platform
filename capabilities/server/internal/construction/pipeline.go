@@ -224,17 +224,15 @@ func (s Step) ApplyWithRules(engine platform.RuleEngine, rows []map[string]any, 
 	case "compute":
 		expr := s.FormulaExpr
 		if expr == nil {
-			node, err := ValueParseFormula(s.Formula)
+			used, err := platform.FormulaFields(s.Formula)
 			if err != nil {
 				return nil, err
 			}
-			used := map[string]bool{}
-			node.Fields(used)
 			types := map[string]string{}
 			for name := range used {
 				types[name] = "decimal"
 			}
-			e, err := node.Expr(types)
+			e, err := platform.LowerFormula(s.Formula, types)
 			if err != nil {
 				return nil, err
 			}
@@ -590,17 +588,15 @@ func (p *Pipeline) NormalizeFormulaRules() error {
 			}
 			continue
 		}
-		node, err := ValueParseFormula(s.Formula)
+		used, err := platform.FormulaFields(s.Formula)
 		if err != nil {
 			return err
 		}
-		used := map[string]bool{}
-		node.Fields(used)
 		types := map[string]string{}
 		for name := range used {
 			types[name] = "decimal"
 		}
-		e, err := node.Expr(types)
+		e, err := platform.LowerFormula(s.Formula, types)
 		if err != nil {
 			return err
 		}

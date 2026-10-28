@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/enterprise"
+	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 )
 

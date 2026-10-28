@@ -156,3 +156,5 @@ export {validSceneConfig,sceneMappingValue,type SceneConfig,type SceneLayer,type
 export {CanvasEditor,CanvasRegion,useCanvasGesture,type CanvasModel,type CanvasPayload,type CanvasDrop,type CanvasRect} from "./layout/CanvasEditor";
 
 export type {CanvasCommand} from "./layout/CanvasSelectionToolbar";
+
+export type {ActionParameterOptions, AnalysisStepOptions, ButtonOptions, DetailPresentationOptions, EventToneOptions, LayoutSizeOptions, LeaderboardOptions, MetricAnnotationOptions, MetricPresentationOptions, RecordCardOptions, RecordEventsOptions, RecordGanttOptions, RecordLinkOptions, RecordScatterOptions, RegionPresentationOptions, SceneConfigOptions, SceneLayerOptions, SceneMappingOptions, StatusTrackerOptions, TableColumnOptions, TablePresentationOptions} from "./presentation";

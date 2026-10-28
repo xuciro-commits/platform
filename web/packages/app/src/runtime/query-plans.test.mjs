@@ -1,11 +1,11 @@
 import {registerHooks} from "node:module";
-registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
+registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if((specifier.startsWith("./")||specifier.startsWith("../"))&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 const { compileQueryPlan, queryView }=await import("./query-plans.ts");
 const {compileQueryPlans}=await import("./query-plans.ts");
-const contract = JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))).runtime.query;
+const contract = JSON.parse(readFileSync(new URL("../pageui/widgets.json",import.meta.url))).runtime.query;
 const info={type:"sample.note",fields:[{name:"bucket",type:"text"},{name:"active",type:"boolean"},{name:"count",type:"integer"}]};
 const variables={bucket:{scope:"page",type:"string",mode:"state",initial:"A"}};
 const plan={object:{app:"sample",kind:"object",name:info.type},limit:20,conditions:[{field:"bucket",op:"=",value:{variable:"bucket"}}]};

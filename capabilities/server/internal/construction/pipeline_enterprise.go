@@ -2,7 +2,7 @@ package construction
 
 import (
 	"fmt"
-	enterprisemodel "platformserver/internal/enterprise"
+	enterprisemodel "platformserver/engine/organization"
 	"regexp"
 	"strings"
 )

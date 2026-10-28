@@ -177,7 +177,7 @@ images: bootstrap ## 构建平台宿主 Docker 镜像并打上 VERSION 标签
 	docker tag platform-platform-server platform/platform-server:$(VERSION)
 
 .PHONY: rehearse
-rehearse: ## 当前组合与自举的隔离 PostgreSQL 恢复检查
+rehearse: ## 当前组合与静态维护的隔离 PostgreSQL 恢复检查
 	PNPM="$(PNPM)" scripts/verify.sh deploy
 
 .PHONY: tag

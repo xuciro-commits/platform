@@ -1,11 +1,12 @@
+import {pageUIManifest} from "@platform/app/page-contract";
+import type {PageUI} from "@platform/app";
 import {snapDimension} from '@platform/ui/canvas-snapping';
 import {pageLayoutDiagnostics} from '@platform/app';
-import {pageUIManifest,type Api} from '@platform/kernel';
 import type {CanvasDrop, CanvasModel, CanvasRect} from '@platform/ui';
 import {layoutID, loopOwner, overlayOwner, repairTabs, setLayoutKind, ungroup, type LayoutKind} from '../page-layout';
 
-type Document=Api.PageDocument;
-type Section=Pick<Api.Section,'id'|'widget'|'configVersion'|'title'>;
+type Document=PageUI.PageDocument;
+type Section=Pick<PageUI.Section,'id'|'widget'|'configVersion'|'title'>;
 export function canvasModel(document:Document,sections:Section[],labels:Record<string,string>={}):CanvasModel {
  const parents=new Map(Object.entries(document.nodes).flatMap(([id,n])=>(n.children??[]).map(child=>[child,id]as const))),indexed=new Map(sections.map(section=>[section.id,section]));
  return Object.fromEntries(Object.entries(document.nodes).map(([id,node])=>[id,{
@@ -82,10 +83,10 @@ export function canvasMove(document:Document,id:string,delta:-1|1,sections:Secti
  return canvasDrop(document,id,{kind:'swap',target:children[to]!},sections);
 }
 /** Pixel resize preserves the measured adjacent pair and original size bounds. */
-export function canvasResize(document:Document,id:string,axis:'width'|'height',pixels:number,rects:Record<string,CanvasRect>):Record<string,Api.PageLayoutSize>|undefined {
+export function canvasResize(document:Document,id:string,axis:'width'|'height',pixels:number,rects:Record<string,CanvasRect>):Record<string,PageUI.PageLayoutSize>|undefined {
  const n=document.nodes[id],p=parent(document,id);if(!n||!Number.isFinite(pixels))return;
  const min=axis==='width'?'minWidth':'minHeight',max=axis==='width'?'maxWidth':'maxHeight';
- const bound=(node:Api.PageLayoutNode)=>[node.size?.[min]??pageUIManifest.layout.minSize,node.size?.[max]??pageUIManifest.layout.maxSize];
+ const bound=(node:PageUI.PageLayoutNode)=>[node.size?.[min]??pageUIManifest.layout.minSize,node.size?.[max]??pageUIManifest.layout.maxSize];
  const [lo,hi]=bound(n);
  if(!Number.isFinite(lo)||!Number.isFinite(hi)||lo!>hi!)return;
  const candidates=Object.entries(rects).filter(([key])=>key!==id&&parent(document,key)===p).map(([,r])=>r[axis]);
@@ -100,10 +101,10 @@ export function canvasResize(document:Document,id:string,axis:'width'|'height',p
  }
  return {[id]:size};
 }
-export function canvasResetSize(document:Document,id:string,axis:'width'|'height'):Record<string,Api.PageLayoutSize>|undefined {
+export function canvasResetSize(document:Document,id:string,axis:'width'|'height'):Record<string,PageUI.PageLayoutSize>|undefined {
  if(!document.nodes[id])return;const size={...document.nodes[id]!.size};delete size[axis];
  if(axis==='height'&&size.maxHeight===undefined)delete size.scroll;
- const result:Record<string,Api.PageLayoutSize>={[id]:size};
+ const result:Record<string,PageUI.PageLayoutSize>={[id]:size};
  if(axis==='width'){
   const p=parent(document,id),children=document.nodes[p??'']?.children??[],at=children.indexOf(id),other=children[at+1]??children[at-1];
   if(document.nodes[p??'']?.kind==='columns'&&other){size.weight=1;const sibling={...document.nodes[other]!.size,weight:1};delete sibling.width;result[other]=sibling;}

@@ -45,10 +45,11 @@ type releaseState struct {
 // A completed release that fails on restart needs a new rollback decision.
 // Keep that one request in current.json until its exact activation is known.
 type rollbackIntent struct {
-	Release   int    `json:"release"`
-	Authority int    `json:"authority,omitempty"`
-	Key       string `json:"key"`
-	Evidence  string `json:"evidence"`
+	Release     int    `json:"release"`
+	Authority   int    `json:"authority,omitempty"`
+	Key         string `json:"key"`
+	Maintenance bool   `json:"maintenance,omitempty"`
+	Evidence    string `json:"evidence"`
 }
 
 type activationView struct {
@@ -64,7 +65,7 @@ func (a activationView) ready(now time.Time) bool {
 	return !now.Before(a.At.Add(time.Duration(a.Window) * time.Second))
 }
 
-// Only the watch goroutine and supervisor touch this file. Each replacement is
+// Maintenance commands and the supervisor touch this file. Each replacement is
 // atomic; the lock prevents a successful report clearing a newer selection.
 var currentMu sync.Mutex
 
@@ -341,11 +342,11 @@ func serve(args []string) error {
 	token := flags.String("token", os.Getenv("PLATFORM_TOKEN"), "system publisher token")
 	drain := flags.Duration("drain", 30*time.Second, "old host shutdown deadline")
 	health := flags.Duration("health-timeout", 45*time.Second, "started host health deadline")
-	watch := flags.Bool("watch", false, "build approved changes and stage requested activations")
-	every := flags.Duration("every", 5*time.Second, "watch interval")
+	watch := flags.Bool("watch", false, "retired dynamic self-hosting option")
+	flags.Duration("every", 5*time.Second, "retired watch interval")
 	flags.Parse(args)
-	if *watch && *token == "" {
-		return errors.New("serve -watch needs -token")
+	if *watch {
+		return errors.New("dynamic self-hosting is frozen; serve does not accept -watch")
 	}
 	serveArgs := []string{"-addr", *addr, "-profile", *profile}
 	if *tenant != "" {
@@ -358,7 +359,7 @@ func serve(args []string) error {
 	s := &supervisor{root: *root, current: filepath.Join(*root, ".build", "system", "current.json"), args: serveArgs,
 		web: *web, data: *data, tenants: *tenants, healthURL: "http://" + *addr + "/healthz", health: *health, drain: *drain,
 		c: client{host: *hostURL, token: *token, tenant: systemscope.Tenant}}
-	return s.run(*watch, *every)
+	return s.run()
 }
 
 type supervisor struct {
@@ -374,7 +375,7 @@ type supervisor struct {
 	c                  client
 }
 
-func (s *supervisor) run(watch bool, every time.Duration) error {
+func (s *supervisor) run() error {
 	desired, err := readState(s.current)
 	if err != nil {
 		return err
@@ -382,16 +383,7 @@ func (s *supervisor) run(watch bool, every time.Duration) error {
 	if err := s.startInitial(desired); err != nil {
 		return err
 	}
-	if watch {
-		go func() {
-			for {
-				if err := watchOnce(s.c, s.root); err != nil {
-					fmt.Fprintln(os.Stderr, "platform-updater watch:", err)
-				}
-				time.Sleep(every)
-			}
-		}()
-	}
+
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(signals)
@@ -443,7 +435,7 @@ func (s *supervisor) startInitial(desired releaseState) error {
 			return fmt.Errorf("release %d startup failed (%v), recovery failed: %w", desired.Release, err, recoverErr)
 		}
 		previous.Activation, previous.Result, previous.Evidence = desired.Activation, desired.Result, desired.Evidence
-		previous.PendingRollback = &rollbackIntent{Release: desired.Release, Key: "system-restart-rollback:" + randomKey(), Evidence: fmt.Sprintf("release %04d failed on restart: %v; release %04d is healthy", desired.Release, err, previous.Release)}
+		previous.PendingRollback = &rollbackIntent{Release: desired.Release, Maintenance: true, Key: "system-restart-rollback:" + randomKey(), Evidence: fmt.Sprintf("release %04d failed on restart: %v; release %04d is healthy", desired.Release, err, previous.Release)}
 		currentMu.Lock()
 		saveErr := writeJSON(s.current, previous)
 		currentMu.Unlock()
@@ -545,6 +537,9 @@ func (s *supervisor) resumeRollback() error {
 	if intent == nil || state.Result != "" {
 		return nil
 	}
+	if intent.Maintenance {
+		return errors.New("the retained predecessor is serving; static maintenance must reconcile the failed release without requesting a new dynamic activation")
+	}
 	if s.c.token == "" {
 		return errors.New("restart rollback needs a system publisher token")
 	}
@@ -584,6 +579,17 @@ func (s *supervisor) resumeRollback() error {
 		}
 	}
 	if _, err := s.c.submitKey("system.release.rollback", systemscope.ReleaseType, fmt.Sprintf("%04d", intent.Authority), systemscope.App, intent.Key, map[string]any{"window": 0, "targetVersion": state.Release}); err != nil {
+		if refusedDecision(err) {
+			// The original rollback was definitively not accepted. Keep its
+			// identity and the proven running predecessor for static repair.
+			intent.Maintenance = true
+			currentMu.Lock()
+			saveErr := writeJSON(s.current, state)
+			currentMu.Unlock()
+			if saveErr != nil {
+				return saveErr
+			}
+		}
 		return err
 	}
 	var activations []activationView

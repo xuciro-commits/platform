@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import {originalRecordObject} from "./record-binding";
 import type {Api} from "@platform/kernel";
 import type {EntityInfo} from "@platform/ui";
@@ -5,7 +6,7 @@ import {loopOwner,overlayOwner} from "../page-layout";
 import type {AuthoringSection} from "./draft";
 
 /** Authoring diagnostics mirror finite bindings; the host remains authoritative. */
-export function observationProblem(document:Api.PageDocument,sections:AuthoringSection[],s:AuthoringSection,pageObject:string,entity:(name:string)=>EntityInfo|undefined,definitions:Api.Definition[]):boolean {
+export function observationProblem(document:PageUI.PageDocument,sections:AuthoringSection[],s:AuthoringSection,pageObject:string,entity:(name:string)=>EntityInfo|undefined,definitions:Api.Definition[]):boolean {
  const bindings=[s.observationHistoryVariable,s.observationContextVariable,s.observationSignalVariable,s.observationThresholdVariable,s.observationRowsVariable,s.observationCountVariable,s.observationMeanVariable];
  if(s.widget!=="observation")return !!s.observation||bindings.some(Boolean);
  const c=s.observation,variables=document.variables??{},v=variables[s.collectionVariable??""],primary=document.queries?.[v?.source?.query??""],leaf=Object.entries(document.nodes).find(([,n])=>n.section===s.id)?.[0],owner=leaf?overlayOwner(document,leaf):undefined,owned=(p?:Api.PageVariable):p is Api.PageVariable&{scope:"page"|"overlay"}=>p?.scope===(owner?"overlay":"page")&&p.owner===owner;

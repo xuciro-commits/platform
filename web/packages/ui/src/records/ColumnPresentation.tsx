@@ -1,10 +1,11 @@
+import {renderingLimits} from "../gen/presentation-limits";
+import type {TableColumnOptions} from "../presentation";
 import type {ColumnDef} from "@tanstack/react-table";
-import {pageUIManifest,type Api} from "@platform/kernel";
 import type {Entity} from "../fields/entity";
 import {Tag} from "../components/StatusTag";
 import type {EntityInfo,EntityRecord} from "./Records";
 
-export type RecordColumnPresentation=Api.PageTableColumn;
+export type RecordColumnPresentation=TableColumnOptions;
 
 /** Decimal strings keep all digits; formatting never changes the editor value. */
 const numericText=(value:unknown)=>{
@@ -16,7 +17,7 @@ const numericText=(value:unknown)=>{
 
 /** Override visible column presentation while retaining the original field metadata. */
 export function presentRecordColumns(columns:ColumnDef<EntityRecord,any>[],entity:Entity<EntityRecord>,info:EntityInfo,presentation:RecordColumnPresentation[]=[]){
- const limits=pageUIManifest.runtime.tablePresentation;
+ const limits=renderingLimits.runtime.tablePresentation;
  return columns.map(column=>{
   const p=presentation.find(p=>p.field===column.id);if(!p)return column;
   const field=entity.fields[p.field],type=info.fields.find(f=>f.name===p.field)?.type;

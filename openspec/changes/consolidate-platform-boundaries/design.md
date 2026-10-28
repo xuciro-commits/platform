@@ -2,87 +2,114 @@
 
 ## Context
 
-见 proposal.md。事实基础：`deploy/local/compose.yaml` 实际运行 postgres、rustfs、rauthy、双 platform-server、compute 栈（wasm-worker `-socket=worker.sock` + code-builder `-socket=builder.sock`，builder 是唯一允许创建离线编译 guest 的固定命令驱动）、webhook-sink（8497）；`cmd/storage-files` 是停机文件校验工具而非运行服务；api-types / check-boundaries / uaf-gen / rule-browser 是开发与检查工具；gateway 以引用计数托管共享驱动子进程（modbus / s7 / simulator）。`composition` 已要求能力显式声明身份、版本、作用域与替换方式，进程拓扑收敛沿用该机制而非新造装配描述。
+本变更由原“目录化整理”改为负责人明确要求的四战役结构主线。负责人已明确授权实现四战役；按各change真实任务状态推进。当前意图仍为客户构建业务应用的平台；只消除非必要复杂性，不借减脂删除真正的规则、权限、持久接受和历史责任。完整源文件去向及目标包预算见 [file-consolidation](file-consolidation.md)。
+
+### 核实的基线
+
+| 范围 | 非测试Go文件 | 真实责任 |
+|---|---:|---|
+| `capabilities/server` 根包 | 263 | 租户协调、结果应用、记录、授权、工作/Flow、集成、AI、发布、HTTP与静态维护混在同包 |
+| `platform` | 166 | 公共声明、Caller/角色、Ledger与纯契约；其中78个page文件还混入视觉配置 |
+| `apps/build` | 73 | 原草稿、编译、规则/事务、发布与部分执行，不是73个转发壳 |
+| `internal/construction` | 42 | 声明类型、确定性编译/变换、兼容与投影；包含真正运行/纯算法 |
+| `internal/host` | 15 | 实际消费者窄角色、构建证据及Attach分派；接口不是可删协议 |
+| 其他包 | 120 | 既有owner、格式/records/rules纯基础包、journal、idp及隔离命令 |
+| 总计 | 679 | 5,124,183字节（修改守门前HEAD `457202df`），同口径计所有build-tag生产文件 |
+
+Build/construction的精确同名交集为29组，五个重点位置合计66组；全仓守门库存为82组/195路径。`code.go/page.go/query.go/property_type.go/link_type.go`在construction主要是常量承载，可并回owner；`formula.go`是旧语法lowering，`pipeline.go`还有真实纯变换，`process.go`与原Flow是作者/执行两类表示，`integration_release.go`剥离可变环境和凭据。不能把所有Struct A→B转换一概删除。
+
+`accepted_*.go`实测23个生产文件，各自并非同一种结果：含Agent、Work、HostControl、Usage、callback行、控制状态、发布映像与SQL计划。当前原`internal/acceptance/result`持版本化格式，`internal/records`持历史/索引/固定行映像；重排必须复用它们的语义而不是再建统一账本。
+
+### 原规划中已失效的陈述
+
+当前`deploy/local/compose.yaml`只有单一platform宿主入口，默认8495；外置worker/builder仍按Unix socket和各自权限运行。gateway不在当前核心树，不能再将“8490/8495双宿主、gateway、compute三服务”列为默认交付目标；当前cmd/README的双实例表述也是文档债务。`cmd`现有11个main包，平台updater是维护监督工具，不因一个目录就算一个业务服务。旧sink收编、govern归位、依赖字节还原和同包拆分已有实施记录，但不能替代今天的目录边界或运行验收。
 
 ## Goals / Non-Goals
 
-**Goals:** 部署面一眼可读（3 个运行服务程序 + 工具分类清单）；webhook-sink 不再是独立常驻服务；Go 宿主按域可导航；web 包边界与三区一致；依赖还原一条命令、版本全程冻结、升级单独成轮。
+**Goals:** 原职责与类型只有一个owner；退役construction/host目录；保持单一平台公共导入面；消除根包杂糅及机械调度；同口径生产文件≤339且每package≤25；报告真实净LOC，保留行为/权限/历史与恢复。
 
-**Non-Goals:** 不合并 wasm-worker / code-builder 隔离对与 driver 子进程（安全与崩溃边界，有意保留）；不改提交管线、接受结果、存储与授权语义；不升级任何依赖版本（升级是完成后的独立一轮）；不动内核契约与向量；不引入新的进程管理器或服务发现机制。
-
-## B1 审计结论（2026-10-24，任务 1.1–1.3 的产出）
-
-**B1.1 cmd 分类**：见 `capabilities/server/cmd/README.md`。运行服务 3 个程序（platform-server、gateway、compute 隔离对）；运维工具 storage-files / rule-browser / webhook-sink；生成检查工具 api-types / check-boundaries / uaf-gen；驱动入口 driver-* 由 gateway 托管，不计部署服务。
-
-**B1.2 webhook-sink 接线点全量清单**（B2 改动面）：
-1. `deploy/local/compose.yaml:161-164` — 服务定义（build + SINK_PORT 8497）
-2. `Makefile:21` — `INFRA := postgres rauthy rustfs webhook-sink`
-3. `deploy/dev/environment.py:166` — dev compose up 清单
-4. `deploy/local/rehearse.sh:10` — `SINK_PORT=58497` 演练隔离
-5. `deploy/local/README.md` — 服务表（8497）、重建命令、webhook/smtp/a2a/模型替身四类使用说明（`http://webhook-sink:8080/*` 内部地址、`http://localhost:8497/*` 查看/故障注入）
-   收编后 B2 需给出等价的网络内地址语义（演练与 `business-confirmation`、`integration-fabric` 两条 e2e 路线依赖它），并同步更新上述五处。
-
-**B1.3 Go 宿主域映射草案**（B3 拆分顺序的输入；`routes_*` 已一区一文件，主要工作在 `accepted_*` 按结果族归档）：
-- 提交核心：`accepted_result/refusal/input/state/store`（信封、拒绝、输入、状态、存储）
-- 记录与事务：`accepted_rows/batch/unique/callback_rows/plan/intents`
-- 工作与智能体：`accepted_work/agent/usage`
-- 效果与集成：`accepted_effect/notices/observation/connectors`
-- 审批：`accepted_approval/requests`
-- 发布：`accepted_release`
-- 治理控制：`accepted_control/host_control`
-- 共同格式在 `internal/acceptance/result`；`routes_{records,build,core,discovery,integration,observations,ai}` 保持区域命名迁入目录；`host.go`（1016 行）收缩为装配壳，锁义务地图随域迁移。
-- 边界基线：`boundaries.sh` 无计数豁免（AST 级检查），`escapes.sh` 已知逃逸清单当前为空——B3 期间该基线只减不增即保持为零。
-
-**B1.3 Web 依赖图**（实测 import 计数，B4 的输入）：
-```text
-kernel(基础) ← ui(46) ← app(88/88) ← build(171/137/102)
-catalog(独立查询库，零依赖)      ↖ platform/治理(23/17/15)
-workspace 壳 → ui/app/kernel
-```
-分层严格无环、无越界：`kernel → catalog → ui → app → {build, platform, workspace}`。含义：`@platform/app` 实为运行时组件层（build 与治理都重度依赖它），不是「运营区专属包」。B4 的正确切法是：基础层（kernel/catalog/ui/app）名称与公共面稳定；区层只重命名归位 `@platform/platform → @platform/govern`（系统区），构建区即 `@platform/build`；运营区界面由 app 的运行时部分 + workspace 壳承担，**不**为运营区新建包（那会把 build 变成跨区依赖方）。此结论替代原 design 第 5 条中「运营界面归属整理」的模糊表述。
+**Non-Goals:** 本轮不迁移业务或更改运行数据、不调整依赖版本、不合并受控执行隔离进程、不继续全量源码自举、不重建enterprise权威、不通过重命名或删除测试伪造净删除、不另建远程服务/总线/万能执行器。
 
 ## Decisions
 
-1. **cmd 分类清单。** `cmd/` 增加 README 表（或等价的 doc.go 段落）：运行服务 platform-server / gateway / compute；运维工具 storage-files（停机校验）、rule-browser（规则浏览）；代码生成与检查 api-types / check-boundaries / uaf-gen；webhook-sink 收编后降级为平台能力代码 + 其 `main.go` 保留为独立调试入口或删除（按 B1 审计决定，倾向删除独立部署）。分类同步 Architecture 代码地图。
-2. **webhook-sink 收编方式。** 接收端点作为 platform-server 的可选进程内能力：composition 声明启用、环境变量沿用原语义、默认未启用不监听；Standard Webhooks 签名校验与逐 webhook-id 存储逻辑原样搬迁，不改行为。演练（`make rehearse`、telemetry / platform rehearsal）改用声明启用的宿主端点，`SINK_PORT` 语义保留。
-3. **有意不合并清单。** compute 隔离对：wasm-worker 以 65534 最小特权运行、builder 是唯一允许创建离线编译 guest 的固定命令——合并即削弱受控执行边界；driver 子进程：设备会话崩溃隔离与共享回收语义在网关进程模型里成立。两项写入分类清单的「为什么是独立进程」栏，防止未来被当作「没合并完」。
-4. **Go 拆分策略。** 按「一个 API 区域一个包、一种接受结果一个文件」迁移为目录化包：`routes_*.go` → `platform/<area>/` 或宿主内 `routes/<area>/`，`accepted_*.go` 同理按结果族归档到目录；`host.go` 收缩为 Tenant 装配壳，锁义务地图（`mu` / `opsMu` / `streamMu`）随拆分逐域搬移并保持 `doc.go` 为唯一义务说明。每拆一域跑 `make check` + `make test-go PKG=<包>`；`boundaries.sh` / `escapes.sh` 已知逃逸数只减不增。对外只保留 `platformserver/platform` 公共导入面不变。
-5. **Web 包映射（待体验线 M2 定版后执行）。** 基础层 `@platform/ui` / `@platform/kernel` / `@platform/app` 名称与公共面稳定；区层对齐三区：`@platform/build`（构建：工坊、模板、资产库应用）、`@platform/govern`（系统：现 `packages/platform` 更名归位）、运营界面（现 `packages/app` 的 widgets/pages 运行时部分）明确归属并整理导出。`apps/workspace` 成为三区共用壳宿主。迁移一次完成 import 路径与 Catalog 重生成，不做新旧双轨。
-6. **依赖还原脚本。** 新增 `scripts/restore-deps.sh`：Go 侧 `GOPROXY=direct` 从 GitHub 逐模块还原（读取 `go.mod` 清单，失败逐个列出）；Web 侧按 lockfile 走 registry。与 `scripts/sandbox-go.sh` 的工具链获取互补；沙箱重置后的恢复顺序写入 AGENTS 沙箱小节。重构期间任何 PR 不含依赖版本变更，`go.mod` / `pnpm-lock.yaml` 冻结由评审把关。
-7. **升级轮。** 全部里程碑完成后单独执行：Go minor/patch 升级、pnpm 全量升级、镜像摘要更新（compose 内 pinned digest），逐项跑 `make verify` + `make rehearse` + 一条 e2e 路线；升级失败逐包回退定位，不与重构混在一个交付。
+### 1. 四职责采用星形装配，不形成四个上帝包
+
+```text
+cmd/platform-server → composition
+                        ├→ kernel      接受、持久化、恢复、固定读取
+                        ├→ engine      业务运行、Flow/Work、规则和授权
+                        ├→ studio      草稿、编译、候选、发布、试用
+                        └→ aigateway   provider、工具协议、阶段与预算
+四职责 ─→ platform 公共类型/窄角色 ─→ contract及既有纯基础契约
+legacy apps ─→ platform
+```
+
+四职责彼此禁止直接导入，亦不得导入旧root、composition或apps具体实现；各自可以使用本职责子包、platform及已有纯基础包。composition是唯一知道所有具体实现的接线处，负责初始装配、维护重建、试用及私有fork的typed重接线。命令按实际执行责任可导入composition或明确的执行owner；不能被业务层反向依赖。
+
+平台API禁止导入这四个concrete职责、composition、apps及退役construction/host。`platform/rules.go`目前使用纯`internal/rules`的类型及默认实现；保留该无I/O基础依赖，不机械搬到engine后造成 `platform→engine→platform` 环。engine选择/实现规则能力、studio经同一platform规则角色编译，实际语义仍唯一；公共API不能把具体engine程序或宿主私有类型暴露出去。
+
+目录分成小而有职责的子包，全部≤25文件。kernel不是替换`contract/`的K1–K9解释器，aigateway不是新的身份/配置权威，studio不在运行期直接决定业务，engine不持有接受存储旁路。
+
+### 2. 接受23→3，合并机械协调而保留结果族
+
+| 目标 | 原路径 | 保留责任 |
+|---|---|---|
+| `kernel/acceptance_pipeline.go` | agent/effect/host_control/input/release/requests/usage/work 8文件 | 原族专属输入、授权/前驱、任务世代、锁外回调、发布接受和未知回执 |
+| `kernel/acceptance_records.go` | approval/batch/callback_rows/connectors/control/intents/notices/observation/plan/rows/state/unique 12文件 | 行/历史/状态/收据、SQL delta、批次私有提升、控制与发布安装映像及观察/通知 |
+| `kernel/acceptance_codec.go` | refusal/result/store 3文件 | 原请求/结果身份、封存预算、持久接受、原字节回执和应用标记 |
+
+`internal/acceptance/result`中的七结果族及其他runtime专属格式仍有各自有类型的解码、摘要与验证；在目标`kernel/acceptedformat`保持显式版本分派。可以表驱动编排共同的准备→持久→应用步骤，不能把业务输入降成无类型JSON、重跑原规则/授权或用一条万能“decide”取代不同owner。
+
+锁与状态只迁归一次：kernel持租户单写lane与已安装代际，私有结果收齐后才持久；ops类工作/状态仍按原owner锁保护，不能因合并函数改变mu→opsMu/streamMu义务或在已有lane回调重拿锁。记录固定SQL视图、接受事务和原结果应用完成的顺序不变。
+
+每类必须核对callback行、嵌套批次、唯一键、通知、HostControl、Agent/Work世代、Usage前驱、发布安装和SQL delta。旧提交/旧输入保持原兼容责任，历史字节不重写；合并不是接受格式版本演进。
+
+### 3. Build与construction只保留一个设计owner
+
+73+42文件内聚至`studio/build`的23个职责文件，逐文件表明确到目标。类型、校验和确定性编译同一owner直接共享，不保留旧目录、兼容别名或重复记录。纯formula lowering并入既有rules基础模块；真正的pipeline/source/matching变换、规则表与事务执行归engine，studio仍负责其声明/编译/发布。
+
+草稿与不可变发布描述的语义差异保留：编译会解析版本、规范类型、冻结依赖并剥离本地地址、凭据和运行观察。只消除同义的重复类型搬运，不把这些安全投影删除。Process→Flow、页面安全绑定及运行字段投影等编译关系使用同一现有算法，不以“同名”要求无编译。
+
+原published影像、pinned版本、联合首次发布、后改草稿与候选隔离、兼容扩展和受控试用必须继续工作。Build拥有的运行回调改由公共typed能力连接原engine，不导入engine实现；编译和业务执行不互为调用依赖。
+
+### 4. host目录退出不代表协议退出
+
+15文件有用角色合入platform已有文件：Agent→ai、Build/Blueprint/资产→definition及asset_lifecycle、Flow→flow、Work→work、凭据→credential、组织→org、账簿/事务→transaction、传输/确认→protocol、成员与Caller→app。仅聚合Host、纯转发和Attach分派退出，不把它们复制为新的全权限平台接口。
+
+公共角色不能引用studio.Build、kernel.Tenant或internal.construction的私有类型；必要的草稿/发布协议值由原公共API声明，方法保持原权限/状态语义。composition提供适用于初始实例、试用与私有fork的接线工厂；kernel调用已注入的角色，不对具体应用做Attach类型断言。角色缺失或循环应在组合检查明确拒绝，不能宽化到any或直接传整Tenant。
+
+### 5. 用真实基线控制减脂，不能用配额掩盖债务
+
+守门使用root=263/platform=166/Build=73/construction=42的临时递减配额；其余package≤25。重名82组195路径、37个视觉AST声明（22文件）及2个退役目录均冻结存量，不准扩散；HEAD中已有baseline只能缩减，删除代码时同步剪去对应条目，禁止自动“更新基线”接纳新债务。
+
+SDK、裸模型endpoint和模型请求方法只归provider，原4个裸调用/SDK路径豁免已随provider抽离撤销，不能恢复为迁移债务；纯rules不得导入网络/文件/数据库/部署或实时状态。四职责依赖图同步落实为AST检查，编译标签不豁免扫描。既有超额不是合规证明，未来迁移也不得通过扩大baseline、新增wrapper目录或改名躲过检查。
+
+逐文件映射当前形成215个目标生产路径（含保留工具、journal/idp、纯基础包），平台API25、studio/build23、每包≤25。该215是包含新增阶段/训练职责的设计去重结果，不是已经写出且编译通过的数量；最终实际必须≤339。需要补回安全实现时，在原职责内修正并重新计数，不能为追求215删去正确性。生产净LOC单独报告，不能拿679→215的路径算术当净代码删除证据。
+
+### 6. 三个关联变更按原owner协作
+
+- [页面解耦](../decouple-page-presentation-contract/design.md)：78个生产page文件→3个公共安全契约；保留原记录/查询/动作安全，把视觉配置交Web。根页面运行owner的新物理路径见本对照表。
+- [AI隔离](../isolate-ai-execution-and-training-data/design.md)：StagePolicy、provider/MCP、预算/降级及SFT/DPO由该变更定义；本表标注原调用文件去向，不复制政策或另建样本Sink。
+- [自举收缩与UAF](../platform-self-hosting/design.md)：先静态禁区与新自举冻结，再UAF外移/原组织owner内聚。原system证据及恢复归属保留，不能为文件目标删未知回执或历史。
+
+三者实施次序与停止条件只归WorkQueue；各change任务分本次责任，不建立另一份队列。实际源码API、generated host.ts、enterprise-sdk和Catalog随相应批次原工具生成，不能手工修生成物掩盖协议差异。
 
 ## Risks / Trade-offs
 
-- 收编 webhook-sink 可能让「演练专用接收端」与宿主生命周期耦合 → 声明未启用时不监听任何端点；演练失败按能力未启用报告。
-- Go 拆分可能引入循环依赖或锁顺序破坏 → 先定包依赖方向图（工具→域→宿主壳），锁义务随域迁移并在 `doc.go` 复核；每步跑原测试，不做行为改写。
-- Web 重划撞上体验线进行中的界面改造 → B4 明确排在体验线 M2 定版之后，迁移窗口内冻结跨线界面 PR。
-- 版本冻结期间错过安全补丁 → 冻结期以里程碑计（不是无限期），升级轮作为硬性收尾任务登记 WorkQueue。
-- 进程合并后 compose 与脚本中的端口 / 服务名假设散落 → B1 全仓盘点 `deploy/`、`scripts/`、演练脚本中的引用后再动手。
+- 单个Tenant方法跨包后无法仅靠移动继续访问私有字段 → 按上述状态owner和typed角色实际拆责任，禁止通过暴露整个Tenant或公共字段绕回原上帝对象。
+- 合并文件减少数量却增加理解成本 → 表中每个目标只承接共同owner和真实职责，先核对调用/锁/历史；报告生产LOC和真实依赖，负责人验收优先于文件配额。
+- 合并接受族误删专属回调或SQL映像 → 原格式/存储向量及owner测试继续覆盖，真实数据库恢复不能跳过后报通过。
+- 把公共API移入concrete包引入循环 → 构建与AST守门共同检查；既有纯基础依赖保留，四职责跨域只能用原公共typed角色。
+- 把旧完成记录当当前拓扑 → tasks历史区完整保留但明确过时；只勾选本次真实完成的行为与验证，不以旧完成记录替代剩余迁移。
 
 ## Migration Plan
 
-顺序：B1 边界审计（cmd 清单、端口 / 服务引用盘点、Go 依赖方向图、web 包依赖图）→ B2 进程收敛（webhook-sink 收编 + compose/lite/rehearse 更新）→ B3 Go 宿主分域拆分（逐域搬迁）→ B4 Web 包重划（等体验线三区定版）→ B5 依赖还原脚本 + 冻结维护 → 完成后升级轮。每个里程碑 `make verify` / `make rehearse` 通过并请负责人确认后推进；数据卷、密钥、租户配置全程不动，回退只回退对应差量。每里程碑完成后 `openspec-sync-specs` 同步 `runtime/deployment` 差量与 Architecture 代码地图。
+1. 本轮完成规划与守门，锁住存量；运行owner守门测试、全边界及check，不修改业务/数据，不部署源码。
+2. 先按自举change保住静态登录/维护并冻结新全量自举；逐批固化公共窄角色与composition工厂，保持原运行能力。
+3. 按owner合并Build/construction和host接口，再迁根包运行/设计职责；每块同步原测试、文档与生成物，报告真实净LOC/文件数及依赖，不留同义旧路径。
+4. 在明确角色与状态边界后合并接受23→3，沿所有格式/回调/SQL/恢复验证；不能把全库验证拖到最后才发现历史责任丢失。
+5. 协调页面、AI及UAF批次，用同一679基线核对最终≤339与每包≤25，执行适用集成、真实PG恢复及代表性浏览器路线。完成后才同步主规范与归档，代码按本次授权更新单一Platform入口并核对实际版本/资源/原数据。
 
-## 批次3 实施记录（B2 + B5.1）
+## Historical implementation record
 
-- 收编：`capabilities/server/internal/sink/sink.go` 承载原 webhook-sink 全部路由（`hook`/`received`/`mail`/`fail`/`a2a/v1`/`v1/chat/completions`）与内置 SMTP；`cmd/webhook-sink` 收缩为参数薄壳（`-addr`/`-smtp`/`WEBHOOK_SECRET`），保留独立运行能力；`cmd/platform-server` 经 `PLATFORM_SINK_ADDRESS`/`PLATFORM_SMTP_ADDRESS` 环境选择启用，未设置则不监听。composition 装配 `NewTenant[WithCapabilities]` 显式声明能力。收编后与原二进制逐字节同代码，`/received` 与 echo 模型行为冒烟一致。
-- 部署：compose 删除独立 sink 服务；manufacturing 宿主面 8497（`PLATFORM_SINK_ADDRESS=0.0.0.0:8497`、SMTP 2525），hospitality 经宿主 8499→容器 8497；演练端口 58497/58499；`cmd/webhook-sink/Dockerfile` 删除。连接配置里指向本地 sink 的 URL 不变（同容器内 127.0.0.1 或跨面宿主端口）。
-- 依赖还原（5.1）：`scripts/restore-deps.sh` 从 GitHub codeload tag tar 字节级组装模块 zip，按 go.sum 逐 entry `h1:` 哈希校验（官方 dirhash 算法，含模块自身 go.mod 与嵌套模块排除）；46/56 模块全绿。余 10 个 otel/genproto/proto 模块的 tag 内容与当年代理记录不符（tag 被重指或 monorepo 子 tag 共用 commit），GitHub 历史狩猎（按 `go.mod` 路径过滤提交）未复现原始字节，须有可达 Go 代理环境完成；不放松 go.sum 校验，不以未校验字节伪造 vendor。追记（2026-10-26）：上句“须有可达 Go 代理环境完成”已证伪——根因是脚本文件集错误而非代理侧变更（go.sum 原始行一直正确）；补齐官方 vendor 文件集（直系文件 + 子目录 LICENSE）与 pre-module 合成后 86/86 模块离线全绿，`make build`/`test-go` 全量通过，go.sum 零变化。
-
-## 批次4 实施记录（B3 同包分域文件化）
-
-- 依赖方向规则入 `doc.go`：工具→域→宿主壳；域只进 `platform/`、`internal/*`、`journal/`，不进兄弟域私有文件；`routes_*.go` 是壳的 API 面，域不反向调用。
-- `host.go` 1016→约 350 行装配壳（Tenant 身份、能力组装 `NewTenant[WithCapabilities]`、app/caller 接线、审计类型）；提交管线（Submit→submitAccepted→decideAccepted→explained/outcomeOf）→`submit.go`；成员读取与连接器输入→`reads.go`；接受事件计划/发布/投递→`events.go`；成员门面（Catalog/Declarations/Apps/AppsOf/Member）→`facade.go`。
-- 验证：纯同包文本搬移——顶级声明清单 40/40 前后一致、gofmt 全清、逐文件 import 双向核查（用即导入、导入即用）；`boundaries.sh` 全过；`escapes.sh` 已知逃逸 2 项无新增；`platformserver/platform` 导入面不变。
-- 目录化包（internal/<域>）与逐域 `make check`/`test-go` 需可达 Go 代理的环境编译验证后进行（沙箱缺 otel 家族模块）。
-
-## 批次5 实施记录（B4 Web 包重划）
-
-- 按 B1.3 实测结论执行：区层唯一结构动作 = `packages/platform` → `packages/govern`（`@platform/govern`，系统区归位）；基础层 `kernel/catalog/ui/app` 名称与公共面稳定；不为运营区新建包（运营界面由 `@platform/app` 运行时 + workspace 壳承担，build 不成为跨区依赖方）。design 决策 5 中「运营界面归属整理」的模糊表述由 B1.3 结论替代，未额外搬移。
-- 一次性迁移：引用面仅 4 文件 + Architecture 代码地图；lockfile 更新；catalog consumers 重生成（旧路径清零）；check-web 全绿；无新旧双轨。
-
-## 收尾审计（2026-10-24，走查通过后）
-
-- B4 结论复核：`@platform/platform` 全仓引用为零（lockfile 历史条目随重生成消失）；基础层公共面未动；无新旧双轨。
-- 依赖冻结承诺复核：`git diff main..HEAD -- go.mod go.sum` 为空；pnpm-lock 无版本变更（仅 govern 改名结构）——5.2 冻结巡检据此勾选。
-- deployment 差量逐条对照 B2 实现：三运行服务拓扑、进程内可选接收能力（声明启用/未声明不监听/端口与签名语义不变）、compute 与驱动隔离保留——无打折实现。剩余 3.1/3.2（目录化搬迁）、6.1/6.2/6.3（宿主验证与升级轮）如实留待代理可用环境，change 保持活动。
+旧12项完成记录继续保存在tasks；已实现sink收编、govern重划、源码同包拆分、依赖还原校验及其当时验证不抹掉。旧双实例/三服务、固定8490/8497目标、等待代理和“一种接受结果一个文件”的收尾方向均不再定义本次目标。当前部署文档中的过时拓扑在对应实施批次修正；本轮不修改Architecture或主规范冒充业务已经迁移。

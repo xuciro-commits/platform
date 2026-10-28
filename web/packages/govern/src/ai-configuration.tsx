@@ -19,6 +19,7 @@ export function AIConfiguration({initialSection="defaults",fromPackage,fromVersi
   if(!can("ai.provider.add")&&!can("platform.setting.set"))return <PageHeader title={t("AI configuration")} description={t("Ask an administrator to connect services, enable models or change purpose defaults.")} actions={<Button onClick={()=>open({view:"ai-playground"})}>{t("Try available models")}</Button>} />;
   return <>
     <PageHeader title={t("AI configuration")} actions={fromPackage?<Button onClick={()=>open({view:"package-preparation",params:{id:fromPackage,version:fromVersion??""}})}>{t("Return to package preparation")}</Button>:undefined} help={t("Connect a service, read its models, enable the models people may use, then choose one default for each purpose. Several services and models can be enabled.")} />
+    <p className="mb-4 max-w-prose text-sm text-muted">{t("Cloud models are available for authorized design tasks. Production inference and knowledge embeddings require a deployment-approved local or edge service; marking a provider as local does not grant approval.")}</p>
     <nav aria-label={t("AI configuration")} className="mb-5 flex flex-wrap gap-2">
       {[["services", "Connect services"], ["models", "Available models"], ["defaults", "Default purposes"], ["usage", "Usage and limits"]].map(([id, title]) => <Button key={id} aria-current={section === id ? "page" : undefined} variant={section === id ? "primary" : undefined} onClick={() => setSection(id!)}>{t(title!)}</Button>)}
     </nav>

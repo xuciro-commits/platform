@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"platformkernel/kernel"
-	enterprisemodel "platformserver/internal/enterprise"
+	enterprisemodel "platformserver/engine/organization"
 )
 
 // EnterpriseQueries is the typed member read capability, separate from the

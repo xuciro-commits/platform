@@ -1,125 +1,144 @@
 # Design
 
-## 目标与边界
+## Context
 
-人和 AI 通过同一条提交、接受、发布与激活路径修改系统。`system` 是宿主唯一的系统权威，其他租户共享实际二进制和工作区资源，各自保存业务记录、历史与在途实例。源码、定义、批准与激活均有原始记录；仓库只提供首次基线，运行与恢复不依赖 Git。
+负责人已从审计与规划进入直接实施，当前完成状态见tasks。原自举已存在，不能把目标收缩写成它从未实现，也不能把旧勾选任务当作新边界已生效。当前产品意图仍是业务应用构建平台；附件新增“确定性优先、静态控制面、UAF 外移”的方向，本 change 只落实战役四，结构拍平、端侧规则和 AI 网关由 `consolidate-platform-boundaries` 管理。
 
-内核契约、提交管线、接受结果、日志、恢复、授权与身份保持冻结。允许平台应用与表现层随受控源码发布演进，不允许通过修改构建配置替换内核。构建由独立 updater 执行，宿主不编译或重启自己。
+### 已核对的实现与风险
 
-这份设计按本轮已核对实现修订，替换旧的可变 seed、仓库构建脚本与已删除 Studio/Catalog 入口描述。原 change 尚未完成的范围仍由 [tasks](tasks.md) 与 [WorkQueue](../../../docs/WorkQueue.md) 跟踪，不以核心链路可用代替整个 change 完成。
+| 事实 | 当前来源 | 判断 |
+|---|---|---|
+| 唯一 system 租户与系统角色 | `capabilities/server/tenants.go` 的 `systemSpec`；`composition/tenant.go` 只在 system 装配 `apps/system` | 是真实控制权，不是静态文档 |
+| 源码、候选、批准与激活 | `apps/system/system.go` 的 file/blob/change/release/activation，`apps/system/definitions.go`，宿主 `system_definitions.go` | 已实现全量源码及定义自举，首批实施须关闭新写入口 |
+| AI 真实写入口 | `system.architect` 工具包含文件读取、保存与提案；其批准/激活被原 owner 拒绝 | 不能靠撤掉导航认为 AI/API 入口已关闭 |
+| 实际前端 | `web/packages/govern/src/system.tsx`，原静态注册在 `govern/src/index.tsx` | 旧 design 的 `web/packages/platform/src/system.tsx` 不存在，旧体量快照过时 |
+| 构建与监督 | `cmd/platform-updater/main.go`、`serve.go`，`internal/systembuild/{source,systembuild}.go` | 固定构建、制品留存、健康、排空、回滚和未知回执续接均真实存在 |
+| 实际恢复物 | `.build/system/{sources,bin,web,releases,builds}` 与 `current.json`；原 system 接受映像、候选字节 | 冻结不能抹去这些来源与未完成责任 |
+| 闸门覆盖缺口 | `internal/systemscope/systemscope.go` 的冻结表未覆盖 `tenants.go`、`credentials.go`、`model_configuration.go`、服务 main、自举 owner/构建器及 Web 治理源码 | 已证实的风险；没有证明发生过控制面锁死。源码后缀拒绝秘密文件不等于冻结凭据管理代码 |
+| 历史恢复边界 | `runtime/storage`、原 owner 严格映像校验；`enterprise/accepted_state.go` 及 `legacy_views.go` | 新封存结果与旧输入分别承担责任；不能删字段、换 owner 或重算旧决定 |
 
-## 单一归属
+### UAF 体量与用途（2026-10-27 工作树）
 
-| 责任 | 归属与选择理由 |
-|---|---|
-| 系统源码与变更 | `apps/system`，使用普通 `Tenant.Submit` 与私有决定，不另建文件写入通道 |
-| 系统定义草稿与候选 | 原 Build 与 release owner，使用完整候选、依赖检查和安装映像，不复制检查器 |
-| 业务运行与数据 | 原业务租户；共享系统定义不是复制系统记录或业务日志 |
-| 源码基线与构建物 | `internal/systembuild` 的内容寻址封存；不从变动中的仓库补齐文件 |
-| 构建与进程切换 | 独立 `platform-updater`，使用 publisher 的原提交接口记录结果 |
-| 系统编辑与审阅 | 单工作区 `web/packages/platform/src/system.tsx`；定义编辑继续走普通 Records/决定表单与原 Build 草稿 |
-| AI | 既有 Agent/AI owner，普通受管主体、原模型预算与运行日志 |
+| 范围 | 文件数 | 字节 |
+|---|---:|---:|
+| `capabilities/server/internal/enterprise/uaf/` | 7 | 1,522,419 |
+| `capabilities/server/internal/enterprise/uafgen/` | 3 | 9,339 |
+| `capabilities/server/cmd/uaf-gen/` | 1 | 1,809 |
+| `docs/standards/uaf/` | 2 | 97,728 |
+| 上述外移候选合计 | 13 | 1,631,295 |
+| 其中两份 XMI | 2 | 1,298,843 |
+| 其中实际嵌入的 JSON | 1 | 212,883 |
+| Enterprise owner（不含 UAF/生成器） | 19 | 153,710 |
 
-## 系统记录与源码基线
+UAF 数据含 272 个构造型、21 个枚举和 12 个域。`go list -deps ./cmd/platform-server` 确认主程序依赖 `internal/enterprise/uaf`，不依赖 `uafgen`；`encoding/xml` 仍可能由其他能力引入。XMI 只在生成阶段解析，运行读取使用 `sync.Once` 解码的生成 JSON。没有做编译耗时、二进制差值或内存基准，不能将 1.63 MB 仓库体量当作运行占用或性能损失。
 
-`system.file` 按规范相对路径保存修订与删除墓碑，内容引用不可变 `system.blob`。保存必须携带期望修订；冲突返回实际修订，不覆盖另一位作者。内容相同的不同路径共用一个 blob，各自保留文件修订。
+UAF 当前参与元素类别及继承、关系端点、属性/枚举/引用校验、关闭/删除时的引用检查、外部切片命名空间及 SDK/建模器发现。它不是无用文件：退出须将轻量组织必需的确定性规则迁回原 owner，并显式停止完整建模的新写与导入。
 
-启动时部署提供 `platform.SystemSource`。开发仓库先捕获为 `.build/system/sources/<digest>/`，目录包含 `manifest.json` 与完整 `files/`，清单绑定路径、内容摘要与文件模式。构建产物、Git、依赖目录和凭据文件不进入封存。冻结内核文件作为构建输入保留并可读，但不可通过自举修改。
+## Goals / Non-Goals
 
-文件索引是分页、可搜索的元数据；只在打开一个路径时读取内容。已保存文件草稿覆盖编辑器看到的基线，但不改变实际运行源码，也不自动成为提案。
+**Goals:** 动态运营记录与静态控制面之间形成可检查边界；原全量自举先冻结新工作再交接保留责任；UAF 从默认运行、构建和生成依赖退出，原组织权威继续服务有效期与授权范围；删除和合并清单可直接核对路径。
 
-`system.change.propose` 同时冻结：
+**Non-Goals:** 本轮不关闭业务入口、不移动实现、不触碰运行数据或密钥；不重建 tenant/enterprise 身份；不清理日志和制品；不删 Knowledge、集成、专业可视化及现役应用包；不把台账、Flow 或蒸馏另实现到 Enterprise；不继续完善旧源码自举的缺口。
 
-- 当前全局 active 发布与实际源码摘要；两者分开，纯定义发布不替换二进制。
-- 选中的文件内容、摘要、删除集与期望修订。
-- 每个路径在完整源码基线中的修改前内容与摘要；新增路径保留明确的空基线标识。审阅不再依赖之后的文件草稿或当前工作树。
-- 原 release owner 产生的完整定义候选，包含此前系统定义闭包，后续草稿修改不能改变它。
-- 来源、理由、原提示词及受管主体；真实 Agent 运行关联由原 Agent owner 绑定在调用上下文，不取客户端 correlation 标签，也不把手工 `origin=prompt` 标签当作模型证据。
+## Decisions
 
-源码比较前后内容合计受变更字节预算约束。旧提案没有修改前映像时显示“基线不可用”，不读取现在的文件冒充原内容。批准后的提案不可修改；修正或构建失败后重做须新建变更。
+### 1. 动态面只接受原 owner 的运营读取与追加
 
-候选原始字节作为 opaque `[]byte` 保存，避免嵌套 JSON/SQL 投影重组后改变内容身份。已有嵌入 JSON 格式只通过原历史候选 owner 还原并验证原身份，历史字节不重写。
+审计、模型用量和工作监控从各自 owner 投影，缺失、受限和失败按原读取结果呈现；不是新建可编辑副本。追加记录绑定原事件、主体及幂等身份，经同一接受结果保存，已有事实不允许编辑/删除。蒸馏样本只引用 AI 网关负责生成、脱敏和授权的原样本，不在此再做配对、调度或存储。
 
-## 定义、源码与混合激活
+动态页面只能选择经静态注册明确声明为只读/追加的运营动作；不能通过通用 ActionTrigger、直接 schema、源码变更、包贡献或 Agent 工具调用禁区。任务监控的重试、取消、排空仍在静态 owner 入口，不因看见任务行就获得控制权。显示脱敏凭据状态不等于允许动态管理凭据。
 
-```text
-人工或 Agent
-    │ 普通提交、权限与内核闸门
-    ▼
-system.change（冻结源码基线、文件与原定义候选）
-    │ 人工 publisher 批准
-    ├─ 纯定义 → definitions release → 显式热激活
-    └─ 含源码 → updater 固定构建 → source/mixed release
-                                      │ 可取消窗口、探活、排空、换版
-                                      ▼
-                              finished(active) 安装混合定义
-```
+### 2. 静态控制面是启动与修复的前提，不是应用定义
 
-纯定义批准时产生发布，显式激活时由原 release owner 准备和接受安装；不编译、不重启。含源码时，构建失败不产生发布。混合定义直到代码换版成功并接受 `finished(active)` 才安装；失败或取消不提前安装定义。
+禁区涵盖租户开通/停用、IdP/登录、成员与授权管理、凭据托管、模型/provider/默认用途/路由、基础实现选择、健康/隔离/恢复和部署选择。它们继续使用原权威、原权限及原接受结果，UI 在受信静态构建中注册；静态不等于去掉权限或直接写数据库。
 
-系统安装映像保留在 system 的接受结果，SQL delta 由原安装格式归属方转换并与同一接受事务落盘。恢复只应用保存映像，不重跑草稿解析、授权、构建或外部调用。
+实现批次先关闭 system 文件保存、源码/定义提案、批准、构建与新激活动作；同时停止 Agent 工具与 updater watch 接入新工作。没有默认“专家开关”重新打开全量自举。后续如需重新引入，应作为新的明确授权变化审阅。
 
-业务租户在自己的协调读取边界使用已接受的系统定义投影：来源标为 `system`，本地不可修改，数据与动作仍经过当前权限。普通本地候选把系统声明当成不可变前置条件；系统 owner 更新才允许替换这些共享声明。激活前检查本地同名冲突，不能等业务读取时才发现无法安装。
+现有健康、宿主维护与登录路径不依赖动态 Page 定义，实施时必须实证保持这种独立性：构造动态元数据损坏/缺失、system 租户隔离的环境，仍能通过原静态身份、维护和健康入口诊断。共享进程未隔离、数据库不可用、身份服务本身宕机不在此保证内，沿原部署故障模式明确报告。
 
-定义版本回退复用原安装 owner。同一 Ref 的旧版可恢复；如果回退需要撤除新引入的资产，当前 owner 尚无整资产退役映像与历史责任计划，明确拒绝。不能把归档草稿当作撤除运行定义，也不能只删除共享投影伪装成功。
+### 3. 旧自举状态冻结，不销毁、不换权威
 
-## 内核闸门
+保留原 `system` 身份、封存字节、ledger/安装映像解码及只读诊断。已经开始且结果未知的激活，先以原 ID/原键核对；已关闭的新写入口不能把原已持久结果重试当作新动作，也不能悄悄生成另一激活。未开始的提案不再触发构建/激活；已请求但未完成的工作按原证据在静态维护中明确终结，不能只改 UI 状态。
 
-保存与构建共同调用 `internal/systemscope`。路径必须是单一规范相对路径；大小写、父目录删除、重复分隔符与点段都不能绕过冻结路径。实际冻结表由该模块维护，不在文档复制另一份名单。
+独立部署/监督继续选择原发布、探活、排空和保留回滚前驱；自动消费新动态变更的 watch 路径退出。不能在没有完成实际服务版本、资源、未回报结果和恢复责任交接前删除 updater、`current.json` 或归属方代码。关闭的是动态控制权，不是版本发布与故障维护本身。
 
-冻结范围包括契约、提交与接受、日志/重放/快照、记录持久映像、授权、身份、闸门自身及相关 Go workspace/module 入口。后者避免使用 `replace` 或 workspace 重定向绕过内核冻结。Go 模块调整走普通版本发布；可编辑 Web 依赖仍须锁定并记录摘要。
+### 4. UAF 工具外移，组织 owner 只保留必要语义
 
-凭据文件在源码捕获与编辑闸门两处排除。秘密由部署环境或原凭据 owner 托管，源码与发布只保存引用。编辑内容限 UTF-8 文本；二进制资产仍由其原 owner 处理。
+目标包为 `capabilities/server/engine/organization/`，移动的是现有 `enterprise` 权威实现，authority ID、记录身份、接受映像和租户组织引用保持原值；不新增 organization 权威或第二目录。目标生产文件为 `organization_owner.go`、`organization_model.go`、`organization_relations.go`、`organization_queries.go`、`organization_state.go`；公开组织事实沿既有 `platform/org.go`，移除跨包别名传话筒。其他三类目录遵循合并变更：kernel 负责接受/持久恢复，studio 负责设计发布，aigateway 负责模型阶段、预算和蒸馏。
 
-## 固定构建与完整导出
+保留轻量单位/岗位/任职、指定结构、有界上下级、有效期间、已存引用解析、关闭/重开与来源所有权检查。组织类型与关系端点成为有界平台目录规则，不复制 272 构造型全集；普通业务台账和流转仍交原 Build/Flow owner。
 
-updater 校验提案的实际基线摘要，从封存完整源码物化独立工作树，再叠加冻结文件与删除集。完整新源码在执行构建前封存；之后清理构建工作树不影响运行文件读取或导出。
+新写不再接受任意 UAF 类别、标准属性、视图或完整切片导入。历史已保存的资源、场所、能力、视图及属性保留原 ID 与字节，通过原 owner 的只读历史解释可辨认；不能全部强转为单位、丢弃未知属性，或把旧来源改成本地。已封存结果只应用原映像；需要原 UAF 解释器重建的旧输入在独立保留的兼容二进制完成原恢复和受检交接前阻止升级，不把外移工具自动挂回普通运行路径。
 
-固定命令：
+### 5. 精确文件删除、合并与目录收敛对照
 
-1. 在物化宿主模块运行 `go build -trimpath` 与 `go vet`。
-2. 在物化 Web 工作区运行锁定依赖还原，禁用生命周期脚本与 pnpmfile。
-3. 直接运行 TypeScript 编译器检查各包与工作区，不执行 package scripts。
-4. updater 生成受信 Vite 配置，关闭仓库 Vite/PostCSS 配置与 envDir，直接执行 Vite 构建工作区。
+下列是统一实施目标，原组织owner已按表内聚；UAF标准与工具尚未外移。外部导入工具的仓库名 `platform-uaf-importer` 是交付目标名，不在本轮创建仓库；转移须保留原来源文件、校验摘要、许可证及版本。
 
-不运行 Makefile、`scripts/`、自定义 package build 或仓库 Vite/PostCSS 脚本。依赖使用部署机器的工具链与锁定缓存；新增未缓存依赖无法解析时明确失败，记录诊断，不产生部分发布。
+#### UAF 从核心外移的 13 个文件
 
-发布证据包含完整清单、源码摘要、实际二进制/工作区摘要、工具链和依赖锁摘要。构建结果先保存在 `.build/system/builds/<identity>` 再上报；答复未知沿原键和原内容重试，不重新构建或产生第二个发布。
+| 当前精确文件 | 目标（可选外部工具仓库内） | 核心处理 |
+|---|---|---|
+| `capabilities/server/internal/enterprise/uaf/data.go` | `platform-uaf-importer/uaf/data.go` | 外移后删除 |
+| `capabilities/server/internal/enterprise/uaf/uaf.go` | `platform-uaf-importer/uaf/uaf.go` | 外移完整标准模型，核心不保留导入 |
+| `capabilities/server/internal/enterprise/uaf/releases.go` | `platform-uaf-importer/uaf/releases.go` | 撤掉核心 JSON embed |
+| `capabilities/server/internal/enterprise/uaf/uaf_test.go` | `platform-uaf-importer/uaf/uaf_test.go` | 标准测试随工具走 |
+| `capabilities/server/internal/enterprise/uaf/gen/uaf-1.3.json` | `platform-uaf-importer/uaf/gen/uaf-1.3.json` | 原生成字节保留 |
+| `capabilities/server/internal/enterprise/uaf/spec/uaf-1.3-profile.xmi` | `platform-uaf-importer/spec/uaf-1.3-profile.xmi` | 原件与摘要保留 |
+| `capabilities/server/internal/enterprise/uaf/spec/uaf-1.3-measurements.xmi` | `platform-uaf-importer/spec/uaf-1.3-measurements.xmi` | 原件与摘要保留 |
+| `capabilities/server/internal/enterprise/uafgen/generate.go` | `platform-uaf-importer/generate/generate.go` | 生成职责外移 |
+| `capabilities/server/internal/enterprise/uafgen/profile.go` | `platform-uaf-importer/generate/profile.go` | XML 解析职责外移 |
+| `capabilities/server/internal/enterprise/uafgen/generate_test.go` | `platform-uaf-importer/generate/generate_test.go` | 来源/生成一致性验证随工具走 |
+| `capabilities/server/cmd/uaf-gen/main.go` | `platform-uaf-importer/cmd/uaf-gen/main.go` | 核心命令退出 |
+| `docs/standards/uaf/1.3/SOURCE.md` | `platform-uaf-importer/docs/1.3/SOURCE.md` | 修正外部仓库内路径，保留来源 |
+| `docs/standards/uaf/1.3/uaf-1.3-specification.html` | `platform-uaf-importer/docs/1.3/uaf-1.3-specification.html` | 标准说明外移 |
 
-`platform-updater export` / `make system-export RELEASE=<n>` 校验并复制完整封存源码。旧发布缺完整源树时拒绝，不拿当前仓库补齐，也不把补丁当作完整源码。
+#### 组织能力内聚的逐文件映射
 
-## 独立监督与回滚
+下表 target 均以 `capabilities/server/engine/organization/` 为根；旧目录仅在全部消费者改接、历史责任验证后删除，不留纯转发壳。
 
-监督进程 `serve -watch` 保存确切激活身份、前驱、结果和上报键。首次接管允许实际 code release 为零且全局前驱仅为同源码定义发布；已有代码发布缺失保留产物时不猜测前驱。
+| 当前精确文件 | 目标文件 | 必须保留或退出的真实责任 |
+|---|---|---|
+| `internal/enterprise/model.go` | `organization_model.go`、`organization_state.go` | 组织/任职/关系身份与有效期；旧 UAF 扩展字段留历史读取 |
+| `internal/enterprise/lifecycle.go` | `organization_model.go`、`organization_relations.go`、`organization_state.go` | 关闭/重开、期间覆盖、引用占用保留；完整 UAF 属性重写和新切片导入退出 |
+| `internal/enterprise/relations.go` | `organization_relations.go` | 有界目录端点/角色规则保留；全 UAF 契约推导外移 |
+| `internal/enterprise/discovery.go` | `organization_queries.go`、`platform/org.go` | 保留目录查询 DTO；标准 metamodel/profile/contracts 发现退出 |
+| `internal/enterprise/profile.go` | `organization_owner.go` | 仅保留轻量组织类别的显示声明；五类完整建模视角与全集 palette 退出 |
+| `internal/enterprise/legacy_views.go` | `organization_state.go` | 旧 grid/viewpoint 映像解释保留，普通视图写入退出 |
+| `internal/enterprise/model_test.go` | `organization_model_test.go`、`organization_relations_test.go` | 原身份/时间/关系与授权事实断言 |
+| `internal/enterprise/lifecycle_test.go` | `organization_model_test.go`、`organization_state_test.go` | 原有效期、关闭及旧历史断言 |
+| `apps/enterprise/enterprise.go` | `organization_owner.go`、`organization_model.go`、`organization_queries.go` | 原 enterprise 决定、Units/Below/Holders/Calendar；必要属性与端点校验内聚，不能直接删掉 |
+| `apps/enterprise/accepted_state.go` | `organization_state.go` | 严格解码、身份重复检查、保存/恢复原 owner 状态 |
+| `apps/enterprise/model.go` | 移除纯别名，实际类型归 `organization_model.go` / `platform/org.go` | 不建立新的同名转发层 |
+| `apps/enterprise/query.go` | `organization_queries.go` | 有界查询、已关闭引用解析、稳定排序保留 |
+| `apps/enterprise/relationship_decisions.go` | `organization_relations.go` | 原期间、端点、结构/任职检查保留；新全量切片及标准关系写入退出 |
+| `apps/enterprise/sdk.go` | `organization_queries.go` | 目录语义从原声明产生；UAF palette/标准SDK发现退出 |
+| `apps/enterprise/view_reads.go` | `organization_queries.go`、`organization_state.go` | 旧视图仅保留历史读取；新完整建模入口退出 |
+| `apps/enterprise/enterprise_test.go` | `organization_model_test.go`、`organization_state_test.go` | 原 owner 决定及恢复证据，不改断言掩盖差异 |
+| `apps/enterprise/accepted_state_test.go` | `organization_state_test.go` | 深拷贝、原映像及未知字段/格式拒绝 |
+| `apps/enterprise/lifecycle_test.go` | `organization_model_test.go`、`organization_relations_test.go` | 生命周期和有界关系验证 |
+| `apps/enterprise/query_test.go` | `organization_queries_test.go` | 当前/历史引用与查询范围验证 |
 
-每次代码激活：
+#### 同批必须改接的入口与消费者
 
-1. 等待已接受的可取消窗口，核对请求仍有效。同一时刻仅允许一个未结束的 requested 激活；窗口到期不释放这项责任。
-2. 在独立临时数据目录探测候选，要求健康且没有隔离租户。
-3. 排空并等待旧监听退出；启动相同数据目录、租户配置、密钥与部署参数的新宿主，服务同一发布的前端。
-4. 核对实际健康与发布身份，成功后以原激活 ID 上报 `active`，旧 active 标为 `superseded`。
-5. 临时探测失败不切换；真实数据启动失败则恢复上一代码产物并上报 `rolled-back`，保留原数据与证据。
+- `Makefile`：`check-go` 不再依赖 `check-uaf`；`generate-uaf/check-uaf` 随外部工具外移。`cmd/README.md`、Architecture 与主规范在实现完成后同步，不在本轮误写为当前已退出。
+- `composition/tenant.go`：装配迁移后的同一 enterprise owner；`enterprise_usage.go`、`enterprise_usage_history.go`、`enterprise_links.go`、`api.go`、`pipelines.go`、`routes_records.go`、`live_queries.go`、`internal/host/enterprise.go` 的类型和读取由战役一共同改接；先逐一核对实际文件/角色，后者随 internal/host 整目录退出，不另立桥接接口。
+- `web/packages/govern/src/enterprise/{index.tsx,model.ts,properties.tsx,lifecycle.tsx,canvas.tsx,TenantLinks.tsx,model.test.mjs}`：目录操作与历史解析内聚至既有组织界面；完整 UAF 属性/元模型、画布、视图及切片编辑退出。`web/packages/ui/src/records/RecordLookup.tsx`、`web/packages/app/src/semantic/Selector.tsx`、`web/packages/build/src/ontology/process.tsx` 及生成 `host.ts` / `enterprise-sdk.ts` 的引用协议与当前权限保留，生成物由原工具重新生成，实施前重查调用方。
+- `apps/system/{system.go,definitions.go}`、宿主 `system_definitions.go`、`apps/build/system_definitions.go`、`platform/{system_definitions.go,system_source.go}`、`internal/systemscope/`：先拒绝新全量自举，保留原封存/恢复解码，不立即整目录删除。
+- `cmd/platform-updater/{main.go,serve.go,updater_test.go}`、`internal/systembuild/{source.go,systembuild.go,source_test.go}`、`internal/host/system.go`：维护/恢复保留部分改归部署静态工具，动态构建订阅退出；只有核清实际调用方和历史后才能删除被替代实现。
+- `web/packages/govern/src/{index.tsx,system.tsx,system.test.mjs,host.tsx,credentials.tsx,ai-configuration.tsx}`：完整自举写控件退出，原宿主、凭据、模型治理保持静态注册；`tenants.go`、`idp/`、`credentials.go`、`model_configuration.go`、`host_control.go`、`deploy_recovery.go` 及服务 main 全部属于静态控制面禁区。
 
-重复激活使用新的激活身份，不能覆写取消或失败的结果。重启后发现已完成发布不能启动，产生新的原回滚决定，不修改旧的 active 证据。逻辑定义版本与实际代码版本分别保存，保留清理保护实际运行产物与可回滚前驱。
+## Risks / Trade-offs
 
-构建/上报/健康读取有界，缺 updater 或工具链只留下原状态与诊断。保留策略清理旧 bin/web/release 与构建缓存，不删被运行与回滚所引用的版本。
+- 删除 UAF 会改变现役校验和发现协议 → 先以原 owner 的组织、端点、属性、有效期与历史样本比较接受/拒绝；无法解释的旧输入阻止升级并保留兼容二进制，不默默放行。
+- 关闭源码入口但尚有未完成激活 → 首批任务列出实际 pending/unknown 状态，沿原 ID 核对并交接监督责任；不能删除 `current.json` 解除阻塞。
+- 静态控制台与动态工作区共享 JavaScript/进程 → 验证不依赖动态元数据，但不夸大为操作系统级隔离；失败必须落到部署维护路径。
+- 当前边界检查只能限制继续扩散 → 本轮 guard 基线通过不等于运行时路径已关闭；新边界均保留未完成任务。
+- 包含敏感来源的运营/蒸馏内容 → 当前权限与原来源继续过滤，禁止将凭据、思考原文或不可读业务内容复制到普通运营记录。
 
-客户端按健康端点的实际代码版本与摘要检测换版，提示用户保存编辑后手动刷新，不自动重载或等待全工作区刷新才结束原决定。当前工作区未启用离线快照；以后启用时仍不能跨发布复用。
+## Migration Plan
 
-## 人工与 AI
-
-Platform 作者入口仅在 system 租户且具备系统角色时出现。业务租户可以看到获权的共享系统页面，不出现系统作者导航。当前前端已用单工作区替换旧 Studio/Catalog 包，不恢复第二套编辑器；元对象经通用表单保存为原 Build 草稿，再与源码一同选择提案。
-
-审阅界面显示来源、提示词、理由、基线、批准证据、选中定义引用、每个冻结文件的修改前后内容和构建诊断。源码文件可搜索、打开、保存、删除并加入同一个提案。回执未知保留原输入与原键，原请求重试不新建一次修改。帮助提供英文与简体中文。
-
-`system.architect` 是普通受管 Agent，只具备声明的源码索引、单文件读取、保存与提案工具；没有 build、批准、激活或凭据读取工具。模型、费用、步数与运行日志复用原 Agent/AI owner。达到上限停止并留下原日志或草稿，不隐式批准。
-
-受管 Agent 即使被错误授予 publisher，也不能批准或激活。普通人工 publisher 可以批准人工提案；这里没有额外的双人批准策略。手工来源标签只表示来源，模型实际运行证据在原 `agent.run`。
-
-## 删除与仍待完成的范围
-
-已退出的旧界面、自举重复入口、未消费宿主构建接口、行业包与驱动等不保留隐藏兼容实现。仍有调用方的页面契约保留：它们继续负责 Build 保存、发布和权限投影，不能以新界面暂不渲染就判为死代码。
-
-`files` / `relations` 和其他历史 owner 的恢复责任不能通过删模块、清空数据或换新租户消失。完整旧租户退役迁移、需要移除新增资产的定义回退、完整 composed/Document 运行时仍未完成；复杂页面先明确说明不支持，不假装通用列表已执行原语义。
-
-上述范围与关闭浏览器后未观察的界面项目继续保留在原任务清单，不归档本 change。核心自举验收仍需真实的定义热激活、人工/AI 源码换版、失败回滚、数据与修订保留及完整源码导出；单元测试或 OpenSpec 格式通过不能代替这些证据。
+1. 首批实施静态禁区与全量自举新写冻结；提供仍可登录、查看健康、维护、恢复的静态路线，原业务运行不变。
+2. 核对并终结/交接既有激活和未知回执，保留原 system 记录、候选、源码、制品及回滚前驱；部署不再自动消费新提案。
+3. 按原 owner 迁移轻量组织规则和历史解释，再改消费者、SDK/生成物和界面；将完整 UAF 工具、标准和测试一起外移，默认构建去依赖。
+4. 引入有限运营投影与追加声明，按 owner 验证权限、幂等及重放；蒸馏只接 AI 战役已交付的样本能力。
+5. 运行针对性检查、真实 PostgreSQL 恢复和元数据故障演练；核对实际版本/资源/数据后，再同步 Architecture/主规范。任一步未通过保留上个兼容部署，不能用动态自举重新打开禁区作为回退。

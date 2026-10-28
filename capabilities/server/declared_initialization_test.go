@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"platformserver/apps/build"
-	"platformserver/apps/enterprise"
+	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 )
 

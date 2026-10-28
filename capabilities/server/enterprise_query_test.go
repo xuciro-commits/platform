@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/apps/enterprise"
+	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 )
 

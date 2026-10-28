@@ -22,6 +22,7 @@ import (
 )
 
 func TestApplicationProposalAdoption(t *testing.T) {
+	approveTestInference(t, "http://localhost:1", "local")
 	at := time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
 		return composeTenant(t, "proposals", []Seat{seatOf("builder", "build:builder", "platform:admin", "ai:admin"), seatOf("operator", "build:user"), seatOf("reviewer", "build:reviewer"), seatOf("observer", "build:observer")}, build.New("proposals"), ai.New("proposals"), work.New("proposals"))
@@ -288,6 +289,7 @@ func TestApplicationProposalAdoption(t *testing.T) {
 }
 
 func TestApplicationAgentCandidateIndependentEvaluation(t *testing.T) {
+	approveTestInference(t, "http://localhost:1", "local")
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
 		return composeTenant(t, "agent-candidate", []Seat{seatOf("builder", "build:builder", "platform:admin", "ai:admin"), seatOf("operator", "build:user")}, build.New("agent-candidate"), ai.New("agent-candidate"), work.New("agent-candidate"), NewAgents("agent-candidate"))

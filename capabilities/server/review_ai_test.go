@@ -12,9 +12,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
-	"platformserver/apps/enterprise"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 )
 
@@ -60,6 +60,7 @@ func modelStandIn(t *testing.T, answer func(turn int) standInCall) func(*http.Re
 // reviewTenant is a desk whose agents run for nobody or for a person, a stock
 // app they must not read beyond their scope, and the ai app both paths need.
 func reviewTenant(t *testing.T) (*Tenant, func(authority, schema, typ, id string, payload any) *pb.ChangeRecord) {
+	approveTestInference(t, "http://local.test", "local")
 	t.Helper()
 	tn, err := NewTenant("t-1", NewConsole("t-1",
 		Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"desk": "clerk", "stock": "lead", ai.ID: ai.Admin, PlatformApp: Admin, AgentApp: AgentAdmin}}},
@@ -106,8 +107,8 @@ func TestAutomationRunReadsItsOwnAppNotTheHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A flow's agent: a run with no person behind it.
-	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: "R1"},
-		Agent: "desk.triage", Goal: "Look into the wifi", State: "running", Steps: []RunStep{}}); err != nil {
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", reviewRun(t, tn, AgentRunRecord{Record: platform.Record{ID: "R1"},
+		Agent: "desk.triage", Goal: "Look into the wifi", State: "running", Steps: []RunStep{}})); err != nil {
 		t.Fatal(err)
 	}
 	answers := []standInCall{
@@ -161,8 +162,8 @@ func TestRunForAPersonStillReadsAsThatPerson(t *testing.T) {
 	// ana is a lead in stock; bo, who also has the desk role this agent
 	// belongs to, holds none — the same read differs between them.
 	for _, who := range []string{"ana", "bo"} {
-		if err := tn.automation(AgentApp, true).PutAt(now, "test.run"+who, AgentRunRecord{Record: platform.Record{ID: "R-" + who},
-			Agent: "desk.triage", OnBehalf: who, Goal: "check the press", State: "running", Steps: []RunStep{}}); err != nil {
+		if err := tn.automation(AgentApp, true).PutAt(now, "test.run"+who, reviewRun(t, tn, AgentRunRecord{Record: platform.Record{ID: "R-" + who},
+			Agent: "desk.triage", OnBehalf: who, Goal: "check the press", State: "running", Steps: []RunStep{}})); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -221,8 +222,8 @@ func TestLateModelAnswerCannotActAfterCancel(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}},
 			Body: io.NopCloser(strings.NewReader(late.body(t)))}, nil
 	}
-	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", AgentRunRecord{Record: platform.Record{ID: "R1"},
-		Agent: "desk.triage", Goal: "Answer ticket T1: wifi", State: "running", Steps: []RunStep{}}); err != nil {
+	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", reviewRun(t, tn, AgentRunRecord{Record: platform.Record{ID: "R1"},
+		Agent: "desk.triage", Goal: "Answer ticket T1: wifi", State: "running", Steps: []RunStep{}})); err != nil {
 		t.Fatal(err)
 	}
 	think := make(chan struct{})
@@ -408,8 +409,8 @@ func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 	tenant.agents.(*Agents).defs["desk.triage"] = &def
 	seed := func(id string) {
 		t.Helper()
-		if err := tenant.automation(AgentApp, true).PutAt(now, "test.run"+id, AgentRunRecord{Record: platform.Record{ID: "R" + id},
-			Agent: "desk.triage", Goal: "look around", State: "running", Steps: []RunStep{}}); err != nil {
+		if err := tenant.automation(AgentApp, true).PutAt(now, "test.run"+id, reviewRun(t, tenant, AgentRunRecord{Record: platform.Record{ID: "R" + id},
+			Agent: "desk.triage", Goal: "look around", State: "running", Steps: []RunStep{}})); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -547,5 +548,33 @@ func TestTranscriptsAreKeptOnlyWhenAsked(t *testing.T) {
 	kept, err := tenant.TranscriptsFor(ana, "", 10, now)
 	if err != nil || len(kept) != 1 || kept[0].Member != "ana" {
 		t.Fatalf("a person's own calls: %v %+v", err, kept)
+	}
+}
+
+// Scope and late-answer cases use the same current binding as a real new run.
+// Separate legacy cases deliberately retain an unstaged original run.
+func reviewRun(t *testing.T, tenant *Tenant, seed AgentRunRecord) AgentRunRecord {
+	t.Helper()
+	run, err := tenant.agents.(*Agents).create(seed.ID, seed.Agent, seed.Goal, seed.Ref, seed.OnBehalf, seed.Flow, seed.Step, seed.Token, time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC), true)
+	if err != nil {
+		t.Fatal(err.Message)
+	}
+	return run
+}
+
+func TestLegacyModelRunStopsWithoutTrustedStage(t *testing.T) {
+	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+	tenant, _ := reviewTenant(t)
+	if err := tenant.automation(AgentApp, true).PutAt(now, "legacy-run", AgentRunRecord{Record: platform.Record{ID: "legacy"}, Agent: "desk.triage", Goal: "old retained work", State: "running", Steps: []RunStep{}}); err != nil {
+		t.Fatal(err)
+	}
+	tenant.AIClient = func(*http.Request) (*http.Response, error) {
+		t.Fatal("an unstaged legacy run requested a model")
+		return nil, nil
+	}
+	tenant.Think(now.Add(time.Second))
+	run, _ := platform.Get[AgentRunRecord](tenant.automation(AgentApp, false), "legacy")
+	if run.State != "stopped" || !strings.Contains(run.Stopped, "trusted execution stage") {
+		t.Fatalf("legacy run was not handed over: %+v", run)
 	}
 }

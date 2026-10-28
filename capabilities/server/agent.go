@@ -586,7 +586,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 			}
 			options = d.ModelOptions
 		}
-		binding, _, err := a.host.ResolveAgentModel(name, options)
+		binding, _, err := a.host.ResolveAgentModel(name, options, platform.AIStageRuntime)
 		if err != nil && name != "" {
 			return run, err
 		}

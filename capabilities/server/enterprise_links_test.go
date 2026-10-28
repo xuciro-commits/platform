@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"platformserver/apps/build"
-	"platformserver/apps/enterprise"
-	enterprisemodel "platformserver/internal/enterprise"
+	enterprise "platformserver/engine/organization"
+
 	"platformserver/platform"
 )
 
@@ -87,7 +87,7 @@ func TestEnterpriseLinkPreviewUsesOriginalConnectionWithoutWriting(t *testing.T)
 	}
 	payload := map[string]any{"link": preview.Link, "base": preview.Base, "content": preview.Content, "connectionRevision": preview.ConnectionRevision, "slice": preview.Slice}
 	altered := preview.Slice
-	altered.Elements = append([]enterprisemodel.Element(nil), altered.Elements...)
+	altered.Elements = append([]enterprise.Element(nil), altered.Elements...)
 	altered.Elements[0].Name = "Not the reviewed name"
 	payload["slice"] = altered
 	if got := refuse(t, tn, "owner", enterprise.ID, enterprise.SchemaSliceImport, enterprise.ModelType, "altered-import", payload, txnAt); !strings.Contains(got, "differs from its preview") {
@@ -96,7 +96,7 @@ func TestEnterpriseLinkPreviewUsesOriginalConnectionWithoutWriting(t *testing.T)
 	payload["slice"] = preview.Slice
 	decide(t, tn, "owner", enterprise.ID, enterprise.SchemaSliceImport, enterprise.ModelType, "source-import", payload, txnAt)
 	imported := model.Model()
-	element := imported.ElementOf(enterprisemodel.ImportedElementID("source", "remote"))
+	element := imported.ElementOf(enterprise.ImportedElementID("source", "remote"))
 	if element == nil || element.Owner != "tenant:source" || calls.Load() != 1 {
 		t.Fatal("confirmation did not import the reviewed content through its original owner")
 	}

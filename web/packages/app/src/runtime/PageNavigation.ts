@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import {isDecimal,isStringSet,type ScalarValue} from "./decimal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useViewCall, useWorkspace, type EntityRecord } from "@platform/ui";
@@ -13,7 +14,7 @@ type EventContext = { values: Record<string, VariableResult>; set: (id: string, 
 
 export const inputSlot = (variable: string) => `input/${variable}`;
 export type PageCall={input?:unknown;expired?:boolean;returnValue?:(value:unknown)=>void};
-export function usePageInputs(page: Api.Page, session: PageSessionStore, snapshot: PageSessionSnapshot,provided?:PageCall) {
+export function usePageInputs(page: PageUI.Page, session: PageSessionStore, snapshot: PageSessionSnapshot,provided?:PageCall) {
   const inherited=useViewCall(),call=provided??inherited;
   const iface = page.document?.interface, envelope = useMemo(() => readPageEnvelope(call?.input), [call?.input]);
   const inputValues = envelope?.values ?? {};
@@ -46,7 +47,7 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
 /** Runs a page event's effect chain in order: state writes at
  * once, actions through the host (waiting for their form), and navigation or
  * return as the terminal effect. A refused or cancelled action stops the chain. */
-export function usePageEffects(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void, provided?: PageCall) {
+export function usePageEffects(page: PageUI.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void, provided?: PageCall) {
   const { definitions, source } = useHost(), workspace = useWorkspace(), inherited = useViewCall(), call = provided ?? inherited;
   const application = useApplicationContext();
   const actions = useActionEffect(live);
@@ -62,7 +63,7 @@ export function usePageEffects(page: Api.Page, live: boolean, values: Record<str
     if (problem) throw new Error(problem);
     call.returnValue({ version: iface?.version ?? 0, values: result });
   };
-  const navigate = (navigation: Api.PageNavigation | undefined, context?: EventContext) => {
+  const navigate = (navigation: PageUI.PageNavigation | undefined, context?: EventContext) => {
     if (!navigation || !workspace.transfer) throw new Error("This workspace cannot transfer page context.");
     const target = findDefinition(definitions, navigation.page);
     if (!target?.page) throw new Error("The target page is unavailable.");

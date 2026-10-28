@@ -1,12 +1,13 @@
+import {renderingLimits} from "../gen/presentation-limits";
 import {useState,type KeyboardEvent} from "react";
-import {pageUIManifest} from "@platform/kernel";
+
 import {Button} from "../primitives/button";
 import {t} from "../i18n";
 
 type ChoiceOption={value:string;label:string};
 type SelectorProps={options:readonly ChoiceOption[];value:string;label:string;enabled?:boolean;onChange?:(value:string)=>void};
 function validOptions(options:readonly ChoiceOption[]) {
- const limits=pageUIManifest.runtime.choiceInput,bytes=(value:string)=>new TextEncoder().encode(value).length;
+ const limits=renderingLimits.runtime.choiceInput,bytes=(value:string)=>new TextEncoder().encode(value).length;
  return Array.isArray(options)&&options.length>0&&options.length<=limits.maxOptions&&new Set(options.map(option=>option?.value)).size===options.length&&options.every(option=>option&&typeof option.value==="string"&&option.value!==""&&bytes(option.value)<=limits.maxOptionBytes&&typeof option.label==="string"&&bytes(option.label)<=limits.maxOptionBytes);
 }
 function moveFocus(event:KeyboardEvent<HTMLElement>) {

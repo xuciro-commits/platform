@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useStudioApplication } from "../projects/use-studio-application";
 import { ResourceControls as AssetControls } from "../editor/workbench";
@@ -205,7 +206,7 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
   const create = async () => {
     if (!valid || busy) return; setBusy(true); setError("");
     try {
-      const sections: Api.Section[] = relation && related ? [
+      const sections: PageUI.Section[] = relation && related ? [
         { widget: "table", title: entity!.plural, fields, selection: "parent" },
         { widget: "table", title: related.plural, object: relation.ref.object, fields: related.fields.filter((field) => !field.aside && field.type !== "lines").slice(0, 4).map((field) => field.name), ...(relation.ref.kind==="link-type"?{collectionVariable:"relatedWindow"}:{relation:relation.inverse,parentSelection:"parent"}), selection:"related" },
         { widget: "detail", title: t("Detail"), object: relation.ref.object, fields: related.fields.filter((field) => !field.aside && field.type !== "lines").slice(0, 4).map((field) => field.name), selection: "related" },

@@ -1,4 +1,4 @@
-import {widgetDeclarationIssues} from "./page-editor/widget-declaration";
+import {widgetDeclarationIssues} from "@platform/app/page-contract";
 import {pageEditingProfile} from "./page-editor/compatibility";
 import { sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";

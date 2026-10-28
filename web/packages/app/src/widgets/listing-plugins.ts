@@ -1,5 +1,6 @@
+import {pageUIManifest} from "../pageui/manifest";
 import {t} from '@platform/ui';
-import {pageUIManifest} from '@platform/kernel';
+
 import {tableEditableFields,sectionWriteActions,defaultTableEdit} from './table-edit';
 import {defineWidgetPlugin} from './plugin';
 import type {WidgetBindingContext} from './bindings';

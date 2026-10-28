@@ -1,11 +1,11 @@
+import type * as PageUI from "../pageui/types";
 import {useId} from 'react';
 import {Button,Panel,RecordLookup,Select,t,type RecordSource} from '@platform/ui';
-import type {Api} from '@platform/kernel';
 import type {ScalarValue} from '../runtime/decimal';
 import type {VariableResult} from '../runtime/variables';
 import type {QueryWindow} from './QueryWindowFrame';
 import {Facets} from './Facets';
-export type FilterProps={object:string;config:Pick<Api.Section,'title'|'fields'|'facets'|'filterSearchVariable'>;source?:RecordSource;filters:Record<string,unknown>;onNarrow:(object:string,field:string,value:unknown)=>void;facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;window?:QueryWindow;aggregateScope?:string};
+export type FilterProps={object:string;config:Pick<PageUI.Section,'title'|'fields'|'facets'|'filterSearchVariable'>;source?:RecordSource;filters:Record<string,unknown>;onNarrow:(object:string,field:string,value:unknown)=>void;facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;window?:QueryWindow;aggregateScope?:string};
 export function FilterRenderer({object: type,config: section,source,filters: set,onNarrow,facetValues,onFacet,window,aggregateScope}:FilterProps) {
   const prefix = useId();
   if(!source)return <Panel role="alert">{t("No source for records")}</Panel>;

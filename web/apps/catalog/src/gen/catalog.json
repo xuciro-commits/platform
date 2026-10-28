@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:498bf0171609725e",
+  "revision": "sha256:824ea0d127462350",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -518,7 +518,7 @@
         },
         {
           "name": "wrapLayout",
-          "type": "(id: string, node: Api.PageLayoutNode, body: ReactNode) => ReactNode",
+          "type": "(id: string, node: PageUI.PageLayoutNode, body: ReactNode) => ReactNode",
           "optional": true,
           "isCallback": true,
           "isSlot": true
@@ -537,9 +537,12 @@
         },
         {
           "name": "wrapLayout",
-          "type": "(id: string, node: Api.PageLayoutNode, body: ReactNode) => ReactNode",
+          "type": "(id: string, node: PageUI.PageLayoutNode, body: ReactNode) => ReactNode",
           "optional": true
         }
+      ],
+      "composed": [
+        "ui/panels"
       ],
       "relatedTypes": [
         {
@@ -555,7 +558,7 @@
         {
           "name": "Composing",
           "kind": "type",
-          "signature": "type Composing = { slotViews?:Readonly<Record<string,ReactNode>>; chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;\n  wrapLayout?: (id: string, node: Api.PageLayoutNode, body: ReactNode) => ReactNode };"
+          "signature": "type Composing = { slotViews?:Readonly<Record<string,ReactNode>>; chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;\n  wrapLayout?: (id: string, node: PageUI.PageLayoutNode, body: ReactNode) => ReactNode };"
         }
       ]
     },
@@ -3140,7 +3143,7 @@
       "props": [
         {
           "name": "buttons",
-          "type": "Api.PageButton[]",
+          "type": "ButtonOptions[]",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -3624,7 +3627,7 @@
         },
         {
           "name": "steps",
-          "type": "Api.PageAnalysisStep[]",
+          "type": "AnalysisStepOptions[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -6695,7 +6698,7 @@
         {
           "name": "LayoutSize",
           "kind": "type",
-          "signature": "export type LayoutSize=Api.PageLayoutSize;"
+          "signature": "export type LayoutSize=LayoutSizeOptions;"
         }
       ]
     },
@@ -8117,7 +8120,7 @@
         },
         {
           "name": "parameters",
-          "type": "Api.PageActionParameter[]",
+          "type": "ActionParameterOptions[]",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -8364,7 +8367,7 @@
         },
         {
           "name": "config",
-          "type": "Api.PageRecordCard",
+          "type": "RecordCardOptions",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -8870,7 +8873,7 @@
         },
         {
           "name": "fields",
-          "type": "Api.PageRecordEvents",
+          "type": "RecordEventsOptions",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -9087,7 +9090,7 @@
         },
         {
           "name": "fields",
-          "type": "Api.PageRecordGantt",
+          "type": "RecordGanttOptions",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -9396,7 +9399,7 @@
         },
         {
           "name": "fields",
-          "type": "Api.PageLeaderboard",
+          "type": "LeaderboardOptions",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -9473,7 +9476,7 @@
         },
         {
           "name": "tablePresentation",
-          "type": "Api.PageTablePresentation",
+          "type": "TablePresentationOptions",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -10013,7 +10016,7 @@
       "props": [
         {
           "name": "detailPresentation",
-          "type": "Api.PageDetailPresentation",
+          "type": "DetailPresentationOptions",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -10027,7 +10030,7 @@
         },
         {
           "name": "recordLinks",
-          "type": "readonly Api.PageRecordLink[]",
+          "type": "readonly RecordLinkOptions[]",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -10042,7 +10045,7 @@
         },
         {
           "name": "statusTracker",
-          "type": "Api.PageStatusTracker",
+          "type": "StatusTrackerOptions",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -10247,7 +10250,7 @@
         },
         {
           "name": "fields",
-          "type": "Omit<Api.PageRecordScatter,\"colorField\"> & {colorField?:string}",
+          "type": "Omit<RecordScatterOptions,\"colorField\"> & {colorField?:string}",
           "optional": false,
           "isCallback": false,
           "isSlot": false
@@ -13817,7 +13820,6 @@
       "web/packages/govern/src/package-preparation.tsx",
       "web/packages/govern/src/permissions.tsx",
       "web/packages/govern/src/processes.tsx",
-      "web/packages/govern/src/system.tsx",
       "web/packages/govern/src/words.tsx",
       "web/packages/ui/src/fields/FacetChoices.tsx",
       "web/packages/ui/src/records/EditableRecordGrid.tsx",
@@ -14671,10 +14673,12 @@
       "types": [
         "AIResultProps",
         "AIResultTurn",
+        "ActionParameterOptions",
         "AggregateColumn",
         "AggregateData",
         "AggregateOp",
         "AggregateQuery",
+        "AnalysisStepOptions",
         "Applications",
         "ApprovalInboxProps",
         "ApprovalInboxRow",
@@ -14686,6 +14690,7 @@
         "AttachmentPreviewProps",
         "BreadcrumbTrailItem",
         "BreadcrumbTrailProps",
+        "ButtonOptions",
         "ButtonProps",
         "CalendarFields",
         "CanvasAction",
@@ -14704,6 +14709,7 @@
         "ColumnDef",
         "ContextCommand",
         "DataTableProps",
+        "DetailPresentationOptions",
         "Dictionary",
         "EditLane",
         "EditorProps",
@@ -14711,6 +14717,7 @@
         "Entity",
         "EntityInfo",
         "EntityRecord",
+        "EventToneOptions",
         "ExternalFrameConfig",
         "ExternalFrameProps",
         "Field",
@@ -14754,12 +14761,16 @@
         "LaneAssignment",
         "LaneBand",
         "LayoutSize",
+        "LayoutSizeOptions",
+        "LeaderboardOptions",
         "Lifecycle",
         "ListState",
         "Mark",
         "MeasureType",
         "Menu",
         "MenuItem",
+        "MetricAnnotationOptions",
+        "MetricPresentationOptions",
         "Money",
         "NavItem",
         "NavLink",
@@ -14783,13 +14794,17 @@
         "Rail",
         "RecentEntry",
         "RecordAvatarStackProps",
+        "RecordCardOptions",
         "RecordChange",
         "RecordChartFields",
         "RecordColumnPresentation",
         "RecordComment",
         "RecordCommentsProps",
         "RecordEditPort",
+        "RecordEventsOptions",
+        "RecordGanttOptions",
         "RecordHistoryProps",
+        "RecordLinkOptions",
         "RecordMapFields",
         "RecordMapProps",
         "RecordNeighborhoodGroup",
@@ -14797,10 +14812,12 @@
         "RecordPageData",
         "RecordQuery",
         "RecordResourceListProps",
+        "RecordScatterOptions",
         "RecordSelectionPort",
         "RecordSource",
         "RecordUploaderProps",
         "RecordView",
+        "RegionPresentationOptions",
         "RelationBadge",
         "RelationCanvasProps",
         "RelationEdge",
@@ -14811,9 +14828,12 @@
         "Route",
         "Scene3DProps",
         "SceneConfig",
+        "SceneConfigOptions",
         "SceneInput",
         "SceneLayer",
+        "SceneLayerOptions",
         "SceneMapping",
+        "SceneMappingOptions",
         "SearchAroundPathEntry",
         "SearchAroundProps",
         "SearchAroundRelation",
@@ -14826,7 +14846,10 @@
         "StaticImageProps",
         "StatisticsValue",
         "StatusRegistry",
+        "StatusTrackerOptions",
         "StructuredValue",
+        "TableColumnOptions",
+        "TablePresentationOptions",
         "TermCount",
         "TimeUnit",
         "TimelineFields",
@@ -14862,6 +14885,7 @@
         "newId",
         "pageDocumentFromSections",
         "pageLayoutDiagnostics",
+        "pageUIManifest",
         "pageUIProfile",
         "pageVariableContract",
         "pageVariableDiagnostics",
@@ -14913,7 +14937,11 @@
         "ObservationStatisticsRequest",
         "OpenInPlace",
         "PageDecimalValue",
+        "PageUI",
         "PageVariableValue",
+        "PageWidgetConfiguration",
+        "PageWidgetConfigurationFor",
+        "PageWidgetID",
         "Passage",
         "PlatformAppCategory",
         "PropertyRef",

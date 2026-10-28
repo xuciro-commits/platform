@@ -1,14 +1,20 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"platformserver/aigateway"
 	"platformserver/platform"
 	"platformserver/platform/authz"
+	"strings"
 )
 
 // RuntimeCapabilities binds trusted pure implementations for one tenant instance.
 // Rebuilding an instance carries this selection; callers never mutate it live.
 type RuntimeCapabilities struct {
+	AIInference   *platform.AIInferencePolicy
 	Rules         platform.RuleEngine
 	Authorization authz.Engine
 	Kernel        platform.KernelFactory
@@ -58,3 +64,29 @@ func (r runtime) Kernel() platform.KernelFactory         { return r.t.services.K
 func (d *stagedDecision) Kernel() platform.KernelFactory { return d.tenant.services.Kernel }
 
 func (t *Tenant) RuntimeCapabilities() RuntimeCapabilities { return t.services }
+
+// Inference approvals are static deployment input, never tenant model metadata.
+func bindAIInferencePolicy(services *RuntimeCapabilities) error {
+	if services.AIInference == nil {
+		policy := platform.AIInferencePolicy{}
+		if raw := strings.TrimSpace(os.Getenv("PLATFORM_AI_INFERENCE_POLICY")); raw != "" {
+			decoder := json.NewDecoder(strings.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&policy); err != nil {
+				return fmt.Errorf("PLATFORM_AI_INFERENCE_POLICY: %w", err)
+			}
+			if err := decoder.Decode(new(any)); err != io.EOF {
+				return fmt.Errorf("PLATFORM_AI_INFERENCE_POLICY contains trailing data")
+			}
+		}
+		services.AIInference = &policy
+	}
+	if err := aigateway.CheckPolicy(*services.AIInference); err != nil {
+		return err
+	}
+	// Own a private copy: callers cannot mutate an instance's deployment approval.
+	policy := *services.AIInference
+	policy.Runtime = append([]platform.AIInferenceSite{}, policy.Runtime...)
+	services.AIInference = &policy
+	return nil
+}

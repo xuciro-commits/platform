@@ -1,0 +1,444 @@
+{
+  "packages": {
+    "capabilities/server": 262,
+    "capabilities/server/apps/build": 73,
+    "capabilities/server/internal/construction": 41,
+    "capabilities/server/platform": 166
+  },
+  "duplicates": {
+    "accepted_state.go": [
+      "capabilities/server/accepted_state.go",
+      "capabilities/server/apps/ai/accepted_state.go"
+    ],
+    "access.go": [
+      "capabilities/server/access.go",
+      "capabilities/server/internal/records/access.go"
+    ],
+    "actions.go": [
+      "capabilities/server/apps/build/actions.go",
+      "capabilities/server/internal/construction/actions.go",
+      "capabilities/server/platform/actions.go"
+    ],
+    "activation.go": [
+      "capabilities/server/apps/build/activation.go",
+      "capabilities/server/internal/construction/activation.go"
+    ],
+    "agent.go": [
+      "capabilities/server/agent.go",
+      "capabilities/server/apps/build/agent.go",
+      "capabilities/server/platform/agent.go"
+    ],
+    "aggregate.go": [
+      "capabilities/server/aggregate.go",
+      "capabilities/server/internal/rules/aggregate.go"
+    ],
+    "ai.go": [
+      "capabilities/server/apps/ai/ai.go",
+      "capabilities/server/platform/ai.go"
+    ],
+    "alert.go": [
+      "capabilities/server/apps/build/alert.go",
+      "capabilities/server/internal/construction/alert.go",
+      "capabilities/server/platform/alert.go"
+    ],
+    "application.go": [
+      "capabilities/server/apps/build/application.go",
+      "capabilities/server/internal/construction/application.go"
+    ],
+    "asset_lifecycle.go": [
+      "capabilities/server/apps/build/asset_lifecycle.go",
+      "capabilities/server/platform/asset_lifecycle.go"
+    ],
+    "authorization.go": [
+      "capabilities/server/authorization.go",
+      "capabilities/server/platform/authorization.go"
+    ],
+    "blueprint.go": [
+      "capabilities/server/apps/build/blueprint.go",
+      "capabilities/server/internal/host/blueprint.go"
+    ],
+    "books.go": [
+      "capabilities/server/apps/core/books.go",
+      "capabilities/server/books.go",
+      "capabilities/server/internal/host/books.go"
+    ],
+    "build.go": [
+      "capabilities/server/apps/build/build.go",
+      "capabilities/server/internal/construction/build.go"
+    ],
+    "business_version.go": [
+      "capabilities/server/apps/build/business_version.go",
+      "capabilities/server/business_version.go",
+      "capabilities/server/platform/business_version.go"
+    ],
+    "code.go": [
+      "capabilities/server/apps/build/code.go",
+      "capabilities/server/internal/construction/code.go"
+    ],
+    "confirmation.go": [
+      "capabilities/server/apps/build/confirmation.go",
+      "capabilities/server/internal/host/confirmation.go",
+      "capabilities/server/platform/confirmation.go"
+    ],
+    "connection.go": [
+      "capabilities/server/apps/build/connection.go",
+      "capabilities/server/internal/construction/connection.go"
+    ],
+    "credentials.go": [
+      "capabilities/server/credentials.go",
+      "capabilities/server/internal/host/credentials.go"
+    ],
+    "dataset.go": [
+      "capabilities/server/apps/build/dataset.go",
+      "capabilities/server/internal/construction/dataset.go"
+    ],
+    "definitions.go": [
+      "capabilities/server/apps/system/definitions.go",
+      "capabilities/server/definitions.go"
+    ],
+    "dependencies.go": [
+      "capabilities/server/dependencies.go",
+      "capabilities/server/platform/dependencies.go"
+    ],
+    "dispatch.go": [
+      "capabilities/server/apps/build/dispatch.go",
+      "capabilities/server/internal/host/dispatch.go",
+      "capabilities/server/platform/dispatch.go"
+    ],
+    "effects.go": [
+      "capabilities/server/effects.go",
+      "capabilities/server/platform/effects.go"
+    ],
+    "evaluation.go": [
+      "capabilities/server/apps/build/evaluation.go",
+      "capabilities/server/internal/construction/evaluation.go"
+    ],
+    "extension.go": [
+      "capabilities/server/apps/build/extension.go",
+      "capabilities/server/platform/extension.go"
+    ],
+    "files.go": [
+      "capabilities/server/apps/files/files.go",
+      "capabilities/server/files.go",
+      "capabilities/server/platform/files.go"
+    ],
+    "flow.go": [
+      "capabilities/server/apps/flow/flow.go",
+      "capabilities/server/internal/host/flow.go",
+      "capabilities/server/platform/flow.go"
+    ],
+    "function.go": [
+      "capabilities/server/apps/build/function.go",
+      "capabilities/server/function.go",
+      "capabilities/server/internal/construction/function.go",
+      "capabilities/server/platform/function.go"
+    ],
+    "function_call.go": [
+      "capabilities/server/apps/build/function_call.go",
+      "capabilities/server/internal/construction/function_call.go"
+    ],
+    "host.go": [
+      "capabilities/server/host.go",
+      "capabilities/server/internal/host/host.go"
+    ],
+    "input.go": [
+      "capabilities/server/internal/acceptance/result/input.go",
+      "capabilities/server/platform/input.go"
+    ],
+    "integration_release.go": [
+      "capabilities/server/apps/build/integration_release.go",
+      "capabilities/server/internal/construction/integration_release.go"
+    ],
+    "joint_release.go": [
+      "capabilities/server/apps/build/joint_release.go",
+      "capabilities/server/internal/construction/joint_release.go"
+    ],
+    "journal.go": [
+      "capabilities/server/apps/build/journal.go",
+      "capabilities/server/internal/construction/journal.go",
+      "capabilities/server/journal/journal.go"
+    ],
+    "json.go": [
+      "capabilities/server/internal/acceptance/json.go",
+      "capabilities/server/internal/agents/json.go"
+    ],
+    "knowledge.go": [
+      "capabilities/server/apps/knowledge/knowledge.go",
+      "capabilities/server/knowledge.go",
+      "capabilities/server/platform/knowledge.go"
+    ],
+    "languages.go": [
+      "capabilities/server/languages.go",
+      "capabilities/server/platform/languages.go"
+    ],
+    "link_type.go": [
+      "capabilities/server/apps/build/link_type.go",
+      "capabilities/server/internal/construction/link_type.go",
+      "capabilities/server/platform/link_type.go"
+    ],
+    "match.go": [
+      "capabilities/server/apps/build/match.go",
+      "capabilities/server/internal/construction/match.go"
+    ],
+    "model_configuration.go": [
+      "capabilities/server/model_configuration.go",
+      "capabilities/server/platform/model_configuration.go"
+    ],
+    "observation.go": [
+      "capabilities/server/apps/build/observation.go",
+      "capabilities/server/internal/construction/observation.go"
+    ],
+    "observation_context.go": [
+      "capabilities/server/observation_context.go",
+      "capabilities/server/platform/observation_context.go"
+    ],
+    "operations.go": [
+      "capabilities/server/operations.go",
+      "capabilities/server/platform/operations.go"
+    ],
+    "page.go": [
+      "capabilities/server/apps/build/page.go",
+      "capabilities/server/internal/construction/page.go",
+      "capabilities/server/internal/rules/page.go"
+    ],
+    "page_composite.go": [
+      "capabilities/server/page_composite.go",
+      "capabilities/server/platform/page_composite.go"
+    ],
+    "page_content.go": [
+      "capabilities/server/apps/build/page_content.go",
+      "capabilities/server/page_content.go",
+      "capabilities/server/platform/page_content.go"
+    ],
+    "page_exploration.go": [
+      "capabilities/server/page_exploration.go",
+      "capabilities/server/platform/page_exploration.go"
+    ],
+    "page_model.go": [
+      "capabilities/server/page_model.go",
+      "capabilities/server/platform/page_model.go"
+    ],
+    "page_queries.go": [
+      "capabilities/server/page_queries.go",
+      "capabilities/server/platform/page_queries.go"
+    ],
+    "pipeline.go": [
+      "capabilities/server/apps/build/pipeline.go",
+      "capabilities/server/internal/construction/pipeline.go"
+    ],
+    "posts.go": [
+      "capabilities/server/apps/build/posts.go",
+      "capabilities/server/internal/construction/posts.go"
+    ],
+    "process.go": [
+      "capabilities/server/apps/build/process.go",
+      "capabilities/server/internal/construction/process.go"
+    ],
+    "profile.go": [
+      "capabilities/server/internal/enterprise/uafgen/profile.go",
+      "capabilities/server/profile.go"
+    ],
+    "property_type.go": [
+      "capabilities/server/apps/build/property_type.go",
+      "capabilities/server/internal/construction/property_type.go",
+      "capabilities/server/platform/property_type.go"
+    ],
+    "proposal.go": [
+      "capabilities/server/apps/build/proposal.go",
+      "capabilities/server/platform/proposal.go"
+    ],
+    "protocol.go": [
+      "capabilities/server/apps/build/protocol.go",
+      "capabilities/server/platform/protocol.go",
+      "capabilities/server/protocol.go"
+    ],
+    "query.go": [
+      "capabilities/server/apps/build/query.go",
+      "capabilities/server/internal/construction/query.go",
+      "capabilities/server/internal/records/query.go"
+    ],
+    "reads.go": [
+      "capabilities/server/platform/reads.go",
+      "capabilities/server/reads.go"
+    ],
+    "record_sets.go": [
+      "capabilities/server/apps/build/record_sets.go",
+      "capabilities/server/record_sets.go"
+    ],
+    "refusal.go": [
+      "capabilities/server/apps/work/refusal.go",
+      "capabilities/server/internal/acceptance/result/refusal.go",
+      "capabilities/server/platform/refusal.go"
+    ],
+    "relations.go": [
+      "capabilities/server/apps/relations/relations.go",
+      "capabilities/server/platform/relations.go"
+    ],
+    "release.go": [
+      "capabilities/server/apps/build/release.go",
+      "capabilities/server/apps/flow/release.go",
+      "capabilities/server/internal/acceptance/result/release.go",
+      "capabilities/server/internal/construction/release.go"
+    ],
+    "rules.go": [
+      "capabilities/server/apps/build/rules.go",
+      "capabilities/server/platform/rules.go"
+    ],
+    "sample_set.go": [
+      "capabilities/server/apps/build/sample_set.go",
+      "capabilities/server/platform/sample_set.go"
+    ],
+    "schema_version.go": [
+      "capabilities/server/apps/build/schema_version.go",
+      "capabilities/server/platform/schema_version.go"
+    ],
+    "sequence.go": [
+      "capabilities/server/platform/sequence.go",
+      "capabilities/server/sequence.go"
+    ],
+    "snapshot.go": [
+      "capabilities/server/platform/snapshot.go",
+      "capabilities/server/snapshot.go"
+    ],
+    "source.go": [
+      "capabilities/server/apps/build/source.go",
+      "capabilities/server/internal/construction/source.go",
+      "capabilities/server/internal/systembuild/source.go"
+    ],
+    "state.go": [
+      "capabilities/server/internal/aistate/state.go",
+      "capabilities/server/journal/state.go"
+    ],
+    "system_definitions.go": [
+      "capabilities/server/apps/build/system_definitions.go",
+      "capabilities/server/platform/system_definitions.go",
+      "capabilities/server/system_definitions.go"
+    ],
+    "table.go": [
+      "capabilities/server/apps/build/table.go",
+      "capabilities/server/internal/construction/table.go"
+    ],
+    "testplan.go": [
+      "capabilities/server/apps/build/testplan.go",
+      "capabilities/server/internal/construction/testplan.go"
+    ],
+    "transaction.go": [
+      "capabilities/server/apps/build/transaction.go",
+      "capabilities/server/internal/host/transaction.go",
+      "capabilities/server/platform/transaction.go"
+    ],
+    "validation.go": [
+      "capabilities/server/internal/acceptance/result/validation.go",
+      "capabilities/server/internal/records/validation.go"
+    ],
+    "work.go": [
+      "capabilities/server/apps/work/work.go",
+      "capabilities/server/internal/host/work.go",
+      "capabilities/server/platform/work.go"
+    ],
+    "writeback.go": [
+      "capabilities/server/apps/build/writeback.go",
+      "capabilities/server/internal/construction/writeback.go"
+    ]
+  },
+  "visual": {
+    "capabilities/server/aggregate.go:checkAggregateSection": "7b9d2cf040d349f2a5149780c4153be8513a45bbcf9b6aac87285154f0c047c4",
+    "capabilities/server/definition_page_projection.go:pageDefinitionProjection.page": "88ec51d11f6f7ae69ef25128adc8f43fb8060e484708d6f7e60f7d8d4121930f",
+    "capabilities/server/installed.go:*Tenant.checkSection": "6f3877e9efe1ee3cf260bb5ec2b4e6aa4e0b1a7f4ac32a7367108307766d36c6",
+    "capabilities/server/installed.go:*Tenant.checkWidget": "6dd536b0b5d537a3415f8fed4a10de4a65c72fc8244031de7c0ccab5ee19fe21",
+    "capabilities/server/page_queries.go:*Tenant.checkPageQueries": "f44e38e68fc75f97bb66034ee061b4ff8dcf65ec232b3b0b62a0fc06deb24e8a",
+    "capabilities/server/platform/application_header.go:Application.CheckHeader": "18f4b15b505ac168344d44e8497cd904d13b03c4f2aa29fbaab4bd1f088fc465",
+    "capabilities/server/platform/definition.go:PageWidgetConfig": "2640cb9417d5f6c7dc6e99b9408ea12e0f02eef68bb313fd3943efc891b5dd1f",
+    "capabilities/server/platform/page_button_group.go:*PageDocument.checkButtonGroup": "d4a07be833e81065105bd4e00d37de37c2e23794592864b212c2902cdee15807",
+    "capabilities/server/platform/page_document.go:*PageDocument.Check": "7e95b24354cb02ff0ded7568fd1663b3ec2ea088e1740fd8f5bc20a9424a04ac",
+    "capabilities/server/platform/page_document.go:*PageDocument.Visible": "5499f42aca9c438d84ff533683fe9f2db227cfdf430277e2057a8d9a41fa2794",
+    "capabilities/server/platform/page_events.go:*PageDocument.checkEvents": "4c54a041038e3b64b7dc0b166217d0bac73c75d12338abf79dec2e92c0afdd6f",
+    "capabilities/server/platform/page_gauge.go:*PageDocument.checkGauge": "8a6803eba1f279c1c16c5c2dcb6c524482a578c874c4c280de82659fefca2d30",
+    "capabilities/server/platform/page_gauge.go:PageGauge": "66eaf072c088ace0ca4f8fbd8a2df257ef38370dc5405f646df29a2dc6e4d150",
+    "capabilities/server/platform/page_heatmap.go:*PageDocument.checkHeatmap": "d011e14a4ee68ce763bac267723bc879f42aa6ce9a097cb32ffe2bde8f86695e",
+    "capabilities/server/platform/page_heatmap.go:Section.CheckHeatmap": "187a488b72732ab8875ec43342d26c0734ee4d9364844d9bf6d980a8c952a147",
+    "capabilities/server/platform/page_kanban.go:Page.CheckKanban": "e96b1b95431b6959cb1055406b52cc520df3e400aa070007c80bf65c9f794b92",
+    "capabilities/server/platform/page_kanban.go:Section.CheckKanban": "49ed4b193ce64a110c41e2e3ea2e939531fca997f3e780ed73005f48eaece483",
+    "capabilities/server/platform/page_model.go:ModelWindowWidget": "ac60419f5f35846454ab913bbfc2104f1b3815555409b637347d86a88921be8e",
+    "capabilities/server/platform/page_record_gantt.go:*PageDocument.checkRecordGantt": "4c13d1f0c5fb0339dcd5e787ba986f34a7faa4842e0a58cfc1d3113ef3afc1b2",
+    "capabilities/server/platform/page_record_gantt.go:PageRecordGantt": "8322115ecf7d35e4a6afb2087ecf44963853669d9c060e138385745b3c499b8e",
+    "capabilities/server/platform/page_record_gantt.go:Section.CheckRecordGantt": "0cf2a191aa8b89ff69ddee929731c0329156a31eab6fb0ab36e911041b14421f",
+    "capabilities/server/platform/page_record_gantt.go:ValidGanttRange": "10823be4bd6c200af81744b6d6d180b983ea9b9e707cd5be112c0ceb8c333fc5",
+    "capabilities/server/platform/page_separator.go:*PageDocument.checkSeparator": "cac263ba9c61c7344df3ff4b88aee973ba8e893ceb929fb4ae42d17106d05c8b",
+    "capabilities/server/platform/page_separator.go:PageSeparator": "aa39662d61302dfa586c0557b2bc2fa85846e7da2ec96beba5854cae83aedeb0",
+    "capabilities/server/platform/page_spacer.go:*PageDocument.checkSpacer": "44e1b2360266b5c5c25a2b1457b7b1e680eb289548275c2649448b2a3e511491",
+    "capabilities/server/platform/page_spacer.go:PageSpacer": "c479e2fe7ace40d59e82673b2e4e9ae4d6beedd2a9fa56c097a5680440227c49",
+    "capabilities/server/platform/page_sparkline.go:*PageDocument.checkSparkline": "24665b2b87e3c80282ca36878d00b6101c2816eaf5e94840b468f72cbbca56a4",
+    "capabilities/server/platform/page_sparkline.go:PageSparkline": "3a615522cd3f804c6455765333cd7d8d8e32c3031bdc4c8c1a21d5967e10259b",
+    "capabilities/server/platform/page_sparkline.go:Section.CheckSparkline": "070156946b8b91103072c5df8ad591150d85e6d378369374d3fb653c5f1d6c90",
+    "capabilities/server/platform/page_terms.go:*PageDocument.checkTerms": "12e41018a8880aff39abe4ba95a3f21e7aec9b642d5ea6474de02447d1e258c0",
+    "capabilities/server/platform/page_terms.go:Section.CheckTerms": "a862aca144dce1fd5ef46cfa1b1bdc89dc8b4e59d3f0b757b805b730df9043a4",
+    "capabilities/server/platform/page_treemap.go:*PageDocument.checkTreemap": "7864ba0981caa1dabd3be7c72d02021f157eb81c498b1adf47a1bf6e8fab4813",
+    "capabilities/server/platform/page_variables.go:*PageDocument.CheckVariables": "fc6531b071f4ffc4ffd9e1603f43440355a4f251e5151332bc6c6d55ee886ea7",
+    "capabilities/server/platform/page_variables.go:pageRuntimeContract": "e55321f53e809e3d8f02535251f6a987e95b9c21c905efb50e39ffd86995412a",
+    "capabilities/server/platform/page_widgets.go:Page.CheckSectionFields": "7bcd00280d1c73cc8b541d97d39d44d84a9d92886f9beb6eead92e3a021fd586",
+    "capabilities/server/platform/page_widgets.go:pageWidgets": "053a03cc84fbd65e53946984a199d966551f526328e0b090822ca93a3096d884",
+    "capabilities/server/platform/revision.go:checkFrozenQueries": "1dbc27eff9362d5c7e2f26ee6b64f139187b7bc1f2ae82a6fd9fe8e1a86eafff"
+  },
+  "retiring": {
+    "capabilities/server/internal/construction": [
+      "capabilities/server/internal/construction/actions.go",
+      "capabilities/server/internal/construction/activation.go",
+      "capabilities/server/internal/construction/alert.go",
+      "capabilities/server/internal/construction/application.go",
+      "capabilities/server/internal/construction/application_projection.go",
+      "capabilities/server/internal/construction/build.go",
+      "capabilities/server/internal/construction/code.go",
+      "capabilities/server/internal/construction/code_declarations.go",
+      "capabilities/server/internal/construction/connection.go",
+      "capabilities/server/internal/construction/dataset.go",
+      "capabilities/server/internal/construction/evaluation.go",
+      "capabilities/server/internal/construction/function.go",
+      "capabilities/server/internal/construction/function_call.go",
+      "capabilities/server/internal/construction/integration_release.go",
+      "capabilities/server/internal/construction/joint_assets.go",
+      "capabilities/server/internal/construction/joint_release.go",
+      "capabilities/server/internal/construction/journal.go",
+      "capabilities/server/internal/construction/link_type.go",
+      "capabilities/server/internal/construction/manifest.go",
+      "capabilities/server/internal/construction/marking.go",
+      "capabilities/server/internal/construction/match.go",
+      "capabilities/server/internal/construction/object_check.go",
+      "capabilities/server/internal/construction/object_shape.go",
+      "capabilities/server/internal/construction/observation.go",
+      "capabilities/server/internal/construction/page.go",
+      "capabilities/server/internal/construction/pipeline.go",
+      "capabilities/server/internal/construction/pipeline_enterprise.go",
+      "capabilities/server/internal/construction/posts.go",
+      "capabilities/server/internal/construction/process.go",
+      "capabilities/server/internal/construction/process_check.go",
+      "capabilities/server/internal/construction/process_compile.go",
+      "capabilities/server/internal/construction/process_decode.go",
+      "capabilities/server/internal/construction/process_scopes.go",
+      "capabilities/server/internal/construction/property_type.go",
+      "capabilities/server/internal/construction/publication.go",
+      "capabilities/server/internal/construction/query.go",
+      "capabilities/server/internal/construction/release.go",
+      "capabilities/server/internal/construction/source.go",
+      "capabilities/server/internal/construction/table.go",
+      "capabilities/server/internal/construction/testplan.go",
+      "capabilities/server/internal/construction/writeback.go"
+    ],
+    "capabilities/server/internal/host": [
+      "capabilities/server/internal/host/agents.go",
+      "capabilities/server/internal/host/blueprint.go",
+      "capabilities/server/internal/host/books.go",
+      "capabilities/server/internal/host/build_definitions.go",
+      "capabilities/server/internal/host/confirmation.go",
+      "capabilities/server/internal/host/consumer.go",
+      "capabilities/server/internal/host/credentials.go",
+      "capabilities/server/internal/host/dispatch.go",
+      "capabilities/server/internal/host/enterprise.go",
+      "capabilities/server/internal/host/flow.go",
+      "capabilities/server/internal/host/host.go",
+      "capabilities/server/internal/host/identity.go",
+      "capabilities/server/internal/host/transaction.go",
+      "capabilities/server/internal/host/work.go"
+    ]
+  }
+}

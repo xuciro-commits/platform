@@ -1,3 +1,5 @@
+import {renderingLimits} from "../gen/presentation-limits";
+import type {DetailPresentationOptions, RecordLinkOptions, StatusTrackerOptions, TablePresentationOptions} from "../presentation";
 // The application model's pages: an entity type described by the
 // host (`GET /v1/entities`) becomes a kit entity, a list page with server-side
 // search, sort and paging, a record page (fields, related records, history) and
@@ -17,7 +19,7 @@ import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresen
 import { DataTable } from "../components/DataTable";
 import { FacetChoices } from "../fields/FacetChoices";
 import {ContentTabs} from "../layout/ContentTabs";
-import {pageUIManifest} from "@platform/kernel";
+
 import { PropertyList } from "../components/EntityCard";
 import { Tag, type Tone } from "../components/StatusTag";
 import { columnsFor, defineEntity, valueOf, type Entity } from "../fields/entity";
@@ -282,7 +284,7 @@ export type ListState = {
 
 export function RecordList({ source, type, onOpen, onOpenReference, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,tablePresentation,cards,selectedId,onNavigate, kanban, onMove, moves = [] }: {
   onOpenReference?: (type: string, id: string) => void;
-  tablePresentation?:Api.PageTablePresentation;onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};selectedId?:string;columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
+  tablePresentation?:TablePresentationOptions;onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};selectedId?:string;columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
@@ -578,7 +580,7 @@ export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[]
 /** A record's original journal order: who changed what. Its
  *  page shows it, and so does a composed page's timeline. */
 export function RecordHistory({info,history=[],heading=true,label,limit,total,loadedCount=history.length,recordID,recordRevision}:RecordHistoryProps) {
-  if(!Array.isArray(history)||limit!==undefined&&(!Number.isSafeInteger(limit)||limit<1||limit>pageUIManifest.runtime.workViews.maxHistoryWindow)||!Number.isSafeInteger(loadedCount)||loadedCount<history.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount)||recordID!==undefined&&(typeof recordID!=="string"||!recordID)||recordRevision!==undefined&&(!Number.isSafeInteger(recordRevision)||recordRevision<0)||history.some((change:RecordChange)=>!change||typeof change.change!=="string"||!change.change||typeof change.schema!=="string"||!change.schema||typeof change.by!=="string"||typeof change.at!=="string"||!change.at||!Array.isArray(change.fields)||change.fields.some((field:Api.FieldChange)=>!field||typeof field.field!=="string"||!field.field)))return <p role="alert">{t("The original record history is unavailable or incompatible.")}</p>;
+  if(!Array.isArray(history)||limit!==undefined&&(!Number.isSafeInteger(limit)||limit<1||limit>renderingLimits.runtime.workViews.maxHistoryWindow)||!Number.isSafeInteger(loadedCount)||loadedCount<history.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount)||recordID!==undefined&&(typeof recordID!=="string"||!recordID)||recordRevision!==undefined&&(!Number.isSafeInteger(recordRevision)||recordRevision<0)||history.some((change:RecordChange)=>!change||typeof change.change!=="string"||!change.change||typeof change.schema!=="string"||!change.schema||typeof change.by!=="string"||typeof change.at!=="string"||!change.at||!Array.isArray(change.fields)||change.fields.some((field:Api.FieldChange)=>!field||typeof field.field!=="string"||!field.field)))return <p role="alert">{t("The original record history is unavailable or incompatible.")}</p>;
   const visible:readonly RecordChange[]=limit===undefined?history:history.slice(0,limit),range=limit!==undefined||total!==undefined||loadedCount!==history.length;
   const occurrences=new Map<string,number>();
   return (
@@ -644,7 +646,7 @@ export function useRecordView(source: RecordSource, type: string, id?: string, r
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
 export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {
-  detailPresentation?:Api.PageDetailPresentation;recordTabs?:readonly string[];recordLinks?:readonly Api.PageRecordLink[];linksOnly?:boolean;statusTracker?:Api.PageStatusTracker;statusOnly?:boolean;
+  detailPresentation?:DetailPresentationOptions;recordTabs?:readonly string[];recordLinks?:readonly RecordLinkOptions[];linksOnly?:boolean;statusTracker?:StatusTrackerOptions;statusOnly?:boolean;
   /** App API composes declared record-specific work without another read path. */
   work?: (view: RecordView) => ReactNode;
   /** Answering the open tasks about the record from its page; without it they are listed only. */
@@ -725,7 +727,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   });
   if(linksOnly)return currentRecord(<div className="grid min-w-0 gap-3">{related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>}</div>);
   if(recordTabs){
-    const tabs=recordTabs.filter(tab=>(pageUIManifest.runtime.recordView.tabs as readonly string[]).includes(tab));
+    const tabs=recordTabs.filter(tab=>(renderingLimits.runtime.recordView.tabs as readonly string[]).includes(tab));
     const titles:Record<string,string>={overview:t("Overview"),properties:t("Properties"),links:t("Links"),history:t("History")};
     const overview=<div className="grid gap-3">{info.lifecycle&&<StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field]??"")}/>}<PropertyList columns={2} items={info.fields.filter(f=>fields?.includes(f.name)&&["integer","decimal"].includes(f.type)).slice(0,4).map(f=>[f.title,entity.fields[f.name]!.display(r[f.name],r)])}/><PropertyList items={[...view.related,...(view.linked??[])].flatMap(rel=>{const target=source.entity(rel.type);return target?[[target.plural,String(rel.total)] as [string,ReactNode]]:[];})}/></div>;
     const panels:Record<string,ReactNode>={overview,properties,links:related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>,history:<><RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/><RecordHistory info={info} history={view.history}/></>};
@@ -776,12 +778,12 @@ export function RecordDeliveries({deliveries,onOpen}:{deliveries?:Api.RecordDeli
 }
 
 /** A standalone projection of the same authorized record view and related windows. */
-export function RecordLinks({source,type,id,groups,onOpen}:{source:RecordSource;type:string;id:string;groups:readonly Api.PageRecordLink[];onOpen?:(type:string,r:EntityRecord)=>void}){
+export function RecordLinks({source,type,id,groups,onOpen}:{source:RecordSource;type:string;id:string;groups:readonly RecordLinkOptions[];onOpen?:(type:string,r:EntityRecord)=>void}){
  return <RecordPage source={source} type={type} id={id} recordLinks={groups} onOpen={onOpen} linksOnly/>;
 }
 
 /** The caller declares lifecycle presentation; this component never emits transitions. */
-export function RecordStatus({source,type,id,config}:{source:RecordSource;type:string;id:string;config?:Api.PageStatusTracker}){
+export function RecordStatus({source,type,id,config}:{source:RecordSource;type:string;id:string;config?:StatusTrackerOptions}){
  return <RecordPage source={source} type={type} id={id} statusTracker={config} statusOnly/>;
 }
 

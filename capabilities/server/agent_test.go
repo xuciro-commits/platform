@@ -57,6 +57,7 @@ func TestAgentMultipleCallsResumeAccepted(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"choices":[{"message":{"content":"处理两张工单","tool_calls":[{"id":"first","type":"function","function":{"name":"desk_ticket_answer","arguments":"{\"target\":\"T1\",\"reply\":\"第一张\",\"rationale\":\"answer first\"}"}},{"id":"second","type":"function","function":{"name":"desk_ticket_answer","arguments":"{\"target\":\"T2\",\"reply\":\"第二张\",\"rationale\":\"answer second\"}"}},{"id":"end","type":"function","function":{"name":"finish","arguments":"{\"result\":\"完成\",\"rationale\":\"finished\"}"}}]}}],"usage":{"prompt_tokens":100,"completion_tokens":20}}`)
 	}))
+	approveTestInference(t, model.URL, "lm")
 	t.Cleanup(model.Close)
 	build := func() *Tenant {
 		return composeTenant(t, "t-1", []Seat{seatOf("ana", "desk:clerk", "platform:admin", "ai:admin", "agent:admin")},
@@ -300,6 +301,7 @@ func scriptedModel(t *testing.T) *httptest.Server {
 			call("finish", map[string]any{"result": "after " + fmt.Sprint(n) + ": " + results[len(results)-1]})
 		}
 	}))
+	approveTestInference(t, s.URL, "lm")
 	t.Cleanup(s.Close)
 	return s
 }

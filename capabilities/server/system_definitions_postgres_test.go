@@ -1,7 +1,10 @@
 package platformserver
 
 import (
+	"encoding/json"
+	"google.golang.org/protobuf/encoding/protojson"
 	"os"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/system"
 	"testing"
 	"time"
@@ -20,21 +23,39 @@ func TestSystemDefinitionsPostgresCheckpointRestoresSharedRuntime(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer func() { database.Close() }()
+	if entries, err := database.Entries(ctx, "system", 0); err != nil || len(entries) != 0 {
+		t.Fatalf("rehearsal database must be empty: %v", err)
+	}
+	// Seed exact pre-freeze accepted results through the original journal owner.
+	// The current runtime must restore them without reopening system writes.
+	for _, entry := range retainedSystemHistory(t, "definitions-active") {
+		var saved struct {
+			RequestHash string
+			Receipt     json.RawMessage
+		}
+		if err := json.Unmarshal(entry.Body, &saved); err != nil {
+			t.Fatal(err)
+		}
+		receipt := new(pb.ChangeRecord)
+		if err := protojson.Unmarshal(saved.Receipt, receipt); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.AppendAccepted(ctx, "system", entry, receipt.GetSubmission().GetIdempotencyKey(), saved.RequestHash); err != nil {
+			t.Fatal(err)
+		}
+	}
 	deployment := &Deployment{SnapshotEvery: 1}
 	owner, business := definitionOwnerTenant(t, "system"), definitionOwnerTenant(t, "pg-business")
 	tenants := []*Tenant{business, owner} // Recovery must establish the system owner first.
 	if err := deployment.restoreTenants(ctx, database, "self-hosting-pg", tenants, map[string]int64{}, map[string]bool{}); err != nil {
 		t.Fatal(err)
 	}
-	if database.Position("system") != 0 || database.Position("pg-business") != 0 {
+	if database.Position("system") != int64(len(retainedSystemHistory(t, "definitions-active"))) || database.Position("pg-business") != 0 {
 		t.Fatal("the PostgreSQL rehearsal database is not empty")
 	}
 	for _, tenant := range tenants {
 		tenant.attachJournal(ctx, database)
 	}
-	definitionDraft(t, owner, "PostgreSQL shared note")
-	proposeDefinition(t, owner, "postgres-definitions", nil)
-	mustDefinitionDecision(t, owner, "publisher", system.SchemaActivate, system.ReleaseType, "0001", map[string]any{})
 	mustDefinitionDecision(t, business, "builder", "build.globalnote.create", "build.globalnote", "durable-note", map[string]any{"title": "Only business data belongs here"})
 	for _, tenant := range tenants {
 		if _, err := tenant.checkpointRuntime(ctx, database, "self-hosting-pg"); err != nil {
@@ -56,7 +77,7 @@ func TestSystemDefinitionsPostgresCheckpointRestoresSharedRuntime(t *testing.T) 
 		}
 		tenant.attachJournal(ctx, database)
 	}
-	if got := definitionOf(t, recoveredBusiness); got.Source != "system" || got.Entity.Title != "PostgreSQL shared note" {
+	if got := definitionOf(t, recoveredBusiness); got.Source != "system" || got.Entity.Title != "Retained system title" {
 		t.Fatalf("recovered shared definition: %+v", got)
 	}
 	member, _ := recoveredBusiness.Member("builder")
@@ -78,19 +99,19 @@ func TestSystemDefinitionsPostgresCheckpointRestoresSharedRuntime(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := "web/projection-check.ts"
-	for revision := 0; revision < 2; revision++ {
-		mustDefinitionDecision(t, recoveredOwner, "builder", system.SchemaFileSave, system.FileType, "source-edit", map[string]any{"path": path, "content": "export const n = 1;", "revision": revision})
+	member, _ = recoveredOwner.Member("builder")
+	input := &pb.Submission{TenantId: "system", PrincipalId: member.ID, Authority: system.ID, IdempotencyKey: "frozen-file", Target: &pb.EntityRef{Type: system.FileType, Id: "source-edit"}, Schema: &pb.SchemaRef{Name: system.SchemaFileSave, Version: 1}, Payload: []byte(`{"path":"web/projection-check.ts","content":"new source"}`)}
+	if _, refusal := recoveredOwner.Submit(member, input, time.Now()); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("SQL runtime reopened system source writes: %v", refusal)
 	}
-	if err = projection.Flush(ctx); err != nil {
+	if err := projection.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
-	var revision int
-	if err = pool.QueryRow(ctx, `select revision from tenant_system.system_file where path=$1`, path).Scan(&revision); err != nil {
+	var count int
+	if err := pool.QueryRow(ctx, `select count(*) from tenant_system.system_file`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if revision != 2 {
-		t.Fatalf("projected revision = %d; declared file revision was shadowed by its embedded record", revision)
+	if count != 0 {
+		t.Fatal("frozen source request inserted a SQL record")
 	}
-
 }

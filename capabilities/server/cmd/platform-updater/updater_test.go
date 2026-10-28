@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/internal/host"
 	"platformserver/internal/systembuild"
+	"platformserver/platform"
 )
 
 // The candidate is a real child process of the supervisor. Its health can
@@ -62,7 +62,7 @@ func testHost() {
 	}
 }
 
-func fixture(t *testing.T) (string, changeView, host.SystemBuildResult) {
+func fixture(t *testing.T) (string, changeView, platform.SystemBuildResult) {
 	t.Helper()
 	root := t.TempDir()
 	work := filepath.Join(root, "work")
@@ -84,7 +84,7 @@ func fixture(t *testing.T) (string, changeView, host.SystemBuildResult) {
 		t.Fatal(err)
 	}
 	change := changeView{ID: "change-1", State: "approved", Manifest: "frozen-change", SourceDigest: source.Digest}
-	result := host.SystemBuildResult{OK: true, Work: work, Binary: systembuild.DigestFile(filepath.Join(work, ".build", "platform-server")), Web: web, Source: source.Root, SourceDigest: source.Digest, Manifest: map[string]string{"README.md": source.Files["README.md"].Digest}}
+	result := platform.SystemBuildResult{OK: true, Work: work, Binary: systembuild.DigestFile(filepath.Join(work, ".build", "platform-server")), Web: web, Source: source.Root, SourceDigest: source.Digest, Manifest: map[string]string{"README.md": source.Files["README.md"].Digest}}
 	return root, change, result
 }
 
@@ -123,10 +123,10 @@ func TestBuildReceiptLossReusesRetainedArtifacts(t *testing.T) {
 	}))
 	defer server.Close()
 	c := client{host: server.URL, token: "test", tenant: "system", principal: "updater"}
-	if err := buildFor(c, root, change); err == nil {
+	if err := resumeBuild(c, root, change); err == nil {
 		t.Fatal("expected interrupted response")
 	}
-	if err := buildFor(c, root, change); err != nil {
+	if err := resumeBuild(c, root, change); err != nil {
 		t.Fatal(err)
 	}
 	if len(keys) != 2 || keys[0] != keys[1] {
@@ -154,7 +154,7 @@ func TestPublishedBuildResumesArtifactInstallation(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	if err := watchOnce(client{host: server.URL}, root); err != nil {
+	if err := reconcileRetained(client{host: server.URL}, root); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := readRelease(root, 3); err != nil {
@@ -428,7 +428,7 @@ func TestCancellationDuringProbeKeepsRunningRelease(t *testing.T) {
 	}
 }
 
-func TestPublishedWatchDoesNotResurrectPrunedBuilds(t *testing.T) {
+func TestPublishedReconciliationDoesNotResurrectPrunedBuilds(t *testing.T) {
 	root, change, result := fixture(t)
 	changes := []changeView{}
 	for version := 1; version <= 7; version++ {
@@ -442,6 +442,18 @@ func TestPublishedWatchDoesNotResurrectPrunedBuilds(t *testing.T) {
 		}
 		changes = append(changes, change)
 	}
+	// These old versions were pruned before freezing. Reconciliation must
+	// neither reconstruct them nor remove any of the remaining releases.
+	for _, version := range []int{1, 2} {
+		stamp := fmt.Sprintf("%04d", version)
+		if err := os.Remove(filepath.Join(root, ".build", "system", "releases", stamp+".json")); err != nil {
+			t.Fatal(err)
+		}
+		var old = changes[version-1]
+		if err := os.RemoveAll(filepath.Join(root, ".build", "system", "builds", buildIdentity(old))); err != nil {
+			t.Fatal(err)
+		}
+	}
 	owner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/system-changes":
@@ -453,7 +465,7 @@ func TestPublishedWatchDoesNotResurrectPrunedBuilds(t *testing.T) {
 		}
 	}))
 	defer owner.Close()
-	if err := watchOnce(client{host: owner.URL}, root); err != nil {
+	if err := reconcileRetained(client{host: owner.URL}, root); err != nil {
 		t.Fatal(err)
 	}
 	for _, version := range []int{1, 2} {
@@ -463,7 +475,7 @@ func TestPublishedWatchDoesNotResurrectPrunedBuilds(t *testing.T) {
 	}
 }
 
-func TestCompletedReleaseRestartFailureCreatesNewRollback(t *testing.T) {
+func TestExistingRollbackReceiptLossPreservesOriginalIdentity(t *testing.T) {
 	for _, pendingActive := range []bool{false, true} {
 		t.Run(fmt.Sprint("pending-active=", pendingActive), func(t *testing.T) {
 			t.Setenv("PLATFORM_UPDATER_TEST_FAIL_REAL", "2")
@@ -535,6 +547,12 @@ func TestCompletedReleaseRestartFailureCreatesNewRollback(t *testing.T) {
 			}
 			if state.Release != 1 || state.PendingRollback == nil {
 				t.Fatalf("startup did not persist recovery: %+v", state)
+			}
+			// This fixture represents a pre-freeze request already issued with
+			// the persisted key; new startup failures stay in maintenance instead.
+			state.PendingRollback.Maintenance = false
+			if err := writeJSON(s.current, state); err != nil {
+				t.Fatal(err)
 			}
 			if pendingActive && (state.Result != "active" || state.Evidence != desired.Evidence) {
 				t.Fatal("recovery rewrote the original outcome")
@@ -673,9 +691,8 @@ func TestDefinitionPredecessorReusesMatchingCodeArtifacts(t *testing.T) {
 	if alias.Digest != previous.Digest || alias.SourceDigest != previous.SourceDigest {
 		t.Fatal("definition predecessor did not reuse the same code")
 	}
-	pruneReleases(root, 0)
 	if _, err := os.Stat(previous.Binary); err != nil {
-		t.Fatal("pruned the still-running physical predecessor during a staged activation:", err)
+		t.Fatal("lost the still-running physical predecessor during a staged activation:", err)
 	}
 	// Each ordinal owns its physical artifacts; pruning its source ordinal must
 	// not delete the installed rollback target.
@@ -822,4 +839,164 @@ func TestServeForwardsOriginalHostArguments(t *testing.T) {
 	if body.Admins != "operator-1" || body.Database != "test-database" || body.Data != s.data {
 		t.Fatalf("lost deployment arguments or supervised override: %+v", body)
 	}
+}
+
+func TestFrozenReconciliationPreservesUnselectedActivationWithoutGuessingOutcome(t *testing.T) {
+	root := t.TempDir()
+	current := filepath.Join(root, ".build", "system", "current.json")
+	selected := releaseState{Release: 7, Binary: "retained-binary", Activation: "already-selected"}
+	if err := writeJSON(current, selected); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(current)
+	var requests []struct {
+		Schema struct {
+			Name string `json:"name"`
+		} `json:"schema"`
+		Target struct {
+			ID string `json:"id"`
+		} `json:"target"`
+		Payload string `json:"payload"`
+	}
+	owner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/system-changes":
+			fmt.Fprint(w, `[{"id":"unstarted","state":"approved","sourceDigest":"not-materialized"}]`)
+		case "/v1/system-activations":
+			fmt.Fprint(w, `[{"id":"already-selected","release":7,"result":"requested"},{"id":"unselected","release":8,"result":"requested"}]`)
+		case "/v1/submissions":
+			var request struct {
+				Schema struct {
+					Name string `json:"name"`
+				} `json:"schema"`
+				Target struct {
+					ID string `json:"id"`
+				} `json:"target"`
+				Payload string `json:"payload"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			requests = append(requests, request)
+			fmt.Fprint(w, `{}`)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer owner.Close()
+	if err := reconcileRetained(client{host: owner.URL, token: "test", principal: "updater"}, root); err == nil || !strings.Contains(err.Error(), "verify the actual running release") {
+		t.Fatalf("unselected requested activation was not kept for verification: %v", err)
+	}
+	if len(requests) != 1 || requests[0].Schema.Name != "system.change.built" || requests[0].Target.ID != "unstarted" {
+		t.Fatalf("unexpected maintenance decisions: %+v", requests)
+	}
+	raw, _ := base64.StdEncoding.DecodeString(requests[0].Payload)
+	var built struct {
+		OK          bool   `json:"ok"`
+		Diagnostics string `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(raw, &built); err != nil || built.OK || !strings.Contains(built.Diagnostics, "not started") {
+		t.Fatalf("unstarted build was not terminated truthfully: %s %v", raw, err)
+	}
+
+	after, _ := os.ReadFile(current)
+	if string(before) != string(after) {
+		t.Fatal("reconciliation changed the running selection")
+	}
+	if _, err := os.Stat(filepath.Join(root, ".build", "system", "work")); !os.IsNotExist(err) {
+		t.Fatalf("reconciliation materialized a new build: %v", err)
+	}
+}
+
+func TestFrozenRestartFailureRetainsStaticMaintenanceWithoutNewActivation(t *testing.T) {
+	t.Setenv("PLATFORM_UPDATER_TEST_FAIL_REAL", "2")
+	var writes int
+	owner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			writes++
+		}
+		t.Errorf("new restart recovery contacted a dynamic owner: %s %s", r.Method, r.URL.Path)
+		http.NotFound(w, r)
+	}))
+	defer owner.Close()
+	s, previous, desired := newProcessSupervisor(t, owner.URL)
+	desired.Previous, desired.Activation = &previous, ""
+	if err := writeJSON(s.current, desired); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.startInitial(desired); err != nil {
+		t.Fatal(err)
+	}
+	state, err := readState(s.current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Release != previous.Release || state.PendingRollback == nil || !state.PendingRollback.Maintenance {
+		t.Fatalf("failed restart did not retain the proven predecessor and maintenance state: %+v", state)
+	}
+	key := state.PendingRollback.Key
+	if err := s.reload(); err == nil || !strings.Contains(err.Error(), "static maintenance") {
+		t.Fatalf("missing maintenance diagnostic: %v", err)
+	}
+	s.stop(time.Second)
+	resumed := &supervisor{root: s.root, current: s.current, args: s.args, data: s.data, healthURL: s.healthURL, health: s.health, drain: s.drain, c: s.c}
+	defer resumed.stop(time.Second)
+	if err := resumed.startInitial(state); err != nil {
+		t.Fatal(err)
+	}
+	if err := resumed.reload(); err == nil || !strings.Contains(err.Error(), "static maintenance") {
+		t.Fatal(err)
+	}
+	after, err := readState(s.current)
+	if err != nil || after.PendingRollback == nil || after.PendingRollback.Key != key || writes != 0 {
+		t.Fatalf("restart lost original maintenance identity: %+v writes=%d err=%v", after, writes, err)
+	}
+}
+
+func TestServeRejectsRetiredDynamicWatchBeforeOpeningState(t *testing.T) {
+	root := t.TempDir()
+	err := serve([]string{"-root", root, "-watch"})
+	if err == nil || !strings.Contains(err.Error(), "frozen") {
+		t.Fatalf("watch was accepted: %v", err)
+	}
+	if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+		t.Fatalf("retired watch changed state: %v %v", entries, err)
+	}
+}
+
+// Retained pre-freeze artifacts are fixtures; maintenance never creates a build.
+func retainBuild(root string, change changeView, result platform.SystemBuildResult) (platform.SystemBuildResult, error) {
+	dir := filepath.Join(root, ".build", "system", "builds")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return result, err
+	}
+	target := filepath.Join(dir, buildIdentity(change))
+	temp, err := os.MkdirTemp(dir, ".build-")
+	if err != nil {
+		return result, err
+	}
+	defer os.RemoveAll(temp)
+	if err := os.MkdirAll(filepath.Join(temp, ".build"), 0o755); err != nil {
+		return result, err
+	}
+	if result.OK {
+		if err := verifyBuild(result); err != nil {
+			return result, err
+		}
+		if err := copyFile(filepath.Join(result.Work, ".build", "platform-server"), filepath.Join(temp, ".build", "platform-server"), 0o755); err != nil {
+			return result, err
+		}
+		if err := copyTree(filepath.Join(result.Work, "web", "apps", "workspace", "dist"), filepath.Join(temp, "web", "apps", "workspace", "dist")); err != nil {
+			return result, err
+		}
+	}
+	result.Work = target
+	if err := writeJSON(filepath.Join(temp, ".build", "result.json"), savedBuild{change.ID, change.Manifest, result}); err != nil {
+		return result, err
+	}
+	if err := os.Rename(temp, target); err != nil {
+		return result, err
+	}
+	return result, nil
 }

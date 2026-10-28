@@ -1,6 +1,6 @@
+import type {PageUI} from "@platform/app";
 import {WidgetGlyph,LayoutGlyph} from "./WidgetGlyph";
 import { type LayoutKind } from "../page-layout";
-import {type Api} from "@platform/kernel";
 import { Button, Card, CommandMenu, cn, t, useCanvasGesture, type ContextCommand } from "@platform/ui";
 import { useId, useState, type ReactNode } from "react";
 import { widgetContract } from "@platform/app";
@@ -9,7 +9,7 @@ import { ChevronDown, ChevronRight, Columns2, Rows3, Settings2 } from "lucide-re
 type Label = { id?: string; widget: string; title?: string };
 
 export function LayoutTree({document,sections,chosen,container,title,widgetTitles,onChoose,onContainer,onGroup,onAddOverlay,commandsForNode}: {
-  document:Api.PageDocument;sections:Label[];chosen:number;container?:string;title:string;
+  document:PageUI.PageDocument;sections:Label[];chosen:number;container?:string;title:string;
   widgetTitles:Record<string,()=>string>;
   onChoose:(index:number)=>void;onContainer:(id:string)=>void;
   onGroup:(kind:LayoutKind)=>void;onAddOverlay:()=>void;commandsForNode:(id:string)=>ContextCommand[];

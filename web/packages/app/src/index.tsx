@@ -1,3 +1,4 @@
+import {pageUIManifest} from "./pageui/manifest";
 import {ConfirmationProgress} from "./widgets/ConfirmationProgress";
 import { DispatchProgress } from "./widgets/DispatchProgress";
 import {RefusalHistory} from "./actions/RefusalHistory";
@@ -22,7 +23,7 @@ export {searchInputObjects} from "./widgets/search-input";
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
 import "./i18n";
-import { apiErrorMessage, OfflineReadError, pageUIManifest, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
+import {apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry} from "@platform/kernel";
 import {
   Button, Chart, Disclosure, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace, useViewVisible,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
@@ -514,3 +515,8 @@ export {createRecordActionSubmitter} from "./actions/record-actions";
 export {useActionTrial} from './actions/trial';
 export {createObservationStatisticsReader} from "./exploration/observation-reader";
 export type {ObservationStatisticsRequest,ObservationStatisticsRead} from "./exploration/observation-reader";
+
+import type * as PageUI from "./pageui/types";
+export type {PageUI};
+export type {PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor} from "./pageui/types";
+export {pageUIManifest} from "./pageui/manifest";

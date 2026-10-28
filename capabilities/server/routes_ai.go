@@ -33,62 +33,71 @@ func (h *Host) routesAI(rt *routes) {
 			WriteJSON(w, http.StatusOK, selection)
 		}
 	})
-	rt.handle(Route{Pattern: "POST /v1/ai/chat", Summary: "Call a model the caller may use; the call is metered", Body: ChatRequest{}, Answer: ChatAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var req ChatRequest
-		// A chat body carries a conversation and its tool declarations; the
-		// platform bounds it like every other request body (review AI-03).
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, chatMaxBytes)).Decode(&req) != nil {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-			return
-		}
-		if req.Stream { // server-sent events: delta, then done or error
-			flusher, _ := w.(http.Flusher)
-			started := false
-			event := func(name string, v any) {
-				if !started {
-					w.Header().Set("Content-Type", "text/event-stream")
-					w.Header().Set("Cache-Control", "no-cache")
-					w.WriteHeader(http.StatusOK)
-					started = true
-				}
-				raw, _ := json.Marshal(v)
-				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, raw)
-				if flusher != nil {
-					flusher.Flush()
-				}
+	for _, endpoint := range []struct {
+		path   string
+		design bool
+	}{{"POST /v1/ai/chat", false}, {"POST /v1/build/ai/chat", true}} {
+		rt.handle(Route{Pattern: endpoint.path, Summary: "Call an authorized model in the endpoint execution stage; the call is metered", Body: ChatRequest{}, Answer: ChatAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+			chat := t.Chat
+			if endpoint.design {
+				chat = t.DesignChat
 			}
-			req.OnStream = func(piece platform.ChatStreamEvent) {
-				if piece.ToolCall != nil {
-					event("tool_delta", piece.ToolCall)
-				}
+			var req ChatRequest
+			// A chat body carries a conversation and its tool declarations; the
+			// platform bounds it like every other request body (review AI-03).
+			if json.NewDecoder(http.MaxBytesReader(w, r.Body, chatMaxBytes)).Decode(&req) != nil {
+				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+				return
 			}
-			answer, err, failure := t.Chat(m, req, h.Now(), func(piece string) { event("delta", map[string]string{"content": piece}) })
+			if req.Stream { // server-sent events: delta, then done or error
+				flusher, _ := w.(http.Flusher)
+				started := false
+				event := func(name string, v any) {
+					if !started {
+						w.Header().Set("Content-Type", "text/event-stream")
+						w.Header().Set("Cache-Control", "no-cache")
+						w.WriteHeader(http.StatusOK)
+						started = true
+					}
+					raw, _ := json.Marshal(v)
+					fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, raw)
+					if flusher != nil {
+						flusher.Flush()
+					}
+				}
+				req.OnStream = func(piece platform.ChatStreamEvent) {
+					if piece.ToolCall != nil {
+						event("tool_delta", piece.ToolCall)
+					}
+				}
+				answer, err, failure := chat(m, req, h.Now(), func(piece string) { event("delta", map[string]string{"content": piece}) })
+				switch {
+				case err != nil && !started:
+					Reply(w, nil, err)
+				case err != nil:
+					event("error", map[string]any{"code": err.Code.String(), "detail": err.Message})
+				case failure != nil && failure.Quota && !started:
+					WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
+				case failure != nil:
+					event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail), "usage": answer.Usage})
+				default:
+					event("done", map[string]any{"usage": answer.Usage, "toolCalls": answer.ToolCalls})
+				}
+				return
+			}
+			answer, err, failure := chat(m, req, h.Now())
 			switch {
-			case err != nil && !started:
-				Reply(w, nil, err)
 			case err != nil:
-				event("error", map[string]any{"code": err.Code.String(), "detail": err.Message})
-			case failure != nil && failure.Quota && !started:
+				Reply(w, nil, err)
+			case failure != nil && failure.Quota:
 				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
 			case failure != nil:
-				event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail), "usage": answer.Usage})
+				WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}, "usage": answer.Usage})
 			default:
-				event("done", map[string]any{"usage": answer.Usage, "toolCalls": answer.ToolCalls})
+				WriteJSON(w, http.StatusOK, answer)
 			}
-			return
-		}
-		answer, err, failure := t.Chat(m, req, h.Now())
-		switch {
-		case err != nil:
-			Reply(w, nil, err)
-		case failure != nil && failure.Quota:
-			WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}})
-		case failure != nil:
-			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": t.i18n.Say(t.Language(m, r), failure.Detail)}, "usage": answer.Usage})
-		default:
-			WriteJSON(w, http.StatusOK, answer)
-		}
-	})
+		})
+	}
 	rt.handle(Route{Pattern: "GET /v1/ai/providers/{id}/models", Summary: "A provider's catalog of models", Answer: []CatalogModel{}, Query: []Param{{"refresh", "true reads the catalog from the provider again"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		models, err, failure := t.ProviderModels(m, r.PathValue("id"), r.URL.Query().Get("refresh") == "true")
 		switch {

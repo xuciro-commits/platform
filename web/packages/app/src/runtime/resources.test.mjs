@@ -3,7 +3,7 @@ import test from "node:test";
 import {registerHooks} from "node:module";
 // The bundler resolves extensionless source imports; mirror that resolution in
 // this source-level Node test while executing the actual production module.
-registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
+registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if((specifier.startsWith("./")||specifier.startsWith("../"))&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
 const {PageSessionStore}=await import("./Session.ts");
 const {overlaySessionScopes,selectionSlot,recordSlot,resourceVariables,recordOutputSlot,recordResourceSlot}=await import("./resources.ts");
 const page={object:{app:"sample",kind:"object",name:"sample.note"},sections:[{id:"main",widget:"table"},{id:"local",widget:"table",collectionVariable:"window"},{id:"detail",widget:"detail"},{id:"other",widget:"table"}],document:{uiProfile:"platform.page.v2.11",root:"root",nodes:{root:{kind:"rows",children:["main"]},main:{kind:"widget",section:"main"},panel:{kind:"rows",children:["local","detail","cards"]},local:{kind:"widget",section:"local"},detail:{kind:"widget",section:"detail"},cards:{kind:"loop",children:[]},otherPanel:{kind:"rows",children:["other"]},other:{kind:"widget",section:"other"}},overlays:{picker:{root:"panel"},other:{root:"otherPanel"}},queries:{read:{owner:"picker"}},variables:{selected:{scope:"overlay",owner:"picker",type:"record",mode:"resource",source:{kind:"record",section:"local"}},window:{scope:"overlay",owner:"picker",type:"object-set",mode:"resource",source:{kind:"plan",query:"read"}}}}};
@@ -102,7 +102,7 @@ test("nested sessions isolate parent paths and retire pending windows when their
 });
 
 test("child item evaluation inherits current outer values without sharing sibling item state",async()=>{
- const {evaluateVariables}=await import("./variables.ts");const {readFileSync}=await import("node:fs");const pageUIManifest=JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url),"utf8"));
+ const {evaluateVariables}=await import("./variables.ts");const {readFileSync}=await import("node:fs");const pageUIManifest=JSON.parse(readFileSync(new URL("../pageui/widgets.json",import.meta.url),"utf8"));
  const variables={global:{scope:"page",type:"boolean",mode:"state",initial:false},shared:{scope:"application",type:"string",mode:"shared",source:{kind:"application",variable:"label"}},local:{scope:"loop-item",owner:"children",type:"boolean",mode:"state",initial:false}};
  const values=evaluateVariables(variables,{local:true},pageUIManifest.runtime,{},"children",undefined,undefined,{global:{status:"value",value:true},shared:{status:"value",value:"current"},local:{status:"value",value:false}});
  assert.deepEqual(values.global,{status:"value",value:true});assert.deepEqual(values.shared,{status:"value",value:"current"});assert.deepEqual(values.local,{status:"value",value:true});

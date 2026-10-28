@@ -1,7 +1,8 @@
+import {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
 import {createContext,useContext,useEffect,useRef,useMemo,useState,type ReactNode} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {ExternalFrame,Panel,t} from "@platform/ui";
-import {pageUIManifest,type Api} from "@platform/kernel";
 const limits=pageUIManifest.runtime.embedding;
 import {useHost} from "../index";
 import {ComposedPage} from "../pages/sections";
@@ -11,9 +12,9 @@ import {PageEmbeddingBudget,pageEmbeddingCost} from "../runtime/embedding-budget
 
 const EmbeddingDepth=createContext(0);
 const BudgetContext=createContext<PageEmbeddingBudget|undefined>(undefined);
-export function ExternalDocumentRenderer({config,title,readCurrent=true}:{config?:Api.PageExternalFrame;title?:string;readCurrent?:boolean}){const budget=useContext(BudgetContext);if(!budget?.valid)return <Panel role="alert">{t("Embedded page instances or reads exceed their shared budget.")}</Panel>;return config?<ExternalFrame key={JSON.stringify(config)} config={config} title={title||t("External document")} active={readCurrent}/>:null;}
-export function PageEmbeddingBoundary({page,children}:{page:Api.Page;children:ReactNode}){const parent=useContext(BudgetContext),budget=useMemo(()=>new PageEmbeddingBudget({instances:limits.maxInstances,queries:limits.maxQueries,records:limits.maxRecords,sections:limits.maxSections},pageEmbeddingCost(page)),[page]);return <BudgetContext.Provider value={parent??budget}>{children}</BudgetContext.Provider>;}
-type Props={config?:Api.PageEmbedding;title?:string;values:Record<string,VariableResult>;scope:string;live:boolean;enabled?:boolean;readCurrent?:boolean;onReturn?:(values:Record<string,unknown>)=>void};
+export function ExternalDocumentRenderer({config,title,readCurrent=true}:{config?:PageUI.PageExternalFrame;title?:string;readCurrent?:boolean}){const budget=useContext(BudgetContext);if(!budget?.valid)return <Panel role="alert">{t("Embedded page instances or reads exceed their shared budget.")}</Panel>;return config?<ExternalFrame key={JSON.stringify(config)} config={config} title={title||t("External document")} active={readCurrent}/>:null;}
+export function PageEmbeddingBoundary({page,children}:{page:PageUI.Page;children:ReactNode}){const parent=useContext(BudgetContext),budget=useMemo(()=>new PageEmbeddingBudget({instances:limits.maxInstances,queries:limits.maxQueries,records:limits.maxRecords,sections:limits.maxSections},pageEmbeddingCost(page)),[page]);return <BudgetContext.Provider value={parent??budget}>{children}</BudgetContext.Provider>;}
+type Props={config?:PageUI.PageEmbedding;title?:string;values:Record<string,VariableResult>;scope:string;live:boolean;enabled?:boolean;readCurrent?:boolean;onReturn?:(values:Record<string,unknown>)=>void};
 /** Each original child owns its existing PageSession. Parent values only cross
  * the original interface; no child observes another instance's private state. */
 export function EmbeddedPageRenderer(props:Props){const host=useHost();return <EmbeddedSurface key={JSON.stringify([props.scope,host.source.scope,props.config,Object.entries(props.config?.inputs??{}).map(([id,v])=>[id,v.variable?props.values[v.variable]:v.literal])])} {...props}/>;}

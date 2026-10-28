@@ -3,7 +3,10 @@ package platformserver
 import "platformserver/internal/construction"
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"platformserver/aigateway"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -124,4 +127,51 @@ func runJob(t *testing.T, tn *Tenant, app, name string, at time.Time) {
 		}
 	}
 	t.Fatalf("job %s/%s is not declared", app, name)
+}
+
+// approveTestInference models the deployment operator's explicit origin review.
+// Adding a tenant provider alone never grants this runtime permission.
+func approveTestInference(t *testing.T, origin string, providers ...string) {
+	t.Helper()
+	policy := platform.AIInferencePolicy{}
+	if raw := os.Getenv("PLATFORM_AI_INFERENCE_POLICY"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &policy); err != nil {
+			t.Fatal(err)
+		}
+	}
+	canonical, err := aigateway.Origin(origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, provider := range providers {
+		found := false
+		for _, site := range policy.Runtime {
+			if site.Provider == provider && site.Origin == canonical {
+				found = true
+			}
+		}
+		if !found {
+			policy.Runtime = append(policy.Runtime, platform.AIInferenceSite{Provider: provider, Origin: canonical, Location: "local"})
+		}
+	}
+	raw, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PLATFORM_AI_INFERENCE_POLICY", string(raw))
+}
+
+// An operator can configure the exact synthetic endpoint before inference in a
+// fixture assembled before its HTTP server. This does not trust provider kind.
+func approveTenantInference(t *testing.T, tenant *Tenant, origin string, providers ...string) {
+	t.Helper()
+	approveTestInference(t, origin, providers...)
+	var policy platform.AIInferencePolicy
+	if err := json.Unmarshal([]byte(os.Getenv("PLATFORM_AI_INFERENCE_POLICY")), &policy); err != nil {
+		t.Fatal(err)
+	}
+	if err := aigateway.CheckPolicy(policy); err != nil {
+		t.Fatal(err)
+	}
+	tenant.services.AIInference = &policy
 }

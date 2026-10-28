@@ -1,6 +1,6 @@
+import type {PageUI} from "@platform/app";
 import { Button, Checkbox, Input,Select, Toggles, t, type EntityInfo } from "@platform/ui";
 import { tableEditableFields,useHost,widgetContract,pageVariableContract } from "@platform/app";
-import type { Api } from "@platform/kernel";
 import { variableAccessible } from "../../page-layout";
 import {EventEffects, selectEffects} from "../EffectsPanel";
 import type {ButtonInspectorPorts} from "./ButtonInspector";
@@ -10,8 +10,8 @@ export function TableSelectionInspector(props:ButtonInspectorPorts){
  return props.owner||!event?null:<EventEffects {...props} eventName={event.id} allowed={selectEffects}/>;
 }
 
-export type TableDraft = {pickerValueVariable?:string;tablePresentation?:Api.PageTablePresentation;tableColumns?:Api.PageTableColumn[];showSearch?:boolean;id?:string;selectionSetVariable?:string; inlineEdit?:{action:string;fields:string[]};collectionVariable?:string; selectionVariable?:string; fields?:string[]; selection?:string; object?:string; filterVariable?:string; query?:string; parentSelection?:string; relation?:string };
-export type TableInspectorPorts = { section:TableDraft; document:Api.PageDocument; object:string; info?:EntityInfo; overlay?:string; itemOwner?:string; onChange:(patch:Partial<TableDraft>)=>void };
+export type TableDraft = {pickerValueVariable?:string;tablePresentation?:PageUI.PageTablePresentation;tableColumns?:PageUI.PageTableColumn[];showSearch?:boolean;id?:string;selectionSetVariable?:string; inlineEdit?:{action:string;fields:string[]};collectionVariable?:string; selectionVariable?:string; fields?:string[]; selection?:string; object?:string; filterVariable?:string; query?:string; parentSelection?:string; relation?:string };
+export type TableInspectorPorts = { section:TableDraft; document:PageUI.PageDocument; object:string; info?:EntityInfo; overlay?:string; itemOwner?:string; onChange:(patch:Partial<TableDraft>)=>void };
 
 /** Only table-specific ports; common object/property controls stay shared. */
 export function TableInspector({section,document,object,info,overlay,itemOwner,onChange,widget="table",showFields=true}:TableInspectorPorts&{widget?:"collection-builder"|"record-map"|"action-table"|"collection-analysis"|"tag-counts"|"sparkline-kpi"|"treemap"|"record-scatter"|"histogram"|"term-counts"|"table"|"record-timeline"|"kanban"|"record-list"|"record-chart"|"record-events"|"record-calendar"|"record-gantt"|"summary-stats"|"record-leaderboard"|"record-picker";showFields?:boolean}) {
@@ -20,7 +20,7 @@ export function TableInspector({section,document,object,info,overlay,itemOwner,o
   const collection=contract.inputPorts.find(p=>p.bindingField==="collectionVariable")!;
   const selection=contract.outputPorts.find(p=>p.bindingField==="selectionVariable")!;
   const presentation=pageVariableContract.tablePresentation;
-  const patchColumn=(name:string,patch:Partial<Api.PageTableColumn>)=>onChange({tableColumns:[...(section.tableColumns??[]).filter(c=>c.field!==name),{...section.tableColumns?.find(c=>c.field===name),field:name,...patch}]});
+  const patchColumn=(name:string,patch:Partial<PageUI.PageTableColumn>)=>onChange({tableColumns:[...(section.tableColumns??[]).filter(c=>c.field!==name),{...section.tableColumns?.find(c=>c.field===name),field:name,...patch}]});
   return <>
     {widget==="table"&&!itemOwner&&<label className="grid gap-1 text-xs">{t("Record selection set output")}<Select value={section.selectionSetVariable??""} onChange={e=>onChange({selectionSetVariable:e.target.value||undefined})}><option value="">{t("Single active record only")}</option>{Object.entries(document.variables??{}).filter(([,v])=>v.type==="record-set"&&(v.mode==="resource"&&v.source?.kind==="records"&&v.source.section===section.id&&variableAccessible(v,undefined,overlay)||!overlay&&v.mode==="shared"&&v.scope==="application"&&v.writable&&v.source?.object?.name===(section.object||object))).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
     {selection&&!overlay&&!itemOwner&&<label className="grid gap-1 text-xs">{t("Shared record selection")}<Select value={section.selectionVariable??""} onChange={event=>onChange({selectionVariable:event.target.value||undefined,selection:undefined})}><option value="">{t("Keep selection in this page")}</option>{Object.entries(document.variables??{}).filter(([,v])=>v.type===selection.type&&v.mode==="shared"&&v.writable&&v.source?.object?.name===(section.object||object)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}

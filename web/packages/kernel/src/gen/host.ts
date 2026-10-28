@@ -34,6 +34,10 @@ export type AIFunction = {
 };
 
 export type AIModelBinding = {
+  stage?: string;
+  policyRevision?: string;
+  providerOrigin?: string;
+  inferenceLocation?: string;
   purpose?: string;
   model: string;
   options: ModelOptions;
@@ -13679,9 +13683,6 @@ export const pageUIManifest = {
     }
   ]
 } as const;
-
-/** Authoring narrows manifest-owned properties and ports by widget; Section retains the installed wire format. */
-export type { PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor } from '../widget-authoring';
 
 /** Files owns normalized raster region bounds. */
 export const imageRegionLimits = {"maxIDBytes":128,"maxLabelBytes":256,"maxRegions":64} as const;

@@ -1,10 +1,10 @@
-import type { Api } from "@platform/kernel";
+import type {PageUI} from "@platform/app";
 import { ContextHelp, Button, Card, Checkbox, Input, Select, t } from "@platform/ui";
 
 export function OverlayProperties({ overlay, onChange, onRemove }: {
-  overlay: Api.PageOverlay; onChange: (patch: Partial<Api.PageOverlay>) => void; onRemove: () => void;
+  overlay: PageUI.PageOverlay; onChange: (patch: Partial<PageUI.PageOverlay>) => void; onRemove: () => void;
 }) {
-  const value=overlay.presentation??{side:"right",size:"medium",backdrop:true,closeOnBackdrop:true,closeOnEsc:true},update=(patch:Partial<Api.PageOverlayPresentation>)=>onChange({presentation:{...value,...patch}});
+  const value=overlay.presentation??{side:"right",size:"medium",backdrop:true,closeOnBackdrop:true,closeOnEsc:true},update=(patch:Partial<PageUI.PageOverlayPresentation>)=>onChange({presentation:{...value,...patch}});
   return <Card className="grid gap-3 p-3"><strong className="text-xs">{t("Overlay")}</strong>
     <label className="grid gap-1 text-xs">{t("Overlay title")}<Input value={overlay.title} onChange={(event) => onChange({ title: event.target.value })} /></label>
     <label className="grid gap-1 text-xs">{t("Overlay kind")}<Select value={overlay.kind} onChange={(event) => onChange({ kind: event.target.value })}><option value="modal">{t("Modal")}</option><option value="drawer">{t("Drawer")}</option></Select></label>

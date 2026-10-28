@@ -199,7 +199,7 @@ func TestCredentialSharedAIAndConnectionUse(t *testing.T) {
 		t.Fatal("provider failure exposed a transmitted key")
 	}
 	decide(t, tn, "admin", "ai", "ai.provider.edit", "ai.provider", "local", map[string]string{"kind": "local", "baseUrl": "http://different.invalid", "secret": "shared"}, at)
-	if _, failure := tn.aiSend(context.Background(), platform.AIProvider{ID: "local", Secret: "shared", BaseURL: "http://different.invalid"}, "GET", "/models", nil); failure == nil {
+	if _, failure := tn.modelProvider(platform.AIProvider{ID: "local", Secret: "shared", BaseURL: "http://different.invalid"}).Send(context.Background(), platform.AIProvider{ID: "local", Secret: "shared", BaseURL: "http://different.invalid"}, "GET", "/models", nil); failure == nil {
 		t.Fatal("provider edit sent credential to unbound target")
 	}
 }
@@ -228,14 +228,14 @@ func TestCredentialBindingRejectsEmptyOriginAndRepairsSavedUse(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"data":[]}`))}, nil
 	}
-	if _, failure := tn.aiSend(context.Background(), provider, "GET", "/models", nil); failure == nil || !strings.Contains(failure.Detail, "not authorized") || strings.Contains(failure.Detail, "missing") || calls != 0 {
+	if _, failure := tn.modelProvider(provider).Send(context.Background(), provider, "GET", "/models", nil); failure == nil || !strings.Contains(failure.Detail, "not authorized") || strings.Contains(failure.Detail, "missing") || calls != 0 {
 		t.Fatalf("binding mismatch was reported as a missing key or sent it: %v", failure)
 	}
 	config.ExpectedVersion = 1
 	config.Bindings[0].Consumer = "ai/deepseek"
 	rebound := sealCredential(t, tn, "admin", config, "")
 	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, config.ID, rebound, txnAt)
-	answer, failure := tn.aiSend(context.Background(), provider, "GET", "/models", nil)
+	answer, failure := tn.modelProvider(provider).Send(context.Background(), provider, "GET", "/models", nil)
 	if failure != nil || calls != 1 {
 		t.Fatalf("saved key was unavailable after binding repair: %v", failure)
 	}

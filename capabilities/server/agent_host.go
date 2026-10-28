@@ -104,8 +104,13 @@ func (h hostView) ScopeAgentRun(run string) func() {
 	h.t.agentRun = run
 	return func() { h.t.agentRun = previous }
 }
-func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
-	return h.t.resolveModel("agent", name, options)
+func (h hostView) ResolveAgentModel(name string, options platform.ModelOptions, stage string) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
+	binding, provider, refusal := h.t.resolveModel("agent", name, options)
+	if refusal != nil {
+		return binding, provider, refusal
+	}
+	binding, refusal = h.t.modelStage(binding, provider, stage)
+	return binding, provider, refusal
 }
 
 func (h hostView) AgentModel(name string) (platform.AIModel, platform.AIProvider, *kernel.Error) {

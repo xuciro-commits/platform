@@ -36,7 +36,7 @@ function controlPanelNavigation(host: Host): NavSection[] {
   const sections: NavSection[] = [
     { label: t("Overview and identity"), items: [
       item(t("Control Panel"), <SlidersHorizontal />, "control-panel"),
-      ...(host.role("system") ? [item(t("Self-hosting"), <Server />, "self-hosting")] : []),
+      ...(host.role("system") ? [item(t("System history"), <Server />, "self-hosting")] : []),
       item(t("My account"), <CircleUser />, "account"),
       ...(admin(host) ? [item(t("Organisation"), <Building2 />, "organisation")] : []),
       ...(admin(host) || auditor(host) ? [item(t("Members"), <Users />, "members")] : []),
@@ -73,7 +73,7 @@ function ControlPanelOverview() {
 }
 
 const controlPanelViews: View[] = [
- {id:"self-hosting",title:()=>t("Self-hosting"),render:()=> <SystemConsole/>},
+ {id:"self-hosting",title:()=>t("System history"),render:()=> <SystemConsole/>},
  { id:"credentials", title:()=>t("Credentials"),render:()=> <Credentials /> },
   { id: "control-panel", title: () => t("Control Panel"), render: () => <ControlPanelOverview /> },
   { id: "account", title: () => t("My account"), render: () => <MyAccount /> },

@@ -1,4 +1,4 @@
-import {schemaIssue} from "../shared/value-schema";
+import {schemaIssue} from "@platform/app/page-contract";
 import { ContextHelp, InputDraftProvider, Button, Checkbox, Disclosure, Input, Select, Textarea, t } from "@platform/ui";
 import { Braces, ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";

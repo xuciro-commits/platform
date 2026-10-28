@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import type { ApplicationUIInfo } from "@platform/app";
 import type { Project } from "./project";
@@ -55,7 +56,7 @@ export function studioApplications(apps: readonly Api.AppInfo[], definitions: re
 }
 
 /** Reverse only bindings the Build page format can represent without loss. */
-export function pageDraftFromDefinition(page: Api.Page) {
+export function pageDraftFromDefinition(page: PageUI.Page) {
   const schema = (ref: Api.AssetRef) => {
     if (ref.app !== ref.name.split(".")[0]) throw Error("page-binding-owner");
     return ref.name;

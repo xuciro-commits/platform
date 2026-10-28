@@ -1,8 +1,8 @@
+import type * as PageUI from "../pageui/types";
 import {Panel,RecordComparison,t,type EntityInfo,type EntityRecord} from "@platform/ui";
-import type {Api} from "@platform/kernel";
 
 /** The session supplies complete, authorized selected records; pending sets never render cached rows. */
-export function RecordComparisonRenderer({records,status,info,fields,config,source,onOpenReference}:{records:EntityRecord[];status?:"empty"|"pending"|"value"|"error";info?:EntityInfo;fields:string[];config?:Api.PageRecordComparison}&Pick<Parameters<typeof RecordComparison>[0],"source"|"onOpenReference">) {
+export function RecordComparisonRenderer({records,status,info,fields,config,source,onOpenReference}:{records:EntityRecord[];status?:"empty"|"pending"|"value"|"error";info?:EntityInfo;fields:string[];config?:PageUI.PageRecordComparison}&Pick<Parameters<typeof RecordComparison>[0],"source"|"onOpenReference">) {
  if(status==="error")return <Panel role="alert">{t("The selected records could not be loaded.")}</Panel>;
  if(status==="pending")return <p role="status" className="text-xs text-muted">{t("Confirming selected record access…")}</p>;
  if(status!=="value"||records.length<2)return <p role="status" className="text-xs text-muted">{t("Select two to four records to compare.")}</p>;

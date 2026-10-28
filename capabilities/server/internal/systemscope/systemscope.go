@@ -1,27 +1,14 @@
-// Package systemscope is the kernel gate of self-hosting: which repository
-// paths a system change may never touch. It is a pure function so the same
-// rule runs when a change is saved and again before anything is built. Paths
-// outside the frozen kernel stay editable; the kernel itself only moves by an
-// ordinary version release.
+// Package systemscope identifies retained system records and validates source
+// identities. Dynamic platform source writes are frozen; static deployments
+// retain the original source manifests, accepted results and recovery state.
 package systemscope
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
-	"fmt"
 	"path"
 	"sort"
 	"strings"
-	"unicode/utf8"
-)
-
-// Limits bound one system change. They keep a single decision small enough to
-// be journaled and reviewed; larger deliveries are split into several changes.
-const (
-	MaxFileBytes   = 2 << 20  // 2 MiB per file
-	MaxChangeBytes = 20 << 20 // 20 MiB per change
-	MaxFiles       = 2000
 )
 
 // Tenant is the host-level tenant that owns the system itself. It is created
@@ -62,57 +49,6 @@ const (
 	StateRolledBack = "rolled-back"
 )
 
-// frozen names the actual owners of the frozen kernel. Entries include files,
-// directory prefixes and root-package filename families split out of host.go.
-var frozen = []string{
-	"contract/",
-	"go.work",
-	"go.work.sum",
-	"capabilities/server/host.go",
-	"capabilities/server/server.go",
-	"capabilities/server/routes.go",
-	"capabilities/server/routes_core.go",
-	"capabilities/server/submission_schema.go",
-	"capabilities/server/staged_decision.go",
-	"capabilities/server/runtime.go",
-	"capabilities/server/hostview.go",
-	"capabilities/server/runtime_state.go",
-	"capabilities/server/runtime_snapshot.go",
-	"capabilities/server/decision_definition.go",
-	"capabilities/server/accepted_",
-	"capabilities/server/committed.go",
-	"capabilities/server/replay",
-	"capabilities/server/snapshot",
-	"capabilities/server/journal_bridge.go",
-	"capabilities/server/journal/",
-	"capabilities/server/records",
-	"capabilities/server/record_",
-	"capabilities/server/authorization",
-	"capabilities/server/access.go",
-	"capabilities/server/console.go",
-	"capabilities/server/console_identity.go",
-	"capabilities/server/console_member.go",
-	"capabilities/server/identity_roles.go",
-	"capabilities/server/lifecycle.go",
-	"capabilities/server/hostadmin.go",
-	"capabilities/server/host_control.go",
-	"capabilities/server/tenant_registry.go",
-	"capabilities/server/internal/acceptance/",
-	"capabilities/server/internal/records/",
-	"capabilities/server/internal/host/",
-	"capabilities/server/internal/systemscope/",
-	"capabilities/server/platform/app.go",
-	"capabilities/server/platform/ledger.go",
-	"capabilities/server/platform/actions.go",
-	"capabilities/server/platform/authorization.go",
-	"capabilities/server/platform/record_image.go",
-	"capabilities/server/platform/snapshot.go",
-	"capabilities/server/platform/authz/",
-	"capabilities/server/idp/",
-	"capabilities/server/go.mod",
-	"capabilities/server/go.sum",
-}
-
 // secret names are refused wherever they appear.
 var secretSuffixes = []string{".key", ".pem", ".p12", ".pfx", ".env"}
 
@@ -131,7 +67,8 @@ func Sensitive(p string) bool {
 	return false
 }
 
-// Verdict says why a path is frozen, or "" when a system change may write it.
+// Verdict refuses every new dynamic source write, including canonical paths.
+// Path validation remains explicit so historical identities cannot gain aliases.
 func Verdict(p string) string {
 	if p == "" {
 		return "an empty path is not a file"
@@ -156,52 +93,7 @@ func Verdict(p string) string {
 	if Sensitive(clean) {
 		return "credentials are never system assets"
 	}
-	for _, entry := range frozen {
-		// Deleting a parent directory also deletes its frozen descendants.
-		if match == strings.TrimSuffix(entry, "/") || strings.HasPrefix(match, entry) || strings.HasPrefix(entry, match+"/") {
-			return "the kernel is frozen: " + entry + " moves by version release only"
-		}
-	}
-	return ""
-}
-
-// Violation is one refused path with the rule it broke.
-type Violation struct {
-	Path   string
-	Reason string
-}
-
-func (v Violation) Error() string { return fmt.Sprintf("%s: %s", v.Path, v.Reason) }
-
-// Check refuses a change that writes any frozen path.
-func Check(paths []string) error {
-	for _, p := range paths {
-		if reason := Verdict(p); reason != "" {
-			return Violation{Path: p, Reason: reason}
-		}
-	}
-	return nil
-}
-
-// ErrTooLarge refuses a change beyond the journal budget.
-var ErrTooLarge = errors.New("the change is larger than one system decision may carry")
-
-// CheckBudget refuses a change whose files exceed the limits.
-func CheckBudget(sizes map[string]int) error {
-	if len(sizes) > MaxFiles {
-		return fmt.Errorf("%w: %d files (limit %d)", ErrTooLarge, len(sizes), MaxFiles)
-	}
-	total := 0
-	for _, size := range sizes {
-		if size > MaxFileBytes {
-			return fmt.Errorf("%w: one file is %d bytes (limit %d)", ErrTooLarge, size, MaxFileBytes)
-		}
-		total += size
-	}
-	if total > MaxChangeBytes {
-		return fmt.Errorf("%w: %d bytes (limit %d)", ErrTooLarge, total, MaxChangeBytes)
-	}
-	return nil
+	return "dynamic platform source changes are frozen; use the static deployment workflow"
 }
 
 // Digest is a file's content identity: sha256 over its bytes, hex.
@@ -228,12 +120,4 @@ func Manifest(files map[string]string) string {
 	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(sum[:])
-}
-
-// Editable source records carry text; binary assets need their original owner.
-func CheckContent(p, content string) error {
-	if strings.IndexByte(content, 0) >= 0 || !utf8.ValidString(content) {
-		return Violation{Path: p, Reason: "system source edits must be UTF-8 text"}
-	}
-	return nil
 }

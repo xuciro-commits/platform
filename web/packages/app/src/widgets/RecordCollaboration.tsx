@@ -1,14 +1,15 @@
+import {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
 import {useEffect,useRef,useState} from "react";
 import {Button,ImageAnnotation,Scene3D,MediaPreview,Panel,PdfViewer,RecordComments,RecordUploader,t,type AttachedFile,type EntityRecord,type RecordComment,type RecordSource,type SceneInput} from "@platform/ui";
 import type {QueryWindow} from "./QueryWindowFrame";
-import type {Api} from "@platform/kernel";
-import {pageUIManifest} from "@platform/kernel";
+
 import {newId,useHost} from "../index";
 import {createRecordCollaboration} from "../collaboration/service";
 import type {RecordReference} from "../runtime/Session";
 import type {VariableResult} from "../runtime/variables";
 
-type Props={sceneSampleObject?:string;sceneWindow?:QueryWindow;scene?:Api.PageSceneConfig;sample?:SceneInput;part?:VariableResult;onPart?:(value:string)=>void;kind:string;label:string;record?:EntityRecord;reference?:RecordReference;status?:"empty"|"pending"|"value"|"error";captureRecordLease?:(slot:string)=>(()=>boolean)|undefined;slot?:string;bindingEpoch?:number;readSource?:RecordSource;draft?:VariableResult;fileValue?:VariableResult;pageValue?:VariableResult;onDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPage?:(value:string)=>void;enabled?:boolean;live:boolean};
+type Props={sceneSampleObject?:string;sceneWindow?:QueryWindow;scene?:PageUI.PageSceneConfig;sample?:SceneInput;part?:VariableResult;onPart?:(value:string)=>void;kind:string;label:string;record?:EntityRecord;reference?:RecordReference;status?:"empty"|"pending"|"value"|"error";captureRecordLease?:(slot:string)=>(()=>boolean)|undefined;slot?:string;bindingEpoch?:number;readSource?:RecordSource;draft?:VariableResult;fileValue?:VariableResult;pageValue?:VariableResult;onDraft?:(value:string)=>void;onFileID?:(value:string)=>void;onPage?:(value:string)=>void;enabled?:boolean;live:boolean};
 type MutationLease={identity:string;active:()=>boolean;service:ReturnType<typeof createRecordCollaboration>};
 const scalar=(value?:VariableResult)=>value?.status==="value"&&typeof value.value==="string"?value.value:undefined;
 const errorText=(failure:unknown)=>failure instanceof Error?failure.message:String(failure);

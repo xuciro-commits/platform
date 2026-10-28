@@ -5,7 +5,8 @@ cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
 
 # AST inspection covers all production source, including files
-# omitted by current OS/build tags. No count allowance or migration exception.
+# omitted by current OS/build tags. Import/authorization rules have no
+# exceptions; structural debt has an explicit baseline that may only shrink.
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 
 hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./apps/... 2>/dev/null | grep -E ' platformserver( |$)' || true)

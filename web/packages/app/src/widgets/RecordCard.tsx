@@ -1,6 +1,6 @@
+import type * as PageUI from "../pageui/types";
 import {Panel,RecordCard,t,type EntityInfo,type EntityRecord} from "@platform/ui";
-import type {Api} from "@platform/kernel";
-export function RecordCardRenderer({record,status,info,fields,config,source,onOpenReference}:{record?:EntityRecord;status?:"empty"|"pending"|"value"|"error";info?:EntityInfo;fields:string[];config?:Api.PageRecordCard}&Pick<Parameters<typeof RecordCard>[0],"source"|"onOpenReference">) {
+export function RecordCardRenderer({record,status,info,fields,config,source,onOpenReference}:{record?:EntityRecord;status?:"empty"|"pending"|"value"|"error";info?:EntityInfo;fields:string[];config?:PageUI.PageRecordCard}&Pick<Parameters<typeof RecordCard>[0],"source"|"onOpenReference">) {
  if(status==="error")return <Panel role="alert">{t("The record card could not be loaded.")}</Panel>;
  if(status==="pending")return <p role="status" className="text-xs text-muted">{t("Confirming record access…")}</p>;
  if(!record||status!=="value")return <p role="status" className="text-xs text-muted">{t("No confirmed record for this card.")}</p>;

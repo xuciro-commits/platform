@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import type {Api} from "@platform/kernel";
 import type {EntityInfo,EntityRecord,RecordPageData,RecordSource} from "@platform/ui";
 
@@ -29,7 +30,7 @@ function originalLinkFields(source:RecordSource,link:Api.LinkType) {
  originalInfo(source,link.parent);const child=originalInfo(source,link.child),via=child.fields.find(f=>f.name===link.via);
  if(!via||via.type!=="reference"||via.ref!==link.parent.name)throw Error("The original relationship field is unavailable.");
 }
-function explorationRelations(source:RecordSource,definitions:readonly Api.Definition[],config:Api.PageGraphExplorer,current:ExplorationReference):ExplorationRelation[] {
+function explorationRelations(source:RecordSource,definitions:readonly Api.Definition[],config:PageUI.PageGraphExplorer,current:ExplorationReference):ExplorationRelation[] {
  if(config.objects.length>8||config.relations.length>12||!config.objects.some(o=>same(o.object,current.object)))throw Error("The original exploration graph is unavailable or exceeds its budget.");
  originalInfo(source,current.object,config.objects.find(o=>same(o.object,current.object))!.labelField);
  const result:ExplorationRelation[]=[];
@@ -57,11 +58,11 @@ export function createRecordExploration(reader:RecordExplorationReader) {
  return {
   info:(object:Api.AssetRef,labelField="id")=>originalInfo(reader.source,object,labelField),
   async confirm(reference:ExplorationReference){requireActive();originalInfo(reader.source,reference.object);const view=await reader.source.get(reference.object.name,reference.id);requireActive();return originalRecord(view.record,reference.id);},
-  async around(config:Api.PageGraphExplorer,current:ExplorationReference):Promise<ExplorationWindow[]>{
+  async around(config:PageUI.PageGraphExplorer,current:ExplorationReference):Promise<ExplorationWindow[]>{
    requireActive();const relations=explorationRelations(reader.source,reader.definitions,config,current);
    return await Promise.all(relations.map(async relation=>{try{return {...relation,page:await read(relation,current,20)};}catch(failure){requireActive();return {...relation,error:error(failure)};}}));
   },
-  async neighborhood(config:Api.PageVertexGraph,current:ExplorationReference){
+  async neighborhood(config:PageUI.PageVertexGraph,current:ExplorationReference){
    requireActive();if(config.groups.length>2||new Set(config.groups.map(g=>g.badge)).size!==config.groups.length||config.groups.some(g=>g.direction!=="forward"||!(g.badge==="S"&&g.limit===4||g.badge==="A"&&g.limit===3)))throw Error("The original neighborhood exceeds its declared budget.");
    return await Promise.all(config.groups.map(async group=>{const link=originalLink(reader.definitions,group.binding);originalLinkFields(reader.source,link);const start=group.direction==="forward"?link.parent:link.child,target=group.direction==="forward"?link.child:link.parent;if(!same(start,current.object))throw Error("The neighborhood relationship has a different original root.");
     const relation:ExplorationRelation={id:group.id,label:group.direction==="forward"?link.forward:link.reverse,binding:group.binding,direction:group.direction as "forward"|"reverse",object:target,labelField:"id"};
@@ -72,7 +73,7 @@ export function createRecordExploration(reader:RecordExplorationReader) {
 }
 
 /** Resolve fixed metadata only; discovery never implies execution or navigation authority. */
-export function originalDirectoryItems(config:Api.PageAssetDirectory,definitions:readonly Api.Definition[]) {
+export function originalDirectoryItems(config:PageUI.PageAssetDirectory,definitions:readonly Api.Definition[]) {
  return config.items.flatMap(item=>{const d=definitions.find(d=>same(d.ref,item.asset.ref));if(!d)return [];
   const retained=item.asset.ref.kind==="query"?d.queryVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="link-type"?d.linkVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="property-type"?d.propertyVersions?.[item.asset.sourceVersion]:undefined;
   if(d.version!==item.asset.sourceVersion&&!retained)return [];

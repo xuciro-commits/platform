@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import {ProposalReview} from "./ProposalReview";
 import {useEffect,useRef,useState} from "react";
 import {useQueries} from "@tanstack/react-query";
@@ -7,7 +8,7 @@ import {useHost,useOpenRecord} from "../index";
 import {createAIReader,type AIRequest} from "../ai/service";
 import type {VariableResult} from "../runtime/variables";
 
-type Props={config?:Api.PageAI;functionBinding?:Api.AssetBinding;record?:EntityRecord;recordType?:string;status?:string;identity:string;active:()=>boolean;live:boolean;enabled?:boolean;question?:VariableResult;onQuestion?:(value:string)=>void};
+type Props={config?:PageUI.PageAI;functionBinding?:Api.AssetBinding;record?:EntityRecord;recordType?:string;status?:string;identity:string;active:()=>boolean;live:boolean;enabled?:boolean;question?:VariableResult;onQuestion?:(value:string)=>void};
 export function AIWidget(props:Props){const host=useHost();return <AISession key={JSON.stringify([host.source.scope,props.identity,props.functionBinding,props.config])} {...props}/>;}
 function AISession({config,functionBinding,record,recordType,status,active,live,enabled=true,question,onQuestion}:Props){
  const host=useHost(),openRecord=useOpenRecord(),lease=useRef(true),current=useRef({active,live,enabled,status});current.current={active,live,enabled,status};useEffect(()=>{lease.current=true;return()=>{lease.current=false;};},[]);

@@ -5,7 +5,6 @@ import "platformserver/internal/construction"
 import (
 	"encoding/json"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -53,11 +52,12 @@ func TestApplicationDraftClosureIncludesUnreadyIntegration(t *testing.T) {
 	}
 	selection := append([]construction.JointDraftRef{{Kind: platform.AssetApp, ID: "APP"}}, closure.Drafts...)
 	preview, err := tn.PreviewReleaseDrafts(member, selection)
-	if err != nil || !strings.Contains(preview.Diagnostic, "source/SOURCE") || !strings.Contains(preview.Diagnostic, "Connection CONNECTION is not ready") || len(preview.Drafts) != 5 {
-		t.Fatalf("review did not locate the actual blocker in its complete selection: %+v %v", preview, err)
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" || len(preview.Drafts) != 5 {
+		t.Fatalf("an unready external connection blocked the complete logical candidate: %+v %v", preview, err)
 	}
+	logicalCandidate := preview.CandidateID
 	if requests.Load() != 0 || !bytes.Equal(before, platform.Raw(tn.Definitions(member))) {
-		t.Fatal("discovery or refused preview performed external I/O or changed installed definitions")
+		t.Fatal("discovery or preview performed external I/O or changed installed definitions")
 	}
 	connection, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "CONNECTION")
 	if connection.State != "draft" || connection.Published != "" {
@@ -66,7 +66,7 @@ func TestApplicationDraftClosureIncludesUnreadyIntegration(t *testing.T) {
 	decide(t, tn, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "CONNECTION", map[string]any{}, at)
 	tn.CheckConnections(at)
 	preview, err = tn.PreviewApplicationDrafts(member, "APP")
-	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" || len(preview.Drafts) != 5 {
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID != logicalCandidate || len(preview.Drafts) != 5 {
 		t.Fatalf("first application preview after checking connection: %+v %v", preview, err)
 	}
 }

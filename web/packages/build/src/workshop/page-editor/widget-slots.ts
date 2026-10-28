@@ -1,7 +1,7 @@
-import type {Api} from "@platform/kernel";
+import type {PageUI} from "@platform/app";
 import {widgetContract} from "@platform/app";
 import {layoutID} from "../page-layout";
-type Document=Api.PageDocument;
+type Document=PageUI.PageDocument;
 
 export function addWidgetSlot(document:Document,section:string,widget:string,slotID:string):{document:Document;id?:string}{
  const leaf=Object.keys(document.nodes).find(id=>document.nodes[id]?.kind==="widget"&&document.nodes[id]?.section===section),contract=widgetContract(widget),slot=contract&&"slots" in contract?contract.slots.find(s=>s.id===slotID):undefined;

@@ -1,3 +1,5 @@
+// Package systembuild retains immutable platform source and artifact identities
+// for static supervision, original result reconciliation and export.
 package systembuild
 
 import (
@@ -212,4 +214,30 @@ func DigestTree(root string) (string, error) {
 		return "", fmt.Errorf("cannot digest %s", root)
 	}
 	return digest, nil
+}
+
+func digestFile(p string) string {
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	h := sha256.New()
+	err := filepath.Walk(p, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(p, path)
+		fmt.Fprintf(h, "%x  %s\n", sha256.Sum256(body), filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		return ""
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

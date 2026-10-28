@@ -1,10 +1,10 @@
+import type {PageUI} from "@platform/app";
 import {Input,Select,t} from "@platform/ui";
-import type {Api} from "@platform/kernel";
 import {variableAccessible} from "../../page-layout";
 import type {AuthoringSection} from "../draft";
 
 export function BooleanInspector({section,document,overlay,itemOwner,onChange}:{
-  section:AuthoringSection;document:Api.PageDocument;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void;
+  section:AuthoringSection;document:PageUI.PageDocument;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void;
 }) {
   return <>
     <label className="grid gap-1 text-xs">{t("Boolean state variable")}<Select value={section.booleanVariable??""} onChange={e=>onChange({booleanVariable:e.target.value||undefined})}>

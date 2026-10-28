@@ -1,6 +1,8 @@
+import {pageUIManifest} from "../pageui/manifest";
+import type * as PageUI from "../pageui/types";
 import {scalarAssignable,type ScalarValue} from "./decimal";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { pageUIManifest, type Api } from "@platform/kernel";
+import {type Api} from "@platform/kernel";
 import { Panel, VirtualStack, t, type EntityRecord, type RecordSource } from "@platform/ui";
 import {usePageQueries} from "./PageQueries";
 import { PageSessionStore, type RecordReference, type PageSessionSnapshot } from "./Session";
@@ -11,7 +13,7 @@ export type LoopContext = { owner: string; key: string; signature: string; query
   session:PageSessionStore; queries?:ReturnType<typeof usePageQueries>; querySession?:PageSessionStore; values: Record<string, VariableResult>; set: (id: string, value: ScalarValue) => void };
 
 export function LoopRuntime({ page, queryKey, expectedSignature, owner, loop, label, result, session, snapshot, variables, resources, overlay, preserveOnUnmount, inherited, children }: {
-  page?:Api.Page; queryKey: string; expectedSignature?: string; owner: string; loop: Api.PageLoop; label: string; result?: VariableResult; session: PageSessionStore; snapshot: PageSessionSnapshot;
+  page?:PageUI.Page; queryKey: string; expectedSignature?: string; owner: string; loop: PageUI.PageLoop; label: string; result?: VariableResult; session: PageSessionStore; snapshot: PageSessionSnapshot;
   variables: Record<string, Api.PageVariable>; resources: Record<string, VariableResult>; overlay?: string; preserveOnUnmount?:boolean; inherited?:Record<string,VariableResult>; children: (context: LoopContext) => ReactNode;
 }) {
   const currentWindow = result && (result.status === "value" || result.status === "empty") && typeof result.value === "object" && result.value?.kind === "object-set" ? result.value.window : undefined;
@@ -35,7 +37,7 @@ export function LoopRuntime({ page, queryKey, expectedSignature, owner, loop, la
 }
 
 function LoopItem({ page, reference, queryKey, owner, loop, signature, session, snapshot, variables, resources, overlay, inherited, children }: {
-  page?:Api.Page; queryKey: string; reference: RecordReference; owner: string; loop: Api.PageLoop; signature: string; session: PageSessionStore; snapshot: PageSessionSnapshot;
+  page?:PageUI.Page; queryKey: string; reference: RecordReference; owner: string; loop: PageUI.PageLoop; signature: string; session: PageSessionStore; snapshot: PageSessionSnapshot;
   variables: Record<string, Api.PageVariable>; resources: Record<string, VariableResult>; overlay?: string; inherited?:Record<string,VariableResult>; children: (context: LoopContext) => ReactNode;
 }) {
   const source = session.readSource(), [read, setRead] = useState<{ record?: EntityRecord; error?: boolean }>({});
@@ -56,7 +58,7 @@ function LoopItem({ page, reference, queryKey, owner, loop, signature, session, 
 
 
 /** Item-owned plans run once in the parent path, before sibling templates consume them. */
-function LoopItemQueries({page,parent,state,overlay,children}:{page:Api.Page;parent:LoopContext;state:Record<string,unknown>;overlay?:string;children:(context:LoopContext)=>ReactNode}) {
+function LoopItemQueries({page,parent,state,overlay,children}:{page:PageUI.Page;parent:LoopContext;state:Record<string,unknown>;overlay?:string;children:(context:LoopContext)=>ReactNode}) {
  const session=parent.session.childSession(parent.owner,parent.key),snapshot=useSyncExternalStore(session.subscribe,session.snapshot,session.snapshot);
  const queries=usePageQueries(page,parent.values,session,snapshot,{},overlay,parent.owner,true),source=parent.source;
  useEffect(()=>session.updateSource(source),[session,source,source.scope,source.revision]);

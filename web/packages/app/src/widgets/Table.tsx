@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import { Panel, RecordList, t, type EntityRecord, type ListState, type RecordSource,type RecordEditPort,type RecordSelectionPort } from "@platform/ui";
 import { useState } from "react";
 import { ImportControl, SaveViewDialog } from "./list-operations";
@@ -5,7 +6,7 @@ import { ImportControl, SaveViewDialog } from "./list-operations";
 export type TablePorts = {onOpenReference?:(type:string,id:string)=>void;onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};
   /** The member's own list operations, where the page permits them. */
   importable?: boolean; savable?: boolean;
-  presentation?:import("@platform/kernel").Api.PageTablePresentation;columns?:import("@platform/ui").RecordColumnPresentation[];showSearch?:boolean;
+  presentation?:PageUI.PageTablePresentation;columns?:import("@platform/ui").RecordColumnPresentation[];showSearch?:boolean;
   keepActive?:boolean;
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;

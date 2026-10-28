@@ -1,3 +1,4 @@
+import type {PageUI} from "@platform/app";
 // A page event runs an ordered chain of effects: set state,
 // open or close an overlay, take an action, open another page, return to the
 // caller. This panel edits that chain for one event of one widget (or one
@@ -16,8 +17,8 @@ export const groupEffects: Allowed = { kinds: ["set", "overlay", "action"] };
 export const selectEffects: Allowed = { kinds: ["set"], selection: true };
 
 export function EventEffects({ document, section, control, eventName, owner, overlay, onChange, allowed, title }: {
-  document: Api.PageDocument; section: string; control?: string; eventName: string; owner?: string; overlay?: string;
-  onChange: (document: Api.PageDocument) => void; allowed: Allowed; title?: string;
+  document: PageUI.PageDocument; section: string; control?: string; eventName: string; owner?: string; overlay?: string;
+  onChange: (document: PageUI.PageDocument) => void; allowed: Allowed; title?: string;
 }) {
   const { definitions, catalog } = useHost();
   const match = (event: Api.PageEventBinding) => event.source === section && (event.control ?? "") === (control ?? "") && event.event === eventName;
@@ -83,7 +84,7 @@ export function EventEffects({ document, section, control, eventName, owner, ove
 
 const swap = (list: Api.PageEffect[], a: number, b: number) => { const next = [...list]; [next[a], next[b]] = [next[b]!, next[a]!]; return next; };
 
-function SetEffect({ document, effect, writable, variables, onChange }: { document: Api.PageDocument; effect: Api.PageEffect; writable: [string, Api.PageVariable][]; variables: [string, Api.PageVariable][]; onChange: (next: Api.PageEffect) => void }) {
+function SetEffect({ document, effect, writable, variables, onChange }: { document: PageUI.PageDocument; effect: Api.PageEffect; writable: [string, Api.PageVariable][]; variables: [string, Api.PageVariable][]; onChange: (next: Api.PageEffect) => void }) {
   const variable = document.variables?.[effect.target ?? ""];
   const tabs = Object.values(document.nodes).filter((node) => node.kind === "tabs" && node.activeVariable === effect.target).flatMap((node) => node.children ?? []);
   const sources = variables.filter(([id, v]) => id !== effect.target && v.type === variable?.type);
@@ -98,7 +99,7 @@ function SetEffect({ document, effect, writable, variables, onChange }: { docume
   </>;
 }
 
-function ActionEffect({ effect, records, variables, document, onChange }: { effect: Api.PageEffect; records: [string, Api.PageVariable][]; variables: [string, Api.PageVariable][]; document: Api.PageDocument; onChange: (next: Api.PageEffect) => void }) {
+function ActionEffect({ effect, records, variables, document, onChange }: { effect: Api.PageEffect; records: [string, Api.PageVariable][]; variables: [string, Api.PageVariable][]; document: PageUI.PageDocument; onChange: (next: Api.PageEffect) => void }) {
   const { catalog } = useHost();
   const action = effect.action ?? { ref: { app: "", kind: "action", name: "" } };
   const variable = document.variables?.[action.recordVariable ?? ""], object = variable?.source?.object?.name;
@@ -112,7 +113,7 @@ function ActionEffect({ effect, records, variables, document, onChange }: { effe
     {declared && <p className="text-xs text-muted">{declared.payload.length ? t("Opens the action's form; the chain continues after it commits.") : t("Taken at once, without a form.")}</p>}
     {declared?.payload.filter((field) => ["string", "boolean", "decimal"].includes(field.type)).map((field) => {
       const binding = action.inputs?.[field.name];
-      const set = (next?: Api.PageValue) => { const inputs = { ...action.inputs }; if (next) inputs[field.name] = next; else delete inputs[field.name]; onChange({ kind: "action", action: { ...action, inputs: Object.keys(inputs).length ? inputs : undefined } }); };
+      const set = (next?: PageUI.PageValue) => { const inputs = { ...action.inputs }; if (next) inputs[field.name] = next; else delete inputs[field.name]; onChange({ kind: "action", action: { ...action, inputs: Object.keys(inputs).length ? inputs : undefined } }); };
       return <div key={field.name} className="grid gap-1">
         <label className="grid gap-1 text-xs">{t("Prefill {name}", { name: field.name })}<Select value={binding ? binding.variable ?? "literal" : ""} onChange={(e) => set(e.target.value === "" ? undefined : e.target.value === "literal" ? { literal: field.type === "boolean" ? false : "" } : { variable: e.target.value })}>
           <option value="">{t("Ask in the form")}</option>{field.type !== "decimal" && <option value="literal">{t("Literal")}</option>}{variables.filter(([, v]) => v.type === field.type).map(([key, v]) => <option key={key} value={key}>{v.title || key}</option>)}</Select></label>
@@ -125,7 +126,7 @@ function ActionEffect({ effect, records, variables, document, onChange }: { effe
   </>;
 }
 
-function NavigateEffect({ navigation, variables, onChange }: { navigation: Api.PageNavigation; variables: [string, Api.PageVariable][]; onChange: (next: Api.PageNavigation) => void }) {
+function NavigateEffect({ navigation, variables, onChange }: { navigation: PageUI.PageNavigation; variables: [string, Api.PageVariable][]; onChange: (next: PageUI.PageNavigation) => void }) {
   const { definitions } = useHost(), pages = definitions.filter((d) => d.page);
   const target = pages.find((page) => assetKey(page.ref) === assetKey(navigation.page));
   const choose = (key: string) => { const page = pages.find((p) => assetKey(p.ref) === key); if (page) onChange({ page: page.ref, interfaceVersion: page.page?.document?.interface?.version ?? 0 }); };
@@ -133,7 +134,7 @@ function NavigateEffect({ navigation, variables, onChange }: { navigation: Api.P
     <label className="grid gap-1 text-xs">{t("Target page")}<Select value={assetKey(navigation.page)} onChange={(e) => choose(e.target.value)}>{pages.map((page) => <option key={assetKey(page.ref)} value={assetKey(page.ref)}>{page.page?.title || page.ref.name}</option>)}</Select></label>
     {Object.entries(target?.page?.document?.interface?.inputs ?? {}).map(([id, port]) => {
       const binding = navigation.inputs?.[id];
-      const set = (value: Api.PageValue) => onChange({ ...navigation, inputs: { ...navigation.inputs, [id]: value } });
+      const set = (value: PageUI.PageValue) => onChange({ ...navigation, inputs: { ...navigation.inputs, [id]: value } });
       return <div key={id} className="grid gap-2 border-t border-border pt-2">
         <label className="grid gap-1 text-xs">{t("Input {name}", { name: id })}<Select value={binding?.variable ?? ""} onChange={(e) => set(e.target.value ? { variable: e.target.value } : { literal: port.type === "boolean" ? false : "" })}><option value="">{t("Literal")}</option>{variables.filter(([, v]) => v.type === port.type).map(([key, v]) => <option key={key} value={key}>{v.title || key}</option>)}</Select></label>
         {!binding?.variable && port.type !== "record" && (port.type === "boolean" ? <Checkbox checked={binding?.literal === true} onChange={(value) => set({ literal: value })}>{t("Input value")}</Checkbox> : <Input aria-label={t("Input value")} value={String(binding?.literal ?? "")} onChange={(e) => set({ literal: e.target.value })} />)}

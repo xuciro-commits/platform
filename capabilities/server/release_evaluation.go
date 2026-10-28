@@ -125,6 +125,10 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if refusal != nil {
 		return "", fmt.Errorf("model options: %s", refusal.Message)
 	}
+	binding, refusal = t.modelStage(binding, provider, platform.AIStageDesign)
+	if refusal != nil {
+		return "", fmt.Errorf("model stage: %s", refusal.Message)
+	}
 	config, err := modelConfigurationDigest(model, provider, &binding)
 	if err != nil {
 		return "", err
