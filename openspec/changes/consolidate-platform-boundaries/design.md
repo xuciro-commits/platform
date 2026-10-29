@@ -88,7 +88,7 @@ SDK、裸模型endpoint和模型请求方法只归provider，原4个裸调用/SD
 
 ### 6. 三个关联变更按原owner协作
 
-- [页面解耦](../decouple-page-presentation-contract/design.md)：78个生产page文件→3个公共安全契约；保留原记录/查询/动作安全，把视觉配置交Web。根页面运行owner的新物理路径见本对照表。
+- [页面解耦](../archive/2026-10-28-decouple-page-presentation-contract/design.md)：78个生产page文件→3个公共安全契约；保留原记录/查询/动作安全，把视觉配置交Web。根页面运行owner的新物理路径见本对照表。
 - [AI隔离](../isolate-ai-execution-and-training-data/design.md)：StagePolicy、provider/MCP、预算/降级及SFT/DPO由该变更定义；本表标注原调用文件去向，不复制政策或另建样本Sink。
 - [自举收缩与UAF](../platform-self-hosting/design.md)：先静态禁区与新自举冻结，再UAF外移/原组织owner内聚。原system证据及恢复归属保留，不能为文件目标删未知回执或历史。
 

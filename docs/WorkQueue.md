@@ -4,10 +4,9 @@
 
 ## 1. 架构减脂与解耦：分批实施
 
-负责人已明确授权四项架构战役直接落实代码；按已核对的统一文件清单实施，不继续原全量自举目标。静态冻结和基础去耦已落实；继续核对实际旧工作交接，并推进页面、AI及职责收敛。
+负责人已明确授权四项架构战役直接落实代码；按已核对的统一文件清单实施，不继续原全量自举目标。静态冻结和基础去耦已落实；继续核对实际旧工作交接，并推进AI及职责收敛；页面解耦已归档。
 
 - [结构拍平与完整文件对照](../openspec/changes/consolidate-platform-boundaries/)：删除五层传话路径，合并接受/拒绝管线；单包生产 Go 文件上限和存量递减配额，核对全后端文件数及净 LOC。
-- [页面安全契约与前端呈现解耦](../openspec/changes/decouple-page-presentation-contract/)：先迁移绑定、权限、原件和旧页解释，再移除 Go 视觉专用类型及校验；复用现有浏览器规则 WASM。
 - [AI 执行隔离与训练数据](../openspec/changes/isolate-ai-execution-and-training-data/)：在已落实的可信阶段与原 AI owner 在途 Token 预占上，补齐 Work 交接、提议确认及合格样本派生，不再造计量、授权或执行路径。
 - [自举收缩与 UAF 退出](../openspec/changes/platform-self-hosting/)：全量自举新写已冻结，继续核对旧激活、退出完整UAF依赖和落实运营只读/追加边界；保留原组织权威及历史。
 
