@@ -30,7 +30,7 @@
 
 ## 5. 组合与恢复验收
 
-- [ ] 5.1 集中执行受影响 owner 检查、`make check`、`scripts/verify.sh composition`、一条通用浏览器路线和 `make rehearse`；真实 PostgreSQL 覆盖阶段绑定、未结算调用、人工任务与训练资格的检查点/后缀恢复，明确记录跳过项及合成 provider 的验证范围。
+- [x] 5.1 集中执行受影响 owner 检查、`make check`、`scripts/verify.sh composition`、一条通用浏览器路线和 `make rehearse`；真实 PostgreSQL 覆盖阶段绑定、未结算调用、人工任务与训练资格的检查点/后缀恢复，明确记录跳过项及合成 provider 的验证范围。（2026-10-28 实测：`make check`、`scripts/verify.sh composition`、`make rehearse` 通过；带真实一次性 PostgreSQL 的全后端 `go test ./...` 通过，另有 `TestJournalAITrainingRecoversEligibilityAndHandoff` 以真实日志检查点+后缀恢复证明提议确认、交接任务与训练资格；阶段绑定与结算恢复由 `function_test.go` 的 PG 路线覆盖。浏览器路线 ai-training、proposal-adoption、ai-configuration、ai-authoring 通过。模型均为本地合成 provider，只证明协议、阶段、预算与恢复语义，不代表真实供应商或付费路径；训练导出仅在本机生成文件，无外部上传。）
 
 ## Workflow follow-up
 

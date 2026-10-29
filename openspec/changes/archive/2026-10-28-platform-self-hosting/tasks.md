@@ -27,7 +27,7 @@
 
 ## 14. 跨模块验收
 
-- [ ] 14.1 对冻结、组织迁移和运营读取的最终组合集中运行适用 make check、owner 测试、composition、真实 PostgreSQL 恢复及元数据损坏路线；说明自动检查、实际运行、负责人体验和未验证边界，核对原部署身份与数据连续。
+- [x] 14.1 对冻结、组织迁移和运营读取的最终组合集中运行适用 make check、owner 测试、composition、真实 PostgreSQL 恢复及元数据损坏路线；说明自动检查、实际运行、负责人体验和未验证边界，核对原部署身份与数据连续。（2026-10-28 实测：`make check`、owner 测试、`scripts/verify.sh composition`、`make rehearse` 通过；带真实一次性 PostgreSQL 的全后端 `go test ./...` 通过；浏览器路线 enterprise 与 static-maintenance 通过（元数据声明读取失败时仍可进入静态维护）；本地实际宿主 `/healthz` 为 release 0、无自举激活，旧 requested/unknown 路径仅由 updater 与 system 的 owner 测试覆盖，未在真实旧部署上演练。未验证：多进程隔离、真实 OIDC 身份服务宕机、生产容量。）
 
 ## Workflow follow-up
 

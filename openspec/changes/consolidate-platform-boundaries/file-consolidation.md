@@ -6,7 +6,7 @@
 
 - 统计范围：`capabilities/server/**/*.go`，排除所有`*_test.go`，包含命令、纯基础包及所有平台应用；679个文件、5,124,183字节。条件编译文件仍计入，不因本机未构建就消失。
 - 重点库存：root263、platform166（其中page78、非page88）、apps/build73、internal/construction42、internal/host15，共559。其余120个生产文件也逐一纳入下表以保持分母一致。
-- 页契约78→3及其安全/兼容责任以[页面变更完整附表](../archive/2026-10-28-decouple-page-presentation-contract/design.md)为准；UAF的13个外移文件和19个组织owner文件见[自举设计](../platform-self-hosting/design.md)。本表只计其中6个生产Go外移，不计JSON、XMI、HTML和测试为手写Go删除收益。
+- 页契约78→3及其安全/兼容责任以[页面变更完整附表](../archive/2026-10-28-decouple-page-presentation-contract/design.md)为准；UAF的13个外移文件和19个组织owner文件见[自举设计](../archive/2026-10-28-platform-self-hosting/design.md)。本表只计其中6个生产Go外移，不计JSON、XMI、HTML和测试为手写Go删除收益。
 - 目标上限为339个非测试Go文件（679口径下降至少50%）。当前逐文件映射经去重并包含2个新增阶段/训练职责后形成 **215个目标生产路径**、每包最多25个；这是一份容量规划，不是已实现结果。与AI/Page/UAF交付最终合并后必须重新计数；差异不能靠重命名、删除测试、提高配额或漏计文件掩盖。
 - 目标路径数量没有证明净LOC减少。每批分别记录生产Go新增/删除行、纯移动、生成物和外移，且比较职责/原行为；只拼大文件或把Go逻辑搬为同量JS不能作为减脂完成。安全必需实现超过预算时先修订设计，不删格式/权限/历史或削弱断言凑数。
 
@@ -744,7 +744,7 @@
 | `capabilities/server/cmd/platform-updater/serve.go` | `capabilities/server/cmd/platform-updater/serve.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
 | `capabilities/server/cmd/rule-browser/main.go` | `capabilities/server/cmd/rule-browser/main.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
 | `capabilities/server/cmd/storage-files/main.go` | `capabilities/server/cmd/storage-files/main.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
-| `capabilities/server/cmd/uaf-gen/main.go` | `外部可选工具（精确路径见platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
+| `capabilities/server/cmd/uaf-gen/main.go` | `外部可选工具（精确路径见archive/2026-10-28-platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
 | `capabilities/server/cmd/wasm-worker/main.go` | `capabilities/server/cmd/wasm-worker/main.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
 | `capabilities/server/cmd/webhook-sink/main.go` | `capabilities/server/cmd/webhook-sink/main.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
 | `capabilities/server/composition/tenant.go` | `capabilities/server/composition/tenant.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
@@ -772,11 +772,11 @@
 | `capabilities/server/internal/enterprise/model.go` | `capabilities/server/engine/organization/organization_model.go` | 同一enterprise权威内聚，必要生命周期/端点/属性与历史保留，见自举清单 |
 | `capabilities/server/internal/enterprise/profile.go` | `capabilities/server/engine/organization/organization_owner.go` | 同一enterprise权威内聚，必要生命周期/端点/属性与历史保留，见自举清单 |
 | `capabilities/server/internal/enterprise/relations.go` | `capabilities/server/engine/organization/organization_relations.go` | 同一enterprise权威内聚，必要生命周期/端点/属性与历史保留，见自举清单 |
-| `capabilities/server/internal/enterprise/uaf/data.go` | `外部可选工具（精确路径见platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
-| `capabilities/server/internal/enterprise/uaf/releases.go` | `外部可选工具（精确路径见platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
-| `capabilities/server/internal/enterprise/uaf/uaf.go` | `外部可选工具（精确路径见platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
-| `capabilities/server/internal/enterprise/uafgen/generate.go` | `外部可选工具（精确路径见platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
-| `capabilities/server/internal/enterprise/uafgen/profile.go` | `外部可选工具（精确路径见platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
+| `capabilities/server/internal/enterprise/uaf/data.go` | `外部可选工具（精确路径见archive/2026-10-28-platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
+| `capabilities/server/internal/enterprise/uaf/releases.go` | `外部可选工具（精确路径见archive/2026-10-28-platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
+| `capabilities/server/internal/enterprise/uaf/uaf.go` | `外部可选工具（精确路径见archive/2026-10-28-platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
+| `capabilities/server/internal/enterprise/uafgen/generate.go` | `外部可选工具（精确路径见archive/2026-10-28-platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
+| `capabilities/server/internal/enterprise/uafgen/profile.go` | `外部可选工具（精确路径见archive/2026-10-28-platform-self-hosting/design.md）` | 完整UAF/生成器外移；只计6个生产Go路径退出，不把生成JSON/XMI当手写LOC |
 | `capabilities/server/internal/records/access.go` | `capabilities/server/internal/records/access.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
 | `capabilities/server/internal/records/fields.go` | `capabilities/server/internal/records/fields.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |
 | `capabilities/server/internal/records/history.go` | `capabilities/server/internal/records/history.go` | 现有独立owner/纯基础包或隔离命令保留；本轮不为配额移动或删除 |

@@ -18,10 +18,11 @@
 | 平台能力 | [流程与持久工作](specs/platform/automation/spec.md) | Flow、Work、审批、等待、世代、取消与重试 |
 | 平台能力 | [数据接入与外部协同](specs/platform/integrations/spec.md) | Source、Dataset、Pipeline、Effect、确认、观测与设备协议 |
 | 平台能力 | [AI 与知识](specs/platform/ai-knowledge/spec.md) | 函数、智能体、预算、评估、知识来源与人工采纳 |
+| 平台能力 | [自举与系统运营](specs/platform/self-hosting/spec.md) | 动态系统范围、静态控制面边界、既有全量自举的冻结与历史保留 |
 | 产品体验 | [工作区与构建编辑](specs/experience/workspace/spec.md) | 单一工作区、应用入口、共享 UI、草稿会话和专业编辑器 |
 | 产品体验 | [专业可视化](specs/experience/professional-visualization/spec.md) | 地图、三维、图像标注的坐标、身份、资源与业务交互 |
 
-`platform-self-hosting` 正在收缩与交接：既有系统源码、发布和激活保留在 `system` 作用域，新动态自举已冻结；剩余运营边界与UAF外移见活动变更。它拟新增模块 [自举](changes/platform-self-hosting/specs/platform/self-hosting/spec.md)；归档时该模块进入上表。
+全量源码自举已冻结：既有系统源码、发布和激活保留在 `system` 作用域，新动态自举不再开放，边界由 [自举与系统运营](specs/platform/self-hosting/spec.md) 与 [组合、部署与运维](specs/runtime/deployment/spec.md) 规定。
 
 层是导航与归属分类，不是新的服务边界，也不要求每层独立部署。模块依赖允许跨层引用；代码依赖仍按 [Architecture](../docs/Architecture.md) 与现有边界检查执行。一次变化可以涉及多个既有模块，不为容纳一项变化另建模块。
 
