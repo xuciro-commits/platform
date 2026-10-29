@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"platformserver/kernel/transport"
 
 	"platformserver"
 	enterprise "platformserver/engine/organization"
@@ -22,7 +23,7 @@ func main() {
 	flag.Parse()
 	h := platformserver.NewHost(nil)
 	h.Handler() // registers the routes the contract describes
-	ts := platformserver.TypeScript(h.OpenAPI(nil, nil), platformserver.KernelModules(filepath.Dir(*out)))
+	ts := transport.TypeScript(h.OpenAPI(nil, nil), transport.KernelModules(filepath.Dir(*out)))
 	if err := os.WriteFile(*out, []byte(ts), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

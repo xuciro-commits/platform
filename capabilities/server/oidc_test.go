@@ -6,7 +6,8 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/go-jose/go-jose/v4"
+	jose "github.com/go-jose/go-jose/v4"
+
 	"net/http"
 	"net/http/httptest"
 	"os"

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	controlowner "platformserver/kernel/control"
 	"reflect"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func TestGeneratedDecisionStaysPrivate(t *testing.T) {
 	tn := stockTenant(t)
 	app := tn.app("stock").(*stock)
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	member, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
+	member, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
 	submission := func(key, schema, typ, id, payload string) *pb.Submission {
 		return &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: "stock",
 			IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id},
@@ -81,7 +82,7 @@ func TestPrivateProbeDoesNotChangeLiveOrParentState(t *testing.T) {
 				name = "parent/" + name
 			}
 			t.Run(name, func(t *testing.T) {
-				tn := composeTenant(t, "probe", []Seat{seatOf("ana", "stock:clerk")}, newStock("probe"))
+				tn := composeTenant(t, "probe", []platform.Seat{seatOf("ana", "stock:clerk")}, newStock("probe"))
 				at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
 				receipt := decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2}, at)
 				member := memberOf(t, tn, "ana")
@@ -154,7 +155,7 @@ func TestStagedDecisionRefusesOtherEffects(t *testing.T) {
 		if recover() == nil {
 			t.Fatal("unsupported effect escaped instead of failing closed")
 		}
-		if len(tn.events) != 0 || len(tn.notices.all) != 0 {
+		if len(tn.events) != 0 || len(noticeValues(tn)) != 0 {
 			t.Fatal("unsupported effect changed the live tenant")
 		}
 	}()

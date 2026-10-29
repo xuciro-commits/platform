@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 func TestObservationStateIntervalReadUsesPublishedSourceAndKeepsPointsOutsideTenantState(t *testing.T) {
 	tn, _, ref, at := observationTenant(t)
 	policy := platform.ObservationIntervals{ValueKind: "choice", When: platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("choice", "sample.value"), platform.ExprLiteralValue("choice", "down")}}, MaxGapSeconds: 10, LatePolicy: "correct", LatenessSeconds: 30, MaxIntervals: 16}
-	decide(t, tn, "builder", construction.ID, "build.observation.edit", construction.ObservationType, "OBSERVATION", map[string]any{"signal": "state", "unit": "state", "decision": nil, "intervals": policy}, at)
-	decide(t, tn, "builder", construction.ID, construction.SchemaObservation, construction.ObservationType, "OBSERVATION", map[string]any{}, at)
+	decide(t, tn, "builder", build.ID, "build.observation.edit", build.ObservationType, "OBSERVATION", map[string]any{"signal": "state", "unit": "state", "decision": nil, "intervals": policy}, at)
+	decide(t, tn, "builder", build.ID, build.SchemaObservation, build.ObservationType, "OBSERVATION", map[string]any{}, at)
 	calls := 0
 	tn.Outbound = func(request *http.Request, _ bool) (*http.Response, error) {
 		calls++
@@ -57,7 +57,7 @@ func TestObservationStateIntervalReadUsesPublishedSourceAndKeepsPointsOutsideTen
 	}
 	// Editing a declaration cannot change the source's fixed execution version.
 	policy.When = platform.ExprLiteralValue("boolean", false)
-	decide(t, tn, "builder", construction.ID, "build.observation.edit", construction.ObservationType, "OBSERVATION", map[string]any{"intervals": policy}, at)
+	decide(t, tn, "builder", build.ID, "build.observation.edit", build.ObservationType, "OBSERVATION", map[string]any{"intervals": policy}, at)
 	result, problem = tn.ReadObservation(context.Background(), memberOf(t, tn, "operator"), ref, q, at)
 	if problem != nil || len(result.Intervals.Intervals) != 1 {
 		t.Fatalf("unpublished analysis replaced the original source: %+v %v", result, problem)

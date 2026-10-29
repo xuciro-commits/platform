@@ -3,8 +3,9 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+
 	"slices"
 	"time"
 
@@ -33,21 +34,21 @@ type acceptedOperationClaim struct {
 
 func operationClaimDigest(r acceptedOperationClaim) (string, error) {
 	r.Digest = ""
-	return acceptance.Digest(r)
+	return platform.CanonicalDigest(r)
 }
 
 // Decode before journal admission without applying the K9 transition.
 func decodeOperationClaim(raw []byte) (acceptedOperationClaim, error) {
 	var saved acceptedOperationClaim
-	if _, err := platform.DecodeValue(raw, acceptance.MaxResultBytes); err != nil {
+	if _, err := platform.DecodeValue(raw, platform.AcceptedResultMaxBytes); err != nil {
 		return saved, err
 	}
 	if err := json.Unmarshal(raw, &saved); err != nil {
 		return saved, err
 	}
 	digest, err := operationClaimDigest(saved)
-	hash, _ := acceptance.Digest([]any{saved.Before, saved.PriorWork})
-	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != resultformat.OperationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
+	hash, _ := platform.CanonicalDigest([]any{saved.Before, saved.PriorWork})
+	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != controlowner.PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != acceptedformat.OperationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
 		return saved, fmt.Errorf("invalid operation ownership result")
 	}
 	if saved.After.Generation == 0 || saved.Key != fmt.Sprintf("operation-claim:%s:%d", saved.Before.ID, saved.After.Generation) {
@@ -71,8 +72,8 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 		return saved, fmt.Errorf("operation claim has no accepted intent")
 	}
 	current := t.outbound[i]
-	same, _ := acceptance.Digest(current.Effect)
-	expected, _ := acceptance.Digest(saved.Before)
+	same, _ := platform.CanonicalDigest(current.Effect)
+	expected, _ := platform.CanonicalDigest(saved.Before)
 	t.opsMu.Unlock()
 	if same != expected {
 		return saved, fmt.Errorf("operation claim predecessor differs")
@@ -82,8 +83,8 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 	if old, err := works.Get(saved.Before.ID); err == nil {
 		prior, _ = protojson.Marshal(old)
 	}
-	priorHash, _ := acceptance.Digest(prior)
-	savedHash, _ := acceptance.Digest(saved.PriorWork)
+	priorHash, _ := platform.CanonicalDigest(prior)
+	savedHash, _ := platform.CanonicalDigest(saved.PriorWork)
 	if priorHash != savedHash {
 		return saved, fmt.Errorf("operation K9 predecessor differs")
 	}
@@ -98,8 +99,8 @@ func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error)
 	}
 	after := saved.Before
 	after.Generation = generation
-	actual, _ := acceptance.Digest(after)
-	frozen, _ := acceptance.Digest(saved.After)
+	actual, _ := platform.CanonicalDigest(after)
+	frozen, _ := platform.CanonicalDigest(saved.After)
 	var work pb.Work
 	if actual != frozen || protojson.Unmarshal(saved.Work, &work) != nil {
 		return saved, fmt.Errorf("invalid operation claim transition")
@@ -150,12 +151,12 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 	rawWork, _ := protojson.Marshal(work)
 	after := before
 	after.Generation = generation
-	r := acceptedOperationClaim{Version: 1, Kind: "operation-claim", Tenant: t.ID, App: PlatformApp, At: now.UTC(), Key: fmt.Sprintf("operation-claim:%s:%d", id, generation), Before: before, After: after, PriorWork: prior, Work: rawWork}
-	r.RequestHash, _ = acceptance.Digest([]any{before, prior})
+	r := acceptedOperationClaim{Version: 1, Kind: "operation-claim", Tenant: t.ID, App: controlowner.PlatformApp, At: now.UTC(), Key: fmt.Sprintf("operation-claim:%s:%d", id, generation), Before: before, After: after, PriorWork: prior, Work: rawWork}
+	r.RequestHash, _ = platform.CanonicalDigest([]any{before, prior})
 	r.Digest, _ = operationClaimDigest(r)
 	raw, _ := json.Marshal(r)
-	principal, _ := json.Marshal(t.automation(PlatformApp, false).Member)
-	saved, err := t.acceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, r.Key, r.RequestHash)
+	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
+	saved, err := t.acceptResult(Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, r.Key, r.RequestHash)
 	if err != nil {
 		return platform.Effect{}, false
 	}
@@ -182,12 +183,12 @@ func (t *Tenant) operationDispatches(now time.Time) []func() {
 	ids := []string{}
 	active := 0
 	for _, x := range t.outbound {
-		if x.Endpoint == resultformat.OperationEndpoint && x.sending {
+		if x.Endpoint == acceptedformat.OperationEndpoint && x.sending {
 			active++
 		}
 	}
 	for _, x := range t.outbound {
-		if x.Endpoint == resultformat.OperationEndpoint && !x.sending && !settled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
+		if x.Endpoint == acceptedformat.OperationEndpoint && !x.sending && !settled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
 			ids = append(ids, x.ID)
 		}
 	}
@@ -201,7 +202,7 @@ func (t *Tenant) operationDispatches(now time.Time) []func() {
 	return runs
 }
 func (t *Tenant) prepareOperationFinish(before platform.Effect, out platform.Outcome) (platform.Works, json.RawMessage, json.RawMessage, error) {
-	if before.Endpoint != resultformat.OperationEndpoint {
+	if before.Endpoint != acceptedformat.OperationEndpoint {
 		return nil, nil, nil, nil
 	}
 	if out.Generation != before.Generation || !t.operationCurrent(before.ID, out.Generation) {

@@ -2,7 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"testing"
 	"time"
 
@@ -53,7 +53,7 @@ func TestRecordedInputStagesInEveryStorageMode(t *testing.T) {
 			t.Run(mode+"/"+map[bool]string{false: "accept", true: "refuse"}[refused], func(t *testing.T) {
 				calls := 0
 				owner := &runtimeInputOwner{notes: newNotes("input-runtime", "a"), decisions: &calls, refuse: refused}
-				tn := composeTenant(t, "input-runtime", []Seat{seatOf("ana", "a:writer")}, owner)
+				tn := composeTenant(t, "input-runtime", []platform.Seat{seatOf("ana", "a:writer")}, owner)
 				member := memberOf(t, tn, "ana")
 				at := time.Date(2026, 10, 11, 21, 0, 0, 0, time.UTC)
 				var entries []Entry
@@ -96,7 +96,7 @@ func TestRecordedInputStagesInEveryStorageMode(t *testing.T) {
 						t.Fatalf("input accepted %d journal entries", len(entries))
 					}
 					freshOwner := &runtimeInputOwner{notes: newNotes(tn.ID, "a"), decisions: &calls, blocked: true}
-					fresh := composeTenant(t, tn.ID, []Seat{seatOf("ana", "a:writer")}, freshOwner)
+					fresh := composeTenant(t, tn.ID, []platform.Seat{seatOf("ana", "a:writer")}, freshOwner)
 					if err := fresh.Replay(entries); err != nil {
 						t.Fatal(err)
 					}
@@ -120,7 +120,7 @@ func TestRecordedInputRecordFailureLeavesPrivateState(t *testing.T) {
 		defer func() { failure = recover() }()
 		_, _ = tn.Input(memberOf(t, tn, "ana"), "a-feed", []byte("private"), time.Now())
 	}()
-	if failure == nil || len(owner.texts) != 0 || len(tn.Audit()) != 0 || len(tn.committed.inputs) != 0 {
+	if failure == nil || len(owner.texts) != 0 || len(tn.Audit()) != 0 || len(tn.committed.AllInputs()) != 0 {
 		t.Fatal("failed Record append exposed private state or swallowed its fatal failure")
 	}
 }
@@ -151,10 +151,10 @@ func TestRecordedInputCannotDropAnOperationCancellation(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			calls := 0
 			owner := &runtimeInputOwner{notes: newNotes("input-cancel", "a"), decisions: &calls, operation: "input-cancel:operation"}
-			tn := composeTenant(t, "input-cancel", []Seat{seatOf("ana", "a:writer")}, owner)
+			tn := composeTenant(t, "input-cancel", []platform.Seat{seatOf("ana", "a:writer")}, owner)
 			member := memberOf(t, tn, "ana")
 			owner.cancel = &pb.ChangeRecord{Submission: submission(tn, member, "a", "a.note", "a.topic", "feed", "")}
-			tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: owner.operation, Endpoint: resultformat.OperationEndpoint,
+			tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: owner.operation, Endpoint: acceptedformat.OperationEndpoint,
 				State: "pending", Body: string(platform.Raw(operationBinding{Member: member.ID}))}})
 			if mode == "record" {
 				tn.Record = func(Entry) { t.Fatal("unsupported cancellation wrote a result") }
@@ -166,7 +166,7 @@ func TestRecordedInputCannotDropAnOperationCancellation(t *testing.T) {
 			}
 			_, refusal := tn.Input(member, "a-feed", []byte("private"), time.Now())
 			if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT || calls != 1 ||
-				len(owner.texts) != 0 || len(tn.committed.inputs) != 0 || len(tn.Audit()) != 0 || tn.outbound[0].State != "pending" {
+				len(owner.texts) != 0 || len(tn.committed.AllInputs()) != 0 || len(tn.Audit()) != 0 || tn.outbound[0].State != "pending" {
 				t.Fatalf("input dropped an unstored cancellation: %v, decisions=%d", refusal, calls)
 			}
 		})
@@ -182,7 +182,7 @@ func (unpublishedInputRuntime) Publish(platform.Caller, *pb.ChangeRecord) {}
 func TestRecordedInputCannotDropAnUnpublishedDecision(t *testing.T) {
 	calls := 0
 	owner := &runtimeInputOwner{notes: newNotes("input-unpublished", "a"), decisions: &calls}
-	tn := composeTenant(t, "input-unpublished", []Seat{seatOf("ana", "a:writer")}, owner)
+	tn := composeTenant(t, "input-unpublished", []platform.Seat{seatOf("ana", "a:writer")}, owner)
 	member := memberOf(t, tn, "ana")
 	at := time.Date(2026, 10, 11, 22, 0, 0, 0, time.UTC)
 	draft := tn.newStagedDecision()
@@ -193,7 +193,7 @@ func TestRecordedInputCannotDropAnUnpublishedDecision(t *testing.T) {
 	}
 	// The writer must not silently omit an actual unreported private receipt.
 	if _, err := draft.inputResult("a", "a-feed", member, []byte("private"), receipt, at); err == nil ||
-		len(owner.AcceptedLedger().RecordsFor(tn.ID)) != 0 || len(tn.committed.inputs) != 0 {
+		len(owner.AcceptedLedger().RecordsFor(tn.ID)) != 0 || len(tn.committed.AllInputs()) != 0 {
 		t.Fatalf("input result dropped an unpublished private decision: %v", err)
 	}
 }

@@ -16,7 +16,7 @@ type studioReadOwner struct{ *notes }
 func (a studioReadOwner) Read(platform.Caller, string) (any, *kernel.Error) { return a.id, nil }
 
 func TestApplicationStudioScopedReadsKeepOriginalOwnerAuthorization(t *testing.T) {
-	tn := composeTenant(t, "studio-reads", []Seat{seatOf("both", "a:writer", "b:writer"), seatOf("onlya", "a:writer")}, studioReadOwner{newNotes("studio-reads", "a")}, studioReadOwner{newNotes("studio-reads", "b")})
+	tn := composeTenant(t, "studio-reads", []platform.Seat{seatOf("both", "a:writer", "b:writer"), seatOf("onlya", "a:writer")}, studioReadOwner{newNotes("studio-reads", "a")}, studioReadOwner{newNotes("studio-reads", "b")})
 	handler := NewHost(Tokens(map[string]string{"both": "both", "onlya": "onlya"}), tn).Handler()
 	for _, tc := range []struct {
 		app, member, answer string
@@ -43,7 +43,7 @@ func (a studioEmptyOwner) Manifest() platform.Manifest {
 
 func TestApplicationStudioRetainsEmptyNativeApplicationIdentity(t *testing.T) {
 	owner := studioEmptyOwner{&notes{id: "empty", ledger: platform.NewLedger("empty-studio", "empty", platform.NewCatalog()), texts: map[string]string{}}}
-	tn := composeTenant(t, "empty-studio", []Seat{seatOf("reader", "empty:reader"), seatOf("other", "platform:admin")}, owner)
+	tn := composeTenant(t, "empty-studio", []platform.Seat{seatOf("reader", "empty:reader"), seatOf("other", "platform:admin")}, owner)
 	ref := platform.AssetRef{App: "empty", Kind: platform.AssetApp, Name: "empty"}
 	definitions := tn.Definitions(memberOf(t, tn, "reader"))
 	i := slices.IndexFunc(definitions, func(definition platform.Definition) bool { return definition.Ref == ref })

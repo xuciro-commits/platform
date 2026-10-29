@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
-	"platformserver/internal/records"
+
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 	"strings"
@@ -20,21 +20,21 @@ import (
 func TestJointDraftsDeliverNewObjectsAndRelationship(t *testing.T) {
 	tn := builderTenant(t, "joint-relationship")
 	member := memberOf(t, tn, "builder")
-	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "PARENT", map[string]any{
-		"name": "jointparent", "title": "Joint parent", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}},
+	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "PARENT", map[string]any{
+		"name": "jointparent", "title": "Joint parent", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}},
 	}, txnAt)
-	decide(t, tn, "builder", construction.ID, construction.ObjectType+".create", construction.ObjectType, "CHILD", map[string]any{
-		"name": "jointchild", "title": "Joint child", "fields": []construction.Field{
+	decide(t, tn, "builder", build.ID, build.ObjectType+".create", build.ObjectType, "CHILD", map[string]any{
+		"name": "jointchild", "title": "Joint child", "fields": []build.Field{
 			{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.jointparent", Required: true},
 			{Name: "note", Title: "Note", Type: "text"},
 		},
 	}, txnAt)
-	decide(t, tn, "builder", construction.ID, construction.LinkTypeType+".create", construction.LinkTypeType, "LINK", map[string]any{
+	decide(t, tn, "builder", build.ID, build.LinkTypeType+".create", build.LinkTypeType, "LINK", map[string]any{
 		"name": "jointchildren", "title": "Joint children", "description": "Jointly delivered child references",
 		"parent": "build.jointparent", "child": "build.jointchild", "via": "parent", "forward": "children", "reverse": "parent",
 		"cardinality": "one-to-one", "deletePolicy": "restrict-active",
 	}, txnAt)
-	selection := []construction.JointDraftRef{
+	selection := []build.JointDraftRef{
 		{Kind: platform.AssetObject, ID: "PARENT"},
 		{Kind: platform.AssetObject, ID: "CHILD"},
 		{Kind: platform.AssetLinkType, ID: "LINK"},
@@ -51,11 +51,11 @@ func TestJointDraftsDeliverNewObjectsAndRelationship(t *testing.T) {
 	if alone, err := tn.PreviewRelease(member, platform.AssetLinkType, "LINK"); err == nil && alone.Diagnostic == "" {
 		t.Fatal("relationship could be delivered without its unpublished objects")
 	}
-	decide(t, tn, "builder", construction.ID, construction.LinkTypeType+".edit", construction.LinkTypeType, "LINK", map[string]any{"via": "note"}, txnAt)
+	decide(t, tn, "builder", build.ID, build.LinkTypeType+".edit", build.LinkTypeType, "LINK", map[string]any{"via": "note"}, txnAt)
 	if invalid, err := tn.PreviewReleaseDrafts(member, selection); err == nil && invalid.Diagnostic == "" {
 		t.Fatal("joint candidate accepted a text field as its relationship reference")
 	}
-	decide(t, tn, "builder", construction.ID, construction.LinkTypeType+".edit", construction.LinkTypeType, "LINK", map[string]any{"via": "parent"}, txnAt)
+	decide(t, tn, "builder", build.ID, build.LinkTypeType+".edit", build.LinkTypeType, "LINK", map[string]any{"via": "parent"}, txnAt)
 	saved, err := tn.SaveReleaseCandidates(member, selection, preview.CandidateID, "save-joint-relationship", txnAt)
 	if err != nil {
 		t.Fatal(err)
@@ -63,12 +63,12 @@ func TestJointDraftsDeliverNewObjectsAndRelationship(t *testing.T) {
 	if _, err := tn.ActivateRelease(member, saved, "activate-joint-relationship", txnAt); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, tn, "user", construction.ID, "build.jointparent.create", "build.jointparent", "P", map[string]any{"note": "Parent"}, txnAt)
-	decide(t, tn, "user", construction.ID, "build.jointchild.create", "build.jointchild", "C", map[string]any{"parent": "P"}, txnAt)
-	if got := refuse(t, tn, "user", construction.ID, "build.jointchild.create", "build.jointchild", "DUPLICATE", map[string]any{"parent": "P"}, txnAt); got == "ok" {
+	decide(t, tn, "user", build.ID, "build.jointparent.create", "build.jointparent", "P", map[string]any{"note": "Parent"}, txnAt)
+	decide(t, tn, "user", build.ID, "build.jointchild.create", "build.jointchild", "C", map[string]any{"parent": "P"}, txnAt)
+	if got := refuse(t, tn, "user", build.ID, "build.jointchild.create", "build.jointchild", "DUPLICATE", map[string]any{"parent": "P"}, txnAt); got == "ok" {
 		t.Fatal("joint publication lost the relationship's one-to-one constraint")
 	}
-	if got := refuse(t, tn, "user", construction.ID, "build.jointparent.archive", "build.jointparent", "P", map[string]any{}, txnAt); got == "ok" {
+	if got := refuse(t, tn, "user", build.ID, "build.jointparent.archive", "build.jointparent", "P", map[string]any{}, txnAt); got == "ok" {
 		t.Fatal("joint publication lost the relationship's active-child protection")
 	}
 }
@@ -76,22 +76,22 @@ func TestJointDraftsDeliverNewObjectsAndRelationship(t *testing.T) {
 func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	t.Run("incremental constraints and isolated reverse indexes", func(t *testing.T) {
 		tn := builderTenant(t, "local-reference-index")
-		parent := publishObject(t, tn, "builder", "parent", map[string]any{"name": "parent", "title": "Parent", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, txnAt)
-		child := publishObject(t, tn, "builder", "child", map[string]any{"name": "child", "title": "Child", "fields": []construction.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: parent}}}, txnAt)
-		decide(t, tn, "builder", construction.ID, construction.LinkTypeType+".create", construction.LinkTypeType, "link", map[string]any{
+		parent := publishObject(t, tn, "builder", "parent", map[string]any{"name": "parent", "title": "Parent", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, txnAt)
+		child := publishObject(t, tn, "builder", "child", map[string]any{"name": "child", "title": "Child", "fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: parent}}}, txnAt)
+		decide(t, tn, "builder", build.ID, build.LinkTypeType+".create", build.LinkTypeType, "link", map[string]any{
 			"name": "children", "title": "Children", "description": "Constrained references", "parent": parent, "child": child, "via": "parent", "forward": "children", "reverse": "parent", "cardinality": "one-to-one", "deletePolicy": "restrict-active",
 		}, txnAt)
-		decide(t, tn, "builder", construction.ID, construction.SchemaLinkType, construction.LinkTypeType, "link", map[string]any{}, txnAt)
+		decide(t, tn, "builder", build.ID, build.SchemaLinkType, build.LinkTypeType, "link", map[string]any{}, txnAt)
 		for _, id := range []string{"P1", "P2", "P3", "P4"} {
-			decide(t, tn, "user", construction.ID, parent+".create", parent, id, map[string]any{"note": id}, txnAt)
+			decide(t, tn, "user", build.ID, parent+".create", parent, id, map[string]any{"note": id}, txnAt)
 		}
 		for i, id := range []string{"C1", "C2"} {
-			decide(t, tn, "user", construction.ID, child+".create", child, id, map[string]any{"parent": fmt.Sprintf("P%d", i+1)}, txnAt)
+			decide(t, tn, "user", build.ID, child+".create", child, id, map[string]any{"parent": fmt.Sprintf("P%d", i+1)}, txnAt)
 		}
 		et := tn.records.types[child]
 		field, _ := et.info.Field("parent")
 		initial := et.referenceIndex(field)
-		decide(t, tn, "user", construction.ID, parent+".edit", parent, "P4", map[string]any{"note": "Unrelated update"}, txnAt)
+		decide(t, tn, "user", build.ID, parent+".edit", parent, "P4", map[string]any{"note": "Unrelated update"}, txnAt)
 		et = tn.records.types[child]
 		if et.referenceIndex(field) != initial {
 			t.Fatal("unrelated write invalidated the reference index")
@@ -118,27 +118,27 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		if err := tn.records.promoteRecords(bulk); err == nil {
 			t.Fatal("bulk schema image skipped complete relation admission")
 		}
-		if got := refuse(t, tn, "user", construction.ID, child+".edit", child, "C2", map[string]any{"parent": "P1"}, txnAt); got == "ok" {
+		if got := refuse(t, tn, "user", build.ID, child+".edit", child, "C2", map[string]any{"parent": "P1"}, txnAt); got == "ok" {
 			t.Fatal("incremental uniqueness accepted a duplicate")
 		}
-		if got := refuse(t, tn, "user", construction.ID, parent+".archive", parent, "P2", map[string]any{}, txnAt); got == "ok" {
+		if got := refuse(t, tn, "user", build.ID, parent+".archive", parent, "P2", map[string]any{}, txnAt); got == "ok" {
 			t.Fatal("reverse index missed an active child")
 		}
-		decide(t, tn, "user", construction.ID, child+".archive", child, "C2", map[string]any{}, txnAt)
-		decide(t, tn, "user", construction.ID, parent+".archive", parent, "P2", map[string]any{}, txnAt)
-		if got := refuse(t, tn, "user", construction.ID, child+".create", child, "C3", map[string]any{"parent": "P2"}, txnAt); got == "ok" {
+		decide(t, tn, "user", build.ID, child+".archive", child, "C2", map[string]any{}, txnAt)
+		decide(t, tn, "user", build.ID, parent+".archive", parent, "P2", map[string]any{}, txnAt)
+		if got := refuse(t, tn, "user", build.ID, child+".create", child, "C3", map[string]any{"parent": "P2"}, txnAt); got == "ok" {
 			t.Fatal("archiving changed the original uniqueness semantics")
 		}
-		decide(t, tn, "user", construction.ID, parent+".archive", parent, "P3", map[string]any{}, txnAt)
-		if got := refuse(t, tn, "user", construction.ID, child+".create", child, "C3", map[string]any{"parent": "P3"}, txnAt); got == "ok" {
+		decide(t, tn, "user", build.ID, parent+".archive", parent, "P3", map[string]any{}, txnAt)
+		if got := refuse(t, tn, "user", build.ID, child+".create", child, "C3", map[string]any{"parent": "P3"}, txnAt); got == "ok" {
 			t.Fatal("an active child was attached to an archived parent")
 		}
-		decide(t, tn, "user", construction.ID, child+".edit", child, "C1", map[string]any{"parent": "P4"}, txnAt)
+		decide(t, tn, "user", build.ID, child+".edit", child, "C1", map[string]any{"parent": "P4"}, txnAt)
 		et = tn.records.types[child]
 		if et.referenceIndex(field).Get("P1").IDs.Len() != 0 || et.referenceIndex(field).Get("P4").IDs.Len() != 1 {
 			t.Fatal("changing a reference left the old key behind")
 		}
-		decide(t, tn, "user", construction.ID, child+".edit", child, "C1", map[string]any{"parent": ""}, txnAt)
+		decide(t, tn, "user", build.ID, child+".edit", child, "C1", map[string]any{"parent": ""}, txnAt)
 		page, refusal := tn.Records(memberOf(t, tn, "user"), child, platform.Query{Domain: platform.Raw([]any{[]any{"parent", "=", ""}})}, txnAt)
 		if refusal != nil || page.Total != 1 {
 			t.Fatalf("empty reference filtering: total=%d %v", page.Total, refusal)
@@ -148,13 +148,13 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		if err := tn.records.install(before.info); err != nil {
 			t.Fatal(err)
 		}
-		if next := tn.records.types[child]; next == before || next.referenceIndexes != nil || !reflect.DeepEqual(next.rows.Get("C1").Value.Interface(), before.rows.Get("C1").Value.Interface()) {
+		if next := tn.records.types[child]; next == before || referenceIndexCount(next) != 0 || !reflect.DeepEqual(next.rows.Get("C1").Value.Interface(), before.rows.Get("C1").Value.Interface()) {
 			t.Fatal("schema replacement retained a stale index or changed record facts")
 		}
 	})
 	const tenant = "link-type-state"
 	compose := func() *Tenant {
-		tn, err := NewTenant(tenant, NewConsole(tenant, Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder}}}, Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{construction.ID: construction.User}}}, Seat{Subjects: []string{"restricted"}, Member: platform.Member{ID: "restricted", Roles: map[string]string{construction.ID: "guest"}}}), build.New(tenant))
+		tn, err := NewTenant(tenant, newConsole(tenant, platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}, platform.Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: build.User}}}, platform.Seat{Subjects: []string{"restricted"}, Member: platform.Member{ID: "restricted", Roles: map[string]string{build.ID: "guest"}}}), build.New(tenant))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +174,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		return e.Body, nil
 	}
 	submit := func(m platform.Member, typ, id, verb string, payload any) *kernel.Error {
-		_, err := tn.Submit(m, submission(tn, m, construction.ID, typ+"."+verb, typ, id, payload), at)
+		_, err := tn.Submit(m, submission(tn, m, build.ID, typ+"."+verb, typ, id, payload), at)
 		return err
 	}
 	must := func(typ, id, verb string, payload any) {
@@ -184,12 +184,12 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"parent", "child"} {
-		fields := []construction.Field{{Name: "note", Title: "Note", Type: "text"}}
+		fields := []build.Field{{Name: "note", Title: "Note", Type: "text"}}
 		if name == "child" {
-			fields = append(fields, construction.Field{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.parent", Required: true}, construction.Field{Name: "secretparent", Title: "Secret parent", Type: "reference", Ref: "build.parent", Read: []string{construction.Builder}})
+			fields = append(fields, build.Field{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.parent", Required: true}, build.Field{Name: "secretparent", Title: "Secret parent", Type: "reference", Ref: "build.parent", Read: []string{build.Builder}})
 		}
-		must(construction.ObjectType, name, "create", map[string]any{"name": name, "title": name, "fields": fields, "access": []construction.Access{{Role: construction.User, Read: "all", Create: true, Edit: true, Archive: true}, {Role: "guest", Read: map[bool]string{true: "own", false: "all"}[name == "parent"]}}})
-		must(construction.ObjectType, name, "publish", map[string]any{})
+		must(build.ObjectType, name, "create", map[string]any{"name": name, "title": name, "fields": fields, "access": []build.Access{{Role: build.User, Read: "all", Create: true, Edit: true, Archive: true}, {Role: "guest", Read: map[bool]string{true: "own", false: "all"}[name == "parent"]}}})
+		must(build.ObjectType, name, "publish", map[string]any{})
 	}
 	for _, id := range []string{"A", "B"} {
 		must("build.parent", id, "create", map[string]any{"note": id})
@@ -198,17 +198,17 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		}
 	}
 	link := map[string]any{"name": "children", "title": "Children", "description": "Reference-backed child records", "parent": "build.parent", "child": "build.child", "via": "parent", "forward": "children", "reverse": "parent"}
-	must(construction.LinkTypeType, "link", "create", link)
-	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetLinkType, Name: "children"}
+	must(build.LinkTypeType, "link", "create", link)
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetLinkType, Name: "children"}
 	binding := platform.AssetBinding{Ref: ref, SourceVersion: "1.link-1"}
 	if _, err := tn.TraverseLink(reader, binding, "forward", "A", platform.Query{}, at); err == nil {
 		t.Fatal("draft was traversable")
 	}
-	if err := submit(reader, construction.LinkTypeType, "link", "publish", map[string]any{}); err == nil {
+	if err := submit(reader, build.LinkTypeType, "link", "publish", map[string]any{}); err == nil {
 		t.Fatal("reader published link")
 	}
 	fail = true
-	if err := submit(builder, construction.LinkTypeType, "link", "publish", map[string]any{}); err == nil {
+	if err := submit(builder, build.LinkTypeType, "link", "publish", map[string]any{}); err == nil {
 		t.Fatal("failed append accepted")
 	}
 	fail = false
@@ -222,7 +222,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	if _, err = tn.SaveReleaseCandidate(builder, platform.AssetLinkType, "link", preview.CandidateID, "save", at); err != nil {
 		t.Fatal(err)
 	}
-	must(construction.LinkTypeType, "link", "edit", map[string]any{"title": "Later draft title", "forward": "newchildren"})
+	must(build.LinkTypeType, "link", "edit", map[string]any{"title": "Later draft title", "forward": "newchildren"})
 	if _, err = tn.ActivateRelease(builder, preview.CandidateID, "activate", at); err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert(restored)
-	must(construction.LinkTypeType, "link", "publish", map[string]any{})
+	must(build.LinkTypeType, "link", "publish", map[string]any{})
 	for _, d := range tn.Definitions(reader) {
 		if d.Ref == ref {
 			if d.LinkType.Forward != "newchildren" || d.LinkVersion("1.link-1").LinkType.Forward != "children" {
@@ -300,8 +300,8 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 			}
 		}
 	}
-	must(construction.LinkTypeType, "private", "create", map[string]any{"name": "privatechildren", "title": "Private children", "description": "Hidden reference", "parent": "build.parent", "child": "build.child", "via": "secretparent", "forward": "privatechildren", "reverse": "privateparent"})
-	must(construction.LinkTypeType, "private", "publish", map[string]any{})
+	must(build.LinkTypeType, "private", "create", map[string]any{"name": "privatechildren", "title": "Private children", "description": "Hidden reference", "parent": "build.parent", "child": "build.child", "via": "secretparent", "forward": "privatechildren", "reverse": "privateparent"})
+	must(build.LinkTypeType, "private", "publish", map[string]any{})
 	for _, d := range tn.Definitions(reader) {
 		if d.LinkType != nil && d.Ref.Name == "privatechildren" {
 			t.Fatal("hidden field relation discovered")
@@ -312,17 +312,17 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	if _, problem := tn.TraverseLink(reader, denied, "forward", "A", platform.Query{}, at); problem == nil {
 		t.Fatal("hidden field relation traversed")
 	}
-	must(construction.ObjectType, "child", "edit", map[string]any{"fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}})
-	if problem := submit(builder, construction.ObjectType, "child", "publish", map[string]any{}); problem == nil {
+	must(build.ObjectType, "child", "edit", map[string]any{"fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}})
+	if problem := submit(builder, build.ObjectType, "child", "publish", map[string]any{}); problem == nil {
 		t.Fatal("object publication removed retained link reference")
 	}
-	if problem := submit(builder, construction.LinkTypeType, "link", "archive", map[string]any{}); problem == nil {
+	if problem := submit(builder, build.LinkTypeType, "link", "archive", map[string]any{}); problem == nil {
 		t.Fatal("published link was archived")
 	}
-	document := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"table", "text"}}, "table": {Kind: "widget", Section: "table"}, "text": {Kind: "widget", Section: "text"}}, Variables: map[string]platform.PageVariable{"parent": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "table"}}, "children": {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "related"}}}, Queries: map[string]platform.PageQuery{"related": {Object: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: "build.child"}, Query: &binding, Direction: "forward", For: &platform.PageValue{Variable: "parent"}, Limit: 1}}}
-	must(construction.PageType, "linkpage", "create", map[string]any{"name": "linked", "title": "Linked page", "object": "build.parent", "sections": []build.Section{{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"note"}}, {ID: "text", Widget: "text", ConfigVersion: 1, Text: "Linked read"}}, "document": document})
-	must(construction.PageType, "linkpage", "publish", map[string]any{})
-	candidate, problem := tn.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "linked"}})
+	document := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"table", "text"}}, "table": {Kind: "widget", Section: "table"}, "text": {Kind: "widget", Section: "text"}}, Variables: map[string]platform.PageVariable{"parent": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "table"}}, "children": {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "related"}}}, Queries: map[string]platform.PageQuery{"related": {Object: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.child"}, Query: &binding, Direction: "forward", For: &platform.PageValue{Variable: "parent"}, Limit: 1}}}
+	must(build.PageType, "linkpage", "create", map[string]any{"name": "linked", "title": "Linked page", "object": "build.parent", "sections": []build.Section{{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"note"}}, {ID: "text", Widget: "text", ConfigVersion: 1, Text: "Linked read"}}, "document": document})
+	must(build.PageType, "linkpage", "publish", map[string]any{})
+	candidate, problem := tn.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "linked"}})
 	if problem != nil {
 		t.Fatal(problem)
 	}
@@ -340,14 +340,14 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	}
 	document.Queries["private"] = platform.PageQuery{Object: document.Queries["related"].Object, Query: &denied, Direction: "forward", For: &platform.PageValue{Variable: "parent"}, Limit: 1}
 	document.Variables["private"] = platform.PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "private"}}
-	must(construction.PageType, "linkpage", "edit", map[string]any{"document": document})
-	must(construction.PageType, "linkpage", "publish", map[string]any{})
+	must(build.PageType, "linkpage", "edit", map[string]any{"document": document})
+	must(build.PageType, "linkpage", "publish", map[string]any{})
 	for _, d := range tn.Definitions(reader) {
 		if d.Page != nil && d.Ref.Name == "linked" {
-			if _, ok := d.Page.Document.Queries["private"]; ok {
+			if _, ok := d.Page.InputSchema.Queries["private"]; ok {
 				t.Fatal("page disclosed hidden relation source")
 			}
-			if d.Page.Document.Variables["private"].Mode != "" {
+			if d.Page.InputSchema.Variables["private"].Mode != "" {
 				t.Fatal("hidden relationship output survived")
 			}
 		}

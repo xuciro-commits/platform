@@ -16,8 +16,8 @@ const bytes = (value: string) => new TextEncoder().encode(value).length;
 const valueType = (value: unknown, contract: Contract) => isNumber(value)?"number":isStringSet(value)?"string-set":isDecimal(value,contract.decimal.maxBytes)?"decimal":typeof value === "boolean" ? "boolean"
   : typeof value === "string" && bytes(value) <= contract.maxStringBytes ? "string" : "";
 
-/** Finite presentation graph. The supplied contract is the generated Go
- * manifest; explicit dependencies are the only edges. No expression text.
+/** Finite presentation graph. The supplied contract is the Web-owned
+ * manifest; explicit dependencies are the only edges.
  */
 export function compileVariables(variables: Variables, contract: Contract) {
   const issues: VariableIssue[] = [], order: string[] = [], visiting = new Set<string>(), visited = new Set<string>();

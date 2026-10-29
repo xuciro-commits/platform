@@ -15,12 +15,14 @@ import (
 const UsageKept = 5000
 
 type State struct {
-	Providers    []platform.AIProvider             `json:"providers"`
-	Models       []platform.AIModel                `json:"models"`
-	Limits       map[string]platform.AILimit       `json:"limits,omitempty"`
-	Usage        []platform.AIUsage                `json:"usage"`
-	Daily        map[string]int                    `json:"daily,omitempty"`
-	Reservations map[string]platform.AIReservation `json:"reservations,omitempty"`
+	TrainingPolicies   map[string]platform.AITrainingPolicy    `json:"trainingPolicies,omitempty"`
+	TrainingCandidates map[string]platform.AITrainingCandidate `json:"trainingCandidates,omitempty"`
+	Providers          []platform.AIProvider                   `json:"providers"`
+	Models             []platform.AIModel                      `json:"models"`
+	Limits             map[string]platform.AILimit             `json:"limits,omitempty"`
+	Usage              []platform.AIUsage                      `json:"usage"`
+	Daily              map[string]int                          `json:"daily,omitempty"`
+	Reservations       map[string]platform.AIReservation       `json:"reservations,omitempty"`
 }
 
 // Decode validates the original saved format without accepting unknown fields

@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -10,12 +10,13 @@ import (
 	"net/http"
 	"os"
 	"platformserver/journal"
+
 	"strings"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
+
 	"platformserver/apps/core"
 	"platformserver/platform"
 )
@@ -24,12 +25,12 @@ func TestIntegratorSeesOnlyIntegrationDeliveryMetadata(t *testing.T) {
 	now := time.Now()
 	tn := composeTenant(t, "metadata", nil, core.New("metadata"))
 	tn.outbound = []*effect{
-		{Effect: platform.Effect{ID: "own", App: construction.ID, Endpoint: "connection:c", Event: "writeback:wrong", Body: "private"}},
-		{Effect: platform.Effect{ID: "allowed", App: construction.ID, Endpoint: "connection:c", Event: "writeback/orders", Body: "private-request", Error: "private-answer", State: "retrying"}},
-		{Effect: platform.Effect{ID: "book", App: construction.ID, Endpoint: construction.BooksEndpoint, Event: "journal/receipt.post", Body: "private-journal", Target: "private-record", Error: "No fiscal period is open private-period", State: "retrying"}},
+		{Effect: platform.Effect{ID: "own", App: build.ID, Endpoint: "connection:c", Event: "writeback:wrong", Body: "private"}},
+		{Effect: platform.Effect{ID: "allowed", App: build.ID, Endpoint: "connection:c", Event: "writeback/orders", Body: "private-request", Error: "private-answer", State: "retrying"}},
+		{Effect: platform.Effect{ID: "book", App: build.ID, Endpoint: build.BooksEndpoint, Event: "journal/receipt.post", Body: "private-journal", Target: "private-record", Error: "No fiscal period is open private-period", State: "retrying"}},
 		{Effect: platform.Effect{ID: "other", App: "erp", Endpoint: "connection:c", Event: "writeback/orders", Body: "private-other"}},
 	}
-	member := platform.Member{ID: "integrator", Tenant: tn.ID, Roles: map[string]string{construction.ID: construction.Integrator}}
+	member := platform.Member{ID: "integrator", Tenant: tn.ID, Roles: map[string]string{build.ID: build.Integrator}}
 	rows, err := tn.integrationEffects(member, now)
 	if err != nil || len(rows) != 2 || rows[0].ID != "book" || rows[0].Error != "Waiting for an open fiscal period" || rows[1].ID != "allowed" {
 		t.Fatalf("metadata: %+v %v", rows, err)
@@ -53,7 +54,7 @@ func TestIntegratorSeesOnlyIntegrationDeliveryMetadata(t *testing.T) {
 	if err != nil || rows[0].Error != "Waiting for an open fiscal period" {
 		t.Fatalf("public delivery text depended on the diagnostic language: %+v %v", rows, err)
 	}
-	member.Roles[construction.ID] = construction.User
+	member.Roles[build.ID] = build.User
 	if _, err := tn.integrationEffects(member, now); err == nil {
 		t.Fatal("ordinary member read integration delivery metadata")
 	}
@@ -81,9 +82,9 @@ func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *jour
 		tenant = fmt.Sprintf("writebacks-%d", time.Now().UnixNano())
 	}
 
-	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{construction.ID: construction.Builder}}}
+	seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder}}}
 	compose := func() *Tenant {
-		tn, err := NewTenant(tenant, NewConsole(tenant, seat), build.New(tenant), newStock(tenant))
+		tn, err := NewTenant(tenant, newConsole(tenant, seat), build.New(tenant), newStock(tenant))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,35 +129,35 @@ func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *jour
 	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
 	submit := func(key, schema, typ, target, payload string) {
 		t.Helper()
-		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key,
+		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: typ, Id: target}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at); err != nil {
 			t.Fatalf("%s: %v", key, err)
 		}
 	}
-	submit("obj", construction.ObjectType+".create", construction.ObjectType, "O1", `{"name":"goodsreceipt","title":"Goods receipt","fields":[{"name":"sku","title":"SKU","type":"text"},{"name":"qty","title":"Qty","type":"decimal"},{"name":"docno","title":"SAP document","type":"text"}]}`)
-	submit("obj-publish", construction.SchemaPublish, construction.ObjectType, "O1", `{}`)
-	submit("conn", construction.ConnectionType+".create", construction.ConnectionType, "sap", `{"name":"sap","title":"SAP","kind":"odata","address":"https://sap.example.com/sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/","secret":"sap-writer"}`)
-	submit("conn-check", construction.ConnectionType+".check", construction.ConnectionType, "sap", `{}`)
+	submit("obj", build.ObjectType+".create", build.ObjectType, "O1", `{"name":"goodsreceipt","title":"Goods receipt","fields":[{"name":"sku","title":"SKU","type":"text"},{"name":"qty","title":"Qty","type":"decimal"},{"name":"docno","title":"SAP document","type":"text"}]}`)
+	submit("obj-publish", build.SchemaPublish, build.ObjectType, "O1", `{}`)
+	submit("conn", build.ConnectionType+".create", build.ConnectionType, "sap", `{"name":"sap","title":"SAP","kind":"odata","address":"https://sap.example.com/sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/","secret":"sap-writer"}`)
+	submit("conn-check", build.ConnectionType+".check", build.ConnectionType, "sap", `{}`)
 	tn.CheckConnections(at) // ready only once the host's check answered and was journaled
-	if c0, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "sap"); c0.State != "ready" {
+	if c0, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "sap"); c0.State != "ready" {
 		t.Fatalf("connection %+v", c0)
 	}
-	submit("wb", construction.WritebackType+".create", construction.WritebackType, "W1", `{"name":"grtosap","title":"Goods receipt to SAP","connection":"sap","object":"build.goodsreceipt","on":"create","path":"A_MaterialDocumentHeader",
+	submit("wb", build.WritebackType+".create", build.WritebackType, "W1", `{"name":"grtosap","title":"Goods receipt to SAP","connection":"sap","object":"build.goodsreceipt","on":"create","path":"A_MaterialDocumentHeader",
 		"mapping":[{"from":"sku","to":"Material"},{"from":"qty","to":"QuantityInEntryUnit","convert":"string"},{"from":"id","to":"ReferenceDocument"}],
 		"result":[{"from":"MaterialDocument","to":"docno"}]}`)
-	submit("wb-publish", construction.WritebackType+".publish", construction.WritebackType, "W1", `{}`)
-	submit("native-wb", construction.WritebackType+".create", construction.WritebackType, "native", `{"name":"nativewriteback","title":"Native writeback","connection":"sap","object":"stock.item","on":"create"}`)
-	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: "native-publish",
-		Target: &pb.EntityRef{Type: construction.WritebackType, Id: "native"}, Schema: &pb.SchemaRef{Name: construction.WritebackType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err == nil || !strings.Contains(err.Message, "owner callback") {
+	submit("wb-publish", build.WritebackType+".publish", build.WritebackType, "W1", `{}`)
+	submit("native-wb", build.WritebackType+".create", build.WritebackType, "native", `{"name":"nativewriteback","title":"Native writeback","connection":"sap","object":"stock.item","on":"create"}`)
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "native-publish",
+		Target: &pb.EntityRef{Type: build.WritebackType, Id: "native"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err == nil || !strings.Contains(err.Message, "owner callback") {
 		t.Fatalf("published a writeback whose native owner cannot receive its answer: %v", err)
 	}
-	submit("unchecked-conn", construction.ConnectionType+".create", construction.ConnectionType, "unchecked", `{"name":"unchecked","title":"Unchecked","kind":"http","address":"https://unchecked.example.com/"}`)
-	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: "invalid-active-writeback",
-		Target: &pb.EntityRef{Type: construction.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: construction.WritebackType + ".edit", Version: 1}, Payload: []byte(`{"connection":"unchecked"}`)}, at); err == nil {
+	submit("unchecked-conn", build.ConnectionType+".create", build.ConnectionType, "unchecked", `{"name":"unchecked","title":"Unchecked","kind":"http","address":"https://unchecked.example.com/"}`)
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "invalid-active-writeback",
+		Target: &pb.EntityRef{Type: build.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".edit", Version: 1}, Payload: []byte(`{"connection":"unchecked"}`)}, at); err == nil {
 		t.Fatal("edited a published writeback past its connection validation")
 	}
-	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: "forged-answer",
-		Target: &pb.EntityRef{Type: construction.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: construction.SchemaWritebackAnswered, Version: 1},
+	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "forged-answer",
+		Target: &pb.EntityRef{Type: build.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: build.SchemaWritebackAnswered, Version: 1},
 		Payload: []byte(`{"answer":{"result":"delivered"}}`)}, at); err == nil {
 		t.Fatal("builder forged a writeback delivery answer")
 	}
@@ -181,8 +182,8 @@ func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *jour
 		t.Fatalf("calls %q", calls)
 	}
 	tn.mu.Lock()
-	c := tn.automation(construction.ID, false)
-	w, _ := platform.Get[construction.Writeback](c, "W1")
+	c := tn.automation(build.ID, false)
+	w, _ := platform.Get[build.Writeback](c, "W1")
 	tn.mu.Unlock()
 	if w.Sent != 1 || len(w.Answers) != 1 || w.Answers[0].Result != "delivered" {
 		t.Fatalf("writeback %+v", w)

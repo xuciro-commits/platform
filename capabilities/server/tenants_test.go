@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
@@ -36,7 +38,7 @@ func TestCreateTenantFromTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Seats[0].ID != "jane-doe" || spec.Settings["timezone"] != "Asia/Shanghai" || spec.Settings["currency"] != "USD" || spec.Settings[SettingName] != "Acme Ltd" {
+	if spec.Seats[0].ID != "jane-doe" || spec.Settings["timezone"] != "Asia/Shanghai" || spec.Settings["currency"] != "USD" || spec.Settings[controlowner.SettingName] != "Acme Ltd" {
 		t.Fatalf("spec %+v", spec)
 	}
 	if err := d.specs.add(spec); err != nil {
@@ -46,7 +48,7 @@ func TestCreateTenantFromTemplate(t *testing.T) {
 	if !strings.Contains(string(raw), `"id": "acme"`) {
 		t.Fatalf("spec not written back: %s", raw)
 	}
-	tn, err := NewTenant("acme", NewConsole("acme", d.SeatsFor("acme")...), newNotes("acme", "a"))
+	tn, err := NewTenant("acme", newConsole("acme", d.SeatsFor("acme")...), newNotes("acme", "a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,19 +57,19 @@ func TestCreateTenantFromTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin, _ := tn.member("jane-doe")
-	if admin.Roles[PlatformApp] != Admin {
+	if admin.Roles[controlowner.PlatformApp] != controlowner.Admin {
 		t.Fatalf("admin roles %v", admin.Roles)
 	}
 	console := testConsoleOf(tn)
 	record := console.TenantRecord()
-	if record.Name != "Acme Ltd" || record.Settings[SettingTimezone] != "Asia/Shanghai" || record.Settings[SettingCurrency] != "USD" || record.Members != 1 {
+	if record.Name != "Acme Ltd" || record.Settings[controlowner.SettingTimezone] != "Asia/Shanghai" || record.Settings[controlowner.SettingCurrency] != "USD" || record.Members != 1 {
 		t.Fatalf("tenant record %+v", record)
 	}
 
 	// a profile over the tenant's defaults; only the fields sent change.
 	decide := func(who platform.Member, target string, payload string) string {
-		_, err := tn.Submit(who, &pb.Submission{TenantId: "acme", PrincipalId: who.ID, Authority: PlatformApp, IdempotencyKey: "p" + payload,
-			Target: &pb.EntityRef{Type: ProfileType, Id: target}, Schema: &pb.SchemaRef{Name: SchemaProfileUpdate, Version: 1}, Payload: json.RawMessage(payload)}, now)
+		_, err := tn.Submit(who, &pb.Submission{TenantId: "acme", PrincipalId: who.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "p" + payload,
+			Target: &pb.EntityRef{Type: controlowner.ProfileType, Id: target}, Schema: &pb.SchemaRef{Name: controlowner.SchemaProfileUpdate, Version: 1}, Payload: json.RawMessage(payload)}, now)
 		if err != nil {
 			return err.Error()
 		}
@@ -97,7 +99,7 @@ func TestCreateTenantFromTemplate(t *testing.T) {
 	}
 	// The directory survives a snapshot round trip with its profiles.
 	snap, _ := console.Snapshot()
-	again := NewConsole("acme")
+	again := newConsole("acme")
 	if err := again.Restore(snap); err != nil {
 		t.Fatal(err)
 	}
@@ -113,18 +115,18 @@ func TestReachDueAndMemberToday(t *testing.T) {
 	at := func(h, m int) time.Time { return time.Date(2026, 10, 6, h, m, 0, 0, sh) }
 	for _, c := range []struct {
 		name string
-		r    Reach
+		r    platform.Reach
 		now  time.Time
 		want time.Time
 	}{
-		{"instant", Reach{Location: sh}, at(14, 5), at(14, 5)},
-		{"hourly", Reach{Location: sh, Digest: "hourly"}, at(14, 5), at(15, 0)},
-		{"daily before 8", Reach{Location: sh, Digest: "daily"}, at(2, 0), at(8, 0)},
-		{"daily after 8", Reach{Location: sh, Digest: "daily"}, at(14, 5), time.Date(2026, 10, 7, 8, 0, 0, 0, sh)},
-		{"quiet over midnight, at night", Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(23, 30), time.Date(2026, 10, 7, 8, 0, 0, 0, sh)},
-		{"quiet over midnight, early", Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(3, 0), at(8, 0)},
-		{"quiet within day", Reach{Location: sh, QuietFrom: "12:00", QuietTo: "13:00"}, at(12, 30), at(13, 0)},
-		{"outside quiet", Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(9, 0), at(9, 0)},
+		{"instant", platform.Reach{Location: sh}, at(14, 5), at(14, 5)},
+		{"hourly", platform.Reach{Location: sh, Digest: "hourly"}, at(14, 5), at(15, 0)},
+		{"daily before 8", platform.Reach{Location: sh, Digest: "daily"}, at(2, 0), at(8, 0)},
+		{"daily after 8", platform.Reach{Location: sh, Digest: "daily"}, at(14, 5), time.Date(2026, 10, 7, 8, 0, 0, 0, sh)},
+		{"quiet over midnight, at night", platform.Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(23, 30), time.Date(2026, 10, 7, 8, 0, 0, 0, sh)},
+		{"quiet over midnight, early", platform.Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(3, 0), at(8, 0)},
+		{"quiet within day", platform.Reach{Location: sh, QuietFrom: "12:00", QuietTo: "13:00"}, at(12, 30), at(13, 0)},
+		{"outside quiet", platform.Reach{Location: sh, QuietFrom: "22:00", QuietTo: "08:00"}, at(9, 0), at(9, 0)},
 	} {
 		if got := c.r.Due(c.now); !got.Equal(c.want) {
 			t.Errorf("%s: due %s, want %s", c.name, got.In(sh), c.want)
@@ -142,8 +144,8 @@ func TestReachDueAndMemberToday(t *testing.T) {
 // grants add up; Roles is the primary role per app; a grant
 // past its until day no longer holds; revoke removes one role or all.
 func TestGrantsAddUpAndExpire(t *testing.T) {
-	seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}
-	tn, err := NewTenant("g", NewConsole("g", seat), newNotes("g", "a"))
+	seat := platform.Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}
+	tn, err := NewTenant("g", newConsole("g", seat), newNotes("g", "a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,39 +153,39 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	decide := func(schema, payload string) string {
 		admin, _ := tn.member("admin")
-		_, err := tn.Submit(admin, &pb.Submission{TenantId: "g", PrincipalId: "admin", Authority: PlatformApp, IdempotencyKey: schema + payload,
-			Target: &pb.EntityRef{Type: MemberType, Id: "admin"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: json.RawMessage(payload)}, now)
+		_, err := tn.Submit(admin, &pb.Submission{TenantId: "g", PrincipalId: "admin", Authority: controlowner.PlatformApp, IdempotencyKey: schema + payload,
+			Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "admin"}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: json.RawMessage(payload)}, now)
 		if err != nil {
 			return err.Error()
 		}
 		return "ok"
 	}
-	if got := decide(SchemaGrant, `{"app":"a","role":"writer","until":"2026-10-7"}`); got != "ERROR_CODE_INVALID_ARGUMENT" {
+	if got := decide(controlowner.SchemaGrant, `{"app":"a","role":"writer","until":"2026-10-7"}`); got != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("bad day accepted: %s", got)
 	}
-	if got := decide(SchemaGrant, `{"app":"a","role":"writer","reason":"covers"}`); got != "ok" {
+	if got := decide(controlowner.SchemaGrant, `{"app":"a","role":"writer","reason":"covers"}`); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := decide(SchemaGrant, `{"app":"platform","role":"auditor","until":"2000-01-01"}`); got != "ok" {
+	if got := decide(controlowner.SchemaGrant, `{"app":"platform","role":"auditor","until":"2000-01-01"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	m, _ := tn.member("admin")
-	if m.Roles[PlatformApp] != Admin || m.Roles["a"] != "writer" || len(m.Grants) != 2 || !m.Holds("a", "writer") || m.Holds(PlatformApp, "auditor") {
+	if m.Roles[controlowner.PlatformApp] != controlowner.Admin || m.Roles["a"] != "writer" || len(m.Grants) != 2 || !m.Holds("a", "writer") || m.Holds(controlowner.PlatformApp, "auditor") {
 		t.Fatalf("grants %+v roles %v", m.Grants, m.Roles)
 	}
 	if m.Grants[1].By != "admin" || m.Grants[1].Reason != "covers" || m.Grants[1].At.IsZero() {
 		t.Fatalf("grant provenance %+v", m.Grants[1])
 	}
-	if got := decide(SchemaRevoke, `{"app":"a","role":"other"}`); got != "ok" {
+	if got := decide(controlowner.SchemaRevoke, `{"app":"a","role":"other"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if m, _ = tn.member("admin"); m.Roles["a"] != "writer" {
 		t.Fatal("revoking an unheld role removed the held one")
 	}
-	if got := decide(SchemaRevoke, `{"app":"a"}`); got != "ok" {
+	if got := decide(controlowner.SchemaRevoke, `{"app":"a"}`); got != "ok" {
 		t.Fatal(got)
 	}
-	if m, _ = tn.member("admin"); m.Roles["a"] != "" || m.Roles[PlatformApp] != Admin {
+	if m, _ = tn.member("admin"); m.Roles["a"] != "" || m.Roles[controlowner.PlatformApp] != controlowner.Admin {
 		t.Fatalf("after revoke %v", m.Roles)
 	}
 	snap, _ := testConsoleOf(tn).Snapshot()
@@ -195,7 +197,7 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 	if x, err := tn.Explain("admin", "a.note"); err != nil || x.Verdict.Allow || x.Verdict.Rule != "none" || x.Verdict.Reason == "" {
 		t.Fatalf("explain before grant: %+v %v", x, err)
 	}
-	if got := decide(SchemaGrant, `{"app":"a","role":"writer"}`); got != "ok" {
+	if got := decide(controlowner.SchemaGrant, `{"app":"a","role":"writer"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if x, _ := tn.Explain("admin", "a.note"); !x.Verdict.Allow || x.Verdict.Role != "writer" || x.App != "a" {
@@ -216,12 +218,12 @@ func TestGrantsAddUpAndExpire(t *testing.T) {
 
 // A custom role, a policy, a team and a delegation, each through the engine.
 func TestAccessConfiguration(t *testing.T) {
-	seats := []Seat{
-		{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}},
+	seats := []platform.Seat{
+		{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}},
 		{Subjects: []string{"user:bo@example.test"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}},
 		{Subjects: []string{"user:cy@example.test"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}},
 	}
-	tn, err := NewTenant("x", NewConsole("x", seats...), newNotes("x", "a"))
+	tn, err := NewTenant("x", newConsole("x", seats...), newNotes("x", "a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,13 +245,13 @@ func TestAccessConfiguration(t *testing.T) {
 		t.Fatal("bo could note without a role")
 	}
 	// A custom role over the app's action; held like any role.
-	if got := decide("admin", PlatformApp, SchemaRoleSave, RoleType, "writer", `{"app":"a","title":"x","actions":["a.note"]}`); got != "ERROR_CODE_INVALID_ARGUMENT" {
+	if got := decide("admin", controlowner.PlatformApp, platform.SchemaRoleSave, platform.RoleType, "writer", `{"app":"a","title":"x","actions":["a.note"]}`); got != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("declared role overwritten: %s", got)
 	}
-	if got := decide("admin", PlatformApp, SchemaRoleSave, RoleType, "scribe", `{"app":"a","title":"Scribe","actions":["a.note"]}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, platform.SchemaRoleSave, platform.RoleType, "scribe", `{"app":"a","title":"Scribe","actions":["a.note"]}`); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := decide("admin", PlatformApp, SchemaGrant, MemberType, "bo", `{"app":"a","role":"scribe"}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaGrant, controlowner.MemberType, "bo", `{"app":"a","role":"scribe"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if got := note("bo"); got != "ok" {
@@ -259,7 +261,7 @@ func TestAccessConfiguration(t *testing.T) {
 		t.Fatalf("%+v", x)
 	}
 	// A deny policy wins over the role; removed, the role is back.
-	if got := decide("admin", PlatformApp, SchemaPolicySave, PolicyType, "freeze", `{"effect":"deny","permission":"a.*","where":{"member":"bo"}}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, platform.SchemaPolicySave, platform.PolicyType, "freeze", `{"effect":"deny","permission":"a.*","where":{"member":"bo"}}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if got := note("bo"); !strings.Contains(got, "POLICY_DENIED") {
@@ -268,27 +270,27 @@ func TestAccessConfiguration(t *testing.T) {
 	if x, _ := tn.Explain("bo", "a.note"); x.Verdict.Allow || x.Verdict.Policy != "freeze" {
 		t.Fatalf("%+v", x)
 	}
-	if got := decide("admin", PlatformApp, SchemaPolicyDrop, PolicyType, "freeze", `{}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, platform.SchemaPolicyDrop, platform.PolicyType, "freeze", `{}`); got != "ok" {
 		t.Fatal(got)
 	}
 	// A team: cy holds the team's grant while a member of it.
-	if got := decide("admin", PlatformApp, SchemaTeamSave, TeamType, "desk", `{"name":"Desk","members":["cy"],"grants":[{"app":"a","role":"writer"}]}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, platform.SchemaTeamSave, platform.TeamType, "desk", `{"name":"Desk","members":["cy"],"grants":[{"app":"a","role":"writer"}]}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if cy, _ := tn.member("cy"); !cy.Holds("a", "writer") || cy.Grants[0].By != "team:desk" {
 		t.Fatalf("team grant missing: %+v", cy.Grants)
 	}
-	if got := decide("admin", PlatformApp, SchemaTeamRemove, TeamType, "desk", `{}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, platform.SchemaTeamRemove, platform.TeamType, "desk", `{}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if cy, _ := tn.member("cy"); cy.Holds("a", "writer") {
 		t.Fatal("team grant survived the team")
 	}
 	// Delegation: bo gives cy what bo holds in a, until a day; cy cannot delegate what cy lacks.
-	if got := decide("cy", PlatformApp, SchemaDelegate, MemberType, "bo", `{"app":"a","until":"2026-12-01"}`); !strings.Contains(got, "POLICY_DENIED") {
+	if got := decide("cy", controlowner.PlatformApp, platform.SchemaDelegate, controlowner.MemberType, "bo", `{"app":"a","until":"2026-12-01"}`); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("delegated nothing: %s", got)
 	}
-	if got := decide("bo", PlatformApp, SchemaDelegate, MemberType, "cy", `{"app":"a","until":"2026-12-01","reason":"holiday"}`); got != "ok" {
+	if got := decide("bo", controlowner.PlatformApp, platform.SchemaDelegate, controlowner.MemberType, "cy", `{"app":"a","until":"2026-12-01","reason":"holiday"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	cy, _ := tn.member("cy")
@@ -297,7 +299,7 @@ func TestAccessConfiguration(t *testing.T) {
 	}
 	// Survives a snapshot and restore, custom role included.
 	snap, _ := testConsoleOf(tn).Snapshot()
-	restored, _ := NewTenant("x", NewConsole("x", seats...), newNotes("x", "a"))
+	restored, _ := NewTenant("x", newConsole("x", seats...), newNotes("x", "a"))
 	if err := testConsoleOf(restored).Restore(snap); err != nil {
 		t.Fatal(err)
 	}
@@ -309,12 +311,12 @@ func TestAccessConfiguration(t *testing.T) {
 // Standing (invite, suspend, resume, offboard), personal
 // tokens with scopes, sessions; all of it replays.
 func TestLifecycleTokensAndSessions(t *testing.T) {
-	seats := []Seat{
-		{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, "a": "writer"}}},
+	seats := []platform.Seat{
+		{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, "a": "writer"}}},
 		{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"a": "writer"}}},
 	}
 	compose := func() *Tenant {
-		tn, err := NewTenant("l", NewConsole("l", seats...), newNotes("l", "a"))
+		tn, err := NewTenant("l", newConsole("l", seats...), newNotes("l", "a"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -341,10 +343,10 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	}
 	d := testConsoleOf(tn)
 	// Invite: stands invited, may be granted, becomes active on first sign-in.
-	if got := decide("admin", PlatformApp, SchemaInvite, MemberType, "cy", `{"subject":"user:cy@example.test"}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaInvite, controlowner.MemberType, "cy", `{"subject":"user:cy@example.test"}`); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := decide("admin", PlatformApp, SchemaGrant, MemberType, "cy", `{"app":"a","role":"writer"}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaGrant, controlowner.MemberType, "cy", `{"app":"a","role":"writer"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if cy, _ := tn.member("cy"); cy.Status != platform.MemberInvited || !cy.Holds("a", "writer") {
@@ -355,27 +357,27 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 		t.Fatal("first sign-in did not accept the invitation")
 	}
 	// Suspend: holds nothing, cannot act; resume: back.
-	if got := decide("admin", PlatformApp, SchemaMemberSuspend, MemberType, "bo", `{"reason":"audit"}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaMemberSuspend, controlowner.MemberType, "bo", `{"reason":"audit"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if bo, _ := tn.member("bo"); bo.Active() || len(bo.RolesIn("a")) != 0 || decide("bo", "a", "a.note", "a.topic", "t", `{}`) == "ok" {
 		t.Fatalf("suspended member still acts: %+v", bo)
 	}
-	if got := decide("admin", PlatformApp, SchemaMemberResume, MemberType, "bo", `{}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaMemberResume, controlowner.MemberType, "bo", `{}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if got := decide("bo", "a", "a.note", "a.topic", "t", `{}`); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := decide("admin", PlatformApp, SchemaMemberSuspend, MemberType, "admin", `{}`); !strings.Contains(got, "POLICY_DENIED") {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaMemberSuspend, controlowner.MemberType, "admin", `{}`); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("suspended self: %s", got)
 	}
 	// Tokens: issued by bo, scoped, secret once; a token cannot mint tokens.
-	if got := decide("bo", PlatformApp, SchemaTokenIssue, TokenType, "ci", `{"label":"CI","scopes":["a.note"],"until":"2027-01-01"}`); got != "ok" {
+	if got := decide("bo", controlowner.PlatformApp, controlowner.SchemaTokenIssue, controlowner.TokenType, "ci", `{"label":"CI","scopes":["a.note"],"until":"2027-01-01"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	secret, ok := d.Minted("ci", "bo", now)
-	if !ok || !strings.HasPrefix(secret, tokenPrefix) {
+	if !ok || !strings.HasPrefix(secret, controlowner.TokenPrefix) {
 		t.Fatalf("no secret: %q %v", secret, ok)
 	}
 	if _, again := d.Minted("ci", "bo", now); again {
@@ -384,7 +386,7 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	if _, wrong := d.Minted("ci", "admin", now); wrong {
 		t.Fatal("secret handed to another member")
 	}
-	if raw, _ := json.Marshal(entries); strings.Contains(string(raw), secret) || strings.Contains(string(raw), secret[len(tokenPrefix):]) {
+	if raw, _ := json.Marshal(entries); strings.Contains(string(raw), secret) || strings.Contains(string(raw), secret[len(controlowner.TokenPrefix):]) {
 		t.Fatal("the journal keeps the secret")
 	}
 	viaToken, ok := d.MemberByToken(secret, now)
@@ -394,10 +396,10 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	if got := submitAs(viaToken, "a", "a.note", "a.topic", "t2", `{}`); got != "ok" {
 		t.Fatalf("in-scope action refused: %s", got)
 	}
-	if got := submitAs(viaToken, PlatformApp, SchemaProfileUpdate, ProfileType, "bo", `{"title":"x"}`); !strings.Contains(got, "POLICY_DENIED") {
+	if got := submitAs(viaToken, controlowner.PlatformApp, controlowner.SchemaProfileUpdate, controlowner.ProfileType, "bo", `{"title":"x"}`); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("out-of-scope action allowed: %s", got)
 	}
-	if got := submitAs(viaToken, PlatformApp, SchemaTokenIssue, TokenType, "ci2", `{"label":"more"}`); !strings.Contains(got, "POLICY_DENIED") {
+	if got := submitAs(viaToken, controlowner.PlatformApp, controlowner.SchemaTokenIssue, controlowner.TokenType, "ci2", `{"label":"more"}`); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("token minted a token: %s", got)
 	}
 	if _, ok := d.MemberByToken(secret, time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)); ok {
@@ -419,17 +421,17 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	if ss := d.Sessions("bo", "cred-1", now); len(ss) != 2 || !ss[0].Current || ss[1].Ended.IsZero() || ss[1].Agent != "curl 8" {
 		t.Fatalf("ended session not shown as ended: %+v", ss)
 	}
-	if ss := d.Sessions("bo", "cred-1", now.Add(endedSessionsShown+time.Minute)); len(ss) != 1 || !ss[0].Current {
+	if ss := d.Sessions("bo", "cred-1", now.Add(24*time.Hour+time.Minute)); len(ss) != 1 || !ss[0].Current {
 		t.Fatalf("ended session did not age out: %+v", ss)
 	}
 	// Admin revokes the token; offboard removes subjects and grants.
-	if got := decide("admin", PlatformApp, SchemaTokenRevoke, TokenType, "ci", `{}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaTokenRevoke, controlowner.TokenType, "ci", `{}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if _, ok := d.MemberByToken(secret, now); ok {
 		t.Fatal("revoked token accepted")
 	}
-	if got := decide("admin", PlatformApp, SchemaOffboard, MemberType, "bo", `{"reason":"left"}`); got != "ok" {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaOffboard, controlowner.MemberType, "bo", `{"reason":"left"}`); got != "ok" {
 		t.Fatal(got)
 	}
 	if _, ok := d.MemberBySubject("bo"); ok {
@@ -438,7 +440,7 @@ func TestLifecycleTokensAndSessions(t *testing.T) {
 	if bo, ok := tn.member("bo"); !ok || bo.Status != platform.MemberLeft || len(bo.Grants) != 0 {
 		t.Fatalf("offboarded: %+v", bo)
 	}
-	if got := decide("admin", PlatformApp, SchemaMemberResume, MemberType, "bo", `{}`); !strings.Contains(got, "POLICY_DENIED") {
+	if got := decide("admin", controlowner.PlatformApp, controlowner.SchemaMemberResume, controlowner.MemberType, "bo", `{}`); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("resumed one who left: %s", got)
 	}
 	CheckReplay(t, tn, entries, compose)

@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+
 	"platformserver/platform"
 )
 
@@ -79,26 +79,26 @@ func (*brokenCompositePublisher) ApplyAcceptedPublication(string, []byte) error 
 
 func TestCompositeIsolatesAcceptedApplicationFailure(t *testing.T) {
 	tn, member, submit := upgradeTenant(t, "composite-application-failure")
-	if result := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); result != "ok" {
+	if result := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); result != "ok" {
 		t.Fatal(result)
 	}
 	appended := 0
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		appended++
-		broken := &brokenCompositePublisher{tn.app(construction.ID).(*build.Build)}
+		broken := &brokenCompositePublisher{tn.app(build.ID).(*build.Build)}
 		for i, app := range tn.apps {
-			if app.Manifest().ID == construction.ID {
+			if app.Manifest().ID == build.ID {
 				tn.apps[i] = broken
 			}
 		}
 		for key, app := range tn.owner {
-			if app.Manifest().ID == construction.ID {
+			if app.Manifest().ID == build.ID {
 				tn.owner[key] = broken
 			}
 		}
 		return e.Body, nil
 	}
-	edits := []CompositeEdit{{Schema: "build.object.publish", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{}`)}}
+	edits := []CompositeEdit{{Schema: "build.object.publish", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{}`)}}
 	at := time.Date(2026, 10, 11, 15, 0, 0, 0, time.UTC)
 	if _, err := tn.Composite(member("dana"), "publish", edits, at); err == nil || !tn.quarantined() || appended != 1 {
 		t.Fatalf("accepted application failure was not isolated: %v, quarantined=%v, appended=%d", err, tn.quarantined(), appended)
@@ -114,17 +114,17 @@ func TestCompositeSealsOnceAndReplaysWithoutDeciding(t *testing.T) {
 	tn, member, submit := upgradeTenant(t, "sealed-composite")
 	var entries []Entry
 	tn.Record = func(e Entry) { entries = append(entries, e) }
-	if result := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); result != "ok" {
+	if result := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); result != "ok" {
 		t.Fatal(result)
 	}
 	prior := append([]Entry(nil), entries...)
-	edits := []CompositeEdit{{Schema: "build.object.edit", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)}}
+	edits := []CompositeEdit{{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)}}
 	at := time.Date(2026, 10, 11, 15, 0, 0, 0, time.UTC)
 	tn.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append failed") }
 	if _, err := tn.Composite(member("dana"), "edit", edits, at); err == nil {
 		t.Fatal("failed append accepted composite")
 	}
-	visit, _ := platform.Get[construction.Object](tn.caller(member("dana"), tn.app(construction.ID), false), "visit")
+	visit, _ := platform.Get[build.Object](tn.caller(member("dana"), tn.app(build.ID), false), "visit")
 	if visit.Title != "Visit" {
 		t.Fatal("composite changed live records before append")
 	}
@@ -146,15 +146,15 @@ func TestCompositeSealsOnceAndReplaysWithoutDeciding(t *testing.T) {
 	if err := fresh.Replay(prior); err != nil {
 		t.Fatal(err)
 	}
-	original := fresh.app(construction.ID).(*build.Build)
+	original := fresh.app(build.ID).(*build.Build)
 	blocked := &blockedCompositeOwner{original}
 	for i, app := range fresh.apps {
-		if app.Manifest().ID == construction.ID {
+		if app.Manifest().ID == build.ID {
 			fresh.apps[i] = blocked
 		}
 	}
 	for key, app := range fresh.owner {
-		if app.Manifest().ID == construction.ID {
+		if app.Manifest().ID == build.ID {
 			fresh.owner[key] = blocked
 		}
 	}
@@ -182,7 +182,7 @@ func TestReleaseStorageKeepsSnapshotRetriesAndPrivatePromotion(t *testing.T) {
 			if mode == "record" {
 				live.Record = func(e Entry) { entries = append(entries, e) }
 			}
-			if err := create("dana", construction.ObjectType+".create", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); err != "ok" {
+			if err := create("dana", build.ObjectType+".create", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); err != "ok" {
 				t.Fatal(err)
 			}
 			at := time.Date(2026, 10, 11, 15, 0, 0, 0, time.UTC)
@@ -211,7 +211,7 @@ func TestReleaseStorageKeepsSnapshotRetriesAndPrivatePromotion(t *testing.T) {
 			}
 			target, to, _ := upgradeTenant(t, "release-target-"+mode)
 			target.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append failed") }
-			if _, err := PromoteCandidate(live, target, id, "promote", false, to("pat"), at); err == nil || target.releases.raw(id) != nil || target.ActiveRelease() != "" {
+			if _, err := PromoteCandidate(live, target, id, "promote", false, to("pat"), at); err == nil || target.releases.Raw(id) != nil || target.ActiveRelease() != "" {
 				t.Fatal("failed promotion exposed candidate before acceptance")
 			}
 		})

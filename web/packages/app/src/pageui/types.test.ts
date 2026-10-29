@@ -8,7 +8,7 @@ test('manifest author types narrow properties and ports while retained sections 
  expectTypeOf<PageWidgetConfigurationFor<'table'>>().toHaveProperty('collectionVariable').toEqualTypeOf<string|undefined>();
  expectTypeOf<PageWidgetConfigurationFor<'avatar-stack'>>().toHaveProperty('avatar');
  expectTypeOf<PageWidgetConfigurationFor<'table'>>().toHaveProperty('inlineEdit').toEqualTypeOf<Api.PageInlineEdit|undefined>();
- expectTypeOf<PageWidgetConfigurationFor<'range-input'>>().toHaveProperty('rangeInput').toEqualTypeOf<Api.PageRangeInput|undefined>();
+ expectTypeOf<PageWidgetConfigurationFor<'range-input'>>().toHaveProperty('rangeInput').toEqualTypeOf<Api.PageRangeInput>();
  expectTypeOf<PageWidgetConfigurationFor<'heading'>>().not.toHaveProperty('rangeInput');
  expectTypeOf<PageWidgetConfigurationFor<'layered-graph'>>().toHaveProperty('composite').toEqualTypeOf<Api.PageComposite|undefined>();
  const retained: Api.Section={widget:'heading',headingLevel:'retained-profile-value'};

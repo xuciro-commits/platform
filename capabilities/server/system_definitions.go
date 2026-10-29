@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	releaseowner "platformserver/studio/releases"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -11,9 +12,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/studio/build"
+
 	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
@@ -63,8 +64,8 @@ func (h hostView) PrepareSystemDefinitions(c platform.Caller, raw json.RawMessag
 	if err != nil {
 		return nil, systemDefinitionRefusal(err)
 	}
-	saved := resultformat.Release{Version: 4, Kind: "release-result", Tenant: h.t.ID, App: construction.ID, Member: c.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: candidate.Bytes, Active: true, Installations: installations, Bootstrap: bootstrap}
-	saved.RequestHash, err = resultformat.ReleaseRequestHash(h.t.ID, c.ID, saved.Key, candidate.ID, true)
+	saved := acceptedformat.Release{Version: 4, Kind: "release-result", Tenant: h.t.ID, App: build.ID, Member: c.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: candidate.Bytes, Active: true, Installations: installations, Bootstrap: bootstrap}
+	saved.RequestHash, err = acceptedformat.ReleaseRequestHash(h.t.ID, c.ID, saved.Key, candidate.ID, true)
 	if err != nil {
 		return nil, systemDefinitionRefusal(err)
 	}
@@ -82,7 +83,7 @@ func (h hostView) PrepareSystemDefinitions(c platform.Caller, raw json.RawMessag
 			}
 		}
 	}
-	image, err := resultformat.EncodeRelease(saved)
+	image, err := acceptedformat.EncodeRelease(saved)
 	if err != nil {
 		return nil, systemDefinitionRefusal(err)
 	}
@@ -90,11 +91,11 @@ func (h hostView) PrepareSystemDefinitions(c platform.Caller, raw json.RawMessag
 }
 
 func (h hostView) ValidateSystemDefinitions(raw json.RawMessage) error {
-	saved, err := resultformat.DecodeRelease(raw)
+	saved, err := acceptedformat.DecodeRelease(raw)
 	if err != nil {
 		return err
 	}
-	if h.t.ID != systemscope.Tenant || saved.Tenant != h.t.ID || saved.App != construction.ID || !saved.Active || !strings.HasPrefix(saved.Key, "activate:system:") {
+	if h.t.ID != systemscope.Tenant || saved.Tenant != h.t.ID || saved.App != build.ID || !saved.Active || !strings.HasPrefix(saved.Key, "activate:system:") {
 		return fmt.Errorf("invalid system definition installation")
 	}
 	return nil
@@ -120,7 +121,7 @@ func (h hostView) ApplySystemDefinitions(raw json.RawMessage) error {
 type systemDefinitionProjection struct {
 	id            string
 	assets        []platform.ReleaseAsset
-	installations []resultformat.ReleaseInstallation
+	installations []platform.ReleaseInstallation
 }
 
 type systemDefinitionPeers struct{ tenants []*Tenant }
@@ -132,7 +133,7 @@ type systemDefinitionState struct {
 	applied   string
 }
 
-func (t *Tenant) systemDefinitionProjection(saved resultformat.Release) (*systemDefinitionProjection, error) {
+func (t *Tenant) systemDefinitionProjection(saved acceptedformat.Release) (*systemDefinitionProjection, error) {
 	candidate, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes)
 	if err != nil {
 		return nil, err
@@ -155,18 +156,18 @@ func (t *Tenant) systemDefinitionProjection(saved resultformat.Release) (*system
 // Startup snapshots already retain the original release results. Reconstruct
 // the cache from their exact accepted images, without preparing a new release.
 func (t *Tenant) restoreSystemDefinitionProjection() error {
-	if t.ID != systemscope.Tenant || t.releases.active == "" {
+	if t.ID != systemscope.Tenant || t.releases.Active() == "" {
 		return nil
 	}
-	for key, raw := range t.committed.allAnswers() {
+	for key, raw := range t.committed.AllAnswers() {
 		if !strings.HasPrefix(key, "release:activate:system:") {
 			continue
 		}
-		saved, err := resultformat.DecodeRelease(raw)
+		saved, err := acceptedformat.DecodeRelease(raw)
 		if err != nil {
 			return err
 		}
-		if saved.CandidateID != t.releases.active {
+		if saved.CandidateID != t.releases.Active() {
 			continue
 		}
 		projection, err := t.systemDefinitionProjection(saved)
@@ -258,14 +259,14 @@ func (t *Tenant) installSystemDefinitionProjection(projection *systemDefinitionP
 		if installation.Ref == nil || !refs[*installation.Ref] {
 			continue
 		}
-		plan, err := t.installationPlan(registry, installation)
+		plan, err := releaseowner.InstallationPlan(registry, installation)
 		if err != nil {
 			return err
 		}
 		if err := registry.ApplyInstallation(plan, platform.AssetApplyContext{Private: private}); err != nil {
 			return err
 		}
-		if reader, ok := t.app(plan.Ref.App).(host.AssetDefinitionReader); ok && (reader.DefinitionMetadataKind(plan.Ref.Kind) || plan.Ref.Kind == platform.AssetAgent) {
+		if reader, ok := t.app(plan.Ref.App).(platform.AssetDefinitionReader); ok && (reader.DefinitionMetadataKind(plan.Ref.Kind) || plan.Ref.Kind == platform.AssetAgent) {
 			var asset platform.ReleaseAsset
 			for _, original := range projection.assets {
 				if original.Ref == plan.Ref {

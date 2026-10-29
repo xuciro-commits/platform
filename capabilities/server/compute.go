@@ -1,5 +1,7 @@
 package platformserver
 
+import computeowner "platformserver/engine/compute"
+
 import (
 	"context"
 	"crypto/sha256"
@@ -7,9 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/host"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+
 	"slices"
 	"strings"
 	"time"
@@ -22,14 +24,14 @@ import (
 // Both compilation and execution use the original effect outbox. They are
 // internal, owned computations: no endpoint configuration or external webhook.
 type operationBinding struct {
-	Definition  platform.Operation         `json:"definition"`
-	Call        platform.OperationCall     `json:"call"`
-	Member      string                     `json:"member"`
-	Inputs      json.RawMessage            `json:"inputs,omitempty"`
-	SealedInput *operationInputArtifact    `json:"sealedInput,omitempty"`
-	RuleFacts   *platform.ExprContext      `json:"ruleFacts,omitempty"`
-	RuleSchemas []platform.ExprSchema      `json:"ruleSchemas,omitempty"`
-	Build       *platform.CodeBuildRequest `json:"build,omitempty"`
+	Definition  platform.Operation               `json:"definition"`
+	Call        platform.OperationCall           `json:"call"`
+	Member      string                           `json:"member"`
+	Inputs      json.RawMessage                  `json:"inputs,omitempty"`
+	SealedInput *platform.OperationInputArtifact `json:"sealedInput,omitempty"`
+	RuleFacts   *platform.ExprContext            `json:"ruleFacts,omitempty"`
+	RuleSchemas []platform.ExprSchema            `json:"ruleSchemas,omitempty"`
+	Build       *platform.CodeBuildRequest       `json:"build,omitempty"`
 }
 
 func pendingOperationInputs(inputs map[string][]*preparedOperationInput) int {
@@ -41,11 +43,11 @@ func pendingOperationInputs(inputs map[string][]*preparedOperationInput) int {
 }
 
 func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest) (platform.OperationCall, *kernel.Error) {
-	var input *operationInputArtifact
-	hash, _ := acceptance.Digest(q)
+	var input *platform.OperationInputArtifact
+	hash, _ := platform.CanonicalDigest(q)
 	if pending := d.operationInputs[hash]; len(pending) > 0 {
 		prepared := pending[0]
-		platformOwner := c.App == PlatformApp && c.ID == prepared.ref.Member
+		platformOwner := c.App == controlowner.PlatformApp && c.ID == prepared.ref.Member
 		flowOwner := c.Automation && c.App == "flow" && c.ID == "app:flow" && q.OnBehalf == prepared.ref.Member
 		if !platformOwner && !flowOwner || hash != prepared.requestHash {
 			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The prepared input belongs to another operation request")
@@ -70,7 +72,7 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	}
 	return call, nil
 }
-func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *recordStore, pending []platform.Effect, sealed ...*operationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
+func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *recordStore, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
 	refuse := func(code pb.ErrorCode, msg string) (platform.OperationCall, platform.Effect, *kernel.Error) {
 		return platform.OperationCall{}, platform.Effect{}, platform.Refuse(code, msg)
 	}
@@ -78,7 +80,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if owner == "" {
 		owner = c.App
 	}
-	if c.Tenant != t.ID || r == nil || r.GetSubmission().GetTenantId() != t.ID || r.GetSubmission().GetAuthority() != c.App || q.Key == "" || len(q.Key) > 256 || q.Version < 0 || owner != c.App && c.App != PlatformApp && (!c.Automation || c.App != "flow") || !c.Automation && (q.OnBehalf != "" && q.OnBehalf != c.ID || q.Release != nil) {
+	if c.Tenant != t.ID || r == nil || r.GetSubmission().GetTenantId() != t.ID || r.GetSubmission().GetAuthority() != c.App || q.Key == "" || len(q.Key) > 256 || q.Version < 0 || owner != c.App && c.App != controlowner.PlatformApp && (!c.Automation || c.App != "flow") || !c.Automation && (q.OnBehalf != "" && q.OnBehalf != c.ID || q.Release != nil) {
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Operation needs an accepted owner or delegated Flow decision")
 	}
 	member := c.Member
@@ -97,7 +99,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if !ok {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Operation is not declared")
 	}
-	definition, err := acceptance.Digest([]any{owner, op, version})
+	definition, err := platform.CanonicalDigest([]any{owner, op, version})
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation definition cannot be bound")
 	}
@@ -106,7 +108,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if refusal := authorizationRefusal(decision); refusal != nil {
 		return platform.OperationCall{}, platform.Effect{}, refusal
 	}
-	var input *operationInputArtifact
+	var input *platform.OperationInputArtifact
 	if len(sealed) == 1 {
 		input = sealed[0]
 	}
@@ -119,13 +121,13 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Operation dependencies cannot be bound")
 	}
-	hash, _ := acceptance.Digest(q.Inputs)
-	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, resultformat.OperationEndpoint)
+	hash, _ := platform.CanonicalDigest(q.Inputs)
+	id := fmt.Sprintf("%s:%s:operation:%s:%s", t.ID, owner, q.Key, acceptedformat.OperationEndpoint)
 	if input != nil {
 		if input.Tenant != t.ID || input.Member != member.ID || input.Call != id || input.Definition != definition || op.Binding.ABI != platform.WasmDataABI || input.Size > op.Limits.DataInputBytes {
 			return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The operation changed while its input was prepared")
 		}
-		if _, err := t.staged.inputKey(*input); err != nil {
+		if _, err := t.staged.InputKey(*input); err != nil {
 			return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 		hash = input.InputHash
@@ -143,12 +145,12 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	exists := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id })
 	queued := 0
 	for _, x := range t.outbound {
-		if x.Endpoint == resultformat.OperationEndpoint && !settled(x.State) {
+		if x.Endpoint == acceptedformat.OperationEndpoint && !settled(x.State) {
 			queued++
 		}
 	}
 	for _, x := range pending {
-		if x.Endpoint == resultformat.OperationEndpoint {
+		if x.Endpoint == acceptedformat.OperationEndpoint {
 			queued++
 		}
 	}
@@ -205,10 +207,10 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	}
 	body, _ := json.Marshal(binding)
 	at := r.GetRecordedTime().AsTime()
-	return call, platform.Effect{Applications: applications, ID: id, Endpoint: resultformat.OperationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
+	return call, platform.Effect{Applications: applications, ID: id, Endpoint: acceptedformat.OperationEndpoint, Event: owner + "/operation", App: owner, Key: q.Key, Target: target, At: at, Due: at, State: "pending", Body: string(body)}, nil
 }
 func operationDefinition(app platform.App, name string, version int) (platform.Operation, int, bool) {
-	if owner, ok := app.(host.OperationDefinitions); ok {
+	if owner, ok := app.(platform.OperationDefinitions); ok {
 		return owner.OperationDefinition(name, version)
 	}
 	if version == 0 {
@@ -224,7 +226,7 @@ func (t *Tenant) operationResult(c platform.Caller, id string) (platform.Operati
 	t.opsMu.Lock()
 	var found *platform.Effect
 	for _, x := range t.outbound {
-		if x.ID != id || x.Endpoint != resultformat.OperationEndpoint {
+		if x.ID != id || x.Endpoint != acceptedformat.OperationEndpoint {
 			continue
 		}
 		copy := x.Effect
@@ -323,26 +325,26 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	d.tenant.opsMu.Lock()
 	queued := 0
 	for _, x := range d.tenant.outbound {
-		if x.Endpoint == resultformat.OperationEndpoint && !settled(x.State) {
+		if x.Endpoint == acceptedformat.OperationEndpoint && !settled(x.State) {
 			queued++
 		}
 	}
 	d.tenant.opsMu.Unlock()
 	for _, x := range d.intents {
-		if x.Endpoint == resultformat.OperationEndpoint {
+		if x.Endpoint == acceptedformat.OperationEndpoint {
 			queued++
 		}
 	}
 	if queued >= 256 {
 		return refuse("Operation queue is at capacity")
 	}
-	hash, _ := acceptance.Digest(q)
-	id := fmt.Sprintf("%s:build:operation:%s:%s", d.tenant.ID, key, resultformat.OperationEndpoint)
+	hash, _ := platform.CanonicalDigest(q)
+	id := fmt.Sprintf("%s:build:operation:%s:%s", d.tenant.ID, key, acceptedformat.OperationEndpoint)
 	call := platform.OperationCall{ID: id, InputHash: hash, Definition: hash}
 	body, _ := json.Marshal(operationBinding{Build: &q, Call: call, Member: c.ID})
 	at := r.GetRecordedTime().AsTime()
 	if !d.probing {
-		d.intents = append(d.intents, platform.Effect{ID: id, Endpoint: resultformat.OperationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
+		d.intents = append(d.intents, platform.Effect{ID: id, Endpoint: acceptedformat.OperationEndpoint, Event: "build/operation", App: "build", Key: key, Target: target, At: at, Due: at, State: "pending", Body: string(body)})
 	}
 	return call, nil
 }
@@ -401,21 +403,21 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		out.Detail = refusal.Message
 		return out
 	}
-	t.cancels.add(x.ID, cancel)
+	t.cancels.Add(x.ID, cancel)
 	t.mu.Unlock()
-	defer t.cancels.remove(x.ID)
+	defer t.cancels.Remove(x.ID)
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {
 		compiler := t.Compiler
 		if compiler == nil {
-			compiler = EnvironmentCompiler()
+			compiler = computeowner.EnvironmentCompiler()
 		}
 		var result platform.CodeBuildResult
 		var module []byte
 		result, module, err = compiler.Compile(ctx, *b.Build)
 		if err == nil {
-			err = ValidateWasm(ctx, module, b.Build.ABI)
+			err = computeowner.ValidateWasm(ctx, module, b.Build.ABI)
 			if err == nil {
 				hash := sha256.Sum256(module)
 				result.Module = hex.EncodeToString(hash[:])
@@ -429,11 +431,11 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 		out.Result = "delivered"
 	} else {
 		op := b.Definition
-		hash, _ := acceptance.Digest(b.Inputs)
+		hash, _ := platform.CanonicalDigest(b.Inputs)
 		if b.SealedInput != nil {
 			hash = b.SealedInput.InputHash
 		}
-		definition, _ := acceptance.Digest([]any{x.App, op, b.Call.Version})
+		definition, _ := platform.CanonicalDigest([]any{x.App, op, b.Call.Version})
 		if op.Check() != nil || hash != b.Call.InputHash || definition != b.Call.Definition {
 			out.Detail = "Operation definition or permission differs"
 			return out
@@ -444,12 +446,12 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				out.Detail = "The accepted input artifact belongs to another operation"
 				return out
 			}
-			inputs, err = t.staged.readInput(ctx, *ref)
+			inputs, err = t.staged.ReadInput(ctx, *ref)
 			if err == nil {
 				err = op.Input.Validate(inputs, op.Limits.DataInputBytes)
 			}
 			if err == nil {
-				actual, digestErr := acceptance.Digest(json.RawMessage(inputs))
+				actual, digestErr := platform.CanonicalDigest(json.RawMessage(inputs))
 				if digestErr != nil || actual != b.Call.InputHash {
 					err = fmt.Errorf("the sealed input differs from its accepted input hash")
 				}
@@ -512,14 +514,14 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			if err == nil {
 				worker := t.ComputeWorker
 				if worker == nil {
-					worker = EnvironmentWasmWorker()
+					worker = computeowner.EnvironmentWasmWorker()
 				}
-				var result WasmResponse
-				request := WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: inputs, Limits: op.Limits}
+				var result platform.WasmResponse
+				request := platform.WasmRequest{ABI: op.Binding.ABI, Module: module, Digest: op.Binding.Module, Input: inputs, Limits: op.Limits}
 				if op.Limits.DataInputBytes > 0 {
 					sum := sha256.Sum256(inputs)
 					request.Input = nil
-					request.Data = &WasmDataInput{Tenant: t.ID, Call: x.ID, Digest: hex.EncodeToString(sum[:]), Bytes: inputs}
+					request.Data = &platform.WasmDataInput{Tenant: t.ID, Call: x.ID, Digest: hex.EncodeToString(sum[:]), Bytes: inputs}
 				}
 				result, err = worker.Execute(ctx, request)
 				output = result.Output
@@ -530,7 +532,7 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			// per-call channel seals the bytes and the result references them.
 			// A result over every budget is refused, never
 			// trimmed.
-			answer, staged, stageErr := t.staged.output(op, x.ID, output)
+			answer, staged, stageErr := t.staged.Output(op, x.ID, output)
 			err = stageErr
 			if stageErr == nil {
 				output, out.Staged = answer, staged

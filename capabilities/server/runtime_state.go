@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	runtimekernel "platformserver/kernel"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"platformserver/internal/aistate"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"slices"
 	"strings"
 
@@ -76,7 +77,7 @@ func (b *storageDeltaBuilder) record(r records.Image, base int) error {
 	b.records[r.Type+"/"+r.ID] = stored
 	return nil
 }
-func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definition *resultformat.DecisionDefinition, binding *platform.SchemaVersion) error {
+func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definition *platform.DecisionDefinition, binding *platform.SchemaVersion) error {
 	r := new(pb.ChangeRecord)
 	if err := protojson.Unmarshal(raw, r); err != nil {
 		return err
@@ -102,7 +103,7 @@ func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definitio
 // plan translates the same declared changes used by accepted application.
 // It never infers writes from application actions or reinterprets a family as
 // a loosely typed envelope with coincidentally matching field names.
-func (b *storageDeltaBuilder) plan(plan resultformat.ChangePlan) error {
+func (b *storageDeltaBuilder) plan(plan acceptedformat.ChangePlan) error {
 	for _, row := range plan.Rows {
 		if err := b.record(row.Image, -1); err != nil {
 			return err
@@ -120,14 +121,14 @@ func (b *storageDeltaBuilder) plan(plan resultformat.ChangePlan) error {
 		b.value("sequence", name, n)
 	}
 	for _, intent := range plan.Intents {
-		b.value("effect", intent.ID, resultformat.EffectState{Effect: intent})
+		b.value("effect", intent.ID, acceptedformat.EffectState{Effect: intent})
 	}
 	if plan.Notices != nil {
 		for _, notice := range plan.Notices.Notices {
 			b.value("notice", notice.ID, notice)
 		}
 		for _, intent := range plan.Notices.Effects {
-			b.value("effect", intent.ID, resultformat.EffectState{Effect: intent})
+			b.value("effect", intent.ID, acceptedformat.EffectState{Effect: intent})
 		}
 		b.value("notice-sequence", "current", plan.Notices.Seq)
 	}
@@ -149,7 +150,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 	}
 	switch envelope.Kind {
 	case "input-result":
-		result, err := resultformat.DecodeInput(raw)
+		result, err := acceptedformat.DecodeInput(raw)
 		if err != nil {
 			return err
 		}
@@ -157,7 +158,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		b.value("input", result.App+"/"+result.Key, raw)
 		return b.plan(result.ChangePlan())
 	case "effect-result":
-		result, err := resultformat.DecodeEffect(raw)
+		result, err := acceptedformat.DecodeEffect(raw)
 		if err != nil {
 			return err
 		}
@@ -186,12 +187,12 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		b.value("task", result.After.ID, result.After)
 		return nil
 	case "record-batch":
-		result, receipt, err := resultformat.DecodeBatch(raw)
+		result, receipt, err := acceptedformat.DecodeBatch(raw)
 		if err != nil {
 			return err
 		}
 		b.legacyUnique = b.legacyUnique || result.Version < 8
-		sub, err := resultformat.BatchSubmission(result, receipt)
+		sub, err := acceptedformat.BatchSubmission(result, receipt)
 		if err != nil {
 			return err
 		}
@@ -232,7 +233,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		}
 		return b.plan(result.ChangePlan())
 	case "refusal":
-		result, sub, err := resultformat.DecodeRefusal(raw)
+		result, sub, err := acceptedformat.DecodeRefusal(raw)
 		if err != nil {
 			return err
 		}
@@ -249,14 +250,14 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		}
 		b.value("composite-answer", result.Key, raw)
 		b.value("composite", result.Key, result.Digest)
-		return b.plan(resultformat.ChangePlan{Changes: result.Changes})
+		return b.plan(acceptedformat.ChangePlan{Changes: result.Changes})
 	case "release-result":
-		result, err := resultformat.DecodeRelease(raw)
+		result, err := acceptedformat.DecodeRelease(raw)
 		if err != nil {
 			return err
 		}
 		b.value("answer", "release:"+result.Key, raw)
-		if err := b.plan(resultformat.ChangePlan{Changes: result.Bootstrap}); err != nil {
+		if err := b.plan(acceptedformat.ChangePlan{Changes: result.Bootstrap}); err != nil {
 			return err
 		}
 		for _, installation := range result.Installations {
@@ -285,7 +286,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		if err := b.plan(resultformat.ChangePlan{Changes: result.Changes}); err != nil {
+		if err := b.plan(acceptedformat.ChangePlan{Changes: result.Changes}); err != nil {
 			return err
 		}
 		if result.UsageBefore != "" {
@@ -296,13 +297,13 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		_, err := decodeAcceptedHostControl(raw)
 		return err
 	case "usage-result":
-		result, err := resultformat.DecodeUsage(raw)
+		result, err := acceptedformat.DecodeUsage(raw)
 		if err == nil {
 			b.meter(result.Usage)
 		}
 		return err
 	default:
-		result, _, err := resultformat.DecodeRecord(raw)
+		result, _, err := acceptedformat.DecodeRecord(raw)
 		if err != nil {
 			return err
 		}
@@ -313,7 +314,7 @@ func (b *storageDeltaBuilder) accepted(raw json.RawMessage) error {
 		if err := b.receipt(result.App, result.Receipt, result.Definition, result.SchemaVersion); err != nil {
 			return err
 		}
-		return b.plan(resultformat.ChangePlan{Unique: result.Unique})
+		return b.plan(acceptedformat.ChangePlan{Unique: result.Unique})
 	}
 }
 
@@ -376,7 +377,7 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 }
 
 type acceptedStateReader interface {
-	acceptedValueReader
+	runtimekernel.AcceptedValueReader
 	StateChanges(context.Context, string, string, string, string, int) ([][]byte, error)
 }
 
@@ -393,7 +394,7 @@ func (t *Tenant) installRuntimeHistory(store acceptedStateReader, position func(
 			})
 		}
 	}
-	t.committed.useStorage(store, t.ID, position)
+	t.committed.UseStorage(store, t.ID, position)
 }
 
 // installRuntimeRecords is called only after migration or recovery established
@@ -402,9 +403,7 @@ func (t *Tenant) installRuntimeHistory(store acceptedStateReader, position func(
 func (t *Tenant) installRuntimeRecords(store journal.RuntimeState, position func() int64) {
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
-	t.records.historyStore, t.records.tenant = store, t.ID
-	t.records.appliedPosition = position()
-	t.records.currentPosition = position
+	t.records.current.Configure(store, t.ID, position(), position)
 	t.records.useCurrentRows()
 }
 
@@ -455,16 +454,16 @@ func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 			d.Values = append(d.Values, journal.StateValue{Owner: "app-state", Key: a.Manifest().ID, Image: raw})
 		}
 	}
-	t.committed.storageValues(&d)
-	for name, n := range t.sequences.clone() {
+	t.committed.StorageValues(&d)
+	for name, n := range t.sequences.Clone() {
 		d.Values = append(d.Values, journal.StateValue{Owner: "sequence", Key: name, Image: jsonOf(n)})
 	}
 	return d, nil
 }
 
 func sameStoredJSON(a, b json.RawMessage) bool {
-	x, e := acceptance.Digest(a)
-	y, f := acceptance.Digest(b)
+	x, e := platform.CanonicalDigest(a)
+	y, f := platform.CanonicalDigest(b)
 	return e == nil && f == nil && x == y
 }
 

@@ -64,6 +64,9 @@ export const pageUIManifest = {
         "object",
         "selection"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "actionDefaults",
         "actions",
@@ -132,6 +135,32 @@ export const pageUIManifest = {
                 "maxLength": 256
               }
             }
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "variable": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "kind": {
+                  "type": "string",
+                  "maxLength": 80
+                }
+              },
+              "required": [
+                "field",
+                "variable",
+                "kind"
+              ]
+            },
+            "maxItems": 64
           }
         }
       },
@@ -228,6 +257,17 @@ export const pageUIManifest = {
         "showSearch",
         "tableColumns"
       ],
+      "declarationTexts": [
+        "tableColumns.*.title",
+        "tablePresentation.titleTemplate",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "tablePresentation",
+          "requiredUIProfile": "platform.page.v2.90"
+        }
+      ],
       "authoringFields": [
         "actions",
         "collectionVariable",
@@ -284,6 +324,29 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "detailPresentation": {
+            "type": "object",
+            "properties": {
+              "columns": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              },
+              "hideNull": {
+                "type": "boolean"
+              },
+              "barcode": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "print": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "columns"
+            ]
           }
         }
       },
@@ -319,6 +382,22 @@ export const pageUIManifest = {
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "detailPresentation.barcode",
+          "requiredUIProfile": "platform.page.v2.107"
+        },
+        {
+          "path": "detailPresentation.print",
+          "requiredUIProfile": "platform.page.v2.107",
+          "values": [
+            true
+          ]
+        }
       ],
       "authoringFields": [
         "configVersion",
@@ -384,6 +463,9 @@ export const pageUIManifest = {
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "actions",
@@ -490,6 +572,15 @@ export const pageUIManifest = {
         "object",
         "parentSelection",
         "relation"
+      ],
+      "declarationTexts": [
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "chartVariant",
+          "requiredUIProfile": "platform.page.v2.44"
+        }
       ],
       "authoringFields": [
         "chartVariant",
@@ -631,6 +722,18 @@ export const pageUIManifest = {
         "parentSelection",
         "relation"
       ],
+      "declarationTexts": [
+        "metricPresentation.annotation.text",
+        "metricPresentation.prefix",
+        "metricPresentation.suffix",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "metricPresentation.annotation",
+          "requiredUIProfile": "platform.page.v2.90"
+        }
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -685,6 +788,10 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "card"
       },
+      "declarationTexts": [
+        "text",
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -724,6 +831,32 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "variable": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "kind": {
+                  "type": "string",
+                  "maxLength": 80
+                }
+              },
+              "required": [
+                "field",
+                "variable",
+                "kind"
+              ]
+            },
+            "maxItems": 64
           }
         }
       },
@@ -754,6 +887,9 @@ export const pageUIManifest = {
         "filterSearchVariable",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -815,6 +951,9 @@ export const pageUIManifest = {
         "object",
         "parentSelection",
         "relation"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -884,6 +1023,9 @@ export const pageUIManifest = {
         "object",
         "selection"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "historyLimit",
@@ -946,6 +1088,9 @@ export const pageUIManifest = {
         "object",
         "selection"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -998,6 +1143,9 @@ export const pageUIManifest = {
         "function",
         "selection"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "function",
@@ -1049,6 +1197,9 @@ export const pageUIManifest = {
         "inputs",
         "operation",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -1120,6 +1271,9 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       },
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -1177,6 +1331,25 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "card"
       },
+      "declarationTexts": [
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "inputKind",
+          "requiredUIProfile": "platform.page.v2.66",
+          "values": [
+            "search"
+          ]
+        },
+        {
+          "path": "inputKind",
+          "requiredUIProfile": "platform.page.v2.107",
+          "values": [
+            "scan"
+          ]
+        }
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -1271,6 +1444,9 @@ export const pageUIManifest = {
         "object",
         "parentSelection",
         "relation"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -1374,6 +1550,9 @@ export const pageUIManifest = {
         "object",
         "selection"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -1469,6 +1648,9 @@ export const pageUIManifest = {
         "object",
         "selection"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "actions",
         "cardLabel",
@@ -1517,6 +1699,27 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "recordView": {
+            "type": "object",
+            "properties": {
+              "tabs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "overview",
+                    "properties",
+                    "links",
+                    "history"
+                  ]
+                },
+                "maxItems": 4
+              }
+            },
+            "required": [
+              "tabs"
+            ]
           }
         }
       },
@@ -1549,6 +1752,9 @@ export const pageUIManifest = {
         "object",
         "recordView",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "actions",
@@ -1600,6 +1806,45 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "buttons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "variant": {
+                  "type": "string",
+                  "enum": [
+                    "default",
+                    "primary",
+                    "ghost",
+                    "danger"
+                  ]
+                },
+                "icon": {
+                  "type": "string",
+                  "enum": [
+                    "arrow",
+                    "edit",
+                    "plus",
+                    "trash"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "title"
+              ]
+            },
+            "maxItems": 16
           }
         }
       },
@@ -1627,6 +1872,10 @@ export const pageUIManifest = {
       },
       "configurationFields": [
         "buttons"
+      ],
+      "declarationTexts": [
+        "buttons.*.title",
+        "title"
       ],
       "authoringFields": [
         "buttons",
@@ -1666,6 +1915,60 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "recordLinks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "object": {
+                  "type": "object",
+                  "properties": {
+                    "app": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "kind": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 256
+                    }
+                  },
+                  "required": [
+                    "app",
+                    "kind",
+                    "name"
+                  ]
+                },
+                "relation": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "field": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "maxItems": 64
+                }
+              },
+              "required": [
+                "object"
+              ]
+            },
+            "maxItems": 16
           }
         }
       },
@@ -1696,6 +1999,10 @@ export const pageUIManifest = {
         "object",
         "recordLinks",
         "selection"
+      ],
+      "declarationTexts": [
+        "recordLinks.*.title",
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -1770,6 +2077,9 @@ export const pageUIManifest = {
         "selection",
         "statusTracker"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -1814,7 +2124,8 @@ export const pageUIManifest = {
             "type": "string",
             "maxLength": 4096,
             "title": "Heading text",
-            "editor": "textarea"
+            "editor": "textarea",
+            "minLength": 1
           },
           "headingLevel": {
             "type": "string",
@@ -1826,7 +2137,10 @@ export const pageUIManifest = {
             "title": "Heading level"
           }
         },
-        "description": "Heading text is plain text; markup and scripts are not interpreted."
+        "description": "Heading text is plain text; markup and scripts are not interpreted.",
+        "required": [
+          "text"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -1834,6 +2148,10 @@ export const pageUIManifest = {
         "frame": "inline"
       },
       "propertyEditor": "schema",
+      "declarationTexts": [
+        "text",
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "headingLevel",
@@ -1924,6 +2242,9 @@ export const pageUIManifest = {
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -2060,6 +2381,9 @@ export const pageUIManifest = {
           "optional": true,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "actions",
@@ -2200,6 +2524,9 @@ export const pageUIManifest = {
             "decimal"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -2363,6 +2690,9 @@ export const pageUIManifest = {
           ]
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -2423,7 +2753,8 @@ export const pageUIManifest = {
               },
               "initialMonth": {
                 "type": "string",
-                "maxLength": 7
+                "maxLength": 7,
+                "pattern": "^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])$"
               }
             },
             "required": [
@@ -2491,6 +2822,9 @@ export const pageUIManifest = {
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -2680,6 +3014,9 @@ export const pageUIManifest = {
           ]
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -2753,6 +3090,10 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "card"
       },
+      "declarationTexts": [
+        "progressLabel",
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -2800,7 +3141,8 @@ export const pageUIManifest = {
             "type": "object",
             "properties": {
               "max": {
-                "type": "number"
+                "type": "number",
+                "exclusiveMinimum": 0
               },
               "warnAt": {
                 "type": "number"
@@ -2834,6 +3176,11 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "card"
       },
+      "declarationTexts": [
+        "gauge.label",
+        "gauge.suffix",
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "gauge",
@@ -2936,6 +3283,9 @@ export const pageUIManifest = {
             "decimal"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -3079,6 +3429,9 @@ export const pageUIManifest = {
           "allowID": true
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -3118,8 +3471,41 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "rangeInput": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "max": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "step": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "unit": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "min",
+              "max",
+              "step"
+            ]
           }
-        }
+        },
+        "required": [
+          "rangeInput"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [
@@ -3184,6 +3570,11 @@ export const pageUIManifest = {
           "max": 2,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "rangeInput.label",
+        "rangeInput.unit",
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -3274,6 +3665,16 @@ export const pageUIManifest = {
           "close"
         ]
       },
+      "declarationTexts": [
+        "booleanLabel",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "booleanVariant",
+          "requiredUIProfile": "platform.page.v2.54"
+        }
+      ],
       "authoringFields": [
         "booleanLabel",
         "booleanVariable",
@@ -3310,8 +3711,55 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "choiceInput": {
+            "type": "object",
+            "properties": {
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "select",
+                  "radio",
+                  "segments",
+                  "multiple",
+                  "steps",
+                  "tabs"
+                ]
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 256,
+                  "minLength": 1
+                },
+                "maxItems": 64
+              },
+              "optionLabels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "maxItems": 64
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "clearable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "variant",
+              "options"
+            ]
           }
-        }
+        },
+        "required": [
+          "choiceInput"
+        ]
       },
       "inputPorts": [
         {
@@ -3355,6 +3803,35 @@ export const pageUIManifest = {
       },
       "configurationFields": [
         "choiceInput"
+      ],
+      "declarationTexts": [
+        "choiceInput.label",
+        "choiceInput.optionLabels.*",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "choiceInput.variant",
+          "requiredUIProfile": "platform.page.v2.56",
+          "values": [
+            "multiple"
+          ]
+        },
+        {
+          "path": "choiceInput.variant",
+          "requiredUIProfile": "platform.page.v2.75",
+          "values": [
+            "steps",
+            "tabs"
+          ]
+        },
+        {
+          "path": "choiceInput.clearable",
+          "requiredUIProfile": "platform.page.v2.65",
+          "values": [
+            true
+          ]
+        }
       ],
       "authoringFields": [
         "choiceInput",
@@ -3406,7 +3883,8 @@ export const pageUIManifest = {
           },
           "dateOffset": {
             "type": "string",
-            "maxLength": 6
+            "maxLength": 6,
+            "pattern": "^(Z|[+-](0[0-9]|1[0-9]|2[0-3]):[0-5][0-9])$"
           }
         }
       },
@@ -3449,6 +3927,19 @@ export const pageUIManifest = {
           "close"
         ]
       },
+      "declarationTexts": [
+        "dateLabel",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "dateKind",
+          "requiredUIProfile": "platform.page.v2.59",
+          "values": [
+            "datetime"
+          ]
+        }
+      ],
       "authoringFields": [
         "configVersion",
         "dateKind",
@@ -3489,6 +3980,22 @@ export const pageUIManifest = {
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "recordPicker": {
+            "type": "object",
+            "properties": {
+              "labelField": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            },
+            "required": [
+              "labelField"
             ]
           }
         }
@@ -3548,6 +4055,10 @@ export const pageUIManifest = {
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "recordPicker.label",
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -3649,6 +4160,10 @@ export const pageUIManifest = {
           "close"
         ]
       },
+      "declarationTexts": [
+        "alertBanner.message",
+        "title"
+      ],
       "authoringFields": [
         "alertBanner",
         "alertValueVariable",
@@ -3721,7 +4236,10 @@ export const pageUIManifest = {
             ]
           }
         },
-        "description": "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions."
+        "description": "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions.",
+        "required": [
+          "notice"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -3729,6 +4247,11 @@ export const pageUIManifest = {
         "frame": "inline"
       },
       "propertyEditor": "schema",
+      "declarationTexts": [
+        "notice.message",
+        "notice.title",
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -3777,7 +4300,10 @@ export const pageUIManifest = {
             }
           }
         },
-        "description": "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity."
+        "description": "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity.",
+        "required": [
+          "separator"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -3785,6 +4311,10 @@ export const pageUIManifest = {
         "frame": "inline"
       },
       "propertyEditor": "schema",
+      "declarationTexts": [
+        "separator.label",
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -3838,7 +4368,10 @@ export const pageUIManifest = {
             ]
           }
         },
-        "description": "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target."
+        "description": "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target.",
+        "required": [
+          "spacer"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -3846,6 +4379,9 @@ export const pageUIManifest = {
         "frame": "inline"
       },
       "propertyEditor": "schema",
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -3935,6 +4471,9 @@ export const pageUIManifest = {
           ]
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -4023,6 +4562,9 @@ export const pageUIManifest = {
             "decimal"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -4182,6 +4724,9 @@ export const pageUIManifest = {
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -4384,6 +4929,9 @@ export const pageUIManifest = {
           "distinct": true
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "columnGroup",
@@ -4519,6 +5067,9 @@ export const pageUIManifest = {
           "max": 1
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -4652,6 +5203,11 @@ export const pageUIManifest = {
           "min": 1,
           "max": 1
         }
+      ],
+      "declarationTexts": [
+        "sparkline.label",
+        "sparkline.suffix",
+        "title"
       ],
       "authoringFields": [
         "collectionVariable",
@@ -4795,6 +5351,9 @@ export const pageUIManifest = {
           "distinct": true
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "fields",
@@ -4910,6 +5469,9 @@ export const pageUIManifest = {
           "optional": true,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -5033,6 +5595,9 @@ export const pageUIManifest = {
           "max": 1
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -5118,6 +5683,9 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "commentDraftVariable",
         "configVersion",
@@ -5202,6 +5770,9 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "fileVariable",
@@ -5276,6 +5847,9 @@ export const pageUIManifest = {
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -5361,6 +5935,9 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "fileVariable",
@@ -5424,6 +6001,9 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       },
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -5482,6 +6062,9 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       },
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -5516,6 +6099,27 @@ export const pageUIManifest = {
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "breadcrumb": {
+            "type": "object",
+            "properties": {
+              "homeLabel": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "pageLabel": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "homeLabel",
+              "pageLabel"
             ]
           }
         }
@@ -5561,6 +6165,11 @@ export const pageUIManifest = {
         "breadcrumb",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "breadcrumb.homeLabel",
+        "breadcrumb.pageLabel",
+        "title"
       ],
       "authoringFields": [
         "breadcrumb",
@@ -5643,6 +6252,9 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "avatar",
         "collectionVariable",
@@ -5680,8 +6292,29 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "image": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "caption": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "height": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 4096
+              }
+            }
           }
-        }
+        },
+        "required": [
+          "image"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -5700,6 +6333,10 @@ export const pageUIManifest = {
       },
       "configurationFields": [
         "image"
+      ],
+      "declarationTexts": [
+        "image.caption",
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -5793,6 +6430,9 @@ export const pageUIManifest = {
           ]
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -5830,6 +6470,71 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "assetDirectory": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    "asset": {
+                      "type": "object",
+                      "properties": {
+                        "ref": {
+                          "type": "object",
+                          "properties": {
+                            "app": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "app",
+                            "kind",
+                            "name"
+                          ]
+                        },
+                        "sourceVersion": {
+                          "type": "string",
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "ref",
+                        "sourceVersion"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "asset"
+                  ]
+                },
+                "maxItems": 4
+              }
+            },
+            "required": [
+              "items"
+            ]
           }
         }
       },
@@ -5866,6 +6571,10 @@ export const pageUIManifest = {
       ],
       "configurationFields": [
         "assetDirectory"
+      ],
+      "declarationTexts": [
+        "assetDirectory.items.*.label",
+        "title"
       ],
       "authoringFields": [
         "assetDirectory",
@@ -5939,6 +6648,9 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "graphExplorer",
@@ -6007,6 +6719,9 @@ export const pageUIManifest = {
         "model",
         "object",
         "vertexGraph"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -6125,6 +6840,9 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "analysis",
         "analysisCountVariable",
@@ -6216,6 +6934,9 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "actionTable",
         "actions",
@@ -6294,6 +7015,9 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       },
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "id",
@@ -6422,6 +7146,9 @@ export const pageUIManifest = {
         "object",
         "observation"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -6487,6 +7214,9 @@ export const pageUIManifest = {
       "configurationFields": [
         "embedding"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "embedding",
@@ -6521,8 +7251,33 @@ export const pageUIManifest = {
               "full",
               "half"
             ]
+          },
+          "externalFrame": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "origin": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4096
+              }
+            },
+            "required": [
+              "url",
+              "origin"
+            ]
           }
-        }
+        },
+        "required": [
+          "externalFrame"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -6540,6 +7295,9 @@ export const pageUIManifest = {
       },
       "configurationFields": [
         "externalFrame"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -6604,6 +7362,9 @@ export const pageUIManifest = {
         "function",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "ai",
@@ -6746,6 +7507,9 @@ export const pageUIManifest = {
           "allowID": true
         }
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "collectionVariable",
         "configVersion",
@@ -6822,6 +7586,9 @@ export const pageUIManifest = {
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "configVersion",
@@ -7034,6 +7801,10 @@ export const pageUIManifest = {
         "model",
         "object"
       ],
+      "declarationTexts": [
+        "scene.layers.*.name",
+        "title"
+      ],
       "authoringFields": [
         "configVersion",
         "fileVariable",
@@ -7129,6 +7900,9 @@ export const pageUIManifest = {
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "collectionBuilder",
@@ -7344,6 +8118,9 @@ export const pageUIManifest = {
       "configurationFields": [
         "composite"
       ],
+      "declarationTexts": [
+        "title"
+      ],
       "authoringFields": [
         "composite",
         "configVersion",
@@ -7441,6 +8218,9 @@ export const pageUIManifest = {
       },
       "configurationFields": [
         "composite"
+      ],
+      "declarationTexts": [
+        "title"
       ],
       "authoringFields": [
         "composite",

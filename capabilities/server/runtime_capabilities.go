@@ -14,14 +14,17 @@ import (
 // RuntimeCapabilities binds trusted pure implementations for one tenant instance.
 // Rebuilding an instance carries this selection; callers never mutate it live.
 type RuntimeCapabilities struct {
-	AIInference   *platform.AIInferencePolicy
-	Rules         platform.RuleEngine
-	Authorization authz.Engine
-	Kernel        platform.KernelFactory
-	RuleModule    platform.CapabilityModule
-	AuthModule    platform.CapabilityModule
-	KernelModule  platform.CapabilityModule
-	StorageModule platform.CapabilityModule
+	NewTransactionExecutor func(platform.BusinessRuntimeContext) platform.TransactionExecutor
+	NewAgentEvaluator      func() platform.AgentEvaluator
+	BindOwner              func(platform.App, platform.OwnerBindings)
+	AIInference            *platform.AIInferencePolicy
+	Rules                  platform.RuleEngine
+	Authorization          authz.Engine
+	Kernel                 platform.KernelFactory
+	RuleModule             platform.CapabilityModule
+	AuthModule             platform.CapabilityModule
+	KernelModule           platform.CapabilityModule
+	StorageModule          platform.CapabilityModule
 }
 
 func (r runtime) AuthorizationEngine() authz.Engine { return r.t.services.Authorization }

@@ -3,7 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
-	"platformserver/internal/acceptance"
+
+	"platformserver/platform"
 	"testing"
 	"time"
 )
@@ -11,7 +12,7 @@ import (
 func TestHostControlAcceptsBeforeExposureAndRestoresHistory(t *testing.T) {
 	const id = "host-control"
 	at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
-	build := func() *Tenant { return composeTenant(t, id, []Seat{seatOf("ana")}) }
+	build := func() *Tenant { return composeTenant(t, id, []platform.Seat{seatOf("ana")}) }
 	live := build()
 	imageHash := func(tn *Tenant) string {
 		t.Helper()
@@ -19,7 +20,7 @@ func TestHostControlAcceptsBeforeExposureAndRestoresHistory(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		hash, err := acceptance.Digest([]any{image, tn.Audit()})
+		hash, err := platform.CanonicalDigest([]any{image, tn.Audit()})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -138,7 +139,7 @@ func TestHostControlRecordAndMemoryUseSameDecision(t *testing.T) {
 	at := time.Date(2026, 10, 11, 13, 0, 0, 0, time.UTC)
 	for _, record := range []bool{false, true} {
 		t.Run(map[bool]string{false: "memory", true: "record"}[record], func(t *testing.T) {
-			tn := composeTenant(t, "host-modes", []Seat{seatOf("ana")})
+			tn := composeTenant(t, "host-modes", []platform.Seat{seatOf("ana")})
 			count := 0
 			if record {
 				tn.Record = func(e Entry) {

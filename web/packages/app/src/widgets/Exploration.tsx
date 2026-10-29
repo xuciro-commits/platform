@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "../index";
 import type * as PageUI from "../pageui/types";
 import {useEffect,useMemo,useRef,useState} from "react";
 import {AssetDirectory,Panel,RecordNeighborhood,RecordResourceList,SearchAround,t,type EntityInfo,type EntityRecord,type RecordSource,type SearchAroundPathEntry} from "@platform/ui";
@@ -15,13 +16,13 @@ export function ResourceListRenderer({config,window,collection,info,selected,onS
  if(window.query.limit!==12||!!window.query.offset||JSON.stringify(window.query.sort)!==JSON.stringify(["id"]))return <Panel role="alert">{t("The original resource window bounds or ordering changed.")}</Panel>;
  return <RecordResourceList records={window.page.records} total={window.page.total} info={info} labelField={config.labelField} statusField={config.statusField} statusTones={config.statusTones as Parameters<typeof RecordResourceList>[0]["statusTones"]} selected={selected?.id} onSelect={onSelect} enabled={enabled} label={label}/>;
 }
-export function AssetDirectoryRenderer({config,definitions,onOpen,canOpen,enabled,label}:{config?:PageUI.PageAssetDirectory;definitions:readonly Api.Definition[];onOpen?:(id:string)=>void;canOpen?:(id:string)=>boolean;enabled?:boolean;label:string}) {
+export function AssetDirectoryRenderer({config,definitions,onOpen,canOpen,enabled,label}:{config?:PageUI.PageAssetDirectory;definitions:readonly WorkspaceDefinition[];onOpen?:(id:string)=>void;canOpen?:(id:string)=>boolean;enabled?:boolean;label:string}) {
  if(!config)return <Panel role="alert">{t("The original asset directory is unavailable.")}</Panel>;
  const items=originalDirectoryItems(config,definitions);
  return <AssetDirectory items={items} onOpen={onOpen?item=>onOpen(item.id):undefined} canOpen={canOpen?item=>canOpen(item.id):undefined} enabled={enabled} label={label}/>;
 }
 
-type Props={kind:"graph-explorer"|"vertex-graph";config?:PageUI.PageGraphExplorer;vertex?:PageUI.PageVertexGraph;root?:EntityRecord;rootObject:Api.AssetRef;status?:Status;source:RecordSource;definitions:readonly Api.Definition[];identity:string;isActive:()=>boolean;onOutput?:(object:string,record:EntityRecord)=>Promise<boolean>;selected?:{object:string;id:string};enabled?:boolean;label:string;readCurrent?:boolean};
+type Props={kind:"graph-explorer"|"vertex-graph";config?:PageUI.PageGraphExplorer;vertex?:PageUI.PageVertexGraph;root?:EntityRecord;rootObject:Api.AssetRef;status?:Status;source:RecordSource;definitions:readonly WorkspaceDefinition[];identity:string;isActive:()=>boolean;onOutput?:(object:string,record:EntityRecord)=>Promise<boolean>;selected?:{object:string;id:string};enabled?:boolean;label:string;readCurrent?:boolean};
 /** The widget owns only a bounded path; records, relations and output confirmation retain their original owners. */
 export function ExplorationRenderer(props:Props) {
  const {kind,config,vertex,root,rootObject,status,source,definitions,identity,isActive,onOutput,selected,enabled,label,readCurrent=true}=props;

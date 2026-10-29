@@ -37,13 +37,13 @@ type letter struct {
 
 // mailNotice makes the email effects of a notice given to a member, as the
 // member wants them: address, language and when (opsMu held).
-func (t *Tenant) mailNotice(n platform.Notification, to Reach) {
+func (t *Tenant) mailNotice(n platform.Notification, to platform.Reach) {
 	for _, planned := range t.planMailNotice(n, to) {
 		t.outbound = append(t.outbound, &effect{Effect: planned})
 	}
 }
 
-func (t *Tenant) planMailNotice(n platform.Notification, to Reach) []platform.Effect {
+func (t *Tenant) planMailNotice(n platform.Notification, to platform.Reach) []platform.Effect {
 	var effects []platform.Effect
 	address, lang := to.Address, to.Language
 	if address == "" || !to.Mail {

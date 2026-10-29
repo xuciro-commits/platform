@@ -1,12 +1,12 @@
+import type {Definition as WorkspaceDefinition} from "../index";
 import {act,cleanup,renderHook} from '@testing-library/react';
 import {afterEach,expect,test,vi} from 'vitest';
-import type {Api} from '@platform/kernel';
 import type {RecordSource,RecordView} from '@platform/ui';
 import type {WidgetBindingContext} from '../widgets/bindings';
 import {PageSessionStore} from './Session';
 import {usePageModel} from './PageModel';
 
-const host=vi.hoisted(()=>({client:{get:vi.fn()},definitions:[] as Api.Definition[]}));
+const host=vi.hoisted(()=>({client:{get:vi.fn()},definitions:[] as WorkspaceDefinition[]}));
 vi.mock('../index',()=>({useHost:()=>host}));
 afterEach(()=>{cleanup();vi.useRealTimers();host.client.get.mockReset();});
 const stamp={by:'member',at:'2026-10-26T00:00:00Z'};

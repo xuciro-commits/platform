@@ -3,7 +3,7 @@ package journal
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
+	"platformserver/platform"
 )
 
 // ReplaceStateRecordValue preserves the opaque record envelope and checks the
@@ -13,7 +13,7 @@ func ReplaceStateRecordValue(image json.RawMessage, replacement StateReplacement
 	if err := json.Unmarshal(image, &envelope); err != nil {
 		return nil, err
 	}
-	before, err := acceptance.Digest(envelope["value"])
+	before, err := platform.CanonicalDigest(envelope["value"])
 	if err != nil || before != replacement.Before {
 		return nil, fmt.Errorf("installation predecessor differs: %s/%s", replacement.Type, replacement.ID)
 	}

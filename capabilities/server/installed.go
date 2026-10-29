@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	pageowner "platformserver/studio/pages"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -114,11 +115,11 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 			return fmt.Errorf("published business versioning and pin bindings are retained")
 		}
 		rows := before.rows
-		if rows.Sourced() && s.historyStore != nil && !before.retainedProjection {
+		if rows.Sourced() && s.current.Backend() != nil && !before.retainedProjection {
 			// Migrated SQL bytes may already have the target shape while this
 			// private installation still catalogs the source declaration. Read
 			// them using the target, then perform the same strict conversion.
-			rows = rows.Rebind(&currentRows{store: s, typ: info.Type, info: &info})
+			rows = rows.Rebind(s.current.Source(info.Type, &info))
 		}
 		entries := make([]records.Entry[*records.Row], 0, rows.Len())
 		for id, r := range rows.All() {
@@ -127,7 +128,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 				return err
 			}
 			v := reflect.New(info.Go).Elem()
-			decode, err := decodeRowImage(info, raw, r.Projection, s.readRelease, r.Format)
+			decode, err := decodeRowImage(info, raw, r.Projection, s.current.Release(), r.Format)
 			if err != nil {
 				return err
 			}
@@ -146,10 +147,10 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		}
 		et.setRows(index)
 		delete(s.byGo, before.info.Go)
-	} else if s.historyStore != nil && s.readView != nil {
+	} else if s.current.Backend() != nil && s.current.View() != nil {
 		// An owner-only SQL checkpoint restores dynamic declarations after native
 		// types. Their accepted rows already belong to the same fixed read view.
-		et.rows = records.SourceRows(&currentRows{store: s, typ: info.Type})
+		et.rows = records.SourceRows(s.current.Source(info.Type, nil))
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et
 	s.generation++
@@ -285,32 +286,46 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 }
 
 func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, engines ...platform.RuleEngine) error {
+	canonical := p
+	safe, err := p.Safety()
+	if err != nil {
+		return err
+	}
+	p = safe
+	if err := p.CheckSafety(); err != nil {
+		return err
+	}
+	for _, trigger := range p.ActionTriggers {
+		refs := slices.Clone(trigger.Actions)
+		if trigger.InlineEdit != nil {
+			refs = append(refs, trigger.InlineEdit.Action)
+		}
+		for _, event := range trigger.Events {
+			for _, effect := range event.Effects {
+				if effect.Action != nil {
+					refs = append(refs, effect.Action.Ref)
+				}
+			}
+		}
+		for _, ref := range refs {
+			if owner := t.owner["action:"+ref.Name]; owner != nil {
+				if action, ok := owner.Manifest().Actions.Action(ref.Name); ok && platform.StaticControlAction(action) {
+					return fmt.Errorf("page %s cannot bind static control action %s", p.Name, ref.Name)
+				}
+			}
+		}
+	}
 	if err := p.CheckModelBindings(t.entity, t.modelCriteria, engines...); err != nil {
 		return err
 	}
-	if err := t.checkModelQueries(p); err != nil {
+	if err := pageowner.CheckModelQueries(p, t.definitions, t.entity); err != nil {
 		return err
-	}
-	canonical := p
-	p = p.EffectiveModelPage(t.entity)
-	id := app.Manifest().ID
-	if p.Name == "" || (p.Layout != "list-detail" && p.Layout != "composed") {
-		return fmt.Errorf("page %q: a page is list-detail, or composed of sections", p.Name)
-	}
-	if p.Document != nil && p.Layout != "composed" {
-		return fmt.Errorf("page %s: a structured layout needs composed sections", p.Name)
-	}
-	if err := p.Document.Check(p.Sections); err != nil {
-		return fmt.Errorf("page %s: %w", p.Name, err)
 	}
 	if err := t.checkPageQueries(p); err != nil {
 		return err
 	}
-	if err := p.CheckRecordPorts(); err != nil {
-		return err
-	}
-	if p.Document != nil && p.Document.Interface != nil {
-		for _, ports := range []map[string]platform.PagePort{p.Document.Interface.Inputs, p.Document.Interface.Outputs} {
+	if iface := p.InputSchema.Interface; iface != nil {
+		for _, ports := range []map[string]platform.PagePort{iface.Inputs, iface.Outputs} {
 			for id, port := range ports {
 				if port.Object != nil {
 					info, ok := t.entity(port.Object.Name)
@@ -322,33 +337,13 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 		}
 	}
 	info, known := t.entity(p.Object.Name)
-	if !known {
-		return fmt.Errorf("page %s: no object %s", p.Name, p.Object.Name)
+	if p.Name == "" || !known {
+		return fmt.Errorf("page %s object %s is unavailable", p.Name, p.Object.Name)
 	}
-	if len(p.Selections) != 0 && len(p.Sections) == 0 {
-		return fmt.Errorf("page %s: selections need composed sections", p.Name)
+	if err := t.checkSections(p, info); err != nil {
+		return err
 	}
-	if len(p.Sections) > 0 {
-		if err := t.checkSections(p, info); err != nil {
-			return err
-		}
-	} else {
-		for _, fields := range [][]string{p.ListFields, p.DetailFields} {
-			if len(fields) == 0 {
-				return fmt.Errorf("page %s: no fields in its list or its detail", p.Name)
-			}
-			for _, name := range fields {
-				if _, ok := info.Field(name); !ok {
-					return fmt.Errorf("page %s: %s has no field %s", p.Name, p.Object.Name, name)
-				}
-			}
-		}
-	}
-	for _, ref := range p.Actions {
-		if err := t.checkAction(p.Name, ref.Name, p.Object.Name); err != nil {
-			return err
-		}
-	}
+	id := app.Manifest().ID
 	if targets {
 		for _, d := range t.definitions {
 			if d.Application != nil && d.Ref.App == id && slices.Contains(d.Application.Pages, p.Name) {
@@ -357,7 +352,7 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 				}
 			}
 		}
-		if err := t.checkPageNavigation(p, id); err != nil {
+		if err := pageowner.CheckNavigation(p, id, t.definitions); err != nil {
 			return err
 		}
 	}
@@ -370,563 +365,140 @@ var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 // knows, an object, the fields, actions and measures that object declares.
 // What the registry offers must open.
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
-	p = p.EffectiveModelPage(t.entity)
-	if err := p.Document.Check(p.Sections); err != nil {
-		return fmt.Errorf("page %s: %w", p.Name, err)
+	safe, err := p.Safety()
+	if err != nil {
+		return err
 	}
-	for _, embedding := range p.EmbeddingBindings() {
-		var child platform.Page
-		var source string
-		for _, d := range t.definitions {
-			if d.Ref == embedding.Page.Ref && d.Page != nil {
-				child = *d.Page
-				source = d.Version
-			}
+	if err := pageowner.CheckSelections(safe, t.entity, func(name string) (platform.Action, bool) {
+		if owner := t.owner["action:"+name]; owner != nil {
+			return owner.Manifest().Actions.Action(name)
 		}
-		digest, _ := platform.PageContentVersion(child)
-		if digest != embedding.ContentVersion {
-			registry, err := t.assetRegistryLocked()
-			if err != nil {
-				return err
-			}
-			asset, err := registry.ResolvePinned(embedding.Page.Ref, embedding.Page.SourceVersion, embedding.ContentVersion)
-			if err != nil {
-				return err
-			}
-			if err := json.Unmarshal(asset.Body, &child); err != nil {
-				return err
-			}
-		}
-		if source != embedding.Page.SourceVersion {
-			return fmt.Errorf("embedded page source differs")
-		}
-		if err := platform.CheckPageEmbedding(p, child, embedding); err != nil {
-			return err
-		}
-	}
-	selections := map[string]string{}
-	for _, selection := range p.Selections {
-		if !selectionName.MatchString(selection.Name) || selections[selection.Name] != "" {
-			return fmt.Errorf("page %s: selection names must be unique lowercase identifiers", p.Name)
-		}
-		info, known := t.entity(selection.Object.Name)
-		if selection.Object.Check() != nil || selection.Object.Kind != platform.AssetObject || !known || selection.Object.App != info.App {
-			return fmt.Errorf("page %s: selection %s needs a known object", p.Name, selection.Name)
-		}
-		selections[selection.Name] = selection.Object.Name
-	}
-	parentBindings := map[string]string{}
-	for i, s := range p.Sections {
-		if err := t.checkSection(p, page, i, s, selections, parentBindings); err != nil {
-			return err
-		}
-	}
-	for key := range parentBindings {
-		seen := map[string]bool{}
-		for at := key; at != ""; at = parentBindings[at] {
-			if seen[at] {
-				return fmt.Errorf("page %s: record selections have a parent cycle", p.Name)
-			}
-			seen[at] = true
-		}
-	}
-	return nil
-}
-
-// checkSection checks one section of a page against the entity it shows, the
-// page's selections, and the parent selections bound so far.
-func (t *Tenant) checkSection(p platform.Page, page platform.EntityInfo, i int, s platform.Section, selections, parentBindings map[string]string) error {
-	where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
-	if q, ok := p.InterfaceQueryForSection(s); ok {
-		return p.CheckInterfaceSection(s, querySourceDefinition(t.definitions, q.Query))
-	}
-	if owner, read := s.WorkViewRead(); read != "" {
-		app := t.owner["read:"+read]
-		if app == nil || app.Manifest().ID != owner {
-			return fmt.Errorf("%s: caller work read %s is unavailable", where, read)
-		}
-	}
-	if err := s.CheckServices(func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-		info, ok := t.entity(ref.Name)
-		return info, ok && info.App == ref.App
-	}, func(ref platform.AssetRef) (platform.Action, bool) {
-		owner := t.owner["action:"+ref.Name]
-		if owner == nil || owner.Manifest().ID != ref.App {
-			return platform.Action{}, false
-		}
-		return owner.Manifest().Actions.Action(ref.Name)
-	}); err != nil {
-		return fmt.Errorf("%s: %w", where, err)
-	}
-	if !slices.Contains(platform.Widgets, s.Widget) {
-		return fmt.Errorf("%s: no widget %q; there are %s", where, s.Widget, strings.Join(platform.Widgets, ", "))
-	}
-	if s.Width != "" && s.Width != "full" && s.Width != "half" {
-		return fmt.Errorf("%s: width %q is neither full nor half", where, s.Width)
-	}
-	if s.Widget == "ai-assistant" {
-		owner, ok := t.app(s.Function.Ref.App).(platform.RetainedFunctionAssets)
-		if !ok {
-			return fmt.Errorf("AI function owner is unavailable")
-		}
-		asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
-		if err != nil {
-			return err
-		}
-		var f platform.AIFunction
-		if json.Unmarshal(asset.Body, &f) != nil {
-			return fmt.Errorf("AI function is invalid")
-		}
-		if err := p.CheckAIBinding(s, f); err != nil {
-			return err
-		}
-	}
-	if s.Widget == "function" {
-		if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-			return platform.WidgetWritesSelection(other.Widget) && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.Selection
-		}) {
-			return fmt.Errorf("%s: add a table that selects a source record", where)
-		}
-		if s.Function == nil || s.Function.Ref.Kind != platform.AssetFunction || s.Function.Ref.App != p.Object.App ||
-			s.Object.Name != "" && s.Object != p.Object || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
-			return fmt.Errorf("%s: a function must bind one retained version on this page's object", where)
-		}
-		owner, ok := t.app(s.Function.Ref.App).(platform.RetainedFunctionAssets)
-		if !ok {
-			return fmt.Errorf("%s: the function has no published call owner", where)
-		}
-		asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
-		if err != nil {
-			return fmt.Errorf("%s: %w", where, err)
-		}
-		var function platform.AIFunction
-		if asset.Ref != s.Function.Ref || json.Unmarshal(asset.Body, &function) != nil || function.Object != p.Object.Name {
-			return fmt.Errorf("%s: the function does not read this page's object", where)
-		}
-	} else if s.Function != nil && s.Widget != "ai-assistant" {
-		return fmt.Errorf("%s: only a function widget may bind a function", where)
-	}
-	if s.Widget == "compute" {
-		if s.Object.Name != "" || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
-			return fmt.Errorf("%s: compute binds its typed inputs, not another widget's configuration", where)
-		}
-		if err := t.checkPageOperation(s, page); err != nil {
-			return fmt.Errorf("%s: %w", where, err)
-		}
-	} else if s.Operation != nil || s.Widget != "form" && len(s.Inputs) != 0 {
-		return fmt.Errorf("%s: only a compute or form widget may bind inputs", where)
-	}
-	info := page
-	if s.Object.Name != "" && s.Object.Name != p.Object.Name {
-		shown, known := t.entity(s.Object.Name)
-		if !known {
-			return fmt.Errorf("%s: no object %s", where, s.Object.Name)
-		}
-		info = shown
-	}
-	info = platform.ModelFields(info, s.Model, t.entity)
-	if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "collection-analysis" || s.Widget == "resource-list" || s.Widget == "graph-explorer" || s.Widget == "vertex-graph" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
-		object := s.Object
-		if object.Name == "" {
-			object = p.Object
-		}
-		if object.Kind != platform.AssetObject || object.App != info.App || object.Name != info.Type {
-			return fmt.Errorf("%s: collaboration object does not match its actual entity owner", where)
-		}
-	}
-	if s.Avatar != nil && s.Avatar.ContextVariable != "" {
-		ref := p.RecordResourceObject(s.Avatar.ContextVariable)
-		actual, ok := t.entity(ref.Name)
-		if !ok || ref.Kind != platform.AssetObject || ref.App != actual.App || ref.Name != actual.Type {
-			return fmt.Errorf("%s: avatar original context owner is unavailable", where)
-		}
-	}
-	if s.Widget == "action-table" {
-		if len(s.Actions) != 1 {
-			return fmt.Errorf("action table requires one original action")
-		}
-		owner := t.owner["action:"+s.Actions[0].Name]
-		if owner == nil {
-			return fmt.Errorf("action table action is unavailable")
-		}
-		a, ok := owner.Manifest().Actions.Action(s.Actions[0].Name)
-		if !ok {
-			return fmt.Errorf("action table action is unavailable")
-		}
-		if err := s.CheckActionTable(info, a); err != nil {
-			return err
-		}
-	}
-	if err := p.CheckObservation(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-		actual, ok := t.entity(ref.Name)
-		return actual, ok && actual.App == ref.App
+		return platform.Action{}, false
 	}); err != nil {
 		return err
 	}
-	if err := s.CheckResourceList(info); err != nil {
+	if err := safe.CheckSafety(); err != nil {
 		return err
 	}
-	if err := p.CheckExplorationSchema(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-		actual, ok := t.entity(ref.Name)
-		return actual, ok && actual.App == ref.App
-	}, func(b platform.AssetBinding) (platform.LinkType, bool) {
-		for _, d := range t.definitions {
-			if d.Ref == b.Ref {
-				if selected := d.LinkVersion(b.SourceVersion); selected != nil && selected.LinkType != nil {
-					return *selected.LinkType, true
-				}
-			}
-		}
-		return platform.LinkType{}, false
-	}); err != nil {
-		return fmt.Errorf("%s: %w", where, err)
-	}
-	if s.AssetDirectory != nil {
-		for _, item := range s.AssetDirectory.Items {
-			if !explorationAssetAvailable(t.definitions, item.Asset) {
-				return fmt.Errorf("%s: directory published asset is unavailable", where)
-			}
-		}
-	}
-	if err := s.CheckContextViews(info); err != nil {
-		return fmt.Errorf("%s: %w", where, err)
-	}
-	if p.Document != nil {
-		v := p.Document.Variables[s.RecordVariable]
-		if v.Source != nil && v.Source.Port != "" {
-			ref := p.RecordResourceObject(s.RecordVariable)
-			expected := info
-			if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
-				actual, ok := t.entity(s.Observation.AssetObject.Name)
-				if !ok {
-					return fmt.Errorf("%s: observation asset is unavailable", where)
-				}
-				expected = actual
-			}
-			if ref.App != expected.App || ref.Name != expected.Type {
-				return fmt.Errorf("%s: graph output consumer does not match its actual entity owner", where)
-			}
-		}
-	}
-	if s.RecordVariable != "" {
-		expectedType := info.Type
-		if s.Widget == "observation" && s.Observation != nil && s.Observation.Kind == "statistics" && s.Observation.AssetObject != nil {
-			expectedType = s.Observation.AssetObject.Name
-		}
-		producer := p.Document.LoopRecordSource(s.RecordVariable)
-		sourceType := p.RecordVariableObject(s.RecordVariable)
-		for _, candidate := range p.Sections {
-			if candidate.ID == producer {
-				sourceType = candidate.Object.Name
-				if sourceType == "" {
-					sourceType = p.Object.Name
-				}
-			}
-		}
-		if sourceType != expectedType {
-			return fmt.Errorf("%s: item record type does not match the widget object", where)
-		}
-	}
-
-	if s.DetailPresentation != nil && p.Document == nil {
-		return fmt.Errorf("detail presentation requires a document")
-	}
-	if s.Widget == "button-group" && p.Document == nil {
-		return fmt.Errorf("button group requires a document")
-	}
-	if len(s.TableColumns) > 0 || s.ShowSearch != nil {
-		if p.Document == nil {
-			return fmt.Errorf("table presentation requires a document")
-		}
-		if err := s.CheckTablePresentation(info); err != nil {
-			return err
-		}
-	}
-	if s.InlineEdit != nil {
-		if p.Document == nil {
-			return fmt.Errorf("table editing requires a document")
-		}
-		owner := t.owner["action:"+s.InlineEdit.Action.Name]
-		if owner == nil {
-			return fmt.Errorf("table edit action is unavailable")
-		}
-		action, _ := owner.Manifest().Actions.Action(s.InlineEdit.Action.Name)
-		if err := s.CheckTableEdit(info, action); err != nil {
-			return err
-		}
-	}
-	parentType := p.Object.Name
-	if s.ParentSelection != "" {
-		parentType = selections[s.ParentSelection]
-		if parentType == "" {
-			return fmt.Errorf("%s: parent selection %q is not declared", where, s.ParentSelection)
-		}
-	}
-	if s.Selection != "" {
-		if selections[s.Selection] != info.Type {
-			return fmt.Errorf("%s: selection %q does not hold %s records", where, s.Selection, info.Type)
-		}
-		if !platform.WidgetReadsSelection(s.Widget) {
-			return fmt.Errorf("%s: this widget does not use a record selection", where)
-		}
-		if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-			return platform.WidgetWritesSelection(other.Widget) && other.Selection == s.Selection
-		}) {
-			return fmt.Errorf("%s: add a table that supplies selection %q", where, s.Selection)
-		}
-	}
-	if s.ParentSelection != "" {
-		if !slices.Contains([]string{"table", "chart", "metric", "form"}, s.Widget) ||
-			!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) || s.Widget == "form" && s.Relation == "" {
-			return fmt.Errorf("%s: parent selection needs a related table, chart, metric or bound form", where)
-		}
-		if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-			return other.Widget == "table" && other.Selection == s.ParentSelection && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name)
-		}) {
-			return fmt.Errorf("%s: add a table that supplies parent selection %q", where, s.ParentSelection)
-		}
-	}
-	if s.Widget == "table" && (info.Type != p.Object.Name || s.ParentSelection != "") && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) {
-		key := "object:" + info.Type
-		if s.Selection != "" {
-			key = "selection:" + s.Selection
-		}
-		parent := "object:" + parentType
-		if s.ParentSelection != "" {
-			parent = "selection:" + s.ParentSelection
-		}
-		if previous := parentBindings[key]; previous != "" && previous != parent {
-			return fmt.Errorf("%s: record selection has conflicting parent bindings", where)
-		}
-		parentBindings[key] = parent
-	}
-	boundParent := ""
-	if s.Relation != "" {
-		if s.Widget != "table" && s.Widget != "chart" && s.Widget != "metric" && s.Widget != "form" {
-			return fmt.Errorf("%s: only a table, chart, metric or form follows a relation", where)
-		}
-		at := slices.IndexFunc(info.Fields, func(f platform.FieldInfo) bool {
-			return f.Type == "reference" && f.Ref == parentType && f.Inverse == s.Relation
-		})
-		if at < 0 {
-			return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, parentType)
-		}
-		if s.Widget == "form" {
-			if info.Fields[at].ReadOnly {
-				return fmt.Errorf("%s: parent reference %s is read only", where, info.Fields[at].Name)
-			}
-			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return other.Widget == "table" && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name) && other.Selection == s.ParentSelection
-			}) {
-				return fmt.Errorf("%s: add a table that selects a parent record", where)
-			}
-			boundParent = info.Fields[at].Name
-		}
-	}
-	if s.Query.Name != "" {
-		q, ok := t.namedQuery(s.Query.App, s.Query.Name)
-		switch {
-		case s.Widget != "table":
-			return fmt.Errorf("%s: only a table lists a query", where)
-		case !ok:
-			return fmt.Errorf("%s: no query %s", where, s.Query)
-		case q.Object != info.Type:
-			return fmt.Errorf("%s: query %s reads %s, not %s", where, s.Query, q.Object, info.Type)
-		case q.By != "" && (!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
-			return f.Name == q.By && f.Ref == parentType
-		})):
-			return fmt.Errorf("%s: query %s is run for a %s record, not this page's %s", where, s.Query, q.By, parentType)
-		}
-	}
-	field := func(name string) error {
-		if _, ok := info.Field(strings.Split(name, ":")[0]); !ok {
-			return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
-		}
-		return nil
-	}
-	if err := p.CheckSectionFields(s, info); err != nil {
+	if err := safe.CheckRecordPorts(); err != nil {
 		return err
 	}
-	return t.checkWidget(p, s, info, where, parentType, boundParent, field)
-}
-
-// checkWidget checks what a section's widget needs of its fields and settings.
-func (t *Tenant) checkWidget(p platform.Page, s platform.Section, info platform.EntityInfo, where, parentType, boundParent string, field func(string) error) error {
-	switch s.Widget {
-	case "inline-action":
-		if p.Document == nil || len(s.Actions) != 1 {
-			return fmt.Errorf("inline action needs a V2 page and one action")
+	for _, binding := range safe.DataBindings {
+		if err := safe.CheckDataBinding(binding, t.entity, t.modelCriteria, t.services.Rules); err != nil {
+			return fmt.Errorf("page %s binding %s: %w", p.Name, binding.ID, err)
 		}
-		owner := t.owner["action:"+s.Actions[0].Name]
-		if owner == nil {
-			return fmt.Errorf("inline action is unavailable")
+		if binding.Query != nil {
+			query := pageowner.QuerySourceDefinition(t.definitions, binding.Query)
+			if query == nil || query.Query == nil || query.Query.Object != binding.Object.Name {
+				return fmt.Errorf("page binding query owner or version is unavailable")
+			}
 		}
-		action, _ := owner.Manifest().Actions.Action(s.Actions[0].Name)
-		if err := s.CheckInlineAction(info, action); err != nil {
-			return err
+		for _, resource := range binding.Resources {
+			if resource.Asset == nil {
+				continue
+			}
+			ref := resource.Asset.Ref
+			if resource.Kind == "service" {
+				switch ref.Kind {
+				case platform.AssetObject:
+					info, ok := t.entity(ref.Name)
+					if !ok || info.App != ref.App {
+						return fmt.Errorf("page service owner is unavailable")
+					}
+				case platform.AssetAction:
+					owner := t.owner["action:"+ref.Name]
+					if owner == nil || owner.Manifest().ID != ref.App {
+						return fmt.Errorf("page service action owner is unavailable")
+					}
+				}
+			} else if !pageowner.ExplorationAssetAvailable(t.definitions, *resource.Asset) {
+				return fmt.Errorf("page resource version is unavailable")
+			}
 		}
-	case "kanban":
-		if p.Document == nil {
-			return fmt.Errorf("kanban needs a V2 document")
+	}
+	for _, trigger := range safe.ActionTriggers {
+		object := p.Object.Name
+		for _, binding := range safe.DataBindings {
+			if binding.ID == trigger.Binding {
+				if binding.Object.Name != "" {
+					object = binding.Object.Name
+				}
+				if binding.Model != nil {
+					object = binding.Model.Type
+				}
+			}
 		}
-		for _, ref := range s.Actions {
-			if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
+		for _, action := range trigger.Actions {
+			if err := t.checkAction(p.Name, action.Name, object); err != nil {
 				return err
 			}
 		}
-	case "breadcrumb", "avatar-stack", "static-image", "resource-list", "asset-directory", "graph-explorer", "vertex-graph":
-		// Their finite bindings and original field schema were checked above.
-	case "collection-builder":
-		if err := s.CheckCollectionBuilderFields(info); err != nil {
-			return err
-		}
-	case "scene-3d":
-		if err := p.CheckSceneBinding(s, func(ref platform.AssetRef) (platform.EntityInfo, bool) {
-			actual, ok := t.entity(ref.Name)
-			return actual, ok && actual.App == ref.App
-		}); err != nil {
-			return err
-		}
-	case "record-timeline":
-		if p.Document == nil {
-			return fmt.Errorf("record timeline needs a V2 document")
-		}
-	case "record-links":
-		if p.Document == nil {
-			return fmt.Errorf("record links require a document")
-		}
-		if err := s.CheckRecordLinks(info, t.entity); err != nil {
-			return err
-		}
-	case "record-view":
-		if p.Document == nil {
-			return fmt.Errorf("record view requires a document")
-		}
-		for _, name := range s.Fields {
-			if err := field(name); err != nil {
+		if trigger.InlineEdit != nil {
+			if err := t.checkAction(p.Name, trigger.InlineEdit.Action.Name, object); err != nil {
+				return err
+			}
+			owner := t.owner["action:"+trigger.InlineEdit.Action.Name]
+			action, _ := owner.Manifest().Actions.Action(trigger.InlineEdit.Action.Name)
+			info, _ := t.entity(object)
+			section := platform.Section{InlineEdit: trigger.InlineEdit}
+			if err := section.CheckTableEdit(info, action); err != nil {
 				return err
 			}
 		}
-		for _, ref := range s.Actions {
-			if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
-				return err
+		if len(trigger.Defaults) > 0 {
+			if len(trigger.Actions) != 1 {
+				return fmt.Errorf("action parameters require one exact action")
 			}
-			owner := t.owner["action:"+ref.Name]
+			owner := t.owner["action:"+trigger.Actions[0].Name]
 			if owner == nil {
-				return fmt.Errorf("record view action owner is unavailable")
+				return fmt.Errorf("action parameter owner is unavailable")
 			}
-			action, _ := owner.Manifest().Actions.Action(ref.Name)
-			if action.New {
-				return fmt.Errorf("record view only offers existing-record actions")
-			}
-		}
-	case "table", "detail":
-		if len(s.Fields) == 0 {
-			return fmt.Errorf("%s: no fields to show", where)
-		}
-		for _, name := range s.Fields {
-			if err := field(name); err != nil {
-				return err
+			action, _ := owner.Manifest().Actions.Action(trigger.Actions[0].Name)
+			info, _ := t.entity(object)
+			for _, mapping := range trigger.Defaults {
+				field, found := info.Field(mapping.Field)
+				parameter := slices.IndexFunc(action.Payload, func(value platform.Field) bool { return value.Name == mapping.Parameter })
+				if !found || parameter < 0 || !platform.ActionParameterCompatible(field, action.Payload[parameter]) {
+					return fmt.Errorf("action parameter field type does not match its original signature")
+				}
 			}
 		}
-		if err := s.CheckDetailBarcode(info); err != nil {
-			return fmt.Errorf("%s: %w", where, err)
-		}
-	case "actions":
-		if len(s.Actions) == 0 {
-			return fmt.Errorf("%s: no actions to offer", where)
-		}
-		for _, ref := range s.Actions {
-			if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
-				return err
-			}
-		}
-	case "chart", "metric", "pivot", "heatmap":
-		if s.Mark != "" && (p.Document == nil || !platform.PageUIProfileSupports(p.Document.UIProfile, "platform.page.v2.24")) {
-			return fmt.Errorf("%s: chart mark requires v2.24", where)
-		}
-		if (s.Widget == "pivot" || s.Widget == "heatmap") && p.Document == nil {
-			return fmt.Errorf("%s: pivot needs a V2 document", where)
-		}
-		if s.Measure == "" {
-			return fmt.Errorf("%s: nothing measured; count, sum:<field>, avg:<field>, min:<field> or max:<field>", where)
-		}
-		kind, name, some := strings.Cut(s.Measure, ":")
-		if !slices.Contains([]string{"count", "sum", "avg", "min", "max"}, kind) || (kind != "count") != some {
-			return fmt.Errorf("%s: %q is not count, sum:<field>, avg:<field>, min:<field> or max:<field>", where, s.Measure)
-		}
-		if some {
-			if err := field(name); err != nil {
-				return err
-			}
-		}
-		if s.Widget == "chart" || (s.Widget == "pivot" || s.Widget == "heatmap") {
-			if s.Group == "" {
-				return fmt.Errorf("%s: nothing to group by", where)
-			}
-			if err := field(s.Group); err != nil {
-				return err
-			}
-		}
-		if ((s.Widget == "pivot" || s.Widget == "heatmap") || s.Mark != "") && !checkAggregateSection(s, info) {
-			return fmt.Errorf("%s: invalid pivot group or measure", where)
-		}
-	case "button", "input":
-		if p.Document == nil || s.Object.Name != "" || s.Query.Name != "" || s.Selection != "" || s.ParentSelection != "" || s.Relation != "" || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Text != "" || s.Function != nil || s.Operation != nil || len(s.Inputs) > 0 {
-			return fmt.Errorf("%s: an interactive presentation widget requires a document and no business binding", where)
-		}
-	case "text":
-		if strings.TrimSpace(s.Text) == "" {
-			return fmt.Errorf("%s: no words to show", where)
-		}
-	case "filter":
-		if len(s.Facets) > 0 || s.FilterSearchVariable != "" {
-			if err := s.CheckFacetSchema(info); err != nil {
-				return err
-			}
-			break
-		}
-		if len(s.Fields) == 0 {
-			return fmt.Errorf("%s: no fields to filter by", where)
-		}
-		for _, name := range s.Fields {
-			f, ok := info.Field(name)
+		if trigger.Operation != nil {
+			info, ok := t.entity(object)
 			if !ok {
-				return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
+				return fmt.Errorf("page operation input object is unavailable")
 			}
-			if !slices.Contains(platform.Filterable, f.Type) {
-				return fmt.Errorf("%s: %s is a %s field; a filter takes %s fields", where, name, f.Type, strings.Join(platform.Filterable, ", "))
-			}
-		}
-	case "form":
-		// A form makes a new record through the object's own create action,
-		// so it asks for everything that action needs, except a parent
-		// reference supplied by its explicitly declared relation.
-		if err := t.checkAction(p.Name, info.Type+".create", info.Type); err != nil {
-			return fmt.Errorf("%s: %s cannot be created here", where, info.Type)
-		}
-		if len(s.Fields) == 0 && boundParent == "" && len(s.Inputs) == 0 {
-			return fmt.Errorf("%s: no fields to fill in", where)
-		}
-		for _, name := range s.Fields {
-			if err := field(name); err != nil {
+			if err := (pageowner.Bindings{Operation: t.pageOperation}).CheckOperation(trigger, info); err != nil {
 				return err
 			}
 		}
-		if err := t.checkFormInputs(s, info, parentType, boundParent); err != nil {
-			return fmt.Errorf("%s: %w", where, err)
+		if trigger.Function != nil {
+			owner, ok := t.app(trigger.Function.Ref.App).(platform.RetainedFunctionAssets)
+			if !ok {
+				return fmt.Errorf("page function owner is unavailable")
+			}
+			asset, err := owner.FunctionReleaseAsset(trigger.Function.Ref.Name, trigger.Function.SourceVersion)
+			if err != nil {
+				return err
+			}
+			var function platform.AIFunction
+			if json.Unmarshal(asset.Body, &function) != nil || function.Object != object {
+				return fmt.Errorf("page function input type is unavailable")
+			}
 		}
-		for _, f := range info.Fields {
-			_, bound := s.Inputs[f.Name]
-			if f.Required && !f.ReadOnly && f.Name != boundParent && !bound && !slices.Contains(s.Fields, f.Name) {
-				return fmt.Errorf("%s: %s needs %s, which the form does not ask for", where, info.Type, f.Name)
+		for _, event := range trigger.Events {
+			for _, effect := range event.Effects {
+				if effect.Action != nil {
+					if err := t.checkAction(p.Name, effect.Action.Ref.Name, object); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
 	return nil
 }
 
-// checkAction holds a page's action to one about the object it shows.
 func (t *Tenant) checkAction(page, schema, object string) error {
 	owner := t.owner["action:"+schema]
 	action, ok := platform.Action{}, false
@@ -1059,4 +631,10 @@ func (t *Tenant) checkApplicationExtension(ref platform.AssetRef, a platform.App
 		}
 	}
 	return nil
+}
+
+func (t *Tenant) checkPageQueries(p platform.Page) error {
+	bindings := pageowner.Bindings{Entity: t.entity, Criteria: t.modelCriteria, Rules: t.services.Rules,
+		Operation: t.pageOperation, Definitions: t.definitions, Interface: t.bindInterfaceQuery}
+	return bindings.CheckQueries(p)
 }

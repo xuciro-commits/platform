@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/engine/resources"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+
 	"slices"
 	"testing"
 	"time"
@@ -18,10 +20,10 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
+
 	"platformserver/apps/work"
-	"platformserver/internal/host"
+	automation "platformserver/engine/automation"
+
 	"platformserver/platform"
 )
 
@@ -30,21 +32,21 @@ func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			const id = "nested-compute-savepoint"
 			source := newFrameDataComputeSource(id, 256<<10)
-			tn := composeTenant(t, id, []Seat{seatOf("admin", PlatformApp+":"+Admin, "stock:clerk", "frames:operator")},
-				work.New(id), flow.New(id), newStock(id), source)
-			tn.Files = &memoryFiles{}
+			tn := composeTenant(t, id, []platform.Seat{seatOf("admin", controlowner.PlatformApp+":"+controlowner.Admin, "stock:clerk", "frames:operator")},
+				work.New(id), automation.New(id), newStock(id), source)
+			tn.Files = &resources.MemoryFiles{}
 			if err := tn.files().Put(context.Background(), artifactKey(id, source.moduleDigest), source.module, "application/wasm"); err != nil {
 				t.Fatal(err)
 			}
 			at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
 			member := memberOf(t, tn, "admin")
 			draft := tn.newStagedDecision()
-			caller := platform.NewCaller(draft, member, PlatformApp, false, false)
+			caller := platform.NewCaller(draft, member, controlowner.PlatformApp, false, false)
 			stockCaller := platform.NewCaller(draft, member, "stock", false, false)
 			if _, err := draft.Decide(stockCaller, tn.app("stock"), submission(tn, member, "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2}), at); err != nil {
 				t.Fatal(err)
 			}
-			receipt, err := draft.Decide(caller, tn.app(PlatformApp), submission(tn, member, PlatformApp, SchemaAdd, MemberType, "parent", map[string]any{"subject": "user:parent@example.test"}), at)
+			receipt, err := draft.Decide(caller, tn.app(controlowner.PlatformApp), submission(tn, member, controlowner.PlatformApp, controlowner.SchemaAdd, controlowner.MemberType, "parent", map[string]any{"subject": "user:parent@example.test"}), at)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -54,14 +56,14 @@ func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 			if !ok {
 				t.Fatal("Compute definition is missing")
 			}
-			definition, _ := acceptance.Digest([]any{q.App, op, version})
-			inputHash, _ := acceptance.Digest(q.Inputs)
-			ref, sealErr := tn.staged.sealInput(id+":frames:operation:"+q.Key+":"+resultformat.OperationEndpoint, member.ID, definition, inputHash, q.Inputs, op.Limits.DataInputBytes)
+			definition, _ := platform.CanonicalDigest([]any{q.App, op, version})
+			inputHash, _ := platform.CanonicalDigest(q.Inputs)
+			ref, sealErr := tn.staged.SealInput(id+":frames:operation:"+q.Key+":"+acceptedformat.OperationEndpoint, member.ID, definition, inputHash, q.Inputs, op.Limits.DataInputBytes)
 			if sealErr != nil {
 				t.Fatal(sealErr)
 			}
-			t.Cleanup(func() { tn.staged.discardInput(ref) })
-			requestHash, _ := acceptance.Digest(q)
+			t.Cleanup(func() { tn.staged.DiscardInput(ref) })
+			requestHash, _ := platform.CanonicalDigest(q)
 			draft.operationInputs = map[string][]*preparedOperationInput{requestHash: {{ref: ref, requestHash: requestHash}}}
 			draft.operationAnswers = map[string]platform.OperationResult{"prior": {ID: "prior", Output: []byte(`[1]`), Ref: &platform.AssetRef{App: "frames", Kind: platform.AssetCompute, Name: "aggregate"}}}
 			parentRefusal := platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Parent issue")
@@ -72,7 +74,7 @@ func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 				if _, err := platform.Decide(stockChild, tn.app("stock"), submission(tn, member, "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": 99}), at); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := platform.Decide(c, tn.app(PlatformApp), submission(tn, member, PlatformApp, SchemaAdd, MemberType, "child", map[string]any{"subject": "user:child@example.test"}), at); err != nil {
+				if _, err := platform.Decide(c, tn.app(controlowner.PlatformApp), submission(tn, member, controlowner.PlatformApp, controlowner.SchemaAdd, controlowner.MemberType, "child", map[string]any{"subject": "user:child@example.test"}), at); err != nil {
 					t.Fatal(err)
 				}
 				c.Notify(platform.Notification{Title: "Child", Key: "child"}, at, platform.Recipient{Member: member.ID})
@@ -116,8 +118,8 @@ func TestAcceptedNestedAttemptOwnsPreparedComputeAndPrivateState(t *testing.T) {
 				wantQty, wantEvents, wantNotices, wantPending, wantIssues = 99, 4, 2, 0, 2
 			}
 			item, _ := platform.Get[Item](stockCaller, "I1")
-			_, hasChild := draft.states[PlatformApp].(*Console).MemberBySubject("user:child@example.test")
-			_, hasParent := draft.states[PlatformApp].(*Console).MemberBySubject("user:parent@example.test")
+			_, hasChild := draft.states[controlowner.PlatformApp].(*controlowner.Console).MemberBySubject("user:child@example.test")
+			_, hasParent := draft.states[controlowner.PlatformApp].(*controlowner.Console).MemberBySubject("user:parent@example.test")
 			if item.Qty != wantQty || len(draft.events) != wantEvents || len(draft.notices) != wantNotices || !hasParent || hasChild != accepted || len(draft.inputIssues) != wantIssues || pendingOperationInputs(draft.operationInputs) != wantPending || snapshot(tn) != liveBefore {
 				t.Fatalf("child escaped or lost its savepoint: qty=%d events=%d notices=%d child=%t parent=%t issues=%d inputs=%d", item.Qty, len(draft.events), len(draft.notices), hasChild, hasParent, len(draft.inputIssues), pendingOperationInputs(draft.operationInputs))
 			}
@@ -145,8 +147,11 @@ type nestedDocument struct {
 }
 
 type nestedIssuer struct {
-	ledger  *platform.Ledger
-	host    host.Host
+	ledger *platform.Ledger
+	host   interface {
+		platform.FlowHost
+		As(platform.Caller, string) platform.Caller
+	}
 	cycle   bool
 	reject  bool
 	calls   int
@@ -159,7 +164,12 @@ func newNestedIssuer(tenant string) *nestedIssuer {
 		Capability: "documents", Roles: []string{"clerk"}})
 	return &nestedIssuer{ledger: platform.NewLedger(tenant, "nested", catalog, "nested.document")}
 }
-func (n *nestedIssuer) AttachBuild(h host.BuildHost) { n.host = h.(host.Host) }
+func (n *nestedIssuer) AttachFlow(h platform.FlowHost) {
+	n.host = h.(interface {
+		platform.FlowHost
+		As(platform.Caller, string) platform.Caller
+	})
+}
 func (n *nestedIssuer) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "nested", Title: "Nested", Version: "1", Actions: n.ledger.Catalog,
 		Sequences: []platform.Sequence{{Name: "document", Pattern: "D/{n}"}},
@@ -203,14 +213,14 @@ func (n *nestedIssuer) Submit(c platform.Caller, sub *pb.Submission, at time.Tim
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Nested record is not visible in the decision")
 		}
 		if n.publish {
-			object := &pb.Submission{TenantId: sub.GetTenantId(), PrincipalId: c.ID, Authority: construction.ID,
-				IdempotencyKey: sub.GetIdempotencyKey() + ":object", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
-				Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
+			object := &pb.Submission{TenantId: sub.GetTenantId(), PrincipalId: c.ID, Authority: build.ID,
+				IdempotencyKey: sub.GetIdempotencyKey() + ":object", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+				Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
 				Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}
 			if _, err := n.host.Submit(c, object, at); err != nil {
 				return nil, err
 			}
-			object.IdempotencyKey, object.Schema.Name, object.Payload = sub.GetIdempotencyKey()+":publish", construction.SchemaPublish, []byte(`{}`)
+			object.IdempotencyKey, object.Schema.Name, object.Payload = sub.GetIdempotencyKey()+":publish", build.SchemaPublish, []byte(`{}`)
 			if _, err := n.host.Submit(c, object, at); err != nil {
 				return nil, err
 			}
@@ -231,14 +241,14 @@ func nestedTenant(t *testing.T) *Tenant {
 
 func nestedTenantID(t *testing.T, id string, extra ...platform.App) *Tenant {
 	t.Helper()
-	seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
+	seat := platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
 		Roles: map[string]string{"stock": "clerk", "nested": "clerk"}}}
 	for _, app := range extra {
-		if app.Manifest().ID == construction.ID {
-			seat.Member.Roles[construction.ID] = construction.Builder
+		if app.Manifest().ID == build.ID {
+			seat.Member.Roles[build.ID] = build.Builder
 		}
 	}
-	apps := append([]platform.App{NewConsole(id, seat), newStock(id), newNestedIssuer(id)}, extra...)
+	apps := append([]platform.App{newConsole(id, seat), newStock(id), newNestedIssuer(id)}, extra...)
 	tn, err := NewTenant(id, apps...)
 	if err != nil {
 		t.Fatal(err)
@@ -258,7 +268,7 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if _, exists := live.owner["action:build.visit.create"]; exists ||
-			live.records.types["build.visit"] != nil || len(live.app(construction.ID).(platform.App).AcceptedLedger().RecordsFor(live.ID)) != 0 {
+			live.records.types["build.visit"] != nil || len(live.app(build.ID).(platform.App).AcceptedLedger().RecordsFor(live.ID)) != 0 {
 			t.Fatal("nested publication installed before the parent's commit")
 		}
 		if fail {
@@ -276,9 +286,9 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	if _, err := live.Submit(member, sub, at); err != nil {
 		t.Fatalf("nested publication: %v fault=%+v", err, live.fault.Load())
 	}
-	result, _, err := resultformat.DecodeBatch(entries[0].Body)
+	result, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(result.Decisions) != 5 || len(result.Rows) != 3 ||
-		!slices.ContainsFunc(result.Decisions, func(d resultformat.Decision) bool { return d.Publication != nil }) ||
+		!slices.ContainsFunc(result.Decisions, func(d acceptedformat.Decision) bool { return d.Publication != nil }) ||
 		live.owner["action:build.visit.create"] == nil || live.records.types["build.visit"] == nil {
 		t.Fatalf("nested publication was not installed from its one saved result: %v", err)
 	}
@@ -302,7 +312,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
 			len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(live.ID)) != 0 ||
 			live.records.types["stock.item"].rows.Get("D1-child") != nil ||
-			live.sequences.last["nested/document/0"] != 0 {
+			live.sequences.Clone()["nested/document/0"] != 0 {
 			t.Fatal("a nested decision escaped before the one journal append")
 		}
 		if fail {
@@ -320,11 +330,11 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 	if refused != nil || receipt == nil || len(entries) != 1 {
 		t.Fatalf("nested decisions did not commit together: %+v, %v, fault=%+v, entries=%+v", receipt, refused, live.fault.Load(), entries)
 	}
-	result, _, err := resultformat.DecodeBatch(entries[0].Body)
+	result, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(result.Decisions) != 3 || len(result.Rows) != 2 {
 		t.Fatalf("one batch omitted nested receipts or rows: %+v, %v", result, err)
 	}
-	if live.sequences.last["nested/document/0"] != 1 || result.SequenceBases["nested/document/0"] != 0 {
+	if live.sequences.Clone()["nested/document/0"] != 1 || result.SequenceBases["nested/document/0"] != 0 {
 		t.Fatal("the number was not committed with its predecessor")
 	}
 	item := live.records.types["stock.item"].rows.Get("D1-child")
@@ -358,7 +368,7 @@ func TestAcceptedNestedRefusalDiscardsEveryChild(t *testing.T) {
 			len(entries) != 1 {
 			t.Fatalf("refused/cyclic parent had no durable refusal: cycle=%t, %v", cycle, err)
 		}
-		if _, _, err := resultformat.DecodeRefusal(entries[0].Body); err != nil {
+		if _, _, err := acceptedformat.DecodeRefusal(entries[0].Body); err != nil {
 			t.Fatal(err)
 		}
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
@@ -377,7 +387,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 	if _, err := source.Submit(member, nestedSubmission(source, "D1"), time.Now()); err != nil {
 		t.Fatalf("%v, fault=%+v, entry=%s", err, source.fault.Load(), entry.Body)
 	}
-	result, _, err := resultformat.DecodeBatch(entry.Body)
+	result, _, err := acceptedformat.DecodeBatch(entry.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +412,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 			result.Rows[i].Value, _ = json.Marshal(record)
 		}
 	}
-	result.Digest, _ = resultformat.DigestBatch(result)
+	result.Digest, _ = acceptedformat.DigestBatch(result)
 	raw, _ := json.Marshal(result)
 	recovered := nestedTenant(t)
 	if _, err := recovered.applyAcceptedBatch(recovered.app("nested").(*nestedIssuer).ledger, raw); err == nil {
@@ -410,7 +420,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 	}
 	if len(recovered.app("stock").(*stock).ledger.RecordsFor(recovered.ID)) != 0 ||
 		len(recovered.app("nested").(*nestedIssuer).ledger.RecordsFor(recovered.ID)) != 0 ||
-		recovered.records.types["stock.item"].rows.Len() != 0 || recovered.sequences.last["nested/document/0"] != 0 {
+		recovered.records.types["stock.item"].rows.Len() != 0 || recovered.sequences.Clone()["nested/document/0"] != 0 {
 		t.Fatal("a late invalid receipt exposed an earlier child's state")
 	}
 }
@@ -452,7 +462,7 @@ func TestJournalAcceptedNestedBatchCrashBeforeApplication(t *testing.T) {
 	}()
 	if len(live.app("stock").(*stock).ledger.RecordsFor(id)) != 0 ||
 		len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(id)) != 0 ||
-		live.records.types["stock.item"].rows.Len() != 0 || live.sequences.last["nested/document/0"] != 0 {
+		live.records.types["stock.item"].rows.Len() != 0 || live.sequences.Clone()["nested/document/0"] != 0 {
 		t.Fatal("unapplied nested result leaked a record, receipt or number")
 	}
 	reopened, err := OpenJournal(ctx, url)

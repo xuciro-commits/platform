@@ -1,12 +1,12 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
+	pageowner "platformserver/studio/pages"
+
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -28,27 +28,12 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return acceptance.Digest(image)
-}
-
-func (t *Tenant) installationPlan(registry *platform.AssetRegistry, installation resultformat.ReleaseInstallation) (platform.AssetInstallation, error) {
-	app := construction.ID
-	if installation.Ref != nil {
-		app = installation.Ref.App
-	}
-	plan, err := registry.DecodeAssetInstallation(app, installation.Schema, installation.Image)
-	if err != nil {
-		return plan, err
-	}
-	if installation.Ref != nil && (*installation.Ref != plan.Ref || installation.Record != plan.Record) {
-		return plan, fmt.Errorf("release installation identity differs")
-	}
-	return plan, nil
+	return platform.CanonicalDigest(image)
 }
 
 // The owner performs every kind-specific install into this isolated runtime.
 // Historical images and new plans share this machinery, never a second switch.
-func (t *Tenant) stageReleaseInstallationLocked(installations []resultformat.ReleaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
+func (t *Tenant) stageReleaseInstallationLocked(installations []platform.ReleaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
 	draft, err := t.assetInstallationView(t.records)
 	if err != nil {
 		return nil, err
@@ -59,7 +44,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []resultformat.Rel
 	}
 	draft.installingSet = true
 	for _, installation := range installations {
-		plan, err := draft.installationPlan(registry, installation)
+		plan, err := releaseowner.InstallationPlan(registry, installation)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +93,7 @@ func (t *Tenant) assetInstallationView(recordView *recordStore) (*Tenant, error)
 	if t.procs != nil {
 		draft.procs = t.procs.InstallationDraft()
 		if app, ok := draft.procs.(platform.App); ok {
-			host.Attach(app, hostView{t: draft, app: app})
+			(hostView{t: draft, app: app}).bindOwner(app)
 		}
 	}
 	for i, app := range draft.apps {
@@ -128,7 +113,7 @@ func (t *Tenant) assetInstallationView(recordView *recordStore) (*Tenant, error)
 			return nil, fmt.Errorf("asset owner %s cannot fork: %v", app.Manifest().ID, err)
 		}
 		draft.apps[i] = fork
-		host.Attach(fork, hostView{t: draft, app: fork})
+		(hostView{t: draft, app: fork}).bindOwner(fork)
 	}
 	if err := draft.registerOwnedAssetMetadata(); err != nil {
 		return nil, err
@@ -145,7 +130,7 @@ func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
 		if next == nil || old.rows.Len() == 0 {
 			continue
 		}
-		if !sameStoredFields(old.info, next.info) && (!upgrade || optionalStoredAddition(old.info, next.info) == nil) {
+		if !releaseowner.SameStoredFields(old.info, next.info) && (!upgrade || releaseowner.OptionalStoredAddition(old.info, next.info) == nil) {
 			return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", typ)
 		}
 	}
@@ -212,23 +197,10 @@ func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
 			}
 		}
 		if definition.Page != nil {
-			if err := t.checkPageNavigation(*definition.Page, definition.Ref.App); err != nil {
+			if err := pageowner.CheckNavigation(*definition.Page, definition.Ref.App, t.definitions); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
-}
-
-func sameStoredFields(a, b platform.EntityInfo) bool {
-	if len(a.Fields) != len(b.Fields) {
-		return false
-	}
-	for _, old := range a.Fields {
-		next, ok := b.Field(old.Name)
-		if !ok || old.Type != next.Type || old.Ref != next.Ref || old.Required != next.Required || !slices.Equal(old.Choices, next.Choices) {
-			return false
-		}
-	}
-	return true
 }

@@ -4,6 +4,8 @@
 // obligations and pipeline entry points are in doc.go.
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
 import (
 	"context"
 	"encoding/json"
@@ -11,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"platformserver/idp"
+	controlowner "platformserver/kernel/control"
 	"strconv"
 	"strings"
 	"time"
@@ -64,15 +67,15 @@ type Host struct {
 	HostAdmins          map[string]bool
 	RuntimeProviders    RuntimeProviders
 	AuthorizationEngine authz.Engine
-	stats               *edgeStats
-	limiter             *limiter
-	web                 *webFiles
+	stats               *transport.Stats
+	limiter             *transport.Limiter
+	web                 *transport.WebFiles
 	// Templates and CreateTenant are how the host console adds a tenant;
 	// a host without a Rebuild leaves CreateTenant nil.
 	Templates    func() []TenantTemplate
 	CreateTenant func(CreateTenantRequest, string) (*Tenant, error)
-	routes       []Route // as Handler registered them: the API contract's source (api.go)
-	SecondFactor Attest  // nil: the provider does not say
+	routes       []transport.Route // as Handler registered them: the API contract's source (api.go)
+	SecondFactor Attest            // nil: the provider does not say
 }
 
 // SignWith makes the host take the lightweight provider's tokens and sign the
@@ -82,7 +85,7 @@ type Host struct {
 // with a key it does not verify.
 func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 	h.authenticate = signer.Authenticate()
-	UseTokenKey(signer.Key())
+	controlowner.UseTokenKey(signer.Key())
 	h.Mint = func(subject string) string {
 		token, err := signer.Mint(subject, ttl, h.Now())
 		if err != nil {
@@ -108,8 +111,8 @@ func (h *Host) currentTenants() []*Tenant {
 	return tenants
 }
 
-func consoleOf(t *Tenant) IdentitySessions {
-	d, _ := t.app(PlatformApp).(IdentitySessions)
+func consoleOf(t *Tenant) platform.IdentitySessions {
+	d, _ := t.app(controlowner.PlatformApp).(platform.IdentitySessions)
 	return d
 }
 
@@ -125,7 +128,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	want := r.Header.Get(TenantHeader)
 	now := h.Now()
-	if strings.HasPrefix(credential, tokenPrefix) { // a personal token
+	if strings.HasPrefix(credential, controlowner.TokenPrefix) { // a personal token
 		for _, t := range h.currentTenants() {
 			if d := consoleOf(t); d != nil && (want == "" || t.ID == want) {
 				if m, ok := d.MemberByToken(credential, now); ok && d.NoticeSession(m.ID, credential, r.UserAgent(), "token", now) {
@@ -163,7 +166,7 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 
 // join seats subject in t by its sign-in domain: the host records the
 // decision as the platform's automation; the newcomer holds nothing until granted.
-func (h *Host) join(t *Tenant, d IdentitySessions, subject string, now time.Time) bool {
+func (h *Host) join(t *Tenant, d platform.IdentitySessions, subject string, now time.Time) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
@@ -177,8 +180,8 @@ func (h *Host) join(t *Tenant, d IdentitySessions, subject string, now time.Time
 	}
 	id := d.JoinID(subject)
 	payload, _ := json.Marshal(map[string]string{"subject": subject})
-	err := t.submitAutomated(d, t.automation(PlatformApp, false), &pb.Submission{TenantId: t.ID, Authority: PlatformApp, IdempotencyKey: "join:" + subject,
-		Target: &pb.EntityRef{Type: MemberType, Id: id}, Schema: &pb.SchemaRef{Name: SchemaJoin, Version: 1}, Payload: payload}, now)
+	err := t.submitAutomated(d, t.automation(controlowner.PlatformApp, false), &pb.Submission{TenantId: t.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "join:" + subject,
+		Target: &pb.EntityRef{Type: controlowner.MemberType, Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaJoin, Version: 1}, Payload: payload}, now)
 	if err != nil {
 		log.Printf("join %s to %s: %s", subject, t.ID, err.Error())
 	}
@@ -213,11 +216,11 @@ func (h *Host) Handler() http.Handler {
 	h.routesCredentials(rt)
 	h.routesIntegration(rt)
 	h.routes = append(h.routes, namedReads...) // served by GET /v1/{read}
-	rt.metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
+	rt.metadata(transport.Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
 	// The runtime's own profiles, when the operator asks for them.
-	profileRoutes(mux)
+	transport.ProfileRoutes(mux)
 	// The host console: its own scope, its own administrators.
 	h.hostConsoleRoutes(mux)
 	h.environmentRoutes(mux)
@@ -241,12 +244,10 @@ func (h *Host) Handler() http.Handler {
 		// The workspace is one page held in memory: a path that is not a file
 		// is its route, and a hashed asset is cached for a year.
 		if h.web == nil {
-			h.web = loadWeb(h.Web)
+			h.web = transport.LoadWeb(h.Web)
 		}
 		web := h.web
-		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-			web.serve(w, r)
-		})
+		mux.Handle("GET /", web)
 	}
 	// What the process has served, in the exposition format Prometheus reads.
 	// The counts name route patterns, never tenants or members.
@@ -259,7 +260,7 @@ func (h *Host) Handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		h.stats.writePrometheus(w)
+		h.stats.WritePrometheus(w)
 	})
 	if h.limiter == nil {
 		// A person never reaches this; a loop or a leaked token does.
@@ -272,9 +273,12 @@ func (h *Host) Handler() http.Handler {
 		if burst == 0 {
 			burst = rate * 2
 		}
-		h.limiter = newLimiter(rate, burst)
+		h.limiter = transport.NewLimiter(rate, burst)
 	}
-	return h.edge(mux)
+	if h.stats == nil {
+		h.stats = transport.NewStats()
+	}
+	return transport.Edge(mux, h.stats, h.limiter, TenantHeader, SchemaVersionHeader)
 }
 
 // scrapeAllowed keeps the process counters off the open internet: a scrape
@@ -285,7 +289,7 @@ func (h *Host) scrapeAllowed(r *http.Request) bool {
 			return true
 		}
 	}
-	host := remoteOf(r)
+	host := transport.RemoteOf(r)
 	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }
 

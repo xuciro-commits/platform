@@ -12,7 +12,7 @@ import (
 
 func TestBookReferenceReaderCannotMaintainMastersOrReadJournals(t *testing.T) {
 	at := time.Date(2026, 10, 23, 9, 0, 0, 0, time.UTC)
-	tn := composeTenant(t, "book-references", []Seat{seatOf("reader", "core:"+core.ReferenceReader), seatOf("accountant", "core:accountant")}, core.New("book-references"))
+	tn := composeTenant(t, "book-references", []platform.Seat{seatOf("reader", "core:"+core.ReferenceReader), seatOf("accountant", "core:accountant")}, core.New("book-references"))
 	reader := memberOf(t, tn, "reader")
 	decide(t, tn, "accountant", core.ID, core.JournalType+".create", core.JournalType, "POSTED", map[string]any{"date": "2026-10-23", "currency": "CNY", "lines": []map[string]any{{"account": "1403", "debit": 10}, {"account": "2202", "credit": 10}}}, at)
 	if _, failure := tn.RecordOf(reader, core.AccountType, "acc-1403", at); failure != nil {

@@ -6,9 +6,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	computeowner "platformserver/engine/compute"
 	"syscall"
-
-	server "platformserver"
 )
 
 func main() {
@@ -16,15 +15,15 @@ func main() {
 	check := flag.Bool("check", false, "Check the existing build driver socket")
 	flag.Parse()
 	if *check {
-		if err := server.CheckComputeSocket(*socket); err != nil {
+		if err := computeowner.CheckComputeSocket(*socket); err != nil {
 			log.Fatal(err)
 		}
 		return
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	compiler := server.ContainerCompiler{GoImage: os.Getenv("PLATFORM_GO_WASM_IMAGE"), TinyGoImage: os.Getenv("PLATFORM_TINYGO_WASM_IMAGE")}
-	if err := server.ServeCodeBuilder(ctx, *socket, compiler); err != nil {
+	compiler := computeowner.ContainerCompiler{GoImage: os.Getenv("PLATFORM_GO_WASM_IMAGE"), TinyGoImage: os.Getenv("PLATFORM_TINYGO_WASM_IMAGE")}
+	if err := computeowner.ServeCodeBuilder(ctx, *socket, compiler); err != nil {
 		log.Fatal(err)
 	}
 }

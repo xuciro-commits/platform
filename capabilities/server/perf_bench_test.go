@@ -11,7 +11,7 @@ import (
 
 func benchTenant(b *testing.B) (*platformserver.Tenant, platform.Member) {
 	b.Helper()
-	seats := []platformserver.Seat{{Subjects: []string{"dev"}, Member: platform.Member{ID: "builder", Roles: map[string]string{
+	seats := []platform.Seat{{Subjects: []string{"dev"}, Member: platform.Member{ID: "builder", Roles: map[string]string{
 		"platform": "admin", "build": "builder", "core": "steward", "ai": "admin", "work": "admin", "agent": "admin",
 	}}}}
 	t, err := composition.NewTenant("bench", seats...)

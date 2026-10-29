@@ -10,13 +10,13 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
+	"platformserver/studio/build"
+
 	"platformserver/platform"
 )
 
 func (d *stagedDecision) TxnTransport() platform.TxnTransport {
-	return hostView{t: d.tenant, app: d.tenant.app(construction.ID), decision: d}
+	return hostView{t: d.tenant, app: d.tenant.app(build.ID), decision: d}
 }
 
 func (h hostView) TakeTxnStep() *kernel.Error {
@@ -37,7 +37,7 @@ type txnCalls struct {
 }
 
 func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCalls, *kernel.Error) {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID {
+	if h.decision == nil || !c.Staging() || c.App != build.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction calls require their original private owner")
 	}
 	return &txnCalls{decision: h.decision, caller: c, snapshot: h.decision.records.forkRecords()}, nil
@@ -80,10 +80,10 @@ func (q *txnCalls) Call(call platform.TxnCall, inputs json.RawMessage, at time.T
 }
 
 func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, step string, target platform.TxnRef, raw json.RawMessage, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
+	if h.decision == nil || !c.Staging() || c.App != build.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction effects require their original private owner")
 	}
-	var request construction.WritebackRequest
+	var request build.WritebackRequest
 	if json.Unmarshal(raw, &request) != nil || request.Version != 1 || request.Connection == "" || request.Writeback == "" || request.Dispatch != "" || request.Confirmation != "" || target.Type == "" || target.ID == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction delivery has no frozen writeback request")
 	}
@@ -91,13 +91,13 @@ func (h hostView) QueueTxnEffect(c platform.Caller, receipt *pb.ChangeRecord, st
 		return refusal
 	}
 	key := receipt.GetChangeId() + ":" + step
-	endpoint := construction.WritebackEndpoint + request.Connection
+	endpoint := build.WritebackEndpoint + request.Connection
 	x := platform.Effect{ID: fmt.Sprintf("%s:%s:transaction:%s:%s", c.Tenant, c.App, key, endpoint), App: c.App, Endpoint: endpoint, Event: c.App + "/transaction", Key: key, Target: target.Type + "/" + target.ID, At: at, Due: at, State: "pending", Body: string(raw)}
 	return h.queueTxnIntent(c, receipt, x)
 }
 
 func (h hostView) QueueTxnJournal(c platform.Caller, receipt *pb.ChangeRecord, step string, journal platform.Journal, reverseAction string, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
+	if h.decision == nil || !c.Staging() || c.App != build.ID || receipt.GetSubmission().GetAuthority() != c.App || step == "" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction journal intents require their original private owner")
 	}
 	if h.t.app(platform.BooksApp) == nil {
@@ -105,12 +105,12 @@ func (h hostView) QueueTxnJournal(c platform.Caller, receipt *pb.ChangeRecord, s
 	}
 	key := receipt.GetChangeId() + ":" + step
 	journal.ID, journal.Source = "jnl-"+key, c.App+"/"+receipt.GetChangeId()
-	x := platform.Effect{ID: fmt.Sprintf("%s:%s:journal:%s:%s", c.Tenant, c.App, key, construction.BooksEndpoint), App: c.App, Endpoint: construction.BooksEndpoint, Event: c.App + "/journal", Key: key, Target: target(receipt.GetSubmission()), At: at, Due: at, State: "pending", Body: string(platform.Raw(journal))}
+	x := platform.Effect{ID: fmt.Sprintf("%s:%s:journal:%s:%s", c.Tenant, c.App, key, build.BooksEndpoint), App: c.App, Endpoint: build.BooksEndpoint, Event: c.App + "/journal", Key: key, Target: target(receipt.GetSubmission()), At: at, Due: at, State: "pending", Body: string(platform.Raw(journal))}
 	if step == "journal" {
 		key = receipt.GetChangeId()
 		journal.ID = "jnl-" + key
 		typ := receipt.GetSubmission().GetTarget().GetType()
-		x.ID, x.Key = fmt.Sprintf("%s:%s:journal:%s:%s", c.Tenant, c.App, key, construction.BooksEndpoint), key
+		x.ID, x.Key = fmt.Sprintf("%s:%s:journal:%s:%s", c.Tenant, c.App, key, build.BooksEndpoint), key
 		var entry map[string]any
 		_ = json.Unmarshal(platform.Raw(journal), &entry)
 		x.Body = h.t.bookBody(entry, typ, receipt.GetSubmission().GetTarget().GetId(), reverseAction)
@@ -124,7 +124,7 @@ func (h hostView) QueueTxnJournal(c platform.Caller, receipt *pb.ChangeRecord, s
 
 func (h hostView) queueTxnIntent(c platform.Caller, receipt *pb.ChangeRecord, effect platform.Effect) *kernel.Error {
 	typ := receipt.GetSubmission().GetTarget().GetType()
-	applications, err := h.t.bindApplications(platform.AssetRef{App: c.App, Kind: platform.AssetObject, Name: typ}, h.t.releases.active, "")
+	applications, err := h.t.bindApplications(platform.AssetRef{App: c.App, Kind: platform.AssetObject, Name: typ}, h.t.releases.Active(), "")
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
@@ -139,4 +139,8 @@ func (h hostView) queueTxnIntent(c platform.Caller, receipt *pb.ChangeRecord, ef
 	return nil
 }
 
-var _ host.TransactionHost = hostView{}
+var _ platform.TransactionHost = hostView{}
+
+func (h hostView) TransactionRuntime(context platform.BusinessRuntimeContext) platform.TransactionExecutor {
+	return h.t.services.NewTransactionExecutor(context)
+}

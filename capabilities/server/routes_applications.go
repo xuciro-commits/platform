@@ -1,5 +1,7 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
 import (
 	"encoding/json"
 	"io"
@@ -11,11 +13,11 @@ import (
 
 // The application runtime: one call opens any application, code or model.
 func (h *Host) routesApplications(rt *routes) {
-	rt.metadata(Route{Pattern: "GET /v1/applications", Summary: "Every application this member may open, with the pages each offers", Answer: []ApplicationView{}},
+	rt.metadata(transport.Route{Pattern: "GET /v1/applications", Summary: "Every application this member may open, with the pages each offers", Answer: []platform.ApplicationView{}},
 		func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 			WriteJSON(w, http.StatusOK, t.i18n.Translate(t.Applications(m), t.Language(m, r)))
 		})
-	rt.metadata(Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: PageRequest{}, Answer: PageView{}},
+	rt.metadata(transport.Route{Pattern: "POST /v1/page-view", Summary: "One page of an application resolved for the caller: its object, fields and the actions they may take", Body: PageRequest{}, Answer: platform.PageView{}},
 		func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 			var body PageRequest
 			decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16))

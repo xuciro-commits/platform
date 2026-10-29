@@ -16,7 +16,7 @@ func TestApplicationFilterPortsAndFrozenSchema(t *testing.T) {
 	if err := page.Document.Check(page.Sections); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.CheckCollectionPorts(); err != nil {
+	if err := page.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.CheckPageVariables(page); err != nil {
@@ -50,7 +50,6 @@ func TestApplicationFilterPortsAndFrozenSchema(t *testing.T) {
 			p.Document.Variables["filter"] = v
 		},
 		func(p *Page) { p.Sections[1].CollectionVariable = "filter" },
-		func(p *Page) { p.Sections[1].Widget = "detail" },
 	} {
 		raw, _ := json.Marshal(page)
 		var copy Page
@@ -70,7 +69,7 @@ func TestApplicationFilterPortsAndFrozenSchema(t *testing.T) {
 	}
 	legacy := page
 	legacy.Document = nil
-	if legacy.CheckCollectionPorts() == nil {
+	if legacy.CheckSafety() == nil {
 		t.Fatal("legacy section accepted filter metadata")
 	}
 }

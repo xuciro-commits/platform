@@ -3,7 +3,7 @@ package platformserver
 import (
 	"encoding"
 	"encoding/json"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"strings"

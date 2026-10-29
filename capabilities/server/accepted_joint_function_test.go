@@ -1,6 +1,8 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import agentowner "platformserver/engine/agents"
+
+import "platformserver/studio/build"
 
 import (
 	"bytes"
@@ -11,15 +13,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
+
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -45,11 +48,11 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, targetID)
 	compose := func(tenant string) *Tenant {
 		t.Helper()
-		tn, err := NewTenant(tenant, NewConsole(tenant,
-			Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{
-				construction.ID: construction.Builder, PlatformApp: Admin, ai.ID: ai.Admin, flow.ID: flow.Admin, AgentApp: AgentAdmin}}},
-			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{construction.ID: construction.User}}}),
-			ai.New(tenant), work.New(tenant), flow.New(tenant), build.New(tenant), NewAgents(tenant))
+		tn, err := NewTenant(tenant, newConsole(tenant,
+			platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{
+				build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, ai.ID: ai.Admin, automation.ID: automation.Admin, platform.AgentApp: platform.AgentAdmin}}},
+			platform.Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}),
+			ai.New(tenant), work.New(tenant), automation.New(tenant), build.New(tenant), agentowner.New(tenant))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,54 +87,54 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 			t.Fatalf("%s: %v", schema, refusal)
 		}
 	}
-	submit(construction.ID, construction.ObjectType+".create", construction.ObjectType, "O", map[string]any{
-		"name": "intake", "title": "Intake", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}},
-		"states":  []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}},
-		"actions": []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}},
+	submit(build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{
+		"name": "intake", "title": "Intake", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}},
+		"states":  []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}},
+		"actions": []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}},
 	})
-	submit(construction.ID, construction.SchemaPublish, construction.ObjectType, "O", struct{}{})
-	function := platform.RecordAdviceFunction("build.intake", []string{"note"}, []string{construction.User, construction.Builder})
+	submit(build.ID, build.SchemaPublish, build.ObjectType, "O", struct{}{})
+	function := platform.RecordAdviceFunction("build.intake", []string{"note"}, []string{build.User, build.Builder})
 	function.Name, function.Model = "advice", "fixture/probe"
-	submit(construction.ID, construction.FunctionType+".create", construction.FunctionType, "F", function)
-	submit(construction.ID, build.SchemaFunction, construction.FunctionType, "F", struct{}{})
-	submit(construction.ID, construction.PageType+".create", construction.PageType, "PAGE", map[string]any{
+	submit(build.ID, build.FunctionType+".create", build.FunctionType, "F", function)
+	submit(build.ID, build.SchemaFunction, build.FunctionType, "F", struct{}{})
+	submit(build.ID, build.PageType+".create", build.PageType, "PAGE", map[string]any{
 		"name": "intakeadvice", "title": "Intake advice", "object": "build.intake",
 		"sections": []build.Section{{Widget: "table", Fields: []string{"note"}},
 			{Widget: "function", Function: &platform.FunctionRef{Name: "advice", Version: 1}}},
 	})
-	submit(construction.ID, construction.SchemaRelease, construction.PageType, "PAGE", struct{}{})
-	submit(construction.ID, construction.ProcessType+".create", construction.ProcessType, "P", map[string]any{
+	submit(build.ID, build.SchemaRelease, build.PageType, "PAGE", struct{}{})
+	submit(build.ID, build.ProcessType+".create", build.ProcessType, "P", map[string]any{
 		"name": "review", "title": "Review intake", "object": "build.intake", "when": "open",
-		"steps": []construction.ProcessStep{{Name: "infer", Kind: "ai", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"},
-			{Name: "review", Kind: "ask", Ask: construction.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}},
+		"steps": []build.ProcessStep{{Name: "infer", Kind: "ai", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"},
+			{Name: "review", Kind: "ask", Ask: build.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}},
 	})
-	submit(construction.ID, construction.SchemaProcess, construction.ProcessType, "P", struct{}{})
+	submit(build.ID, build.SchemaProcess, build.ProcessType, "P", struct{}{})
 	submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": provider.URL})
 	submit(ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"})
-	submit(construction.ID, construction.TestPlanType+".create", construction.TestPlanType, "EVAL", map[string]any{
+	submit(build.ID, build.TestPlanType+".create", build.TestPlanType, "EVAL", map[string]any{
 		"name": "quality", "title": "Synthetic quality", "function": "F", "model": "fixture/probe", "at": at,
-		"steps": []construction.TestStep{{Type: "build.intake", ID: "SAMPLE", Action: "build.intake.create",
+		"steps": []platform.TestStep{{Type: "build.intake", ID: "SAMPLE", Action: "build.intake.create",
 			Payload: `{"note":"Synthetic"}`, Expect: "accepted"}},
-		"evaluation": []construction.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 0.05, MaxLatencyMillis: 300000,
-			Cases: []construction.EvaluationCase{{Name: "synthetic", Input: json.RawMessage(`{"note":"Synthetic"}`),
+		"evaluation": []platform.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 0.05, MaxLatencyMillis: 300000,
+			Cases: []platform.EvaluationCase{{Name: "synthetic", Input: json.RawMessage(`{"note":"Synthetic"}`),
 				Expected: json.RawMessage(`{"summary":"Check source","category":"review","review":true}`)}}}},
 	})
-	submit(construction.ID, build.SchemaEvaluationSetPublish, construction.TestPlanType, "EVAL", struct{}{})
-	submit(construction.ID, build.AgentType+".create", build.AgentType, "AGENT", map[string]any{"name": "assistant", "title": "Intake assistant", "description": "Prepare intake updates", "instructions": "Prepare a note update", "tools": []string{"build.intake.edit"}, "steps": 4, "tokens": 2000, "actions": 1, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Expect: "Check source"}}})
-	submit(construction.ID, build.SchemaAgentPublish, build.AgentType, "AGENT", struct{}{})
-	submit(construction.ID, construction.ConnectionType+".create", construction.ConnectionType, "CONNECTION", map[string]any{"name": "feed", "title": "Feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true})
-	submit(construction.ID, construction.ConnectionType+".check", construction.ConnectionType, "CONNECTION", struct{}{})
+	submit(build.ID, build.SchemaEvaluationSetPublish, build.TestPlanType, "EVAL", struct{}{})
+	submit(build.ID, build.AgentType+".create", build.AgentType, "AGENT", map[string]any{"name": "assistant", "title": "Intake assistant", "description": "Prepare intake updates", "instructions": "Prepare a note update", "tools": []string{"build.intake.edit"}, "steps": 4, "tokens": 2000, "actions": 1, "cases": []build.AgentCase{{Name: "note", Goal: "Prepare a note", Expect: "Check source"}}})
+	submit(build.ID, build.SchemaAgentPublish, build.AgentType, "AGENT", struct{}{})
+	submit(build.ID, build.ConnectionType+".create", build.ConnectionType, "CONNECTION", map[string]any{"name": "feed", "title": "Feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true})
+	submit(build.ID, build.ConnectionType+".check", build.ConnectionType, "CONNECTION", struct{}{})
 	live.CheckConnections(at)
-	submit(construction.ID, construction.SourceType+".create", construction.SourceType, "SOURCE", map[string]any{"name": "feedrows", "title": "Feed rows", "connection": "CONNECTION", "profile": "json", "url": "rows", "object": "build.intake", "key": "id", "mapping": []construction.SourceField{{From: "note", To: "note"}}})
-	submit(construction.ID, construction.SourceType+".publish", construction.SourceType, "SOURCE", struct{}{})
-	submit(construction.ID, construction.AppType+".create", construction.AppType, "APP", map[string]any{"name": "intakeapp", "title": "Intake application", "pages": []string{"intakeadvice"}, "resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetFlow, Name: "build.review"}, {App: construction.ID, Kind: platform.AssetEvaluation, Name: "quality"}, {App: construction.ID, Kind: platform.AssetAgent, Name: "assistant"}, {App: construction.ID, Kind: platform.AssetSource, Name: "feedrows"}}, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.intake": 2}, ExpectedRuns: 1, Retention: map[string]string{"runs": "24h"}, RPO: "1h", RTO: "30m"}})
+	submit(build.ID, build.SourceType+".create", build.SourceType, "SOURCE", map[string]any{"name": "feedrows", "title": "Feed rows", "connection": "CONNECTION", "profile": "json", "url": "rows", "object": "build.intake", "key": "id", "mapping": []build.SourceField{{From: "note", To: "note"}}})
+	submit(build.ID, build.SourceType+".publish", build.SourceType, "SOURCE", struct{}{})
+	submit(build.ID, build.AppType+".create", build.AppType, "APP", map[string]any{"name": "intakeapp", "title": "Intake application", "pages": []string{"intakeadvice"}, "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetFlow, Name: "build.review"}, {App: build.ID, Kind: platform.AssetEvaluation, Name: "quality"}, {App: build.ID, Kind: platform.AssetAgent, Name: "assistant"}, {App: build.ID, Kind: platform.AssetSource, Name: "feedrows"}}, "profile": platform.ApplicationProfile{ExpectedRecords: map[string]int64{"build.intake": 2}, ExpectedRuns: 1, Retention: map[string]string{"runs": "24h"}, RPO: "1h", RTO: "30m"}})
 	preview, err := live.PreviewRelease(builder, platform.AssetApp, "APP")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("joint candidate: %+v %v", preview, err)
 	}
 	seen := map[platform.AssetKind]bool{}
 	for _, asset := range preview.Included {
-		if asset.App == construction.ID {
+		if asset.App == build.ID {
 			seen[asset.Kind] = true
 		}
 	}
@@ -144,7 +147,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if review, err := live.ReviewSavedRelease(builder, preview.CandidateID); err != nil || !review.CanActivate {
 		t.Fatalf("unevaluated declaration could not be delivered: %+v %v", review, err)
 	}
-	submit(construction.ID, construction.TestPlanType+".edit", construction.TestPlanType, "EVAL", map[string]any{"model": "not-enabled/new-draft", "evaluation": []construction.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 0.05, MaxLatencyMillis: 300000, Cases: []construction.EvaluationCase{{Name: "newdraft", Input: json.RawMessage(`{"note":"New draft"}`), Expected: json.RawMessage(`{"summary":"Different","category":"review","review":false}`)}}}}})
+	submit(build.ID, build.TestPlanType+".edit", build.TestPlanType, "EVAL", map[string]any{"model": "not-enabled/new-draft", "evaluation": []platform.EvaluationPolicy{{MinQuality: 1, MaxCostUSD: 0.05, MaxLatencyMillis: 300000, Cases: []platform.EvaluationCase{{Name: "newdraft", Input: json.RawMessage(`{"note":"New draft"}`), Expected: json.RawMessage(`{"summary":"Different","category":"review","review":false}`)}}}}})
 	reportID, err := live.EvaluateRelease(builder, ReleaseEvaluationRequest{CandidateID: preview.CandidateID, PlanID: "EVAL", Key: "evaluate"}, at)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +170,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 				return nil, errors.New("injected evaluation answer append failure")
 			}
 			live.settleWithUsage(effect.ID, outcome, usage, at)
-			unchanged, ok := platform.Get[construction.Evaluation](live.automation(construction.ID, false), reportID)
+			unchanged, ok := platform.Get[build.Evaluation](live.automation(build.ID, false), reportID)
 			if !ok || unchanged.Attempts[0].Outcome != "" || len(live.ai.Usage()) != 0 || activeJournal.Position(id) != position {
 				t.Fatalf("failed append exposed evaluation state: %+v", unchanged)
 			}
@@ -191,7 +194,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 				}()
 				live.settleWithUsage(effect.ID, outcome, usage, at)
 			}()
-			unapplied, ok := platform.Get[construction.Evaluation](live.automation(construction.ID, false), reportID)
+			unapplied, ok := platform.Get[build.Evaluation](live.automation(build.ID, false), reportID)
 			if !ok || unapplied.Attempts[1].Outcome != "" || len(live.ai.Usage()) != 1 {
 				t.Fatalf("unapplied evaluation answer became visible: %+v", unapplied)
 			}
@@ -212,7 +215,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 			if err := recovered.Replay(entries); err != nil {
 				t.Fatal(err)
 			}
-			replayed, ok := platform.Get[construction.Evaluation](recovered.automation(construction.ID, false), reportID)
+			replayed, ok := platform.Get[build.Evaluation](recovered.automation(build.ID, false), reportID)
 			if !ok || replayed.Attempts[1].Outcome != "accepted" || len(recovered.ai.Usage()) != 2 {
 				t.Fatalf("evaluation answer and meter did not recover together: %+v", replayed)
 			}
@@ -227,11 +230,11 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		}
 		attempts++
 	}
-	report, ok := platform.Get[construction.Evaluation](live.automation(construction.ID, false), reportID)
-	if attempts != construction.EvaluationRepeats || !ok || report.State != "passed" || report.Set == nil || report.Model != "fixture/probe" || report.Policy[0].Cases[0].Name != "synthetic" {
+	report, ok := platform.Get[build.Evaluation](live.automation(build.ID, false), reportID)
+	if attempts != build.EvaluationRepeats || !ok || report.State != "passed" || report.Set == nil || report.Model != "fixture/probe" || report.Policy[0].Cases[0].Name != "synthetic" {
 		t.Fatalf("joint evaluation: %+v (%d attempts)", report, attempts)
 	}
-	submit(PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "fixture/probe"})
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]string{"value": "fixture/probe"})
 	if _, err := live.EvaluateRelease(builder, ReleaseEvaluationRequest{CandidateID: preview.CandidateID, Agent: "build.assistant", Key: "agent"}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -271,11 +274,11 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	if recovered.ActiveRelease() != preview.CandidateID ||
-		!bytes.Equal(recovered.releases.candidates[preview.CandidateID], live.releases.candidates[preview.CandidateID]) {
+		!bytes.Equal(recovered.releases.Candidates()[preview.CandidateID], live.releases.Candidates()[preview.CandidateID]) {
 		t.Fatal("recovery lost the committed joint release")
 	}
-	replayedReport, ok := platform.Get[construction.Evaluation](recovered.automation(construction.ID, false), reportID)
-	if !ok || replayedReport.State != "passed" || len(replayedReport.Attempts) != construction.EvaluationRepeats {
+	replayedReport, ok := platform.Get[build.Evaluation](recovered.automation(build.ID, false), reportID)
+	if !ok || replayedReport.State != "passed" || len(replayedReport.Attempts) != build.EvaluationRepeats {
 		t.Fatalf("recovery lost the measured report: %+v", replayedReport)
 	}
 	recovered.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
@@ -286,7 +289,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		activated != preview.CandidateID || reopened.Position(id) != int64(len(entries)) {
 		t.Fatalf("retry duplicated or lost the activation: %s %v", activated, err)
 	}
-	root := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: "intakeapp"}
+	root := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "intakeapp"}
 	sourceRuntime, refusal := recovered.ApplicationRuntimeOf(recoveredBuilder, root, at)
 	if refusal != nil {
 		assets, assetErr := recovered.releaseAssetsLocked(nil, false)
@@ -297,7 +300,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if refusal != nil || len(sourceRuntime.Artifact.Model) == 0 || len(sourceRuntime.Artifact.Rules) == 0 || len(sourceRuntime.Artifact.AI) != 3 || len(sourceRuntime.Artifact.Integrations) != 2 || len(sourceRuntime.Monitoring.AgentBudgets) != 1 || len(sourceRuntime.Maintenance.Retention) != 1 {
 		t.Fatalf("full application artifact: %+v %v", sourceRuntime, refusal)
 	}
-	if bytes.Contains(recovered.releases.raw(preview.CandidateID), []byte(provider.URL)) {
+	if bytes.Contains(recovered.releases.Raw(preview.CandidateID), []byte(provider.URL)) {
 		t.Fatal("application artifact retained an environment address")
 	}
 	target := compose(targetID)
@@ -317,12 +320,12 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	}
 	decide(t, target, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": provider.URL}, at)
 	decide(t, target, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"}, at)
-	connection, exists := platform.Get[construction.Connection](target.automation(construction.ID, false), "feed")
+	connection, exists := platform.Get[build.Connection](target.automation(build.ID, false), "feed")
 	if !exists || connection.Address != "" || connection.Secret != "" || connection.State == "ready" {
 		t.Fatal("delivery configured or omitted the target logical connection")
 	}
-	decide(t, target, "builder", construction.ID, construction.ConnectionType+".edit", construction.ConnectionType, connection.ID, map[string]any{"name": "feed", "title": "Target feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true}, at)
-	decide(t, target, "builder", construction.ID, construction.ConnectionType+".check", construction.ConnectionType, connection.ID, map[string]any{}, at)
+	decide(t, target, "builder", build.ID, build.ConnectionType+".edit", build.ConnectionType, connection.ID, map[string]any{"name": "feed", "title": "Target feed", "kind": "http", "address": provider.URL + "/", "allowPrivate": true}, at)
+	decide(t, target, "builder", build.ID, build.ConnectionType+".check", build.ConnectionType, connection.ID, map[string]any{}, at)
 	target.CheckConnections(at)
 	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "stage-unmeasured", false, targetMember, at); err != nil {
 		t.Fatal(err)
@@ -330,7 +333,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if _, err := PromoteCandidate(recovered, target, preview.CandidateID, "unmeasured", true, targetMember, at); err != nil {
 		t.Fatalf("missing quality report blocked application delivery: %v", err)
 	}
-	decide(t, target, "builder", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "fixture/probe"}, at)
+	decide(t, target, "builder", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]any{"value": "fixture/probe"}, at)
 	measureTarget := func(candidateID, key string) {
 		if _, err := target.EvaluateRelease(targetMember, ReleaseEvaluationRequest{CandidateID: candidateID, Agent: "build.assistant", Key: key + ":agent"}, at); err != nil {
 			t.Fatal(err)
@@ -361,12 +364,12 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		t.Fatalf("second environment changed the artifact: %+v %v", targetRuntime, refusal)
 	}
 	for i := 0; i < 3; i++ {
-		decide(t, target, "operator", construction.ID, "build.intake.create", "build.intake", fmt.Sprintf("ROW-%d", i), map[string]any{"note": fmt.Sprintf("Original %d", i)}, at.Add(time.Second))
+		decide(t, target, "operator", build.ID, "build.intake.create", "build.intake", fmt.Sprintf("ROW-%d", i), map[string]any{"note": fmt.Sprintf("Original %d", i)}, at.Add(time.Second))
 	}
 	// Add a field through the current upgrade owner, preserving the original
 	// field and its data; this path does not rename or convert stored values.
-	decide(t, recovered, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "O", map[string]any{"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text", "sourceType": "user-input"}, {"name": "memo", "title": "Memo", "type": "text", "sourceType": "user-input"}}}, at.Add(2*time.Second))
-	upgradeDrafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetApp, ID: "APP"}}
+	decide(t, recovered, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "O", map[string]any{"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text", "sourceType": "user-input"}, {"name": "memo", "title": "Memo", "type": "text", "sourceType": "user-input"}}}, at.Add(2*time.Second))
+	upgradeDrafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "O"}, {Kind: platform.AssetApp, ID: "APP"}}
 	next, err := recovered.PreviewReleaseDrafts(recoveredBuilder, upgradeDrafts)
 	if err != nil || next.Diagnostic != "" {
 		t.Fatalf("complete upgrade preview: %+v %v", next, err)
@@ -380,7 +383,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if _, err := PromoteCandidate(recovered, target, next.CandidateID, "stage-upgrade", false, targetMember, at.Add(2*time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	plans, _, refusal := platform.Find[construction.TestPlan](target.automation(construction.ID, false), platform.Query{})
+	plans, _, refusal := platform.Find[build.TestPlan](target.automation(build.ID, false), platform.Query{})
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -409,7 +412,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	target.Evaluate(at.Add(4 * time.Second))
-	nextRaw := target.releases.raw(next.CandidateID)
+	nextRaw := target.releases.Raw(next.CandidateID)
 	if nextRaw == nil {
 		t.Fatal("staged upgrade candidate missing")
 	}

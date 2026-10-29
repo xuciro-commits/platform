@@ -3,24 +3,24 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+
 	"time"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
 )
 
 func pendingComputeEffects(t *Tenant) []platform.Effect {
 	var out []platform.Effect
 	for _, effect := range t.outbound {
-		if effect.Endpoint == resultformat.OperationEndpoint && !settled(effect.State) {
+		if effect.Endpoint == acceptedformat.OperationEndpoint && !settled(effect.State) {
 			out = append(out, effect.Effect)
 		}
 	}
 	return out
 }
-func settleComputeFixture(t *Tenant, actor platform.Member, fixture construction.ComputeFixture, now time.Time) (bool, error) {
+func settleComputeFixture(t *Tenant, actor platform.Member, fixture platform.ComputeFixture, now time.Time) (bool, error) {
 	var matched []platform.Effect
 	for _, effect := range pendingComputeEffects(t) {
 		var binding operationBinding
@@ -53,7 +53,7 @@ func settleComputeFixture(t *Tenant, actor platform.Member, fixture construction
 	if t.quarantined() {
 		return false, fmt.Errorf("compute fixture settlement failed")
 	}
-	result, refusal := t.operationResult(platform.NewCaller(runtime{t}, actor, PlatformApp, false, false), claimed.ID)
+	result, refusal := t.operationResult(platform.NewCaller(runtime{t}, actor, controlowner.PlatformApp, false, false), claimed.ID)
 	if refusal != nil {
 		return false, refusal
 	}
@@ -61,11 +61,11 @@ func settleComputeFixture(t *Tenant, actor platform.Member, fixture construction
 		return false, nil
 	}
 	if fixture.ExpectOutput != "" {
-		actual, err := acceptance.Digest(result.Output)
+		actual, err := platform.CanonicalDigest(result.Output)
 		if err != nil {
 			return false, err
 		}
-		expected, err := acceptance.Digest(json.RawMessage(fixture.ExpectOutput))
+		expected, err := platform.CanonicalDigest(json.RawMessage(fixture.ExpectOutput))
 		return err == nil && actual == expected, err
 	}
 	return true, nil

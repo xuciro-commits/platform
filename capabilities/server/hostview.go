@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	pageowner "platformserver/studio/pages"
 	"reflect"
 	"slices"
 	"strings"
@@ -11,12 +12,11 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
-	"platformserver/internal/records"
+
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
-// hostView is the tenant as its own apps see it (internal/host.Host).
 // hostView is the tenant as one of its own apps sees it; app is that app, for
 // what it declares at runtime.
 type hostView struct {
@@ -155,19 +155,17 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 			def.Ref.App == h.app.Manifest().ID && def.Ref.Name == generatedPage {
 			continue
 		}
-		p := *def.Page
-		if p.Object.Name != e.Type && !slices.ContainsFunc(p.QueryReferences(), func(ref platform.AssetRef) bool { return ref.Kind == platform.AssetObject && ref.Name == e.Type }) && !slices.ContainsFunc(p.Sections, func(s platform.Section) bool {
+		p, err := def.Page.Safety()
+		if err != nil {
+			return err
+		}
+		if p.Object.Name != e.Type && !slices.ContainsFunc(p.QueryReferences(), func(ref platform.AssetRef) bool { return ref.Kind == platform.AssetObject && ref.Name == e.Type }) && !slices.ContainsFunc(p.DataBindings, func(s platform.PageDataBinding) bool {
 			return s.Object.Name == e.Type
 		}) {
 			continue
 		}
-		for _, ref := range p.Actions {
-			if removedAction(ref) {
-				return fmt.Errorf("page %s: removed action %s", p.Name, ref.Name)
-			}
-		}
-		for _, section := range p.Sections {
-			for _, ref := range section.Actions {
+		for _, trigger := range p.ActionTriggers {
+			for _, ref := range trigger.Actions {
 				if removedAction(ref) {
 					return fmt.Errorf("page %s: removed action %s", p.Name, ref.Name)
 				}
@@ -212,10 +210,10 @@ func (h hostView) Automation(parent platform.Caller, app string) platform.Caller
 	return h.t.automated(parent, app)
 }
 
-func (h hostView) identity() host.IdentityDirectory {
+func (h hostView) identity() platform.IdentityDirectory {
 	owner := h.t.identity
 	if owner != nil && h.decision != nil {
-		if private, ok := h.decision.stateApp(owner).(host.IdentityDirectory); ok {
+		if private, ok := h.decision.stateApp(owner).(platform.IdentityDirectory); ok {
 			return private
 		}
 	}
@@ -281,7 +279,7 @@ func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Rec
 	return h.t.recipients(c, now, to)
 }
 
-func (h hostView) Directory() host.Directory {
+func (h hostView) Directory() platform.Directory {
 	if h.decision != nil {
 		return h.decision.directoryView()
 	}
@@ -293,7 +291,7 @@ func (h hostView) Seen(c platform.Caller, keys ...string) {
 		platform.MarkSeen(c, keys...)
 		return
 	}
-	h.t.notices.markKeysRead(c.App, keys)
+	h.t.notices.MarkKeysRead(c.App, keys)
 }
 
 func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error) {
@@ -301,29 +299,29 @@ func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload
 	return ref, err
 }
 
-func (h hostView) Tasks() host.Tasks {
+func (h hostView) Tasks() platform.Tasks {
 	if h.decision != nil && h.t.tasks != nil {
-		return h.decision.stateApp(h.t.tasks.(platform.App)).(host.Tasks)
+		return h.decision.stateApp(h.t.tasks.(platform.App)).(platform.Tasks)
 	}
 	return h.t.tasks
 }
 
-func (h hostView) Processes() host.Processes {
+func (h hostView) Processes() platform.Processes {
 	if h.decision != nil && h.t.procs != nil {
-		return h.decision.stateApp(h.t.procs.(platform.App)).(host.Processes)
+		return h.decision.stateApp(h.t.procs.(platform.App)).(platform.Processes)
 	}
 	return h.t.procs
 }
 
 // ActiveRelease is read inside a decision, which already holds the tenant lock.
-func (h hostView) ActiveRelease() string { return h.t.releases.active }
+func (h hostView) ActiveRelease() string { return h.t.releases.Active() }
 
-func (h hostView) Runs() host.Runs {
+func (h hostView) Runs() platform.Runs {
 	if h.t.agents == nil {
 		return nil
 	}
 	if h.decision != nil {
-		return h.decision.stateApp(h.t.agents).(host.Runs)
+		return h.decision.stateApp(h.t.agents).(platform.Runs)
 	}
 	return h.t.agents
 }
@@ -402,7 +400,7 @@ func (h hostView) Record(ref string) (any, bool) {
 	return h.t.held(ref)
 }
 
-func (h hostView) BuildProcesses() host.ProcessDefinitions { return h.Processes() }
+func (h hostView) BuildProcesses() platform.ProcessDefinitions { return h.Processes() }
 func (h hostView) Calendar(party string, day platform.Date) platform.Calendar {
 	if directory := h.Directory(); directory != nil {
 		return directory.Calendar(party, day)
@@ -453,5 +451,12 @@ func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
 	if err := p.CheckModelBindings(h.t.modelVisibleLookup(c.Member), h.t.modelCriteria, c.Rules()); err != nil {
 		return err
 	}
-	return h.t.checkModelQueries(p)
+	return pageowner.CheckModelQueries(p, h.t.definitions, h.t.entity)
 }
+
+// Rebinding uses the same composition factory for startup, trials, retained
+// releases and private decisions. The runtime knows no concrete owner.
+func (h hostView) ownerBindings() platform.OwnerBindings {
+	return platform.OwnerBindings{Training: h, System: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
+}
+func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }

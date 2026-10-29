@@ -1,5 +1,7 @@
 package platformserver
 
+import automation "platformserver/engine/automation"
+
 import (
 	"bytes"
 	"context"
@@ -7,11 +9,13 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
 	"maps"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/host"
-	"platformserver/internal/records"
+	appowner "platformserver/engine/applications"
+	runtimekernel "platformserver/kernel"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/studio/releases"
+
 	"platformserver/journal"
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -21,8 +25,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // A snapshot is a tenant's state at a journal position: what the
@@ -35,51 +39,51 @@ import (
 // the journal stays the truth. Explicit host/owner formats and the native
 // composition decide compatibility; the build digest is diagnostic metadata.
 type tenantState struct {
-	Runtime             *runtimeSnapshot                            `json:"runtime,omitempty"`
-	Checkpoint          *snapshotCheckpoint                         `json:"checkpoint,omitempty"`
-	DecisionDefinitions map[string]*resultformat.DecisionDefinition `json:"decisionDefinitions,omitempty"`
-	SubmissionSchemas   map[string]platform.SchemaVersion           `json:"submissionSchemas,omitempty"`
-	Apps                map[string]json.RawMessage                  `json:"apps"`
-	Records             map[string][]recordState                    `json:"records"`
-	Audit               []AuditEntry                                `json:"audit"`
-	Refusals            map[string]resultformat.Refusal             `json:"refusals,omitempty"`
-	AcceptedAnswers     map[string]json.RawMessage                  `json:"acceptedAnswers,omitempty"`
-	AcceptedInputs      map[string]json.RawMessage                  `json:"acceptedInputs,omitempty"`
-	ReleaseCandidates   map[string]json.RawMessage                  `json:"releaseCandidates,omitempty"`
-	ReleaseRequests     map[string]string                           `json:"releaseRequests,omitempty"`
-	ReleaseApplied      map[string]string                           `json:"releaseApplied,omitempty"`
-	ActiveRelease       string                                      `json:"activeRelease,omitempty"`
-	Deliveries          []Delivery                                  `json:"deliveries"`
-	Acted               int                                         `json:"acted"`
-	Bindings            map[string]string                           `json:"bindings"` // protocol → provider app
-	Works               json.RawMessage                             `json:"works"`
-	Queues              map[string][]string                         `json:"queues"` // subscriber → task IDs, head first
-	Failed              []string                                    `json:"failed"`
-	Tasks               []taskState                                 `json:"tasks"` // every delivery task, by ID
-	Jobs                []Task                                      `json:"jobs"`
-	Connectors          json.RawMessage                             `json:"connectors"`
-	Marks               []kernel.ConnectorMark                      `json:"marks"`
-	LastError           map[string]ConnectorError                   `json:"lastError"`
-	Notices             []platform.Notification                     `json:"notices"`
-	NoticeSeq           int                                         `json:"noticeSeq"`
-	Settings            map[string]string                           `json:"settings"`
-	Words               map[string]map[string]string                `json:"words,omitempty"` // the tenant's translations
-	Endpoints           []*Endpoint                                 `json:"endpoints"`
-	Outbound            []resultformat.EffectState                  `json:"outbound"`
+	Runtime             *runtimeSnapshot                        `json:"runtime,omitempty"`
+	Checkpoint          *snapshotCheckpoint                     `json:"checkpoint,omitempty"`
+	DecisionDefinitions map[string]*platform.DecisionDefinition `json:"decisionDefinitions,omitempty"`
+	SubmissionSchemas   map[string]platform.SchemaVersion       `json:"submissionSchemas,omitempty"`
+	Apps                map[string]json.RawMessage              `json:"apps"`
+	Records             map[string][]recordState                `json:"records"`
+	Audit               []platform.AuditEntry                   `json:"audit"`
+	Refusals            map[string]acceptedformat.Refusal       `json:"refusals,omitempty"`
+	AcceptedAnswers     map[string]json.RawMessage              `json:"acceptedAnswers,omitempty"`
+	AcceptedInputs      map[string]json.RawMessage              `json:"acceptedInputs,omitempty"`
+	ReleaseCandidates   map[string]json.RawMessage              `json:"releaseCandidates,omitempty"`
+	ReleaseRequests     map[string]string                       `json:"releaseRequests,omitempty"`
+	ReleaseApplied      map[string]string                       `json:"releaseApplied,omitempty"`
+	ActiveRelease       string                                  `json:"activeRelease,omitempty"`
+	Deliveries          []platform.Delivery                     `json:"deliveries"`
+	Acted               int                                     `json:"acted"`
+	Bindings            map[string]string                       `json:"bindings"` // protocol → provider app
+	Works               json.RawMessage                         `json:"works"`
+	Queues              map[string][]string                     `json:"queues"` // subscriber → task IDs, head first
+	Failed              []string                                `json:"failed"`
+	Tasks               []automation.TaskState                  `json:"tasks"` // every delivery task, by ID
+	Jobs                []automation.Task                       `json:"jobs"`
+	Connectors          json.RawMessage                         `json:"connectors"`
+	Marks               []kernel.ConnectorMark                  `json:"marks"`
+	LastError           map[string]ConnectorError               `json:"lastError"`
+	Notices             []platform.Notification                 `json:"notices"`
+	NoticeSeq           int                                     `json:"noticeSeq"`
+	Settings            map[string]string                       `json:"settings"`
+	Words               map[string]map[string]string            `json:"words,omitempty"` // the tenant's translations
+	Endpoints           []*Endpoint                             `json:"endpoints"`
+	Outbound            []acceptedformat.EffectState            `json:"outbound"`
 	// The host console's lifecycle and support sessions travel
 	// with the tenant: a restart keeps a suspension and its authorized sessions.
-	HostRequests     map[string]hostControlReceipt    `json:"hostRequests,omitempty"`
-	HostLifecycle    string                           `json:"hostLifecycle,omitempty"`
-	RuntimeSelection map[string]string                `json:"runtimeSelection,omitempty"`
-	DisabledOwners   []string                         `json:"disabledOwners,omitempty"`
-	Support          []SupportGrant                   `json:"support,omitempty"`
-	Sealed           map[string]SealedArtifact        `json:"sealed,omitempty"`
-	ReleaseOrigins   map[string]ReleaseOrigin         `json:"releaseOrigins,omitempty"`
-	Migrations       []MigrationManifest              `json:"migrations,omitempty"`
-	CompositeAnswers map[string]json.RawMessage       `json:"compositeAnswers,omitempty"`
-	Composites       map[string]string                `json:"composites,omitempty"`
-	Staged           map[string]platform.StagedResult `json:"staged,omitempty"`
-	Sequences        map[string]int                   `json:"sequences,omitempty"`
+	HostRequests     map[string]hostControlReceipt      `json:"hostRequests,omitempty"`
+	HostLifecycle    string                             `json:"hostLifecycle,omitempty"`
+	RuntimeSelection map[string]string                  `json:"runtimeSelection,omitempty"`
+	DisabledOwners   []string                           `json:"disabledOwners,omitempty"`
+	Support          []SupportGrant                     `json:"support,omitempty"`
+	Sealed           map[string]platform.SealedArtifact `json:"sealed,omitempty"`
+	ReleaseOrigins   map[string]platform.ReleaseOrigin  `json:"releaseOrigins,omitempty"`
+	Migrations       []MigrationManifest                `json:"migrations,omitempty"`
+	CompositeAnswers map[string]json.RawMessage         `json:"compositeAnswers,omitempty"`
+	Composites       map[string]string                  `json:"composites,omitempty"`
+	Staged           map[string]platform.StagedResult   `json:"staged,omitempty"`
+	Sequences        map[string]int                     `json:"sequences,omitempty"`
 }
 
 const tenantSnapshotFormat = "platform.tenant.v1"
@@ -140,7 +144,7 @@ func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 		composition = append(composition, item)
 	}
 	slices.SortFunc(composition, func(a, b compositionApp) int { return strings.Compare(a.ID, b.ID) })
-	digest, err := acceptance.Digest(composition)
+	digest, err := platform.CanonicalDigest(composition)
 	compatibility.Composition = digest
 	return compatibility, err
 }
@@ -153,7 +157,7 @@ func (t *Tenant) snapshotKey(code string) (string, error) {
 	if err != nil || compatibility.Host == "" {
 		return code, err
 	}
-	return acceptance.Digest(compatibility)
+	return platform.CanonicalDigest(compatibility)
 }
 
 // runtimeSnapshotKey keeps an owner-only SQL checkpoint outside the portable
@@ -166,12 +170,12 @@ func (t *Tenant) runtimeSnapshotKey(code string) (string, error) {
 	exact := compatibility.Host == ""
 	compatibility.Host = tenantSQLSnapshotFormat
 	if exact {
-		return acceptance.Digest(struct {
+		return platform.CanonicalDigest(struct {
 			Compatibility snapshotCompatibility
 			Build         string
 		}{compatibility, code})
 	}
-	return acceptance.Digest(compatibility)
+	return platform.CanonicalDigest(compatibility)
 }
 
 func (t *Tenant) snapshotStorageKey(code string, raw []byte) (string, error) {
@@ -225,16 +229,6 @@ type recordState struct {
 	Extraction  *records.Extraction    `json:"extraction,omitempty"`
 }
 
-type taskState struct {
-	Task
-	Since    int                 `json:"since,omitempty"`
-	EventApp string              `json:"eventApp,omitempty"` // the event it delivers
-	Event    json.RawMessage     `json:"event,omitempty"`
-	Hops     int                 `json:"hops,omitempty"`
-	Changed  []string            `json:"changed,omitempty"` // the records its decision put
-	Plan     *resultformat.Event `json:"plan,omitempty"`    // accepted-result delivery routing
-}
-
 // Snapshot saves the tenant's state between inputs; the caller's position
 // function runs under the same lock, so the journal position matches the state.
 // Decisions wait only while the state is captured: records never change once
@@ -252,25 +246,25 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 		}
 	}()
 	s, rows, seq, err := t.capture(position, true, func() (func(), error) {
-		if t.records.readView != nil {
-			read = t.records.readView
+		if t.records.current.View() != nil {
+			read = t.records.current.View()
 			if t.currentReadScopes {
 				ownsRead = true
 				return t.detachSnapshotRead, nil
 			}
 			return nil, nil // the recovery caller owns this archive view
 		}
-		views, ok := t.records.historyStore.(journal.StateReadViews)
+		views, ok := t.records.current.Backend().(journal.StateReadViews)
 		if !ok {
 			return nil, nil
 		}
 		var err error
-		read, err = views.BeginStateRead(context.Background(), t.ID, t.records.appliedPosition)
+		read, err = views.BeginStateRead(context.Background(), t.ID, t.records.current.Applied())
 		if err != nil {
 			return nil, err
 		}
 		ownsRead = true
-		t.records.bindReadView(read)
+		t.records.current.Bind(read)
 		return t.detachSnapshotRead, nil
 	})
 	if err != nil {
@@ -303,9 +297,9 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 // is released. Transfer that view to the snapshot instead of opening a second
 // connection; the lane resumes its ordinary storage readers before unlocking.
 func (t *Tenant) detachSnapshotRead() {
-	t.records.bindReadView(nil)
-	if store, ok := t.records.historyStore.(acceptedStateReader); ok && t.records.currentPosition != nil {
-		t.installRuntimeHistory(store, t.records.currentPosition)
+	t.records.current.Bind(nil)
+	if store, ok := t.records.current.Backend().(acceptedStateReader); ok && t.records.current.Position() != nil {
+		t.installRuntimeHistory(store, t.records.current.Position())
 	}
 }
 
@@ -322,7 +316,7 @@ type runtimeSnapshot struct {
 
 func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessage, int64, error) {
 	views, ok := j.(journal.StateReadViews)
-	if !ok || t.records.historyStore == nil {
+	if !ok || t.records.current.Backend() == nil {
 		return t.Snapshot(func() int64 { return j.Position(t.ID) })
 	}
 	compatibility, err := t.snapshotCompatibility()
@@ -334,8 +328,8 @@ func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessa
 	var ownsRead bool
 	s, _, seq, err := t.capture(func() int64 {
 		position := j.Position(t.ID)
-		if t.records.readView != nil {
-			view = t.records.readView
+		if t.records.current.View() != nil {
+			view = t.records.current.View()
 			if view.Position() != position {
 				viewErr = fmt.Errorf("tenant %s: SQL snapshot view position differs", t.ID)
 			}
@@ -419,11 +413,15 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 			}
 		}()
 	}
-	t.audit.snapshot(&s)
+	s.Audit, s.Deliveries = t.audit.SnapshotState()
 	if includeRows {
-		t.committed.snapshot(&s)
+		state := t.committed.SnapshotState()
+		s.DecisionDefinitions, s.SubmissionSchemas, s.CompositeAnswers = state.DecisionDefinitions, state.SubmissionSchemas, state.CompositeAnswers
+		s.Refusals, s.AcceptedAnswers, s.AcceptedInputs, s.Composites = state.Refusals, state.AcceptedAnswers, state.AcceptedInputs, state.Composites
 	}
-	t.releases.snapshot(&s)
+	releaseState := t.releases.SnapshotState()
+	s.ReleaseRequests, s.ReleaseCandidates, s.ReleaseApplied = releaseState.ReleaseRequests, releaseState.ReleaseCandidates, releaseState.ReleaseApplied
+	s.ActiveRelease, s.Sealed, s.ReleaseOrigins = releaseState.ActiveRelease, releaseState.Sealed, releaseState.ReleaseOrigins
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	s.Acted, s.Failed = t.acted, []string{}
@@ -434,7 +432,12 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	if s.Works, err = platform.Protos(t.works.All()); err != nil {
 		return tenantState{}, nil, 0, err
 	}
-	if err := t.work.snapshot(&s); err != nil {
+	work, workErr := t.work.Snapshot()
+	s.Queues = work.Queues
+	s.Failed = append(s.Failed, work.Failed...)
+	s.Tasks = append(s.Tasks, work.Tasks...)
+	s.Jobs = append(s.Jobs, work.Jobs...)
+	if err := workErr; err != nil {
 		return tenantState{}, nil, 0, err
 	}
 	descriptors, marks := t.connectors.kernel.State()
@@ -443,14 +446,14 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	}
 	s.Marks = marks
 	t.connectors.snapshot(&s)
-	s.Notices, s.NoticeSeq = t.notices.state()
-	s.Settings, s.Endpoints, s.Words = t.settings.clone(), t.endpoints, t.words.clone()
-	s.Sequences = t.sequences.clone()
+	s.Notices, s.NoticeSeq = t.notices.State()
+	s.Settings, s.Endpoints, s.Words = t.settings.Snapshot(), t.endpoints, t.words.Clone()
+	s.Sequences = t.sequences.Clone()
 	for _, x := range t.outbound {
-		s.Outbound = append(s.Outbound, resultformat.EffectState{Effect: x.Effect, Since: x.since})
+		s.Outbound = append(s.Outbound, acceptedformat.EffectState{Effect: x.Effect, Since: x.since})
 	}
 	t.console.snapshot(&s)
-	s.Staged = t.staged.snapshot()
+	s.Staged = t.staged.Snapshot()
 	seq := position()
 	if seq == 0 {
 		seq = t.snapshotPosition
@@ -475,7 +478,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 		entries := make([]records.Entry[*records.Row], 0, len(rows))
 		for _, r := range rows {
 			v := reflect.New(et.info.Go).Elem()
-			decode, err := decodeRowImage(et.info, r.Value, r.Projection, t.records.readRelease, r.Format)
+			decode, err := decodeRowImage(et.info, r.Value, r.Projection, t.records.current.Release(), r.Format)
 			if err != nil {
 				return nil, err
 			}
@@ -515,7 +518,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return err
 	}
-	if s.Runtime != nil && (s.Runtime.Format != runtimeSnapshotFormat || len(s.Records) != 0 || t.records.historyStore == nil || t.records.readView == nil || t.records.readView.Position() != s.Runtime.Position) {
+	if s.Runtime != nil && (s.Runtime.Format != runtimeSnapshotFormat || len(s.Records) != 0 || t.records.current.Backend() == nil || t.records.current.View() == nil || t.records.current.View().Position() != s.Runtime.Position) {
 		return fmt.Errorf("tenant %s: SQL checkpoint requires its matching runtime store", t.ID)
 	}
 	if s.Checkpoint != nil {
@@ -528,7 +531,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if s.Checkpoint != nil {
 		t.snapshotPosition = s.Checkpoint.Position
 	}
-	t.records.readRelease = s.ActiveRelease
+	t.records.current.SelectRelease(s.ActiveRelease)
 	if len(s.Apps) != len(t.apps) {
 		return fmt.Errorf("tenant %s: the snapshot has %d apps, the tenant %d", t.ID, len(s.Apps), len(t.apps))
 	}
@@ -555,18 +558,18 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err := t.records.validateLinkConstraints(); err != nil {
 		return err
 	}
-	t.audit.restore(&s)
+	t.audit.Restore(s.Audit, s.Deliveries)
 	if err := validateHostImage(t.ID, hostControlImage{Lifecycle: s.HostLifecycle, Support: s.Support, Migrations: s.Migrations, Requests: s.HostRequests, RuntimeSelection: s.RuntimeSelection, DisabledOwners: s.DisabledOwners}); err != nil {
 		return err
 	}
 	t.console.restore(&s)
 	if s.Staged != nil {
-		t.staged.restore(s.Staged)
+		t.staged.Restore(s.Staged)
 	}
 	if err := t.verifyCommitted(&s); err != nil {
 		return err
 	}
-	t.releases.restore(&s)
+	t.releases.Restore(releases.State{ReleaseRequests: s.ReleaseRequests, ReleaseCandidates: s.ReleaseCandidates, ReleaseApplied: s.ReleaseApplied, ActiveRelease: s.ActiveRelease, Sealed: s.Sealed, ReleaseOrigins: s.ReleaseOrigins})
 	if err := t.restoreSystemDefinitionProjection(); err != nil {
 		return err
 	}
@@ -583,7 +586,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 // records of the types they install.
 func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordState) error {
 	needsDefinitions := len(held) > 0 || s.Runtime != nil
-	for typ, kind := range map[string]platform.AssetKind{construction.PropertyTypeType: platform.AssetPropertyType, construction.LinkTypeType: platform.AssetLinkType, construction.QueryType: platform.AssetQuery, construction.ObjectType: platform.AssetObject, construction.PageType: platform.AssetPage, construction.AppType: platform.AssetApp, construction.ProcessType: platform.AssetFlow, construction.FunctionType: platform.AssetFunction, construction.CodeType: platform.AssetCompute, construction.TableType: platform.AssetCompute} {
+	for typ, kind := range map[string]platform.AssetKind{build.PropertyTypeType: platform.AssetPropertyType, build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute, build.TableType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
 			var meta struct {
 				Published string `json:"published"`
@@ -600,7 +603,7 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 			}
 			name := saved.Name
 			if kind == platform.AssetObject || kind == platform.AssetFlow {
-				name = construction.TypeOf(name)
+				name = build.TypeOf(name)
 			}
 			if kind == platform.AssetFlow {
 				var state struct {
@@ -608,12 +611,12 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]recordStat
 					Version int    `json:"version"`
 				}
 				json.Unmarshal([]byte(meta.Published), &state)
-				owner, ok := t.procs.(host.FlowDefinitionPresence)
-				needsDefinitions = needsDefinitions || !ok || !owner.HasDefinition(construction.ID, state.Name, state.Version)
+				owner, ok := t.procs.(platform.FlowDefinitionPresence)
+				needsDefinitions = needsDefinitions || !ok || !owner.HasDefinition(build.ID, state.Name, state.Version)
 				continue
 			}
 
-			ref := platform.AssetRef{App: construction.ID, Kind: kind, Name: name}
+			ref := platform.AssetRef{App: build.ID, Kind: kind, Name: name}
 			needsDefinitions = needsDefinitions || !slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Source == "tenant" })
 		}
 	}
@@ -647,16 +650,16 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		receipt := owner.AcceptedLedger().AcceptedFor(t.ID, request)
 		sub := receipt.GetSubmission()
 		if raw := s.AcceptedAnswers[key]; len(raw) > 0 {
-			result, answer, err := resultformat.DecodeBatch(raw)
+			result, answer, err := acceptedformat.DecodeBatch(raw)
 			if err != nil {
 				return fmt.Errorf("tenant %s: schema snapshot %s has an invalid answer", t.ID, key)
 			}
-			sub, err = resultformat.BatchSubmission(result, answer)
+			sub, err = acceptedformat.BatchSubmission(result, answer)
 			if err != nil || sub.GetIdempotencyKey() != request || result.App != app {
 				return fmt.Errorf("tenant %s: schema snapshot %s has no matching request", t.ID, key)
 			}
 		}
-		if sub == nil || resultformat.ValidateSubmissionSchemaVersion(sub, &binding) != nil {
+		if sub == nil || acceptedformat.ValidateSubmissionSchemaVersion(sub, &binding) != nil {
 			return fmt.Errorf("tenant %s: schema snapshot %s has no matching receipt", t.ID, key)
 		}
 	}
@@ -665,7 +668,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		if err != nil {
 			return fmt.Errorf("tenant %s: refusal snapshot %s: %w", t.ID, key, err)
 		}
-		decoded, sub, err := resultformat.DecodeRefusal(raw)
+		decoded, sub, err := acceptedformat.DecodeRefusal(raw)
 		if err != nil || decoded.Tenant != t.ID || key != decoded.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: refusal snapshot %s is incompatible: %v", t.ID, key, err)
 		}
@@ -681,7 +684,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 			return fmt.Errorf("tenant %s: composite answer snapshot %s is incompatible", t.ID, key)
 		}
 		if r.Refusal == "" {
-			batch, _, _ := resultformat.DecodeBatch(r.Changes)
+			batch, _, _ := acceptedformat.DecodeBatch(r.Changes)
 			for _, decision := range batch.Decisions {
 				receipt := new(pb.ChangeRecord)
 				if protojson.Unmarshal(decision.Receipt, receipt) != nil {
@@ -708,17 +711,17 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 			}
 		}
 	}
-	t.committed.restore(s)
+	t.committed.Restore(runtimekernel.CommittedState{DecisionDefinitions: s.DecisionDefinitions, SubmissionSchemas: s.SubmissionSchemas, CompositeAnswers: s.CompositeAnswers, Refusals: s.Refusals, AcceptedAnswers: s.AcceptedAnswers, AcceptedInputs: s.AcceptedInputs, Composites: s.Composites})
 	for key, raw := range s.AcceptedAnswers {
 		if strings.HasPrefix(key, "release:") {
-			result, err := resultformat.DecodeRelease(raw)
+			result, err := acceptedformat.DecodeRelease(raw)
 			if err != nil || (result.Version != 3 && result.Version != 4) || result.Tenant != t.ID || key != "release:"+result.Key || s.ReleaseApplied[result.Key] != result.Digest || !bytes.Equal(s.ReleaseCandidates[result.CandidateID], result.Bytes) {
 				return fmt.Errorf("tenant %s: release answer snapshot %s is incompatible", t.ID, key)
 			}
 			continue
 		}
-		result, receipt, err := resultformat.DecodeBatch(raw)
-		sub, subErr := resultformat.BatchSubmission(result, receipt)
+		result, receipt, err := acceptedformat.DecodeBatch(raw)
+		sub, subErr := acceptedformat.BatchSubmission(result, receipt)
 		if err != nil || subErr != nil || result.Tenant != t.ID ||
 			!result.HasSavedAnswer(sub) || key != result.App+"/"+sub.GetIdempotencyKey() {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
@@ -727,7 +730,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
 		}
-		if _, refused := t.committed.refusal(key); refused {
+		if _, refused := t.committed.Refusal(key); refused {
 			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
 		}
 		binding, bound := s.SubmissionSchemas[key]
@@ -736,7 +739,7 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 		}
 	}
 	for key, raw := range s.AcceptedInputs {
-		result, err := resultformat.DecodeInput(raw)
+		result, err := acceptedformat.DecodeInput(raw)
 		owner, ok := t.app(result.App).(platform.AcceptedInputApp)
 		if err != nil || !ok || result.Tenant != t.ID ||
 			key != result.App+"/"+result.Key || !slices.Contains(owner.AcceptedInputs(), result.Name) {
@@ -758,12 +761,12 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 // queues, jobs, connectors, notices, settings, endpoints, sequences, outbound.
 func (t *Tenant) restoreOperations(s *tenantState) error {
 	for _, job := range s.Jobs {
-		if err := checkApplicationBindings(job.Applications); err != nil {
+		if err := appowner.CheckBindings(job.Applications); err != nil {
 			return err
 		}
 	}
 	for _, effect := range s.Outbound {
-		if err := checkApplicationBindings(effect.Effect.Applications); err != nil {
+		if err := appowner.CheckBindings(effect.Effect.Applications); err != nil {
 			return err
 		}
 	}
@@ -779,16 +782,16 @@ func (t *Tenant) restoreOperations(s *tenantState) error {
 	defer t.opsMu.Unlock()
 	t.acted = s.Acted
 	t.works.Restore(works)
-	if err := t.work.restore(t.ID, s); err != nil {
+	if err := t.work.Restore(t.ID, automation.WorkState{Queues: s.Queues, Failed: s.Failed, Tasks: s.Tasks, Jobs: s.Jobs}); err != nil {
 		return err
 	}
 	t.connectors.restore(t.ID, descriptors, s)
-	t.notices.restore(s.Notices, s.NoticeSeq)
-	t.settings.restore(s.Settings)
-	t.words.restore(s.Words)
-	t.i18n.reset()
+	t.notices.Restore(s.Notices, s.NoticeSeq)
+	t.settings.Restore(s.Settings)
+	t.words.Restore(s.Words)
+	t.i18n.Reset()
 	t.endpoints = s.Endpoints
-	t.sequences.restore(s.Sequences)
+	t.sequences.Restore(s.Sequences)
 	t.outbound = nil
 	for _, x := range s.Outbound {
 		t.outbound = append(t.outbound, &effect{Effect: x.Effect, since: x.Since})

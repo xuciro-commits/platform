@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "@platform/app";
 // Original asset owners and editor routes.  organizes navigation
 // by application business concepts; asset kinds remain compilation identities.
 import type { Api } from "@platform/kernel";
@@ -38,7 +39,7 @@ export const resourceKinds: ResourceKindInfo[] = [
 export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.type === type);
 
 /** The original installed declaration determines the category, never its name. */
-export function systemDefinitionsForType(definitions: readonly Api.Definition[], type: string) {
+export function systemDefinitionsForType(definitions: readonly WorkspaceDefinition[], type: string) {
   const kind = type === "build.evaluation-set" || type === "build.testplan"
     ? resourceKinds.find(kind => kind.kind === (type === "build.testplan" ? "test-plan" : "evaluation-set")) : kindOfType(type);
   if (!kind) return [];

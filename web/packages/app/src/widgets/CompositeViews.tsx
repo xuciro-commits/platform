@@ -1,3 +1,4 @@
+import type * as PageUI from "../pageui/types";
 import type {Api} from '@platform/kernel';
 import {Button,DataTable,FlowSteps,t,type ColumnDef,type EntityRecord,type FlowStepNode,type FlowStepEdge,type Tone} from '@platform/ui';
 import {useMemo} from 'react';
@@ -6,11 +7,11 @@ type Row=Record<string,unknown>;
 const text=(value:unknown)=>value===undefined||value===null?'—':typeof value==='boolean'?t(value?'Yes':'No'):String(value);
 const role=(row:Row,name:string)=>row[`$view.${name}`];
 const title=(row:Row)=>text(role(row,'label')??row.id);
-const tone=(config:Api.PageComposite,value:unknown):Tone|undefined=>config.tones?.[String(value)] as Tone|undefined;
+const tone=(config:PageUI.PageComposite,value:unknown):Tone|undefined=>config.tones?.[String(value)] as Tone|undefined;
 
 /** Presentation only: inputs are the host's authorized expression results.
  * Columns retain typed identities; equal labels never merge distinct records. */
-export function ModelMatrixRenderer({data,config,enabled,onSelect,selected}:{data?:Api.PageCompositeResult;config?:Api.PageComposite;enabled?:boolean;onSelect:(row?:EntityRecord)=>void;selected?:EntityRecord}){
+export function ModelMatrixRenderer({data,config,enabled,onSelect,selected}:{data?:Api.PageCompositeResult;config?:PageUI.PageComposite;enabled?:boolean;onSelect:(row?:EntityRecord)=>void;selected?:EntityRecord}){
  const rows=data?.sources.rows?.records??[],columns=data?.sources.columns?.records??[];
  const cells=useMemo(()=>new Map(data?.cells?.map(c=>[JSON.stringify([c.row,c.column]),c])),[data]);
  if(!data||!config)return <p role="status">{t('Configure the composite model bindings.')}</p>;
@@ -18,7 +19,7 @@ export function ModelMatrixRenderer({data,config,enabled,onSelect,selected}:{dat
  return <DataTable data={rows} columns={defs} getRowId={row=>String(row.id)} selectedId={selected?.id} onRowClick={enabled===false?undefined:row=>onSelect(row as EntityRecord)} height={Math.min(480,Math.max(140,(rows.length+2)*28))} empty={t('No matching records.')}/>;
 }
 
-export function LayeredGraphRenderer({data,config,label,enabled,onSelect,onOpen,selected,storeKey}:{data?:Api.PageCompositeResult;config?:Api.PageComposite;label:string;enabled?:boolean;onSelect:(row?:EntityRecord)=>void;onOpen?:(type:string,row:EntityRecord)=>void;selected?:EntityRecord;storeKey:string}){
+export function LayeredGraphRenderer({data,config,label,enabled,onSelect,onOpen,selected,storeKey}:{data?:Api.PageCompositeResult;config?:PageUI.PageComposite;label:string;enabled?:boolean;onSelect:(row?:EntityRecord)=>void;onOpen?:(type:string,row:EntityRecord)=>void;selected?:EntityRecord;storeKey:string}){
  if(!data||!config)return <p role="status">{t('Configure the composite model bindings.')}</p>;
  const raw=data.sources.nodes?.records??[],overlays=data.sources.overlay?.records??[],layers=data.sources.layers?.records??[],links=data.sources.edges?.records??[];
  const ordered=[...raw].sort((a,b)=>Number(role(a,'order')??0)-Number(role(b,'order')??0));

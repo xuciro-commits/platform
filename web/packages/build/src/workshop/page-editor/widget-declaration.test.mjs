@@ -6,7 +6,14 @@ import test from 'node:test';
 const manifest=JSON.parse(readFileSync(new URL('../../../../app/src/pageui/widgets.json',import.meta.url)));
 registerHooks({resolve(specifier,context,next){
  if(specifier==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)};`),shortCircuit:true};
- if(specifier==='@platform/ui')return {url:'data:text/javascript,'+encodeURIComponent('export const t=(s,values={})=>s.replace(/\\{(\\w+)\\}/g,(_,key)=>values[key]??key);'),shortCircuit:true};
+ if(specifier==='@platform/ui')return {url:'data:text/javascript,'+encodeURIComponent(`
+  export const t=(s,values={})=>s.replace(/\\{(\\w+)\\}/g,(_,key)=>values[key]??key);
+  export {validExternalFrame} from ${JSON.stringify(new URL('../../../../ui/src/components/external-frame.ts',import.meta.url).href)};
+  export {validStaticImage} from ${JSON.stringify(new URL('../../../../ui/src/components/static-image.ts',import.meta.url).href)};
+  export {rangeGrid} from ${JSON.stringify(new URL('../../../../ui/src/components/range.ts',import.meta.url).href)};
+  export {validSceneConfig} from ${JSON.stringify(new URL('../../../../ui/src/spatial/scene-model.ts',import.meta.url).href)};
+  export {validCivilDate,validTimestampOffset} from ${JSON.stringify(new URL('../../../../ui/src/components/date.ts',import.meta.url).href)};
+ `),shortCircuit:true};
  try{return next(specifier,context);}catch(error){
   if(specifier.startsWith('./')||specifier.startsWith('../'))return next(specifier+'.ts',context);
   throw error;

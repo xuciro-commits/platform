@@ -1,8 +1,9 @@
+import type {Definition as WorkspaceDefinition} from "../index";
 import type * as PageUI from "../pageui/types";
 import type {Api} from "@platform/kernel";
 import type {EntityInfo,EntityRecord,RecordPageData,RecordSource} from "@platform/ui";
 
-export type RecordExplorationReader={source:RecordSource;definitions:readonly Api.Definition[];active:()=>boolean};
+export type RecordExplorationReader={source:RecordSource;definitions:readonly WorkspaceDefinition[];active:()=>boolean};
 export type ExplorationReference={object:Api.AssetRef;id:string};
 export type ExplorationRelation={id:string;label:string;binding:Api.AssetBinding;direction:"forward"|"reverse";object:Api.AssetRef;labelField:string};
 export type ExplorationWindow=ExplorationRelation&{page?:RecordPageData;error?:string};
@@ -16,7 +17,7 @@ function originalWindow(page:RecordPageData,limit:number):RecordPageData {
  if(!page||!Array.isArray(page.records)||page.records.length>limit||!Number.isSafeInteger(page.total)||page.total<page.records.length||new Set(page.records.map(r=>r?.id)).size!==page.records.length)throw Error("The original relation window is unavailable or incompatible.");
  page.records.forEach(r=>originalRecord(r));return page;
 }
-function originalLink(definitions:readonly Api.Definition[],binding:Api.AssetBinding):Api.LinkType {
+function originalLink(definitions:readonly WorkspaceDefinition[],binding:Api.AssetBinding):Api.LinkType {
  const d=definitions.find(d=>same(d.ref,binding.ref)),link=d?.version===binding.sourceVersion?d.linkType:d?.linkVersions?.[binding.sourceVersion];
  if(binding.ref.kind!=="link-type"||!binding.sourceVersion||!link)throw Error("The original relationship version is unavailable.");
  return link;
@@ -30,7 +31,7 @@ function originalLinkFields(source:RecordSource,link:Api.LinkType) {
  originalInfo(source,link.parent);const child=originalInfo(source,link.child),via=child.fields.find(f=>f.name===link.via);
  if(!via||via.type!=="reference"||via.ref!==link.parent.name)throw Error("The original relationship field is unavailable.");
 }
-function explorationRelations(source:RecordSource,definitions:readonly Api.Definition[],config:PageUI.PageGraphExplorer,current:ExplorationReference):ExplorationRelation[] {
+function explorationRelations(source:RecordSource,definitions:readonly WorkspaceDefinition[],config:PageUI.PageGraphExplorer,current:ExplorationReference):ExplorationRelation[] {
  if(config.objects.length>8||config.relations.length>12||!config.objects.some(o=>same(o.object,current.object)))throw Error("The original exploration graph is unavailable or exceeds its budget.");
  originalInfo(source,current.object,config.objects.find(o=>same(o.object,current.object))!.labelField);
  const result:ExplorationRelation[]=[];
@@ -73,7 +74,7 @@ export function createRecordExploration(reader:RecordExplorationReader) {
 }
 
 /** Resolve fixed metadata only; discovery never implies execution or navigation authority. */
-export function originalDirectoryItems(config:PageUI.PageAssetDirectory,definitions:readonly Api.Definition[]) {
+export function originalDirectoryItems(config:PageUI.PageAssetDirectory,definitions:readonly WorkspaceDefinition[]) {
  return config.items.flatMap(item=>{const d=definitions.find(d=>same(d.ref,item.asset.ref));if(!d)return [];
   const retained=item.asset.ref.kind==="query"?d.queryVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="link-type"?d.linkVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="property-type"?d.propertyVersions?.[item.asset.sourceVersion]:undefined;
   if(d.version!==item.asset.sourceVersion&&!retained)return [];

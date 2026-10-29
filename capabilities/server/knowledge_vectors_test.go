@@ -3,6 +3,8 @@ package platformserver
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +22,14 @@ type indexedKnowledgeStore struct {
 func (s *indexedKnowledgeStore) Vectors(string, string, []string) map[string][]float32 {
 	panic("production search fetched corpus vectors")
 }
-func (s *indexedKnowledgeStore) SyncVectorSources(context.Context, string, string, []journal.VectorSource, bool) error {
+func (s *indexedKnowledgeStore) SyncVectorSources(_ context.Context, _, _ string, sources []journal.VectorSource, _ bool) error {
+	slices.SortFunc(sources, func(a, b journal.VectorSource) int { return strings.Compare(a.Source, b.Source) })
+	s.hits = nil
+	for i, source := range sources {
+		for _, passage := range source.Passages {
+			s.hits = append(s.hits, journal.VectorHit{Source: source.Source, Chunk: passage.Chunk, Hash: passage.Hash, Score: 1 - float64(i)/100})
+		}
+	}
 	return nil
 }
 func (s *indexedKnowledgeStore) MissingVectors(context.Context, string, string, []string) ([]string, error) {
@@ -47,20 +56,19 @@ func TestKnowledgeVectorSearchContinuesAfterAuthorization(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	tn.sync()
-	for i := range 33 {
-		source := fmt.Sprintf("knowledge.document/D%02d", i)
-		c := tn.index.chunks[source][0]
-		store.hits = append(store.hits, journal.VectorHit{Source: source, Chunk: 0, Hash: c.hash, Score: 1 - float64(i)/100})
-	}
 	reader := memberOf(t, tn, "ana")
-	found := tn.nearestKnowledge("local/embed", []float32{1}, &reader, "", 1, now)
+	context := tn.knowledgeContext()
+	context.Active = func() string { return "local/embed" }
+	context.NeedsRebuild = func(string) bool { return false }
+	context.Space = func(name string) string { return name }
+	context.Embed = func(string, []string, time.Time) ([][]float32, error) { return [][]float32{{1}}, nil }
+	found := tn.index.Search(context, &reader, "", "中文工单维护", 1, now)
 	if len(found) != 1 || len(store.requests) != 2 || store.requests[0] != 32 || store.requests[1] != 64 {
 		t.Fatalf("did not continue after filtering: %v %v", found, store.requests)
 	}
-	for c := range found {
-		if c.doc != "knowledge.document/D32" {
-			t.Fatalf("private content escaped: %s", c.doc)
+	for _, passage := range found {
+		if passage.Document != "knowledge.document/D32" {
+			t.Fatalf("private content escaped: %s", passage.Document)
 		}
 	}
 }

@@ -1,7 +1,9 @@
 package platform
 
 import (
+	"encoding/json"
 	"fmt"
+	"platformkernel/kernel"
 	"slices"
 	"time"
 )
@@ -147,4 +149,39 @@ func (m AIModel) Resolve(purpose string, override ModelOptions, ceiling int) (AI
 		return b, fmt.Errorf("Thinking configuration is not implemented by this adapter")
 	}
 	return b, nil
+}
+
+// EstimateModelTokens is the original fallback meter when a provider reports
+// no usage. Reservation bounds include the complete encoded input separately.
+func EstimateModelTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+	return (len(text) + 2) / 3
+}
+
+type CatalogModel struct {
+	ID           string             `json:"id"`
+	Name         string             `json:"name,omitempty"`
+	Context      int                `json:"context,omitempty"`
+	Free         bool               `json:"free,omitempty"`
+	PriceKnown   bool               `json:"priceKnown,omitempty"`
+	Capabilities *ModelCapabilities `json:"capabilities,omitempty"`
+}
+
+// ModelToolHost exposes the original authorized catalog, reads and proposal
+// acceptance. Protocol adapters cannot submit an arbitrary business write.
+type ModelToolProposal struct {
+	ID      string
+	Key     string
+	Action  Action
+	Target  string
+	Payload json.RawMessage
+}
+type ModelToolHost interface {
+	Entities(Member) []EntityInfo
+	Catalog(Member) []Action
+	ModelToolReads(Member) []string
+	Read(Member, string, ...json.RawMessage) (any, *kernel.Error)
+	ProposeModelTool(Member, ModelToolProposal, time.Time) *kernel.Error
 }

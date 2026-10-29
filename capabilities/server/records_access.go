@@ -2,7 +2,8 @@ package platformserver
 
 import (
 	"platformkernel/kernel"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -20,12 +21,12 @@ func viewOf(m platform.Member, et *entityType) (*entityType, []platform.FieldInf
 
 // Entities are the entity types m may read: those of apps m holds a role in.
 func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
-	gen, key := t.definitionsFingerprint(), rights(m)
-	if out, ok := t.cachedEntities(m, gen, key); ok {
+	gen, key := t.definitionsFingerprint(), transport.Rights(m)
+	if out, ok := t.views.Entities(gen, key); ok {
 		return out
 	}
 	out := t.entityView(m)
-	t.storeEntities(gen, key, out)
+	t.views.StoreEntities(gen, key, out)
 	return out
 }
 

@@ -1,19 +1,21 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	controlowner "platformserver/kernel/control"
+	"platformserver/platform"
+	"platformserver/studio/build"
+	"platformserver/studio/packages"
 	"slices"
 	"strings"
 	"time"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
-	"platformserver/platform"
 )
 
 // Preparation is a read projection of sealed package content and its original
@@ -25,11 +27,12 @@ type PackagePreparation struct {
 	Connections       []PackageConnection      `json:"connections"`
 	AI                []PackageAIRequirement   `json:"ai"`
 	Roles             []PackageRoleRequirement `json:"roles"`
-	Setup             *PackageSetup            `json:"setup,omitempty"`
+	Setup             *platform.PackageSetup   `json:"setup,omitempty"`
 	Installed         bool                     `json:"installed"`
 	InstalledVersion  string                   `json:"installedVersion,omitempty"`
 	InstallationState string                   `json:"installationState,omitempty"`
 }
+
 type PackageApplication struct {
 	Ref       platform.AssetRef `json:"ref"`
 	Title     string            `json:"title"`
@@ -38,6 +41,7 @@ type PackageApplication struct {
 	Published bool              `json:"published"`
 	Pages     []string          `json:"pages"`
 }
+
 type PackageConnection struct {
 	Ref        platform.AssetRef `json:"ref"`
 	Title      string            `json:"title"`
@@ -47,6 +51,7 @@ type PackageConnection struct {
 	Configured bool              `json:"configured"`
 	Ready      bool              `json:"ready"`
 }
+
 type PackageAIRequirement struct {
 	Problem string            `json:"problem,omitempty"`
 	Ref     platform.AssetRef `json:"ref"`
@@ -54,12 +59,14 @@ type PackageAIRequirement struct {
 	Model   string            `json:"model,omitempty"`
 	Ready   bool              `json:"ready"`
 }
+
 type PackageRoleRequirement struct {
 	App       string `json:"app"`
 	Role      string `json:"role"`
 	Held      bool   `json:"held"`
 	Available bool   `json:"available"`
 }
+
 type packageDraftState struct {
 	platform.Record
 	Name, Title, State, Address, Secret, Published, Model string
@@ -69,27 +76,11 @@ type packageDraftState struct {
 }
 
 type packagePreparationSource interface {
-	PreparationBlueprint(id, version string) (PackageBlueprint, *InstalledPackage, error)
-}
-
-func (d *Console) PreparationBlueprint(id, version string) (PackageBlueprint, *InstalledPackage, error) {
-	for _, view := range d.PackageViews() {
-		if view.Descriptor.ID != id || view.Descriptor.Version != version {
-			continue
-		}
-		if view.Installed != nil && view.Installed.Version == version && view.Installed.State == "active" {
-			blueprint, err := d.packageBlueprint(id, version)
-			return blueprint, view.Installed, err
-		}
-		if view.Descriptor.Blueprint != nil {
-			return *view.Descriptor.Blueprint, view.Installed, nil
-		}
-	}
-	return PackageBlueprint{}, nil, fmt.Errorf("application package %s@%s is unavailable", id, version)
+	PreparationBlueprint(id, version string) (platform.PackageBlueprint, *platform.InstalledPackage, error)
 }
 
 func (h *Host) routesPackagePreparation(rt *routes) {
-	rt.authorized(Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: PackagePreparation{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: PackagePreparation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		value, err := t.PackagePreparation(m, r.PathValue("id"), r.URL.Query().Get("version"), h.Now())
 		if err != nil {
 			Reply(w, nil, err)
@@ -107,14 +98,14 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 		fail := func(err error) (PackagePreparation, *kernel.Error) {
 			return PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 		}
-		if !holdsIndependentBuildRole(m, construction.Builder) {
+		if !holdsIndependentBuildRole(m, build.Builder) {
 			return PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Builder role required")
 		}
 		_, refusal := t.read(m, "packages")
 		if refusal != nil {
 			return PackagePreparation{}, refusal
 		}
-		source, ok := t.app(PlatformApp).(packagePreparationSource)
+		source, ok := t.app(controlowner.PlatformApp).(packagePreparationSource)
 		if !ok {
 			return fail(fmt.Errorf("package owner is unavailable"))
 		}
@@ -122,7 +113,7 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 		if err != nil {
 			return fail(err)
 		}
-		owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
+		owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 		if !ok {
 			return fail(fmt.Errorf("Build is unavailable"))
 		}
@@ -130,7 +121,7 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 		if err != nil {
 			return fail(err)
 		}
-		candidate, err := blueprint.candidate(owner, code)
+		candidate, err := packages.BlueprintCandidate(blueprint, owner, code)
 		if err != nil {
 			return fail(err)
 		}
@@ -170,7 +161,7 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 			if err != nil {
 				return fail(err)
 			}
-			state, err := find(construction.AppType, root.Name)
+			state, err := find(build.AppType, root.Name)
 			if err != nil {
 				return fail(err)
 			}
@@ -190,26 +181,26 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 			}
 		}
 		for _, asset := range candidate.Assets {
-			if asset.Ref.App != construction.ID {
+			if asset.Ref.App != build.ID {
 				continue
 			}
 			switch asset.Ref.Kind {
 			case platform.AssetConnection:
-				var def construction.ConnectionDefinition
+				var def build.ConnectionDefinition
 				if err := json.Unmarshal(asset.Body, &def); err != nil {
 					return fail(err)
 				}
-				state, err := find(construction.ConnectionType, asset.Ref.Name)
+				state, err := find(build.ConnectionType, asset.Ref.Name)
 				if err != nil {
 					return fail(err)
 				}
 				out.Connections = append(out.Connections, PackageConnection{Ref: asset.Ref, Title: def.Title, DraftID: state.ID, Kind: def.Kind, Credential: def.Credential, Configured: state.Address != "" && (!def.Credential || state.Secret != ""), Ready: state.State == "ready" && (!def.Credential || state.Secret != "")})
 			case platform.AssetAgent, platform.AssetFunction, platform.AssetEvaluation:
-				typ := construction.FunctionType
+				typ := build.FunctionType
 				if asset.Ref.Kind == platform.AssetAgent {
 					typ = "build.agent"
 				} else if asset.Ref.Kind == platform.AssetEvaluation {
-					typ = construction.TestPlanType
+					typ = build.TestPlanType
 				}
 				state, err := find(typ, asset.Ref.Name)
 				if err != nil {

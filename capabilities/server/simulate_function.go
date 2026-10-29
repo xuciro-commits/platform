@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // Candidate tests never inherit live transports or bindings. A fixture replaces
@@ -30,14 +31,14 @@ func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error 
 	if !ok || provider == "" || name == "" {
 		return fmt.Errorf("fixture model must identify provider/model")
 	}
-	admin := platform.Member{ID: "app:candidate-test", Tenant: t.ID, Roles: map[string]string{PlatformApp: Admin, platform.AIApp: platform.AIAdmin}}
+	admin := platform.Member{ID: "app:candidate-test", Tenant: t.ID, Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, platform.AIApp: platform.AIAdmin}}
 	settings := []struct {
 		app, schema, kind, id string
 		payload               any
 	}{
 		{platform.AIApp, platform.AISchemaProviderAdd, platform.AIProviderType, provider, map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid", "wire": "openai"}},
 		{platform.AIApp, platform.AISchemaModelEnable, platform.AIModelType, model, map[string]string{"access": "users"}},
-		{PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": model}},
+		{controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/app-model", map[string]string{"value": model}},
 	}
 	for i, setting := range settings {
 		payload, _ := json.Marshal(setting.payload)
@@ -55,14 +56,14 @@ func pendingFunctionEffects(t *Tenant) []platform.Effect {
 	var pending []platform.Effect
 	for _, effect := range t.outbound {
 		var ask modelAsk
-		if effect.Endpoint == resultformat.ModelEndpoint && !settled(effect.State) && json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Function != nil {
+		if effect.Endpoint == acceptedformat.ModelEndpoint && !settled(effect.State) && json.Unmarshal([]byte(effect.Body), &ask) == nil && ask.Function != nil {
 			pending = append(pending, effect.Effect)
 		}
 	}
 	return pending
 }
 
-func settleFunctionFixture(t *Tenant, actor platform.Member, fixture construction.FunctionFixture, now time.Time) (bool, error) {
+func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.FunctionFixture, now time.Time) (bool, error) {
 	pending := pendingFunctionEffects(t)
 	if len(pending) == 0 {
 		return false, nil
@@ -98,23 +99,23 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture constructio
 		return false, fmt.Errorf("fixture settlement failed")
 	}
 	kind, id, ok := strings.Cut(ask.Record, "/")
-	if !ok || kind != construction.FunctionCallType {
+	if !ok || kind != build.FunctionCallType {
 		return false, fmt.Errorf("fixture reply is not a builder function call")
 	}
 	view, refusal := t.recordOf(actor, kind, id, now)
 	if refusal != nil {
 		return false, nil
 	}
-	run, ok := view.Record.(construction.FunctionRun)
+	run, ok := view.Record.(build.FunctionRun)
 	if !ok || run.State != fixture.ExpectState {
 		return false, nil
 	}
 	if fixture.ExpectOutput != "" {
-		actual, err := acceptance.Digest(json.RawMessage(run.Output))
+		actual, err := platform.CanonicalDigest(json.RawMessage(run.Output))
 		if err != nil {
 			return false, nil
 		}
-		expected, err := acceptance.Digest(json.RawMessage(fixture.ExpectOutput))
+		expected, err := platform.CanonicalDigest(json.RawMessage(fixture.ExpectOutput))
 		return err == nil && actual == expected, nil
 	}
 	return true, nil

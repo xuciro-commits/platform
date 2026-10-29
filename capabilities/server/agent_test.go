@@ -1,11 +1,14 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"platformserver/internal/agents"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -16,8 +19,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/ai"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -43,7 +46,7 @@ func TestAgentObservationBoundsPreserveJSONAndChinese(t *testing.T) {
 		t.Fatalf("text cut inside a character: %q", got)
 	}
 	for _, args := range []string{`{"id":`, `{"id":1,"id":2}`, `[]`} {
-		if _, err := agents.CompleteToolCalls([]ToolCall{{ID: "a", Name: "read", Arguments: json.RawMessage(args)}}, "r", 1); err == nil {
+		if _, err := agents.CompleteToolCalls([]platform.ToolCall{{ID: "a", Name: "read", Arguments: json.RawMessage(args)}}, "r", 1); err == nil {
 			t.Fatalf("accepted incomplete or ambiguous tool input: %s", args)
 		}
 	}
@@ -60,8 +63,8 @@ func TestAgentMultipleCallsResumeAccepted(t *testing.T) {
 	approveTestInference(t, model.URL, "lm")
 	t.Cleanup(model.Close)
 	build := func() *Tenant {
-		return composeTenant(t, "t-1", []Seat{seatOf("ana", "desk:clerk", "platform:admin", "ai:admin", "agent:admin")},
-			ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
+		return composeTenant(t, "t-1", []platform.Seat{seatOf("ana", "desk:clerk", "platform:admin", "ai:admin", "agent:admin")},
+			ai.New("t-1"), work.New("t-1"), automation.New("t-1"), agentowner.New("t-1"), newDesk("t-1"))
 	}
 	tn := build()
 	var entries []Entry
@@ -78,10 +81,10 @@ func TestAgentMultipleCallsResumeAccepted(t *testing.T) {
 	}
 	decide(t, tn, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}, now)
 	decide(t, tn, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/scripted", map[string]any{"access": "users"}, now)
-	decide(t, tn, "ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "lm/scripted"}, now)
-	decide(t, tn, "ana", AgentApp, SchemaRunStart, RunType, "R1", map[string]any{"agent": "desk.triage", "goal": "answer both", "act": true}, now)
+	decide(t, tn, "ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]any{"value": "lm/scripted"}, now)
+	decide(t, tn, "ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "R1", map[string]any{"agent": "desk.triage", "goal": "answer both", "act": true}, now)
 	tn.Think(now)
-	run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "R1")
+	run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "R1")
 	if run.StepsUsed != 1 || len(run.Pending) != 2 || len(run.Steps[0].Calls) != 3 || run.Steps[0].CallID != "first" {
 		t.Fatalf("model response was not retained: %+v", run)
 	}
@@ -93,18 +96,33 @@ func TestAgentMultipleCallsResumeAccepted(t *testing.T) {
 				t.Fatal(err)
 			}
 			if interruption == "cancel" {
-				decide(t, interrupted, "ana", AgentApp, SchemaRunCancel, RunType, "R1", map[string]any{}, now)
+				decide(t, interrupted, "ana", platform.AgentApp, platform.SchemaRunCancel, platform.RunType, "R1", map[string]any{}, now)
 			} else {
 				console := testConsoleOf(interrupted)
-				console.mu.Lock()
-				delete(console.members["ana"].Roles, "desk")
-				console.mu.Unlock()
+				rewriteMember(t, console, "ana", func(member *platform.Member) {
+					delete(member.Roles, "desk")
+				})
 			}
 			interrupted.Think(now.Add(time.Second))
-			stopped, _ := platform.Get[AgentRunRecord](interrupted.automation(AgentApp, false), "R1")
+			stopped, _ := platform.Get[platform.AgentRunRecord](interrupted.automation(platform.AgentApp, false), "R1")
+			first, _ := platform.Get[Ticket](interrupted.automation("desk", false), "T1")
 			second, _ := platform.Get[Ticket](interrupted.automation("desk", false), "T2")
-			if stopped.State != "stopped" || len(stopped.Pending) != 0 || second.Revision != 1 || second.Status != "open" {
-				t.Fatalf("pending call executed after %s: %+v %+v", interruption, stopped, second)
+			if first.Revision != 1 || second.Revision != 1 || first.Status != "open" || second.Status != "open" {
+				t.Fatalf("a draft wrote before confirmation after %s: %+v %+v", interruption, first, second)
+			}
+			if interruption == "revoke" {
+				// The person lost the role the draft would use: it waits, and the
+				// confirmation is refused by the original authorization.
+				if stopped.State != "waiting" {
+					t.Fatalf("revoked run changed state: %+v", stopped)
+				}
+				if got := refuse(t, interrupted, "ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "R1", map[string]any{}, now.Add(time.Second)); !strings.HasPrefix(got, "ERROR_CODE_POLICY_DENIED") {
+					t.Fatalf("revoked confirmation: %s", got)
+				}
+				return
+			}
+			if stopped.State != "stopped" || len(stopped.Pending) != 0 {
+				t.Fatalf("pending call executed after %s: %+v", interruption, stopped)
 			}
 			results := map[string]bool{}
 			for _, step := range stopped.Steps {
@@ -117,8 +135,9 @@ func TestAgentMultipleCallsResumeAccepted(t *testing.T) {
 			}
 		})
 	}
-	// Restart after the first action was accepted. The other calls resume from
-	// the saved response, without another model call or another first action.
+	// Restart before the first draft is confirmed. The other calls resume from
+	// the saved response, without another model call or another first draft;
+	// each write still waits for its own confirmation.
 	restored := build()
 	if err := restored.Replay(entries); err != nil {
 		t.Fatal(err)
@@ -129,15 +148,18 @@ func TestAgentMultipleCallsResumeAccepted(t *testing.T) {
 		return nil, nil
 	}
 	restored.Think(now.Add(time.Second))
-	restored.Think(now.Add(2 * time.Second))
-	run, _ = platform.Get[AgentRunRecord](restored.automation(AgentApp, false), "R1")
+	decide(t, restored, "ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "R1", map[string]any{}, now.Add(2*time.Second))
+	restored.Think(now.Add(3 * time.Second))
+	decide(t, restored, "ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "R1", map[string]any{}, now.Add(4*time.Second))
+	restored.Think(now.Add(5 * time.Second))
+	run, _ = platform.Get[platform.AgentRunRecord](restored.automation(platform.AgentApp, false), "R1")
 	first, _ := platform.Get[Ticket](restored.automation("desk", false), "T1")
 	second, _ := platform.Get[Ticket](restored.automation("desk", false), "T2")
 	if run.State != "done" || len(run.Pending) != 0 || run.StepsUsed != 1 || run.TokensUsed != 120 || modelCalls.Load() != 1 ||
 		first.Revision != 2 || second.Revision != 2 || first.Reply != "第一张" || second.Reply != "第二张" {
 		t.Fatalf("bad resumed run: %+v; tickets: %+v / %+v", run, first, second)
 	}
-	req := restored.agents.(*Agents).prompt(restored.automation(AgentApp, false), restored.agents.(*Agents).def(run.Agent), run, "lm/scripted", now)
+	req := restored.agents.AgentEvaluationRuntime().Prompt(restored.automation(platform.AgentApp, false), restored.agents.AgentEvaluationRuntime().Definition(run.Agent), run, "lm/scripted", now)
 	if len(req.Messages) != 6 || len(req.Messages[2].ToolCalls) != 3 || req.Messages[3].ToolCallID != "first" || req.Messages[4].ToolCallID != "second" || req.Messages[5].ToolCallID != "end" {
 		t.Fatalf("model call/result pairing was lost: %+v", req.Messages)
 	}
@@ -312,12 +334,12 @@ func testAgents(t *testing.T, accepted bool) {
 	model := scriptedModel(t)
 	var journal []Entry
 	build := func() *Tenant {
-		seat := func(id string, roles map[string]string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
+		seat := func(id string, roles map[string]string) platform.Seat {
+			return platform.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
+		tn, err := NewTenant("t-1", newConsole("t-1", seat("ana", map[string]string{"desk": "clerk", controlowner.PlatformApp: controlowner.Admin, ai.ID: ai.Admin, platform.AgentApp: platform.AgentAdmin}),
 			seat("bo", map[string]string{"desk": "viewer"}),
-			Seat{Subjects: []string{"bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{"desk": "clerk"}, Agent: true}}), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
+			platform.Seat{Subjects: []string{"bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{"desk": "clerk"}, Agent: true}}), ai.New("t-1"), work.New("t-1"), automation.New("t-1"), agentowner.New("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -333,7 +355,10 @@ func testAgents(t *testing.T, accepted bool) {
 			return e.Body, nil
 		}
 	}
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	do := func(who, authority, schema, typ, id string, payload any) string {
@@ -352,8 +377,8 @@ func testAgents(t *testing.T, accepted bool) {
 			tn.Work(now)
 		}
 	}
-	run := func(id string) AgentRunRecord {
-		r, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), id)
+	run := func(id string) platform.AgentRunRecord {
+		r, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), id)
 		return r
 	}
 	steps := func(id string) string {
@@ -371,7 +396,7 @@ func testAgents(t *testing.T, accepted bool) {
 		}
 	}
 	start := func(who, id, goal, ref string) string {
-		return do(who, AgentApp, SchemaRunStart, RunType, id, map[string]string{"agent": "desk.triage", "goal": goal, "ref": ref})
+		return do(who, platform.AgentApp, platform.SchemaRunStart, platform.RunType, id, map[string]string{"agent": "desk.triage", "goal": goal, "ref": ref})
 	}
 	for _, id := range []string{"T1", "T2", "T3", "T4"} {
 		do("ana", "desk", "desk.ticket.open", "desk.ticket", id, map[string]string{"subject": "Wifi down in room " + id})
@@ -383,7 +408,7 @@ func testAgents(t *testing.T, accepted bool) {
 	expect("no model", run("R0").State+" "+run("R0").Stopped, "stopped no model is set for agents")
 	do("ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
 	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/scripted", map[string]string{"access": "users"})
-	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "lm/scripted"})
+	do("ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]string{"value": "lm/scripted"})
 
 	// For ana, a clerk: it reads the ticket's context and drafts the answer; ana
 	// confirms it, and it is done as ana, correlated to the run (D6). The agent finishes.
@@ -391,22 +416,22 @@ func testAgents(t *testing.T, accepted bool) {
 	think(4)
 	expect("R1 drafts", run("R1").State+" / "+steps("R1"), "waiting / context {\"type\":\"desk.ticket\",\"record\":{\"id\":\"T1\",\"revision\":1,\"created\":{\"by\":\"ana\",\"at\":\"2026-10-01T09:00:00Z\",\"change\":\"chg-1\"},\"changed\":{\"by\":\"ana\",\"at\":\"2026-10-01T09:00:00Z\",\"change\":\"chg-1\"},\"subject\":\"Wifi, desk_ticket_answer drafted")
 	expect("draft", fmt.Sprint(run("R1").Draft[0].Action, " ", run("R1").Draft[0].Target, " ", run("R1").Draft[0].Payload, " ", ticket("T1").Status), `desk.ticket.answer T1 {"reply":"Hello"} open`)
-	expect("only ana answers her drafts", do("bo", AgentApp, SchemaRunConfirm, RunType, "R1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
-	expect("confirm", do("ana", AgentApp, SchemaRunConfirm, RunType, "R1", map[string]any{"payload": map[string]string{"reply": "Hello, it works again"}}), "ok")
+	expect("only ana answers her drafts", do("bo", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "R1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
+	expect("confirm", do("ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "R1", map[string]any{"payload": map[string]string{"reply": "Hello, it works again"}}), "ok")
 	expect("answered as ana", ticket("T1").Status+" "+ticket("T1").Reply+" "+ticket("T1").Changed.By, "answered Hello, it works again ana")
 	think(2)
 	expect("R1", run("R1").State+" "+run("R1").Signals[0].Kind+" "+run("R1").Signals[0].Value, `done changed {"reply":"Hello, it works again"}`)
 
 	// In the person's language.
-	do("ana", AgentApp, SchemaRunStart, RunType, "RL1", map[string]string{"agent": "desk.triage", "goal": "speak", "language": "zh-CN"})
-	do("ana", AgentApp, SchemaRunStart, RunType, "RL2", map[string]string{"agent": "desk.triage", "goal": "speak"})
+	do("ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "RL1", map[string]string{"agent": "desk.triage", "goal": "speak", "language": "zh-CN"})
+	do("ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "RL2", map[string]string{"agent": "desk.triage", "goal": "speak"})
 	think(2)
 	expect("languages", run("RL1").Result+" "+run("RL2").Result, "中文 English")
 	expect("rationale", run("R1").Steps[1].Rationale, "because desk_ticket_answer")
 	// A rejected draft: the agent hears why and goes on.
 	start("ana", "R6", "Answer ticket T4: wifi", "desk.ticket/T4")
 	think(3)
-	expect("reject", do("ana", AgentApp, SchemaRunReject, RunType, "R6", map[string]string{"reason": "not this ticket"}), "ok")
+	expect("reject", do("ana", platform.AgentApp, platform.SchemaRunReject, platform.RunType, "R6", map[string]string{"reason": "not this ticket"}), "ok")
 	think(2)
 	expect("R6", run("R6").State+" "+run("R6").Signals[0].Kind+" "+ticket("T4").Status+" "+fmt.Sprint(strings.Contains(run("R6").Result, "rejected by ana: not this ticket")), "done rejected open true")
 	// For bo, a viewer who may not answer: the agent may not either (D2).
@@ -414,7 +439,7 @@ func testAgents(t *testing.T, accepted bool) {
 	think(4)
 	expect("R2", run("R2").Steps[1].Outcome[:25]+" "+ticket("T2").Status, "refused: bo may not do th open")
 	// An agent of an app the member has no role in cannot be asked.
-	expect("a stranger", do("bo", AgentApp, SchemaRunStart, RunType, "R9", map[string]string{"agent": "desk.nope", "goal": "x"}), "ERROR_CODE_POLICY_DENIED")
+	expect("a stranger", do("bo", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "R9", map[string]string{"agent": "desk.nope", "goal": "x"}), "ERROR_CODE_POLICY_DENIED")
 
 	// It asks a person, waits, and goes on with the answer.
 	start("ana", "R3", "ask about T3", "")
@@ -445,40 +470,43 @@ func testAgents(t *testing.T, accepted bool) {
 	// that keeps failing stops the run and the flow takes its fault path.
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T5", map[string]string{"subject": "auto wifi"})
 	think(6)
-	x, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "desk.handle:T5")
+	x, _ := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "desk.handle:T5")
 	expect("flow", x.State+" "+ticket("T5").Status+" "+x.Answer[:7], "done answered after 2")
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T6", map[string]string{"subject": "auto fail"})
 	think(6)
-	x, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "desk.handle:T6")
+	x, _ = platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "desk.handle:T6")
 	expect("fault", x.State+" "+x.Tokens[0].Step, "waiting manual")
 
 	// Memory: ana's change proposed a memory, which she keeps;
 	// bo may not forget it. The agent remembers a fact about ana itself, and
 	// both go into the prompt of her next run, not into bo's.
-	memory := func(id string) Memory { m, _ := platform.Get[Memory](tn.automation(AgentApp, false), id); return m }
+	memory := func(id string) platform.Memory {
+		m, _ := platform.Get[platform.Memory](tn.automation(platform.AgentApp, false), id)
+		return m
+	}
 	expect("proposed", memory("R1:p1").State+" "+memory("R1:p1").For+" "+memory("R1:p1").Fact, `proposed ana ana changed a draft for "Answer ticket T1: wifi" to {"reply":"Hello, it works again"}.`)
 	// A memory bo may not read is not there for him to act on:
 	// the same answer a read gives, which does not say whose memories exist.
-	expect("bo forgets", do("bo", AgentApp, MemoryType+".forget", MemoryType, "R1:p1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
-	expect("ana keeps", do("ana", AgentApp, MemoryType+".keep", MemoryType, "R1:p1", map[string]any{}), "ok")
+	expect("bo forgets", do("bo", platform.AgentApp, platform.MemoryType+".forget", platform.MemoryType, "R1:p1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
+	expect("ana keeps", do("ana", platform.AgentApp, platform.MemoryType+".keep", platform.MemoryType, "R1:p1", map[string]any{}), "ok")
 	start("ana", "R7", "remember this", "")
 	think(3)
 	expect("remembered", memory("R7:m1").State+" "+memory("R7:m1").For+" "+fmt.Sprint(memory("R7:m1").Expires.Sub(now) > 80*24*time.Hour), "active ana true")
 	prompt := func(who string) string {
-		return tn.agents.(*Agents).prompt(tn.automation(AgentApp, false), tn.agents.(*Agents).defs["desk.triage"], AgentRunRecord{Agent: "desk.triage", Goal: "reply to ana", OnBehalf: who}, "m", now).Messages[0].Content
+		return tn.agents.AgentEvaluationRuntime().Prompt(tn.automation(platform.AgentApp, false), tn.agents.AgentEvaluationRuntime().Definition("desk.triage"), platform.AgentRunRecord{Agent: "desk.triage", Goal: "reply to ana", OnBehalf: who}, "m", now).Messages[0].Content
 	}
 	expect("ana's prompt", fmt.Sprint(strings.Contains(prompt("ana"), "- ana signs replies"), strings.Contains(prompt("ana"), "it works again")), "true true")
 	expect("bo's prompt", fmt.Sprint(strings.Contains(prompt("bo"), "What you remember")), "false")
 	mine, _ := tn.Read(member("ana"), "memories")
-	expect("ana's memories", fmt.Sprint(len(mine.([]Memory))), "3") // R6's rejection proposed one too
+	expect("ana's memories", fmt.Sprint(len(mine.([]platform.Memory))), "3") // R6's rejection proposed one too
 
 	// A candidate model re-runs the runs people answered, dry: R1's changed
 	// draft is not what it drafts again, R6's rejected one is. Nothing is done.
-	expect("evaluate", do("ana", AgentApp, SchemaEvalStart, EvaluationType, "E1", map[string]string{"agent": "desk.triage", "model": "lm/scripted"}), "ok")
-	expect("only administrators", do("bo", AgentApp, SchemaEvalStart, EvaluationType, "E2", map[string]string{"agent": "desk.triage", "model": "lm/scripted"}), "ERROR_CODE_POLICY_DENIED")
+	expect("evaluate", do("ana", platform.AgentApp, platform.SchemaEvalStart, platform.EvaluationType, "E1", map[string]string{"agent": "desk.triage", "model": "lm/scripted"}), "ok")
+	expect("only administrators", do("bo", platform.AgentApp, platform.SchemaEvalStart, platform.EvaluationType, "E2", map[string]string{"agent": "desk.triage", "model": "lm/scripted"}), "ERROR_CODE_POLICY_DENIED")
 	before := ticket("T4").Revision
 	tn.Evaluate(now)
-	ev, _ := platform.Get[Evaluation](tn.automation(AgentApp, false), "E1")
+	ev, _ := platform.Get[platform.Evaluation](tn.automation(platform.AgentApp, false), "E1")
 	var verdicts []string
 	for _, x := range ev.Cases {
 		verdicts = append(verdicts, x.Run+" "+x.Signal+" "+x.Verdict)
@@ -487,10 +515,10 @@ func testAgents(t *testing.T, accepted bool) {
 	expect("reference", ev.Cases[1].Reference+" / "+ev.Cases[1].Candidate, `desk.ticket.answer T1 {"reply":"Hello, it works again"};  / desk.ticket.answer T1 {"reply":"Hello"}; `)
 
 	// The declared cases, three runs each, dry: one passes every time, one never.
-	expect("suite", do("ana", AgentApp, SchemaEvalStart, EvaluationType, "E3", map[string]any{"agent": "desk.triage", "model": "lm/scripted", "suite": true}), "ok")
+	expect("suite", do("ana", platform.AgentApp, platform.SchemaEvalStart, platform.EvaluationType, "E3", map[string]any{"agent": "desk.triage", "model": "lm/scripted", "suite": true}), "ok")
 	t1 := ticket("T1").Revision
 	tn.Evaluate(now)
-	suite, _ := platform.Get[Evaluation](tn.automation(AgentApp, false), "E3")
+	suite, _ := platform.Get[platform.Evaluation](tn.automation(platform.AgentApp, false), "E3")
 	var cases []string
 	for _, x := range suite.Cases {
 		cases = append(cases, fmt.Sprintf("%s %s %d/%d", x.Case, x.Verdict, x.Passes, x.Runs))
@@ -501,7 +529,7 @@ func testAgents(t *testing.T, accepted bool) {
 	// A flow that compensates undoes what its agent did: a signal on the run.
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T8", map[string]string{"subject": "auto undo"})
 	think(6)
-	runs, _, _ := platform.Find[AgentRunRecord](tn.automation(AgentApp, false), platform.Query{Domain: json.RawMessage(`[["flow","=","desk.handle:T8"]]`)})
+	runs, _, _ := platform.Find[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["flow","=","desk.handle:T8"]]`)})
 	expect("undone", runs[0].Signals[0].Kind+" "+runs[0].Signals[0].Detail, "undone the flow asked to undo")
 
 	// Usage is metered as the agent's.
@@ -509,13 +537,13 @@ func testAgents(t *testing.T, accepted bool) {
 
 	// The overview: each agent, declared or outside, with what
 	// it did and what people made of it.
-	overview := func(member string) AgentOverview {
+	overview := func(member string) platform.AgentOverview {
 		for _, o := range tn.agents.AgentOverview() {
 			if o.Member == member {
 				return o
 			}
 		}
-		return AgentOverview{}
+		return platform.AgentOverview{}
 	}
 	triage := overview("agent:desk.triage")
 	expect("overview", fmt.Sprint(triage.Runs > 5, " ", triage.Calls > 0, " ", triage.Judged["changed"], " ", triage.Judged["rejected"], " ", triage.Actions > 0, " ", overview("bot").Outside), "true true 1 1 true true")
@@ -526,17 +554,17 @@ func testAgents(t *testing.T, accepted bool) {
 	// agent's running run stops at its next step, a new one is refused, and an
 	// outside agent's decisions and model calls are refused; resumed, it works again.
 	expect("start before", start("ana", "R20", "Answer ticket T2: wifi", "desk.ticket/T2"), "ok")
-	expect("not bo", do("bo", AgentApp, SchemaSuspend, SwitchType, "agent:desk.triage", map[string]string{}), "ERROR_CODE_POLICY_DENIED")
-	expect("suspend", do("ana", AgentApp, SchemaSuspend, SwitchType, "agent:desk.triage", map[string]string{"reason": "misbehaves"}), "ok")
+	expect("not bo", do("bo", platform.AgentApp, platform.SchemaSuspend, platform.SwitchType, "agent:desk.triage", map[string]string{}), "ERROR_CODE_POLICY_DENIED")
+	expect("suspend", do("ana", platform.AgentApp, platform.SchemaSuspend, platform.SwitchType, "agent:desk.triage", map[string]string{"reason": "misbehaves"}), "ok")
 	think(1)
 	expect("stopped", run("R20").State+" "+run("R20").Stopped, "stopped suspended by ana")
 	expect("no new run", start("ana", "R21", "Answer ticket T2", "desk.ticket/T2"), "ERROR_CODE_POLICY_DENIED")
-	expect("suspend bot", do("ana", AgentApp, SchemaSuspend, SwitchType, "bot", map[string]string{}), "ok")
+	expect("suspend bot", do("ana", platform.AgentApp, platform.SchemaSuspend, platform.SwitchType, "bot", map[string]string{}), "ok")
 	expect("bot refused", do("bot", "desk", "desk.ticket.open", "desk.ticket", "T21", map[string]string{"subject": "again"}), "ERROR_CODE_POLICY_DENIED")
-	_, refused, _ := tn.Chat(member("bot"), ChatRequest{Model: "lm/scripted", Messages: []Message{{Role: "user", Content: "hi"}}}, now)
+	_, refused, _ := tn.Chat(member("bot"), platform.ChatRequest{Model: "lm/scripted", Messages: []platform.Message{{Role: "user", Content: "hi"}}}, now)
 	expect("bot's model call", refused.Message, "The agent bot is suspended")
 	expect("overview says so", fmt.Sprint(overview("agent:desk.triage").Suspended, overview("bot").Suspended), "true true")
-	expect("resume", do("ana", AgentApp, SchemaResume, SwitchType, "agent:desk.triage", map[string]string{}), "ok")
+	expect("resume", do("ana", platform.AgentApp, platform.SchemaResume, platform.SwitchType, "agent:desk.triage", map[string]string{}), "ok")
 	expect("works again", start("ana", "R22", "Answer ticket T2", "desk.ticket/T2"), "ok")
 	CheckReplay(t, tn, journal, build)
 }

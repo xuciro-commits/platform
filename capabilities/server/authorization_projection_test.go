@@ -3,13 +3,14 @@ package platformserver
 import (
 	"bytes"
 	"encoding/json"
+	controlowner "platformserver/kernel/control"
 	"reflect"
 	"strings"
 	"testing"
 
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 type projectionOwner struct {
@@ -46,13 +47,13 @@ type sourceProjection struct {
 
 func TestDerivedDTORechecksSourceRowsFieldsAndRevokedGrants(t *testing.T) {
 	owner := &projectionOwner{notes: newNotes("projection", "projection")}
-	tn := composeTenant(t, "projection", []Seat{seatOf("ana", "stock:lead", "projection:writer"), seatOf("bo", "stock:clerk", "projection:writer")}, newStock("projection"), owner)
+	tn := composeTenant(t, "projection", []platform.Seat{seatOf("ana", "stock:lead", "projection:writer"), seatOf("bo", "stock:clerk", "projection:writer")}, newStock("projection"), owner)
 	decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Machine", "secret": "private tolerance"}, txnAt)
-	dir := tn.app(PlatformApp).(*Console)
-	dir.mu.Lock()
-	dir.members["ana"].Roles = map[string]string{"projection": "writer", "stock": "clerk"}
-	dir.members["ana"].Grants = nil
-	dir.mu.Unlock()
+	dir := tn.app(controlowner.PlatformApp).(*controlowner.Console)
+	rewriteMember(t, dir, "ana", func(member *platform.Member) {
+		member.Roles = map[string]string{"projection": "writer", "stock": "clerk"}
+		member.Grants = nil
+	})
 	report := sourceProjection{ID: "I1", Name: "Machine", Secret: "private tolerance", Body: json.RawMessage(`{"name":"Machine","count":9007199254740993}`), Missing: "untracked generation", Original: "member input", Undeclared: "untracked prose", Source: "stock.item/I1", Sources: []string{"stock.item/I1#name"}}
 	owner.result = report
 	before := platform.Raw(report)
@@ -83,10 +84,10 @@ func TestDerivedDTORechecksSourceRowsFieldsAndRevokedGrants(t *testing.T) {
 		t.Fatal("DTO collection retained an invisible source element")
 	}
 	owner.result = report
-	dir.mu.Lock()
-	dir.members["ana"].Roles = map[string]string{"projection": "writer"}
-	dir.members["ana"].Grants = nil
-	dir.mu.Unlock()
+	rewriteMember(t, dir, "ana", func(member *platform.Member) {
+		member.Roles = map[string]string{"projection": "writer"}
+		member.Grants = nil
+	})
 	revoked := read(stale)
 	if revoked.Name != "" || len(revoked.Body) != 0 || !revoked.Withheld {
 		t.Fatal("retained DTO used stale source authority")
@@ -192,7 +193,7 @@ func TestMissingSourcesWithholdWholeListAndCombinedDerivations(t *testing.T) {
 
 func TestOriginalReadSourceDoesNotWidenRecordsOrExplicitDerivedFields(t *testing.T) {
 	owner := &projectionOwner{notes: newNotes("projection", "projection"), original: "record"}
-	tn := composeTenant(t, "projection", []Seat{seatOf("ana", "stock:clerk", "projection:writer"), seatOf("bo", "stock:clerk", "projection:writer")}, newStock("projection"), owner)
+	tn := composeTenant(t, "projection", []platform.Seat{seatOf("ana", "stock:clerk", "projection:writer"), seatOf("bo", "stock:clerk", "projection:writer")}, newStock("projection"), owner)
 	for _, id := range []string{"ana", "bo"} {
 		decide(t, tn, id, "stock", "stock.item.create", "stock.item", id, map[string]any{"name": id, "note": "undeclared record prose"}, txnAt)
 	}
@@ -217,7 +218,7 @@ func TestOriginalReadSourceDoesNotWidenRecordsOrExplicitDerivedFields(t *testing
 	}
 	for _, source := range []string{"generated", "invented"} {
 		owner.original = source
-		if construction.CheckManifest(owner.Manifest(), false) == nil {
+		if build.CheckManifest(owner.Manifest(), false) == nil {
 			t.Fatal("uncontrolled read source was accepted")
 		}
 	}

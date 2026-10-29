@@ -11,8 +11,8 @@ import (
 	"testing/iotest"
 	"time"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 func TestDeclaredA2AWritebackKeepsOriginalMessageAndAcceptedAnswer(t *testing.T) {
@@ -72,19 +72,19 @@ func TestDeclaredA2AWritebackKeepsOriginalMessageAndAcceptedAnswer(t *testing.T)
 		WriteJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": rpc.ID, "result": map[string]any{"task": map[string]any{"id": rpc.ID, "status": map[string]any{"state": "TASK_STATE_COMPLETED"}, "artifacts": []any{map[string]any{"parts": []any{map[string]string{"text": "Delivery in three days"}}}}}}})
 	}))
 	defer server.Close()
-	typ := publishObject(t, tn, "builder", "INQUIRY", map[string]any{"name": "inquiry", "title": "Inquiry", "fields": []construction.Field{{Name: "question", Title: "Question", Type: "text", Required: true}, {Name: "answer", Title: "Supplier answer", Type: "longtext", SourceType: "external-input", Write: []string{construction.Builder}}}, "access": []construction.Access{{Role: construction.User, Read: "all", Create: true}}}, txnAt)
-	decide(t, tn, "builder", "build", "build.connection.create", construction.ConnectionType, "supplier", map[string]any{"name": "supplier", "title": "Supplier agent", "kind": "http", "address": server.URL, "secret": "supplier-inquiry", "allowPrivate": true}, txnAt)
-	decide(t, tn, "builder", "build", "build.connection.check", construction.ConnectionType, "supplier", nil, txnAt)
+	typ := publishObject(t, tn, "builder", "INQUIRY", map[string]any{"name": "inquiry", "title": "Inquiry", "fields": []build.Field{{Name: "question", Title: "Question", Type: "text", Required: true}, {Name: "answer", Title: "Supplier answer", Type: "longtext", SourceType: "external-input", Write: []string{build.Builder}}}, "access": []build.Access{{Role: build.User, Read: "all", Create: true}}}, txnAt)
+	decide(t, tn, "builder", "build", "build.connection.create", build.ConnectionType, "supplier", map[string]any{"name": "supplier", "title": "Supplier agent", "kind": "http", "address": server.URL, "secret": "supplier-inquiry", "allowPrivate": true}, txnAt)
+	decide(t, tn, "builder", "build", "build.connection.check", build.ConnectionType, "supplier", nil, txnAt)
 	tn.CheckConnections(txnAt)
-	decide(t, tn, "builder", "build", "build.writeback.create", construction.WritebackType, "inquiry", map[string]any{"name": "asksupplier", "title": "Ask supplier", "connection": "supplier", "object": typ, "on": "create", "transport": "a2a", "method": "POST", "path": "rpc", "mapping": []construction.SourceField{{From: "question", To: "message"}}, "result": []construction.SourceField{{From: "artifacts.0.parts.0.text", To: "answer"}}}, txnAt)
-	decide(t, tn, "builder", "build", "build.writeback.publish", construction.WritebackType, "inquiry", nil, txnAt)
+	decide(t, tn, "builder", "build", "build.writeback.create", build.WritebackType, "inquiry", map[string]any{"name": "asksupplier", "title": "Ask supplier", "connection": "supplier", "object": typ, "on": "create", "transport": "a2a", "method": "POST", "path": "rpc", "mapping": []build.SourceField{{From: "question", To: "message"}}, "result": []build.SourceField{{From: "artifacts.0.parts.0.text", To: "answer"}}}, txnAt)
+	decide(t, tn, "builder", "build", "build.writeback.publish", build.WritebackType, "inquiry", nil, txnAt)
 	sub := submission(tn, memberOf(t, tn, "user"), "build", typ+".create", typ, "delivery", map[string]any{"question": "When can the supplier deliver this item?"})
 	if _, err := tn.Submit(memberOf(t, tn, "user"), sub, txnAt); err != nil {
 		t.Fatal(err)
 	}
 	// A subsequent publication cannot turn the pending A2A message into HTTP.
-	decide(t, tn, "builder", "build", "build.writeback.edit", construction.WritebackType, "inquiry", map[string]any{"transport": "", "method": "PUT"}, txnAt)
-	decide(t, tn, "builder", "build", "build.writeback.publish", construction.WritebackType, "inquiry", nil, txnAt)
+	decide(t, tn, "builder", "build", "build.writeback.edit", build.WritebackType, "inquiry", map[string]any{"transport": "", "method": "PUT"}, txnAt)
+	decide(t, tn, "builder", "build", "build.writeback.publish", build.WritebackType, "inquiry", nil, txnAt)
 	tn.Dispatch(txnAt)
 	row, problem := tn.RecordOf(memberOf(t, tn, "user"), typ, "delivery", txnAt)
 	if problem != nil || strings.Contains(string(platform.Raw(row.Record)), "Delivery in three days") {
@@ -121,7 +121,7 @@ func TestDeclaredA2AWritebackRefusesIncompleteAnswersAndInvalidTransport(t *test
 				}
 				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(body)}, nil
 			}
-			req := construction.WritebackRequest{Transport: "a2a", Method: "POST", URL: "https://supplier.example/rpc", Body: map[string]any{"message": "Ask for availability"}}
+			req := build.WritebackRequest{Transport: "a2a", Method: "POST", URL: "https://supplier.example/rpc", Body: map[string]any{"message": "Ask for availability"}}
 			out := tn.sendWriteback(platform.Effect{ID: "inquiry", Body: string(platform.Raw(req))})
 			if out.Result != "unknown" || len(out.Answer) != 0 {
 				t.Fatalf("an incomplete answer was accepted: %+v", out)
@@ -129,8 +129,8 @@ func TestDeclaredA2AWritebackRefusesIncompleteAnswersAndInvalidTransport(t *test
 		})
 	}
 	for _, transport := range []string{"script", "a2a"} {
-		request := construction.Writeback{Transport: transport, Method: "PUT"}
-		if _, err := request.Request(construction.Connection{Kind: "http", Address: "https://supplier.example"}, "inquiry", platform.Raw(map[string]string{"question": "Availability?"})); err == nil {
+		request := build.Writeback{Transport: transport, Method: "PUT"}
+		if _, err := request.Request(build.Connection{Kind: "http", Address: "https://supplier.example"}, "inquiry", platform.Raw(map[string]string{"question": "Availability?"})); err == nil {
 			t.Fatal("an undeclared transport or A2A method was accepted")
 		}
 	}

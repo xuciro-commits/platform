@@ -1,15 +1,18 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"platformserver/apps/ai"
 	"platformserver/apps/system"
+
 	"testing"
 )
 
 func TestSystemTenantFactoryKeepsTheConfiguredHostAdministrator(t *testing.T) {
 	d := Deployment{HostAdmins: "operator-subject"}
 	d.RebuildWithCapabilities = func(id string, services RuntimeCapabilities) (*Tenant, error) {
-		return NewTenantWithCapabilities(id, services, NewConsole(id, d.SeatsFor(id)...), NewAgents(id), ai.New(id), system.New(id, systemTestSource()))
+		return newTestTenantWithCapabilities(id, services, newConsole(id, d.SeatsFor(id)...), agentowner.New(id), ai.New(id), system.New(id, systemTestSource()))
 	}
 	d.Tenants(TenantSpec{ID: "workspace"})
 	tenant, err := d.rebuildTenant("system")

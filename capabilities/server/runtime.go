@@ -17,9 +17,6 @@ var _ platform.Runtime = runtime{}
 func (r runtime) CheckEnterpriseUsage(c platform.Caller, id, until string, deleting bool, now time.Time) *kernel.Error {
 	return r.t.checkEnterpriseUsage(c, r.t.records, id, until, deleting, now)
 }
-func (r runtime) CheckEnterpriseTenantLink(c platform.Caller, id string, revision uint32, now time.Time) *kernel.Error {
-	return r.t.checkTenantLink(c, id, revision, now)
-}
 func (r runtime) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
 	return r.t.checkTenantConnection(c, id, now)
 }
@@ -137,7 +134,7 @@ func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *ker
 
 // The live runtime serves historical replay and reads; new execution requests
 // require a private decision so their intents are accepted with its records.
-func (r runtime) Seen(c platform.Caller, keys ...string)          { r.t.notices.markKeysRead(c.App, keys) }
+func (r runtime) Seen(c platform.Caller, keys ...string)          { r.t.notices.MarkKeysRead(c.App, keys) }
 func (runtime) InputRefused(*kernel.Error, []platform.FieldIssue) {}
 func (runtime) RequestApproval(platform.Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval requests require a private decision")

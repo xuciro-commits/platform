@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"maps"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"sync"
 	"testing"
@@ -79,7 +80,7 @@ func TestAcceptedParentKeepsActiveReceiverAcrossChildSavepoints(t *testing.T) {
 				const tenant = "active-parent"
 				child := newNotes(tenant, "child")
 				parent := &lockedParentDecision{notes: newNotes(tenant, "parent"), child: child, outcome: outcome}
-				tn := composeTenant(t, tenant, []Seat{seatOf("writer", "parent:writer", "child:writer")}, parent, child)
+				tn := composeTenant(t, tenant, []platform.Seat{seatOf("writer", "parent:writer", "child:writer")}, parent, child)
 				at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
 				if directLedger {
 					member := memberOf(t, tn, "writer")
@@ -115,12 +116,12 @@ func TestAcceptedParentKeepsActiveReceiverAcrossChildSavepoints(t *testing.T) {
 func TestPrivateRecipientsReadUncommittedDirectoryOwners(t *testing.T) {
 	const tenant = "private-recipients"
 	enterpriseOwner := enterprise.New(tenant, platform.OrgSeed{Units: []platform.Unit{{ID: "unit", Name: "Unit", From: "2020-01-01"}}})
-	tn := composeTenant(t, tenant, []Seat{seatOf("admin", PlatformApp+":"+Admin, "stock:clerk", enterprise.ID+":"+enterprise.Admin), seatOf("recipient")}, newStock(tenant), enterpriseOwner)
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("admin", controlowner.PlatformApp+":"+controlowner.Admin, "stock:clerk", enterprise.ID+":"+enterprise.Admin), seatOf("recipient")}, newStock(tenant), enterpriseOwner)
 	member := memberOf(t, tn, "admin")
 	at := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
 	draft := tn.newStagedDecision()
-	caller := platform.NewCaller(draft, member, PlatformApp, false, false)
-	_, refused := platform.Decide(caller, tn.app(PlatformApp), submission(tn, member, PlatformApp, SchemaGrant, MemberType, "recipient", map[string]string{"app": "stock", "role": "clerk"}), at)
+	caller := platform.NewCaller(draft, member, controlowner.PlatformApp, false, false)
+	_, refused := platform.Decide(caller, tn.app(controlowner.PlatformApp), submission(tn, member, controlowner.PlatformApp, controlowner.SchemaGrant, controlowner.MemberType, "recipient", map[string]string{"app": "stock", "role": "clerk"}), at)
 	if refused != nil {
 		t.Fatal(refused)
 	}
@@ -134,7 +135,7 @@ func TestPrivateRecipientsReadUncommittedDirectoryOwners(t *testing.T) {
 	if !slices.Contains(roles, "recipient") || !slices.Equal(units, []string{"recipient"}) {
 		t.Fatalf("private recipient owners were read from live state: roles=%v units=%v", roles, units)
 	}
-	if live, _ := tn.member("recipient"); live.Holds("stock", "clerk") || len(tn.notices.forMember("recipient")) != 0 || len(enterpriseOwner.Holders("", "unit", "operator", at.Format(time.DateOnly))) != 0 {
+	if live, _ := tn.member("recipient"); live.Holds("stock", "clerk") || len(tn.notices.ForMember("recipient")) != 0 || len(enterpriseOwner.Holders("", "unit", "operator", at.Format(time.DateOnly))) != 0 {
 		t.Fatal("resolving private recipients exposed the directory or notifications")
 	}
 }

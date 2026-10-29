@@ -16,28 +16,19 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/engine/integrations"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+	"platformserver/platform"
+	"platformserver/studio/build"
 	"slices"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/construction"
-	"platformserver/platform"
 )
-
-// Outbound effects. An intent is created inside an input, so replay
-// rebuilds it; an attempt is made by the dispatcher outside the tenant's lock
-// and never during replay; its outcome is journaled as an input of its own.
-// This is the K5 outbox with the host as the edge and the endpoint as the
-// authority: at least once, with a key the receiver deduplicates by.
-//
-// The first use is webhooks (D7): an administrator subscribes an endpoint to
-// events in Settings, and the platform app turns each matching event into an
-// effect, signed as Standard Webhooks.
 
 // Endpoint is a destination the tenant's administrator configured. A webhook
 // receives the events it subscribes to (no app code) and the effects apps emit
@@ -156,7 +147,7 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 	if typ == "" {
 		resource = platform.AssetRef{App: c.App, Kind: platform.AssetApp, Name: c.App}
 	}
-	applications, err := t.bindApplications(resource, t.releases.active, "")
+	applications, err := t.bindApplications(resource, t.releases.Active(), "")
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The effect application cannot be bound")
 	}
@@ -191,14 +182,14 @@ func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, dat
 func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned []platform.Effect, now time.Time) {
 	a := t.app(c.App)
 	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
-	console := t.automated(c, PlatformApp)
+	console := t.automated(c, controlowner.PlatformApp)
 	for _, x := range planned {
 		if x.State != "held" {
 			continue
 		}
 		console.Notify(platform.Notification{Title: fmt.Sprintf("Approve %s for %s", a.Manifest().Emits[i].Title, entity),
 			Body: fmt.Sprintf("The AI agent %s caused it, and it cannot be recalled once sent. Approve or discard it in Settings → Integrations.", c.ID),
-			Ref:  EffectType + "/" + x.ID, Key: "approve:" + x.ID}, now, platform.Recipient{AppRole: Admin})
+			Ref:  controlowner.EffectType + "/" + x.ID, Key: "approve:" + x.ID}, now, platform.Recipient{AppRole: controlowner.Admin})
 	}
 }
 
@@ -270,7 +261,7 @@ func (t *Tenant) secret(name string) ([]byte, bool) {
 // Dispatch makes the attempts that are due at now: the head of each endpoint's
 // effects (ordered per endpoint, D2). It sends outside every lock and journals
 // each outcome. The host calls it every second; it is never called in replay.
-func (t *Tenant) Dispatch(now time.Time) { onLane(t.dispatches(now)) }
+func (t *Tenant) Dispatch(now time.Time) { integrations.OnLane(t.dispatches(now)) }
 
 // dispatches are the attempts due at now, to run on the I/O lane: endpoints
 // side by side, each in its order; an endpoint whose breaker is open waits,
@@ -293,8 +284,8 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	t.opsMu.Lock()
 	// Apps' model requests go to the built-in model destination;
 	// the model door keeps each provider's own breaker.
-	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: resultformat.ModelEndpoint, Kind: resultformat.ModelEndpoint}) {
-		if ep.Kind != resultformat.ModelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now, true) {
+	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
+		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
 			continue
 		}
 		// A held effect waits for its approval outside the endpoint's order.
@@ -328,8 +319,8 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 				return // an already in-flight call may have escaped; do not record its answer in damaged state
 			}
 			counted(t, "effect", j.effect.App, outcome.Result)
-			if j.endpoint.Kind != resultformat.ModelEndpoint {
-				t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
+			if j.endpoint.Kind != acceptedformat.ModelEndpoint {
+				t.breakers.Report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
 			}
 			t.settleWithUsage(j.effect.ID, outcome, usage, now)
 		})
@@ -338,7 +329,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 }
 
 func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
-	if ep.Kind == resultformat.ModelEndpoint {
+	if ep.Kind == acceptedformat.ModelEndpoint {
 		return t.sendModel(x, now)
 	}
 	return t.send(ep, x, now), nil
@@ -347,7 +338,7 @@ func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (p
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
 // both webhook-id and Idempotency-Key.
 func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
-	if ep.Kind == resultformat.ModelEndpoint {
+	if ep.Kind == acceptedformat.ModelEndpoint {
 		out, _ := t.sendModel(x, now)
 		return out
 	}
@@ -424,7 +415,7 @@ func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 	// Client.Timeout covers reading the body too. Cancelling a derived context
 	// here would close a streamed response before its caller can read it.
 	response, err := client.Do(req)
-	return redactCredentialFailure(response, req), err
+	return controlowner.RedactCredentialFailure(response, req), err
 }
 
 func guardedDialer(allowPrivate bool) *net.Dialer {
@@ -479,7 +470,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	if x.State == "failed" {
 		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
 	}
-	if x.Endpoint == resultformat.ModelEndpoint {
+	if x.Endpoint == acceptedformat.ModelEndpoint {
 		// Legacy journals contain the separate model reply submission. Recovery
 		// updates only the effect here and reads that saved reply later.
 		return true
@@ -490,7 +481,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 			t.enqueue(at)
 		}
 		if t.agents != nil { // an agent that sent it waits for the answer
-			t.agents.AgentEffectEnded(t.automation(AgentApp, replaying), nil, x, o, at)
+			t.agents.AgentEffectEnded(t.automation(platform.AgentApp, replaying), nil, x, o, at)
 			t.enqueue(at)
 		}
 	}
@@ -504,7 +495,7 @@ func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, repl
 		t.controlAnswer(x, o, now)
 		return
 	}
-	if x.Endpoint == resultformat.ModelEndpoint { // a model request answers its app's reply action, refused
+	if x.Endpoint == acceptedformat.ModelEndpoint { // a model request answers its app's reply action, refused
 		return
 	}
 	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
@@ -526,47 +517,7 @@ func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) 
 
 func markEffect(x *effect, o platform.Outcome, at time.Time) {
 	x.sending = false
-	resultformat.MarkEffect(&x.Effect, x.since, o, at)
-}
-
-// The console's actions about endpoints and effects.
-const (
-	EndpointType         = "platform.endpoint"
-	EffectType           = "platform.effect"
-	SchemaEndpointAdd    = "platform.endpoint.add"
-	SchemaEndpointRemove = "platform.endpoint.remove"
-	SchemaEffectRetry    = "platform.effect.retry"
-	SchemaEffectDiscard  = "platform.effect.discard"
-	SchemaEffectApprove  = "platform.effect.approve"
-	SchemaEffectResolve  = "platform.effect.resolve"
-)
-
-func effectActions() []platform.Action {
-	admin := []string{Admin}
-	return []platform.Action{
-		{Schema: SchemaEndpointAdd, Target: EndpointType, Capability: "integrations", Title: "Add endpoint",
-			Description: "Send the chosen events and effects to a URL, signed with a named secret (Standard Webhooks); or mail the chosen apps' notifications to members through an SMTP server.",
-			Payload: []platform.Field{{Name: "url", Type: "string", Required: true, Description: "https URL of the receiver"},
-				{Name: "secret", Type: "string", Description: "Name of the signing secret in the secret store"},
-				{Name: "events", Type: "string[]", Description: "Action schemas or <protocol id>#<event> to send as webhooks"},
-				{Name: "effects", Type: "string[]", Description: "Effect kinds apps emit, <app>/<kind>, to send here"},
-				{Name: "kind", Type: "string", Description: "webhook (default), email, or a2a (an external agent's A2A 1.0 JSON-RPC URL; the secret is its bearer token)"},
-				{Name: "irreversible", Type: "boolean", Description: "What the receiver does cannot be recalled: effects agents cause wait for a person"},
-				{Name: "from", Type: "string", Description: "email: the sender address"},
-				{Name: "notifications", Type: "string[]", Description: "email: apps whose notifications are mailed to members"},
-				{Name: "allowPrivate", Type: "boolean", Description: "Allow private addresses and plain http (inside the deployment only)"}}, Roles: admin},
-		{Schema: SchemaEndpointRemove, Target: EndpointType, Capability: "integrations", Title: "Remove endpoint",
-			Description: "Stop sending to the endpoint; what it has not received is discarded.", Payload: []platform.Field{}, Roles: admin},
-		{Schema: SchemaEffectRetry, Target: EffectType, Capability: "integrations", Title: "Retry effect",
-			Description: "Send a failed or rejected effect again, with the same key.", Payload: []platform.Field{}, Roles: admin},
-		{Schema: SchemaEffectResolve, Target: EffectType, Capability: "integrations", Title: "Resolve unknown delivery",
-			Description: "Record checked external evidence before resolving an unknown outcome; the original effect is not sent again.", Roles: admin,
-			Payload: []platform.Field{{Name: "outcome", Type: "string", Required: true, Choices: []string{"delivered", "rejected"}, Description: "Confirmed external result"}, {Name: "reason", Type: "string", Required: true, Description: "Evidence supporting the decision"}, {Name: "answer", Type: "json", Description: "Confirmed external answer"}}},
-		{Schema: SchemaEffectDiscard, Target: EffectType, Capability: "integrations", Title: "Discard effect",
-			Description: "Give up on an effect not yet delivered.", Payload: []platform.Field{}, Roles: admin},
-		{Schema: SchemaEffectApprove, Target: EffectType, Capability: "integrations", Title: "Approve effect",
-			Description: "Send an irreversible effect an AI agent caused; only a person may approve it.", Payload: []platform.Field{}, Roles: admin},
-	}
+	acceptedformat.MarkEffect(&x.Effect, x.since, o, at)
 }
 
 // decideEndpoint decides adding and removing an endpoint.
@@ -576,7 +527,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 	t.opsMu.Lock()
 	known := slices.IndexFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id }) >= 0
 	t.opsMu.Unlock()
-	if s.GetSchema().GetName() == SchemaEndpointRemove {
+	if s.GetSchema().GetName() == controlowner.SchemaEndpointRemove {
 		if !known {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
@@ -660,10 +611,10 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 		x = t.outbound[i]
 	}
 	t.opsMu.Unlock()
-	if x != nil && x.App == construction.ID && x.Event == construction.ID+"/dispatch" {
+	if x != nil && x.App == build.ID && x.Event == build.ID+"/dispatch" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Manage this command through its dispatch review and declared reviewer role")
 	}
-	if s.GetSchema().GetName() == SchemaEffectApprove {
+	if s.GetSchema().GetName() == controlowner.SchemaEffectApprove {
 		if x == nil || x.State != "held" {
 			return nil, notFound
 		}
@@ -675,11 +626,11 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			x.State, x.Due = "pending", now
 			t.opsMu.Unlock()
 			if x.Run != "" && t.agents != nil {
-				t.agents.RecordAgentSignal(c, r, x.Run, Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
+				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
 			}
 		}, nil
 	}
-	if s.GetSchema().GetName() == SchemaEffectDiscard {
+	if s.GetSchema().GetName() == controlowner.SchemaEffectDiscard {
 		if x != nil && x.State == "unknown" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
 		}
@@ -692,7 +643,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			x.State = "discarded"
 			t.opsMu.Unlock()
 			if held && x.Run != "" && t.agents != nil { // a person refused what the agent caused
-				t.agents.RecordAgentSignal(c, r, x.Run, Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
+				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
 			}
 			if t.agents != nil {
 				t.agents.AgentEffectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
@@ -700,7 +651,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "discarded by " + c.ID}, now, c.Replaying)
 		}, nil
 	}
-	if s.GetSchema().GetName() == SchemaEffectResolve {
+	if s.GetSchema().GetName() == controlowner.SchemaEffectResolve {
 		var input struct {
 			Outcome, Reason string
 			Answer          json.RawMessage

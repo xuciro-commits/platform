@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	controlowner "platformserver/kernel/control"
 	"reflect"
 	"slices"
 	"strconv"
@@ -15,8 +16,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // Import and export of records as CSV. A row is a decision:
@@ -55,7 +56,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	header := rows[0]
 	sum := sha256.Sum256(data)
 	file := hex.EncodeToString(sum[:8])
-	currency := t.setting(t.automation(PlatformApp, false), SettingCurrency)
+	currency := t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)
 	out := []ImportRow{}
 	for i, row := range rows[1:] {
 		r := ImportRow{Row: i + 1}
@@ -282,12 +283,12 @@ func toCSV(v any) string {
 // restricted says whether typ holds restricted data: a dataset or
 // version marked so, or an object a restricted pipeline writes.
 func (t *Tenant) restricted(typ string) bool {
-	c := t.automation(construction.ID, false)
+	c := t.automation(build.ID, false)
 	switch typ {
-	case construction.DatasetType, construction.DatasetVersionType:
-		sets, _, _ := platform.Find[construction.Dataset](c, platform.Query{Limit: 500})
-		return slices.ContainsFunc(sets, func(d construction.Dataset) bool { return d.Marking == "restricted" })
+	case build.DatasetType, build.DatasetVersionType:
+		sets, _, _ := platform.Find[build.Dataset](c, platform.Query{Limit: 500})
+		return slices.ContainsFunc(sets, func(d build.Dataset) bool { return d.Marking == "restricted" })
 	}
-	pipelines, _, _ := platform.Find[construction.Pipeline](c, platform.Query{Limit: 500})
-	return slices.ContainsFunc(pipelines, func(p construction.Pipeline) bool { return p.OutputObject == typ && p.Marking == "restricted" })
+	pipelines, _, _ := platform.Find[build.Pipeline](c, platform.Query{Limit: 500})
+	return slices.ContainsFunc(pipelines, func(p build.Pipeline) bool { return p.OutputObject == typ && p.Marking == "restricted" })
 }

@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ type Chain struct {
 // ChainOf is the chain of ref, an agent run or a flow instance, as m may read it.
 func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {
 	typ, id, _ := strings.Cut(ref, "/")
-	if typ != RunType && typ != platform.FlowInstanceType {
+	if typ != platform.RunType && typ != platform.FlowInstanceType {
 		return Chain{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if _, err := t.recordOf(m, typ, id, now); err != nil {
@@ -77,9 +78,9 @@ func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (Chain,
 	}
 	// Up to the first flow: a run's flow, an instance's parents.
 	top := ""
-	if typ == RunType {
-		v, _ := t.recordOf(m, RunType, id, now)
-		run := v.Record.(AgentRunRecord)
+	if typ == platform.RunType {
+		v, _ := t.recordOf(m, platform.RunType, id, now)
+		run := v.Record.(platform.AgentRunRecord)
 		if run.Flow == "" {
 			t.chainRun(m, run, add, link, now)
 			return out, nil
@@ -108,9 +109,9 @@ func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (Chain,
 			add(ChainNode{Ref: x.Subject, Kind: "record", Title: x.Subject})
 			link(x.Subject, ref)
 		}
-		for _, r := range find(RunType, "flow", id) {
-			run := r.(AgentRunRecord)
-			link(ref, RunType+"/"+run.ID)
+		for _, r := range find(platform.RunType, "flow", id) {
+			run := r.(platform.AgentRunRecord)
+			link(ref, platform.RunType+"/"+run.ID)
 			t.chainRun(m, run, add, link, now)
 		}
 		for _, c := range find(platform.FlowInstanceType, "parent", id) {
@@ -124,15 +125,15 @@ func (t *Tenant) chainRead(m platform.Member, ref string, now time.Time) (Chain,
 }
 
 // chainRun adds a run and the effects it caused.
-func (t *Tenant) chainRun(m platform.Member, run AgentRunRecord, add func(ChainNode), link func(string, string), now time.Time) {
-	ref := RunType + "/" + run.ID
+func (t *Tenant) chainRun(m platform.Member, run platform.AgentRunRecord, add func(ChainNode), link func(string, string), now time.Time) {
+	ref := platform.RunType + "/" + run.ID
 	add(ChainNode{Ref: ref, Kind: "run", Title: run.Title, State: run.State, Detail: run.Agent})
-	if m.Roles[PlatformApp] != Admin { // effects are the administrators'
+	if m.Roles[controlowner.PlatformApp] != controlowner.Admin { // effects are the administrators'
 		return
 	}
 	for _, x := range t.Effects(now) {
 		if x.Run == run.ID {
-			node := EffectType + "/" + x.ID
+			node := controlowner.EffectType + "/" + x.ID
 			add(ChainNode{Ref: node, Kind: "effect", Title: x.Event, State: x.State, Detail: x.Endpoint})
 			link(ref, node)
 		}

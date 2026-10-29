@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+
 	"testing"
 	"time"
 
@@ -125,7 +126,7 @@ func newRequestsTenant(t *testing.T, withStock bool) *Tenant {
 		actions = append(actions, platform.Action{Schema: "cart.line." + schema, Target: "cart.line", Title: schema, Description: schema + " a line",
 			Payload: payload, Roles: []string{"buyer"}})
 	}
-	apps := []platform.App{NewConsole("t", seatOf("b", "cart:buyer", "stock:keeper"), seatOf("c", "cart:buyer"), seatOf("buyer", "cart:buyer", "stock:keeper")), &cart{ledger: platform.NewLedger("t", "cart", platform.NewCatalog(actions...), "cart.line")}}
+	apps := []platform.App{newConsole("t", seatOf("b", "cart:buyer", "stock:keeper"), seatOf("c", "cart:buyer"), seatOf("buyer", "cart:buyer", "stock:keeper")), &cart{ledger: platform.NewLedger("t", "cart", platform.NewCatalog(actions...), "cart.line")}}
 	if withStock {
 		apps = append(apps, &depot{ledger: platform.NewLedger("t", "stock", platform.NewCatalog(platform.Action{Schema: "stock.hold.make", Target: "stock.hold",
 			Title: "Hold", Description: "Hold an item.", Payload: testProtocol().Actions[0].Payload, Roles: []string{"keeper"}}), "stock.hold")})

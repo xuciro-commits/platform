@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
-	"platformserver/internal/construction"
+	"platformserver/studio/build"
+
 	"platformserver/platform"
 )
 
@@ -28,7 +28,7 @@ func TestPostgresApplicationRuntimeAndDiagnosticReadScopes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer forgetJournal(t, j, id)
-	tn := composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "ai:admin"), seatOf("user", "build:user")}, build.New(id), ai.New(id))
+	tn := composeTenant(t, id, []platform.Seat{seatOf("builder", "build:builder", "ai:admin"), seatOf("user", "build:user")}, build.New(id), ai.New(id))
 	if _, err = j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -36,14 +36,14 @@ func TestPostgresApplicationRuntimeAndDiagnosticReadScopes(t *testing.T) {
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	typ := publishObject(t, tn, "builder", "OBJECT", map[string]any{
 		"name": "item", "title": "Item",
-		"fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}},
-		"access": []construction.Access{{Role: construction.User, Read: "all", Create: true, Edit: true}},
+		"fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}},
+		"access": []build.Access{{Role: build.User, Read: "all", Create: true, Edit: true}},
 	}, at)
-	decide(t, tn, "builder", construction.ID, "build.app.create", construction.AppType, "APP", map[string]any{
-		"name": "wms", "title": "WMS", "resources": []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: typ}},
+	decide(t, tn, "builder", build.ID, "build.app.create", build.AppType, "APP", map[string]any{
+		"name": "wms", "title": "WMS", "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: typ}},
 	}, at)
-	decide(t, tn, "builder", construction.ID, construction.SchemaHandOver, construction.AppType, "APP", map[string]any{}, at)
-	decide(t, tn, "user", construction.ID, typ+".create", typ, "I1", map[string]any{"name": "one"}, at)
+	decide(t, tn, "builder", build.ID, build.SchemaHandOver, build.AppType, "APP", map[string]any{}, at)
+	decide(t, tn, "user", build.ID, typ+".create", typ, "I1", map[string]any{"name": "one"}, at)
 	if err = tn.migrateRuntimeState(ctx, j); err != nil {
 		t.Fatal(err)
 	}
@@ -61,16 +61,16 @@ func TestPostgresApplicationRuntimeAndDiagnosticReadScopes(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), answer); err != nil {
 			t.Fatal(err)
 		}
-		if tn.records.readView != nil {
+		if tn.records.current.View() != nil {
 			t.Fatal("application read retained its SQL snapshot")
 		}
 	}
-	var runtime ApplicationRuntime
+	var runtime platform.ApplicationRuntime
 	get("/v1/applications/build/wms/runtime", &runtime)
 	if runtime.Artifact.Ref.Name != "wms" || len(runtime.Data) != 1 || runtime.Data[0].Records != 1 || runtime.Recovery.State != "ready" {
 		t.Fatalf("application runtime lost its data or recovery state: %+v", runtime)
 	}
-	var diagnostic ApplicationDiagnostic
+	var diagnostic platform.ApplicationDiagnostic
 	get("/v1/applications/build/wms/records/"+typ+"/I1/diagnostic", &diagnostic)
 	if diagnostic.Record != "I1" || len(diagnostic.Decisions) != 1 {
 		t.Fatalf("application diagnostic lost record history: %+v", diagnostic)

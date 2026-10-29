@@ -1,7 +1,10 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"fmt"
+
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -10,13 +13,13 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
 	"platformserver/apps/core"
 	"platformserver/apps/files"
 	"platformserver/apps/relations"
 	"platformserver/apps/system"
 	"platformserver/apps/work"
-	"platformserver/internal/construction"
+	"platformserver/studio/build"
+
 	"platformserver/internal/systemscope"
 	"platformserver/platform"
 )
@@ -25,7 +28,7 @@ var systemDefinitionTestKeys atomic.Int64
 
 func definitionOwnerTenant(t *testing.T, id string) *Tenant {
 	t.Helper()
-	seats := []Seat{
+	seats := []platform.Seat{
 		{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{"system": "builder", "build": "builder", "platform": "admin"}}},
 		{Subjects: []string{"publisher"}, Member: platform.Member{ID: "publisher", Roles: map[string]string{"system": "publisher", "build": "builder", "platform": "admin"}}},
 	}
@@ -34,7 +37,7 @@ func definitionOwnerTenant(t *testing.T, id string) *Tenant {
 			delete(seats[i].Member.Roles, "system")
 		}
 	}
-	apps := []platform.App{NewConsole(id, seats...), relations.New(id), ai.New(id), work.New(id), NewAgents(id), files.New(id), core.New(id), build.New(id)}
+	apps := []platform.App{newConsole(id, seats...), relations.New(id), ai.New(id), work.New(id), agentowner.New(id), files.New(id), core.New(id), build.New(id)}
 	if id == systemscope.Tenant {
 		source := &platform.SystemSource{Digest: systemscope.Digest([]byte("running baseline")), Read: func(string) (string, error) { return "baseline", nil }}
 		apps = append(apps, system.New(id, source))
@@ -133,7 +136,7 @@ func TestSystemDefinitionsRetainedHistoryRemainsReadOnlyInBusinessTenants(t *tes
 	if definition.Source != "system" || definition.Entity.Title != "Retained system title" {
 		t.Fatalf("shared definition=%#v", definition)
 	}
-	if len(entries) != 0 || business.records.types[construction.ObjectType].rows.Len() != 0 {
+	if len(entries) != 0 || business.records.types[build.ObjectType].rows.Len() != 0 {
 		t.Fatal("projection wrote system metadata into business owner")
 	}
 	if _, refusal := definitionDecision(business, "builder", "build.object.create", "build.object", "shadow", map[string]any{"name": "globalnote", "title": "Shadow", "fields": []any{}}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {

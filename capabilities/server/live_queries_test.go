@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"bufio"
@@ -9,9 +9,10 @@ import (
 	"net/http/httptest"
 	"net/url"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
+	controlowner "platformserver/kernel/control"
+
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 	"platformserver/platform/authz"
@@ -26,7 +27,7 @@ import (
 
 func TestEnterpriseLegacyViewRecovery(t *testing.T) {
 	compose := func() *Tenant {
-		return composeTenant(t, "legacy-views", []Seat{seatOf("admin", "enterprise:admin")}, enterprise.New("legacy-views", platform.OrgSeed{}))
+		return composeTenant(t, "legacy-views", []platform.Seat{seatOf("admin", "enterprise:admin")}, enterprise.New("legacy-views", platform.OrgSeed{}))
 	}
 	tn := compose()
 	m := memberOf(t, tn, "admin")
@@ -43,20 +44,13 @@ func TestEnterpriseLegacyViewRecovery(t *testing.T) {
 		entries = append(entries, Entry{App: enterprise.ID, Kind: "submission", Principal: platform.Raw(m), Body: raw, At: at})
 	}
 	before := string(platform.Raw(entries))
-	if err := tn.Replay(entries); err != nil {
-		t.Fatal(err)
+	// Historical view inputs need the retained original binary: the current
+	// owner blocks the upgrade instead of reinterpreting them.
+	if err := tn.Replay(entries); err == nil || !strings.Contains(err.Error(), "INVALID_ARGUMENT") {
+		t.Fatalf("historical view inputs were not blocked: %v", err)
 	}
 	if string(platform.Raw(entries)) != before {
-		t.Fatal("legacy recovery rewrote journal bytes")
-	}
-	value, err := tn.Read(m, enterprise.ReadModel)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, view := range value.(enterprise.Model).Views {
-		if view.Viewpoint != grids[view.ID] || view.Layout["historical"] != [2]float64{123, 456} || view.AsOf != "2026-10-07" {
-			t.Fatalf("legacy view identity or drawing changed: %+v", view)
-		}
+		t.Fatal("blocked recovery rewrote journal bytes")
 	}
 	if why := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "live-grid", map[string]any{"name": "old write", "grid": "Pr-Sr"}, at); why == "ok" {
 		t.Fatal("the retired grid field returned to the live contract")
@@ -72,8 +66,8 @@ func TestEnterpriseLegacyViewRecovery(t *testing.T) {
 }
 
 func TestApprovalRequestsJoinSharedLiveReads(t *testing.T) {
-	seat := Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{PlatformApp: Admin, work.ID: "member", construction.ID: construction.Builder}}}
-	tn, err := NewTenant("live-requests", NewConsole("live-requests", seat), work.New("live-requests"), build.New("live-requests"))
+	seat := platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, work.ID: "member", build.ID: build.Builder}}}
+	tn, err := NewTenant("live-requests", newConsole("live-requests", seat), work.New("live-requests"), build.New("live-requests"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +112,8 @@ func TestApprovalRequestsJoinSharedLiveReads(t *testing.T) {
 }
 
 func TestEnterpriseHTTPAndLiveReads(t *testing.T) {
-	seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, enterprise.ID: enterprise.Admin}}}
-	tn, err := NewTenant("enterprise-http", NewConsole("enterprise-http", seat), enterprise.New("enterprise-http", platform.OrgSeed{}))
+	seat := platform.Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, enterprise.ID: enterprise.Admin}}}
+	tn, err := NewTenant("enterprise-http", newConsole("enterprise-http", seat), enterprise.New("enterprise-http", platform.OrgSeed{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,7 +307,7 @@ func TestLiveQueriesUseOriginalMemberAuthorizationAfterRevocation(t *testing.T) 
 		t.Fatalf("authorized initial read: %+v", result)
 	}
 	payload, _ := json.Marshal(map[string]string{"app": "build"})
-	if _, err := tn.Submit(member("dana"), &pb.Submission{TenantId: tn.ID, PrincipalId: "dana", Authority: PlatformApp, IdempotencyKey: "live-revoke", Target: &pb.EntityRef{Type: MemberType, Id: "dana"}, Schema: &pb.SchemaRef{Name: "platform.member.revoke", Version: 1}, Payload: payload}, time.Now()); err != nil {
+	if _, err := tn.Submit(member("dana"), &pb.Submission{TenantId: tn.ID, PrincipalId: "dana", Authority: controlowner.PlatformApp, IdempotencyKey: "live-revoke", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "dana"}, Schema: &pb.SchemaRef{Name: "platform.member.revoke", Version: 1}, Payload: payload}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if result := read(); result.Status == 200 && strings.Contains(string(result.Body), `"records":[{`) {
@@ -329,12 +323,12 @@ func TestLiveChainSharesOriginalAuthorizedReads(t *testing.T) {
 	process := platform.Flow{Name: "review", Title: "Review", Version: 1, Start: platform.Start{On: []string{"shop.order.place"}, Begin: func(_ platform.Caller, event platform.Event) (string, any, bool) {
 		return event.Record.GetSubmission().GetTarget().GetId(), nil, true
 	}}, Steps: []platform.Step{{Name: "waiting", Wait: &platform.Wait{Until: func(platform.Caller, *platform.Run) bool { return false }}}}}
-	tn := composeTenant(t, tenant, []Seat{seatOf("ana", "shop:clerk", "flow:admin")}, work.New(tenant), flow.New(tenant), newShop(tenant, process))
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("ana", "shop:clerk", "flow:admin")}, work.New(tenant), automation.New(tenant), newShop(tenant, process))
 	decide(t, tn, "ana", "shop", "shop.order.place", "shop.order", "order", map[string]any{"item": "ordinary"}, at)
 	tn.Work(at)
 	id := "shop.review:order"
-	ref := flow.InstanceType + "/" + id
-	chainPath := "/v1/chain/" + flow.InstanceType + "/" + strings.ReplaceAll(url.PathEscape(id), ":", "%3A")
+	ref := automation.InstanceType + "/" + id
+	chainPath := "/v1/chain/" + automation.InstanceType + "/" + strings.ReplaceAll(url.PathEscape(id), ":", "%3A")
 	watch, _ := json.Marshal([]string{"/v1/me", chainPath})
 	server := httptest.NewServer(NewHost(Tokens(map[string]string{"ana": "ana"}), tn).Handler())
 	defer server.Close()
@@ -386,15 +380,15 @@ func TestLiveChainSharesOriginalAuthorizedReads(t *testing.T) {
 		t.Fatalf("shared member read failed: %+v", initial)
 	}
 	checkChain(initial, "waiting")
-	instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), id)
-	decide(t, tn, "ana", flow.ID, flow.SchemaFlowSkip, flow.InstanceType, id, map[string]any{"token": instance.Tokens[0].ID}, at.Add(time.Second))
+	instance, _ := platform.Get[platform.FlowInstance](tn.automation(automation.ID, false), id)
+	decide(t, tn, "ana", automation.ID, automation.SchemaFlowSkip, automation.InstanceType, id, map[string]any{"token": instance.Tokens[0].ID}, at.Add(time.Second))
 	checkChain(read(), "done")
 	tn.mu.Lock()
-	tn.app(flow.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
-		return []authz.Policy{{ID: "chain-source-revoked", Effect: "deny", Permission: flow.InstanceType + ".read"}}
+	tn.app(automation.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
+		return []authz.Policy{{ID: "chain-source-revoked", Effect: "deny", Permission: automation.InstanceType + ".read"}}
 	})
 	tn.mu.Unlock()
-	tn.changedOwner(flow.ID)
+	tn.changedOwner(automation.ID)
 	for _, result := range read().Results {
 		if result.Path == chainPath {
 			if result.Status != http.StatusForbidden || strings.Contains(string(result.Body), ref) {
@@ -406,11 +400,11 @@ func TestLiveChainSharesOriginalAuthorizedReads(t *testing.T) {
 	t.Fatal("chain permission change was not returned")
 }
 
-// View identity and relationship replacement must preserve unrelated state,
-// survive refusals and replay identically through the real submission pipeline.
-func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
+// Retired view editing stays refused, and relationship replacement keeps
+// unrelated state, survives refusals and replays identically.
+func TestEnterpriseRetiredViewsAndAtomicRelationships(t *testing.T) {
 	compose := func() *Tenant {
-		return composeTenant(t, "model-decisions", []Seat{seatOf("admin", "enterprise:admin", "build:builder"), seatOf("viewer", "enterprise:admin")},
+		return composeTenant(t, "model-decisions", []platform.Seat{seatOf("admin", "enterprise:admin", "build:builder"), seatOf("viewer", "enterprise:admin")},
 			enterprise.New("model-decisions", platform.OrgSeed{Structures: []platform.Structure{{ID: "management", Name: "Management", Kind: "management"}}}), build.New("model-decisions"))
 	}
 	tn := compose()
@@ -428,19 +422,10 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 		}
 		return value.(enterprise.Model)
 	}
-	for _, id := range []string{"first", "second"} {
-		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, id,
-			map[string]any{"name": id, "viewpoint": "organization", "kind": "management", "asOf": "2026-10-08", "elements": []string{"a", "b"}}, at)
-	}
-	second := model("admin").Views[1]
-	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first",
-		map[string]any{"name": "Renamed", "viewpoint": "data", "elements": []string{}, "asOf": "2026-10-07"}, at)
-	m := model("admin")
-	if m.Views[0].ID != "first" || m.Views[0].Kind != "management" || len(m.Views[0].Elements) != 0 || !reflect.DeepEqual(m.Views[1], second) {
-		t.Fatalf("view state crossed identities: %+v", m.Views)
-	}
-	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "first", map[string]any{"name": "bad", "viewpoint": "made-up"}, at); got == "ok" {
-		t.Fatal("unknown viewpoint accepted")
+	for _, schema := range []string{enterprise.SchemaViewSave, enterprise.SchemaViewDelete} {
+		if got := refuse(t, tn, "admin", enterprise.ID, schema, enterprise.ViewType, "first", map[string]any{"name": "retired", "viewpoint": "organization"}, at); got == "ok" {
+			t.Fatalf("retired view action %s was accepted", schema)
+		}
 	}
 	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "bad-project",
 		map[string]any{"name": "Bad project", "stereotype": enterprise.Project, "properties": map[string]any{"startDate": "2026-10-10T00:00:00Z", "endDate": "2026-10-08T00:00:00Z"}}, at); got == "ok" {
@@ -457,29 +442,9 @@ func TestEnterpriseViewIdentityAndAtomicRelationships(t *testing.T) {
 	}
 	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaRelationshipChange, enterprise.RelationshipType, "old",
 		map[string]any{"replacement": "new", "stereotype": enterprise.Placement, "source": "a", "target": "c", "kind": "management"}, at)
-	m = model("admin")
+	m := model("admin")
 	if len(m.Relationships) != 2 || m.Relationships[0].Until != "2026-10-08" || m.Relationships[1].Target != "c" {
 		t.Fatalf("same-day change: %+v", m.Relationships)
-	}
-	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewDelete, enterprise.ViewType, "first", map[string]any{"id": "first"}, at)
-	if len(model("admin").Views) != 1 || len(model("admin").Elements) != 3 {
-		t.Fatal("deleting a drawing changed the model")
-	}
-	decide(t, tn, "admin", construction.ID, "build.object.create", construction.ObjectType, "OBJ", map[string]any{"name": "privateobject", "title": "Private object"}, at)
-	decide(t, tn, "admin", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second",
-		map[string]any{"name": "Pinned", "viewpoint": "organization", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a", "label": "Cached private text", "at": []int{10, 20}}}}, at)
-	if len(model("viewer").Views[0].Pins) != 0 {
-		t.Fatal("private record pin leaked into shared model")
-	}
-	if pins := model("admin").Views[0].Pins; len(pins) != 1 || pins[0].Label == "Cached private text" {
-		t.Fatal("pin label bypassed the current scoped record")
-	}
-	if got := refuse(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "overwrite", "viewpoint": "organization", "elements": []string{"a"}, "pins": []map[string]any{{"ref": "record:build.object/OBJ", "anchor": "a"}}}, at); got == "ok" {
-		t.Fatal("a submitted unreadable pin bypassed its original record permission")
-	}
-	decide(t, tn, "viewer", enterprise.ID, enterprise.SchemaViewSave, enterprise.ViewType, "second", map[string]any{"name": "Unpinned", "viewpoint": "organization", "elements": []string{"a"}, "pins": []any{}}, at)
-	if len(model("admin").Views[0].Pins) != 0 {
-		t.Fatal("the final submitted pins did not remove the unreadable old pin")
 	}
 	CheckReplay(t, tn, entries, compose)
 }

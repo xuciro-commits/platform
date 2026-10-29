@@ -1,27 +1,33 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
+	"platformserver/studio/build"
+	"platformserver/studio/packages"
+	"time"
 )
 
 type PackageDraftRequest struct {
 	Version string `json:"version"`
 	Key     string `json:"key"`
 }
+
 type PackageDraft struct {
 	Ref  platform.AssetRef `json:"ref"`
 	Type string            `json:"type"`
 	ID   string            `json:"id"`
 }
+
 type PackageDraftResult struct {
 	Package       string         `json:"package"`
 	Version       string         `json:"version"`
@@ -35,7 +41,7 @@ func (h *Host) routesPackageDrafts(rt *routes) {
 	h.routesPackagePreparation(rt)
 	h.routesPackageSources(rt)
 	h.routesComposition(rt)
-	rt.authorized(Route{Pattern: "POST /v1/packages/{id}/drafts", Summary: "Create original Build drafts from an installed package; publication and permissions stay separate", Body: PackageDraftRequest{}, Answer: PackageDraftResult{}}, construction.ID, []string{construction.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/packages/{id}/drafts", Summary: "Create original Build drafts from an installed package; publication and permissions stay separate", Body: PackageDraftRequest{}, Answer: PackageDraftResult{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request PackageDraftRequest
 		if !decodeReleaseBody(w, r, &request) {
 			return
@@ -49,34 +55,6 @@ func (h *Host) routesPackageDrafts(rt *routes) {
 	})
 }
 
-func (d *Console) packageBlueprint(id, version string) (PackageBlueprint, error) {
-	d.mu.Lock()
-	held := d.packages[id]
-	artifact := ""
-	if held != nil && held.State == "active" && held.Version == version {
-		artifact = held.Artifact
-	}
-	d.mu.Unlock()
-	if artifact == "" {
-		return PackageBlueprint{}, fmt.Errorf("package %s@%s is not the installed active version", id, version)
-	}
-	descriptor, err := d.sealedPackageDescriptor(id, version, artifact)
-	if err != nil {
-		return PackageBlueprint{}, err
-	}
-	if descriptor.Blueprint == nil {
-		return PackageBlueprint{}, fmt.Errorf("package %s@%s has no application blueprint", id, version)
-	}
-	return *descriptor.Blueprint, nil
-}
-
-func (d *Console) InstalledBlueprint(id, version string) ([]platform.AssetRef, []platform.ReleaseAsset, error) {
-	blueprint, err := d.packageBlueprint(id, version)
-	return blueprint.Roots, blueprint.Assets, err
-}
-
-var _ host.BlueprintCatalog = (*Console)(nil)
-
 // CreatePackageDrafts reuses the original release bootstrap and composite
 // accepted result. It owns only Build decisions, never the Package license.
 func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string, at time.Time) (PackageDraftResult, error) {
@@ -84,7 +62,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if err := t.admits(m); err != nil {
 		return answer, err
 	}
-	if !holdsIndependentBuildRole(m, construction.Builder) {
+	if !holdsIndependentBuildRole(m, build.Builder) {
 		return answer, fmt.Errorf("builder role required")
 	}
 	if id == "" || version == "" || key == "" || len(key) > 128 || at.IsZero() {
@@ -95,16 +73,16 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if t.quarantined() {
 		return answer, fmt.Errorf("tenant is quarantined")
 	}
-	console, ok := t.app(PlatformApp).(host.BlueprintCatalog)
-	if !ok || t.app(construction.ID) == nil {
+	console, ok := t.app(controlowner.PlatformApp).(platform.BlueprintCatalog)
+	if !ok || t.app(build.ID) == nil {
 		return answer, fmt.Errorf("this tenant has no package and Build owners")
 	}
 	roots, assets, err := console.InstalledBlueprint(id, version)
 	if err != nil {
 		return answer, err
 	}
-	blueprint := PackageBlueprint{Roots: roots, Assets: assets}
-	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
+	blueprint := platform.PackageBlueprint{Roots: roots, Assets: assets}
+	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return answer, fmt.Errorf("this tenant has no Build draft owner")
 	}
@@ -112,7 +90,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if err != nil {
 		return answer, err
 	}
-	candidate, err := blueprint.candidate(owner, code)
+	candidate, err := packages.BlueprintCandidate(blueprint, owner, code)
 	if err != nil {
 		return answer, err
 	}
@@ -135,7 +113,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		if batch > 0 {
 			batchKey = fmt.Sprintf("%s:%d", batchKey, batch)
 		}
-		raw := t.committed.compositeAnswer(batchKey)
+		raw := t.committed.CompositeAnswer(batchKey)
 		if len(raw) == 0 {
 			break
 		}
@@ -188,8 +166,8 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			return answer, err
 		}
 	}
-	if len(drafts) == 0 || len(drafts) > construction.JointDraftLimit {
-		return answer, fmt.Errorf("an application package needs one to %d owner drafts", construction.JointDraftLimit)
+	if len(drafts) == 0 || len(drafts) > build.JointDraftLimit {
+		return answer, fmt.Errorf("an application package needs one to %d owner drafts", build.JointDraftLimit)
 	}
 	edits := make([]CompositeEdit, 0, len(drafts))
 	answer = PackageDraftResult{Package: id, Version: version, Key: key, Drafts: make([]PackageDraft, 0, len(drafts))}
@@ -202,10 +180,10 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	}
 	for _, draft := range drafts {
 		et := t.records.types[draft.Type]
-		if et == nil || et.info.App != construction.ID {
+		if et == nil || et.info.App != build.ID {
 			return PackageDraftResult{}, fmt.Errorf("draft %s has no Build owner", draft.Ref)
 		}
-		payload, err := assetDraftPayload(et.info, draft.Image)
+		payload, err := releaseowner.AssetDraftPayload(et.info, draft.Image)
 		if err != nil {
 			return PackageDraftResult{}, err
 		}
@@ -237,7 +215,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		if from > 0 {
 			batchKey = fmt.Sprintf("%s:%d", commandKey, from/64)
 		}
-		saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: construction.ID, Member: m.ID, Key: "composite:" + batchKey, Context: contextHash, At: at.UTC(), Edits: edits[from:until]}
+		saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: build.ID, Member: m.ID, Key: "composite:" + batchKey, Context: contextHash, At: at.UTC(), Edits: edits[from:until]}
 		if contextHash != "" {
 			saved.Version = 3
 		}
@@ -245,7 +223,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		if err != nil {
 			return answer, err
 		}
-		if prior := t.committed.compositeAnswer(saved.Key); len(prior) > 0 {
+		if prior := t.committed.CompositeAnswer(saved.Key); len(prior) > 0 {
 			accepted, err := decodeAcceptedComposite(prior)
 			if err != nil || accepted.RequestHash != saved.RequestHash {
 				return PackageDraftResult{}, fmt.Errorf("package draft key belongs to another request")
@@ -255,7 +233,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			}
 			continue
 		}
-		decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &ownerDraftRequest{Key: batchKey, From: from, Until: until, Refs: createRefs})
+		decision, changes, err := t.bootstrapOwnerDraftsLocked(candidate, context, false, &releaseowner.OwnerDraftRequest{Key: batchKey, From: from, Until: until, Refs: createRefs})
 		if err != nil {
 			return PackageDraftResult{}, err
 		}
@@ -265,7 +243,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			return PackageDraftResult{}, err
 		}
 		principal, _ := json.Marshal(m)
-		committed, err := t.acceptResult(Entry{App: construction.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
+		committed, err := t.acceptResult(Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: at, Versions: decision.flowVersions()}, saved.Key, saved.RequestHash)
 		if err != nil {
 			return PackageDraftResult{}, err
 		}

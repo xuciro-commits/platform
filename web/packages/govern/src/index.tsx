@@ -260,17 +260,12 @@ const masterData = defineApp({
 });
 
 export const enterprise = defineApp({
-  id: "enterprise", serves: ["enterprise"], category: "ontology", title: t("Enterprise"), icon: <Network />,
-  description: t("The organisation's people, places, capabilities and relationships."),
+  id: "enterprise", serves: ["enterprise"], category: "ontology", title: t("Organisation directory"), icon: <Network />,
+  description: t("Units, posts, people and assignments. Historical enterprise content is read-only."),
   for: (host) => admin(host) || ["admin", "viewer"].includes(host.role("enterprise") ?? ""),
   home: { view: "enterprise" },
-  views: [{ id: "enterprise", title: () => t("Enterprise"), render: params => <Enterprise element={params.element} section={params.section} /> }],
-  nav: () => [{ label: t("Enterprise"), items: [
-    { label: t("Enterprise"), icon: <Network />, route: { view: "enterprise" } },
-    { label: t("Organisation management"), icon: <Building2 />, route: { view: "enterprise", params: { section: "organization" } } },
-    { label: t("Business usage"), icon: <Blocks />, route: { view: "enterprise", params: { section: "usage" } } },
-    { label: t("Tenant links"), icon: <ArrowLeftRight />, route: { view: "enterprise", params: { section: "tenant-links" } } },
-  ] }],
+  views: [{ id: "enterprise", title: () => t("Organisation directory"), render: params => <Enterprise element={params.element} section={params.section} /> }],
+  nav: () => [{label:t("Organisation directory"),items:[{ label: t("Organisation directory"), icon: <Building2 />, route: {view:"enterprise"} }]}],
 });
 
 export const contributions: AppUI[] = [runs, dataConnection, agents, ai, knowledge, hostConsole, masterData, enterprise];

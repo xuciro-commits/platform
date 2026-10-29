@@ -24,16 +24,18 @@ capabilities/server/ 宿主：Tenant、提交管线、路由、持久化
   host.go            Tenant 装配壳：身份、能力组装、app/caller 接线、审计类型
   submit.go          提交管线：Submit → submitAccepted → decideAccepted
   reads.go events.go facade.go   读取与连接器输入 / 事件计划与投递 / 成员门面
-  accepted_*.go      一种接受结果一个文件
+  acceptance_pipeline.go acceptance_records.go acceptance_codec.go  接受协调 / 映像 / 封套
   routes_*.go        一个 API 区域一个文件（壳的 API 面，域不反向调用）
   platform/          应用唯一可导入的 API
   apps/<id>/         平台应用
-  engine/organization/ 原enterprise权威：组织/关系/有效期、原接受状态与查询
+  engine/            agents、applications、automation、knowledge、business、integrations、organization原运行owner
+  studio/            build统一草稿与编译；authoring设计态候选评估；releases候选原件与应用身份；packages包库与制品
+  kernel/            acceptedformat原结果格式；幂等答复、审计和通知状态；control静态凭据与配置
   aigateway/         可信模型阶段准入；providers/持唯一SDK、HTTP和流解析
   journal/           日志、正式 SQL 状态、快照/检查点、固定读取视图
   idp/               身份提供方
-  internal/          acceptance agents aistate construction enterprise host records rules
-  cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、uaf-gen、rule-browser、webhook-sink（独立调试薄壳）、compute、code-builder、wasm-worker、storage-files
+  internal/          agents aistate records rules systemscope systembuild 等纯基础职责
+  cmd/               platform-server（webhook 接收为进程内可选能力，PLATFORM_SINK_ADDRESS 启用）、api-types、check-boundaries、rule-browser、webhook-sink（独立调试薄壳）、compute、code-builder、wasm-worker、storage-files
   composition/       通用宿主的平台能力装配；cmd/platform-server 启动与恢复共用
 web/
   apps/workspace     @platform/workspace   唯一工作区：构建/运营/系统三区共用壳（session host shell chrome，角色显隐）
@@ -47,7 +49,8 @@ web/
   e2e                @platform/e2e         Playwright 路线，spec 只经 tests/kit.ts
 scripts/             boundaries escapes verify catalog code-size package-artifacts formal sandbox-go
 deploy/              local（compose、启动、演练）、dev（air、环境切换）、packages、examples
-docs/                Intent Architecture WorkQueue standards/uaf
+tools/platform-uaf-importer/ 独立可选UAF导入工具与原标准材料
+docs/                Intent Architecture WorkQueue
 openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 .agents/skills/      官方 OpenSpec 核心工作流（CLI 生成）
 ```
@@ -56,14 +59,15 @@ openspec/            specs/<层>/<模块>/spec.md；changes/<本次变化>/
 
 | 模块 | 实际责任 |
 |---|---|
-| `internal/construction` | 唯一构建声明、正规化、纯编译与变换；不持有 Tenant、网络或实时业务状态 |
-| `internal/acceptance` | 结果封套、版本解码、共同变化计划及纯校验；租户锁、持久接受与应用仍由宿主协调 |
+| `studio/build` | 同一Build账本的作者声明、正规化、编译与不可变发布描述；原construction与Build别名层已删除 |
+| `kernel/acceptedformat` | 原版本结果封套、严格解码、共同变化计划与格式校验；租户lane、持久接受与应用仍由宿主协调 |
 | `internal/records` | 冻结映像、历史引用、私有覆盖和索引；授权裁决和提交不由它另行承担 |
-| `engine/organization` | 同一enterprise权威的模型、关系、查询与接受状态；原apps/internal双层别名已退出。完整UAF仍由`internal/enterprise/uaf`提供，标准外移尚未完成 |
-| `internal/agents`、`internal/aistate` | 已授权上下文编排、预算及纯计量变换；真实模型调用和运行仍归原应用/宿主 |
-| `internal/host` | 宿主消费者所需的具名窄角色；不另存构建模型或复制应用执行器 |
+| `engine/organization` | 原enterprise权威的轻量组织、任职、成员与关系；保留原接受状态及旧资源引用的只读解释。完整UAF标准与导入工具独立于默认运行构建 |
+| `engine/agents`、`engine/knowledge` | 原Agent与函数运行、上下文编排和知识索引/检索；宿主适配原lane、SQL权限、模型网关与接受结果 |
+| `internal/agents`、`internal/aistate` | 纯上下文/预算及原AI状态格式和计量变换；AI应用保存配置、预占、用量和训练资格 |
+| `platform`、`composition` | 公共consumer角色只在platform按owner声明；真实Attach分派只在composition，初始构建、私有决定和试用沿同一工厂 |
 
-Build 的有界区间、完整明细记账与余额结果引用仍由 `apps/build/transaction*.go` 的原事务解释器执行；集合迭代可沿类型化引用读取同一归属记录的完整声明集合，保存实际读取顺序，仍使用原权限与预算。旧算术语法解析与lowering、纯日期/小时运算归 `internal/rules`，关闭期间策略归 Core。原事务编辑器直接编辑这些声明，生成的宿主类型与浏览器规则模块由原工具产生。联合发布在隔离安装视图登记完整候选后检查跨对象引用，不要求构建者先发布临时对象。
+Build 的有界区间、完整明细记账与余额结果引用仍由 `engine/business/business_transactions.go` 的原事务解释器执行；集合迭代可沿类型化引用读取同一归属记录的完整声明集合，保存实际读取顺序，仍使用原权限与预算。旧算术语法解析与lowering、纯日期/小时运算归 `internal/rules`，关闭期间策略归 Core。原事务编辑器直接编辑这些声明，生成的宿主类型与浏览器规则模块由原工具产生。联合发布在隔离安装视图登记完整候选后检查跨对象引用，不要求构建者先发布临时对象。
 
 对象计算字段、业务约束与事务分别保存自己的集合读取绑定；原构建器可选择声明集合或查询的确切版本、主体记录键和完整/可见范围，表达式源码与可视化写同一草稿。查询主体键可以显式读取获权的 `$subject.field`；记录 `id` 是只读身份元数据，不伪装为可授权业务字段。Build 自己的原生确认记录仍由原权限投影，声明查询不赋予其他应用的内部读取权。已类型化草稿的正规化不要求依赖先发布，完整候选检查承担最终类型、集合和归属检查。
 
@@ -84,7 +88,7 @@ Build 的有界区间、完整明细记账与余额结果引用仍由 `apps/buil
 
 - `Tenant.Submit` 与 `Tenant.Input` 是提交、输入入口；Work、Effect、Agent/用量、发布与宿主管理保存各自的接受结果，共用相同顺序，没有另一条普通直接修改路径。
 - **只有实际需要外部读取、模型或制品 I/O 的执行**才先在锁内固定定义、主体、输入和世代，锁外完成有界 I/O，回锁复核当前权限、版本及前驱后接受；普通记录写入不必经过锁外 I/O。效果意图与业务结果先一起保存，实际投递随后进行。
-- `accepted_*.go` 保留各结果族语义，`internal/acceptance` 承担共同格式与变化计划；存储接线不选择另一套业务规则。接受前失败丢弃私有变化，不提前发布通知或效果。
+- `acceptance_pipeline.go`、`acceptance_records.go`、`acceptance_codec.go` 保留各结果族协调语义，`kernel/acceptedformat` 承担原共同格式与变化计划；存储接线不选择另一套业务规则。接受前失败丢弃私有变化，不提前发布通知或效果。
 - 同一幂等键重试复用原答复，同键异内容拒绝；新事件不能仅因内容相同而复用旧身份。提交答复未知时先查询原键，不能当成确定失败重做决定；提交或应用状态无法确定时停止该租户，沿原恢复入口处理，其他正常租户继续服务。
 
 ## 4. 数据归属
@@ -122,7 +126,7 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 - 计算、长等待、状态变更、推断各有唯一 owner：状态变更归 Action/Lifecycle，长等待归 Flow/Work，计算归 Operation/Compute，推断归 AI；都复用 Work/Effect 与接受结果。
 - Flow 的绝对时间等待使用获权的时间戳绑定，在进入等待时固定截止时间；无法读取时间戳时走原错误分支，不把未知时间解释为立即到期。记录状态启动保持每条记录一次；可重复的业务申请使用独立申请记录保留每次原始意图。
 - Observation 的状态区间读取由 `platform/observation_intervals.go` 使用同一规则求值器处理有界窗口，返回来源修订、处理版本、开放边界与未知区段；原采样只存在于外部来源及读取期间的临时输入。读取沿原连接和权限复核，独立于业务接受；数值摘要继续使用原路径。原事务的 `intervals` 步骤将紧凑结果映射为声明对象，K1 校验连续及拆并，原关系保存前驱；Flow 从这些类型化对象继续工作。格式 10 保存依据和结果映像，恢复不读取外部采样。
-- 出站凭据由原 Console 治理，`credentials.go` 管理元数据、使用绑定、版本和停用；AI、连接及投递共用解析，登录身份继续归原身份提供方。平台包拥有治理，能力包可提供外部凭据库适配，应用包只引用目标环境的凭据，不携带秘密。
+- 出站凭据由原 Console 治理，`kernel/control/control_credentials.go` 管理私有密文、元数据、使用绑定、版本和停用；根credentials.go只接原HTTP与部署secret；AI、连接及投递共用解析，登录身份继续归原身份提供方。平台包拥有治理，能力包可提供外部凭据库适配，应用包只引用目标环境的凭据，不携带秘密。
 - 在线 `/v1/credentials/seal` 只将瞬时输入封装为带格式版本的 AES-256-GCM 密文，关联数据绑定租户、凭据及完整配置。浏览器清空原值后才通过原提交保存密文；原值不进入离线队列、普通动作历史或导出工件。Console 的私有接受映像保存密文，恢复不解密或重新封装；普通读取只返回元数据。`PLATFORM_CREDENTIAL_KEY` 独立留在部署环境，完整备份须保留它；缺失时托管使用失败，已有密文仍可恢复。
 - 凭据绑定具体 AI 提供方、连接或端点及目标 origin。替换和停用沿原版本与接受机制生效，停用、未授权或解密失败不回退同名环境变量。无平台凭据记录的既有部署引用继续沿原文件/环境解析，迁入平台管理须显式配置绑定。治理入口提供加密录入和部署引用；AI 提供方可编辑并保留启用模型，检查使用原模型目录刷新。
 - 模型配置仍归原 AI 应用：`AIModel` 保存能力资料、来源时间和默认参数，修订取原 ChangeRecord 的目标修订；模型启用与更新继续使用 `ai.model.enable`。目录是临时读取，缓存按租户、提供方配置、凭据修订与值隔离；只有明确保存才采用能力资料。供应商事实、适配器已实现的选项和未知值分别表达，不按模型名猜参数。
@@ -209,7 +213,7 @@ SQL 当前记录按固定事务视图分批读取，私有决定叠加本次变�
 - **接受与恢复**：原system ledger、候选不透明字节、摘要和SQL安装映像不重写。`built`、`finished`、`cancel` 只核对既有工作。定义准备仅允许原requested激活ID与原release的同一候选；旧混合激活可以如实回报并应用原保存定义，不能将历史恢复解释为新授权或重新请求构建。
 - **静态监督**：`platform-updater build/activate/watch` 和 `serve -watch` 退出新工作；`internal/systembuild`只保留不可变源码、摘要校验和导出，动态物化/编译器已删除。`serve`继续监督原current.json选择，保留健康、排空、回滚前驱及未知回执；`reconcile`只续报原保留结果，不编译或自动挑选发布。无法证明未执行的requested工作保持原状，要求核对实际版本后显式处理。
 - **制品与维护**：保留 `.build/system/{sources,bin,web,releases,builds}` 与 `current.json`，不自动清理运行或回滚依赖。已有已完成版本重启失败时可以恢复保留前驱并留下静态维护状态，不自动新建动态回滚请求。`swap/finish/export`沿原ID、真实制品和稳定请求键操作；具体步骤归[部署指南](../deploy/local/README.md)。
-- **模型准入**：普通Chat、Agent、AI函数和在线知识嵌入属于运行态；获权Studio Chat、原评估及隔离构建试用属于设计态。接收owner固定阶段、实际模型、源站和策略摘要，provider调用前再复核。运行态只允许部署注入的本地/边缘源站；动态provider的kind、模型名称和客户端Binding字段不能创建该资格。原AI应用仍持配置与用量，SDK/裸HTTP只在`aigateway/providers`。派发前通过原AI owner的私有接受输入保存保守输入和最大输出Token预占，按运行步骤/效果尝试身份结算；未发送的请求沿同一入口释放，响应丢失、未知用量和重启保留未结算责任。用量页分别展示等待确认、未报告和超额；超额报告如实入账，其工具输出不能执行，后续模型调用被阻止。预占不宣称精确分词或供应方物理费用绝不超额。预算/熔断后的完整Work交接、未知用量人工核对、统一写提议及训练导出仍按活动变更落实。
+- **模型准入**：普通Chat、Agent、AI函数和在线知识嵌入属于运行态；获权Studio Chat、原评估及隔离构建试用属于设计态。接收owner固定阶段、实际模型、源站和策略摘要，provider调用前再复核。运行态只允许部署注入的本地/边缘源站；动态provider的kind、模型名称和客户端Binding字段不能创建该资格。原AI应用仍持配置与用量，SDK/裸HTTP只在`aigateway/providers`。派发前通过原AI owner的私有接受输入保存保守输入和最大输出Token预占，按运行步骤/效果尝试身份结算；未发送的请求沿同一入口释放，响应丢失、未知用量和重启保留未结算责任。用量页分别展示等待确认、未报告和超额；超额报告如实入账，其工具输出不能执行，后续模型调用被阻止。预占不宣称精确分词或供应方物理费用绝不超额。预算和终止模型错误通过原Work交接；没有合格接手人时明确显示未分配。新Agent/MCP业务写先生成原Draft并由原Work确认，不能直接提交业务动作。原AI应用根据确切模型运行、来源版本、当前权限及人工修订保存训练资格、审核和撤销；导出重查资格并保存到原文件制品。
 - **客户端换版提示**：原 `/healthz` 代码发布号与二进制摘要核对、手动刷新及保留输入继续生效，独立于Build已安装候选身份。
 
-当前实施范围和未完成验收只归 [WorkQueue](WorkQueue.md) 与活动change；旧自举成功演练不能证明收缩后的全部架构任务已完成。动态运营投影限制、UAF外移、页面五要素和四职责完全收敛尚未全量落地。
+当前实施范围和未完成验收只归 [WorkQueue](WorkQueue.md) 与活动change；旧自举成功演练不能证明收缩后的全部架构任务已完成。当前代码迁移与验收状态分别记录在活动change；四职责完全收敛和文件预算需要按真实依赖与最终库存核验。

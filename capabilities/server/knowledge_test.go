@@ -1,20 +1,23 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
-	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -33,7 +36,7 @@ func TestKnowledge(t *testing.T) {
 			var data []map[string]any
 			for i, text := range req.Input {
 				v := make([]float32, 16)
-				for _, w := range words(text) {
+				for _, w := range platform.TokenizeWords(text) {
 					h := fnv.New32a()
 					h.Write([]byte(w))
 					v[h.Sum32()%16]++
@@ -57,11 +60,11 @@ func TestKnowledge(t *testing.T) {
 	approveTestInference(t, model.URL, "lm")
 	var journal []Entry
 	build := func() *Tenant {
-		seat := func(id string, roles map[string]string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
+		seat := func(id string, roles map[string]string) platform.Seat {
+			return platform.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", knowledge.ID: knowledge.Editor, PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
-			seat("cy", map[string]string{"other": "x"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), knowledge.New("t-1"), newDesk("t-1"))
+		tn, err := NewTenant("t-1", newConsole("t-1", seat("ana", map[string]string{"desk": "clerk", knowledge.ID: knowledge.Editor, controlowner.PlatformApp: controlowner.Admin, ai.ID: ai.Admin, platform.AgentApp: platform.AgentAdmin}),
+			seat("cy", map[string]string{"other": "x"})), ai.New("t-1"), work.New("t-1"), automation.New("t-1"), agentowner.New("t-1"), knowledge.New("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +74,10 @@ func TestKnowledge(t *testing.T) {
 	tn := build()
 	tn.AIClient = nil
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	do := func(who, authority, schema, typ, id string, payload any) string {
@@ -114,22 +120,22 @@ func TestKnowledge(t *testing.T) {
 	do("ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
 	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/embed", map[string]string{"access": "users"})
 	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/chat", map[string]string{"access": "users"})
-	expect("prepare index", do("ana", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-next-model", map[string]string{"value": "lm/embed"}), "ok")
+	expect("prepare index", do("ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "knowledge/embedding-next-model", map[string]string{"value": "lm/embed"}), "ok")
 	tn.Embed(now)
 	tn.Embed(now)
 	expect("embedded once", fmt.Sprint(embeds), "1")
-	expect("activate prepared index", do("ana", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-model", map[string]string{"value": "lm/embed"}), "ok")
+	expect("activate prepared index", do("ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "knowledge/embedding-model", map[string]string{"value": "lm/embed"}), "ok")
 	expect("by meaning too", found("cy", "password key card")+fmt.Sprint(" ", embeds, " ", tn.ai.Spent("app:knowledge", now) > 0), "knowledge.document/RULES#1 2 true") // the query was embedded, and metered
 
 	// An agent's search: journaled with its step, cited on the run.
-	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "lm/chat"})
-	do("ana", AgentApp, SchemaRunStart, RunType, "R1", map[string]string{"agent": "desk.triage", "goal": "What is the wifi password?"})
+	do("ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]string{"value": "lm/chat"})
+	do("ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "R1", map[string]string{"agent": "desk.triage", "goal": "What is the wifi password?"})
 	for range 3 {
 		now = now.Add(time.Second)
 		tn.Think(now)
 		tn.Work(now)
 	}
-	run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "R1")
+	run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "R1")
 	expect("run", run.State+" "+run.Citations[0].Document+" "+run.Citations[0].Title, "done knowledge.document/RULES House rules")
 	expect("transcripts", fmt.Sprint(len(tn.Transcripts("R1", 10)), " ", strings.Contains(string(tn.Transcripts("R1", 10)[1].Request), "What is the wifi password?")), "2 true")
 	CheckReplay(t, tn, journal, build)

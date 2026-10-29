@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/internal/records"
 	"platformserver/journal"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -69,9 +69,8 @@ func TestPostgresSourcedRowsUsePrivateOverlayWithoutResidentRecords(t *testing.T
 	}
 	defer view.Close()
 	counted := &countedCurrentView{StateReadView: view, loaded: map[string]int{}}
-	store.historyStore = j
-	store.tenant = tenant
-	store.bindReadView(counted)
+	store.current.Configure(j, tenant, 0, nil)
+	store.current.Bind(counted)
 	store.useCurrentRows()
 	child := store.types["unique.child"]
 	if child.rows.Get("C0000") == nil || child.rows.Stored() != 0 {
@@ -79,8 +78,8 @@ func TestPostgresSourcedRowsUsePrivateOverlayWithoutResidentRecords(t *testing.T
 	}
 	field, _ := child.info.Field("parent")
 	bucket := child.referenceBucket(field, "P1")
-	if bucket.IDs.Len() != 2 || len(child.referenceIndexes) != 0 {
-		t.Fatal("SQL reference lookup differs", bucket.IDs.Len(), len(child.referenceIndexes))
+	if bucket.IDs.Len() != 2 || referenceIndexCount(child) != 0 {
+		t.Fatal("SQL reference lookup differs", bucket.IDs.Len(), referenceIndexCount(child))
 	}
 	for ref := range counted.loaded {
 		if strings.HasPrefix(ref, "unique.child/") && ref != "unique.child/C0000" && ref != "unique.child/C0001" {
@@ -107,12 +106,12 @@ func TestPostgresSourcedRowsUsePrivateOverlayWithoutResidentRecords(t *testing.T
 		t.Fatal(err)
 	}
 	for _, et := range store.types {
-		if et.rows.Stored() != 0 || len(et.referenceIndexes) != 0 || len(et.uniqueIndexes) != 0 {
+		if et.rows.Stored() != 0 || referenceIndexCount(et) != 0 || uniqueIndexCount(et) != 0 {
 			t.Fatal("SQL current state remained resident")
 		}
 	}
 	for _, et := range draft.types {
-		if len(et.referenceIndexes) != 0 || len(et.uniqueIndexes) != 0 {
+		if referenceIndexCount(et) != 0 || uniqueIndexCount(et) != 0 {
 			t.Fatal("private lookup retained a complete derived index")
 		}
 	}

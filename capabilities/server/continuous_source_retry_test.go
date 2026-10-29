@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgproto3"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -109,7 +109,7 @@ func (s *retryIntakeSource) Manifest() platform.Manifest {
 func TestContinuousSourceWithoutControlledIntakeRefuses(t *testing.T) {
 	const tenant, id = "no-controlled-intake", "frames.window:source"
 	at := time.Date(2026, 10, 11, 12, 0, 10, 0, time.UTC)
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 2<<20))
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), newFrameSource(tenant, 2<<20))
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
 	if _, refusal := tn.ConsumeFlowSource(memberOf(t, tn, "member"), id, at); refusal == nil {
 		t.Fatal("a native batch-only instance accepted an uncontrolled source read")

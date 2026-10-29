@@ -2,14 +2,14 @@ package platformserver
 
 import (
 	"fmt"
-	"platformserver/internal/host"
+
 	"reflect"
 	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 const linkArchiveFailure = "Active reference archive protection failed"
@@ -197,10 +197,10 @@ func (s *recordStore) checkLinkWriteLocked(et *entityType, value reflect.Value) 
 // Publications derive their constraint from the same frozen Build descriptor;
 // staging and accepted replay never maintain a second writable link declaration.
 func (t *Tenant) installPublicationLinkConstraint(store *recordStore, schema string, image []byte) error {
-	if schema != construction.SchemaLinkType {
+	if schema != build.SchemaLinkType {
 		return nil
 	}
-	owner, ok := t.app(construction.ID).(host.LinkPublicationReader)
+	owner, ok := t.app(build.ID).(platform.LinkPublicationReader)
 	if !ok {
 		return fmt.Errorf("link publication owner is unavailable")
 	}

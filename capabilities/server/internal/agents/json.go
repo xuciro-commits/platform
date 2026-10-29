@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"platformserver/internal/acceptance"
+
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -118,7 +118,7 @@ func CompleteToolCalls(calls []platform.ToolCall, run string, turn int) ([]platf
 			return nil, fmt.Errorf("invalid or duplicate tool call %q", call.ID)
 		}
 		seen[call.ID] = true
-		value, err := platform.DecodeValue(call.Arguments, acceptance.MaxResultBytes)
+		value, err := platform.DecodeValue(call.Arguments, platform.AcceptedResultMaxBytes)
 		if _, object := value.(map[string]any); err != nil || !object {
 			return nil, fmt.Errorf("tool call %q requires a complete JSON object", call.ID)
 		}

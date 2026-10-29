@@ -1,7 +1,8 @@
 package platformserver
 
 import (
-	"platformserver/internal/records"
+	controlowner "platformserver/kernel/control"
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -10,7 +11,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	enterprisemodel "platformserver/engine/organization"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -108,8 +109,8 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 			add(EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.info.Type + "/" + records.Header(r.Value).ID, Field: field, Current: current}, visible)
 		}
 	}
-	if directory, ok := t.app(PlatformApp).(host.IdentityDirectory); ok {
-		visible := details && c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Type: MemberType, Action: SchemaGrant}, now).Allow
+	if directory, ok := t.app(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
+		visible := details && c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Type: controlowner.MemberType, Action: controlowner.SchemaGrant}, now).Allow
 		for _, usage := range directory.UnitGrantUsage(id, until) {
 			ref := "member:" + usage.Member
 			if strings.HasPrefix(usage.Member, "team:") {
@@ -118,7 +119,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 			add(EnterpriseUsageItem{Kind: "grant", Title: usage.Member, Ref: ref, Current: usage.Current}, visible)
 		}
 	}
-	if root := t.setting(platform.RouteCaller(c, PlatformApp), "enterpriseRoot"); root == id {
+	if root := t.setting(platform.RouteCaller(c, controlowner.PlatformApp), "enterpriseRoot"); root == id {
 		add(EnterpriseUsageItem{Kind: "tenant", Title: t.ID, Ref: "tenant:" + t.ID, Current: true}, details)
 	}
 	return result

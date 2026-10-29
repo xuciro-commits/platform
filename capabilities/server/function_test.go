@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -53,7 +54,7 @@ func TestAIFunctionRefusalsAndModelGates(t *testing.T) {
 			if reason != "no model" {
 				must(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": "http://localhost:1"})
 				must(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]string{"access": "users"})
-				must(PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "local/probe"})
+				must(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/app-model", map[string]string{"value": "local/probe"})
 			}
 			name := "Part"
 			if reason == "input budget" {
@@ -129,7 +130,7 @@ func TestJournalAcceptedFunctionCrashBeforeApplication(t *testing.T) {
 	}
 	do(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": provider.URL})
 	do(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/probe", map[string]string{"access": "users"})
-	do(PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "local/probe"})
+	do(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/app-model", map[string]string{"value": "local/probe"})
 	do("stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Part", "qty": 2, "note": "original"})
 	do("stock", "stock.item.advise", "stock.item", "I1", struct{}{})
 	out, usage := live.sendModel(live.outbound[0].Effect, at.Add(time.Second))
@@ -220,10 +221,10 @@ func functionTenantFor(t *testing.T, id, instructions string, fields []string) *
 	a.ledger.Catalog.Add(platform.Action{Schema: "stock.item.advise", Target: "stock.item", Title: "Advise", Description: "Advise", Payload: []platform.Field{}, Roles: []string{"clerk", "lead"}},
 		platform.Action{Schema: "stock.item.advice-answer", Target: "stock.item", Title: "Answer", Description: "Answer", Payload: platform.AnswerFields(), Automation: true})
 	a.ledger = platform.NewLedger(id, "stock", a.ledger.Catalog, "stock.bin", "stock.item")
-	tn, err := NewTenant(id, NewConsole(id,
-		Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk", PlatformApp: Admin, ai.ID: ai.Admin}}},
-		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"stock": "clerk"}}},
-		Seat{Subjects: []string{"lead"}, Member: platform.Member{ID: "lead", Roles: map[string]string{"stock": "lead"}}}), ai.New(id), a)
+	tn, err := NewTenant(id, newConsole(id,
+		platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk", controlowner.PlatformApp: controlowner.Admin, ai.ID: ai.Admin}}},
+		platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"stock": "clerk"}}},
+		platform.Seat{Subjects: []string{"lead"}, Member: platform.Member{ID: "lead", Roles: map[string]string{"stock": "lead"}}}), ai.New(id), a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +272,7 @@ func TestAIFunctionUsesAcceptedInputAndStrictOutput(t *testing.T) {
 		reply := response.Load().(modelResponse)
 		var body struct {
 			Model     string
-			Messages  []Message
+			Messages  []platform.Message
 			MaxTokens int `json:"max_tokens"`
 		}
 		json.NewDecoder(r.Body).Decode(&body)
@@ -289,7 +290,7 @@ func TestAIFunctionUsesAcceptedInputAndStrictOutput(t *testing.T) {
 	approveTenantInference(t, tn, server.URL, "local")
 	must(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL})
 	must(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/chosen", map[string]string{"access": "users"})
-	must(PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "local/chosen"})
+	must(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/app-model", map[string]string{"value": "local/chosen"})
 	must("stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Part", "qty": 2, "note": "original"})
 	bo, _ := tn.Member("bo")
 	if err := submit(bo, "stock", "stock.item.advise", "stock.item", "I1", map[string]any{}); err == nil || len(tn.outbound) != 0 {
@@ -367,7 +368,7 @@ func TestAIFunctionUsesAcceptedInputAndStrictOutput(t *testing.T) {
 		CheckReplay(t, tn, entries, compose)
 	}
 	must("stock", "stock.item.advise", "stock.item", "I1", map[string]any{})
-	must(PlatformApp, SchemaRevoke, MemberType, "ana", map[string]string{"app": "stock"})
+	must(controlowner.PlatformApp, controlowner.SchemaRevoke, controlowner.MemberType, "ana", map[string]string{"app": "stock"})
 	before := requests.Load()
 	out, usage := tn.sendModel(tn.outbound[len(tn.outbound)-1].Effect, at.Add(time.Minute))
 	if out.Result != "rejected" || usage != nil || requests.Load() != before {

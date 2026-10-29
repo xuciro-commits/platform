@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -752,7 +751,6 @@ func (m Model) InternalUsage(id string) string {
 // ElementPropertyUses follows the metamodel's element-typed tagged values, never free text.
 // Empty day includes every retained period; otherwise only use on or after day counts.
 func (m Model) ElementPropertyUses(id string, day platform.Date) []string {
-	mm := uaf.Current()
 	out := []string{}
 	for _, element := range m.Elements {
 		if element.ID == id || element.Deleted && day != "" {
@@ -761,10 +759,7 @@ func (m Model) ElementPropertyUses(id string, day platform.Date) []string {
 		if day != "" && !slices.ContainsFunc(element.PeriodsFromLegacy(), func(period platform.Period) bool { return period.Until == "" || period.Until > day }) {
 			continue
 		}
-		for _, property := range mm.Properties(element.Stereotype) {
-			if mm.Stereotypes[property.Type] == nil || mm.Relationship(property.Type) {
-				continue
-			}
+		for _, property := range historicalReferences[element.Stereotype] {
 			match := func(value any) bool {
 				text, ok := value.(string)
 				return ok && (text == id || text == "enterprise.element/"+id)
@@ -824,121 +819,7 @@ func (m Model) PreviewImport(s Slice, linkID, content, base string, today platfo
 }
 
 func (m Model) NamespaceSlice(s Slice) (Slice, error) {
-	raw, _ := json.Marshal(s)
-	var cloned Slice
-	json.Unmarshal(raw, &cloned)
-	s = cloned
-	mm := uaf.Current()
-	kinds := map[string]string{}
-	for i := range s.Kinds {
-		kind := &s.Kinds[i]
-		if kind.ID == "" || kind.Name == "" || kind.Kind == "" || kinds[kind.ID] != "" {
-			return Slice{}, fmt.Errorf("The shared slice contains an invalid relationship kind")
-		}
-		id := ImportedElementID(s.Tenant, kind.ID)
-		legacy := false
-		if old := m.KindOf(kind.ID); old != nil && old.Owner == "" && slices.ContainsFunc(m.Relationships, func(r Relationship) bool { return strings.HasPrefix(r.ID, "fed:"+s.Tenant+":") && r.Kind == kind.ID }) {
-			id = kind.ID
-			legacy = true
-		}
-		if old := m.KindOf(id); old != nil && !legacy && old.Owner != "tenant:"+s.Tenant {
-			return Slice{}, fmt.Errorf("The relationship kind identity is already reserved")
-		}
-		kinds[kind.ID] = id
-		kind.ID, kind.Owner = id, "tenant:"+s.Tenant
-	}
-	ids := map[string]string{}
-	for _, e := range s.Elements {
-		if e.ID == "" || e.Name == "" || e.Deleted {
-			return Slice{}, fmt.Errorf("The shared slice contains an invalid element")
-		}
-		if st := mm.Stereotypes[e.Stereotype]; st == nil || st.Abstract || mm.Relationship(e.Stereotype) {
-			return Slice{}, fmt.Errorf("Choose a concrete enterprise element type")
-		}
-		props := mm.Properties(e.Stereotype)
-		for name, value := range e.Properties {
-			index := slices.IndexFunc(props, func(p uaf.Property) bool { return p.Name == name })
-			if index < 0 {
-				return Slice{}, fmt.Errorf("The shared element contains an unknown tagged value")
-			}
-			if enumeration := mm.Enumerations[props[index].Type]; enumeration != nil {
-				if text, ok := value.(string); !ok || !slices.Contains(enumeration.Literals, text) {
-					return Slice{}, fmt.Errorf("The shared element contains an invalid tagged value")
-				}
-			}
-		}
-		if err := CheckPeriods(e.PeriodsFromLegacy()); err != nil {
-			return Slice{}, err
-		}
-		id := ImportedElementID(s.Tenant, e.ID)
-		if previous := m.ElementOf(e.ID); previous != nil && previous.Owner == "tenant:"+s.Tenant {
-			id = e.ID
-		}
-		if previous := m.ElementOf(id); previous != nil && (previous.Owner != "tenant:"+s.Tenant || previous.Deleted) {
-			return Slice{}, fmt.Errorf("The shared element identity is already reserved")
-		}
-		if previous := m.ElementOf(id); previous != nil && previous.Stereotype != e.Stereotype {
-			return Slice{}, fmt.Errorf("A source element keeps its identity and type")
-		}
-		if ids[e.ID] != "" {
-			return Slice{}, fmt.Errorf("The shared slice repeats an element")
-		}
-		ids[e.ID] = id
-	}
-	for i := range s.Elements {
-		s.Elements[i].ID = ids[s.Elements[i].ID]
-		for _, property := range mm.Properties(s.Elements[i].Stereotype) {
-			if mm.Stereotypes[property.Type] == nil || mm.Relationship(property.Type) {
-				continue
-			}
-			translate := func(value any) any {
-				if ref, ok := value.(string); ok {
-					if mapped := ids[ref]; mapped != "" {
-						return mapped
-					}
-					if mapped := ids[strings.TrimPrefix(ref, "enterprise.element/")]; strings.HasPrefix(ref, "enterprise.element/") && mapped != "" {
-						return "enterprise.element/" + mapped
-					}
-				}
-				return value
-			}
-			value := s.Elements[i].Properties[property.Name]
-			if property.Many {
-				if values, ok := value.([]any); ok {
-					for j := range values {
-						values[j] = translate(values[j])
-					}
-				}
-			} else if value != nil {
-				s.Elements[i].Properties[property.Name] = translate(value)
-			}
-		}
-	}
-	relIDs := map[string]bool{}
-	for i := range s.Relationships {
-		r := &s.Relationships[i]
-		if ref := kinds[r.Kind]; ref != "" {
-			r.Kind = ref
-		}
-		if r.ID == "" || relIDs[r.ID] {
-			return Slice{}, fmt.Errorf("The shared slice repeats a relationship")
-		}
-		relIDs[r.ID] = true
-		if err := CheckPeriods(r.PeriodsFromLegacy()); err != nil {
-			return Slice{}, err
-		}
-		r.Source, r.Target = ids[r.Source], ids[r.Target]
-		if r.Source == "" || r.Target == "" {
-			return Slice{}, fmt.Errorf("The shared relationship has an unavailable endpoint")
-		}
-		if !strings.HasPrefix(r.ID, "fed:"+s.Tenant+":") {
-			r.ID = "fed:" + s.Tenant + ":" + r.ID
-		}
-		if old := m.RelationshipOf(r.ID); old != nil && (old.Source != r.Source || old.Target != r.Target || old.Stereotype != r.Stereotype) {
-			return Slice{}, fmt.Errorf("A source relationship keeps its endpoints; use a new relationship ID")
-		}
-	}
-	return s, nil
+	return Slice{}, fmt.Errorf("Full enterprise imports are retired; use the retained original binary for historical input recovery")
 }
 
 func closeSourceElement(e *Element, day platform.Date, reason string) {
@@ -950,3 +831,327 @@ func closeSourceElement(e *Element, day platform.Date, reason string) {
 
 type Date = platform.Date
 type Period = platform.Period
+
+// DirectoryModel describes only the fixed types used by organisation scopes.
+// Stored historical elements retain their original strings and properties.
+type DirectoryModel struct {
+	Version      string                           `json:"version"`
+	URI          string                           `json:"uri"`
+	Domains      []string                         `json:"domains"`
+	Stereotypes  map[string]*DirectoryType        `json:"stereotypes"`
+	Enumerations map[string]*DirectoryEnumeration `json:"enumerations"`
+}
+type DirectoryType struct {
+	Name        string              `json:"name"`
+	ID          string              `json:"id"`
+	Domain      string              `json:"domain"`
+	Abstract    bool                `json:"abstract,omitempty"`
+	Generals    []string            `json:"generals,omitempty"`
+	Bases       []string            `json:"bases,omitempty"`
+	Properties  []DirectoryProperty `json:"properties,omitempty"`
+	Client      []string            `json:"client,omitempty"`
+	Supplier    []string            `json:"supplier,omitempty"`
+	Constraints []string            `json:"constraints,omitempty"`
+}
+type DirectoryProperty struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Many bool   `json:"many,omitempty"`
+}
+type DirectoryEnumeration struct {
+	Name     string   `json:"name"`
+	Literals []string `json:"literals"`
+}
+
+func directoryElement(name string) bool {
+	return name == Organization || name == Post || name == Person
+}
+func directoryRelationship(name string) bool {
+	return name == Placement || name == Membership || name == FillsPost || name == Owns
+}
+func directory() *DirectoryModel {
+	types := map[string]*DirectoryType{}
+	for _, name := range []string{Organization, Post, Person, Placement, Membership, FillsPost, Owns} {
+		types[name] = &DirectoryType{Name: name, ID: name, Domain: "Organisation"}
+	}
+	return &DirectoryModel{Version: "directory-1", URI: "platform:directory:1", Domains: []string{"Organisation"}, Stereotypes: types, Enumerations: map[string]*DirectoryEnumeration{}}
+}
+func (m *DirectoryModel) Is(name, parent string) bool   { return name == parent }
+func (m *DirectoryModel) Relationship(name string) bool { return directoryRelationship(name) }
+
+// Historical property references preserve the old reference projection without
+// loading its editable standard schema. Ordinary text never becomes a reference.
+var historicalReferences = map[string][]DirectoryProperty{
+	"Achiever":                       {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Achieves":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Activity":                       {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualCondition":                {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualEffect":                   {{Name: "enablingCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualEnduringTask":             {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualEnterprisePhase":          {{Name: "statementTask", Type: "ActualEnduringTask", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualEnvironment":              {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualLocation":                 {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualMeasurement":              {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualMeasurementSet":           {{Name: "appliesFor", Type: "MeasurableElement", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualMission":                  {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualMissionPhase":             {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualMissionScenario":          {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualMissionVignette":          {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualOrganization":             {{Name: "publishedStandards", Type: "Standard", Many: true}, {Name: "ratifiedStandards", Type: "Standard", Many: true}, {Name: "createdStandards", Type: "Standard", Many: true}, {Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualOrganizationRole":         {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualOrganizationalResource":   {{Name: "publishedStandards", Type: "Standard", Many: true}, {Name: "ratifiedStandards", Type: "Standard", Many: true}, {Name: "createdStandards", Type: "Standard", Many: true}, {Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualOutcome":                  {{Name: "enablingCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualPerson":                   {{Name: "publishedStandards", Type: "Standard", Many: true}, {Name: "ratifiedStandards", Type: "Standard", Many: true}, {Name: "createdStandards", Type: "Standard", Many: true}, {Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualPost":                     {{Name: "publishedStandards", Type: "Standard", Many: true}, {Name: "ratifiedStandards", Type: "Standard", Many: true}, {Name: "createdStandards", Type: "Standard", Many: true}, {Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualProject":                  {{Name: "ownedMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "publishedStandards", Type: "Standard", Many: true}, {Name: "ratifiedStandards", Type: "Standard", Many: true}, {Name: "createdStandards", Type: "Standard", Many: true}, {Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualProjectMilestone":         {{Name: "actualResource", Type: "ActualResource", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "versionReleased", Type: "VersionedElement", Many: true}, {Name: "versionWithdrawn", Type: "VersionedElement", Many: true}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualProjectMilestoneRole":     {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualProjectRole":              {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualPropertySet":              {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualResource":                 {{Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualResourceRelationship":     {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualResourceRole":             {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualResponsibility":           {{Name: "publishedStandards", Type: "Standard", Many: true}, {Name: "ratifiedStandards", Type: "Standard", Many: true}, {Name: "createdStandards", Type: "Standard", Many: true}, {Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualResponsibleResource":      {{Name: "publishedStandards", Type: "Standard", Many: true}, {Name: "ratifiedStandards", Type: "Standard", Many: true}, {Name: "createdStandards", Type: "Standard", Many: true}, {Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"ActualRisk":                     {{Name: "actualRiskOwner", Type: "ActualResponsibleResource", Many: false}, {Name: "affectedActualResource", Type: "ActualResource", Many: false}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualService":                  {{Name: "appliesFor", Type: "MeasurableElement", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualState":                    {{Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ActualStrategicPhase":           {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"AffectableElement":              {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Affects":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"AffectsInContext":               {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Alias":                          {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ArbitraryConnector":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ArchitecturalDescription":       {{Name: "view", Type: "View", Many: true}, {Name: "viewpoint", Type: "Viewpoint", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ArchitecturalReference":         {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Architecture":                   {{Name: "describedBy", Type: "ArchitecturalDescription", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ArchitectureMetadata":           {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Asset":                          {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"AssetRole":                      {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Capability":                     {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"CapabilityConfiguration":        {{Name: "doctrine", Type: "StandardOperationalActivity", Many: true}, {Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"CapabilityRole":                 {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"CapableElement":                 {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Challenge":                      {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Command":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ComparesTo":                     {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Competence":                     {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"CompetenceForRole":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"CompetenceToConduct":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ConceptItem":                    {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ConceptRole":                    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Concern":                        {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Condition":                      {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ConflictsWith":                  {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Control":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Creates":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Defines":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Definition":                     {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"DesignationKind":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Desirer":                        {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Desires":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Doctrine":                       {{Name: "ratifiedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "mandatedDate", Type: "ISO8601DateTime", Many: false}, {Name: "retiredDate", Type: "ISO8601DateTime", Many: false}, {Name: "publishedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "createdBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Driver":                         {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Effect":                         {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Enables":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"EnhancedSecurityControl":        {{Name: "mitigatingActualResource", Type: "ActualResource", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Enhances":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"EnterpriseGoal":                 {{Name: "benefit", Type: "ValueItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"EnterpriseObjective":            {{Name: "benefit", Type: "ValueItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"EnterpriseVision":               {{Name: "statement", Type: "VisionStatement", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Environment":                    {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"EnvironmentProperty":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"EvokedBy":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Exchange":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Exhibits":                       {{Name: "environmentalConditions", Type: "Environment", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"FieldedCapability":              {{Name: "milestone", Type: "ActualProjectMilestone", Many: true}, {Name: "actualCondition", Type: "ActualCondition", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"FillsPost":                      {{Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Forecast":                       {{Name: "forecastPeriod", Type: "ActualStrategicPhase", Many: false}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Function":                       {{Name: "affectedResource", Type: "ResourceExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"FunctionAction":                 {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"FunctionControlFlow":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"FunctionEdge":                   {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"FunctionObjectFlow":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"GeoPoliticalExtentType":         {{Name: "function", Type: "Function", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}},
+	"GovernedBy":                     {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"HighLevelOperationalConcept":    {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ISO8601DateTime":                {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ImpactedBy":                     {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Implements":                     {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Information":                    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"InformationModel":               {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"IsCapableToPerform":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"KnownResource":                  {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}},
+	"Location":                       {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"LocationHolder":                 {{Name: "physicalLocation", Type: "ActualLocation", Many: true}, {Name: "requiredEnvironment", Type: "Condition", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MapsToCapability":               {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MapsToGoal":                     {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MeasurableElement":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Measurement":                    {{Name: "environmentalContext", Type: "ActualCondition", Many: false}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MeasurementSet":                 {{Name: "appliesFor", Type: "MeasurableElement", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Metadata":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MilestoneDependency":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Mission":                        {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"MissionEngineeringThread":       {{Name: "affectedResource", Type: "ResourceExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MissionScenario":                {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"MissionTask":                    {{Name: "affectedResource", Type: "OperationalExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MissionTaskAction":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MissionThread":                  {{Name: "affectedResource", Type: "OperationalExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MissionVignette":                {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Mitigates":                      {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MotivatedBy":                    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"MotivationalElement":            {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"NaturalResource":                {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"OperationalActivity":            {{Name: "affectedResource", Type: "OperationalExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalActivityAction":      {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalActivityEdge":        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalAgent":               {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalArchitecture":        {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"OperationalAsset":               {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalConnector":           {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalConstraint":          {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalControlFlow":         {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalExchange":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalExchangeItem":        {{Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalInformation":         {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}},
+	"OperationalInformationRole":     {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalInterface":           {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalMessage":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalMethod":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalMitigation":          {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"OperationalObjectFlow":          {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalParameter":           {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalPerformer":           {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"OperationalPort":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalRole":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "physicalLocation", Type: "ActualLocation", Many: true}, {Name: "requiredEnvironment", Type: "Condition", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"OperationalSignal":              {{Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalSignalProperty":      {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OperationalStateDescription":    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Opportunity":                    {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"OpposableElement":               {{Name: "designation", Type: "DesignationKind", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Opposes":                        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Organization":                   {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "stakeholderConcern", Type: "Concern", Many: true}},
+	"OrganizationInPhase":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OrganizationalResource":         {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "stakeholderConcern", Type: "Concern", Many: true}},
+	"OwnsProcess":                    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OwnsRisk":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OwnsRiskInContext":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"OwnsValue":                      {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"PerformsInContext":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Person":                         {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "stakeholderConcern", Type: "Concern", Many: true}},
+	"PhaseableElement":               {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Phases":                         {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"PhysicalResource":               {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"Post":                           {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "stakeholderConcern", Type: "Concern", Many: true}},
+	"PresentedBy":                    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProblemDomain":                  {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "physicalLocation", Type: "ActualLocation", Many: true}, {Name: "requiredEnvironment", Type: "Condition", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"Project":                        {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "stakeholderConcern", Type: "Concern", Many: true}},
+	"ProjectActivity":                {{Name: "affectedResource", Type: "ResourceExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProjectActivityAction":          {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProjectMilestone":               {{Name: "resource", Type: "ResourcePerformer", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProjectMilestoneRole":           {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProjectRole":                    {{Name: "physicalLocation", Type: "ActualLocation", Many: true}, {Name: "requiredEnvironment", Type: "Condition", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"ProjectSequence":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProjectStatus":                  {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProjectTheme":                   {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"PropertySet":                    {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Protects":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProtectsInContext":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Protocol":                       {{Name: "ratifiedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "mandatedDate", Type: "ISO8601DateTime", Many: false}, {Name: "retiredDate", Type: "ISO8601DateTime", Many: false}, {Name: "publishedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "createdBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProtocolImplementation":         {{Name: "implements", Type: "Protocol", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProtocolLayer":                  {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProtocolStack":                  {{Name: "ratifiedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "mandatedDate", Type: "ISO8601DateTime", Many: false}, {Name: "retiredDate", Type: "ISO8601DateTime", Many: false}, {Name: "publishedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "createdBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProvidedServiceLevel":           {{Name: "appliesFor", Type: "MeasurableElement", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ProvidesCompetence":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"RequiredServiceLevel":           {{Name: "appliesFor", Type: "MeasurableElement", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"RequiresCompetence":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Resource":                       {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceArchitecture":           {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"ResourceArtifact":               {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"ResourceAsset":                  {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceConnector":              {{Name: "boundaryCondition", Type: "Environment", Many: true}, {Name: "implements", Type: "Protocol", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}},
+	"ResourceConstraint":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceExchange":               {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceExchangeItem":           {{Name: "function", Type: "Function", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceInformation":            {{Name: "function", Type: "Function", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}},
+	"ResourceInformationRole":        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceInterface":              {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceMessage":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceMethod":                 {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceMitigation":             {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"ResourceParameter":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourcePerformer":              {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"ResourcePort":                   {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "implements", Type: "Protocol", Many: true}},
+	"ResourceRole":                   {{Name: "physicalLocation", Type: "ActualLocation", Many: true}, {Name: "requiredEnvironment", Type: "Condition", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"ResourceService":                {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"ResourceServiceInterface":       {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceSignal":                 {{Name: "function", Type: "Function", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceSignalProperty":         {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ResourceStateDescription":       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Responsibility":                 {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "stakeholderConcern", Type: "Concern", Many: true}},
+	"ResponsibleFor":                 {{Name: "startDate", Type: "ISO8601DateTime", Many: false}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Risk":                           {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Rule":                           {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SameAs":                         {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SecurityConstraint":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SecurityControl":                {{Name: "mitigatingActualResource", Type: "ActualResource", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SecurityControlFamily":          {{Name: "mitigatingActualResource", Type: "ActualResource", Many: true}, {Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SecurityEnclave":                {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"SecurityProcess":                {{Name: "affectedResource", Type: "OperationalExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SecurityProcessAction":          {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SecurityRisk":                   {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Sequence":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Service":                        {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}},
+	"ServiceArchitecture":            {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"ServiceConnector":               {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceContract":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceControlFlow":             {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceExchange":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceExchangeItem":            {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceFunction":                {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceFunctionAction":          {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceFunctionEdge":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceInterface":               {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceMessage":                 {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceMethod":                  {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceObjectFlow":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceParameter":               {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServicePolicy":                  {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServicePort":                    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceRole":                    {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceSignal":                  {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceSignalProperty":          {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"ServiceStateDescription":        {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Software":                       {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"Stakeholder":                    {{Name: "stakeholderConcern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Standard":                       {{Name: "ratifiedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "mandatedDate", Type: "ISO8601DateTime", Many: false}, {Name: "retiredDate", Type: "ISO8601DateTime", Many: false}, {Name: "publishedBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "createdBy", Type: "ActualOrganizationalResource", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"StandardOperationalActivity":    {{Name: "affectedResource", Type: "OperationalExchangeItem", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"StatusIndicators":               {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"StrategicAsset":                 {{Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"StrategicConstraint":            {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"StrategicExchange":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"StrategicExchangeItem":          {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"StrategicInformation":           {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}},
+	"StrategicPhase":                 {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"StructuralPart":                 {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"SubjectOfForecast":              {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"SubjectOfOperationalConstraint": {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"SubjectOfResourceConstraint":    {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"SubjectOfSecurityConstraint":    {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"SubjectOfStrategicConstraint":   {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"Supports":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"System":                         {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}, {Name: "describedBy", Type: "ArchitecturalDescription", Many: true}},
+	"Technology":                     {{Name: "milestone", Type: "ProjectMilestone", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "function", Type: "Function", Many: true}, {Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "activity", Type: "OperationalActivity", Many: true}, {Name: "designation", Type: "DesignationKind", Many: false}},
+	"TemporalPart":                   {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"UAFElement":                     {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"ValueItem":                      {{Name: "appliesFor", Type: "MeasurableElement", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "categoryCategorizesAsset", Type: "MeasurementSet", Many: false}},
+	"ValueStream":                    {{Name: "conformsTo", Type: "Standard", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+	"VersionOfConfiguration":         {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"VersionSuccession":              {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"VersionedElement":               {{Name: "versionReleasedAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "versionWithdrawnAtMilestone", Type: "ActualProjectMilestone", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"View":                           {{Name: "viewpoint", Type: "Viewpoint", Many: false}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"Viewpoint":                      {{Name: "stakeholder", Type: "Stakeholder", Many: true}, {Name: "concern", Type: "Concern", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"VisionStatement":                {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},
+	"WholeLifeConfiguration":         {{Name: "conformsTo", Type: "Standard", Many: true}},
+	"WholeLifeEnterprise":            {{Name: "statementTask", Type: "ActualEnduringTask", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}, {Name: "endDate", Type: "ISO8601DateTime", Many: false}, {Name: "startDate", Type: "ISO8601DateTime", Many: false}},
+}

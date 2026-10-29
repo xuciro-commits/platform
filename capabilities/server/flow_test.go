@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/engine/resources"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"slices"
 	"strings"
 	"testing"
@@ -15,9 +16,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
-	"platformserver/internal/host"
+	automation "platformserver/engine/automation"
+
 	"platformserver/platform"
 )
 
@@ -70,16 +71,16 @@ type frameDataWorker struct {
 	data  []byte
 }
 
-func (w *frameDataWorker) Execute(_ context.Context, request WasmRequest) (WasmResponse, error) {
+func (w *frameDataWorker) Execute(_ context.Context, request platform.WasmRequest) (platform.WasmResponse, error) {
 	if request.Data == nil || len(request.Input) != 0 || request.Limits.DataInputBytes <= request.Limits.MaxInputBytes {
-		return WasmResponse{}, fmt.Errorf("the large Compute input did not use the declared data channel")
+		return platform.WasmResponse{}, fmt.Errorf("the large Compute input did not use the declared data channel")
 	}
 	w.calls++
 	w.data = slices.Clone(request.Data.Bytes)
-	return WasmResponse{Output: platform.Raw(map[string]int{"bytes": len(request.Data.Bytes)})}, nil
+	return platform.WasmResponse{Output: platform.Raw(map[string]int{"bytes": len(request.Data.Bytes)})}, nil
 }
 
-func (s *frameSource) AttachBuild(h host.BuildHost) { s.host = h.(hostView) }
+func (s *frameSource) AttachBuild(h platform.BuildHost) { s.host = h.(hostView) }
 func (s *frameSource) Manifest() platform.Manifest {
 	continuous := &platform.Continuous{
 		Source: "frames.source", Batch: 512, State: s.stateBytes, FrameBytes: 2 * s.stateBytes, CheckpointEvery: s.checkpointEvery, DeadLetter: true,
@@ -100,7 +101,7 @@ func (s *frameSource) Manifest() platform.Manifest {
 		}
 		steps = []platform.Step{
 			{Name: "aggregate", Next: "finish", Retry: retry, Operation: &platform.OperationStep{Request: func(_ platform.Caller, run *platform.Run) (platform.OperationRequest, *kernel.Error) {
-				var input flow.ContinuousWindowInput
+				var input automation.ContinuousWindowInput
 				if json.Unmarshal(run.Data, &input) != nil {
 					return platform.OperationRequest{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "window input is malformed")
 				}
@@ -182,15 +183,15 @@ func (s *frameSource) Submit(c platform.Caller, sub *pb.Submission, now time.Tim
 			err = start.StartManual(c, "frames", "window", 1, "source", json.RawMessage(`{}`), now)
 		} else {
 			var input struct {
-				Batch flow.Batch `json:"batch"`
+				Batch automation.Batch `json:"batch"`
 			}
 			if json.Unmarshal(sub.GetPayload(), &input) != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "invalid batch")
 			}
 			consume := s.host.Processes().(interface {
-				ConsumeBatch(platform.Caller, string, flow.Batch, time.Time) (flow.BatchOutcome, *kernel.Error)
+				ConsumeBatch(platform.Caller, string, automation.Batch, time.Time) (automation.BatchOutcome, *kernel.Error)
 			})
-			_, err = consume.ConsumeBatch(s.host.Automation(c, flow.ID), "frames.window:source", input.Batch, now)
+			_, err = consume.ConsumeBatch(s.host.Automation(c, automation.ID), "frames.window:source", input.Batch, now)
 		}
 		if err != nil {
 			return nil, err
@@ -203,29 +204,29 @@ func TestContinuousFlowAutoStartsOnceAndStopIsDurable(t *testing.T) {
 	const tenant, id = "continuous-auto-start", "frames.window:continuous-v1"
 	source := newFrameSource(tenant, 128<<10)
 	source.autoStart = true
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
 	at := time.Date(2026, 10, 10, 10, 0, 0, 0, time.UTC)
-	runJob(t, tn, flow.ID, "timers", at)
-	if _, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id); ok {
+	runJob(t, tn, automation.ID, "timers", at)
+	if _, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id); ok {
 		t.Fatal("a continuous flow started while its published Process owner was inactive")
 	}
 	source.autoEnabled = true
-	runJob(t, tn, flow.ID, "timers", at.Add(time.Second))
-	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	runJob(t, tn, automation.ID, "timers", at.Add(time.Second))
+	instance, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 	if !ok || instance.State != "waiting" || instance.OnBehalf != "member" || len(instance.Tokens) != 1 || instance.Tokens[0].Waits != "stream" {
 		t.Fatalf("published stream did not start one retained waiting instance: %+v", instance)
 	}
-	runJob(t, tn, flow.ID, "timers", at.Add(2*time.Second))
-	if _, duplicate := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id+"#2"); duplicate {
+	runJob(t, tn, automation.ID, "timers", at.Add(2*time.Second))
+	if _, duplicate := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id+"#2"); duplicate {
 		t.Fatal("the continuous start tick created a duplicate instance")
 	}
-	decide(t, tn, "member", flow.ID, flow.SchemaFlowStop, flow.InstanceType, id, map[string]any{}, at.Add(3*time.Second))
-	runJob(t, tn, flow.ID, "timers", at.Add(4*time.Second))
-	stopped, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	decide(t, tn, "member", automation.ID, automation.SchemaFlowStop, automation.InstanceType, id, map[string]any{}, at.Add(3*time.Second))
+	runJob(t, tn, automation.ID, "timers", at.Add(4*time.Second))
+	stopped, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 	if !ok || stopped.State != "canceled" {
 		t.Fatalf("the explicit stop did not remain terminal: %+v", stopped)
 	}
-	if _, restarted := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id+"#2"); restarted {
+	if _, restarted := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id+"#2"); restarted {
 		t.Fatal("a durable stop was silently restarted by the timer")
 	}
 }
@@ -233,7 +234,7 @@ func TestContinuousFlowAutoStartsOnceAndStopIsDurable(t *testing.T) {
 func TestNativeFlowApplicationArtifactUsesOriginalDescriptor(t *testing.T) {
 	const tenant = "native-flow-application"
 	source := newFrameSource(tenant, 128<<10)
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
 	root := platform.AssetRef{App: "frames", Kind: platform.AssetApp, Name: "frames"}
 	assets, err := tn.releaseAssetsLocked(nil, false)
 	if err != nil {
@@ -284,23 +285,23 @@ func TestNativeFlowApplicationArtifactUsesOriginalDescriptor(t *testing.T) {
 func TestContinuousWindowRunsRetainedComputeWithBackpressure(t *testing.T) {
 	const tenant, id = "continuous-window-compute", "frames.window:source"
 	source := newFrameComputeSource(tenant, 128<<10)
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
-	store := &memoryFiles{}
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
+	store := &resources.MemoryFiles{}
 	tn.Files = store
 	var entries []Entry
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	at := time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC)
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
 	member := memberOf(t, tn, "member")
-	read := func() flow.FlowInstance {
+	read := func() automation.FlowInstance {
 		t.Helper()
-		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		x, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 		if !ok {
 			t.Fatal("continuous Compute instance was not created")
 		}
 		return x
 	}
-	first := flow.Batch{ID: "window-1", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: platform.Raw(4)}}}
+	first := automation.Batch{ID: "window-1", Signals: []automation.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: platform.Raw(4)}}}
 	acceptedAt := at.Add(3 * time.Second)
 	if _, err := tn.ConsumeFlowBatch(member, id, first, acceptedAt); err != nil {
 		t.Fatalf("first window batch: %v", err)
@@ -317,12 +318,12 @@ func TestContinuousWindowRunsRetainedComputeWithBackpressure(t *testing.T) {
 	}
 	var priorState struct {
 		Outputs map[string]json.RawMessage `json:"outputs"`
-		Signals []flow.Signal              `json:"signals"`
+		Signals []automation.Signal        `json:"signals"`
 	}
-	if len(accepted.Tokens) != 2 || !slices.ContainsFunc(accepted.Tokens, func(token flow.Token) bool { return token.Waits == "stream" }) || len(continuation) == 0 || json.Unmarshal(continuation, &priorState) != nil || priorState.Outputs == nil || len(priorState.Signals) != 0 {
+	if len(accepted.Tokens) != 2 || !slices.ContainsFunc(accepted.Tokens, func(token automation.Token) bool { return token.Waits == "stream" }) || len(continuation) == 0 || json.Unmarshal(continuation, &priorState) != nil || priorState.Outputs == nil || len(priorState.Signals) != 0 {
 		t.Fatalf("Compute token was not retained with bounded continuation state beside the idle source token: %+v", accepted.Tokens)
 	}
-	second := flow.Batch{ID: "window-2", Predecessor: first.ID, Signals: []flow.Signal{{Key: "B", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(5)}}}
+	second := automation.Batch{ID: "window-2", Predecessor: first.ID, Signals: []automation.Signal{{Key: "B", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(5)}}}
 	if _, err := tn.ConsumeFlowBatch(member, id, second, at.Add(time.Second)); err == nil {
 		t.Fatal("source advanced while its previous Compute operation was running")
 	}
@@ -369,19 +370,19 @@ func TestContinuousWindowRunsRetainedComputeWithBackpressure(t *testing.T) {
 		t.Fatalf("second ready window did not replace the latest Compute output: %s", computed.Outputs["aggregate"])
 	}
 	CheckReplay(t, tn, entries, func() *Tenant {
-		return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameComputeSource(tenant, 128<<10))
+		return composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), newFrameComputeSource(tenant, 128<<10))
 	})
 }
 
 func TestContinuousWindowRetriesComputeFromItsAcceptedSealedFrame(t *testing.T) {
 	const tenant, id = "continuous-window-compute-retry", "frames.window:source"
 	source := newFrameRetryComputeSource(tenant, 128<<10)
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
-	tn.Files = &memoryFiles{}
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
+	tn.Files = &resources.MemoryFiles{}
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 	at := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
-	batch := flow.Batch{ID: "retry-window", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: platform.Raw(7)}}}
+	batch := automation.Batch{ID: "retry-window", Signals: []automation.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: platform.Raw(7)}}}
 	acceptedAt := at.Add(3 * time.Second)
 	if _, err := tn.ConsumeFlowBatch(memberOf(t, tn, "member"), id, batch, acceptedAt); err != nil {
 		t.Fatalf("retry window batch: %v", err)
@@ -391,8 +392,8 @@ func TestContinuousWindowRetriesComputeFromItsAcceptedSealedFrame(t *testing.T) 
 		t.Fatalf("ready window did not enqueue its initial Compute: %d", len(runs))
 	}
 	runs[0]()
-	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
-	if !ok || !slices.ContainsFunc(instance.Tokens, func(token flow.Token) bool {
+	instance, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
+	if !ok || !slices.ContainsFunc(instance.Tokens, func(token automation.Token) bool {
 		return token.Step == "aggregate" && token.Waits == "retry" && token.Attempts == 1
 	}) {
 		t.Fatalf("the transient Compute failure did not retain its step retry: %+v", instance.Tokens)
@@ -404,7 +405,7 @@ func TestContinuousWindowRetriesComputeFromItsAcceptedSealedFrame(t *testing.T) 
 		t.Fatalf("the accepted sealed window did not enqueue one retry: %d", len(retries))
 	}
 	retries[0]()
-	instance, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	instance, _ = platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 	var output map[string]int
 	if instance.Batch.Cursor != batch.ID || instance.Data != "{}" || instance.State != "waiting" || len(instance.Tokens) != 1 || instance.Tokens[0].Waits != "stream" || len(source.computeInputs) != 2 || !slices.Equal(source.computeInputs[0], source.computeInputs[1]) || json.Unmarshal(instance.Outputs["aggregate"], &output) != nil || output["count"] != 1 {
 		t.Fatalf("the retry did not reuse the exact sealed window and settle the original Flow: %+v", instance)
@@ -414,8 +415,8 @@ func TestContinuousWindowRetriesComputeFromItsAcceptedSealedFrame(t *testing.T) 
 func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 	const tenant, id = "continuous-window-data-input", "frames.window:source"
 	source := newFrameDataComputeSource(tenant, 256<<10)
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
-	store := &memoryFiles{}
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
+	store := &resources.MemoryFiles{}
 	tn.Files = store
 	worker := &frameDataWorker{}
 	tn.ComputeWorker = worker
@@ -432,11 +433,11 @@ func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch := flow.Batch{ID: "large-window", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: value}}}
+	batch := automation.Batch{ID: "large-window", Signals: []automation.Signal{{Key: "A", Partition: "plant", At: at.Add(-time.Second), Value: value}}}
 	if _, err := tn.ConsumeFlowBatch(member, id, batch, at.Add(3*time.Second)); err != nil {
 		t.Fatalf("large window Compute batch: %v", err)
 	}
-	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	instance, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 	if !ok || instance.Data != "{}" || instance.Batch == nil || instance.Batch.Sealed == nil || len(platform.Raw(instance.Batch)) > 2048 {
 		t.Fatal("the large window or operation input was copied into the durable Flow record")
 	}
@@ -444,9 +445,9 @@ func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 		t.Fatal("the worker ran inside the accepted source decision")
 	}
 	tn.opsMu.Lock()
-	var inputRef *operationInputArtifact
+	var inputRef *platform.OperationInputArtifact
 	for _, item := range tn.outbound {
-		if item.Endpoint != resultformat.OperationEndpoint {
+		if item.Endpoint != acceptedformat.OperationEndpoint {
 			continue
 		}
 		var binding operationBinding
@@ -461,12 +462,12 @@ func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 	if inputRef == nil || inputRef.Tenant != tenant || inputRef.Member != member.ID || inputRef.Size <= 4096 || inputRef.Size > 256<<10 {
 		t.Fatalf("the operation input handle has a wrong owner or bound: %+v", inputRef)
 	}
-	sealed, err := tn.staged.readInput(context.Background(), *inputRef)
+	sealed, err := tn.staged.ReadInput(context.Background(), *inputRef)
 	if err != nil || len(sealed) != inputRef.Size {
 		t.Fatalf("the operation input could not be resolved: %v", err)
 	}
 	for _, entry := range entries {
-		if len(entry.Body) > acceptance.MaxResultBytes {
+		if len(entry.Body) > platform.AcceptedResultMaxBytes {
 			t.Fatal("the large window input was copied into the accepted journal result")
 		}
 	}
@@ -478,7 +479,7 @@ func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 	if worker.calls != 1 || string(worker.data) != string(sealed) {
 		t.Fatal("the worker did not receive exactly the accepted call's sealed bytes")
 	}
-	instance, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	instance, _ = platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 	var output map[string]int
 	if json.Unmarshal(instance.Outputs["aggregate"], &output) != nil || output["bytes"] != len(sealed) {
 		t.Fatalf("the operation result did not resume into the original Flow output: %s", instance.Outputs["aggregate"])
@@ -488,7 +489,7 @@ func TestContinuousWindowSealsLargeComputeInput(t *testing.T) {
 func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 	const tenant = "accepted-frames"
 	compose := func() *Tenant {
-		return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 4096))
+		return composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), newFrameSource(tenant, 4096))
 	}
 	tn := compose()
 	var entries []Entry
@@ -496,17 +497,17 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
 	at := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
-	first := flow.Batch{ID: "one", Signals: []flow.Signal{{Key: "A", Partition: "plant", At: at, Value: platform.Raw(4)}}}
+	first := automation.Batch{ID: "one", Signals: []automation.Signal{{Key: "A", Partition: "plant", At: at, Value: platform.Raw(4)}}}
 	decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": first}, at)
-	read := func() flow.FlowInstance {
-		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "frames.window:source")
+	read := func() automation.FlowInstance {
+		x, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "frames.window:source")
 		if !ok {
 			t.Fatal("no native instance")
 		}
 		return x
 	}
 	before := read()
-	tooLarge := flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "B", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(strings.Repeat("x", 6000))}}}
+	tooLarge := automation.Batch{ID: "two", Predecessor: "one", Signals: []automation.Signal{{Key: "B", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(strings.Repeat("x", 6000))}}}
 	if refusal := refuse(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": tooLarge}, at.Add(time.Second)); refusal == "ok" {
 		t.Fatal("over-budget accepted work consumed source input")
 	}
@@ -519,11 +520,11 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 		t.Fatal("identical input generated another flow change")
 	}
 	changed := first
-	changed.Signals = []flow.Signal{{Key: "A", Partition: "plant", At: at, Value: platform.Raw(40)}}
+	changed.Signals = []automation.Signal{{Key: "A", Partition: "plant", At: at, Value: platform.Raw(40)}}
 	if refuse(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": changed}, at.Add(time.Second)) == "ok" {
 		t.Fatal("reused batch identity accepted different bytes")
 	}
-	second := flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "B", Partition: "plant", At: at.Add(5 * time.Second), Value: platform.Raw(5)}}}
+	second := automation.Batch{ID: "two", Predecessor: "one", Signals: []automation.Signal{{Key: "B", Partition: "plant", At: at.Add(5 * time.Second), Value: platform.Raw(5)}}}
 	decide(t, tn, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": second}, at.Add(5*time.Second))
 	if read().Batch.Cursor != "two" || read().Batch.Consumed != 2 {
 		t.Fatal("valid successor could not resume after refusal")
@@ -537,7 +538,7 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 	if err := restored.Restore(raw); err != nil {
 		t.Fatal(err)
 	}
-	copy, ok := platform.Get[flow.FlowInstance](restored.automation(flow.ID, false), "frames.window:source")
+	copy, ok := platform.Get[automation.FlowInstance](restored.automation(automation.ID, false), "frames.window:source")
 	if !ok || string(platform.Raw(copy.Batch)) != string(platform.Raw(read().Batch)) {
 		t.Fatal("snapshot changed the accepted window")
 	}
@@ -545,7 +546,7 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 	t.Run("large window keeps bytes in the original frame", func(t *testing.T) {
 		const tenant = "large-accepted-frames"
 		compose := func() *Tenant {
-			return composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 128<<10))
+			return composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), newFrameSource(tenant, 128<<10))
 		}
 		live := compose()
 		var entries []Entry
@@ -554,15 +555,15 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 		decide(t, live, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
 		cursor := ""
 		for n := 1; n <= 9; n++ {
-			batch := flow.Batch{ID: fmt.Sprintf("%d", n), Predecessor: cursor, Signals: []flow.Signal{{Key: fmt.Sprintf("%d", n), Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
+			batch := automation.Batch{ID: fmt.Sprintf("%d", n), Predecessor: cursor, Signals: []automation.Signal{{Key: fmt.Sprintf("%d", n), Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
 			decide(t, live, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": batch}, at)
 			cursor = batch.ID
 		}
-		x, ok := platform.Get[flow.FlowInstance](live.automation(flow.ID, false), "frames.window:source")
+		x, ok := platform.Get[automation.FlowInstance](live.automation(automation.ID, false), "frames.window:source")
 		if !ok || len(x.Batch.State["window"]) <= 48<<10 {
 			t.Fatal("fixture did not retain a window above the inline budget")
 		}
-		var ref flow.BatchStateReference
+		var ref automation.BatchStateReference
 		if err := json.Unmarshal(x.Outputs["state:window"], &ref); err != nil || ref.Instance != x.ID || ref.Node != "window" || ref.Size != len(x.Batch.State["window"]) || ref.Digest != fmt.Sprintf("sha256:%x", sha256.Sum256(x.Batch.State["window"])) {
 			t.Fatalf("output does not identify its original accepted bytes: %+v %v", ref, err)
 		}
@@ -571,9 +572,9 @@ func TestContinuousAcceptedFrameRefusalAndRecovery(t *testing.T) {
 		}
 		// Retained history is checked against its predecessor, but not copied
 		// into each new accepted result. The original result budget still holds.
-		batch := flow.Batch{ID: "ten", Predecessor: cursor, Signals: []flow.Signal{{Key: "ten", Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
+		batch := automation.Batch{ID: "ten", Predecessor: cursor, Signals: []automation.Signal{{Key: "ten", Partition: "plant", At: at, Value: platform.Raw(strings.Repeat("x", 6000))}}}
 		decide(t, live, "member", "frames", "frames.source.feed", "frames.source", "source", map[string]any{"batch": batch}, at)
-		after, ok := platform.Get[flow.FlowInstance](live.automation(flow.ID, false), x.ID)
+		after, ok := platform.Get[automation.FlowInstance](live.automation(automation.ID, false), x.ID)
 		if !ok || after.Batch.Cursor != "ten" {
 			t.Fatal("history growth blocked a bounded successor")
 		}
@@ -585,20 +586,20 @@ func TestContinuousLatestBootstrapWithComputeEntry(t *testing.T) {
 	const tenant = "latest-compute"
 	source := newFrameComputeSource(tenant, 128<<10)
 	source.autoStart, source.autoEnabled = true, true
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
-	tn.Files = &memoryFiles{}
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
+	tn.Files = &resources.MemoryFiles{}
 	at := time.Date(2026, 10, 11, 10, 0, 0, 0, time.UTC)
-	procs := tn.app(flow.ID).(*flow.Flows)
-	runJob(t, tn, flow.ID, "timers", at)
-	x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "frames.window:continuous-v1")
+	procs := tn.app(automation.ID).(*automation.Flows)
+	runJob(t, tn, automation.ID, "timers", at)
+	x, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "frames.window:continuous-v1")
 	if !ok {
 		t.Fatal("continuous instance did not start")
 	}
-	plan, refusal := procs.PlanBatch(x, tn.automation(flow.ID, false))
+	plan, refusal := procs.PlanBatch(x, tn.automation(automation.ID, false))
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	batch := flow.Batch{ID: "bootstrap", Bootstrap: true, Source: &flow.SourceCheckpoint{Record: "stream", Config: "hash", Cursor: "42", Offset: "latest", Initialized: true}}
+	batch := automation.Batch{ID: "bootstrap", Bootstrap: true, Source: &automation.SourceCheckpoint{Record: "stream", Config: "hash", Cursor: "42", Offset: "latest", Initialized: true}}
 	prepared, refusal := plan.Prepare(batch, at, flowFrameStore{tenant: tenant, files: tn.Files})
 	if refusal != nil {
 		t.Fatalf("latest bootstrap was refused: %v", refusal)
@@ -610,14 +611,14 @@ func TestContinuousLatestBootstrapWithComputeEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var frame flow.BatchFrame
+	var frame automation.BatchFrame
 	if err := json.Unmarshal(raw, &frame); err != nil || frame.Source == nil || frame.Source.Cursor != "42" || frame.Consumed != 0 {
 		t.Fatalf("bootstrap lost the source position: %+v %v", frame, err)
 	}
 }
 
 type transientDeleteFiles struct {
-	*memoryFiles
+	*resources.MemoryFiles
 	failures int
 }
 
@@ -626,16 +627,16 @@ func (s *transientDeleteFiles) Delete(ctx context.Context, key string) error {
 		s.failures--
 		return errors.New("injected object-store delete failure")
 	}
-	return s.memoryFiles.Delete(ctx, key)
+	return s.MemoryFiles.Delete(ctx, key)
 }
 
 func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T) {
 	const tenant, id = "continuous-artifact-retirement", "frames.window:source"
-	files := &transientDeleteFiles{memoryFiles: &memoryFiles{}}
+	files := &transientDeleteFiles{MemoryFiles: &resources.MemoryFiles{}}
 	compose := func() *Tenant {
 		source := newFrameSource(tenant, 2<<20)
 		source.checkpointEvery = 2
-		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+		tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
 		tn.Files = files
 		return tn
 	}
@@ -646,12 +647,12 @@ func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T
 	at := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
 	member := memberOf(t, tn, "member")
-	feed := func(batch flow.Batch, now time.Time) flow.FlowInstance {
+	feed := func(batch automation.Batch, now time.Time) automation.FlowInstance {
 		t.Helper()
 		if _, err := tn.ConsumeFlowBatch(member, id, batch, now); err != nil {
 			t.Fatalf("accept source batch %s: %v", batch.ID, err)
 		}
-		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		x, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 		if !ok || x.Batch == nil || x.Batch.Sealed == nil {
 			t.Fatal("accepted batch did not retain its sealed frame")
 		}
@@ -665,9 +666,9 @@ func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T
 		}
 		return files.Exists(context.Background(), key)
 	}
-	one := feed(flow.Batch{ID: "one", Signals: []flow.Signal{{Key: "one", Partition: "plant", At: at, Value: platform.Raw(1)}}}, at)
+	one := feed(automation.Batch{ID: "one", Signals: []automation.Signal{{Key: "one", Partition: "plant", At: at, Value: platform.Raw(1)}}}, at)
 	firstFrame := *one.Batch.Sealed
-	two := feed(flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "two", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(2)}}}, at.Add(time.Second))
+	two := feed(automation.Batch{ID: "two", Predecessor: "one", Signals: []automation.Signal{{Key: "two", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(2)}}}, at.Add(time.Second))
 	firstCheckpoint := *two.Batch.CheckpointArtifact
 	if !two.CleanupPending || len(two.ArtifactCleanup) != 1 || two.ArtifactCleanup[0] != firstFrame || !stored(firstFrame) {
 		t.Fatalf("the accepted replacement did not durably identify its superseded frame: %+v", two.ArtifactCleanup)
@@ -675,11 +676,11 @@ func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T
 	if !stored(*two.Batch.Sealed) || !stored(firstCheckpoint) {
 		t.Fatal("the live frame and checkpoint must remain stored")
 	}
-	if result := refuse(t, tn, "member", flow.ID, flow.SchemaFlowArtifactCleanup, flow.InstanceType, id, map[string]string{"digest": "forged"}, at.Add(time.Second)); !strings.Contains(result, pb.ErrorCode_ERROR_CODE_POLICY_DENIED.String()) {
+	if result := refuse(t, tn, "member", automation.ID, automation.SchemaFlowArtifactCleanup, automation.InstanceType, id, map[string]string{"digest": "forged"}, at.Add(time.Second)); !strings.Contains(result, pb.ErrorCode_ERROR_CODE_POLICY_DENIED.String()) {
 		t.Fatalf("a member submitted the host-only cleanup action: %s", result)
 	}
 
-	f := tn.procs.(*flow.Flows)
+	f := tn.procs.(*automation.Flows)
 	cleanup, refusal := f.PlanArtifactCleanup(two, at.Add(2*time.Second))
 	if refusal != nil {
 		t.Fatal(refusal)
@@ -688,17 +689,17 @@ func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T
 	if refusal := tn.retireContinuousArtifacts(cleanup, at.Add(2*time.Second)); refusal == nil {
 		t.Fatal("a transient object-store failure must leave cleanup unacknowledged")
 	}
-	stillPending, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	stillPending, _ := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 	if !stillPending.CleanupPending || stillPending.Revision != two.Revision || !stored(firstFrame) {
 		t.Fatal("a failed delete cleared the durable retry intent or removed the object")
 	}
 
-	three := feed(flow.Batch{ID: "three", Predecessor: "two", Signals: []flow.Signal{{Key: "three", Partition: "plant", At: at.Add(2 * time.Second), Value: platform.Raw(3)}}}, at.Add(3*time.Second))
+	three := feed(automation.Batch{ID: "three", Predecessor: "two", Signals: []automation.Signal{{Key: "three", Partition: "plant", At: at.Add(2 * time.Second), Value: platform.Raw(3)}}}, at.Add(3*time.Second))
 	thirdFrame := *three.Batch.Sealed
 	if !three.CleanupPending || len(three.ArtifactCleanup) != 1 || three.ArtifactCleanup[0] != *two.Batch.Sealed || stored(firstFrame) {
 		t.Fatalf("a retried cleanup did not precede the next accepted batch: %+v", three.ArtifactCleanup)
 	}
-	four := feed(flow.Batch{ID: "four", Predecessor: "three", Signals: []flow.Signal{{Key: "four", Partition: "plant", At: at.Add(3 * time.Second), Value: platform.Raw(4)}}}, at.Add(4*time.Second))
+	four := feed(automation.Batch{ID: "four", Predecessor: "three", Signals: []automation.Signal{{Key: "four", Partition: "plant", At: at.Add(3 * time.Second), Value: platform.Raw(4)}}}, at.Add(4*time.Second))
 	if !four.CleanupPending || len(four.ArtifactCleanup) != 2 || four.ArtifactCleanup[0] != thirdFrame || four.ArtifactCleanup[1] != firstCheckpoint {
 		t.Fatalf("checkpoint rollover did not retire both replaced artifacts: %+v", four.ArtifactCleanup)
 	}
@@ -709,7 +710,7 @@ func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T
 	// The original shared host source loop discovers and retries cleanup even
 	// when this Flow has no further source records to consume.
 	tn.PullContinuousSources(at.Add(5 * time.Second))
-	cleaned, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+	cleaned, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 	if !ok || cleaned.CleanupPending || len(cleaned.ArtifactCleanup) != 0 || stored(thirdFrame) || stored(firstCheckpoint) {
 		t.Fatalf("host cleanup did not delete and acknowledge the superseded frame/checkpoint: %+v", cleaned.ArtifactCleanup)
 	}
@@ -721,11 +722,11 @@ func TestContinuousArtifactRetirementRetriesAndUsesHostAcceptedWork(t *testing.T
 
 func TestContinuousPeriodicCheckpointIsRetainedAndVersionBound(t *testing.T) {
 	const tenant, id = "periodic-checkpoints", "frames.window:source"
-	store := &memoryFiles{}
+	store := &resources.MemoryFiles{}
 	compose := func() *Tenant {
 		source := newFrameSource(tenant, 2<<20)
 		source.checkpointEvery = 2
-		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+		tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
 		tn.Files = store
 		return tn
 	}
@@ -736,37 +737,37 @@ func TestContinuousPeriodicCheckpointIsRetainedAndVersionBound(t *testing.T) {
 	at := time.Date(2026, 10, 8, 11, 0, 0, 0, time.UTC)
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
 	member := memberOf(t, tn, "member")
-	feed := func(batch flow.Batch, now time.Time) {
+	feed := func(batch automation.Batch, now time.Time) {
 		t.Helper()
 		if _, err := tn.ConsumeFlowBatch(member, id, batch, now); err != nil {
 			t.Fatalf("accept source batch %s: %v", batch.ID, err)
 		}
 	}
-	read := func() flow.FlowInstance {
+	read := func() automation.FlowInstance {
 		t.Helper()
-		x, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
+		x, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
 		if !ok {
 			t.Fatal("the original Flow instance was not retained")
 		}
 		return x
 	}
-	first := flow.Batch{ID: "one", Signals: []flow.Signal{{Key: "one", Partition: "plant", At: at, Value: platform.Raw(1)}}}
+	first := automation.Batch{ID: "one", Signals: []automation.Signal{{Key: "one", Partition: "plant", At: at, Value: platform.Raw(1)}}}
 	feed(first, at)
 	if x := read(); x.Batch.CheckpointArtifact != nil || x.Batch.BatchesSinceCheckpoint != 1 || x.Batch.CheckpointEvery != 2 {
 		t.Fatalf("checkpoint was not scheduled at the declared interval: %+v", x.Batch)
 	}
-	second := flow.Batch{ID: "two", Predecessor: "one", Signals: []flow.Signal{{Key: "two", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(2)}}}
+	second := automation.Batch{ID: "two", Predecessor: "one", Signals: []automation.Signal{{Key: "two", Partition: "plant", At: at.Add(time.Second), Value: platform.Raw(2)}}}
 	feed(second, at.Add(time.Second))
 	x := read()
 	if x.Batch.CheckpointArtifact == nil || x.Batch.Sealed == nil || x.Batch.CheckpointCursor != "two" || x.Batch.BatchesSinceCheckpoint != 0 || x.Batch.CheckpointEvery != 2 || x.Batch.CheckpointArtifact.Ticket == x.Batch.Sealed.Ticket {
 		t.Fatalf("the second accepted batch did not create a distinct periodic checkpoint: %+v", x.Batch)
 	}
 	checkpointRaw, err := (flowFrameStore{tenant: tenant, files: store}).Read(*x.Batch.CheckpointArtifact)
-	var checkpoint flow.BatchFrame
+	var checkpoint automation.BatchFrame
 	if err != nil || json.Unmarshal(checkpointRaw, &checkpoint) != nil || checkpoint.Cursor != "two" || checkpoint.CheckpointCursor != "two" || checkpoint.CheckpointArtifact != nil || checkpoint.Sealed != nil || len(checkpoint.State) == 0 {
 		t.Fatalf("the periodic checkpoint is not a self-contained versioned frame: %+v %v", checkpoint, err)
 	}
-	third := flow.Batch{ID: "three", Predecessor: "two", Signals: []flow.Signal{{Key: "three", Partition: "plant", At: at.Add(2 * time.Second), Value: platform.Raw(3)}}}
+	third := automation.Batch{ID: "three", Predecessor: "two", Signals: []automation.Signal{{Key: "three", Partition: "plant", At: at.Add(2 * time.Second), Value: platform.Raw(3)}}}
 	feed(third, at.Add(2*time.Second))
 	frame, refusal := tn.ReadFlowFrame(memberOf(t, tn, "member"), id, at.Add(2*time.Second))
 	if refusal != nil || frame.CheckpointCursor != "two" || frame.BatchesSinceCheckpoint != 1 || frame.CheckpointArtifact == nil || frame.Cursor != "three" {

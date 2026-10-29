@@ -20,7 +20,7 @@ func TestApplicationQueryContractAndSharedObjectRequirements(t *testing.T) {
 	if err := page.Document.Check(page.Sections); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.CheckCollectionPorts(); err != nil {
+	if err := page.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.CheckPageVariables(page); err != nil {
@@ -61,7 +61,7 @@ func TestApplicationQueryContractAndSharedObjectRequirements(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a, p := applicationQueryFixture()
 			tc.change(&a, &p)
-			if a.CheckVariables() == nil && p.Document.Check(p.Sections) == nil && p.CheckCollectionPorts() == nil && a.CheckPageVariables(p) == nil {
+			if a.CheckVariables() == nil && p.Document.Check(p.Sections) == nil && p.CheckSafety() == nil && a.CheckPageVariables(p) == nil {
 				t.Fatal("invalid shared resource accepted")
 			}
 		})

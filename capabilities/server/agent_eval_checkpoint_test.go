@@ -1,5 +1,7 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"errors"
@@ -40,9 +42,9 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 	}))
 	t.Cleanup(model.Close)
 	compose := func(version string) *Tenant {
-		tn := composeTenant(t, "eval-checkpoint", []Seat{
+		tn := composeTenant(t, "eval-checkpoint", []platform.Seat{
 			seatOf("ana", "platform:admin", "agent:admin", "ai:admin", "desk:clerk"), seatOf("viewer", "desk:viewer"),
-		}, ai.New("eval-checkpoint"), NewAgents("eval-checkpoint"), &checkpointDesk{desk: newDesk("eval-checkpoint"), version: version})
+		}, ai.New("eval-checkpoint"), agentowner.New("eval-checkpoint"), &checkpointDesk{desk: newDesk("eval-checkpoint"), version: version})
 		tn.AIClient = func(*http.Request) (*http.Response, error) { t.Fatal("recovery called a model"); return nil, nil }
 		return tn
 	}
@@ -52,7 +54,7 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 	var entries []Entry
 	live.Record = func(e Entry) { entries = append(entries, e) }
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-		if e.App == AgentApp {
+		if e.App == platform.AgentApp {
 			var saved acceptedAgent
 			if json.Unmarshal(e.Body, &saved) == nil && saved.Step.Evaluation != nil {
 				ev := saved.Step.Evaluation
@@ -67,12 +69,12 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 	decide(t, live, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}, at)
 	decide(t, live, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/model", map[string]any{"access": "users", "defaults": platform.ModelOptions{MaxTokens: 64}}, at)
 	request := map[string]any{"agent": "desk.review", "model": "local/model", "suite": true}
-	if got := refuse(t, live, "viewer", AgentApp, SchemaEvalStart, EvaluationType, "denied", request, at); !strings.Contains(got, "POLICY_DENIED") {
+	if got := refuse(t, live, "viewer", platform.AgentApp, platform.SchemaEvalStart, platform.EvaluationType, "denied", request, at); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("non-administrator queued an evaluation: %s", got)
 	}
-	decide(t, live, "ana", AgentApp, SchemaEvalStart, EvaluationType, "E1", request, at)
+	decide(t, live, "ana", platform.AgentApp, platform.SchemaEvalStart, platform.EvaluationType, "E1", request, at)
 	live.Evaluate(at)
-	partial, _ := platform.Get[Evaluation](live.automation(AgentApp, false), "E1")
+	partial, _ := platform.Get[platform.Evaluation](live.automation(platform.AgentApp, false), "E1")
 	if calls.Load() != 2 || partial.State != "queued" || len(partial.Cases) != 1 || partial.Cases[0].Runs != 1 || partial.Cases[0].Candidate != "answer 1" || partial.Tokens != 10 || partial.Cost != 0.01 {
 		t.Fatalf("failed checkpoint changed accepted progress: calls=%d evaluation=%+v", calls.Load(), partial)
 	}
@@ -92,7 +94,7 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 			return e.Body, nil
 		}
 		live.Evaluate(at.Add(2 * time.Second))
-		report, _ := platform.Get[Evaluation](live.automation(AgentApp, false), "E1")
+		report, _ := platform.Get[platform.Evaluation](live.automation(platform.AgentApp, false), "E1")
 		tokens, cost := 0, 0.0
 		for _, usage := range live.ai.Usage() {
 			tokens += usage.Input + usage.Output
@@ -122,7 +124,7 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 			}
 			before := calls.Load()
 			restarted.Evaluate(at)
-			report, _ := platform.Get[Evaluation](restarted.automation(AgentApp, false), "E1")
+			report, _ := platform.Get[platform.Evaluation](restarted.automation(platform.AgentApp, false), "E1")
 			if report.State != "done" || report.Created.By != "ana" || report.DefinitionDigest != partial.DefinitionDigest || report.ModelConfig != partial.ModelConfig || report.Cases[0].Candidate != "answer 1" {
 				t.Fatalf("restart lost accepted result, requester or version: %+v", report)
 			}
@@ -136,7 +138,7 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 				t.Fatalf("completed item was rerun or totals changed: calls=%d report=%+v", calls.Load()-before, report)
 			}
 			for _, item := range report.Cases {
-				if item.Runs != suiteRuns || item.Passes != suiteRuns {
+				if item.Runs != 3 || item.Passes != 3 {
 					t.Fatalf("unfinished report: %+v", report)
 				}
 			}

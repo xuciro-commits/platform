@@ -167,3 +167,18 @@ func ResolveComposition(modules []CapabilityModule, selected map[string]string) 
 	}
 	return plan, nil
 }
+
+// OwnerBindings is the composition's bundle of independent consumer roles.
+// Each owner is attached only to its declared role; it cannot retain the bundle.
+type OwnerBindings struct {
+	Training  AITrainingHost
+	System    SystemDefinitionHost
+	Agent     AgentHost
+	Console   ConsoleHost
+	Build     BuildHost
+	Files     FileHost
+	Knowledge KnowledgeHost
+	Relations RelationsHost
+	Flow      FlowHost
+	Work      WorkHost
+}

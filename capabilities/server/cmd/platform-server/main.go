@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	controlowner "platformserver/kernel/control"
 	_ "time/tzdata"
 
 	"platformserver"
@@ -14,10 +15,10 @@ import (
 	"platformserver/apps/system"
 	"platformserver/apps/work"
 	"platformserver/composition"
-	"platformserver/internal/construction"
 	"platformserver/internal/systembuild"
 	"platformserver/internal/systemscope"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 func main() {
@@ -39,16 +40,16 @@ func main() {
 	development := platformserver.TenantSpec{ID: *tenant}
 	if *admin != "" {
 		roles := map[string]string{
-			platformserver.PlatformApp: platformserver.Admin,
-			construction.ID:            construction.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
-			work.ID: work.Admin, platformserver.AgentApp: platformserver.AgentAdmin,
+			controlowner.PlatformApp: controlowner.Admin,
+			build.ID:                 build.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
+			work.ID: work.Admin, platform.AgentApp: platform.AgentAdmin,
 		}
 		// The development seat of the system tenant is its publisher: without
 		// it nobody could approve a change in a local run.
 		if *tenant == systemscope.Tenant {
 			roles[system.ID] = system.Publisher
 		}
-		development.Seats = []platformserver.Seat{{Subjects: []string{*admin}, Member: platform.Member{
+		development.Seats = []platform.Seat{{Subjects: []string{*admin}, Member: platform.Member{
 			ID: "builder", Roles: roles,
 		}}}
 	}

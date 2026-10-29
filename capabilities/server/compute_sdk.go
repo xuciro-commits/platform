@@ -9,15 +9,6 @@ import (
 	"platformserver/platform"
 )
 
-type ComputeSDKRequest struct {
-	ABI    string               `json:"abi,omitempty"`
-	Input  platform.ValueSchema `json:"input"`
-	Output platform.ValueSchema `json:"output"`
-}
-type ComputeSDK struct {
-	Source string `json:"source"`
-}
-
 func readCapabilityBody(w http.ResponseWriter, r *http.Request, value any) bool {
 	raw, err := io.ReadAll(io.LimitReader(r.Body, (128<<10)+1))
 	if err != nil || len(raw) > 128<<10 {

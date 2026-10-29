@@ -1,6 +1,6 @@
 // Package work is the platform's work app: approval requests for
 // actions that wait for approvers, and tasks for people, with one inbox. A
-// platform app on the app API and internal/host.
+// platform app on the app API and public consumer roles.
 package work
 
 import (
@@ -15,7 +15,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -68,15 +68,15 @@ type SavedView = platform.SavedView
 
 type Work struct {
 	mu     sync.Mutex
-	host   host.WorkHost // the tenant running it, once composed
+	host   platform.WorkHost // the tenant running it, once composed
 	ledger *platform.Ledger
 }
 
 var _ platform.ApprovalOwner = (*Work)(nil)
-var _ host.AttachedWork = (*Work)(nil)
+var _ platform.AttachedWork = (*Work)(nil)
 
 // Attach is called by the host when a tenant is composed.
-func (w *Work) AttachWork(h host.WorkHost) { w.host = h }
+func (w *Work) AttachWork(h platform.WorkHost) { w.host = h }
 
 // RequestApproval retains the original held-submission format and identity.
 // It is a nested decision in the host's existing staged transaction.

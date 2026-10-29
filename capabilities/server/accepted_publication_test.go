@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/construction"
-	"platformserver/internal/records"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
+	"platformserver/kernel/records"
+	"platformserver/studio/build"
 	"slices"
 	"strings"
 	"testing"
@@ -16,7 +17,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+
 	"platformserver/platform"
 )
 
@@ -34,9 +35,9 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	id := fmt.Sprintf("publication-%d", time.Now().UnixNano())
 	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{construction.ID: construction.Builder}}}
-		tenant, err := NewTenant(id, NewConsole(id, seat), build.New(id))
+		seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}}
+		tenant, err := NewTenant(id, newConsole(id, seat), build.New(id))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,34 +54,34 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
 	for _, action := range []struct {
 		key, schema, typ, target, payload string
-	}{{"create", construction.ObjectType + ".create", construction.ObjectType, "O1",
+	}{{"create", build.ObjectType + ".create", build.ObjectType, "O1",
 		`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`},
-		{"publish", construction.SchemaPublish, construction.ObjectType, "O1", `{}`},
-		{"page-create", construction.PageType + ".create", construction.PageType, "P1",
+		{"publish", build.SchemaPublish, build.ObjectType, "O1", `{}`},
+		{"page-create", build.PageType + ".create", build.PageType, "P1",
 			`{"name":"visits","title":"Visits","object":"build.visit","list":["guest"],"detail":["guest"]}`},
-		{"page-publish", construction.SchemaRelease, construction.PageType, "P1", `{}`},
-		{"app-create", construction.AppType + ".create", construction.AppType, "A1",
+		{"page-publish", build.SchemaRelease, build.PageType, "P1", `{}`},
+		{"app-create", build.AppType + ".create", build.AppType, "A1",
 			`{"name":"frontdesk","title":"Front Desk","pages":["visits"]}`},
-		{"app-publish", construction.SchemaHandOver, construction.AppType, "A1", `{}`}} {
+		{"app-publish", build.SchemaHandOver, build.AppType, "A1", `{}`}} {
 		if _, err := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-			Authority: construction.ID, IdempotencyKey: action.key, Target: &pb.EntityRef{Type: action.typ, Id: action.target},
+			Authority: build.ID, IdempotencyKey: action.key, Target: &pb.EntityRef{Type: action.typ, Id: action.target},
 			Schema: &pb.SchemaRef{Name: action.schema, Version: 1}, Payload: []byte(action.payload)}, at); err != nil {
 			t.Fatal(err)
 		}
 	}
-	function := platform.RecordAdviceFunction("build.visit", []string{"guest"}, []string{construction.Builder, construction.User})
+	function := platform.RecordAdviceFunction("build.visit", []string{"guest"}, []string{build.Builder, build.User})
 	function.Name = "advice"
 	for i, action := range []struct {
 		schema  string
 		payload any
 	}{
-		{construction.FunctionType + ".create", function},
+		{build.FunctionType + ".create", function},
 		{build.SchemaFunction, struct{}{}},
-		{construction.FunctionType + ".edit", map[string]string{"instructions": "Second published prompt"}},
+		{build.FunctionType + ".edit", map[string]string{"instructions": "Second published prompt"}},
 		{build.SchemaFunction, struct{}{}},
 	} {
-		if _, refusal := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: construction.ID,
-			IdempotencyKey: fmt.Sprint("function-", i), Target: &pb.EntityRef{Type: construction.FunctionType, Id: "F1"},
+		if _, refusal := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: build.ID,
+			IdempotencyKey: fmt.Sprint("function-", i), Target: &pb.EntityRef{Type: build.FunctionType, Id: "F1"},
 			Schema: &pb.SchemaRef{Name: action.schema, Version: 1}, Payload: platform.Raw(action.payload)}, at); refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -88,7 +89,7 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	if journal.Position(id) != 10 {
 		t.Fatalf("ten generated decisions did not occupy ten journal positions: %d", journal.Position(id))
 	}
-	if object, ok := platform.Get[construction.Object](live.caller(member, live.app(construction.ID), false), "O1"); !ok ||
+	if object, ok := platform.Get[build.Object](live.caller(member, live.app(build.ID), false), "O1"); !ok ||
 		object.State != "published" || object.Published == "" {
 		t.Fatalf("committed PostgreSQL publication was not applied in memory: %+v, found=%t", object, ok)
 	}
@@ -105,7 +106,7 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if _, installed := recovered.entity(construction.TypeOf("visit")); !installed ||
+	if _, installed := recovered.entity(build.TypeOf("visit")); !installed ||
 		!slices.ContainsFunc(recovered.definitions, func(d platform.Definition) bool {
 			return d.Ref.Kind == platform.AssetPage && d.Ref.Name == "visits"
 		}) ||
@@ -114,7 +115,7 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 		}) {
 		t.Fatal("persisted publications did not restore the generated object, page and application")
 	}
-	functions := recovered.app(construction.ID).(*build.Build)
+	functions := recovered.app(build.ID).(*build.Build)
 	if f, version, ok := functions.FunctionDefinition("advice", 1); !ok || version != 1 || f.Instructions != function.Instructions {
 		t.Fatal("PostgreSQL recovery lost the first function version")
 	}
@@ -124,9 +125,9 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	CheckReplay(t, live, entries, compose)
 	// A function publication uses the same append-before-install boundary as
 	// objects/pages/apps. A committed third version survives a pre-apply crash.
-	if _, refusal := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: construction.ID,
-		IdempotencyKey: "function-third-draft", Target: &pb.EntityRef{Type: construction.FunctionType, Id: "F1"},
-		Schema: &pb.SchemaRef{Name: construction.FunctionType + ".edit", Version: 1}, Payload: platform.Raw(map[string]string{"instructions": "Third published prompt"})}, at); refusal != nil {
+	if _, refusal := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: build.ID,
+		IdempotencyKey: "function-third-draft", Target: &pb.EntityRef{Type: build.FunctionType, Id: "F1"},
+		Schema: &pb.SchemaRef{Name: build.FunctionType + ".edit", Version: 1}, Payload: platform.Raw(map[string]string{"instructions": "Third published prompt"})}, at); refusal != nil {
 		t.Fatal(refusal)
 	}
 	live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
@@ -141,11 +142,11 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 				t.Fatal("publication crash was not injected")
 			}
 		}()
-		live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: construction.ID,
-			IdempotencyKey: "function-third-publish", Target: &pb.EntityRef{Type: construction.FunctionType, Id: "F1"},
+		live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: build.ID,
+			IdempotencyKey: "function-third-publish", Target: &pb.EntityRef{Type: build.FunctionType, Id: "F1"},
 			Schema: &pb.SchemaRef{Name: build.SchemaFunction, Version: 1}, Payload: []byte(`{}`)}, at)
 	}()
-	if _, version, _ := live.app(construction.ID).(*build.Build).FunctionDefinition("advice", 0); version != 2 {
+	if _, version, _ := live.app(build.ID).(*build.Build).FunctionDefinition("advice", 0); version != 2 {
 		t.Fatal("publication became installed before committed application")
 	}
 	entries, err = reopened.Entries(ctx, id, 0)
@@ -156,7 +157,7 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	if err := restarted.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if f, version, ok := restarted.app(construction.ID).(*build.Build).FunctionDefinition("advice", 0); !ok || version != 3 || f.Instructions != "Third published prompt" {
+	if f, version, ok := restarted.app(build.ID).(*build.Build).FunctionDefinition("advice", 0); !ok || version != 3 || f.Instructions != "Third published prompt" {
 		t.Fatal("post-append publication did not recover")
 	}
 	CheckReplay(t, restarted, entries, compose)
@@ -165,9 +166,9 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 func TestAcceptedBuilderPublicationRejectsBrokenDependentBeforeCommit(t *testing.T) {
 	const tenantID = "published-dependent"
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{construction.ID: construction.Builder}}}
-		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seat), build.New(tenantID))
+		seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}}
+		tenant, err := NewTenant(tenantID, newConsole(tenantID, seat), build.New(tenantID))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,7 +189,7 @@ func TestAcceptedBuilderPublicationRejectsBrokenDependentBeforeCommit(t *testing
 			t.Fatal(err)
 		}
 		_, refused := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
-			Authority: construction.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id},
+			Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id},
 			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, at)
 		return refused
 	}
@@ -196,30 +197,30 @@ func TestAcceptedBuilderPublicationRejectsBrokenDependentBeforeCommit(t *testing
 		key, schema, typ, id string
 		payload              any
 	}{
-		{"object", construction.ObjectType + ".create", construction.ObjectType, "O1", map[string]any{
+		{"object", build.ObjectType + ".create", build.ObjectType, "O1", map[string]any{
 			"name": "visit", "title": "Visit", "fields": []map[string]any{
 				{"name": "guest", "title": "Guest", "type": "text"},
 				{"name": "room", "title": "Room", "type": "text"},
 			}}},
-		{"install", construction.SchemaPublish, construction.ObjectType, "O1", map[string]any{}},
-		{"page", construction.PageType + ".create", construction.PageType, "P1", map[string]any{
+		{"install", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}},
+		{"page", build.PageType + ".create", build.PageType, "P1", map[string]any{
 			"name": "visitdesk", "title": "Visit desk", "object": "build.visit",
 			"list": []string{"guest"}, "detail": []string{"room"}}},
-		{"page-install", construction.SchemaRelease, construction.PageType, "P1", map[string]any{}},
-		{"edit", construction.ObjectType + ".edit", construction.ObjectType, "O1", map[string]any{
+		{"page-install", build.SchemaRelease, build.PageType, "P1", map[string]any{}},
+		{"edit", build.ObjectType + ".edit", build.ObjectType, "O1", map[string]any{
 			"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}}}},
 	} {
 		if refusal := submit(step.key, step.schema, step.typ, step.id, step.payload); refusal != nil {
 			t.Fatalf("%s: %v", step.key, refusal)
 		}
 	}
-	root := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "visitdesk"}}
+	root := []platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "visitdesk"}}
 	prior, err := live.ReleaseCandidate(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := len(entries)
-	if refusal := submit("bad-install", construction.SchemaPublish, construction.ObjectType, "O1", map[string]any{}); refusal == nil ||
+	if refusal := submit("bad-install", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}); refusal == nil ||
 		refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 		t.Fatalf("accepted result did not refuse incompatible object installation: %v", refusal)
 	}
@@ -237,9 +238,9 @@ func TestAcceptedBuilderPublicationRejectsBrokenDependentBeforeCommit(t *testing
 
 func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.T) {
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{construction.ID: construction.Builder}}}
-		tenant, err := NewTenant("publish-tenant", NewConsole("publish-tenant", seat), build.New("publish-tenant"))
+		seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}}
+		tenant, err := NewTenant("publish-tenant", newConsole("publish-tenant", seat), build.New("publish-tenant"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -264,7 +265,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 			t.Fatal(err)
 		}
 		_, refused := live.Submit(member, &pb.Submission{TenantId: live.ID, PrincipalId: member.ID,
-			Authority: construction.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id},
+			Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id},
 			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, at)
 		if refused != nil {
 			return fmt.Errorf("%s: %s", refused.Code, refused.Message)
@@ -279,72 +280,72 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	}
 	has := func(kind platform.AssetKind, name string) bool {
 		return slices.ContainsFunc(live.definitions, func(d platform.Definition) bool {
-			return d.Ref.App == construction.ID && d.Ref.Kind == kind && d.Ref.Name == name
+			return d.Ref.App == build.ID && d.Ref.Kind == kind && d.Ref.Name == name
 		})
 	}
-	must("o-create", construction.ObjectType+".create", construction.ObjectType, "O1", map[string]any{
+	must("o-create", build.ObjectType+".create", build.ObjectType, "O1", map[string]any{
 		"name": "visit", "title": "Visit", "fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}}})
 	fail = true
-	if err := submit("o-publish", construction.SchemaPublish, construction.ObjectType, "O1", map[string]any{}); err == nil {
+	if err := submit("o-publish", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}); err == nil {
 		t.Fatal("object publication did not fail before the journal append")
 	}
-	if _, installed := live.entity(construction.TypeOf("visit")); installed ||
-		has(platform.AssetObject, construction.TypeOf("visit")) ||
-		slices.ContainsFunc(live.app(construction.ID).Declarations(), func(d *pb.AuthorityDeclaration) bool {
-			return d.GetDataClass() == construction.TypeOf("visit")
+	if _, installed := live.entity(build.TypeOf("visit")); installed ||
+		has(platform.AssetObject, build.TypeOf("visit")) ||
+		slices.ContainsFunc(live.app(build.ID).Declarations(), func(d *pb.AuthorityDeclaration) bool {
+			return d.GetDataClass() == build.TypeOf("visit")
 		}) {
 		t.Fatal("failed object publication installed a definition or authority")
 	}
-	if object, ok := platform.Get[construction.Object](live.caller(member, live.app(construction.ID), false), "O1"); !ok ||
+	if object, ok := platform.Get[build.Object](live.caller(member, live.app(build.ID), false), "O1"); !ok ||
 		object.State != "draft" || object.Published != "" {
 		t.Fatal("failed object publication changed the durable draft record")
 	}
 	fail = false
-	must("o-publish", construction.SchemaPublish, construction.ObjectType, "O1", map[string]any{})
-	if _, installed := live.entity(construction.TypeOf("visit")); !installed ||
-		!has(platform.AssetObject, construction.TypeOf("visit")) {
+	must("o-publish", build.SchemaPublish, build.ObjectType, "O1", map[string]any{})
+	if _, installed := live.entity(build.TypeOf("visit")); !installed ||
+		!has(platform.AssetObject, build.TypeOf("visit")) {
 		t.Fatal("committed object was not installed")
 	}
-	must("p-create", construction.PageType+".create", construction.PageType, "P1", map[string]any{
-		"name": "visits", "title": "Visits", "object": construction.TypeOf("visit"),
+	must("p-create", build.PageType+".create", build.PageType, "P1", map[string]any{
+		"name": "visits", "title": "Visits", "object": build.TypeOf("visit"),
 		"list": []string{"guest"}, "detail": []string{"guest"}})
 	fail = true
-	if err := submit("p-publish", construction.SchemaRelease, construction.PageType, "P1", map[string]any{}); err == nil {
+	if err := submit("p-publish", build.SchemaRelease, build.PageType, "P1", map[string]any{}); err == nil {
 		t.Fatal("page publication did not fail before append")
 	}
 	if has(platform.AssetPage, "visits") {
 		t.Fatal("failed page publication became visible")
 	}
-	if page, ok := platform.Get[build.Page](live.caller(member, live.app(construction.ID), false), "P1"); !ok ||
+	if page, ok := platform.Get[build.Page](live.caller(member, live.app(build.ID), false), "P1"); !ok ||
 		page.State != "draft" || page.Published != "" {
 		t.Fatal("failed page publication changed the draft record")
 	}
 	fail = false
-	must("p-publish", construction.SchemaRelease, construction.PageType, "P1", map[string]any{})
+	must("p-publish", build.SchemaRelease, build.PageType, "P1", map[string]any{})
 	if !has(platform.AssetPage, "visits") {
 		t.Fatal("committed page was not installed")
 	}
-	must("a-create", construction.AppType+".create", construction.AppType, "A1", map[string]any{
+	must("a-create", build.AppType+".create", build.AppType, "A1", map[string]any{
 		"name": "frontdesk", "title": "Front Desk", "pages": []string{"visits"}})
 	fail = true
-	if err := submit("a-publish", construction.SchemaHandOver, construction.AppType, "A1", map[string]any{}); err == nil {
+	if err := submit("a-publish", build.SchemaHandOver, build.AppType, "A1", map[string]any{}); err == nil {
 		t.Fatal("application publication did not fail before append")
 	}
 	if has(platform.AssetApp, "frontdesk") {
 		t.Fatal("failed application publication became visible")
 	}
-	if app, ok := platform.Get[build.Application](live.caller(member, live.app(construction.ID), false), "A1"); !ok ||
+	if app, ok := platform.Get[build.Application](live.caller(member, live.app(build.ID), false), "A1"); !ok ||
 		app.State != "draft" || app.Published != "" {
 		t.Fatal("failed application publication changed the draft record")
 	}
 	fail = false
-	must("a-publish", construction.SchemaHandOver, construction.AppType, "A1", map[string]any{})
+	must("a-publish", build.SchemaHandOver, build.AppType, "A1", map[string]any{})
 	if !has(platform.AssetApp, "frontdesk") {
 		t.Fatal("committed application was not installed")
 	}
 	releaseID := func(tenant *Tenant) string {
 		t.Helper()
-		candidate, err := tenant.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetApp, Name: "frontdesk"}})
+		candidate, err := tenant.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "frontdesk"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -357,11 +358,11 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	var publications int
 	for _, e := range entries {
 		if e.Kind == "accepted-result" {
-			result, receipt, err := resultformat.DecodeRecord(e.Body)
+			result, receipt, err := acceptedformat.DecodeRecord(e.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if slices.Contains([]string{construction.SchemaPublish, construction.SchemaRelease, construction.SchemaHandOver},
+			if slices.Contains([]string{build.SchemaPublish, build.SchemaRelease, build.SchemaHandOver},
 				receipt.GetSubmission().GetSchema().GetName()) {
 				if result.Version != 5 || result.Kind != "publication" {
 					t.Fatalf("publication used result format %d", result.Version)
@@ -381,7 +382,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		if e.Kind != "accepted-result" {
 			continue
 		}
-		result, _, err := resultformat.DecodeRecord(e.Body)
+		result, _, err := acceptedformat.DecodeRecord(e.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -392,7 +393,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		result.Unique = nil
 		result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
 		result.Row.History = records.CopyHistory(live.records.types[result.Row.Type].rows.Get(result.Row.ID).RecordHistory())
-		result.Digest, err = resultformat.DigestRecord(result)
+		result.Digest, err = acceptedformat.DigestRecord(result)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -412,7 +413,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	if recoveredID := releaseID(afterCrash); recoveredID != publishedID {
 		t.Fatalf("saved publication changed identity after code-free recovery: %s -> %s", publishedID, recoveredID)
 	}
-	if _, ok := afterCrash.entity(construction.TypeOf("visit")); !ok ||
+	if _, ok := afterCrash.entity(build.TypeOf("visit")); !ok ||
 		!slices.ContainsFunc(afterCrash.definitions, func(d platform.Definition) bool {
 			return d.Ref.Kind == platform.AssetApp && d.Ref.Name == "frontdesk"
 		}) {
@@ -426,16 +427,16 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		if e.Kind != "accepted-result" {
 			continue
 		}
-		result, receipt, err := resultformat.DecodeRecord(e.Body)
+		result, receipt, err := acceptedformat.DecodeRecord(e.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if receipt.GetSubmission().GetSchema().GetName() != construction.SchemaPublish {
+		if receipt.GetSubmission().GetSchema().GetName() != build.SchemaPublish {
 			continue
 		}
 		result.Row.Value = json.RawMessage(strings.Replace(string(result.Row.Value), `"installed":"build.visit"`,
 			`"installed":"build.other"`, 1))
-		result.Digest, err = resultformat.DigestRecord(result)
+		result.Digest, err = acceptedformat.DigestRecord(result)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -446,9 +447,9 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	if err := isolated.recoverEntries(damaged); err == nil || !isolated.quarantined() {
 		t.Fatal("invalid durable publication did not quarantine the tenant")
 	}
-	if object, ok := platform.Get[construction.Object](isolated.caller(member, isolated.app(construction.ID), false), "O1"); !ok ||
+	if object, ok := platform.Get[build.Object](isolated.caller(member, isolated.app(build.ID), false), "O1"); !ok ||
 		object.State != "draft" || object.Published != "" ||
-		len(isolated.app(construction.ID).(platform.App).AcceptedLedger().RecordsFor(isolated.ID)) != 1 {
+		len(isolated.app(build.ID).(platform.App).AcceptedLedger().RecordsFor(isolated.ID)) != 1 {
 		t.Fatal("incompatible publication changed the recovered record or receipt before quarantine")
 	}
 
@@ -459,9 +460,9 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		kind                           platform.AssetKind
 		asset                          string
 	}{
-		{"object", "o-publish", construction.SchemaPublish, construction.ObjectType, "O1", 1, platform.AssetObject, construction.TypeOf("visit")},
-		{"page", "p-publish", construction.SchemaRelease, construction.PageType, "P1", 3, platform.AssetPage, "visits"},
-		{"application", "a-publish", construction.SchemaHandOver, construction.AppType, "A1", 5, platform.AssetApp, "frontdesk"},
+		{"object", "o-publish", build.SchemaPublish, build.ObjectType, "O1", 1, platform.AssetObject, build.TypeOf("visit")},
+		{"page", "p-publish", build.SchemaRelease, build.PageType, "P1", 3, platform.AssetPage, "visits"},
+		{"application", "a-publish", build.SchemaHandOver, build.AppType, "A1", 5, platform.AssetApp, "frontdesk"},
 	} {
 		t.Run(point.name+"-after-append", func(t *testing.T) {
 			crashing := compose()
@@ -481,7 +482,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 					}
 				}()
 				crashing.Submit(crashingMember, &pb.Submission{TenantId: crashing.ID, PrincipalId: crashingMember.ID,
-					Authority: construction.ID, IdempotencyKey: point.key,
+					Authority: build.ID, IdempotencyKey: point.key,
 					Target: &pb.EntityRef{Type: point.typ, Id: point.target},
 					Schema: &pb.SchemaRef{Name: point.schema, Version: 1}, Payload: []byte(`{}`)}, at)
 			}()

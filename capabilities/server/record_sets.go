@@ -3,8 +3,9 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
+	pageowner "platformserver/studio/pages"
+
 	"reflect"
 	"slices"
 	"strings"
@@ -16,7 +17,7 @@ import (
 )
 
 func (t *Tenant) recordSetBinding(binding platform.AssetBinding) (*platform.Definition, bool) {
-	selected := querySourceDefinition(t.definitions, &binding)
+	selected := pageowner.QuerySourceDefinition(t.definitions, &binding)
 	return selected, selected != nil
 }
 
@@ -111,7 +112,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	}
 	set := info.Sets[slices.IndexFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == name })]
 	result.Object = set.Object
-	result.Definition, _ = acceptance.Digest(set)
+	result.Definition, _ = platform.CanonicalDigest(set)
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: object, Record: id}
 	outer := t.authorizeFrom(store, c, question, at, false)
 	result.Authorization = &platform.AuthzCollection{Decision: outer, Elements: []platform.AuthzElement{}}

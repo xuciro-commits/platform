@@ -1,3 +1,4 @@
+import {encodePage} from "../pageui/wire";
 import {pageUIManifest} from "../pageui/manifest";
 
 import {useEffect,useRef,useState} from 'react';
@@ -30,7 +31,7 @@ export function usePageComposite(bound:WidgetBindingContext,source:RecordSource|
   if(!active||!ready){if(config)session?.adoptModelWindow(key,'');return;}
   let mounted=true;const valid=()=>mounted&&current.current===identity&&source?.scope===session?.snapshotScope();
   session?.adoptModelWindow(key,signature);
-  const request:Api.PageModelRead={page:definition?.ref??{app:'build',kind:'page',name:page.name},...bound.modelDraft||!definition?{draft:page}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,offset:0,limit:pageUIManifest.runtime.composite.maxRecords};
+  const request:Api.PageModelRead={page:definition?.ref??{app:'build',kind:'page',name:page.name},...bound.modelDraft||!definition?{draft:encodePage(page,definitions)}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,offset:0,limit:pageUIManifest.runtime.composite.maxRecords};
   void client.get<Api.PageModelResult>(`/v1/page-model/read\n${JSON.stringify(request)}`,true).then(data=>{if(!valid())return;const primary=data.composite?.sources[bound.section.widget==='model-matrix'?'rows':'nodes'];session?.adoptModelWindow(key,signature,{object:primary?.object??primaryModel(bound.section)!.type,query:{},records:(primary?.records??[]) as import('@platform/ui').EntityRecord[],total:primary?.records.length??0,partial:data.partial});setState({identity,data});},()=>{if(valid()){const error='Composite model bindings could not be read. Check their collections and permissions.';session?.adoptModelWindow(key,'',undefined,error);setState({identity,error});}});
   return()=>{mounted=false;};
  },[active,ready,identity,client,session]);

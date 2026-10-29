@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"slices"
 	"time"
@@ -91,7 +93,7 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	entry := t.authorizeEntry(m, a.Manifest().ID, name, "read", Now())
-	if name == "packages" && !m.Holds(PlatformApp, Admin) && !m.Holds(PlatformApp, Auditor) {
+	if name == "packages" && !m.Holds(controlowner.PlatformApp, controlowner.Admin) && !m.Holds(controlowner.PlatformApp, platform.Auditor) {
 		caller := t.caller(m, a, false)
 		entry = caller.May("build", "build.app.create", []string{"builder"})
 		if !m.InScope("build.app.create") {
@@ -101,7 +103,7 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 	if refusal := authorizationRefusal(entry); refusal != nil {
 		return nil, refusal
 	}
-	out, err := readApp(a, t.caller(m, a, false), name, inputs...)
+	out, err := platform.CallRead(a, t.caller(m, a, false), name, inputs...)
 	if err != nil {
 		return nil, err
 	}
@@ -109,40 +111,6 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 	// leaves no wider than the member's authority over the fields and sources
 	// behind them (#130), however the app collected them.
 	return t.narrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
-}
-
-func readApp(app platform.App, c platform.Caller, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
-	if app == nil {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	// Named reads are optional: an app implementing neither reader answers
-	// NOT_FOUND without building a manifest it may not be able to build.
-	parameterized, hasParameterized := app.(platform.ParameterizedReader)
-	_, hasPlain := app.(platform.Reader)
-	if !hasParameterized && !hasPlain {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if fields, declared := app.Manifest().ReadInputs[name]; declared {
-		if reader, ok := parameterized, hasParameterized; ok {
-			raw := json.RawMessage(`{}`)
-			if len(inputs) > 0 && len(inputs[0]) > 0 {
-				raw = inputs[0]
-			}
-			var values map[string]any
-			if json.Unmarshal(raw, &values) != nil || values == nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Read inputs must be a JSON object")
-			}
-			if issues := platform.InputIssues(fields, values); len(issues) > 0 {
-				return nil, c.RefuseFields(issues)
-			}
-			return reader.ReadInput(c, name, raw)
-		}
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if reader, ok := app.(platform.Reader); ok {
-		return reader.Read(c, name)
-	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
 
 func inputApp(app platform.App, c platform.Caller, name string, body []byte, at time.Time) (any, *kernel.Error) {

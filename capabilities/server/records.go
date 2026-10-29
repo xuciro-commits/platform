@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/internal/records"
-	"platformserver/journal"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -14,19 +13,16 @@ import (
 )
 
 type recordStore struct {
-	rules           platform.RuleEngine
-	historyStore    journal.RuntimeState
-	readView        journal.StateReadView
-	appliedPosition int64
-	currentPosition func() int64
-	tenant          string
-	mu              sync.Mutex
-	readRelease     string // decoder context, derived from the release owner's pointer
-	liveVersions    map[string]uint64
-	uniqueLinks     map[string]platform.LinkType
-	archiveLinks    map[string]platform.LinkType
-	types           map[string]*entityType
-	byGo            map[reflect.Type]*entityType
+	current *records.CurrentScope
+	rules   platform.RuleEngine
+
+	mu sync.Mutex
+
+	liveVersions map[string]uint64
+	uniqueLinks  map[string]platform.LinkType
+	archiveLinks map[string]platform.LinkType
+	types        map[string]*entityType
+	byGo         map[reflect.Type]*entityType
 	// A private 19a decision view has no projection callback. It may replace
 	// its parent only if no direct write reached that parent in the meantime.
 	parent         *recordStore
@@ -69,14 +65,13 @@ func (t *Tenant) held(ref string) (any, bool) {
 }
 
 type entityType struct {
-	store         *recordStore
-	uniqueIndexes map[string]records.UniqueIndex
-	info          platform.EntityInfo
-	rows          records.Rows
+	store   *recordStore
+	indexes records.DerivedIndexes
+	info    platform.EntityInfo
+	rows    records.Rows
 	// Derived indexes share the same immutable rows. Writes update only built
 	// reference buckets; schema replacement discards them with its type image.
-	referenceIndexes map[string]records.References
-	fullImage        bool // private schema/bulk replacement needs full admission once
+	fullImage bool // private schema/bulk replacement needs full admission once
 	// knowledge says a record of this type may become knowledge: it declares a
 	// knowledge field, it is a knowledge document, or it is a file that may be
 	// attached to one.
@@ -90,7 +85,9 @@ type RecordChange = records.RecordChange
 type FieldChange = records.FieldChange
 
 func newRecordStore() *recordStore {
-	return &recordStore{rules: platform.NativeRules{}, types: map[string]*entityType{}, byGo: map[reflect.Type]*entityType{}}
+	s := &recordStore{rules: platform.NativeRules{}, types: map[string]*entityType{}, byGo: map[reflect.Type]*entityType{}}
+	s.current = records.NewCurrentScope(func(typ string) platform.EntityInfo { return s.types[typ].info })
+	return s
 }
 
 // forkRecords snapshots immutable row, dirty and change indexes without
@@ -105,13 +102,14 @@ func (s *recordStore) forkRecords() *recordStore {
 
 func (s *recordStore) forkRecordsLocked() *recordStore {
 	s.prepareUniqueIndexes()
-	draft := &recordStore{rules: s.rules, historyStore: s.historyStore, readView: s.readView, tenant: s.tenant, appliedPosition: s.appliedPosition, currentPosition: s.currentPosition, readRelease: s.readRelease, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{rules: s.rules, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
+	draft.current = s.current.Fork(func(typ string) platform.EntityInfo { return draft.types[typ].info })
 	for typ, et := range s.types {
-		copied := &entityType{store: draft, uniqueIndexes: maps.Clone(et.uniqueIndexes), info: et.info, knowledge: et.knowledge, rows: et.rows, referenceIndexes: maps.Clone(et.referenceIndexes), fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection}
+		copied := &entityType{store: draft, indexes: et.indexes.Fork(), info: et.info, knowledge: et.knowledge, rows: et.rows, fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection}
 		if copied.rows.Sourced() {
-			copied.rows = copied.rows.Rebind(&currentRows{store: draft, typ: typ})
+			copied.rows = copied.rows.Rebind(draft.current.Source(typ, nil))
 		}
 		draft.types[typ] = copied
 		draft.byGo[et.info.Go] = copied
@@ -142,7 +140,7 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	for _, et := range s.types {
 		et.store = s
 		if et.rows.Sourced() {
-			et.rows = et.rows.Rebind(&currentRows{store: s, typ: et.info.Type})
+			et.rows = et.rows.Rebind(s.current.Source(et.info.Type, nil))
 		}
 	}
 	if s.parent == nil {
@@ -150,7 +148,7 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 			et.fullImage = false
 		}
 	}
-	s.readRelease = draft.readRelease
+	s.current.SelectRelease(draft.current.Release())
 	s.dirty, s.recentChanges = draft.dirty, draft.recentChanges
 	s.generation++
 	draft.sealed = true
@@ -162,10 +160,10 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	for _, ref := range refs {
 		typ, _, _ := strings.Cut(ref, "/")
 		s.liveTouched(typ)
-		if s.parent == nil && s.historyStore != nil {
+		if s.parent == nil && s.current.Backend() != nil {
 			_, id, _ := strings.Cut(ref, "/")
 			et := s.types[typ]
-			s.attachHistory(et, id, et.rows.Get(id), s.historyStore, s.tenant)
+			s.attachHistory(et, id, et.rows.Get(id), s.current.Backend(), s.current.Tenant())
 		}
 		if s.touched != nil {
 			typ, id, _ := strings.Cut(ref, "/")
@@ -195,4 +193,138 @@ func (s *recordStore) liveTouched(typ string) {
 		s.liveVersions = map[string]uint64{}
 	}
 	s.liveVersions[typ]++
+}
+
+// All replacements, including pure accepted-result application, use this
+// type owner. No decision rules run here; only derived lookup buckets change.
+func (et *entityType) setRows(rows records.Index[*records.Row]) {
+	et.rows, et.fullImage = records.MemoryRows(rows), true
+	et.indexes.Reset()
+	if et.store != nil {
+		// A schema/full-image replacement may change every referenced scope.
+		// Bulk recovery may rebuild; ordinary setRow keeps its existing roots.
+		for _, other := range et.store.types {
+			other.indexes.ResetUnique()
+		}
+	}
+}
+
+func (et *entityType) setRow(id string, value *records.Row) {
+	et.indexes.ReplaceReferences(et.info, et.rows, id, value)
+	et.rows.Set(id, value)
+	if et.store != nil {
+		et.store.refreshUniqueIndexes(et.info.Type, id)
+	}
+}
+func (et *entityType) indexImage() records.IndexImage {
+	return records.IndexImage{Info: et.info, Rows: et.rows, Indexes: &et.indexes, RetainedProjection: et.retainedProjection, Current: func() *records.CurrentScope { return et.store.current }}
+}
+func (s *recordStore) indexImage(typ string) (records.IndexImage, bool) {
+	et := s.types[typ]
+	if et == nil {
+		return records.IndexImage{}, false
+	}
+	return et.indexImage(), true
+}
+func (et *entityType) referenceIndex(field platform.FieldInfo) records.References {
+	return et.indexes.References(et.indexImage(), field)
+}
+func (et *entityType) referenceBucket(field platform.FieldInfo, target string) records.Bucket {
+	return et.indexes.ReferenceBucket(et.indexImage(), field, target)
+}
+func (et *entityType) uniqueIndex(s *recordStore, rule platform.Constraint) records.UniqueIndex {
+	return et.indexes.Unique(et.indexImage(), s.indexImage, rule)
+}
+
+func (s *recordStore) refreshUniqueIndexes(changedType, changedID string) {
+	for _, et := range s.types {
+		et.indexes.RefreshUnique(et.indexImage(), s.indexImage, changedType, changedID)
+	}
+}
+
+// uniqueKeys is the owner-derived SQL representation of one current row. A
+// missing/incomplete historical scope occupies no key, just as the in-memory
+// index. Storage persists these values without evaluating business rules.
+func (s *recordStore) uniqueKeys(typ, id string) map[string]string {
+	keys := map[string]string{}
+	et := s.types[typ]
+	if et == nil {
+		return keys
+	}
+	r := et.rows.Get(id)
+	if r == nil {
+		return keys
+	}
+	for _, rule := range et.info.Constraints {
+		if rule.Kind != "unique" {
+			continue
+		}
+		key, err := records.UniqueKey(s.indexImage, et.info, rule, r.Value)
+		if err == nil && key != "" {
+			keys[rule.Name] = key
+		}
+	}
+	return keys
+}
+
+// uniqueChanges contains complete per-row replacement key sets for a private
+// decision, including unchanged children whose parent scope was edited. A
+// caller applies an empty key set by deleting that row's former derived keys.
+// The store lock belongs to the caller, as with accepted record collection.
+func (s *recordStore) uniqueChanges() map[string]map[string]string {
+	var affected records.Index[bool]
+	for ref := range s.writes {
+		affected.Set(ref, true)
+		typ, id, _ := strings.Cut(ref, "/")
+		for _, et := range s.types {
+			for _, rule := range et.info.Constraints {
+				if rule.Kind != "unique" {
+					continue
+				}
+				for child := range records.ScopeDependents(s.indexImage, et.info, rule, typ, id).All() {
+					affected.Set(et.info.Type+"/"+child, true)
+				}
+			}
+		}
+	}
+	for typ, et := range s.types {
+		if !et.fullImage {
+			continue
+		}
+		for id := range et.rows.All() {
+			affected.Set(typ+"/"+id, true)
+		}
+	}
+	changes := map[string]map[string]string{}
+	for ref := range affected.All() {
+		typ, id, _ := strings.Cut(ref, "/")
+		changes[ref] = s.uniqueKeys(typ, id)
+	}
+	return changes
+}
+
+// Retain roots on the authoritative image before copying a private view. A
+// refusal must not make the next decision rebuild all the unique keys.
+func (s *recordStore) prepareUniqueIndexes() {
+	if s.current.Backend() != nil {
+		return
+	}
+	for _, et := range s.types {
+		for _, rule := range et.info.Constraints {
+			if rule.Kind == "unique" {
+				et.uniqueIndex(s, rule)
+			}
+		}
+	}
+}
+
+// useCurrentRows is called only after the existing images have been checked
+// against SQL, or after the complete accepted changes have been applied there.
+// A private decision keeps its immutable overlay until its parent accepts it.
+func (s *recordStore) useCurrentRows() {
+	for typ, et := range s.types {
+		et.rows = records.SourceRows(s.current.Source(typ, nil))
+		et.indexes.Reset()
+		et.fullImage = false
+	}
 }

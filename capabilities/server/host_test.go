@@ -8,7 +8,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	resultformat "platformserver/internal/acceptance/result"
+
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+	"platformserver/studio/packages"
 	"slices"
 	"strings"
 	"testing"
@@ -77,9 +80,9 @@ func note(tenant, member, app, key, topic, text string) *pb.Submission {
 }
 
 func setup(t *testing.T, record func(Entry)) (*Tenant, *notes, *notes) {
-	dir := NewConsole("t-1",
-		Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", "b": "writer", PlatformApp: Admin}}},
-		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"b": "writer"}}})
+	dir := newConsole("t-1",
+		platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", "b": "writer", controlowner.PlatformApp: controlowner.Admin}}},
+		platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"b": "writer"}}})
 	a, b := newNotes("t-1", "a"), newNotes("t-1", "b")
 	tn, err := NewTenant("t-1", dir, a, b)
 	if err != nil {
@@ -95,8 +98,8 @@ func TestTenantComposition(t *testing.T) {
 	}
 	var journal []Entry
 	tn, a, b := setup(t, func(e Entry) { journal = append(journal, e) })
-	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
-	bo, _ := tn.app(PlatformApp).(*Console).MemberBySubject("bo")
+	ana, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
+	bo, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("bo")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 
 	// Each submission reaches the app declaring its action, with the member's role there.
@@ -119,13 +122,14 @@ func TestTenantComposition(t *testing.T) {
 		}
 		return out
 	}
-	if got := schemas(bo); !slices.Equal(got, []string{SchemaProfileUpdate, SchemaDelegate, SchemaTokenIssue, SchemaTokenRevoke, SchemaNotificationRead, SchemaOperationCall, "b.note"}) {
+	if got := schemas(bo); !slices.Equal(got, []string{controlowner.SchemaProfileUpdate, controlowner.SchemaTokenIssue, controlowner.SchemaTokenRevoke, controlowner.SchemaNotificationRead, controlowner.SchemaOperationCall, platform.SchemaDelegate, "b.note"}) {
 		t.Fatalf("bo is offered %v", got)
 	}
-	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaProfileUpdate, SchemaRoleSave, SchemaRoleRemove, SchemaPolicySave, SchemaPolicyDrop, SchemaTeamSave, SchemaTeamRemove, SchemaDelegate, SchemaInvite, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard, SchemaTokenIssue, SchemaTokenRevoke,
-		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead, SchemaTranslationSet,
-		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectResolve, SchemaEffectDiscard, SchemaEffectApprove, SchemaOperationCall,
-		SchemaProjectSave, SchemaProjectArchive, SchemaPackageImport, SchemaPackageRemoveSource, SchemaPackageInstall, SchemaPackageUpgrade, SchemaPackageDrain, SchemaPackageRetire, SchemaCredentialSave, SchemaCredentialDisable, "a.note", "b.note"}) {
+	if got := schemas(ana); !slices.Equal(got, []string{controlowner.SchemaAdd, controlowner.SchemaGrant, controlowner.SchemaRevoke, controlowner.SchemaProfileUpdate, controlowner.SchemaInvite, controlowner.SchemaMemberSuspend, controlowner.SchemaMemberResume, controlowner.SchemaOffboard, controlowner.SchemaTokenIssue, controlowner.SchemaTokenRevoke,
+		controlowner.SchemaConnectorOn, controlowner.SchemaConnectorOff, controlowner.SchemaSettingSet, controlowner.SchemaWorkRetry, controlowner.SchemaProtocolBind, controlowner.SchemaNotificationRead, controlowner.SchemaTranslationSet,
+		controlowner.SchemaEndpointAdd, controlowner.SchemaEndpointRemove, controlowner.SchemaEffectRetry, controlowner.SchemaEffectResolve, controlowner.SchemaEffectDiscard, controlowner.SchemaEffectApprove, controlowner.SchemaOperationCall,
+		platform.SchemaRoleSave, platform.SchemaRoleRemove, platform.SchemaPolicySave, platform.SchemaPolicyDrop, platform.SchemaTeamSave, platform.SchemaTeamRemove, platform.SchemaDelegate,
+		platform.SchemaProjectSave, platform.SchemaProjectArchive, packages.SchemaPackageImport, packages.SchemaPackageRemoveSource, packages.SchemaPackageInstall, packages.SchemaPackageUpgrade, packages.SchemaPackageDrain, packages.SchemaPackageRetire, controlowner.SchemaCredentialSave, controlowner.SchemaCredentialDisable, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
 	}
 	if _, err := tn.Input(ana, "a-feed", []byte("tick"), now); err != nil {
@@ -136,7 +140,7 @@ func TestTenantComposition(t *testing.T) {
 	if len(journal) != 4 {
 		t.Fatalf("expected four complete accepted results, got %d", len(journal))
 	}
-	refused, original, decodeErr := resultformat.DecodeRefusal(journal[2].Body)
+	refused, original, decodeErr := acceptedformat.DecodeRefusal(journal[2].Body)
 	if decodeErr != nil || journal[2].Kind != "accepted-result" || original.GetIdempotencyKey() != "k3" || refused.Error.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 		t.Fatalf("unauthorized decision lost its accepted refusal: %+v, %v", refused, decodeErr)
 	}
@@ -163,10 +167,10 @@ func TestHostHTTPAndConsole(t *testing.T) {
 	}
 	submit := func(token, member, schema, target, key, payload string) (int, string) {
 		id := "bo"
-		if schema == SchemaAdd {
+		if schema == controlowner.SchemaAdd {
 			id = "agent-1"
 		}
-		raw, _ := json.Marshal(map[string]any{"tenantId": "t-1", "principalId": member, "authority": PlatformApp, "idempotencyKey": key,
+		raw, _ := json.Marshal(map[string]any{"tenantId": "t-1", "principalId": member, "authority": controlowner.PlatformApp, "idempotencyKey": key,
 			"target": map[string]string{"type": target, "id": id}, "schema": map[string]any{"name": schema, "version": 1},
 			"payload": []byte(payload)})
 		return call("POST", "/v1/submissions", token, string(raw))
@@ -192,27 +196,27 @@ func TestHostHTTPAndConsole(t *testing.T) {
 		t.Fatalf("empty delivery attempts: %d %s", status, body)
 	}
 	// Grant bo a role in a: on the next request bo's catalog offers both notes.
-	if status, body := submit("ana-token", "ana", SchemaGrant, MemberType, "g1", `{"app":"a","role":"writer"}`); status != 200 {
+	if status, body := submit("ana-token", "ana", controlowner.SchemaGrant, controlowner.MemberType, "g1", `{"app":"a","role":"writer"}`); status != 200 {
 		t.Fatalf("grant: %d %s", status, body)
 	}
 	if _, body := call("GET", "/v1/actions", "bo-token", ""); !strings.Contains(body, `"a.note"`) || !strings.Contains(body, `"b.note"`) {
 		t.Fatalf("after the grant bo sees %s", body)
 	}
-	if status, _ := submit("bo-token", "bo", SchemaGrant, MemberType, "g2", `{"app":"platform","role":"admin"}`); status != 403 {
+	if status, _ := submit("bo-token", "bo", controlowner.SchemaGrant, controlowner.MemberType, "g2", `{"app":"platform","role":"admin"}`); status != 403 {
 		t.Fatalf("a member without the admin role granted itself: %d", status)
 	}
-	submit("ana-token", "ana", SchemaRevoke, MemberType, "r1", `{"app":"b"}`)
+	submit("ana-token", "ana", controlowner.SchemaRevoke, controlowner.MemberType, "r1", `{"app":"b"}`)
 	for _, c := range []struct {
 		key, schema, payload string
 		status               int
 	}{
-		{"x1", SchemaGrant, `{"app":"a","role":"owner"}`, 400},     // a role app a does not define
-		{"x2", SchemaGrant, `{"app":"nope","role":"writer"}`, 400}, // an app the tenant does not run
-		{"x4", SchemaAdd, `{"subject":"client:agent"}`, 200},
-		{"x5", SchemaAdd, `{"subject":"client:agent"}`, 409},
-		{"x6", SchemaAdd, `{"subject":"agent"}`, 400},
+		{"x1", controlowner.SchemaGrant, `{"app":"a","role":"owner"}`, 400},     // a role app a does not define
+		{"x2", controlowner.SchemaGrant, `{"app":"nope","role":"writer"}`, 400}, // an app the tenant does not run
+		{"x4", controlowner.SchemaAdd, `{"subject":"client:agent"}`, 200},
+		{"x5", controlowner.SchemaAdd, `{"subject":"client:agent"}`, 409},
+		{"x6", controlowner.SchemaAdd, `{"subject":"agent"}`, 400},
 	} {
-		if status, body := submit("ana-token", "ana", c.schema, MemberType, c.key, c.payload); status != c.status {
+		if status, body := submit("ana-token", "ana", c.schema, controlowner.MemberType, c.key, c.payload); status != c.status {
 			t.Errorf("%s %s: %d %s", c.schema, c.payload, status, body)
 		}
 	}
@@ -238,7 +242,7 @@ func TestHostHTTPAndConsole(t *testing.T) {
 // host; /v1/me names the apps they may open; the host serves the workspace.
 func TestWorkspaceSurface(t *testing.T) {
 	one, _, _ := setup(t, nil)
-	other, err := NewTenant("t-2", NewConsole("t-2", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana-2", Roles: map[string]string{"b": "writer"}}}),
+	other, err := NewTenant("t-2", newConsole("t-2", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana-2", Roles: map[string]string{"b": "writer"}}}),
 		newNotes("t-2", "b"))
 	if err != nil {
 		t.Fatal(err)
@@ -286,7 +290,7 @@ type decisionOnlyApp struct {
 
 func TestAppReadAndInputAreOptional(t *testing.T) {
 	owner := decisionOnlyApp{}
-	if _, err := readApp(owner, platform.Caller{}, "missing"); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+	if _, err := platform.CallRead(owner, platform.Caller{}, "missing"); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 		t.Fatalf("missing reader: %v", err)
 	}
 	if _, err := inputApp(owner, platform.Caller{}, "missing", nil, time.Time{}); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA {
@@ -296,7 +300,7 @@ func TestAppReadAndInputAreOptional(t *testing.T) {
 	if _, err := inputApp(actual, platform.Caller{}, "feed", []byte("kept"), time.Time{}); err != nil {
 		t.Fatal(err)
 	}
-	value, err := readApp(actual, platform.Caller{}, "notes")
+	value, err := platform.CallRead(actual, platform.Caller{}, "notes")
 	if err != nil || value.(map[string]string)["feed"] != "kept" {
 		t.Fatalf("existing implementation was not used: %v %v", value, err)
 	}

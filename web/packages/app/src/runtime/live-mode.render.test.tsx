@@ -127,7 +127,7 @@ test("an embedded published page inherits its author's preview boundary", async 
   class EmbeddedClient extends RecordingClient {
     override async pageContent() { return { ...samplePage, contentVersion, page }; }
   }
-  const parent = { ...page, document: {formatVersion:2, uiProfile:pageUIManifest.uiProfile, root:"embedded", nodes:{embedded:{kind:"widget",section:"embedded"}}}, sections: [{ id: "embedded", widget: "embedded-page", configVersion: 1, title: "Nested workspace",
+  const parent = { ...page, document: {formatVersion:2, uiProfile:pageUIManifest.uiProfile, root:"root", nodes:{root:{kind:"rows",children:["embedded"]},embedded:{kind:"widget",section:"embedded"}}}, sections: [{ id: "embedded", widget: "embedded-page", configVersion: 1, title: "Nested workspace",
     embedding: { kind: "module", page: { ref: samplePage.ref, sourceVersion: samplePage.version }, contentVersion, interfaceVersion: 0 } }] };
   expect(pagePresentationIssues(page)).toEqual([]);
   expect(pagePresentationIssues(parent)).toEqual([]);
@@ -232,8 +232,8 @@ test("an upload begun in live mode cannot attach its delayed bytes after preview
 
 test("an authoring overlay keeps its create form inside the preview boundary", async () => {
   const spy = makeSpy();
-  const overlayPage = { ...page, sections: [{ id: "create", widget: "form", configVersion: 1, fields: ["title"] }], document: {
-    formatVersion: 2, uiProfile: pageUIManifest.uiProfile, root: "root", nodes: { root: { kind: "rows", children: [] }, panel: { kind: "rows", children: ["create"] }, create: { kind: "widget", section: "create" } },
+  const overlayPage = { ...page, sections: [{ id: "intro", widget: "heading", configVersion: 1, text: "Page" }, { id: "create", widget: "form", configVersion: 1, fields: ["title"] }], document: {
+    formatVersion: 2, uiProfile: pageUIManifest.uiProfile, root: "root", nodes: { root: { kind: "rows", children: ["intro"] }, intro: { kind: "widget", section: "intro" }, panel: { kind: "rows", children: ["create"] }, create: { kind: "widget", section: "create" } },
     variables: { open: { scope: "page", type: "boolean", mode: "state", initial: true } }, overlays: { original: { kind: "dialog", title: "Original overlay", root: "panel", openVariable: "open" } },
   } };
   render(<CatalogFixture client={new RecordingClient(spy.events)} decide={spy.decide}>

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"testing"
 	"time"
 
@@ -15,8 +16,8 @@ import (
 // routes answer, the filters reach the model, and a refused argument is a 400 —
 // the contract the generated SDK calls.
 func TestEnterpriseQueryHTTP(t *testing.T) {
-	seat := Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin, enterprise.ID: enterprise.Admin}}}
-	tn, err := NewTenant("enterprise-query", NewConsole("enterprise-query", seat), enterprise.New("enterprise-query", platform.OrgSeed{Units: []platform.Unit{
+	seat := platform.Seat{Subjects: []string{"user:admin@example.test"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, enterprise.ID: enterprise.Admin}}}
+	tn, err := NewTenant("enterprise-query", newConsole("enterprise-query", seat), enterprise.New("enterprise-query", platform.OrgSeed{Units: []platform.Unit{
 		{ID: "plant-1", Name: "Main plant", Kind: "plant", From: "2026-01-01"},
 		{ID: "line-1", Name: "Line 1", Kind: "line", From: "2026-01-01"},
 		{ID: "line-old", Name: "Retired line", Kind: "line", From: "2026-01-01", Until: "2026-06-01", Closed: "merged"},
@@ -27,7 +28,7 @@ func TestEnterpriseQueryHTTP(t *testing.T) {
 	server := httptest.NewServer(NewHost(Tokens(map[string]string{"token": "user:admin@example.test"}), tn).Handler())
 	defer server.Close()
 	client := &http.Client{Timeout: 3 * time.Second}
-	get := func(path string, want int) enterprise.EnterpriseQueryResult {
+	get := func(path string, want int) platform.EnterpriseQueryResult {
 		t.Helper()
 		request, _ := http.NewRequest("GET", server.URL+path, nil)
 		request.Header.Set("Authorization", "Bearer token")
@@ -39,7 +40,7 @@ func TestEnterpriseQueryHTTP(t *testing.T) {
 		if response.StatusCode != want {
 			t.Fatalf("%s: HTTP %d, want %d", path, response.StatusCode, want)
 		}
-		var out enterprise.EnterpriseQueryResult
+		var out platform.EnterpriseQueryResult
 		if want == http.StatusOK {
 			if err := json.NewDecoder(response.Body).Decode(&out); err != nil {
 				t.Fatal(err)
@@ -47,7 +48,7 @@ func TestEnterpriseQueryHTTP(t *testing.T) {
 		}
 		return out
 	}
-	ids := func(r enterprise.EnterpriseQueryResult) (first, second string) {
+	ids := func(r platform.EnterpriseQueryResult) (first, second string) {
 		if len(r.Elements) > 0 {
 			first = r.Elements[0].ID
 		}

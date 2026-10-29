@@ -1,12 +1,10 @@
 package platformserver
 
 import (
-	"context"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/records"
-	"platformserver/journal"
+
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 	"strings"
@@ -46,75 +44,20 @@ func (s *recordStore) visitMatching(et *entityType, q platform.Query, visible fu
 	if refusal != nil {
 		return refusal
 	}
-	visit := func(r *records.Row) {
-		if r == nil {
-			return
-		}
-		v := r.Value
-		if !q.Archived && records.Header(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match(v) {
-			return
-		}
-		accept(v)
-	}
-	if ids, indexed := s.indexedRecordCandidates(et, q); indexed {
-		for _, id := range ids {
-			visit(et.rows.Get(id))
-		}
-	} else if s.historyStore != nil {
-		var filters []journal.StateFilter
-		// SQL retains the original image, while the owner may have renamed or
-		// transformed its fields. Filter the converted values below instead.
-		if !et.retainedProjection && len(et.info.RecordImages) == 0 {
-			filters = sqlRecordFilters(et.info, q.Domain)
-		}
-		if et.retainedProjection {
-			// Record identity is unchanged by aliases or historical field projections.
-			for _, filter := range sqlRecordFilters(et.info, q.Domain) {
-				if len(filter.Path) == 2 && filter.Path[0] == "value" && filter.Path[1] == "id" {
-					filters = append(filters, filter)
-				}
-			}
-		}
-		pending := map[string]bool{}
-		// During checkpoint recovery the fixed SQL archive predates accepted
-		// tail writes promoted into the root overlay. They must participate in
-		// owner inventories even when their IDs do not exist in that archive.
-		for id := range et.rows.Overlay().All() {
-			pending[id] = true
-		}
+
+	image := et.indexImage()
+	image.Current = func() *records.CurrentScope { return s.current }
+	writes := func(yield func(string) bool) {
 		for overlay := s; overlay != nil; overlay = overlay.parent {
 			for ref := range overlay.writes {
 				typ, id, ok := strings.Cut(ref, "/")
-				if ok && typ == et.info.Type {
-					pending[id] = true
+				if ok && typ == et.info.Type && !yield(id) {
+					return
 				}
 			}
 		}
-		after := ""
-		for {
-			ids, readErr := s.stateReader().StateCandidates(context.Background(), s.tenant, et.info.Type, filters, after, 256, s.appliedPosition)
-			if readErr != nil {
-				panic(fmt.Errorf("record candidates: %w", readErr))
-			}
-			for _, id := range ids {
-				delete(pending, id)
-				visit(et.rows.Get(id))
-			}
-			if len(ids) < 256 {
-				break
-			}
-			after = ids[len(ids)-1]
-		}
-		// Private writes may newly match a condition their committed predecessor
-		// did not. Include this decision's overlay before applying the same rules.
-		for id := range pending {
-			visit(et.rows.Get(id))
-		}
-	} else {
-		for _, r := range et.rows.All() {
-			visit(r)
-		}
 	}
+	records.VisitMatching(image, s.indexImage, q, visible, effective, match, writes, accept)
 
 	return nil
 }

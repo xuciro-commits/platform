@@ -1,19 +1,20 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"strings"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
+
 	"platformserver/apps/core"
 	"platformserver/platform"
 )
@@ -43,9 +44,9 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 		}
 	}
 
-	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{construction.ID: construction.Builder, core.ID: core.Accountant}}}
+	seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder, core.ID: core.Accountant}}}
 	compose := func() *Tenant {
-		tn, err := NewTenant(tenant, NewConsole(tenant, seat), core.New(tenant), build.New(tenant))
+		tn, err := NewTenant(tenant, newConsole(tenant, seat), core.New(tenant), build.New(tenant))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,15 +88,15 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 			t.Fatalf("%s: %s %s", key, err.Code, err.Message)
 		}
 	}
-	submit("obj", construction.ID, construction.ObjectType+".create", construction.ObjectType, "O1", `{"name":"goodsreceipt","title":"Goods receipt",
+	submit("obj", build.ID, build.ObjectType+".create", build.ObjectType, "O1", `{"name":"goodsreceipt","title":"Goods receipt",
 		"fields":[{"name":"number","title":"Number","type":"text"},{"name":"amount","title":"Amount","type":"decimal"},{"name":"receivedon","title":"Received on","type":"text"},{"name":"supplier","title":"Supplier","type":"text"}],
 		"numbering":{"field":"number","prefix":"GR","yearly":true,"width":4},
 		"states":[{"name":"open","title":"Open"},{"name":"posted","title":"Posted"},{"name":"cancelled","title":"Cancelled"}],
 		"actions":[{"name":"post","title":"Post","from":["open"],"to":"posted","journal":{"date":"record.receivedon","text":"=Goods receipt","lines":[{"account":"=1403","debit":"record.amount","object":"record.number"},{"account":"=2290","credit":"record.amount","partner":"record.supplier"}]}},
 		           {"name":"cancel","title":"Cancel","from":["posted"],"to":"cancelled","reverses":"post"}]}`, at)
-	submit("obj-publish", construction.ID, construction.SchemaPublish, construction.ObjectType, "O1", `{}`, at)
-	submit("gr1", construction.ID, "build.goodsreceipt.create", "build.goodsreceipt", "gr1", `{"amount":120.5,"receivedon":"2026-10-05","supplier":"ACME"}`, at)
-	submit("gr2", construction.ID, "build.goodsreceipt.create", "build.goodsreceipt", "gr2", `{"amount":80,"receivedon":"2026-09-28","supplier":"ACME"}`, at)
+	submit("obj-publish", build.ID, build.SchemaPublish, build.ObjectType, "O1", `{}`, at)
+	submit("gr1", build.ID, "build.goodsreceipt.create", "build.goodsreceipt", "gr1", `{"amount":120.5,"receivedon":"2026-10-05","supplier":"ACME"}`, at)
+	submit("gr2", build.ID, "build.goodsreceipt.create", "build.goodsreceipt", "gr2", `{"amount":80,"receivedon":"2026-09-28","supplier":"ACME"}`, at)
 	for _, id := range []string{"gr1", "gr2"} {
 		held, _ := tn.Held("build.goodsreceipt/" + id)
 		if n := toMap(held)["number"]; n != "GR2026-000"+map[string]string{"gr1": "1", "gr2": "2"}[id] {
@@ -104,8 +105,8 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 	}
 	// Close September, then post both: October's lands in October, September's shifts to October and says so.
 	submit("close-sep", core.ID, core.PeriodType+".close", core.PeriodType, "per-2026-09", `{}`, at)
-	submit("post1", construction.ID, "build.goodsreceipt.post", "build.goodsreceipt", "gr1", `{}`, at)
-	submit("post2", construction.ID, "build.goodsreceipt.post", "build.goodsreceipt", "gr2", `{}`, at)
+	submit("post1", build.ID, "build.goodsreceipt.post", "build.goodsreceipt", "gr1", `{}`, at)
+	submit("post2", build.ID, "build.goodsreceipt.post", "build.goodsreceipt", "gr2", `{}`, at)
 	tn.Dispatch(at) // the books lane sends one entry at a time, in order
 	tn.Dispatch(at)
 	c := tn.automation(core.ID, false)
@@ -120,8 +121,8 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 		t.Fatalf("September's receipt should post to October, marked: %+v", e)
 	}
 	// Reverse through the object's cancel: an opposite entry, the balance nets to zero.
-	submit("edit-posted", construction.ID, "build.goodsreceipt.edit", "build.goodsreceipt", "gr1", `{"amount":999}`, at)
-	submit("cancel1", construction.ID, "build.goodsreceipt.cancel", "build.goodsreceipt", "gr1", `{}`, at.Add(time.Minute))
+	submit("edit-posted", build.ID, "build.goodsreceipt.edit", "build.goodsreceipt", "gr1", `{"amount":999}`, at)
+	submit("cancel1", build.ID, "build.goodsreceipt.cancel", "build.goodsreceipt", "gr1", `{}`, at.Add(time.Minute))
 	if durable {
 		// Lose the effect answer after core commits the reversal, then recover.
 		var queued platform.Effect
@@ -144,7 +145,7 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 		capture(tn)
 	}
 	tn.Dispatch(at.Add(time.Minute))
-	tb, _ := readApp(tn.app(core.ID), c, core.ReadTrialBalance+"/2026-10")
+	tb, _ := platform.CallRead(tn.app(core.ID), c, core.ReadTrialBalance+"/2026-10")
 	balance := tb.(core.TrialBalance)
 	if len(balance.Rows) != 2 || balance.Debit != balance.Credit || balance.Rows[0].Account != "1403" || balance.Rows[0].Balance != 80 {
 		t.Fatalf("trial balance %+v", balance)
@@ -153,7 +154,7 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 	if original.State != "reversed" || original.Reversed != original.ID+"-rev" {
 		t.Fatalf("original journal was not reversed: %+v", original)
 	}
-	submit("archive-receipt", construction.ID, "build.goodsreceipt.archive", "build.goodsreceipt", "gr1", `{}`, at)
+	submit("archive-receipt", build.ID, "build.goodsreceipt.archive", "build.goodsreceipt", "gr1", `{}`, at)
 	// An unbalanced hand entry and one into a month nobody opened are refused.
 	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: core.ID, IdempotencyKey: "bad",
 		Target: &pb.EntityRef{Type: core.JournalType, Id: "bad"}, Schema: &pb.SchemaRef{Name: core.JournalType + ".create", Version: 1},
@@ -165,8 +166,8 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 	for _, p := range []string{"11", "12"} {
 		submit("close-"+p, core.ID, core.PeriodType+".close", core.PeriodType, "per-2026-"+p, `{}`, at)
 	}
-	submit("gr3", construction.ID, "build.goodsreceipt.create", "build.goodsreceipt", "gr3", `{"amount":5,"receivedon":"2026-10-06","supplier":"ACME"}`, at)
-	submit("post3", construction.ID, "build.goodsreceipt.post", "build.goodsreceipt", "gr3", `{}`, at)
+	submit("gr3", build.ID, "build.goodsreceipt.create", "build.goodsreceipt", "gr3", `{"amount":5,"receivedon":"2026-10-06","supplier":"ACME"}`, at)
+	submit("post3", build.ID, "build.goodsreceipt.post", "build.goodsreceipt", "gr3", `{}`, at)
 	tn.Dispatch(at.Add(2 * time.Minute))
 	if entries, _, _ = platform.Find[core.Journal](c, platform.Query{Limit: 10}); len(entries) != 3 {
 		t.Fatalf("the late receipt must wait, got %d entries", len(entries))
@@ -194,7 +195,7 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 	if toMap(held)["number"] != "GR2026-0003" {
 		t.Fatal("archive reused an existing document number")
 	}
-	submit("next-year", construction.ID, "build.goodsreceipt.create", "build.goodsreceipt", "next", `{"amount":1,"receivedon":"2027-01-05"}`, at.AddDate(1, 0, 0))
+	submit("next-year", build.ID, "build.goodsreceipt.create", "build.goodsreceipt", "next", `{"amount":1,"receivedon":"2027-01-05"}`, at.AddDate(1, 0, 0))
 	held, _ = tn.Held("build.goodsreceipt/next")
 	if toMap(held)["number"] != "GR2027-0001" {
 		t.Fatal("numbering used the wall clock rather than decision time")
@@ -210,10 +211,10 @@ func testBooksFromBuilderActions(t *testing.T, durable bool, store Journals) {
 		}
 		tn = restored
 		capture(tn)
-		submit("post-restored", construction.ID, "build.goodsreceipt.post", "build.goodsreceipt", "next", `{}`, at.AddDate(1, 0, 0))
+		submit("post-restored", build.ID, "build.goodsreceipt.post", "build.goodsreceipt", "next", `{}`, at.AddDate(1, 0, 0))
 		count := 0
 		for _, effect := range tn.Effects(at) {
-			if effect.Endpoint == construction.BooksEndpoint && effect.Target == "build.goodsreceipt/next" {
+			if effect.Endpoint == build.BooksEndpoint && effect.Target == "build.goodsreceipt/next" {
 				count++
 			}
 		}
@@ -233,10 +234,10 @@ func TestBooksDeliveryClassificationAndPublicMessage(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			id := "classified-books-" + tc.name
-			pending := platform.Effect{ID: "posting", App: construction.ID, Key: "posting", Endpoint: construction.BooksEndpoint, Event: "journal/check", State: "pending", At: at, Due: at}
+			pending := platform.Effect{ID: "posting", App: build.ID, Key: "posting", Endpoint: build.BooksEndpoint, Event: "journal/check", State: "pending", At: at, Due: at}
 			pending.Body = string(platform.Raw(platform.Journal{Record: platform.Record{ID: "journal"}, Date: tc.date, Lines: []platform.JournalLine{{Account: tc.account, Debit: 10}, {Account: "2202", Credit: 10}}}))
 			compose := func() *Tenant {
-				tn := composeTenant(t, id, []Seat{seatOf("dana", "build:builder", "core:accountant")}, core.New(id), build.New(id))
+				tn := composeTenant(t, id, []platform.Seat{seatOf("dana", "build:builder", "core:accountant")}, core.New(id), build.New(id))
 				tn.outbound = append(tn.outbound, &effect{Effect: pending})
 				return tn
 			}
@@ -251,7 +252,7 @@ func TestBooksDeliveryClassificationAndPublicMessage(t *testing.T) {
 			if live.quarantined() || len(entries) != 1 {
 				t.Fatalf("classified result was not accepted once: entries=%d fault=%v", len(entries), live.fault.Load())
 			}
-			accepted, err := resultformat.DecodeEffect(entries[0].Body)
+			accepted, err := acceptedformat.DecodeEffect(entries[0].Body)
 			if err != nil || accepted.Version != 5 || accepted.Outcome.PublicMessage != tc.message || accepted.After.PublicMessage != tc.message {
 				t.Fatalf("safe delivery text was not saved with its outcome: %+v %v", accepted, err)
 			}

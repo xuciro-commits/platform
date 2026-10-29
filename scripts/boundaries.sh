@@ -10,7 +10,7 @@ fail() { echo "boundary: $*" >&2; exit 1; }
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 
 hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./apps/... 2>/dev/null | grep -E ' platformserver( |$)' || true)
-[[ -z $hits ]] || fail "a platform app imports the host runtime, not the app API and internal/host:"$'\n'"$hits"
+[[ -z $hits ]] || fail "a platform app imports the host runtime, instead of public platform roles:"$'\n'"$hits"
 
 leaks=$(grep -rnE '\.(Changes|changes)\.' --include="*.go" capabilities/server/ --exclude-dir=platform --exclude-dir=vendor || true)
 [[ -z $leaks ]] || fail "code outside platform touches change log directly without ledger lock:"$'\n'"$leaks"

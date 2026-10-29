@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strings"
 
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -87,7 +86,7 @@ func (t *Tenant) deactivateOwners(disabled []string) error {
 		}
 	}
 	t.listeners = slices.DeleteFunc(t.listeners, func(id string) bool { return !t.ownerActive(id) })
-	t.observers = slices.DeleteFunc(t.observers, func(observer host.Observer) bool {
+	t.observers = slices.DeleteFunc(t.observers, func(observer platform.Observer) bool {
 		app, ok := observer.(platform.App)
 		return ok && !t.ownerActive(app.Manifest().ID)
 	})
@@ -95,25 +94,25 @@ func (t *Tenant) deactivateOwners(disabled []string) error {
 		if t.ownerActive(app.Manifest().ID) {
 			continue
 		}
-		if _, ok := app.(host.Linker); ok {
+		if _, ok := app.(platform.Linker); ok {
 			t.linker = nil
 		}
-		if _, ok := app.(host.Directory); ok {
+		if _, ok := app.(platform.Directory); ok {
 			t.directory = nil
 		}
-		if _, ok := app.(host.IdentityDirectory); ok {
+		if _, ok := app.(platform.IdentityDirectory); ok {
 			t.identity = nil
 		}
 		if _, ok := app.(models); ok {
 			t.ai = nil
 		}
-		if _, ok := app.(host.Tasks); ok {
+		if _, ok := app.(platform.Tasks); ok {
 			t.tasks = nil
 		}
-		if _, ok := app.(AgentRuntime); ok {
+		if _, ok := app.(platform.AgentRuntime); ok {
 			t.agents = nil
 		}
-		if _, ok := app.(host.Glossary); ok {
+		if _, ok := app.(platform.Glossary); ok {
 			t.knowledge = nil
 		}
 	}

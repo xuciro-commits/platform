@@ -1,5 +1,7 @@
 package platformserver
 
+import fileowner "platformserver/engine/resources"
+
 import (
 	"context"
 	"crypto/sha256"
@@ -13,10 +15,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"platformserver/engine/integrations"
 	"platformserver/idp"
 	"platformserver/journal"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"platformserver/platform/authz"
+	"platformserver/studio/packages"
 	"slices"
 	"strings"
 	"sync"
@@ -60,7 +65,7 @@ type Deployment struct {
 	// Packages is a directory of package descriptors: the
 	// index the console lists and prechecks. Empty: no packages offered.
 	Packages     string
-	packageIndex *PackageIndex
+	packageIndex *platform.PackageIndex
 	// Rebuild composes a fresh, unstarted tenant with the same durable app and
 	// connector declarations. Required for an in-process recovery retry.
 	Rebuild                 func(id string) (*Tenant, error)
@@ -173,12 +178,12 @@ func (d *Deployment) makeKey() error {
 
 // lightweightState opens what a lightweight host runs on: its journal, its
 // file bytes and its signing key, all inside -data.
-func (d *Deployment) lightweightState() (Journals, FileStore, *idp.Local, error) {
+func (d *Deployment) lightweightState() (Journals, platform.FileStore, *idp.Local, error) {
 	journal, err := d.openJournals(context.Background())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("journal: %w", err)
 	}
-	files, err := NewLocalFiles(filepath.Join(d.Data, "files"))
+	files, err := fileowner.NewLocalFiles(filepath.Join(d.Data, "files"))
 	if err != nil {
 		journal.Close()
 		return nil, nil, nil, err
@@ -342,7 +347,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 			continue
 		}
-		if console, ok := t.app(PlatformApp).(IdentityRecovery); ok {
+		if console, ok := t.app(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
 			console.CloseTokenSecretWindows()
 		}
 		fresh[t.ID] = after == 0 && len(entries) == 0
@@ -458,11 +463,11 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	}
 	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set
 	defer flush(context.Background())
-	var lightweightFiles FileStore // the lightweight profile's bytes open with its journal, all in -data
-	var files FileStore
+	var lightweightFiles platform.FileStore // the lightweight profile's bytes open with its journal, all in -data
+	var files platform.FileStore
 	switch {
 	case d.Files != "":
-		store, err := NewS3Files(ctx, d.Files)
+		store, err := fileowner.NewS3Files(ctx, d.Files)
 		if err != nil {
 			return err
 		}
@@ -684,7 +689,7 @@ func (d *Deployment) listen(ctx context.Context, host *Host, atExit func(context
 
 // createTenant records a new tenant's spec, builds it, opens its journal and
 // files, seeds it and applies the template's first decisions.
-func (d *Deployment) createTenant(req CreateTenantRequest, by string, files FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
+func (d *Deployment) createTenant(req CreateTenantRequest, by string, files platform.FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
 	now := Now()
 	spec, tpl, err := d.spec(req, by, now)
 	if err != nil {
@@ -838,7 +843,7 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 				outside = append(outside, t.continuousSources(Now())...)
 			}
 			outsideRuns.Add(1)
-			go func() { defer outsideRuns.Done(); onLane(outside) }()
+			go func() { defer outsideRuns.Done(); integrations.OnLane(outside) }()
 		}
 	}()
 	go func() { // evaluations, embeddings and old transcripts: many calls, apart from runs
@@ -899,14 +904,14 @@ func (d *Deployment) configurePersonalTokens() error {
 	if len(key) < 32 {
 		return fmt.Errorf("OIDC delivery requires PLATFORM_PERSONAL_TOKEN_KEY of at least 32 bytes")
 	}
-	UseTokenKey([]byte(key))
+	controlowner.UseTokenKey([]byte(key))
 	return nil
 }
 
 // preparePackageIndex gives every tenant the offered deployment catalogue;
 // installed package state remains in each tenant's accepted Console state.
 func (d *Deployment) preparePackageIndex(tenants []*Tenant) error {
-	index, err := LoadPackageIndex(d.Packages)
+	index, err := packages.LoadPackageIndex(d.Packages)
 	if err != nil {
 		return err
 	}
@@ -918,7 +923,7 @@ func (d *Deployment) preparePackageIndex(tenants []*Tenant) error {
 }
 
 func (d *Deployment) bindPackageIndex(tenant *Tenant) {
-	if console, ok := tenant.app(PlatformApp).(PackageCatalog); ok && d.packageIndex != nil {
+	if console, ok := tenant.app(controlowner.PlatformApp).(packages.Catalog); ok && d.packageIndex != nil {
 		console.BindPackageIndex(d.packageIndex)
 	}
 }

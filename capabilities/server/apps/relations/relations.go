@@ -1,5 +1,5 @@
 // Package relations is the platform's links and timeline, a
-// platform app on the app API and internal/host.
+// platform app on the app API and public consumer roles.
 package relations
 
 import (
@@ -13,7 +13,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -54,7 +54,7 @@ type Link = platform.RelationLink
 type Note = platform.RelationNote
 
 type Relations struct {
-	host   host.RelationsHost // the tenant running it, once composed
+	host   platform.RelationsHost // the tenant running it, once composed
 	mu     sync.Mutex
 	links  []Link
 	notes  []Note
@@ -173,7 +173,7 @@ func (r *Relations) sees(c platform.Caller, entity string) bool {
 }
 
 // Attach is the host handing itself to the app (host.Attached).
-func (r *Relations) AttachRelations(h host.RelationsHost) { r.host = h }
+func (r *Relations) AttachRelations(h platform.RelationsHost) { r.host = h }
 
 func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	switch s.GetSchema().GetName() {
@@ -239,7 +239,7 @@ func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 
 // Observe tells a record's followers of each member's decision on it, and
 // protocol events on the timeline of their entity and of the entities linked
-// to it (host.Observer). It runs inside the input, so replay
+// to it (platform.Observer). It runs inside the input, so replay
 // tells them again.
 func (r *Relations) Observe(e platform.Event, events []string) {
 	raw, err := r.PlanObserved(r.host.Automation(platform.Caller{}, ID), e, events)
@@ -303,7 +303,7 @@ func (r *Relations) ApplyObserved(raw json.RawMessage) error {
 	return nil
 }
 
-// Links are the entities linked to entity that c sees (Caller.Links, host.Linker).
+// Links are the entities linked to entity that c sees (Caller.Links, platform.Linker).
 func (r *Relations) Links(c platform.Caller, entity string) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -322,7 +322,7 @@ func (r *Relations) Links(c platform.Caller, entity string) []string {
 	return out
 }
 
-// Link relates two entities for c (Caller.Link, host.Linker), as a decision of
+// Link relates two entities for c (Caller.Link, platform.Linker), as a decision of
 // this app taken for c.
 func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
 	payload, _ := json.Marshal(map[string]string{"from": from.GetType() + "/" + from.GetId(), "to": to.GetType() + "/" + to.GetId()})

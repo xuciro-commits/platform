@@ -3,7 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/records"
+	controlowner "platformserver/kernel/control"
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"sync"
@@ -92,19 +93,19 @@ func (s *stock) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*p
 }
 
 func stockTenant(t testing.TB, extra ...platform.App) *Tenant {
-	seat := func(id, role string) Seat {
-		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{"stock": role}}}
+	seat := func(id, role string) platform.Seat {
+		return platform.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{"stock": role}}}
 	}
 	org := enterprise.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
 		Units: []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}, {ID: "L2", Kind: "line"}},
 		Edges: []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}},
 		Memberships: []platform.Membership{{Party: "member:lead", Unit: "plant", Role: "lead"}, {Party: "member:op", Unit: "L1", Role: "op"},
 			{Party: "member:boss", Unit: "plant", Role: "lead"}}})
-	seats := []Seat{seat("ana", "clerk"), seat("bo", "clerk"), seat("lead", "lead"), seat("op", "line"), seat("boss", "line")}
-	if slices.ContainsFunc(extra, func(app platform.App) bool { return app.Manifest().ID == AgentApp }) {
+	seats := []platform.Seat{seat("ana", "clerk"), seat("bo", "clerk"), seat("lead", "lead"), seat("op", "line"), seat("boss", "line")}
+	if slices.ContainsFunc(extra, func(app platform.App) bool { return app.Manifest().ID == platform.AgentApp }) {
 		seats = append(seats, seatOf("admin", "agent:admin"), seatOf("audit", "agent:admin"))
 	}
-	apps := []platform.App{NewConsole("t-1", seats...), org, newStock("t-1")}
+	apps := []platform.App{newConsole("t-1", seats...), org, newStock("t-1")}
 	apps = append(apps, extra...)
 	tn, err := NewTenant("t-1", apps...)
 	if err != nil {
@@ -259,7 +260,10 @@ func TestRecords(t *testing.T) {
 	var journal []Entry
 	tn := stockTenant(t)
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	do := func(who, schema, typ, id string, payload any) string {

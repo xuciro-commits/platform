@@ -1,10 +1,12 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
 import (
 	"net/http"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // ConnectionKind is one way the tenant can reach an external system.
@@ -27,9 +29,9 @@ func (t *Tenant) connectionKinds() ConnectionKindPage {
 }
 
 func (h *Host) routesConnectionKinds(rt *routes) {
-	roles := []string{construction.Builder, construction.Integrator}
+	roles := []string{build.Builder, build.Integrator}
 	// GET /v1/connection-kinds answers the built-in transports.
-	rt.authorized(Route{Pattern: "GET /v1/connection-kinds", Summary: "Built-in transports a connection can use", Answer: ConnectionKindPage{}}, construction.ID, roles, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/connection-kinds", Summary: "Built-in transports a connection can use", Answer: ConnectionKindPage{}}, build.ID, roles, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(t.connectionKinds(), t.Language(m, r)))
 	})
 }

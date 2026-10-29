@@ -29,4 +29,4 @@
 | `api-types/` | 从真实宿主API生成Web契约类型及企业SDK |
 | `check-boundaries/` | 检查导入、授权边界、文件预算、同名路径、视觉声明及模型协议归属；包含条件编译文件，存量基线只能递减 |
 | `rule-browser/` | 将同一个纯规则实现编译为浏览器WASM，供本地公式/表单联动使用；构建入口为`scripts/rule-browser.mjs` |
-| `uaf-gen/` | 当前仍从保留的OMG原件生成UAF元模型；外移与运行去依赖尚在活动变更中，不能提前删掉历史解释责任 |
+完整UAF标准及生成/导入命令位于独立[可选工具](../../../../tools/platform-uaf-importer/README.md)，不参与默认宿主构建。原组织历史引用和旧输入交接仍由原owner负责。

@@ -9,7 +9,7 @@ import (
 )
 
 func TestBuiltinsExposeOneAcyclicComposition(t *testing.T) {
-	tenant, err := NewTenant("builtins", platformserver.Seat{Subjects: []string{"ops"}, Member: platform.Member{ID: "ops", Roles: map[string]string{"platform": "admin"}}})
+	tenant, err := NewTenant("builtins", platform.Seat{Subjects: []string{"ops"}, Member: platform.Member{ID: "ops", Roles: map[string]string{"platform": "admin"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,5 @@
 // Package files is the platform's files app, on the app API and
-// internal/host: a file is uploaded to the tenant's object
+// public consumer roles: a file is uploaded to the tenant's object
 // store, then attached to a record by a decision that names its sha256, so the
 // journal holds the hash and never the bytes. A file is readable exactly when
 // the record it is attached to is.
@@ -14,7 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -33,12 +33,12 @@ var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type Files struct {
 	mu     sync.Mutex
-	host   host.FileHost
+	host   platform.FileHost
 	ledger *platform.Ledger
 }
 
 // Attach is called by the host when a tenant is composed.
-func (f *Files) AttachFiles(h host.FileHost) { f.host = h }
+func (f *Files) AttachFiles(h platform.FileHost) { f.host = h }
 
 // New is a tenant's files app.
 func New(tenant string) *Files {

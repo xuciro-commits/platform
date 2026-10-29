@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 import { refKey, resourceKinds, resourceRoute } from "./resources";
@@ -73,7 +74,7 @@ export const studioApplicationID = (route?: Route) => route?.view === "project" 
 export const studioRoute = (id: string, area: StudioArea, asset?: string): Route => ({ view: "project", params: { id, area, ...(asset ? { asset } : {}) } });
 
 /** The tree and the editor's return bar describe the same original asset. */
-export function studioContext(route: Route | undefined, resources: readonly OwnedResource[], definitions: readonly Api.Definition[]) {
+export function studioContext(route: Route | undefined, resources: readonly OwnedResource[], definitions: readonly WorkspaceDefinition[]) {
   const params = route?.params;
   const definitionKind = route?.view === "observations" ? "observation" : params?.kind;
   const definition = ["definition", "page-preview", "observations"].includes(route?.view ?? "")
@@ -140,7 +141,7 @@ export function studioResourceGroups(application: Pick<Api.Application, "title" 
 }
 
 /** Actions retain their original identity beside the object they affect. */
-export function studioActionGroups(resources: readonly OwnedResource[], definitions: readonly Api.Definition[]) {
+export function studioActionGroups(resources: readonly OwnedResource[], definitions: readonly WorkspaceDefinition[]) {
   const objects = resources.filter(item => item.ref.kind === "object");
   const actions = resources.filter(item => item.ref.kind === "action");
   const definitionsByRef = new Map(definitions.map(item => [refKey(item.ref), item]));
@@ -160,7 +161,7 @@ export function moveConceptAsset(concepts: readonly Api.AppConcept[], ref: Api.A
   ] }));
 }
 
-export function assetRoute(ref: Api.AssetRef, resources: readonly OwnedResource[], definitions: readonly Api.Definition[], application: string): Route {
+export function assetRoute(ref: Api.AssetRef, resources: readonly OwnedResource[], definitions: readonly WorkspaceDefinition[], application: string): Route {
   const resource = resources.find(item => refKey(item.ref) === refKey(ref));
   if (resource?.record) return resourceRoute(resource.kind, resource.record.id, application);
   if (ref.kind === "action") {

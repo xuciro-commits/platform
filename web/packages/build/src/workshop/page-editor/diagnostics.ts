@@ -1,5 +1,5 @@
 import {pageUIManifest} from "@platform/app/page-contract";
-import type {PageUI} from "@platform/app";
+import type {Definition,PageUI} from "@platform/app";
 import type { Api, ActionDeclaration } from "@platform/kernel";
 import { pageLayoutDiagnostics, pageVariableContract, pageVariableDiagnostics, parsePageDecimal, widgetContract } from "@platform/app";
 import { searchInputObjects } from "@platform/app/search";
@@ -23,7 +23,7 @@ export type PageDiagnostic = {
   id: string; code: string; values?: Record<string, number>; subject?: string;
   target: { kind: "node" | "widget"; id: string } | { kind: "page" | "variables" | "queries" | "compatibility" };
 };
-type Context = { object: string; entity: (type: string) => EntityInfo | undefined; catalog: ActionDeclaration[]; definitions: Api.Definition[] };
+type Context = { object: string; entity: (type: string) => EntityInfo | undefined; catalog: ActionDeclaration[]; definitions: Definition[] };
 
 /** One result owns the editor's explanations, locations and save eligibility.
  * Existing runtime and widget diagnostics retain their original semantics. */

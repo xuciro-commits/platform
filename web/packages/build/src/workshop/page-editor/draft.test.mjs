@@ -4,7 +4,7 @@ import test from "node:test";
 import { previewSection } from "./draft.ts";
 
 test("preview preserves every generated widget field without a second field list", () => {
-  const source = readFileSync(new URL("../../../../kernel/src/gen/host.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../../../app/src/pageui/types.ts", import.meta.url), "utf8");
   const section = source.split("export type Section = {")[1].split("};")[0];
   const bindings = new Set(["object", "query", "actions", "function", "inlineEdit"]);
   const fields = [...section.matchAll(/^  (\w+)\??:/gm)].map(match => match[1]).filter(name => !bindings.has(name));
@@ -19,7 +19,7 @@ test("preview preserves every generated widget field without a second field list
 
 test("preview translates original owner bindings and keeps ordering without changing its draft", () => {
   const draft = { widget: "table", object: "crm.account", query: "crm.open.accounts",
-    actions: ["crm.account.close", "work.task.complete"], function: { name: "advice", version: 3 },
+    actions: ["crm.account.close", "work.task.complete"], function: { ref: { app: "build", kind: "function", name: "advice" }, sourceVersion: "function.sha256.abc" },
     inlineEdit: { action: "crm.account.edit", fields: ["name"] } };
   const before = structuredClone(draft), result = previewSection(draft);
   assert.deepEqual(result.object, { app: "crm", kind: "object", name: "crm.account" });
@@ -28,7 +28,7 @@ test("preview translates original owner bindings and keeps ordering without chan
     { app: "crm", kind: "action", name: "crm.account.close" },
     { app: "work", kind: "action", name: "work.task.complete" },
   ]);
-  assert.deepEqual(result.function, { ref: { app: "build", kind: "function", name: "advice" }, sourceVersion: "preview.function-3" });
+  assert.deepEqual(result.function, draft.function);
   assert.deepEqual(result.inlineEdit, { action: { app: "crm", kind: "action", name: "crm.account.edit" }, fields: ["name"] });
   assert.deepEqual(draft, before);
 });

@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "../index";
 import type {pageUIManifest} from "../pageui/manifest";
 import type * as PageUI from "../pageui/types";
 import {builderSection,refineCollection} from "./collection-builder";
@@ -12,7 +13,7 @@ import type { QueryView } from "./Session";
 import {interfaceWindowSignature} from "./ontology-interface";
 
 /** Resolve only the explicitly selected retained query version. */
-export function boundQueryDefinition(definition: Api.Definition | undefined, binding: Api.AssetBinding | undefined): Api.Definition | undefined {
+export function boundQueryDefinition(definition: WorkspaceDefinition | undefined, binding: Api.AssetBinding | undefined): WorkspaceDefinition | undefined {
  if(!definition||!binding)return undefined;
  if(definition.version===binding.sourceVersion&&definition.query)return definition;
  const query=definition.queryVersions?.[binding.sourceVersion];
@@ -85,11 +86,11 @@ export function hasEnumFilters(filters: Record<string,string[]> | undefined):boo
 }
 /** Whether a window can carry enum filters at all: fixed domains belong to
  * their named query and interface shapes own their predicates. */
-export function windowFiltersLocked(named: Api.Definition | undefined, base?: {interface?:string}):boolean {
+export function windowFiltersLocked(named: WorkspaceDefinition | undefined, base?: {interface?:string}):boolean {
   return !!base?.interface||Array.isArray(named?.query?.domain)&&named.query.domain.length>0;
 }
 
-export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, pickerTitle?:string): QueryPlanResult {
+export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: WorkspaceDefinition | undefined, contract: Contract, pickerTitle?:string): QueryPlanResult {
   named=plan.query?boundQueryDefinition(named,plan.query):named;
   if(base.status!=="value" || !view) return base;
   if(base.interface&&base.binding){
@@ -128,7 +129,7 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 
 /** Build the finite read shape from member-visible descriptors and explicit
  * values. It emits the original RecordQuery, never source text or SQL. */
-export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:PageUI.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
+export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: WorkspaceDefinition | undefined, contract: Contract, sections:PageUI.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
   if(plan.interface){
     const selected=boundQueryDefinition(named,plan.query),declared=selected?.query,ordering=declared?.sort?.length?declared.sort:["id"];
     if(!plan.query||selected?.ref.app!==plan.query.ref.app||selected.ref.name!==plan.query.ref.name||declared?.interface!==plan.interface||!declared.interfaceShape||plan.object.name||plan.object.app||plan.object.kind||plan.input||plan.for||plan.direction||plan.itemOwner||plan.set||plan.conditions?.length||!Number.isInteger(plan.limit)||plan.limit<1||plan.limit>Math.min(contract.maxLimit,declared.limit||contract.maxLimit)||!Number.isInteger(plan.offset??0)||(plan.offset??0)<0||(plan.offset??0)>contract.maxOffset||plan.sort?.length&&JSON.stringify(plan.sort)!==JSON.stringify(ordering))return failed("Interface query window is unavailable or incompatible.");
@@ -223,7 +224,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
 
 /** Compile source predicates, never their downloaded windows. Each root owns
  * one immutable request signature and the original read/session lifecycle. */
-export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>Api.Definition|undefined,contract:Contract,sections:PageUI.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:PageUI.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
+export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>WorkspaceDefinition|undefined,contract:Contract,sections:PageUI.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:PageUI.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
  const compile=(root:string):QueryPlanResult=>{
   let nodes=0;
   const target=plans[root];

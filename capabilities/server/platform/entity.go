@@ -3,17 +3,295 @@ package platform
 import (
 	"encoding/json"
 	"fmt"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform/authz"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
-
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 )
+
+// Versioning describes business data, independently of record revisions and
+// definition releases. A version is an ordinary retained record.
+type Versioning struct {
+	Key        string `json:"key"`
+	Version    string `json:"version"`
+	ValidFrom  string `json:"validFrom"`
+	ValidUntil string `json:"validUntil,omitempty"`
+	Pin        string `json:"pin"`
+}
+
+// VersionPinBinding names the consumer's reference and the field receiving the
+// selected record's version. Selection remains a business decision.
+type VersionPinBinding struct {
+	Reference string `json:"reference"`
+	Version   string `json:"version"`
+}
+
+type RecordVersionPin struct {
+	Reference    string          `json:"reference"`
+	VersionField string          `json:"versionField"`
+	Source       string          `json:"source"`
+	Version      json.RawMessage `json:"version"`
+	At           time.Time       `json:"at"`
+}
+
+// BusinessTime selects effective data; nil means the caller's current clock.
+// All deliberately disables effective-time filtering, without widening access.
+type BusinessTime struct {
+	At  string `json:"at,omitempty"`
+	All bool   `json:"all,omitempty"`
+}
+
+func withinBusinessPeriod(startComparedToPoint, pointComparedToEnd int, bounded bool) bool {
+	return startComparedToPoint <= 0 && (!bounded || pointComparedToEnd < 0)
+}
+
+func ActiveOn(from, until, day string) bool {
+	return withinBusinessPeriod(strings.Compare(from, day), strings.Compare(day, until), until != "")
+}
+
+func EffectiveAt(kind, from, until, at string) (bool, error) {
+	layout := time.DateOnly
+	if kind == "datetime" {
+		layout = time.RFC3339Nano
+	}
+	start, err := time.Parse(layout, from)
+	if err != nil {
+		return false, fmt.Errorf("business valid-from must be a %s", kind)
+	}
+	point, err := time.Parse(layout, at)
+	if err != nil {
+		return false, fmt.Errorf("business time must be a %s", kind)
+	}
+	var end time.Time
+	if until != "" {
+		end, err = time.Parse(layout, until)
+		if err != nil || !end.After(start) {
+			return false, fmt.Errorf("business valid-until must be after valid-from")
+		}
+	}
+	return withinBusinessPeriod(start.Compare(point), point.Compare(end), until != ""), nil
+}
+
+func CheckVersioning(info EntityInfo, lookup func(string) (EntityInfo, bool)) error {
+	if v := info.Versioning; v != nil {
+		key, k := info.Field(v.Key)
+		version, n := info.Field(v.Version)
+		from, f := info.Field(v.ValidFrom)
+		if !k || !n || !f || !key.Required || !version.Required || !from.Required || !slices.Contains([]string{"text", "choice"}, key.Type) || !slices.Contains([]string{"text", "integer"}, version.Type) || !slices.Contains([]string{"date", "datetime"}, from.Type) || v.Key == v.Version || v.Key == v.ValidFrom || v.Version == v.ValidFrom {
+			return fmt.Errorf("business versioning needs distinct required key, integer/text version and date/datetime valid-from fields")
+		}
+		if v.ValidUntil != "" {
+			until, ok := info.Field(v.ValidUntil)
+			if !ok || until.Type != from.Type || slices.Contains([]string{v.Key, v.Version, v.ValidFrom}, v.ValidUntil) {
+				return fmt.Errorf("business valid-until must be a distinct field with the valid-from type")
+			}
+		}
+		if v.Pin != "none" && v.Pin != "on_create" && (!strings.HasPrefix(v.Pin, "on_state:") || strings.TrimPrefix(v.Pin, "on_state:") == "") {
+			return fmt.Errorf("business version pin policy must be none, on_create or on_state:<state>")
+		}
+	}
+	seen := map[string]bool{}
+	for _, pin := range info.VersionPins {
+		reference, ok := info.Field(pin.Reference)
+		version, exists := info.Field(pin.Version)
+		if !ok || reference.Type != "reference" || reference.Ref == "" || !exists || !version.ReadOnly || pin.Reference == pin.Version || seen[pin.Reference] || seen[pin.Version] {
+			return fmt.Errorf("business version pin needs a distinct reference and read-only version field")
+		}
+		seen[pin.Reference], seen[pin.Version] = true, true
+		source, ok := lookup(reference.Ref)
+		if !ok || source.App != info.App || source.Versioning == nil || source.Versioning.Pin == "none" {
+			return fmt.Errorf("business version pin source must declare a same-authority pin policy")
+		}
+		selected, ok := source.Field(source.Versioning.Version)
+		if !ok || selected.Type != version.Type {
+			return fmt.Errorf("business version pin field type differs from its source")
+		}
+		if policy := source.Versioning.Pin; strings.HasPrefix(policy, "on_state:") && (info.Lifecycle == nil || !slices.ContainsFunc(info.Lifecycle.States, func(s State) bool { return s.Name == strings.TrimPrefix(policy, "on_state:") })) {
+			return fmt.Errorf("business version pin state is not declared by the consumer")
+		}
+	}
+	return nil
+}
+
+func VersioningConstraints(v *Versioning) []Constraint {
+	if v == nil {
+		return nil
+	}
+	return []Constraint{
+		{Name: "business-version-unique", Kind: "unique", Fields: []string{v.Key, v.Version}, Scope: "tenant", Message: "The business key and version must be unique", Translations: map[string]string{"zh-CN": "业务标识和版本必须唯一"}},
+	}
+}
+
+type BusinessVersionRuntime interface {
+	PrepareBusinessVersions(Caller, any, time.Time) *kernel.Error
+}
+
+func (c Caller) PrepareBusinessVersions(record any, at time.Time) *kernel.Error {
+	if c.Replaying {
+		return nil
+	}
+	if r, ok := c.rt.(BusinessVersionRuntime); ok {
+		return r.PrepareBusinessVersions(c, record, at)
+	}
+	return nil
+}
+
+// Constraint is a versioned, pure write invariant of an object.
+// It is part of the object's publication, not a second executable asset.
+type Constraint struct {
+	Name         string            `json:"name"`
+	Kind         string            `json:"kind" enum:"required,unique,range,pattern,expression,cardinality,immutable,temporal"`
+	Fields       []string          `json:"fields"`
+	Expr         *Expr             `json:"expr,omitempty"`
+	Message      string            `json:"message"`
+	Translations map[string]string `json:"translations,omitempty"`
+	Scope        string            `json:"scope,omitempty"`
+	Level        string            `json:"level,omitempty" enum:"record,txn"`
+	Reads        *RuleReadSpec     `json:"reads,omitempty"`
+}
+
+func (c *Constraint) UnmarshalJSON(raw []byte) error {
+	type plain Constraint
+	return strictTxn(raw, (*plain)(c))
+}
+
+// ConstraintSpec uses only declared same-owner paths and complete collections.
+// Partial/visible sets cannot prove a storage invariant.
+func ConstraintSpec(info EntityInfo, constraint Constraint) RuleReadSpec {
+	spec := RuleReadSpec{Object: info.Type}
+	if constraint.Reads != nil {
+		spec.Collections = constraint.Reads.Collections
+	}
+	return spec
+}
+
+// ConstraintEntity includes existing Record metadata in the rule schema.
+func ConstraintEntity(info EntityInfo) EntityInfo {
+	info.Fields = slices.Clone(info.Fields)
+	info.Fields = append(info.Fields, FieldInfo{Name: "id", Type: "text"}, FieldInfo{Name: "archived", Type: "boolean"})
+	return info
+}
+
+// CheckConstraints is shared by native declarations and builder publication.
+// A host must supply an explicit accepted transaction boundary for txn rules.
+func CheckConstraints(info EntityInfo, lookup func(string) (EntityInfo, bool), transactionBoundary bool, engines ...RuleEngine) error {
+	if len(info.Constraints) > 64 {
+		return fmt.Errorf("object supports at most 64 constraints")
+	}
+	seen := map[string]bool{}
+	ownerLookup := func(typ string) (EntityInfo, bool) {
+		if typ == info.Type {
+			return ConstraintEntity(info), true
+		}
+		other, ok := lookup(typ)
+		return ConstraintEntity(other), ok && other.App == info.App
+	}
+	for _, c := range info.Constraints {
+		if !pageNodeID.MatchString(c.Name) || len(c.Name) > 64 || seen[c.Name] || strings.TrimSpace(c.Message) == "" || len(c.Message) > 512 || len(c.Fields) == 0 || len(c.Fields) > 16 {
+			return fmt.Errorf("constraint needs a unique stable name, message and 1-16 fields")
+		}
+		seen[c.Name] = true
+		if !slices.Contains([]string{"required", "unique", "range", "pattern", "expression", "cardinality", "immutable", "temporal"}, c.Kind) {
+			return fmt.Errorf("constraint %s has unknown kind %s", c.Name, c.Kind)
+		}
+		if c.Level != "" && c.Level != "record" && c.Level != "txn" || c.Level == "txn" && !transactionBoundary {
+			return fmt.Errorf("constraint %s needs a known accepted transaction boundary", c.Name)
+		}
+		for i, name := range c.Fields {
+			if _, ok := ConstraintEntity(info).Field(name); !ok || slices.Contains(c.Fields[:i], name) {
+				return fmt.Errorf("constraint %s names an unknown or repeated field %s", c.Name, name)
+			}
+		}
+		for language, message := range c.Translations {
+			if language != "zh-CN" || strings.TrimSpace(message) == "" || len(message) > 512 {
+				return fmt.Errorf("constraint %s has an invalid message translation", c.Name)
+			}
+		}
+		if c.Kind != "unique" && c.Scope != "" {
+			return fmt.Errorf("only unique constraints have a scope")
+		}
+		if c.Kind == "unique" && c.Scope != "" && c.Scope != "tenant" {
+			path, err := ConstraintScopePath(info, c.Scope)
+			if err != nil {
+				return err
+			}
+			if _, err := RecordPathField(info.Type, path, ownerLookup); err != nil {
+				return fmt.Errorf("constraint %s scope: %w", c.Name, err)
+			}
+		}
+		if c.Kind == "immutable" && (c.Expr == nil && info.Lifecycle == nil || c.Level == "txn") {
+			return fmt.Errorf("immutable constraint %s needs a lifecycle and record level", c.Name)
+		}
+		needsExpr := slices.Contains([]string{"range", "pattern", "expression", "cardinality", "temporal"}, c.Kind)
+		if c.Kind != "immutable" && needsExpr != (c.Expr != nil) {
+			return fmt.Errorf("constraint %s has an invalid expression shape", c.Name)
+		}
+		if c.Reads != nil {
+			if c.Reads.Object != "" && c.Reads.Object != info.Type || len(c.Reads.Inputs) > 0 || c.Expr == nil {
+				return fmt.Errorf("constraint reads cannot accept invocation inputs")
+			}
+			for _, set := range c.Reads.Collections {
+				object, ok := ownerLookup(set.Object)
+				if !ok || object.App != info.App || set.App != info.App || set.Policy != "complete" || set.Of != "" && set.Of != "$subject" {
+					return fmt.Errorf("constraint collections must be complete and owned by the application")
+				}
+			}
+		}
+		if c.Expr != nil {
+			if c.Expr.Kind != "boolean" {
+				return fmt.Errorf("constraint %s must return boolean", c.Name)
+			}
+			if _, err := RuleSchema(*c.Expr, ConstraintSpec(info, c), ownerLookup, engines...); err != nil {
+				return fmt.Errorf("constraint %s: %w", c.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+// parent is unambiguous only with one declared scalar reference. Otherwise the
+// builder must choose an explicit reference path (at most 16 segments).
+func ConstraintScopePath(info EntityInfo, scope string) ([]string, error) {
+	if scope == "parent" {
+		var refs []string
+		for _, field := range info.Fields {
+			if field.Type == "reference" {
+				refs = append(refs, field.Name)
+			}
+		}
+		if len(refs) != 1 {
+			return nil, fmt.Errorf("parent scope needs one reference; choose an explicit path")
+		}
+		return refs, nil
+	}
+	path := strings.Split(scope, ".")
+	if len(path) > 16 {
+		return nil, fmt.Errorf("constraint scope exceeds 16 segments")
+	}
+	return path, nil
+}
+
+// RefuseConstraint preserves the original kernel error vocabulary and supplies
+// a distinct host diagnostic code. Replay stores these facts, never the rule.
+func (c Caller) RefuseConstraint(constraint Constraint, record string, values map[string]json.RawMessage, reason string) *kernel.Error {
+	issue := FieldIssue{Code: "constraint_violation", Constraint: constraint.Name, Record: record, Message: constraint.Message, Translations: constraint.Translations, Values: values, Reason: reason, Path: []string{constraint.Fields[0]}}
+	for _, field := range constraint.Fields[1:] {
+		issue.RelatedPaths = append(issue.RelatedPaths, []string{field})
+	}
+	err := Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Constraint {name}: {message}", constraint.Name, constraint.Message)
+	if c.inputRefused != nil {
+		c.inputRefused(err, []FieldIssue{issue})
+	}
+	if c.rt != nil {
+		c.rt.InputRefused(err, []FieldIssue{issue})
+	}
+	return err
+}
 
 // The application model. An app declares its entity types once, as
 // Go structs; the host keeps their records, and gives every type the same
@@ -54,6 +332,9 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
+	// LocalRules exposes the same immutable field Expr for browser preview.
+	// ComputeAt remains the only formal evaluator on accepted writes.
+	LocalRules map[string]Expr
 	// EnterpriseUse says whether this record still actively uses its enterprise references.
 	// Nil keeps every unarchived record current; history always protects deletion.
 	EnterpriseUse    *Expr
@@ -452,6 +733,7 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
+	LocalRules      map[string]Expr     `json:"localRules,omitempty"`
 	EnterpriseUse   *Expr               `json:"enterpriseUse,omitempty"`
 	Versioning      *Versioning         `json:"versioning,omitempty"`
 	VersionPins     []VersionPinBinding `json:"versionPins,omitempty"`
@@ -506,7 +788,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{LocalRules: e.LocalRules, EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	info.RecordFormat, info.RecordImages = e.RecordFormat, slices.Clone(e.RecordImages)
 	if err := checkRecordImageFormats(info); err != nil {
 		return EntityInfo{}, err
@@ -1106,4 +1388,176 @@ func pathTo(t reflect.Type, name string) ([]int, error) {
 		}
 	}
 	return nil, fmt.Errorf("%s has no field %q", t, name)
+}
+
+// ExtensionSource is publication provenance, not an execution binding: an
+// extension remains owned by its original authority when its base is upgraded.
+// The recorded base shape lets the release owner check that upgrade without
+// rewriting the extension's accepted declaration or its customer records.
+type ExtensionSource struct {
+	Base   AssetBinding `json:"base"`
+	Fields []FieldInfo  `json:"fields"`
+}
+
+func (s ExtensionSource) Check(typ string) error {
+	if s.Base.Ref.Check() != nil || s.Base.Ref.Kind != AssetObject || s.Base.Ref.Name != typ || s.Base.SourceVersion == "" || len(s.Fields) == 0 {
+		return fmt.Errorf("extension %s needs its original base package version and shape", typ)
+	}
+	seen := map[string]bool{}
+	for _, field := range s.Fields {
+		if field.Name == "" || field.Type == "" || seen[field.Name] {
+			return fmt.Errorf("extension %s has an invalid original base shape", typ)
+		}
+		seen[field.Name] = true
+	}
+	return nil
+}
+
+// CheckExtension is the one structural check shared by authoring, live writes
+// and upgrade admission. Retained aliases preserve historical names;
+// a writable extension field may never shadow a field supplied by the base.
+func CheckExtension(extension, base EntityInfo) error {
+	if extension.Extends == "" || extension.Extends != base.Type || extension.Type == base.Type {
+		return fmt.Errorf("extension %s has an unavailable base %s", extension.Type, extension.Extends)
+	}
+	link, ok := extension.Field("base")
+	if !ok || link.Type != "reference" || link.Ref != base.Type || !link.Required {
+		return fmt.Errorf("extension %s needs a required base reference to %s", extension.Type, base.Type)
+	}
+	for _, field := range extension.Fields {
+		if field.Name == "base" || field.ReadOnly && field.AliasOf != "" {
+			continue
+		}
+		if _, exists := base.Field(field.Name); exists {
+			return fmt.Errorf("extension %s field %s conflicts with base %s; declare a migration to rename the extension field", extension.Type, field.Name, base.Type)
+		}
+	}
+	if source := extension.ExtensionSource; source != nil {
+		if err := source.Check(base.Type); err != nil {
+			return err
+		}
+		if base.App != "" && source.Base.Ref.App != base.App {
+			return fmt.Errorf("extension %s base authority differs from its source package", extension.Type)
+		}
+		for _, field := range source.Fields {
+			next, exists := base.Field(field.Name)
+			if !exists || field.Type != next.Type || field.Ref != next.Ref || field.Required != next.Required || field.ReadOnly != next.ReadOnly || field.AliasOf != next.AliasOf || !slices.Equal(field.Choices, next.Choices) || !reflect.DeepEqual(field.Property, next.Property) {
+				return fmt.Errorf("extension %s source %s@%s has an incompatible base field %s; review and republish the extension against the new package", extension.Type, base.Type, source.Base.SourceVersion, field.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// Interface is a shape several entity types share ( A2, Foundry's
+// Ontology interfaces): named fields with their kinds. An entity type that
+// lists it in Entity.Implements must carry every one of those fields with the
+// same kind; the host refuses to compose otherwise. Interfaces are declared by
+// the app that owns the idea (`core.coded`) and implemented by any app's
+// entities, so a page or query written against the interface works for all
+// of them. An interface carries no storage and no actions of its own.
+type Interface struct {
+	Name        string           `json:"name"`                  // <app>.<name>, lower-case letters and digits
+	Title       string           `json:"title"`                 // what people call it
+	Description string           `json:"description,omitempty"` // what implementing it means
+	Fields      []InterfaceField `json:"fields"`                // the fields an implementation must have
+}
+
+// InterfaceField is one field an implementation must have, by name and kind.
+type InterfaceField struct {
+	Name  string `json:"name"`
+	Type  string `json:"type"` // a FieldInfo type: text, integer, decimal, money, date, datetime, boolean, choice, reference, references, tags, longtext
+	Title string `json:"title"`
+}
+
+var interfaceName = regexp.MustCompile(`^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$`)
+
+// Check says the interface is well declared and belongs to app.
+func (i Interface) Check(app string) error {
+	if !interfaceName.MatchString(i.Name) || i.Name[:len(app)+1] != app+"." {
+		return fmt.Errorf("interface %q: not <%s>.<name> in lower-case letters and digits", i.Name, app)
+	}
+	if i.Title == "" || i.Description == "" || len(i.Fields) == 0 {
+		return fmt.Errorf("interface %s lacks a title, a description or fields", i.Name)
+	}
+	for k, f := range i.Fields {
+		if f.Name == "" || f.Type == "" || slices.ContainsFunc(i.Fields[:k], func(x InterfaceField) bool { return x.Name == f.Name }) {
+			return fmt.Errorf("interface %s: field %q unnamed, untyped or repeated", i.Name, f.Name)
+		}
+	}
+	return nil
+}
+
+// Implements says info carries every field of the interface with its kind;
+// the error names the first field it lacks.
+func (i Interface) Implements(info EntityInfo) error {
+	for _, want := range i.Fields {
+		k := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == want.Name })
+		if k < 0 {
+			return fmt.Errorf("%s implements %s but has no field %s", info.Type, i.Name, want.Name)
+		}
+		if info.Fields[k].Type != want.Type {
+			return fmt.Errorf("%s implements %s but its field %s is %s, not %s", info.Type, i.Name, want.Name, info.Fields[k].Type, want.Type)
+		}
+	}
+	return nil
+}
+
+// CheckInterfaces verifies, once every app is composed, that the interfaces
+// declared across manifests are distinct and that every entity implements the
+// interfaces it names. infos are the described entities by type.
+func CheckInterfaces(manifests []Manifest, infos map[string]EntityInfo) error {
+	declared := map[string]Interface{}
+	for _, m := range manifests {
+		for _, i := range m.Interfaces {
+			if err := i.Check(m.ID); err != nil {
+				return err
+			}
+			if _, dup := declared[i.Name]; dup {
+				return fmt.Errorf("interface %s is declared twice", i.Name)
+			}
+			declared[i.Name] = i
+		}
+	}
+	for _, m := range manifests {
+		for _, e := range m.Entities {
+			for k, name := range e.Implements {
+				i, ok := declared[name]
+				if !ok {
+					return fmt.Errorf("%s implements %s, which no app declares", e.Type, name)
+				}
+				if slices.Contains(e.Implements[:k], name) {
+					return fmt.Errorf("%s implements %s twice", e.Type, name)
+				}
+				info, ok := infos[e.Type]
+				if !ok {
+					return fmt.Errorf("%s implements %s but was not described", e.Type, name)
+				}
+				if err := i.Implements(info); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// Interfaces are the interfaces declared across manifests, by name, sorted.
+func Interfaces(manifests []Manifest) []Interface {
+	var out []Interface
+	for _, m := range manifests {
+		out = append(out, m.Interfaces...)
+	}
+	slices.SortFunc(out, func(a, b Interface) int { return compareStrings(a.Name, b.Name) })
+	return out
+}
+
+func compareStrings(a, b string) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
 }

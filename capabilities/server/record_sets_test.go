@@ -66,7 +66,7 @@ func (o *recordSetOwner) Submit(c platform.Caller, s *pb.Submission, at time.Tim
 
 func recordSetTenant(t *testing.T, owner *recordSetOwner) *Tenant {
 	t.Helper()
-	return composeTenant(t, "record-sets", []Seat{seatOf("writer", "invariants:operator"), seatOf("viewer", "invariants:observer")}, owner)
+	return composeTenant(t, "record-sets", []platform.Seat{seatOf("writer", "invariants:operator"), seatOf("viewer", "invariants:observer")}, owner)
 }
 
 func TestOwnedRelationsAtomicCardinalityAndReplay(t *testing.T) {

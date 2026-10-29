@@ -4,10 +4,8 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -16,7 +14,7 @@ import (
 // UAF 1.3 states, for most of its relationship stereotypes, which ends are
 // allowed: "Value for the client metaproperty must be stereotyped
 // «ActualPerson»…". The metamodel reader takes those rules out of the XMI
-// (uaf.Stereotype.Client/Supplier); this file turns them into the contracts the
+// (DirectoryType.Client/Supplier); this file turns them into the contracts the
 // host checks, states the profile's own rules for the constructs the standard
 // leaves open, and names — with the standard's own words — every place the
 // profile goes beyond it. Nothing else decides what may be joined: element
@@ -57,70 +55,12 @@ type Contract struct {
 }
 
 // Contracts are the profile's relationship contracts, by stereotype name.
-func Contracts(mm *uaf.Metamodel) []Contract {
-	byName := map[string]Contract{}
-	for _, n := range mm.Names() {
-		st := mm.Stereotypes[n]
-		if !mm.Relationship(n) || len(st.Client) == 0 && len(st.Supplier) == 0 {
-			continue
-		}
-		byName[n] = Contract{Stereotype: n, Client: st.Client, Supplier: st.Supplier, Basis: endRules(st)}
-	}
-	for _, c := range platformContracts() {
-		if from, ok := byName[c.Stereotype]; ok { // keep the standard's ends and the text they come from
-			c.Client, c.Supplier, c.Basis = from.Client, from.Supplier, from.Basis
-		} else if st := mm.Stereotypes[c.Stereotype]; st != nil {
-			c.Client, c.Supplier, c.Basis = st.Client, st.Supplier, endRules(st)
-		}
-		byName[c.Stereotype] = c
-	}
-	out := make([]Contract, 0, len(byName))
-	for _, c := range byName {
-		out = append(out, c)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Stereotype < out[j].Stereotype })
-	return out
-}
-
-// endRules are the constraint texts that state which end accepts what.
-func endRules(st *uaf.Stereotype) []string {
-	var out []string
-	for _, c := range st.Constraints {
-		lower := strings.ToLower(c)
-		if strings.Contains(lower, "client metaproperty") || strings.Contains(lower, "supplier metaproperty") {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// platformContracts are the profile's own rules and its extensions of the
-// standard's. Each says in Note why, so a reader can tell a rule of UAF from a
-// decision of this platform.
-func platformContracts() []Contract {
+func Contracts(mm *DirectoryModel) []Contract {
 	return []Contract{
-		{
-			Stereotype: Placement, Platform: true, Note: "UAF's general resource association. UAF constrains its informationSource and realizes properties, not the ends, so the profile states them: an organisation under an organisation, a place inside a place, a resource inside a resource, a resource at a place.",
-			Extension: []Pair{{Organization, Organization}, {Location, Location}, {Resource, Resource}, {Resource, Location}},
-		},
-		{
-			Stereotype: Membership, Platform: true, Note: "A slot, not a relationship: a party in an organisation. The party may also be an account of this tenant (member:<id>) — accounts are not elements. UAF's owningInstance rule («ActualOrganization») names the organisation end.",
-			Extension: []Pair{{Organization, Organization}, {Person, Organization}},
-		},
-		{
-			Stereotype: Typed, Platform: true, Note: "The platform's instance-to-type link, not UAF.",
-			Extension: []Pair{{"*", "*"}},
-		},
-		{
-			Stereotype: Performs, Platform: true, Note: "UAF's own pairs are conditional and relate performers to the activities, functions and services they perform — never to a Capability. The profile's meaning (an organisation or resource has a capability) is «Exhibits», which the profile offers beside this; this pair stays accepted so models made before  keep working.",
-			Extension: []Pair{{"*", Capability}},
-		},
-		{
-			Stereotype: Owns, Note: "An organisation answers for what it holds: its posts, the places it runs, its systems and resources, and the goals it is set. UAF's supplier names projects, responsibilities and milestones; the profile adds these four.",
-			Extension: []Pair{
-				{Organization, Post}, {Organization, Location}, {Organization, Resource}, {Organization, System}, {Organization, Goal},
-			},
-		},
+		{Stereotype: Placement, Platform: true, Extension: []Pair{{Organization, Organization}}},
+		{Stereotype: Membership, Platform: true, Extension: []Pair{{Person, Organization}, {Organization, Organization}}},
+		{Stereotype: FillsPost, Platform: true, Extension: []Pair{{Person, Post}}},
+		{Stereotype: Owns, Platform: true, Extension: []Pair{{Organization, Post}}},
 	}
 }
 
@@ -129,7 +69,7 @@ func platformContracts() []Contract {
 // names the ends the relationship does have, and cites the standard, so a
 // modeller learns the model instead of reading a refusal. The full rule text
 // stays in the contract's Basis, for a surface with room to show it.
-func Allowed(contracts []Contract, mm *uaf.Metamodel, stereotype, source, target string) (bool, string) {
+func Allowed(contracts []Contract, mm *DirectoryModel, stereotype, source, target string) (bool, string) {
 	var c Contract
 	found := false
 	for _, x := range contracts {
@@ -150,7 +90,7 @@ func Allowed(contracts []Contract, mm *uaf.Metamodel, stereotype, source, target
 		if anyEnd(mm, c.Client, source) && anyEnd(mm, c.Supplier, target) {
 			return true, ""
 		}
-		ends := fmt.Sprintf("«%s» joins %s (client) to %s (supplier) in UAF %s", stereotype, list(c.Client), list(c.Supplier), mm.Version)
+		ends := fmt.Sprintf("«%s» joins %s (client) to %s (supplier) in directory %s", stereotype, list(c.Client), list(c.Supplier), mm.Version)
 		if ext := pairs(c.Extension); ext != "" {
 			ends += ", and " + ext + " in this profile"
 		}
@@ -182,7 +122,7 @@ func pairs(ps []Pair) string {
 // anyEnd reports whether a stereotype is one of the named ends or a
 // specialisation of one; "*" is any element and an empty list constrains
 // nothing.
-func anyEnd(mm *uaf.Metamodel, ends []string, stereotype string) bool {
+func anyEnd(mm *DirectoryModel, ends []string, stereotype string) bool {
 	if len(ends) == 0 {
 		return true
 	}
@@ -210,7 +150,7 @@ func EndsFor(c Contract) []Pair {
 }
 
 // decideRelationship validates before exposing any change to the model.
-func decideRelationship(m *Model, mm *uaf.Metamodel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *kernel.Error) {
+func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := func(msg string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, msg, args...)
 	}
@@ -355,7 +295,7 @@ func closingUsage(m Model, id string, day platform.Date) string {
 	return ""
 }
 
-func checkSourceRelationships(m Model, mm *uaf.Metamodel, prefix string, today platform.Date) *kernel.Error {
+func checkSourceRelationships(m Model, mm *DirectoryModel, prefix string, today platform.Date) *kernel.Error {
 	for _, r := range m.Relationships {
 		if !strings.HasPrefix(r.ID, prefix) {
 			continue
@@ -383,7 +323,7 @@ func checkSourceRelationships(m Model, mm *uaf.Metamodel, prefix string, today p
 
 // ValidateImportedModel lets preview use the same relationship checks as the accepted import.
 func (e *Enterprise) ValidateImportedModel(model Model, sourceTenant string, today platform.Date) error {
-	if refusal := checkSourceRelationships(model, uaf.Current(), "fed:"+sourceTenant+":", today); refusal != nil {
+	if refusal := checkSourceRelationships(model, directory(), "fed:"+sourceTenant+":", today); refusal != nil {
 		return refusal
 	}
 	return nil

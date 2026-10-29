@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 
 	"platformserver/journal"
 )

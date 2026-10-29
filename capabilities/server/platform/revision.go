@@ -49,14 +49,7 @@ type AssetBinding struct {
 // PageReleaseAsset is the single descriptor path for a code page and a page
 // assembled by the builder. Its bindings become closure dependencies.
 func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error) {
-	effective := page.EffectiveModelPage(nil)
-	if err := effective.Document.Check(effective.Sections); err != nil {
-		return ReleaseAsset{}, err
-	}
-	if err := effective.CheckCollectionPorts(); err != nil {
-		return ReleaseAsset{}, err
-	}
-	if err := effective.CheckRecordPorts(); err != nil {
+	if err := page.CheckSafety(); err != nil {
 		return ReleaseAsset{}, err
 	}
 	body, err := json.Marshal(page)
@@ -351,24 +344,19 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 				for _, c := range page.ComputeResources() {
 					bindings = append(bindings, c.Operation)
 				}
-				for _, section := range page.Sections {
-					if section.Function != nil {
-						if section.Widget == "ai-assistant" {
-							asset, ok := lookup[section.Function.Ref]
-							var f AIFunction
-							if !ok || json.Unmarshal(asset.Body, &f) != nil {
-								return empty, fmt.Errorf("AI function dependency is invalid")
-							}
-							if err := page.CheckAIBinding(section, f); err != nil {
-								return empty, err
-							}
-						}
-						bindings = append(bindings, *section.Function)
+				safe, err := page.Safety()
+				if err != nil {
+					return empty, err
+				}
+				for _, trigger := range safe.ActionTriggers {
+					if trigger.Function != nil {
+						bindings = append(bindings, *trigger.Function)
 					}
-					if section.Operation != nil {
-						bindings = append(bindings, *section.Operation)
+					if trigger.Operation != nil {
+						bindings = append(bindings, *trigger.Operation)
 					}
 				}
+
 			}
 			seen := map[AssetRef]bool{}
 			for _, binding := range bindings {
@@ -595,39 +583,42 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 	return added, removed, changed, nil
 }
 
-func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
-	modelLookup := func(typ string) (EntityInfo, bool) {
-		asset, ok := lookup[ModelObject(typ)]
+func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
+	page, err := original.Safety()
+	if err != nil {
+		return err
+	}
+	lookup := func(typ string) (EntityInfo, bool) {
+		asset, ok := assets[ModelObject(typ)]
+		if !ok {
+			for ref, value := range assets {
+				if ref.Kind == AssetObject && ref.Name == typ {
+					asset = value
+					ok = true
+					break
+				}
+			}
+		}
 		info, err := queryObjectDescriptor(asset.Body)
 		return ConstraintEntity(info), ok && err == nil
 	}
 	criteria := func(ref AssetRef) (*RuleCriteria, bool) {
-		asset, ok := lookup[ref]
-		var action Action
-		if !ok || json.Unmarshal(asset.Body, &action) != nil {
+		asset, ok := assets[ref]
+		action, err := releaseActionDescriptor(asset.Body)
+		if !ok || err != nil {
 			return nil, false
 		}
 		reads := RuleReadSpec{Object: action.Target, Inputs: map[string]ExprType{}}
-		mapped := map[string]bool{}
-		for _, section := range page.Sections {
-			if section.Model != nil && section.Model.Options != nil && section.Model.Options.Rule != nil && section.Model.Options.Rule.Action == ref {
-				for name := range section.Model.Options.Rule.Inputs {
-					mapped[name] = true
-				}
-			}
-		}
-		for _, f := range action.Payload {
-			if mapped[f.Name] {
-				reads.Inputs[f.Name] = ExprType{Kind: RuleFieldKind(f.Type), Object: f.Ref}
-			}
+		for _, field := range action.Payload {
+			reads.Inputs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
 		}
 		return &RuleCriteria{Reads: reads}, true
 	}
-	if err := page.CheckModelBindings(modelLookup, criteria); err != nil {
-		return err
-	}
-	for _, section := range page.Sections {
-		for _, model := range section.ModelBindings() {
+	for _, binding := range page.DataBindings {
+		if err := page.CheckDataBinding(binding, lookup, criteria); err != nil {
+			return err
+		}
+		for _, model := range binding.ModelBindings() {
 			sets := []*ModelRecordSet{model.Set}
 			if model.Options != nil {
 				sets = append(sets, model.Options.Set)
@@ -636,299 +627,172 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 				if set == nil || set.Query == nil {
 					continue
 				}
-				asset, ok := lookup[set.Query.Ref]
+				asset, ok := assets[set.Query.Ref]
 				var query NamedQuery
 				if !ok || asset.SourceVersion != set.Query.SourceVersion || json.Unmarshal(asset.Body, &query) != nil || query.Object != model.Type {
-					return fmt.Errorf("section %s: frozen model query type or source version differs", section.ID)
+					return fmt.Errorf("binding %s frozen model source differs", binding.ID)
 				}
 			}
 		}
+		for _, resource := range binding.Resources {
+			if resource.Asset == nil {
+				continue
+			}
+			asset, ok := assets[resource.Asset.Ref]
+			if !ok || resource.Asset.SourceVersion != "" && asset.SourceVersion != resource.Asset.SourceVersion {
+				return fmt.Errorf("binding %s exact resource is unavailable", binding.ID)
+			}
+		}
 	}
-	page = page.EffectiveModelPage(modelLookup)
-	for _, s := range page.Sections {
-		if q, ok := page.InterfaceQueryForSection(s); ok {
-			named, err := frozenPageInterfaceQuery(q, lookup)
+	for _, trigger := range page.ActionTriggers {
+		object := page.Object.Name
+		for _, binding := range page.DataBindings {
+			if binding.ID == trigger.Binding {
+				object = binding.ObjectRef(page).Name
+			}
+		}
+		for _, ref := range trigger.Actions {
+			asset, ok := assets[ref]
+			action, err := releaseActionDescriptor(asset.Body)
+			if !ok || err != nil || StaticControlAction(action) || action.Target != object {
+				return fmt.Errorf("page action owner or target is unavailable")
+			}
+		}
+		if trigger.InlineEdit != nil {
+			asset, ok := assets[trigger.InlineEdit.Action]
+			action, err := releaseActionDescriptor(asset.Body)
+			info, found := lookup(object)
+			if !ok || !found || err != nil || (Section{InlineEdit: trigger.InlineEdit}).CheckTableEdit(info, action) != nil {
+				return fmt.Errorf("page edit fields differ from original action")
+			}
+		}
+		if len(trigger.Defaults) > 0 {
+			if len(trigger.Actions) != 1 {
+				return fmt.Errorf("page parameters need one original action")
+			}
+			action, err := releaseActionDescriptor(assets[trigger.Actions[0]].Body)
 			if err != nil {
 				return err
 			}
-			if err := page.CheckInterfaceSection(s, named); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := page.CheckExplorationBinding(s); err != nil {
-			return err
-		}
-		if err := checkFrozenExploration(page, s, lookup); err != nil {
-			return err
-		}
-		if err := page.CheckContextViewBinding(s); err != nil {
-			return err
-		}
-		if contextView(s.Widget) {
-			refs := []AssetRef{}
-			if s.Widget == "avatar-stack" || s.RecordVariable != "" {
-				ref := s.Object
-				if ref.Name == "" {
-					ref = page.Object
-				}
-				refs = append(refs, ref)
-			}
-			if s.Avatar != nil && s.Avatar.ContextVariable != "" {
-				refs = append(refs, page.RecordResourceObject(s.Avatar.ContextVariable))
-			}
-			for _, ref := range refs {
-				asset, ok := lookup[ref]
-				info, err := queryObjectDescriptor(asset.Body)
-				shown := s.Object
-				if shown.Name == "" {
-					shown = page.Object
-				}
-				if !ok || err != nil || !frozenObjectOwnerMatches(asset, ref) || ref == shown && s.CheckContextViews(info) != nil {
-					return fmt.Errorf("frozen context presentation object or fields are unavailable")
+			info, _ := lookup(object)
+			for _, mapping := range trigger.Defaults {
+				field, ok := info.Field(mapping.Field)
+				index := slices.IndexFunc(action.Payload, func(f Field) bool { return f.Name == mapping.Parameter })
+				if !ok || index < 0 || !ActionParameterCompatible(field, action.Payload[index]) {
+					return fmt.Errorf("page action parameter differs from original readable field")
 				}
 			}
 		}
-		if err := page.CheckHistoryBinding(s); err != nil {
-			return err
-		}
-		if s.HistoryLimit > 0 {
-			ref := s.Object
-			if ref.Name == "" {
-				ref = page.Object
-			}
-			asset, ok := lookup[ref]
-			if !ok || !frozenObjectOwnerMatches(asset, ref) {
-				return fmt.Errorf("frozen history object does not match its actual entity owner")
+		if trigger.Function != nil {
+			asset, ok := assets[trigger.Function.Ref]
+			var function AIFunction
+			if !ok || asset.SourceVersion != trigger.Function.SourceVersion || json.Unmarshal(asset.Body, &function) != nil || function.Object != object {
+				return fmt.Errorf("page function original source is unavailable")
 			}
 		}
-		if err := page.CheckSceneBinding(s, func(ref AssetRef) (EntityInfo, bool) {
-			a, ok := lookup[ref]
-			info, err := queryObjectDescriptor(a.Body)
-			return info, ok && err == nil && info.App == ref.App
-		}); err != nil {
-			return err
-		}
-		if err := page.CheckCollaborationBinding(s); err != nil {
-			return err
-		}
-		if err := s.CheckServices(func(ref AssetRef) (EntityInfo, bool) {
-			asset, ok := lookup[ref]
-			var descriptor struct {
-				Type   string      `json:"type"`
-				Entity *EntityInfo `json:"entity"`
+		if trigger.Operation != nil {
+			asset, ok := assets[trigger.Operation.Ref]
+			var operation Operation
+			if !ok || asset.SourceVersion != trigger.Operation.SourceVersion || json.Unmarshal(asset.Body, &operation) != nil || operation.Check() != nil {
+				return fmt.Errorf("page operation original source is unavailable")
 			}
-			var info EntityInfo
-			err := json.Unmarshal(asset.Body, &descriptor)
-			if descriptor.Entity != nil {
-				info = *descriptor.Entity // service names may differ from their actual app owner
-			} else if err == nil {
-				err = json.Unmarshal(asset.Body, &info)
-			}
-			return info, ok && err == nil && descriptor.Type == info.Type
-		}, func(ref AssetRef) (Action, bool) {
-			asset, ok := lookup[ref]
-			var action Action
-			err := json.Unmarshal(asset.Body, &action)
-			return action, ok && err == nil
-		}); err != nil {
-			return err
 		}
 	}
-	for _, s := range page.Sections {
-		if s.Widget != "record-links" {
+	if err := page.InputSchema.CheckVariables(); err != nil {
+		return err
+	}
+	if err := page.InputSchema.CheckQuerySets(); err != nil {
+		return err
+	}
+	for id, compute := range page.ComputeResources() {
+		asset, ok := assets[compute.Operation.Ref]
+		var op Operation
+		object, found := lookup(page.RecordResourceObject(compute.RecordVariable).Name)
+		if !ok || !found || asset.SourceVersion != compute.Operation.SourceVersion || json.Unmarshal(asset.Body, &op) != nil || page.CheckComputeResource(compute, object, op, page.InputSchema.Variables[id].Type, lookup) != nil {
+			return fmt.Errorf("frozen compute resource contract is unavailable")
+		}
+	}
+	for _, v := range page.InputSchema.Variables {
+		if v.Source == nil {
 			continue
 		}
-		ref := s.Object
-		if ref.Name == "" {
-			ref = page.Object
-		}
-		asset, ok := lookup[ref]
-		parent, err := queryObjectDescriptor(asset.Body)
-		if !ok || err != nil || s.CheckRecordLinks(parent, func(typ string) (EntityInfo, bool) {
-			for ref, asset := range lookup {
-				if ref.Kind == AssetObject && ref.Name == typ {
-					info, err := queryObjectDescriptor(asset.Body)
-					return info, err == nil
-				}
+		if v.Mode == "property" && v.Source.Object != nil {
+			info, ok := lookup(v.Source.Object.Name)
+			if !ok || page.CheckPropertySchema(v, info) != nil {
+				return fmt.Errorf("frozen property schema is unavailable")
 			}
-			return EntityInfo{}, false
-		}) != nil {
-			return fmt.Errorf("frozen record link schema is unavailable")
 		}
-	}
-
-	for _, s := range page.Sections {
-		if s.Widget != "action-table" && s.Widget != "inline-action" {
-			continue
-		}
-		ref := s.Object
-		if ref.Name == "" {
-			ref = page.Object
-		}
-		object, ok := lookup[ref]
-		info, err := queryObjectDescriptor(object.Body)
-		if !ok || err != nil || s.Widget == "inline-action" && page.Document == nil || len(s.Actions) != 1 {
-			return fmt.Errorf("frozen %s object is unavailable", s.Widget)
-		}
-		asset, ok := lookup[s.Actions[0]]
-		action, err := releaseActionDescriptor(asset.Body)
-		if !ok || err != nil {
-			return fmt.Errorf("frozen %s declaration is unavailable", s.Widget)
-		}
-		if s.Widget == "action-table" {
-			err = s.CheckActionTable(info, action)
-		} else {
-			err = s.CheckInlineAction(info, action)
-		}
-		if err != nil {
-			return fmt.Errorf("frozen %s: %w", s.Widget, err)
-		}
-	}
-	for _, s := range page.Sections {
-		if err := page.CheckObservation(s, func(ref AssetRef) (EntityInfo, bool) {
-			a, ok := lookup[ref]
-			if !ok {
-				return EntityInfo{}, false
+		if v.Scope == "application" && v.Mode == "resource" && v.Type == "filter" && v.Source.Object != nil {
+			info, ok := lookup(v.Source.Object.Name)
+			if !ok || CheckFilterSchema(*v.Source, info) != nil {
+				return fmt.Errorf("frozen application filter schema is unavailable")
 			}
-			info, err := queryObjectDescriptor(a.Body)
-			return info, err == nil && info.App == ref.App && info.Type == ref.Name
-		}); err != nil {
-			return err
-		}
-	}
-	for _, s := range page.Sections {
-		if s.Widget != "collection-analysis" && s.Widget != "record-comparison" && s.Widget != "record-card" && s.Widget != "sparkline-kpi" && s.Widget != "treemap" && s.Widget != "tag-counts" && s.Widget != "heatmap" && s.Widget != "record-scatter" && s.Widget != "record-map" && s.Widget != "histogram" && s.Widget != "term-counts" && s.Widget != "record-timeline" && s.Widget != "kanban" && s.Widget != "status-tracker" && s.Widget != "record-list" && s.Widget != "record-chart" && s.Widget != "record-events" && s.Widget != "record-picker" && s.Widget != "record-leaderboard" && s.Widget != "summary-stats" && s.Widget != "record-gantt" && s.Widget != "record-calendar" && s.MetricPresentation == nil {
-			continue
-		}
-		if page.SectionInterface(s) != "" {
-			continue // its frozen common shape was checked above
-		}
-		ref := s.Object
-		if ref.Name == "" {
-			ref = page.Object
-		}
-		asset, ok := lookup[ref]
-		info, err := queryObjectDescriptor(asset.Body)
-		if !ok || err != nil || page.Document == nil || page.CheckSectionFields(s, info) != nil || page.CheckRecordComparisonBinding(s) != nil {
-			return fmt.Errorf("frozen %s schema is unavailable", s.Widget)
 		}
 	}
 	namedSources := map[AssetBinding]NamedQuery{}
-	if page.Document != nil {
-		for id, c := range page.ComputeResources() {
-			asset, ok := lookup[c.Operation.Ref]
-			var op Operation
-			ref := page.RecordResourceObject(c.RecordVariable)
-			objectAsset, exists := lookup[ref]
-			object, err := queryObjectDescriptor(objectAsset.Body)
-			if !ok || !exists || err != nil || json.Unmarshal(asset.Body, &op) != nil || page.CheckComputeResource(c, object, op, page.Document.Variables[id].Type, modelLookup) != nil {
-				return fmt.Errorf("frozen compute resource contract is unavailable")
+	for id, plan := range page.InputSchema.Queries {
+		if plan.Interface != "" {
+			named, err := frozenPageInterfaceQuery(plan, assets)
+			if err != nil {
+				return err
 			}
+			if err := page.CheckInterfaceQuery(plan, named); err != nil {
+				return err
+			}
+			continue
 		}
-		if err := page.Document.CheckQuerySets(); err != nil {
-			return err
+		asset, ok := assets[plan.Object]
+		object, err := queryObjectDescriptor(asset.Body)
+		if !ok || err != nil {
+			return fmt.Errorf("page query %s object is unavailable", id)
 		}
-		for _, v := range page.Document.Variables {
-			if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
-				asset, ok := lookup[*v.Source.Object]
-				object, err := queryObjectDescriptor(asset.Body)
-				if !ok || err != nil || page.CheckPropertySchema(v, object) != nil {
-					return fmt.Errorf("frozen property schema is unavailable")
+		var named *Definition
+		if plan.Query != nil {
+			asset, ok := assets[plan.Query.Ref]
+			if !ok || asset.SourceVersion != plan.Query.SourceVersion {
+				return fmt.Errorf("page query %s exact source is unavailable", id)
+			}
+			if plan.Query.Ref.Kind == AssetLinkType {
+				var link LinkType
+				if json.Unmarshal(asset.Body, &link) != nil {
+					return fmt.Errorf("frozen link source is invalid")
 				}
-			}
-			if v.Scope == "application" && v.Mode == "resource" && v.Type == "filter" && v.Source != nil && v.Source.Object != nil {
-				asset, ok := lookup[*v.Source.Object]
-				object, err := queryObjectDescriptor(asset.Body)
-				if !ok || err != nil || CheckFilterSchema(*v.Source, object) != nil {
-					return fmt.Errorf("frozen application filter object or fields are unavailable")
+				parentAsset, pok := assets[link.Parent]
+				childAsset, cok := assets[link.Child]
+				parent, pe := queryObjectDescriptor(parentAsset.Body)
+				child, ce := queryObjectDescriptor(childAsset.Body)
+				parent.App = link.Parent.App
+				child.App = link.Child.App
+				if !pok || !cok || pe != nil || ce != nil || link.CheckSchema(parent, child) != nil {
+					return fmt.Errorf("frozen link endpoints are unavailable")
 				}
+				named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, LinkType: &link}
+			} else {
+				var query NamedQuery
+				if json.Unmarshal(asset.Body, &query) != nil {
+					return fmt.Errorf("frozen named query is invalid")
+				}
+				named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
+				namedSources[*plan.Query] = query
 			}
 		}
-		for id, plan := range page.Document.Queries {
-			if plan.Interface != "" {
-				named, err := frozenPageInterfaceQuery(plan, lookup)
-				if err != nil {
+		for _, v := range page.InputSchema.Variables {
+			if v.Source != nil && v.Source.Query == id {
+				if err := page.InputSchema.CheckAggregateScalar(v, object); err != nil {
 					return err
 				}
-				if err := page.CheckInterfaceQuery(plan, named); err != nil {
-					return fmt.Errorf("page query %s: %w", id, err)
-				}
-				continue
 			}
-			objectAsset, ok := lookup[plan.Object]
-			object, err := queryObjectDescriptor(objectAsset.Body)
-			if !ok || err != nil {
-				return fmt.Errorf("page query %s object is unavailable", id)
-			}
-			var named *Definition
-			if plan.Query != nil {
-				asset, ok := lookup[plan.Query.Ref]
-				if plan.Query.Ref.Kind == AssetLinkType {
-					var l LinkType
-					if json.Unmarshal(asset.Body, &l) != nil {
-						return fmt.Errorf("invalid frozen link type")
-					}
-					parentAsset, pok := lookup[l.Parent]
-					childAsset, cok := lookup[l.Child]
-					parent, pe := queryObjectDescriptor(parentAsset.Body)
-					child, ce := queryObjectDescriptor(childAsset.Body)
-					parent.App = l.Parent.App
-					child.App = l.Child.App
-					if !pok || !cok || pe != nil || ce != nil || l.CheckSchema(parent, child) != nil {
-						return fmt.Errorf("frozen link source schema is unavailable")
-					}
-					named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, LinkType: &l}
-				} else {
-					var query NamedQuery
-					if !ok || json.Unmarshal(asset.Body, &query) != nil {
-						return fmt.Errorf("page query %s named query is unavailable", id)
-					}
-					named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
-				}
-			}
-			for _, v := range page.Document.Variables {
-				if v.Mode == "aggregate" && v.Source != nil && v.Source.Query == id {
-					if err := page.Document.CheckAggregateScalar(v, object); err != nil {
-						return err
-					}
-				}
-			}
-			if err := page.CheckRecordPickerQuery(id, named); err != nil {
-				return err
-			}
-			if err := page.CheckObservationQuery(id, named); err != nil {
-				return err
-			}
-			if err := page.CheckRecordWorkQuery(id, named); err != nil {
-				return err
-			}
-			if err := page.CheckAnalysisQuery(id, named); err != nil {
-				return err
-			}
-			if err := page.CheckResourceListQuery(id, named); err != nil {
-				return err
-			}
-			if err := page.CheckAvatarQuery(id, named, object); err != nil {
-				return err
-			}
-			if err := page.CheckLeaderboardQuery(id, named); err != nil {
-				return err
-			}
-			if err := page.CheckQuerySchema(plan, object, named); err != nil {
-				return fmt.Errorf("page query %s: %w", id, err)
-			}
-			if plan.Query != nil && named != nil && named.Query != nil {
-				namedSources[*plan.Query] = *named.Query
-			}
+		}
+		if err := page.CheckBoundQuery(id, named); err != nil {
+			return err
+		}
+		if err := page.CheckQuerySchema(plan, object, named); err != nil {
+			return err
 		}
 	}
 	return page.CheckQuerySetConditions(namedSources)
 }
 
-// Frozen objects retain their owner's complete definition. Construction fields
-// store choices as source text, while native descriptors use an array. Project
-// these representations before the shared query checker reads the schema.
 func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	var shape struct {
 		Type            string                       `json:"type"`

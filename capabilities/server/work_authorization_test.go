@@ -67,7 +67,7 @@ func (a *approvalDocumentApp) Submit(c platform.Caller, s *pb.Submission, at tim
 	return nil, unknown()
 }
 func approvalOwnerTenant(t *testing.T, id string) *Tenant {
-	seats := []Seat{seatOf("alice", "review:writer"), seatOf("front", "review:writer"), seatOf("bob", "review:reviewer"), seatOf("carol", "review:reviewer"), seatOf("other", "review:reviewer"), seatOf("bot", "review:reviewer")}
+	seats := []platform.Seat{seatOf("alice", "review:writer"), seatOf("front", "review:writer"), seatOf("bob", "review:reviewer"), seatOf("carol", "review:reviewer"), seatOf("other", "review:reviewer"), seatOf("bot", "review:reviewer")}
 	seats[5].Agent = true
 	chart := platform.OrgSeed{Structures: []platform.Structure{{ID: "management", Name: "Management", Kind: "management"}}, Units: []platform.Unit{{ID: "root", Name: "Root", Kind: "company"}, {ID: "office", Name: "Office", Kind: "team", Calendar: "office"}, {ID: "front", Name: "Front", Kind: "team", Calendar: "daily"}}, Edges: []platform.Edge{{Structure: "management", Unit: "office", Parent: "root"}, {Structure: "management", Unit: "front", Parent: "root"}}, Memberships: []platform.Membership{{Party: "member:alice", Unit: "office", Role: "member", Primary: true}, {Party: "member:front", Unit: "front", Role: "member", Primary: true}, {Party: "member:bob", Unit: "office", Role: "manager"}, {Party: "member:bot", Unit: "office", Role: "manager"}, {Party: "member:bob", Unit: "root", Role: "manager"}, {Party: "member:carol", Unit: "root", Role: "head"}}, Calendars: []platform.Calendar{{ID: "office", Name: "Office", Holidays: []platform.Date{"2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07"}}, {ID: "daily", Name: "Daily", Workdays: []int{1, 2, 3, 4, 5, 6, 7}}}}
 	return composeTenant(t, id, seats, enterprise.New(id, chart), work.New(id), newApprovalDocumentApp(id))
@@ -236,9 +236,9 @@ func TestProtectedFieldsKeepHistorySearchExportAndAuditAtOriginalOwner(t *testin
 		}
 	}
 	reads := tn.PersonalReads()
-	if !slices.ContainsFunc(reads, func(r PersonalRead) bool {
+	if !slices.ContainsFunc(reads, func(r platform.PersonalRead) bool {
 		return r.Member == "bob" && r.Type == "review.document" && slices.Equal(r.Fields, []string{"secret"})
-	}) || slices.ContainsFunc(reads, func(r PersonalRead) bool { return r.Member == "alice" }) {
+	}) || slices.ContainsFunc(reads, func(r platform.PersonalRead) bool { return r.Member == "alice" }) {
 		t.Fatalf("protected read audit: %+v", reads)
 	}
 }

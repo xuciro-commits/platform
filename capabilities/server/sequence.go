@@ -30,5 +30,5 @@ func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, 
 		year = date.Year()
 	}
 	key := fmt.Sprintf("%s/%s/%d", c.App, sequence, year)
-	return s.Format(date.Year(), t.sequences.take(key)), nil
+	return s.Format(date.Year(), t.sequences.Take(key)), nil
 }

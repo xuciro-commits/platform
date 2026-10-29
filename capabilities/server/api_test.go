@@ -1,17 +1,22 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"net/http/httptest"
 	"os"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 
 	"platformserver/apps/ai"
-	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 
@@ -23,9 +28,9 @@ import (
 // entity types and payloads they see, and the web edge's types are exactly
 // what the Go types generate.
 func TestAPIContract(t *testing.T) {
-	tn, err := NewTenant("t-1", NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
-		Roles: map[string]string{PlatformApp: Admin, work.ID: "member", knowledge.ID: knowledge.Editor}}}),
-		enterprise.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), flow.New("t-1"), ai.New("t-1"), NewAgents("t-1"), knowledge.New("t-1"))
+	tn, err := NewTenant("t-1", newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
+		Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, work.ID: "member", knowledge.ID: knowledge.Editor}}}),
+		enterprise.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), automation.New("t-1"), ai.New("t-1"), agentowner.New("t-1"), knowledge.New("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +109,7 @@ func TestAPIContract(t *testing.T) {
 	}
 	static := NewHost(nil)
 	static.Handler()
-	if got := TypeScript(static.OpenAPI(nil, nil), KernelModules("../../web/packages/kernel/src/gen")); got != string(want) {
+	if got := transport.TypeScript(static.OpenAPI(nil, nil), transport.KernelModules("../../web/packages/kernel/src/gen")); got != string(want) {
 		t.Errorf("%s is stale: run go run ./cmd/api-types", generated)
 	}
 	const sdk = "../../web/packages/kernel/src/gen/enterprise-sdk.ts"

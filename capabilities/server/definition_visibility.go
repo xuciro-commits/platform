@@ -2,12 +2,14 @@ package platformserver
 
 import (
 	"maps"
+	pageowner "platformserver/studio/pages"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // Member discovery delegates grants and current row readability to their
@@ -22,7 +24,8 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	for _, action := range t.Catalog(m) {
 		actions[action.Schema] = action
 	}
-	pages := pageDefinitionProjection{member: m, entities: entities, actions: actions, definitions: registeredDefinitions, sources: retainedPageDefinitionSources{tenant: t}}
+	sources := retainedPageDefinitionSources{tenant: t}
+	pages := pageowner.DefinitionProjection{Member: m, Entities: entities, Actions: actions, Definitions: registeredDefinitions, Criteria: t.modelCriteria, Function: sources.function, Operation: sources.operation, CheckQuery: checkNamedQuery}
 	out := []platform.Definition{}
 	for _, registered := range registeredDefinitions {
 		if !t.ownerActive(registered.Ref.App) {
@@ -99,13 +102,13 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			if def.Query.Interface != "" {
 				def.QueryVersions = maps.Clone(def.QueryVersions)
 				for version, query := range def.QueryVersions {
-					if visible, ok := visibleInterfaceQuery(query, entities); ok {
+					if visible, ok := pageowner.VisibleQuery(query, entities); ok {
 						def.QueryVersions[version] = visible
 					} else {
 						delete(def.QueryVersions, version)
 					}
 				}
-				if visible, ok := visibleInterfaceQuery(*def.Query, entities); ok {
+				if visible, ok := pageowner.VisibleQuery(*def.Query, entities); ok {
 					def.Query = &visible
 				} else {
 					def.Query = nil
@@ -149,7 +152,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 		case platform.AssetAgent:
-			if def.Agent == nil || !m.Active() || len(m.RolesIn(def.Ref.App)) == 0 && !m.Holds(AgentApp, AgentAdmin) {
+			if def.Agent == nil || !m.Active() || len(m.RolesIn(def.Ref.App)) == 0 && !m.Holds(platform.AgentApp, platform.AgentAdmin) {
 				continue
 			}
 			if def.Source == "builder" && (def.OwnerRecord == "" || !t.readable(m, def.OwnerRecord, time.Now())) {
@@ -234,7 +237,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			def.Protocol = &projected
 		default:
 			if def.Source == "system" {
-				if !m.Active() || !m.Holds(def.Ref.App, construction.Builder) {
+				if !m.Active() || !m.Holds(def.Ref.App, build.Builder) {
 					continue
 				}
 				break
@@ -248,7 +251,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 				continue
 			}
 		case platform.AssetPage:
-			visible, ok := pages.page(def)
+			visible, ok := pages.Page(def)
 			if !ok {
 				continue
 			}
@@ -258,7 +261,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		}
 		out = append(out, def)
 	}
-	out = filterPageNavigation(out)
+	out = pageowner.FilterNavigation(out)
 
 	// An application is offered to whoever may open one of its pages.
 	opens := map[platform.AssetRef]bool{}
@@ -284,7 +287,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 		}
 	}
-	applications := construction.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
+	applications := build.ApplicationProjection{Member: m, Definitions: out, Entities: entities, Pages: opens, Resources: visibleResources, PublishedFlows: publishedFlows}
 	for _, registered := range registeredDefinitions {
 		if !t.ownerActive(registered.Ref.App) {
 			continue
@@ -292,11 +295,11 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 		if t.applicationEntryWithdrawn(registered.Ref) {
 			continue
 		}
-		if def, ok := construction.ProjectApplication(registered, applications); ok {
+		if def, ok := build.ProjectApplication(registered, applications); ok {
 			out = append(out, def)
 		}
 	}
-	out = filterExplorationAssets(out)
+	out = pageowner.FilterExplorationAssets(out)
 	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	visible := map[platform.AssetRef]bool{}
 	for _, def := range out {
@@ -315,12 +318,12 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 // The mutable Build application owns entry availability. Retained definition
 // bytes, independent asset permissions and already accepted work stay intact.
 func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
-	if ref.App != construction.ID || ref.Kind != platform.AssetApp {
+	if ref.App != build.ID || ref.Kind != platform.AssetApp {
 		return false
 	}
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
-	entity := t.records.types[construction.AppType]
+	entity := t.records.types[build.AppType]
 	if entity == nil {
 		return false
 	}
@@ -330,4 +333,25 @@ func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
 		}
 	}
 	return false
+}
+
+type retainedPageDefinitionSources struct{ tenant *Tenant }
+
+func (s retainedPageDefinitionSources) function(binding platform.AssetBinding) (platform.AIFunction, bool) {
+	app := s.tenant.app(binding.Ref.App)
+	owner, ok := app.(platform.FunctionDefinitions)
+	if !ok {
+		return platform.AIFunction{}, false
+	}
+	text, ok := strings.CutPrefix(binding.SourceVersion, app.Manifest().Version+".function-")
+	version, err := strconv.Atoi(text)
+	if !ok || err != nil {
+		return platform.AIFunction{}, false
+	}
+	value, _, exists := owner.FunctionDefinition(binding.Ref.Name, version)
+	return value, exists
+}
+func (s retainedPageDefinitionSources) operation(binding *platform.AssetBinding) (platform.Operation, bool) {
+	value, _, err := s.tenant.pageOperation(binding)
+	return value, err == nil
 }

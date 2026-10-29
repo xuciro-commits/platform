@@ -1,6 +1,8 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import releaseowner "platformserver/studio/releases"
+
+import "platformserver/studio/build"
 
 import (
 	"bytes"
@@ -11,22 +13,23 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"strings"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
+
 	"platformserver/platform"
 )
 
 func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	const tenantID = "release-candidate"
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{construction.ID: construction.Builder}}}
-		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seat), build.New(tenantID))
+		seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}}
+		tenant, err := NewTenant(tenantID, newConsole(tenantID, seat), build.New(tenantID))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,8 +58,8 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 		return e.Body, nil
 	}
 	if _, err := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
-		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
+		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +92,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", preview.CandidateID, "save-1", at); err == nil {
 		t.Fatal("append failure should be returned")
 	}
-	if len(live.releases.candidates) != 0 || len(entries) != 1 {
+	if len(live.releases.Candidates()) != 0 || len(entries) != 1 {
 		t.Fatal("failed append exposed a candidate")
 	}
 	fail = false
@@ -97,7 +100,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err != nil || savedID != preview.CandidateID || len(entries) != 2 {
 		t.Fatalf("candidate was not committed once: %s, %v", savedID, err)
 	}
-	if _, err := platform.ReadCandidate(savedID, live.releases.candidates[savedID]); err != nil {
+	if _, err := platform.ReadCandidate(savedID, live.releases.Candidates()[savedID]); err != nil {
 		t.Fatalf("saved bytes are not the exact candidate: %v", err)
 	}
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", savedID, "save-1", at.Add(time.Hour)); err != nil || len(entries) != 2 {
@@ -115,7 +118,7 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(recovered.releases.candidates[savedID], live.releases.candidates[savedID]) {
+	if !bytes.Equal(recovered.releases.Candidates()[savedID], live.releases.Candidates()[savedID]) {
 		t.Fatal("recovery did not use the committed candidate bytes")
 	}
 	page, err := recovered.SavedReleases(member, 0, 20)
@@ -130,12 +133,12 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err := fromSnapshot.Restore(raw); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(fromSnapshot.releases.candidates[savedID], live.releases.candidates[savedID]) {
+	if !bytes.Equal(fromSnapshot.releases.Candidates()[savedID], live.releases.Candidates()[savedID]) {
 		t.Fatal("snapshot lost the immutable candidate")
 	}
 	// A saved revision does not change the installed development definition or
 	// activate itself; those are separate, still-pending release operations.
-	if live.releases.active != "" || recovered.releases.active != "" {
+	if live.releases.Active() != "" || recovered.releases.Active() != "" {
 		t.Fatal("saving a candidate silently activated it")
 	}
 	CheckReplay(t, live, entries, compose)
@@ -143,19 +146,19 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 
 func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) {
 	const id = "release-route"
-	seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-		Roles: map[string]string{construction.ID: construction.Builder}}}
-	reader := Seat{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin",
-		Roles: map[string]string{construction.ID: construction.User}}}
-	tenant, err := NewTenant(id, NewConsole(id, seat, reader), build.New(id))
+	seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+		Roles: map[string]string{build.ID: build.Builder}}}
+	reader := platform.Seat{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin",
+		Roles: map[string]string{build.ID: build.User}}}
+	tenant, err := NewTenant(id, newConsole(id, seat, reader), build.New(id))
 	if err != nil {
 		t.Fatal(err)
 	}
 	member, _ := tenant.Member("dana")
 	at := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
 	if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
+		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +172,7 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 	handler := host.Handler()
 	post := func(token, candidate string) *httptest.ResponseRecorder {
 		t.Helper()
-		body, _ := json.Marshal(ReleaseSaveRequest{Kind: platform.AssetObject, ID: "O1", CandidateID: candidate, Key: "k1"})
+		body, _ := json.Marshal(releaseowner.ReleaseSaveRequest{Kind: platform.AssetObject, ID: "O1", CandidateID: candidate, Key: "k1"})
 		req := httptest.NewRequest(http.MethodPost, "/v1/releases/candidates", strings.NewReader(string(body)))
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
@@ -179,7 +182,7 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 	if rec := post("reader", preview.CandidateID); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "ERROR_CODE_POLICY_DENIED") || strings.Contains(rec.Body.String(), preview.CandidateID) {
 		t.Fatalf("non-builder learned about a private candidate: %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := post("builder", "sha256-v1:stale"); rec.Code != http.StatusConflict || len(tenant.releases.candidates) != 0 {
+	if rec := post("builder", "sha256-v1:stale"); rec.Code != http.StatusConflict || len(tenant.releases.Candidates()) != 0 {
 		t.Fatalf("stale preview was saved: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := post("builder", preview.CandidateID); rec.Code != http.StatusOK ||
@@ -199,7 +202,7 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 			t.Fatalf("non-builder read private release metadata: %d %s", rec.Code, rec.Body.String())
 		}
 	}
-	var page ReleasePage
+	var page releaseowner.ReleasePage
 	rec := get("builder", "/v1/releases/candidates?limit=1")
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &page) != nil || page.Total != 1 ||
 		len(page.Candidates) != 1 || page.Candidates[0].ID != preview.CandidateID || page.Candidates[0].Title != "Visit" {
@@ -212,10 +215,10 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 	if rec = get("builder", "/v1/releases/candidates?limit=-1"); rec.Code != http.StatusBadRequest {
 		t.Fatalf("invalid release page: %d", rec.Code)
 	}
-	var review SavedReleaseReview
+	var review releaseowner.SavedReleaseReview
 	readReview := func() {
 		t.Helper()
-		review = SavedReleaseReview{}
+		review = releaseowner.SavedReleaseReview{}
 		rec = get("builder", "/v1/releases/candidates/"+preview.CandidateID)
 		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &review) != nil ||
 			review.Preview.CandidateID != preview.CandidateID || len(review.Preview.Included) != len(preview.Included) {
@@ -227,8 +230,8 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 		t.Fatalf("uninstalled saved draft was reported as running: %+v", review)
 	}
 	if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-		Authority: construction.ID, IdempotencyKey: "publish", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
-		Schema: &pb.SchemaRef{Name: construction.ObjectType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err != nil {
+		Authority: build.ID, IdempotencyKey: "publish", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+		Schema: &pb.SchemaRef{Name: build.ObjectType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tenant.ActivateRelease(member, preview.CandidateID, "activate", at); err != nil {
@@ -242,8 +245,8 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 		{"edit", `{"title":"Changed draft"}`}, {"publish", `{}`},
 	} {
 		if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-			Authority: construction.ID, IdempotencyKey: "changed-" + change.schema, Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
-			Schema: &pb.SchemaRef{Name: construction.ObjectType + "." + change.schema, Version: 1}, Payload: []byte(change.payload)}, at); err != nil {
+			Authority: build.ID, IdempotencyKey: "changed-" + change.schema, Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+			Schema: &pb.SchemaRef{Name: build.ObjectType + "." + change.schema, Version: 1}, Payload: []byte(change.payload)}, at); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -272,9 +275,9 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 	id := fmt.Sprintf("release-candidate-%d", time.Now().UnixNano())
 	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{construction.ID: construction.Builder}}}
-		tenant, err := NewTenant(id, NewConsole(id, seat), build.New(id))
+		seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}}
+		tenant, err := NewTenant(id, newConsole(id, seat), build.New(id))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -290,8 +293,8 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 		return journal.AppendAccepted(ctx, id, entry, key, hash)
 	}
 	if _, err := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
-		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
+		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +311,7 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 		return nil, errors.New("connection lost after append")
 	}
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", preview.CandidateID, "save", at); err == nil ||
-		len(live.releases.candidates) != 0 {
+		len(live.releases.Candidates()) != 0 {
 		t.Fatal("lost acknowledgement exposed an unapplied candidate")
 	}
 	reopened, err := OpenJournal(ctx, url)
@@ -324,7 +327,7 @@ func TestJournalAcceptedReleaseCandidateCrashBeforeApplication(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := platform.ReadCandidate(preview.CandidateID, recovered.releases.candidates[preview.CandidateID]); err != nil {
+	if _, err := platform.ReadCandidate(preview.CandidateID, recovered.releases.Candidates()[preview.CandidateID]); err != nil {
 		t.Fatal(err)
 	}
 	recovered.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
@@ -343,25 +346,25 @@ func TestAcceptedReleaseCandidateRejectsCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved := resultformat.Release{Version: 1, Kind: "release-result", Tenant: "t", App: construction.ID,
+	saved := acceptedformat.Release{Version: 1, Kind: "release-result", Tenant: "t", App: build.ID,
 		Member: "dana", Key: "release:k", At: time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC),
 		CandidateID: candidate.ID, Bytes: candidate.Bytes}
-	saved.RequestHash, _ = resultformat.ReleaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, false)
-	raw, err := resultformat.EncodeRelease(saved)
+	saved.RequestHash, _ = acceptedformat.ReleaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, false)
+	raw, err := acceptedformat.EncodeRelease(saved)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var altered resultformat.Release
+	var altered acceptedformat.Release
 	if err := json.Unmarshal(raw, &altered); err != nil {
 		t.Fatal(err)
 	}
 	altered.Bytes = []byte(`{"format":1,"assets":[]}`)
-	altered.Digest, _ = resultformat.DigestRelease(altered)
+	altered.Digest, _ = acceptedformat.DigestRelease(altered)
 	bad, _ := json.Marshal(altered)
-	if _, err := resultformat.DecodeRelease(bad); err == nil {
+	if _, err := acceptedformat.DecodeRelease(bad); err == nil {
 		t.Fatal("valid envelope digest must not excuse a changed candidate")
 	}
-	if _, err := resultformat.DecodeRelease(append(raw, []byte(`{}`)...)); err == nil {
+	if _, err := acceptedformat.DecodeRelease(append(raw, []byte(`{}`)...)); err == nil {
 		t.Fatal("trailing release data was accepted")
 	}
 }
@@ -371,9 +374,9 @@ func TestAcceptedReleaseCandidateRejectsCorruption(t *testing.T) {
 func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 	const tenantID = "release-memory"
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{construction.ID: construction.Builder}}}
-		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seat), build.New(tenantID))
+		seat := platform.Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}}
+		tenant, err := NewTenant(tenantID, newConsole(tenantID, seat), build.New(tenantID))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -385,8 +388,8 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 	member, _ := live.Member("dana")
 	at := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
 	if _, err := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
-		Authority: construction.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
-		Schema:  &pb.SchemaRef{Name: construction.ObjectType + ".create", Version: 1},
+		Authority: build.ID, IdempotencyKey: "create", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+		Schema:  &pb.SchemaRef{Name: build.ObjectType + ".create", Version: 1},
 		Payload: []byte(`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +409,7 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(recovered.releases.candidates[id], live.releases.candidates[id]) || recovered.releases.active != "" {
+	if !bytes.Equal(recovered.releases.Candidates()[id], live.releases.Candidates()[id]) || recovered.releases.Active() != "" {
 		t.Fatal("replay lost the saved candidate or activated it")
 	}
 }
@@ -416,10 +419,10 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 	const tenantID = "release-activate"
 	compose := func() *Tenant {
-		seats := []Seat{{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
-			Roles: map[string]string{construction.ID: construction.Builder}}},
-			{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin", Roles: map[string]string{construction.ID: construction.User}}}}
-		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seats...), build.New(tenantID))
+		seats := []platform.Seat{{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}},
+			{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin", Roles: map[string]string{build.ID: build.User}}}}
+		tenant, err := NewTenant(tenantID, newConsole(tenantID, seats...), build.New(tenantID))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -434,12 +437,12 @@ func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 	submit := func(key, schema string, payload string) {
 		t.Helper()
 		if _, err := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
-			Authority: construction.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: construction.ObjectType, Id: "O1"},
+			Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
 			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at); err != nil {
 			t.Fatal(err)
 		}
 	}
-	submit("create", construction.ObjectType+".create", `{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)
+	submit("create", build.ObjectType+".create", `{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)
 	draft, _ := live.PreviewRelease(member, platform.AssetObject, "O1")
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", draft.CandidateID, "s1", at); err != nil {
 		t.Fatal(err)

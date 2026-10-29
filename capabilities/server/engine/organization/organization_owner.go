@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -63,8 +62,8 @@ func declarations() []platform.Action {
 	from, until := f("from", "date", "Valid from (YYYY-MM-DD; empty: today)", false), f("until", "date", "Valid until, exclusive (empty: open)", false)
 	actions := []platform.Action{
 		platform.Action{Schema: SchemaElementAdd, Target: ElementType, Capability: "elements", Title: "Add element", Roles: admin,
-			Description: "Add an element of the enterprise: an organisation, post, person, capability, location, resource, project or goal, typed by a UAF stereotype.",
-			Payload: []platform.Field{f("stereotype", "string", "UAF stereotype, e.g. ActualOrganization, ActualPost, Capability, ActualLocation", true), f("name", "string", "Name", true),
+			Description: "Add an organisational unit, post or person.",
+			Payload: []platform.Field{f("stereotype", "string", "Directory type: ActualOrganization, ActualPost or ActualPerson", true), f("name", "string", "Name", true),
 				f("kind", "string", "Kind within the stereotype, e.g. factory, line, team; plant, bin; machine", false), f("shortName", "string", "Short name", false),
 				f("legal", "boolean", "A legal entity", false), f("external", "boolean", "Outside the tenant's own enterprise", false), f("properties", "json", "Tagged values of the stereotype", false), from, until}},
 		platform.Action{Schema: SchemaElementEdit, Target: ElementType, Capability: "elements", Title: "Edit element", Roles: admin,
@@ -85,7 +84,7 @@ func declarations() []platform.Action {
 			Payload:     []platform.Field{f("name", "string", "Name", true), f("kind", "string", "Kind", true), f("matrix", "boolean", "An organisation may have several parents", false)}},
 		platform.Action{Schema: SchemaRelationshipAdd, Target: RelationshipType, Capability: "relationships", Title: "Relate", Roles: admin,
 			Description: "Relate two elements: place an organisation under a parent in a kind, make a party a member, fill a post, give a capability, assign responsibility.",
-			Payload: []platform.Field{f("stereotype", "string", "UAF relationship stereotype, e.g. ActualResourceRelationship, ActualOrganizationRole, FillsPost, IsCapableToPerform, ResponsibleFor", true),
+			Payload: []platform.Field{f("stereotype", "string", "Directory relationship: ActualResourceRelationship, ActualOrganizationRole, FillsPost or ResponsibleFor", true),
 				f("source", "string", "Source element id, or member:<id> for a membership", true), f("target", "string", "Target element id", true),
 				f("kind", "string", "For a placement: the relationship kind id", false), f("role", "string", "For a membership: employee, chair, volunteer …", false),
 				f("relation", "string", "e.g. part of, owned by, reports to", false), f("share", "number", "Ownership share", false), f("primary", "boolean", "The party's primary organisation", false), from, until}},
@@ -152,7 +151,7 @@ func (e *Enterprise) Restore(raw json.RawMessage) error {
 }
 
 func (e *Enterprise) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Enterprise", Version: "1", Actions: e.ledger.Catalog,
+	return platform.Manifest{ID: ID, Title: "Organisation", Version: "1", Actions: platform.NewCatalog(directoryActions()...),
 		Reads: []string{ReadOrganization, ReadModel, ReadMetamodel, ReadPublished}, Everyone: []string{ReadModel, ReadMetamodel},
 		ReadSources: map[string]string{ReadOrganization: "record", ReadModel: "record", ReadMetamodel: "record", ReadPublished: "record"}}
 }
@@ -162,7 +161,7 @@ func (e *Enterprise) Manifest() platform.Manifest {
 // decisions, so the person's tenure reads Until and nothing is deleted.
 const memberOffboard = "platform.member.offboard"
 
-// Interested hears the console's offboarding (host.Listener: a platform app
+// Interested hears the console's offboarding (platform.Listener: a platform app
 // given another app's events as owned work).
 func (e *Enterprise) Interested(names []string, _ platform.Event) bool {
 	return slices.Contains(names, memberOffboard)
@@ -246,24 +245,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if err := c.Enterprise().CheckTenantConnection(p.Connection, now); err != nil {
 				return nil, err
 			}
-		case SchemaSliceImport:
-			if p.Link != "" {
-				if err := c.Enterprise().CheckTenantLink(p.Link, p.ConnectionRevision, now); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-	if !c.Replaying && s.GetSchema().GetName() == SchemaViewSave {
-		var v payload
-		if err := json.Unmarshal(s.GetPayload(), &v); err != nil {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid view")
-		}
-		pins := v.Pins
-		for _, p := range pins {
-			if _, err := pinRecord(c, p.Ref, now); err != nil {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This view contains a record pin you may not read")
-			}
+
 		}
 	}
 	e.mu.Lock()
@@ -294,7 +276,36 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			p.From = today
 		}
 		id := s.GetTarget().GetId()
-		mm := uaf.Current()
+		if !c.Replaying {
+			switch s.GetSchema().GetName() {
+			case SchemaElementAdd:
+				if !directoryElement(p.Stereotype) || p.Properties != nil {
+					return nil, invalid("Choose a directory unit, post or person without standard properties")
+				}
+			case SchemaElementEdit, SchemaElementClose, SchemaElementDelete, SchemaElementReopen, SchemaElementReinstate:
+				if existing := e.model.ElementOf(id); existing != nil && (!directoryElement(existing.Stereotype) || existing.Owner != "") {
+					return nil, invalid("This historical enterprise element is read-only")
+				}
+				if p.Properties != nil {
+					return nil, invalid("Standard enterprise properties are read-only")
+				}
+			case SchemaRelationshipEnd:
+				if prior := e.model.RelationshipOf(id); prior != nil {
+					source, target := e.model.ElementOf(prior.Source), e.model.ElementOf(prior.Target)
+					if !directoryRelationship(prior.Stereotype) || source != nil && !directoryElement(source.Stereotype) || target != nil && !directoryElement(target.Stereotype) {
+						return nil, invalid("This historical enterprise relationship is read-only")
+					}
+				}
+			case SchemaRelationshipAdd, SchemaRelationshipChange:
+				if !directoryRelationship(p.Stereotype) {
+					return nil, invalid("Choose a directory relationship")
+				}
+			}
+		}
+		if c.Replaying && (len(p.Properties) > 0 || s.GetSchema().GetName() == SchemaElementAdd && !directoryElement(p.Stereotype)) {
+			return nil, invalid("Recover legacy enterprise inputs with the retained original binary before upgrading")
+		}
+		mm := directory()
 		m := &e.model
 		var supplied map[string]json.RawMessage
 		json.Unmarshal(s.GetPayload(), &supplied)
@@ -314,9 +325,6 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("the element would end before it starts")
 			case m.ElementOf(id) != nil:
 				return nil, conflict
-			}
-			if err := checkProperties(mm, p.Stereotype, p.Properties, !c.Replaying); err != nil {
-				return nil, err
 			}
 			return func(*pb.ChangeRecord) {
 				m.Elements = append(m.Elements, Element{ID: id, Stereotype: p.Stereotype, Name: p.Name, ShortName: p.ShortName, Kind: p.Kind, Legal: p.Legal, External: p.External, From: p.From, Until: p.Until, Properties: p.Properties})
@@ -366,229 +374,8 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			return func(*pb.ChangeRecord) {
 				m.TenantLinks = slices.DeleteFunc(m.TenantLinks, func(link TenantLink) bool { return link.ID == id })
 			}, nil
-		case SchemaSliceSync:
-			if p.Source == "" || strings.ContainsAny(p.Source, " :/") {
-				return nil, invalid("a sync names its source system")
-			}
-			var sync struct {
-				Elements      []Element      `json:"elements"`
-				Relationships []Relationship `json:"relationships"`
-			}
-			if json.Unmarshal(s.GetPayload(), &sync) != nil || sync.Elements == nil {
-				return nil, invalid("a sync carries elements")
-			}
-			owner, ids := "source:"+p.Source, map[string]bool{}
-			stereotypes := map[string]string{}
-			for i := range sync.Elements {
-				el := &sync.Elements[i]
-				switch {
-				case el.ID == "" || el.Name == "":
-					return nil, invalid("every synced element has an id and a name")
-				case mm.Stereotypes[el.Stereotype] == nil || mm.Relationship(el.Stereotype) || mm.Stereotypes[el.Stereotype].Abstract:
-					return nil, invalid("{stereotype} is not a concrete UAF {version} element stereotype", el.Stereotype, mm.Version)
-				case ids[el.ID]:
-					return nil, invalid("{element} is sent twice", el.ID)
-				}
-				if own := m.ElementOf(el.ID); own != nil && own.Owner != owner {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is not {source}'s to change", el.ID, p.Source)
-				}
-				if !c.Replaying {
-					if el.Deleted {
-						return nil, invalid("A source element keeps its identity and type")
-					}
-					if own := m.ElementOf(el.ID); own != nil && (own.Deleted || own.Stereotype != el.Stereotype) {
-						return nil, invalid("A source element keeps its identity and type")
-					}
-					if err := CheckPeriods(el.PeriodsFromLegacy()); err != nil {
-						return nil, invalid(err.Error())
-					}
-				}
-				if err := checkProperties(mm, el.Stereotype, el.Properties, !c.Replaying); err != nil {
-					return nil, err
-				}
-				ids[el.ID] = true
-				stereotypes[el.ID] = el.Stereotype
-			}
-			relationshipIDs := map[string]bool{}
-			for i := range sync.Relationships {
-				r := &sync.Relationships[i]
-				if !c.Replaying {
-					if relationshipIDs[r.ID] {
-						return nil, invalid("The shared slice repeats a relationship")
-					}
-					relationshipIDs[r.ID] = true
-					prefixed := "sync:" + p.Source + ":"
-					relID := r.ID
-					if !strings.HasPrefix(relID, prefixed) {
-						relID = prefixed + relID
-					}
-					if old := m.RelationshipOf(relID); old != nil && (old.Source != r.Source || old.Target != r.Target || old.Stereotype != r.Stereotype) {
-						return nil, invalid("A source relationship keeps its endpoints; use a new relationship ID")
-					}
-					if err := CheckPeriods(r.PeriodsFromLegacy()); err != nil {
-						return nil, invalid(err.Error())
-					}
-				}
-				switch {
-				case r.ID == "" || r.Source == "" || r.Target == "":
-					return nil, invalid("every synced relationship has an id, a source and a target")
-				case !mm.Relationship(r.Stereotype):
-					return nil, invalid("{stereotype} is not a UAF {version} relationship stereotype", r.Stereotype, mm.Version)
-				case !ids[r.Source] && m.ElementOf(r.Source) == nil && !strings.HasPrefix(r.Source, "member:"):
-					return nil, invalid("{element} is not in the model nor in the sync", r.Source)
-				case !ids[r.Target] && m.ElementOf(r.Target) == nil:
-					return nil, invalid("{element} is not in the model nor in the sync", r.Target)
-				case r.Stereotype == Placement && r.Kind != "" && m.KindOf(r.Kind) == nil:
-					return nil, invalid("{kind} is not a relationship kind of this model", r.Kind)
-				}
-				// The same contract as Relate: a slice or a sync
-				// cannot write a pair the profile refuses.
-				src, dst := m.ElementOf(r.Source), m.ElementOf(r.Target)
-				if st, ok := stereotypes[r.Source]; ok {
-					src = &Element{Stereotype: st}
-				}
-				if st, ok := stereotypes[r.Target]; ok {
-					dst = &Element{Stereotype: st}
-				}
-				if src != nil && dst != nil {
-					if ok, why := Allowed(Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
-						return nil, invalid(why)
-					}
-				}
-			}
-			source := p.Source
-			if !c.Replaying {
-				candidate := copyModel(*m)
-				candidate.Sync(source, sync.Elements, sync.Relationships, today)
-				if err := checkSourceRelationships(candidate, mm, "sync:"+source+":", today); err != nil {
-					return nil, err
-				}
-				return func(*pb.ChangeRecord) { *m = candidate }, nil
-			}
-			return func(*pb.ChangeRecord) { m.ReplaySync(source, sync.Elements, sync.Relationships, today) }, nil
-		case SchemaSliceImport:
-			if p.Slice == nil || p.Slice.Tenant == "" || p.Slice.Tenant == e.tenant {
-				return nil, invalid("a slice names the tenant it comes from")
-			}
-			if p.Link != "" {
-				next, err := m.PreviewImport(*p.Slice, p.Link, p.Content, p.Base, today)
-				if err != nil {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
-				}
-				for _, el := range next.Elements {
-					if el.Owner == "tenant:"+p.Slice.Tenant {
-						if mm.Stereotypes[el.Stereotype] == nil || mm.Relationship(el.Stereotype) {
-							return nil, invalid("Choose a concrete enterprise element type")
-						}
-					}
-				}
-				if err := checkSourceRelationships(next, mm, "fed:"+p.Slice.Tenant+":", today); err != nil {
-					return nil, err
-				}
-				return func(*pb.ChangeRecord) { *m = next }, nil
-			}
-			if !c.Replaying {
-				normalized, err := m.NamespaceSlice(*p.Slice)
-				if err != nil {
-					return nil, invalid(err.Error())
-				}
-				p.Slice = &normalized
-			}
-			owner := "tenant:" + p.Slice.Tenant
-			stereotypes := map[string]string{}
-			for i := range p.Slice.Elements {
-				el := &p.Slice.Elements[i]
-				if mm.Stereotypes[el.Stereotype] == nil {
-					return nil, invalid("{stereotype} is not in UAF {version}", el.Stereotype, mm.Version)
-				}
-				if own := m.ElementOf(el.ID); own != nil && own.Owner != owner {
-					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{element} is this tenant's own; the slice may not replace it", el.ID)
-				}
-				stereotypes[el.ID] = el.Stereotype
-				el.Owner, el.Published = owner, false
-			}
-			for _, r := range p.Slice.Relationships {
-				src, dst := m.ElementOf(r.Source), m.ElementOf(r.Target)
-				if st, ok := stereotypes[r.Source]; ok {
-					src = &Element{Stereotype: st}
-				}
-				if st, ok := stereotypes[r.Target]; ok {
-					dst = &Element{Stereotype: st}
-				}
-				if src == nil || dst == nil {
-					return nil, invalid("{element} is not in the model nor in the slice", r.Source)
-				}
-				if ok, why := Allowed(Contracts(mm), mm, r.Stereotype, src.Stereotype, dst.Stereotype); !ok {
-					return nil, invalid(why)
-				}
-			}
-			slice := *p.Slice
-			if !c.Replaying {
-				next := copyModel(*m)
-				next.ImportOn(slice, today)
-				if err := checkSourceRelationships(next, mm, "fed:"+slice.Tenant+":", today); err != nil {
-					return nil, err
-				}
-				return func(*pb.ChangeRecord) { *m = next }, nil
-			}
-			return func(*pb.ChangeRecord) { m.Import(slice) }, nil
-		case SchemaViewSave:
-			if p.Name == "" || p.Viewpoint == "" {
-				return nil, invalid("a view needs a name and a viewpoint")
-			}
-			if !slices.ContainsFunc(Views(mm), func(v Viewpoint) bool { return v.ID == p.Viewpoint }) {
-				return nil, invalid("{viewpoint} is not a view of this model", p.Viewpoint)
-			}
-			for _, el := range p.Elements {
-				if m.ElementOf(el) == nil || !c.Replaying && m.ElementOf(el).Deleted {
-					return nil, invalid("the view shows {element}, which is not in the model", el)
-				}
-			}
-			for _, pin := range p.Pins {
-				if m.ElementOf(pin.Anchor) == nil || !c.Replaying && m.ElementOf(pin.Anchor).Deleted {
-					return nil, invalid("a pinned record sits beside {element}, which is not in the model", pin.Anchor)
-				}
-				if !strings.HasPrefix(pin.Ref, "record:") || RefType(pin.Ref) == "" || RefID(pin.Ref) == "" {
-					return nil, invalid("a pin is a record reference: record:<entity type>/<id>, not {pin}", pin.Ref)
-				}
-			}
-			kind := p.Kind
-			if kind == "" {
-				if prev := m.ViewOf(id); prev != nil {
-					kind = prev.Kind
-				}
-			}
-			if kind != "" && m.KindOf(kind) == nil {
-				return nil, invalid("{kind} is not a relationship kind of this model", kind)
-			}
-			if p.AsOf != "" {
-				if _, err := time.Parse(time.DateOnly, p.AsOf); err != nil {
-					return nil, invalid("Invalid date {day}", p.AsOf)
-				}
-			}
-			for _, context := range p.Context {
-				if !slices.Contains(p.Elements, context) {
-					return nil, invalid("A context element must be on the view")
-				}
-			}
-			return func(*pb.ChangeRecord) {
-				v := View{ID: id, Name: p.Name, Viewpoint: p.Viewpoint, Kind: kind, Context: p.Context, Elements: p.Elements, Layout: p.Layout, Pins: p.Pins, AsOf: p.AsOf}
-				if v.Elements == nil {
-					v.Elements = []string{}
-				}
-				if i := slices.IndexFunc(m.Views, func(x View) bool { return x.ID == id }); i >= 0 {
-					m.Views[i] = v
-				} else {
-					m.Views = append(m.Views, v)
-				}
-			}, nil
-		case SchemaViewDelete:
-			if m.ViewOf(id) == nil {
-				return nil, notFound
-			}
-			return func(*pb.ChangeRecord) {
-				m.Views = slices.DeleteFunc(m.Views, func(x View) bool { return x.ID == id })
-			}, nil
+		case SchemaSliceSync, SchemaSliceImport, SchemaViewSave, SchemaViewDelete:
+			return nil, invalid("Full enterprise imports and view editing are retired; recover historical inputs with the retained original binary")
 		case SchemaRelationshipAdd:
 			return decideRelationship(m, mm, id, p, !c.Replaying, false)
 		case SchemaRelationshipChange:
@@ -654,11 +441,6 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		case SchemaElementEdit:
 			if !c.Replaying && supplied["name"] != nil && strings.TrimSpace(p.Name) == "" {
 				return nil, invalid("an element needs a name")
-			}
-			if p.Properties != nil {
-				if err := checkProperties(mm, el.Stereotype, p.Properties, !c.Replaying); err != nil {
-					return nil, err
-				}
 			}
 			return func(*pb.ChangeRecord) {
 				if p.Name != "" {
@@ -728,46 +510,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 	})
 }
 
-// checkProperties: tagged values name properties of the stereotype, and an
-// enumeration-typed one holds one of its literals.
-func checkProperties(mm *uaf.Metamodel, stereotype string, values map[string]any, strictDates bool) *kernel.Error {
-	if len(values) == 0 {
-		return nil
-	}
-	props := mm.Properties(stereotype)
-	for name, v := range values {
-		if _, bag := v.(map[string]any); bag && strings.HasPrefix(name, "source:") {
-			continue // an external system's own attributes, kept under its name
-		}
-		i := slices.IndexFunc(props, func(p uaf.Property) bool { return p.Name == name })
-		if i < 0 {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{stereotype} has no property {name}", stereotype, name)
-		}
-		if en := mm.Enumerations[props[i].Type]; en != nil {
-			if s, _ := v.(string); s != "" && !slices.Contains(en.Literals, s) {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{name} takes one of {literals}", name, strings.Join(en.Literals, ", "))
-			}
-		}
-		if strictDates && props[i].Type == "ISO8601DateTime" {
-			text, ok := v.(string)
-			if _, err := time.Parse(time.RFC3339Nano, text); !ok || err != nil {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{name} needs a date and time with a timezone", name)
-			}
-		}
-	}
-	start, startOK := values["startDate"].(string)
-	end, endOK := values["endDate"].(string)
-	if strictDates && startOK && endOK {
-		a, _ := time.Parse(time.RFC3339Nano, start)
-		b, _ := time.Parse(time.RFC3339Nano, end)
-		if b.Before(a) {
-			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The end date cannot be before the start date")
-		}
-	}
-	return nil
-}
-
-// --- host.Directory ---
+// --- platform.Directory ---
 
 // Units are the organisations party belongs to on day and those below them
 // in kind ("" for the organisations themselves).
@@ -857,7 +600,7 @@ func (e *Enterprise) Calendar(party string, day platform.Date) platform.Calendar
 
 // Metamodel is what the client draws palettes from: the current release's
 // stereotypes in the Enterprise Core Profile, with the whole registry behind.
-// Element and Related serve host.Directory for the apps.
+// Element and Related serve platform.Directory for the apps.
 func (e *Enterprise) Element(id string, day platform.Date) (platform.ElementInfo, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -886,7 +629,7 @@ func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	case ReadPublished:
 		return e.model.Published(e.tenant), nil
 	case ReadMetamodel:
-		mm := uaf.Current()
+		mm := directory()
 		return Metamodel{Version: mm.Version, URI: mm.URI, Domains: mm.Domains, Profile: Profile(), Stereotypes: mm.Stereotypes, Enumerations: mm.Enumerations,
 			Views: Views(mm), Contracts: Contracts(mm)}, nil
 	}
@@ -925,24 +668,9 @@ type Viewpoint struct {
 
 func Profile() []ProfileEntry {
 	return []ProfileEntry{
-		{Stereotype: Organization, Title: "Organisation", Plural: "Organisations", Icon: "building", Kinds: []string{"group", "company", "subsidiary", "division", "business unit", "factory", "plant", "department", "line", "shift", "team", "committee", "partner"}},
-		{Stereotype: Post, Title: "Post", Plural: "Posts", Icon: "badge", Kinds: []string{"executive", "manager", "supervisor", "specialist", "operator", "staff"}},
+		{Stereotype: Organization, Title: "Organisation", Plural: "Organisations", Icon: "building", Kinds: []string{"company", "department", "team"}},
+		{Stereotype: Post, Title: "Post", Plural: "Posts", Icon: "badge"},
 		{Stereotype: Person, Title: "Person", Plural: "People", Icon: "user"},
-		{Stereotype: "Responsibility", Title: "Responsibility", Plural: "Responsibilities", Icon: "clipboard"},
-		{Stereotype: Capability, Title: "Capability", Plural: "Capabilities", Icon: "target", Kinds: []string{"business", "operational", "technical", "support"}},
-		{Stereotype: Goal, Title: "Goal", Plural: "Goals", Icon: "flag"},
-		{Stereotype: "EnterpriseObjective", Title: "Objective", Plural: "Objectives", Icon: "flag"},
-		{Stereotype: "Opportunity", Title: "Opportunity", Plural: "Opportunities", Icon: "sparkles"},
-		{Stereotype: Location, Title: "Location", Plural: "Locations", Icon: "map-pin", Kinds: []string{"site", "plant", "building", "warehouse", "workshop", "zone", "line", "workcenter", "station", "bin", "dock", "office"}},
-		{Stereotype: Resource, Title: "Resource", Plural: "Resources", Icon: "wrench", Kinds: []string{"machine", "equipment", "tool", "vehicle", "fixture", "instrument"}},
-		{Stereotype: "System", Title: "System", Plural: "Systems", Icon: "server", Kinds: []string{"ERP", "MES", "WMS", "PLM", "CRM", "custom"}},
-		{Stereotype: "Service", Title: "Service", Plural: "Services", Icon: "handshake"},
-		{Stereotype: "OperationalActivity", Title: "Process", Plural: "Processes", Icon: "workflow"},
-		{Stereotype: Project, Title: "Project", Plural: "Projects", Icon: "calendar", Kinds: []string{"improvement", "investment", "product", "compliance"}},
-		{Stereotype: "ActualProjectMilestone", Title: "Milestone", Plural: "Milestones", Icon: "milestone"},
-		{Stereotype: "Standard", Title: "Standard", Plural: "Standards", Icon: "book"},
-		{Stereotype: "Risk", Title: "Risk", Plural: "Risks", Icon: "alert"},
-		{Stereotype: "InformationElement", Title: "Information", Plural: "Information", Icon: "database"},
 	}
 }
 
@@ -961,51 +689,20 @@ var Vocabulary = map[string]bool{
 // Each declares the stereotypes it draws as its own and the ones it draws only
 // as context; the relationships are derived — a view offers a relation only
 // when the contracts admit some pair of its own slice.
-func Views(mm *uaf.Metamodel) []Viewpoint {
-	contracts := Contracts(mm)
-	drawable := func(elements []string) []string {
-		var out []string
-		for _, c := range contracts {
-			if !Vocabulary[c.Stereotype] {
-				continue
-			}
-			for _, pair := range EndsFor(c) {
-				if holds(mm, pair.Source, elements) && holds(mm, pair.Target, elements) {
-					out = append(out, c.Stereotype)
-					break
-				}
-			}
-		}
-		return out
-	}
-	views := []Viewpoint{
-		{ID: "organization", Title: "Organisation and places", Note: "Who is where: organisations, posts, people, responsibilities, sites and equipment.",
-			Elements: []string{Organization, Post, Person, "Responsibility", Location, Resource}},
-		{ID: "data", Title: "Information", Note: "What the enterprise holds: information elements and where they belong.",
-			Elements: []string{"InformationElement"}, Context: []string{Organization}},
-		{ID: "function", Title: "Capabilities and goals", Note: "What it aims to do and can do: goals, objectives, opportunities, capabilities and the systems that support them.",
-			Elements: []string{Capability, Goal, "EnterpriseObjective", "Opportunity", System}, Context: []string{Organization}},
-		{ID: "output", Title: "Services delivered", Note: "What it offers outside: services and who provides them.",
-			Elements: []string{"Service"}, Context: []string{Organization}},
-		{ID: "control", Title: "Processes, projects and rules", Note: "How it is run: processes, projects and milestones, standards and risks — the view that joins the others.",
-			Elements: []string{"OperationalActivity", Project, "ActualProjectMilestone", "Standard", "Risk"}, Context: []string{Organization}},
-	}
-	for i := range views {
-		views[i].Relationships = drawable(append(append([]string{}, views[i].Elements...), views[i].Context...))
-	}
-	return views
+func Views(mm *DirectoryModel) []Viewpoint {
+	return []Viewpoint{{ID: "organization", Title: "Organisation", Note: "Units, posts and people", Elements: []string{Organization, Post, Person}, Relationships: []string{Placement, Membership, FillsPost, Owns}}}
 }
 
-// holds reports whether any of the view's element stereotypes is the named end
-// or a specialisation of it.
-func holds(mm *uaf.Metamodel, end string, elements []string) bool {
-	if end == "*" {
-		return len(elements) > 0
-	}
-	for _, e := range elements {
-		if mm.Is(e, end) {
-			return true
+// directoryActions exposes only supported new writes. The original ledger
+// retains retired schemas so their accepted receipts keep their identity.
+func directoryActions() []platform.Action {
+	actions := slices.DeleteFunc(declarations(), func(a platform.Action) bool {
+		return a.Schema == SchemaSliceImport || a.Schema == SchemaSliceSync || a.Schema == SchemaViewSave || a.Schema == SchemaViewDelete
+	})
+	for i := range actions {
+		if actions[i].Schema == SchemaElementAdd || actions[i].Schema == SchemaElementEdit {
+			actions[i].Payload = slices.DeleteFunc(actions[i].Payload, func(f platform.Field) bool { return f.Name == "properties" })
 		}
 	}
-	return false
+	return actions
 }

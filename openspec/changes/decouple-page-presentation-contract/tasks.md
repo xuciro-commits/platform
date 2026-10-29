@@ -1,6 +1,6 @@
 # Tasks
 
-负责人已授权直接实施。UI primitive与Web作者类型迁移已落实；五要素Go契约、旧安全投影及75生产文件删除尚未完成；项目顺序归 `docs/WorkQueue.md`。逐文件责任清单及迁移条件见 `design.md` 附表 A–F；物理路径按战役1 `file-consolidation.md` 中原精确路径的唯一行解析，不能把本change中的旧owner定位重建为新普通路径。
+负责人已授权直接实施。Web视觉清单、同源安全声明生成、格式3源码/可视化适配、声明文字本地化与原WASM表单预览已编码；五要素Go契约与旧路径删除正在同批收口，跨层验收尚未运行；项目顺序归 `docs/WorkQueue.md`。逐文件责任清单及迁移条件见 `design.md` 附表 A–F；物理路径按战役1 `file-consolidation.md` 中原精确路径的唯一行解析，不能把本change中的旧owner定位重建为新普通路径。
 
 ## 1. 紧凑安全契约与旧原件
 

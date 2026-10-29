@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"time"
@@ -10,23 +11,23 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 func (d *stagedDecision) ConfirmationTransport() platform.ConfirmationTransport {
-	return hostView{t: d.tenant, app: d.tenant.app(construction.ID), decision: d}
+	return hostView{t: d.tenant, app: d.tenant.app(build.ID), decision: d}
 }
 
 func (h hostView) FreezeConfirmation(c platform.Caller, subject string, spec platform.Confirmation, at time.Time) (string, []platform.ReleaseAsset, error) {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID {
+	if h.decision == nil || !c.Staging() || c.App != build.ID {
 		return "", nil, fmt.Errorf("Confirmation requires its original private authority")
 	}
 	assets, err := h.t.releaseAssetsLocked(nil, false)
 	if err != nil {
 		return "", nil, err
 	}
-	roots := []platform.AssetRef{{App: construction.ID, Kind: platform.AssetObject, Name: subject}}
+	roots := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: subject}}
 	for _, p := range spec.Parties {
 		if p.Protocol != "" {
 			original, err := h.FreezeConfirmationProtocol(p)
@@ -43,18 +44,18 @@ func (h hostView) FreezeConfirmation(c platform.Caller, subject string, spec pla
 			if id == "" {
 				continue
 			}
-			w, ok := platform.Get[construction.Writeback](c, id)
+			w, ok := platform.Get[build.Writeback](c, id)
 			if !ok {
 				return "", nil, fmt.Errorf("Confirmation writeback is unavailable")
 			}
-			roots = append(roots, platform.AssetRef{App: construction.ID, Kind: platform.AssetWriteback, Name: w.Name})
+			roots = append(roots, platform.AssetRef{App: build.ID, Kind: platform.AssetWriteback, Name: w.Name})
 		}
 		if p.Reconcile != nil {
-			s, ok := platform.Get[construction.Source](c, p.Reconcile.Source)
+			s, ok := platform.Get[build.Source](c, p.Reconcile.Source)
 			if !ok {
 				return "", nil, fmt.Errorf("Reconciliation source is unavailable")
 			}
-			roots = append(roots, platform.AssetRef{App: construction.ID, Kind: platform.AssetSource, Name: s.Name})
+			roots = append(roots, platform.AssetRef{App: build.ID, Kind: platform.AssetSource, Name: s.Name})
 		}
 	}
 	closed, err := platform.Candidate(roots, assets)
@@ -64,7 +65,7 @@ func (h hostView) FreezeConfirmation(c platform.Caller, subject string, spec pla
 	if len(closed.Bytes) > 192<<10 {
 		return "", nil, fmt.Errorf("Confirmation definition exceeds its retained execution budget")
 	}
-	return h.t.releases.active, closed.Assets, nil
+	return h.t.releases.Active(), closed.Assets, nil
 }
 
 func (h hostView) FreezeConfirmationProtocol(p platform.ConfirmationParty) (*platform.ConfirmationProtocol, error) {
@@ -76,7 +77,7 @@ func (h hostView) FreezeConfirmationProtocol(p platform.ConfirmationParty) (*pla
 }
 
 func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run platform.ConfirmationRun, index int, compensate bool, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID || index < 0 || index >= len(run.Parties) {
+	if h.decision == nil || !c.Staging() || c.App != build.ID || index < 0 || index >= len(run.Parties) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation transport requires its original owner")
 	}
 	p := run.Parties[index]
@@ -107,7 +108,7 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original confirmation protocol mapping is unavailable")
 		}
 		member, known := h.Member(run.Member)
-		applicant := platform.NewCaller(h.decision, member, construction.ID, false, false)
+		applicant := platform.NewCaller(h.decision, member, build.ID, false, false)
 		if !known || !member.Active() || !h.decision.Readable(applicant, run.Subject) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation applicant can no longer read the subject")
 		}
@@ -121,11 +122,11 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 		applicant.Request(receipt, platform.Request{Tag: p.Name + map[bool]string{true: ":compensate"}[compensate], Key: intent, Provider: p.Protocol.Provider, Protocol: declaration.Protocol, Action: action, Target: target, Payload: run.Input, Reply: platform.ConfirmationAnswerSchema})
 		return nil
 	}
-	var req construction.WritebackRequest
+	var req build.WritebackRequest
 	if json.Unmarshal(body, &req) != nil || req.Confirmation != run.ID || req.Party != p.Name || req.Version != 1 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Confirmation delivery has no frozen request")
 	}
-	applications, err := h.t.bindApplications(platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: strings.SplitN(run.Subject, "/", 2)[0]}, run.Release, "")
+	applications, err := h.t.bindApplications(platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: strings.SplitN(run.Subject, "/", 2)[0]}, run.Release, "")
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 	}
@@ -136,7 +137,7 @@ func (h hostView) QueueConfirmation(c platform.Caller, r *pb.ChangeRecord, run p
 	if compensate {
 		key += ":compensate"
 	}
-	x := platform.Effect{ID: intent, App: construction.ID, Endpoint: construction.WritebackEndpoint + req.Connection, Event: construction.ID + "/confirmation", Key: key, Target: run.Subject, At: at, State: "pending", Due: at, Body: string(body), Applications: applications, Compensates: req.Compensates}
+	x := platform.Effect{ID: intent, App: build.ID, Endpoint: build.WritebackEndpoint + req.Connection, Event: build.ID + "/confirmation", Key: key, Target: run.Subject, At: at, State: "pending", Due: at, Body: string(body), Applications: applications, Compensates: req.Compensates}
 	if !slices.ContainsFunc(h.decision.intents, func(e platform.Effect) bool { return e.ID == intent }) {
 		h.decision.intents = append(h.decision.intents, x)
 	}
@@ -170,12 +171,12 @@ func (h hostView) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, ru
 	if !strings.HasPrefix(action, typ+".") {
 		action = typ + "." + action
 	}
-	sub := &pb.Submission{TenantId: c.Tenant, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: "confirmation:" + run.ID + ":" + action, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: action, Version: 1}, Payload: []byte(`{}`), CorrelationId: run.ID}
+	sub := &pb.Submission{TenantId: c.Tenant, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "confirmation:" + run.ID + ":" + action, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: action, Version: 1}, Payload: []byte(`{}`), CorrelationId: run.ID}
 	receipt, refusal := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
 		previous := h.decision.confirmationCompleting
 		h.decision.confirmationCompleting = &confirmationCompletion{Member: member.ID, Subject: run.Subject, Action: action}
 		defer func() { h.decision.confirmationCompleting = previous }()
-		return bound.Submit(bound.Caller(c, member, construction.ID), sub, at)
+		return bound.Submit(bound.Caller(c, member, build.ID), sub, at)
 	})
 	if refusal != nil {
 		return "", refusal
@@ -185,7 +186,7 @@ func (h hostView) CompleteConfirmation(c platform.Caller, r *pb.ChangeRecord, ru
 }
 
 func (h hostView) ResolveConfirmationDelivery(c platform.Caller, run platform.ConfirmationRun, index int, compensated bool, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID || index < 0 || index >= len(run.Parties) {
+	if h.decision == nil || !c.Staging() || c.App != build.ID || index < 0 || index >= len(run.Parties) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation resolution requires its original owner")
 	}
 	p := run.Parties[index]
@@ -204,8 +205,8 @@ func (h hostView) ResolveConfirmationDelivery(c platform.Caller, run platform.Co
 			if effect.ID != id || settled(effect.State) {
 				continue
 			}
-			var request construction.WritebackRequest
-			if effect.App != construction.ID || json.Unmarshal([]byte(effect.Body), &request) != nil || request.Confirmation != run.ID || request.Party != p.Name {
+			var request build.WritebackRequest
+			if effect.App != build.ID || json.Unmarshal([]byte(effect.Body), &request) != nil || request.Confirmation != run.ID || request.Party != p.Name {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation does not own this delivery")
 			}
 			if effect.sending {
@@ -234,7 +235,7 @@ func (h hostView) ResolveConfirmationDelivery(c platform.Caller, run platform.Co
 }
 
 func (h hostView) RetryConfirmationDelivery(c platform.Caller, run platform.ConfirmationRun, index int, compensated bool, at time.Time) *kernel.Error {
-	if h.decision == nil || !c.Staging() || c.App != construction.ID || index < 0 || index >= len(run.Parties) {
+	if h.decision == nil || !c.Staging() || c.App != build.ID || index < 0 || index >= len(run.Parties) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Confirmation resolution requires its original owner")
 	}
 	p := run.Parties[index]
@@ -246,7 +247,7 @@ func (h hostView) RetryConfirmationDelivery(c platform.Caller, run platform.Conf
 		id = p.Compensation
 	}
 	view := h.decision.controlHost()
-	apply, err := view.decideEffect(c, &pb.Submission{Target: &pb.EntityRef{Id: id}, Schema: &pb.SchemaRef{Name: SchemaEffectRetry}}, at)
+	apply, err := view.decideEffect(c, &pb.Submission{Target: &pb.EntityRef{Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEffectRetry}}, at)
 	if err != nil {
 		return err
 	}
@@ -262,14 +263,14 @@ func (h hostView) CheckConfirmationRead(run platform.ConfirmationRun, index int,
 	if !known || !member.Active() || !h.Readable(member, run.Subject, at) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The confirmation applicant can no longer read the subject")
 	}
-	var source construction.Source
-	var connection construction.Connection
+	var source build.Source
+	var connection build.Connection
 	policy := run.Definition.Parties[index].Reconcile
 	if policy == nil || json.Unmarshal(run.Parties[index].Source, &source) != nil || json.Unmarshal(run.Parties[index].Connection, &connection) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original reconciliation descriptor is unavailable")
 	}
 	publisher, known := h.Member(source.Puller)
-	if !known || !publisher.Active() || !h.Readable(publisher, construction.SourceType+"/"+policy.Source, at) || construction.Guarded(connection.Marking) || construction.Guarded(h.t.connectionMarking(connection.ID)) {
+	if !known || !publisher.Active() || !h.Readable(publisher, build.SourceType+"/"+policy.Source, at) || build.Guarded(connection.Marking) || build.Guarded(h.t.connectionMarking(connection.ID)) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Reconciliation source access is unavailable")
 	}
 	return nil

@@ -1,4 +1,4 @@
-import {widgetDeclarationIssues} from "@platform/app/page-contract";
+import {decodePage,encodePage,pageAuthoringIssues} from "@platform/app/page-contract";
 import {pageEditingProfile} from "./page-editor/compatibility";
 import { sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
@@ -47,15 +47,16 @@ import {LayoutTree} from "./page-editor/LayoutTree";
 import {LayoutProperties,LayoutSizing} from "./page-editor/LayoutProperties";
 import { useDraftSession } from "../session/DraftSession";
 import {copyLayout,copyLayoutIssue,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
-import {previewSection,type AuthoringSection,type PageDraft} from "./page-editor/draft";
+import {previewSection,authoringSection,type AuthoringSection,type PageDraft} from "./page-editor/draft";
 
 type Api = NonNullable<Definition["page"]>;
+import type {PageUI} from "@platform/app";
 /** The page as its record holds it: what the builder edits and submits. */
-type PageRecord = {
+type PageRecord = Partial<Omit<HostApi.Page,"object"|"sections"|"document"|"actions">>&{
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
   list?: string[]; detail?: string[]; actions?: string[];
   selections?: HostApi.SelectionVariable[];
-  document?: HostApi.PageDocument;
+  document?: PageUI.PageDocument;
   sections?: AuthoringSection[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
@@ -67,6 +68,11 @@ const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetCont
 type StudioSelection = { kind: "page" | "variables" | "interface" | "queries" } | { kind: "widget" | "container"; id: string };
 const emptyDraft = (): PageDraft => ({ sections: [], document: pageDocumentFromSections<Draft>([]).document, selections: [], title: "", description: "" });
 const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined=()=>undefined, fields: HostApi.FieldInfo[] = []): PageDraft => {
+  if(record.format===3){
+    const page=decodePage({...record,object:{app:record.object.split(".")[0],kind:"object",name:record.object}} as HostApi.Page);
+    const lifted=pageDocumentFromSections((page.sections??[]).map(authoringSection));
+    return {...declarationValue(record,fields),sections:lifted.sections.map(section=>materializeModelSection(section,lookup,true)),document:page.document??lifted.document,selections:page.selections??[],title:record.title,description:record.description??""};
+  }
   const shorthand: Draft[] = (record.list ?? []).length ? [
     { widget: "table", title: t("Table"), width: "half", fields: record.list },
     { widget: "detail", title: t("Detail"), width: "half", fields: record.detail },
@@ -80,7 +86,7 @@ const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined
 const filterable = ["choice", "boolean", "reference"];
 
 /** The page being composed, as the renderer takes it. */
-const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDocument): Api => ({
+const asPage = (record: PageRecord, sections: Draft[], document?: PageUI.PageDocument): Api => ({
   name: record.name, title: record.title, description: record.description, layout: "composed",
   object: { app: record.object.split(".")[0] ?? "", kind: "object", name: record.object },
   listFields: [], detailFields: [], actions: [],
@@ -229,7 +235,9 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     const submitted = session.draft;
     const expectedRevision = baseRevision.current;
     try {
-      const payload={...submitted,document:{...submitted.document,uiProfile:pageEditingProfile(submitted)},sections:submitted.sections.map(canonicalModelSection)};
+      const encoded=encodePage(asPage({...savedPage!,...submitted},submitted.sections.map(canonicalModelSection),{...submitted.document,uiProfile:pageEditingProfile(submitted)}),definitions);
+      const {object:ignoredObject,...payload}=encoded;
+      void ignoredObject;
       const ok = await decide("build.page.edit", { type: "build.page", id }, declarationChanges(payload, declarationValue(savedPage!, declarationFields)), { expectedRevision, onRefused: setRefused });
       if (ok) {
         const result = await query.refetch();
@@ -254,11 +262,11 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const review = async () => { if (nothing || invalid || lock.current || dirty && !await save()) return; open({ view: "release-review", params: { kind: "page", id } }); };
   const canvasSelection = sections[chosen];
   const nodeID = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id && node.kind === "widget")?.[0];
-  const patchNode = (id: string, patch: Partial<HostApi.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
+  const patchNode = (id: string, patch: Partial<PageUI.PageLayoutNode>) => edit((old) => ({ ...old, document: { ...old.document, nodes: { ...old.document.nodes, [id]: { ...old.document.nodes[id]!, ...patch } } } }), `node:${id}:${Object.keys(patch).join(",")}`);
   const canvasSelect=(id:string)=>{const node=document.nodes[id];if(!node)return;if(node.kind==='widget'){const index=sections.findIndex(s=>s.id===node.section);if(index>=0)choose(index);}else{select({kind:'container',id});}};
-  const canvasEdit=(next:HostApi.PageDocument|undefined)=>{if(next){for(const key of Object.keys(session.inputs.values)){const node=key.match(/^\/layout:([^/]+)\//)?.[1];if(node&&!next.nodes[node])session.inputs.set(key);}edit({document:next});}};
+  const canvasEdit=(next:PageUI.PageDocument|undefined)=>{if(next){for(const key of Object.keys(session.inputs.values)){const node=key.match(/^\/layout:([^/]+)\//)?.[1];if(node&&!next.nodes[node])session.inputs.set(key);}edit({document:next});}};
   const canvasCommitDrop=(payload:CanvasPayload,target:CanvasDrop)=>{if(lock.current)return;if(payload.kind==='new')add(payload.type,undefined,target);else{const next=canvasDrop(document,payload.id,target,sections);if(next){canvasEdit(next);canvasSelect(payload.id);}else notify.error(t("This move would change a protected scope or exceed the layout limits."));}};
-  const canvasCommitSizes=(sizes:Record<string,HostApi.PageLayoutSize>)=>{if(lock.current)return;const next=structuredClone(document);for(const [id,size]of Object.entries(sizes))if(next.nodes[id])next.nodes[id]!.size=Object.keys(size).length?size:undefined;if(!pageLayoutDiagnostics(next,sections).length)canvasEdit(next);};
+  const canvasCommitSizes=(sizes:Record<string,PageUI.PageLayoutSize>)=>{if(lock.current)return;const next=structuredClone(document);for(const [id,size]of Object.entries(sizes))if(next.nodes[id])next.nodes[id]!.size=Object.keys(size).length?size:undefined;if(!pageLayoutDiagnostics(next,sections).length)canvasEdit(next);};
   const canvasCommands=(id:string):CanvasCommand[]=>{
     const node=document.nodes[id];if(!node)return [];const parent=Object.entries(document.nodes).find(([,n])=>n.children?.includes(id))?.[0],root=id===document.root||Object.values(document.overlays??{}).some(o=>o.root===id),unused=document.unusedWidgets?.find(e=>e.node===id),at=sections.findIndex(s=>s.id===node.section);
     const children=parent?document.nodes[parent]!.children??[]:[],index=children.indexOf(id),horizontal=parent&&['columns','toolbar'].includes(document.nodes[parent]!.kind),copyIssue=copyLayoutIssue(session.draft,id),ungrouped=canvasUngroup(document,id,sections);
@@ -385,7 +393,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       {refused && <Panel role="alert" className="m-2 text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {!source.entity(page.object) && info && <p className="px-3 pt-2 text-xs text-warning" role="status">{t("Field choices come from a saved object draft. Business data is available after joint activation.")}</p>}
       {compatibilityOpen && <CompatibilityReview key={clipboardScope} draft={session.draft} busy={busy} onClose={() => setCompatibilityOpen(false)} onLocate={(id) => { select({ kind: "widget", id }); setCompatibilityOpen(false); }} onApply={(review) => { if (lock.current || preview) return; const next = applyProfileUpgrade(session.draft, review); if (!next) return; session.edit(next, "profile-upgrade"); setCompatibilityOpen(false); setRefused(undefined); }} />}
-      <StructuredEditor validate={widgetDeclarationIssues} expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue({ ...session.draft, sections: sections.map(canonicalModelSection) }, declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible || preview} onChange={next => { if (preview) return; setSourceApplied(true); session.edit(() => ({ ...emptyDraft(), ...next }) as PageDraft); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <StructuredEditor validate={pageAuthoringIssues} expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={incompatible&&savedPage?.format===3?declarationValue(savedPage,declarationFields):declarationValue({...encodePage(asPage({...savedPage!,...session.draft},sections.map(canonicalModelSection),document),definitions),object:savedPage!.object},declarationFields)} fields={declarationFields} scope={`build.page:${id}:${source.scope}`} disabled={busy || incompatible || preview} onChange={next => { if (preview) return; setSourceApplied(true); session.edit(() => loadDraft({...savedPage!,...next}as PageRecord,authoringEntity,declarationFields)); select({ kind: "page" }); }} onTrial={next => trial("build.page.edit", { type: "build.page", id }, declarationChanges(next, declarationValue(savedPage!, declarationFields)), baseRevision.current)}><fieldset disabled={busy || incompatible} className="flex min-h-0 min-w-0 flex-1 flex-col">
         <CanvasEditor model={canvasModel(document, sections, { ...Object.fromEntries(Object.entries(widgetTitles).map(([id, title]) => [id, title()])), rows: t("Rows"), columns: t("Columns"), tabs: t("Tabs"), flow: t("Flow layout"), toolbar: t("Toolbar"), loop: t("Loop") })} selected={preview ? undefined : nodeID} revision={session.draft} zoom={zoom / 100} disabled={busy || incompatible || preview}
           commands={selectionCommands} icon={canvasSelection ? <WidgetGlyph widget={canvasSelection.widget} /> : <LayoutGlyph kind={document.nodes[nodeID ?? ""]?.kind ?? "rows"} />}
           onSelect={canvasSelect} onDrop={canvasCommitDrop} onMove={(id, delta) => canvasEdit(canvasMove(document, id, delta, sections))}
@@ -429,7 +437,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
 
 /** The panel that configures the widget in hand: only what that widget binds. */
 type PropertiesProps = {
-  section?: Draft; sections:Draft[]; document: HostApi.PageDocument; info?: EntityInfo; object: string; relatedObjects?: string[];
+  section?: Draft; sections:Draft[]; document: PageUI.PageDocument; info?: EntityInfo; object: string; relatedObjects?: string[];
   selections: HostApi.SelectionVariable[];
   catalog: { schema: string; title: string; target: string; draft?: boolean }[];
   pageActions: string[];
@@ -485,12 +493,11 @@ function Properties({ section, sections, document, info, catalog, pageActions, o
   }));
   const functions = provided.filter(item => item.ref.app === "build" && item.capability.kind === "function").flatMap(item => {
     const definition = definitions.find(definition => definition.ref.app === item.ref.app && definition.ref.kind === "function" && definition.ref.name === item.ref.name && definition.version === item.version);
-    const version = Number(item.version.match(/\.function-(\d+)$/)?.[1]);
-    return definition?.function?.object === object && version > 0 ? [{ name: item.ref.name, title: definition.function.title, version }] : [];
+    return definition?.function?.object === object ? [{ name: item.ref.name, title: definition.function.title, version:item.version,binding:{ref:item.ref,sourceVersion:item.version} }] : [];
   });
   const queriesOf = (obj: string) => definitions
     .filter(definition => definition.query?.object === obj && provided.some(item => item.capability.kind === "query" && item.capability.side === "pure" && item.ref.app === definition.ref.app && item.ref.name === definition.ref.name && item.version === definition.version))
-    .map(definition => ({ key: `${definition.ref.app}.${definition.ref.name}`, title: definition.query?.title ?? definition.ref.name }));
+    .map(definition => ({ key: `${definition.ref.app}.${definition.ref.name}`, title: definition.query?.title ?? definition.ref.name,version:definition.version }));
   if (!section) return <p className="p-3 text-xs text-muted">{t("Choose a section to configure it.")}</p>;
   const contract = widgetContract(section.widget);
   const allows = (kind: string) => contract?.bindingKinds.some((binding) => binding === kind) ?? false;
@@ -552,7 +559,7 @@ function Properties({ section, sections, document, info, catalog, pageActions, o
       )}
       {!section.model&&!section.collectionVariable && allows("query") && queriesOf(section.object || object).length > 0 && (
         <label className="grid gap-1 text-xs">{t("Query")}
-          <Select value={section.query ?? ""} onChange={(e) => onChange({ query: e.target.value || undefined })}>
+          <Select value={section.query ?? ""} onChange={(e) => onChange({ query: e.target.value || undefined,querySourceVersion:queriesOf(section.object||object).find(query=>query.key===e.target.value)?.version })}>
             <option value="">{t("All records it may read")}</option>
             {queriesOf(section.object || object).map((q) => <option key={q.key} value={q.key}>{q.title}</option>)}
           </Select>
@@ -560,11 +567,11 @@ function Properties({ section, sections, document, info, catalog, pageActions, o
       )}
       {section.widget === "function" && <>
         <label className="grid gap-1 text-xs">{t("Published function version")}
-          <Select value={section.function ? `${section.function.name}:${section.function.version}` : ""} onChange={(e) => {
+          <Select value={section.function ? `${section.function.ref.name}:${section.function.sourceVersion}` : ""} onChange={(e) => {
             const selected = functions.find((f) => `${f.name}:${f.version}` === e.target.value);
-            onChange({ function: selected ? { name: selected.name, version: selected.version } : undefined });
+            onChange({ function: selected?.binding });
           }}><option value="">{t("Choose a published function")}</option>
-            {section.function && !functions.some(fn => fn.name === section.function!.name && fn.version === section.function!.version) && <option disabled value={`${section.function.name}:${section.function.version}`}>{t("Retained binding")}: {section.function.name} · {section.function.version}</option>}
+            {section.function && !functions.some(fn => fn.name === section.function!.ref.name && fn.version === section.function!.sourceVersion) && <option disabled value={`${section.function.ref.name}:${section.function.sourceVersion}`}>{t("Retained binding")}: {section.function.ref.name} · {section.function.sourceVersion}</option>}
             {functions.map((f) => <option key={`${f.name}:${f.version}`} value={`${f.name}:${f.version}`}>{f.title} · {t("Version")} {f.version}</option>)}
           </Select></label>
         <p className="text-xs text-muted">{t("The selected record supplies the function input. Its typed answer stays in a separate call record.")}</p>

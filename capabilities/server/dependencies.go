@@ -1,5 +1,8 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+import "platformserver/studio/authoring"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -41,14 +44,14 @@ func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset
 			if owner := t.app(def.Ref.App); owner != nil {
 				for _, entity := range owner.Manifest().Entities {
 					if entity.Type == def.Ref.Name {
-						body = codeObjectDescriptor(entity, *def.Entity)
+						body = releaseowner.CodeObjectDescriptor(entity, *def.Entity)
 						break
 					}
 				}
 			}
 		}
 	case def.Action != nil:
-		body = codeActionDescriptor(*def.Action)
+		body = releaseowner.CodeActionDescriptor(*def.Action)
 	case def.Page != nil:
 		body = def.Page
 	case def.Application != nil:
@@ -236,7 +239,7 @@ func (t *Tenant) visibleProvides(def platform.Definition, m platform.Member, ent
 			continue
 		}
 		if capability.Kind == "query" && def.Query != nil {
-			input, output := queryCapabilitySchemas(*def.Query, entities[def.Query.Object])
+			input, output := authoring.QueryCapabilitySchemas(*def.Query, entities[def.Query.Object])
 			if input != nil {
 				capability.Inputs = *input
 			}

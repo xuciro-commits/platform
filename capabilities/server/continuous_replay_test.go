@@ -4,20 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"platformserver/engine/resources"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
 type replayComputeSource struct{ *frameSource }
 
 type replayReadFiles struct {
-	*memoryFiles
+	*resources.MemoryFiles
 	once func()
 }
 
@@ -26,7 +28,7 @@ func (s *replayReadFiles) Get(ctx context.Context, key string) (io.ReadCloser, i
 		s.once = nil
 		hook()
 	}
-	return s.memoryFiles.Get(ctx, key)
+	return s.MemoryFiles.Get(ctx, key)
 }
 
 func (s *replayComputeSource) Manifest() platform.Manifest {
@@ -48,8 +50,8 @@ func TestContinuousSignalReplayUsesRetainedOperationAndInputChannel(t *testing.T
 				base = newFrameDataComputeSource(tenant, 1<<20)
 			}
 			source := &replayComputeSource{base}
-			tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin"), seatOf("other", "flow:admin"), seatOf("admin", "platform:admin")}, work.New(tenant), flow.New(tenant), source)
-			files := &replayReadFiles{memoryFiles: &memoryFiles{}}
+			tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin"), seatOf("other", "flow:admin"), seatOf("admin", "platform:admin")}, work.New(tenant), automation.New(tenant), source)
+			files := &replayReadFiles{MemoryFiles: &resources.MemoryFiles{}}
 			tn.Files = files
 			tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 			worker := &frameDataWorker{}
@@ -84,41 +86,37 @@ func TestContinuousSignalReplayUsesRetainedOperationAndInputChannel(t *testing.T
 			if _, err := tn.ConsumeFlowBatch(member, id, late, at); err != nil {
 				t.Fatal(err)
 			}
-			letters, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{})
+			letters, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{})
 			if err != nil || len(letters) != 1 {
 				t.Fatalf("late input has no replayable original asset: %+v %v", letters, err)
 			}
-			if got := refuse(t, tn, "other", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{}, at); got == "ok" {
+			if got := refuse(t, tn, "other", automation.ID, automation.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{}, at); got == "ok" {
 				t.Fatal("another member replayed the protected source")
 			}
-			sub := submission(tn, member, flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{})
+			sub := submission(tn, member, automation.ID, automation.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{})
 			if err := tn.cleanupFlowArtifactsFor(member, id, at); err != nil {
 				t.Fatal(err)
 			}
-			before, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
-			files.mu.Lock()
-			objectsBefore := len(files.m)
-			files.mu.Unlock()
+			before, _ := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
+			objectsBefore := len(storedFiles(t, files))
 			files.once = func() {
-				decide(t, tn, "admin", PlatformApp, SchemaRevoke, MemberType, member.ID, map[string]any{"app": flow.ID}, at)
+				decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaRevoke, controlowner.MemberType, member.ID, map[string]any{"app": automation.ID}, at)
 			}
 			if _, err := tn.Submit(member, sub, at); err == nil {
 				t.Fatal("permission revoked during artifact I/O still replayed the source")
 			}
-			after, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
-			assetBefore, _ := platform.Get[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), letters[0].ID)
+			after, _ := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
+			assetBefore, _ := platform.Get[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), letters[0].ID)
 			if string(platform.Raw(before)) != string(platform.Raw(after)) || assetBefore.Replayed || len(tn.operationDispatches(time.Now().UTC().Add(time.Second))) != 0 {
 				t.Fatal("refused replay exposed partial instance, asset or operation state")
 			}
-			files.mu.Lock()
-			objectsAfter := len(files.m)
-			files.mu.Unlock()
+			objectsAfter := len(storedFiles(t, files))
 			if objectsAfter != objectsBefore {
 				t.Fatalf("durably refused replay retained unused frame/input objects: %d -> %d", objectsBefore, objectsAfter)
 			}
-			decide(t, tn, "admin", PlatformApp, SchemaGrant, MemberType, member.ID, map[string]any{"app": flow.ID, "role": "admin"}, at)
+			decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaGrant, controlowner.MemberType, member.ID, map[string]any{"app": automation.ID, "role": "admin"}, at)
 			member = memberOf(t, tn, "member")
-			sub = submission(tn, member, flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{})
+			sub = submission(tn, member, automation.ID, automation.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{})
 			receipt, refusal := tn.Submit(member, sub, at)
 			if refusal != nil {
 				t.Fatalf("retained Compute replay was refused: %v %s roles=%v", refusal, refusal.Message, member.Roles)
@@ -127,7 +125,7 @@ func TestContinuousSignalReplayUsesRetainedOperationAndInputChannel(t *testing.T
 			if refusal != nil || !proto.Equal(receipt, duplicate) {
 				t.Fatal("the same HTTP key did not return the original replay receipt", refusal)
 			}
-			if got := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{}, at); got == "ok" {
+			if got := refuse(t, tn, "member", automation.ID, automation.SchemaFlowReplay, "flow.dead-letter", letters[0].ID, map[string]any{}, at); got == "ok" {
 				t.Fatal("a fresh command replayed the asset twice")
 			}
 			runs := tn.operationDispatches(time.Now().UTC().Add(time.Second))
@@ -135,8 +133,8 @@ func TestContinuousSignalReplayUsesRetainedOperationAndInputChannel(t *testing.T
 				t.Fatalf("replay did not plan one original operation: %d", len(runs))
 			}
 			runs[0]()
-			x, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
-			asset, _ := platform.Get[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), letters[0].ID)
+			x, _ := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), id)
+			asset, _ := platform.Get[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), letters[0].ID)
 			if !asset.Replayed || x.Batch.Cursor != "replay:"+asset.ID || len(x.Tokens) != 1 || x.Tokens[0].Waits != "stream" || x.Data != "{}" {
 				t.Fatal("replay did not settle the original instance and asset together")
 			}

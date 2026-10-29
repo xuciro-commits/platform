@@ -1,31 +1,29 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"fmt"
 
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
+	"platformserver/studio/build"
+
 	"platformserver/platform"
 )
 
-type ReleaseDraftChanges struct {
-	Changes []construction.DraftChange `json:"changes"`
-}
-
-func (t *Tenant) SavedDraftChanges(m platform.Member, application, typ, id string) (ReleaseDraftChanges, error) {
+func (t *Tenant) SavedDraftChanges(m platform.Member, application, typ, id string) (releaseowner.ReleaseDraftChanges, error) {
 	if err := t.admits(m); err != nil {
-		return ReleaseDraftChanges{}, err
+		return releaseowner.ReleaseDraftChanges{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/drafts/changes", "read", []string{construction.Builder}, true)); err != nil {
-		return ReleaseDraftChanges{}, err
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/drafts/changes", "read", []string{build.Builder}, true)); err != nil {
+		return releaseowner.ReleaseDraftChanges{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
-		return ReleaseDraftChanges{}, fmt.Errorf("tenant has no builder")
+		return releaseowner.ReleaseDraftChanges{}, fmt.Errorf("tenant has no builder")
 	}
 	changes, err := owner.SavedDraftChanges(c, application, typ, id)
-	return ReleaseDraftChanges{Changes: changes}, err
+	return releaseowner.ReleaseDraftChanges{Changes: changes}, err
 }

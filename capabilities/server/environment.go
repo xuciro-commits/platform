@@ -7,13 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
 	"strings"
 	"time"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // Candidate physical isolation, cross-environment promotion and real data
@@ -39,16 +39,6 @@ import (
 // repeats nothing. Types the target does not host refuse the whole run up front.
 
 // SealedArtifact is one candidate's sealed bytes.
-type SealedArtifact struct {
-	Tenant    string    `json:"tenant"`
-	Candidate string    `json:"candidate"`
-	Key       string    `json:"key"`
-	Digest    string    `json:"digest"`
-	Size      int       `json:"size"`
-	Assets    int       `json:"assets"`
-	SealedAt  time.Time `json:"sealedAt"`
-}
-
 // PromotionResult says what one promotion did.
 type PromotionResult struct {
 	From      string `json:"from"`
@@ -80,27 +70,27 @@ type MigrationResult struct {
 // SealCandidate writes a saved candidate's exact bytes into the file store as a
 // sealed artifact and remembers its digest. Sealing is idempotent: the same
 // candidate seals to the same key and digest.
-func (t *Tenant) SealCandidate(id string, now time.Time) (SealedArtifact, error) {
+func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifact, error) {
 	t.mu.Lock()
-	raw := slices.Clone(t.releases.raw(id))
+	raw := slices.Clone(t.releases.Raw(id))
 	t.mu.Unlock()
 	if raw == nil {
-		return SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
+		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not saved", id)
 	}
 	candidate, err := platform.ReadCandidate(id, raw)
 	if err != nil {
-		return SealedArtifact{}, fmt.Errorf("release candidate %s: %w", id, err)
+		return platform.SealedArtifact{}, fmt.Errorf("release candidate %s: %w", id, err)
 	}
 	sum := sha256.Sum256(raw)
-	artifact := SealedArtifact{Tenant: t.ID, Candidate: candidate.ID, Key: sealedKey(t.ID, candidate.ID),
+	artifact := platform.SealedArtifact{Tenant: t.ID, Candidate: candidate.ID, Key: sealedKey(t.ID, candidate.ID),
 		Digest: "sha256:" + hex.EncodeToString(sum[:]), Size: len(raw), Assets: len(candidate.Assets), SealedAt: now.UTC()}
 	if err := t.files().Put(context.Background(), artifact.Key, raw, "application/json"); err != nil {
-		return SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
+		return platform.SealedArtifact{}, fmt.Errorf("seal %s: %w", id, err)
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if err := t.releases.seal(candidate.ID, artifact); err != nil {
-		return SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", candidate.ID)
+	if err := t.releases.Seal(candidate.ID, artifact); err != nil {
+		return platform.SealedArtifact{}, fmt.Errorf("sealed candidate %s changed", candidate.ID)
 	}
 	return artifact, nil
 }
@@ -110,23 +100,23 @@ func sealedKey(tenant, candidate string) string {
 }
 
 // SealedArtifact reads back one sealed candidate's manifest.
-func (t *Tenant) SealedArtifact(id string) (SealedArtifact, bool) {
+func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, a := range t.releases.sealed {
+	for _, a := range t.releases.Sealed() {
 		if a.Candidate == id {
 			return a, true
 		}
 	}
-	return SealedArtifact{}, false
+	return platform.SealedArtifact{}, false
 }
 
 // sealedBytes reads a sealed artifact and checks its digest, so a promoted or
 // activated candidate is exactly what was sealed.
-func (t *Tenant) sealedBytes(id string) ([]byte, SealedArtifact, error) {
+func (t *Tenant) sealedBytes(id string) ([]byte, platform.SealedArtifact, error) {
 	artifact, ok := t.SealedArtifact(id)
 	if !ok {
-		return nil, SealedArtifact{}, fmt.Errorf("release candidate %s is not sealed", id)
+		return nil, platform.SealedArtifact{}, fmt.Errorf("release candidate %s is not sealed", id)
 	}
 	reader, _, err := t.files().Get(context.Background(), artifact.Key)
 	if err != nil {
@@ -151,10 +141,10 @@ func (t *Tenant) sealedBytes(id string) ([]byte, SealedArtifact, error) {
 // no artifact is on record: the artifact is derived from the committed bytes
 // and sealing is idempotent, so a save that never sealed, or a sealed map not
 // carried by a journal-only recovery, is repaired here rather than refused.
-func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, SealedArtifact, error) {
+func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, platform.SealedArtifact, error) {
 	if _, ok := t.SealedArtifact(id); !ok {
 		if _, err := t.SealCandidate(id, now); err != nil {
-			return nil, SealedArtifact{}, err
+			return nil, platform.SealedArtifact{}, err
 		}
 	}
 	return t.sealedBytes(id)
@@ -169,7 +159,7 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if from == nil || to == nil || from.ID == to.ID {
 		return PromotionResult{}, fmt.Errorf("promotion needs two different environments")
 	}
-	if !holdsIndependentBuildRole(member, construction.Builder, construction.Publisher) {
+	if !holdsIndependentBuildRole(member, build.Builder, build.Publisher) {
 		return PromotionResult{}, fmt.Errorf("promotion needs the builder or publisher role in %s", to.ID)
 	}
 	raw, artifact, err := from.sealedOrSeal(candidateID, now)
@@ -192,29 +182,29 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if to.quarantined() {
 		return result, fmt.Errorf("tenant %s is quarantined", to.ID)
 	}
-	if prior, ok := to.releases.request("promotion:" + key); ok {
-		hash, hashErr := resultformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
+	if prior, ok := to.releases.Request("promotion:" + key); ok {
+		hash, hashErr := acceptedformat.ReleaseRequestHash(to.ID, member.ID, "promotion:"+key, candidate.ID, activate)
 		if hashErr != nil || prior != hash {
 			return result, fmt.Errorf("promotion key belongs to another request")
 		}
 		return result, nil
 	}
-	if prior := to.releases.raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
+	if prior := to.releases.Raw(candidate.ID); prior != nil && !bytes.Equal(prior, raw) {
 		return result, fmt.Errorf("candidate %s exists in %s with different bytes", candidate.ID, to.ID)
 	}
-	var installations []resultformat.ReleaseInstallation
+	var installations []platform.ReleaseInstallation
 	var bootstrap json.RawMessage
 	if activate {
 		if installations, bootstrap, err = to.prepareReleaseLifecycleLocked(candidate, member, now, false); err != nil {
 			return result, err
 		}
 	}
-	saved := resultformat.Release{Version: 2, Kind: "release-result", Tenant: to.ID, App: construction.ID, Member: member.ID,
+	saved := acceptedformat.Release{Version: 2, Kind: "release-result", Tenant: to.ID, App: build.ID, Member: member.ID,
 		Key: "promotion:" + key, At: now.UTC(), CandidateID: candidate.ID, Bytes: slices.Clone(raw), Active: activate, Installations: installations, Bootstrap: bootstrap, From: from.ID}
 	if activate {
 		saved.Version = 4
 	}
-	if saved.RequestHash, err = resultformat.ReleaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
+	if saved.RequestHash, err = acceptedformat.ReleaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
 		return result, err
 	}
 	// The target's audit of the promotion is written where the result is
@@ -296,11 +286,11 @@ type MigrationManifest struct {
 }
 
 // rememberMigration keeps the console's own view of what moved.
-func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time, evidence ...resultformat.AuthorizationEvidence) error {
+func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, err := t.acceptHostControl("migration", member, result, now,
-		AuditEntry{Action: "host.migration", Target: result.Key}, func(image *hostControlImage) (SupportGrant, error) {
+		platform.AuditEntry{Action: "host.migration", Target: result.Key}, func(image *hostControlImage) (SupportGrant, error) {
 			image.Migrations = append(image.Migrations, MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
 			return SupportGrant{}, nil
 		}, evidence...)

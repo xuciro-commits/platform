@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"net/http"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"slices"
 	"testing"
@@ -103,11 +104,11 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	}
 	reads := map[string]any{}
 	for _, a := range t.apps {
-		if a.Manifest().ID == PlatformApp {
+		if a.Manifest().ID == controlowner.PlatformApp {
 			continue // its reads are the host views above
 		}
 		for _, name := range a.Manifest().Reads {
-			out, err := readApp(a, t.caller(everyone, a, false), name)
+			out, err := platform.CallRead(a, t.caller(everyone, a, false), name)
 			reads[name] = []any{out, err}
 		}
 	}
@@ -123,7 +124,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	for _, e := range t.Endpoints() { // health depends on the secret store, not the journal
 		endpoints = append(endpoints, []any{e.Endpoint, e.Pending, e.Delivers})
 	}
-	notices, _ := t.notices.state()
+	notices, _ := t.notices.State()
 	bindings := []any{}
 	for _, p := range t.Protocols() {
 		bindings = append(bindings, []string{p.ID, p.Bound})
@@ -146,7 +147,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	raw, err := json.Marshal([]any{recordView, definitions, t.Audit(), t.committed.allRefusals(), t.committed.allAnswers(), t.releases.candidates, t.releases.active, t.releases.applied, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	raw, err := json.Marshal([]any{recordView, definitions, t.Audit(), t.committed.AllRefusals(), t.committed.AllAnswers(), t.releases.Candidates(), t.releases.Active(), t.releases.Applied(), t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
 	if err != nil {
 		return "", err
 	}

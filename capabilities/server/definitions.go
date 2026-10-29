@@ -1,13 +1,16 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"encoding/json"
 	"fmt"
+	"platformserver/kernel/transport"
 	"slices"
 	"strings"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // registerDefinitions coordinates declaration owners after their pure
@@ -16,7 +19,7 @@ import (
 func (t *Tenant) registerDefinitions() error {
 	classes := map[string]bool{}
 	versions := map[string]string{}
-	declarations := construction.CodeDeclarations{DataClasses: classes, NarrowedFields: map[string][]string{}, NativeExecutors: map[string]bool{}}
+	declarations := build.CodeDeclarations{DataClasses: classes, NarrowedFields: map[string][]string{}, NativeExecutors: map[string]bool{}}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
 		versions[manifest.ID] = manifest.Version
@@ -78,7 +81,7 @@ func (t *Tenant) registerDefinitions() error {
 		manifest := app.Manifest()
 		for _, page := range manifest.Pages {
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetPage, Name: page.Name}
-			if len(page.Sections) != 0 {
+			if len(page.DataBindings) != 0 || page.Format == 0 {
 				if err := t.checkSections(page, objectInfo[page.Object.Name]); err != nil {
 					return err
 				}
@@ -133,7 +136,7 @@ func (t *Tenant) registerDefinitions() error {
 			}
 		}
 		for _, agent := range manifest.Agents {
-			descriptor, err := construction.AgentDescriptor(agent)
+			descriptor, err := build.AgentDescriptor(agent)
 			if err != nil {
 				return err
 			}
@@ -164,7 +167,7 @@ func (t *Tenant) registerDefinitions() error {
 			}
 		}
 		for _, provision := range manifest.Provides {
-			protocol, err := construction.ProtocolDescriptor(manifest, provision)
+			protocol, err := build.ProtocolDescriptor(manifest, provision)
 			if err != nil {
 				return err
 			}
@@ -209,7 +212,7 @@ func (t *Tenant) registerDefinitions() error {
 				resources = append(resources, definition.Ref)
 			}
 		}
-		declaration := platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)}
+		declaration := platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: releaseowner.UniqueRefs(resources)}
 		if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetApp, Name: manifest.ID}, Source: "code", Version: manifest.Version, ContractVersion: 1, Application: &declaration}); err != nil {
 			return err
 		}
@@ -223,27 +226,16 @@ func (t *Tenant) registerDefinitions() error {
 	return nil
 }
 
-func uniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
-	out := []platform.AssetRef{}
-	for _, ref := range refs {
-		if !slices.Contains(out, ref) {
-			out = append(out, ref)
-		}
-	}
-	slices.SortFunc(out, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
-	return out
-}
-
 // Definitions serves the installed assets the member can discover. Entity
 // fields and actions are filtered through the existing read/catalog paths at
 // request time, so role and field changes are never cached in the registry.
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
-	gen, key := t.definitionsFingerprint(), rights(m)
-	if out, ok := t.cachedDefinitions(m, gen, key); ok {
+	gen, key := t.definitionsFingerprint(), transport.Rights(m)
+	if out, ok := t.views.Definitions(gen, key); ok {
 		return out
 	}
 	out := t.buildDefinitions(m)
-	t.storeDefinitions(gen, key, out)
+	t.views.StoreDefinitions(gen, key, out)
 	return out
 }
 
@@ -274,4 +266,16 @@ func (r runtime) VisibleApplications(c platform.Caller) []platform.AssetRef {
 }
 func (d *stagedDecision) VisibleApplications(c platform.Caller) []platform.AssetRef {
 	return (runtime{d.tenant}).VisibleApplications(c)
+}
+
+// definitionsGeneration moves when the tenant's installed definitions do; it
+// is the cache's only invalidation key.
+func (t *Tenant) definitionsFingerprint() uint64 { return t.defGen.Load() }
+
+// setDefinitions installs a definition set and moves the generation: every
+// cached catalog, entity view and encoded answer becomes stale at once.
+func (t *Tenant) setDefinitions(definitions []platform.Definition) {
+	t.definitions = definitions
+	t.defGen.Add(1)
+	t.i18n.InstallApplications(definitions)
 }

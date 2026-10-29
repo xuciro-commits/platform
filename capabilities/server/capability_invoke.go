@@ -9,8 +9,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // InvokeCapability is a projection onto the original owner entry points.
@@ -90,8 +90,8 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 		}
 		_ = json.Unmarshal(q.Inputs, &values)
 		payload, _ := json.Marshal(map[string]any{"app": q.Ref.App, "name": q.Ref.Name, "source": values.Source, "version": q.Version})
-		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: construction.ID, IdempotencyKey: q.Key,
-			Target: &pb.EntityRef{Type: construction.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: construction.SchemaFunctionCall, Version: 1}, Payload: payload}
+		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: q.Key,
+			Target: &pb.EntityRef{Type: build.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: build.SchemaFunctionCall, Version: 1}, Payload: payload}
 		_, err := t.Submit(m, s, now)
 		answer.State, answer.Call = "pending", q.Key
 		return answer, err

@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {registerHooks} from 'node:module';
 const manifest=JSON.parse(readFileSync(new URL('../../../../app/src/pageui/widgets.json',import.meta.url)));
 registerHooks({resolve(s,c,next){
- if(s==='@platform/ui')return {url:'data:text/javascript,'+encodeURIComponent('export const t=(s,v={})=>s.replace(/\\{(\\w+)\\}/g,(_,k)=>v[k]??k);'),shortCircuit:true};
+ if(s==='@platform/ui'){const ui=new URL('../../../../ui/src/',import.meta.url).href;return {url:'data:text/javascript,'+encodeURIComponent('export const t=(s,v={})=>s.replace(/\\{(\\w+)\\}/g,(_,k)=>v[k]??k);export {validTimestampOffset,validCivilDate} from "'+ui+'components/date.ts";export {rangeGrid} from "'+ui+'components/range.ts";export {validExternalFrame} from "'+ui+'components/external-frame.ts";export {validStaticImage} from "'+ui+'components/static-image.ts";export {validSceneConfig} from "'+ui+'spatial/scene-model.ts";'),shortCircuit:true};}
  if(s==='@platform/ui/canvas-snapping')return {url:new URL('../../../../ui/src/layout/canvas-snapping.ts',import.meta.url).href,shortCircuit:true};
  if(s==='@platform/kernel')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(manifest)};`),shortCircuit:true};
  if(s==='@platform/app')return {url:'data:text/javascript,'+encodeURIComponent(`export const pageUIProfile=${JSON.stringify(manifest.uiProfile)},pageVariableContract=${JSON.stringify(manifest.runtime)};export {pageLayoutDiagnostics} from ${JSON.stringify(new URL('../../../../app/src/pages/layout.ts',import.meta.url).href)};`),shortCircuit:true};

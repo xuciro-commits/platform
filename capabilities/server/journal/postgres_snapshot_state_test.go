@@ -6,11 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"platformserver/platform"
 	"reflect"
 	"testing"
 	"time"
-
-	"platformserver/internal/records"
 )
 
 func TestPostgresCheckpointArchiveAndTail(t *testing.T) {
@@ -95,7 +94,7 @@ func TestPostgresCheckpointArchiveAndTail(t *testing.T) {
 		t.Fatal("unchanged archive did not refresh owner checkpoint eligibility", err)
 	}
 	second := json.RawMessage(`{"revision":2}`)
-	head, err := records.AppendHistory(before.HistoryHead, 1, second)
+	head, err := platform.AppendRecordHistory(before.HistoryHead, 1, second)
 	if err != nil {
 		t.Fatal(err)
 	}

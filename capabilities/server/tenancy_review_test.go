@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -9,7 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	resultformat "platformserver/internal/acceptance/result"
+	jose "github.com/go-jose/go-jose/v4"
+
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+	"platformserver/studio/packages"
 
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +26,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
-	"github.com/go-jose/go-jose/v4"
 	enterprise "platformserver/engine/organization"
 	"platformserver/idp"
 	"platformserver/platform"
@@ -64,40 +67,40 @@ func TestOIDCRequiresMultipleFactors(t *testing.T) {
 
 func TestProjectDelegationWithIndependentReadRole(t *testing.T) {
 	tn, member, submit := upgradeTenant(t, "project-mixed-grant")
-	project := map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "allowed"}}}
-	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", project); got != "ok" {
+	project := map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": platform.ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "allowed"}}}
+	if got := submit("dana", platform.SchemaProjectSave, platform.ProjectType, "limited", project); got != "ok" {
 		t.Fatal(got)
 	}
-	grant, _ := json.Marshal(map[string]string{"app": construction.ID, "role": construction.User})
-	if _, err := tn.Submit(member("dana"), &pb.Submission{TenantId: tn.ID, PrincipalId: "dana", Authority: PlatformApp, IdempotencyKey: "grant-reader", Target: &pb.EntityRef{Type: MemberType, Id: "mo"}, Schema: &pb.SchemaRef{Name: SchemaGrant, Version: 1}, Payload: grant}, time.Now()); err != nil {
+	grant, _ := json.Marshal(map[string]string{"app": build.ID, "role": build.User})
+	if _, err := tn.Submit(member("dana"), &pb.Submission{TenantId: tn.ID, PrincipalId: "dana", Authority: controlowner.PlatformApp, IdempotencyKey: "grant-reader", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "mo"}, Schema: &pb.SchemaRef{Name: controlowner.SchemaGrant, Version: 1}, Payload: grant}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	object := map[string]any{"name": "outside", "title": "Outside", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("mo", "build.object.create", construction.ObjectType, "outside", object); got != "ERROR_CODE_POLICY_DENIED" {
+	if got := submit("mo", "build.object.create", build.ObjectType, "outside", object); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("project builder + user created outside scope: %s", got)
 	}
 	object["name"] = "allowed"
-	if got := submit("mo", "build.object.create", construction.ObjectType, "allowed", object); got != "ok" {
+	if got := submit("mo", "build.object.create", build.ObjectType, "allowed", object); got != "ok" {
 		t.Fatalf("project asset refused: %s", got)
 	}
 	// The project names the asset; the editor's record ID differs (UX-11).
 	named := map[string]any{"name": "allowed", "title": "Allowed", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("dana", "build.object.create", construction.ObjectType, "UX-ITEM", map[string]any{"name": "uxitem", "title": "Item", "fields": named["fields"]}); got != "ok" {
+	if got := submit("dana", "build.object.create", build.ObjectType, "UX-ITEM", map[string]any{"name": "uxitem", "title": "Item", "fields": named["fields"]}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "uxitem"}}}); got != "ok" {
+	if got := submit("dana", platform.SchemaProjectSave, platform.ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": platform.ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "uxitem"}}}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := submit("mo", "build.object.edit", construction.ObjectType, "UX-ITEM", map[string]any{"title": "Item renamed"}); got != "ok" {
+	if got := submit("mo", "build.object.edit", build.ObjectType, "UX-ITEM", map[string]any{"title": "Item renamed"}); got != "ok" {
 		t.Fatalf("delegated edit of a draft whose ID differs from its name refused: %s", got)
 	}
-	if got := submit("mo", "build.object.edit", construction.ObjectType, "allowed", map[string]any{"title": "No longer named"}); got != "ERROR_CODE_POLICY_DENIED" {
+	if got := submit("mo", "build.object.edit", build.ObjectType, "allowed", map[string]any{"title": "No longer named"}); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("an asset the project no longer names was edited: %s", got)
 	}
-	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "future"}}}); got != "ok" {
+	if got := submit("dana", platform.SchemaProjectSave, platform.ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": platform.ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "future"}}}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := submit("mo", "build.object.edit", construction.ObjectType, "allowed", map[string]any{"name": "future", "title": "Claimed by payload"}); got != "ERROR_CODE_POLICY_DENIED" {
+	if got := submit("mo", "build.object.edit", build.ObjectType, "allowed", map[string]any{"name": "future", "title": "Claimed by payload"}); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("a payload name claimed an existing draft outside the project: %s", got)
 	}
 
@@ -106,7 +109,7 @@ func TestProjectDelegationWithIndependentReadRole(t *testing.T) {
 func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
 	_, addr := newMailbox(t)
 	compose := func() *Tenant {
-		tn, err := NewTenant("invite-review", NewConsole("invite-review", Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}))
+		tn, err := NewTenant("invite-review", newConsole("invite-review", platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -125,16 +128,16 @@ func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
 		entries = append(entries, e)
 		return e.Body, nil
 	}
-	endpoint, _ := json.Marshal(map[string]any{"kind": "email", "url": "smtp://" + addr, "from": "host@example.test", "notifications": []string{PlatformApp}, "allowPrivate": true})
-	if _, err := tn.Submit(admin, &pb.Submission{TenantId: tn.ID, PrincipalId: "admin", Authority: PlatformApp, IdempotencyKey: "mail-endpoint", Target: &pb.EntityRef{Type: EndpointType, Id: "mail"}, Schema: &pb.SchemaRef{Name: SchemaEndpointAdd, Version: 1}, Payload: endpoint}, now); err != nil {
+	endpoint, _ := json.Marshal(map[string]any{"kind": "email", "url": "smtp://" + addr, "from": "host@example.test", "notifications": []string{controlowner.PlatformApp}, "allowPrivate": true})
+	if _, err := tn.Submit(admin, &pb.Submission{TenantId: tn.ID, PrincipalId: "admin", Authority: controlowner.PlatformApp, IdempotencyKey: "mail-endpoint", Target: &pb.EntityRef{Type: controlowner.EndpointType, Id: "mail"}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEndpointAdd, Version: 1}, Payload: endpoint}, now); err != nil {
 		t.Fatal(err)
 	}
-	sub := &pb.Submission{TenantId: tn.ID, PrincipalId: "admin", Authority: PlatformApp, IdempotencyKey: "invite", Target: &pb.EntityRef{Type: MemberType, Id: "new"}, Schema: &pb.SchemaRef{Name: SchemaInvite, Version: 1}, Payload: []byte(`{"subject":"user:new@example.test"}`)}
+	sub := &pb.Submission{TenantId: tn.ID, PrincipalId: "admin", Authority: controlowner.PlatformApp, IdempotencyKey: "invite", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "new"}, Schema: &pb.SchemaRef{Name: controlowner.SchemaInvite, Version: 1}, Payload: []byte(`{"subject":"user:new@example.test"}`)}
 	fail = true
 	if _, err := tn.Submit(admin, sub, now); err == nil {
 		t.Fatal("failed append accepted invite")
 	}
-	if _, ok := tn.Member("new"); ok || len(tn.notices.all) != 0 || len(tn.outbound) != 0 {
+	if _, ok := tn.Member("new"); ok || len(noticeValues(tn)) != 0 || len(tn.outbound) != 0 {
 		t.Fatal("failed invite leaked state or intent")
 	}
 	fail = false
@@ -142,7 +145,7 @@ func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch, _, errDecode := resultformat.DecodeBatch(entries[len(entries)-1].Body)
+	batch, _, errDecode := acceptedformat.DecodeBatch(entries[len(entries)-1].Body)
 	if errDecode != nil || batch.Notices == nil || len(batch.Notices.Effects) != 1 {
 		t.Fatalf("accepted invitation omitted mail intent: %+v %v", batch.Notices, errDecode)
 	}
@@ -157,7 +160,7 @@ func TestAcceptedInvitationIncludesMailIntent(t *testing.T) {
 }
 
 func TestDomainJoinRequiresMFAAndDoesNotReadmitLeaver(t *testing.T) {
-	tn, err := NewTenant("join-review", NewConsole("join-review", Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}, Seat{Subjects: []string{"user:left@allowed.test"}, Member: platform.Member{ID: "left", Roles: map[string]string{}}}))
+	tn, err := NewTenant("join-review", newConsole("join-review", platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}, platform.Seat{Subjects: []string{"user:left@allowed.test"}, Member: platform.Member{ID: "left", Roles: map[string]string{}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,12 +170,12 @@ func TestDomainJoinRequiresMFAAndDoesNotReadmitLeaver(t *testing.T) {
 	submit := func(schema, typ, id, key string, payload any) {
 		t.Helper()
 		raw, _ := json.Marshal(payload)
-		if _, err := tn.Submit(admin, &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
+		if _, err := tn.Submit(admin, &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
 			t.Fatal(err)
 		}
 	}
-	submit(SchemaSettingSet, SettingType, PlatformApp+"/"+SettingDomains, "domains", map[string]string{"value": "allowed.test"})
-	submit(SchemaSettingSet, SettingType, PlatformApp+"/"+SettingMFA, "mfa-on", map[string]string{"value": "true"})
+	submit(controlowner.SchemaSettingSet, controlowner.SettingType, controlowner.PlatformApp+"/"+controlowner.SettingDomains, "domains", map[string]string{"value": "allowed.test"})
+	submit(controlowner.SchemaSettingSet, controlowner.SettingType, controlowner.PlatformApp+"/"+controlowner.SettingMFA, "mfa-on", map[string]string{"value": "true"})
 	h := NewHost(Tokens(map[string]string{"new": "user:new@allowed.test", "left": "user:left@allowed.test"}), tn)
 	h.Now = func() time.Time { return now }
 	request := func(token string) bool {
@@ -191,11 +194,11 @@ func TestDomainJoinRequiresMFAAndDoesNotReadmitLeaver(t *testing.T) {
 	if !request("new") {
 		t.Fatal("attested domain member refused")
 	}
-	submit(SchemaOffboard, MemberType, "left", "offboard", map[string]any{})
+	submit(controlowner.SchemaOffboard, controlowner.MemberType, "left", "offboard", map[string]any{})
 	if request("left") {
 		t.Fatal("offboarded identity rejoined through its domain")
 	}
-	submit(SchemaInvite, MemberType, "returned", "return", map[string]string{"subject": "user:left@allowed.test"})
+	submit(controlowner.SchemaInvite, controlowner.MemberType, "returned", "return", map[string]string{"subject": "user:left@allowed.test"})
 	if !request("left") {
 		t.Fatal("explicit administrative reinvitation was refused")
 	}
@@ -203,7 +206,7 @@ func TestDomainJoinRequiresMFAAndDoesNotReadmitLeaver(t *testing.T) {
 
 func TestBoundGrantReadsUnionWithinItsStructure(t *testing.T) {
 	org := enterprise.New("grant-reads", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Kind: "site"}, {ID: "other", Kind: "site"}}, Units: []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}, {ID: "L2", Kind: "line"}, {ID: "X", Kind: "line"}}, Edges: []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}, {Structure: "other", Unit: "X", Parent: "plant"}}, Memberships: []platform.Membership{{Party: "member:writer", Unit: "plant"}, {Party: "member:reader", Unit: "L1"}}})
-	dir := NewConsole("grant-reads", seatOf("writer", "stock:lead"), seatOf("reader", "stock:lead"))
+	dir := newConsole("grant-reads", seatOf("writer", "stock:lead"), seatOf("reader", "stock:lead"))
 	tn, err := NewTenant("grant-reads", dir, org, newStock("grant-reads"))
 	if err != nil {
 		t.Fatal(err)
@@ -230,9 +233,9 @@ func TestBoundGrantReadsUnionWithinItsStructure(t *testing.T) {
 		{"unbound and bound", []platform.Grant{{App: "stock", Role: "lead"}, {App: "stock", Role: "lead", Unit: "L2", Structure: "site"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir.mu.Lock()
-			dir.members["reader"].Grants = slices.Clone(tc.grants)
-			dir.mu.Unlock()
+			rewriteMember(t, dir, "reader", func(member *platform.Member) {
+				member.Grants = slices.Clone(tc.grants)
+			})
 			page, err := tn.Records(platform.Member{ID: "reader", Tenant: tn.ID, Roles: map[string]string{"stock": "lead"}, Grants: tc.grants}, "stock.item", platform.Query{}, now)
 			if err != nil || page.Total != 2 {
 				t.Fatalf("reads want L1+L2, got %+v %v", page, err)
@@ -243,7 +246,7 @@ func TestBoundGrantReadsUnionWithinItsStructure(t *testing.T) {
 
 func TestProjectBuilderCannotSaveOrActivateReleases(t *testing.T) {
 	tn, member, submit := upgradeTenant(t, "project-release-bound")
-	if got := submit("dana", SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "allowed"}}}); got != "ok" {
+	if got := submit("dana", platform.SchemaProjectSave, platform.ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": platform.ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "allowed"}}}); got != "ok" {
 		t.Fatal(got)
 	}
 	for _, run := range []func() (string, error){
@@ -276,7 +279,7 @@ func TestJournalAcceptedInvitationCrashAfterCommit(t *testing.T) {
 	}
 	box, addr := newMailbox(t)
 	compose := func() *Tenant {
-		tn, err := NewTenant(id, NewConsole(id, Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}))
+		tn, err := NewTenant(id, newConsole(id, platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -290,11 +293,11 @@ func TestJournalAcceptedInvitationCrashAfterCommit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	endpoint, _ := json.Marshal(map[string]any{"kind": "email", "url": "smtp://" + addr, "from": "host@example.test", "notifications": []string{PlatformApp}, "allowPrivate": true})
-	if _, err := live.Submit(admin, &pb.Submission{TenantId: id, PrincipalId: "admin", Authority: PlatformApp, IdempotencyKey: "endpoint", Target: &pb.EntityRef{Type: EndpointType, Id: "mail"}, Schema: &pb.SchemaRef{Name: SchemaEndpointAdd, Version: 1}, Payload: endpoint}, now); err != nil {
+	endpoint, _ := json.Marshal(map[string]any{"kind": "email", "url": "smtp://" + addr, "from": "host@example.test", "notifications": []string{controlowner.PlatformApp}, "allowPrivate": true})
+	if _, err := live.Submit(admin, &pb.Submission{TenantId: id, PrincipalId: "admin", Authority: controlowner.PlatformApp, IdempotencyKey: "endpoint", Target: &pb.EntityRef{Type: controlowner.EndpointType, Id: "mail"}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEndpointAdd, Version: 1}, Payload: endpoint}, now); err != nil {
 		t.Fatal(err)
 	}
-	sub := &pb.Submission{TenantId: id, PrincipalId: "admin", Authority: PlatformApp, IdempotencyKey: "invite", Target: &pb.EntityRef{Type: MemberType, Id: "new"}, Schema: &pb.SchemaRef{Name: SchemaInvite, Version: 1}, Payload: []byte(`{"subject":"user:new@example.test"}`)}
+	sub := &pb.Submission{TenantId: id, PrincipalId: "admin", Authority: controlowner.PlatformApp, IdempotencyKey: "invite", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "new"}, Schema: &pb.SchemaRef{Name: controlowner.SchemaInvite, Version: 1}, Payload: []byte(`{"subject":"user:new@example.test"}`)}
 	live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
 		if _, ok := live.Member("new"); ok {
 			t.Fatal("invite exposed before commit")
@@ -356,13 +359,13 @@ func TestJournalAcceptedInvitationCrashAfterCommit(t *testing.T) {
 }
 
 func TestDomainJoinConcurrentRequestsShareOneSeat(t *testing.T) {
-	tn, err := NewTenant("join-concurrent", NewConsole("join-concurrent", Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}))
+	tn, err := NewTenant("join-concurrent", newConsole("join-concurrent", platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	admin, _ := tn.Member("admin")
 	now := Now()
-	if _, err := tn.Submit(admin, &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: "domains", Target: &pb.EntityRef{Type: SettingType, Id: PlatformApp + "/" + SettingDomains}, Schema: &pb.SchemaRef{Name: SchemaSettingSet, Version: 1}, Payload: []byte(`{"value":"allowed.test"}`)}, now); err != nil {
+	if _, err := tn.Submit(admin, &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "domains", Target: &pb.EntityRef{Type: controlowner.SettingType, Id: controlowner.PlatformApp + "/" + controlowner.SettingDomains}, Schema: &pb.SchemaRef{Name: controlowner.SchemaSettingSet, Version: 1}, Payload: []byte(`{"value":"allowed.test"}`)}, now); err != nil {
 		t.Fatal(err)
 	}
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
@@ -390,9 +393,18 @@ func TestDomainJoinConcurrentRequestsShareOneSeat(t *testing.T) {
 		}
 	}
 	d := testConsoleOf(tn)
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if len(d.members) != 2 || d.subjects["user:same@allowed.test"] != "same" {
+	raw, err := d.AcceptedState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state struct {
+		Members  map[string]json.RawMessage
+		Subjects map[string]string
+	}
+	if err = json.Unmarshal(raw, &state); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Members) != 2 || state.Subjects["user:same@allowed.test"] != "same" {
 		t.Fatal("concurrent join duplicated seat")
 	}
 }
@@ -402,7 +414,7 @@ func TestAcceptedProjectAndPackageState(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			compose := func() *Tenant {
 				tn, _, _ := upgradeTenant(t, "accepted-"+kind)
-				testConsoleOf(tn).index = &PackageIndex{Packages: []PackageDescriptor{{ID: "review.base", Version: "1.0.0", Namespace: "review", Title: "Review"}}}
+				testConsoleOf(tn).BindPackageIndex(&platform.PackageIndex{Packages: []platform.PackageDescriptor{{ID: "review.base", Version: "1.0.0", Namespace: "review", Title: "Review"}}})
 				return tn
 			}
 			tn := compose()
@@ -417,17 +429,17 @@ func TestAcceptedProjectAndPackageState(t *testing.T) {
 				entries = append(entries, e)
 				return e.Body, nil
 			}
-			schema, typ, id, payload := SchemaProjectSave, ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "allowed"}}}
+			schema, typ, id, payload := platform.SchemaProjectSave, platform.ProjectType, "limited", map[string]any{"name": "limited", "title": "Limited", "members": []map[string]any{{"member": "mo", "role": platform.ProjectEditorRole}}, "assets": []map[string]any{{"kind": "object", "name": "allowed"}}}
 			if kind == "package" {
-				schema, typ, id, payload = SchemaPackageInstall, PackageType, "review.base", map[string]any{"id": "review.base", "version": "1.0.0"}
+				schema, typ, id, payload = packages.SchemaPackageInstall, platform.PackageType, "review.base", map[string]any{"id": "review.base", "version": "1.0.0"}
 			}
 			raw, _ := json.Marshal(payload)
-			sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: kind, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
+			sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: kind, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
 			if _, err := tn.Submit(admin, sub, now); err == nil {
 				t.Fatal("failed append accepted state")
 			}
 			d := testConsoleOf(tn)
-			if len(d.projects) != 0 || len(d.packages) != 0 {
+			if len(d.ConsolePolicies.SnapshotState().Projects) != 0 || len(d.ConsolePackages.SnapshotState().Packages) != 0 {
 				t.Fatal("failed append leaked state")
 			}
 			fail = false
@@ -435,14 +447,14 @@ func TestAcceptedProjectAndPackageState(t *testing.T) {
 				t.Fatal(err)
 			}
 			if kind == "project" {
-				if d.projects[id] == nil {
+				if d.ConsolePolicies.SnapshotState().Projects[id] == nil {
 					t.Fatal("accepted project was not installed")
 				}
 				mo, _ := tn.Member("mo")
-				if !mo.Holds(construction.ID, construction.Builder) {
+				if !mo.Holds(build.ID, build.Builder) {
 					t.Fatal("accepted project did not grant builder")
 				}
-			} else if d.packages[id] == nil || d.packages[id].State != "active" {
+			} else if d.ConsolePackages.SnapshotState().Packages[id] == nil || d.ConsolePackages.SnapshotState().Packages[id].State != "active" {
 				t.Fatal("accepted package was not installed")
 			}
 			if _, err := tn.Submit(admin, sub, now.Add(time.Minute)); err != nil || len(entries) != 1 {
@@ -458,7 +470,7 @@ func TestDeploymentPackageIndexSurvivesTenantRebuild(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "review.json"), []byte(`{"id":"review.base","version":"1.0.0","namespace":"review","title":"Review"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	compose := func(id string) (*Tenant, error) { return NewTenant(id, NewConsole(id)) }
+	compose := func(id string) (*Tenant, error) { return NewTenant(id, newConsole(id)) }
 	tn, err := compose("original")
 	if err != nil {
 		t.Fatal(err)

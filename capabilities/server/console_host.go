@@ -3,11 +3,12 @@ package platformserver
 import (
 	"context"
 	"io"
+	controlowner "platformserver/kernel/control"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -33,9 +34,9 @@ func (h hostView) CodeReleaseAssets() ([]platform.ReleaseAsset, error) {
 	return assets, nil
 }
 func (h hostView) ConsoleSetting(name string) string {
-	return h.t.setting(h.t.automation(PlatformApp, false), name)
+	return h.t.setting(h.t.automation(controlowner.PlatformApp, false), name)
 }
-func (h hostView) Languages() []string   { return h.t.i18n.languages() }
+func (h hostView) Languages() []string   { return h.t.i18n.Languages() }
 func (h hostView) TenantSuspended() bool { return h.t.console.suspended() }
 func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
@@ -81,4 +82,4 @@ func (h hostView) GetPackageArtifact(key string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-var _ host.ConsoleHost = hostView{}
+var _ platform.ConsoleHost = hostView{}

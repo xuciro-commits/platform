@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -22,8 +23,8 @@ func TestFiles(t *testing.T) {
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	var journal []Entry
 	build := func() *Tenant {
-		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"shop": "clerk", "knowledge": knowledge.Editor}}},
-			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}})
+		dir := newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"shop": "clerk", "knowledge": knowledge.Editor}}},
+			platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}})
 		tn, err := NewTenant("t-1", dir, files.New("t-1"), knowledge.New("t-1"), newShop("t-1"))
 		if err != nil {
 			t.Fatal(err)
@@ -32,7 +33,10 @@ func TestFiles(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	ana, bo := member("ana"), member("bo")
 	n := 0
 	decide := func(m platform.Member, app, schema, typ, id string, payload any) string {

@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -22,9 +22,9 @@ import (
 
 func TestSubmissionSchemaHTTPRequiresContentBeforeExecutingPublishedObjects(t *testing.T) {
 	tenant := builderTenant(t, "schema-http")
-	typ := publishObject(t, tenant, "builder", "item", map[string]any{"name": "item", "title": "Item", "fields": []construction.Field{
+	typ := publishObject(t, tenant, "builder", "item", map[string]any{"name": "item", "title": "Item", "fields": []build.Field{
 		{Name: "name", Title: "Name", Type: "text"},
-		{Name: "private", Title: "Private", Type: "text", Read: []string{construction.Builder}, Write: []string{construction.Builder}},
+		{Name: "private", Title: "Private", Type: "text", Read: []string{build.Builder}, Write: []string{build.Builder}},
 	}}, txnAt)
 	binding := schemaAction(t, tenant, typ+".create")
 	for _, action := range tenant.Catalog(memberOf(t, tenant, "builder")) {
@@ -33,7 +33,7 @@ func TestSubmissionSchemaHTTPRequiresContentBeforeExecutingPublishedObjects(t *t
 		}
 	}
 	host := NewHost(Tokens(map[string]string{"user": "user"}), tenant)
-	request := submission(tenant, memberOf(t, tenant, "user"), construction.ID, typ+".create", typ, "A", map[string]any{"name": "Declared version"})
+	request := submission(tenant, memberOf(t, tenant, "user"), build.ID, typ+".create", typ, "A", map[string]any{"name": "Declared version"})
 	post := func(content string) SubmissionAnswer {
 		t.Helper()
 		raw, err := protojson.Marshal(request)
@@ -94,20 +94,20 @@ func TestSubmissionSchemaFamiliesRetainVersionsAndRecover(t *testing.T) {
 			}
 			live := builderTenant(t, id)
 			live.AcceptResult = persist
-			fields := []construction.Field{{Name: "name", Title: "Name", Type: "text"}}
-			typ := publishObject(t, live, "builder", "item", map[string]any{"name": "item", "title": "Item", "fields": fields, "states": []construction.State{{Name: "open", Title: "Open"}, {Name: "reviewed", Title: "Reviewed"}}, "actions": []construction.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed"}}}, txnAt)
+			fields := []build.Field{{Name: "name", Title: "Name", Type: "text"}}
+			typ := publishObject(t, live, "builder", "item", map[string]any{"name": "item", "title": "Item", "fields": fields, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "reviewed", Title: "Reviewed"}}, "actions": []build.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed"}}}, txnAt)
 			original := schemaAction(t, live, typ+".create")
 			if original.Check() != nil || original.Family != 1 {
 				t.Fatal("initial schema is not declared")
 			}
-			fields = append(fields, construction.Field{Name: "note", Title: "Note", Type: "text"})
-			decide(t, live, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "item", map[string]any{"fields": fields}, txnAt)
-			decide(t, live, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "item", map[string]any{}, txnAt)
+			fields = append(fields, build.Field{Name: "note", Title: "Note", Type: "text"})
+			decide(t, live, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "item", map[string]any{"fields": fields}, txnAt)
+			decide(t, live, "builder", build.ID, build.SchemaPublish, build.ObjectType, "item", map[string]any{}, txnAt)
 			compatible := schemaAction(t, live, typ+".create")
 			if compatible.Version == original.Version || compatible.Family != original.Family {
 				t.Fatal("optional field did not retain its family with a new content version")
 			}
-			request := submission(live, memberOf(t, live, "user"), construction.ID, typ+".create", typ, "A", map[string]any{"name": "Old client"})
+			request := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "A", map[string]any{"name": "Old client"})
 			receipt, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), request, original.Version, txnAt)
 			if refusal != nil {
 				t.Fatal(refusal)
@@ -119,18 +119,18 @@ func TestSubmissionSchemaFamiliesRetainVersionsAndRecover(t *testing.T) {
 			if journal.Position(id) != position {
 				t.Fatal("schema key conflict wrote a second result")
 			}
-			decide(t, live, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "item", map[string]any{"actions": []construction.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "open"}}}, txnAt)
-			decide(t, live, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "item", map[string]any{}, txnAt)
+			decide(t, live, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "item", map[string]any{"actions": []build.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "open"}}}, txnAt)
+			decide(t, live, "builder", build.ID, build.SchemaPublish, build.ObjectType, "item", map[string]any{}, txnAt)
 			current := schemaAction(t, live, typ+".create")
 			if current.Family != 2 {
 				t.Fatalf("breaking change retained family %d", current.Family)
 			}
-			oldRequest := submission(live, memberOf(t, live, "user"), construction.ID, typ+".create", typ, "B", map[string]any{"name": "Stale client"})
+			oldRequest := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "B", map[string]any{"name": "Stale client"})
 			_, refusal, _ = live.submitSchemaDiagnosed(memberOf(t, live, "user"), oldRequest, compatible.Version, txnAt)
 			if refusal == nil || live.records.types[typ].rows.Get("B") != nil || !strings.Contains(refusal.Message, "refresh") {
 				t.Fatal("old family executed current rules or omitted its refresh reason", refusal)
 			}
-			corrected := submission(live, memberOf(t, live, "user"), construction.ID, typ+".create", typ, "B", map[string]any{"name": "Stale client"})
+			corrected := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "B", map[string]any{"name": "Stale client"})
 			corrected.CorrelationId = "correction:" + oldRequest.IdempotencyKey
 			if _, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), corrected, compatible.Version, txnAt); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 				t.Fatal("same inputs and schema created another intent", refusal)
@@ -140,19 +140,19 @@ func TestSubmissionSchemaFamiliesRetainVersionsAndRecover(t *testing.T) {
 			if refusal != nil || correctedReceipt == nil || live.records.types[typ].rows.Get("B") == nil {
 				t.Fatal("refreshed schema could not correct unchanged inputs", refusal)
 			}
-			freshRequest := submission(live, memberOf(t, live, "user"), construction.ID, typ+".create", typ, "C", map[string]any{"name": "New client", "note": "V2"})
+			freshRequest := submission(live, memberOf(t, live, "user"), build.ID, typ+".create", typ, "C", map[string]any{"name": "New client", "note": "V2"})
 			freshRequest.Schema.Version = current.Family
 			if _, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), freshRequest, current.Version, txnAt); refusal != nil {
 				t.Fatal(refusal)
 			}
-			retiredRequest := submission(live, memberOf(t, live, "user"), construction.ID, typ+".review", typ, "A", map[string]any{})
+			retiredRequest := submission(live, memberOf(t, live, "user"), build.ID, typ+".review", typ, "A", map[string]any{})
 			retiredRequest.Schema.Version = current.Family
 			retiredReceipt, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), retiredRequest, current.Version, txnAt)
 			if refusal != nil {
 				t.Fatal(refusal)
 			}
-			decide(t, live, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "item", map[string]any{"actions": []construction.Action{}}, txnAt)
-			decide(t, live, "builder", construction.ID, construction.SchemaPublish, construction.ObjectType, "item", map[string]any{}, txnAt)
+			decide(t, live, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "item", map[string]any{"actions": []build.Action{}}, txnAt)
+			decide(t, live, "builder", build.ID, build.SchemaPublish, build.ObjectType, "item", map[string]any{}, txnAt)
 			journal.Close()
 			journal = backend.reopen(t, id)
 			defer journal.Close()
@@ -198,7 +198,7 @@ func TestSubmissionSchemaFamiliesRetainVersionsAndRecover(t *testing.T) {
 			}
 			wrong := current
 			wrong.Family++
-			invalid.SubmissionSchemas[construction.ID+"/"+freshRequest.GetIdempotencyKey()] = wrong
+			invalid.SubmissionSchemas[build.ID+"/"+freshRequest.GetIdempotencyKey()] = wrong
 			if err := builderTenant(t, id).Restore(platform.Raw(invalid)); err == nil {
 				t.Fatal("snapshot accepted a schema binding that differs from its receipt")
 			}
@@ -214,13 +214,13 @@ func TestSubmissionSchemaApprovalSnapshotPreservesTheOriginalRequest(t *testing.
 		return append([]byte(nil), entry.Body...), nil
 	}
 	typ := publishObject(t, live, "builder", "item", map[string]any{"name": "item", "title": "Item",
-		"fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}},
-		"states": []construction.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "reviewed", Title: "Reviewed"}},
-		"actions": []construction.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed",
-			Approval: &construction.ActionApproval{Pending: "pending", Levels: []construction.ApproverLevel{{Title: "Reviewer", Role: construction.Builder}}}}},
+		"fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}},
+		"states": []build.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "reviewed", Title: "Reviewed"}},
+		"actions": []build.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed",
+			Approval: &build.ActionApproval{Pending: "pending", Levels: []build.ApproverLevel{{Title: "Reviewer", Role: build.Builder}}}}},
 	}, txnAt)
-	decide(t, live, "user", construction.ID, typ+".create", typ, "A", map[string]any{"name": "Approval request"}, txnAt)
-	request := submission(live, memberOf(t, live, "user"), construction.ID, typ+".review", typ, "A", map[string]any{})
+	decide(t, live, "user", build.ID, typ+".create", typ, "A", map[string]any{"name": "Approval request"}, txnAt)
+	request := submission(live, memberOf(t, live, "user"), build.ID, typ+".review", typ, "A", map[string]any{})
 	binding := schemaAction(t, live, typ+".review")
 	receipt, refusal, _ := live.submitSchemaDiagnosed(memberOf(t, live, "user"), request, binding.Version, txnAt)
 	if refusal != nil || receipt.GetSubmission().GetAuthority() != work.ID {

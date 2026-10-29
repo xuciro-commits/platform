@@ -7,9 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/records"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
+
+	"platformserver/kernel/records"
 	"reflect"
 	"testing"
 	"time"
@@ -70,7 +71,7 @@ func (s *statefulStock) Submit(c platform.Caller, sub *pb.Submission, at time.Ti
 func TestAcceptedGeneratedRecordKeepsPrivateOwnerState(t *testing.T) {
 	const tenant = "accepted-owner-state"
 	compose := func() *Tenant {
-		return composeTenant(t, tenant, []Seat{seatOf("ana", "stock:clerk")}, &statefulStock{stock: newStock(tenant)})
+		return composeTenant(t, tenant, []platform.Seat{seatOf("ana", "stock:clerk")}, &statefulStock{stock: newStock(tenant)})
 	}
 	live := compose()
 	owner := live.app("stock").(*statefulStock)
@@ -97,7 +98,7 @@ func TestAcceptedGeneratedRecordKeepsPrivateOwnerState(t *testing.T) {
 	if refusal != nil || owner.accepted != 1 || len(entries) != 1 {
 		t.Fatalf("accepted record lost its owner's state: count=%d, refusal=%v", owner.accepted, refusal)
 	}
-	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
+	batch, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(batch.States) != 1 || batch.States[0].App != "stock" {
 		t.Fatalf("result omitted private owner state: %+v, %v", batch.States, err)
 	}
@@ -149,8 +150,8 @@ func TestJournalAcceptedResultAtomicRetryAndRecovery(t *testing.T) {
 		j.Close()
 	}()
 	build := func() *Tenant {
-		seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
-		tn, err := NewTenant(id, NewConsole(id, seat), newStock(id))
+		seat := platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
+		tn, err := NewTenant(id, newConsole(id, seat), newStock(id))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -175,7 +176,7 @@ func TestJournalAcceptedResultAtomicRetryAndRecovery(t *testing.T) {
 	if err != nil || len(entries) != 1 || entries[0].Kind != "accepted-result" {
 		t.Fatalf("committed journal: %v %v", entries, err)
 	}
-	result, _, err := resultformat.DecodeRecord(entries[0].Body)
+	result, _, err := acceptedformat.DecodeRecord(entries[0].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +229,7 @@ func TestAcceptedGeneratedArchivePreservesReceiptAndHistory(t *testing.T) {
 
 func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	live := stockTenant(t)
-	member, _ := live.app(PlatformApp).(*Console).MemberBySubject("ana")
+	member, _ := live.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
 	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
 	sub := func(key, verb, body string) *pb.Submission {
 		return &pb.Submission{TenantId: live.ID, PrincipalId: member.ID, Authority: "stock",
@@ -263,7 +264,7 @@ func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	if _, err := live.Submit(member, sub("bad", "edit", `{"qty":"wrong"}`), now); err == nil || len(entries) != 2 {
 		t.Fatal("rejected edit did not retain its durable refusal")
 	}
-	rejected, _, err := resultformat.DecodeRefusal(entries[1].Body)
+	rejected, _, err := acceptedformat.DecodeRefusal(entries[1].Body)
 	if err != nil || rejected.Kind != "refusal" {
 		t.Fatalf("rejected edit did not preserve its answer: %+v, %v", rejected, err)
 	}
@@ -299,7 +300,7 @@ func TestGeneratedActionWithWrongTargetCannotFallBackToLegacy(t *testing.T) {
 		tn.records.types["stock.bin"].rows.Get("B1") != nil {
 		t.Fatalf("malformed generated action escaped the isolated result boundary: %v, journal=%+v", err, journal)
 	}
-	if _, _, decodeErr := resultformat.DecodeRefusal(journal[0].Body); decodeErr != nil {
+	if _, _, decodeErr := acceptedformat.DecodeRefusal(journal[0].Body); decodeErr != nil {
 		t.Fatalf("malformed target was not committed as a refusal: %v", decodeErr)
 	}
 }
@@ -389,7 +390,7 @@ func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, _, decodeErr := resultformat.DecodeRecord(saved.Body)
+	result, _, decodeErr := acceptedformat.DecodeRecord(saved.Body)
 	if decodeErr != nil || result.Version != 5 || result.Kind != "record" || len(result.Event.Subscribers) != 1 ||
 		result.Event.Subscribers[0] != "listener" || len(result.Event.Effects) != 1 {
 		t.Fatalf("result omitted owned work: %+v, %v", result.Event, decodeErr)
@@ -401,11 +402,11 @@ func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
 	if err := restarted.Replay([]Entry{saved}); err != nil {
 		t.Fatal(err)
 	}
-	if len(restarted.work.queues["listener"]) != 1 || len(restarted.outbound) != 1 ||
+	if len(restarted.work.Queues["listener"]) != 1 || len(restarted.outbound) != 1 ||
 		restarted.outbound[0].ID != source.outbound[0].ID ||
 		restarted.outbound[0].Event != "stock.bin.create" {
 		t.Fatalf("saved intents were rediscovered rather than restored: queues=%+v effects=%+v",
-			restarted.work.queues["listener"], restarted.outbound)
+			restarted.work.Queues["listener"], restarted.outbound)
 	}
 	snapshot, _, snapErr := restarted.Snapshot(func() int64 { return 1 })
 	if snapErr != nil {
@@ -415,8 +416,8 @@ func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
 	if err := restored.Restore(snapshot); err != nil {
 		t.Fatal(err)
 	}
-	if len(restored.work.queues["listener"]) != 1 || restored.work.queues["listener"][0].event.plan == nil ||
-		restored.work.queues["listener"][0].event.plan.Names[0] != "stock.bin.create" {
+	if len(restored.work.Queues["listener"]) != 1 || restored.work.Queues["listener"][0].Event.Plan == nil ||
+		restored.work.Queues["listener"][0].Event.Plan.Names[0] != "stock.bin.create" {
 		t.Fatal("snapshot lost the committed delivery's original routing")
 	}
 }
@@ -436,7 +437,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result resultformat.Record
+	var result acceptedformat.Record
 	if err := json.Unmarshal(committed.Body, &result); err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +447,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	result.Unique = nil
 	result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
 	result.Row.History = records.CopyHistory(source.records.types["stock.bin"].rows.Get("B1").RecordHistory())
-	previousDigest, previousDigestErr := resultformat.DigestRecord(result)
+	previousDigest, previousDigestErr := acceptedformat.DigestRecord(result)
 	if previousDigestErr != nil {
 		t.Fatal(previousDigestErr)
 	}
@@ -457,7 +458,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 		t.Fatalf("version 2 result no longer recovers: %v", err)
 	}
 	result.Event.Names = nil
-	digest, digestErr := resultformat.DigestRecord(result)
+	digest, digestErr := acceptedformat.DigestRecord(result)
 	if digestErr != nil {
 		t.Fatal(digestErr)
 	}
@@ -470,7 +471,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 	// Results written by the previous format must remain readable.
 	result.Version = 1
 	result.At = time.Time{}
-	digest, digestErr = resultformat.DigestRecord(result)
+	digest, digestErr = acceptedformat.DigestRecord(result)
 	if digestErr != nil {
 		t.Fatal(digestErr)
 	}
@@ -485,7 +486,7 @@ func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
 func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	source := stockTenant(t)
 	app := source.app("stock").(*stock)
-	member, _ := source.app(PlatformApp).(*Console).MemberBySubject("ana")
+	member, _ := source.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
 	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
 	submit := func(key, verb, payload string) *pb.Submission {
 		return &pb.Submission{TenantId: source.ID, PrincipalId: member.ID, Authority: "stock",
@@ -574,7 +575,7 @@ func TestAcceptedJSONReadsExactlyOneTypedValue(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var value struct{ Version int }
-			err := acceptance.DecodeJSON([]byte(test.raw), &value, "saved result")
+			err := platform.DecodeJSON([]byte(test.raw), &value, "saved result")
 			if test.wantError == "" {
 				if err != nil || value.Version != 2 {
 					t.Fatalf("decoded version %d: %v", value.Version, err)
@@ -589,7 +590,7 @@ func TestAcceptedJSONReadsExactlyOneTypedValue(t *testing.T) {
 func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 	source := stockTenant(t)
 	app := source.app("stock").(*stock)
-	member, _ := source.app(PlatformApp).(*Console).MemberBySubject("ana")
+	member, _ := source.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
 	draft := source.newStagedDecision()
 	c := platform.NewCaller(draft, member, "stock", false, false)
 	sub := &pb.Submission{TenantId: source.ID, PrincipalId: member.ID, Authority: "stock", IdempotencyKey: "k1",
@@ -611,21 +612,21 @@ func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	reordered, _ := json.Marshal(asJSON)
-	if _, _, err := resultformat.DecodeRecord(reordered); err != nil {
+	if _, _, err := acceptedformat.DecodeRecord(reordered); err != nil {
 		t.Fatalf("JSONB-style reordered keys changed the result digest: %v", err)
 	}
-	for name, mutate := range map[string]func(*resultformat.Record){
-		"version":        func(r *resultformat.Record) { r.Version++ },
-		"request digest": func(r *resultformat.Record) { r.RequestHash = "other" },
-		"record type":    func(r *resultformat.Record) { r.Row.Type = "other" },
-		"record image":   func(r *resultformat.Record) { r.Row.Value = []byte(`{"id":"I2"}`) },
-		"changed value": func(r *resultformat.Record) {
+	for name, mutate := range map[string]func(*acceptedformat.Record){
+		"version":        func(r *acceptedformat.Record) { r.Version++ },
+		"request digest": func(r *acceptedformat.Record) { r.RequestHash = "other" },
+		"record type":    func(r *acceptedformat.Record) { r.Row.Type = "other" },
+		"record image":   func(r *acceptedformat.Record) { r.Row.Value = []byte(`{"id":"I2"}`) },
+		"changed value": func(r *acceptedformat.Record) {
 			r.Row.Value = bytes.Replace(r.Row.Value, []byte(`"qty":2`), []byte(`"qty":99`), 1)
 		},
-		"history": func(r *resultformat.Record) { r.Row.History[len(r.Row.History)-1].Change = "other" },
+		"history": func(r *acceptedformat.Record) { r.Row.History[len(r.Row.History)-1].Change = "other" },
 	} {
 		t.Run(name, func(t *testing.T) {
-			var changed resultformat.Record
+			var changed acceptedformat.Record
 			if err := json.Unmarshal(raw, &changed); err != nil {
 				t.Fatal(err)
 			}
@@ -639,7 +640,7 @@ func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 			}
 		})
 	}
-	if _, _, err := resultformat.DecodeRecord(bytes.Repeat([]byte(" "), acceptance.MaxResultBytes+1)); err == nil {
+	if _, _, err := acceptedformat.DecodeRecord(bytes.Repeat([]byte(" "), platform.AcceptedResultMaxBytes+1)); err == nil {
 		t.Fatal("oversized result accepted")
 	}
 }

@@ -1,11 +1,14 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import agentowner "platformserver/engine/agents"
+
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
@@ -13,7 +16,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
+
 	"platformserver/apps/relations"
 	"platformserver/platform"
 	"platformserver/platform/authz"
@@ -57,7 +60,7 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 	})
 	t.Run("owned work", func(t *testing.T) {
 		owner := newResultWorker("work-authz")
-		tn := composeTenant(t, "work-authz", []Seat{seatOf("ana")}, owner)
+		tn := composeTenant(t, "work-authz", []platform.Seat{seatOf("ana")}, owner)
 		freeze(tn, "worker")
 		var saved acceptedWork
 		tn.Record = func(entry Entry) {
@@ -87,21 +90,21 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 		}
 	})
 	t.Run("agent step", func(t *testing.T) {
-		tn := stockTenant(t, NewAgents("t-1"))
-		if err := tn.automation(AgentApp, true).PutAt(txnAt, "fixture", AgentRunRecord{Record: platform.Record{ID: "R"}, Agent: "stock.guide", OnBehalf: "ana", State: "running"}); err != nil {
+		tn := stockTenant(t, agentowner.New("t-1"))
+		if err := tn.automation(platform.AgentApp, true).PutAt(txnAt, "fixture", platform.AgentRunRecord{Record: platform.Record{ID: "R"}, Agent: "stock.guide", OnBehalf: "ana", State: "running"}); err != nil {
 			t.Fatal(err)
 		}
-		freeze(tn, AgentApp)
+		freeze(tn, platform.AgentApp)
 		draft := tn.newStagedDecision()
-		c := platform.NewCaller(draft, tn.automation(AgentApp, false).Member, AgentApp, false, true)
-		err := draft.stateApp(tn.agents).(AgentRuntime).ApplyAgentStepCaller(c, stepBody{Run: "R", Stop: "stopped"}, txnAt)
+		c := platform.NewCaller(draft, tn.automation(platform.AgentApp, false).Member, platform.AgentApp, false, true)
+		err := draft.stateApp(tn.agents).(platform.AgentRuntime).ApplyAgentStepCaller(c, platform.AgentResultStep{Run: "R", Stop: "stopped"}, txnAt)
 		denied(err)
 		if len(draft.records.writes) != 0 {
 			t.Fatal("refused agent step wrote state")
 		}
 	})
 	t.Run("model usage", func(t *testing.T) {
-		tn := composeTenant(t, "usage-authz", []Seat{seatOf("ana")}, ai.New("usage-authz"))
+		tn := composeTenant(t, "usage-authz", []platform.Seat{seatOf("ana")}, ai.New("usage-authz"))
 		freeze(tn, platform.AIApp)
 		err := tn.meter(memberOf(t, tn, "ana"), platform.AIUsage{Member: "ana", Model: "fixture/model", Input: 1, At: txnAt})
 		denied(err)
@@ -111,7 +114,7 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 	})
 	t.Run("compute and source", func(t *testing.T) {
 		owner := &computeStock{stock: newStock("compute-authz")}
-		tn := composeTenant(t, "compute-authz", []Seat{seatOf("ana", "stock:clerk")}, owner)
+		tn := composeTenant(t, "compute-authz", []platform.Seat{seatOf("ana", "stock:clerk")}, owner)
 		freeze(tn, "stock")
 		_, err := tn.InvokeOperation(memberOf(t, tn, "ana"), platform.OperationRequest{App: "stock", Name: "double", Key: "blocked", Inputs: json.RawMessage(`{"value":4}`)}, txnAt)
 		denied(err)
@@ -120,14 +123,14 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 		}
 	})
 	t.Run("publish composition and host controls", func(t *testing.T) {
-		tn := composeTenant(t, "control-authz", []Seat{seatOf("builder", "platform:admin", "build:builder")}, build.New("control-authz"))
-		freeze(tn, construction.ID)
+		tn := composeTenant(t, "control-authz", []platform.Seat{seatOf("builder", "platform:admin", "build:builder")}, build.New("control-authz"))
+		freeze(tn, build.ID)
 		h := NewHost(Tokens(map[string]string{"builder-token": "builder"}), tn)
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPost, "/v1/releases/candidates", strings.NewReader(`{}`))
 		request.Header.Set("Authorization", "Bearer builder-token")
 		h.Handler().ServeHTTP(response, request)
-		if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "Authorization denied at deny:") || len(tn.releases.candidates) != 0 {
+		if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "Authorization denied at deny:") || len(tn.releases.Candidates()) != 0 {
 			t.Fatal("release route skipped the shared decision")
 		}
 		hostDecision := h.hostAuthorization("builder", true, "POST /v1/host/tenants/{tenant}/lifecycle", tn.ID)
@@ -163,7 +166,7 @@ func TestMemberProjectionFiltersRowsAndUndeclaredComments(t *testing.T) {
 
 func TestAuthorizationRejectsInventedPrincipalsAndKeepsSecondaryRoles(t *testing.T) {
 	owner := &computeStock{stock: newStock("identity-authz")}
-	tn := composeTenant(t, "identity-authz", []Seat{{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "lead"}, Grants: []platform.Grant{{App: "stock", Role: "lead"}, {App: "stock", Role: "clerk"}}}}}, owner)
+	tn := composeTenant(t, "identity-authz", []platform.Seat{{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "lead"}, Grants: []platform.Grant{{App: "stock", Role: "lead"}, {App: "stock", Role: "clerk"}}}}}, owner)
 	ghost := platform.Member{ID: "unregistered", Tenant: tn.ID, Roles: map[string]string{"stock": "clerk"}}
 	c := platform.NewCaller(runtime{tn}, ghost, "stock", false, false)
 	decision := c.Authorize(platform.AuthzRequest{Principal: ghost.ID, Tenant: tn.ID, Kind: "read", Type: "stock.item"}, txnAt)
@@ -178,7 +181,7 @@ func TestAuthorizationRejectsInventedPrincipalsAndKeepsSecondaryRoles(t *testing
 
 func TestHostHTTPRetainsItsExplicitAuthorityAndRecoversWithoutAuthorization(t *testing.T) {
 	buildTenant := func() *Tenant {
-		return composeTenant(t, "host-authz", []Seat{seatOf("tenant-admin", "platform:admin")})
+		return composeTenant(t, "host-authz", []platform.Seat{seatOf("tenant-admin", "platform:admin")})
 	}
 	tn := buildTenant()
 	var entries []Entry
@@ -204,7 +207,7 @@ func TestHostHTTPRetainsItsExplicitAuthorityAndRecoversWithoutAuthorization(t *t
 		t.Fatal("host result omitted its original authority")
 	}
 	recovered := buildTenant()
-	recovered.app(PlatformApp).Manifest().Actions.UsePolicies(func() []authz.Policy { t.Fatal("host recovery reauthorized"); return nil })
+	recovered.app(controlowner.PlatformApp).Manifest().Actions.UsePolicies(func() []authz.Policy { t.Fatal("host recovery reauthorized"); return nil })
 	if err := recovered.Replay(entries); err != nil || !recovered.console.suspended() {
 		t.Fatal("recorded host authority was not restored")
 	}

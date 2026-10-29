@@ -1,23 +1,24 @@
+import type {Definition as WorkspaceDefinition} from "../index";
 import type { Api } from "@platform/kernel";
 
 export type PropertyRef = { object: Api.AssetRef; field: string };
 export type ReferenceRelationRef = { kind: "reference"; object: Api.AssetRef; field: string; direction: "outbound" | "inbound" };
 type LinkRelationRef = Omit<ReferenceRelationRef,"kind"> & {kind:"link-type";binding:Api.AssetBinding};
 export type SemanticRelation = {
-  definition?:Api.Definition;linkType?:Api.LinkType;
+  definition?:WorkspaceDefinition;linkType?:Api.LinkType;
   ref: ReferenceRelationRef|LinkRelationRef; target: Api.AssetRef; title: string; inverse?: string;
-  field: Api.FieldInfo; owner: Api.Definition; targetDefinition: Api.Definition;
+  field: Api.FieldInfo; owner: WorkspaceDefinition; targetDefinition: WorkspaceDefinition;
 };
 export type SemanticModelView = {
-  objects: Api.Definition[]; relations: SemanticRelation[];
+  objects: WorkspaceDefinition[]; relations: SemanticRelation[];
   propertyTypes: SemanticPropertyType[];
 };
 
-export type SemanticPropertyType = { binding: Api.AssetBinding; property: Api.PropertyType; definition: Api.Definition };
+export type SemanticPropertyType = { binding: Api.AssetBinding; property: Api.PropertyType; definition: WorkspaceDefinition };
 export const assetBindingKey = (binding: Api.AssetBinding) => `${key(binding.ref)}@${binding.sourceVersion}`;
 
 /** Retained declarations only. A missing version never resolves to latest. */
-export function semanticPropertyTypes(definitions: Api.Definition[]): SemanticPropertyType[] {
+export function semanticPropertyTypes(definitions: WorkspaceDefinition[]): SemanticPropertyType[] {
   return definitions.filter(d => d.ref.kind === "property-type" && d.propertyType).flatMap(definition => {
     const versions = new Map(Object.entries(definition.propertyVersions ?? {}));
     versions.set(definition.version, definition.propertyType!);
@@ -32,7 +33,7 @@ const key = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
  * References remain field-backed relationships, with no inferred cardinality
  * or delete/uniqueness guarantees.
  */
-export function semanticModelView(definitions: Api.Definition[]): SemanticModelView {
+export function semanticModelView(definitions: WorkspaceDefinition[]): SemanticModelView {
   const objects = definitions.filter((definition) => definition.ref.kind === "object" && definition.entity);
   const byType = new Map(objects.map((definition) => [definition.ref.name, definition]));
   const relations: SemanticRelation[] = [];

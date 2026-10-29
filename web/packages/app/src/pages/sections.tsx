@@ -1,4 +1,4 @@
-import {pagePresentationIssues} from "../pageui/contract";
+import {pagePresentationIssues,presentPage} from "../pageui/contract";
 import type * as PageUI from "../pageui/types";
 import {usePageComposite} from "../runtime/PageComposite";
 import {usePageModel} from "../runtime/PageModel";
@@ -110,7 +110,8 @@ export function ComposedPage(props: ComposedPageProps) {
   const { me,source } = useHost();const application=useApplicationContext();const previewRoute=useContext(AuthoringPreview);
   const issues=pagePresentationIssues(props.page);
   if(issues.length)return <Panel role="alert"><ul>{issues.map((issue,index)=><li key={index}><code>{issue.path.join(".")}</code>: {issue.message}</li>)}</ul></Panel>;
-  const effective={...props.page,sections:props.page.sections?.map(section=>{const value=materializeModelSection(section,source.entity);return interfaceQueryForSection(props.page,section)?{...value,object:undefined}:value;})};
+  const presented=presentPage(props.page);
+  const effective={...presented,sections:presented.sections?.map(section=>{const value=materializeModelSection(section,source.entity);return interfaceQueryForSection(props.page,section)?{...value,object:undefined}:value;})};
   return <PageEmbeddingBoundary page={props.page}><PageSession key={JSON.stringify([me?.tenantId, me?.principalId, props.definitionKey, props.page, application?.identity])} {...props} live={resolvePageLiveMode(props.live,application?.preview===true,previewRoute)} page={effective} /></PageEmbeddingBoundary>;
 }
 

@@ -122,17 +122,11 @@ ui-capture: ## 只读批量截取当前开发工作区并打包；CONFIG=本地�
 	node scripts/capture-ui.mjs $(if $(CONFIG),--config "$(CONFIG)") $(if $(OUT),--out "$(OUT)") $(ARGS)
 
 .PHONY: check-go
-check-go: check-uaf ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
+check-go: ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
 	cd capabilities/server && $(GO) build ./... && $(GO) vet ./...
 	scripts/verify.sh format composition-static
 
-.PHONY: generate-uaf check-uaf
-generate-uaf: ## 从完整 OMG XMI 原件生成 UAF 运行元模型
-	cd capabilities/server && $(GO) run ./cmd/uaf-gen
-
-check-uaf: ## 只读检查 UAF 运行元模型与标准原件一致
-	cd capabilities/server && $(GO) run ./cmd/uaf-gen -check
-
+.PHONY:
 .PHONY: check-web
 check-web: ## 检查生成代码类型一致性、Catalog 资产库及全部 Web 包类型检查
 	scripts/verify.sh web-types

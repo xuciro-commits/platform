@@ -1,6 +1,8 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import agentowner "platformserver/engine/agents"
+
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
@@ -12,7 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+
 	"platformserver/platform"
 )
 
@@ -60,7 +62,7 @@ func TestAgentUnknownQueryFailsComposition(t *testing.T) {
 	}
 	app := &dummyAppWithAgent{agent: ag}
 	app.ledger = platform.NewLedger("t-agent-test", "testapp", app.Manifest().Actions, "testapp.item")
-	_, err := NewTenant("t-agent-test", NewAgents("t-agent-test"), app)
+	_, err := NewTenant("t-agent-test", agentowner.New("t-agent-test"), app)
 	if err == nil || !strings.Contains(err.Error(), "not a query of") {
 		t.Fatalf("expected error containing 'not a query of', got: %v", err)
 	}
@@ -69,9 +71,9 @@ func TestAgentUnknownQueryFailsComposition(t *testing.T) {
 // Page and query checks use published owner declarations, not a second app.
 func queryBindingTenant(t *testing.T, id string) *Tenant {
 	t.Helper()
-	tn := composeTenant(t, id, []Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user"), seatOf("other", "platform:auditor")}, build.New(id))
-	publishObject(t, tn, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text", Required: true}}}, txnAt)
-	publishObject(t, tn, "builder", "CHILD", map[string]any{"name": "child", "title": "Child", "fields": []construction.Field{
+	tn := composeTenant(t, id, []platform.Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user"), seatOf("other", "platform:auditor")}, build.New(id))
+	publishObject(t, tn, "builder", "PARENT", map[string]any{"name": "parent", "title": "Parent", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text", Required: true}}}, txnAt)
+	publishObject(t, tn, "builder", "CHILD", map[string]any{"name": "child", "title": "Child", "fields": []build.Field{
 		{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.parent", Inverse: "children", Required: true},
 		{Name: "title", Title: "Title", Type: "text", Required: true}, {Name: "enabled", Title: "Enabled", Type: "boolean"},
 	}}, txnAt)
@@ -80,8 +82,8 @@ func queryBindingTenant(t *testing.T, id string) *Tenant {
 
 func publishBindingQuery(t *testing.T, tn *Tenant) {
 	t.Helper()
-	decide(t, tn, "builder", "build", "build.query.create", construction.QueryType, "QUERY", platform.NamedQuery{Name: "enabledchildren", Title: "Enabled children", Description: "Filter related records", Object: "build.child", By: "parent", Domain: json.RawMessage(`[["enabled","=",true]]`), Limit: 20}, txnAt)
-	decide(t, tn, "builder", "build", build.SchemaQuery, construction.QueryType, "QUERY", map[string]any{}, txnAt)
+	decide(t, tn, "builder", "build", "build.query.create", build.QueryType, "QUERY", platform.NamedQuery{Name: "enabledchildren", Title: "Enabled children", Description: "Filter related records", Object: "build.child", By: "parent", Domain: json.RawMessage(`[["enabled","=",true]]`), Limit: 20}, txnAt)
+	decide(t, tn, "builder", "build", build.SchemaQuery, build.QueryType, "QUERY", map[string]any{}, txnAt)
 }
 
 func TestNamedQueryHTTP(t *testing.T) {
@@ -136,11 +138,11 @@ func TestNamedQueryHTTP(t *testing.T) {
 func TestReleaseCandidateIncludesQueryAsset(t *testing.T) {
 	tn := queryBindingTenant(t, "query-candidate")
 	publishBindingQuery(t, tn)
-	decide(t, tn, "builder", "build", "build.page.create", construction.PageType, "PAGE", map[string]any{
+	decide(t, tn, "builder", "build", "build.page.create", build.PageType, "PAGE", map[string]any{
 		"name": "relatedrows", "title": "Related rows", "object": "build.parent",
 		"sections": []map[string]any{{"widget": "table", "object": "build.child", "query": "build.enabledchildren", "fields": []string{"title"}}},
 	}, txnAt)
-	decide(t, tn, "builder", "build", construction.SchemaRelease, construction.PageType, "PAGE", map[string]any{}, txnAt)
+	decide(t, tn, "builder", "build", build.SchemaRelease, build.PageType, "PAGE", map[string]any{}, txnAt)
 	candidate, err := tn.ReleaseCandidate([]platform.AssetRef{{App: "build", Kind: platform.AssetPage, Name: "relatedrows"}})
 	if err != nil {
 		t.Fatal(err)

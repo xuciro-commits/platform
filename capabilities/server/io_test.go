@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/engine/integrations"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
@@ -22,26 +24,26 @@ func TestIOLane(t *testing.T) {
 
 	// Breakers: five failures in a row open one; after the pause one probe
 	// goes through; a failed probe doubles the pause; a success closes it.
-	var b breakers
-	for range breakerAfter {
-		if !b.allow("x", t0, true) {
+	var b integrations.Breakers
+	for range integrations.BreakerAfter {
+		if !b.Allow("x", t0, true) {
 			t.Fatal("closed breaker refused")
 		}
-		b.report("x", false, t0)
+		b.Report("x", false, t0)
 	}
-	if b.allow("x", t0.Add(breakerPause-time.Second), true) {
+	if b.Allow("x", t0.Add(integrations.BreakerPause-time.Second), true) {
 		t.Fatal("an open breaker let work through")
 	}
-	if !b.allow("x", t0.Add(breakerPause), true) || b.allow("x", t0.Add(breakerPause), true) {
+	if !b.Allow("x", t0.Add(integrations.BreakerPause), true) || b.Allow("x", t0.Add(integrations.BreakerPause), true) {
 		t.Fatal("after the pause exactly one probe goes through")
 	}
-	b.report("x", false, t0.Add(breakerPause))
-	if b.allow("x", t0.Add(2*breakerPause), true) || !b.allow("x", t0.Add(3*breakerPause), true) {
+	b.Report("x", false, t0.Add(integrations.BreakerPause))
+	if b.Allow("x", t0.Add(2*integrations.BreakerPause), true) || !b.Allow("x", t0.Add(3*integrations.BreakerPause), true) {
 		t.Fatal("a failed probe doubles the pause")
 	}
-	b.report("x", true, t0.Add(3*breakerPause))
-	probe1 := b.allow("x", t0.Add(3*breakerPause), true)
-	probe2 := b.allow("x", t0.Add(3*breakerPause), true)
+	b.Report("x", true, t0.Add(3*integrations.BreakerPause))
+	probe1 := b.Allow("x", t0.Add(3*integrations.BreakerPause), true)
+	probe2 := b.Allow("x", t0.Add(3*integrations.BreakerPause), true)
 	if !probe1 || !probe2 {
 		t.Fatal("a success closes the breaker")
 	}
@@ -54,7 +56,7 @@ func TestIOLane(t *testing.T) {
 	defer slow.Close()
 	fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	defer fast.Close()
-	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}})
+	dir := newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", controlowner.PlatformApp: controlowner.Admin}}})
 	tn, err := NewTenant("t-1", dir, newNotes("t-1", "a"))
 	if err != nil {
 		t.Fatal(err)
@@ -71,8 +73,8 @@ func TestIOLane(t *testing.T) {
 	for id, url := range map[string]string{"slow": slow.URL, "fast": fast.URL} {
 		keys++
 		raw, _ := json.Marshal(map[string]any{"url": url, "secret": "hook", "events": []string{"a.note"}, "allowPrivate": true})
-		submit(&pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: PlatformApp, IdempotencyKey: fmt.Sprint("e", keys),
-			Target: &pb.EntityRef{Type: EndpointType, Id: id}, Schema: &pb.SchemaRef{Name: SchemaEndpointAdd, Version: 1}, Payload: raw})
+		submit(&pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprint("e", keys),
+			Target: &pb.EntityRef{Type: controlowner.EndpointType, Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEndpointAdd, Version: 1}, Payload: raw})
 	}
 	submit(note("t-1", "ana", "a", "k1", "x", "one"))
 	started := time.Now()
@@ -95,14 +97,14 @@ func TestIOLane(t *testing.T) {
 	// The slow endpoint keeps failing: its breaker opens and Settings shows it;
 	// once the effect gives up, the administrators are told.
 	at := t0
-	for range resultformat.EffectRetryAttempts + breakerAfter {
+	for range acceptedformat.EffectRetryAttempts + integrations.BreakerAfter {
 		at = at.Add(2 * time.Hour)
 		tn.Dispatch(at)
 	}
 	if got := states(); got != "fast delivered, slow failed" {
 		t.Fatalf("effects after hours of failures: %s", got)
 	}
-	if bs := tn.Breakers(at); len(bs) != 1 || bs[0].Destination != "endpoint:slow" || bs[0].Failures < breakerAfter {
+	if bs := tn.Breakers(at); len(bs) != 1 || bs[0].Destination != "endpoint:slow" || bs[0].Failures < integrations.BreakerAfter {
 		t.Fatalf("breakers %+v", bs)
 	}
 	if h := tn.Health(at); h.Status != "degraded" || h.OpenBreakers != 1 || len(h.Breakers) != 1 || !h.Started.Equal(Started) || h.Started.IsZero() {

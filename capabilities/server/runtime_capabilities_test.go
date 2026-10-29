@@ -4,12 +4,13 @@ import (
 	"errors"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+
 	"strings"
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
-	"platformserver/internal/construction"
+	"platformserver/studio/build"
+
 	"platformserver/platform"
 	"platformserver/platform/authz"
 )
@@ -75,7 +76,7 @@ func TestSelectedRuntimeProvidersReachDecisionsAndDoNotRunDuringResultRecovery(t
 	services.RuleModule.ID = "test.selected-rules"
 	services.AuthModule.ID = "test.selected-authorization"
 	newTenant := func() *Tenant {
-		return composeTenantWithCapabilities(t, "selected-runtime", services, []Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user")}, build.New("selected-runtime"))
+		return composeTenantWithCapabilities(t, "selected-runtime", services, []platform.Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user")}, build.New("selected-runtime"))
 	}
 	tn := newTenant()
 	var entries []Entry
@@ -84,15 +85,15 @@ func TestSelectedRuntimeProvidersReachDecisionsAndDoNotRunDuringResultRecovery(t
 	expression := platform.Expr{Op: "+", Kind: "integer", Args: []platform.Expr{platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 1)}}
 	publishObject(t, tn, "builder", "MODEL", map[string]any{
 		"name": "calculation", "title": "Calculation",
-		"fields":      []construction.Field{{Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "total", Title: "Total", Type: "integer", FormulaExpr: &expression}},
+		"fields":      []build.Field{{Name: "qty", Title: "Quantity", Type: "integer"}, {Name: "total", Title: "Total", Type: "integer", FormulaExpr: &expression}},
 		"constraints": []platform.Constraint{{Name: "positive", Kind: "expression", Fields: []string{"qty"}, Message: "Quantity must be positive", Expr: &platform.Expr{Op: ">", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("integer", "qty"), platform.ExprLiteralValue("integer", 0)}}}},
-		"access":      []construction.Access{{Role: "user", Read: "all", Create: true, Edit: true}},
+		"access":      []build.Access{{Role: "user", Read: "all", Create: true, Edit: true}},
 	}, at)
-	decide(t, tn, "builder", "build", "build.table.create", construction.TableType, "TABLE", map[string]any{
-		"name": "gate", "title": "Gate", "inputs": []construction.TableColumn{{Name: "value", Type: "text"}},
-		"outputs": []construction.TableColumn{{Name: "allowed", Type: "boolean"}}, "rows": []construction.TableRow{{When: []string{"ready"}, Then: []string{"true"}}},
+	decide(t, tn, "builder", "build", "build.table.create", build.TableType, "TABLE", map[string]any{
+		"name": "gate", "title": "Gate", "inputs": []build.TableColumn{{Name: "value", Type: "text"}},
+		"outputs": []build.TableColumn{{Name: "allowed", Type: "boolean"}}, "rows": []build.TableRow{{When: []string{"ready"}, Then: []string{"true"}}},
 	}, at)
-	decide(t, tn, "builder", "build", build.SchemaTablePublish, construction.TableType, "TABLE", map[string]any{}, at)
+	decide(t, tn, "builder", "build", build.SchemaTablePublish, build.TableType, "TABLE", map[string]any{}, at)
 	rules.failing = true
 	if err := tn.validateAssetSet(rules); err == nil || !strings.Contains(err.Error(), "selected rule provider") {
 		t.Fatalf("publication set checks bypassed selected provider: %v", err)

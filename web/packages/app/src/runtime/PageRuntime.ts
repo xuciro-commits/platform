@@ -5,6 +5,7 @@ import type { RecordSource } from "@platform/ui";
 import { PageSessionStore, type SelectionPlan } from "./Session";
 import {type Api} from "@platform/kernel";
 import { compileVariables, evaluateVariables, type VariableResult } from "./variables";
+import {initializeRules} from "./rule-engine";
 
 export const pageVariableContract = pageUIManifest.runtime;
 export const pageVariableValues = (variables: Record<string,Api.PageVariable>, state:Record<string,unknown> = {}) => evaluateVariables(variables,state,pageVariableContract);
@@ -14,7 +15,13 @@ export const pageVariableDiagnostics = (variables: Record<string, Api.PageVariab
  * definition, so identity, publication and document edits dispose this state.
  */
 export function usePageVariables(variables: Record<string, Api.PageVariable>, state: Record<string, unknown>, session: PageSessionStore, resources: Record<string, VariableResult>) {
-  const values = useMemo(() => evaluateVariables(variables, state, pageVariableContract, resources,undefined,undefined,session.property), [variables, state, resources]);
+  const needed=Object.values(variables).some(variable=>variable.mode==="derived"),[runtime,setRuntime]=useState<{ready:boolean;error?:string}>({ready:false});
+  useEffect(()=>{if(needed)void initializeRules().then(()=>setRuntime({ready:true}),error=>setRuntime({ready:false,error:error instanceof Error?error.message:String(error)}));},[needed]);
+  const values = useMemo(() => {
+   const evaluated=evaluateVariables(variables,state,pageVariableContract,resources,undefined,undefined,session.property);
+   if(needed&&!runtime.ready)for(const [id,variable]of Object.entries(variables))if(variable.mode==="derived")evaluated[id]=runtime.error?{status:"error",code:runtime.error}:{status:"pending"};
+   return evaluated;
+  }, [variables, state, resources,runtime]);
   const setMany = (changes: Record<string, ScalarValue>) => {
     if (Object.entries(changes).some(([id, value]) => {
       const variable = variables[id];

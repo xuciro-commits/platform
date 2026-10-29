@@ -3,44 +3,19 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
+	"platformserver/aigateway"
+
 	"slices"
 	"strconv"
 	"strings"
 
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
-// ApplicationAI is a projection of the original function, action, evaluation
-// and usage owners. It carries no prompts, grants, quotas or second AI state.
-type ApplicationAI struct {
-	Resource    platform.AssetBinding     `json:"resource"`
-	Placement   string                    `json:"placement"`
-	Model       string                    `json:"model,omitempty"`
-	HandoffRole string                    `json:"handoffRole,omitempty"`
-	Adoptions   []string                  `json:"adoptions"`
-	Checkpoints []string                  `json:"checkpoints"`
-	Evaluations []ApplicationAIEvaluation `json:"evaluations"`
-	Calls       int                       `json:"calls"`
-	SharedCalls int                       `json:"sharedCalls"`
-	Input       int                       `json:"input"`
-	Output      int                       `json:"output"`
-	Cost        float64                   `json:"cost"`
-	CostUnknown int                       `json:"costUnknown"`
-}
-type ApplicationAIEvaluation struct {
-	ID        string  `json:"id"`
-	Candidate string  `json:"candidate"`
-	State     string  `json:"state"`
-	Model     string  `json:"model"`
-	Quality   float64 `json:"quality"`
-	CostUSD   float64 `json:"costUsd"`
-}
-
-func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]ApplicationAI, *kernel.Error) {
-	out := []ApplicationAI{}
+func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.ReleaseAsset, visible map[platform.AssetRef]bool) ([]platform.ApplicationAI, *kernel.Error) {
+	out := []platform.ApplicationAI{}
 	for _, asset := range assets {
 		if !visible[asset.Ref] {
 			continue
@@ -50,13 +25,13 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 			if json.Unmarshal(asset.Body, &definition) != nil || definition.Check() != nil {
 				return nil, conflictRefusal(fmt.Errorf("invalid agent declaration"))
 			}
-			item := ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []ApplicationAIEvaluation{}}
+			item := platform.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []platform.ApplicationAIEvaluation{}}
 			currentConfig := ""
 			if binding, pv, err := t.resolveModel("agent", definition.Model, definition.ModelOptions); err == nil {
 				item.Model = binding.Model
 				model, _, _ := t.ai.Model(binding.Model)
 				if pinned, refusal := t.modelStage(binding, pv, platform.AIStageDesign); refusal == nil {
-					currentConfig, _ = modelConfigurationDigest(model, pv, &pinned)
+					currentConfig, _ = aigateway.ConfigurationDigest(model, pv, &pinned)
 				}
 			}
 			for _, tool := range definition.Tools {
@@ -70,9 +45,9 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 					item.Placement = "autonomous"
 				}
 			}
-			if t.agents != nil && (m.Holds(construction.ID, construction.Builder) || m.Holds(construction.ID, construction.Publisher)) {
-				digest, _ := acceptance.Digest(asset)
-				reports, _, problem := platform.Find[Evaluation](t.automation(AgentApp, false), platform.Query{Domain: platform.Raw([]any{[]any{"agent", "=", asset.Ref.App + "." + asset.Ref.Name}, []any{"definitionDigest", "=", digest}})})
+			if t.agents != nil && (m.Holds(build.ID, build.Builder) || m.Holds(build.ID, build.Publisher)) {
+				digest, _ := platform.CanonicalDigest(asset)
+				reports, _, problem := platform.Find[platform.Evaluation](t.automation(platform.AgentApp, false), platform.Query{Domain: platform.Raw([]any{[]any{"agent", "=", asset.Ref.App + "." + asset.Ref.Name}, []any{"definitionDigest", "=", digest}})})
 				if problem != nil {
 					return nil, problem
 				}
@@ -90,7 +65,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 					if report.State == "done" && (currentConfig == "" || report.ModelConfig != currentConfig) {
 						state = "Configuration changed; evaluate again"
 					}
-					item.Evaluations = append(item.Evaluations, ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Score, CostUSD: report.Cost})
+					item.Evaluations = append(item.Evaluations, platform.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Score, CostUSD: report.Cost})
 				}
 			}
 			out = append(out, item)
@@ -103,13 +78,13 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 		if err != nil {
 			return nil, conflictRefusal(err)
 		}
-		item := ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, Adoptions: []string{}, Checkpoints: []string{}, Evaluations: []ApplicationAIEvaluation{}}
+		item := platform.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, Adoptions: []string{}, Checkpoints: []string{}, Evaluations: []platform.ApplicationAIEvaluation{}}
 		currentConfig := ""
 		if binding, pv, err := t.resolveModel("generation", definition.Model, definition.ModelOptions.Override(platform.ModelOptions{MaxTokens: definition.MaxTokens})); err == nil {
 			item.Model = binding.Model
 			model, _, _ := t.ai.Model(binding.Model)
 			if pinned, refusal := t.modelStage(binding, pv, platform.AIStageDesign); refusal == nil {
-				currentConfig, _ = modelConfigurationDigest(model, pv, &pinned)
+				currentConfig, _ = aigateway.ConfigurationDigest(model, pv, &pinned)
 			}
 		}
 		if definition.Proposal != nil {
@@ -120,7 +95,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 			if object.Ref.Kind != platform.AssetObject || object.Ref.App != asset.Ref.App {
 				continue
 			}
-			var declaration construction.Object
+			var declaration build.Object
 			if json.Unmarshal(object.Body, &declaration) != nil {
 				continue
 			}
@@ -140,10 +115,10 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 				}
 			}
 		}
-		if m.Holds(construction.ID, construction.Builder) || m.Holds(construction.ID, construction.Publisher) {
+		if m.Holds(build.ID, build.Builder) || m.Holds(build.ID, build.Publisher) {
 			offset := 0
 			for {
-				rows, total, problem := platform.Find[construction.Evaluation](t.automation(construction.ID, false), platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
+				rows, total, problem := platform.Find[build.Evaluation](t.automation(build.ID, false), platform.Query{Limit: 500, Offset: offset, Sort: []string{"id"}})
 				if problem != nil {
 					return nil, problem
 				}
@@ -153,7 +128,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 						if (state == "passed" || state == "failed") && (currentConfig == "" || report.ModelConfig != currentConfig) {
 							state = "Configuration changed; evaluate again"
 						}
-						item.Evaluations = append(item.Evaluations, ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
+						item.Evaluations = append(item.Evaluations, platform.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Quality, CostUSD: report.CostUSD})
 					}
 				}
 				offset += len(rows)
@@ -167,7 +142,7 @@ func (t *Tenant) applicationAILocked(m platform.Member, assets []platform.Releas
 	return out, nil
 }
 
-func (t *Tenant) applicationAIUsage(m platform.Member, application platform.AssetRef, items []ApplicationAI) []ApplicationAI {
+func (t *Tenant) applicationAIUsage(m platform.Member, application platform.AssetRef, items []platform.ApplicationAI) []platform.ApplicationAI {
 	value, problem := t.Read(m, "ai-usage")
 	if problem != nil {
 		return items
@@ -193,7 +168,9 @@ func (t *Tenant) applicationAIUsage(m platform.Member, application platform.Asse
 			item.CostUnknown += total.CostUnknown
 		}
 	}
-	slices.SortFunc(items, func(a, b ApplicationAI) int { return strings.Compare(a.Resource.Ref.String(), b.Resource.Ref.String()) })
+	slices.SortFunc(items, func(a, b platform.ApplicationAI) int {
+		return strings.Compare(a.Resource.Ref.String(), b.Resource.Ref.String())
+	})
 	return items
 }
 

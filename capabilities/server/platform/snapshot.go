@@ -2,12 +2,29 @@ package platform
 
 import (
 	"encoding/json"
-
 	"google.golang.org/protobuf/proto"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 )
+
+// SimulationFactory is trusted composition capability. It creates a fresh
+// owner with its original declarations; no records, grants or side effects
+// are copied from the active owner.
+type SimulationFactory interface {
+	NewSimulationApp(tenant string) App
+}
+
+// SimulationIdentityFactory constructs only the explicit test principals;
+// active authentication subjects, sessions and tokens never enter a sandbox.
+type SimulationIdentityFactory interface {
+	NewSimulationIdentity(tenant string, members []Member) App
+}
+
+// SimulationOrganizationFactory installs only explicit synthetic organization
+// input in a fresh owner. It never copies the active enterprise model.
+type SimulationOrganizationFactory interface {
+	NewSimulationOrganization(tenant string, seed OrgSeed) App
+}
 
 // Snapshotter is an app whose state the host can save at a journal position
 // and restore instead of replaying the entries before it. Every

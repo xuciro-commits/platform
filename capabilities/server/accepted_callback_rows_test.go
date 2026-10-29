@@ -3,7 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 		if forbid {
 			owner = &neverAnswerStock{app}
 		}
-		return composeTenant(t, id, []Seat{seatOf("ana", "platform:admin", "stock:clerk")}, owner)
+		return composeTenant(t, id, []platform.Seat{seatOf("ana", "platform:admin", "stock:clerk")}, owner)
 	}
 	live := build(false)
 	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2, "line": "L1"}, at)
@@ -36,7 +37,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 		t.Fatal(err)
 	}
 	member := memberOf(t, live, "ana")
-	request := submission(live, member, PlatformApp, SchemaEffectDiscard, EffectType, id+":reply", map[string]any{})
+	request := submission(live, member, controlowner.PlatformApp, controlowner.SchemaEffectDiscard, controlowner.EffectType, id+":reply", map[string]any{})
 	value := func(tenant *Tenant) Item {
 		item, _ := platform.Get[Item](tenant.automation("stock", false), "I1")
 		return item
@@ -51,7 +52,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 	if len(entries) != 1 || value(live).Note != "" || live.outbound[0].State != "pending" {
 		t.Fatal("callback became visible before application")
 	}
-	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
+	batch, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || batch.Version != 8 || len(batch.DirectRows) != 1 || batch.Control == nil {
 		t.Fatalf("callback not sealed with control: %v", err)
 	}
@@ -67,7 +68,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 	}
 	for _, damage := range []string{"source", "foreign source", "predecessor", "receipt", "duplicate"} {
 		t.Run(damage, func(t *testing.T) {
-			broken, _, err := resultformat.DecodeBatch(entries[0].Body)
+			broken, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -83,7 +84,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 			case "duplicate":
 				broken.DirectRows = append(broken.DirectRows, broken.DirectRows[0])
 			}
-			broken.Digest, err = resultformat.DigestBatch(broken)
+			broken.Digest, err = acceptedformat.DigestBatch(broken)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -95,7 +96,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 			if err := isolated.Restore(image); err != nil {
 				t.Fatal(err)
 			}
-			if applied, err := isolated.applyAcceptedBatch(isolated.app(PlatformApp).AcceptedLedger(), raw); err == nil || applied || value(isolated).Note != "" || isolated.outbound[0].State != "pending" || isolated.app(PlatformApp).AcceptedLedger().AcceptedFor(id, request.GetIdempotencyKey()) != nil {
+			if applied, err := isolated.applyAcceptedBatch(isolated.app(controlowner.PlatformApp).AcceptedLedger(), raw); err == nil || applied || value(isolated).Note != "" || isolated.outbound[0].State != "pending" || isolated.app(controlowner.PlatformApp).AcceptedLedger().AcceptedFor(id, request.GetIdempotencyKey()) != nil {
 				t.Fatalf("damaged callback exposed part of the result: %v", err)
 			}
 		})
@@ -105,7 +106,7 @@ func TestAcceptedControlCallbackRowsAppendFailureCrashAndPureRecovery(t *testing
 func TestCallbackRowsDoNotAcceptOrdinaryUnpublishedWrites(t *testing.T) {
 	const id = "callback-scope"
 	at := time.Date(2026, 10, 11, 19, 0, 0, 0, time.UTC)
-	live := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, newStock(id))
+	live := composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, newStock(id))
 	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 2, "line": "L1"}, at)
 	draft := live.newStagedDecision()
 	draft.at = at

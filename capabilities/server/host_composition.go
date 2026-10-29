@@ -1,9 +1,13 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
 import (
 	"fmt"
 	"maps"
 	"net/http"
+	controlowner "platformserver/kernel/control"
+	"platformserver/studio/packages"
 	"slices"
 	"strings"
 	"time"
@@ -48,7 +52,7 @@ func (t *Tenant) compositionView(providers RuntimeProviders) HostComposition {
 			view.Owners = append(view.Owners, module)
 		}
 	}
-	if missingRuntime(view.Desired) || slices.Contains(view.DesiredDisabledOwners, PlatformApp) {
+	if missingRuntime(view.Desired) || slices.Contains(view.DesiredDisabledOwners, controlowner.PlatformApp) {
 		view.State, view.Reason = "maintenance", "A required implementation is removed; business access remains stopped"
 	} else if !maps.Equal(view.Current, view.Desired) || !slices.Equal(view.DisabledOwners, view.DesiredDisabledOwners) {
 		view.State, view.Reason = "restart-required", "The selection is saved; restart this host to activate the checked composition"
@@ -60,9 +64,9 @@ func (t *Tenant) compositionView(providers RuntimeProviders) HostComposition {
 
 func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 	providers := h.RuntimeProviders
-	h.hostRoute(mux, Route{Pattern: "POST /v1/host/tenants/{tenant}/packages/inspect", Summary: "Inspect package contents during tenant maintenance without installing or granting access", Body: PackageInspectRequest{}, Answer: PackagePreview{}}, func(w http.ResponseWriter, r *http.Request, _ string, t *Tenant) {
-		var body PackageInspectRequest
-		if err := decodeBodyLimit(r, &body, MaxPackageImportBytes+4096); err != nil {
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/packages/inspect", Summary: "Inspect package contents during tenant maintenance without installing or granting access", Body: platform.PackageInspectRequest{}, Answer: platform.PackagePreview{}}, func(w http.ResponseWriter, r *http.Request, _ string, t *Tenant) {
+		var body platform.PackageInspectRequest
+		if err := decodeBodyLimit(r, &body, packages.MaxPackageImportBytes+4096); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
@@ -73,10 +77,10 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 		}
 		WriteJSON(w, http.StatusOK, preview)
 	})
-	h.hostRoute(mux, Route{Pattern: "GET /v1/host/tenants/{tenant}/composition", Summary: "Current and saved foundational provider selection and supported maintenance mode", Answer: HostComposition{}}, func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}/composition", Summary: "Current and saved foundational provider selection and supported maintenance mode", Answer: HostComposition{}}, func(w http.ResponseWriter, _ *http.Request, _ string, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.compositionView(providers))
 	})
-	h.hostRoute(mux, Route{Pattern: "POST /v1/host/tenants/{tenant}/composition", Summary: "Save a checked provider selection and stop business access until supported restart and recovery", Body: CompositionRequest{}, Answer: HostComposition{}}, func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/composition", Summary: "Save a checked provider selection and stop business access until supported restart and recovery", Body: CompositionRequest{}, Answer: HostComposition{}}, func(w http.ResponseWriter, r *http.Request, subject string, t *Tenant) {
 		var body CompositionRequest
 		if err := decodeBody(r, &body); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -96,7 +100,7 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		_, err := t.acceptHostControl("composition", "host:"+subject, body, body.At, AuditEntry{Action: "host.composition", Target: t.ID + ":" + body.Reason}, func(image *hostControlImage) (SupportGrant, error) {
+		_, err := t.acceptHostControl("composition", "host:"+subject, body, body.At, platform.AuditEntry{Action: "host.composition", Target: t.ID + ":" + body.Reason}, func(image *hostControlImage) (SupportGrant, error) {
 			if t.quarantined() {
 				return SupportGrant{}, fmt.Errorf("Repair this tenant before changing its implementation")
 			}

@@ -25,4 +25,4 @@
 
 ## Impact
 
-涉及 `aicall.go`、`anthropic.go`、`model_configuration.go`、`mcp.go`、Agent/Function 派发、知识嵌入及原 AI/Work 应用；目录迁移与接受管线合并由 `consolidate-platform-boundaries` 统筹。完整文件对照、历史责任和验收条件见本变更 design。现有自举范围收缩由 `platform-self-hosting` 负责。负责人已授权分步执行；provider传输与阶段准入已落实，在途Token预占已接入原接受状态，Work交接、写提议与训练导出仍未完成。
+涉及 `aicall.go`、`anthropic.go`、`model_configuration.go`、`mcp.go`、Agent/Function 派发、知识嵌入及原 AI/Work 应用；目录迁移与接受管线合并由 `consolidate-platform-boundaries` 统筹。完整文件对照、历史责任和验收条件见本变更 design。现有自举范围收缩由 `platform-self-hosting` 负责。负责人已授权实施；provider传输、阶段准入和在途Token预占沿原owner运行。本批将Work交接、Agent/MCP写提议及训练候选/导出接回原接受状态和工作订阅；实际业务验收由tasks的集中检查记录。

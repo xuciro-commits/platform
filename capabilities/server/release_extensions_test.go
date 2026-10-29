@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+
 	"platformserver/apps/core"
 	"platformserver/platform"
 )
@@ -80,19 +80,19 @@ func (a *extensionCorePackage) Submit(c platform.Caller, s *pb.Submission, at ti
 
 func extensionTenant(t *testing.T, id, version, added string, incompatible bool) *Tenant {
 	t.Helper()
-	return composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "core:steward"), seatOf("user", "build:user")}, build.New(id), newExtensionCorePackage(id, version, added, incompatible))
+	return composeTenant(t, id, []platform.Seat{seatOf("builder", "build:builder", "core:steward"), seatOf("user", "build:user")}, build.New(id), newExtensionCorePackage(id, version, added, incompatible))
 }
 
-func extensionObjectFields() []construction.Field {
-	return []construction.Field{{Name: "base", Title: "Material", Type: "reference", Ref: core.MaterialType, Required: true, Inverse: "materialextra"},
+func extensionObjectFields() []build.Field {
+	return []build.Field{{Name: "base", Title: "Material", Type: "reference", Ref: core.MaterialType, Required: true, Inverse: "materialextra"},
 		{Name: "customergrade", Title: "Customer grade", Type: "text", Search: true}, {Name: "inspectiondue", Title: "Inspection due", Type: "date"}}
 }
 
 func extensionFixture(t *testing.T, live *Tenant) string {
 	t.Helper()
 	publishObject(t, live, "builder", "extension", map[string]any{"name": "materialextra", "title": "Material extension", "extends": core.MaterialType, "fields": extensionObjectFields(),
-		"states":  []construction.State{{Name: "open", Title: "Open"}, {Name: "reviewed", Title: "Reviewed"}},
-		"actions": []construction.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed"}}}, txnAt)
+		"states":  []build.State{{Name: "open", Title: "Open"}, {Name: "reviewed", Title: "Reviewed"}},
+		"actions": []build.Action{{Name: "review", Title: "Review", From: []string{"open"}, To: "reviewed"}}}, txnAt)
 	from := saveExtensionDraft(t, live, "extension", "source")
 	if _, err := live.ActivateRelease(memberOf(t, live, "builder"), from, "source-activate", txnAt); err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func extensionFixture(t *testing.T, live *Tenant) string {
 	for i := 0; i < 3; i++ {
 		id := fmt.Sprintf("M%d", i)
 		decide(t, live, "builder", core.ID, core.MaterialType+".create", core.MaterialType, id, map[string]any{"name": id, "code": id, "kind": "raw", "baseUom": "uom-pce"}, txnAt)
-		decide(t, live, "user", construction.ID, "build.materialextra.create", "build.materialextra", id, map[string]any{"base": id, "customergrade": fmt.Sprintf("Grade %d", i), "inspectiondue": "2027-01-01"}, txnAt)
+		decide(t, live, "user", build.ID, "build.materialextra.create", "build.materialextra", id, map[string]any{"base": id, "customergrade": fmt.Sprintf("Grade %d", i), "inspectiondue": "2027-01-01"}, txnAt)
 	}
 	return from
 }

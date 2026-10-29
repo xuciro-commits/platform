@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/flow"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -23,8 +24,8 @@ func TestTraceFollowsWork(t *testing.T) {
 	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSyncer(spans)))
 	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	defer sink.Close()
-	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"shop": "clerk", PlatformApp: Admin}}})
-	tn, err := NewTenant("t-1", dir, flow.New("t-1"), newShop("t-1", fulfil(1)))
+	dir := newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"shop": "clerk", controlowner.PlatformApp: controlowner.Admin}}})
+	tn, err := NewTenant("t-1", dir, automation.New("t-1"), newShop("t-1", fulfil(1)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +40,7 @@ func TestTraceFollowsWork(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	decide(PlatformApp, SchemaEndpointAdd, EndpointType, "hook", map[string]any{"url": sink.URL, "secret": "hook", "events": []string{"shop.order.reserve"}, "allowPrivate": true})
+	decide(controlowner.PlatformApp, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "hook", map[string]any{"url": sink.URL, "secret": "hook", "events": []string{"shop.order.reserve"}, "allowPrivate": true})
 	spans.Reset()
 	decide("shop", "shop.order.place", "shop.order", "O1", map[string]string{"item": "pen"})
 	tn.Work(now)

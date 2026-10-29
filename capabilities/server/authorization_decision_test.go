@@ -1,17 +1,18 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
+
 	"platformserver/platform"
 	"platformserver/platform/authz"
 )
@@ -20,7 +21,7 @@ func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T)
 	approveTestInference(t, "http://candidate.invalid", "probe")
 	const id = "capability-owner-authorization"
 	at := txnAt
-	tenant := composeTenant(t, id, []Seat{
+	tenant := composeTenant(t, id, []platform.Seat{
 		seatOf("builder", "build:builder", "ai:admin", "platform:admin"),
 		seatOf("user", "build:user"),
 		seatOf("app:candidate-test", "ai:admin", "platform:admin"),
@@ -30,25 +31,25 @@ func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T)
 	}
 	publishObject(t, tenant, "builder", "NOTES", map[string]any{
 		"name": "note", "title": "Note",
-		"fields": []construction.Field{{Name: "text", Title: "Text", Type: "text", Read: []string{construction.Builder}}},
+		"fields": []build.Field{{Name: "text", Title: "Text", Type: "text", Read: []string{build.Builder}}},
 	}, at)
-	definition := platform.RecordAdviceFunction("build.note", []string{"text"}, []string{construction.User})
+	definition := platform.RecordAdviceFunction("build.note", []string{"text"}, []string{build.User})
 	definition.Name = "advice"
-	decide(t, tenant, "builder", construction.ID, construction.FunctionType+".create", construction.FunctionType, "ADVICE", definition, at)
-	decide(t, tenant, "builder", construction.ID, build.SchemaFunction, construction.FunctionType, "ADVICE", map[string]any{}, at)
-	decide(t, tenant, "builder", construction.ID, "build.note.create", "build.note", "N", map[string]any{"text": "Synthetic task"}, at)
+	decide(t, tenant, "builder", build.ID, build.FunctionType+".create", build.FunctionType, "ADVICE", definition, at)
+	decide(t, tenant, "builder", build.ID, build.SchemaFunction, build.FunctionType, "ADVICE", map[string]any{}, at)
+	decide(t, tenant, "builder", build.ID, "build.note.create", "build.note", "N", map[string]any{"text": "Synthetic task"}, at)
 
 	// The grant permits the function even though the member's primary role
 	// is builder. Discovery and result reads must not invent a single-role gate.
 	directory := testConsoleOf(tenant)
-	directory.mu.Lock()
-	directory.members["builder"].Grants = []platform.Grant{{App: construction.ID, Role: construction.Builder}, {App: construction.ID, Role: construction.User}}
-	directory.mu.Unlock()
+	rewriteMember(t, directory, "builder", func(member *platform.Member) {
+		member.Grants = []platform.Grant{{App: build.ID, Role: build.Builder}, {App: build.ID, Role: build.User}}
+	})
 	member := memberOf(t, tenant, "builder")
-	if member.Roles[construction.ID] != construction.Builder || !member.Holds(construction.ID, construction.User) {
+	if member.Roles[build.ID] != build.Builder || !member.Holds(build.ID, build.User) {
 		t.Fatalf("test needs a non-primary user grant: %+v", member)
 	}
-	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetFunction, Name: definition.Name}
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFunction, Name: definition.Name}
 	for _, version := range []int{0, 1} {
 		if descriptor, problem := tenant.DescribeCapability(member, ref, version); problem != nil || descriptor.Ref != ref {
 			t.Fatalf("function version %d ignored its effective grant: %+v %v", version, descriptor, problem)
@@ -64,7 +65,7 @@ func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T)
 		t.Fatalf("function result ignored its effective grant: %+v %v", result, problem)
 	}
 
-	owner := tenant.app(construction.ID)
+	owner := tenant.app(build.ID)
 	owner.Manifest().Actions.UsePolicies(func() []authz.Policy {
 		return []authz.Policy{{ID: "deny-advice", Effect: "deny", Permission: definition.Name}}
 	})
@@ -81,13 +82,9 @@ func TestCapabilityDiscoveryAndResultsUseCurrentOwnerAuthorization(t *testing.T)
 	}
 	assertDenied("owner deny policy")
 	owner.Manifest().Actions.UsePolicies(func() []authz.Policy { return nil })
-	directory.mu.Lock()
-	directory.members["builder"].Grants = []platform.Grant{{App: construction.ID, Role: construction.User}}
-	directory.mu.Unlock()
+	rewriteMember(t, directory, "builder", func(member *platform.Member) { member.Grants = []platform.Grant{{App: build.ID, Role: build.User}} })
 	assertDenied("revoked source-field role with the function role retained")
-	directory.mu.Lock()
-	directory.members["builder"].Grants = []platform.Grant{{App: construction.ID, Role: construction.Builder}}
-	directory.mu.Unlock()
+	rewriteMember(t, directory, "builder", func(member *platform.Member) { member.Grants = []platform.Grant{{App: build.ID, Role: build.Builder}} })
 	assertDenied("revoked grant in a stale member snapshot")
 }
 
@@ -119,7 +116,7 @@ func TestOwnerAuthorizationExplainsRowsFieldsAndSavedEvidence(t *testing.T) {
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) { saved = entry.Body; return entry.Body, nil }
 	decide(t, tn, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"note": "Updated"}, txnAt)
 	var result struct {
-		Authorizations []resultformat.AuthorizationEvidence `json:"authorizations"`
+		Authorizations []acceptedformat.AuthorizationEvidence `json:"authorizations"`
 	}
 	if json.Unmarshal(saved, &result) != nil || len(result.Authorizations) == 0 || !result.Authorizations[0].Decision.Allow {
 		t.Fatal("accepted result omitted authorization basis")
@@ -135,10 +132,10 @@ func TestAuthorizationRevocationPreservesAcceptedRecovery(t *testing.T) {
 	live.Record = func(entry Entry) { entries = append(entries, entry) }
 	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Press", "line": "L1"}, txnAt)
 	stale := memberOf(t, live, "ana")
-	dir := live.app(PlatformApp).(*Console)
-	dir.mu.Lock()
-	dir.members[stale.ID].Roles, dir.members[stale.ID].Grants = map[string]string{}, nil
-	dir.mu.Unlock()
+	dir := live.app(controlowner.PlatformApp).(*controlowner.Console)
+	rewriteMember(t, dir, stale.ID, func(member *platform.Member) {
+		member.Roles, member.Grants = map[string]string{}, nil
+	})
 	c := platform.NewCaller(runtime{live}, stale, "stock", false, false)
 	question := platform.AuthzRequest{Principal: stale.ID, Tenant: stale.Tenant, Kind: "read", Type: "stock.item", Record: "I1"}
 	decision := c.Authorize(question, txnAt)
@@ -191,11 +188,11 @@ func TestDeclaredInputAndWorkShareDenyPrecedence(t *testing.T) {
 	if refusal == nil || len(draft.authorizations) != 1 || draft.authorizations[0].Decision.Policy != "frozen" {
 		t.Fatal("owner work bypassed the shared deny decision")
 	}
-	if resultformat.ValidateAuthorizationEvidence(tn.ID, draft.authorizations) != nil {
+	if acceptedformat.ValidateAuthorizationEvidence(tn.ID, draft.authorizations) != nil {
 		t.Fatal("recorded denial has an invalid layer shape")
 	}
 	draft.authorizations[0].Decision.Layers[0].Name = "allow"
-	if resultformat.ValidateAuthorizationEvidence(tn.ID, draft.authorizations) == nil {
+	if acceptedformat.ValidateAuthorizationEvidence(tn.ID, draft.authorizations) == nil {
 		t.Fatal("recovery accepted reordered authorization layers")
 	}
 }

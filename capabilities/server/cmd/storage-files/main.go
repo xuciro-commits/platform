@@ -7,9 +7,9 @@ import (
 	"flag"
 	"log"
 	"os"
+	"platformserver/engine/resources"
+	"platformserver/platform"
 	"strings"
-
-	"platformserver"
 )
 
 func main() {
@@ -20,20 +20,20 @@ func main() {
 		log.Fatal("a file store endpoint is required")
 	}
 	ctx := context.Background()
-	var store platformserver.FileStore
+	var store platform.FileStore
 	var err error
 	if strings.HasPrefix(address, "http://") || strings.HasPrefix(address, "https://") {
-		store, err = platformserver.OpenS3Files(ctx, address)
+		store, err = resources.OpenS3Files(ctx, address)
 	} else {
 		if info, statErr := os.Stat(address); statErr != nil || !info.IsDir() {
 			log.Fatal("the local file store must already exist")
 		}
-		store, err = platformserver.NewLocalFiles(address)
+		store, err = resources.NewLocalFiles(address)
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	manifest, err := platformserver.FileStoreManifest(ctx, store)
+	manifest, err := resources.FileStoreManifest(ctx, store)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,6 +1,11 @@
 package platform
 
-import "strconv"
+import (
+	"context"
+	"io"
+	"strconv"
+	"time"
+)
 
 const (
 	FileApp            = "files"
@@ -51,3 +56,41 @@ func MaxFileSize(c Caller) int {
 	}
 	return mb << 20
 }
+
+type FileHost interface {
+	Readable(m Member, ref string, now time.Time) bool
+	Stored(tenant, hash string) bool
+}
+
+type AttachedFiles interface{ AttachFiles(FileHost) }
+
+// FileStore keeps file bytes outside the journal: an
+// S3-compatible object store in a deployment, memory in development. Keys are
+// "<tenant>/<sha256>", so the same bytes are kept once and a key never changes.
+type FileStore interface {
+	Put(ctx context.Context, key string, data []byte, contentType string) error
+	Get(ctx context.Context, key string) (io.ReadCloser, int64, error)
+	Exists(ctx context.Context, key string) bool
+	Delete(ctx context.Context, key string) error
+}
+
+// FileInventory is an optional file-owner capability. Each page is ordered by
+// key, strictly after the previous page's last key. Empty Next proves that this
+// prefix has no further objects; an unavailable inventory returns an error.
+// Inventory does not prove whether a file is referenced by accepted state.
+type FileInventory interface {
+	Inventory(context.Context, string, string, int) (FileInventoryPage, error)
+}
+
+type StoredFile struct {
+	Key      string
+	Size     int64
+	Modified time.Time
+}
+
+type FileInventoryPage struct {
+	Files []StoredFile
+	Next  string
+}
+
+const MaxFileInventoryPage = 1024

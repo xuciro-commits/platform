@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
 	"slices"
 	"strconv"
@@ -19,36 +18,17 @@ const (
 )
 
 type Metamodel struct {
-	Version      string                      `json:"version"`
-	URI          string                      `json:"uri"`
-	Domains      []string                    `json:"domains"`
-	Profile      []ProfileEntry              `json:"profile"`
-	Stereotypes  map[string]*uaf.Stereotype  `json:"stereotypes"`
-	Enumerations map[string]*uaf.Enumeration `json:"enumerations"`
-	Views        []Viewpoint                 `json:"views"`
+	Version      string                           `json:"version"`
+	URI          string                           `json:"uri"`
+	Domains      []string                         `json:"domains"`
+	Profile      []ProfileEntry                   `json:"profile"`
+	Stereotypes  map[string]*DirectoryType        `json:"stereotypes"`
+	Enumerations map[string]*DirectoryEnumeration `json:"enumerations"`
+	Views        []Viewpoint                      `json:"views"`
 	// Contracts are the relationship stereotypes as the host checks them
 	//what each end accepts, the standard's text it comes from,
 	// and what this profile adds. The modeler offers exactly these.
 	Contracts []Contract `json:"contracts"`
-}
-
-type EnterpriseQueryElement struct {
-	ID         string            `json:"id"`
-	Stereotype string            `json:"stereotype"`
-	Name       string            `json:"name"`
-	Kind       string            `json:"kind,omitempty"`
-	ShortName  string            `json:"shortName,omitempty"`
-	Legal      bool              `json:"legal,omitempty"`
-	From       platform.Date     `json:"from,omitempty"`
-	Until      platform.Date     `json:"until,omitempty"`
-	Periods    []platform.Period `json:"periods,omitempty"`
-	// Closed marks an element that is no longer live today (ended, merged,
-	// decommissioned): resolve returns it so a stored reference still reads.
-	Closed bool `json:"closed,omitempty"`
-}
-
-type EnterpriseQueryResult struct {
-	Elements []EnterpriseQueryElement `json:"elements"`
 }
 
 // The query and resolve halves of the ref/query contracts:
@@ -56,10 +36,10 @@ type EnterpriseQueryResult struct {
 // the whole graph. The host serves them as GET /v1/enterprise-query and
 // /v1/enterprise-resolve; the generated SDK (SDK()) wraps both.
 
-// EnterpriseQueryElement is one element as the query contract projects it.
-// EnterpriseQueryResult is the answer both reads share.
-func project(e Element, today platform.Date) EnterpriseQueryElement {
-	return EnterpriseQueryElement{ID: e.ID, Stereotype: e.Stereotype, Name: e.Name, Kind: e.Kind, ShortName: e.ShortName,
+// platform.EnterpriseQueryElement is one element as the query contract projects it.
+// platform.EnterpriseQueryResult is the answer both reads share.
+func project(e Element, today platform.Date) platform.EnterpriseQueryElement {
+	return platform.EnterpriseQueryElement{ID: e.ID, Stereotype: e.Stereotype, Name: e.Name, Kind: e.Kind, ShortName: e.ShortName,
 		Legal: e.Legal, From: e.From, Until: e.Until, Periods: slices.Clone(e.Periods), Closed: !e.ActiveOn(today)}
 }
 
@@ -69,11 +49,11 @@ func project(e Element, today platform.Date) EnterpriseQueryElement {
 // ("all": no window, closed and future included), limit a bounded page (the
 // host caps it before calling). Results sort by id: a picker's order must not
 // depend on map iteration.
-func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit int, now time.Time) (EnterpriseQueryResult, *kernel.Error) {
+func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit int, now time.Time) (platform.EnterpriseQueryResult, *kernel.Error) {
 	today := platform.Date(now.UTC().Format(time.DateOnly))
 	if alive != "" && alive != "all" {
 		if len(alive) != len("2006-01-02") {
-			return EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "alive is \"all\" or a YYYY-MM-DD day")
+			return platform.EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "alive is \"all\" or a YYYY-MM-DD day")
 		}
 		today = platform.Date(alive)
 	}
@@ -106,7 +86,7 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 	if limit > 0 && len(matches) > limit {
 		matches = matches[:limit]
 	}
-	out := EnterpriseQueryResult{Elements: make([]EnterpriseQueryElement, len(matches))}
+	out := platform.EnterpriseQueryResult{Elements: make([]platform.EnterpriseQueryElement, len(matches))}
 	for i, el := range matches {
 		out.Elements[i] = project(el, today)
 	}
@@ -117,14 +97,14 @@ func (e *Enterprise) Query(stereotypes []string, kind, q, alive string, limit in
 // of each named id, closed elements included and marked, unknown ids skipped —
 // a stored reference always reads. At most 100 ids per call keep the answer
 // bounded; empty resolves to nothing.
-func (e *Enterprise) Resolve(ids []string, now time.Time) (EnterpriseQueryResult, *kernel.Error) {
+func (e *Enterprise) Resolve(ids []string, now time.Time) (platform.EnterpriseQueryResult, *kernel.Error) {
 	if len(ids) > 100 {
-		return EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "resolve takes at most 100 ids")
+		return platform.EnterpriseQueryResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "resolve takes at most 100 ids")
 	}
 	today := platform.Date(now.UTC().Format(time.DateOnly))
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	out := EnterpriseQueryResult{Elements: []EnterpriseQueryElement{}}
+	out := platform.EnterpriseQueryResult{Elements: []platform.EnterpriseQueryElement{}}
 	for _, id := range ids {
 		if id == "" {
 			continue
@@ -156,14 +136,14 @@ func SDK() string {
 	}
 	b.WriteString(";\n\n")
 
-	b.WriteString("// EnterpriseViewpoint is the five description views the model projects onto itself.\n")
+	b.WriteString("// EnterpriseViewpoint identifies the read-only directory projection.\n")
 	b.WriteString("export type EnterpriseViewpoint =\n")
-	for _, v := range Views(uaf.Current()) {
+	for _, v := range Views(directory()) {
 		b.WriteString("\t| " + strconv.Quote(v.ID) + "\n")
 	}
 	b.WriteString(";\n\n")
 
-	actions := declarations()
+	actions := directoryActions()
 	b.WriteString("// enterpriseWrites is the write contract: every schema that may change the model.\n")
 	b.WriteString("export const enterpriseWrites = [\n")
 	for _, a := range actions {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 	"log"
 	"platformkernel/kernel"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"reflect"
 	"regexp"
 	"slices"
@@ -14,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"platformserver/platform"

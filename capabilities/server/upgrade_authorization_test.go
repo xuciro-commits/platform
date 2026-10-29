@@ -1,6 +1,8 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import computeowner "platformserver/engine/compute"
+
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -10,13 +12,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+
+	controlowner "platformserver/kernel/control"
+	"platformserver/studio/packages"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
+
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -24,14 +29,14 @@ import (
 // The upgrade batch's authorization, host console, environment and package
 // behavior (ordered 2026-10-05).
 
-func upgradeSeats() []Seat {
-	seat := func(id string, roles map[string]string) Seat {
-		return Seat{Subjects: []string{"user:" + id + "@example.test"}, Member: platform.Member{ID: id, Roles: roles}}
+func upgradeSeats() []platform.Seat {
+	seat := func(id string, roles map[string]string) platform.Seat {
+		return platform.Seat{Subjects: []string{"user:" + id + "@example.test"}, Member: platform.Member{ID: id, Roles: roles}}
 	}
-	return []Seat{
-		seat("dana", map[string]string{construction.ID: construction.Builder, PlatformApp: Admin, work.ID: work.Admin}),
-		seat("pat", map[string]string{construction.ID: construction.Publisher}),
-		seat("aud", map[string]string{PlatformApp: Auditor}),
+	return []platform.Seat{
+		seat("dana", map[string]string{build.ID: build.Builder, controlowner.PlatformApp: controlowner.Admin, work.ID: work.Admin}),
+		seat("pat", map[string]string{build.ID: build.Publisher}),
+		seat("aud", map[string]string{controlowner.PlatformApp: platform.Auditor}),
 		seat("mo", nil),
 		seat("approver", map[string]string{"manager": "manager"}),
 	}
@@ -39,7 +44,7 @@ func upgradeSeats() []Seat {
 
 func upgradeTenant(t *testing.T, id string) (*Tenant, func(string) platform.Member, func(string, string, string, string, any) string) {
 	t.Helper()
-	tn, err := NewTenant(id, NewConsole(id, upgradeSeats()...), work.New(id), build.New(id))
+	tn, err := NewTenant(id, newConsole(id, upgradeSeats()...), work.New(id), build.New(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,11 +59,11 @@ func upgradeTenant(t *testing.T, id string) (*Tenant, func(string) platform.Memb
 	submit := func(who, schema, typ, target string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		authority := construction.ID
+		authority := build.ID
 		if typ == work.ApprovalType || typ == work.PolicyType {
 			authority = work.ID
-		} else if typ == PackageType || typ == ProjectType {
-			authority = PlatformApp
+		} else if typ == platform.PackageType || typ == platform.ProjectType {
+			authority = controlowner.PlatformApp
 		}
 		sub := &pb.Submission{TenantId: id, PrincipalId: who, Authority: authority, IdempotencyKey: "u" + id + "-" + schema + "-" + target + "-" + string(rune('a'+keys%26)),
 			Target: &pb.EntityRef{Type: typ, Id: target}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
@@ -76,7 +81,7 @@ func TestPublisherActivatesWithoutEditing(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 
 	// The builder role edits definitions; the publisher does not.
-	if role := member("pat").Roles[construction.ID]; role != construction.Publisher {
+	if role := member("pat").Roles[build.ID]; role != build.Publisher {
 		t.Fatalf("publisher seat: %s", role)
 	}
 	if _, err := tn.SaveReleaseCandidates(member("pat"), nil, "cand", "k1", now); err == nil ||
@@ -108,10 +113,10 @@ func TestAuditorReadsWithoutDeciding(t *testing.T) {
 	if _, err := tn.Read(member("aud"), "packages"); err != nil {
 		t.Fatalf("auditor may not read packages: %v", err)
 	}
-	if got := submit("aud", SchemaGrant, MemberType, "mo", map[string]any{"app": construction.ID, "role": construction.Builder}); got == "ok" {
+	if got := submit("aud", controlowner.SchemaGrant, controlowner.MemberType, "mo", map[string]any{"app": build.ID, "role": build.Builder}); got == "ok" {
 		t.Fatal("the auditor granted a role")
 	}
-	if got := submit("aud", SchemaAdd, MemberType, "eve", map[string]any{"subject": "user:eve@example.test"}); got == "ok" {
+	if got := submit("aud", controlowner.SchemaAdd, controlowner.MemberType, "eve", map[string]any{"subject": "user:eve@example.test"}); got == "ok" {
 		t.Fatal("the auditor added a member")
 	}
 }
@@ -162,47 +167,47 @@ func TestProjectDelegationIsTargetScoped(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	object := map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
+	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("builder draft: %s", got)
 	}
 	second := map[string]any{"name": "invoice", "title": "Invoice",
 		"fields": []map[string]any{{"name": "amount", "title": "Amount", "type": "text"}}}
-	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "invoice", second); got != "ok" {
+	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "invoice", second); got != "ok" {
 		t.Fatalf("builder draft 2: %s", got)
 	}
 	// Without a project the member has no edit right at all.
-	if got := submit("mo", "build.object.edit", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit"}); got == "ok" {
+	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit"}); got == "ok" {
 		t.Fatal("a member with no role edited an object")
 	}
 	project := map[string]any{"name": "opening", "title": "Hotel opening",
-		"members": []map[string]any{{"member": "mo", "role": ProjectEditorRole}},
+		"members": []map[string]any{{"member": "mo", "role": platform.ProjectEditorRole}},
 		"assets":  []map[string]any{{"kind": "object", "name": "visit"}}}
-	if got := submit("dana", SchemaProjectSave, ProjectType, "opening", project); got != "ok" {
+	if got := submit("dana", platform.SchemaProjectSave, platform.ProjectType, "opening", project); got != "ok" {
 		t.Fatalf("project save: %s", got)
 	}
 	// The project hands mo the builder role (By project:<id>): the Studio loads for them.
 	mo := member("mo")
-	if mo.Roles[construction.ID] != construction.Builder || !slices.ContainsFunc(mo.Grants, func(g platform.Grant) bool { return g.By == "project:opening" }) {
+	if mo.Roles[build.ID] != build.Builder || !slices.ContainsFunc(mo.Grants, func(g platform.Grant) bool { return g.By == "project:opening" }) {
 		t.Fatalf("project did not grant builder: %+v", mo.Grants)
 	}
 	// Its writes are bounded to the assets the project names, on the submission path.
-	if got := submit("mo", "build.object.edit", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit (mo)", "fields": object["fields"]}); got != "ok" {
+	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit (mo)", "fields": object["fields"]}); got != "ok" {
 		t.Fatalf("delegated edit: %s", got)
 	}
-	if got := submit("mo", "build.object.edit", construction.ObjectType, "invoice", map[string]any{"name": "invoice", "title": "Invoice", "fields": second["fields"]}); got == "ok" {
+	if got := submit("mo", "build.object.edit", build.ObjectType, "invoice", map[string]any{"name": "invoice", "title": "Invoice", "fields": second["fields"]}); got == "ok" {
 		t.Fatal("delegation leaked to an asset the project does not name")
 	}
-	if got := submit("mo", construction.SchemaPublish, construction.ObjectType, "visit", map[string]any{}); got == "ok" {
+	if got := submit("mo", build.SchemaPublish, build.ObjectType, "visit", map[string]any{}); got == "ok" {
 		t.Fatal("delegation covered publishing")
 	}
 	// Archiving the project takes the role and the edit right away together.
-	if got := submit("dana", SchemaProjectArchive, ProjectType, "opening", map[string]any{}); got != "ok" {
+	if got := submit("dana", platform.SchemaProjectArchive, platform.ProjectType, "opening", map[string]any{}); got != "ok" {
 		t.Fatalf("project archive: %s", got)
 	}
-	if member("mo").Roles[construction.ID] != "" {
+	if member("mo").Roles[build.ID] != "" {
 		t.Fatal("an archived project still grants")
 	}
-	if got := submit("mo", "build.object.edit", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": object["fields"]}); got == "ok" {
+	if got := submit("mo", "build.object.edit", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit", "fields": object["fields"]}); got == "ok" {
 		t.Fatal("an archived project still delegates")
 	}
 	_ = now
@@ -220,14 +225,14 @@ func TestMultiApprovalPolicyNeedsDistinctApprovers(t *testing.T) {
 		t.Fatalf("an all-approvers level stays all: %d", got)
 	}
 	tn, member, submit := upgradeTenant(t, "t-appr")
-	if got := submit("dana", work.SchemaPolicySave, work.PolicyType, "publish-two-eyes", map[string]any{"app": construction.ID, "schema": construction.SchemaPublish, "approvals": 2, "title": "two eyes"}); got != "ok" {
+	if got := submit("dana", work.SchemaPolicySave, work.PolicyType, "publish-two-eyes", map[string]any{"app": build.ID, "schema": build.SchemaPublish, "approvals": 2, "title": "two eyes"}); got != "ok" {
 		t.Fatalf("policy save: %s", got)
 	}
 	caller := tn.caller(member("dana"), tn.app(work.ID), false)
-	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, construction.ID, construction.SchemaPublish); count != 2 {
+	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, build.ID, build.SchemaPublish); count != 2 {
 		t.Fatalf("policy count: %d", count)
 	}
-	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, construction.ID, "nothing"); count != 0 {
+	if count := tn.app(work.ID).(*work.Work).PolicyCount(caller, build.ID, "nothing"); count != 0 {
 		t.Fatalf("policy leaked to another action: %d", count)
 	}
 }
@@ -304,12 +309,12 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	object := map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}
-	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
+	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
 	// Activation is a target-side install: the target must hold the owner
 	// drafts the candidate's assets resolve to, exactly as a local save needs.
-	if got := toSubmit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
+	if got := toSubmit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("target draft: %s", got)
 	}
 	preview, err := from.PreviewRelease(member("dana"), platform.AssetObject, "visit")
@@ -317,7 +322,7 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 		t.Fatalf("preview: %+v %v", preview, err)
 	}
 	candidateID := preview.CandidateID
-	drafts := []construction.JointDraftRef{{Kind: platform.AssetObject, ID: "visit"}}
+	drafts := []build.JointDraftRef{{Kind: platform.AssetObject, ID: "visit"}}
 	if _, err := from.SaveReleaseCandidates(member("dana"), drafts, candidateID, "save", now); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -325,7 +330,7 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seal: %v", err)
 	}
-	if artifact.Digest == "" || artifact.Size != len(from.releases.candidates[candidateID]) {
+	if artifact.Digest == "" || artifact.Size != len(from.releases.Candidates()[candidateID]) {
 		t.Fatalf("artifact: %+v", artifact)
 	}
 	raw, back, err := from.sealedBytes(candidateID)
@@ -339,16 +344,16 @@ func TestCandidateSealingAndPromotion(t *testing.T) {
 	if result.Digest != artifact.Digest || result.To != to.ID {
 		t.Fatalf("promotion: %+v", result)
 	}
-	if to.releases.candidates[candidateID] == nil {
+	if to.releases.Candidates()[candidateID] == nil {
 		t.Fatal("the target does not hold the promoted candidate")
 	}
 	// A candidate for an app the target does not host is refused.
 	other, _, otherSubmit := upgradeTenant(t, "t-other")
 	_ = other
-	if got := otherSubmit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", object); got != "ok" {
+	if got := otherSubmit("dana", build.ObjectType+".create", build.ObjectType, "visit", object); got != "ok" {
 		t.Fatalf("draft on the third tenant: %s", got)
 	}
-	thin := NewConsole("t-thin", upgradeSeats()...)
+	thin := newConsole("t-thin", upgradeSeats()...)
 	thinTenant, err := NewTenant("t-thin", thin, work.New("t-thin"))
 	if err != nil {
 		t.Fatal(err)
@@ -371,32 +376,32 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 		"contributions": []map[string]any{{"view": "board", "title": "Board"}}})
 	write("crm.json", map[string]any{"id": "acme.crm", "version": "1.0.0", "namespace": "acme-crm", "title": "CRM views",
 		"requires": []string{"acme.base"}, "contributions": []map[string]any{{"view": "board", "surface": "work", "title": "Pipeline"}}})
-	index, err := LoadPackageIndex(dir)
+	index, err := packages.LoadPackageIndex(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tn, _, submit := upgradeTenant(t, "t-pkg")
-	console := tn.app(PlatformApp).(*Console)
-	console.index = index
+	console := tn.app(controlowner.PlatformApp).(*controlowner.Console)
+	console.BindPackageIndex(index)
 
 	if views := console.PackageViews(); len(views) != 2 || views[1].Precheck.OK || len(views[1].Precheck.Missing) != 1 {
 		t.Fatalf("package dependency precheck: %+v", views)
 	}
-	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.crm", map[string]any{"id": "acme.crm", "version": "1.0.0"}); got == "ok" {
+	if got := submit("dana", packages.SchemaPackageInstall, platform.PackageType, "acme.crm", map[string]any{"id": "acme.crm", "version": "1.0.0"}); got == "ok" {
 		t.Fatal("a package installed with a missing requirement")
 	}
-	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got != "ok" {
+	if got := submit("dana", packages.SchemaPackageInstall, platform.PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got != "ok" {
 		t.Fatalf("base install: %s", got)
 	}
-	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.crm", map[string]any{"id": "acme.crm", "version": "1.0.0"}); got != "ok" {
+	if got := submit("dana", packages.SchemaPackageInstall, platform.PackageType, "acme.crm", map[string]any{"id": "acme.crm", "version": "1.0.0"}); got != "ok" {
 		t.Fatalf("dependent install: %s", got)
 	}
 	// Retirement uses the installed dependency, not a later edit of the deployment directory.
 	write("crm.json", map[string]any{"id": "acme.crm", "version": "1.0.0", "namespace": "acme-crm", "title": "CRM views"})
-	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got == "ok" {
+	if got := submit("dana", packages.SchemaPackageRetire, platform.PackageType, "acme.base", map[string]any{"id": "acme.base"}); got == "ok" {
 		t.Fatal("retirement ignored the dependent's sealed requirement")
 	}
-	if held := console.packagesOf()["acme.base"]; held.State != "active" {
+	if held := console.ConsolePackages.SnapshotState().Packages["acme.base"]; held.State != "active" {
 		t.Fatalf("refused retirement changed the base package: %+v", held)
 	}
 	keys := map[string]bool{}
@@ -410,60 +415,66 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 	// and refuses to replace bytes nobody can prove.
 	write("base2.json", map[string]any{"id": "acme.base", "version": "1.1.0", "namespace": "acme", "title": "Base",
 		"contributions": []map[string]any{{"view": "board", "title": "Board"}}})
-	if index, err = LoadPackageIndex(dir); err != nil {
+	if index, err = packages.LoadPackageIndex(dir); err != nil {
 		t.Fatal(err)
 	}
-	console.index = index
-	if got := submit("dana", SchemaPackageUpgrade, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.1.0"}); got != "ok" {
+	console.BindPackageIndex(index)
+	if got := submit("dana", packages.SchemaPackageUpgrade, platform.PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.1.0"}); got != "ok" {
 		t.Fatalf("upgrade: %s", got)
 	}
-	upgraded := console.packagesOf()["acme.base"]
+	upgraded := console.ConsolePackages.SnapshotState().Packages["acme.base"]
 	if upgraded.Version != "1.1.0" || !strings.HasPrefix(upgraded.Artifact, "sha256:") ||
 		len(upgraded.Retained) != 1 || upgraded.Retained[0].Version != "1.0.0" || !strings.HasPrefix(upgraded.Retained[0].Digest, "sha256:") {
 		t.Fatalf("installed upgrade: %+v", upgraded)
 	}
 	write("base3.json", map[string]any{"id": "acme.base", "version": "1.2.0", "namespace": "acme", "title": "Base",
 		"contributions": []map[string]any{{"view": "board", "title": "Board"}}})
-	if index, err = LoadPackageIndex(dir); err != nil {
+	if index, err = packages.LoadPackageIndex(dir); err != nil {
 		t.Fatal(err)
 	}
-	console.index = index
-	if err := tn.files().Put(context.Background(), packageArtifactKey(tn.ID, "acme.base", "1.1.0"), []byte(`{"id":"acme.base"}`), "application/json"); err != nil {
+	console.BindPackageIndex(index)
+	if err := tn.files().Put(context.Background(), packages.ArtifactKey(tn.ID, "acme.base", "1.1.0"), []byte(`{"id":"acme.base"}`), "application/json"); err != nil {
 		t.Fatal(err)
 	}
-	if got := submit("dana", SchemaPackageUpgrade, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.2.0"}); got == "ok" {
+	if got := submit("dana", packages.SchemaPackageUpgrade, platform.PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.2.0"}); got == "ok" {
 		t.Fatal("an upgrade replaced a sealed artifact whose bytes changed")
 	}
-	if held := console.packagesOf()["acme.base"]; held.Version != "1.1.0" {
+	if held := console.ConsolePackages.SnapshotState().Packages["acme.base"]; held.Version != "1.1.0" {
 		t.Fatalf("the refused upgrade moved the version: %+v", held)
 	}
 	// Restore the test's known sealed bytes before the remaining lifecycle decisions.
-	sealed, _ := index.find("acme.base", "1.1.0")
-	if err := tn.files().Put(context.Background(), packageArtifactKey(tn.ID, "acme.base", "1.1.0"), platform.Raw(sealed), "application/json"); err != nil {
+	var sealed platform.PackageDescriptor
+	for _, descriptor := range index.Packages {
+		if descriptor.ID == "acme.base" && descriptor.Version == "1.1.0" {
+			sealed = descriptor
+			break
+		}
+	}
+	if err := tn.files().Put(context.Background(), packages.ArtifactKey(tn.ID, "acme.base", "1.1.0"), platform.Raw(sealed), "application/json"); err != nil {
 		t.Fatal(err)
 	}
-	if got := submit("dana", SchemaPackageDrain, PackageType, "acme.crm", map[string]any{"id": "acme.crm"}); got != "ok" {
+	if got := submit("dana", packages.SchemaPackageDrain, platform.PackageType, "acme.crm", map[string]any{"id": "acme.crm"}); got != "ok" {
 		t.Fatalf("drain: %s", got)
 	}
-	held := console.packagesOf()["acme.crm"]
+	held := console.ConsolePackages.SnapshotState().Packages["acme.crm"]
 	if held == nil || held.State != "draining" {
 		t.Fatalf("drain state: %+v", held)
 	}
-	for _, descriptor := range []PackageDescriptor{
-		{ID: "acme.collision", Version: "1.0.0", Namespace: "acme-crm", Contributions: []PackageContribution{{View: "board"}}},
+	for _, descriptor := range []platform.PackageDescriptor{
+		{ID: "acme.collision", Version: "1.0.0", Namespace: "acme-crm", Contributions: []platform.PackageContribution{{View: "board"}}},
 		{ID: "acme.extension", Version: "1.0.0", Namespace: "extension", Requires: []string{"acme.crm"}},
 	} {
 		if pre := console.Precheck(descriptor); pre.OK {
 			t.Fatalf("draining package released its namespace or accepted a new dependent: %+v", descriptor)
 		}
 	}
-	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got == "ok" {
+	if got := submit("dana", packages.SchemaPackageRetire, platform.PackageType, "acme.base", map[string]any{"id": "acme.base"}); got == "ok" {
 		t.Fatal("retirement ignored a draining dependent")
 	}
-	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.crm", map[string]any{"id": "acme.crm"}); got != "ok" {
+	if got := submit("dana", packages.SchemaPackageRetire, platform.PackageType, "acme.crm", map[string]any{"id": "acme.crm"}); got != "ok" {
 		t.Fatalf("retire: %s", got)
 	}
-	if held := console.packagesOf()["acme.crm"]; held.State != "retired" {
+	if held := console.ConsolePackages.SnapshotState().Packages["acme.crm"]; held.State != "retired" {
 		t.Fatalf("retire state: %+v", held)
 	}
 	// A retired package's views are no longer contributions.
@@ -477,7 +488,7 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	listed := map[string]PackageView{}
+	listed := map[string]platform.PackageView{}
 	for _, view := range console.PackageViews() {
 		listed[view.Descriptor.ID+"@"+view.Descriptor.Version] = view
 	}
@@ -490,7 +501,7 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 	if view := listed["acme.crm@1.0.0"]; view.Installed.State != "retired" || !slices.Contains(view.Descriptor.Requires, "acme.base") {
 		t.Fatalf("retired package lost its original declaration: %+v", view)
 	}
-	if got := submit("dana", SchemaPackageRetire, PackageType, "acme.base", map[string]any{"id": "acme.base"}); got != "ok" {
+	if got := submit("dana", packages.SchemaPackageRetire, platform.PackageType, "acme.base", map[string]any{"id": "acme.base"}); got != "ok" {
 		t.Fatalf("retired dependent still blocked the base package: %s", got)
 	}
 	// The same immutability rule applies to ordinary contribution packages.
@@ -499,16 +510,16 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 		t.Fatal(err)
 	}
 	write("base.json", map[string]any{"id": "acme.base", "version": "1.0.0", "namespace": "changed"})
-	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got == "ok" {
+	if got := submit("dana", packages.SchemaPackageInstall, platform.PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got == "ok" {
 		t.Fatal("ordinary package replaced a retained version")
 	}
 	if err := os.WriteFile(filepath.Join(dir, "base.json"), original, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if got := submit("dana", SchemaPackageInstall, PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got != "ok" {
+	if got := submit("dana", packages.SchemaPackageInstall, platform.PackageType, "acme.base", map[string]any{"id": "acme.base", "version": "1.0.0"}); got != "ok" {
 		t.Fatalf("original contribution package could not be reinstalled: %s", got)
 	}
-	held = console.packagesOf()["acme.base"]
+	held = console.ConsolePackages.SnapshotState().Packages["acme.base"]
 	if held.State != "active" || held.Version != "1.0.0" || len(held.Retained) != 1 || held.Retained[0].Version != "1.1.0" {
 		t.Fatalf("reinstalling an older version lost the newer artifact: %+v", held)
 	}
@@ -517,19 +528,19 @@ func TestPackagePrecheckInstallDrainRetire(t *testing.T) {
 func TestCompositeEditsAllOrNothing(t *testing.T) {
 	tn, member, submit := upgradeTenant(t, "t-comp")
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
-	if got := submit("dana", construction.ObjectType+".create", construction.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit",
+	if got := submit("dana", build.ObjectType+".create", build.ObjectType, "visit", map[string]any{"name": "visit", "title": "Visit",
 		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
 	edits := []CompositeEdit{
-		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)},
-		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "missing"}, Payload: json.RawMessage(`{"name":"missing","title":"Missing"}`)},
+		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)},
+		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "missing"}, Payload: json.RawMessage(`{"name":"missing","title":"Missing"}`)},
 	}
 	if _, err := tn.Composite(member("dana"), "composite-1", edits, now); err == nil {
 		t.Fatal("a composite with a bad edit applied")
 	}
 	// Nothing half-applied: the first edit's title is unchanged.
-	visit, ok := platform.Get[construction.Object](tn.caller(member("dana"), tn.app(construction.ID), false), "visit")
+	visit, ok := platform.Get[build.Object](tn.caller(member("dana"), tn.app(build.ID), false), "visit")
 	if !ok || visit.Title != "Visit" {
 		t.Fatalf("the refused composite changed the first edit: %+v", visit)
 	}
@@ -538,7 +549,7 @@ func TestCompositeEditsAllOrNothing(t *testing.T) {
 	if err != nil || answer.Applied != 1 {
 		t.Fatalf("composite: %+v %v", answer, err)
 	}
-	visit, _ = platform.Get[construction.Object](tn.caller(member("dana"), tn.app(construction.ID), false), "visit")
+	visit, _ = platform.Get[build.Object](tn.caller(member("dana"), tn.app(build.ID), false), "visit")
 	if visit.Title != "Visit today" {
 		t.Fatalf("the composite did not apply: %+v", visit)
 	}
@@ -554,7 +565,7 @@ func TestStagedResultChannel(t *testing.T) {
 		// The schema above is intentionally lax; the check may pass or refuse.
 		t.Log("operation check accepted the report operation")
 	}
-	answer, handle, err := tn.staged.output(op, "call-1", big)
+	answer, handle, err := tn.staged.Output(op, "call-1", big)
 	if err != nil {
 		t.Fatalf("staged output: %v", err)
 	}
@@ -572,7 +583,7 @@ func TestStagedResultChannel(t *testing.T) {
 		func(h *platform.StagedResult) { h.Tenant = "other" },
 		func(h *platform.StagedResult) { h.Call = "other" },
 		func(h *platform.StagedResult) { h.Key = "uploads/other" },
-		func(h *platform.StagedResult) { h.Size = maxStagedOutputBytes + 1 },
+		func(h *platform.StagedResult) { h.Size = computeowner.MaxStagedOutputBytes + 1 },
 	} {
 		foreign := *handle
 		change(&foreign)
@@ -582,11 +593,11 @@ func TestStagedResultChannel(t *testing.T) {
 	}
 	// Inline results stay inline.
 	small := json.RawMessage(`{"note":"ok"}`)
-	_, inline, err := tn.staged.output(op, "call-2", small)
+	_, inline, err := tn.staged.Output(op, "call-2", small)
 	if err != nil || inline != nil {
 		t.Fatalf("an inline result was staged: %v %+v", err, inline)
 	}
-	if _, _, err := tn.staged.output(op, "call-3", json.RawMessage(`{"note":"`+strings.Repeat("y", 2<<20)+`"}`)); err == nil {
+	if _, _, err := tn.staged.Output(op, "call-3", json.RawMessage(`{"note":"`+strings.Repeat("y", 2<<20)+`"}`)); err == nil {
 		t.Fatal("an over-budget result was accepted")
 	}
 	// The channel's bytes are the sealed ones.

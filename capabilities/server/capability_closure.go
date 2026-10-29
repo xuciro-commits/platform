@@ -1,5 +1,7 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -32,14 +34,14 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
-	release := t.releases.active
+	release := t.releases.Active()
 	if retained != nil {
 		release = *retained
 	}
 	if release == "" {
 		return candidate, "", nil
 	}
-	saved, err := t.releases.candidate(release)
+	saved, err := t.releases.Candidate(release)
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
@@ -55,9 +57,9 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 		// after a later compute-only activation. Resolve only an exact saved
 		// closure, never a caller-selected release or an arbitrary descriptor.
 		if retained == nil && sourceVersion != "" {
-			ids := t.releases.ids()
+			ids := t.releases.Ids()
 			for _, id := range ids {
-				prior, err := t.releases.candidate(id)
+				prior, err := t.releases.Candidate(id)
 				if err != nil {
 					continue
 				}
@@ -81,7 +83,7 @@ func sameRetainedCapability(current, retained platform.ReleaseCandidate) bool {
 		if index < 0 {
 			return false
 		}
-		same, err := immutableCodeAssetMatches(current.Assets[index], original)
+		same, err := releaseowner.ImmutableCodeAssetMatches(current.Assets[index], original)
 		if err != nil || !same {
 			return false
 		}

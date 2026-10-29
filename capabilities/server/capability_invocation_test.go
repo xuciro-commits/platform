@@ -1,24 +1,27 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import trialowner "platformserver/studio/trials"
+
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
+
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
+
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
 func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 	at := time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC)
-	tenant, err := NewTenant("cap-approval", NewConsole("cap-approval", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder, flow.ID: flow.Admin}}}, Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{construction.ID: construction.User}}}), work.New("cap-approval"), flow.New("cap-approval"), build.New("cap-approval"))
+	tenant, err := NewTenant("cap-approval", newConsole("cap-approval", platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, automation.ID: automation.Admin}}}, platform.Seat{Subjects: []string{"user"}, Member: platform.Member{ID: "user", Roles: map[string]string{build.ID: build.User}}}), work.New("cap-approval"), automation.New("cap-approval"), build.New("cap-approval"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,15 +30,15 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 	user, _ := tenant.Member("user")
 	submit := func(member platform.Member, key, schema, typ, id string, payload any) {
 		t.Helper()
-		if _, problem := tenant.Submit(member, &pb.Submission{TenantId: tenant.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}, at); problem != nil {
+		if _, problem := tenant.Submit(member, &pb.Submission{TenantId: tenant.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}, at); problem != nil {
 			t.Fatal(problem.Message)
 		}
 	}
-	object := map[string]any{"name": "review", "title": "Review", "fields": []any{}, "states": []construction.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "approved", Title: "Approved"}}, "actions": []map[string]any{{"name": "approve", "title": "Approve", "from": []string{"open"}, "to": "approved", "roles": []string{construction.User}, "approval": map[string]any{"pending": "pending", "levels": []map[string]string{{"title": "Builder", "role": construction.Builder}}}}}}
-	submit(builder, "object", construction.ObjectType+".create", construction.ObjectType, "O", object)
-	submit(builder, "publish", construction.SchemaPublish, construction.ObjectType, "O", struct{}{})
+	object := map[string]any{"name": "review", "title": "Review", "fields": []any{}, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "pending", Title: "Pending"}, {Name: "approved", Title: "Approved"}}, "actions": []map[string]any{{"name": "approve", "title": "Approve", "from": []string{"open"}, "to": "approved", "roles": []string{build.User}, "approval": map[string]any{"pending": "pending", "levels": []map[string]string{{"title": "Builder", "role": build.Builder}}}}}}
+	submit(builder, "object", build.ObjectType+".create", build.ObjectType, "O", object)
+	submit(builder, "publish", build.SchemaPublish, build.ObjectType, "O", struct{}{})
 	submit(user, "row", "build.review.create", "build.review", "R", struct{}{})
-	request := platform.CapabilityInvocation{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetAction, Name: "build.review.approve"}, Key: "approve", Target: "R", Inputs: json.RawMessage(`{}`)}
+	request := platform.CapabilityInvocation{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.review.approve"}, Key: "approve", Target: "R", Inputs: json.RawMessage(`{}`)}
 	result, problem := tenant.InvokeCapability(user, request, at)
 	if problem != nil {
 		t.Fatal(problem.Message)
@@ -48,12 +51,12 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 	if problem != nil || string(again.Result) != string(result.Result) || again.State != "pending" {
 		t.Fatal("retry replaced the canonical approval receipt")
 	}
-	submit(builder, "process", construction.ProcessType+".create", construction.ProcessType, "P", map[string]any{"name": "review", "title": "Review flow", "object": "build.review", "when": "open", "steps": []construction.ProcessStep{{Name: "approve", Kind: "action", Act: "approve", Next: "end"}, {Name: "end", Kind: "end"}}})
-	submit(builder, "process-publish", construction.SchemaProcess, construction.ProcessType, "P", struct{}{})
+	submit(builder, "process", build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review flow", "object": "build.review", "when": "open", "steps": []build.ProcessStep{{Name: "approve", Kind: "action", Act: "approve", Next: "end"}, {Name: "end", Kind: "end"}}})
+	submit(builder, "process-publish", build.SchemaProcess, build.ProcessType, "P", struct{}{})
 	submit(user, "second-row", "build.review.create", "build.review", "R2", struct{}{})
 	tenant.Work(at)
-	process, _ := tenant.RecordOf(builder, flow.InstanceType, "build.review:R2", at)
-	pending := process.Record.(flow.FlowInstance)
+	process, _ := tenant.RecordOf(builder, automation.InstanceType, "build.review:R2", at)
+	pending := process.Record.(automation.FlowInstance)
 	if pending.State != "waiting" || len(pending.Tokens) != 1 || pending.Tokens[0].Waits != "approval" {
 		t.Fatalf("flow ran past an unapproved owner action: %+v", pending)
 	}
@@ -62,8 +65,8 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 		t.Fatal(problem.Message)
 	}
 	tenant.Work(at.Add(2 * time.Second))
-	final, _ := tenant.RecordOf(builder, flow.InstanceType, pending.ID, at.Add(2*time.Second))
-	if final.Record.(flow.FlowInstance).State != "done" {
+	final, _ := tenant.RecordOf(builder, automation.InstanceType, pending.ID, at.Add(2*time.Second))
+	if final.Record.(automation.FlowInstance).State != "done" {
 		t.Fatal("the original approved action did not resume its waiting flow token")
 	}
 
@@ -71,8 +74,8 @@ func TestCapabilityActionPreservesApprovalReceipt(t *testing.T) {
 func TestNativeAIFunctionUsesOwnerGrantsWithoutBuildRole(t *testing.T) {
 	approveTestInference(t, "http://candidate.invalid", "probe")
 	at := time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC)
-	native := newSampleOwner("native-ai", platform.Manifest{ID: "source", Title: "Source", Version: "1", Actions: platform.NewCatalog(), Roles: []string{"viewer", "reader"}, Entities: []platform.Entity{{Type: "source.item", Title: "Item", Model: querySampleRow{}, Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"viewer": platform.ScopeTenant, "reader": platform.ScopeTenant}}, Seed: []any{querySampleRow{Record: platform.Record{ID: "S"}, Label: "Synthetic"}}}}, Functions: []platform.AIFunction{platform.RecordAdviceFunction("source.item", []string{"label"}, []string{"viewer"})}})
-	tenant, err := NewTenant("native-ai", NewConsole("native-ai", Seat{Subjects: []string{"viewer"}, Member: platform.Member{ID: "viewer", Roles: map[string]string{"source": "viewer"}}}, Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{"source": "reader"}}}, seatOf("app:candidate-test", "platform:admin", "ai:admin")), ai.New("native-ai"), native, build.New("native-ai"))
+	native := trialowner.NewSampleOwner("native-ai", platform.Manifest{ID: "source", Title: "Source", Version: "1", Actions: platform.NewCatalog(), Roles: []string{"viewer", "reader"}, Entities: []platform.Entity{{Type: "source.item", Title: "Item", Model: querySampleRow{}, Scope: platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{"viewer": platform.ScopeTenant, "reader": platform.ScopeTenant}}, Seed: []any{querySampleRow{Record: platform.Record{ID: "S"}, Label: "Synthetic"}}}}, Functions: []platform.AIFunction{platform.RecordAdviceFunction("source.item", []string{"label"}, []string{"viewer"})}})
+	tenant, err := NewTenant("native-ai", newConsole("native-ai", platform.Seat{Subjects: []string{"viewer"}, Member: platform.Member{ID: "viewer", Roles: map[string]string{"source": "viewer"}}}, platform.Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{"source": "reader"}}}, seatOf("app:candidate-test", "platform:admin", "ai:admin")), ai.New("native-ai"), native, build.New("native-ai"))
 	if err != nil {
 		t.Fatal(err)
 	}

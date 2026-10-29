@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "../index";
 import type * as PageUI from "../pageui/types";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
@@ -8,8 +9,8 @@ import { PageSessionStore } from "./Session";
 import { useApplicationQueries } from "./ApplicationQueries";
 import { usePageQueries } from "./PageQueries";
 
-const host=vi.hoisted(()=>({source:undefined as RecordSource|undefined,definitions:[] as Api.Definition[]}));
-vi.mock("../index",()=>({useHost:()=>host,findDefinition:(definitions:Api.Definition[],ref:Api.AssetRef)=>definitions.find(definition=>definition.ref.app===ref.app&&definition.ref.kind===ref.kind&&definition.ref.name===ref.name)}));
+const host=vi.hoisted(()=>({source:undefined as RecordSource|undefined,definitions:[] as WorkspaceDefinition[]}));
+vi.mock("../index",()=>({useHost:()=>host,findDefinition:(definitions:WorkspaceDefinition[],ref:Api.AssetRef)=>definitions.find(definition=>definition.ref.app===ref.app&&definition.ref.kind===ref.kind&&definition.ref.name===ref.name)}));
 afterEach(cleanup);
 const object={app:"sample",kind:"object" as const,name:"sample.item"};
 const plan:Api.PageQuery={object,limit:10,conditions:[{field:"state",op:"in",value:{literal:{kind:"string-set",values:["open","held"]}}}]};
@@ -33,7 +34,7 @@ test("application query controls retain selected filters against the base signat
 
 test("an application interface window exposes the original compiler's fixed ordering",()=>{
  const from=source(),binding={ref:{app:"sample",kind:"query" as const,name:"coded"},sourceVersion:"one"};
- host.definitions=[{ref:binding.ref,version:"one",query:{interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[{name:"name",type:"text"}]},implementations:["sample.item"],limit:10}} as Api.Definition];
+ host.definitions=[{ref:binding.ref,version:"one",query:{interface:"sample.coded",interfaceShape:{name:"sample.coded",fields:[{name:"name",type:"text"}]},implementations:["sample.item"],limit:10}} as WorkspaceDefinition];
  const session=new ApplicationSession({rows:variable("application")},{source:from,queries:{items:{object:{app:"",kind:"",name:""},interface:"sample.coded",query:binding,limit:10}}});
  const {result}=renderHook(()=>useApplicationQueries(session,{})),window=result.current.windows.rows!;
  expect(window.query.sort).toEqual(["id"]);expect(window.sortLocked).toBe(true);

@@ -1,23 +1,25 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"errors"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"strings"
 	"testing"
 	"time"
 
 	"platformserver/apps/ai"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
 func TestRuntimeUsageAcceptsBeforeMeterAndRecoversWithoutCall(t *testing.T) {
 	const id = "runtime-meter"
 	at := time.Date(2026, 10, 11, 10, 0, 0, 0, time.UTC)
-	build := func() *Tenant { return composeTenant(t, id, []Seat{seatOf("ana")}, ai.New(id)) }
+	build := func() *Tenant { return composeTenant(t, id, []platform.Seat{seatOf("ana")}, ai.New(id)) }
 	live := build()
 	m := memberOf(t, live, "ana")
 	u := ai.Usage{Member: m.ID, Model: "fixture/model", Input: 7, Output: 3, At: at}
@@ -56,20 +58,20 @@ func TestRuntimeAgentAcceptsStepAndMeterTogether(t *testing.T) {
 	const id = "runtime-agent"
 	at := time.Date(2026, 10, 11, 11, 0, 0, 0, time.UTC)
 	build := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("ana", "desk:clerk", "agent:admin")}, ai.New(id), work.New(id), flow.New(id), NewAgents(id), newDesk(id))
+		return composeTenant(t, id, []platform.Seat{seatOf("ana", "desk:clerk", "agent:admin")}, ai.New(id), work.New(id), automation.New(id), agentowner.New(id), newDesk(id))
 	}
 	live := build()
-	decide(t, live, "ana", AgentApp, SchemaRunStart, RunType, "R", map[string]string{"agent": "desk.triage", "goal": "Answer"}, at)
+	decide(t, live, "ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "R", map[string]string{"agent": "desk.triage", "goal": "Answer"}, at)
 	image, _, err := live.Snapshot(func() int64 { return 0 })
 	if err != nil {
 		t.Fatal(err)
 	}
-	get := func(tn *Tenant) AgentRunRecord {
-		r, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "R")
+	get := func(tn *Tenant) platform.AgentRunRecord {
+		r, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "R")
 		return r
 	}
 	initial := get(live)
-	step := stepBody{Run: "R", Content: "Finished", Usage: ai.Usage{Member: "agent:desk.triage", Agent: true, Model: "fixture/model", Input: 3, Output: 2, At: at}}
+	step := platform.AgentResultStep{Run: "R", Content: "Finished", Usage: ai.Usage{Member: "agent:desk.triage", Agent: true, Model: "fixture/model", Input: 3, Output: 2, At: at}}
 	live.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append failed") }
 	live.agentStep(step, at)
 	if get(live).Revision != initial.Revision || len(live.ai.Usage()) != 0 {
@@ -112,7 +114,7 @@ func TestRuntimeWorkAndEffectAcceptInRecordMode(t *testing.T) {
 	var entries []Entry
 	live.Record = func(e Entry) { entries = append(entries, e) }
 	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I", map[string]any{"name": "Bolt", "qty": 2, "line": "L1"}, at)
-	task := live.work.queues["worker"][0]
+	task := live.work.Queues["worker"][0]
 	live.mu.Lock()
 	outcome := live.attempt(task, at, false)
 	live.mu.Unlock()
@@ -128,7 +130,7 @@ func TestRuntimeWorkAndEffectAcceptInRecordMode(t *testing.T) {
 	if live.quarantined() || len(entries) != 3 {
 		t.Fatalf("effect Record acceptance: %v", live.fault.Load())
 	}
-	if _, err := resultformat.DecodeEffect(entries[2].Body); err != nil {
+	if _, err := acceptedformat.DecodeEffect(entries[2].Body); err != nil {
 		t.Fatal(err)
 	}
 }

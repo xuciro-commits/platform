@@ -1,11 +1,14 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import agentowner "platformserver/engine/agents"
+
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -13,12 +16,12 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
+
 	"platformserver/apps/core"
-	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 )
@@ -26,15 +29,15 @@ import (
 // Languages: declarations are served in the request's language,
 // records never; every platform app's text has a Chinese translation.
 func TestLanguages(t *testing.T) {
-	tn, err := NewTenant("t-1", NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
-		Roles: map[string]string{PlatformApp: Admin, work.ID: "member", enterprise.ID: "admin", core.ID: core.Steward}}},
-		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{work.ID: "member"}}},
-		Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{work.ID: "member"}}}),
-		enterprise.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), flow.New("t-1"), ai.New("t-1"), NewAgents("t-1"), knowledge.New("t-1"), core.New("t-1"), build.New("t-1"))
+	tn, err := NewTenant("t-1", newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
+		Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, work.ID: "member", enterprise.ID: "admin", core.ID: core.Steward}}},
+		platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{work.ID: "member"}}},
+		platform.Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{work.ID: "member"}}}),
+		enterprise.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), automation.New("t-1"), ai.New("t-1"), agentowner.New("t-1"), knowledge.New("t-1"), core.New("t-1"), build.New("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, app := range []string{PlatformApp, enterprise.ID, relations.ID, work.ID, flow.ID, ai.ID, AgentApp, knowledge.ID, core.ID, construction.ID} {
+	for _, app := range []string{controlowner.PlatformApp, enterprise.ID, relations.ID, work.ID, automation.ID, ai.ID, platform.AgentApp, knowledge.ID, core.ID, build.ID} {
 		if missing := tn.Untranslated(app, "zh-CN"); len(missing) > 0 {
 			t.Errorf("%s lacks Chinese for %q", app, missing)
 		}
@@ -99,7 +102,7 @@ func TestLanguages(t *testing.T) {
 			t.Errorf("Say(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
-	if !tn.i18n.says("zh-CN", "Archive a task: it leaves lists but stays referenced and in history.", 0) || tn.i18n.says("zh-CN", "Archive a gizmo: it leaves lists but stays referenced and in history.", 0) {
+	if !tn.i18n.CanSay("zh-CN", "Archive a task: it leaves lists but stays referenced and in history.") || tn.i18n.CanSay("zh-CN", "Archive a gizmo: it leaves lists but stays referenced and in history.") {
 		t.Errorf("a pattern counts only when the language says its every value")
 	}
 	if got := tn.i18n.Say("", "Overdue: x"); got != "Overdue: x" {
@@ -111,9 +114,9 @@ func TestLanguages(t *testing.T) {
 	keys := 0
 	decide := func(who, schema, typ, id string, payload any) string {
 		keys++
-		m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(who)
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(who)
 		raw, _ := json.Marshal(payload)
-		if _, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: PlatformApp, IdempotencyKey: fmt.Sprint("l", keys),
+		if _, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprint("l", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
 			return err.Error()
 		}
@@ -125,15 +128,15 @@ func TestLanguages(t *testing.T) {
 		{"bo", "bo", "fr", "ERROR_CODE_INVALID_ARGUMENT"},  // a language the tenant speaks
 		{"ana", "cy", "en", "ok"},
 	} {
-		if got := decide(c.who, SchemaProfileUpdate, ProfileType, c.id, map[string]string{"language": c.language}); got != c.want {
+		if got := decide(c.who, controlowner.SchemaProfileUpdate, controlowner.ProfileType, c.id, map[string]string{"language": c.language}); got != c.want {
 			t.Errorf("%s sets %s's language %s: %s, want %s", c.who, c.id, c.language, got, c.want)
 		}
 	}
-	decide("ana", SchemaProfileUpdate, ProfileType, "cy", map[string]string{"language": ""})
+	decide("ana", controlowner.SchemaProfileUpdate, controlowner.ProfileType, "cy", map[string]string{"language": ""})
 	if got := callAs("bo-token", "/v1/me", "en"); !strings.Contains(got, `"language":"zh-CN"`) || !strings.Contains(got, `"preferred":"zh-CN"`) {
 		t.Errorf("bo's own language wins over the browser's: %s", got)
 	}
-	if got := decide("ana", SchemaSettingSet, SettingType, PlatformApp+"/"+SettingLanguage, map[string]string{"value": "zh-CN"}); got != "ok" {
+	if got := decide("ana", controlowner.SchemaSettingSet, controlowner.SettingType, controlowner.PlatformApp+"/"+controlowner.SettingLanguage, map[string]string{"value": "zh-CN"}); got != "ok" {
 		t.Fatalf("tenant default: %s", got)
 	}
 	for _, c := range []struct{ language, want string }{{"", `"language":"zh-CN"`}, {"en-US", `"language":""`}, {"fr", `"language":"zh-CN"`}} {
@@ -146,16 +149,16 @@ func TestLanguages(t *testing.T) {
 // The tenant's own words are the last dictionary layer: they say
 // what no shipped dictionary does, override what one does, and go when removed.
 func TestTenantWords(t *testing.T) {
-	tn, err := NewTenant("t-w", NewConsole("t-w"))
+	tn, err := NewTenant("t-w", newConsole("t-w"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := tn.i18n.Say("zh-CN", "Pallet"); got != "Pallet" {
 		t.Fatalf("before: %q", got)
 	}
-	tn.words.set("zh-CN", "Pallet", "托盘")
-	tn.words.set("zh-CN", "Change app setting", "改设置")
-	tn.i18n.reset()
+	tn.words.Set("zh-CN", "Pallet", "托盘")
+	tn.words.Set("zh-CN", "Change app setting", "改设置")
+	tn.i18n.Reset()
 	if got := tn.i18n.Say("zh-CN", "Pallet"); got != "托盘" {
 		t.Fatalf("own word: %q", got)
 	}
@@ -165,13 +168,13 @@ func TestTenantWords(t *testing.T) {
 	if got := tn.i18n.Say("zh-CN", "Create pallet"); got != "新建托盘" {
 		t.Fatalf("pattern over own word: %q", got)
 	}
-	tn.words.set("zh-CN", "Pallet", "")
-	tn.i18n.reset()
+	tn.words.Set("zh-CN", "Pallet", "")
+	tn.i18n.Reset()
 	if got := tn.i18n.Say("zh-CN", "Pallet"); got != "Pallet" {
 		t.Fatalf("removed: %q", got)
 	}
-	tn.words.set("en", "托盘", "Pallet")
-	tn.i18n.reset()
+	tn.words.Set("en", "托盘", "Pallet")
+	tn.i18n.Reset()
 	req := httptest.NewRequest("GET", "/v1/entities", nil)
 	req.Header.Set("Accept-Language", "en-US,zh-CN;q=0.5")
 	lang, asked := tn.asked(req)
@@ -186,7 +189,7 @@ func TestAppScopedEntityTranslation(t *testing.T) {
 	manifest := sample.Manifest()
 	manifest.Entities[0].Title = "Account"
 	manifest.Languages = platform.Languages{"zh-CN": {"Account": "样本", "Accounts": "样本"}}
-	tn, err := NewTenant(tenant, NewConsole(tenant, seatOf("u", "core:steward", "stock:clerk")), core.New(tenant), definitionStock{stock: sample, manifest: manifest})
+	tn, err := NewTenant(tenant, newConsole(tenant, seatOf("u", "core:steward", "stock:clerk")), core.New(tenant), definitionStock{stock: sample, manifest: manifest})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,8 +209,8 @@ func TestAppScopedEntityTranslation(t *testing.T) {
 	if got := byType["core.location"]; got == nil || got["title"] != "库位" || got["plural"] != "库位" {
 		t.Errorf("core.location: want title=库位, plural=库位; got %v", got)
 	}
-	tn.words.set("zh-CN", "Account", "租户科目")
-	tn.i18n.reset()
+	tn.words.Set("zh-CN", "Account", "租户科目")
+	tn.i18n.Reset()
 	for _, app := range []string{core.ID, "stock"} {
 		if got := tn.i18n.SayInApp(app, "zh-CN", "Account"); got != "租户科目" {
 			t.Errorf("%s ignored tenant override of native dictionary: %s", app, got)

@@ -196,7 +196,7 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 	if started.IsZero() || now.IsZero() || t.quarantined() {
 		return nil
 	}
-	inventory, ok := t.files().(FileInventory)
+	inventory, ok := t.files().(platform.FileInventory)
 	if !ok {
 		return fmt.Errorf("Flow artifact file inventory is unavailable")
 	}
@@ -206,15 +206,15 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 		cutoff = recoveryCutoff
 	}
 	prefix := t.ID + "/artifacts/flow/"
-	var candidates []StoredFile
+	var candidates []platform.StoredFile
 	cursor := ""
 	seen := 0
 	for {
-		page, err := inventory.Inventory(ctx, prefix, cursor, maxFileInventoryPage)
+		page, err := inventory.Inventory(ctx, prefix, cursor, platform.MaxFileInventoryPage)
 		if err != nil {
 			return err
 		}
-		if len(page.Files) > maxFileInventoryPage {
+		if len(page.Files) > platform.MaxFileInventoryPage {
 			return fmt.Errorf("Flow artifact inventory exceeded its page bound")
 		}
 		previous := cursor

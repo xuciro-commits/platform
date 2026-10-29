@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"testing"
 	"time"
 
@@ -64,9 +65,9 @@ func (a *connectorOrderApp) Submit(c platform.Caller, sub *pb.Submission, now ti
 
 func connectorOrderTenant(t *testing.T, id string) *Tenant {
 	t.Helper()
-	seat := Seat{Subjects: []string{"gateway"}, Member: platform.Member{
+	seat := platform.Seat{Subjects: []string{"gateway"}, Member: platform.Member{
 		ID: "gateway", Roles: map[string]string{"connector-order": "clerk"}}}
-	tn, err := NewTenant(id, NewConsole(id, seat), newConnectorOrderApp(id))
+	tn, err := NewTenant(id, newConsole(id, seat), newConnectorOrderApp(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 	if refusal != nil || again.GetChangeId() != receipt.GetChangeId() || len(entries) != 1 {
 		t.Fatalf("a duplicate reran the cursor transition: %v", refusal)
 	}
-	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
+	batch, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(batch.Deliveries) != 1 || batch.Deliveries[0].To != "cursor-1" {
 		t.Fatalf("result omitted the cursor transition: %+v %v", batch, err)
 	}
@@ -135,7 +136,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 
 	damaged := entries[0]
 	batch.Deliveries[0].Before = "not-the-prior-mark"
-	batch.Digest, _ = resultformat.DigestBatch(batch)
+	batch.Digest, _ = acceptedformat.DigestBatch(batch)
 	damaged.Body, _ = json.Marshal(batch)
 	isolated := compose()
 	if err := isolated.recoverEntries([]Entry{damaged}); err == nil || !isolated.quarantined() {

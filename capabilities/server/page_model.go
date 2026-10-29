@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	pageowner "platformserver/studio/pages"
 	"slices"
 	"strings"
 	"time"
@@ -53,38 +54,6 @@ type PageModelResult struct {
 	LabelField    string                                       `json:"labelField,omitempty"`
 	Sort          []string                                     `json:"sort,omitempty"`
 	SortLocked    bool                                         `json:"sortLocked,omitempty"`
-}
-
-func (t *Tenant) checkModelQueries(page platform.Page) error {
-	for _, section := range page.Sections {
-		for _, m := range section.ModelBindings() {
-			sets := []*platform.ModelRecordSet{m.Set}
-			if m.Options != nil {
-				sets = append(sets, m.Options.Set)
-			}
-			for _, set := range sets {
-				if set == nil || set.Query == nil {
-					continue
-				}
-				named := querySourceDefinition(t.definitions, set.Query)
-				if named == nil || named.Query == nil || named.Query.Object != m.Type {
-					return fmt.Errorf("section %s: retained model query type or version is unavailable", section.ID)
-				}
-				if section.Widget == "record-picker" && len(named.Query.Sort) > 0 && !slices.Equal(named.Query.Sort, []string{"id"}) {
-					return fmt.Errorf("section %s: model picker needs its original ID ordering", section.ID)
-				}
-				if named.Query.By != "" {
-					root := page.RecordResourceObject(set.RecordVariable)
-					info, ok := t.entity(m.Type)
-					f, found := info.Field(named.Query.By)
-					if !ok || !found || f.Type != "reference" || root.Name != f.Ref {
-						return fmt.Errorf("section %s: model query needs its declared source record", section.ID)
-					}
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func (t *Tenant) modelCriteria(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
@@ -140,7 +109,12 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 		if err := page.NormalizeModelBindings(t.entity); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
-		for _, section := range page.Sections {
+		projected, err := page.Safety()
+		if err != nil {
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+		page = projected
+		for _, section := range page.DataBindings {
 			for _, model := range section.ModelBindings() {
 				if model.Set != nil && model.Set.Query != nil && model.Set.Query.SourceVersion == "" {
 					if binding, ok := (hostView{t: t}).ModelQueryBinding(model.Set.Query.Ref); ok {
@@ -163,27 +137,32 @@ func (t *Tenant) readPageModel(member platform.Member, request PageModelRead, at
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model page is unavailable")
 		}
 	}
-	if err := page.CheckModelBindings(t.entity, t.modelCriteria, t.services.Rules); err != nil {
+	projectedPage, projectionError := page.Safety()
+	if projectionError != nil {
+		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, projectionError.Error())
+	}
+	page = projectedPage
+	for _, binding := range page.DataBindings {
+		if err := page.CheckDataBinding(binding, t.entity, t.modelCriteria, t.services.Rules); err != nil {
+			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+	}
+
+	if err := pageowner.CheckModelQueries(page, t.definitions, t.entity); err != nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	if page.Document == nil {
-		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model bindings need a page document")
-	}
-	if err := t.checkModelQueries(page); err != nil {
-		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	index := slices.IndexFunc(page.Sections, func(section platform.Section) bool { return section.ID == request.Section })
-	if index < 0 || page.Sections[index].PrimaryModel() == nil {
+	index := slices.IndexFunc(page.DataBindings, func(section platform.PageDataBinding) bool { return section.ID == request.Section })
+	if index < 0 || page.DataBindings[index].PrimaryModel() == nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Model section is unavailable")
 	}
-	section := page.Sections[index]
-	if section.Composite != nil {
+	section := page.DataBindings[index]
+	if len(section.Models) > 0 {
 		return t.readPageComposite(member, page, section, request, at)
 	}
 	return t.readPageModelSource(member, page, section, request, at)
 }
 
-func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page, section platform.Section, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
+func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
 	result := PageModelResult{Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}}
 	model := section.Model
 	result.Model, result.Object = model, model.Type
@@ -215,26 +194,27 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 		}
 	}
 	for name, raw := range request.Values {
-		variable, ok := page.Document.Variables[name]
+		variable, ok := page.InputSchema.Variables[name]
 		if !ok || variable.Type == "record" || len(raw) > 64<<10 {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Model input is not a declared scalar variable")
 		}
 	}
-	effective := page.EffectiveModelSection(section, visibleLookup)
 	fieldRefs := slices.Clone(model.Fields)
-	for _, name := range effective.Fields {
-		if !slices.ContainsFunc(fieldRefs, func(f platform.FieldRef) bool { return f.Key() == name }) {
-			fieldRefs = append(fieldRefs, platform.FieldRef{Name: name})
+	for _, field := range section.Fields {
+		if !slices.ContainsFunc(fieldRefs, func(f platform.FieldRef) bool { return f.Key() == field.Key() }) {
+			fieldRefs = append(fieldRefs, field)
 		}
 	}
-	// A model control keeps its model's type-based field dispatch even when
-	// no column list is configured. The transport never grants a write.
-	if section.Widget == "form" {
-		result.Fields = slices.Clone(visibleInfo.Fields)
+	for _, fields := range section.FieldSlots {
+		for _, field := range fields {
+			if !slices.ContainsFunc(fieldRefs, func(f platform.FieldRef) bool { return f.Key() == field.Key() }) {
+				fieldRefs = append(fieldRefs, field)
+			}
+		}
 	}
 	projected := platform.ModelFields(visibleInfo, model, visibleLookup)
 	for _, field := range projected.Fields {
-		if slices.Contains(effective.Fields, field.Name) || slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return ref.Key() == field.Name }) {
+		if slices.ContainsFunc(fieldRefs, func(ref platform.FieldRef) bool { return ref.Key() == field.Name }) {
 			result.Fields = append(result.Fields, field)
 		}
 	}
@@ -253,7 +233,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 		set = model.Options.Set
 	}
 	if set != nil && set.Query != nil {
-		if named := querySourceDefinition(t.definitions, set.Query); named != nil && named.Query != nil && len(named.Query.Sort) > 0 {
+		if named := pageowner.QuerySourceDefinition(t.definitions, set.Query); named != nil && named.Query != nil && len(named.Query.Sort) > 0 {
 			result.Sort = slices.Clone(named.Query.Sort)
 			result.SortLocked = true
 		}
@@ -455,7 +435,7 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 	return result, nil
 }
 
-func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section platform.Section, request PageModelRead, at time.Time) ([]map[string]any, bool, *platform.AuthzCollection, *kernel.Error) {
+func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) ([]map[string]any, bool, *platform.AuthzCollection, *kernel.Error) {
 	model := section.Model
 	set := model.Set
 	if model.Options != nil && model.Options.Set != nil {
@@ -477,7 +457,7 @@ func (t *Tenant) pageModelRows(c platform.Caller, page platform.Page, section pl
 			return nil, false, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Declared collection object changed")
 		}
 		source, partial, authorization = value.Records, value.Partial, value.Authorization
-	} else if reference := request.Records["$record"]; reference.ID != "" && section.Widget != "table" && section.Widget != "record-picker" {
+	} else if reference := request.Records["$record"]; reference.ID != "" && section.Kind == "record" {
 		value, refusal := c.ReadRecord(reference.Object, reference.ID, at)
 		if refusal != nil {
 			return nil, false, nil, refusal

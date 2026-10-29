@@ -10,24 +10,25 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
 
 	"platformserver/apps/ai"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 const testCredentialKey = "1919191919191919191919191919191919191919191919191919191919191919"
 
 func credentialTenant(t *testing.T, id string) *Tenant {
-	return composeTenant(t, id, []Seat{seatOf("admin", PlatformApp+":"+Admin, "ai:admin"), seatOf("ai-admin", "ai:admin"), seatOf("user", "ai:user")}, ai.New(id))
+	return composeTenant(t, id, []platform.Seat{seatOf("admin", controlowner.PlatformApp+":"+controlowner.Admin, "ai:admin"), seatOf("ai-admin", "ai:admin"), seatOf("user", "ai:user")}, ai.New(id))
 }
-func sealCredential(t *testing.T, tn *Tenant, who string, w CredentialWrite, value string) CredentialWrite {
+func sealCredential(t *testing.T, tn *Tenant, who string, w platform.CredentialWrite, value string) platform.CredentialWrite {
 	t.Helper()
 	handler := NewHost(Tokens(map[string]string{who: who}), tn).Handler()
-	request := httptest.NewRequest("POST", "/v1/credentials/seal", bytes.NewReader(platform.Raw(CredentialSealRequest{CredentialWrite: w, Value: value})))
+	request := httptest.NewRequest("POST", "/v1/credentials/seal", bytes.NewReader(platform.Raw(platform.CredentialSealRequest{CredentialWrite: w, Value: value})))
 	request.Header.Set("Authorization", "Bearer "+who)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -37,7 +38,7 @@ func sealCredential(t *testing.T, tn *Tenant, who string, w CredentialWrite, val
 	if value != "" && strings.Contains(response.Body.String(), value) {
 		t.Fatal("seal response exposed plaintext")
 	}
-	var sealed CredentialWrite
+	var sealed platform.CredentialWrite
 	if err := json.Unmarshal(response.Body.Bytes(), &sealed); err != nil {
 		t.Fatal(err)
 	}
@@ -56,12 +57,12 @@ func TestCredentialAcceptedLifecycleAndRecovery(t *testing.T) {
 		return entry.Body, nil
 	}
 	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
-	config := CredentialWrite{CredentialDefinition: CredentialDefinition{ID: "models", Title: "Models", Kind: "api-key", Source: "managed", Bindings: []CredentialBinding{{Consumer: "ai/models", Origin: "https://models.example.test"}}}}
+	config := platform.CredentialWrite{CredentialDefinition: platform.CredentialDefinition{ID: "models", Title: "Models", Kind: "api-key", Source: "managed", Bindings: []platform.CredentialBinding{{Consumer: "ai/models", Origin: "https://models.example.test"}}}}
 	sealed := sealCredential(t, tn, "admin", config, "private-test-key-01")
 	if len(entries) != 0 {
 		t.Fatal("sealing created durable state")
 	}
-	original := submission(tn, memberOf(t, tn, "admin"), PlatformApp, SchemaCredentialSave, CredentialType, "models", sealed)
+	original := submission(tn, memberOf(t, tn, "admin"), controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "models", sealed)
 	fail = true
 	if _, refusal := tn.Submit(memberOf(t, tn, "admin"), original, now); refusal == nil {
 		t.Fatal("failed append accepted")
@@ -95,32 +96,32 @@ func TestCredentialAcceptedLifecycleAndRecovery(t *testing.T) {
 	if _, refusal := tn.Read(memberOf(t, tn, "user"), "credentials"); refusal == nil {
 		t.Fatal("ordinary user read credential catalog")
 	}
-	if got := refuse(t, tn, "ai-admin", PlatformApp, SchemaCredentialSave, CredentialType, "models", sealed, now); got == "ok" {
+	if got := refuse(t, tn, "ai-admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "models", sealed, now); got == "ok" {
 		t.Fatal("AI administration granted credential management")
 	}
 	changed := sealed
 	changed.Title = "Changed"
 	before := len(entries)
-	if got := refuse(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "models", changed, now); got == "ok" {
+	if got := refuse(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "models", changed, now); got == "ok" {
 		t.Fatal("tampered configuration accepted")
 	}
 	if len(entries) != before {
 		t.Fatal("invalid envelope entered durable refusal history")
 	}
-	if got := refuse(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "models", map[string]any{"value": "never-save-this-plaintext"}, now); got == "ok" || len(entries) != before {
+	if got := refuse(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "models", map[string]any{"value": "never-save-this-plaintext"}, now); got == "ok" || len(entries) != before {
 		t.Fatal("plaintext entered ordinary journal")
 	}
 	other := credentialTenant(t, "another-tenant")
-	if got := refuse(t, other, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "models", sealed, now); got == "ok" {
+	if got := refuse(t, other, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "models", sealed, now); got == "ok" {
 		t.Fatal("envelope crossed tenants")
 	}
 	config.ExpectedVersion = 1
 	rotated := sealCredential(t, tn, "admin", config, "private-test-key-02")
-	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "models", rotated, now)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "models", rotated, now)
 	if value, ok := tn.credentialValue("models", "ai/models", "https://models.example.test"); !ok || string(value) != "private-test-key-02" {
 		t.Fatal("rotation did not take effect")
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaCredentialDisable, CredentialType, "models", map[string]int{"expectedVersion": 2}, now)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialDisable, controlowner.CredentialType, "models", map[string]int{"expectedVersion": 2}, now)
 	t.Setenv("PLATFORM_SECRET_MODELS", "must-not-fallback")
 	if _, ok := tn.credentialValue("models", "ai/models", "https://models.example.test"); ok {
 		t.Fatal("disabled credential fell back to environment")
@@ -128,7 +129,7 @@ func TestCredentialAcceptedLifecycleAndRecovery(t *testing.T) {
 	// A disabled value can be explicitly re-enabled without displaying or re-entering it.
 	config.ExpectedVersion = 3
 	metadata := sealCredential(t, tn, "admin", config, "")
-	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "models", metadata, now)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "models", metadata, now)
 	if value, ok := tn.credentialValue("models", "ai/models", "https://models.example.test"); !ok || string(value) != "private-test-key-02" {
 		t.Fatal("metadata edit lost the sealed value")
 	}
@@ -162,29 +163,29 @@ func TestCredentialSharedAIAndConnectionUse(t *testing.T) {
 		fmt.Fprint(w, `{"data":[{"id":"example"}]}`)
 	}))
 	defer upstream.Close()
-	origin := credentialOrigin(upstream.URL)
-	w := CredentialWrite{CredentialDefinition: CredentialDefinition{ID: "shared", Title: "Shared API", Kind: "bearer", Source: "managed", Bindings: []CredentialBinding{{Consumer: "ai/local", Origin: origin}, {Consumer: "connection/read", Origin: origin}}}}
+	origin := controlowner.CredentialOrigin(upstream.URL)
+	w := platform.CredentialWrite{CredentialDefinition: platform.CredentialDefinition{ID: "shared", Title: "Shared API", Kind: "bearer", Source: "managed", Bindings: []platform.CredentialBinding{{Consumer: "ai/local", Origin: origin}, {Consumer: "connection/read", Origin: origin}}}}
 	sealed := sealCredential(t, tn, "admin", w, "shared-test-token")
 	at := time.Now()
-	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "shared", sealed, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "shared", sealed, at)
 	decide(t, tn, "admin", "ai", "ai.provider.add", "ai.provider", "local", map[string]string{"kind": "local", "baseUrl": upstream.URL, "secret": "shared"}, at)
 	decide(t, tn, "admin", "ai", "ai.model.enable", "ai.model", "local/example", map[string]string{"access": "users"}, at)
 	if _, refusal, failure := tn.ProviderModels(memberOf(t, tn, "admin"), "local", true); refusal != nil || failure != nil {
 		t.Fatalf("provider check: %v %v", refusal, failure)
 	}
-	connection := construction.Connection{Record: platform.Record{ID: "read"}, Kind: "http", Address: upstream.URL, Secret: "shared", AllowPrivate: true}
-	rows, err := tn.readSourceWithConnection(construction.Source{URL: "records", Path: "data"}, &connection)
+	connection := build.Connection{Record: platform.Record{ID: "read"}, Kind: "http", Address: upstream.URL, Secret: "shared", AllowPrivate: true}
+	rows, err := tn.readSourceWithConnection(build.Source{URL: "records", Path: "data"}, &connection)
 	if err != nil || len(rows) != 1 || rows[0]["id"] != "example" || len(headers) != 2 || headers[0] != "Bearer shared-test-token" || headers[1] != "Bearer shared-test-token" {
 		t.Fatalf("shared AI and real connection read failed: %v %v", err, headers)
 	}
-	if _, err := tn.readSourceWithConnection(construction.Source{URL: "https://different.invalid/records", Path: "data"}, &connection); err == nil || len(headers) != 2 {
+	if _, err := tn.readSourceWithConnection(build.Source{URL: "https://different.invalid/records", Path: "data"}, &connection); err == nil || len(headers) != 2 {
 		t.Fatal("source escaped the credential's bound origin")
 	}
 	t.Setenv("PLATFORM_SECRET_DEPLOYED", "deployment-test-token")
-	deployment := CredentialWrite{CredentialDefinition: CredentialDefinition{ID: "deployment", Title: "Deployment reference", Kind: "bearer", Source: "deployment", Reference: "deployed", Bindings: []CredentialBinding{{Consumer: "connection/read", Origin: origin}}}}
-	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "deployment", deployment, at)
+	deployment := platform.CredentialWrite{CredentialDefinition: platform.CredentialDefinition{ID: "deployment", Title: "Deployment reference", Kind: "bearer", Source: "deployment", Reference: "deployed", Bindings: []platform.CredentialBinding{{Consumer: "connection/read", Origin: origin}}}}
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "deployment", deployment, at)
 	connection.Secret = "deployment"
-	if _, err := tn.readSourceWithConnection(construction.Source{URL: "records", Path: "data"}, &connection); err != nil || headers[len(headers)-1] != "Bearer deployment-test-token" {
+	if _, err := tn.readSourceWithConnection(build.Source{URL: "records", Path: "data"}, &connection); err != nil || headers[len(headers)-1] != "Bearer deployment-test-token" {
 		t.Fatalf("deployment reference did not use the same authorized connection path: %v", err)
 	}
 	decide(t, tn, "admin", "ai", "ai.provider.edit", "ai.provider", "local", map[string]string{"kind": "local", "baseUrl": upstream.URL + "/v2", "secret": "shared"}, at)
@@ -207,9 +208,9 @@ func TestCredentialSharedAIAndConnectionUse(t *testing.T) {
 func TestCredentialBindingRejectsEmptyOriginAndRepairsSavedUse(t *testing.T) {
 	t.Setenv("PLATFORM_CREDENTIAL_KEY", testCredentialKey)
 	tn := credentialTenant(t, "credential-binding-repair")
-	config := CredentialWrite{CredentialDefinition: CredentialDefinition{ID: "DeepseekApiKey", Title: "Model key", Kind: "api-key", Source: "managed", Bindings: []CredentialBinding{{Consumer: "ai/Deepseek", Origin: ""}}}}
+	config := platform.CredentialWrite{CredentialDefinition: platform.CredentialDefinition{ID: "DeepseekApiKey", Title: "Model key", Kind: "api-key", Source: "managed", Bindings: []platform.CredentialBinding{{Consumer: "ai/Deepseek", Origin: ""}}}}
 	handler := NewHost(Tokens(map[string]string{"admin": "admin"}), tn).Handler()
-	request := httptest.NewRequest("POST", "/v1/credentials/seal", bytes.NewReader(platform.Raw(CredentialSealRequest{CredentialWrite: config, Value: "binding-test-key"})))
+	request := httptest.NewRequest("POST", "/v1/credentials/seal", bytes.NewReader(platform.Raw(platform.CredentialSealRequest{CredentialWrite: config, Value: "binding-test-key"})))
 	request.Header.Set("Authorization", "Bearer admin")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -218,7 +219,7 @@ func TestCredentialBindingRejectsEmptyOriginAndRepairsSavedUse(t *testing.T) {
 	}
 	config.Bindings[0].Origin = "https://api.example.test"
 	sealed := sealCredential(t, tn, "admin", config, "binding-test-key")
-	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, config.ID, sealed, txnAt)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, config.ID, sealed, txnAt)
 	provider := platform.AIProvider{ID: "deepseek", Secret: config.ID, BaseURL: "https://api.example.test/v1"}
 	calls := 0
 	tn.AIClient = func(request *http.Request) (*http.Response, error) {
@@ -234,7 +235,7 @@ func TestCredentialBindingRejectsEmptyOriginAndRepairsSavedUse(t *testing.T) {
 	config.ExpectedVersion = 1
 	config.Bindings[0].Consumer = "ai/deepseek"
 	rebound := sealCredential(t, tn, "admin", config, "")
-	decide(t, tn, "admin", PlatformApp, SchemaCredentialSave, CredentialType, config.ID, rebound, txnAt)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, config.ID, rebound, txnAt)
 	answer, failure := tn.modelProvider(provider).Send(context.Background(), provider, "GET", "/models", nil)
 	if failure != nil || calls != 1 {
 		t.Fatalf("saved key was unavailable after binding repair: %v", failure)
@@ -260,13 +261,13 @@ func TestCredentialJournalCheckpointAndFullRecovery(t *testing.T) {
 			if err := live.migrateRuntimeState(ctx, journal); err != nil {
 				t.Fatal(err)
 			}
-			config := CredentialWrite{CredentialDefinition: CredentialDefinition{ID: "api", Title: "API", Kind: "api-key", Source: "managed", Bindings: []CredentialBinding{{Consumer: "ai/provider", Origin: "https://api.example.test"}}}}
+			config := platform.CredentialWrite{CredentialDefinition: platform.CredentialDefinition{ID: "api", Title: "API", Kind: "api-key", Source: "managed", Bindings: []platform.CredentialBinding{{Consumer: "ai/provider", Origin: "https://api.example.test"}}}}
 			sealed := sealCredential(t, live, "admin", config, "journal-private-credential")
-			decide(t, live, "admin", PlatformApp, SchemaCredentialSave, CredentialType, "api", sealed, time.Now())
+			decide(t, live, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialSave, controlowner.CredentialType, "api", sealed, time.Now())
 			if _, err := live.checkpointRuntime(ctx, journal, "credential-checkpoint"); err != nil {
 				t.Fatal(err)
 			}
-			decide(t, live, "admin", PlatformApp, SchemaCredentialDisable, CredentialType, "api", map[string]int{"expectedVersion": 1}, time.Now())
+			decide(t, live, "admin", controlowner.PlatformApp, controlowner.SchemaCredentialDisable, controlowner.CredentialType, "api", map[string]int{"expectedVersion": 1}, time.Now())
 			restored := compose()
 			deployment := Deployment{SnapshotEvery: 1, Rebuild: func(string) (*Tenant, error) { return compose(), nil }}
 			if err := deployment.restoreTenants(ctx, journal, "credential-new-build", []*Tenant{restored}, map[string]int64{}, map[string]bool{}); err != nil {

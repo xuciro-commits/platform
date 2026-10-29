@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"platformserver/engine/integrations"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,8 +18,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/aigateway/providers"
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // fakeModels speaks the OpenAI wire as LM Studio, Ollama or OpenRouter do:
@@ -32,7 +34,7 @@ func fakeModels(t *testing.T, calls *atomic.Int32) *httptest.Server {
 		calls.Add(1)
 		var req struct {
 			Model    string
-			Messages []Message
+			Messages []platform.Message
 			Stream   bool
 		}
 		json.NewDecoder(r.Body).Decode(&req)
@@ -93,11 +95,11 @@ func TestAIProviders(t *testing.T) {
 	server := fakeModels(t, &calls)
 	var journal []Entry
 	build := func() *Tenant {
-		console := NewConsole("t-1",
-			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin}}},
-			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{ai.ID: ai.User}}},
-			Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}},
-			Seat{Subjects: []string{"client:bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{}, Agent: true}})
+		console := newConsole("t-1",
+			platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin}}},
+			platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{ai.ID: ai.User}}},
+			platform.Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}},
+			platform.Seat{Subjects: []string{"client:bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{}, Agent: true}})
 		tn, err := NewTenant("t-1", console, ai.New("t-1"))
 		if err != nil {
 			t.Fatal(err)
@@ -106,7 +108,10 @@ func TestAIProviders(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	ana, bo, cy, bot := member("ana"), member("bo"), member("cy"), member("bot")
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	keys := 0
@@ -152,7 +157,7 @@ func TestAIProviders(t *testing.T) {
 		}
 	}
 	chat := func(m platform.Member, model, text string) string {
-		answer, err, failure := tn.Chat(m, ChatRequest{Model: model, Messages: []Message{{Role: "user", Content: text}}}, now)
+		answer, err, failure := tn.Chat(m, platform.ChatRequest{Model: model, Messages: []platform.Message{{Role: "user", Content: text}}}, now)
 		switch {
 		case err != nil:
 			return err.Error()
@@ -246,7 +251,7 @@ func TestAnthropicProvider(t *testing.T) {
 	}))
 	defer api.Close()
 	target, _ := url.Parse(api.URL)
-	console := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin, "build": "builder"}}})
+	console := newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin, "build": "builder"}}})
 	tn, err := NewTenant("t-1", console, ai.New("t-1"), build.New("t-1"))
 	if err != nil {
 		t.Fatal(err)
@@ -275,19 +280,19 @@ func TestAnthropicProvider(t *testing.T) {
 	if kerr != nil || failure != nil || len(catalog) != 1 || catalog[0].Name != "Claude Opus 5" || catalog[0].Capabilities == nil || catalog[0].Capabilities.InputTokens == nil || *catalog[0].Capabilities.InputTokens != 1000000 || catalog[0].Capabilities.ContextTokens != nil {
 		t.Fatalf("catalog %+v %v %v", catalog, kerr, failure)
 	}
-	answer, kerr, failure := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-opus-5", Messages: []Message{
+	answer, kerr, failure := tn.chatForStage(ana, platform.ChatRequest{Model: "claude/claude-opus-5", Messages: []platform.Message{
 		{Role: "system", Content: "be brief"}, {Role: "user", Content: "hi"}, {Role: "assistant", Content: "hello"}, {Role: "user", Content: "again"}}}, now, platform.AIStageDesign)
 	if kerr != nil || failure != nil || answer.Content != "be brief|again|3|8192" || answer.Usage.Input != 12 || answer.Usage.Output != 7 {
 		t.Fatalf("answer %+v %v %v", answer, kerr, failure)
 	}
 	// The platform's ceiling, not the adapter's own default, is what an answer
 	// asking for more is capped to (review AI-03); a smaller ask is kept.
-	capped, _, _ := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 100000, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now, platform.AIStageDesign)
-	small, _, _ := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 512, Messages: []Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now, platform.AIStageDesign)
+	capped, _, _ := tn.chatForStage(ana, platform.ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 100000, Messages: []platform.Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now, platform.AIStageDesign)
+	small, _, _ := tn.chatForStage(ana, platform.ChatRequest{Model: "claude/claude-opus-5", MaxTokens: 512, Messages: []platform.Message{{Role: "system", Content: "be brief"}, {Role: "user", Content: "x"}}}, now, platform.AIStageDesign)
 	if !strings.HasSuffix(capped.Content, "|8192") || !strings.HasSuffix(small.Content, "|512") {
 		t.Fatalf("max tokens ceiling: %q, %q", capped.Content, small.Content)
 	}
-	if _, _, failure := tn.chatForStage(ana, ChatRequest{Model: "claude/claude-busy", Messages: []Message{{Role: "user", Content: "x"}}}, now, platform.AIStageDesign); failure == nil ||
+	if _, _, failure := tn.chatForStage(ana, platform.ChatRequest{Model: "claude/claude-busy", Messages: []platform.Message{{Role: "user", Content: "x"}}}, now, platform.AIStageDesign); failure == nil ||
 		failure.Status != 429 || failure.Detail != "rate limited" {
 		t.Fatalf("a rate limit: %+v", failure)
 	}
@@ -301,10 +306,10 @@ func TestAILimits(t *testing.T) {
 	server := fakeModels(t, &calls)
 	var journal []Entry
 	build := func() *Tenant {
-		console := NewConsole("t-1",
-			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin, PlatformApp: Admin}}},
-			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}},
-			Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}})
+		console := newConsole("t-1",
+			platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin, controlowner.PlatformApp: controlowner.Admin}}},
+			platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}},
+			platform.Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}})
 		tn, err := NewTenant("t-1", console, ai.New("t-1"))
 		if err != nil {
 			t.Fatal(err)
@@ -326,7 +331,7 @@ func TestAILimits(t *testing.T) {
 		}
 	}
 	chat := func(who string) string {
-		_, err, failure := tn.Chat(member(who), ChatRequest{Model: "local/echo", MaxTokens: 11, Messages: []Message{{Role: "user", Content: "hello"}}}, now)
+		_, err, failure := tn.Chat(member(who), platform.ChatRequest{Model: "local/echo", MaxTokens: 11, Messages: []platform.Message{{Role: "user", Content: "hello"}}}, now)
 		switch {
 		case err != nil:
 			return err.Error()
@@ -345,7 +350,7 @@ func TestAILimits(t *testing.T) {
 	}
 	decide(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL + "/v1"})
 	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]string{"access": "everyone"})
-	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "136"})
+	decide(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "136"})
 
 	// Each call costs 16 reported tokens. The fourth cannot reserve its
 	// input bound and maximum output within the remaining daily budget.
@@ -367,8 +372,8 @@ func TestAILimits(t *testing.T) {
 	expect("said in Chinese", tn.i18n.Say("zh-CN", "bo used its 136 tokens for today"), "bo 今天的 136 个 token 已用完")
 
 	// Calls a minute, whatever the tokens.
-	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingPerMinute, map[string]string{"value": "2"})
-	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "0"})
+	decide(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, ai.ID+"/"+ai.SettingPerMinute, map[string]string{"value": "2"})
+	decide(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "0"})
 	expect("cy 1", chat("cy"), "ok")
 	expect("cy 2", chat("cy"), "ok")
 	expect("cy 3", chat("cy"), "quota: cy made its 2 calls this minute")
@@ -383,7 +388,7 @@ func TestAILimits(t *testing.T) {
 	// Streamed: the pieces as they come, the whole answer, one usage entry.
 	var pieces []string
 	usage := len(journal)
-	answer, err, failure := tn.Chat(member("cy"), ChatRequest{Model: "local/echo", Messages: []Message{{Role: "user", Content: "stream"}}}, now.Add(time.Minute),
+	answer, err, failure := tn.Chat(member("cy"), platform.ChatRequest{Model: "local/echo", Messages: []platform.Message{{Role: "user", Content: "stream"}}}, now.Add(time.Minute),
 		func(piece string) { pieces = append(pieces, piece) })
 	if err != nil || failure != nil {
 		t.Fatalf("stream: %v %v", err, failure)
@@ -393,7 +398,7 @@ func TestAILimits(t *testing.T) {
 	// A server that does not stream answers at once, and the answer comes as one piece.
 	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/flat", map[string]string{"access": "everyone"})
 	pieces = nil
-	answer, _, failure = tn.Chat(member("bo"), ChatRequest{Model: "local/flat", MaxTokens: 8, Messages: []Message{{Role: "user", Content: "hi"}}}, now.Add(2*time.Minute),
+	answer, _, failure = tn.Chat(member("bo"), platform.ChatRequest{Model: "local/flat", MaxTokens: 8, Messages: []platform.Message{{Role: "user", Content: "hi"}}}, now.Add(2*time.Minute),
 		func(piece string) { pieces = append(pieces, piece) })
 	expect("flat", fmt.Sprint(pieces, " ", failure == nil), "[echo: hi] true")
 
@@ -414,13 +419,13 @@ func TestAIReservationAdmissionSettlementAndRecovery(t *testing.T) {
 	approveTestInference(t, server.URL, "local")
 	const id = "reservation-concurrent"
 	build := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("ana", "ai:admin", "platform:admin")}, ai.New(id))
+		return composeTenant(t, id, []platform.Seat{seatOf("ana", "ai:admin", "platform:admin")}, ai.New(id))
 	}
 	tenant := build()
 	ana := memberOf(t, tenant, "ana")
 	decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": server.URL}, at)
 	decide(t, tenant, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone", "dailyTokens": 160}, at)
-	request := ChatRequest{Call: "original-call", Model: "local/echo", MaxTokens: 10, Messages: []Message{{Role: "user", Content: "hello"}}}
+	request := platform.ChatRequest{Call: "original-call", Model: "local/echo", MaxTokens: 10, Messages: []platform.Message{{Role: "user", Content: "hello"}}}
 	done := make(chan error, 1)
 	go func() {
 		_, err, failure := tenant.Chat(ana, request, at)
@@ -448,7 +453,7 @@ func TestAIReservationAdmissionSettlementAndRecovery(t *testing.T) {
 		t.Errorf("concurrent call escaped the token cap after a minute: %v %v calls=%d", err, failure, calls.Load())
 	}
 	duplicate := request
-	duplicate.Messages = []Message{{Role: "user", Content: "other"}}
+	duplicate.Messages = []platform.Message{{Role: "user", Content: "other"}}
 	if _, err, failure := tenant.Chat(ana, duplicate, at); err != nil || failure == nil || !strings.Contains(failure.Detail, "different input") || calls.Load() != 1 {
 		t.Errorf("same-key changed input was accepted: %v %v", err, failure)
 	}
@@ -497,7 +502,7 @@ func TestAIReservationUnknownAndOverreportedUsage(t *testing.T) {
 			defer server.Close()
 			approveTestInference(t, server.URL, "local")
 			id := "reservation-" + kind
-			build := func() *Tenant { return composeTenant(t, id, []Seat{seatOf("ana", "ai:admin")}, ai.New(id)) }
+			build := func() *Tenant { return composeTenant(t, id, []platform.Seat{seatOf("ana", "ai:admin")}, ai.New(id)) }
 			tenant := build()
 			ana := memberOf(t, tenant, "ana")
 			decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": server.URL}, at)
@@ -508,7 +513,7 @@ func TestAIReservationUnknownAndOverreportedUsage(t *testing.T) {
 				t.Fatal(err)
 			}
 			tenant.Record = func(e Entry) { entries = append(entries, e) }
-			req := ChatRequest{Run: "bounded-run", RunTokens: 160, Call: "original-call", Model: "local/echo", MaxTokens: 10, Messages: []Message{{Role: "user", Content: "hello"}}}
+			req := platform.ChatRequest{Run: "bounded-run", RunTokens: 160, Call: "original-call", Model: "local/echo", MaxTokens: 10, Messages: []platform.Message{{Role: "user", Content: "hello"}}}
 			answer, kerr, failure := tenant.Chat(ana, req, at)
 			if kerr != nil || (kind == "unknown" && failure != nil) || (kind == "exceeded" && failure == nil) {
 				t.Fatal(kerr, failure)
@@ -526,7 +531,7 @@ func TestAIReservationUnknownAndOverreportedUsage(t *testing.T) {
 			if kind == "exceeded" && (answer.Usage.Output != 50 || answer.Usage.Cost != 0.25) {
 				t.Fatal("provider excess was hidden", answer.Usage)
 			}
-			for _, next := range []ChatRequest{req, {Call: "other-call", Model: req.Model, MaxTokens: 10, Messages: req.Messages}} {
+			for _, next := range []platform.ChatRequest{req, {Call: "other-call", Model: req.Model, MaxTokens: 10, Messages: req.Messages}} {
 				if next.Call != "original-call" {
 					next.Run, next.RunTokens = req.Run, 160-answer.Usage.Input-answer.Usage.Output
 				}
@@ -558,7 +563,7 @@ func TestAIReservationUnknownAndOverreportedUsage(t *testing.T) {
 
 func TestAIReservationReleasesOnlyUndispatchedCalls(t *testing.T) {
 	at := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
-	tenant := composeTenant(t, "reservation-release", []Seat{seatOf("ana", "ai:admin", "platform:admin")}, ai.New("reservation-release"))
+	tenant := composeTenant(t, "reservation-release", []platform.Seat{seatOf("ana", "ai:admin", "platform:admin")}, ai.New("reservation-release"))
 	ana := memberOf(t, tenant, "ana")
 	approveTenantInference(t, tenant, "http://localhost:1", "local")
 	decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://localhost:1", "secret": "unconfigured-model-key"}, at)
@@ -567,14 +572,14 @@ func TestAIReservationReleasesOnlyUndispatchedCalls(t *testing.T) {
 		t.Fatal("missing credentials reached external I/O")
 		return nil, nil
 	}
-	req := ChatRequest{Model: "local/echo", MaxTokens: 10, Messages: []Message{{Role: "user", Content: "hello"}}}
+	req := platform.ChatRequest{Model: "local/echo", MaxTokens: 10, Messages: []platform.Message{{Role: "user", Content: "hello"}}}
 	if _, err, failure := tenant.Chat(ana, req, at); err != nil || failure == nil {
 		t.Fatal("missing credentials were not reported", err, failure)
 	}
 	if q := tenant.ai.Quota(ana, tenant.limits(), at); q.ReservedTokens != 0 || q.UnsettledCalls != 0 || q.UsedCalls != 0 || len(tenant.ai.Usage()) != 0 {
 		t.Fatal("undispatched call was charged or retained", q)
 	}
-	decide(t, tenant, "ana", PlatformApp, SchemaSettingSet, SettingType, "ai/"+ai.SettingMaxTokens, map[string]string{"value": "0"}, at)
+	decide(t, tenant, "ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/"+ai.SettingMaxTokens, map[string]string{"value": "0"}, at)
 	req.MaxTokens = 0
 	if _, err, failure := tenant.Chat(ana, req, at); err != nil || failure == nil || !strings.Contains(failure.Detail, "positive generation") {
 		t.Fatal("unbounded call acquired a reservation", err, failure)
@@ -588,19 +593,19 @@ func TestAIHalfOpenProbeSurvivesReadinessAndBudgetRefusal(t *testing.T) {
 	at := time.Date(2026, 10, 28, 13, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
 	server := fakeModels(t, &calls)
-	tenant := composeTenant(t, "probe-reservation", []Seat{seatOf("ana", "ai:admin")}, ai.New("probe-reservation"))
+	tenant := composeTenant(t, "probe-reservation", []platform.Seat{seatOf("ana", "ai:admin")}, ai.New("probe-reservation"))
 	decide(t, tenant, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": server.URL}, at)
 	decide(t, tenant, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone", "dailyTokens": 1}, at)
-	for range breakerAfter {
-		tenant.breakers.report("ai:local", false, at)
+	for range integrations.BreakerAfter {
+		tenant.breakers.Report("ai:local", false, at)
 	}
-	ready := at.Add(breakerPause)
+	ready := at.Add(integrations.BreakerPause)
 	for range 2 {
-		if !tenant.breakers.allow("ai:local", ready, false) {
+		if !tenant.breakers.Allow("ai:local", ready, false) {
 			t.Fatal("readiness consumed a probe")
 		}
 	}
-	req := ChatRequest{Model: "local/echo", MaxTokens: 16, Messages: []Message{{Role: "user", Content: "hello"}}}
+	req := platform.ChatRequest{Model: "local/echo", MaxTokens: 16, Messages: []platform.Message{{Role: "user", Content: "hello"}}}
 	if _, _, failure := tenant.Chat(memberOf(t, tenant, "ana"), req, ready); failure == nil || !failure.Quota || calls.Load() != 0 {
 		t.Fatal("budget refusal consumed a provider call", failure)
 	}

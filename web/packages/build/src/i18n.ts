@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "The application header configuration is invalid.": "应用页头配置无效，请检查布局、栏目和按钮。",
   "The release token does not permit {schema}.": "发布令牌未允许动作 {schema}。",
   "Connection {connection} has an incompatible local kind. Choose a connection with the declared kind.": "连接 {connection} 的本地类型不兼容，请选择与声明类型一致的连接。",
   "Configuration changed; evaluate again": "配置已变化，请重新评估",

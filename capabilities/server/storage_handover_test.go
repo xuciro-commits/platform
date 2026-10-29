@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"platformserver/engine/resources"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	"platformserver/platform"
 	"strings"
 	"testing"
 	"time"
-
-	"platformserver/internal/acceptance/result"
-	"platformserver/platform"
 )
 
 // These two phases are called by the isolated deployment rehearsal around the
@@ -25,7 +25,7 @@ func TestPostgresStorageHandoverPrepare(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	tenant := composeTenant(t, "storage-handover", []Seat{seatOf("operator", "stock:clerk")}, newStock("storage-handover"))
+	tenant := composeTenant(t, "storage-handover", []platform.Seat{seatOf("operator", "stock:clerk")}, newStock("storage-handover"))
 	if _, err := store.Entries(ctx, tenant.ID, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestPostgresStorageHandoverVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	tenant := composeTenant(t, "storage-handover", []Seat{seatOf("operator", "stock:clerk")}, newStock("storage-handover"))
+	tenant := composeTenant(t, "storage-handover", []platform.Seat{seatOf("operator", "stock:clerk")}, newStock("storage-handover"))
 	entries, err := store.Entries(ctx, tenant.ID, 0)
 	if err != nil || len(entries) != 2 {
 		t.Fatal(len(entries), err)
@@ -71,7 +71,7 @@ func TestPostgresStorageHandoverVerify(t *testing.T) {
 	}
 	before := store.Position(tenant.ID)
 	// Retry the original command identity; it must return the saved answer.
-	_, receipt, err := result.DecodeRecord(entries[0].Body)
+	_, receipt, err := acceptedformat.DecodeRecord(entries[0].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,11 +98,11 @@ func TestPostgresStorageHandoverVerify(t *testing.T) {
 		stale.Close()
 		t.Fatal("stale source reopened after target append")
 	}
-	files := &memoryFiles{}
+	files := &resources.MemoryFiles{}
 	if err := files.Put(ctx, "retained/receipt", platform.Raw(entries), "application/json"); err != nil {
 		t.Fatal(err)
 	}
-	if manifest, err := FileStoreManifest(ctx, files); err != nil || len(manifest) != 1 {
+	if manifest, err := resources.FileStoreManifest(ctx, files); err != nil || len(manifest) != 1 {
 		t.Fatal(manifest, err)
 	}
 }

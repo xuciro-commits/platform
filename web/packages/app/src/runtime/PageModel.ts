@@ -1,3 +1,4 @@
+import {encodePage} from "../pageui/wire";
 import {useEffect,useRef,useState} from 'react';
 import type {Api} from '@platform/kernel';
 import type {EntityRecord,RecordQuery,RecordSource} from '@platform/ui';
@@ -37,7 +38,7 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
   let mounted=true;const valid=()=>mounted&&current.current===identity&&source?.scope===session?.snapshotScope();
   if(producer)session?.adoptModelWindow(key,signature);
   if(searched!==query.search)return;
-  const request:Api.PageModelRead={page:definition?.ref??{app:'build',kind:'page',name:bound.page.name},...bound.modelDraft||!definition?{draft:canonicalPage}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,values,offset:query.offset,limit:query.limit,search:query.search,sort:query.sort,query:bound.window?.query??{domain:Object.entries(bound.narrowed[model.type]??{}).filter(([,v])=>v!==undefined&&v!=='').map(([name,value])=>[name,'=',value])}};
+  const request:Api.PageModelRead={page:definition?.ref??{app:'build',kind:'page',name:bound.page.name},...bound.modelDraft||!definition?{draft:encodePage(canonicalPage,definitions)}:{contentVersion:definition.contentVersion},section:bound.section.id??'',records,values,offset:query.offset,limit:query.limit,search:query.search,sort:query.sort,query:bound.window?.query??{domain:Object.entries(bound.narrowed[model.type]??{}).filter(([,v])=>v!==undefined&&v!=='').map(([name,value])=>[name,'=',value])}};
   void client.get<Api.PageModelResult>(`/v1/page-model/read\n${JSON.stringify(request)}`,true).then(async data=>{
    if(!valid())return;
    const paths=(model.fields??[]).filter(f=>(f.path?.length??0)>1&&data.fields.some(visible=>visible.name===modelFieldKey(f)));

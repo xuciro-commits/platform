@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
@@ -9,22 +9,21 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
 func TestOwnedAssetDiscoveryUsesMetadataReadAuthority(t *testing.T) {
-	tn := composeTenant(t, "owned-discovery", []Seat{
-		seatOf("builder", construction.ID+":"+construction.Builder),
-		seatOf("integrator", construction.ID+":"+construction.Integrator),
-		seatOf("user", construction.ID+":"+construction.User),
+	tn := composeTenant(t, "owned-discovery", []platform.Seat{
+		seatOf("builder", build.ID+":"+build.Builder),
+		seatOf("integrator", build.ID+":"+build.Integrator),
+		seatOf("user", build.ID+":"+build.User),
 		seatOf("outsider"),
 	}, build.New("owned-discovery"))
 	at := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
-	decide(t, tn, "builder", construction.ID, construction.DatasetType+".create", construction.DatasetType, "private-dataset-id", map[string]any{"name": "input", "title": "Input rows"}, at)
-	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetDataset, Name: "input"}
+	decide(t, tn, "builder", build.ID, build.DatasetType+".create", build.DatasetType, "private-dataset-id", map[string]any{"name": "input", "title": "Input rows"}, at)
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetDataset, Name: "input"}
 	builder := memberOf(t, tn, "builder")
-	preview, err := tn.PreviewReleaseDrafts(builder, []construction.JointDraftRef{{Kind: platform.AssetDataset, ID: "private-dataset-id"}})
+	preview, err := tn.PreviewReleaseDrafts(builder, []build.JointDraftRef{{Kind: platform.AssetDataset, ID: "private-dataset-id"}})
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("dataset candidate: %+v %v", preview, err)
 	}
@@ -68,13 +67,13 @@ func TestOwnedAssetDiscoveryUsesMetadataReadAuthority(t *testing.T) {
 		t.Fatal("foreign-tenant member discovered integration metadata")
 	}
 	missing := *find(builder)
-	missing.OwnerRecord = construction.DatasetType + "/missing"
+	missing.OwnerRecord = build.DatasetType + "/missing"
 	if slices.ContainsFunc(tn.definitionsFrom(memberOf(t, tn, "builder"), []platform.Definition{missing}), func(def platform.Definition) bool { return def.Ref == ref }) {
 		t.Fatal("asset without readable metadata record was offered")
 	}
 	// A damaged accepted image is an explicit discovery error, rather than an
 	// invented legacy configuration or a stale cached definition.
-	row := tn.records.types[construction.DatasetType].rows.Get("private-dataset-id")
+	row := tn.records.types[build.DatasetType].rows.Get("private-dataset-id")
 	row.Value.FieldByName("Published").SetString("{damaged")
 	row.Original = nil
 	tn.setDefinitions(tn.definitions) // direct damage moves the cache generation like any install would
@@ -116,8 +115,8 @@ func TestOwnedAssetDiscoveryPreservesRowScopeAndFiltersDependencies(t *testing.T
 func TestOwnedAssetDiscoveryPreservesNativeMetadataDefinitions(t *testing.T) {
 	for _, tenant := range []*Tenant{stockTenant(t), builderTenant(t, "native-build-metadata")} {
 		app := "stock"
-		if tenant.app(construction.ID) != nil {
-			app = construction.ID
+		if tenant.app(build.ID) != nil {
+			app = build.ID
 		}
 		ref := platform.AssetRef{App: app, Kind: platform.AssetObservation, Name: "temperature"}
 		native := platform.Definition{Ref: ref, Source: "code", Version: "1", ContractVersion: 1, Observation: &platform.ObservationDefinition{Name: "temperature", Title: "Native temperature"}}

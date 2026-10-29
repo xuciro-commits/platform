@@ -1,6 +1,6 @@
 # Tasks
 
-负责人已授权直接实施。Provider传输抽离与可信阶段准入已落实；在途Token预占、统一写提议和训练导出尚未完成。文件迁移与其他战役共用的目标按 `consolidate-platform-boundaries` 唯一清单计数，不重复执行。
+负责人已授权直接实施。Provider传输、可信阶段与Token预占已落实；本批已增加原Work交接、统一写提议及训练候选/导出实现，并迁移Agent、候选评估和知识索引的实际owner。任务勾选以最后集中检查的证据为准，编码完成不等于业务验收。文件迁移与其他战役共用的目标按 `consolidate-platform-boundaries` 唯一清单计数，不重复执行。
 
 ## 1. 收敛 Provider 与工具归属
 

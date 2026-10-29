@@ -46,6 +46,7 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
         finally { setBusy(false); }
       }}>
       <div className="text-sm font-semibold">{declared?.title ?? draft.action} <span className="font-mono text-xs text-muted">{draft.target}</span></div>
+      {draft.simulation&&<p className="text-sm text-muted">{t("Simulation passed. Business records change only after confirmation.")}</p>}
       {draft.rationale && <p className="text-sm text-muted">{draft.rationale}</p>}
       <fieldset disabled={busy}><PayloadFields fields={fields} values={values} onChange={setValues} submitted={submitted}/></fieldset>{error&&<p role="alert" className="text-xs text-danger">{error}</p>}
       <div className="flex flex-wrap items-center gap-2">
@@ -69,7 +70,7 @@ export function RunView({ id, compact, application, project }: { id: string; com
   const [open, setOpen] = useState<number>();
   if(record.isError)return <p role="alert">{t("This agent run is unavailable to you.")}</p>;
   if (!run) return <p className="text-sm text-muted">{t("Loading run")} {id}…</p>;
-  const mine = run.onBehalf === me.principalId;
+  const mine = run.onBehalf === me.principalId || run.reviewers?.includes(me.principalId);
   const live = run.state === "running" || run.state === "waiting";
   return (
     <div className="grid max-w-4xl gap-3">
@@ -108,6 +109,7 @@ export function RunView({ id, compact, application, project }: { id: string; com
       {run.draft?.[0] && run.state === "waiting" && (mine ? <DraftCard key={run.draft[0].step} run={run} draft={run.draft[0]} />
         : <p className="text-sm text-muted">{t("A draft waits for")} {run.onBehalf} {t("to confirm.")}</p>)}
       {run.state === "running" && <p className="text-sm text-muted">{t("The agent is working…")}</p>}
+      {run.handoff&&<Panel role="status">{run.handoff==="assigned"?t("A task has been assigned for human review."):t(run.handoff)}</Panel>}
       {run.stopped && <p className="text-sm text-[var(--tone-danger)]">{t("Stopped:")} {run.stopped}</p>}
       {run.result && <Card className="p-3"><div className="mb-1 text-xs text-muted">{t("Result")}</div><p className="whitespace-pre-wrap text-sm">{run.result}</p></Card>}
       {!compact && run.steps.length > 0 && <RunGraph run={run} onStep={setOpen} />}

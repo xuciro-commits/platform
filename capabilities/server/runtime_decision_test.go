@@ -16,7 +16,7 @@ func TestLiveRuntimeRefusesNewDecisionsAndRetainsHistoricalReplay(t *testing.T) 
 			name = "historical replay"
 		}
 		t.Run(name, func(t *testing.T) {
-			tn := composeTenant(t, "legacy", []Seat{seatOf("ana", "stock:clerk")}, newStock("legacy"))
+			tn := composeTenant(t, "legacy", []platform.Seat{seatOf("ana", "stock:clerk")}, newStock("legacy"))
 			member := memberOf(t, tn, "ana")
 			app := tn.app("stock")
 			caller := tn.caller(member, app, replay)
@@ -58,7 +58,7 @@ func (missingPrivateLedgerRuntime) DraftChanges(*platform.Ledger, func() platfor
 }
 
 func TestStagedRuntimeWithoutPrivateLedgerRefusesBeforeApplication(t *testing.T) {
-	tn := composeTenant(t, "private", []Seat{seatOf("ana", "stock:clerk")}, newStock("private"))
+	tn := composeTenant(t, "private", []platform.Seat{seatOf("ana", "stock:clerk")}, newStock("private"))
 	member := memberOf(t, tn, "ana")
 	app := tn.app("stock")
 	caller := platform.NewCaller(missingPrivateLedgerRuntime{runtime{tn}}, member, "stock", false, false)

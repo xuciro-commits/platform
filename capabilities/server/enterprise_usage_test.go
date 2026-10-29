@@ -2,7 +2,9 @@ package platformserver
 
 import (
 	"encoding/json"
-	"platformserver/internal/records"
+
+	controlowner "platformserver/kernel/control"
+	"platformserver/kernel/records"
 	"reflect"
 	"strings"
 	"testing"
@@ -18,7 +20,7 @@ import (
 func TestEnterpriseUsageCoreSiteRetainsOldReferencesAndHistory(t *testing.T) {
 	const tenant = "enterprise-core-usage"
 	compose := func() *Tenant {
-		return composeTenant(t, tenant, []Seat{seatOf("admin", "enterprise:admin", "core:steward")}, enterprise.New(tenant, platform.OrgSeed{}), core.New(tenant))
+		return composeTenant(t, tenant, []platform.Seat{seatOf("admin", "enterprise:admin", "core:steward")}, enterprise.New(tenant, platform.OrgSeed{}), core.New(tenant))
 	}
 	tn := compose()
 	var entries []Entry
@@ -29,7 +31,7 @@ func TestEnterpriseUsageCoreSiteRetainsOldReferencesAndHistory(t *testing.T) {
 	}
 	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	for _, id := range []string{"place", "closed-other"} {
-		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, id, map[string]any{"name": id, "stereotype": enterprise.Location, "from": "2026-01-01"}, at)
+		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, id, map[string]any{"name": id, "stereotype": enterprise.Organization, "from": "2026-01-01"}, at)
 	}
 	decide(t, tn, "admin", core.ID, core.SiteType+".create", core.SiteType, "SITE", map[string]any{"name": "Site", "code": "SITE", "kind": "plant", "place": "place", "active": true}, at)
 	close := map[string]any{"until": "2026-10-20", "reason": "Site retired"}
@@ -63,7 +65,7 @@ func TestEnterpriseUsageCoreSiteRetainsOldReferencesAndHistory(t *testing.T) {
 type privateEnterpriseUse struct {
 	platform.Record
 	Name   string `json:"name"`
-	Place  string `json:"place,omitempty" ref:"enterprise.element" stereo:"ActualLocation" read:"writer"`
+	Place  string `json:"place,omitempty" ref:"enterprise.element" stereos:"ActualOrganization,ActualLocation" read:"writer"`
 	Active bool   `json:"active"`
 }
 type privateEnterpriseApp struct{ ledger *platform.Ledger }
@@ -100,9 +102,9 @@ func (a *privateEnterpriseApp) Submit(c platform.Caller, s *pb.Submission, at ti
 
 func TestEnterpriseUsageHiddenOwnerFieldsStillBlockLifecycle(t *testing.T) {
 	const tenant = "hidden-enterprise-usage"
-	tn := composeTenant(t, tenant, []Seat{seatOf("owner", "enterprise:admin", "private-use:writer"), seatOf("modeler", "enterprise:admin")}, enterprise.New(tenant, platform.OrgSeed{}), newPrivateEnterpriseApp(tenant))
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("owner", "enterprise:admin", "private-use:writer"), seatOf("modeler", "enterprise:admin")}, enterprise.New(tenant, platform.OrgSeed{}), newPrivateEnterpriseApp(tenant))
 	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	decide(t, tn, "owner", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "secret-place", map[string]any{"name": "Place", "stereotype": enterprise.Location, "from": "2026-01-01"}, at)
+	decide(t, tn, "owner", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "secret-place", map[string]any{"name": "Place", "stereotype": enterprise.Organization, "from": "2026-01-01"}, at)
 	decide(t, tn, "owner", "private-use", "private-use.item.create", "private-use.item", "SECRET", map[string]any{"name": "Confidential site", "place": "secret-place", "active": true}, at)
 	usage, err := tn.EnterpriseUsage(memberOf(t, tn, "modeler"), "secret-place", "2026-10-20", at)
 	if err != nil {
@@ -124,13 +126,13 @@ func TestEnterpriseUsageHiddenOwnerFieldsStillBlockLifecycle(t *testing.T) {
 
 func TestEnterpriseUsageGrantsAndRepresentativeRootBlockLifecycle(t *testing.T) {
 	const tenant = "enterprise-directory-usage"
-	tn := composeTenant(t, tenant, []Seat{seatOf("admin", "platform:admin", "enterprise:admin", "core:steward"), seatOf("member")}, enterprise.New(tenant, platform.OrgSeed{}), core.New(tenant))
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("admin", "platform:admin", "enterprise:admin", "core:steward"), seatOf("member")}, enterprise.New(tenant, platform.OrgSeed{}), core.New(tenant))
 	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	for _, id := range []string{"grant-unit", "root", "team-unit"} {
 		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, id, map[string]any{"name": id, "stereotype": enterprise.Organization, "from": "2026-01-01"}, at)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaGrant, MemberType, "member", map[string]any{"app": core.ID, "role": core.Steward, "unit": "grant-unit", "structure": "management", "from": "2026-10-01", "until": "2026-12-01"}, at)
-	decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, PlatformApp+"/enterpriseRoot", map[string]any{"value": "root"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaGrant, controlowner.MemberType, "member", map[string]any{"app": core.ID, "role": core.Steward, "unit": "grant-unit", "structure": "management", "from": "2026-10-01", "until": "2026-12-01"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, controlowner.PlatformApp+"/enterpriseRoot", map[string]any{"value": "root"}, at)
 	for _, id := range []string{"grant-unit", "root"} {
 		for _, schema := range []string{enterprise.SchemaElementClose, enterprise.SchemaElementDelete} {
 			if got := refuse(t, tn, "admin", enterprise.ID, schema, enterprise.ElementType, id, map[string]any{"until": "2026-10-20", "reason": "Retire"}, at); !strings.HasPrefix(got, "ERROR_CODE_CONFLICT") {
@@ -138,7 +140,7 @@ func TestEnterpriseUsageGrantsAndRepresentativeRootBlockLifecycle(t *testing.T) 
 			}
 		}
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaRevoke, MemberType, "member", map[string]any{"app": core.ID, "role": core.Steward, "unit": "grant-unit"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaRevoke, controlowner.MemberType, "member", map[string]any{"app": core.ID, "role": core.Steward, "unit": "grant-unit"}, at)
 	usage, err := tn.EnterpriseUsage(memberOf(t, tn, "admin"), "grant-unit", "2026-10-20", at)
 	if err != nil || usage.CanDelete || !usage.CanClose {
 		t.Fatalf("revoked grant must protect history without keeping it current: %+v %v", usage, err)
@@ -147,12 +149,12 @@ func TestEnterpriseUsageGrantsAndRepresentativeRootBlockLifecycle(t *testing.T) 
 	if got := refuse(t, tn, "admin", enterprise.ID, enterprise.SchemaElementDelete, enterprise.ElementType, "grant-unit", map[string]any{"reason": "Old grant removed"}, at); !strings.HasPrefix(got, "ERROR_CODE_CONFLICT") {
 		t.Fatalf("revoked grant erased historical use: %s", got)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaTeamSave, TeamType, "team", map[string]any{"name": "Team", "members": []string{}, "grants": []platform.Grant{{App: core.ID, Role: core.Steward, Unit: "team-unit", Structure: "management"}}}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, platform.SchemaTeamSave, platform.TeamType, "team", map[string]any{"name": "Team", "members": []string{}, "grants": []platform.Grant{{App: core.ID, Role: core.Steward, Unit: "team-unit", Structure: "management"}}}, at)
 	usage, err = tn.EnterpriseUsage(memberOf(t, tn, "admin"), "team-unit", "2026-10-20", at)
 	if err != nil || usage.CanClose {
 		t.Fatalf("stored team grant did not prevent closure: %+v %v", usage, err)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaTeamRemove, TeamType, "team", map[string]any{}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, platform.SchemaTeamRemove, platform.TeamType, "team", map[string]any{}, at)
 	usage, err = tn.EnterpriseUsage(memberOf(t, tn, "admin"), "team-unit", "2026-10-20", at)
 	if err != nil || usage.CanDelete || !usage.CanClose {
 		t.Fatalf("removed team grant lost history or kept current use: %+v %v", usage, err)

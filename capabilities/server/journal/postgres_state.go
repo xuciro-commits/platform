@@ -6,10 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
+	"platformserver/platform"
 	"strings"
-
-	"github.com/jackc/pgx/v5"
-	"platformserver/internal/records"
 )
 
 var stateSchema = []string{
@@ -227,7 +226,7 @@ func (j *Postgres) compareStateImage(ctx context.Context, tx pgx.Tx, tenant stri
 			return err
 		}
 		at := 0
-		head := records.EmptyHistory
+		head := platform.EmptyRecordHistory
 		for rows.Next() {
 			var pos int
 			var raw []byte
@@ -239,7 +238,7 @@ func (j *Postgres) compareStateImage(ctx context.Context, tx pgx.Tx, tenant stri
 				rows.Close()
 				return fmt.Errorf("tenant %s history differs for %s/%s at %d", tenant, r.Type, r.ID, at)
 			}
-			head, err = records.AppendHistory(head, at, raw)
+			head, err = platform.AppendRecordHistory(head, at, raw)
 			if err != nil {
 				rows.Close()
 				return err
@@ -322,7 +321,7 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			return fmt.Errorf("record history predecessor differs: %s/%s (%d/%d)", r.Type, r.ID, base, n)
 		}
 		if n == 0 && head == "" {
-			head = records.EmptyHistory
+			head = platform.EmptyRecordHistory
 		}
 		if head == "" {
 			// Only historical writes need this bootstrap. New writers require startup
@@ -330,7 +329,7 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			if r.HistoryPrior != "" {
 				return fmt.Errorf("record history head was not initialized")
 			}
-			head = records.EmptyHistory
+			head = platform.EmptyRecordHistory
 			prefix, err := tx.Query(ctx, `select image from runtime_history where tenant=$1 and type=$2 and id=$3 order by pos`, tenant, r.Type, r.ID)
 			if err != nil {
 				return err
@@ -342,7 +341,7 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 					prefix.Close()
 					return err
 				}
-				head, err = records.AppendHistory(head, at, raw)
+				head, err = platform.AppendRecordHistory(head, at, raw)
 				if err != nil {
 					prefix.Close()
 					return err
@@ -362,7 +361,7 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			return fmt.Errorf("record history chain predecessor differs")
 		}
 		for i, image := range h {
-			head, err = records.AppendHistory(head, base+i, image)
+			head, err = platform.AppendRecordHistory(head, base+i, image)
 			if err != nil {
 				return err
 			}

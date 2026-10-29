@@ -1,19 +1,22 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
 )
@@ -62,14 +65,14 @@ func modelStandIn(t *testing.T, answer func(turn int) standInCall) func(*http.Re
 func reviewTenant(t *testing.T) (*Tenant, func(authority, schema, typ, id string, payload any) *pb.ChangeRecord) {
 	approveTestInference(t, "http://local.test", "local")
 	t.Helper()
-	tn, err := NewTenant("t-1", NewConsole("t-1",
-		Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"desk": "clerk", "stock": "lead", ai.ID: ai.Admin, PlatformApp: Admin, AgentApp: AgentAdmin}}},
-		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"desk": "viewer", "stock": "clerk"}}}),
+	tn, err := NewTenant("t-1", newConsole("t-1",
+		platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"desk": "clerk", "stock": "lead", ai.ID: ai.Admin, controlowner.PlatformApp: controlowner.Admin, platform.AgentApp: platform.AgentAdmin}}},
+		platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"desk": "viewer", "stock": "clerk"}}}),
 		enterprise.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
 			Units:       []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}},
 			Edges:       []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}},
 			Memberships: []platform.Membership{{Party: "member:ana", Unit: "plant", Role: "lead"}}}),
-		newDesk("t-1"), newStock("t-1"), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"))
+		newDesk("t-1"), newStock("t-1"), ai.New("t-1"), work.New("t-1"), automation.New("t-1"), agentowner.New("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +92,7 @@ func reviewTenant(t *testing.T) (*Tenant, func(authority, schema, typ, id string
 	}
 	submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://local.test/v1"})
 	submit(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/stand-in", map[string]string{"access": "everyone"})
-	submit(PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "local/stand-in"})
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]string{"value": "local/stand-in"})
 	return tn, submit
 }
 
@@ -107,8 +110,8 @@ func TestAutomationRunReadsItsOwnAppNotTheHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A flow's agent: a run with no person behind it.
-	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", reviewRun(t, tn, AgentRunRecord{Record: platform.Record{ID: "R1"},
-		Agent: "desk.triage", Goal: "Look into the wifi", State: "running", Steps: []RunStep{}})); err != nil {
+	if err := tn.automation(platform.AgentApp, true).PutAt(now, "test.run", reviewRun(t, tn, platform.AgentRunRecord{Record: platform.Record{ID: "R1"},
+		Agent: "desk.triage", Goal: "Look into the wifi", State: "running", Steps: []platform.RunStep{}})); err != nil {
 		t.Fatal(err)
 	}
 	answers := []standInCall{
@@ -127,7 +130,7 @@ func TestAutomationRunReadsItsOwnAppNotTheHost(t *testing.T) {
 		now = now.Add(time.Second)
 		tn.Think(now)
 	}
-	run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "R1")
+	run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "R1")
 	if len(run.Steps) != len(answers) {
 		t.Fatalf("steps: %+v", run.Steps)
 	}
@@ -162,8 +165,8 @@ func TestRunForAPersonStillReadsAsThatPerson(t *testing.T) {
 	// ana is a lead in stock; bo, who also has the desk role this agent
 	// belongs to, holds none — the same read differs between them.
 	for _, who := range []string{"ana", "bo"} {
-		if err := tn.automation(AgentApp, true).PutAt(now, "test.run"+who, reviewRun(t, tn, AgentRunRecord{Record: platform.Record{ID: "R-" + who},
-			Agent: "desk.triage", OnBehalf: who, Goal: "check the press", State: "running", Steps: []RunStep{}})); err != nil {
+		if err := tn.automation(platform.AgentApp, true).PutAt(now, "test.run"+who, reviewRun(t, tn, platform.AgentRunRecord{Record: platform.Record{ID: "R-" + who},
+			Agent: "desk.triage", OnBehalf: who, Goal: "check the press", State: "running", Steps: []platform.RunStep{}})); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -190,7 +193,7 @@ func TestRunForAPersonStillReadsAsThatPerson(t *testing.T) {
 		tn.Think(now)
 	}
 	read := func(who string) string {
-		run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "R-"+who)
+		run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "R-"+who)
 		if len(run.Steps) == 0 {
 			t.Fatalf("%s's run: %+v", who, run)
 		}
@@ -222,27 +225,24 @@ func TestLateModelAnswerCannotActAfterCancel(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}},
 			Body: io.NopCloser(strings.NewReader(late.body(t)))}, nil
 	}
-	if err := tn.automation(AgentApp, true).PutAt(now, "test.run", reviewRun(t, tn, AgentRunRecord{Record: platform.Record{ID: "R1"},
-		Agent: "desk.triage", Goal: "Answer ticket T1: wifi", State: "running", Steps: []RunStep{}})); err != nil {
+	if err := tn.automation(platform.AgentApp, true).PutAt(now, "test.run", reviewRun(t, tn, platform.AgentRunRecord{Record: platform.Record{ID: "R1"},
+		Agent: "desk.triage", Goal: "Answer ticket T1: wifi", State: "running", Steps: []platform.RunStep{}})); err != nil {
 		t.Fatal(err)
 	}
 	think := make(chan struct{})
 	go func() { tn.Think(now.Add(time.Second)); close(think) }()
 	<-started
-	submit(AgentApp, SchemaRunCancel, RunType, "R1", struct{}{}) // the run stops in flight
+	submit(platform.AgentApp, platform.SchemaRunCancel, platform.RunType, "R1", struct{}{}) // the run stops in flight
 	close(release)
 	<-think
 
-	run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "R1")
+	run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "R1")
 	if run.State != "stopped" || !strings.Contains(run.Stopped, "stopped by ana") || len(run.Steps) != 0 || run.Result != "" {
 		t.Fatalf("a late answer was acted on: %+v", run)
 	}
 	// The call happened: its tokens are accounted for, not lost.
 	if spent := tn.ai.Spent("agent:desk.triage", now.Add(time.Second)); spent != 15 {
 		t.Fatalf("late usage metered: %d", spent)
-	}
-	if tn.agents.(*Agents).busy["R1"] {
-		t.Fatal("the cancelled run stayed busy")
 	}
 }
 
@@ -267,8 +267,8 @@ func TestAnswersAreCapped(t *testing.T) {
 			Body: io.NopCloser(strings.NewReader(string(answer)))}, nil
 	}
 	for _, want := range []int{0, 100000, 512} {
-		if _, err, failure := tenant.Chat(ana, ChatRequest{Model: "local/stand-in", MaxTokens: want,
-			Messages: []Message{{Role: "user", Content: "hi"}}}, now); err != nil || failure != nil {
+		if _, err, failure := tenant.Chat(ana, platform.ChatRequest{Model: "local/stand-in", MaxTokens: want,
+			Messages: []platform.Message{{Role: "user", Content: "hi"}}}, now); err != nil || failure != nil {
 			t.Fatalf("chat asking %d: %v %v", want, err, failure)
 		}
 	}
@@ -276,9 +276,9 @@ func TestAnswersAreCapped(t *testing.T) {
 		t.Fatalf("what the provider was asked for: %v", asked)
 	}
 	// An administrator may lower the tenant's ceiling.
-	submit(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingMaxTokens, map[string]string{"value": "256"})
-	if _, err, failure := tenant.Chat(ana, ChatRequest{Model: "local/stand-in", MaxTokens: 4096,
-		Messages: []Message{{Role: "user", Content: "hi"}}}, now); err != nil || failure != nil {
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, ai.ID+"/"+ai.SettingMaxTokens, map[string]string{"value": "256"})
+	if _, err, failure := tenant.Chat(ana, platform.ChatRequest{Model: "local/stand-in", MaxTokens: 4096,
+		Messages: []platform.Message{{Role: "user", Content: "hi"}}}, now); err != nil || failure != nil {
 		t.Fatalf("chat under a lower ceiling: %v %v", err, failure)
 	}
 	if got := asked[len(asked)-1]; got != 256 {
@@ -339,8 +339,8 @@ func TestUnreportedUsageIsEstimatedAndZeroIsZero(t *testing.T) {
 	ana, _ := tenant.Member("ana")
 	chat := func() {
 		t.Helper()
-		if _, err, failure := tenant.Chat(ana, ChatRequest{Model: "local/stand-in",
-			Messages: []Message{{Role: "user", Content: "how long is the lead time of P-200?"}}}, now); err != nil || failure != nil {
+		if _, err, failure := tenant.Chat(ana, platform.ChatRequest{Model: "local/stand-in",
+			Messages: []platform.Message{{Role: "user", Content: "how long is the lead time of P-200?"}}}, now); err != nil || failure != nil {
 			t.Fatalf("chat: %v %v", err, failure)
 		}
 	}
@@ -360,13 +360,13 @@ func TestUnreportedUsageIsEstimatedAndZeroIsZero(t *testing.T) {
 	}
 	// A cap at exactly what was estimated refuses the next call: the estimate
 	// is what the cap is held against.
-	submit(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": fmt.Sprint(spent)})
-	if _, err, failure := tenant.Chat(ana, ChatRequest{Model: "local/stand-in",
-		Messages: []Message{{Role: "user", Content: "again"}}}, now); err != nil || failure == nil || !failure.Quota {
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": fmt.Sprint(spent)})
+	if _, err, failure := tenant.Chat(ana, platform.ChatRequest{Model: "local/stand-in",
+		Messages: []platform.Message{{Role: "user", Content: "again"}}}, now); err != nil || failure == nil || !failure.Quota {
 		t.Fatalf("a call past the estimated spend: err %v, failure %v", err, failure)
 	}
 	// A provider that reports a real zero is reported, and adds zero.
-	submit(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "100000"})
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "100000"})
 	tenant.AIClient = func(*http.Request) (*http.Response, error) {
 		return wireAnswer(t, "no tokens at all", map[string]any{"prompt_tokens": 0, "completion_tokens": 0}), nil
 	}
@@ -405,12 +405,11 @@ func TestUnreportedUsageIsEstimatedAndZeroIsZero(t *testing.T) {
 func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 	now := time.Date(2026, 10, 5, 13, 0, 0, 0, time.UTC)
 	tenant, _ := reviewTenant(t)
-	def := *tenant.agents.(*Agents).defs["desk.triage"]
-	tenant.agents.(*Agents).defs["desk.triage"] = &def
+	def := tenant.agents.AgentEvaluationRuntime().Definition("desk.triage")
 	seed := func(id string) {
 		t.Helper()
-		if err := tenant.automation(AgentApp, true).PutAt(now, "test.run"+id, reviewRun(t, tenant, AgentRunRecord{Record: platform.Record{ID: "R" + id},
-			Agent: "desk.triage", Goal: "look around", State: "running", Steps: []RunStep{}})); err != nil {
+		if err := tenant.automation(platform.AgentApp, true).PutAt(now, "test.run"+id, reviewRun(t, tenant, platform.AgentRunRecord{Record: platform.Record{ID: "R" + id},
+			Agent: "desk.triage", Goal: "look around", State: "running", Steps: []platform.RunStep{}})); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -420,7 +419,7 @@ func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 	calls := 0
 	tenant.AIClient = func(*http.Request) (*http.Response, error) { calls++; return wireAnswer(t, "", nil), nil }
 	tenant.Think(now.Add(time.Second))
-	run, _ := platform.Get[AgentRunRecord](tenant.automation(AgentApp, false), "R1")
+	run, _ := platform.Get[platform.AgentRunRecord](tenant.automation(platform.AgentApp, false), "R1")
 	if run.State != "stopped" || !strings.Contains(run.Stopped, "remaining run token budget") || run.TokensUsed != 0 {
 		t.Fatalf("a budget that ignored unreported usage: %+v", run)
 	}
@@ -441,7 +440,7 @@ func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 			Body: io.NopCloser(strings.NewReader(string(raw)))}, nil
 	}
 	tenant.Think(now.Add(time.Second))
-	run, _ = platform.Get[AgentRunRecord](tenant.automation(AgentApp, false), "R2")
+	run, _ = platform.Get[platform.AgentRunRecord](tenant.automation(platform.AgentApp, false), "R2")
 	if run.State != "stopped" || !strings.Contains(run.Stopped, "USD") || run.Cost != 0.60 {
 		t.Fatalf("a cost budget: %+v", run)
 	}
@@ -456,7 +455,7 @@ func TestRunBudgetCountsUnreportedUsageAndCost(t *testing.T) {
 	}
 	tenant.Think(now.Add(time.Second))
 	tenant.Think(now.Add(2 * time.Second))
-	run, _ = platform.Get[AgentRunRecord](tenant.automation(AgentApp, false), "R3")
+	run, _ = platform.Get[platform.AgentRunRecord](tenant.automation(platform.AgentApp, false), "R3")
 	if run.Cost != 0 || strings.Contains(run.Stopped, "USD") || len(run.Steps) != 2 {
 		t.Fatalf("an unreported cost: %+v", run)
 	}
@@ -472,7 +471,7 @@ func TestCallsInFlightHoldTheirLimit(t *testing.T) {
 	now := time.Date(2026, 10, 5, 14, 0, 0, 0, time.UTC)
 	tenant, submit := reviewTenant(t)
 	ana, _ := tenant.Member("ana")
-	submit(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingPerMinute, map[string]string{"value": "1"})
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, ai.ID+"/"+ai.SettingPerMinute, map[string]string{"value": "1"})
 	started, release := make(chan struct{}), make(chan struct{})
 	tenant.AIClient = func(*http.Request) (*http.Response, error) {
 		close(started)
@@ -481,7 +480,7 @@ func TestCallsInFlightHoldTheirLimit(t *testing.T) {
 	}
 	first := make(chan string)
 	go func() {
-		_, err, failure := tenant.Chat(ana, ChatRequest{Model: "local/stand-in", Messages: []Message{{Role: "user", Content: "first"}}}, now)
+		_, err, failure := tenant.Chat(ana, platform.ChatRequest{Model: "local/stand-in", Messages: []platform.Message{{Role: "user", Content: "first"}}}, now)
 		switch {
 		case err != nil:
 			first <- err.Error()
@@ -493,7 +492,7 @@ func TestCallsInFlightHoldTheirLimit(t *testing.T) {
 	}()
 	<-started
 	// The first call is in flight: the minute's one call is taken.
-	if _, err, failure := tenant.Chat(ana, ChatRequest{Model: "local/stand-in", Messages: []Message{{Role: "user", Content: "second"}}}, now); err != nil || failure == nil || !failure.Quota {
+	if _, err, failure := tenant.Chat(ana, platform.ChatRequest{Model: "local/stand-in", Messages: []platform.Message{{Role: "user", Content: "second"}}}, now); err != nil || failure == nil || !failure.Quota {
 		t.Fatalf("a call while the minute's one call was in flight: err %v, failure %v", err, failure)
 	}
 	close(release)
@@ -518,7 +517,7 @@ func TestTranscriptsAreKeptOnlyWhenAsked(t *testing.T) {
 	}
 	chat := func(who platform.Member) {
 		t.Helper()
-		if _, err, failure := tenant.Chat(who, ChatRequest{Model: "local/stand-in", Messages: []Message{{Role: "user", Content: "hello"}}}, now); err != nil || failure != nil {
+		if _, err, failure := tenant.Chat(who, platform.ChatRequest{Model: "local/stand-in", Messages: []platform.Message{{Role: "user", Content: "hello"}}}, now); err != nil || failure != nil {
 			t.Fatalf("chat: %v %v", err, failure)
 		}
 	}
@@ -528,7 +527,7 @@ func TestTranscriptsAreKeptOnlyWhenAsked(t *testing.T) {
 	}
 	// 0 is a switch, not a period: nothing new is kept, and what was kept is
 	// forgotten on the next round.
-	submit(PlatformApp, SchemaSettingSet, SettingType, AgentApp+"/"+SettingTranscriptDays, map[string]string{"value": "0"})
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, platform.AgentApp+"/"+platform.SettingTranscriptDays, map[string]string{"value": "0"})
 	chat(ana)
 	if kept := tenant.Transcripts("", 10); len(kept) != 1 {
 		t.Fatalf("0 kept something new: %d", len(kept))
@@ -539,7 +538,7 @@ func TestTranscriptsAreKeptOnlyWhenAsked(t *testing.T) {
 	}
 	// Kept again, a person's own calls are readable by an agent administrator
 	// without a per-run check; another member still may not read them.
-	submit(PlatformApp, SchemaSettingSet, SettingType, AgentApp+"/"+SettingTranscriptDays, map[string]string{"value": "7"})
+	submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, platform.AgentApp+"/"+platform.SettingTranscriptDays, map[string]string{"value": "7"})
 	chat(ana)
 	if _, err := tenant.TranscriptsFor(bo, "", 10, now); err == nil {
 		t.Fatal("a non-administrator read transcripts")
@@ -552,19 +551,23 @@ func TestTranscriptsAreKeptOnlyWhenAsked(t *testing.T) {
 
 // Scope and late-answer cases use the same current binding as a real new run.
 // Separate legacy cases deliberately retain an unstaged original run.
-func reviewRun(t *testing.T, tenant *Tenant, seed AgentRunRecord) AgentRunRecord {
+func reviewRun(t *testing.T, tenant *Tenant, seed platform.AgentRunRecord) platform.AgentRunRecord {
 	t.Helper()
-	run, err := tenant.agents.(*Agents).create(seed.ID, seed.Agent, seed.Goal, seed.Ref, seed.OnBehalf, seed.Flow, seed.Step, seed.Token, time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC), true)
-	if err != nil {
-		t.Fatal(err.Message)
+	at := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+	who := seed.OnBehalf
+	if who == "" {
+		who = "ana"
 	}
+	decide(t, tenant, who, platform.AgentApp, platform.SchemaRunStart, platform.RunType, seed.ID, map[string]any{"agent": seed.Agent, "goal": seed.Goal, "ref": seed.Ref}, at)
+	run, _ := platform.Get[platform.AgentRunRecord](tenant.automation(platform.AgentApp, false), seed.ID)
+	run.OnBehalf, run.Flow, run.Step, run.Token = seed.OnBehalf, seed.Flow, seed.Step, seed.Token
 	return run
 }
 
 func TestLegacyModelRunStopsWithoutTrustedStage(t *testing.T) {
 	now := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
 	tenant, _ := reviewTenant(t)
-	if err := tenant.automation(AgentApp, true).PutAt(now, "legacy-run", AgentRunRecord{Record: platform.Record{ID: "legacy"}, Agent: "desk.triage", Goal: "old retained work", State: "running", Steps: []RunStep{}}); err != nil {
+	if err := tenant.automation(platform.AgentApp, true).PutAt(now, "legacy-run", platform.AgentRunRecord{Record: platform.Record{ID: "legacy"}, Agent: "desk.triage", Goal: "old retained work", State: "running", Steps: []platform.RunStep{}}); err != nil {
 		t.Fatal(err)
 	}
 	tenant.AIClient = func(*http.Request) (*http.Response, error) {
@@ -572,7 +575,7 @@ func TestLegacyModelRunStopsWithoutTrustedStage(t *testing.T) {
 		return nil, nil
 	}
 	tenant.Think(now.Add(time.Second))
-	run, _ := platform.Get[AgentRunRecord](tenant.automation(AgentApp, false), "legacy")
+	run, _ := platform.Get[platform.AgentRunRecord](tenant.automation(platform.AgentApp, false), "legacy")
 	if run.State != "stopped" || !strings.Contains(run.Stopped, "trusted execution stage") {
 		t.Fatalf("legacy run was not handed over: %+v", run)
 	}

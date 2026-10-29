@@ -1,5 +1,5 @@
 // Package knowledge is the platform's knowledge app, on the app API
-// and internal/host: documents people upload for agents and
+// and public consumer roles: documents people upload for agents and
 // members to find, and the tenant's glossary. The host searches them, with
 // the fields apps declare as knowledge (knowledge.go in the host).
 package knowledge
@@ -12,7 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -28,12 +28,12 @@ type Document = platform.KnowledgeDocument
 type Term = platform.KnowledgeTerm
 
 type Knowledge struct {
-	host   host.KnowledgeHost // the tenant running it, once composed
+	host   platform.KnowledgeHost // the tenant running it, once composed
 	ledger *platform.Ledger
 }
 
 // Attach is called by the host when a tenant is composed.
-func (k *Knowledge) AttachKnowledge(h host.KnowledgeHost) { k.host = h }
+func (k *Knowledge) AttachKnowledge(h platform.KnowledgeHost) { k.host = h }
 
 // New is a tenant's knowledge app.
 func New(tenant string) *Knowledge {

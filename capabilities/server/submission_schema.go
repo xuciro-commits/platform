@@ -1,10 +1,12 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"encoding/json"
 
 	"google.golang.org/protobuf/proto"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
 	"strings"
 	"time"
@@ -22,18 +24,18 @@ func (t *Tenant) currentSubmissionSchema(app platform.App, sub *pb.Submission) *
 	}
 	family := uint32(1)
 	key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-	if raw := t.committed.answer(key); len(raw) > 0 {
-		result, receipt, err := resultformat.DecodeBatch(raw)
+	if raw := t.committed.Answer(key); len(raw) > 0 {
+		result, receipt, err := acceptedformat.DecodeBatch(raw)
 		if err == nil {
-			saved, err := resultformat.BatchSubmission(result, receipt)
+			saved, err := acceptedformat.BatchSubmission(result, receipt)
 			if err == nil {
 				family = saved.GetSchema().GetVersion()
 			}
 		}
 	} else if prior := app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()); prior != nil {
 		family = prior.GetSubmission().GetSchema().GetVersion()
-	} else if prior, exists := t.committed.refusal(key); exists {
-		_, saved, err := resultformat.DecodeRefusal(platform.Raw(prior))
+	} else if prior, exists := t.committed.Refusal(key); exists {
+		_, saved, err := acceptedformat.DecodeRefusal(platform.Raw(prior))
 		if err == nil {
 			family = saved.GetSchema().GetVersion()
 		}
@@ -56,14 +58,14 @@ func (t *Tenant) actionSchemaVersion(app platform.App, action platform.Action) (
 	contract := struct {
 		App, Version   string
 		Action, Object any
-	}{App: manifest.ID, Version: manifest.Version, Action: codeActionDescriptor(action)}
+	}{App: manifest.ID, Version: manifest.Version, Action: releaseowner.CodeActionDescriptor(action)}
 	for _, definition := range t.definitions {
 		if definition.Source != "code" || definition.Ref.App != manifest.ID || definition.Ref.Kind != platform.AssetObject || definition.Ref.Name != action.Target || definition.Entity == nil {
 			continue
 		}
 		for _, entity := range manifest.Entities {
 			if entity.Type == action.Target {
-				contract.Object = codeObjectDescriptor(entity, *definition.Entity)
+				contract.Object = releaseowner.CodeObjectDescriptor(entity, *definition.Entity)
 				break
 			}
 		}
@@ -94,10 +96,10 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 	}
 	if content == "" {
 		key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
-		if _, bound := t.committed.schemaVersion(key); !bound && app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+		if _, bound := t.committed.SchemaVersion(key); !bound && app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
 			return nil, nil // Retry an original unbound receipt without upgrading its bytes.
 		}
-		if prior, exists := t.committed.refusal(key); exists && prior.SchemaVersion == nil {
+		if prior, exists := t.committed.Refusal(key); exists && prior.SchemaVersion == nil {
 			return nil, nil
 		}
 		if action.SchemaVersion == nil && current.Family == 1 && sub.GetSchema().GetVersion() == 1 {

@@ -1,7 +1,7 @@
 package platformserver
 
 import (
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 
 	"slices"
 
@@ -23,7 +23,7 @@ func (d *stagedDecision) CaptureTxnIteration(c platform.Caller, receipt *pb.Chan
 	}
 	iteration.Decision = c.App + "/" + receipt.GetChangeId()
 	all := append(slices.Clone(d.iterations), iteration)
-	if err := resultformat.ValidateTxnIterations("", all); err != nil {
+	if err := acceptedformat.ValidateTxnIterations("", all); err != nil {
 		return fail(err.Error())
 	}
 	for _, id := range iteration.IDs {

@@ -55,6 +55,7 @@ export function SystemConsole(){
   <h1>{t("System history")}</h1>
   <Note>{t("System source editing, proposals, approvals, builds and new activations are frozen. Existing records and release evidence remain available for diagnosis.")}</Note>
   <p><a href="#/control-panel">{t("Control Panel")}</a> · <a href="#/host-overview">{t("Host Console")}</a></p>
+  <Panel title={t("Operational records")} description={t("Read the original audit, usage, work and qualified training records. Configuration and task controls stay in their owner consoles.")}><div className="flex flex-wrap gap-3"><a href="#/audit">{t("Audit")}</a><a href="#/ai-usage">{t("AI usage")}</a><a href="#/automation-operations">{t("Work queue")}</a><a href="#/ai-configuration?section=training">{t("Training candidates")}</a></div></Panel>
   <Note>{t("Use the static control panel for authorized configuration and the host console for maintenance. Opening a historical record does not start a build or activation.")}</Note>
   {receipts.report}<PendingRequests receipts={receipts}/>
   <Changes rows={changes.data??[]} releases={releases.data??[]} activations={activations.data??[]} loading={changes.loading||releases.loading||activations.loading} error={changes.error||releases.error||activations.error} reload={reload}/>

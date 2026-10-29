@@ -2,283 +2,441 @@ package platform
 
 import (
 	"encoding/json"
-	"slices"
+	"fmt"
 	"testing"
 )
 
+func setPlanPage() Page {
+	p := queryPlanPage()
+	a := p.Document.Queries["read"]
+	p.Document.Queries["left"] = a
+	p.Document.Queries["right"] = a
+	a.Set = &PageQuerySet{Op: "union", Inputs: []string{"left", "right"}}
+	p.Document.Queries["read"] = a
+	return p
+}
+func TestPageQuerySetExpandedAndFixedConditionBudgets(t *testing.T) {
+	p := setPlanPage()
+	d := p.Document
+	leaf := d.Queries["left"]
+	d.Queries = map[string]PageQuery{"q0": leaf}
+	for i := 1; i <= 4; i++ {
+		q := leaf
+		input := fmt.Sprintf("q%d", i-1)
+		q.Set = &PageQuerySet{Op: "union", Inputs: []string{input, input}}
+		d.Queries[fmt.Sprintf("q%d", i)] = q
+	}
+	if err := d.CheckQuerySets(); err != nil {
+		t.Fatal("legal expanded graph rejected", err)
+	}
+	q := leaf
+	q.Set = &PageQuerySet{Op: "union", Inputs: []string{"q4", "q4"}}
+	d.Queries["q5"] = q
+	if d.CheckQuerySets() == nil {
+		t.Fatal("reused sources evaded expanded budget")
+	}
+	p = setPlanPage()
+	binding := AssetBinding{Ref: AssetRef{App: "sample", Kind: AssetQuery, Name: "fixed"}, SourceVersion: "q1"}
+	left := p.Document.Queries["left"]
+	left.Query = &binding
+	p.Document.Queries["left"] = left
+	terms := make([]any, 32)
+	for i := range terms {
+		terms[i] = []any{"bucket", "=", "A"}
+	}
+	named := map[AssetBinding]NamedQuery{binding: {Domain: Raw(terms)}}
+	if p.CheckQuerySetConditions(named) == nil {
+		t.Fatal("fixed and additional conditions exceeded the owner budget")
+	}
+	left.Conditions = nil
+	p.Document.Queries["left"] = left
+	if err := p.CheckQuerySetConditions(named); err != nil {
+		t.Fatal("legal fixed conditions rejected", err)
+	}
+}
+func TestDateConditionOriginalFieldAndExclusiveType(t *testing.T) {
+	p := queryPlanPage()
+	d := p.Document
+	d.Variables["day"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: Raw("")}
+	q := d.Queries["read"]
+	q.Conditions = []PageQueryCondition{{Field: "due", Op: ">=", Value: PageValue{Variable: "day"}, AsDate: true, Optional: true}}
+	info := EntityInfo{Type: "sample.note", Fields: []FieldInfo{{Name: "due", Type: "date"}}}
+	if err := p.CheckQuerySchema(q, info, nil); err != nil {
+		t.Fatal(err)
+	}
+	info.Fields[0].Type = "datetime"
+	if p.CheckQuerySchema(q, info, nil) == nil {
+		t.Fatal("instant relabelled civil")
+	}
+	info.Fields[0].Type = "date"
+	q.Conditions[0].AsDecimal = true
+	if p.CheckQuerySchema(q, info, nil) == nil {
+		t.Fatal("mixed conversion accepted")
+	}
+}
+
 func queryPlanPage() Page {
-	d, sections := loopDocument()
-	d.Queries = map[string]PageQuery{"read": {Title: "Read notes", Object: AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}, Limit: 20, Sort: []string{"id"}, Conditions: []PageQueryCondition{{Field: "bucket", Op: "=", Value: PageValue{Variable: "bucket"}}}}}
-	d.Variables["window"] = PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "read"}}
-	d.Variables["bucket"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`"A"`)}
-	return Page{Name: "work", Object: d.Queries["read"].Object, Layout: "composed", Sections: sections, Document: d}
+	object := AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}
+	return Page{Name: "work", Object: object, Sections: []Section{{ID: "table", Widget: "table", Fields: []string{"bucket"}, CollectionVariable: "window"}}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"table"}}, "table": {Kind: "widget", Section: "table"}}, Variables: map[string]PageVariable{"window": {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "read"}}, "bucket": {Scope: "page", Type: "string", Mode: "state", Initial: Raw("A")}}, Queries: map[string]PageQuery{"read": {Title: "Read notes", Object: object, Limit: 20, Sort: []string{"id"}, Conditions: []PageQueryCondition{{Field: "bucket", Op: "=", Value: PageValue{Variable: "bucket"}}}}}}}
+}
+
+func typedPage(t *testing.T, original Page) Page {
+	t.Helper()
+	safe, err := original.Safety()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return safe
+}
+func clonePage(t *testing.T, p Page) Page {
+	t.Helper()
+	var copy Page
+	if err := json.Unmarshal(Raw(p), &copy); err != nil {
+		t.Fatal(err)
+	}
+	return copy
 }
 
 func TestIndependentQueryPlansAndScopes(t *testing.T) {
-	p := queryPlanPage()
-	info := EntityInfo{Type: "sample.note", Fields: []FieldInfo{{Name: "bucket", Type: "text"}}}
-	if err := p.Document.Check(p.Sections); err != nil {
+	p := typedPage(t, queryPlanPage())
+	info := EntityInfo{Type: p.Object.Name, Fields: []FieldInfo{{Name: "bucket", Type: "text"}}}
+	if err := p.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.CheckQuerySchema(p.Document.Queries["read"], info, nil); err != nil {
+	if err := p.CheckQuerySchema(p.InputSchema.Queries["read"], info, nil); err != nil {
 		t.Fatal(err)
 	}
-	for _, test := range []struct {
+	for _, tc := range []struct {
 		name   string
 		change func(*Page)
 	}{
-		{"old profile", func(p *Page) { p.Document.UIProfile = "platform.page.v2.8" }},
-		{"unbounded window", func(p *Page) { q := p.Document.Queries["read"]; q.Limit = 101; p.Document.Queries["read"] = q }},
-		{"missing source", func(p *Page) { delete(p.Document.Queries, "read") }},
-		{"item parameter", func(p *Page) {
-			q := p.Document.Queries["read"]
-			q.Conditions[0].Value = PageValue{Variable: "expanded"}
-			p.Document.Queries["read"] = q
-		}},
+		{"unbounded window", func(p *Page) { q := p.InputSchema.Queries["read"]; q.Limit = 101; p.InputSchema.Queries["read"] = q }},
+		{"missing source", func(p *Page) { delete(p.InputSchema.Queries, "read") }},
 		{"query output dependency", func(p *Page) {
-			p.Document.Variables["present"] = PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &PageExpression{Op: "present", Args: []PageValue{{Variable: "window"}}}}
-			q := p.Document.Queries["read"]
+			p.InputSchema.Variables["present"] = PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &PageExpression{Op: "present", Args: []PageValue{{Variable: "window"}}}}
+			q := p.InputSchema.Queries["read"]
 			q.Conditions[0].Value = PageValue{Variable: "present"}
-			p.Document.Queries["read"] = q
+			p.InputSchema.Queries["read"] = q
+		}},
+		{"unknown parameter", func(p *Page) {
+			q := p.InputSchema.Queries["read"]
+			q.Conditions[0].Value = PageValue{Variable: "missing"}
+			p.InputSchema.Queries["read"] = q
+		}},
+		{"foreign owner", func(p *Page) {
+			q := p.InputSchema.Queries["read"]
+			q.Owner = "foreign"
+			p.InputSchema.Queries["read"] = q
 		}},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			p := queryPlanPage()
-			test.change(&p)
-			if p.Document.Check(p.Sections) == nil {
+		t.Run(tc.name, func(t *testing.T) {
+			copy := clonePage(t, p)
+			tc.change(&copy)
+			if copy.CheckSafety() == nil {
 				t.Fatal("invalid plan accepted")
 			}
 		})
 	}
 	hidden := info
 	hidden.Fields = nil
-	if p.CheckQuerySchema(p.Document.Queries["read"], hidden, nil) == nil {
+	if p.CheckQuerySchema(p.InputSchema.Queries["read"], hidden, nil) == nil {
 		t.Fatal("hidden condition field accepted")
 	}
-	mismatch := info
-	mismatch.Fields = []FieldInfo{{Name: "bucket", Type: "boolean"}}
-	if p.CheckQuerySchema(p.Document.Queries["read"], mismatch, nil) == nil {
+	info.Fields[0].Type = "boolean"
+	if p.CheckQuerySchema(p.InputSchema.Queries["read"], info, nil) == nil {
 		t.Fatal("parameter type mismatch accepted")
 	}
-	doc := *p.Document
-	doc.Queries = map[string]PageQuery{}
-	shown := doc.Visible(p.Sections)
-	if _, ok := shown.Variables["window"]; ok || shown.Nodes["loop"].Loop != nil {
-		t.Fatal("unavailable plan left dependent loop")
+	delete(p.InputSchema.Queries, "read")
+	visible := p.VisibleSafety()
+	if _, ok := visible.InputSchema.Variables["window"]; ok {
+		t.Fatal("missing plan retained its output")
+	}
+}
+
+func TestPageQuerySetGraphAndMemberClosure(t *testing.T) {
+	p := typedPage(t, setPlanPage())
+	if err := p.CheckSafety(); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*Page){
+		func(p *Page) { delete(p.InputSchema.Queries, "left") },
+		func(p *Page) {
+			q := p.InputSchema.Queries["read"]
+			q.Set.Inputs[0] = "read"
+			p.InputSchema.Queries["read"] = q
+		},
+		func(p *Page) {
+			q := p.InputSchema.Queries["left"]
+			q.Object.Name = "sample.other"
+			p.InputSchema.Queries["left"] = q
+		},
+		func(p *Page) {
+			q := p.InputSchema.Queries["left"]
+			q.Owner = "foreign"
+			p.InputSchema.Queries["left"] = q
+		},
+		func(p *Page) {
+			q := p.InputSchema.Queries["read"]
+			q.Set.Op = "script"
+			p.InputSchema.Queries["read"] = q
+		},
+	} {
+		copy := clonePage(t, p)
+		change(&copy)
+		if copy.CheckSafety() == nil {
+			t.Fatal("invalid source graph accepted")
+		}
+	}
+	delete(p.InputSchema.Queries, "left")
+	visible := p.VisibleSafety()
+	if _, ok := visible.InputSchema.Queries["read"]; ok {
+		t.Fatal("query set survived missing member source")
+	}
+	if _, ok := visible.InputSchema.Variables["window"]; ok {
+		t.Fatal("query set output survived missing source")
+	}
+	c := pageWidgets.Runtime.Query.Set
+	if c.MaxNodes != QuerySetMaxNodes || c.MaxDepth != QuerySetMaxDepth || c.MaxBytes != QuerySetMaxBytes || c.MaxConditions != QuerySetMaxConditions {
+		t.Fatal("declared and executed set budgets differ")
+	}
+	for _, op := range c.Operations {
+		if err := (Query{Set: &QuerySet{Op: op, Inputs: []*RecordSetPredicate{{}, {}}}}).CheckSet(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
 func TestQueryBindingFreezesOriginalNamedVersion(t *testing.T) {
-	p := queryPlanPage()
-	q := p.Document.Queries["read"]
+	p := typedPage(t, queryPlanPage())
+	q := p.InputSchema.Queries["read"]
 	ref := AssetRef{App: "sample", Kind: AssetQuery, Name: "notes"}
 	q.Query = &AssetBinding{Ref: ref, SourceVersion: "query-1"}
-	p.Document.Queries["read"] = q
+	p.InputSchema.Queries["read"] = q
 	info := EntityInfo{Type: q.Object.Name, Fields: []FieldInfo{{Name: "bucket", Type: "text"}}}
-	decl := NamedQuery{Name: ref.Name, Title: "Notes", Object: q.Object.Name, Domain: json.RawMessage(`[["bucket","!=","private"]]`)}
+	decl := NamedQuery{Name: ref.Name, Title: "Notes", Object: q.Object.Name, Domain: Raw([]any{[]any{"bucket", "!=", "private"}})}
 	named := Definition{Ref: ref, Version: "query-1", Query: &decl}
 	if err := p.CheckQuerySchema(q, info, &named); err != nil {
 		t.Fatal(err)
 	}
 	named.Version = "query-2"
 	if p.CheckQuerySchema(q, info, &named) == nil {
-		t.Fatal("changed named query version accepted")
+		t.Fatal("changed named version accepted")
 	}
-	page, err := PageReleaseAsset("sample", "page-1", p)
+	asset, err := PageReleaseAsset("sample", "page-1", p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := json.Marshal(info)
-	queryBody, _ := json.Marshal(decl)
-	object := ReleaseAsset{Ref: q.Object, SourceVersion: "object-1", ContractVersion: 1, Body: body}
-	query := ReleaseAsset{Ref: ref, SourceVersion: "query-1", ContractVersion: 1, Requires: []AssetRef{q.Object}, Body: queryBody}
-	if _, err = Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, object, query}); err != nil {
+	object := ReleaseAsset{Ref: q.Object, SourceVersion: "object-1", ContractVersion: 1, Body: Raw(info)}
+	query := ReleaseAsset{Ref: ref, SourceVersion: "query-1", ContractVersion: 1, Requires: []AssetRef{q.Object}, Body: Raw(decl)}
+	if _, err := Candidate([]AssetRef{asset.Ref}, []ReleaseAsset{asset, object, query}); err != nil {
 		t.Fatal(err)
 	}
 	query.SourceVersion = "query-2"
-	if _, err = Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, object, query}); err == nil {
-		t.Fatal("candidate ignored exact query binding")
+	if _, err := Candidate([]AssetRef{asset.Ref}, []ReleaseAsset{asset, object, query}); err == nil {
+		t.Fatal("candidate ignored exact source version")
 	}
 }
 
-func TestInterfacePageBindingKeepsPublishedShapeAndConcreteRecordIdentity(t *testing.T) {
-	root := AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}
-	binding := AssetBinding{Ref: AssetRef{App: "sample", Kind: AssetQuery, Name: "coded"}, SourceVersion: "query-1"}
-	shape := Interface{Name: "sample.coded", Title: "Coded", Description: "Common names", Fields: []InterfaceField{{Name: "name", Type: "text", Title: "Name"}}}
-	named := NamedQuery{Name: "coded", Title: "Coded", Interface: shape.Name, InterfaceShape: &shape, Implementations: []string{root.Name}, Sort: []string{"id"}, Limit: 20}
-	definition := Definition{Ref: binding.Ref, Version: binding.SourceVersion, Query: &named}
-	p := Page{Name: "picker", Object: root, Layout: "composed", Sections: []Section{
-		{PageWidgetConfig: PageWidgetConfig{RecordPicker: &PageRecordPicker{LabelField: "name"}}, ID: "picker", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window"},
-		{PageWidgetConfig: PageWidgetConfig{RecordCard: &PageRecordCard{LabelField: "name", Tone: "neutral"}}, ID: "card", Widget: "record-card", ConfigVersion: 1, RecordVariable: "selected", Fields: []string{"name"}},
-	}, Document: &PageDocument{FormatVersion: 2, UIProfile: PageUIProfile(), Root: "root", Nodes: map[string]PageLayoutNode{"root": {Kind: "rows", Children: []string{"picker", "card"}}, "picker": {Kind: "widget", Section: "picker"}, "card": {Kind: "widget", Section: "card"}}, Queries: map[string]PageQuery{"coded": {Interface: shape.Name, Query: &binding, Limit: 20, Sort: []string{"id"}}}, Variables: map[string]PageVariable{
-		"window":   {Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "coded"}},
-		"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "picker"}},
-	}}}
-	if err := p.Document.Check(p.Sections); err != nil {
+func TestComputeResourceThreeConsumersRetainTypedInputAndFrozenOperation(t *testing.T) {
+	p, info, op := computeResourcePage()
+	if err := p.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
-	for _, err := range []error{p.CheckCollectionPorts(), p.CheckRecordPorts(), p.CheckInterfaceQuery(p.Document.Queries["coded"], &definition), p.CheckInterfaceSection(p.Sections[0], &definition), p.CheckInterfaceSection(p.Sections[1], &definition)} {
-		if err != nil {
+	for id, c := range p.ComputeResources() {
+		if err := p.CheckComputeResource(c, info, op, p.InputSchema.Variables[id].Type); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if p.WindowVariableInterface("window") != shape.Name || p.RecordVariableInterface("selected") != shape.Name || p.RecordVariableObject("selected") != "" || p.RecordResourceObject("selected") != (AssetRef{}) {
-		t.Fatal("interface record acquired a fabricated concrete identity")
-	}
-	page, err := PageReleaseAsset("sample", "page-1", p)
+	asset, err := PageReleaseAsset("sample", "1", p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	object := ReleaseAsset{Ref: root, SourceVersion: "object-1", ContractVersion: 1, Body: Raw(EntityInfo{App: root.App, Type: root.Name, Implements: []string{shape.Name}, Fields: []FieldInfo{{Name: "name", Type: "text"}}})}
-	query := ReleaseAsset{Ref: binding.Ref, SourceVersion: binding.SourceVersion, ContractVersion: 1, Body: Raw(named)}
-	object, err = WithDependencies(object)
-	if err != nil {
+	found := false
+	for _, r := range asset.Requires {
+		found = found || r.Kind == AssetCompute && r.Name == "score"
+	}
+	if !found {
+		t.Fatal("operation was not retained as a candidate dependency")
+	}
+	lookup := map[AssetRef]ReleaseAsset{p.Object: {Ref: p.Object, SourceVersion: "1", Body: Raw(info)}, p.InputSchema.Variables["number"].Source.Compute.Operation.Ref: {Ref: p.InputSchema.Variables["number"].Source.Compute.Operation.Ref, SourceVersion: "1", Body: Raw(op)}}
+	if err := checkFrozenQueries(p, lookup); err != nil {
 		t.Fatal(err)
 	}
-	query, err = WithDependencies(query)
-	if err != nil {
+	for _, change := range []func(*Page){func(p *Page) { p.InputSchema.profile = "platform.page.v2.99" }, func(p *Page) {
+		v := p.InputSchema.Variables["number"]
+		v.Scope = "application"
+		p.InputSchema.Variables["number"] = v
+	}, func(p *Page) {
+		p.InputSchema.Variables["number"].Source.Compute.Inputs["qty"] = Binding{Source: "input", Path: []string{"qty"}}
+	}, func(p *Page) {
+		v := p.InputSchema.Variables["number"]
+		v.Source.Section = "table"
+		p.InputSchema.Variables["number"] = v
+	}} {
+		p, _, _ := computeResourcePage()
+		change(&p)
+		if p.CheckSafety() == nil {
+			t.Fatal("accepted invalid computation owner")
+		}
+	}
+	invalidPath := *p.InputSchema.Variables["number"].Source.Compute
+	invalidPath.Inputs = map[string]Binding{"qty": {Source: "subject", Path: []string{"qty", "nested"}}}
+	if p.CheckComputeResource(invalidPath, info, op, "number") == nil {
+		t.Fatal("a non-reference field admitted a further computation hop")
+	}
+	hidden := info
+	hidden.Fields = nil
+	if p.CheckComputeResource(*p.InputSchema.Variables["number"].Source.Compute, hidden, op, "number") == nil {
+		t.Fatal("hidden fields admitted a calculation")
+	}
+	op.Output = ValueSchema{Type: "number"}
+	if p.CheckComputeResource(*p.InputSchema.Variables["exact"].Source.Compute, info, op, "decimal") == nil {
+		t.Fatal("binary fractional output acquired exact decimal semantics")
+	}
+}
+func TestModelComputeResourceFollowsOriginalReferences(t *testing.T) {
+	p, info, op := computeResourcePage()
+	info.Fields = append(info.Fields, FieldInfo{Name: "source", Type: "reference", Ref: info.Type})
+	c := *p.InputSchema.Variables["number"].Source.Compute
+	c.Inputs = map[string]Binding{"qty": {Source: "subject", Path: []string{"source", "source", "qty"}}}
+	lookup := func(typ string) (EntityInfo, bool) { return info, typ == info.Type }
+	if err := p.CheckComputeResource(c, info, op, "number", lookup); err != nil {
 		t.Fatal(err)
 	}
-	shapeAsset, err := WithDependencies(ReleaseAsset{Ref: AssetRef{App: root.App, Kind: AssetInterface, Name: shape.Name}, SourceVersion: "shape-1", ContractVersion: 1, Body: Raw(shape)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object, shapeAsset}); err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range []struct {
-		name   string
-		change func(*Page, *Definition)
-	}{
-		{"changed query version", func(_ *Page, d *Definition) { d.Version = "query-2" }},
-		{"subtype field", func(p *Page, _ *Definition) { p.Sections[1].Fields = []string{"secret"} }},
-		{"wrong concrete object", func(p *Page, _ *Definition) { p.Sections[0].Object = root }},
-		{"untyped ID state", func(p *Page, _ *Definition) { p.Sections[0].PickerValueVariable = "id" }},
-		{"unsupported consumer", func(p *Page, _ *Definition) { p.Sections[0].Widget = "table" }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			var changed Page
-			if err := json.Unmarshal(Raw(p), &changed); err != nil {
-				t.Fatal(err)
-			}
-			d := definition
-			test.change(&changed, &d)
-			if changed.CheckInterfaceSection(changed.Sections[0], &d) == nil && changed.CheckInterfaceSection(changed.Sections[1], &d) == nil {
-				t.Fatal("invalid interface binding accepted")
-			}
-		})
-	}
-	query.SourceVersion = "query-2"
-	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object}); err == nil {
-		t.Fatal("frozen candidate ignored interface query version")
-	}
-	query.SourceVersion = binding.SourceVersion
-	object.Body = Raw(EntityInfo{App: root.App, Type: root.Name, Fields: []FieldInfo{{Name: "name", Type: "text"}}})
-	if _, err := Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, query, object}); err == nil {
-		t.Fatal("frozen candidate accepted a type that stopped implementing the interface")
+	c.Inputs["qty"] = Binding{Source: "subject", Path: []string{"source", "source", "unknown"}}
+	if p.CheckComputeResource(c, info, op, "number", lookup) == nil {
+		t.Fatal("computation accepted an undeclared final field")
 	}
 }
 
-func TestTableCollectionPortIsVersionedAndExclusive(t *testing.T) {
-	p := queryPlanPage()
-	for i := range p.Sections {
-		if p.Sections[i].Widget == "table" {
-			p.Sections[i].CollectionVariable = "window"
-		}
+func computeResourcePage() (Page, EntityInfo, Operation) {
+	object := AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}
+	compute := &PageComputeResource{Operation: AssetBinding{Ref: AssetRef{App: "sample", Kind: AssetCompute, Name: "score"}, SourceVersion: "1"}, RecordVariable: "selected", Inputs: map[string]Binding{"qty": {Source: "subject", Path: []string{"qty"}}}}
+	p := Page{Format: 3, Name: "compute", Title: "Compute", Object: object, WidgetSpec: PageWidgetSpec{Format: "platform.page.web.v1", Body: Raw(map[string]any{})}, InputSchema: PageInputSchema{Variables: map[string]PageVariable{"selected": {Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "table"}}, "number": {Scope: "page", Type: "number", Mode: "resource", Source: &PageResourceSource{Kind: "compute", Compute: compute}}, "exact": {Scope: "page", Type: "decimal", Mode: "resource", Source: &PageResourceSource{Kind: "compute", Compute: compute}}}}, ScopeVisibility: PageScopeVisibility{Root: "root", Owners: map[string]string{}, Scopes: []PageScope{{ID: "root", Kind: "page"}}}, DataBindings: []PageDataBinding{{ID: "table", Object: object, Kind: "records", Model: &ModelBinding{Type: object.Name, Fields: []FieldRef{{Name: "qty"}}}}, {ID: "gauge", Kind: "presentation", Ports: map[string]string{"gaugeValueVariable": "number"}}, {ID: "mini", Kind: "presentation", Ports: map[string]string{"sparklineNumberVariable": "number"}}, {ID: "notice", Kind: "presentation", Ports: map[string]string{"alertValueVariable": "exact"}}}}
+	for _, binding := range p.DataBindings {
+		node := binding.ID + "-scope"
+		p.ScopeVisibility.Owners[binding.ID] = node
+		p.ScopeVisibility.Scopes = append(p.ScopeVisibility.Scopes, PageScope{ID: node, Kind: "page", Parent: "root", Binding: binding.ID})
 	}
-	if err := p.Document.Check(p.Sections); err != nil {
+	info := EntityInfo{App: "sample", Type: object.Name, Fields: []FieldInfo{{Name: "qty", Type: "integer"}}}
+	op := Operation{Name: "score", Title: "Original score", Input: ValueSchema{Type: "object", Properties: map[string]ValueSchema{"qty": {Type: "integer"}}, Required: []string{"qty"}}, Output: ValueSchema{Type: "integer"}, Roles: []string{"reader"}, Binding: OperationBinding{Kind: "native"}, Limits: OperationLimits{TimeoutMillis: 1000, MemoryPages: 1, MaxInputBytes: 4096, MaxOutputBytes: 4096}}
+	return p, info, op
+}
+func TestComputeVisibilityRetainsConsumersAndWithdrawsLostRecordInput(t *testing.T) {
+	p, _, _ := computeResourcePage()
+	visible := p.VisibleSafety()
+	if len(visible.DataBindings) != 4 || len(visible.ComputeResources()) != 2 {
+		t.Fatal("visible computation or consumers were lost")
+	}
+	if err := visible.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.CheckCollectionPorts(); err != nil {
+	p.DataBindings = p.DataBindings[1:]
+	retired := p.VisibleSafety()
+	if len(retired.ComputeResources()) != 0 || len(retired.DataBindings) != 0 {
+		t.Fatal("computation or consumer survived its lost record source")
+	}
+}
+
+func TestTypedScopeGraphRetainsOriginalReadOwners(t *testing.T) {
+	p := typedPage(t, queryPlanPage())
+	p.InputSchema.Variables["local"] = PageVariable{Scope: "overlay", Owner: "panel", Type: "string", Mode: "state", Initial: Raw("")}
+	p.InputSchema.Variables["open"] = PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: Raw(false)}
+	p.ScopeVisibility.Scopes = append(p.ScopeVisibility.Scopes, PageScope{ID: "panel", Kind: "overlay", Bindings: map[string]string{"root": "panel-root", "openVariable": "open"}}, PageScope{ID: "panel-root", Kind: "page", Parent: "panel"}, PageScope{ID: "local-scope", Kind: "page", Parent: "panel-root", Binding: "local"})
+	p.ScopeVisibility.Owners["local"] = "local-scope"
+	p.DataBindings = append(p.DataBindings, PageDataBinding{ID: "local", Kind: "presentation", Ports: map[string]string{"dateVariable": "local"}})
+	if err := p.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
-	for _, test := range []struct {
+	for _, tc := range []struct {
 		name   string
 		change func(*Page)
 	}{
-		{"old profile", func(p *Page) { p.Document.UIProfile = "platform.page.v2.9" }},
-		{"wrong variable", func(p *Page) {
-			for i := range p.Sections {
-				if p.Sections[i].Widget == "table" {
-					p.Sections[i].CollectionVariable = "bucket"
+		{"foreign overlay", func(p *Page) {
+			v := p.InputSchema.Variables["local"]
+			v.Owner = "foreign"
+			p.InputSchema.Variables["local"] = v
+		}},
+		{"page escape", func(p *Page) {
+			for i, s := range p.ScopeVisibility.Scopes {
+				if s.ID == "local-scope" {
+					p.ScopeVisibility.Scopes[i].Parent = "root"
 				}
 			}
 		}},
-		{"mixed query", func(p *Page) {
-			for i := range p.Sections {
-				if p.Sections[i].Widget == "table" {
-					p.Sections[i].Query = AssetRef{App: "sample", Kind: AssetQuery, Name: "other"}
-				}
-			}
+		{"scope cycle", func(p *Page) { p.ScopeVisibility.Scopes[0].Parent = "local-scope" }},
+		{"unknown source", func(p *Page) { p.DataBindings[1].Ports["dateVariable"] = "missing" }},
+		{"duplicate identity", func(p *Page) {
+			p.ScopeVisibility.Scopes = append(p.ScopeVisibility.Scopes, p.ScopeVisibility.Scopes[0])
 		}},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			q := p
-			q.Sections = slices.Clone(p.Sections)
-			doc := *p.Document
-			q.Document = &doc
-			test.change(&q)
-			if q.Document.Check(q.Sections) == nil {
-				t.Fatal("invalid collection port accepted")
+		t.Run(tc.name, func(t *testing.T) {
+			copy := clonePage(t, p)
+			tc.change(&copy)
+			if copy.CheckSafety() == nil {
+				t.Fatal("invalid original owner graph accepted")
 			}
 		})
 	}
-	wrong := p
-	wrong.Sections = slices.Clone(p.Sections)
-	for i := range wrong.Sections {
-		if wrong.Sections[i].Widget == "table" {
-			wrong.Sections[i].Object = AssetRef{App: "sample", Kind: AssetObject, Name: "sample.other"}
-		}
+}
+
+func TestNestedLoopUsesTypedParentAndExpandedBudgets(t *testing.T) {
+	p := typedPage(t, queryPlanPage())
+	p.ScopeVisibility.Scopes = append(p.ScopeVisibility.Scopes, PageScope{ID: "outer", Kind: "loop", Parent: "root", MaxIterations: 20, Bindings: map[string]string{"collection": "window", "itemVariable": "item"}}, PageScope{ID: "inner", Kind: "loop", Parent: "outer", MaxIterations: 10, Bindings: map[string]string{"collection": "window", "itemVariable": "nested"}})
+	p.InputSchema.Variables["item"] = PageVariable{Scope: "loop-item", Owner: "outer", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "item", Node: "outer"}}
+	p.InputSchema.Variables["nested"] = PageVariable{Scope: "loop-item", Owner: "inner", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "item", Node: "inner"}}
+	if factor, err := p.LoopFactor("inner"); err != nil || factor != 200 {
+		t.Fatal("nested read expansion changed", factor, err)
 	}
-	if wrong.CheckCollectionPorts() == nil {
-		t.Fatal("object mismatch accepted")
-	}
-	if _, err := PageReleaseAsset("sample", "page-1", wrong); err == nil {
-		t.Fatal("candidate allowed object mismatch")
-	}
-	cycle := p
-	cycle.Document = &PageDocument{}
-	raw, _ := json.Marshal(p.Document)
-	json.Unmarshal(raw, cycle.Document)
-	cycle.Document.Variables["tableWindow"] = PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "query", Section: "table"}}
-	cycle.Document.Variables["present"] = PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &PageExpression{Op: "present", Args: []PageValue{{Variable: "tableWindow"}}}}
-	query := cycle.Document.Queries["read"]
-	query.Conditions[0].Value = PageValue{Variable: "present"}
-	cycle.Document.Queries["read"] = query
-	if cycle.Document.Check(cycle.Sections) == nil {
-		t.Fatal("table output introduced a plan dependency cycle")
+	p.ScopeVisibility.Scopes[3].MaxIterations = 101
+	if _, err := p.LoopFactor("inner"); err == nil {
+		t.Fatal("multiplied loop budget accepted")
 	}
 }
 
-func TestFrozenQueryObjectChoiceProjection(t *testing.T) {
-	for _, body := range []string{`{"type":"sample.note","fields":[{"name":"bucket","type":"choice","choices":"A, B"}]}`, `{"type":"sample.note","fields":[{"name":"bucket","type":"choice","choices":["A","B"]}]}`} {
-		object, err := queryObjectDescriptor([]byte(body))
-		if err != nil {
-			t.Fatal(err)
-		}
-		p := Page{Document: &PageDocument{Variables: map[string]PageVariable{}}}
-		q := PageQuery{Object: AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}, Limit: 10, Conditions: []PageQueryCondition{{Field: "bucket", Op: "=", Value: PageValue{Literal: json.RawMessage(`"B"`)}}}}
-		if err := p.CheckQuerySchema(q, object, nil); err != nil {
-			t.Fatal(err)
-		}
-		if len(object.Fields[0].Choices) != 2 || object.Fields[0].Choices[1] != "B" {
-			t.Fatal("source choices changed during projection")
-		}
-	}
-}
-
-// A builder object's "only when" is the tag form in its saved body; the query
-// checker reads it as the parsed condition instead of refusing the candidate.
-func TestQueryObjectDescriptorReadsConditionalFields(t *testing.T) {
-	info, err := queryObjectDescriptor([]byte(`{"type":"build.item","fields":[{"name":"kind","type":"choice","choices":"refund,return,other"},{"name":"why","type":"text","when":"kind=refund,return"},{"name":"note","type":"text","when":""}]}`))
-	if err != nil {
+func TestRecordPropertyGraphAndSchema(t *testing.T) {
+	p := typedPage(t, queryPlanPage())
+	object := p.Object
+	p.InputSchema.Variables["selected"] = PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &PageResourceSource{Kind: "record", Section: "table"}}
+	p.InputSchema.Variables["active"] = PageVariable{Scope: "page", Type: "boolean", Mode: "property", Source: &PageResourceSource{Kind: "property", Variable: "selected", Object: &object, Field: "active"}}
+	info := EntityInfo{App: "sample", Type: object.Name, Fields: []FieldInfo{{Name: "active", Type: "boolean"}}}
+	if err := p.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
-	why, ok := info.Field("why")
-	if !ok || why.When == nil || why.When.Field != "kind" || len(why.When.In) != 2 {
-		t.Fatalf("condition not read: %+v", why.When)
+	if err := p.CheckPropertySchema(p.InputSchema.Variables["active"], info); err != nil {
+		t.Fatal(err)
 	}
-	if note, _ := info.Field("note"); note.When != nil {
-		t.Fatalf("an empty condition became %+v", note.When)
+	info.Fields[0].Type = "text"
+	if p.CheckPropertySchema(p.InputSchema.Variables["active"], info) == nil {
+		t.Fatal("property field type drift accepted")
+	}
+	copy := clonePage(t, p)
+	v := copy.InputSchema.Variables["active"]
+	v.Source.Variable = "active"
+	copy.InputSchema.Variables["active"] = v
+	if copy.CheckSafety() == nil {
+		t.Fatal("cyclic property graph accepted")
+	}
+	p.DataBindings = nil
+	if _, ok := p.VisibleSafety().InputSchema.Variables["active"]; ok {
+		t.Fatal("property survived its lost record source")
+	}
+}
+
+func TestNamedRecordSelectionKeepsItsOriginalObject(t *testing.T) {
+	p := typedPage(t, queryPlanPage())
+	p.InputSchema.Selections = []SelectionVariable{{Name: "chosen", Object: p.Object}}
+	p.DataBindings[0].Ports["selection"] = "chosen"
+	if err := p.CheckSafety(); err != nil {
+		t.Fatal(err)
+	}
+	p.DataBindings[0].Ports["selection"] = "missing"
+	if p.CheckSafety() == nil {
+		t.Fatal("unknown record selection accepted")
+	}
+	p.DataBindings[0].Ports["selection"] = "chosen"
+	p.InputSchema.Selections[0].Object.Name = "sample.other"
+	if p.CheckSafety() == nil {
+		t.Fatal("foreign record selection accepted")
 	}
 }

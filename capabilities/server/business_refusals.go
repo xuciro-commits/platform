@@ -2,8 +2,9 @@ package platformserver
 
 import (
 	"encoding/json"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	"platformserver/engine/business"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"reflect"
 	"slices"
 	"strings"
@@ -15,99 +16,18 @@ import (
 	"platformserver/platform"
 )
 
-type BusinessInputChange struct {
-	Field  string          `json:"field"`
-	Before json.RawMessage `json:"before,omitempty"`
-	After  json.RawMessage `json:"after,omitempty"`
-}
-type BusinessRefusalEntry struct {
-	Key          string                         `json:"key"`
-	App          string                         `json:"app"`
-	Type         string                         `json:"type"`
-	ID           string                         `json:"id"`
-	Action       string                         `json:"action"`
-	Member       string                         `json:"member"`
-	At           time.Time                      `json:"at"`
-	Category     string                         `json:"category"`
-	Code         string                         `json:"code"`
-	Message      string                         `json:"message"`
-	State        string                         `json:"state"`
-	Inputs       json.RawMessage                `json:"inputs,omitempty"`
-	Issues       []platform.FieldIssue          `json:"issues,omitempty"`
-	Facts        []platform.BusinessRefusalFact `json:"facts,omitempty"`
-	CorrectionOf string                         `json:"correctionOf,omitempty"`
-	Changes      []BusinessInputChange          `json:"changes,omitempty"`
-}
-type BusinessRefusalPage struct {
-	Records []BusinessRefusalEntry `json:"records"`
-	Total   int                    `json:"total"`
-}
-type RefusalCodeCount struct {
-	Category string `json:"category"`
-	Code     string `json:"code"`
-	Type     string `json:"type"`
-	Count    int    `json:"count"`
-}
-
-func refusalCategory(result resultformat.Refusal) (string, string) {
-	if result.Business != nil {
-		return "business", result.Business.Code
-	}
-	if slices.ContainsFunc(result.Issues, func(i platform.FieldIssue) bool { return i.Constraint != "" }) {
-		return "constraint", "constraint_violation"
-	}
-	if result.Error.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED || result.Error.Code == pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY {
-		return "policy", result.Error.Code.String()
-	}
-	if result.Error.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT || result.Error.Code == pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE {
-		return "input", result.Error.Code.String()
-	}
-	return "technical", result.Error.Code.String()
-}
-func correctionOf(sub *pb.Submission) string {
-	key, _ := strings.CutPrefix(sub.GetCorrelationId(), "correction:")
-	if key == sub.GetCorrelationId() {
-		return ""
-	}
-	return key
-}
-func changedBusinessInputs(before, after []byte) []BusinessInputChange {
-	var a, b map[string]json.RawMessage
-	if json.Unmarshal(before, &a) != nil || json.Unmarshal(after, &b) != nil {
-		return nil
-	}
-	names := map[string]bool{}
-	for k := range a {
-		names[k] = true
-	}
-	for k := range b {
-		names[k] = true
-	}
-	var out []BusinessInputChange
-	for k := range names {
-		ah, _ := acceptance.Digest(a[k])
-		bh, _ := acceptance.Digest(b[k])
-		_, aExists := a[k]
-		_, bExists := b[k]
-		if ah != bh || aExists != bExists {
-			out = append(out, BusinessInputChange{Field: k, Before: slices.Clone(a[k]), After: slices.Clone(b[k])})
-		}
-	}
-	slices.SortFunc(out, func(a, b BusinessInputChange) int { return strings.Compare(a.Field, b.Field) })
-	return out
-}
 func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, binding *platform.SchemaVersion) *kernel.Error {
-	key := correctionOf(sub)
+	key := business.CorrectionOf(sub)
 	if key == "" {
 		return nil
 	}
-	prior, ok := t.committed.refusal(sub.GetAuthority() + "/" + key)
+	prior, ok := t.committed.Refusal(sub.GetAuthority() + "/" + key)
 	var original pb.Submission
 	if !ok || key == sub.GetIdempotencyKey() || protojson.Unmarshal(prior.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetAuthority() != sub.GetAuthority() || original.GetSchema().GetName() != sub.GetSchema().GetName() || original.GetTarget().GetType() != sub.GetTarget().GetType() || original.GetTarget().GetId() != sub.GetTarget().GetId() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A correction needs the same applicant, action and target as its original refused request")
 	}
 	sameSchema := original.GetSchema().GetVersion() == sub.GetSchema().GetVersion() && reflect.DeepEqual(prior.SchemaVersion, binding)
-	if sameSchema && len(changedBusinessInputs(original.GetPayload(), sub.GetPayload())) == 0 {
+	if sameSchema && len(business.ChangedBusinessInputs(original.GetPayload(), sub.GetPayload())) == 0 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Unchanged inputs must repeat the original request key")
 	}
 	return nil
@@ -115,8 +35,8 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, 
 
 // The accepted-result journal remains the truth. This is a caller-filtered
 // projection of its already restored envelopes, not another refusal store.
-func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (BusinessRefusalPage, *kernel.Error) {
-	out := BusinessRefusalPage{Records: []BusinessRefusalEntry{}}
+func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
+	out := platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}
 	if err := t.admits(m); err != nil {
 		return out, err
 	}
@@ -125,7 +45,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 	if typ == "" || id == "" {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose the original business record")
 	}
-	add := func(sub *pb.Submission, e BusinessRefusalEntry) {
+	add := func(sub *pb.Submission, e platform.BusinessRefusalEntry) {
 		if sub.GetTarget().GetType() != typ || sub.GetTarget().GetId() != id {
 			return
 		}
@@ -146,14 +66,14 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 			return
 		}
 		e.Key, e.App, e.Type, e.ID, e.Action, e.Member = sub.GetIdempotencyKey(), sub.GetAuthority(), typ, id, sub.GetSchema().GetName(), sub.GetPrincipalId()
-		e.CorrectionOf = correctionOf(sub)
+		e.CorrectionOf = business.CorrectionOf(sub)
 		if own && (!exists || readable) {
 			e.Inputs = slices.Clone(sub.GetPayload())
 			if e.CorrectionOf != "" {
-				if prior, ok := t.committed.refusal(e.App + "/" + e.CorrectionOf); ok {
+				if prior, ok := t.committed.Refusal(e.App + "/" + e.CorrectionOf); ok {
 					var old pb.Submission
 					if protojson.Unmarshal(prior.Submission, &old) == nil {
-						e.Changes = changedBusinessInputs(old.GetPayload(), sub.GetPayload())
+						e.Changes = business.ChangedBusinessInputs(old.GetPayload(), sub.GetPayload())
 					}
 				}
 			}
@@ -167,37 +87,37 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		}
 		out.Records = append(out.Records, e)
 	}
-	for _, r := range t.committed.allRefusals() {
+	for _, r := range t.committed.AllRefusals() {
 		var sub pb.Submission
 		if protojson.Unmarshal(r.Submission, &sub) != nil {
 			continue
 		}
-		category, code := refusalCategory(r)
-		e := BusinessRefusalEntry{At: r.At, Category: category, Code: code, Message: r.Error.Message, State: "refused", Issues: r.Issues}
+		category, code := business.RefusalCategory(r.Error, r.Business, r.Issues)
+		e := platform.BusinessRefusalEntry{At: r.At, Category: category, Code: code, Message: r.Error.Message, State: "refused", Issues: r.Issues}
 		if r.Business != nil {
-			e.Facts = []platform.BusinessRefusalFact{resultformat.CloneBusinessFact(*r.Business)}
+			e.Facts = []platform.BusinessRefusalFact{acceptedformat.CloneBusinessFact(*r.Business)}
 			e.Message = r.Business.Message
 		}
 		add(&sub, e)
 	}
-	for _, raw := range t.committed.allAnswers() {
+	for _, raw := range t.committed.AllAnswers() {
 		var kind struct{ Kind string }
 		if json.Unmarshal(raw, &kind) != nil || kind.Kind != "record-batch" {
 			continue
 		}
-		r, receipt, err := resultformat.DecodeBatch(raw)
+		r, receipt, err := acceptedformat.DecodeBatch(raw)
 		if err != nil {
 			continue
 		}
-		sub, err := resultformat.BatchSubmission(r, receipt)
+		sub, err := acceptedformat.BatchSubmission(r, receipt)
 		if err != nil {
 			continue
 		}
-		if len(r.Business) == 0 && correctionOf(sub) == "" {
+		if len(r.Business) == 0 && business.CorrectionOf(sub) == "" {
 			continue
 		}
 		if len(r.Business) == 0 {
-			add(sub, BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business"})
+			add(sub, platform.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business"})
 			continue
 		}
 		for _, decision := range r.Decisions {
@@ -215,11 +135,11 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 			if len(facts) == 0 {
 				continue
 			}
-			e := BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business", Facts: facts, Code: facts[0].Code, Message: facts[0].Message}
+			e := platform.BusinessRefusalEntry{At: r.At, State: "accepted", Category: "business", Facts: facts, Code: facts[0].Code, Message: facts[0].Message}
 			add(child, e)
 		}
 	}
-	slices.SortFunc(out.Records, func(a, b BusinessRefusalEntry) int {
+	slices.SortFunc(out.Records, func(a, b platform.BusinessRefusalEntry) int {
 		if c := b.At.Compare(a.At); c != 0 {
 			return c
 		}
@@ -235,7 +155,7 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 }
 
 func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefusalFact, at time.Time) platform.BusinessRefusalFact {
-	f = resultformat.CloneBusinessFact(f)
+	f = acceptedformat.CloneBusinessFact(f)
 	if f.Record != "" && !t.readable(m, f.Record, at) {
 		f.Record = ""
 	}
@@ -275,8 +195,8 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 		_ = json.Unmarshal(platform.Raw(historical.Interface()), &rawBefore)
 		_ = json.Unmarshal(platform.Raw(narrowed.Interface()), &rawAfter)
 		for name := range original {
-			beforeHash, _ := acceptance.Digest(rawBefore[name])
-			afterHash, _ := acceptance.Digest(rawAfter[name])
+			beforeHash, _ := platform.CanonicalDigest(rawBefore[name])
+			afterHash, _ := platform.CanonicalDigest(rawAfter[name])
 			if beforeHash != afterHash {
 				delete(original, name)
 			}

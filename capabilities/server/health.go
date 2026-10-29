@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"platformserver/platform"
 	"runtime/debug"
 	"slices"
 	"time"
@@ -15,16 +16,16 @@ type TenantHealth struct {
 	// Started is when this process began, and Built the code it was built from:
 	// what answers "is this host running the code I just changed?" — the
 	// question that cost three walks before it was on screen.
-	Started      time.Time     `json:"started"`
-	Built        string        `json:"built,omitempty"`
-	Apps         int           `json:"apps"`
-	Queues       []QueueHealth `json:"queues"`
-	Failed       int           `json:"failed"`   // owned work that gave up
-	Deferred     []string      `json:"deferred"` // apps past their quota now
-	Breakers     []Breaker     `json:"breakers"`
-	OpenBreakers int           `json:"openBreakers"`
-	Connectors   int           `json:"connectorsFailing"` // connectors neither healthy nor unknown
-	Endpoints    int           `json:"endpointsFailing"`
+	Started      time.Time          `json:"started"`
+	Built        string             `json:"built,omitempty"`
+	Apps         int                `json:"apps"`
+	Queues       []QueueHealth      `json:"queues"`
+	Failed       int                `json:"failed"`   // owned work that gave up
+	Deferred     []string           `json:"deferred"` // apps past their quota now
+	Breakers     []platform.Breaker `json:"breakers"`
+	OpenBreakers int                `json:"openBreakers"`
+	Connectors   int                `json:"connectorsFailing"` // connectors neither healthy nor unknown
+	Endpoints    int                `json:"endpointsFailing"`
 }
 
 // QueueHealth is one app's waiting deliveries.
@@ -45,15 +46,15 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 func (t *Tenant) health(now time.Time) TenantHealth {
 	if fault := t.fault.Load(); fault != nil {
 		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
-			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []Breaker{}}
+			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []platform.Breaker{}}
 	}
-	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.deferred(now), Breakers: t.Breakers(now)}
+	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.workLoop().Deferred(now), Breakers: t.Breakers(now)}
 	if h.Deferred == nil {
 		h.Deferred = []string{}
 	}
 	t.opsMu.Lock()
 	for _, a := range t.apps {
-		q := t.work.queued(a.Manifest().ID)
+		q := t.work.Queued(a.Manifest().ID)
 		if len(q) == 0 {
 			continue
 		}
@@ -66,7 +67,7 @@ func (t *Tenant) health(now time.Time) TenantHealth {
 		qh.Age = qh.Oldest.Seconds()
 		h.Queues = append(h.Queues, qh)
 	}
-	h.Failed = t.work.failedCount()
+	h.Failed = t.work.FailedCount()
 	t.opsMu.Unlock()
 	for _, b := range h.Breakers {
 		if b.State != "closed" {
@@ -123,3 +124,5 @@ func Built() string {
 	}
 	return revision
 }
+
+func (t *Tenant) Breakers(now time.Time) []platform.Breaker { return t.breakers.View(now) }

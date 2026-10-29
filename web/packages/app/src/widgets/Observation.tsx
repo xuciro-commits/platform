@@ -1,12 +1,12 @@
+import type * as PageUI from "../pageui/types";
 import {useEffect,useMemo,useRef,useState} from "react";
 import {ObservationTable,ObservationStatistics,ObservationTimeSeries,ObservationAvailability,Input,Panel,t,type RecordSource,type EntityRecord,type ObservationStatisticsValue} from "@platform/ui";
-import type {Api} from "@platform/kernel";
 import {useHost} from "../index";
 import {createObservationStatisticsReader} from "../exploration/observation-reader";
 import type {VariableResult} from "../runtime/variables";
 import {QueryWindowFrame,type QueryWindow} from "./QueryWindowFrame";
 
-type Props={object:string;primary:string;config?:Api.PageObservation;title?:string;signalVariable?:string;thresholdVariable?:string;rowsVariable?:string;countVariable?:string;meanVariable?:string;window?:QueryWindow;history?:QueryWindow;context?:QueryWindow;asset?:EntityRecord;selectedRow?:string;onRow?:(record:EntityRecord)=>Promise<void>;values:Record<string,VariableResult>;onState?:(id:string,value:string)=>void;readSource?:RecordSource;scope:string;enabled?:boolean;readCurrent?:boolean;live:boolean};
+type Props={object:string;primary:string;config?:PageUI.PageObservation;title?:string;signalVariable?:string;thresholdVariable?:string;rowsVariable?:string;countVariable?:string;meanVariable?:string;window?:QueryWindow;history?:QueryWindow;context?:QueryWindow;asset?:EntityRecord;selectedRow?:string;onRow?:(record:EntityRecord)=>Promise<void>;values:Record<string,VariableResult>;onState?:(id:string,value:string)=>void;readSource?:RecordSource;scope:string;enabled?:boolean;readCurrent?:boolean;live:boolean};
 const string=(v?:VariableResult)=>v?.status==="value"&&typeof v.value==="string"?v.value:undefined;
 export function ObservationRenderer(props:Props){return <ObservationSurface key={props.scope} {...props}/>;}
 function ObservationSurface({object,primary,config,title,signalVariable,thresholdVariable,rowsVariable,countVariable,meanVariable,window,history,context,asset,selectedRow,onRow,values,onState,readSource,scope,enabled=true,readCurrent=true}:Props){

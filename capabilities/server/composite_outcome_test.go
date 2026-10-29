@@ -11,16 +11,16 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/construction"
+	"platformserver/studio/build"
 )
 
 func TestCompositeHTTPDistinguishesSavedRefusalFromUnknownOutcome(t *testing.T) {
 	tn := builderTenant(t, "composite-outcome")
 	at := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
-	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "retained", map[string]any{"name": "retained", "title": "Retained", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}, at)
-	decide(t, tn, "builder", construction.ID, "build.object.publish", construction.ObjectType, "retained", map[string]any{}, at)
+	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "retained", map[string]any{"name": "retained", "title": "Retained", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}, at)
+	decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "retained", map[string]any{}, at)
 	handler := NewHost(Tokens(map[string]string{"builder": "builder"}), tn).Handler()
-	edits := []CompositeEdit{{Schema: "build.object.archive", Target: &pb.EntityRef{Type: construction.ObjectType, Id: "retained"}, Payload: json.RawMessage(`{}`)}}
+	edits := []CompositeEdit{{Schema: "build.object.archive", Target: &pb.EntityRef{Type: build.ObjectType, Id: "retained"}, Payload: json.RawMessage(`{}`)}}
 	post := func(edits []CompositeEdit) map[string]any {
 		t.Helper()
 		body, err := json.Marshal(map[string]any{"key": "original", "edits": edits})

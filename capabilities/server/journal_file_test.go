@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -107,8 +108,8 @@ func TestJournalsKeepTheSameContract(t *testing.T) {
 			j := backend.open(t, tenant)
 			defer j.Close()
 			compose := func() *Tenant {
-				seat := Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}
-				tn, err := NewTenant(tenant, NewConsole(tenant, seat))
+				seat := platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}
+				tn, err := NewTenant(tenant, newConsole(tenant, seat))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -116,7 +117,7 @@ func TestJournalsKeepTheSameContract(t *testing.T) {
 			}
 			// An append before reading refuses: a writer that has not seen the
 			// entries cannot continue them.
-			if err := j.Append(ctx, tenant, Entry{App: PlatformApp, Kind: "submission", At: at}); err == nil ||
+			if err := j.Append(ctx, tenant, Entry{App: controlowner.PlatformApp, Kind: "submission", At: at}); err == nil ||
 				!strings.Contains(err.Error(), "before reading") {
 				t.Fatalf("append before read: %v", err)
 			}
@@ -128,22 +129,22 @@ func TestJournalsKeepTheSameContract(t *testing.T) {
 			live.attachJournal(ctx, j)
 			admin, _ := live.Member("admin")
 			submit := func(key, id, subject string, when time.Time) (*pb.ChangeRecord, *kernel.Error) {
-				return live.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: admin.ID, Authority: PlatformApp,
-					IdempotencyKey: key, Target: &pb.EntityRef{Type: MemberType, Id: id},
-					Schema: &pb.SchemaRef{Name: SchemaAdd, Version: 1}, Payload: []byte(fmt.Sprintf(`{"subject":%q}`, subject))}, when)
+				return live.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: admin.ID, Authority: controlowner.PlatformApp,
+					IdempotencyKey: key, Target: &pb.EntityRef{Type: controlowner.MemberType, Id: id},
+					Schema: &pb.SchemaRef{Name: controlowner.SchemaAdd, Version: 1}, Payload: []byte(fmt.Sprintf(`{"subject":%q}`, subject))}, when)
 			}
 			first, failure := submit("k1", "m-ana", "user:ana@example.com", at)
 			if failure != nil {
 				t.Fatalf("submit: %v", failure)
 			}
-			if _, known := live.app(PlatformApp).(*Console).MemberBySubject("user:ana@example.com"); !known {
+			if _, known := live.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("user:ana@example.com"); !known {
 				t.Fatal("the committed decision was not applied")
 			}
 			if j.Position(tenant) != 1 {
 				t.Fatalf("one decision wrote %d entries", j.Position(tenant))
 			}
 			entries, err := j.Entries(ctx, tenant, 0)
-			if err != nil || len(entries) != 1 || entries[0].Kind != "accepted-result" || entries[0].App != PlatformApp {
+			if err != nil || len(entries) != 1 || entries[0].Kind != "accepted-result" || entries[0].App != controlowner.PlatformApp {
 				t.Fatalf("the journal holds %+v, %v", entries, err)
 			}
 			// The same request again is the same decision: no second entry, the
@@ -206,21 +207,21 @@ func TestJournalsKeepTheSameContract(t *testing.T) {
 			if err := restored.Replay(entries); err != nil {
 				t.Fatalf("replay: %v", err)
 			}
-			if _, known := restored.app(PlatformApp).(*Console).MemberBySubject("user:ana@example.com"); !known {
+			if _, known := restored.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("user:ana@example.com"); !known {
 				t.Fatal("the replayed decision did not apply")
 			}
 			restored.attachJournal(ctx, reopened)
 			// The committed key is still the committed decision, and new work
 			// continues after the restart.
 			admin, _ = restored.Member("admin")
-			if _, err := restored.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: admin.ID, Authority: PlatformApp,
-				IdempotencyKey: "k1", Target: &pb.EntityRef{Type: MemberType, Id: "m-ana"},
-				Schema: &pb.SchemaRef{Name: SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:ana@example.com"}`)}, at); err != nil {
+			if _, err := restored.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: admin.ID, Authority: controlowner.PlatformApp,
+				IdempotencyKey: "k1", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "m-ana"},
+				Schema: &pb.SchemaRef{Name: controlowner.SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:ana@example.com"}`)}, at); err != nil {
 				t.Fatalf("a retry after restart: %v", err)
 			}
-			if _, err := restored.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: admin.ID, Authority: PlatformApp,
-				IdempotencyKey: "k2", Target: &pb.EntityRef{Type: MemberType, Id: "m-bo"},
-				Schema: &pb.SchemaRef{Name: SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:bo@example.com"}`)}, at.Add(time.Second)); err != nil {
+			if _, err := restored.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: admin.ID, Authority: controlowner.PlatformApp,
+				IdempotencyKey: "k2", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "m-bo"},
+				Schema: &pb.SchemaRef{Name: controlowner.SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:bo@example.com"}`)}, at.Add(time.Second)); err != nil {
 				t.Fatalf("new work after restart: %v", err)
 			}
 			if reopened.Position(tenant) != 2 {

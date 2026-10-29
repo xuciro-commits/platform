@@ -5,6 +5,7 @@ import type { Api } from "@platform/kernel";
 import {modelReferenceTitle} from "./shared";
 import { ReadResult } from "./operations";
 import { AIProviders, AIUsage } from "./ai";
+import { AITraining } from "./ai-training";
 
 const purposes: { purpose: ModelPurpose; setting: string; title: string; description: string }[] = [
   { purpose: "generation", setting: "ai/app-model", title: "Application generation", description: "The default for functions that generate text or structured results. Each function may choose a different model." },
@@ -21,11 +22,12 @@ export function AIConfiguration({initialSection="defaults",fromPackage,fromVersi
     <PageHeader title={t("AI configuration")} actions={fromPackage?<Button onClick={()=>open({view:"package-preparation",params:{id:fromPackage,version:fromVersion??""}})}>{t("Return to package preparation")}</Button>:undefined} help={t("Connect a service, read its models, enable the models people may use, then choose one default for each purpose. Several services and models can be enabled.")} />
     <p className="mb-4 max-w-prose text-sm text-muted">{t("Cloud models are available for authorized design tasks. Production inference and knowledge embeddings require a deployment-approved local or edge service; marking a provider as local does not grant approval.")}</p>
     <nav aria-label={t("AI configuration")} className="mb-5 flex flex-wrap gap-2">
-      {[["services", "Connect services"], ["models", "Available models"], ["defaults", "Default purposes"], ["usage", "Usage and limits"]].map(([id, title]) => <Button key={id} aria-current={section === id ? "page" : undefined} variant={section === id ? "primary" : undefined} onClick={() => setSection(id!)}>{t(title!)}</Button>)}
+      {[["services", "Connect services"], ["models", "Available models"], ["defaults", "Default purposes"], ["usage", "Usage and limits"],["training","Training data"]].map(([id, title]) => <Button key={id} aria-current={section === id ? "page" : undefined} variant={section === id ? "primary" : undefined} onClick={() => setSection(id!)}>{t(title!)}</Button>)}
     </nav>
     {section === "services" && <AIProviders />}
     {section === "models" && <AvailableModels />}
     {section === "defaults" && <div className="grid max-w-4xl gap-6">{purposes.map(item => <PurposeDefault key={item.purpose} {...item} />)}</div>}
+    {section === "training" && <AITraining />}
     {section === "usage" && <><Button className="mb-3" onClick={()=>open({view:"app-settings"})}>{t("Organization default limits")}</Button><AIUsage /></>}
   </>;
 }

@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
@@ -16,7 +17,7 @@ import (
 func TestScheduler(t *testing.T) {
 	start := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	build := func(id string) (*Tenant, *[]Entry) {
-		dir := NewConsole(id, Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer"}}})
+		dir := newConsole(id, platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer"}}})
 		tn, err := NewTenant(id, dir, published{newNotes(id, "a")}, watcher{newNotes(id, "w")})
 		if err != nil {
 			t.Fatal(err)
@@ -27,7 +28,7 @@ func TestScheduler(t *testing.T) {
 	}
 	submit := func(tn *Tenant, key, topic, text string) {
 		t.Helper()
-		ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
+		ana, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
 		if _, err := tn.Submit(ana, note(tn.ID, "ana", "a", key, topic, text), start); err != nil {
 			t.Fatal(err)
 		}

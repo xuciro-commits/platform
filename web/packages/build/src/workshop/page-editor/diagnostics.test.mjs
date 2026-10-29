@@ -19,11 +19,15 @@ registerHooks({ resolve(specifier, context, next) {
   // These cases exercise binding and layout ownership; rendering-only helpers
   // must not accidentally run. Their original boundary tests stay with UI.
   if (specifier === "@platform/ui") return { url: `data:text/javascript,${encodeURIComponent(`
-export {validTimestampOffset} from ${JSON.stringify(new URL("components/date.ts", ui).href)};
+export {validTimestampOffset,validCivilDate} from ${JSON.stringify(new URL("components/date.ts", ui).href)};
+export {rangeGrid} from ${JSON.stringify(new URL("components/range.ts", ui).href)};
+export {validExternalFrame} from ${JSON.stringify(new URL("components/external-frame.ts", ui).href)};
+export {validStaticImage} from ${JSON.stringify(new URL("components/static-image.ts", ui).href)};
+export {validSceneConfig} from ${JSON.stringify(new URL("spatial/scene-model.ts", ui).href)};
 export {validChoiceInput} from ${JSON.stringify(new URL("components/choice.ts", ui).href)};
 export const t=(s,v={})=>s.replace(/\\{(\\w+)\\}/g,(_,k)=>v[k]??k);
 const rendering=()=>{throw Error("Unexpected rendering calculation in diagnostic case");};
-export const rangeGrid=rendering,gaugeModel=rendering,progressRatio=rendering,ganttRange=rendering;`)}`, shortCircuit: true };
+export const gaugeModel=rendering,progressRatio=rendering,ganttRange=rendering;`)}`, shortCircuit: true };
   try { return next(specifier, context); }
   catch (error) {
     if (specifier.startsWith("./") || specifier.startsWith("../")) return next(`${specifier}.ts`, context);

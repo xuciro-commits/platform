@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"strings"
 	"time"
 
@@ -17,9 +17,9 @@ import (
 
 // Only the compact window and declared source identity accompany a business
 // result. No raw point has a field in the accepted-result representation.
-type ObservationDecisionEvidence = resultformat.ObservationDecisionEvidence
+type ObservationDecisionEvidence = platform.ObservationDecisionEvidence
 
-func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *resultformat.ObservationDecisionEvidence, now time.Time) *resultformat.ObservationDecisionEvidence {
+func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platform.ObservationDecisionEvidence, now time.Time) *platform.ObservationDecisionEvidence {
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil
@@ -60,7 +60,7 @@ func observationRequestIdentity(ref platform.AssetRef, q ObservationEvaluate) (s
 	if q.Key == "" || len(q.Key) > 160 || strings.ContainsAny(q.Key, "/\x00\r\n") || q.Until.IsZero() {
 		return "", "", fmt.Errorf("choose a stable observation decision key and window end")
 	}
-	hash, err := acceptance.Digest([]any{ref, q.Record, q.Until.UTC()})
+	hash, err := platform.CanonicalDigest([]any{ref, q.Record, q.Until.UTC()})
 	return "observation:" + q.Key, "observation:" + hash, err
 }
 
@@ -70,13 +70,13 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 	for _, app := range t.apps {
 		var original *pb.Submission
 		var receipt *pb.ChangeRecord
-		if raw := t.committed.answer(app.Manifest().ID + "/" + key); len(raw) > 0 {
-			result, saved, err := resultformat.DecodeBatch(raw)
+		if raw := t.committed.Answer(app.Manifest().ID + "/" + key); len(raw) > 0 {
+			result, saved, err := acceptedformat.DecodeBatch(raw)
 			if err != nil {
 				return nil, observationUnavailable(err), true
 			}
 			receipt = saved
-			original, err = resultformat.BatchSubmission(result, saved)
+			original, err = acceptedformat.BatchSubmission(result, saved)
 			if err != nil {
 				return nil, observationUnavailable(err), true
 			}
@@ -89,7 +89,7 @@ func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.
 			}
 			return receipt, nil, true
 		}
-		if saved, found := t.committed.refusal(app.Manifest().ID + "/" + key); found {
+		if saved, found := t.committed.Refusal(app.Manifest().ID + "/" + key); found {
 			var original pb.Submission
 			if len(saved.Submission) == 0 || protojson.Unmarshal(saved.Submission, &original) != nil || original.GetPrincipalId() != m.ID || original.GetCorrelationId() != identity {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}, true
@@ -208,7 +208,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		return answer, refusal
 	}
 	submission = t.currentSubmissionSchema(owner, submission)
-	evidence := &resultformat.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.info.Version}, Record: plan.entity.Type + "/" + q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Window: result.Window, Intervals: result.Intervals}
+	evidence := &platform.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.info.Version}, Record: plan.entity.Type + "/" + q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Window: result.Window, Intervals: result.Intervals}
 	receipt, refusal := t.submitAcceptedVersion(owner, m, submission, now, false, nil, nil, evidence)
 	if receipt != nil {
 		answer.Receipt = &SubmissionAnswer{Record: receipt}

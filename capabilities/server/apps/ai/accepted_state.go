@@ -21,7 +21,7 @@ func (a *AI) AcceptedLedger() *platform.Ledger { return a.ledger }
 func (a *AI) ForkAcceptedState() (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	fork := &AI{ledger: a.ledger,
+	fork := &AI{ledger: a.ledger, trainingHost: a.trainingHost, trainingPolicies: maps.Clone(a.trainingPolicies), trainingCandidates: maps.Clone(a.trainingCandidates),
 		providers: slices.Clone(a.providers), models: slices.Clone(a.models),
 		limits: maps.Clone(a.limits), usage: slices.Clone(a.usage), daily: maps.Clone(a.daily),
 		recent: cloneCalls(a.recent), reservations: maps.Clone(a.reservations)}
@@ -39,7 +39,7 @@ func cloneCalls(source map[string][]time.Time) map[string][]time.Time {
 func (a *AI) AcceptedState() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return json.Marshal(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily, Reservations: a.reservations})
+	return json.Marshal(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily, Reservations: a.reservations, TrainingPolicies: a.trainingPolicies, TrainingCandidates: a.trainingCandidates})
 }
 
 func (*AI) ValidateAcceptedState(raw json.RawMessage) error {
@@ -57,6 +57,13 @@ func (a *AI) ApplyAcceptedState(raw json.RawMessage) error {
 	defer a.mu.Unlock()
 	a.providers, a.models, a.limits = state.Providers, state.Models, state.Limits
 	a.usage, a.daily, a.reservations = state.Usage, state.Daily, state.Reservations
+	a.trainingPolicies, a.trainingCandidates = state.TrainingPolicies, state.TrainingCandidates
+	if a.trainingPolicies == nil {
+		a.trainingPolicies = map[string]platform.AITrainingPolicy{}
+	}
+	if a.trainingCandidates == nil {
+		a.trainingCandidates = map[string]platform.AITrainingCandidate{}
+	}
 	if a.reservations == nil {
 		a.reservations = map[string]platform.AIReservation{}
 	}

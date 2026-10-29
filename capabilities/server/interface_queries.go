@@ -2,7 +2,7 @@ package platformserver
 
 import (
 	"fmt"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"time"
@@ -86,18 +86,6 @@ func checkInterfaceQueryFields(q platform.NamedQuery) error {
 		info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type})
 	}
 	return checkQueryFields(q, info)
-}
-
-func visibleInterfaceQuery(q platform.NamedQuery, entities map[string]platform.EntityInfo) (platform.NamedQuery, bool) {
-	if q.InterfaceShape == nil {
-		return q, false
-	}
-	empty := len(q.Implementations) == 0
-	q.Implementations = slices.DeleteFunc(slices.Clone(q.Implementations), func(typ string) bool {
-		info, ok := entities[typ]
-		return !ok || !slices.Contains(info.Implements, q.Interface) || q.InterfaceShape.Implements(info) != nil
-	})
-	return q, empty || len(q.Implementations) > 0
 }
 
 // InterfaceRecords uses current implementers; published named queries use

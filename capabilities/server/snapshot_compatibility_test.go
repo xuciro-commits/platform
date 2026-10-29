@@ -34,7 +34,7 @@ func TestSnapshotRestoreFormatsAndLegacyEligibility(t *testing.T) {
 			journal := backend.open(t, id)
 			defer journal.Close()
 			compose := func(format, version string) *Tenant {
-				return composeTenant(t, id, []Seat{seatOf("clerk", "stock:clerk")},
+				return composeTenant(t, id, []platform.Seat{seatOf("clerk", "stock:clerk")},
 					&formattedStock{stock: newStock(id), format: format, version: version})
 			}
 			ctx := context.Background()
@@ -115,7 +115,7 @@ func TestSnapshotRestoreFormatsAndLegacyEligibility(t *testing.T) {
 			// Old checkpoints retain their bytes and their exact-build namespace.
 			legacyID := id + "-legacy"
 			t.Cleanup(func() { backend.cleanup(t, legacyID) })
-			legacy := composeTenant(t, legacyID, []Seat{seatOf("clerk", "stock:clerk")}, newStock(legacyID))
+			legacy := composeTenant(t, legacyID, []platform.Seat{seatOf("clerk", "stock:clerk")}, newStock(legacyID))
 			legacyKey, _ := legacy.snapshotKey("legacy-build")
 			if legacyKey != "legacy-build" {
 				t.Fatal("an undeclared owner gained cross-build eligibility")
@@ -132,7 +132,7 @@ func TestSnapshotRestoreFormatsAndLegacyEligibility(t *testing.T) {
 			if err := journal.SaveSnapshot(ctx, legacyID, oldSeq, legacyKey, oldState); err != nil {
 				t.Fatal(err)
 			}
-			newOwner := composeTenant(t, legacyID, []Seat{seatOf("clerk", "stock:clerk")}, &formattedStock{stock: newStock(legacyID), format: "stock.ledger.v1"})
+			newOwner := composeTenant(t, legacyID, []platform.Seat{seatOf("clerk", "stock:clerk")}, &formattedStock{stock: newStock(legacyID), format: "stock.ledger.v1"})
 			positions := map[string]int64{}
 			if err := deployment.restoreTenants(ctx, journal, "legacy-build", []*Tenant{newOwner}, positions, map[string]bool{}); err != nil || newOwner.quarantined() || positions[legacyID] != oldSeq {
 				t.Fatalf("exact-build legacy checkpoint was not restored: %v", err)

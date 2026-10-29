@@ -1,19 +1,22 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	controlowner "platformserver/kernel/control"
 	"testing"
 	"time"
 
 	"platformserver/apps/ai"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	automation "platformserver/engine/automation"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"platformserver/platform"
 )
 
@@ -32,12 +35,12 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 	defer forgetJournal(t, j, id)
 	at := time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
-		tn := composeTenant(t, id, []Seat{seatOf("ana", "platform:admin", "ai:admin", "agent:admin", "desk:clerk")}, ai.New(id), work.New(id), flow.New(id), NewAgents(id), newDesk(id))
+		tn := composeTenant(t, id, []platform.Seat{seatOf("ana", "platform:admin", "ai:admin", "agent:admin", "desk:clerk")}, ai.New(id), work.New(id), automation.New(id), agentowner.New(id), newDesk(id))
 		tn.AIClient = func(*http.Request) (*http.Response, error) {
 			t.Fatal("saved usage recovery called a model")
 			return nil, nil
 		}
-		tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: "usage-model-effect", App: "desk", Endpoint: resultformat.ModelEndpoint, State: "pending", At: at, Due: at}})
+		tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: "usage-model-effect", App: "desk", Endpoint: acceptedformat.ModelEndpoint, State: "pending", At: at, Due: at}})
 		return tn
 	}
 	live := compose()
@@ -47,8 +50,8 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 	live.attachJournal(ctx, j)
 	decide(t, live, "ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://localhost:1234/v1"}, at)
 	decide(t, live, "ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/model", map[string]any{"access": "users"}, at)
-	decide(t, live, "ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/model"}, at)
-	decide(t, live, "ana", AgentApp, SchemaRunStart, RunType, "R1", map[string]any{"agent": "desk.triage", "goal": "answer", "act": true}, at)
+	decide(t, live, "ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]any{"value": "local/model"}, at)
+	decide(t, live, "ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "R1", map[string]any{"agent": "desk.triage", "goal": "answer", "act": true}, at)
 	if err = live.migrateRuntimeState(ctx, j); err != nil {
 		t.Fatal(err)
 	}
@@ -66,11 +69,11 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 		if err != nil {
 			t.Fatal(err)
 		}
-		a, err := acceptance.Digest(actual)
+		a, err := platform.CanonicalDigest(actual)
 		if err != nil {
 			t.Fatal(err)
 		}
-		b, err := acceptance.Digest(stored)
+		b, err := platform.CanonicalDigest(stored)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -85,7 +88,7 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 	}
 	reserve := func(m platform.Member, call string) {
 		t.Helper()
-		if why := live.reserveCall(m, model, ChatRequest{Call: call}, 30, 20, at); why != nil {
+		if why := live.reserveCall(m, model, platform.ChatRequest{Call: call}, 30, 20, at); why != nil {
 			t.Fatal(why)
 		}
 	}
@@ -109,7 +112,7 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 	live.settleWithUsage("usage-model-effect", platform.Outcome{Effect: "usage-model-effect", Result: "delivered"}, &effectUsage, effectUsage.At)
 	check(live, 2)
 	agentUsage := platform.AIUsage{Call: "agent-call", At: at.Add(3 * time.Second), Member: live.agents.AgentPrincipal("desk.triage").ID, Agent: true, Model: "local/model", Input: 13, Output: 5, TokensReported: true}
-	live.applyAgentStep(stepBody{Run: "R1", Content: "saved answer", Usage: agentUsage}, agentUsage.At, false)
+	live.applyAgentStep(platform.AgentResultStep{Run: "R1", Content: "saved answer", Usage: agentUsage}, agentUsage.At, false)
 	check(live, 3)
 	entries, err := j.Entries(ctx, id, 0)
 	if err != nil {

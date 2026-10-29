@@ -2,6 +2,7 @@
 package ai
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -17,6 +18,11 @@ import (
 	"platformserver/internal/aistate"
 	"platformserver/platform"
 )
+
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 // AI is the platform's AI capability: the providers a tenant uses,
 // the models it enables and who may call them, and the usage of every call.
@@ -65,11 +71,14 @@ type Limit = platform.AILimit
 type Usage = platform.AIUsage
 
 type AI struct {
-	mu        sync.Mutex
-	providers []Provider
-	models    []Model
-	limits    map[string]Limit
-	usage     []Usage
+	trainingHost       platform.AITrainingHost
+	trainingPolicies   map[string]platform.AITrainingPolicy
+	trainingCandidates map[string]platform.AITrainingCandidate
+	mu                 sync.Mutex
+	providers          []Provider
+	models             []Model
+	limits             map[string]Limit
+	usage              []Usage
 	// Tokens per day ("<day>|<member>", "<day>|model:<name>") and each
 	// caller's calls of the last minute, derived from usage as it is metered.
 	daily        map[string]int
@@ -84,7 +93,7 @@ func New(tenant string) *AI {
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]platform.AIReservation{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
+	return &AI{trainingPolicies: map[string]platform.AITrainingPolicy{}, trainingCandidates: map[string]platform.AITrainingCandidate{}, limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, reservations: map[string]platform.AIReservation{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(append(trainingActions(), []platform.Action{
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -107,7 +116,7 @@ func New(tenant string) *AI {
 			Payload:     []platform.Field{f("dailyTokens", "integer", "Tokens a day; 0: the default", false), f("perMinute", "integer", "Calls a minute; 0: the default", false)}},
 		platform.Action{Schema: SchemaLimitRemove, Target: LimitType, Capability: "limits", Title: "Remove AI limit", Roles: admin,
 			Description: "Return a member, agent or app to the default limits.", Payload: []platform.Field{}},
-	), ProviderType, ModelType, LimitType)}
+	}...)...), ProviderType, ModelType, LimitType, trainingPolicyType, trainingCandidateType)}
 }
 
 // Snapshot and Restore: providers, models and usage.
@@ -117,7 +126,7 @@ func (a *AI) SnapshotFormat() string { return "ai.state.v1" }
 func (a *AI) Snapshot() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.ledger.SnapshotWith(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily, Reservations: a.reservations})
+	return a.ledger.SnapshotWith(aistate.State{Providers: a.providers, Models: a.models, Limits: a.limits, Usage: a.usage, Daily: a.daily, Reservations: a.reservations, TrainingPolicies: a.trainingPolicies, TrainingCandidates: a.trainingCandidates})
 }
 
 func (a *AI) Restore(raw json.RawMessage) error {
@@ -138,6 +147,13 @@ func (a *AI) Restore(raw json.RawMessage) error {
 	for _, u := range a.usage {
 		a.recent[u.Member] = append(a.recent[u.Member], u.At)
 	}
+	a.trainingPolicies, a.trainingCandidates = s.TrainingPolicies, s.TrainingCandidates
+	if a.trainingPolicies == nil {
+		a.trainingPolicies = map[string]platform.AITrainingPolicy{}
+	}
+	if a.trainingCandidates == nil {
+		a.trainingCandidates = map[string]platform.AITrainingCandidate{}
+	}
 	a.reservations = s.Reservations
 	if a.reservations == nil {
 		a.reservations = map[string]platform.AIReservation{}
@@ -146,8 +162,8 @@ func (a *AI) Restore(raw json.RawMessage) error {
 }
 
 func (a *AI) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits"},
-		ReadSources: map[string]string{"ai-providers": "record", "ai-models": "record", "ai-usage": "record", "ai-limits": "record"},
+	return platform.Manifest{Languages: languages, ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
+		ReadSources: map[string]string{"ai-providers": "record", "ai-models": "record", "ai-usage": "record", "ai-limits": "record", "ai-training": "record"},
 		Everyone:    []string{"ai-models", "ai-usage"}, Roles: []string{User}, // the user role opens models with access "users"
 		Settings: []platform.Setting{
 			{Name: SettingDailyTokens, Title: "Tokens per person per day", Type: "integer", Default: "0",
@@ -185,6 +201,9 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		id := s.GetTarget().GetId()
+		if s.GetSchema().GetName() == trainingPolicySet || s.GetSchema().GetName() == trainingReview || s.GetSchema().GetName() == trainingRevoke {
+			return a.trainingDecision(c, s, now)
+		}
 		var p struct {
 			Kind, Vendor, BaseURL, Secret, Access string
 			DailyTokens, PerMinute                int
@@ -330,7 +349,7 @@ func (a *AI) allows(m platform.Member, x Model) bool {
 func (a *AI) Meter(u Usage) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	state := aistate.State{Usage: a.usage, Daily: a.daily, Reservations: a.reservations}
+	state := aistate.State{Usage: a.usage, Daily: a.daily, Reservations: a.reservations, TrainingPolicies: a.trainingPolicies, TrainingCandidates: a.trainingCandidates}
 	state.Meter(u)
 	a.usage, a.daily, a.reservations = state.Usage, state.Daily, state.Reservations
 	a.recent[u.Member] = append(slices.DeleteFunc(a.recent[u.Member], func(t time.Time) bool { return u.At.Sub(t) >= time.Minute }), u.At)
@@ -450,6 +469,24 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	defer a.mu.Unlock()
 	admin := c.Holds(c.App, Admin)
 	switch name {
+	case "ai-training":
+		if !admin {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "AI administration access is required")
+		}
+		report := platform.AITrainingReport{Policies: slices.Collect(maps.Values(a.trainingPolicies)), Candidates: []platform.AITrainingCandidate{}}
+		for _, candidate := range a.trainingCandidates {
+			if why := a.trainingProblem(c.Member, candidate, time.Now().UTC(), true); why != "" {
+				candidate.Problems = []string{why}
+			}
+			if a.trainingHost != nil && a.trainingHost.TrainingReadable(c.Member, candidate, time.Now().UTC()) != "" {
+				candidate.Sources, candidate.SourceFields, candidate.ExpectedSources = nil, nil, nil
+				candidate.Target, candidate.Run, candidate.Intent = "", "", ""
+			}
+			candidate.Chosen, candidate.Rejected = nil, nil
+			report.Candidates = append(report.Candidates, candidate)
+		}
+		slices.SortFunc(report.Candidates, func(a, b platform.AITrainingCandidate) int { return strings.Compare(a.ID, b.ID) })
+		return report, nil
 	case "ai-providers":
 		if !admin {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}

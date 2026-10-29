@@ -1,23 +1,22 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
-	"platformserver/apps/build"
-	"platformserver/internal/host"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"testing"
 )
 
 // Governance must not initialise permissions on a half-declared composition.
 type readyConsole struct {
-	*Console
-	buildHost host.BuildHost
+	*controlowner.Console
+	buildHost platform.BuildHost
 	ready     int
 	testing   *testing.T
 }
 
-func (c *readyConsole) AttachBuild(h host.BuildHost) { c.buildHost = h }
+func (c *readyConsole) AttachBuild(h platform.BuildHost) { c.buildHost = h }
 func (c *readyConsole) Ready() error {
 	c.ready++
 	if _, _, ok := c.buildHost.Action("build.object.create"); !ok {
@@ -26,7 +25,7 @@ func (c *readyConsole) Ready() error {
 	return c.Console.Ready()
 }
 func TestCompositionReadyRequiresAllDeclarations(t *testing.T) {
-	c := &readyConsole{Console: NewConsole("ready", seatOf("admin", "platform:admin", "build:builder")), testing: t}
+	c := &readyConsole{Console: newConsole("ready", seatOf("admin", "platform:admin", "build:builder")), testing: t}
 	tenant, err := NewTenant("ready", c, build.New("ready"))
 	if err != nil {
 		t.Fatal(err)
@@ -34,10 +33,10 @@ func TestCompositionReadyRequiresAllDeclarations(t *testing.T) {
 	if c.ready != 1 {
 		t.Fatalf("Ready called %d times", c.ready)
 	}
-	if m, ok := tenant.Member("admin"); !ok || !m.Holds(construction.ID, construction.Builder) {
+	if m, ok := tenant.Member("admin"); !ok || !m.Holds(build.ID, build.Builder) {
 		t.Fatal("ready identity roles missing")
 	}
-	failed := &readyConsole{Console: NewConsole("invalid", seatOf("admin", "platform:admin")), testing: t}
+	failed := &readyConsole{Console: newConsole("invalid", seatOf("admin", "platform:admin")), testing: t}
 	if _, err := NewTenant("invalid", failed, build.New("invalid"), build.New("invalid")); err == nil {
 		t.Fatal("duplicate owner composed")
 	}

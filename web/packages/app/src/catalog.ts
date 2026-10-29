@@ -29,6 +29,7 @@ export const entries: CatalogEntry[] = [
   }),
   asset("generated-form", "Generated record form", "Edit fields from the original object declaration; submit through the owning action.", ["GeneratedForm"], "GeneratedFormExample", {
     dependencies: ["ui/record-form"], uses: ["code", "widget"], widgets: ["form"], states: ["dirty", "pending", "validation"],
+    constraints: ["Local field calculations use the original rule module and projected form inputs. Preview values are read-only; the original host evaluates current facts when saving."],
     snippet: 'import { GeneratedForm } from "@platform/app";\n<GeneratedForm type="your.object" submitLabel="Create" onSubmit={submit} onCancel={cancel} />',
   }),
   asset("records", "Authorized record list", "Browse records, choose a record and save a list view through the member’s host.", ["Records"], "RecordsExample", {
@@ -104,6 +105,6 @@ export const entries: CatalogEntry[] = [
 ];
 
 /** Nonvisual public API, attached to the existing public owner rather than visual cards. */
-export const api = ["pageUIManifest", "PageUI", "PageWidgetID", "PageWidgetConfiguration", "PageWidgetConfigurationFor", "modelOptionLabel","ModelPurpose","boundQueryDefinition", "interfaceQueryForSection", "useTenantApps", "AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useTransition", "useReadQuery", "useRead", "useRecordInventory",
+export const api = ["decodeDefinitions", "validApplicationHeader","pageUIManifest", "PageUI", "PageWidgetID", "PageWidgetConfiguration", "PageWidgetConfigurationFor", "modelOptionLabel","ModelPurpose","boundQueryDefinition", "interfaceQueryForSection", "useTenantApps", "AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useTransition", "useReadQuery", "useRead", "useRecordInventory",
   "useDefinitions", "useCapabilities", "useDependencies", "useProvidedCapabilities", "DependencyDescriptor", "DependencyRead", "ProvidedCapability", "useInvokeCapability", "assetKey", "findDefinition", "definitionPresentation", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "PlatformAppCategory", "categoryOf", "SavedView", "newId",
   "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed", "pageDocumentFromSections", "createWidgetRegistry", "createWidgetDefinitions", "WidgetRegistry", "widgetContracts", "widgetContract", "pageUIProfile", "supportsPageUIProfile", "searchInputObjects", "parsePageDecimal", "isPageDecimal", "isPageDecimalDraft", "PageDecimalValue", "pageVariableContract", "pageVariableValues", "pageVariableDiagnostics", "pageLayoutDiagnostics", "PageVariableValue", "WidgetImplementation", "WidgetContract", "WidgetID", "semanticModelView", "semanticPropertyTypes", "assetBindingKey", "SemanticPropertyType", "propertyKey", "relationKey", "PropertyRef", "ReferenceRelationRef", "SemanticRelation", "SemanticModelView"];

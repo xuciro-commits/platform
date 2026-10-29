@@ -2,24 +2,24 @@ package platformserver
 
 import (
 	"maps"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
 func (h hostView) ApprovalRelease(app, action, typ string) (string, *kernel.Error) {
 	activated := map[string]bool{}
-	for key, raw := range storedValues(&h.t.committed, "answer", h.t.committed.answers, "active") {
+	for key, raw := range h.t.committed.AllAnswers("active") {
 		if !strings.HasPrefix(key, "release:") {
 			continue
 		}
-		result, err := resultformat.DecodeRelease(raw)
+		result, err := acceptedformat.DecodeRelease(raw)
 		if err == nil && result.Active {
 			activated[result.CandidateID] = true
 		}
@@ -57,7 +57,7 @@ func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.Rel
 	if release == "" {
 		return platform.ReleaseCandidate{}, nil
 	}
-	sealed, err := t.releases.candidate(release)
+	sealed, err := t.releases.Candidate(release)
 	if err != nil {
 		return platform.ReleaseCandidate{}, conflictRefusal(err)
 	}
@@ -72,11 +72,11 @@ func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.Rel
 	return closed, conflictRefusal(err)
 }
 
-func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalRequest) (host.WorkHost, *kernel.Error) {
+func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalRequest) (platform.WorkHost, *kernel.Error) {
 	if a.Release == "" {
 		return h, nil
 	}
-	sealed, err := h.t.releases.candidate(a.Release)
+	sealed, err := h.t.releases.Candidate(a.Release)
 	if err != nil {
 		return nil, conflictRefusal(err)
 	}
@@ -95,7 +95,7 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	if err != nil {
 		return nil, conflictRefusal(err)
 	}
-	bound := execution.(host.WorkHost)
+	bound := execution.(platform.WorkHost)
 	app, action, known := bound.Action(a.Action)
 	if !known || app != a.App || action.Target != "" && action.Target != typ || action.Approval == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained approval action is unavailable")
@@ -130,6 +130,9 @@ func (r *flowExecutionRuntime) RequestApproval(c platform.Caller, app string, s 
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The approval owner is unavailable")
 	}
-	work.(host.AttachedWork).AttachWork(flowExecution{hostView: hostView{t: r.tenant, app: work, decision: r.stagedDecision}, rt: r})
+	context := hostView{t: r.tenant, app: work, decision: r.stagedDecision}
+	bindings := context.ownerBindings()
+	bindings.Work = flowExecution{hostView: context, rt: r}
+	r.tenant.services.BindOwner(work, bindings)
 	return work.RequestApproval(c, s, at)
 }

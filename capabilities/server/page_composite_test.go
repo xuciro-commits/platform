@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -31,26 +30,26 @@ func TestPageCompositeMatrixUsesAuthorizedOriginalRuleAndRetainsRelease(t *testi
 	tn := compose()
 	var entries []Entry
 	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
-	row := publishObject(t, tn, "builder", "ROW", map[string]any{"name": "resource", "title": "Resource", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "capacity", Title: "Capacity", Type: "decimal"}}}, at)
-	column := publishObject(t, tn, "builder", "COL", map[string]any{"name": "requirement", "title": "Requirement", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "minimum", Title: "Minimum", Type: "decimal"}}}, at)
+	row := publishObject(t, tn, "builder", "ROW", map[string]any{"name": "resource", "title": "Resource", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "capacity", Title: "Capacity", Type: "decimal"}}}, at)
+	column := publishObject(t, tn, "builder", "COL", map[string]any{"name": "requirement", "title": "Requirement", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "minimum", Title: "Minimum", Type: "decimal"}}}, at)
 	for _, r := range []struct {
 		id       string
 		capacity float64
 	}{{"press", 120}, {"drill", 40}} {
-		decide(t, tn, "user", construction.ID, row+".create", row, r.id, map[string]any{"name": r.id, "capacity": r.capacity}, at)
+		decide(t, tn, "user", build.ID, row+".create", row, r.id, map[string]any{"name": r.id, "capacity": r.capacity}, at)
 	}
 	for _, r := range []struct {
 		id      string
 		minimum float64
 	}{{"light", 30}, {"heavy", 100}} {
-		decide(t, tn, "user", construction.ID, column+".create", column, r.id, map[string]any{"name": r.id, "minimum": r.minimum}, at)
+		decide(t, tn, "user", build.ID, column+".create", column, r.id, map[string]any{"name": r.id, "minimum": r.minimum}, at)
 	}
 	path := func(root, name string) platform.Expr {
 		return platform.Expr{Op: "path", Kind: "decimal", Args: []platform.Expr{platform.ExprReference("reference", "input."+root)}, Path: []string{name}}
 	}
 	expr := platform.Expr{Op: ">=", Kind: "boolean", Args: []platform.Expr{path("row", "capacity"), path("column", "minimum")}}
-	p := modelTestPage(row, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: row}}, "columns": {Model: platform.ModelBinding{Type: column}}}, Value: &expr}}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}})
-	p.Document.UIProfile = platform.PageCompositeProfile
+	p := modelTestPage(row, []platform.PageDataBinding{platform.PageDataBinding{Models: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: row}}, "columns": {Model: platform.ModelBinding{Type: column}}}, Value: &expr, ID: "matrix", Kind: "composite"}})
+
 	result := compositeRead(t, tn, "builder", p, "matrix")
 	if result.Hidden || result.Partial || len(result.Composite.Cells) != 4 {
 		t.Fatalf("matrix: %+v", result)
@@ -63,15 +62,14 @@ func TestPageCompositeMatrixUsesAuthorizedOriginalRuleAndRetainsRelease(t *testi
 	}
 	// Both inputs are original identities. A subsequent model edit changes the
 	// answer without replacing the page or adding client-side calculations.
-	decide(t, tn, "user", construction.ID, row+".edit", row, "drill", map[string]any{"capacity": 150.0}, at)
+	decide(t, tn, "user", build.ID, row+".edit", row, "drill", map[string]any{"capacity": 150.0}, at)
 	for _, cell := range compositeRead(t, tn, "builder", p, "matrix").Composite.Cells {
 		if cell.Value != true {
 			t.Fatalf("stale cell: %+v", cell)
 		}
 	}
-	sections := []build.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: p.Sections[0].Composite}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}}
-	decide(t, tn, "builder", construction.ID, "build.page.create", construction.PageType, "PAGE", map[string]any{"name": p.Name, "title": p.Title, "object": row, "sections": sections, "document": p.Document}, at)
-	decide(t, tn, "builder", construction.ID, "build.page.publish", construction.PageType, "PAGE", map[string]any{}, at)
+	decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", modelDraftPayload(p), at)
+	decide(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at)
 	preview, err := tn.PreviewRelease(memberOf(t, tn, "builder"), platform.AssetPage, "PAGE")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("composite closure: %+v %v", preview, err)
@@ -82,29 +80,29 @@ func TestPageCompositeMatrixUsesAuthorizedOriginalRuleAndRetainsRelease(t *testi
 func TestPageCompositeGraphLayersOverlayAndDAG(t *testing.T) {
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	tn := builderTenant(t, "composite-graph")
-	layer := publishObject(t, tn, "builder", "LAYER", map[string]any{"name": "division", "title": "Division", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
-	node := publishObject(t, tn, "builder", "NODE", map[string]any{"name": "unit", "title": "Unit", "fields": []construction.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "division", Title: "Division", Type: "reference", Ref: layer}}}, at)
-	edge := publishObject(t, tn, "builder", "EDGE", map[string]any{"name": "reporting", "title": "Reporting", "fields": []construction.Field{{Name: "superior", Title: "Superior", Type: "reference", Ref: node}, {Name: "subordinate", Title: "Subordinate", Type: "reference", Ref: node}, {Name: "division", Title: "Division", Type: "reference", Ref: layer}}}, at)
-	overlay := publishObject(t, tn, "builder", "OVERLAY", map[string]any{"name": "tenure", "title": "Tenure", "fields": []construction.Field{{Name: "unit", Title: "Unit", Type: "reference", Ref: node}, {Name: "period", Title: "Period", Type: "text"}, {Name: "current", Title: "Current", Type: "boolean"}}}, at)
-	decide(t, tn, "user", construction.ID, layer+".create", layer, "division", map[string]any{"name": "Delivery"}, at)
+	layer := publishObject(t, tn, "builder", "LAYER", map[string]any{"name": "division", "title": "Division", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
+	node := publishObject(t, tn, "builder", "NODE", map[string]any{"name": "unit", "title": "Unit", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "division", Title: "Division", Type: "reference", Ref: layer}}}, at)
+	edge := publishObject(t, tn, "builder", "EDGE", map[string]any{"name": "reporting", "title": "Reporting", "fields": []build.Field{{Name: "superior", Title: "Superior", Type: "reference", Ref: node}, {Name: "subordinate", Title: "Subordinate", Type: "reference", Ref: node}, {Name: "division", Title: "Division", Type: "reference", Ref: layer}}}, at)
+	overlay := publishObject(t, tn, "builder", "OVERLAY", map[string]any{"name": "tenure", "title": "Tenure", "fields": []build.Field{{Name: "unit", Title: "Unit", Type: "reference", Ref: node}, {Name: "period", Title: "Period", Type: "text"}, {Name: "current", Title: "Current", Type: "boolean"}}}, at)
+	decide(t, tn, "user", build.ID, layer+".create", layer, "division", map[string]any{"name": "Delivery"}, at)
 	for _, id := range []string{"parent", "child"} {
-		decide(t, tn, "user", construction.ID, node+".create", node, id, map[string]any{"name": id, "division": "division"}, at)
+		decide(t, tn, "user", build.ID, node+".create", node, id, map[string]any{"name": id, "division": "division"}, at)
 	}
-	decide(t, tn, "user", construction.ID, edge+".create", edge, "report", map[string]any{"superior": "parent", "subordinate": "child"}, at)
-	decide(t, tn, "user", construction.ID, overlay+".create", overlay, "period", map[string]any{"unit": "child", "period": "2026-01 to 2026-12", "current": true}, at)
-	p := modelTestPage(node, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Acyclic: true, Bindings: map[string]platform.ModelViewBinding{
+	decide(t, tn, "user", build.ID, edge+".create", edge, "report", map[string]any{"superior": "parent", "subordinate": "child"}, at)
+	decide(t, tn, "user", build.ID, overlay+".create", overlay, "period", map[string]any{"unit": "child", "period": "2026-01 to 2026-12", "current": true}, at)
+	p := modelTestPage(node, []platform.PageDataBinding{platform.PageDataBinding{Acyclic: true, Models: map[string]platform.ModelViewBinding{
 		"nodes":  {Model: platform.ModelBinding{Type: node}, Roles: map[string]platform.FieldRef{"layer": {Name: "division"}, "detail": {Path: []string{"division", "name"}}}},
 		"layers": {Model: platform.ModelBinding{Type: layer}}, "edges": {Model: platform.ModelBinding{Type: edge}, Roles: map[string]platform.FieldRef{"from": {Name: "superior"}, "to": {Name: "subordinate"}}},
 		"overlay": {Model: platform.ModelBinding{Type: overlay}, Roles: map[string]platform.FieldRef{"node": {Name: "unit"}, "detail": {Name: "period"}, "current": {Name: "current"}}},
-	}}}, ID: "graph", Widget: "layered-graph", ConfigVersion: 1,
+	}, ID: "graph", Kind: "composite",
 	}})
-	p.Document.UIProfile = platform.PageCompositeProfile
-	originalEdges := p.Sections[0].Composite.Bindings["edges"]
-	p.Sections[0].Composite.Bindings["edges"] = platform.ModelViewBinding{Model: originalEdges.Model, Roles: map[string]platform.FieldRef{"to": {Name: "subordinate"}}, Expressions: map[string]platform.Expr{"from": platform.ExprReference("reference", "division")}}
+
+	originalEdges := p.DataBindings[0].Models["edges"]
+	p.DataBindings[0].Models["edges"] = platform.ModelViewBinding{Model: originalEdges.Model, Roles: map[string]platform.FieldRef{"to": {Name: "subordinate"}}, Expressions: map[string]platform.Expr{"from": platform.ExprReference("reference", "division")}}
 	if err := p.CheckModelBindings(tn.entity, tn.modelCriteria); err == nil || !strings.Contains(err.Error(), "reference target differs") {
 		t.Fatalf("expression changed the reference owner: %v", err)
 	}
-	p.Sections[0].Composite.Bindings["edges"] = originalEdges
+	p.DataBindings[0].Models["edges"] = originalEdges
 	result := compositeRead(t, tn, "builder", p, "graph")
 	if result.Partial || result.Hidden || len(result.Composite.Sources["nodes"].Records) != 2 || result.Composite.Sources["overlay"].Records[0]["$view.current"] != true {
 		t.Fatalf("graph projection: %+v", result)
@@ -114,7 +112,7 @@ func TestPageCompositeGraphLayersOverlayAndDAG(t *testing.T) {
 			t.Fatalf("model path not projected: %+v", row)
 		}
 	}
-	decide(t, tn, "user", construction.ID, edge+".create", edge, "cycle", map[string]any{"superior": "child", "subordinate": "parent"}, at)
+	decide(t, tn, "user", build.ID, edge+".create", edge, "cycle", map[string]any{"superior": "child", "subordinate": "parent"}, at)
 	tn.mu.Lock()
 	_, err := tn.readPageModel(memberOf(t, tn, "builder"), PageModelRead{Draft: &p, Section: "graph", Limit: 200}, at)
 	tn.mu.Unlock()
@@ -127,20 +125,20 @@ func TestPageCompositePartialNeverTurnsHiddenCellsIntoFalse(t *testing.T) {
 	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	id := "composite-partial"
 	owner := newRecordSetOwner(id)
-	tn := composeTenant(t, id, []Seat{seatOf("writer", "invariants:operator", "build:builder"), seatOf("viewer", "invariants:observer", "build:builder")}, owner, build.New(id))
+	tn := composeTenant(t, id, []platform.Seat{seatOf("writer", "invariants:operator", "build:builder"), seatOf("viewer", "invariants:observer", "build:builder")}, owner, build.New(id))
 	for _, who := range []string{"writer", "viewer"} {
 		decide(t, tn, who, "invariants", "invariants.entry.create", owner.entity.Type, who, validConstraintEntry(who), at)
 	}
 	expr := platform.ExprLiteralValue("boolean", true)
-	p := modelTestPage(owner.entity.Type, []platform.Section{{PageWidgetConfig: platform.PageWidgetConfig{Composite: &platform.PageComposite{Bindings: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: owner.entity.Type}}, "columns": {Model: platform.ModelBinding{Type: owner.entity.Type}}}, Value: &expr}}, ID: "matrix", Widget: "model-matrix", ConfigVersion: 1}})
-	p.Document.UIProfile = platform.PageCompositeProfile
+	p := modelTestPage(owner.entity.Type, []platform.PageDataBinding{platform.PageDataBinding{Models: map[string]platform.ModelViewBinding{"rows": {Model: platform.ModelBinding{Type: owner.entity.Type}}, "columns": {Model: platform.ModelBinding{Type: owner.entity.Type}}}, Value: &expr, ID: "matrix", Kind: "composite"}})
+
 	result := compositeRead(t, tn, "viewer", p, "matrix")
 	if !result.Hidden || !result.Partial || len(result.Composite.Cells) > 0 || len(result.Composite.Sources) > 0 {
 		t.Fatalf("hidden matrix leaked: %+v", result)
 	}
-	for name, b := range p.Sections[0].Composite.Bindings {
+	for name, b := range p.DataBindings[0].Models {
 		b.Model.Visibility = "mark"
-		p.Sections[0].Composite.Bindings[name] = b
+		p.DataBindings[0].Models[name] = b
 	}
 	result = compositeRead(t, tn, "viewer", p, "matrix")
 	if result.Hidden || !result.Partial || len(result.Composite.Cells) != 1 || result.Composite.Cells[0].Value != true {

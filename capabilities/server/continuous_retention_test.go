@@ -3,12 +3,13 @@ package platformserver
 import (
 	"fmt"
 	"platformkernel/kernel"
+	"platformserver/engine/resources"
 	"strings"
 	"testing"
 	"time"
 
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -50,9 +51,9 @@ func (s *retainedNativeSource) Manifest() platform.Manifest {
 
 func TestContinuousDeadLetterAssetsRetainBoundsExpiryAndRecovery(t *testing.T) {
 	const tenant, id = "dead-letter-retention", "frames.window:source"
-	files := &memoryFiles{}
+	files := &resources.MemoryFiles{}
 	compose := func() *Tenant {
-		tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), &retainedNativeSource{newNativeFrameSource(tenant)})
+		tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), &retainedNativeSource{newNativeFrameSource(tenant)})
 		tn.Files = files
 		return tn
 	}
@@ -73,15 +74,15 @@ func TestContinuousDeadLetterAssetsRetainBoundsExpiryAndRecovery(t *testing.T) {
 	if _, err := tn.ConsumeFlowBatch(member, id, first, at); err != nil {
 		t.Fatal(err)
 	}
-	active, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{})
-	all, _, _ := platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{Archived: true})
+	active, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{})
+	all, _, _ := platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{Archived: true})
 	if err != nil || len(active) != 2 || len(all) != 8 || active[0].Action == "" {
 		t.Fatalf("action failures escaped the retained live bound: active=%d all=%d %v", len(active), len(all), err)
 	}
 	expiredAt := at.Add(time.Second)
 	for _, asset := range active {
 		decide(t, tn, "member", "frames", "frames.probe.unblock", "frames.probe", asset.Target, map[string]any{}, at)
-		if got := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", asset.ID, map[string]any{}, expiredAt); got == "ok" {
+		if got := refuse(t, tn, "member", automation.ID, automation.SchemaFlowReplay, "flow.dead-letter", asset.ID, map[string]any{}, expiredAt); got == "ok" {
 			t.Fatal("an expired action replay ran before the retention timer")
 		}
 		if probe, _ := platform.Get[nativeProbeRecord](tn.automation("frames", false), asset.Target); probe.Applied != 0 {
@@ -95,24 +96,24 @@ func TestContinuousDeadLetterAssetsRetainBoundsExpiryAndRecovery(t *testing.T) {
 	if _, err := tn.ConsumeFlowBatch(member, id, late, at.Add(100*time.Millisecond)); err != nil {
 		t.Fatal(err)
 	}
-	active, _, err = platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{})
+	active, _, err = platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{})
 	if err != nil || len(active) != 2 || active[0].Action != "" || active[1].Action != "" {
 		t.Fatal("signal and action assets did not share the original retained bound", err)
 	}
 	for _, asset := range active {
-		if got := refuse(t, tn, "member", flow.ID, flow.SchemaFlowReplay, "flow.dead-letter", asset.ID, map[string]any{}, at.Add(1100*time.Millisecond)); got == "ok" {
+		if got := refuse(t, tn, "member", automation.ID, automation.SchemaFlowReplay, "flow.dead-letter", asset.ID, map[string]any{}, at.Add(1100*time.Millisecond)); got == "ok" {
 			t.Fatal("an expired signal was prepared before its retention timer")
 		}
 	}
-	decide(t, tn, "member", flow.ID, flow.SchemaFlowStop, flow.InstanceType, id, map[string]any{}, at)
+	decide(t, tn, "member", automation.ID, automation.SchemaFlowStop, automation.InstanceType, id, map[string]any{}, at)
 	for tick := range 3 {
 		tn.Work(at.Add(time.Duration(tick+2) * time.Second))
 	}
-	active, _, err = platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{})
+	active, _, err = platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{})
 	if err != nil || len(active) != 0 {
 		t.Fatal("terminal instance retained expired live assets", len(active), err)
 	}
-	all, _, err = platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{Archived: true})
+	all, _, err = platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{Archived: true})
 	if err != nil || len(all) != 10 {
 		t.Fatal("retention removed original asset records", len(all), err)
 	}
@@ -138,7 +139,7 @@ func TestContinuousDeadLetterAssetsRetainBoundsExpiryAndRecovery(t *testing.T) {
 	if err := recovered.Restore(raw); err != nil {
 		t.Fatal(err)
 	}
-	all, _, err = platform.Find[platform.FlowDeadLetterAsset](recovered.automation(flow.ID, false), platform.Query{Archived: true})
+	all, _, err = platform.Find[platform.FlowDeadLetterAsset](recovered.automation(automation.ID, false), platform.Query{Archived: true})
 	if err != nil || len(all) != 10 {
 		t.Fatal("snapshot lost archived assets", err)
 	}
@@ -152,7 +153,7 @@ func TestContinuousDeadLetterAssetsRetainBoundsExpiryAndRecovery(t *testing.T) {
 func TestContinuousDeadLetterArchiveProgressesPastPagingTarget(t *testing.T) {
 	const tenant, id = "large-dead-letter", "frames.window:source"
 	at := time.Date(2026, 10, 11, 12, 0, 10, 0, time.UTC)
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), &retainedFrameSource{newFrameSource(tenant, 2<<20)})
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), &retainedFrameSource{newFrameSource(tenant, 2<<20)})
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
 	member := memberOf(t, tn, "member")
 	large := platform.Raw(strings.Repeat("x", 90<<10))
@@ -167,8 +168,8 @@ func TestContinuousDeadLetterArchiveProgressesPastPagingTarget(t *testing.T) {
 	for tick := range 3 {
 		tn.Work(at.Add(time.Duration(tick+2) * time.Second))
 	}
-	active, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{})
-	all, _, _ := platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{Archived: true})
+	active, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{})
+	all, _, _ := platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{Archived: true})
 	if err != nil || len(active) != 0 || len(all) != 1 || !all[0].Archived || all[0].Letter.Value != string(large) {
 		t.Fatal("a legal 90 KiB asset could not archive past the paging target", len(active), len(all), err)
 	}
@@ -178,10 +179,10 @@ func TestContinuousDeadLetterBacklogDoesNotStarveDueFlow(t *testing.T) {
 	const tenant, id = "retention-with-due", "frames.window:source"
 	at := time.Date(2026, 10, 11, 12, 0, 10, 0, time.UTC)
 	source := &retentionWithDueSource{&retainedFrameSource{newFrameSource(tenant, 2<<20)}}
-	tn := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	tn := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
 	decide(t, tn, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, at)
 	tn.Work(at)
-	due, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "frames.due:source")
+	due, ok := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "frames.due:source")
 	if !ok || due.State != "waiting" || len(due.Tokens) != 1 || !due.Tokens[0].Due.Equal(at.Add(time.Second)) {
 		t.Fatal("fixture did not retain the ordinary due wait", due.State)
 	}
@@ -197,8 +198,8 @@ func TestContinuousDeadLetterBacklogDoesNotStarveDueFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	tn.Work(at.Add(2 * time.Second))
-	due, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "frames.due:source")
-	remaining, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(flow.ID, false), platform.Query{})
+	due, _ = platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "frames.due:source")
+	remaining, _, err := platform.Find[platform.FlowDeadLetterAsset](tn.automation(automation.ID, false), platform.Query{})
 	if due.State != "done" || err != nil || len(remaining) == 0 || len(remaining) >= 6 {
 		t.Fatalf("due work did not advance alongside a bounded archive batch: state=%s remaining=%d refusal=%v", due.State, len(remaining), err)
 	}

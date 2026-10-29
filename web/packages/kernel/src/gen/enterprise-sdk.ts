@@ -7,30 +7,11 @@ export type EnterpriseStereotype =
 	| "ActualOrganization"
 	| "ActualPost"
 	| "ActualPerson"
-	| "Responsibility"
-	| "Capability"
-	| "EnterpriseGoal"
-	| "EnterpriseObjective"
-	| "Opportunity"
-	| "ActualLocation"
-	| "ActualResource"
-	| "System"
-	| "Service"
-	| "OperationalActivity"
-	| "ActualProject"
-	| "ActualProjectMilestone"
-	| "Standard"
-	| "Risk"
-	| "InformationElement"
 ;
 
-// EnterpriseViewpoint is the five description views the model projects onto itself.
+// EnterpriseViewpoint identifies the read-only directory projection.
 export type EnterpriseViewpoint =
 	| "organization"
-	| "data"
-	| "function"
-	| "output"
-	| "control"
 ;
 
 // enterpriseWrites is the write contract: every schema that may change the model.
@@ -47,10 +28,6 @@ export const enterpriseWrites = [
 	"enterprise.kind.add",
 	"enterprise.relationship.add",
 	"enterprise.relationship.end",
-	"enterprise.view.save",
-	"enterprise.view.delete",
-	"enterprise.slice.import",
-	"enterprise.slice.sync",
 	"enterprise.relationship.change",
 ] as const;
 
@@ -58,7 +35,7 @@ export type EnterpriseWrite = (typeof enterpriseWrites)[number];
 
 // Payloads of the write contract: required fields are required, the rest optional.
 export type EnterpriseElementAddPayload = {
-	// UAF stereotype, e.g. ActualOrganization, ActualPost, Capability, ActualLocation
+	// Directory type: ActualOrganization, ActualPost or ActualPerson
 	stereotype: EnterpriseStereotype;
 	// Name
 	name: string;
@@ -70,8 +47,6 @@ export type EnterpriseElementAddPayload = {
 	legal?: boolean;
 	// Outside the tenant's own enterprise
 	external?: boolean;
-	// Tagged values of the stereotype
-	properties?: unknown;
 	// Valid from (YYYY-MM-DD; empty: today)
 	from?: string;
 	// Valid until, exclusive (empty: open)
@@ -85,8 +60,6 @@ export type EnterpriseElementEditPayload = {
 	kind?: string;
 	// Short name
 	shortName?: string;
-	// Tagged values
-	properties?: unknown;
 	// Working calendar id
 	calendar?: string;
 	// Share it with the tenants this one federates with (group, subsidiaries, partners)
@@ -146,7 +119,7 @@ export type EnterpriseKindAddPayload = {
 };
 
 export type EnterpriseRelationshipAddPayload = {
-	// UAF relationship stereotype, e.g. ActualResourceRelationship, ActualOrganizationRole, FillsPost, IsCapableToPerform, ResponsibleFor
+	// Directory relationship: ActualResourceRelationship, ActualOrganizationRole, FillsPost or ResponsibleFor
 	stereotype: string;
 	// Source element id, or member:<id> for a membership
 	source: string;
@@ -173,54 +146,8 @@ export type EnterpriseRelationshipEndPayload = {
 	until?: string;
 };
 
-export type EnterpriseViewSavePayload = {
-	// Name
-	name: string;
-	// The viewpoint the drawing starts from: organization, data, function, output, control
-	viewpoint: EnterpriseViewpoint;
-	// Relationship kind shown by the view
-	kind?: string;
-	// Elements explicitly added from other viewpoints
-	context?: unknown;
-	// Element ids shown
-	elements?: unknown;
-	// Positions by element id
-	layout?: unknown;
-	// Records pinned on the drawing: {ref, anchor, at}
-	pins?: unknown;
-	// The day the view shows
-	asOf?: string;
-};
-
-export type EnterpriseViewDeletePayload = {
-	// The view's id
-	id: string;
-};
-
-export type EnterpriseSliceImportPayload = {
-	// The other tenant's enterprise-published answer
-	slice: unknown;
-	// Tenant link
-	link?: string;
-	// Shared slice content
-	content?: string;
-	// Model version from preview
-	base?: string;
-	// Connection revision from preview
-	connectionRevision?: number;
-};
-
-export type EnterpriseSliceSyncPayload = {
-	// The system's name, e.g. sap-hr
-	source: string;
-	// Elements with ids stable across syncs
-	elements: unknown;
-	// Relationships between them, or to the tenant's own elements
-	relationships?: unknown;
-};
-
 export type EnterpriseRelationshipChangePayload = {
-	// UAF relationship stereotype, e.g. ActualResourceRelationship, ActualOrganizationRole, FillsPost, IsCapableToPerform, ResponsibleFor
+	// Directory relationship: ActualResourceRelationship, ActualOrganizationRole, FillsPost or ResponsibleFor
 	stereotype: string;
 	// Source element id, or member:<id> for a membership
 	source: string;
@@ -258,10 +185,6 @@ export type EnterpriseWritePayloads = {
 	"enterprise.kind.add": EnterpriseKindAddPayload;
 	"enterprise.relationship.add": EnterpriseRelationshipAddPayload;
 	"enterprise.relationship.end": EnterpriseRelationshipEndPayload;
-	"enterprise.view.save": EnterpriseViewSavePayload;
-	"enterprise.view.delete": EnterpriseViewDeletePayload;
-	"enterprise.slice.import": EnterpriseSliceImportPayload;
-	"enterprise.slice.sync": EnterpriseSliceSyncPayload;
 	"enterprise.relationship.change": EnterpriseRelationshipChangePayload;
 };
 

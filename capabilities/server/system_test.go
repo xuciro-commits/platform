@@ -1,5 +1,7 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -7,6 +9,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"os"
+
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -31,7 +34,7 @@ type systemKit struct {
 
 func newSystemTenant(t *testing.T, sources ...*platform.SystemSource) *systemKit {
 	t.Helper()
-	seats := []Seat{
+	seats := []platform.Seat{
 		{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{system.ID: system.Builder}}},
 		{Subjects: []string{"publisher"}, Member: platform.Member{ID: "publisher", Roles: map[string]string{system.ID: system.Publisher}}},
 	}
@@ -39,7 +42,7 @@ func newSystemTenant(t *testing.T, sources ...*platform.SystemSource) *systemKit
 	if len(sources) > 0 {
 		source = sources[0]
 	}
-	tenant, err := NewTenant(systemscope.Tenant, NewConsole(systemscope.Tenant, seats...), NewAgents(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant, source))
+	tenant, err := NewTenant(systemscope.Tenant, newConsole(systemscope.Tenant, seats...), agentowner.New(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant, source))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,12 +303,12 @@ func TestSystemFreezeColdSourceAndAssistantAreReadOnly(t *testing.T) {
 	if len(files) != 1 || files[0].Content != "retained source" || files[0].Editable {
 		t.Fatalf("cold source: %+v", files)
 	}
-	definition := kit.tenant.app(AgentApp).(*Agents).def("system.architect")
+	definition := kit.tenant.app(platform.AgentApp).(platform.AgentRuntime).AgentEvaluationRuntime().Definition("system.architect")
 	if definition == nil {
 		t.Fatal("retained history assistant unavailable")
 	}
-	for _, tool := range definition.tools {
-		if tool.kind == "action" || tool.kind == "protocol" {
+	for _, tool := range definition.Toolset {
+		if tool.Kind == "action" || tool.Kind == "protocol" {
 			t.Fatalf("frozen assistant has write tool %+v", tool)
 		}
 	}

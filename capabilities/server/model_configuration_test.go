@@ -1,9 +1,14 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/anthropics/anthropic-sdk-go"
+	anthropic "github.com/anthropics/anthropic-sdk-go"
+	knowledgeindex "platformserver/engine/knowledge"
+	controlowner "platformserver/kernel/control"
+
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,12 +19,12 @@ import (
 	"platformserver/aigateway"
 	"platformserver/aigateway/providers"
 	"platformserver/apps/ai"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/journal"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 func TestInferenceStagesRequireTrustedOwnerAndDeployment(t *testing.T) {
@@ -30,11 +35,11 @@ func TestInferenceStagesRequireTrustedOwnerAndDeployment(t *testing.T) {
 	}))
 	defer service.Close()
 	t.Setenv("PLATFORM_AI_INFERENCE_POLICY", "{}")
-	tenant := composeTenant(t, "inference-stages", []Seat{seatOf("builder", "ai:admin", "build:builder"), seatOf("reader", "ai:admin")}, ai.New("inference-stages"), build.New("inference-stages"))
+	tenant := composeTenant(t, "inference-stages", []platform.Seat{seatOf("builder", "ai:admin", "build:builder"), seatOf("reader", "ai:admin")}, ai.New("inference-stages"), build.New("inference-stages"))
 	at := time.Now().UTC()
 	decide(t, tenant, "builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": service.URL}, at)
 	decide(t, tenant, "builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/model", map[string]string{"access": "everyone"}, at)
-	request := ChatRequest{Model: "local/model", Messages: []Message{{Role: "user", Content: "input"}}, Binding: &platform.AIModelBinding{Stage: platform.AIStageDesign}}
+	request := platform.ChatRequest{Model: "local/model", Messages: []platform.Message{{Role: "user", Content: "input"}}, Binding: &platform.AIModelBinding{Stage: platform.AIStageDesign}}
 	builder, reader := memberOf(t, tenant, "builder"), memberOf(t, tenant, "reader")
 	if _, refusal, _ := tenant.Chat(builder, request, at); refusal == nil || requests != 0 {
 		t.Fatal("provider kind or client stage granted runtime inference", refusal, requests)
@@ -98,7 +103,7 @@ func TestKnowledgeConfigurationResumesPreparedVectorsAfterRestart(t *testing.T) 
 	defer service.Close()
 	approveTestInference(t, service.URL, "local")
 	build := func() *Tenant {
-		tn := composeTenant(t, "vector-restart", []Seat{seatOf("admin", "platform:admin", "ai:admin", "knowledge:editor")}, ai.New("vector-restart"), knowledge.New("vector-restart"))
+		tn := composeTenant(t, "vector-restart", []platform.Seat{seatOf("admin", "platform:admin", "ai:admin", "knowledge:editor")}, ai.New("vector-restart"), knowledge.New("vector-restart"))
 		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 		return tn
 	}
@@ -111,13 +116,13 @@ func TestKnowledgeConfigurationResumesPreparedVectorsAfterRestart(t *testing.T) 
 	tn.Store = store
 	decide(t, tn, "admin", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": service.URL}, at)
 	decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/embed", map[string]any{"access": "users", "capabilities": platform.ModelCapabilities{Source: "synthetic embedding fixture", ObservedAt: at, Purposes: []string{"embedding"}}}, at)
-	for i := 0; i < embedBatch+1; i++ {
+	for i := 0; i < 32+1; i++ {
 		decide(t, tn, "admin", knowledge.ID, knowledge.DocumentType+".create", knowledge.DocumentType, fmt.Sprint(i), map[string]any{"title": fmt.Sprintf("Document %d", i), "text": fmt.Sprintf("Knowledge passage %d", i)}, at)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-next-model", map[string]any{"value": "local/embed"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "knowledge/embedding-next-model", map[string]any{"value": "local/embed"}, at)
 	tn.Embed(at)
 	status := tn.knowledgeIndexStatus()
-	if status.Completed != embedBatch || status.Total != embedBatch+1 || status.Ready || status.Problem == "" {
+	if status.Completed != 32 || status.Total != 32+1 || status.Ready || status.Problem == "" {
 		t.Fatal("interrupted rebuild did not retain progress", status)
 	}
 	image, _, err := tn.Snapshot(func() int64 { return 0 })
@@ -137,10 +142,10 @@ func TestKnowledgeConfigurationResumesPreparedVectorsAfterRestart(t *testing.T) 
 	}
 	restored.Embed(at.Add(time.Second))
 	status = restored.knowledgeIndexStatus()
-	if !status.Ready || status.Completed != embedBatch+1 || calls != 3 {
+	if !status.Ready || status.Completed != 32+1 || calls != 3 {
 		t.Fatal("restart repeated completed embeddings or lost the target", status, calls)
 	}
-	decide(t, restored, "admin", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-model", map[string]any{"value": "local/embed"}, at)
+	decide(t, restored, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "knowledge/embedding-model", map[string]any{"value": "local/embed"}, at)
 	status = restored.knowledgeIndexStatus()
 	if status.Active != "local/embed" || status.Preparing != "" || status.NeedsRebuild {
 		t.Fatal("prepared index activation did not retain its space", status)
@@ -165,9 +170,9 @@ func TestAnthropicAdaptiveConfigurationProtectsThinkingState(t *testing.T) {
 	}))
 	defer service.Close()
 	approveTestInference(t, service.URL, "local")
-	tn := composeTenant(t, "anthropic-options", []Seat{seatOf("admin", "ai:admin")}, ai.New("anthropic-options"))
+	tn := composeTenant(t, "anthropic-options", []platform.Seat{seatOf("admin", "ai:admin")}, ai.New("anthropic-options"))
 	tn.Secrets = func(string) ([]byte, bool) { return []byte("synthetic-credential"), true }
-	request := ChatRequest{Options: platform.ModelOptions{Thinking: "adaptive", Effort: "high"}, MaxTokens: 128, Messages: []Message{
+	request := platform.ChatRequest{Options: platform.ModelOptions{Thinking: "adaptive", Effort: "high"}, MaxTokens: 128, Messages: []platform.Message{
 		{Role: "assistant", Content: "previous", Protocol: json.RawMessage(`[{"type":"thinking","thinking":"retained private state","signature":"signed"}]`)},
 		{Role: "user", Content: "continue"},
 	}}
@@ -212,7 +217,7 @@ func TestAIModelConfigurationPostgresCheckpoint(t *testing.T) {
 	defer func() { store.Close() }()
 	id := "model-configuration-checkpoint"
 	build := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("admin", "platform:admin", "ai:admin", "agent:admin", "desk:clerk")}, ai.New(id), NewAgents(id), newDesk(id), work.New(id), flow.New(id))
+		return composeTenant(t, id, []platform.Seat{seatOf("admin", "platform:admin", "ai:admin", "agent:admin", "desk:clerk")}, ai.New(id), agentowner.New(id), newDesk(id), work.New(id), automation.New(id))
 	}
 	deployment := &Deployment{SnapshotEvery: 1}
 	tn := build()
@@ -226,8 +231,8 @@ func TestAIModelConfigurationPostgresCheckpoint(t *testing.T) {
 	at := time.Now().UTC()
 	decide(t, tn, "admin", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://127.0.0.1:1/v1"}, at)
 	decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/one", map[string]any{"access": "users", "capabilities": platform.ModelCapabilities{Source: "synthetic protocol fixture", ObservedAt: at, Adapter: "deepseek", ThinkingModes: []string{"enabled", "disabled"}, EffortLevels: []string{"high", "max"}}, "defaults": platform.ModelOptions{MaxTokens: 128, Thinking: "enabled", Effort: "high"}}, at)
-	decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/one"}, at)
-	decide(t, tn, "admin", AgentApp, SchemaRunStart, RunType, "r", map[string]any{"agent": "desk.triage", "goal": "retained model configuration"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]any{"value": "local/one"}, at)
+	decide(t, tn, "admin", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "r", map[string]any{"agent": "desk.triage", "goal": "retained model configuration"}, at)
 	decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/one", map[string]any{"access": "users", "defaults": platform.ModelOptions{MaxTokens: 256, Thinking: "enabled", Effort: "max"}}, at)
 	if _, err := tn.checkpointRuntime(ctx, store, "model-configuration"); err != nil {
 		t.Fatal(err)
@@ -249,12 +254,12 @@ func TestAIModelConfigurationPostgresCheckpoint(t *testing.T) {
 		t.Fatal("model owner or accepted run failed to restore", restored.fault.Load())
 	}
 	restored.attachJournal(ctx, store)
-	value, refusal := restored.RecordOf(memberOf(t, restored, "admin"), RunType, "r", at)
+	value, refusal := restored.RecordOf(memberOf(t, restored, "admin"), platform.RunType, "r", at)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
 	raw, _ := json.Marshal(value.Record)
-	var run AgentRunRecord
+	var run platform.AgentRunRecord
 	if err := json.Unmarshal(raw, &run); err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +276,7 @@ func TestAgentAcceptedConfigurationSurvivesDefaultChanges(t *testing.T) {
 	approveTestInference(t, "http://127.0.0.1:1", "local")
 	at := time.Now()
 	build := func() *Tenant {
-		return composeTenant(t, "agent-binding", []Seat{seatOf("admin", "platform:admin", "ai:admin", "agent:admin", "desk:clerk")}, ai.New("agent-binding"), NewAgents("agent-binding"), newDesk("agent-binding"), work.New("agent-binding"), flow.New("agent-binding"))
+		return composeTenant(t, "agent-binding", []platform.Seat{seatOf("admin", "platform:admin", "ai:admin", "agent:admin", "desk:clerk")}, ai.New("agent-binding"), agentowner.New("agent-binding"), newDesk("agent-binding"), work.New("agent-binding"), automation.New("agent-binding"))
 	}
 	tn := build()
 	var entries []Entry
@@ -281,13 +286,13 @@ func TestAgentAcceptedConfigurationSurvivesDefaultChanges(t *testing.T) {
 	for _, model := range []string{"one", "two"} {
 		decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/"+model, map[string]any{"access": "users", "defaults": platform.ModelOptions{MaxTokens: 128}}, at)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/one"}, at)
-	decide(t, tn, "admin", AgentApp, SchemaRunStart, RunType, "r", map[string]any{"agent": "desk.triage", "goal": "a bounded task"}, at)
-	run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "r")
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]any{"value": "local/one"}, at)
+	decide(t, tn, "admin", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "r", map[string]any{"agent": "desk.triage", "goal": "a bounded task"}, at)
+	run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "r")
 	if run.ModelBinding == nil || run.ModelBinding.Model != "local/one" {
 		t.Fatal("new accepted run did not pin its model", run.ModelBinding)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]any{"value": "local/two"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]any{"value": "local/two"}, at)
 	decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/one", map[string]any{"access": "users", "defaults": platform.ModelOptions{MaxTokens: 256}}, at)
 	turns := tn.agents.DueAgentTurns(at)
 	if len(turns) != 1 || turns[0].Request.Binding == nil || turns[0].Request.Binding.Model != "local/one" || turns[0].Request.Binding.Options.MaxTokens != 128 {
@@ -323,7 +328,7 @@ func TestModelConfigurationDirectoryAndAcceptedBinding(t *testing.T) {
 	defer service.Close()
 	approveTestInference(t, service.URL, "local")
 	build := func() *Tenant {
-		return composeTenant(t, "model-config", []Seat{seatOf("admin", "platform:admin", "ai:admin"), seatOf("user", "ai:user")}, ai.New("model-config"))
+		return composeTenant(t, "model-config", []platform.Seat{seatOf("admin", "platform:admin", "ai:admin"), seatOf("user", "ai:user")}, ai.New("model-config"))
 	}
 	tn := build()
 	var entries []Entry
@@ -338,12 +343,12 @@ func TestModelConfigurationDirectoryAndAcceptedBinding(t *testing.T) {
 	if pages != 2 {
 		t.Fatal("unchanged provider did not reuse directory cache")
 	}
-	deep, problem := catalogModel(platform.AIProvider{Vendor: "deepseek", BaseURL: service.URL + "/v1"}, json.RawMessage(`{"id":"a","context_window":32000,"max_output_tokens":4000,"effort":{"supported_levels":["high","max"]}}`), at)
+	deep, problem := aigateway.CatalogModel(platform.AIProvider{Vendor: "deepseek", BaseURL: service.URL + "/v1"}, json.RawMessage(`{"id":"a","context_window":32000,"max_output_tokens":4000,"effort":{"supported_levels":["high","max"]}}`), at)
 	if problem != nil || len(deep.Capabilities.EffortLevels) != 2 {
 		t.Fatal("DeepSeek capability evidence lost", problem)
 	}
 	decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/a", map[string]any{"access": "everyone", "capabilities": deep.Capabilities, "defaults": platform.ModelOptions{MaxTokens: 128, Thinking: "enabled", Effort: "high"}}, at)
-	rec := decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]any{"value": "local/a"}, at)
+	rec := decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/app-model", map[string]any{"value": "local/a"}, at)
 	caller := platform.NewCaller(&stagedDecision{tenant: tn, records: tn.records}, admin, ai.ID, false, true)
 	effect := tn.planModelRequest(caller, rec, platform.Request{Target: "test", Payload: platform.Prompt{User: "hello"}}, nil)
 	var saved modelAsk
@@ -382,7 +387,7 @@ func TestModelConfigurationConstraintsAndProtectedContinuation(t *testing.T) {
 	if strings.Contains(string(public), "private") {
 		t.Fatal("reasoning leaked through public answer")
 	}
-	wire := providers.OpenAIMessages([]Message{{Role: "assistant", Content: reply.Content, ToolCalls: reply.ToolCalls, Protocol: reply.Protocol}})
+	wire := providers.OpenAIMessages([]platform.Message{{Role: "assistant", Content: reply.Content, ToolCalls: reply.ToolCalls, Protocol: reply.Protocol}})
 	if wire[0]["reasoning_content"] != "private" {
 		t.Fatal("tool continuation omitted provider reasoning state")
 	}
@@ -393,19 +398,19 @@ func TestModelConfigurationConstraintsAndProtectedContinuation(t *testing.T) {
 		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"private\",\"content\":\"visible\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
 	}))
 	defer stream.Close()
-	tn := composeTenant(t, "continuation", []Seat{seatOf("admin", "platform:admin", "agent:admin")}, NewAgents("continuation"))
-	answer, _, failure := tn.modelProvider(platform.AIProvider{ID: "local", Kind: "local", BaseURL: stream.URL, Wire: "openai", Vendor: "openai"}).Complete(platform.AIProvider{ID: "local", Kind: "local", BaseURL: stream.URL, Wire: "openai", Vendor: "openai"}, "m", ChatRequest{MaxTokens: 64, Stream: true, Messages: []Message{{Role: "user", Content: "hello"}}})
+	tn := composeTenant(t, "continuation", []platform.Seat{seatOf("admin", "platform:admin", "agent:admin")}, agentowner.New("continuation"))
+	answer, _, failure := tn.modelProvider(platform.AIProvider{ID: "local", Kind: "local", BaseURL: stream.URL, Wire: "openai", Vendor: "openai"}).Complete(platform.AIProvider{ID: "local", Kind: "local", BaseURL: stream.URL, Wire: "openai", Vendor: "openai"}, "m", platform.ChatRequest{MaxTokens: 64, Stream: true, Messages: []platform.Message{{Role: "user", Content: "hello"}}})
 	if failure != nil || string(answer.Protocol) != `"private"` {
 		t.Fatal("stream continuation lost", failure)
 	}
 	if nativeBudget["max_completion_tokens"] != float64(64) || nativeBudget["max_tokens"] != nil {
 		t.Fatal("native OpenAI generation budget used the deprecated field", nativeBudget)
 	}
-	run := AgentRunRecord{Record: platform.Record{ID: "r"}, State: "done", OnBehalf: "admin", Protocol: map[int]json.RawMessage{0: reply.Protocol}, Steps: []RunStep{}}
-	if err := tn.automation(AgentApp, true).PutAt(time.Now(), "test.run", run); err != nil {
+	run := platform.AgentRunRecord{Record: platform.Record{ID: "r"}, State: "done", OnBehalf: "admin", Protocol: map[int]json.RawMessage{0: reply.Protocol}, Steps: []platform.RunStep{}}
+	if err := tn.automation(platform.AgentApp, true).PutAt(time.Now(), "test.run", run); err != nil {
 		t.Fatal(err)
 	}
-	view, refusal := tn.RecordOf(memberOf(t, tn, "admin"), RunType, "r", time.Now())
+	view, refusal := tn.RecordOf(memberOf(t, tn, "admin"), platform.RunType, "r", time.Now())
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -417,25 +422,25 @@ func TestModelConfigurationConstraintsAndProtectedContinuation(t *testing.T) {
 
 func TestKnowledgeConfigurationRequiresPreparedSpace(t *testing.T) {
 	at := time.Now()
-	tn := composeTenant(t, "embedding-config", []Seat{seatOf("admin", "platform:admin", "ai:admin", "knowledge:editor")}, ai.New("embedding-config"), knowledge.New("embedding-config"))
+	tn := composeTenant(t, "embedding-config", []platform.Seat{seatOf("admin", "platform:admin", "ai:admin", "knowledge:editor")}, ai.New("embedding-config"), knowledge.New("embedding-config"))
 	decide(t, tn, "admin", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]any{"kind": "local", "baseUrl": "http://127.0.0.1:1/v1"}, at)
 	decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/embed", map[string]any{"access": "users", "capabilities": platform.ModelCapabilities{Purposes: []string{"embedding"}, Source: "test", ObservedAt: at}}, at)
-	if result := refuse(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-model", map[string]any{"value": "local/embed"}, at); !strings.Contains(result, "Build this model") {
+	if result := refuse(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "knowledge/embedding-model", map[string]any{"value": "local/embed"}, at); !strings.Contains(result, "Build this model") {
 		t.Fatal("unprepared vector space activated", result)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-next-model", map[string]any{"value": "local/embed"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "knowledge/embedding-next-model", map[string]any{"value": "local/embed"}, at)
 	tn.sync()
 	status := tn.knowledgeIndexStatus()
 	if !status.Ready || status.Total != 0 {
 		t.Fatal("empty corpus should be ready without external calls", status)
 	}
-	decide(t, tn, "admin", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-model", map[string]any{"value": "local/embed"}, at)
+	decide(t, tn, "admin", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "knowledge/embedding-model", map[string]any{"value": "local/embed"}, at)
 	before := tn.vectorSpace("local/embed")
 	decide(t, tn, "admin", ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/embed", map[string]any{"access": "users"}, at)
 	if before == tn.vectorSpace("local/embed") {
 		t.Fatal("model revision reused an old vector space")
 	}
-	if consistentVectors([][]float32{{1, 2}, {1}}, 0) == nil {
+	if knowledgeindex.ConsistentVectors([][]float32{{1, 2}, {1}}, 0) == nil {
 		t.Fatal("mixed vector dimensions accepted")
 	}
 }

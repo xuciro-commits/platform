@@ -2,15 +2,157 @@ package platform
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
+	"math"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform/authz"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
 	"time"
-
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"unicode/utf16"
 )
+
+// ActionInputSchema describes the original action input for model and MCP
+// callers. Standard create/edit inputs use the same writable entity fields as
+// generated forms, including nested rows and fields with dedicated editors.
+// A nil roles slice describes a compiled agent's declared tool; member-facing
+// callers pass their original roles. This is a projection, not a validator.
+func ActionInputSchema(action Action, entity *EntityInfo, roles []string) map[string]any {
+	properties := map[string]any{}
+	required := []string{}
+	for _, field := range action.Payload {
+		var columns []FieldInfo
+		if entity != nil && entity.Type == action.Target && field.Type == "lines" {
+			if original, ok := entity.Field(field.Name); ok && original.Type == "lines" {
+				columns = original.Fields
+			}
+		}
+		properties[field.Name] = inputFieldSchema(field, columns, roles)
+		if field.Required {
+			required = append(required, field.Name)
+		}
+	}
+	if entity != nil && action.Target == entity.Type && slices.Contains(entity.Standard, action.Schema) &&
+		(action.Schema == entity.Type+".create" || action.Schema == entity.Type+".edit") {
+		properties, required = map[string]any{}, []string{}
+		create := action.Schema == entity.Type+".create"
+		for _, field := range entity.Fields {
+			if field.ReadOnly || roles != nil && (!field.ReadsAny(roles) || !field.WritesAny(roles)) {
+				continue
+			}
+			input := Field{Name: field.Name, Type: field.Type, Description: field.Help, Required: create && field.Required && field.When == nil,
+				Choices: field.Choices, Ref: field.Ref, Stereotype: field.Stereotype, Stereotypes: field.Stereotypes, Constraints: field.Constraints}
+			if i := slices.IndexFunc(action.Payload, func(p Field) bool { return p.Name == field.Name }); i >= 0 {
+				// The action owns requiredness (for example fields filled by its
+				// create transaction); entity metadata supplies the full shape.
+				original := action.Payload[i]
+				input.Required, input.Description, input.Default = original.Required, original.Description, original.Default
+				input.From, input.Key, input.Label = original.From, original.Key, original.Label
+			}
+			properties[field.Name] = inputFieldSchema(input, field.Fields, roles)
+			if field.When != nil {
+				properties[field.Name].(map[string]any)["x-platform-when"] = field.When
+			}
+			if input.Required {
+				required = append(required, field.Name)
+			}
+		}
+	}
+	return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
+}
+
+func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[string]any {
+	schema := map[string]any{}
+	switch field.Type {
+	case "integer":
+		schema["type"] = "integer"
+	case "number", "decimal":
+		schema["type"] = "number"
+	case "boolean":
+		schema["type"] = "boolean"
+	case "string[]", "tags", "references":
+		schema["type"], schema["items"] = "array", map[string]any{"type": "string"}
+	case "money":
+		schema = map[string]any{"type": "object", "properties": map[string]any{"amount": map[string]any{"type": "integer"}, "currency": map[string]any{"type": "string"}}, "required": []string{"amount", "currency"}, "additionalProperties": false}
+	case "lines":
+		row, required := map[string]any{}, []string{}
+		for _, column := range columns {
+			if column.ReadOnly || roles != nil && (!column.ReadsAny(roles) || !column.WritesAny(roles)) {
+				continue
+			}
+			row[column.Name] = inputFieldSchema(Field{Name: column.Name, Type: column.Type, Description: column.Help,
+				Choices: column.Choices, Ref: column.Ref, Stereotype: column.Stereotype, Stereotypes: column.Stereotypes, Constraints: column.Constraints}, column.Fields, roles)
+			if column.When != nil {
+				row[column.Name].(map[string]any)["x-platform-when"] = column.When
+			}
+			if column.Required && column.When == nil {
+				required = append(required, column.Name)
+			}
+		}
+		items := map[string]any{}
+		if len(columns) > 0 {
+			items = map[string]any{"type": "object", "properties": row, "required": required, "additionalProperties": false}
+		}
+		schema["type"], schema["items"] = "array", items
+	case "json": // An opaque JSON value must not be advertised as text.
+	default:
+		schema["type"] = "string"
+	}
+	if field.Description != "" {
+		schema["description"] = field.Description
+	}
+	if json.Valid(field.Default) {
+		schema["default"] = slices.Clone(field.Default)
+	}
+	if len(field.Choices) > 0 {
+		if schema["type"] == "array" {
+			schema["items"].(map[string]any)["enum"] = slices.Clone(field.Choices)
+		} else {
+			schema["enum"] = slices.Clone(field.Choices)
+		}
+	}
+	if field.Type == "date" && (field.Constraints == nil || !field.Constraints.DateTime) {
+		schema["format"] = "date"
+	} else if field.Type == "datetime" {
+		schema["format"] = "date-time"
+	}
+	if field.Ref != "" {
+		schema["x-platform-reference"] = field.Ref
+	}
+	if field.Stereotype != "" {
+		schema["x-platform-stereotype"] = field.Stereotype
+	}
+	if len(field.Stereotypes) > 0 {
+		schema["x-platform-stereotypes"] = slices.Clone(field.Stereotypes)
+	}
+	if field.From != "" {
+		schema["x-platform-source"] = map[string]string{"read": field.From, "key": field.Key, "label": field.Label}
+	}
+	if c := field.Constraints; c != nil {
+		for _, bound := range []struct {
+			name  string
+			value *float64
+		}{{map[bool]string{false: "minimum", true: "exclusiveMinimum"}[c.ExclusiveMin], c.Min}, {map[bool]string{false: "maximum", true: "exclusiveMaximum"}[c.ExclusiveMax], c.Max}} {
+			if bound.value != nil {
+				schema[bound.name] = *bound.value
+			}
+		}
+		if c.MinLength != nil {
+			schema["minLength"] = *c.MinLength
+		}
+		if c.MaxLength != nil {
+			schema["maxLength"] = *c.MaxLength
+		}
+		if c.Before != "" || c.After != "" || c.DateTime {
+			schema["x-platform-constraints"] = c
+		}
+	}
+	return schema
+}
 
 // Action declares one business action a domain offers: the submission
 // schema that carries it, what it acts on, the capability it belongs to, and a
@@ -496,4 +638,506 @@ func (c *Catalog) Capabilities() []CapabilityInfo {
 		out[i].Actions = append(out[i].Actions, a.Schema)
 	}
 	return out
+}
+
+// StaticControlAction classifies the existing control-plane targets. Dynamic
+// pages and model tools may read owner projections but cannot bind these writes.
+// Ordinary generated business targets are not control-plane targets.
+func StaticControlAction(action Action) bool {
+	for _, prefix := range []string{"platform.", "system.", "ai.", "enterprise."} {
+		if strings.HasPrefix(action.Target, prefix) {
+			return true
+		}
+	}
+	switch action.Target {
+	case "agent.run", "agent.switch", "agent.evaluation", "agent.memory", "work.task", "platform.work", "platform.effect", "platform.operation", "platform.job",
+		"build.object", "build.page", "build.app", "build.flow", "build.agent", "build.function", "build.code", "build.query", "build.process", "build.connection", "build.pipeline", "build.dataset", "build.datasetversion", "build.evaluation", "build.release", "build.packagesource", "build.alertrule":
+		return true
+	}
+	return false
+}
+
+// DecisionTrace is an observation of the original executor in an isolated
+// builder run. It never participates in acceptance, grants or persistence.
+type DecisionTrace struct {
+	Kind          string          `json:"kind"`
+	Name          string          `json:"name,omitempty"`
+	Type          string          `json:"type,omitempty"`
+	ID            string          `json:"id,omitempty"`
+	Operation     string          `json:"operation,omitempty"`
+	Expression    *Expr           `json:"expression,omitempty"`
+	Reads         *ExprContext    `json:"reads,omitempty"`
+	Result        *ExprResult     `json:"result,omitempty"`
+	Request       *AuthzRequest   `json:"request,omitempty"`
+	Authorization *AuthzDecision  `json:"authorization,omitempty"`
+	Before        json.RawMessage `json:"before,omitempty"`
+	After         json.RawMessage `json:"after,omitempty"`
+	Refusal       string          `json:"refusal,omitempty"`
+}
+type DecisionTraceRecorder interface {
+	TraceEnabled() bool
+	RecordDecisionTrace(DecisionTrace)
+}
+
+func (c Caller) TraceEnabled() bool {
+	r, ok := c.rt.(DecisionTraceRecorder)
+	return ok && r.TraceEnabled()
+}
+func (c Caller) Trace(event DecisionTrace) {
+	if r, ok := c.rt.(DecisionTraceRecorder); ok && r.TraceEnabled() {
+		r.RecordDecisionTrace(event)
+	}
+}
+
+// Only references reached by the real expression belong in its explanation.
+// The original RuleContext has already enforced record/field/derived reads.
+func ruleTraceContext(expr Expr, context ExprContext) ExprContext {
+	out := ExprContext{Refs: map[string]ExprValue{}, Sets: map[string]ExprCollection{}, Sources: context.Sources, Me: context.Me, Now: context.Now, Today: context.Today}
+	var visit func(Expr)
+	visit = func(e Expr) {
+		if e.Ref != "" {
+			if v, ok := context.Refs[e.Ref]; ok {
+				out.Refs[e.Ref] = v
+			}
+		}
+		if e.Window != nil {
+			if out.Windows == nil {
+				out.Windows = map[string]ExprWindowSummary{}
+			}
+			out.Windows[e.Window.Source] = context.Windows[e.Window.Source]
+		}
+		if e.Agg != nil {
+			out.Sets[e.Agg.Source] = context.Sets[e.Agg.Source]
+		}
+		for _, arg := range e.Args {
+			visit(arg)
+		}
+		if e.In != nil {
+			visit(*e.In)
+		}
+	}
+	visit(expr)
+	return out
+}
+
+var inputInstant = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,9})?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$`)
+
+// CheckInputs validates declarations without evaluating business rules.
+func CheckInputs(fields []Field) error {
+	byName := map[string]Field{}
+	for _, f := range fields {
+		if _, ok := byName[f.Name]; ok {
+			return fmt.Errorf("duplicate input %q", f.Name)
+		}
+		byName[f.Name] = f
+	}
+	seenEnds := map[string]bool{}
+	for _, f := range fields {
+		if len(f.Group) > 128 {
+			return fmt.Errorf("%s group exceeds bounds", f.Name)
+		}
+		c := f.Constraints
+		if c != nil {
+			if c.DateTime && f.Type != "date" {
+				return fmt.Errorf("%s does not take a date or local date-time", f.Name)
+			}
+			numeric := f.Type == "integer" || f.Type == "number"
+			if (c.Min != nil || c.Max != nil) && !numeric {
+				return fmt.Errorf("%s has nonnumeric bounds", f.Name)
+			}
+			if c.Min != nil && (math.IsNaN(*c.Min) || math.IsInf(*c.Min, 0)) || c.Max != nil && (math.IsNaN(*c.Max) || math.IsInf(*c.Max, 0)) {
+				return fmt.Errorf("%s has invalid bounds", f.Name)
+			}
+			if c.ExclusiveMin && c.Min == nil || c.ExclusiveMax && c.Max == nil || c.Min != nil && c.Max != nil && (*c.Min > *c.Max || *c.Min == *c.Max && (c.ExclusiveMin || c.ExclusiveMax)) {
+				return fmt.Errorf("%s has empty bounds", f.Name)
+			}
+			if (c.MinLength != nil || c.MaxLength != nil) && f.Type != "string" {
+				return fmt.Errorf("%s has nontext length", f.Name)
+			}
+			for _, n := range []*int{c.MinLength, c.MaxLength} {
+				if n != nil && (*n < 0 || *n > 4096) {
+					return fmt.Errorf("%s has invalid length", f.Name)
+				}
+			}
+			if c.MinLength != nil && c.MaxLength != nil && *c.MinLength > *c.MaxLength {
+				return fmt.Errorf("%s has empty length bounds", f.Name)
+			}
+			for _, name := range []string{c.Before, c.After} {
+				if name != "" {
+					other, ok := byName[name]
+					if !ok || name == f.Name || other.Type != f.Type || !slices.Contains([]string{"date", "datetime", "integer", "number"}, f.Type) {
+						return fmt.Errorf("%s has invalid comparison %q", f.Name, name)
+					}
+				}
+			}
+		}
+		if f.Range != nil {
+			if seenEnds[f.Range.End] {
+				return fmt.Errorf("%s repeats a date range end", f.Name)
+			}
+			seenEnds[f.Range.End] = true
+			other, ok := byName[f.Range.End]
+			if !ok || other.Name == f.Name || f.Type != "date" || other.Type != "date" || other.Range != nil {
+				return fmt.Errorf("%s has invalid date range", f.Name)
+			}
+		}
+	}
+	state := map[string]uint8{}
+	var visit func(string) bool
+	visit = func(name string) bool {
+		if state[name] == 1 {
+			return false
+		}
+		if state[name] == 2 {
+			return true
+		}
+		state[name] = 1
+		if c := byName[name].Constraints; c != nil {
+			for _, dependency := range []string{c.Before, c.After} {
+				if dependency != "" && !visit(dependency) {
+					return false
+				}
+			}
+		}
+		state[name] = 2
+		return true
+	}
+	for name := range byName {
+		if !visit(name) {
+			return fmt.Errorf("%s has cyclic input dependencies", name)
+		}
+	}
+	return nil
+}
+
+// InputIssues uses the exact submitted values. Empty optional edit fields are
+// allowed; relation checks wait for both endpoints. Replay bypasses this check.
+func InputIssues(fields []Field, values map[string]any) []FieldIssue {
+	issues := []FieldIssue{}
+	dependencies := map[string]bool{}
+	for _, f := range fields {
+		if c := f.Constraints; c != nil {
+			dependencies[c.Before] = true
+			dependencies[c.After] = true
+		}
+	}
+	valid := map[string]bool{}
+	add := func(f Field, code, message string, related string) {
+		if len(issues) >= 64 {
+			return
+		}
+		issue := FieldIssue{Code: code, Message: message, Path: []string{f.Name}}
+		if related != "" {
+			issue.RelatedPaths = [][]string{{related}}
+		}
+		issues = append(issues, issue)
+	}
+	for _, f := range fields {
+		v, ok := values[f.Name]
+		text, isText := v.(string)
+		empty := !ok || v == nil || isText && strings.TrimSpace(text) == ""
+		if empty && f.Required {
+			add(f, "required", "Enter a value.", "")
+			continue
+		}
+		c := f.Constraints
+		// Unannotated inputs retain their original type and range checks.
+		if c == nil {
+			if !dependencies[f.Name] {
+				continue
+			}
+			c = &InputConstraints{}
+		}
+		if empty {
+			continue
+		}
+		valid[f.Name] = true
+		bad := false
+		switch f.Type {
+		case "string":
+			bad = !isText
+		case "date":
+			_, err := time.Parse(time.DateOnly, text)
+			bad = !isText || err != nil || strings.HasPrefix(text, "0000-")
+			if bad && c.DateTime {
+				_, err = time.Parse("2006-01-02T15:04", text)
+				bad = !isText || err != nil || strings.HasPrefix(text, "0000-")
+			}
+		case "datetime":
+			_, err := time.Parse(time.RFC3339Nano, text)
+			bad = !isText || err != nil || !inputInstant.MatchString(text) || strings.HasPrefix(text, "0000-") || strings.HasSuffix(text, "-00:00")
+		case "integer", "number":
+			n, yes := v.(float64)
+			bad = !yes || math.IsNaN(n) || math.IsInf(n, 0) || f.Type == "integer" && (math.Trunc(n) != n || math.Abs(n) > 9007199254740991)
+		case "boolean":
+			_, yes := v.(bool)
+			bad = !yes
+		}
+		if bad {
+			valid[f.Name] = false
+			add(f, "type", "Enter a valid value.", "")
+			continue
+		}
+		if len(f.Choices) > 0 && !slices.Contains(f.Choices, text) {
+			add(f, "choice", "Choose a listed value.", "")
+		}
+		if isText {
+			n := len(utf16.Encode([]rune(text)))
+			if c.MinLength != nil && n < *c.MinLength {
+				add(f, "minLength", fmt.Sprintf("Use at least %d characters.", *c.MinLength), "")
+			}
+			if c.MaxLength != nil && n > *c.MaxLength {
+				add(f, "maxLength", fmt.Sprintf("Use at most %d characters.", *c.MaxLength), "")
+			}
+		}
+		if n, yes := v.(float64); yes {
+			if c.Min != nil && (n < *c.Min || c.ExclusiveMin && n == *c.Min) {
+				add(f, "min", fmt.Sprintf("Value must be %s %g.", map[bool]string{false: "at least", true: "greater than"}[c.ExclusiveMin], *c.Min), "")
+			}
+			if c.Max != nil && (n > *c.Max || c.ExclusiveMax && n == *c.Max) {
+				add(f, "max", fmt.Sprintf("Value must be %s %g.", map[bool]string{false: "at most", true: "less than"}[c.ExclusiveMax], *c.Max), "")
+			}
+		}
+	}
+	for _, f := range fields {
+		c := f.Constraints
+		if c == nil || !valid[f.Name] {
+			continue
+		}
+		for _, relation := range []struct {
+			name   string
+			before bool
+		}{{c.Before, true}, {c.After, false}} {
+			if relation.name == "" || !valid[relation.name] {
+				continue
+			}
+			v, other := values[f.Name], values[relation.name]
+			cmp := 0
+			switch x := v.(type) {
+			case string:
+				y := other.(string)
+				cmp = strings.Compare(x, y)
+				if f.Type == "datetime" {
+					a, _ := time.Parse(time.RFC3339Nano, x)
+					b, _ := time.Parse(time.RFC3339Nano, y)
+					cmp = a.Compare(b)
+				}
+			case float64:
+				y := other.(float64)
+				if x < y {
+					cmp = -1
+				} else if x > y {
+					cmp = 1
+				}
+			}
+			if relation.before && cmp > 0 || !relation.before && cmp < 0 || cmp == 0 && !c.Inclusive {
+				word := "after"
+				if relation.before {
+					word = "before"
+				}
+				if c.Inclusive {
+					word += " or equal to"
+				}
+				add(f, "relation", fmt.Sprintf("Value must be %s %s.", word, relation.name), relation.name)
+			}
+		}
+	}
+	return issues
+}
+
+// RefuseFields attaches diagnostics to this decision's private runtime; kernel
+// errors and the contract remain unchanged.
+func (c Caller) RefuseFields(issues []FieldIssue) *kernel.Error {
+	err := Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Correct the highlighted fields.")
+	if c.inputRefused != nil {
+		c.inputRefused(err, issues)
+	}
+	if c.rt != nil {
+		c.rt.InputRefused(err, issues)
+	}
+	return err
+}
+
+// Refusal is a business result, separate from authorization and invariants.
+// Record is an ordinary transaction step; Route names an existing transaction.
+type Refusal struct {
+	When         *Expr              `json:"when"`
+	Level        string             `json:"level"`
+	Code         string             `json:"code"`
+	Message      string             `json:"message"`
+	Translations map[string]string  `json:"translations,omitempty"`
+	Route        *TxnRef            `json:"route,omitempty"`
+	Record       *TxnStep           `json:"record,omitempty"`
+	Escalation   *RefusalEscalation `json:"escalation,omitempty"`
+}
+
+func (r *Refusal) UnmarshalJSON(raw []byte) error {
+	type plain Refusal
+	return strictTxn(raw, (*plain)(r))
+}
+
+// BusinessRefusalFact captures what the applicant asked and why the business
+// rule chose another result. Its values are re-filtered by the host on reads.
+type BusinessRefusalFact struct {
+	Level        string                     `json:"level"`
+	Code         string                     `json:"code"`
+	Message      string                     `json:"message"`
+	Translations map[string]string          `json:"translations,omitempty"`
+	Step         string                     `json:"step,omitempty"`
+	Subject      string                     `json:"subject"`
+	Action       string                     `json:"action"`
+	Member       string                     `json:"member"`
+	At           time.Time                  `json:"at"`
+	Original     json.RawMessage            `json:"original"`
+	Inputs       map[string]json.RawMessage `json:"inputs,omitempty"`
+	Record       string                     `json:"record,omitempty"`
+	Route        *TxnRef                    `json:"route,omitempty"`
+	Escalation   *RefusalEscalation         `json:"escalation,omitempty"`
+}
+
+// BusinessRefusalRuntime attaches facts to the existing accepted-result owner.
+// A refused decision saves its fact with the answer; successful flags/routes
+// save facts with the ordinary atomic batch. This never grants a direct write.
+type BusinessRefusalRuntime interface {
+	BusinessRefused(*kernel.Error, BusinessRefusalFact)
+	CaptureBusinessRefusal(Caller, *pb.ChangeRecord, BusinessRefusalFact) *kernel.Error
+}
+
+func (c Caller) RefuseBusiness(fact BusinessRefusalFact) *kernel.Error {
+	owner, ok := c.rt.(BusinessRefusalRuntime)
+	if !ok || !c.Staging() || c.Replaying {
+		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal facts need the accepted decision owner / 业务拒绝事实须经接受决策归属方")
+	}
+	answer := Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", fact.Message)
+	owner.BusinessRefused(answer, fact)
+	return answer
+}
+
+func (c Caller) CaptureBusinessRefusal(receipt *pb.ChangeRecord, fact BusinessRefusalFact) *kernel.Error {
+	owner, ok := c.rt.(BusinessRefusalRuntime)
+	if !ok || !c.Staging() || c.Replaying {
+		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal facts need the accepted decision owner / 业务拒绝事实须经接受决策归属方")
+	}
+	return owner.CaptureBusinessRefusal(c, receipt, fact)
+}
+
+type BusinessConditionRuntime interface {
+	RefuseBusinessCondition(Caller, string, string, any, map[string]any, time.Time) *kernel.Error
+}
+
+// A false business precondition is separate from access checks made while
+// reading the condition. It retains the same original evaluator and savepoint.
+func (c Caller) RefuseBusinessCondition(code, message string, record any, inputs map[string]any, at time.Time) *kernel.Error {
+	if owner, ok := c.rt.(BusinessConditionRuntime); ok && c.Staging() && !c.Replaying {
+		return owner.RefuseBusinessCondition(c, code, message, record, inputs, at)
+	}
+	return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", message)
+}
+
+// RefusalEscalation asks the existing Work owner to open one review task when
+// distinct decisions reach Count in a window starting at its first refusal.
+// Repeating an idempotency key never contributes another refusal.
+type RefusalEscalation struct {
+	Count         int    `json:"count"`
+	WindowSeconds int    `json:"windowSeconds"`
+	ReviewerRole  string `json:"reviewerRole"`
+}
+
+func (e *RefusalEscalation) UnmarshalJSON(raw []byte) error {
+	type plain RefusalEscalation
+	return strictTxn(raw, (*plain)(e))
+}
+
+func (e RefusalEscalation) Check() error {
+	if e.Count < 2 || e.Count > 100 || e.WindowSeconds < 1 || e.WindowSeconds > 604800 || e.ReviewerRole == "" || len(e.ReviewerRole) > 64 {
+		return fmt.Errorf("Refusal escalation needs 2–100 distinct requests, a bounded window and a reviewer role")
+	}
+	return nil
+}
+
+// RefusalEscalationRequest is an immutable business result projected into a
+// normal Work task. It contains no submitted inputs or original field values.
+type RefusalEscalationRequest struct {
+	Key        string    `json:"key"`
+	App        string    `json:"app"`
+	Subject    string    `json:"subject"`
+	Action     string    `json:"action"`
+	Code       string    `json:"code"`
+	Message    string    `json:"message"`
+	Count      int       `json:"count"`
+	First      time.Time `json:"first"`
+	Last       time.Time `json:"last"`
+	Candidates []string  `json:"candidates"`
+}
+
+func (r RefusalEscalationRequest) TaskID() string { return r.App + ":refusal:" + r.Key }
+
+type RefusalEscalationRuntime interface {
+	PendingRefusalEscalations(Caller, time.Time) ([]RefusalEscalationRequest, *kernel.Error)
+}
+
+func PendingRefusalEscalations(c Caller, at time.Time) ([]RefusalEscalationRequest, *kernel.Error) {
+	rt, ok := c.rt.(RefusalEscalationRuntime)
+	if !ok || !c.Staging() || c.Replaying || !c.Automation || c.App != WorkApp || c.ID != "app:"+WorkApp {
+		return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")
+	}
+	return rt.PendingRefusalEscalations(c, at)
+}
+
+type BusinessInputChange struct {
+	Field  string          `json:"field"`
+	Before json.RawMessage `json:"before,omitempty"`
+	After  json.RawMessage `json:"after,omitempty"`
+}
+type BusinessRefusalEntry struct {
+	Key          string                `json:"key"`
+	App          string                `json:"app"`
+	Type         string                `json:"type"`
+	ID           string                `json:"id"`
+	Action       string                `json:"action"`
+	Member       string                `json:"member"`
+	At           time.Time             `json:"at"`
+	Category     string                `json:"category"`
+	Code         string                `json:"code"`
+	Message      string                `json:"message"`
+	State        string                `json:"state"`
+	Inputs       json.RawMessage       `json:"inputs,omitempty"`
+	Issues       []FieldIssue          `json:"issues,omitempty"`
+	Facts        []BusinessRefusalFact `json:"facts,omitempty"`
+	CorrectionOf string                `json:"correctionOf,omitempty"`
+	Changes      []BusinessInputChange `json:"changes,omitempty"`
+}
+type BusinessRefusalPage struct {
+	Records []BusinessRefusalEntry `json:"records"`
+	Total   int                    `json:"total"`
+}
+type RefusalCodeCount struct {
+	Category string `json:"category"`
+	Code     string `json:"code"`
+	Type     string `json:"type"`
+	Count    int    `json:"count"`
+}
+
+type Delivery struct {
+	At         time.Time `json:"at"`
+	App        string    `json:"app"`
+	Action     string    `json:"action"`
+	Target     string    `json:"target"`
+	Subscriber string    `json:"subscriber"`
+	Outcome    string    `json:"outcome"` // "ok" or an error code
+	Attempt    int       `json:"attempt,omitempty"`
+}
+type AuditEntry struct {
+	At     time.Time `json:"at"`
+	Member string    `json:"member"`
+	App    string    `json:"app"`
+	Action string    `json:"action"` // an action's schema, or "input:<name>"
+	Target string    `json:"target,omitempty"`
+}
+type PersonalRead struct {
+	At     time.Time `json:"at"`
+	Member string    `json:"member"`
+	Type   string    `json:"type"`
+	IDs    []string  `json:"ids"`
+	Fields []string  `json:"fields"`
 }

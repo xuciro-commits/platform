@@ -1,24 +1,26 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"platformserver/engine/resources"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
+
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -38,9 +40,9 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Exec(ctx, "drop table "+table)
-	files := &memoryFiles{}
+	files := &resources.MemoryFiles{}
 	compose := func() *Tenant {
-		tn := composeTenant(t, "table-profile", []Seat{seatOf("builder", "build:builder", "flow:admin"), seatOf("admin", "platform:admin")}, build.New("table-profile"), work.New("table-profile"), flow.New("table-profile"))
+		tn := composeTenant(t, "table-profile", []platform.Seat{seatOf("builder", "build:builder", "flow:admin"), seatOf("admin", "platform:admin")}, build.New("table-profile"), work.New("table-profile"), automation.New("table-profile"))
 		tn.Files = files
 		return tn
 	}
@@ -71,13 +73,13 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	at := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
 	submit := func(typ, id, verb string, payload any) {
 		t.Helper()
-		decide(t, tn, "builder", construction.ID, typ+"."+verb, typ, id, payload, at)
+		decide(t, tn, "builder", build.ID, typ+"."+verb, typ, id, payload, at)
 	}
-	submit(construction.DatasetType, "rows", "create", map[string]any{"name": "tablerows", "title": "Table rows"})
-	submit(construction.ConnectionType, "db", "create", map[string]any{"name": "db", "title": "Database", "kind": "postgres", "address": address.String(), "secret": secret})
-	submit(construction.ConnectionType, "db", "check", map[string]any{})
+	submit(build.DatasetType, "rows", "create", map[string]any{"name": "tablerows", "title": "Table rows"})
+	submit(build.ConnectionType, "db", "create", map[string]any{"name": "db", "title": "Database", "kind": "postgres", "address": address.String(), "secret": secret})
+	submit(build.ConnectionType, "db", "check", map[string]any{})
 	tn.CheckConnections(at)
-	connection, _ := platform.Get[construction.Connection](tn.automation(construction.ID, false), "db")
+	connection, _ := platform.Get[build.Connection](tn.automation(build.ID, false), "db")
 	if connection.State != "ready" {
 		t.Fatalf("database check: %+v", connection.Last)
 	}
@@ -93,23 +95,23 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	if readOnly != "on" {
 		t.Fatal("source database session is writable")
 	}
-	submit(construction.SourceType, "source", "create", map[string]any{"name": "tableprobe", "title": "Table probe", "connection": "db", "profile": "table", "entity": strings.Trim(table, "\""), "since": "seq", "dataset": "rows"})
-	submit(construction.SourceType, "source", "publish", map[string]any{})
+	submit(build.SourceType, "source", "create", map[string]any{"name": "tableprobe", "title": "Table probe", "connection": "db", "profile": "table", "entity": strings.Trim(table, "\""), "since": "seq", "dataset": "rows"})
+	submit(build.SourceType, "source", "publish", map[string]any{})
 	tn.PullSources(at)
-	source, _ := platform.Get[construction.Source](tn.automation(construction.ID, false), "source")
+	source, _ := platform.Get[build.Source](tn.automation(build.ID, false), "source")
 	if source.Cursor != "10" || source.Last == nil || source.Last.Applied != 3 {
 		t.Fatalf("first pull: %+v", source)
 	}
 	if _, err := db.Exec(ctx, "insert into "+table+" values (11, 'D'), (12, 'E')"); err != nil {
 		t.Fatal(err)
 	}
-	submit(construction.SourceType, "source", "pull", map[string]any{})
+	submit(build.SourceType, "source", "pull", map[string]any{})
 	tn.PullSources(at.Add(time.Second))
-	source, _ = platform.Get[construction.Source](tn.automation(construction.ID, false), "source")
+	source, _ = platform.Get[build.Source](tn.automation(build.ID, false), "source")
 	if source.Cursor != "12" || source.Last.Applied != 2 {
 		t.Fatalf("incremental pull: %+v", source)
 	}
-	version, _ := platform.Get[construction.DatasetVersion](tn.automation(construction.ID, false), "rows@2")
+	version, _ := platform.Get[build.DatasetVersion](tn.automation(build.ID, false), "rows@2")
 	var rows []map[string]any
 	if err := json.Unmarshal(version.Data, &rows); err != nil || len(rows) != 2 {
 		t.Fatalf("loaded rows: %s (%v)", version.Data, err)
@@ -121,14 +123,14 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	if _, err := db.Exec(ctx, "truncate "+table+"; alter table "+table+" add plant text default 'P', add device text default 'D', add at timestamptz default '2026-10-06T09:00:00Z', add reading double precision default 12; insert into "+table+"(seq,sku) select n,'event-'||n from generate_series(1,1025) n"); err != nil {
 		t.Fatal(err)
 	}
-	submit(construction.SourceType, "stream", "create", map[string]any{"name": "telemetry", "title": "Telemetry", "connection": "db", "profile": "table", "entity": strings.Trim(table, "\""), "since": "seq", "stream": true})
-	submit(construction.SourceType, "stream", "publish", map[string]any{})
+	submit(build.SourceType, "stream", "create", map[string]any{"name": "telemetry", "title": "Telemetry", "connection": "db", "profile": "table", "entity": strings.Trim(table, "\""), "since": "seq", "stream": true})
+	submit(build.SourceType, "stream", "publish", map[string]any{})
 	continuous := &platform.Continuous{Source: "telemetry", Batch: 512, State: 2 << 20, FrameBytes: 4 << 20, DeadLetter: true,
 		Intake: &platform.StreamIntake{SourceRecord: "stream", Key: "sku", Partition: []string{"plant", "device"}, EventTime: "at", Value: "reading"},
 		Window: &platform.StreamWindow{Node: "window", WindowMS: 30000, SlideMS: 5000, WatermarkMS: 2000, MaxRecords: 50000, LateEvents: "sideOutput"}}
-	submit(construction.ProcessType, "consumer", "create", map[string]any{"name": "telemetry", "title": "Telemetry consumer", "continuous": continuous,
-		"steps": []construction.ProcessStep{{Name: "intake", Kind: "wait", Condition: &platform.Predicate{Op: "eq", Left: &platform.Binding{Source: "literal", Value: platform.Raw(false)}, Right: &platform.Binding{Source: "literal", Value: platform.Raw(true)}}}}})
-	submit(construction.ProcessType, "consumer", "publish", map[string]any{})
+	submit(build.ProcessType, "consumer", "create", map[string]any{"name": "telemetry", "title": "Telemetry consumer", "continuous": continuous,
+		"steps": []build.ProcessStep{{Name: "intake", Kind: "wait", Condition: &platform.Predicate{Op: "eq", Left: &platform.Binding{Source: "literal", Value: platform.Raw(false)}, Right: &platform.Binding{Source: "literal", Value: platform.Raw(true)}}}}})
+	submit(build.ProcessType, "consumer", "publish", map[string]any{})
 	tn.Work(at)
 	const instance = "build.telemetry:continuous-v1"
 	tn.PullContinuousSources(at)
@@ -141,7 +143,7 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	windowTickAt := at.Add(7 * time.Second)
 	tn.PullContinuousSources(windowTickAt)
 	ticked, failure := tn.ReadFlowFrame(member, instance, windowTickAt)
-	var tickState flow.WindowState
+	var tickState automation.WindowState
 	stateErr := json.Unmarshal(ticked.State["window"], &tickState)
 	if failure != nil || stateErr != nil || ticked.Cursor == frame.Cursor || ticked.Source == nil || ticked.Source.Cursor != frame.Source.Cursor || ticked.Consumed != frame.Consumed || !ticked.Watermark.After(frame.Watermark) || !tickState.Ready || !tickState.EmittedAt.Equal(at.Add(5*time.Second)) {
 		t.Fatalf("idle slide tick changed the source cursor or did not advance its window: before=%+v after=%+v state=%+v refusal=%v stateErr=%v", frame, ticked, tickState, failure, stateErr)
@@ -149,11 +151,11 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	for tick := 1; tick <= 4; tick++ {
 		tn.Work(at.Add(time.Duration(tick) * time.Second))
 	}
-	running, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), instance)
+	running, _ := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), instance)
 	if running.State != "waiting" || len(running.Tokens) != 1 || running.Tokens[0].Waits != "stream" || !running.Tokens[0].Due.IsZero() {
 		t.Fatal("the automatic source wait acquired an execution deadline")
 	}
-	stream, _ := platform.Get[construction.Source](tn.automation(construction.ID, false), "stream")
+	stream, _ := platform.Get[build.Source](tn.automation(build.ID, false), "stream")
 	if stream.Cursor != "" || stream.Last != nil || stream.Requested || stream.Due(at) {
 		t.Fatal("the stream also scheduled an import or kept a second cursor")
 	}
@@ -184,18 +186,18 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	}
 	// Pause/republication, accepted definition changes, and stopped instances
 	// cannot read past the committed predecessor or rebind a running flow.
-	decide(t, restored, "builder", construction.ID, "build.source.pause", construction.SourceType, "stream", map[string]any{}, at)
+	decide(t, restored, "builder", build.ID, "build.source.pause", build.SourceType, "stream", map[string]any{}, at)
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil {
 		t.Fatal("a paused source continued consuming")
 	}
-	decide(t, restored, "builder", construction.ID, "build.source.publish", construction.SourceType, "stream", map[string]any{}, at)
+	decide(t, restored, "builder", build.ID, "build.source.publish", build.SourceType, "stream", map[string]any{}, at)
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err != nil {
 		t.Fatalf("an unchanged source did not resume: %v", err)
 	}
 	consumerConfig := recovered.Source.Config
-	decide(t, restored, "builder", construction.ID, "build.source.edit", construction.SourceType, "stream", map[string]any{"filter": "seq > 10"}, at)
-	editedSource, _ := platform.Get[construction.Source](restored.automation(construction.ID, false), "stream")
-	executionSource, sourceErr := restored.app(construction.ID).(*build.Build).ExecutionSource(editedSource)
+	decide(t, restored, "builder", build.ID, "build.source.edit", build.SourceType, "stream", map[string]any{"filter": "seq > 10"}, at)
+	editedSource, _ := platform.Get[build.Source](restored.automation(build.ID, false), "stream")
+	executionSource, sourceErr := restored.app(build.ID).(*build.Build).ExecutionSource(editedSource)
 	if sourceErr != nil || editedSource.Filter != "seq > 10" || executionSource.Filter != "" {
 		t.Fatalf("source draft changed its accepted execution filter: %v", sourceErr)
 	}
@@ -206,12 +208,12 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	if failure != nil || draftFrame.Source == nil || draftFrame.Source.Config != consumerConfig || draftFrame.Source.Cursor != recovered.Source.Cursor {
 		t.Fatalf("source draft rebound its consumer configuration or checkpoint: %v", failure)
 	}
-	decide(t, restored, "builder", construction.ID, "build.source.publish", construction.SourceType, "stream", map[string]any{}, at)
+	decide(t, restored, "builder", build.ID, "build.source.publish", build.SourceType, "stream", map[string]any{}, at)
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
 		t.Fatal("a changed source silently rebound its consumer")
 	}
-	decide(t, restored, "builder", construction.ID, "build.source.edit", construction.SourceType, "stream", map[string]any{"filter": ""}, at)
-	decide(t, restored, "builder", construction.ID, "build.source.publish", construction.SourceType, "stream", map[string]any{}, at)
+	decide(t, restored, "builder", build.ID, "build.source.edit", build.SourceType, "stream", map[string]any{"filter": ""}, at)
+	decide(t, restored, "builder", build.ID, "build.source.publish", build.SourceType, "stream", map[string]any{}, at)
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err != nil {
 		t.Fatalf("the accepted original source definition did not resume its consumer: %v", err)
 	}
@@ -225,25 +227,21 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	restored.Secrets = func(name string) ([]byte, bool) {
 		if !revoked {
 			revoked = true
-			decide(t, restored, "admin", PlatformApp, "platform.member.revoke", "platform.member", "builder", map[string]any{"app": construction.ID}, at)
+			decide(t, restored, "admin", controlowner.PlatformApp, "platform.member.revoke", "platform.member", "builder", map[string]any{"app": build.ID}, at)
 		}
 		return secrets(name)
 	}
-	files.mu.Lock()
-	beforeFiles := len(files.m)
-	files.mu.Unlock()
+	beforeFiles := len(storedFiles(t, files))
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil || !revoked {
-		t.Fatalf("a captured source grant survived its revocation during I/O (revoked=%v, refusal=%v, role=%s)", revoked, err, memberOf(t, restored, "builder").Roles[construction.ID])
+		t.Fatalf("a captured source grant survived its revocation during I/O (revoked=%v, refusal=%v, role=%s)", revoked, err, memberOf(t, restored, "builder").Roles[build.ID])
 	}
-	files.mu.Lock()
-	afterFiles := len(files.m)
-	files.mu.Unlock()
+	afterFiles := len(storedFiles(t, files))
 	if afterFiles != beforeFiles {
 		t.Fatal("permission refusal kept an unused prepared source frame")
 	}
 	restored.Secrets = secrets
-	decide(t, restored, "admin", PlatformApp, "platform.member.grant", "platform.member", "builder", map[string]any{"app": construction.ID, "role": construction.Builder}, at)
-	decide(t, restored, "builder", flow.ID, flow.SchemaFlowStop, flow.InstanceType, instance, map[string]any{}, at)
+	decide(t, restored, "admin", controlowner.PlatformApp, "platform.member.grant", "platform.member", "builder", map[string]any{"app": build.ID, "role": build.Builder}, at)
+	decide(t, restored, "builder", automation.ID, automation.SchemaFlowStop, automation.InstanceType, instance, map[string]any{}, at)
 	if _, err := restored.ConsumeFlowSource(memberOf(t, restored, "builder"), instance, at); err == nil {
 		t.Fatal("a canceled flow continued consuming")
 	}
@@ -259,8 +257,8 @@ func TestODataWalksPagesPastCursor(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
 	}}
-	c := construction.Connection{Kind: "odata", Address: "https://sap.example/sap/opu/odata/sap/API_PRODUCT/"}
-	s := construction.Source{Profile: "odata", Entity: "Products", Since: "Changed", Cursor: "2026-01-01T00:00:00Z", Filter: "Plant eq '1000'"}
+	c := build.Connection{Kind: "odata", Address: "https://sap.example/sap/opu/odata/sap/API_PRODUCT/"}
+	s := build.Source{Profile: "odata", Entity: "Products", Since: "Changed", Cursor: "2026-01-01T00:00:00Z", Filter: "Plant eq '1000'"}
 	rows, err := tn.readOData(s, c)
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("rows=%d err=%v", len(rows), err)
@@ -280,7 +278,7 @@ func TestODataRejectsCrossOriginAndIncompletePagination(t *testing.T) {
 		tn := &Tenant{Outbound: func(*http.Request, bool) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"value":[{"Id":"1"}],"@odata.nextLink":"` + next + `"}`))}, nil
 		}}
-		if _, err := tn.readOData(construction.Source{Entity: "Products"}, construction.Connection{Address: "https://service.example/odata/"}); err == nil {
+		if _, err := tn.readOData(build.Source{Entity: "Products"}, build.Connection{Address: "https://service.example/odata/"}); err == nil {
 			t.Fatalf("accepted unsafe/incomplete pagination %s", next)
 		}
 	}
@@ -290,7 +288,7 @@ func TestODataV2Shape(t *testing.T) {
 	tn := &Tenant{Outbound: func(*http.Request, bool) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"d":{"results":[{"Id":"1"}]}}`))}, nil
 	}}
-	rows, err := tn.readOData(construction.Source{Profile: "odata", Entity: "Set"}, construction.Connection{Kind: "odata", Address: "https://x.example/odata"})
+	rows, err := tn.readOData(build.Source{Profile: "odata", Entity: "Set"}, build.Connection{Kind: "odata", Address: "https://x.example/odata"})
 	if err != nil || len(rows) != 1 || rows[0]["Id"] != "1" {
 		t.Fatalf("rows=%v err=%v", rows, err)
 	}

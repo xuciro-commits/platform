@@ -23,7 +23,7 @@ func TestPostgresCapabilityPreparationUsesCurrentReadScope(t *testing.T) {
 	}
 	defer forgetJournal(t, j, id)
 	app := &formattedStock{stock: newStock(id), format: "stock.ledger.v1"}
-	live := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk", "invariants:operator")}, app, newConstraintOwner(id))
+	live := composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk", "invariants:operator")}, app, newConstraintOwner(id))
 	if _, err = j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestPostgresCapabilityPreparationUsesCurrentReadScope(t *testing.T) {
 	if refusal != nil || row.Record.(Item).Qty != 7 || row.Record.(Item).Revision != 2 {
 		t.Fatal(row, refusal)
 	}
-	if live.records.readView != nil || live.records.types["stock.item"].rows.Stored() != 0 {
+	if live.records.current.View() != nil || live.records.types["stock.item"].rows.Stored() != 0 {
 		t.Fatal("capability retained an SQL transaction or row cache")
 	}
 	// Refusal details also read current records. Filter them before leaving

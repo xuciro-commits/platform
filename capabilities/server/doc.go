@@ -6,27 +6,27 @@
 // components that each own their state and, where reads cross the pipeline,
 // their own lock:
 //
-//	committed        committed.go          answers by idempotency key
-//	audit            audit_log.go          recent inputs, deliveries, personal reads
-//	releases         release_store.go      candidates, applied digests, active release
+//	committed        kernel/tenant_state.go answers by idempotency key
+//	audit            kernel/tenant_diagnostics.go recent inputs, deliveries, personal reads
+//	releases         studio/releases/release_retention.go candidates, applied digests, active release
 //	console          host_control.go       lifecycle, support sessions, migrations
 //	staged           compute_channel.go    the per-call result channel
 //	work             work_board.go         queues, failed deliveries, jobs
-//	quota            quota.go              attempts per app per minute
+//	quota            automation.Quota.go              attempts per app per minute
 //	connectors       connector_roster.go   registry, descriptor index, last refusals
-//	notices          notices.go            notifications
-//	settings         settings.go           app settings
+//	notices          kernel/tenant_notifications.go notifications
+//	settings         kernel/control/control_settings.go app settings
 //	sequences        sequences.go          number counters
 //	uploads          uploads.go            file hashes not yet attached
 //	cancels          compute_cancel_registry.go
 //	i18n             translator.go         dictionaries and patterns
 //	memStore         journal/memory.go     the Store without one
 //
-// Consumer boundaries: internal/host names the role each
-// compiled owner receives; Host is only the composition aggregate. Console
-// and Agents own their state and receive ConsoleHost/AgentHost, never Tenant.
-// Pure construction and enterprise declarations live in internal/construction
-// and internal/enterprise; UAF runtime data is generated before the build.
+// Consumer boundaries are named public roles in platform. composition binds
+// actual owners for startup and the same private decision/trial factories.
+// Agent and Knowledge runtime algorithms live in engine; author evaluation and
+// Build compilation live in studio. They receive their declared roles, never
+// Tenant. Credentials and settings keep their original state in kernel/control.
 // Record images, immutable history segments, recent changes, indexes and pure
 // field/scope/query compilation live in internal/records. Host recordStore owns authorized
 // storage access, private decision coordination and accepted application. SQL
@@ -34,17 +34,17 @@
 // accepted application clears overlays before admitting the next read view.
 // SQL owner checkpoints restore through their fixed archive plus accepted tail;
 // portable snapshots and legacy reconstruction keep their original obligations.
-// Construction owns pure object/process compilation and declaration/member
+// studio/build owns object/process compilation and declaration/member
 // projections; original owners supply narrow read roles and execute results.
-// Accepted canonical encoding and strict decoding live in internal/acceptance.
-// Seven pure result families, shared evidence and the typed change plan live
-// in internal/acceptance/result. Runtime-owned Task/Agent/console formats keep
+// Accepted versioned encoding, strict decoding, shared evidence and the typed
+// change plan live in kernel/acceptedformat. Runtime-owned Task/Agent/console formats keep
 // their owner-specific checks and use those same shared values and decoders.
 // Agent prompt/history compilation, observation bounds and budget arithmetic
 // live in internal/agents, which receives only already-authorized values.
 // internal/aistate owns the unchanged AI state format and pure usage updates;
 // the AI app keeps live reservations while SQL consumes the same saved rules.
-// Runtime code imports no compiled apps. Public DTOs retain
+// Runtime owners use public roles; host installation adapters retain Build
+// compilation dependencies pending the remaining boundary work. Public DTOs retain
 // the original host API schema names and journal encodings.
 //
 // Lock obligations: mu owns the tenant decision lane, installed definitions,
@@ -71,12 +71,13 @@
 // only place allowed to reach across them. routes_*.go are the shell's API
 // surface: they call domains, and domains never call routes.
 //
-// The pipeline is Tenant.Submit (submit.go) → accepted_*.go (one file per
-// result kind) → replay.go; snapshot.go carries every component's state.
+// The pipeline is Tenant.Submit (submit.go) → acceptance_pipeline.go /
+// acceptance_records.go / acceptance_codec.go → replay.go; snapshot.go carries
+// every component's state.
 // Reads and connector inputs live in reads.go, accepted-event planning and
 // delivery in events.go, and the member-facing facade (catalog, declarations,
 // apps, directory) in facade.go. Routes live in routes.go and routes_*.go,
 // one file per API area. Sub-packages: platform/ (the apps' only API), apps/
 // (platform apps), journal/ (durable stores), idp/ (identity providers),
-// internal/host (host-side interfaces).
+// engine/ and studio/ (runtime and authoring owners).
 package platformserver

@@ -6,11 +6,10 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 	"maps"
 	"reflect"
 	"slices"
-
-	"github.com/jackc/pgx/v5"
 )
 
 const uniqueStateVersion = 1

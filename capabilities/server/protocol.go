@@ -223,7 +223,7 @@ func (t *Tenant) query(c platform.Caller, protocol, read string, provider ...str
 		if !ok || !slices.Contains(b.provision.Protocol.Reads, read) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		result, err := readApp(b.provider, called, name)
+		result, err := platform.CallRead(b.provider, called, name)
 		if err != nil {
 			return nil, err
 		}

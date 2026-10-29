@@ -2,7 +2,6 @@ package organization
 
 import (
 	"encoding/json"
-	"platformserver/internal/enterprise/uaf"
 	"platformserver/platform"
 	"testing"
 )
@@ -11,10 +10,10 @@ import (
 // palette is answered by exactly one view's slice, and every view offers only
 // relationships the contracts admit among its own elements.
 func TestViews(t *testing.T) {
-	mm := uaf.Current()
+	mm := directory()
 	views := Views(mm)
-	if len(views) != 5 {
-		t.Fatalf("got %d views, want 5", len(views))
+	if len(views) != 1 {
+		t.Fatalf("got %d views, want 1", len(views))
 	}
 	seen := map[string]string{}
 	for _, v := range views {
@@ -69,35 +68,16 @@ func TestLifecycleInvalidDatesLeavePeriodsUnchanged(t *testing.T) {
 	}
 }
 
-func TestLinkedImportIsPureNamespacedAndRetainsWithdrawnHistory(t *testing.T) {
-	m := FromOrgSeed(platform.OrgSeed{Units: []platform.Unit{{ID: "local", Name: "Local"}}, Memberships: []platform.Membership{{Party: "member:ann", Unit: "local", Role: "employee"}}})
-	m.TenantLinks = []TenantLink{{ID: "sub", Organization: "local", Tenant: "subtenant", Root: "root", Connection: "CONNECTION"}}
-	slice := Slice{Tenant: "subtenant", UAF: "1.3", Elements: []Element{{ID: "root", Stereotype: Organization, Name: "Shared root"}, {ID: "cap", Stereotype: Capability, Name: "Shared capability"}}, Relationships: []Relationship{{ID: "ability", Stereotype: Performs, Source: "root", Target: "cap"}}}
-	before, _ := json.Marshal(slice)
-	next, err := m.PreviewImport(slice, "sub", slice.Fingerprint(), m.Fingerprint(), "2026-01-01")
-	if err != nil {
-		t.Fatal(err)
+func TestRetiredImportPreviewCannotChangeModelOrSource(t *testing.T) {
+	m := FromOrgSeed(platform.OrgSeed{Units: []platform.Unit{{ID: "local", Name: "Local"}}})
+	source := Slice{Tenant: "source", UAF: "1.3", Elements: []Element{{ID: "root", Stereotype: Organization, Name: "Root"}}}
+	before, _ := json.Marshal([]any{m, source})
+	if _, err := m.PreviewImport(source, "", source.Fingerprint(), m.Fingerprint(), "2026-01-01"); err == nil {
+		t.Fatal("retired slice preview was accepted")
 	}
-	after, _ := json.Marshal(slice)
+	after, _ := json.Marshal([]any{m, source})
 	if string(before) != string(after) {
-		t.Fatal("preview mutated source slice")
-	}
-	root := ImportedElementID(slice.Tenant, "root")
-	cap := ImportedElementID(slice.Tenant, "cap")
-	if next.ElementOf(root) == nil || next.TenantLinkOf("sub").Content == "" || len(next.Relationships) != 2 {
-		t.Fatal("linked import lost namespace, metadata or local membership")
-	}
-	slice.Elements = slice.Elements[:1]
-	slice.Relationships = nil
-	withdrawn, err := next.PreviewImport(slice, "sub", slice.Fingerprint(), next.Fingerprint(), "2026-02-01")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if withdrawn.ElementOf(cap) == nil || withdrawn.LiveOn(cap, "2026-02-15") || !withdrawn.LiveOn(cap, "2026-01-15") {
-		t.Fatal("withdrawal erased earlier history")
-	}
-	if _, err := withdrawn.PreviewImport(slice, "sub", slice.Fingerprint(), m.Fingerprint(), "2026-03-01"); err == nil {
-		t.Fatal("stale preview applied")
+		t.Fatal("retired preview changed retained model or original source")
 	}
 }
 

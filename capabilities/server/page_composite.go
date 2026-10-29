@@ -28,25 +28,28 @@ type PageCompositeResult struct {
 
 // All sources and cells are read within the route's existing tenant lock. A
 // client supplies typed identities only; cell inputs are confirmed here.
-func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, section platform.Section, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
+func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
 	result := PageModelResult{Object: section.PrimaryModel().Type, Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}, Composite: &PageCompositeResult{Sources: map[string]PageCompositeSource{}}}
-	c := section.Composite
+	c := section
 	recordLimit, cellLimit, byteLimit := platform.CompositeLimits()
-	keys := make([]string, 0, len(c.Bindings))
-	for key := range c.Bindings {
+	keys := make([]string, 0, len(c.Models))
+	for key := range c.Models {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
 	for _, key := range keys {
-		binding := c.Bindings[key]
+		binding := c.Models[key]
 		info, _ := t.entity(binding.Model.Type)
 		model := binding.Model
 		model.Fields = slices.Clone(model.Fields)
-		roles := platform.CompositePortRoles(section.Widget, key)
+		roles := make([]string, 0, len(binding.Roles))
+		for role := range binding.Roles {
+			roles = append(roles, role)
+		}
+		slices.Sort(roles)
 		for _, role := range roles {
-			if field := platform.CompositeRole(binding, role, info); field != nil {
-				model.Fields = append(model.Fields, *field)
-			}
+			field := binding.Roles[role]
+			model.Fields = append(model.Fields, field)
 		}
 		read := request
 		read.Offset, read.Limit, read.Search, read.Sort, read.Query = 0, recordLimit, "", nil, nil
@@ -57,7 +60,7 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 				read.Records[name] = record
 			}
 		}
-		value, err := t.readPageModelSource(member, page, platform.Section{PageWidgetConfig: platform.PageWidgetConfig{Model: &model}, ID: section.ID, Widget: "table"}, read, at)
+		value, err := t.readPageModelSource(member, page, platform.PageDataBinding{Model: &model, ID: section.ID, Kind: "records"}, read, at)
 		if err != nil {
 			return result, err
 		}
@@ -74,10 +77,9 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 			// ordinary record owner has admitted it (including false and zero).
 			ruleRecord := t.pageModelRuleRecord(model.Type, id, row)
 			for _, role := range roles {
-				if field := platform.CompositeRole(binding, role, info); field != nil {
-					if v, ok := row[field.Key()]; ok {
-						row["$view."+role] = v
-					}
+				field := binding.Roles[role]
+				if v, ok := row[field.Key()]; ok {
+					row["$view."+role] = v
 				}
 			}
 			if value.LabelField != "" {
@@ -115,12 +117,12 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 		result.Composite.Sources = map[string]PageCompositeSource{}
 		return result, nil
 	}
-	if section.Widget == "layered-graph" {
+	if _, graph := section.Models["nodes"]; graph {
 		if err := checkCompositeGraph(result.Composite, c.Acyclic, result.Partial); err != nil {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}
 	}
-	if section.Widget == "model-matrix" {
+	if section.Value != nil {
 		rows, columns := result.Composite.Sources["rows"], result.Composite.Sources["columns"]
 		if len(rows.Records)*len(columns.Records) > cellLimit {
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Matrix exceeds 1600 cells; bind narrower declared collections")
@@ -135,7 +137,7 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 						return result, err
 					}
 					result.Partial = true
-					if c.Bindings["rows"].Model.Visibility != "mark" || c.Bindings["columns"].Model.Visibility != "mark" {
+					if c.Models["rows"].Model.Visibility != "mark" || c.Models["columns"].Model.Visibility != "mark" {
 						result.Hidden = true
 						result.Composite.Sources = map[string]PageCompositeSource{}
 						result.Composite.Cells = nil

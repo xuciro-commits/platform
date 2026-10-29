@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"sync"
 	"testing"
@@ -84,8 +85,8 @@ func TestOutboundEffects(t *testing.T) {
 	defer server.Close()
 	var journal []Entry
 	build := func() *Tenant {
-		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}},
-			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"a": "writer"}}})
+		dir := newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", controlowner.PlatformApp: controlowner.Admin}}},
+			platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"a": "writer"}}})
 		tn, err := NewTenant("t-1", dir, newNotes("t-1", "a"))
 		if err != nil {
 			t.Fatal(err)
@@ -100,14 +101,14 @@ func TestOutboundEffects(t *testing.T) {
 		json.Unmarshal(raw, &stored)
 		journal = append(journal, stored)
 	}
-	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
-	bo, _ := tn.app(PlatformApp).(*Console).MemberBySubject("bo")
+	ana, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
+	bo, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("bo")
 	t0 := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	decide := func(tn *Tenant, m platform.Member, schema, typ, id string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		_, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: m.ID, Authority: PlatformApp, IdempotencyKey: fmt.Sprint("d", keys),
+		_, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: m.ID, Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprint("d", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, t0)
 		if err != nil {
 			return err.Error()
@@ -121,16 +122,16 @@ func TestOutboundEffects(t *testing.T) {
 		}
 	}
 	endpoint := map[string]any{"url": server.URL + "/hook", "secret": "hook", "events": []string{"a.note"}, "allowPrivate": true}
-	if got := decide(tn, bo, SchemaEndpointAdd, EndpointType, "crm-sync", endpoint); got != "ERROR_CODE_POLICY_DENIED" {
+	if got := decide(tn, bo, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "crm-sync", endpoint); got != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("a member without the platform role added an endpoint: %s", got)
 	}
-	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "plain", map[string]any{"url": "http://example.com/x", "secret": "hook", "events": []string{"a.note"}}); got != "ERROR_CODE_INVALID_ARGUMENT" {
+	if got := decide(tn, ana, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "plain", map[string]any{"url": "http://example.com/x", "secret": "hook", "events": []string{"a.note"}}); got != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("plain http to a public address was accepted: %s", got)
 	}
-	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "typo", map[string]any{"url": server.URL, "secret": "hook", "events": []string{"a.nope"}, "allowPrivate": true}); got != "ERROR_CODE_INVALID_ARGUMENT" {
+	if got := decide(tn, ana, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "typo", map[string]any{"url": server.URL, "secret": "hook", "events": []string{"a.nope"}, "allowPrivate": true}); got != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("an event no app declares was accepted: %s", got)
 	}
-	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "crm-sync", endpoint); got != "ok" {
+	if got := decide(tn, ana, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "crm-sync", endpoint); got != "ok" {
 		t.Fatal(got)
 	}
 
@@ -206,7 +207,7 @@ func TestOutboundEffects(t *testing.T) {
 
 	CheckReplay(t, tn, journal, build)
 	// An endpoint on a private address without permission is refused at connect time.
-	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "strict", map[string]any{"url": "https://127.0.0.1:1/x", "secret": "hook", "events": []string{"a.note"}}); got != "ok" {
+	if got := decide(tn, ana, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "strict", map[string]any{"url": "https://127.0.0.1:1/x", "secret": "hook", "events": []string{"a.note"}}); got != "ok" {
 		t.Fatal(got)
 	}
 	tn.Dispatch(t0.Add(3 * time.Hour))
@@ -224,10 +225,10 @@ func TestOutboundEffects(t *testing.T) {
 			rejected = x.ID
 		}
 	}
-	if got := decide(tn, ana, SchemaEffectRetry, EffectType, rejected, struct{}{}); got != "ok" {
+	if got := decide(tn, ana, controlowner.SchemaEffectRetry, controlowner.EffectType, rejected, struct{}{}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := decide(tn, ana, SchemaEffectDiscard, EffectType, rejected, struct{}{}); got != "ok" {
+	if got := decide(tn, ana, controlowner.SchemaEffectDiscard, controlowner.EffectType, rejected, struct{}{}); got != "ok" {
 		t.Fatal(got)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	pageowner "platformserver/studio/pages"
 	"slices"
 	"strconv"
 	"time"
@@ -85,7 +86,7 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 
 // Shared normalization keeps list and aggregate traversal on the original reader.
 func (t *Tenant) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {
-	if selected := querySourceDefinition(t.Definitions(m), &binding); selected != nil {
+	if selected := pageowner.QuerySourceDefinition(t.Definitions(m), &binding); selected != nil {
 		return selected.LinkType
 	}
 	return nil

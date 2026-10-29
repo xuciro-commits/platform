@@ -1,3 +1,6 @@
+import {decodeDefinitions} from "./pageui/wire";
+export {decodeDefinitions} from "./pageui/wire";
+import {FormRulePreview} from "./runtime/FormRulePreview";
 import {pageUIManifest} from "./pageui/manifest";
 import {ConfirmationProgress} from "./widgets/ConfirmationProgress";
 import { DispatchProgress } from "./widgets/DispatchProgress";
@@ -50,7 +53,7 @@ export { useDependencies, useProvidedCapabilities, type DependencyDescriptor, ty
 /** An app the member may open: the tenant runs it and they hold a role in it. */
 export type AppEntry = Api.AppEntry;
 export type AssetRef = Api.AssetRef;
-export type Definition = Api.Definition;
+export type Definition = Omit<Api.Definition,"page">&{page?:PageUI.Page};
 /** The signed-in member on this host, with their language. */
 export type Me = Api.MeView;
 /** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
@@ -158,7 +161,9 @@ export function useRecordInventory<T>(type: string, limit = 1000, enabled = true
 
 /** The member's installed semantic assets, through the host's one registry. */
 export function useDefinitions(): UseQueryResult<Definition[]> {
-  return useReadQuery<Definition[]>("/v1/definitions");
+  const result=useReadQuery<Api.Definition[]>("/v1/definitions");
+  const data=useMemo(()=>result.data&&decodeDefinitions(result.data),[result.data]);
+  return {...result,data} as UseQueryResult<Definition[]>;
 }
 
 /** Block metadata is derived by the owners from this member's definitions. */
@@ -301,7 +306,13 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   /** Presentation subset, in this order: a composed page's form asks for these. */
   fields?: string[];
 }) {
-  const { source, catalog } = useHost();
+  const { source, catalog,me } = useHost();
+  const [draft,setDraft]=useState<Record<string,unknown>>({});
+  const [instant]=useState(()=>new Date());
+  const clock=useMemo(()=>{
+   const parts=new Intl.DateTimeFormat("en-CA",{timeZone:source.ruleIdentity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(instant),part=(kind:string)=>parts.find(value=>value.type===kind)?.value??"";
+   return {me:me.principalId,tenant:me.tenantId,now:instant.toISOString(),today:`${part("year")}-${part("month")}-${part("day")}`};
+  },[source.ruleIdentity?.timezone,me.principalId,me.tenantId,instant]);
   const info = source.entity(type);
   const action = catalog.find((action) => action.schema === (actionSchema??`${type}.${record ? "edit" : "create"}`));
   if (!info || !action) return null;
@@ -316,8 +327,8 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   const editable=fields?fields.filter(name=>writableNames.has(name)):writable.map(field=>field.name);
   const editableValues=(values:Record<string,unknown>)=>Object.fromEntries(Object.entries(values).filter(([key])=>writableNames.has(key)));
   const defaults=record??{...Object.fromEntries(action.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial};
-  return <RecordForm sourceFields={writable} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={action.payload.find(input=>input.name===field.name)} app={action.schema.split(".")[0]}/>} onTrial={onTrial} context={context} entity={entityFrom({...info,fields:writable}, {}, source)} keys={editable} defaultValues={defaults} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
-    onValuesChange={onValuesChange ? values => onValuesChange(editableValues(values)) : undefined}
+  return <RecordForm sourceFields={writable} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={action.payload.find(input=>input.name===field.name)} app={action.schema.split(".")[0]}/>} onTrial={onTrial} context={<>{context}<FormRulePreview info={info} values={{...defaults,...draft}} clock={clock}/></>} entity={entityFrom({...info,fields:writable}, {}, source)} keys={editable} defaultValues={defaults} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
+    onValuesChange={values => {const editable=editableValues(values);setDraft(editable);onValuesChange?.(editable);}}
     onSubmit={values => onSubmit(editableValues(values))} />;
 }
 
@@ -520,3 +531,5 @@ import type * as PageUI from "./pageui/types";
 export type {PageUI};
 export type {PageWidgetID, PageWidgetConfiguration, PageWidgetConfigurationFor} from "./pageui/types";
 export {pageUIManifest} from "./pageui/manifest";
+
+export {validApplicationHeader} from "./pageui/application-header";

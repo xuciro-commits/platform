@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"platformkernel/kernel"
-	"platformserver/internal/acceptance"
+	controlowner "platformserver/kernel/control"
+
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ type observationWindowAttempt struct {
 // source window produces at most an ordinary business decision. Unmatched
 // windows, source points and this disposable scheduling memory are not logged.
 func (t *Tenant) EvaluateObservations(at time.Time) {
-	if t.businessStopped() || !t.ownerActive(BuildApp) {
+	if t.businessStopped() || !t.ownerActive(controlowner.BuildApp) {
 		return
 	}
 	type scheduled struct {
@@ -89,7 +90,7 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 				if json.Unmarshal(platform.Raw(record), &row) != nil || row.ID == "" {
 					continue
 				}
-				identity, err := acceptance.Digest([]any{source.ref, source.version, row.ID, until})
+				identity, err := platform.CanonicalDigest([]any{source.ref, source.version, row.ID, until})
 				if err != nil {
 					continue
 				}

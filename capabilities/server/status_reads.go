@@ -2,10 +2,11 @@ package platformserver
 
 import (
 	"encoding/json"
-	"platformserver/internal/acceptance"
+
+	"platformserver/platform"
 	"time"
 
-	"platformserver/internal/construction"
+	"platformserver/studio/build"
 )
 
 const statusReadLimit = 64
@@ -58,13 +59,13 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	if !found {
 		return "", false
 	}
-	var connection construction.Connection
+	var connection build.Connection
 	_ = json.Unmarshal(connectionRaw, &connection)
 	var credential []byte
 	if connection.Secret != "" {
 		credential, _ = t.credentialValue(connection.Secret, "connection/"+connection.ID, connection.Address)
 	}
-	var source construction.Source
+	var source build.Source
 	_ = json.Unmarshal(sourceRaw, &source)
 	publisher, _ := t.Member(source.Puller)
 	marking := ""
@@ -77,6 +78,6 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 		generation = t.records.generation
 		t.records.mu.Unlock()
 	}
-	stamp, err := acceptance.Digest([]any{revision, member, publisher, marking, credential, generation})
+	stamp, err := platform.CanonicalDigest([]any{revision, member, publisher, marking, credential, generation})
 	return stamp, err == nil
 }

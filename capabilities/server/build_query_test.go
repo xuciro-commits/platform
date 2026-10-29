@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+
 	"platformserver/journal"
 	"platformserver/platform"
 	"slices"
@@ -49,7 +49,7 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 		defer journal.Pool().Exec(context.Background(), `delete from journal where tenant=$1`, tenant)
 	}
 	compose := func() *Tenant {
-		return composeTenant(t, tenant, []Seat{seatOf("builder", "build:builder"), seatOf("reader", "build:user")}, build.New(tenant))
+		return composeTenant(t, tenant, []platform.Seat{seatOf("builder", "build:builder"), seatOf("reader", "build:user")}, build.New(tenant))
 	}
 	tn := compose()
 	if journal != nil {
@@ -81,7 +81,7 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 		return e.Body, nil
 	}
 	submit := func(member platform.Member, typ, id, verb string, payload any) *kernel.Error {
-		_, err := tn.Submit(member, submission(tn, member, construction.ID, typ+"."+verb, typ, id, payload), at)
+		_, err := tn.Submit(member, submission(tn, member, build.ID, typ+"."+verb, typ, id, payload), at)
 		return err
 	}
 	must := func(typ, id, verb string, payload any) {
@@ -90,25 +90,25 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 			t.Fatal(typ, verb, err)
 		}
 	}
-	must(construction.ObjectType, "object", "create", map[string]any{"name": "note", "title": "Note", "access": []construction.Access{{Role: construction.User, Read: "all", Create: true}}, "fields": []construction.Field{{Name: "bucket", Title: "Bucket", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}})
-	must(construction.ObjectType, "object", "publish", map[string]any{})
+	must(build.ObjectType, "object", "create", map[string]any{"name": "note", "title": "Note", "access": []build.Access{{Role: build.User, Read: "all", Create: true}}, "fields": []build.Field{{Name: "bucket", Title: "Bucket", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
+	must(build.ObjectType, "object", "publish", map[string]any{})
 	for _, bucket := range []string{"A", "B"} {
 		must("build.note", bucket, "create", map[string]string{"bucket": bucket, "secret": "private"})
 	}
 	q := platform.NamedQuery{Name: "shared", Title: "Shared query", Description: "Reusable read", Object: "build.note", Domain: json.RawMessage(`[["bucket","=","A"]]`), Sort: []string{"id"}, Limit: 20}
-	must(construction.QueryType, "query", "create", q)
-	if _, ok := tn.namedQuery(construction.ID, "shared"); ok {
+	must(build.QueryType, "query", "create", q)
+	if _, ok := tn.namedQuery(build.ID, "shared"); ok {
 		t.Fatal("draft installed")
 	}
-	if err := submit(reader, construction.QueryType, "query", "publish", map[string]any{}); err == nil {
+	if err := submit(reader, build.QueryType, "query", "publish", map[string]any{}); err == nil {
 		t.Fatal("reader published query")
 	}
 	fail = true
-	if err := submit(builder, construction.QueryType, "query", "publish", map[string]any{}); err == nil {
+	if err := submit(builder, build.QueryType, "query", "publish", map[string]any{}); err == nil {
 		t.Fatal("failed append accepted")
 	}
 	fail = false
-	if _, ok := tn.namedQuery(construction.ID, "shared"); ok {
+	if _, ok := tn.namedQuery(build.ID, "shared"); ok {
 		t.Fatal("failed append installed")
 	}
 	// Freeze a draft candidate, then edit its row. Activation must install the saved bytes.
@@ -119,29 +119,29 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 	if _, err = tn.SaveReleaseCandidate(builder, platform.AssetQuery, "query", preview.CandidateID, "save-query", at); err != nil {
 		t.Fatal(err)
 	}
-	must(construction.QueryType, "query", "edit", map[string]any{"domain": [][]any{{"bucket", "=", "B"}}})
+	must(build.QueryType, "query", "edit", map[string]any{"domain": [][]any{{"bucket", "=", "B"}}})
 	if _, err = tn.ActivateRelease(builder, preview.CandidateID, "activate-query", at); err != nil {
 		t.Fatal(err)
 	}
-	if installed, _ := tn.namedQuery(construction.ID, "shared"); string(installed.Domain) != string(q.Domain) {
+	if installed, _ := tn.namedQuery(build.ID, "shared"); string(installed.Domain) != string(q.Domain) {
 		t.Fatal("mutable draft changed saved query")
 	}
-	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetQuery, Name: "shared"}
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetQuery, Name: "shared"}
 	binding := platform.AssetBinding{Ref: ref, SourceVersion: "1.query-1"}
 	for i, name := range []string{"first", "second"} {
-		doc := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"text"}}, "text": {Kind: "widget", Section: "text"}}, Variables: map[string]platform.PageVariable{"window": {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}}, Queries: map[string]platform.PageQuery{"read": {Object: platform.AssetRef{App: construction.ID, Kind: platform.AssetObject, Name: q.Object}, Query: &binding, Limit: 20}}}
+		doc := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"text"}}, "text": {Kind: "widget", Section: "text"}}, Variables: map[string]platform.PageVariable{"window": {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}}, Queries: map[string]platform.PageQuery{"read": {Object: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: q.Object}, Query: &binding, Limit: 20}}}
 		id := fmt.Sprint("page-", i)
-		must(construction.PageType, id, "create", map[string]any{"name": name, "title": name, "object": q.Object, "sections": []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: name}}, "document": doc})
-		must(construction.PageType, id, "publish", map[string]any{})
+		must(build.PageType, id, "create", map[string]any{"name": name, "title": name, "object": q.Object, "sections": []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: name}}, "document": doc})
+		must(build.PageType, id, "publish", map[string]any{})
 	}
 	// The later publication becomes latest, while both page plans remain at v1.
-	must(construction.QueryType, "query", "publish", map[string]any{})
-	row, problem := tn.RunQuery(reader, construction.ID, "shared", "", at)
+	must(build.QueryType, "query", "publish", map[string]any{})
+	row, problem := tn.RunQuery(reader, build.ID, "shared", "", at)
 	if problem != nil || len(row.Records) != 1 || !queryRecordID(row.Records[0], "B") {
 		t.Fatalf("latest query %+v %v", row, problem)
 	}
 	for _, name := range []string{"first", "second"} {
-		candidate, err := tn.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: name}})
+		candidate, err := tn.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: name}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -150,7 +150,7 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 			t.Fatal("page candidate upgraded query")
 		}
 	}
-	owner := tn.app(construction.ID).(*build.Build)
+	owner := tn.app(build.ID).(*build.Build)
 	available, err := owner.ReleaseAssets()
 	if err != nil {
 		t.Fatal(err)
@@ -162,21 +162,21 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 		}
 	}
 	third.Name = "third"
-	doc := *third.Document
-	doc.Queries = map[string]platform.PageQuery{}
-	for id, q := range third.Document.Queries {
+	schema := third.InputSchema
+	schema.Queries = map[string]platform.PageQuery{}
+	for id, q := range third.InputSchema.Queries {
 		copy := *q.Query
 		copy.SourceVersion = "1.query-2"
 		q.Query = &copy
-		doc.Queries[id] = q
+		schema.Queries[id] = q
 	}
-	third.Document = &doc
-	extra, err := platform.PageReleaseAsset(construction.ID, "1", third)
+	third.InputSchema = schema
+	extra, err := platform.PageReleaseAsset(build.ID, "1", third)
 	if err != nil {
 		t.Fatal(err)
 	}
 	available = append(available, extra)
-	if _, err := tn.candidateWithBindings([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetPage, Name: "first"}, extra.Ref}, available, nil); err == nil {
+	if _, err := tn.candidateWithBindings([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "first"}, extra.Ref}, available, nil); err == nil {
 		t.Fatal("mixed query versions in one candidate accepted")
 	}
 
@@ -189,8 +189,8 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 	if string(old.Domain) != string(q.Domain) {
 		t.Fatal("retained query drifted")
 	}
-	must(construction.QueryType, "query", "edit", map[string]any{"domain": [][]any{{"secret", "=", "private"}}})
-	must(construction.QueryType, "query", "publish", map[string]any{})
+	must(build.QueryType, "query", "edit", map[string]any{"domain": [][]any{{"secret", "=", "private"}}})
+	must(build.QueryType, "query", "publish", map[string]any{})
 	// A member may discover old readable versions without seeing the private latest.
 	var visible *platform.Definition
 	for _, d := range tn.Definitions(reader) {
@@ -202,11 +202,11 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 	if visible == nil || visible.Query != nil || len(visible.QueryVersions) != 2 || visible.QueryVersion("1.query-1") == nil {
 		t.Fatal("member version projection leaked or lost readable history")
 	}
-	if _, problem = tn.RunQuery(reader, construction.ID, "shared", "", at); problem == nil {
+	if _, problem = tn.RunQuery(reader, build.ID, "shared", "", at); problem == nil {
 		t.Fatal("hidden condition bypassed field permission")
 	}
-	must(construction.QueryType, "query", "edit", map[string]any{"title": "Unpublished title"})
-	if err := submit(builder, construction.QueryType, "query", "archive", map[string]any{}); err == nil {
+	must(build.QueryType, "query", "edit", map[string]any{"title": "Unpublished title"})
+	if err := submit(builder, build.QueryType, "query", "archive", map[string]any{}); err == nil {
 		t.Fatal("published query archived")
 	}
 	if journal != nil {
@@ -241,16 +241,16 @@ func reusableQueryVersions(t *testing.T, journal *journal.Postgres) {
 		}
 	}
 	// A retained workflow cannot silently pick a mutable latest tenant query.
-	flow := construction.Process{Name: "reuse", Title: "Reuse", Manual: true, Steps: []construction.ProcessStep{{Name: "read", Kind: "query", App: construction.ID, Query: "shared", Next: "done"}, {Name: "done", Kind: "end"}}}
-	if problem := owner.CheckProcess(platform.NewCaller(runtime{tn}, builder, construction.ID, false, false), flow); problem == nil || !strings.Contains(problem.Message, "exact retained tenant query version") {
+	flow := build.Process{Name: "reuse", Title: "Reuse", Manual: true, Steps: []build.ProcessStep{{Name: "read", Kind: "query", App: build.ID, Query: "shared", Next: "done"}, {Name: "done", Kind: "end"}}}
+	if problem := owner.CheckProcess(platform.NewCaller(runtime{tn}, builder, build.ID, false, false), flow); problem == nil || !strings.Contains(problem.Message, "exact retained tenant query version") {
 		t.Fatal("tenant query was offered without a frozen flow binding", problem)
 	}
 
 	// New object revisions cannot remove a field read by any retained query.
-	if err := submit(builder, construction.ObjectType, "object", "edit", map[string]any{"fields": []construction.Field{{Name: "secret", Title: "Secret", Type: "text", Read: []string{construction.Builder}}}}); err != nil {
+	if err := submit(builder, build.ObjectType, "object", "edit", map[string]any{"fields": []build.Field{{Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := submit(builder, construction.ObjectType, "object", "publish", map[string]any{}); err == nil {
+	if err := submit(builder, build.ObjectType, "object", "publish", map[string]any{}); err == nil {
 		t.Fatal("object update broke retained query")
 	}
 }

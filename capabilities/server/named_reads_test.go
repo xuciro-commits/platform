@@ -61,13 +61,13 @@ func TestParameterizedReadPreservesCallerAndValidatesRequiredInput(t *testing.T)
 	app := &parameterizedReadProbe{}
 	caller := platform.Caller{Member: platform.Member{ID: "builder"}, App: "system"}
 	inputs := json.RawMessage(`{"path":"web/src/main.tsx","offset":12}`)
-	out, refusal := readApp(app, caller, "source", inputs)
+	out, refusal := platform.CallRead(app, caller, "source", inputs)
 	if refusal != nil || out != "source result" || app.called != "source" || app.caller.ID != "builder" || app.caller.App != "system" || string(app.inputs) != string(inputs) {
 		t.Fatalf("parameterized owner received caller=%#v inputs=%s; result=%v refusal=%v", app.caller, app.inputs, out, refusal)
 	}
 	for _, invalid := range []json.RawMessage{nil, json.RawMessage(`{}`), json.RawMessage(`[]`), json.RawMessage(`null`)} {
 		app.called = ""
-		_, refusal := readApp(app, caller, "source", invalid)
+		_, refusal := platform.CallRead(app, caller, "source", invalid)
 		if refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT || app.called != "" {
 			t.Fatalf("invalid inputs %s reached the owner: called=%q refusal=%v", invalid, app.called, refusal)
 		}
@@ -80,7 +80,7 @@ func TestUnparameterizedReadKeepsItsOriginalOwner(t *testing.T) {
 	if refusal != nil || inputs != nil {
 		t.Fatalf("legacy read acquired inputs: %s %v", inputs, refusal)
 	}
-	out, refusal := readApp(app, platform.Caller{}, "legacy")
+	out, refusal := platform.CallRead(app, platform.Caller{}, "legacy")
 	if refusal != nil || out != "legacy result" || app.called != "legacy" {
 		t.Fatalf("legacy result=%v called=%q refusal=%v", out, app.called, refusal)
 	}

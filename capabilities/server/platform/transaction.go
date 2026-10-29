@@ -2,17 +2,278 @@ package platform
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
-	"io"
-	"reflect"
-	"slices"
-	"strings"
-	"time"
-
+	"fmt"
 	"google.golang.org/protobuf/proto"
+	"io"
+	"maps"
+	"math"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"reflect"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
 )
+
+const (
+	BooksApp    = "core"
+	JournalType = "core.journal"
+)
+
+// Journal is one balanced entry: lines whose debits equal their credits.
+type Journal struct {
+	Record
+	Number       string `json:"number,omitempty" field:"readonly,search" title:"Document number"`
+	Date         string `json:"date" field:"required" title:"Posting date" help:"YYYY-MM-DD"`
+	Period       string `json:"period,omitempty" field:"readonly" title:"Period"`
+	ClosedPeriod string `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
+	// Shifted tells that the date's period was closed and the entry went to Period instead.
+	Shifted  bool          `json:"shifted,omitempty" field:"readonly" title:"Posted to a later period"`
+	Text     string        `json:"text,omitempty" field:"search"`
+	Currency string        `json:"currency,omitempty" help:"ISO 4217; default the tenant's first currency"`
+	Lines    []JournalLine `json:"lines" field:"required" type:"json" title:"Lines"`
+	Total    float64       `json:"total,omitempty" field:"readonly" title:"Total debit"`
+	// Source is the decision that caused it - "<app>/<change id>" - or empty when posted by hand.
+	Source   string `json:"source,omitempty" field:"search" help:"The decision that posted it, set by the platform"`
+	Reverses string `json:"reverses,omitempty" field:"readonly" title:"Reverses"`
+	Reversed string `json:"reversed,omitempty" field:"readonly" title:"Reversed by"`
+	State    string `json:"state" field:"readonly"`
+}
+
+type JournalLine struct {
+	Account string  `json:"account"` // the account's code
+	Debit   float64 `json:"debit,omitempty"`
+	Credit  float64 `json:"credit,omitempty"`
+	Text    string  `json:"text,omitempty"`
+	// Object and Partner tie the line to what it is about: a material, a site, a business partner.
+	Object  string `json:"object,omitempty"`
+	Partner string `json:"partner,omitempty"`
+}
+
+func OwnedRelationType(app string) string { return app + ".__relation" }
+
+// RelationEntity belongs to the application's own ledger. Hidden rows can only
+// be read through typed traversal, which checks both endpoint grants.
+func RelationEntity(app string) Entity {
+	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[Record](), Anonymous: true, Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, OwnedRelationType(app)))}}
+	for _, field := range []string{"binding", "version", "parent", "child"} {
+		fields = append(fields, reflect.StructField{Name: strings.ToUpper(field[:1]) + field[1:], Type: reflect.TypeFor[string](), Tag: reflect.StructTag(fmt.Sprintf(`json:"%s" field:"readonly"`, field))})
+	}
+	fields = append(fields,
+		reflect.StructField{Name: "Migration", Type: reflect.TypeFor[bool](), Tag: `json:"migration,omitempty" field:"readonly"`},
+		reflect.StructField{Name: "Legacy", Type: reflect.TypeFor[[]RelationLink](), Tag: `json:"legacy,omitempty" type:"json" field:"readonly"`},
+	)
+	model := reflect.New(reflect.StructOf(fields)).Elem().Interface()
+	return Entity{Type: OwnedRelationType(app), Title: "Owned relationship", Description: "An immutable typed relation instance of this application's authority", Model: model, Scope: Scope{Default: ScopeNone}}
+}
+
+type TxnLink struct {
+	Binding AssetBinding `json:"binding"`
+	Parent  TxnRef       `json:"parent"`
+	Child   TxnRef       `json:"child"`
+}
+
+type OwnedRelationRuntime interface {
+	PutOwnedRelation(Caller, *pb.ChangeRecord, TxnLink, bool, time.Time) *kernel.Error
+}
+
+func (c Caller) PutOwnedRelation(receipt *pb.ChangeRecord, link TxnLink, remove bool, at time.Time) *kernel.Error {
+	runtime, ok := c.rt.(OwnedRelationRuntime)
+	if !ok {
+		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Owned relation writes require a private host")
+	}
+	return runtime.PutOwnedRelation(c, receipt, link, remove, at)
+}
+
+func RelationValue(entity Entity, id, binding, version, parent, child string, archived bool, legacy ...RelationLink) any {
+	value := reflect.New(reflect.TypeOf(entity.Model))
+	_ = json.Unmarshal(Raw(map[string]any{"id": id, "binding": binding, "version": version, "parent": parent, "child": child, "archived": archived, "legacy": legacy}), value.Interface())
+	return value.Elem().Interface()
+}
+
+type RelationMigrationPlan struct {
+	Binding  AssetBinding   `json:"binding"`
+	Links    []RelationLink `json:"links"`
+	Partial  bool           `json:"partial"`
+	Migrated bool           `json:"migrated"`
+}
+
+type OwnedRelationMigrationRuntime interface {
+	MigrateOwnedRelations(Caller, *pb.ChangeRecord, AssetBinding, time.Time) *kernel.Error
+}
+
+func (c Caller) MigrateOwnedRelations(receipt *pb.ChangeRecord, binding AssetBinding, at time.Time) *kernel.Error {
+	runtime, ok := c.rt.(OwnedRelationMigrationRuntime)
+	if !ok {
+		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Relationship migration requires a private decision")
+	}
+	return runtime.MigrateOwnedRelations(c, receipt, binding, at)
+}
+
+type LegacyRelationSource interface{ LegacyRelations() []RelationLink }
+type OwnedRelationReadRuntime interface {
+	OwnedRelations(Caller, string) []RelationLink
+	LegacyRelationActive(Caller, RelationLink) bool
+	LegacyRelationWritable(Caller, string, string) bool
+}
+
+func (c Caller) OwnedRelations(entity string) []RelationLink {
+	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
+		return runtime.OwnedRelations(c, entity)
+	}
+	return nil
+}
+func (c Caller) LegacyRelationActive(link RelationLink) bool {
+	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
+		return runtime.LegacyRelationActive(c, link)
+	}
+	return true
+}
+func (c Caller) LegacyRelationWritable(from, to string) bool {
+	if runtime, ok := c.rt.(OwnedRelationReadRuntime); ok {
+		return runtime.LegacyRelationWritable(c, from, to)
+	}
+	return true
+}
+
+// RecordSetPredicate describes complete matching records of the outer query's
+// object. It has no window, sort, archive flag or independently chosen object.
+type RecordSetPredicate struct {
+	Domain json.RawMessage `json:"domain,omitempty"`
+	Search string          `json:"search,omitempty"`
+	Set    *QuerySet       `json:"set,omitempty"`
+}
+
+type QuerySet struct {
+	Op     string                `json:"op"`
+	Inputs []*RecordSetPredicate `json:"inputs"`
+}
+
+const (
+	QuerySetMaxConditions  = 32
+	QuerySetMaxSearchBytes = 4096
+	QuerySetMaxNodes       = 31
+	QuerySetMaxDepth       = 4
+	QuerySetMaxBytes       = 64 * 1024
+)
+
+// CheckSet bounds the whole tree before execution, including branches that a
+// particular row would short-circuit. Ordinary queries keep their old limits.
+func (q Query) CheckSet() error {
+	if q.Set == nil {
+		return nil
+	}
+	if q.Offset < 0 || q.Limit < 0 {
+		return fmt.Errorf("invalid record set window")
+	}
+	nodes := 0
+	var check func(RecordSetPredicate, int) error
+	check = func(p RecordSetPredicate, depth int) error {
+		nodes++
+		if nodes > QuerySetMaxNodes || depth > QuerySetMaxDepth || len(p.Search) > QuerySetMaxSearchBytes {
+			return fmt.Errorf("record set budget exceeded")
+		}
+		if len(p.Domain) > 0 {
+			var tokens []json.RawMessage
+			if json.Unmarshal(p.Domain, &tokens) != nil || len(tokens) > QuerySetMaxConditions {
+				return fmt.Errorf("record set domain budget exceeded")
+			}
+		}
+		if p.Set != nil {
+			if (p.Set.Op != "union" && p.Set.Op != "intersect" && p.Set.Op != "subtract") || len(p.Set.Inputs) != 2 {
+				return fmt.Errorf("record set needs a binary supported operation")
+			}
+			for _, input := range p.Set.Inputs {
+				if input == nil {
+					return fmt.Errorf("record set input is null")
+				}
+				if err := check(*input, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	root := RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set}
+	if err := check(root, 0); err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(root)
+	if err != nil || len(encoded) > QuerySetMaxBytes {
+		return fmt.Errorf("record set encoding budget exceeded")
+	}
+	return nil
+}
+
+// Sequence numbers an app's documents without gaps, as SAP's
+// number ranges and Odoo's journal sequences do: a number is taken only by a
+// decision that is accepted, so a refused one leaves no hole, and replay takes
+// the same numbers again.
+type Sequence struct {
+	Name string // unique in the app: "entry.general"
+	// Pattern writes a number: {n} is the counter, {n:5} padded to five digits,
+	// {year} the year of the document's date. Default "{n}".
+	Pattern string
+	Yearly  bool // the counter starts again at 1 in each year of the document's date
+	// SeedRecord and SeedField retain the old document-number waterline only
+	// when migrating a record-count range to this named sequence. The original
+	// sequence owner reads it once, before the counter's first accepted take.
+	SeedRecord string `json:",omitempty"`
+	SeedField  string `json:",omitempty"`
+}
+
+var sequencePattern = regexp.MustCompile(`\{(n|n:[1-9][0-9]*|year)\}`)
+
+// Check tells whether the sequence is well declared.
+func (s Sequence) Check() error {
+	rest := sequencePattern.ReplaceAllString(s.Pattern, "")
+	if s.Name == "" || strings.ContainsAny(rest, "{}") || s.Pattern != "" && !strings.Contains(s.Pattern, "{n") || (s.SeedRecord == "") != (s.SeedField == "") || s.SeedRecord != "" && strings.Count(s.Pattern, "{n") != 1 {
+		return fmt.Errorf("sequence %q: a name, and a pattern with {n} and no unknown placeholder", s.Name)
+	}
+	for _, part := range sequencePattern.FindAllString(s.Pattern, -1) {
+		if strings.HasPrefix(part, "{n:") {
+			if _, err := strconv.Atoi(part[3 : len(part)-1]); err != nil {
+				return fmt.Errorf("sequence %q: invalid number width", s.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// Format writes the n-th number of year.
+func (s Sequence) Format(year, n int) string {
+	pattern := s.Pattern
+	if pattern == "" {
+		pattern = "{n}"
+	}
+	return sequencePattern.ReplaceAllStringFunc(pattern, func(p string) string {
+		switch {
+		case p == "{year}":
+			return strconv.Itoa(year)
+		case p == "{n}":
+			return strconv.Itoa(n)
+		}
+		width, _ := strconv.Atoi(p[3 : len(p)-1])
+		return fmt.Sprintf("%0*d", width, n)
+	})
+}
+
+// Next takes the next number of the app's sequence for the accepted decision
+// r, dated date (its year counts for a yearly sequence). Call it only in the
+// function a decision applies, never in its rules.
+func (c Caller) Next(r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
+	if c.rt == nil {
+		return "", notFound()
+	}
+	return c.rt.Next(c, r, sequence, date)
+}
 
 const TxnMaxSteps = 256
 const TxnMaxIterations = 1000
@@ -381,4 +642,683 @@ func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target Tx
 	}
 	apply(r)
 	return failure
+}
+
+// BooksChecks validates accepted-effect preparations through the actual books
+// owner; the host neither inspects its private chart nor recreates its policy.
+type BooksChecks interface {
+	CheckPosting(Caller, Journal) (Outcome, *kernel.Error)
+	CheckReversal(Caller, string, json.RawMessage, time.Time) (Outcome, *kernel.Error)
+	HistoricalPostingMessage(string) string
+}
+
+type TransactionHost interface {
+	CheckTxnCall(TxnCall) error
+}
+
+// TransformStep is one transformation. The fields used depend on Kind:
+//
+//	select     Columns
+//	rename     From → To
+//	cast       Column, Type (string, number, boolean, date)
+//	filter     Column, Op (=, !=, <, <=, >, >=, contains, empty, notempty), Value
+//	compute    To, Formula (the  arithmetic over number columns)
+//	lookup     Dataset, Column (here) = Match (there), take Columns (prefixed with As)
+//	join       Dataset, Column = Match, inner unless Outer; the other side's columns prefixed with As
+//	dedupe     Columns (the key; first row wins after Sort)
+//	aggregate  Columns (group by), Measures (sum/min/max/count/avg of a column into To)
+//	sort       Column, Desc
+type TransformStep struct {
+	Kind        string             `json:"kind"`
+	Columns     []string           `json:"columns,omitempty"`
+	From        string             `json:"from,omitempty"`
+	To          string             `json:"to,omitempty"`
+	Column      string             `json:"column,omitempty"`
+	Type        string             `json:"type,omitempty"`
+	Op          string             `json:"op,omitempty"`
+	Value       string             `json:"value,omitempty"`
+	FormulaExpr *Expr              `json:"formulaExpr,omitempty" type:"json" field:"aside"`
+	Formula     string             `json:"formula,omitempty"`
+	Dataset     string             `json:"dataset,omitempty"`
+	Match       string             `json:"match,omitempty"`
+	As          string             `json:"as,omitempty"`
+	Outer       bool               `json:"outer,omitempty"`
+	Desc        bool               `json:"desc,omitempty"`
+	Measures    []TransformMeasure `json:"measures,omitempty"`
+}
+
+type TransformMeasure struct {
+	Fn     string `json:"fn"` // sum, min, max, count, avg
+	Column string `json:"column,omitempty"`
+	To     string `json:"to"`
+}
+
+// TransformExpectation is a rule a final row must meet: notnull, unique, in (Value is
+// a comma list), matches (Value is a regexp), range (Value "min..max").
+type TransformExpectation struct {
+	Column string `json:"column"`
+	Rule   string `json:"rule"`
+	Value  string `json:"value,omitempty"`
+}
+
+type QuarantinedRow struct {
+	Reason string         `json:"reason"`
+	Row    map[string]any `json:"row"`
+}
+
+// literal is a fixed value a builder wrote, as the field's type holds it.
+func Literal(kind, s string) (any, error) {
+	switch kind {
+	case "integer":
+		return strconv.Atoi(s)
+	case "decimal":
+		return strconv.ParseFloat(s, 64)
+	case "boolean":
+		return strconv.ParseBool(s)
+	case "date":
+		_, err := time.Parse(time.DateOnly, s)
+		return s, err
+	case "datetime":
+		return time.Parse(time.RFC3339, s)
+	case "money":
+		return nil, fmt.Errorf("an amount is not set to a fixed value")
+	}
+	return s, nil
+}
+
+func AssignmentExpr(kind string, set TxnSet, spec RuleReadSpec) (Expr, error) {
+	kind = RuleFieldKind(kind)
+	targetKind := kind
+	if set.Expr != nil {
+		if set.From != "" {
+			return Expr{}, fmt.Errorf("use one assignment expression")
+		}
+		if !RuleAssignmentFits(kind, set.Expr.Kind) {
+			return Expr{}, fmt.Errorf("assignment result type differs from field")
+		}
+		return *set.Expr, nil
+	}
+	switch {
+	case set.From == "$me":
+		return ExprReference("text", "caller.id"), nil
+	case set.From == "$subject":
+		return ExprReference("reference", "input.$subject"), nil
+	case set.From == "$now":
+		op := "$now"
+		if kind == "date" {
+			op = "$today"
+		}
+		return Expr{Op: op, Kind: kind}, nil
+	case strings.HasPrefix(set.From, "="):
+		v, err := Literal(kind, strings.TrimPrefix(set.From, "="))
+		return ExprLiteralValue(kind, v), err
+	default:
+		name := set.From
+		if !strings.HasPrefix(name, "step.") && !strings.HasPrefix(name, "row.") {
+			name = "input." + name
+		}
+		input := strings.TrimPrefix(name, "input.")
+		if typ, ok := spec.Inputs[input]; ok {
+			kind = typ.Kind
+		}
+		if !RuleAssignmentFits(targetKind, kind) {
+			return Expr{}, fmt.Errorf("assignment source differs")
+		}
+		return ExprReference(kind, name), nil
+	}
+}
+
+func RuleAssignment(e Expr, s RuleReadSpec, c Caller, record any, inputs map[string]any, now time.Time, lookup func(string) (EntityInfo, bool), provenance ...*[]string) (any, *kernel.Error) {
+	r, err := EvaluateRule(e, s, c, record, inputs, now, lookup)
+	for _, refs := range provenance {
+		*refs = append(*refs, r.Sources...)
+	}
+	if err != nil {
+		return nil, err
+	}
+	v, failure := ExprGoValue(r.Value)
+	if failure != nil {
+		return nil, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, failure.Error())
+	}
+	return v, nil
+}
+
+func RuleAssignmentFits(dst, src string) bool {
+	dst = RuleFieldKind(dst)
+	src = RuleFieldKind(src)
+	return dst == src || dst == "text" && src == "choice" || (dst == "decimal" || dst == "number") && (src == "integer" || src == "decimal" || src == "number")
+}
+
+func DispatchParameter(set TxnSet, scope RuleReadSpec) (Expr, error) {
+	kind := "text"
+	if set.Expr != nil {
+		kind = set.Expr.Kind
+	} else if input, found := scope.Inputs[strings.TrimPrefix(set.From, "input.")]; found {
+		kind = input.Kind
+	}
+	if set.Expr == nil && strings.HasPrefix(set.From, "input.") {
+		set.From = strings.TrimPrefix(set.From, "input.")
+	}
+	if slices.Contains([]string{"set", "object", "json", ""}, kind) {
+		return Expr{}, fmt.Errorf("Dispatch parameters require scalar expressions")
+	}
+	return AssignmentExpr(kind, set, scope)
+}
+
+// BalanceID is the balance record for one set of match values: stable, so the
+// same identity always meets the same record.
+func BalanceID(object string, values []string) string {
+	sum := sha256.Sum256([]byte(object + "\x00" + strings.Join(values, "\x00")))
+	return "bal-" + hex.EncodeToString(sum[:12])
+}
+
+func CastCell(cell, typ string) (any, error) {
+	text := strings.TrimSpace(cell)
+	switch typ {
+	case "number":
+		n, err := strconv.ParseFloat(text, 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+			return nil, fmt.Errorf("%q is not a number", text)
+		}
+		return n, nil
+	case "boolean":
+		switch strings.ToLower(text) {
+		case "true", "yes":
+			return true, nil
+		case "false", "no":
+			return false, nil
+		}
+		return nil, fmt.Errorf("%q is not true or false", text)
+	}
+	return text, nil
+}
+
+// castValue reads a call's input value as a column's type.
+func CastValue(value any, typ string) (any, error) {
+	switch x := value.(type) {
+	case string:
+		return CastCell(x, typ)
+	case float64:
+		if typ == "number" {
+			return x, nil
+		}
+		return CastCell(strconv.FormatFloat(x, 'f', -1, 64), typ)
+	case bool:
+		if typ == "boolean" {
+			return x, nil
+		}
+		return CastCell(strconv.FormatBool(x), typ)
+	case json.Number:
+		return CastCell(x.String(), typ)
+	}
+	return nil, fmt.Errorf("no value")
+}
+
+// TableInput projects the already declared input types. RuleTablePlan remains
+// the sole table evaluator; legacy cell coercion keeps historical semantics.
+func TableInput(reads RuleReadSpec, legacy bool, values map[string]any) ExprContext {
+	facts := ExprContext{Refs: map[string]ExprValue{}}
+	for name, col := range reads.Inputs {
+		v, ok := values[name]
+		if legacy {
+			v, _ = CastValue(v, col.Kind)
+		}
+		if ok {
+			facts.Refs["input."+name] = ExprPresent(col.Kind, v)
+			facts.Refs[name] = facts.Refs["input."+name]
+		}
+	}
+	return facts
+}
+
+func ConditionValue(kind, raw string) (any, error) {
+	switch kind {
+	case "integer":
+		return strconv.ParseInt(raw, 10, 64)
+	case "decimal":
+		x, err := strconv.ParseFloat(raw, 64)
+		if err == nil && (math.IsInf(x, 0) || math.IsNaN(x)) {
+			err = fmt.Errorf("a finite number is required")
+		}
+		return x, err
+	case "date":
+		if day, err := time.Parse(time.DateOnly, raw); err == nil {
+			return day, nil
+		}
+		// Record fields are decoded as times; authored literals are dates.
+		instant, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return time.Parse(time.DateOnly, instant.UTC().Format(time.DateOnly))
+	case "datetime":
+		return time.Parse(time.RFC3339, raw)
+	case "boolean":
+		return strconv.ParseBool(raw)
+	default:
+		return raw, nil
+	}
+}
+
+// holds compares typed values. An unset or malformed value fails closed; it
+// never falls back to lexical order when a numeric or temporal parse fails.
+func Holds(got any, kind, op, want string) bool {
+	kind = RuleFieldKind(kind)
+	v := got
+	if kind == "date" {
+		if t, ok := got.(time.Time); ok {
+			v = t.UTC().Format(time.DateOnly)
+		}
+	}
+	e := Expr{Kind: "boolean", Op: op, Args: []Expr{ExprReference(kind, "value")}}
+	if op == "not empty" {
+		e.Op = "not-empty"
+	}
+	if op != "empty" && op != "not empty" {
+		x, err := ConditionValue(kind, want)
+		if err != nil {
+			return false
+		}
+		if t, ok := x.(time.Time); ok {
+			if kind == "date" {
+				x = t.Format(time.DateOnly)
+			} else {
+				x = t.Format(time.RFC3339Nano)
+			}
+		}
+		e.Args = append(e.Args, ExprLiteralValue(kind, x))
+	}
+	p, err := CompileExpr(e, ExprSchema{Refs: map[string]ExprType{"value": {Kind: kind}}})
+	if err != nil {
+		return false
+	}
+	r, err := p.Eval(ExprContext{Refs: map[string]ExprValue{"value": ExprPresent(kind, v)}})
+	return err == nil && string(r.Value.Data) == "true"
+}
+
+// textOf is a value as a condition reads it: money by its amount, a time by its day.
+func TextOf(v any) string {
+	if v != nil {
+		rv := reflect.ValueOf(v)
+		for rv.Kind() == reflect.Pointer {
+			if rv.IsNil() {
+				return ""
+			}
+			rv = rv.Elem()
+		}
+		v = rv.Interface()
+	}
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	case bool:
+		return strconv.FormatBool(x)
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(x)
+	case time.Time:
+		if x.IsZero() {
+			return ""
+		}
+		return x.UTC().Format(time.RFC3339)
+	case Money:
+		if x.Currency == "" && x.Amount == 0 {
+			return ""
+		}
+		return strconv.FormatInt(x.Amount, 10)
+	}
+	return fmt.Sprint(v)
+}
+
+// Runtime executes the installed declaration through the original ledger and
+// transaction transport. It does not keep independent business state.
+type BusinessRuntimeContext struct {
+	App      string
+	Entities map[string]Entity
+	Ledger   *Ledger
+	Lookup   func(string) (EntityInfo, bool)
+	Prepare  func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) (TransactionProposal, *kernel.Error)
+	Link     func(AssetBinding) (LinkType, error)
+	Effect   func(Caller, string) (TransactionEffectDefinition, *kernel.Error)
+	Dispatch func(Caller, *pb.ChangeRecord, *BusinessTxn, RuleReadSpec, map[string]any, map[string]any, time.Time) *kernel.Error
+	Confirm  func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *kernel.Error
+}
+
+type TransactionProposal struct {
+	Apply  func(Entity, EntityInfo, map[string]any, []string) (Entity, map[string]any)
+	Finish func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
+}
+
+type TransactionEffectDefinition struct {
+	Request func(string, json.RawMessage) (json.RawMessage, *kernel.Error)
+}
+
+func WalkTxnSteps(steps []TxnStep, visit func(TxnStep)) {
+	for _, step := range steps {
+		visit(step)
+		if step.ForEach != nil {
+			WalkTxnSteps(step.ForEach.Steps, visit)
+		}
+		for _, refusal := range step.Refusals {
+			if refusal.Record != nil {
+				WalkTxnSteps([]TxnStep{*refusal.Record}, visit)
+			}
+		}
+	}
+}
+
+func WalkBusinessTxn(txn *BusinessTxn, visit func(TxnStep)) {
+	WalkTxnSteps(txn.Steps, visit)
+	for _, refusal := range txn.Refusals {
+		if refusal.Record != nil {
+			WalkTxnSteps([]TxnStep{*refusal.Record}, visit)
+		}
+	}
+}
+
+func WithTxnRow(spec RuleReadSpec, info EntityInfo) RuleReadSpec {
+	spec.Inputs = maps.Clone(spec.Inputs)
+	for _, field := range ConstraintEntity(info).Fields {
+		spec.Inputs["row."+field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
+	}
+	spec.Inputs["row.$subject"] = ExprType{Kind: "reference", Object: info.Type}
+	return spec
+}
+
+func TxnResult(spec *RuleReadSpec, step TxnStep) {
+	if step.Call != nil {
+		spec.Inputs["step."+step.Name] = step.Call.ResultType
+	}
+	if step.Kind == "sequence" {
+		spec.Inputs["step."+step.Name] = ExprType{Kind: "text"}
+	}
+	if step.Kind == "create" || step.Kind == "post" {
+		spec.Inputs["step."+step.Name] = ExprType{Kind: "reference", Object: step.Target.Type}
+	}
+}
+
+func IntervalFields(f TxnIntervalFields) map[string]string {
+	return map[string]string{f.Subject: "reference", f.Source: "text", f.SourceVersion: "text", f.SourceRevision: "text", f.ProcessingVersion: "text", f.Since: "datetime", f.Until: "datetime", f.OpenStart: "boolean", f.OpenEnd: "boolean", f.Retired: "boolean", f.Review: "boolean"}
+}
+
+func WithTxnRange(scope RuleReadSpec, kind string) RuleReadSpec {
+	scope.Inputs = maps.Clone(scope.Inputs)
+	scope.Inputs["row.start"] = ExprType{Kind: kind}
+	scope.Inputs["row.end"] = ExprType{Kind: kind}
+	scope.Inputs["row.index"] = ExprType{Kind: "integer"}
+	return scope
+}
+
+func TxnIterationSource(owner, subject, of string, lookup func(string) (EntityInfo, bool)) (EntityInfo, error) {
+	typ := subject
+	if of != "" {
+		field, err := RecordPathField(subject, strings.Split(of, "."), lookup)
+		if err != nil || field.Type != "reference" || field.Ref == "" {
+			return EntityInfo{}, fmt.Errorf("Iteration source must be a declared record reference")
+		}
+		typ = field.Ref
+	}
+	info, ok := lookup(typ)
+	if !ok || info.App != owner {
+		return EntityInfo{}, fmt.Errorf("Iteration source must belong to its transaction owner")
+	}
+	return info, nil
+}
+
+type TransactionExecutor interface {
+	Transact(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *kernel.Error
+}
+
+func IntegrationTypeOf(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case bool:
+		return "boolean"
+	case float64:
+		return "number"
+	case string:
+		if _, err := time.Parse(time.RFC3339, x); err == nil {
+			return "date"
+		}
+		if len(x) == 10 {
+			if _, err := time.Parse("2006-01-02", x); err == nil {
+				return "date"
+			}
+		}
+		return "string"
+	default:
+		return "json"
+	}
+}
+
+func IntegrationLookupPath(in map[string]any, path string) (any, bool) {
+	var cur any = in
+	for _, part := range strings.Split(path, ".") {
+		switch value := cur.(type) {
+		case map[string]any:
+			var ok bool
+			if cur, ok = value[part]; !ok {
+				return nil, false
+			}
+		case []any:
+			index, err := strconv.Atoi(part)
+			if err != nil || index < 0 || index >= len(value) {
+				return nil, false
+			}
+			cur = value[index]
+		default:
+			return nil, false
+		}
+	}
+	return cur, true
+}
+
+func IntegrationMatches(v any, op, want string) bool {
+	text := IntegrationScalar(v)
+	switch op {
+	case "empty":
+		return v == nil || text == ""
+	case "notempty":
+		return v != nil && text != ""
+	case "contains":
+		return strings.Contains(strings.ToLower(text), strings.ToLower(want))
+	case "=":
+		return text == want || (IntegrationTypeOf(v) == "number" && IntegrationNumeric(v) == IntegrationNumeric(want))
+	case "!=":
+		return !(text == want || (IntegrationTypeOf(v) == "number" && IntegrationNumeric(v) == IntegrationNumeric(want)))
+	}
+	if IntegrationTypeOf(v) == "number" {
+		a, b := IntegrationNumeric(v), IntegrationNumeric(want)
+		switch op {
+		case "<":
+			return a < b
+		case "<=":
+			return a <= b
+		case ">":
+			return a > b
+		case ">=":
+			return a >= b
+		}
+	}
+	switch op {
+	case "<":
+		return text < want
+	case "<=":
+		return text <= want
+	case ">":
+		return text > want
+	case ">=":
+		return text >= want
+	}
+	return false
+}
+
+func IntegrationNumeric(v any) float64 {
+	switch x := v.(type) {
+	case json.Number:
+		n, _ := x.Float64()
+		return n
+	case float64:
+		return x
+	case bool:
+		if x {
+			return 1
+		}
+	case string:
+		n, _ := strconv.ParseFloat(strings.TrimSpace(x), 64)
+		return n
+	}
+	return 0
+}
+
+func IntegrationKeyOf(r map[string]any, cols []string) string {
+	parts := make([]string, len(cols))
+	for i, c := range cols {
+		parts[i] = IntegrationScalar(r[c])
+	}
+	return strings.Join(parts, "\x1f")
+}
+
+func IntegrationNormalize(v, how string) string {
+	switch how {
+	case "folded":
+		return strings.Join(strings.Fields(strings.ToLower(v)), " ")
+	case "digits":
+		var b strings.Builder
+		for _, r := range v {
+			if unicode.IsDigit(r) {
+				b.WriteRune(r)
+			}
+		}
+		return strings.TrimLeft(b.String(), "0")
+	}
+	return v
+}
+
+// csvRows reads a header row and the rows beneath it.
+func IntegrationCSVRows(body []byte) ([]map[string]any, error) {
+	r := csv.NewReader(bytes.NewReader(body))
+	r.FieldsPerRecord = -1
+	r.LazyQuotes = true
+	records, err := r.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("the answer is not CSV: %v", err)
+	}
+	if len(records) == 0 {
+		return nil, nil
+	}
+	head := records[0]
+	rows := make([]map[string]any, 0, len(records)-1)
+	for _, rec := range records[1:] {
+		row := map[string]any{}
+		for i, name := range head {
+			if i < len(rec) {
+				row[strings.TrimSpace(name)] = rec[i]
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+// rowsAt is the array of objects at the dotted path inside a JSON answer.
+func IntegrationRowsAt(body []byte, path string) ([]map[string]any, error) {
+	var node any
+	if err := json.Unmarshal(body, &node); err != nil {
+		return nil, fmt.Errorf("the answer is not JSON")
+	}
+	if path != "" {
+		for _, part := range strings.Split(path, ".") {
+			object, ok := node.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("the answer has no %s", path)
+			}
+			node = object[part]
+		}
+	}
+	items, ok := node.([]any)
+	if !ok {
+		return nil, fmt.Errorf("the rows at %q are not an array", path)
+	}
+	rows := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		row, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("a row is not an object")
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
+
+// scalar is a row value as the string a record id or a text field takes.
+func IntegrationScalar(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(x)
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(x)
+	default:
+		raw, _ := json.Marshal(x)
+		return string(raw)
+	}
+}
+
+// convert applies one declared conversion; an absent value stays absent.
+func IntegrationConvert(v any, to string) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	switch to {
+	case "":
+		return v, nil
+	case "string":
+		return IntegrationScalar(v), nil
+	case "number":
+		switch x := v.(type) {
+		case json.Number:
+			if _, err := x.Float64(); err == nil {
+				return x, nil
+			}
+		case float64:
+			return x, nil
+		case string:
+			n, err := strconv.ParseFloat(strings.TrimSpace(x), 64)
+			if err != nil {
+				return nil, fmt.Errorf("%q is not a number", x)
+			}
+			return n, nil
+		}
+	case "boolean":
+		switch x := v.(type) {
+		case bool:
+			return x, nil
+		case string:
+			switch strings.ToLower(strings.TrimSpace(x)) {
+			case "true", "yes", "1", "y":
+				return true, nil
+			case "false", "no", "0", "n", "":
+				return false, nil
+			}
+		case float64:
+			return x != 0, nil
+		}
+	case "date":
+		text := IntegrationScalar(v)
+		for _, layout := range []string{time.RFC3339, "2006-01-02", "2006-01-02 15:04:05", "2006/01/02", "02.01.2006"} {
+			if t, err := time.Parse(layout, text); err == nil {
+				return t.UTC().Format(time.RFC3339), nil
+			}
+		}
+		return nil, fmt.Errorf("%q is not a date", text)
+	}
+	return nil, fmt.Errorf("%v cannot become %s", v, to)
 }

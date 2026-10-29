@@ -7,10 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
+	"platformserver/platform"
 	"slices"
-
-	"github.com/jackc/pgx/v5"
-	"platformserver/internal/records"
 )
 
 // SQL checkpoint images have the same lifetime as the original two retained
@@ -247,7 +246,7 @@ func verifyCheckpointHistory(ctx context.Context, db stateQueries, tenant string
 	defer rows.Close()
 	var previousType, previousID, expectedHead string
 	var count, seen int
-	head := records.EmptyHistory
+	head := platform.EmptyRecordHistory
 	started := false
 	finish := func() error {
 		if started && (seen != count || head != expectedHead) {
@@ -267,7 +266,7 @@ func verifyCheckpointHistory(ctx context.Context, db stateQueries, tenant string
 			if err = finish(); err != nil {
 				return err
 			}
-			previousType, previousID, expectedHead, count, seen, head, started = typ, id, storedHead, n, 0, records.EmptyHistory, true
+			previousType, previousID, expectedHead, count, seen, head, started = typ, id, storedHead, n, 0, platform.EmptyRecordHistory, true
 		}
 		if pos == nil {
 			continue
@@ -275,7 +274,7 @@ func verifyCheckpointHistory(ctx context.Context, db stateQueries, tenant string
 		if *pos != seen {
 			return fmt.Errorf("SQL checkpoint history has a missing entry: %s/%s", typ, id)
 		}
-		head, err = records.AppendHistory(head, seen, image)
+		head, err = platform.AppendRecordHistory(head, seen, image)
 		if err != nil {
 			return err
 		}
@@ -417,14 +416,14 @@ func verifyTailRecord(ctx context.Context, tx pgx.Tx, tenant string, r StateReco
 	var head string
 	err := tx.QueryRow(ctx, `select history_count,history_head from expected_records where type=$1 and id=$2`, r.Type, r.ID).Scan(&count, &head)
 	if errors.Is(err, pgx.ErrNoRows) {
-		head = records.EmptyHistory
+		head = platform.EmptyRecordHistory
 		err = nil
 	}
 	if err != nil {
 		return err
 	}
 	if count == 0 && head == "" {
-		head = records.EmptyHistory
+		head = platform.EmptyRecordHistory
 	}
 	base, changes := r.HistoryBase, r.History
 	if base < 0 {
@@ -445,7 +444,7 @@ func verifyTailRecord(ctx context.Context, tx pgx.Tx, tenant string, r StateReco
 		if !bytes.Equal(stored, image) {
 			return fmt.Errorf("checkpoint tail history differs: %s/%s", r.Type, r.ID)
 		}
-		head, err = records.AppendHistory(head, count+i, image)
+		head, err = platform.AppendRecordHistory(head, count+i, image)
 		if err != nil {
 			return err
 		}

@@ -1,24 +1,14 @@
-// The enterprise model as the host serves it: UAF-typed elements,
-// relationships and views, plus the metamodel the palette draws from.
+// The directory and retained enterprise history served by the original owner.
 import type { Api } from "@platform/kernel";
-import { relationLayout } from "@platform/ui";
 
 export type ElementPeriod = Api.Period;
 export type Element = Api.Element;
-export type TenantLink = Api.TenantLink;
 export type Model = Api.EnterpriseModel;
 export type Relationship = Api.Relationship;
 export const sourceRelationship = (relationship: Relationship) => relationship.id.startsWith("sync:") || relationship.id.startsWith("fed:");
 export type Metamodel = Api.Metamodel;
-/** One description view of the model: who and where, what it holds, what it can
- * do, what it offers, how it is run. */
-export type Viewpoint = Api.Viewpoint;
-export type Pin = Api.Pin;
-
 export const ELEMENT = "enterprise.element";
 export const RELATIONSHIP = "enterprise.relationship";
-export const VIEW = "enterprise.view";
-export const MODEL = "enterprise.model";
 
 export const PLACEMENT = "ActualResourceRelationship";
 export const MEMBERSHIP = "ActualOrganizationRole";
@@ -26,7 +16,7 @@ export const FILLS_POST = "FillsPost";
 export const ORGANIZATION = "ActualOrganization";
 export const POST = "ActualPost";
 export const PERSON = "ActualPerson";
-/** «ResponsibleFor»: the organisation a post belongs to (and, on locations, the unit that owns a place). */
+/** The organisation responsible for a post. */
 export const RESPONSIBLE_FOR = "ResponsibleFor";
 
 /** Is a stereotype the named one, or a specialisation of it? The metamodel's
@@ -58,81 +48,8 @@ export function allowedRelationships(meta: Metamodel, source: string, target: st
   return out;
 }
 
-/** What a relationship admits, for a surface that has to say which ends are
- * allowed without a shrug: the profile's own words where the
- * profile decides, the standard's ends where the standard does. */
-export function contractNote(meta: Metamodel, stereotype: string): string {
-  const c = (meta.contracts ?? []).find((x) => x.stereotype === stereotype);
-  if (!c) return "";
-  if (c.note) return c.note;
-  const ends = [c.client?.length ? `client ${c.client.join(" / ")}` : "", c.supplier?.length ? `supplier ${c.supplier.join(" / ")}` : ""].filter(Boolean).join(" · ");
-  return ends;
-}
-
-/** A free spot beside an anchor, for a pin or a fresh node: to the right when
- * the place is taken, below otherwise. */
-export function nextTo(layout: Record<string, [number, number]>, anchor: string, gap = 210): [number, number] {
-  const at = layout[anchor];
-  if (!at) return [40, 40];
-  const taken = (x: number, y: number) => Object.values(layout).some(([px, py]) => Math.abs(px - x) < 100 && Math.abs(py - y) < 60);
-  for (const [dx, dy] of [[gap, 0], [gap, 70], [gap, -70], [0, 90], [0, -90], [gap * 2, 0]] as [number, number][]) {
-    const x = Math.round(at[0] + dx), y = Math.round(at[1] + dy);
-    if (!taken(x, y)) return [x, y];
-  }
-  return [Math.round(at[0]), Math.round(at[1] + 90)];
-}
-
 export const today = () => new Date().toISOString().slice(0, 10);
 export const live = (x: { from?: string; until?: string; periods?: ElementPeriod[]; deleted?: string | boolean }, day: string) => !x.deleted && (x.periods
   ? x.periods.some(period => (period.from ?? "") <= day && (!period.until || day < period.until))
   : (x.from ?? "") <= day && (!x.until || day < x.until));
 export const elementStatus = (element: Element, day: string) => live(element, day) ? "Active" : (element.periods ?? [{ from: element.from ?? "", until: element.until }]).some(period => (period.from ?? "") > day) ? "Future" : "Inactive";
-
-/** The elements a viewpoint draws: its own slice, plus the context
- * stereotypes — every one of them drawn only when a relationship puts it beside
- * a slice element. The organisation belongs to every question's context rather
- * than all of it in every drawing; the model's relationships name the owners. */
-export function viewpointElements(model: Model, viewpoint: Viewpoint | undefined, day: string): string[] {
-  if (!viewpoint) return [];
-  const base = new Set(model.elements.filter((e) => viewpoint.elements.includes(e.stereotype) && live(e, day)).map((e) => e.id));
-  const primary = new Set(base);
-  for (const context of viewpoint.context ?? []) for (const r of model.relationships) {
-    if (!live(r, day)) continue;
-    const other = primary.has(r.source) ? r.target : primary.has(r.target) ? r.source : undefined;
-    if (other && model.elements.some((e) => e.id === other && e.stereotype === context && live(e, day))) base.add(other);
-  }
-  return [...base];
-}
-
-/** The elements below `id` in a placement kind on a day, direct children only. */
-export const childrenOf = (m: Model, id: string, kind: string, day: string) =>
-  m.relationships.filter((r) => r.stereotype === PLACEMENT && r.target === id && (!kind || r.kind === kind) && live(r, day)).map((r) => r.source);
-
-/** Which end of a relationship is the parent in the drawing's hierarchy: what an
- * element is part of, who answers for a post, place or system, the post a
- * person fills, the organisation a party belongs to. Other relationships are
- * drawn, but do not shape the tree. */
-export function hierarchyParent(r: Pick<Relationship, "stereotype">): "source" | "target" | undefined {
-  return r.stereotype === PLACEMENT || r.stereotype === FILLS_POST || r.stereotype === MEMBERSHIP ? "target" : r.stereotype === RESPONSIBLE_FOR ? "source" : undefined;
-}
-
-/** A node keeps the first parent it is given: placement before answering-for
- * before filling a post before membership. */
-const rank = (r: Pick<Relationship, "stereotype">) => [PLACEMENT, RESPONSIBLE_FOR, FILLS_POST, MEMBERSHIP].indexOf(r.stereotype) >>> 0;
-export const byHierarchy = <R extends Pick<Relationship, "stereotype">>(rels: readonly R[]): R[] => [...rels].sort((a, b) => rank(a) - rank(b));
-
-/** Positions for a view: saved ones kept, the rest arranged top-down by the
- * shared layout along the same hierarchy the canvas draws, below whatever is
- * already placed. */
-export async function autoLayout(m: Model, shown: string[], kind: string, day: string, saved: Record<string, number[]> = {}): Promise<Record<string, [number, number]>> {
-  const out: Record<string, [number, number]> = {};
-  for (const [id, p] of Object.entries(saved)) if (p?.length === 2 && shown.includes(id)) out[id] = [p[0]!, p[1]!];
-  const missing = shown.filter((id) => !out[id]);
-  if (missing.length === 0) return out;
-  const set = new Set(missing);
-  const edges = byHierarchy(m.relationships.filter((r) => live(r, day) && set.has(r.source) && set.has(r.target) && (r.stereotype !== PLACEMENT || !kind || r.kind === kind)))
-    .map((r) => ({ from: r.source, to: r.target, parent: hierarchyParent(r) }));
-  const below = Object.values(out).reduce((y, p) => Math.max(y, p[1] + 120), 40);
-  for (const [id, p] of Object.entries(await relationLayout("down", missing.map((id) => ({ id })), edges))) out[id] = [p.x + 40, p.y + below];
-  return out;
-}

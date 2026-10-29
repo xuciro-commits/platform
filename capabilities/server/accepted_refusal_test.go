@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"reflect"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		return e.Body, nil
 	}
 	if _, err := live.Submit(member, submission, at); err == nil || len(entries) != 0 ||
-		len(live.committed.refusals) != 0 {
+		len(live.committed.AllRefusals()) != 0 {
 		t.Fatalf("uncommitted refusal became visible: %v, %+v", err, entries)
 	}
 	fail = false
@@ -43,7 +44,7 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 	if first == nil || len(entries) != 1 {
 		t.Fatalf("refusal not committed: %v, %+v", first, entries)
 	}
-	saved, sub, err := resultformat.DecodeRefusal(entries[0].Body)
+	saved, sub, err := acceptedformat.DecodeRefusal(entries[0].Body)
 	if err != nil || saved.Error != *first || sub.GetIdempotencyKey() != submission.IdempotencyKey {
 		t.Fatalf("refusal bytes differ from the answer: %+v, %v", saved, err)
 	}
@@ -85,7 +86,7 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		if refusal == nil || len(issues) != 1 || issues[0].Path[0] != "qty" || issues[0].Code != "min" {
 			t.Fatalf("missing input issue: %v %+v", refusal, issues)
 		}
-		saved, _, decodeErr := resultformat.DecodeRefusal(entries[0].Body)
+		saved, _, decodeErr := acceptedformat.DecodeRefusal(entries[0].Body)
 		if decodeErr != nil || saved.Version != 2 || len(saved.Issues) != 1 {
 			t.Fatalf("missing version 2 refusal: %+v %v", saved, decodeErr)
 		}
@@ -102,20 +103,20 @@ func TestAcceptedRefusalIsDurableAndImmutableOnRetry(t *testing.T) {
 		if !reflect.DeepEqual(restored, issues) {
 			t.Fatalf("replay recast diagnostics: %+v", restored)
 		}
-		legacy, encodeErr := resultformat.EncodeRefusal(request, at, refusal)
-		old, _, decodeErr := resultformat.DecodeRefusal(legacy)
+		legacy, encodeErr := acceptedformat.EncodeRefusal(request, at, refusal)
+		old, _, decodeErr := acceptedformat.DecodeRefusal(legacy)
 		if encodeErr != nil || decodeErr != nil || old.Version != 1 || len(old.Issues) != 0 {
 			t.Fatalf("version 1 changed: %v %v", encodeErr, decodeErr)
 		}
 		saved.Issues[0].Message = "tampered issue"
 		damaged, _ := json.Marshal(saved)
-		if _, _, err := resultformat.DecodeRefusal(damaged); err == nil {
+		if _, _, err := acceptedformat.DecodeRefusal(damaged); err == nil {
 			t.Fatal("issue tampering passed the digest")
 		}
 	})
 
 	damaged := entries[0]
-	var decoded resultformat.Refusal
+	var decoded acceptedformat.Refusal
 	if err := json.Unmarshal(damaged.Body, &decoded); err != nil {
 		t.Fatal(err)
 	}
@@ -161,8 +162,8 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 	id := fmt.Sprintf("refused-%d", time.Now().UnixNano())
 	defer func() { _, _ = j.Pool().Exec(ctx, `delete from journal where tenant=$1`, id) }()
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
-		tn, err := NewTenant(id, NewConsole(id, seat), newStock(id))
+		seat := platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
+		tn, err := NewTenant(id, newConsole(id, seat), newStock(id))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +192,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 		}()
 		live.Submit(m, bad, at)
 	}()
-	if len(live.committed.refusals) != 0 {
+	if len(live.committed.AllRefusals()) != 0 {
 		t.Fatal("unapplied refusal entered the live cache")
 	}
 	reopened, err := OpenJournal(ctx, url)
@@ -214,7 +215,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 	if refusal == nil || reopened.Position(id) != 1 {
 		t.Fatalf("retry changed the committed refusal: %v, position=%d", refusal, reopened.Position(id))
 	}
-	saved, _, err := resultformat.DecodeRefusal(entries[0].Body)
+	saved, _, err := acceptedformat.DecodeRefusal(entries[0].Body)
 	if err != nil || *refusal != saved.Error {
 		t.Fatalf("retry lost the original answer: %v, %+v, %v", refusal, saved, err)
 	}
@@ -232,7 +233,7 @@ func TestJournalAcceptedRefusalAfterCrashAndRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherHash, err := resultformat.SubmissionHash(valid)
+	otherHash, err := acceptedformat.SubmissionHash(valid)
 	if err != nil {
 		t.Fatal(err)
 	}

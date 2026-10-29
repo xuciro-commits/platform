@@ -2,12 +2,12 @@ package platformserver
 
 import (
 	"encoding/json"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"slices"
 	"strings"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 type enterpriseReferenceDeclaration struct {
@@ -54,9 +54,9 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 		for _, et := range store.types {
 			fields(et.info.Type, et.info.Fields, nil)
 		}
-		if objects := store.types[construction.ObjectType]; objects != nil {
+		if objects := store.types[build.ObjectType]; objects != nil {
 			for _, row := range objects.rows.All() {
-				typ := construction.TypeOf(businessField(objects.info, row.Value, "name"))
+				typ := build.TypeOf(businessField(objects.info, row.Value, "name"))
 				if published := businessField(objects.info, row.Value, "published"); published != "" {
 					bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
 				}
@@ -76,7 +76,7 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 			}
 		}
 	}()
-	for _, raw := range t.releases.candidates {
+	for _, raw := range t.releases.Candidates() {
 		var release struct {
 			Assets []platform.ReleaseAsset `json:"assets"`
 		}
@@ -99,8 +99,8 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 		typ := body.typ
 		if declaration.Type != "" {
 			typ = declaration.Type
-		} else if declaration.Name != "" && strings.HasPrefix(typ, construction.ID+".") {
-			typ = construction.TypeOf(declaration.Name)
+		} else if declaration.Name != "" && strings.HasPrefix(typ, build.ID+".") {
+			typ = build.TypeOf(declaration.Name)
 		}
 		if declaration.Entity != nil {
 			declaration = *declaration.Entity

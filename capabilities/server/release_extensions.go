@@ -1,21 +1,14 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"fmt"
 	"reflect"
 	"slices"
 
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
-
-type ReleaseExtensionReview struct {
-	Type          string                `json:"type"`
-	Base          platform.AssetBinding `json:"base"`
-	TargetVersion string                `json:"targetVersion"`
-	Fields        []string              `json:"fields"`
-	Issue         string                `json:"issue,omitempty"`
-}
 
 // All installed extensions participate in upgrade admission, including those
 // outside the selected application closure. Nothing republishes or replaces an
@@ -36,7 +29,7 @@ func (t *Tenant) checkExtensionSet() error {
 	return nil
 }
 
-func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]ReleaseExtensionReview, error) {
+func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]releaseowner.ReleaseExtensionReview, error) {
 	shapes, err := t.releaseAssetShapes(candidate.Assets)
 	if err != nil {
 		return nil, err
@@ -47,7 +40,7 @@ func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]
 			versions[asset.Ref.Name] = asset.SourceVersion
 		}
 	}
-	var result []ReleaseExtensionReview
+	var result []releaseowner.ReleaseExtensionReview
 	for _, et := range t.records.sortedTypes() {
 		extension := et.info
 		if next, exists := shapes[extension.Type]; exists {
@@ -60,7 +53,7 @@ func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]
 		if !exists {
 			base, exists = t.entity(extension.Extends)
 		}
-		row := ReleaseExtensionReview{Type: extension.Type, Fields: []string{}, TargetVersion: versions[extension.Extends]}
+		row := releaseowner.ReleaseExtensionReview{Type: extension.Type, Fields: []string{}, TargetVersion: versions[extension.Extends]}
 		if extension.ExtensionSource != nil {
 			row.Base = extension.ExtensionSource.Base
 		}
@@ -92,7 +85,7 @@ func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]
 func (t *Tenant) releaseAssetShapes(available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
 	shapes := map[string]platform.EntityInfo{}
 	for _, owner := range t.apps {
-		compiler, ok := owner.(host.ReleaseExecutionOwner)
+		compiler, ok := owner.(platform.ReleaseExecutionOwner)
 		if !ok {
 			continue
 		}

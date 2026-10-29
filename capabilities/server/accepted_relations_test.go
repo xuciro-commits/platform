@@ -1,8 +1,10 @@
 package platformserver
 
+import platform "platformserver/platform"
+
 import (
 	"errors"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +22,7 @@ func TestSameAuthorityAdHocRelationshipIsFrozen(t *testing.T) {
 
 func TestAcceptedRelationGraphIsPrivateUntilCommit(t *testing.T) {
 	compose := func() *Tenant {
-		return composeTenant(t, "t-1", []Seat{seatOf("ana", "stock:clerk", "invariants:operator")}, newStock("t-1"), newConstraintOwner("t-1"), relations.New("t-1"))
+		return composeTenant(t, "t-1", []platform.Seat{seatOf("ana", "stock:clerk", "invariants:operator")}, newStock("t-1"), newConstraintOwner("t-1"), relations.New("t-1"))
 	}
 	tn := compose()
 	ana, _ := tn.Member("ana")
@@ -37,7 +39,7 @@ func TestAcceptedRelationGraphIsPrivateUntilCommit(t *testing.T) {
 		// Append already holds the tenant lane. Inspect the committed owner
 		// here; public coordinated reads cannot re-enter that same lane.
 		owner := tn.app(relations.ID)
-		links, refusal := readApp(owner, tn.caller(ana, owner, false), "links")
+		links, refusal := platform.CallRead(owner, tn.caller(ana, owner, false), "links")
 		if refusal != nil {
 			t.Fatal(refusal)
 		}
@@ -60,7 +62,7 @@ func TestAcceptedRelationGraphIsPrivateUntilCommit(t *testing.T) {
 	if err != nil || len(entries) != 2 {
 		t.Fatalf("relation not accepted: %v", err)
 	}
-	batch, _, errDecode := resultformat.DecodeBatch(entries[1].Body)
+	batch, _, errDecode := acceptedformat.DecodeBatch(entries[1].Body)
 	if errDecode != nil || len(batch.Rows) != 0 || len(batch.States) != 1 || batch.States[0].App != relations.ID {
 		t.Fatalf("relation graph is not a bounded owner state: %+v, %v", batch, errDecode)
 	}

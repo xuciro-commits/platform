@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/records"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"time"
 
@@ -64,8 +64,8 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 		return fmt.Errorf("tenant %s: SQL checkpoint records differ", t.ID)
 	}
 	t.installRuntimeRecords(store, func() int64 { return seq })
-	t.records.bindReadView(view)
-	defer t.records.bindReadView(nil)
+	t.records.current.Bind(view)
+	defer t.records.current.Bind(nil)
 	t.installRuntimeHistory(view, func() int64 { return seq })
 	if err = t.recoverSnapshot(state, seq); err != nil {
 		return err
@@ -86,7 +86,7 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	if err = t.verifyRuntimeSnapshotTail(ctx, j, seq, current, entries); err != nil {
 		return err
 	}
-	if console, ok := t.app(PlatformApp).(IdentityRecovery); ok {
+	if console, ok := t.app(controlowner.PlatformApp).(platform.IdentityRecovery); ok {
 		console.CloseTokenSecretWindows()
 	}
 	if t.procs != nil {
@@ -141,7 +141,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 			key := replacement.Type + "/" + replacement.ID
 			expected, exists := changed[key]
 			if !exists {
-				current, readErr := t.records.readView.StateCurrent(ctx, t.ID, replacement.Type, replacement.ID)
+				current, readErr := t.records.current.View().StateCurrent(ctx, t.ID, replacement.Type, replacement.ID)
 				if readErr != nil {
 					return readErr
 				}
@@ -164,7 +164,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 			}
 			prior, exists := owners[update.Key]
 			if !exists {
-				prior, err = t.records.readView.StateValue(ctx, t.ID, update.Owner, update.Key, -1)
+				prior, err = t.records.current.View().StateValue(ctx, t.ID, update.Owner, update.Key, -1)
 				if err != nil {
 					return err
 				}
@@ -201,9 +201,9 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 		}
 		head := expected.HistoryHead
 		if head == "" && expected.HistoryBase < 0 {
-			head = records.EmptyHistory
+			head = platform.EmptyRecordHistory
 			for i, raw := range expected.History {
-				head, err = records.AppendHistory(head, i, raw)
+				head, err = platform.AppendRecordHistory(head, i, raw)
 				if err != nil {
 					return err
 				}

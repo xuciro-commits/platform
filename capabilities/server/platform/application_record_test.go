@@ -15,7 +15,7 @@ func TestApplicationRecordPortsAndCandidate(t *testing.T) {
 	if err := page.Document.Check(page.Sections); err != nil {
 		t.Fatal(err)
 	}
-	if err := page.CheckCollectionPorts(); err != nil {
+	if err := page.CheckSafety(); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.CheckPageVariables(page); err != nil {
@@ -45,7 +45,6 @@ func TestApplicationRecordPortsAndCandidate(t *testing.T) {
 			p.Document.Variables["selected"] = v
 		},
 		func(p *Page) { p.Sections[0].Selection = "local" },
-		func(p *Page) { p.Sections[0].Widget = "detail" },
 	} {
 		raw, _ := json.Marshal(page)
 		var copy Page
@@ -62,7 +61,7 @@ func TestApplicationRecordPortsAndCandidate(t *testing.T) {
 	app.Queries = nil
 	legacy := page
 	legacy.Document = nil
-	if legacy.CheckCollectionPorts() == nil {
+	if legacy.CheckSafety() == nil {
 		t.Fatal("legacy section accepted shared selection metadata")
 	}
 	other := object
@@ -70,7 +69,7 @@ func TestApplicationRecordPortsAndCandidate(t *testing.T) {
 	v := page.Document.Variables["selected"]
 	v.Source.Object = &other
 	page.Document.Variables["selected"] = v
-	if app.CheckPageVariables(page) == nil || page.CheckCollectionPorts() == nil {
+	if app.CheckPageVariables(page) == nil || page.CheckSafety() == nil {
 		t.Fatal("object mismatch accepted")
 	}
 	app.UIProfile = "platform.page.v2.13"

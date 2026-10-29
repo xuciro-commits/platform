@@ -1,115 +1,67 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"platformserver/internal/construction"
 	"platformserver/internal/systemscope"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
-
-// Saved candidates are read from committed bytes, independently of today's drafts.
-type ReleaseSummary struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Assets int    `json:"assets"`
-	// From and PromotedAt are set when the candidate arrived from another
-	// environment: the release holder here sees what was promoted in and
-	// still waits for review, not an anonymous saved candidate.
-	From       string    `json:"from,omitempty"`
-	PromotedAt time.Time `json:"promotedAt,omitzero"`
-	// PromotedTo lists the environments of this host that received the
-	// candidate from here, so the source sees where its release went.
-	PromotedTo []PromotionTarget `json:"promotedTo,omitempty"`
-}
-
-// PromotionTarget is one environment a candidate was promoted into.
-type PromotionTarget struct {
-	Tenant string    `json:"tenant"`
-	Member string    `json:"member"`
-	At     time.Time `json:"at"`
-	Active bool      `json:"active"`
-}
 
 // promotionsOf finds, across this host's tenants, where a candidate saved in
 // the source went by promotion and whether it is active there. Each target
 // records the origin where the result is applied (accepted_release.go);
 // the source keeps nothing, so the answer is read from the targets.
-func (h *Host) promotionsOf(source, candidate string) []PromotionTarget {
-	var out []PromotionTarget
+func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTarget {
+	var out []releaseowner.PromotionTarget
 	for _, other := range h.currentTenants() {
 		if other.ID == source {
 			continue
 		}
 		other.mu.Lock()
-		origin, ok := other.releases.origin(candidate)
-		active := other.releases.active == candidate
+		origin, ok := other.releases.Origin(candidate)
+		active := other.releases.Active() == candidate
 		other.mu.Unlock()
 		if ok && origin.From == source {
-			out = append(out, PromotionTarget{Tenant: other.ID, Member: origin.Member, At: origin.At, Active: active})
+			out = append(out, releaseowner.PromotionTarget{Tenant: other.ID, Member: origin.Member, At: origin.At, Active: active})
 		}
 	}
 	return out
 }
 
 // withPromotions annotates an inventory with where each candidate went.
-func (h *Host) withPromotions(source string, page ReleasePage) ReleasePage {
+func (h *Host) withPromotions(source string, page releaseowner.ReleasePage) releaseowner.ReleasePage {
 	for i := range page.Candidates {
 		page.Candidates[i].PromotedTo = h.promotionsOf(source, page.Candidates[i].ID)
 	}
 	return page
 }
 
-type ReleasePage struct {
-	Candidates []ReleaseSummary `json:"candidates"`
-	Total      int              `json:"total"`
-	ActiveID   string           `json:"activeId"`
-}
-
-// ReleaseCandidateSaved is the candidate a tenant just froze.
-type ReleaseCandidateSaved struct {
-	ID string `json:"id"`
-}
-
-type SavedReleaseReview struct {
-	AI                   []ApplicationAI          `json:"ai,omitempty"`
-	Preview              ReleasePreview           `json:"preview"`
-	Assets               []platform.ReleaseAsset  `json:"assets"`
-	Active               bool                     `json:"active"`
-	RunningMatches       bool                     `json:"runningMatches"`
-	RunningDiagnostic    string                   `json:"runningDiagnostic,omitempty"`
-	CanActivate          bool                     `json:"canActivate"`
-	ActivationDiagnostic string                   `json:"activationDiagnostic,omitempty"`
-	UpgradePlan          *ReleaseUpgradePlan      `json:"upgradePlan,omitempty"`
-	Extensions           []ReleaseExtensionReview `json:"extensions,omitempty"`
-	From                 string                   `json:"from,omitempty"`
-	PromotedAt           time.Time                `json:"promotedAt,omitzero"`
-	PromotedTo           []PromotionTarget        `json:"promotedTo,omitempty"`
-}
-
-func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application ...string) (ReleasePage, error) {
+func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application ...string) (releaseowner.ReleasePage, error) {
 	if err := t.admits(m); err != nil {
-		return ReleasePage{}, err
+		return releaseowner.ReleasePage{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{construction.Builder, construction.Publisher}, true)); err != nil {
-		return ReleasePage{}, err
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+		return releaseowner.ReleasePage{}, err
 	}
 	if offset < 0 || limit < 1 || limit > 100 {
-		return ReleasePage{}, fmt.Errorf("release page needs a nonnegative offset and a limit from 1 to 100")
+		return releaseowner.ReleasePage{}, fmt.Errorf("release page needs a nonnegative offset and a limit from 1 to 100")
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	ids := t.releases.ids()
+	ids := t.releases.Ids()
 	if len(application) > 0 && application[0] != "" {
-		ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetApp, Name: application[0]}
+		ref := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: application[0]}
 		filtered := make([]string, 0, len(ids))
 		for _, id := range ids {
-			candidate, err := t.releases.candidate(id)
+			candidate, err := t.releases.Candidate(id)
 			if err != nil {
-				return ReleasePage{}, err
+				return releaseowner.ReleasePage{}, err
 			}
 			for _, asset := range candidate.Assets {
 				if asset.Ref == ref {
@@ -120,12 +72,12 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 		}
 		ids = filtered
 	}
-	reply := ReleasePage{Candidates: []ReleaseSummary{}, Total: len(ids), ActiveID: t.releases.active}
+	reply := releaseowner.ReleasePage{Candidates: []releaseowner.ReleaseSummary{}, Total: len(ids), ActiveID: t.releases.Active()}
 	start := min(offset, len(ids))
 	for _, id := range ids[start : start+min(limit, len(ids)-start)] {
-		candidate, err := t.releases.candidate(id)
+		candidate, err := t.releases.Candidate(id)
 		if err != nil {
-			return ReleasePage{}, err
+			return releaseowner.ReleasePage{}, err
 		}
 		// Use an application or business object label rather than a generated page name.
 		title := id
@@ -150,8 +102,8 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 				break
 			}
 		}
-		summary := ReleaseSummary{ID: id, Title: title, Assets: len(candidate.Assets)}
-		if origin, ok := t.releases.origin(id); ok {
+		summary := releaseowner.ReleaseSummary{ID: id, Title: title, Assets: len(candidate.Assets)}
+		if origin, ok := t.releases.Origin(id); ok {
 			summary.From, summary.PromotedAt = origin.From, origin.At
 		}
 		reply.Candidates = append(reply.Candidates, summary)
@@ -159,23 +111,23 @@ func (t *Tenant) SavedReleases(m platform.Member, offset, limit int, application
 	return reply, nil
 }
 
-func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseReview, error) {
+func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (releaseowner.SavedReleaseReview, error) {
 	if err := t.admits(m); err != nil {
-		return SavedReleaseReview{}, err
+		return releaseowner.SavedReleaseReview{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{construction.Builder, construction.Publisher}, true)); err != nil {
-		return SavedReleaseReview{}, err
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/candidates/{id}", "read", []string{build.Builder, build.Publisher}, true)); err != nil {
+		return releaseowner.SavedReleaseReview{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	raw, exists := t.releases.candidates[id]
+	raw, exists := t.releases.Candidates()[id]
 	if !exists {
-		return SavedReleaseReview{}, fmt.Errorf("saved release candidate not found")
+		return releaseowner.SavedReleaseReview{}, fmt.Errorf("saved release candidate not found")
 	}
 	saved, err := platform.ReadCandidate(id, raw)
 	if err != nil {
-		return SavedReleaseReview{}, err
+		return releaseowner.SavedReleaseReview{}, err
 	}
 	visible := map[platform.AssetRef]bool{}
 	for _, asset := range saved.Assets {
@@ -183,15 +135,15 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	}
 	ai, refusal := t.applicationAILocked(m, saved.Assets, visible)
 	if refusal != nil {
-		return SavedReleaseReview{}, fmt.Errorf("candidate AI metadata is unavailable: %s", refusal.Message)
+		return releaseowner.SavedReleaseReview{}, fmt.Errorf("candidate AI metadata is unavailable: %s", refusal.Message)
 	}
-	reply := SavedReleaseReview{AI: ai, Assets: saved.Assets, Active: t.releases.active == id, Preview: ReleasePreview{
+	reply := releaseowner.SavedReleaseReview{AI: ai, Assets: saved.Assets, Active: t.releases.Active() == id, Preview: releaseowner.ReleasePreview{
 		CandidateID: id, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{},
 	}}
 	for _, asset := range saved.Assets {
 		reply.Preview.Included = append(reply.Preview.Included, asset.Ref)
 	}
-	if origin, ok := t.releases.origin(id); ok {
+	if origin, ok := t.releases.Origin(id); ok {
 		reply.From, reply.PromotedAt = origin.From, origin.At
 	}
 	reply.Extensions, err = t.releaseExtensionReview(saved)

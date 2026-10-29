@@ -1,5 +1,5 @@
 import type {PageUI} from "@platform/app";
-import { sourceFieldInput } from "@platform/app";
+import { validApplicationHeader, sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
@@ -93,7 +93,8 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project,declarationFields));baseRevision.current=project.revision; loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
   const canEdit = role("build") === "builder";
   const pages = useMemo(() => (draft.pages ?? []).map((name) => { const record = pageRecords.data?.records.find((item) => item.name === name && !item.archived); return { name, title: record?.title ?? name, id: record?.id, state: record?.state }; }), [draft.pages, pageRecords.data]);
-  const invalid = session.inputs.invalid;
+  const headerInvalid = !validApplicationHeader(draft.header,draft.pages??[]);
+  const invalid = session.inputs.invalid || headerInvalid;
   const { markSaved, confirmDiscard } = useUnsavedChanges(dirty || !!createdPage, () => {
     if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
     setCreatedPage(undefined); setError(undefined);
@@ -154,6 +155,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   if (!project || !context) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{query.isError ? t("The project could not be loaded.") : t("Loading…")}{pendingPage}</WorkbenchMessage></Workbench>;
   if (page) return <>{pendingPage}<InputDraftProvider isolated scope={`page:${page}`}><PageEditor key={page} id={page} module={context} /></InputDraftProvider>{createPage.dialog}</>;
   const problems: WorkbenchProblem[] = [
+    ...(headerInvalid ? [{id:"header",text:t("The application header configuration is invalid."),locate:()=>setFocus("header")}] : []),
     ...pages.filter((item) => !item.id && pageRecords.data).map((item) => ({ id: `missing:${item.name}`, severity: "warning" as const, text: t("Page {name} is listed but has no saved draft.", { name: item.name }), locate: () => setFocus("navigation") })),
     ...(!pages.length ? [{ id: "empty", severity: "info" as const, text: t("Add at least one page before publishing the module.") }] : []),
     ...(draft.header && !draft.header.title.trim() ? [{ id: "header-title", severity: "warning" as const, text: t("The header has no title."), locate: () => setFocus("header") }] : []),

@@ -1,7 +1,8 @@
 package platformserver
 
 import (
-	resultformat "platformserver/internal/acceptance/result"
+	appowner "platformserver/engine/applications"
+
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -11,9 +12,9 @@ import (
 // DecisionDefinition belongs to the original accepted decision. It records
 // its execution contract and resource memberships, never an inferred time
 // interval or a second application/decision state.
-type DecisionDefinition = resultformat.DecisionDefinition
+type DecisionDefinition = platform.DecisionDefinition
 
-func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*resultformat.DecisionDefinition, error) {
+func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*platform.DecisionDefinition, error) {
 	if declared := t.app(owner.Manifest().ID); declared != nil {
 		owner = declared
 	}
@@ -29,7 +30,7 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 		contract.Family = request.GetSchema().GetVersion()
 	}
 	root := platform.AssetRef{App: owner.Manifest().ID, Kind: platform.AssetAction, Name: action.Schema}
-	out := &resultformat.DecisionDefinition{Definition: platform.AssetBinding{Ref: root, SourceVersion: owner.Manifest().Version}, Contract: contract, Release: release, DependenciesState: "unavailable", Dependencies: []platform.AssetBinding{}, Applications: []platform.AssetBinding{}}
+	out := &platform.DecisionDefinition{Definition: platform.AssetBinding{Ref: root, SourceVersion: owner.Manifest().Version}, Contract: contract, Release: release, DependenciesState: "unavailable", Dependencies: []platform.AssetBinding{}, Applications: []platform.AssetBinding{}}
 	var available []platform.ReleaseAsset
 	if len(retained) > 0 {
 		available = slices.Clone(retained[0])
@@ -61,7 +62,7 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 	}
 	membershipAssets := available
 	if len(retained) > 0 && release != "" {
-		selected, err := t.releases.candidate(release)
+		selected, err := t.releases.Candidate(release)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +77,7 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 		if asset.Ref.Kind != platform.AssetApp {
 			continue
 		}
-		graph := applicationRunGraph(asset.Ref, lookup)
+		graph := appowner.RunGraph(asset.Ref, lookup)
 		if !graph[root] && !graph[target] {
 			continue
 		}

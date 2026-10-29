@@ -2,10 +2,9 @@ package platformserver
 
 import (
 	"encoding/json"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 
-	"platformserver/internal/acceptance"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -19,8 +18,8 @@ import (
 
 // Sealing retains each distinct authorization basis and outcome in first-use
 // order. Repeated reads still evaluate current permissions at every call.
-func (d *stagedDecision) savedAuthorizations() ([]resultformat.AuthorizationEvidence, error) {
-	var saved []resultformat.AuthorizationEvidence
+func (d *stagedDecision) savedAuthorizations() ([]acceptedformat.AuthorizationEvidence, error) {
+	var saved []acceptedformat.AuthorizationEvidence
 	seen := map[string]bool{}
 	for _, item := range d.authorizations {
 		raw, err := json.Marshal(item)
@@ -57,13 +56,13 @@ func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, a
 	} else if et := d.records.types[q.Type]; et != nil {
 		app = et.info.App
 	}
-	d.authorizations = append(d.authorizations, resultformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesIn(app))})
+	d.authorizations = append(d.authorizations, acceptedformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesIn(app))})
 	return decision
 }
 
 func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.AuthzRequest, decision platform.AuthzDecision) {
 	c.Member = d.tenant.authorizationMember(c.Member)
-	d.authorizations = append(d.authorizations, resultformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+	d.authorizations = append(d.authorizations, acceptedformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesHere())})
 	if d.TraceEnabled() {
 		d.RecordDecisionTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
 	}
@@ -95,7 +94,7 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 	var policies []authz.Policy
 	if owner != nil {
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
-		context.Definition, _ = acceptance.Digest([]any{c.App, owner.Manifest().Version, permission, allowed})
+		context.Definition, _ = platform.CanonicalDigest([]any{c.App, owner.Manifest().Version, permission, allowed})
 	}
 	if len(details) > 0 {
 		detail := details[0]
@@ -147,7 +146,7 @@ func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string
 
 func (d *stagedDecision) authorizeNative(c platform.Caller, permission, kind string, allowed []string, declared bool) *kernel.Error {
 	decision := d.tenant.authorizeNative(c, permission, kind, allowed, declared)
-	d.authorizations = append(d.authorizations, resultformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: kind, Action: permission}, Decision: decision, Roles: slices.Clone(c.RolesHere())})
+	d.authorizations = append(d.authorizations, acceptedformat.AuthorizationEvidence{Request: platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: kind, Action: permission}, Decision: decision, Roles: slices.Clone(c.RolesHere())})
 	return authorizationRefusal(decision)
 }
 
@@ -177,7 +176,7 @@ func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string,
 			allowed = []string{authz.AnyMember}
 		}
 		policies = owner.Manifest().Actions.AuthorizationPolicies()
-		context.Definition, _ = acceptance.Digest([]any{app, owner.Manifest().Version, permission, kind, allowed})
+		context.Definition, _ = platform.CanonicalDigest([]any{app, owner.Manifest().Version, permission, kind, allowed})
 		if name, input := strings.CutPrefix(permission, "input:"); input {
 			t.opsMu.Lock()
 			connector := t.connectors.byID[m.ID]
@@ -312,7 +311,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 	}
 	if et != nil {
 		context.Definition = et.info.Type
-		if digest, err := acceptance.Digest(struct {
+		if digest, err := platform.CanonicalDigest(struct {
 			Fields                          []platform.FieldInfo
 			Derived                         []platform.DerivationInfo
 			Withheld                        []int

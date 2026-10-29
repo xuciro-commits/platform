@@ -3,15 +3,16 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/acceptance"
+	"platformserver/aigateway"
+
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // ReleaseEvaluationRequest asks the original function or agent evaluator for
@@ -31,7 +32,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if err := t.admits(m); err != nil {
 		return "", err
 	}
-	if !holdsIndependentBuildRole(m, construction.Builder) || request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") ||
+	if !holdsIndependentBuildRole(m, build.Builder) || request.CandidateID == "" || (request.PlanID == "") == (request.Agent == "") ||
 		request.Key == "" || len(request.Key) > 200 || now.IsZero() {
 		return "", fmt.Errorf("a builder, saved candidate, test plan or agent, and idempotency key are required")
 	}
@@ -45,29 +46,29 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if request.Agent != "" {
 		return t.evaluateReleaseAgentLocked(m, request, now)
 	}
-	candidate, err := t.releases.candidate(request.CandidateID)
+	candidate, err := t.releases.Candidate(request.CandidateID)
 	if err != nil {
 		return "", fmt.Errorf("release candidate is not saved: %w", err)
 	}
-	caller := t.automation(construction.ID, false)
-	plan, ok := platform.Get[construction.TestPlan](caller, request.PlanID)
+	caller := t.automation(build.ID, false)
+	plan, ok := platform.Get[build.TestPlan](caller, request.PlanID)
 	if ok && plan.Archived {
 		return "", fmt.Errorf("a saved function plan is required")
 	}
 	if !ok {
-		plan = construction.TestPlan{Record: platform.Record{ID: request.PlanID, Revision: 1}, Name: request.PlanID}
+		plan = build.TestPlan{Record: platform.Record{ID: request.PlanID, Revision: 1}, Name: request.PlanID}
 	}
 	var evaluationSet *platform.AssetBinding
 	functionName := ""
 	for _, selected := range candidate.Assets {
-		if selected.Ref.Kind != platform.AssetEvaluation || selected.Ref.App != construction.ID || selected.Ref.Name != plan.Name {
+		if selected.Ref.Kind != platform.AssetEvaluation || selected.Ref.App != build.ID || selected.Ref.Name != plan.Name {
 			continue
 		}
 		descriptor, err := platform.ReadEvaluationSet(selected.Body)
 		if err != nil {
 			return "", err
 		}
-		plan.Evaluation = []construction.EvaluationPolicy{descriptor.Policy}
+		plan.Evaluation = []platform.EvaluationPolicy{descriptor.Policy}
 		plan.Model = descriptor.Model
 		functionName = descriptor.Function.Ref.Name
 		evaluationSet = &platform.AssetBinding{Ref: selected.Ref, SourceVersion: selected.SourceVersion}
@@ -76,7 +77,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		if !ok {
 			return "", fmt.Errorf("a saved function plan or candidate evaluation set is required")
 		}
-		function, ok := platform.Get[construction.Function](caller, string(plan.Function))
+		function, ok := platform.Get[build.Function](caller, string(plan.Function))
 		if !ok || function.Archived || len(plan.Evaluation) != 1 {
 			return "", fmt.Errorf("a saved function plan with one evaluation policy is required")
 		}
@@ -84,7 +85,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	}
 	var asset platform.ReleaseAsset
 	for _, selected := range candidate.Assets {
-		if selected.Ref.App == construction.ID && selected.Ref.Kind == platform.AssetFunction && selected.Ref.Name == functionName {
+		if selected.Ref.App == build.ID && selected.Ref.Kind == platform.AssetFunction && selected.Ref.Name == functionName {
 			asset = selected
 			break
 		}
@@ -92,7 +93,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if asset.Ref.Name == "" {
 		return "", fmt.Errorf("the saved candidate does not contain the plan's function")
 	}
-	versionText, found := strings.CutPrefix(asset.SourceVersion, t.app(construction.ID).Manifest().Version+".function-")
+	versionText, found := strings.CutPrefix(asset.SourceVersion, t.app(build.ID).Manifest().Version+".function-")
 	version, parseErr := strconv.Atoi(versionText)
 	var definition platform.AIFunction
 	if !found || parseErr != nil || version < 1 || json.Unmarshal(asset.Body, &definition) != nil ||
@@ -129,7 +130,7 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 	if refusal != nil {
 		return "", fmt.Errorf("model stage: %s", refusal.Message)
 	}
-	config, err := modelConfigurationDigest(model, provider, &binding)
+	config, err := aigateway.ConfigurationDigest(model, provider, &binding)
 	if err != nil {
 		return "", err
 	}
@@ -139,26 +140,26 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request ReleaseEvaluationReq
 		}
 	}
 
-	definitionDigest, err := acceptance.Digest(json.RawMessage(asset.Body))
+	definitionDigest, err := platform.CanonicalDigest(json.RawMessage(asset.Body))
 	if err != nil {
 		return "", err
 	}
-	planDigest, err := acceptance.Digest(plan)
+	planDigest, err := platform.CanonicalDigest(plan)
 	if err != nil {
 		return "", err
 	}
-	identity, err := acceptance.Digest([]string{t.ID, request.CandidateID, request.PlanID, request.Key})
+	identity, err := platform.CanonicalDigest([]string{t.ID, request.CandidateID, request.PlanID, request.Key})
 	if err != nil {
 		return "", err
 	}
 	id := "eval-" + identity[:32]
-	start := construction.EvaluationStart{Set: evaluationSet, Candidate: request.CandidateID, Function: definition.Name, Version: version,
+	start := build.EvaluationStart{Set: evaluationSet, Candidate: request.CandidateID, Function: definition.Name, Version: version,
 		Definition: definition, DefinitionDigest: definitionDigest, Plan: request.PlanID, PlanRevision: plan.Revision,
 		PlanDigest: planDigest, Model: plan.Model, ModelConfig: config, Policy: plan.Evaluation[0]}
-	sub := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + construction.ID, Authority: construction.ID,
-		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: construction.EvaluationType, Id: id},
-		Schema: &pb.SchemaRef{Name: construction.SchemaEvaluationStart, Version: 1}, Payload: platform.Raw(start)}
-	app := t.app(construction.ID).(platform.App)
+	sub := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + build.ID, Authority: build.ID,
+		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: build.EvaluationType, Id: id},
+		Schema: &pb.SchemaRef{Name: build.SchemaEvaluationStart, Version: 1}, Payload: platform.Raw(start)}
+	app := t.app(build.ID).(platform.App)
 	if _, refusal := t.submitAccepted(app, platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, now, true); refusal != nil {
 		return "", fmt.Errorf("function evaluation was refused: %s", refusal.Message)
 	}
@@ -173,15 +174,15 @@ func evalEqualRaw(a, b []byte) bool {
 func checkApplicationProposalFunctions(candidate platform.ReleaseCandidate) error {
 	functions := map[string]platform.ReleaseAsset{}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetFunction {
+		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetFunction {
 			functions[asset.Ref.Name] = asset
 		}
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object construction.Object
+		var object build.Object
 		if json.Unmarshal(asset.Body, &object) != nil {
 			return fmt.Errorf("Proposal object declaration is invalid")
 		}

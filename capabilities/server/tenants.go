@@ -1,5 +1,7 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"platformserver/internal/systemscope"
+	controlowner "platformserver/kernel/control"
 	"regexp"
 	"slices"
 	"strings"
@@ -30,7 +33,7 @@ type TenantSpec struct {
 	ID       string            `json:"id"`
 	Name     string            `json:"name,omitempty"`
 	Template string            `json:"template,omitempty"`
-	Seats    []Seat            `json:"seats"`
+	Seats    []platform.Seat   `json:"seats"`
 	Settings map[string]string `json:"settings,omitempty"` // platform settings decided when the tenant first starts
 	Created  time.Time         `json:"created,omitempty"`
 	By       string            `json:"by,omitempty"` // the host administrator who created it
@@ -144,17 +147,17 @@ func (d *Deployment) Tenants(development TenantSpec) []TenantSpec {
 // with the host administrators as the people who may change the system.
 func (d *Deployment) systemSpec(development TenantSpec) TenantSpec {
 	roles := map[string]string{
-		"platform": Admin, "system": "publisher", "build": "builder",
-		platform.AIApp: platform.AIAdmin, AgentApp: AgentAdmin,
+		"platform": controlowner.Admin, "system": "publisher", "build": "builder",
+		platform.AIApp: platform.AIAdmin, platform.AgentApp: platform.AgentAdmin,
 	}
-	seats := []Seat{}
+	seats := []platform.Seat{}
 	if d.HostAdmins != "" {
 		for _, subject := range strings.Split(d.HostAdmins, ",") {
 			subject = strings.TrimSpace(subject)
 			if subject == "" {
 				continue
 			}
-			seats = append(seats, Seat{Subjects: []string{subject}, Member: platform.Member{ID: "operator", Roles: roles}})
+			seats = append(seats, platform.Seat{Subjects: []string{subject}, Member: platform.Member{ID: "operator", Roles: roles}})
 		}
 	}
 	if len(seats) == 0 {
@@ -168,14 +171,14 @@ func (d *Deployment) systemSpec(development TenantSpec) TenantSpec {
 					merged.Roles[app] = role
 				}
 			}
-			seats = append(seats, Seat{Subjects: seat.Subjects, Member: merged})
+			seats = append(seats, platform.Seat{Subjects: seat.Subjects, Member: merged})
 		}
 	}
 	return TenantSpec{ID: systemscope.Tenant, Name: "Platform", Seats: seats}
 }
 
 // SeatsFor are the configured seats of a tenant, for the binary's Rebuild.
-func (d *Deployment) SeatsFor(id string) []Seat {
+func (d *Deployment) SeatsFor(id string) []platform.Seat {
 	if d.specs == nil {
 		return nil
 	}
@@ -241,7 +244,7 @@ func (d *Deployment) spec(req CreateTenantRequest, by string, now time.Time) (Te
 		settings[k] = v
 	}
 	if req.Name != "" {
-		settings[SettingName] = req.Name
+		settings[controlowner.SettingName] = req.Name
 	}
 	_, after, _ := strings.Cut(req.Admin, ":")
 	id, _, _ := strings.Cut(after, "@")
@@ -249,8 +252,8 @@ func (d *Deployment) spec(req CreateTenantRequest, by string, now time.Time) (Te
 	if id == "" {
 		id = "admin"
 	}
-	seat := Seat{Subjects: []string{req.Admin}, Member: platform.Member{ID: id, Roles: map[string]string{PlatformApp: Admin}}}
-	return TenantSpec{ID: req.ID, Name: req.Name, Template: req.Template, Seats: []Seat{seat}, Settings: settings, Created: now.UTC(), By: by}, tpl, nil
+	seat := platform.Seat{Subjects: []string{req.Admin}, Member: platform.Member{ID: id, Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}
+	return TenantSpec{ID: req.ID, Name: req.Name, Template: req.Template, Seats: []platform.Seat{seat}, Settings: settings, Created: now.UTC(), By: by}, tpl, nil
 }
 
 // firstDecisions gives a new tenant its configured settings and its first
@@ -268,7 +271,7 @@ func firstDecisions(t *Tenant, spec TenantSpec, tpl TenantTemplate, now time.Tim
 	decide := func(schema, typ, id string, payload any) error {
 		key++
 		raw, _ := json.Marshal(payload)
-		_, err := t.Submit(admin, &pb.Submission{TenantId: t.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: fmt.Sprintf("create:%d", key),
+		_, err := t.Submit(admin, &pb.Submission{TenantId: t.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprintf("create:%d", key),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
 		if err != nil {
 			return fmt.Errorf("%s %s: %s", schema, id, err.Error())
@@ -279,8 +282,8 @@ func firstDecisions(t *Tenant, spec TenantSpec, tpl TenantTemplate, now time.Tim
 	if len(roles) == 0 {
 		roles = map[string]string{}
 		for _, a := range t.apps {
-			if m := a.Manifest(); m.ID != PlatformApp && slices.Contains(m.AllRoles(), Admin) {
-				roles[m.ID] = Admin
+			if m := a.Manifest(); m.ID != controlowner.PlatformApp && slices.Contains(m.AllRoles(), controlowner.Admin) {
+				roles[m.ID] = controlowner.Admin
 			}
 		}
 	}
@@ -293,7 +296,7 @@ func firstDecisions(t *Tenant, spec TenantSpec, tpl TenantTemplate, now time.Tim
 		if t.app(app) == nil {
 			continue
 		}
-		if err := decide(SchemaGrant, MemberType, admin.ID, map[string]string{"app": app, "role": roles[app]}); err != nil {
+		if err := decide(controlowner.SchemaGrant, controlowner.MemberType, admin.ID, map[string]string{"app": app, "role": roles[app]}); err != nil {
 			return err
 		}
 		admin, _ = t.member(admin.ID)
@@ -304,7 +307,7 @@ func firstDecisions(t *Tenant, spec TenantSpec, tpl TenantTemplate, now time.Tim
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		if err := decide(SchemaSettingSet, SettingType, PlatformApp+"/"+name, map[string]string{"value": spec.Settings[name]}); err != nil {
+		if err := decide(controlowner.SchemaSettingSet, controlowner.SettingType, controlowner.PlatformApp+"/"+name, map[string]string{"value": spec.Settings[name]}); err != nil {
 			return err
 		}
 	}
@@ -313,7 +316,7 @@ func firstDecisions(t *Tenant, spec TenantSpec, tpl TenantTemplate, now time.Tim
 
 // tenantRoutes are the host console's tenant creation: templates and POST /v1/host/tenants.
 func (h *Host) tenantRoutes(mux *http.ServeMux) {
-	h.hostRoute(mux, Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []TenantTemplate{}},
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []TenantTemplate{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, _ *Tenant) {
 			out := []TenantTemplate{}
 			if h.Templates != nil {
@@ -321,7 +324,7 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 			}
 			WriteJSON(w, http.StatusOK, out)
 		})
-	h.hostRoute(mux, Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: CreateTenantRequest{}, Answer: HostTenantView{}},
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: CreateTenantRequest{}, Answer: HostTenantView{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
 			if h.CreateTenant == nil {
 				WriteJSON(w, http.StatusNotImplemented, map[string]any{"error": "this host does not create tenants"})

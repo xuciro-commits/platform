@@ -2,9 +2,11 @@ package platformserver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"strings"
 	"testing"
@@ -12,7 +14,7 @@ import (
 )
 
 func TestDeploymentHostAdministratorsAreExplicit(t *testing.T) {
-	tenant, err := NewTenant("host-admin-boundary", NewConsole("host-admin-boundary", Seat{Subjects: []string{"tenant-admin"}, Member: platform.Member{ID: "tenant-admin", Roles: map[string]string{PlatformApp: Admin}}}))
+	tenant, err := NewTenant("host-admin-boundary", newConsole("host-admin-boundary", platform.Seat{Subjects: []string{"tenant-admin"}, Member: platform.Member{ID: "tenant-admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,10 +41,28 @@ func TestDeploymentHostAdministratorsAreExplicit(t *testing.T) {
 }
 
 func TestDeliveryPersonalTokensRequirePrivateKey(t *testing.T) {
-	tokenKeyMu.RLock()
-	before := append([]byte{}, tokenKey...)
-	tokenKeyMu.RUnlock()
-	t.Cleanup(func() { UseTokenKey(before) })
+	t.Cleanup(func() { controlowner.UseTokenKey([]byte("development-only")) })
+	sampleToken := func() string {
+		at := time.Now()
+		directory := newConsole("tenant", platform.Seat{Member: platform.Member{ID: "member", Roles: map[string]string{}}})
+		raw, err := directory.AcceptedState()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var state map[string]json.RawMessage
+		if err = json.Unmarshal(raw, &state); err != nil {
+			t.Fatal(err)
+		}
+		state["tokens"] = platform.Raw(map[string]controlowner.Token{"token": {ID: "token", Member: "member", Change: "change", Issued: at}})
+		if err = directory.ApplyAcceptedState(platform.Raw(state)); err != nil {
+			t.Fatal(err)
+		}
+		secret, ok := directory.Minted("token", "member", at)
+		if !ok {
+			t.Fatal("configured token could not be minted")
+		}
+		return secret
+	}
 	d := Deployment{Issuer: "https://issuer.example.test"}
 	t.Setenv("PLATFORM_PERSONAL_TOKEN_KEY", "")
 	if d.configurePersonalTokens() == nil {
@@ -56,18 +76,18 @@ func TestDeliveryPersonalTokensRequirePrivateKey(t *testing.T) {
 	if err := d.configurePersonalTokens(); err != nil {
 		t.Fatal(err)
 	}
-	first := tokenSecret("tenant", "token", "change")
+	first := sampleToken()
 	if err := d.configurePersonalTokens(); err != nil {
 		t.Fatal(err)
 	}
-	if tokenSecret("tenant", "token", "change") != first {
+	if sampleToken() != first {
 		t.Fatal("same key does not retain token")
 	}
 	t.Setenv("PLATFORM_PERSONAL_TOKEN_KEY", strings.Repeat("b", 32))
 	if err := d.configurePersonalTokens(); err != nil {
 		t.Fatal(err)
 	}
-	if tokenSecret("tenant", "token", "change") == first {
+	if sampleToken() == first {
 		t.Fatal("another host key accepts the token")
 	}
 }
@@ -80,7 +100,7 @@ func TestRecoveredPersonalTokenDoesNotReopenSecretWindow(t *testing.T) {
 	}
 	defer journal.Close()
 	compose := func() *Tenant {
-		tn, err := NewTenant("token-recovery", NewConsole("token-recovery", Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}))
+		tn, err := NewTenant("token-recovery", newConsole("token-recovery", platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,7 +113,7 @@ func TestRecoveredPersonalTokenDoesNotReopenSecretWindow(t *testing.T) {
 	live.attachJournal(ctx, journal)
 	admin, _ := live.Member("admin")
 	now := time.Now().UTC()
-	sub := &pb.Submission{TenantId: live.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: "issue", Target: &pb.EntityRef{Type: TokenType, Id: "ci"}, Schema: &pb.SchemaRef{Name: SchemaTokenIssue, Version: 1}, Payload: []byte(`{"label":"CI"}`)}
+	sub := &pb.Submission{TenantId: live.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: "issue", Target: &pb.EntityRef{Type: controlowner.TokenType, Id: "ci"}, Schema: &pb.SchemaRef{Name: controlowner.SchemaTokenIssue, Version: 1}, Payload: []byte(`{"label":"CI"}`)}
 	if _, err := live.Submit(admin, sub, now); err != nil {
 		t.Fatal(err)
 	}

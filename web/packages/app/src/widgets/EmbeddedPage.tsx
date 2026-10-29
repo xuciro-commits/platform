@@ -1,3 +1,4 @@
+import {decodePage} from "../pageui/wire";
 import {pageUIManifest} from "../pageui/manifest";
 import type * as PageUI from "../pageui/types";
 import {createContext,useContext,useEffect,useRef,useMemo,useState,type ReactNode} from "react";
@@ -20,7 +21,7 @@ type Props={config?:PageUI.PageEmbedding;title?:string;values:Record<string,Vari
 export function EmbeddedPageRenderer(props:Props){const host=useHost();return <EmbeddedSurface key={JSON.stringify([props.scope,host.source.scope,props.config,Object.entries(props.config?.inputs??{}).map(([id,v])=>[id,v.variable?props.values[v.variable]:v.literal])])} {...props}/>;}
 function EmbeddedSurface({config,title,values,scope,live,enabled=true,readCurrent=true,onReturn}:Props){
  const {client,source}=useHost(),depth=useContext(EmbeddingDepth),budget=useContext(BudgetContext),e=config,lease=useRef(true),activity=useRef({enabled,readCurrent,onReturn}),owner=useRef({}),envelope=useRef<{key:string;value:{version:number;values:Record<string,unknown>}}|undefined>(undefined),[reserved,setReserved]=useState(false);activity.current={enabled,readCurrent,onReturn};useEffect(()=>{lease.current=true;return()=>{lease.current=false;};},[]);
- const result=useQuery({queryKey:["page-content",source.scope,e?.page,e?.contentVersion],enabled:!!e&&depth<limits.maxDepth&&readCurrent,queryFn:()=>client.pageContent(e!.page.ref,e!.contentVersion)});
+ const result=useQuery({queryKey:["page-content",source.scope,e?.page,e?.contentVersion],enabled:!!e&&depth<limits.maxDepth&&readCurrent,queryFn:async()=>{const result=await client.pageContent(e!.page.ref,e!.contentVersion);return {...result,page:result.page&&decodePage(result.page)};}});
  useEffect(()=>{if(!result.data?.page||!budget)return;const granted=budget.reserve(owner.current,pageEmbeddingCost(result.data.page));setReserved(granted);return()=>{budget.release(owner.current);setReserved(false);};},[result.data?.page,budget]);
  if(!e||depth>=limits.maxDepth)return <Panel role="alert">{t("Embedded page depth or bindings are unavailable.")}</Panel>;
  if(!readCurrent||result.isPending)return <p role="status">{t("Loading original embedded page…")}</p>;

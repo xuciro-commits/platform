@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func (s definitionStock) Manifest() platform.Manifest { return s.manifest }
 
 func TestDefinitions(t *testing.T) {
 	tn := stockTenant(t)
-	console := tn.app(PlatformApp).(*Console)
+	console := tn.app(controlowner.PlatformApp).(*controlowner.Console)
 	clerk, _ := console.MemberBySubject("ana")
 	line, _ := console.MemberBySubject("op")
 	find := func(defs []platform.Definition, ref platform.AssetRef) *platform.Definition {
@@ -133,8 +134,8 @@ func TestDefinitionValidation(t *testing.T) {
 	})
 	t.Run("directory reference submission", func(t *testing.T) {
 		at := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
-		tn := composeTenant(t, "directory-records", []Seat{seatOf("admin", "core:steward", "enterprise:admin")}, core.New("directory-records"), enterprise.New("directory-records", platform.OrgSeed{}))
-		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "plant", map[string]any{"name": "Plant", "stereotype": enterprise.Location}, at)
+		tn := composeTenant(t, "directory-records", []platform.Seat{seatOf("admin", "core:steward", "enterprise:admin")}, core.New("directory-records"), enterprise.New("directory-records", platform.OrgSeed{}))
+		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementAdd, enterprise.ElementType, "plant", map[string]any{"name": "Plant", "stereotype": enterprise.Organization}, at)
 		decide(t, tn, "admin", core.ID, "core.site.create", core.SiteType, "warehouse", map[string]any{"name": "Warehouse", "code": "W1", "kind": "warehouse", "place": "plant"}, at)
 		decide(t, tn, "admin", enterprise.ID, enterprise.SchemaElementClose, enterprise.ElementType, "plant", map[string]any{"until": "2026-10-09", "reason": "Plant retired"}, at)
 		if el, ok := tn.directory.Element("plant", "2026-10-09"); ok {
@@ -251,7 +252,7 @@ func TestPageDefinitions(t *testing.T) {
 	if err := tn.registerDefinitions(); err != nil {
 		t.Fatal(err)
 	}
-	console := tn.app(PlatformApp).(*Console)
+	console := tn.app(controlowner.PlatformApp).(*controlowner.Console)
 	clerk, _ := console.MemberBySubject("ana")
 	line, _ := console.MemberBySubject("op")
 	pageFor := func(m platform.Member) *platform.Page {
@@ -262,10 +263,10 @@ func TestPageDefinitions(t *testing.T) {
 		}
 		return nil
 	}
-	if got := pageFor(clerk); got == nil || len(got.Actions) != 1 || got.Actions[0].Name != "stock.item.create" {
+	if got := pageFor(clerk); got == nil || len(pageActions(got)) != 1 || pageActions(got)[0].Name != "stock.item.create" {
 		t.Fatalf("clerk page grants: %+v", got)
 	}
-	if got := pageFor(line); got == nil || len(got.Actions) != 1 || got.Actions[0].Name != "stock.item.count" {
+	if got := pageFor(line); got == nil || len(pageActions(got)) != 1 || pageActions(got)[0].Name != "stock.item.count" {
 		t.Fatalf("line page grants: %+v", got)
 	}
 	if got := pageFor(platform.Member{Roles: map[string]string{}}); got != nil {

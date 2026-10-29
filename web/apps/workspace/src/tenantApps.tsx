@@ -1,14 +1,14 @@
+import type {Definition as WorkspaceDefinition} from "@platform/app";
 // Applications a tenant hands to its people. One of them is not a
 // code package: it is a name, an icon and pages from the host's definition
 // registry, which the workspace turns into an ordinary entry in the launcher
 // and the navigation — beside the apps that came as code, with the same shell.
 import type { AppUI } from "@platform/app";
-import type { Api } from "@platform/kernel";
 import { t, type NavSection, type Route } from "@platform/ui";
 import { BarChart3, LayoutDashboard } from "lucide-react";
 import { IconGlyph } from "@platform/ui";
 
-type Definition = Api.Definition;
+type Definition = WorkspaceDefinition;
 export { pageApplication } from "./host/applications";
 
 /**

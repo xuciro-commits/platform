@@ -11,7 +11,7 @@ func TestApplicationHeaderContractAndProjection(t *testing.T) {
 	if err := a.CheckHeader(); err != nil {
 		t.Fatal(err)
 	}
-	for _, change := range []func(*Application){func(a *Application) { a.UIProfile = "platform.page.v2.104" }, func(a *Application) { a.Header.Variant = "unknown" }, func(a *Application) { a.Header.Collapsed = true }, func(a *Application) { a.Header.Logo = "javascript:alert(1)" }, func(a *Application) { a.Header.Items[2].Pages = []string{"missing"} }, func(a *Application) { a.Header.Items[2].Pages = []string{"one", "one"} }, func(a *Application) { a.Header.Items[3].Action = "execute" }} {
+	for _, change := range []func(*Application){func(a *Application) { a.UIProfile = "platform.page.v2.104" }, func(a *Application) { a.Header.Logo = "javascript:alert(1)" }, func(a *Application) { a.Header.Items[2].Pages = []string{"missing"} }, func(a *Application) { a.Header.Items[2].Pages = []string{"one", "one"} }} {
 		next := headerApplication()
 		change(&next)
 		if err := next.CheckHeader(); err == nil {

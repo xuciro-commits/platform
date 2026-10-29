@@ -3,7 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"testing"
 	"time"
 
@@ -69,7 +70,7 @@ func (p *resultProjection) ApplyObserved(raw json.RawMessage) error {
 
 func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.T) {
 	compose := func() *Tenant {
-		tn, err := NewTenant("observation", NewConsole("observation", Seat{Subjects: []string{"ana"},
+		tn, err := NewTenant("observation", newConsole("observation", platform.Seat{Subjects: []string{"ana"},
 			Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}),
 			newStock("observation"), &resultProjection{ledger: platform.NewLedger("observation", "projection", platform.NewCatalog())})
 		if err != nil {
@@ -83,7 +84,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	var entries []Entry
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
-		if len(live.app("projection").(*resultProjection).notes) != 0 || len(live.notices.all) != 0 {
+		if len(live.app("projection").(*resultProjection).notes) != 0 || len(noticeValues(live)) != 0 {
 			t.Fatal("an observer projection or notice escaped before append")
 		}
 		if fail {
@@ -103,9 +104,9 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	if _, err := live.Submit(ana, sub, at); err != nil {
 		t.Fatal(err)
 	}
-	batch, _, err := resultformat.DecodeBatch(entries[0].Body)
+	batch, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(batch.Observations) != 1 || !batch.Decisions[0].Event.Observed ||
-		len(live.notices.all) != 1 || len(live.app("projection").(*resultProjection).notes) != 1 {
+		len(noticeValues(live)) != 1 || len(live.app("projection").(*resultProjection).notes) != 1 {
 		t.Fatalf("observer result missing: %+v %v", batch, err)
 	}
 	CheckReplay(t, live, entries, compose)
@@ -117,7 +118,7 @@ func TestAcceptedObservationsArePrivateAndRecoveredWithoutReplanning(t *testing.
 	}
 	// A late invalid projection cannot advance even the earlier valid ledger.
 	batch.Observations[0].Body = json.RawMessage(`{}`)
-	batch.Digest, _ = resultformat.DigestBatch(batch)
+	batch.Digest, _ = acceptedformat.DigestBatch(batch)
 	bad, _ := json.Marshal(batch)
 	empty := compose()
 	before = snapshot(empty)

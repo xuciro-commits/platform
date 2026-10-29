@@ -3,19 +3,20 @@ package platformserver
 import (
 	"context"
 	"fmt"
-	"platformserver/internal/records"
+	"platformserver/engine/resources"
+	"platformserver/kernel/records"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
 type orphanRetryFiles struct {
-	*memoryFiles
+	*datedInventoryFiles
 	key  string
 	fail bool
 }
@@ -25,15 +26,15 @@ func (s *orphanRetryFiles) Delete(ctx context.Context, key string) error {
 		s.fail = false
 		return fmt.Errorf("object store unavailable")
 	}
-	return s.memoryFiles.Delete(ctx, key)
+	return s.datedInventoryFiles.Delete(ctx, key)
 }
 
 func TestContinuousOrphanCollectionPreservesHistoryAndRecoveryBoundary(t *testing.T) {
 	const tenant, id = "orphan-gc", "frames.window:source"
 	now := time.Now().UTC()
-	files := &orphanRetryFiles{memoryFiles: &memoryFiles{}}
+	files := &orphanRetryFiles{datedInventoryFiles: &datedInventoryFiles{MemoryFiles: &resources.MemoryFiles{}, modified: map[string]time.Time{}}}
 	source := newFrameSource(tenant, 2<<20)
-	live := composeTenant(t, tenant, []Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), flow.New(tenant), source)
+	live := composeTenant(t, tenant, []platform.Seat{seatOf("member", "frames:operator", "flow:admin")}, work.New(tenant), automation.New(tenant), source)
 	live.Files = files
 	decide(t, live, "member", "frames", "frames.source.start", "frames.source", "source", map[string]any{}, now)
 	feed := func(key, previous string) platform.FlowStateArtifact {
@@ -74,12 +75,10 @@ func TestContinuousOrphanCollectionPreservesHistoryAndRecoveryBoundary(t *testin
 	}
 	newerKey, _ := frameStore.key(newer)
 	currentKey, _ := frameStore.key(current)
-	files.mu.Lock()
 	for _, key := range []string{oldKey, currentKey, orphanKey} {
 		files.modified[key] = now.Add(-48 * time.Hour)
 	}
 	files.modified[newerKey] = now.Add(-30 * time.Minute)
-	files.mu.Unlock()
 	if err := live.collectUnacceptedFlowArtifacts(context.Background(), now); err != nil {
 		t.Fatal(err)
 	}
@@ -120,12 +119,10 @@ func TestContinuousOrphanCollectionPreservesHistoryAndRecoveryBoundary(t *testin
 		t.Fatal(err)
 	}
 	badKey, _ := frameStore.key(bad)
-	files.mu.Lock()
 	files.modified[badKey] = now.Add(-48 * time.Hour)
-	files.mu.Unlock()
-	for _, unavailable := range []FileStore{
-		unavailableInventoryFiles{memoryFiles: files.memoryFiles},
-		badCursorInventoryFiles{memoryFiles: files.memoryFiles, key: badKey},
+	for _, unavailable := range []platform.FileStore{
+		unavailableInventoryFiles{MemoryFiles: files.MemoryFiles},
+		badCursorInventoryFiles{MemoryFiles: files.MemoryFiles, key: badKey},
 	} {
 		live.Files = unavailable
 		if err := live.collectUnacceptedFlowArtifacts(context.Background(), now); err == nil {
@@ -156,7 +153,7 @@ func TestContinuousOrphanCollectionPreservesHistoryAndRecoveryBoundary(t *testin
 }
 
 func TestFlowArtifactReferencesRetainOriginalRecoveryBytes(t *testing.T) {
-	store := flowFrameStore{tenant: "original", files: &memoryFiles{}}
+	store := flowFrameStore{tenant: "original", files: &resources.MemoryFiles{}}
 	ref := platform.FlowStateArtifact{Tenant: "original", Instance: "old", Version: 1, Ticket: strings.Repeat("a", 32), Digest: strings.Repeat("b", 64), Size: 2}
 	key, err := store.key(ref)
 	if err != nil {
@@ -180,8 +177,8 @@ func TestContinuousOrphanCollectionPreservesExactLargeVersions(t *testing.T) {
 	now := time.Now().UTC()
 	wideVersion := int64(9007199254740993)
 	version := int(wideVersion)
-	files := &memoryFiles{}
-	live := composeTenant(t, tenant, nil, work.New(tenant), flow.New(tenant), newFrameSource(tenant, 2<<20))
+	files := &datedInventoryFiles{MemoryFiles: &resources.MemoryFiles{}, modified: map[string]time.Time{}}
+	live := composeTenant(t, tenant, nil, work.New(tenant), automation.New(tenant), newFrameSource(tenant, 2<<20))
 	live.Files = files
 	store := flowFrameStore{tenant: tenant, files: files}
 	seal := func(label string) platform.FlowStateArtifact {
@@ -201,11 +198,10 @@ func TestContinuousOrphanCollectionPreservesExactLargeVersions(t *testing.T) {
 	if err := live.automation(platform.FlowApp, true).PutAt(now, "test.frame", x); err != nil {
 		t.Fatal(err)
 	}
-	files.mu.Lock()
-	for key := range files.m {
+	for _, file := range storedFiles(t, files) {
+		key := file.Key
 		files.modified[key] = now.Add(-48 * time.Hour)
 	}
-	files.mu.Unlock()
 	live.flowArtifactRecoveryComplete(now.Add(-time.Hour))
 	if err := live.collectUnacceptedFlowArtifacts(context.Background(), now); err != nil {
 		t.Fatal(err)
@@ -219,4 +215,21 @@ func TestContinuousOrphanCollectionPreservesExactLargeVersions(t *testing.T) {
 	if files.Exists(context.Background(), orphanKey) {
 		t.Fatal("unaccepted frame was not collected")
 	}
+}
+
+// The external inventory supplies object timestamps; retain real file bytes
+// while arranging the collector's original age/recovery boundary cases.
+type datedInventoryFiles struct {
+	*resources.MemoryFiles
+	modified map[string]time.Time
+}
+
+func (s *datedInventoryFiles) Inventory(ctx context.Context, prefix, cursor string, limit int) (platform.FileInventoryPage, error) {
+	page, err := s.MemoryFiles.Inventory(ctx, prefix, cursor, limit)
+	for i := range page.Files {
+		if modified, ok := s.modified[page.Files[i].Key]; ok {
+			page.Files[i].Modified = modified
+		}
+	}
+	return page, err
 }

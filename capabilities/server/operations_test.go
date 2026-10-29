@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	controlowner "platformserver/kernel/control"
 	"testing"
 	"time"
 
@@ -54,11 +55,11 @@ func (p probe) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 func TestOperations(t *testing.T) {
 	var journal []Entry
 	build := func() *Tenant {
-		dir := NewConsole("t-1",
-			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{PlatformApp: Admin}}},
-			Seat{Subjects: []string{"sup"}, Member: platform.Member{ID: "sup", Roles: map[string]string{}}},
-			Seat{Subjects: []string{"op"}, Member: platform.Member{ID: "op", Roles: map[string]string{}}},
-			Seat{Subjects: []string{"gw"}, Member: platform.Member{ID: "gw", Roles: map[string]string{}}})
+		dir := newConsole("t-1",
+			platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}},
+			platform.Seat{Subjects: []string{"sup"}, Member: platform.Member{ID: "sup", Roles: map[string]string{}}},
+			platform.Seat{Subjects: []string{"op"}, Member: platform.Member{ID: "op", Roles: map[string]string{}}},
+			platform.Seat{Subjects: []string{"gw"}, Member: platform.Member{ID: "gw", Roles: map[string]string{}}})
 		org := enterprise.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Sites", Kind: "site"}},
 			Units: []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}},
 			Edges: []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}},
@@ -76,13 +77,16 @@ func TestOperations(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	ana, sup, op, gw := member("ana"), member("sup"), member("op"), member("gw")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	n := 0
 	decide := func(m platform.Member, schema, typ, id, payload string) *kernel.Error {
 		n++
-		_, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: m.ID, Authority: PlatformApp, IdempotencyKey: fmt.Sprint("d", n),
+		_, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: m.ID, Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprint("d", n),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, now)
 		return err
 	}
@@ -100,10 +104,10 @@ func TestOperations(t *testing.T) {
 	if _, err := tn.Input(gw, "heartbeat", nil, now); err != nil {
 		t.Fatal(err)
 	}
-	if err := decide(op, SchemaConnectorOff, ConnectorType, "gw", "{}"); code(err) != "ERROR_CODE_POLICY_DENIED" {
+	if err := decide(op, controlowner.SchemaConnectorOff, controlowner.ConnectorType, "gw", "{}"); code(err) != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("an operator disabled a connector: %v", err)
 	}
-	if err := decide(ana, SchemaConnectorOff, ConnectorType, "gw", "{}"); err != nil {
+	if err := decide(ana, controlowner.SchemaConnectorOff, controlowner.ConnectorType, "gw", "{}"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tn.Input(gw, "p-feed", []byte("2"), now.Add(time.Second)); code(err) != "ERROR_CODE_POLICY_DENIED" {
@@ -113,7 +117,7 @@ func TestOperations(t *testing.T) {
 	if len(c) != 1 || c[0].Health != "disabled" || c[0].LastError == nil || c[0].LastError.Error != "ERROR_CODE_POLICY_DENIED" || c[0].LastSeen == nil {
 		t.Fatalf("connectors %+v", c)
 	}
-	if err := decide(ana, SchemaConnectorOn, ConnectorType, "gw", "{}"); err != nil {
+	if err := decide(ana, controlowner.SchemaConnectorOn, controlowner.ConnectorType, "gw", "{}"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tn.Input(gw, "p-feed", []byte("3"), now.Add(2*time.Second)); err != nil {
@@ -141,15 +145,15 @@ func TestOperations(t *testing.T) {
 		t.Fatal("a member without the platform role read its work")
 	}
 	first := inbox(sup)[1].ID
-	if err := decide(op, SchemaNotificationRead, NotificationType, first, "{}"); code(err) != "ERROR_CODE_POLICY_DENIED" {
+	if err := decide(op, controlowner.SchemaNotificationRead, controlowner.NotificationType, first, "{}"); code(err) != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("op marked sup's notification: %v", err)
 	}
-	if err := decide(sup, SchemaNotificationRead, NotificationType, first, "{}"); err != nil {
+	if err := decide(sup, controlowner.SchemaNotificationRead, controlowner.NotificationType, first, "{}"); err != nil {
 		t.Fatal(err)
 	}
 
 	// Settings are typed; an idle job advances only its local polling deadline.
-	if err := decide(ana, SchemaSettingSet, SettingType, "p/limit", `{"value":"many"}`); code(err) != "ERROR_CODE_INVALID_ARGUMENT" {
+	if err := decide(ana, controlowner.SchemaSettingSet, controlowner.SettingType, "p/limit", `{"value":"many"}`); code(err) != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("an integer setting took text: %v", err)
 	}
 	entries := len(journal)
@@ -157,7 +161,7 @@ func TestOperations(t *testing.T) {
 	if len(journal) != entries {
 		t.Fatal("an idle job wrote a scheduling-only result")
 	}
-	if err := decide(ana, SchemaSettingSet, SettingType, "p/limit", `{"value":"3"}`); err != nil {
+	if err := decide(ana, controlowner.SchemaSettingSet, controlowner.SettingType, "p/limit", `{"value":"3"}`); err != nil {
 		t.Fatal(err)
 	}
 	tn.Work(now.Add(time.Minute))
@@ -193,7 +197,7 @@ func TestOperations(t *testing.T) {
 	}
 	view := func(tn *Tenant) string {
 		c := tn.Connectors(now)
-		raw, _ := json.Marshal([]any{c[0].Disabled, c[0].LastSeen, tn.notices.all, tn.Settings()})
+		raw, _ := json.Marshal([]any{c[0].Disabled, c[0].LastSeen, noticeValues(tn), tn.Settings()})
 		return string(raw)
 	}
 	if view(again) != view(tn) {

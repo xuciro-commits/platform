@@ -1,5 +1,7 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"testing"
 
@@ -23,11 +25,11 @@ func TestCatalogCacheKeepsTheSelectedAuthorizationsPrincipalBoundary(t *testing.
 	services := DefaultRuntimeCapabilities()
 	services.Authorization = principalAuthorization{}
 	services.AuthModule.ID = "test.principal-authorization"
-	seats := []Seat{}
+	seats := []platform.Seat{}
 	for _, id := range []string{"builder", "restricted"} {
-		seats = append(seats, Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{system.ID: system.Builder}}})
+		seats = append(seats, platform.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{system.ID: system.Builder}}})
 	}
-	tenant, err := NewTenantWithCapabilities(systemscope.Tenant, services, NewConsole(systemscope.Tenant, seats...), NewAgents(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant, systemTestSource()))
+	tenant, err := newTestTenantWithCapabilities(systemscope.Tenant, services, newConsole(systemscope.Tenant, seats...), agentowner.New(systemscope.Tenant), ai.New(systemscope.Tenant), system.New(systemscope.Tenant, systemTestSource()))
 	if err != nil {
 		t.Fatal(err)
 	}

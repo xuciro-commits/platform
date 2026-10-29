@@ -1,15 +1,17 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/host"
+
 	"slices"
 	"strings"
 	"time"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // releaseCandidateLocked constructs a read-only release from actual owner
@@ -48,166 +50,48 @@ func (t *Tenant) releaseAssetsLocked(builderAssets []platform.ReleaseAsset, repl
 			code[definition.Ref] = true
 		}
 	}
-	out := slices.DeleteFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref.App == construction.ID && !code[asset.Ref] })
+	out := slices.DeleteFunc(available, func(asset platform.ReleaseAsset) bool { return asset.Ref.App == build.ID && !code[asset.Ref] })
 	return append(out, builderAssets...), nil
 }
 
 func (t *Tenant) codeReleaseAssetsLocked(app platform.App) ([]platform.ReleaseAsset, error) {
 	manifest := app.Manifest()
-	var available []platform.ReleaseAsset
-	for _, def := range t.definitions {
-		if def.Ref.App != manifest.ID || def.Source != "code" {
+	definitions := []platform.Definition{}
+	special := map[platform.AssetRef]platform.ReleaseAsset{}
+	for _, definition := range t.definitions {
+		if definition.Ref.App != manifest.ID || definition.Source != "code" {
 			continue
 		}
-		switch def.Ref.Kind {
+		definitions = append(definitions, definition)
+		var asset platform.ReleaseAsset
+		var err error
+		switch definition.Ref.Kind {
 		case platform.AssetInterface, platform.AssetProtocol, platform.AssetObservation:
-			asset, err := t.definitionAsset(def)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, asset)
-		case platform.AssetObject:
-			i := slices.IndexFunc(manifest.Entities, func(e platform.Entity) bool { return e.Type == def.Ref.Name })
-			if i < 0 || def.Entity == nil {
-				return nil, fmt.Errorf("code object %s has no owner declaration", def.Ref)
-			}
-			body, err := json.Marshal(codeObjectDescriptor(manifest.Entities[i], *def.Entity))
-			if err != nil {
-				return nil, fmt.Errorf("encode code object %s: %w", def.Ref, err)
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Body: body})
-		case platform.AssetAction:
-			action, ok := manifest.Actions.Action(def.Ref.Name)
-			if !ok {
-				return nil, fmt.Errorf("code action %s has no owner declaration", def.Ref)
-			}
-			body, err := json.Marshal(codeActionDescriptor(action))
-			if err != nil {
-				return nil, fmt.Errorf("encode code action %s: %w", def.Ref, err)
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Body: body})
-		case platform.AssetPropertyType:
-			if def.PropertyType == nil {
-				return nil, fmt.Errorf("property has no descriptor")
-			}
-			body, err := json.Marshal(def.PropertyType)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
-		case platform.AssetLinkType:
-			if def.LinkType == nil {
-				return nil, fmt.Errorf("code link type has no descriptor")
-			}
-			body, err := json.Marshal(def.LinkType)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
-		case platform.AssetQuery:
-			if def.Query == nil {
-				return nil, fmt.Errorf("code query %s has no owner declaration", def.Ref)
-			}
-			body, err := json.Marshal(def.Query)
-			if err != nil {
-				return nil, fmt.Errorf("encode code query %s: %w", def.Ref, err)
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Body: body})
+			asset, err = t.definitionAsset(definition)
 		case platform.AssetFlow:
-			if def.Flow == nil {
+			if definition.Flow == nil {
 				return nil, fmt.Errorf("native flow has no owner descriptor")
 			}
-			name := strings.TrimPrefix(def.Ref.Name, manifest.ID+".")
-			asset, err := t.nativeFlowAsset(app, name, def.Flow.Version)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, asset)
-		case platform.AssetFunction:
-			if def.Function == nil {
-				return nil, fmt.Errorf("code function %s has no owner declaration", def.Ref)
-			}
-			body, err := json.Marshal(def.Function)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
-				SourceVersion: manifest.Version, Body: body})
-		case platform.AssetAgent:
-			if def.Agent == nil {
-				return nil, fmt.Errorf("code agent has no owner descriptor")
-			}
-			body, err := json.Marshal(def.Agent)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Body: body})
-		case platform.AssetCompute:
-			if def.Operation == nil {
-				return nil, fmt.Errorf("compute %s has no owner declaration", def.Ref)
-			}
-			body, err := json.Marshal(def.Operation)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion, SourceVersion: manifest.Version, Body: body})
-		case platform.AssetPage:
-			if def.Page == nil {
-				return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
-			}
-			asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
-			if err != nil {
-				return nil, err
-			}
-			available = append(available, asset)
+			asset, err = t.nativeFlowAsset(app, strings.TrimPrefix(definition.Ref.Name, manifest.ID+"."), definition.Flow.Version)
+		default:
+			continue
 		}
-	}
-	pages := make([]string, len(manifest.Pages))
-	for i, page := range manifest.Pages {
-		pages[i] = page.Name
-	}
-	resources := []platform.AssetRef{}
-	for _, asset := range available {
-		if asset.Ref.Kind != platform.AssetPage && asset.Ref.Kind != platform.AssetApp {
-			resources = append(resources, asset.Ref)
+		if err != nil {
+			return nil, err
 		}
+		special[definition.Ref] = asset
 	}
-	asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
-		platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages, Resources: uniqueRefs(resources)})
+	assets, err := releaseowner.CodeReleaseAssets(manifest, definitions, special)
 	if err != nil {
 		return nil, err
 	}
-	available = append(available, asset)
-	for i := range available {
-		var err error
-		available[i], err = t.describeOwnedAsset(available[i])
+	for i := range assets {
+		assets[i], err = t.describeOwnedAsset(assets[i])
 		if err != nil {
 			return nil, err
 		}
 	}
-	return append(available, t.sharedSystemAssets(manifest.ID)...), nil
-}
-
-// A changed object or page can affect a page or application above it. Include
-// those owners in the preview roots so its ID and diff describe the actual
-// impacted closure, not just the object picked in the editor.
-func dependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []platform.AssetRef {
-	descriptors := make([]platform.Dependencies, 0, len(available))
-	for _, asset := range available {
-		descriptors = append(descriptors, platform.Dependencies{Ref: asset.Ref, Requires: asset.Requires, Provides: asset.Provides, Version: asset.SourceVersion})
-	}
-	graph, err := platform.NewDependencyGraph(descriptors)
-	if err != nil {
-		return []platform.AssetRef{ref}
-	}
-	roots, err := graph.Impact([]platform.AssetRef{ref})
-	if err != nil {
-		return []platform.AssetRef{ref}
-	}
-	return roots
+	return append(assets, t.sharedSystemAssets(manifest.ID)...), nil
 }
 
 func (t *Tenant) previewCandidateLocked(selected []platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (platform.ReleaseCandidate, error) {
@@ -217,7 +101,7 @@ func (t *Tenant) previewCandidateLocked(selected []platform.AssetRef, builderAss
 	}
 	var roots []platform.AssetRef
 	for _, ref := range selected {
-		roots = append(roots, dependentRoots(ref, available)...)
+		roots = append(roots, releaseowner.DependentRoots(ref, available)...)
 	}
 	for _, other := range additionalRoots {
 		if slices.ContainsFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == other }) &&
@@ -228,114 +112,49 @@ func (t *Tenant) previewCandidateLocked(selected []platform.AssetRef, builderAss
 	return t.candidateWithBindings(roots, available, selected)
 }
 
-// ReleasePreview is a builder-only comparison between the installed
-// development definition and one saved draft. The IDs are candidate IDs,
-// not published versions or an active release pointer.
-type ReleasePreview struct {
-	CurrentID   string              `json:"currentId,omitempty"`
-	CandidateID string              `json:"candidateId,omitempty"`
-	Included    []platform.AssetRef `json:"included"`
-	Added       []platform.AssetRef `json:"added"`
-	Removed     []platform.AssetRef `json:"removed"`
-	Changed     []platform.AssetRef `json:"changed"`
-	Diagnostic  string              `json:"diagnostic,omitempty"`
-	// Drafts is the exact saved-draft selection this review was built from, in
-	// the order it was selected: the provenance of a joint
-	// candidate. One draft keeping its installed dependency is not repeated.
-	Drafts []construction.JointDraftRef `json:"drafts,omitempty"`
-	// CandidateActions are owner-compiled draft inputs for builder test forms,
-	// not the installed member catalog or permission to execute.
-	CandidateActions []platform.Action `json:"candidateActions"`
-}
-
-type ReleasePreviewRequest struct {
-	ApplicationDrafts bool               `json:"applicationDrafts,omitempty"`
-	Kind              platform.AssetKind `json:"kind,omitempty"`
-	ID                string             `json:"id,omitempty"`
-	// Drafts selects several saved drafts as one joint candidate.
-	// A request carries either one kind/id or a non-empty drafts list.
-	Drafts []construction.JointDraftRef `json:"drafts,omitempty"`
-}
-
-type ReleaseSaveRequest struct {
-	Kind        platform.AssetKind           `json:"kind,omitempty"`
-	ID          string                       `json:"id,omitempty"`
-	Drafts      []construction.JointDraftRef `json:"drafts,omitempty"`
-	CandidateID string                       `json:"candidateId"`
-	Key         string                       `json:"key"`
-}
-
-// ReleaseDraftsRequest names one saved draft to list dependencies for.
-type ReleaseDraftsRequest struct {
-	Kind platform.AssetKind `json:"kind"`
-	ID   string             `json:"id"`
-}
-
-// ReleaseDraftClosure is the saved record drafts that must be delivered with
-// the chosen draft, in dependency order breadth-first from it.
-type ReleaseDraftClosure struct {
-	Drafts []construction.JointDraftRef `json:"drafts"`
-}
-
 // ReferencedDrafts answers which saved record drafts a chosen draft needs, so
 // a builder can select them together.
-func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id string) (ReleaseDraftClosure, error) {
+func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id string) (releaseowner.ReleaseDraftClosure, error) {
 	if err := t.admits(m); err != nil {
-		return ReleaseDraftClosure{}, err
+		return releaseowner.ReleaseDraftClosure{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{construction.Builder}, true)); err != nil {
-		return ReleaseDraftClosure{}, err
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/drafts/referenced", "read", []string{build.Builder}, true)); err != nil {
+		return releaseowner.ReleaseDraftClosure{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
-		return ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
+		return releaseowner.ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
 	drafts, err := owner.ReferencedDrafts(kind, id)
 	if err != nil {
-		return ReleaseDraftClosure{}, err
+		return releaseowner.ReleaseDraftClosure{}, err
 	}
 	if drafts == nil {
-		drafts = []construction.JointDraftRef{}
+		drafts = []build.JointDraftRef{}
 	}
-	return ReleaseDraftClosure{Drafts: drafts}, nil
-}
-
-type ReleaseSaved struct {
-	ID string `json:"id"`
-}
-
-// ReleaseActivateRequest moves the tenant's release pointer to a saved candidate.
-type ReleaseActivateRequest struct {
-	CandidateID string `json:"candidateId"`
-	Key         string `json:"key"`
-	UpgradeID   string `json:"upgradeId,omitempty"`
-}
-
-// ReleaseActive is the tenant's active release, empty before any activation.
-type ReleaseActive struct {
-	ID string `json:"id"`
+	return releaseowner.ReleaseDraftClosure{Drafts: drafts}, nil
 }
 
 // PreviewRelease checks authority before looking up the owner's unfiltered
 // records and before computing any digest or error path. It never changes the
 // installed definitions, persistent records, or active operator work.
-func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id string) (ReleasePreview, error) {
-	return t.PreviewReleaseDrafts(m, []construction.JointDraftRef{{Kind: kind, ID: id}})
+func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id string) (releaseowner.ReleasePreview, error) {
+	return t.PreviewReleaseDrafts(m, []build.JointDraftRef{{Kind: kind, ID: id}})
 }
 
 // PreviewReleaseDrafts compares one or several saved drafts with the installed
 // development definitions, and proves the resulting joint candidate installs
 // before it can be saved (/D2).
-func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []construction.JointDraftRef) (ReleasePreview, error) {
+func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef) (releaseowner.ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
-		return ReleasePreview{}, err
+		return releaseowner.ReleasePreview{}, err
 	}
-	c := platform.NewCaller(runtime{t}, m, construction.ID, false, false)
-	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{construction.Builder}, true)); err != nil {
-		return ReleasePreview{}, err
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "POST /v1/releases/preview", "read", []string{build.Builder}, true)); err != nil {
+		return releaseowner.ReleasePreview{}, err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -345,17 +164,17 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []construction.J
 		return reply, err
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App != construction.ID || asset.Ref.Kind != platform.AssetObject {
+		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
 			continue
 		}
-		var object construction.Object
+		var object build.Object
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
-			return ReleasePreview{}, fmt.Errorf("candidate object %s: %w", asset.Ref, err)
+			return releaseowner.ReleasePreview{}, fmt.Errorf("candidate object %s: %w", asset.Ref, err)
 		}
 		// A function/flow candidate retains its source object, but may not
 		// retain its create/edit action assets. Ask the original owner for
 		// those test inputs using that exact object image, not the live model.
-		owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
+		owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 		if !ok {
 			return reply, fmt.Errorf("construction owner is unavailable")
 		}
@@ -376,13 +195,13 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []construction.J
 // The candidate returned here is exactly what the builder saw in the
 // comparison. A later save must recompute it under the tenant lock and reject
 // a stale candidate ID rather than trusting bytes supplied by the browser.
-func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
-	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
+func (t *Tenant) previewReleaseLocked(drafts []build.JointDraftRef, member platform.Member) (releaseowner.ReleasePreview, platform.ReleaseCandidate, error) {
+	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
-		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
+		return releaseowner.ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
 	assets, diagnostic := owner.DraftReleaseAssetsMulti(drafts, member)
-	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
+	reply := releaseowner.ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
 	for _, draft := range drafts {
 		if draft.ID != "" && !slices.Contains(reply.Drafts, draft) {
 			reply.Drafts = append(reply.Drafts, draft)
@@ -397,7 +216,7 @@ func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, membe
 			if available, err := t.releaseAssetsLocked(nil, false); err == nil {
 				var installedRoots []platform.AssetRef
 				for _, prior := range assets.Priors {
-					for _, owner := range dependentRoots(prior, available) {
+					for _, owner := range releaseowner.DependentRoots(prior, available) {
 						if !slices.Contains(installedRoots, owner) {
 							installedRoots = append(installedRoots, owner)
 						}
@@ -415,10 +234,10 @@ func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, membe
 	if len(assets.Priors) > 0 {
 		available, err := t.releaseAssetsLocked(assets.Before, true)
 		if err != nil {
-			return ReleasePreview{}, platform.ReleaseCandidate{}, err
+			return releaseowner.ReleasePreview{}, platform.ReleaseCandidate{}, err
 		}
 		for _, prior := range assets.Priors {
-			for _, owner := range dependentRoots(prior, available) {
+			for _, owner := range releaseowner.DependentRoots(prior, available) {
 				if !slices.Contains(oldOwners, owner) {
 					oldOwners = append(oldOwners, owner)
 				}
@@ -426,7 +245,7 @@ func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, membe
 		}
 		current, err = t.candidateWithBindings(oldOwners, available, assets.Priors)
 		if err != nil {
-			return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
+			return releaseowner.ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
 		}
 		reply.CurrentID = current.ID
 		// Renames must still check surviving pages/apps that pointed at the
@@ -465,113 +284,25 @@ func (t *Tenant) previewReleaseLocked(drafts []construction.JointDraftRef, membe
 	return reply, candidate, err
 }
 
-// Code behavior is pinned by Manifest.Version rather than serialized Go
-// callbacks. This body preserves the complete declarative
-// security and lifecycle contract that JSON discovery intentionally omits.
-func codeObjectDescriptor(entity platform.Entity, info platform.EntityInfo) any {
-	type scope struct {
-		Levels       map[string]string `json:"levels"`
-		Default      string            `json:"default"`
-		Structure    string            `json:"structure"`
-		Unit         string            `json:"unit"`
-		Owner        string            `json:"owner"`
-		Participants bool              `json:"participants"`
-		Through      bool              `json:"through"`
-	}
-	type transition struct {
-		Name, Title, Description string
-		From, To                 []string
-		Roles                    []string
-		Payload                  []platform.Field
-		Capability               string
-		Approval                 any
-		Do, After                bool
-	}
-	type lifecycle struct {
-		Field, Initial string
-		States         []platform.State
-		Transitions    []transition
-	}
-	var steps *lifecycle
-	if entity.Lifecycle != nil {
-		steps = &lifecycle{Field: entity.Lifecycle.Field, Initial: entity.Lifecycle.Initial, States: entity.Lifecycle.States}
-		for _, step := range entity.Lifecycle.Transitions {
-			steps.Transitions = append(steps.Transitions, transition{
-				Name: step.Name, Title: step.Title, Description: step.Description, From: step.From, To: step.To,
-				Roles: step.Roles, Payload: step.Payload, Capability: step.Capability,
-				Approval: codeApprovalDescriptor(step.Approval), Do: step.Do != nil, After: step.After != nil,
-			})
-		}
-	}
-	return struct {
-		Type      string                `json:"type"`
-		Entity    platform.EntityInfo   `json:"entity"`
-		Scope     scope                 `json:"scope"`
-		Standard  platform.Standard     `json:"standard"`
-		Derived   []platform.Derivation `json:"derived"`
-		Withheld  string                `json:"withheld"`
-		Lifecycle *lifecycle            `json:"lifecycle"`
-	}{
-		Type: info.Type, Entity: info,
-		Scope: scope{Levels: entity.Scope.Levels, Default: entity.Scope.Default, Structure: entity.Scope.Structure,
-			Unit: entity.Scope.Unit, Owner: entity.Scope.Owner, Participants: entity.Scope.Participants != nil,
-			Through: entity.Scope.Through != nil},
-		Standard: entity.Standard, Derived: entity.Derived, Withheld: entity.Withheld, Lifecycle: steps,
-	}
-}
-
-func codeActionDescriptor(action platform.Action) any {
-	return struct {
-		Schema   string          `json:"schema"`
-		Target   string          `json:"target"`
-		Action   platform.Action `json:"action"`
-		Roles    []string        `json:"roles"`
-		Approval any             `json:"approval"`
-	}{Schema: action.Schema, Target: action.Target, Action: action, Roles: action.Roles,
-		Approval: codeApprovalDescriptor(action.Approval)}
-}
-
-func codeApprovalDescriptor(approval *platform.Approval) any {
-	if approval == nil {
-		return nil
-	}
-	type level struct {
-		Title, Structure, Role, AppRole, Member string
-		All                                     bool
-		HasWhen                                 bool
-		Due                                     int64
-		WorkingDays                             int
-	}
-	levels := make([]level, 0, len(approval.Levels))
-	for _, l := range approval.Levels {
-		levels = append(levels, level{Title: l.Title, Structure: l.Structure, Role: l.Role, AppRole: l.AppRole,
-			Member: l.Member, All: l.All, HasWhen: l.When != nil, Due: int64(l.Due), WorkingDays: l.WorkingDays})
-	}
-	return struct {
-		Pending, Rejected string
-		Levels            []level
-	}{Pending: approval.Pending, Rejected: approval.Rejected, Levels: levels}
-}
-
 // PreviewApplicationDrafts uses the same owner graph and candidate compiler
 // as execution. The builder gate precedes access to authoring inventories.
-func (t *Tenant) PreviewApplicationDrafts(m platform.Member, id string) (ReleasePreview, error) {
+func (t *Tenant) PreviewApplicationDrafts(m platform.Member, id string) (releaseowner.ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
-		return ReleasePreview{}, err
+		return releaseowner.ReleasePreview{}, err
 	}
-	if !m.Holds(construction.ID, construction.Builder) {
-		return ReleasePreview{}, fmt.Errorf("Only a builder can inspect application drafts")
+	if !m.Holds(build.ID, build.Builder) {
+		return releaseowner.ReleasePreview{}, fmt.Errorf("Only a builder can inspect application drafts")
 	}
 	t.mu.Lock()
-	owner, ok := t.app(construction.ID).(host.ConstructionDrafts)
+	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		t.mu.Unlock()
-		return ReleasePreview{}, fmt.Errorf("Construction owner is unavailable")
+		return releaseowner.ReleasePreview{}, fmt.Errorf("Construction owner is unavailable")
 	}
 	drafts, err := owner.ApplicationDrafts(id)
 	t.mu.Unlock()
 	if err != nil {
-		return ReleasePreview{}, err
+		return releaseowner.ReleasePreview{}, err
 	}
 	return t.PreviewReleaseDrafts(m, drafts)
 }

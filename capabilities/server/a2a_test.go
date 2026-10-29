@@ -1,11 +1,14 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
@@ -13,8 +16,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -37,11 +40,11 @@ func testA2A(t *testing.T, storage string) {
 	defer partner.Close()
 	var journal []Entry
 	build := func() *Tenant {
-		seat := func(id string, roles map[string]string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
+		seat := func(id string, roles map[string]string) platform.Seat {
+			return platform.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
-			seat("bo", map[string]string{"desk": "viewer"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
+		tn, err := NewTenant("t-1", newConsole("t-1", seat("ana", map[string]string{"desk": "clerk", controlowner.PlatformApp: controlowner.Admin, ai.ID: ai.Admin, platform.AgentApp: platform.AgentAdmin}),
+			seat("bo", map[string]string{"desk": "viewer"})), ai.New("t-1"), work.New("t-1"), automation.New("t-1"), agentowner.New("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,7 +59,10 @@ func testA2A(t *testing.T, storage string) {
 		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { journal = append(journal, e); return e.Body, nil }
 	}
 	tn.Secrets = func(string) ([]byte, bool) { return []byte("partner-token"), true }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	h := NewHost(Tokens(map[string]string{"ana-token": "ana", "bo-token": "bo"}), tn)
 	h.Now = func() time.Time { return now }
@@ -123,12 +129,12 @@ func testA2A(t *testing.T, storage string) {
 	}
 	do("ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
 	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/scripted", map[string]string{"access": "users"})
-	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "lm/scripted"})
+	do("ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/model", map[string]string{"value": "lm/scripted"})
 
 	// Unpublished, there is no card; published, the card names the JSON-RPC binding.
 	expect("unpublished", card("desk.triage")[:3], "404")
 	expect("unpublished call", state(send("ana-token", "x", "m-0", "")), "error -32001")
-	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/published", map[string]string{"value": "desk.triage"})
+	do("ana", controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "agent/published", map[string]string{"value": "desk.triage"})
 	var c struct {
 		Name       string
 		Interfaces []struct{ URL, ProtocolBinding, ProtocolVersion string } `json:"supportedInterfaces"`
@@ -167,32 +173,32 @@ func testA2A(t *testing.T, storage string) {
 
 	// Calling out: the scout's question goes to the partner's agent as an
 	// effect; its answer, journaled, resumes the run.
-	expect("a2a endpoint", do("ana", PlatformApp, SchemaEndpointAdd, EndpointType, "partner",
+	expect("a2a endpoint", do("ana", controlowner.PlatformApp, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "partner",
 		map[string]any{"kind": "a2a", "url": partner.URL, "secret": "partner", "effects": []string{"desk/lookup"}, "allowPrivate": true}), "ok")
-	do("ana", AgentApp, SchemaRunStart, RunType, "S1", map[string]any{"agent": "desk.scout", "goal": "scout the lead time"})
+	do("ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "S1", map[string]any{"agent": "desk.scout", "goal": "scout the lead time"})
 	think(4)
-	run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "S1")
+	run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "S1")
 	expect("scouted", run.State+" "+run.Result, `done after 1: sent desk/lookup to 1 receivers; waiting for the answer
 answered: {"product":"P-200","leadTimeDays":12}`)
 	expect("heard", fmt.Sprint(len(heard), strings.HasPrefix(heard[0], "1.0 Bearer partner-token "), strings.Contains(heard[0], `"messageId":"t-1:desk:lookup:S1:1:partner"`)), "1 true true")
 
 	// An endpoint whose tasks cannot be recalled holds what an agent sends;
 	// discarded, the run goes on with that.
-	expect("remove partner", do("ana", PlatformApp, SchemaEndpointRemove, EndpointType, "partner", map[string]any{}), "ok")
-	expect("public partner", do("ana", PlatformApp, SchemaEndpointAdd, EndpointType, "partner-2",
+	expect("remove partner", do("ana", controlowner.PlatformApp, controlowner.SchemaEndpointRemove, controlowner.EndpointType, "partner", map[string]any{}), "ok")
+	expect("public partner", do("ana", controlowner.PlatformApp, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "partner-2",
 		map[string]any{"kind": "a2a", "url": partner.URL, "effects": []string{"desk/lookup"}, "allowPrivate": true, "irreversible": true}), "ok")
-	expect("second scout", do("ana", AgentApp, SchemaRunStart, RunType, "S2", map[string]any{"agent": "desk.scout", "goal": "scout again"}), "ok")
+	expect("second scout", do("ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "S2", map[string]any{"agent": "desk.scout", "goal": "scout again"}), "ok")
 	think(2)
 	effects := tn.Effects(now)
 	held := slices.IndexFunc(effects, func(effect platform.Effect) bool { return effect.Run == "S2" })
 	if held < 0 {
-		run, _ := platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "S2")
+		run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "S2")
 		t.Fatalf("the second run has no held inquiry: %s", platform.Raw(run))
 	}
 	expect("held", effects[held].State+" "+effects[held].Run, "held S2")
-	do("ana", PlatformApp, SchemaEffectDiscard, EffectType, effects[held].ID, map[string]any{})
+	do("ana", controlowner.PlatformApp, controlowner.SchemaEffectDiscard, controlowner.EffectType, effects[held].ID, map[string]any{})
 	think(2)
-	run, _ = platform.Get[AgentRunRecord](tn.automation(AgentApp, false), "S2")
+	run, _ = platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "S2")
 	expect("discarded", fmt.Sprint(run.State, " ", strings.HasSuffix(run.Result, "discarded by ana"), " ", run.Signals[0].Kind, " ", len(heard)), "done true discarded 1")
 	if storage != "memory" {
 		CheckReplay(t, tn, journal, build)

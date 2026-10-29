@@ -1,7 +1,5 @@
 package platformserver
 
-import ()
-
 // The same lifecycle as TestApplicationLifecycleAcrossEnvironments, driven
 // through the HTTP surface a browser and the host console use:
 // builder routes for drafts, preview, save and activation; host-console routes

@@ -3,7 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"strconv"
@@ -433,53 +433,4 @@ func (t *Tenant) aggregateView(member platform.Member, et *entityType) *entityTy
 		view = &entityType{info: info, rows: view.rows, retainedProjection: view.retainedProjection}
 	}
 	return view
-}
-
-// Definitions and installation consult the original aggregate compiler so
-// grouping/measure semantics do not diverge into a second UI validator.
-func checkAggregateSection(section platform.Section, info platform.EntityInfo) bool {
-	if section.CheckHeatmap(info) != nil {
-		return false
-	}
-	et := entityType{info: info}
-	if _, ok := et.measure(section.Measure); !ok {
-		return false
-	}
-	if section.Widget == "chart" || (section.Widget == "pivot" || section.Widget == "heatmap") {
-		if _, ok := et.grouping(section.Group); !ok {
-			return false
-		}
-	}
-	if (section.Widget == "pivot" || section.Widget == "heatmap") && section.ColumnGroup != "" {
-		if section.ColumnGroup == section.Group {
-			return false
-		}
-		if _, ok := et.grouping(section.ColumnGroup); !ok {
-			return false
-		}
-	}
-	if section.Widget == "chart" {
-		mark := section.Mark
-		if mark == "" {
-			mark = "bar"
-		}
-		switch mark {
-		case "bar":
-		case "line", "area":
-			name, unit, ok := strings.Cut(section.Group, ":")
-			f, exists := info.Field(name)
-			if !ok || !slices.Contains([]string{"day", "week", "month", "year"}, unit) || name != "created" && name != "changed" && (!exists || f.Type != "date" && f.Type != "datetime") {
-				return false
-			}
-		case "arc":
-			op, name, _ := strings.Cut(section.Measure, ":")
-			f, _ := info.Field(name)
-			if op != "count" && op != "sum" || f.Type == "money" {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	return true
 }

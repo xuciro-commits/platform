@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -8,24 +8,23 @@ import (
 	"strings"
 	"testing"
 
-	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
 func TestOneRuleAcrossBusinessFaces(t *testing.T) {
 	tn := builderTenant(t, "rule-language")
 	rule := platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("boolean", "capable"), platform.ExprReference("boolean", "safe")}}
-	publishObject(t, tn, "builder", "EQUIPMENT", map[string]any{"name": "equipment", "title": "Equipment", "fields": []construction.Field{{Name: "capable", Title: "Capable", Type: "boolean"}, {Name: "safe", Title: "Safe", Type: "boolean"}, {Name: "allowed", Title: "Allowed", Type: "boolean", FormulaExpr: &rule}}, "states": []construction.State{{Name: "ready", Title: "Ready"}}, "actions": []construction.Action{{Name: "start", Title: "Start", From: []string{"ready"}, Conditions: []construction.Condition{{Expr: &rule, Message: "Equipment must be capable and safe"}}}}}, txnAt)
-	table := construction.Table{Name: "permission", Title: "Permission", Inputs: []construction.TableColumn{{Name: "capable", Type: "boolean"}, {Name: "safe", Type: "boolean"}}, Outputs: []construction.TableColumn{{Name: "allowed", Type: "boolean"}}, Rows: []construction.TableRow{{Expressions: []platform.Expr{rule, platform.ExprLiteralValue("boolean", true)}, Then: []string{"true"}}}, Default: []string{"false"}}
-	decide(t, tn, "builder", construction.ID, "build.table.create", "build.table", "TABLE", map[string]any{"name": table.Name, "title": table.Title, "inputs": table.Inputs, "outputs": table.Outputs, "rows": table.Rows, "default": table.Default}, txnAt)
-	decide(t, tn, "builder", construction.ID, "build.table.publish", "build.table", "TABLE", map[string]any{}, txnAt)
+	publishObject(t, tn, "builder", "EQUIPMENT", map[string]any{"name": "equipment", "title": "Equipment", "fields": []build.Field{{Name: "capable", Title: "Capable", Type: "boolean"}, {Name: "safe", Title: "Safe", Type: "boolean"}, {Name: "allowed", Title: "Allowed", Type: "boolean", FormulaExpr: &rule}}, "states": []build.State{{Name: "ready", Title: "Ready"}}, "actions": []build.Action{{Name: "start", Title: "Start", From: []string{"ready"}, Conditions: []build.Condition{{Expr: &rule, Message: "Equipment must be capable and safe"}}}}}, txnAt)
+	table := build.Table{Name: "permission", Title: "Permission", Inputs: []build.TableColumn{{Name: "capable", Type: "boolean"}, {Name: "safe", Type: "boolean"}}, Outputs: []build.TableColumn{{Name: "allowed", Type: "boolean"}}, Rows: []build.TableRow{{Expressions: []platform.Expr{rule, platform.ExprLiteralValue("boolean", true)}, Then: []string{"true"}}}, Default: []string{"false"}}
+	decide(t, tn, "builder", build.ID, "build.table.create", "build.table", "TABLE", map[string]any{"name": table.Name, "title": table.Title, "inputs": table.Inputs, "outputs": table.Outputs, "rows": table.Rows, "default": table.Default}, txnAt)
+	decide(t, tn, "builder", build.ID, "build.table.publish", "build.table", "TABLE", map[string]any{}, txnAt)
 	page := platform.PageDocument{UIProfile: platform.PageUIProfile(), Variables: map[string]platform.PageVariable{"capable": {Type: "boolean", Scope: "page", Mode: "state", Initial: platform.Raw(true)}, "safe": {Type: "boolean", Scope: "page", Mode: "state", Initial: platform.Raw(true)}, "visible": {Type: "boolean", Scope: "page", Mode: "derived", Rule: &rule}}}
 	if err := page.CheckVariables(); err != nil {
 		t.Fatal(err)
 	}
 	for i, ok := range []bool{true, false} {
 		id := []string{"GOOD", "BAD"}[i]
-		decide(t, tn, "user", construction.ID, "build.equipment.create", "build.equipment", id, map[string]any{"capable": true, "safe": ok}, txnAt)
+		decide(t, tn, "user", build.ID, "build.equipment.create", "build.equipment", id, map[string]any{"capable": true, "safe": ok}, txnAt)
 		view, refusal := tn.RecordOf(memberOf(t, tn, "user"), "build.equipment", id, txnAt)
 		if refusal != nil {
 			t.Fatal(refusal)
@@ -37,13 +36,13 @@ func TestOneRuleAcrossBusinessFaces(t *testing.T) {
 			t.Fatalf("computed field differs: %s", raw)
 		}
 		if ok {
-			decide(t, tn, "user", construction.ID, "build.equipment.start", "build.equipment", id, map[string]any{}, txnAt)
+			decide(t, tn, "user", build.ID, "build.equipment.start", "build.equipment", id, map[string]any{}, txnAt)
 		} else {
-			if reason := refuse(t, tn, "user", construction.ID, "build.equipment.start", "build.equipment", id, map[string]any{}, txnAt); !strings.Contains(reason, "capable") {
+			if reason := refuse(t, tn, "user", build.ID, "build.equipment.start", "build.equipment", id, map[string]any{}, txnAt); !strings.Contains(reason, "capable") {
 				t.Fatal(reason)
 			}
 		}
-		out, err := tn.app(construction.ID).(*build.Build).Compute(context.Background(), "permission", platform.Raw(map[string]any{"capable": true, "safe": ok}))
+		out, err := tn.app(build.ID).(*build.Build).Compute(context.Background(), "permission", platform.Raw(map[string]any{"capable": true, "safe": ok}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,10 +65,10 @@ func TestOneRuleAcrossBusinessFaces(t *testing.T) {
 func TestStrictRuleFailureLeavesBusinessStateUntouched(t *testing.T) {
 	tn := builderTenant(t, "rule-language")
 	divide := platform.Expr{Op: "/", Kind: "decimal", Args: []platform.Expr{platform.ExprReference("decimal", "numerator"), platform.ExprReference("decimal", "denominator")}}
-	publishObject(t, tn, "builder", "RATIO", map[string]any{"name": "ratio", "title": "Ratio", "fields": []construction.Field{{Name: "numerator", Title: "Numerator", Type: "decimal"}, {Name: "denominator", Title: "Denominator", Type: "decimal"}, {Name: "value", Title: "Value", Type: "decimal", FormulaExpr: &divide}}}, txnAt)
+	publishObject(t, tn, "builder", "RATIO", map[string]any{"name": "ratio", "title": "Ratio", "fields": []build.Field{{Name: "numerator", Title: "Numerator", Type: "decimal"}, {Name: "denominator", Title: "Denominator", Type: "decimal"}, {Name: "value", Title: "Value", Type: "decimal", FormulaExpr: &divide}}}, txnAt)
 	before := txnState(tn)
 	for _, payload := range []map[string]any{{"numerator": 10.0}, {"numerator": 10.0, "denominator": 0.0}} {
-		reason := refuse(t, tn, "user", construction.ID, "build.ratio.create", "build.ratio", "REFUSED", payload, txnAt)
+		reason := refuse(t, tn, "user", build.ID, "build.ratio.create", "build.ratio", "REFUSED", payload, txnAt)
 		if !strings.Contains(reason, "missing") && !strings.Contains(reason, "zero") {
 			t.Fatal(reason)
 		}
@@ -87,16 +86,16 @@ func TestRuleMigrationRetainsFrozenPublicationBytes(t *testing.T) {
 	// Saving each legacy surface produces Expr while leaving supplied immutable
 	// publication bytes untouched. Restore applies accepted bytes without rules.
 
-	object := map[string]any{"name": "migrated", "title": "Migrated", "fields": []construction.Field{{Name: "base", Title: "Base", Type: "decimal"}, {Name: "total", Title: "Total", Type: "decimal", Formula: "base * 2"}}, "states": []construction.State{{Name: "ready", Title: "Ready"}}, "actions": []construction.Action{{Name: "go", Title: "Go", From: []string{"ready"}, Conditions: []construction.Condition{{Field: "base", Operator: ">", Value: "0", Message: "Positive base required"}}}}}
+	object := map[string]any{"name": "migrated", "title": "Migrated", "fields": []build.Field{{Name: "base", Title: "Base", Type: "decimal"}, {Name: "total", Title: "Total", Type: "decimal", Formula: "base * 2"}}, "states": []build.State{{Name: "ready", Title: "Ready"}}, "actions": []build.Action{{Name: "go", Title: "Go", From: []string{"ready"}, Conditions: []build.Condition{{Field: "base", Operator: ">", Value: "0", Message: "Positive base required"}}}}}
 	// Published is read-only: install the historical image through the original
 	// fixture/accepted-state lane, then only edit a live definition.
 
-	decide(t, tn, "builder", construction.ID, "build.object.create", construction.ObjectType, "MIGRATED", object, txnAt)
-	read, refusal := tn.RecordOf(memberOf(t, tn, "builder"), construction.ObjectType, "MIGRATED", txnAt)
+	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "MIGRATED", object, txnAt)
+	read, refusal := tn.RecordOf(memberOf(t, tn, "builder"), build.ObjectType, "MIGRATED", txnAt)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	var saved construction.Object
+	var saved build.Object
 	raw, _ := json.Marshal(read.Record)
 	if err := json.Unmarshal(raw, &saved); err != nil {
 		t.Fatal(err)
@@ -108,11 +107,11 @@ func TestRuleMigrationRetainsFrozenPublicationBytes(t *testing.T) {
 	if len(action.Conditions) != 0 || action.Transaction == nil || action.Transaction.Guard == nil || action.Transaction.Guard.Op != ">" || action.Transaction.Message != "Positive base required" {
 		t.Fatal("legacy condition was not moved into the business transaction guard")
 	}
-	table := map[string]any{"name": "cells", "title": "Cells", "inputs": []construction.TableColumn{{Name: "qty", Type: "number"}}, "outputs": []construction.TableColumn{{Name: "ok", Type: "boolean"}}, "rows": []construction.TableRow{{When: []string{"1..5"}, Then: []string{"true"}}}}
-	decide(t, tn, "builder", construction.ID, "build.table.create", construction.TableType, "CELLS", table, txnAt)
-	var tb construction.Table
+	table := map[string]any{"name": "cells", "title": "Cells", "inputs": []build.TableColumn{{Name: "qty", Type: "number"}}, "outputs": []build.TableColumn{{Name: "ok", Type: "boolean"}}, "rows": []build.TableRow{{When: []string{"1..5"}, Then: []string{"true"}}}}
+	decide(t, tn, "builder", build.ID, "build.table.create", build.TableType, "CELLS", table, txnAt)
+	var tb build.Table
 	if raw, _ := json.Marshal(func() any {
-		v, e := tn.RecordOf(memberOf(t, tn, "builder"), construction.TableType, "CELLS", txnAt)
+		v, e := tn.RecordOf(memberOf(t, tn, "builder"), build.TableType, "CELLS", txnAt)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -138,17 +137,17 @@ func TestRuleMigrationRetainsFrozenPublicationBytes(t *testing.T) {
 }
 
 func TestDeclaredRuleCollectionsRespectCallerScope(t *testing.T) {
-	tn := composeTenant(t, "scoped-rules", []Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:operator")}, build.New("scoped-rules"))
-	publishObject(t, tn, "builder", "JOB", map[string]any{"name": "job", "title": "Job", "fields": []construction.Field{{Name: "title", Title: "Title", Type: "text"}}, "states": []construction.State{{Name: "ready", Title: "Ready"}}, "access": []construction.Access{{Role: "operator", Read: "all", Create: true, Edit: true}}}, txnAt)
-	publishObject(t, tn, "builder", "CAP", map[string]any{"name": "capability", "title": "Capability", "fields": []construction.Field{{Name: "job", Title: "Job", Type: "reference", Ref: "build.job", Required: true}, {Name: "owner", Title: "Owner", Type: "text", Required: true}, {Name: "certified", Title: "Certified", Type: "boolean"}}, "scope": construction.ObjectScope{Owner: "owner"}, "access": []construction.Access{{Role: "operator", Read: "own", Create: true, Edit: true}}}, txnAt)
-	decide(t, tn, "builder", construction.ID, "build.query.create", construction.QueryType, "CAPQUERY", map[string]any{"name": "capabilities", "title": "Capabilities", "description": "Capabilities for a job", "object": "build.capability", "by": "job", "limit": 200}, txnAt)
-	decide(t, tn, "builder", construction.ID, "build.query.publish", construction.QueryType, "CAPQUERY", map[string]any{}, txnAt)
-	decide(t, tn, "operator", construction.ID, "build.job.create", "build.job", "JOB1", map[string]any{"title": "Job 1"}, txnAt)
+	tn := composeTenant(t, "scoped-rules", []platform.Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:operator")}, build.New("scoped-rules"))
+	publishObject(t, tn, "builder", "JOB", map[string]any{"name": "job", "title": "Job", "fields": []build.Field{{Name: "title", Title: "Title", Type: "text"}}, "states": []build.State{{Name: "ready", Title: "Ready"}}, "access": []build.Access{{Role: "operator", Read: "all", Create: true, Edit: true}}}, txnAt)
+	publishObject(t, tn, "builder", "CAP", map[string]any{"name": "capability", "title": "Capability", "fields": []build.Field{{Name: "job", Title: "Job", Type: "reference", Ref: "build.job", Required: true}, {Name: "owner", Title: "Owner", Type: "text", Required: true}, {Name: "certified", Title: "Certified", Type: "boolean"}}, "scope": build.ObjectScope{Owner: "owner"}, "access": []build.Access{{Role: "operator", Read: "own", Create: true, Edit: true}}}, txnAt)
+	decide(t, tn, "builder", build.ID, "build.query.create", build.QueryType, "CAPQUERY", map[string]any{"name": "capabilities", "title": "Capabilities", "description": "Capabilities for a job", "object": "build.capability", "by": "job", "limit": 200}, txnAt)
+	decide(t, tn, "builder", build.ID, "build.query.publish", build.QueryType, "CAPQUERY", map[string]any{}, txnAt)
+	decide(t, tn, "operator", build.ID, "build.job.create", "build.job", "JOB1", map[string]any{"title": "Job 1"}, txnAt)
 	for i, owner := range []string{"operator", "builder"} {
-		decide(t, tn, "builder", construction.ID, "build.capability.create", "build.capability", []string{"VISIBLE", "HIDDEN"}[i], map[string]any{"job": "JOB1", "owner": owner, "certified": i == 0}, txnAt)
+		decide(t, tn, "builder", build.ID, "build.capability.create", "build.capability", []string{"VISIBLE", "HIDDEN"}[i], map[string]any{"job": "JOB1", "owner": owner, "certified": i == 0}, txnAt)
 	}
 	expr := platform.Expr{Op: "all", Kind: "boolean", Agg: &platform.ExprAggregate{Source: "capabilities"}, In: &platform.Expr{Kind: "boolean", Ref: "item.certified"}}
-	spec := platform.RuleReadSpec{Object: "build.job", Collections: map[string]platform.RuleCollection{"capabilities": {App: construction.ID, Query: "capabilities", Version: 1, Object: "build.capability", Of: "$subject", Policy: "visible"}}}
+	spec := platform.RuleReadSpec{Object: "build.job", Collections: map[string]platform.RuleCollection{"capabilities": {App: build.ID, Query: "capabilities", Version: 1, Object: "build.capability", Of: "$subject", Policy: "visible"}}}
 	schema, err := platform.RuleSchema(expr, spec, tn.entity)
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +157,7 @@ func TestDeclaredRuleCollectionsRespectCallerScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, who := range []string{"operator", "builder"} {
-		caller := tn.caller(memberOf(t, tn, who), tn.app(construction.ID), false)
+		caller := tn.caller(memberOf(t, tn, who), tn.app(build.ID), false)
 		ctx, err := caller.RuleContext(expr, spec, tn.entity, map[string]any{"id": "JOB1"}, nil, txnAt)
 		if err != nil {
 			t.Fatal(err)
@@ -176,7 +175,7 @@ func TestDeclaredRuleCollectionsRespectCallerScope(t *testing.T) {
 		}
 	}
 	for _, who := range []string{"operator", "builder"} {
-		caller := tn.caller(memberOf(t, tn, who), tn.app(construction.ID), false)
+		caller := tn.caller(memberOf(t, tn, who), tn.app(build.ID), false)
 		ctx, err := caller.RuleContext(expr, spec, tn.entity, map[string]any{"id": "JOB1"}, nil, txnAt)
 		if err != nil {
 			t.Fatal(err)
@@ -206,7 +205,7 @@ func TestDeclaredRuleCollectionsRespectCallerScope(t *testing.T) {
 		}
 	}
 
-	spec.Collections["capabilities"] = platform.RuleCollection{App: construction.ID, Query: "capabilities", Version: 1, Object: "build.capability", Of: "$subject", Policy: "complete"}
+	spec.Collections["capabilities"] = platform.RuleCollection{App: build.ID, Query: "capabilities", Version: 1, Object: "build.capability", Of: "$subject", Policy: "complete"}
 	schema, err = platform.RuleSchema(expr, spec, tn.entity)
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +214,7 @@ func TestDeclaredRuleCollectionsRespectCallerScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	caller := tn.caller(memberOf(t, tn, "operator"), tn.app(construction.ID), false)
+	caller := tn.caller(memberOf(t, tn, "operator"), tn.app(build.ID), false)
 	ctx, err := caller.RuleContext(expr, spec, tn.entity, map[string]any{"id": "JOB1"}, nil, txnAt)
 	if err != nil {
 		t.Fatal(err)
@@ -226,10 +225,10 @@ func TestDeclaredRuleCollectionsRespectCallerScope(t *testing.T) {
 }
 func TestRulePathsDistinguishUnsetValuesFromWithheldFields(t *testing.T) {
 	tn := builderTenant(t, "optional-rule-path")
-	publishObject(t, tn, "builder", "SOURCE", map[string]any{"name": "optionalsource", "title": "Optional source", "fields": []construction.Field{{Name: "optional", Title: "Optional value", Type: "text"}, {Name: "optionalnumber", Title: "Optional number", Type: "integer"}, {Name: "private", Title: "Private value", Type: "text", Read: []string{"builder"}}, {Name: "privatecount", Title: "Private count", Type: "integer", Required: true, Read: []string{"builder"}}}}, txnAt)
-	publishObject(t, tn, "builder", "READER", map[string]any{"name": "optionalreader", "title": "Optional reader", "fields": []construction.Field{{Name: "source", Title: "Source", Type: "reference", Ref: "build.optionalsource"}}}, txnAt)
+	publishObject(t, tn, "builder", "SOURCE", map[string]any{"name": "optionalsource", "title": "Optional source", "fields": []build.Field{{Name: "optional", Title: "Optional value", Type: "text"}, {Name: "optionalnumber", Title: "Optional number", Type: "integer"}, {Name: "private", Title: "Private value", Type: "text", Read: []string{"builder"}}, {Name: "privatecount", Title: "Private count", Type: "integer", Required: true, Read: []string{"builder"}}}}, txnAt)
+	publishObject(t, tn, "builder", "READER", map[string]any{"name": "optionalreader", "title": "Optional reader", "fields": []build.Field{{Name: "source", Title: "Source", Type: "reference", Ref: "build.optionalsource"}}}, txnAt)
 	decide(t, tn, "builder", "build", "build.optionalsource.create", "build.optionalsource", "source", map[string]any{"privatecount": 0}, txnAt)
-	caller := tn.caller(memberOf(t, tn, "user"), tn.app(construction.ID), false)
+	caller := tn.caller(memberOf(t, tn, "user"), tn.app(build.ID), false)
 	raw, failure := caller.ReadRecord("build.optionalsource", "source", txnAt)
 	var values map[string]json.RawMessage
 	if failure != nil || json.Unmarshal(raw, &values) != nil {

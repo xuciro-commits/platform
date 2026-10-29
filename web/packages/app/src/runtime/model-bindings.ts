@@ -7,7 +7,7 @@ import type {EntityInfo} from '@platform/ui';
 export const modelBindingContract=pageUIManifest.runtime.modelBinding;
 export const modelFieldKey=(field:Api.FieldRef)=>(field.path??[field.name??'']).join('.');
 type Lookup=(type:string)=>EntityInfo|undefined;
-type ModelSection={widget:string;composite?:Api.PageComposite;model?:Api.ModelBinding;object?:string|Api.AssetRef;fields?:string[];relation?:string;parentSelection?:string;query?:string|Api.AssetRef};
+type ModelSection={widget:string;composite?:PageUI.PageComposite;model?:Api.ModelBinding;object?:string|Api.AssetRef;fields?:string[];relation?:string;parentSelection?:string;query?:string|Api.AssetRef};
 type Values=Record<string,unknown>;
 export function modelPort(value:unknown,path:string):unknown {
  let current=value;for(const name of path.split('.')){if(!current||typeof current!=='object')return;current=(current as Values)[name];}return current;

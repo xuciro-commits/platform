@@ -3,8 +3,11 @@ package ai
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"platformserver/internal/aistate"
+	"platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"strings"
 	"testing"
 	"time"
 )
@@ -110,5 +113,133 @@ func TestApplyUsageStateMatchesMeterAcrossDaysAndRetention(t *testing.T) {
 	}
 	if state.Limits["member"].DailyTokens != 123456 || len(state.Providers) != 1 || len(state.Models) != 1 {
 		t.Fatal("meter projection changed owner configuration")
+	}
+}
+
+// Rebuilding candidate state must choose the same preceding refusal rather
+// than whichever map entry happens to be visited first.
+func TestTrainingPreferenceUsesLatestComparablePrecedingRefusal(t *testing.T) {
+	at := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	for _, test := range []struct {
+		name     string
+		refusals []platform.AITrainingCandidate
+		want     string
+	}{
+		{name: "latest preceding refusal", refusals: []platform.AITrainingCandidate{
+			{ID: "older", At: at.Add(-2 * time.Minute), Rejected: map[string]json.RawMessage{"reply": json.RawMessage(`"older"`)}},
+			{ID: "latest", At: at.Add(-time.Minute), Rejected: map[string]json.RawMessage{"reply": json.RawMessage(`"latest"`)}},
+			{ID: "future", At: at.Add(time.Minute), Rejected: map[string]json.RawMessage{"reply": json.RawMessage(`"future"`)}},
+		}, want: `"latest"`},
+		{name: "future refusal cannot explain prior acceptance", refusals: []platform.AITrainingCandidate{
+			{ID: "future", At: at.Add(time.Minute), Rejected: map[string]json.RawMessage{"reply": json.RawMessage(`"future"`)}},
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			owner := New("tenant")
+			owner.trainingPolicies["reviewed"] = platform.AITrainingPolicy{ID: "reviewed", Revision: 1, Enabled: true, TrainingAllowed: true, ProviderAllowed: true, Fields: []string{"reply"}, RetainDays: 30, EffectiveAt: at.Add(-time.Hour)}
+			for _, refusal := range test.refusals {
+				refusal.Intent, refusal.Action, refusal.Definition, refusal.Authorization = "intent", "desk.answer", "definition", "same-grants"
+				refusal.Outcome, refusal.Policy, refusal.PolicyVersion = "rejected", "reviewed", 1
+				owner.trainingCandidates[refusal.ID] = refusal
+			}
+			owner.trainingHost = trainingEvidenceFixture{platform.AITrainingEvidence{Candidates: []platform.AITrainingCandidate{{ID: "accepted", At: at, Intent: "intent", Action: "desk.answer", Definition: "definition", Authorization: "same-grants", Outcome: "accepted", Chosen: map[string]json.RawMessage{"reply": json.RawMessage(`"correct"`)}}}}}
+			if refusal := owner.Listen(platform.Caller{}, platform.Event{}, nil, at); refusal != nil {
+				t.Fatal(refusal)
+			}
+			if got := string(owner.trainingCandidates["accepted"].Rejected["reply"]); got != test.want {
+				t.Fatalf("preference pair used %s; want %s", got, test.want)
+			}
+		})
+	}
+}
+
+type trainingEvidenceFixture struct{ evidence platform.AITrainingEvidence }
+
+func (f trainingEvidenceFixture) TrainingEvidence(platform.Event) platform.AITrainingEvidence {
+	return f.evidence
+}
+func (trainingEvidenceFixture) TrainingReadable(platform.Member, platform.AITrainingCandidate, time.Time) string {
+	return ""
+}
+
+func TestTrainingCandidateCapacityKeepsRecentEvidenceAndBoundsMetadata(t *testing.T) {
+	at := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	for _, test := range []struct {
+		name  string
+		fill  func(*AI)
+		check func(*testing.T, *AI)
+	}{
+		{name: "unconfigured metadata count", fill: func(owner *AI) {
+			for i := range trainingCandidatesKept + 1 {
+				id := fmt.Sprint(i)
+				owner.trainingCandidates[id] = platform.AITrainingCandidate{ID: id, At: at.Add(time.Duration(i) * time.Second), Evidence: "original/" + id}
+			}
+		}, check: func(t *testing.T, owner *AI) {
+			if len(owner.trainingCandidates) != trainingCandidatesKept || owner.trainingCandidates["0"].ID != "" || owner.trainingCandidates[fmt.Sprint(trainingCandidatesKept)].Evidence == "" {
+				t.Fatal("candidate capacity lost its newest facts or retained the oldest metadata")
+			}
+		}},
+		{name: "total content bytes", fill: func(owner *AI) {
+			payload, _ := json.Marshal(strings.Repeat("x", trainingCandidatesBytes/5))
+			for i := range 9 {
+				id := fmt.Sprint(i)
+				owner.trainingCandidates[id] = platform.AITrainingCandidate{ID: id, At: at.Add(time.Duration(i) * time.Second), Chosen: map[string]json.RawMessage{"reply": payload}}
+			}
+		}, check: func(t *testing.T, owner *AI) {
+			if len(owner.trainingCandidates) == 0 || len(owner.trainingCandidates) == 9 || owner.trainingCandidates["8"].ID == "" || owner.trainingCandidates["0"].ID != "" {
+				t.Fatal("byte capacity did not retain a bounded window of newest facts")
+			}
+		}},
+		{name: "oversized content preserves metadata", fill: func(owner *AI) {
+			payload, _ := json.Marshal(strings.Repeat("x", trainingCandidatesBytes))
+			owner.trainingCandidates["large"] = platform.AITrainingCandidate{ID: "large", At: at, Evidence: "original/change", Approved: true, QualityEvidence: "review", Chosen: map[string]json.RawMessage{"reply": payload}}
+		}, check: func(t *testing.T, owner *AI) {
+			candidate := owner.trainingCandidates["large"]
+			if candidate.Evidence != "original/change" || len(candidate.Chosen) > 0 || candidate.Approved {
+				t.Fatal("oversized content was retained or lost its original evidence reference")
+			}
+		}},
+		{name: "oversized source metadata does not block derivation", fill: func(owner *AI) {
+			owner.trainingCandidates["large"] = platform.AITrainingCandidate{ID: "large", At: at, Sources: map[string]uint32{strings.Repeat("x", trainingCandidatesBytes): 1}}
+		}, check: func(t *testing.T, owner *AI) {
+			if len(owner.trainingCandidates) != 0 {
+				t.Fatal("oversized metadata entered the candidate collection")
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			owner := New("tenant")
+			owner.trainingHost = trainingEvidenceFixture{}
+			test.fill(owner)
+			if refusal := owner.Listen(platform.Caller{}, platform.Event{}, nil, at); refusal != nil {
+				t.Fatal("candidate capacity changed business acceptance", refusal)
+			}
+			raw, err := json.Marshal(owner.trainingCandidates)
+			if err != nil || len(raw) > trainingCandidatesBytes {
+				t.Fatal("candidate JSON exceeds its byte capacity", len(raw), err)
+			}
+			test.check(t, owner)
+			image, err := owner.AcceptedState()
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := acceptedformat.Input{Version: 2, Kind: "input-result", Tenant: "tenant", App: ID, Name: "candidate-capacity", Member: "app:" + ID, At: at, Answer: json.RawMessage(`{}`), States: []acceptedformat.State{{App: ID, Image: image}}}
+			result.RequestHash, err = acceptedformat.InputHash(result.Tenant, result.App, result.Name, result.Member, result.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result.Key = "input:" + result.RequestHash
+			result.Digest, err = acceptedformat.DigestInput(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err = json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := acceptedformat.DecodeInput(raw); err != nil {
+				t.Fatal("bounded candidate state cannot fit the original accepted-result envelope", err)
+			}
+		})
 	}
 }

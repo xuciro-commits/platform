@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func TestAttachedJournalCommitFailureIsTenantLocal(t *testing.T) {
 				store := backend.open(t, id)
 				defer store.Close()
 				compose := func(id string) *Tenant {
-					return composeTenant(t, id, []Seat{seatOf("clerk", "stock:clerk")}, newStock(id))
+					return composeTenant(t, id, []platform.Seat{seatOf("clerk", "stock:clerk")}, newStock(id))
 				}
 				bad, good := compose(id), compose(neighborID)
 				for _, tenant := range []*Tenant{bad, good} {
@@ -109,7 +110,7 @@ func TestTenantRecoveryChecksOnlyItsStartupComposition(t *testing.T) {
 	}
 	defer store.Close()
 	compose := func(format, version string) *Tenant {
-		return composeTenant(t, "composition-recovery", []Seat{seatOf("clerk", "stock:clerk")},
+		return composeTenant(t, "composition-recovery", []platform.Seat{seatOf("clerk", "stock:clerk")},
 			&formattedStock{stock: newStock("composition-recovery"), format: format, version: version})
 	}
 	old := compose("stock.v1", "1")
@@ -153,9 +154,9 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	defer journal.Pool().Exec(ctx, `delete from journal where tenant=$1`, id)
 	defer journal.Pool().Exec(ctx, `delete from snapshots where tenant=$1`, id)
 	compose := func(id string) (*Tenant, error) {
-		return NewTenant(id, NewConsole(id,
-			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{PlatformApp: Admin, "stock": "clerk"}}},
-			Seat{Subjects: []string{"bob"}, Member: platform.Member{ID: "bob", Roles: map[string]string{"stock": "clerk"}}}),
+		return NewTenant(id, newConsole(id,
+			platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, "stock": "clerk"}}},
+			platform.Seat{Subjects: []string{"bob"}, Member: platform.Member{ID: "bob", Roles: map[string]string{"stock": "clerk"}}}),
 			newStock(id))
 	}
 	source, err := compose(id)

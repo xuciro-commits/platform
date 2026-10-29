@@ -49,8 +49,8 @@ export function register(lang: string, dictionary: Dictionary): void {
 }
 
 /** Translates English source text; `{name}` placeholders take `vars`. */
-export function t(text: string, vars?: Record<string, string | number>): string {
-  const out = dictionaries[current]?.[text] ?? text;
+export function t(text: string, vars?: Record<string, string | number>, resolved?: Readonly<Dictionary>): string {
+  const out = resolved?.[text] ?? dictionaries[current]?.[text] ?? text;
   return vars ? out.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)) : out;
 }
 

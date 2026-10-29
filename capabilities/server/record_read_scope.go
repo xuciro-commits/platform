@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -13,47 +13,25 @@ import (
 	"platformserver/platform"
 )
 
-// tenantLane is still a non-reentrant writer lock. A coordinated operation
-// owns one SQL snapshot until it leaves the lane; nested calls use the private
-// read methods rather than acquiring the public entry point again.
-type tenantLane struct {
-	lock   sync.Mutex
-	tenant *Tenant
-}
-
-func (l *tenantLane) Lock() { l.lockContext(context.Background()) }
-func (l *tenantLane) lockContext(ctx context.Context) {
-	l.lock.Lock()
-	if l.tenant != nil {
-		l.tenant.recordReadError = nil
-		l.tenant.openRecordRead(ctx)
-		if l.tenant.recordReadError == nil && !l.tenant.quarantined() {
-			l.tenant.recordReadError = l.tenant.applySystemDefinitionProjection()
-		}
+// beginRecordRead runs under the original lane before any coordinated read.
+func (t *Tenant) beginRecordRead(ctx context.Context) {
+	t.recordReadError = nil
+	t.openRecordRead(ctx)
+	if t.recordReadError == nil && !t.quarantined() {
+		t.recordReadError = t.applySystemDefinitionProjection()
 	}
-}
-func (l *tenantLane) Unlock() {
-	if l.tenant != nil {
-		l.tenant.closeRecordRead()
-	}
-	l.lock.Unlock()
 }
 
 func (t *Tenant) enableCurrentReadScopes() {
 	t.currentReadScopes = true
-	t.mu.tenant = t
+	t.mu.BindReadScope(t.beginRecordRead, t.closeRecordRead)
 }
 func (t *Tenant) openRecordRead(ctx context.Context) {
 	if !t.currentReadScopes || t.quarantined() {
 		return
 	}
 	t.recordReadError = nil
-	store := t.records
-	views, ok := store.historyStore.(journal.StateReadViews)
-	if !ok {
-		return
-	}
-	view, err := views.BeginStateRead(ctx, t.ID, store.appliedPosition)
+	view, err := t.records.current.Open(ctx)
 	if err != nil {
 		t.recordReadError = err
 		var mismatch *journal.StatePositionError
@@ -62,20 +40,20 @@ func (t *Tenant) openRecordRead(ctx context.Context) {
 		}
 		return
 	}
-	store.bindReadView(view)
-	t.installRuntimeHistory(view, view.Position)
+	if view != nil {
+		t.installRuntimeHistory(view, view.Position)
+	}
 }
 func (t *Tenant) closeRecordRead() {
 	if !t.currentReadScopes {
 		return
 	}
-	if t.records.currentPosition != nil && t.records.currentPosition() != t.records.appliedPosition {
-		t.quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", t.records.currentPosition(), t.records.appliedPosition))
+	if t.records.current.Position() != nil && t.records.current.Position()() != t.records.current.Applied() {
+		t.quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", t.records.current.Position()(), t.records.current.Applied()))
 	}
-	if view := t.records.readView; view != nil {
-		t.records.bindReadView(nil)
-		if store, ok := t.records.historyStore.(acceptedStateReader); ok {
-			t.installRuntimeHistory(store, t.records.currentPosition)
+	if view := t.records.current.Detach(); view != nil {
+		if store, ok := t.records.current.Backend().(acceptedStateReader); ok {
+			t.installRuntimeHistory(store, t.records.current.Position())
 		}
 		if err := view.Close(); err != nil && t.recordReadError == nil {
 			t.recordReadError = err
@@ -95,7 +73,7 @@ func recordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.E
 	return coordinatedRecordRead(t, ctx, read)
 }
 func coordinatedRecordRead[T any](t *Tenant, ctx context.Context, read func() (T, *kernel.Error)) (value T, refusal *kernel.Error) {
-	t.mu.lockContext(ctx)
+	t.mu.LockContext(ctx)
 	defer t.mu.Unlock()
 	defer func() {
 		if failure := recover(); failure != nil {

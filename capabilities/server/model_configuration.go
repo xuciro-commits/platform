@@ -6,7 +6,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/aigateway"
-	"platformserver/internal/acceptance"
+
 	"platformserver/platform"
 	"strconv"
 )
@@ -38,7 +38,7 @@ func (t *Tenant) ModelSelection(m platform.Member, purpose string) (ModelSelecti
 		if err != nil {
 			return out, err
 		}
-		app, key := modelPurposeSetting(purpose)
+		app, key := aigateway.PurposeSetting(purpose)
 		out.Default = t.setting(t.automation(app, false), key)
 		if resolved, _, err := t.resolveModel(purpose, "", platform.ModelOptions{}); err == nil {
 			out.ResolvedDefault = resolved.Model
@@ -59,7 +59,7 @@ func (t *Tenant) ModelSelection(m platform.Member, purpose string) (ModelSelecti
 			}
 			if m.Roles[platform.AIApp] == platform.AIAdmin {
 				for _, use := range []string{"generation", "agent", "embedding"} {
-					owner, setting := modelPurposeSetting(use)
+					owner, setting := aigateway.PurposeSetting(use)
 					if actual, _, _ := t.resolveModel(use, "", platform.ModelOptions{}); actual.Model == model.Name() {
 						choice.References = append(choice.References, owner+"/"+setting)
 					}
@@ -87,21 +87,10 @@ func (t *Tenant) ModelSelection(m platform.Member, purpose string) (ModelSelecti
 	})
 }
 
-func modelPurposeSetting(purpose string) (string, string) {
-	switch purpose {
-	case "agent":
-		return AgentApp, SettingAgentModel
-	case "embedding":
-		return platform.KnowledgeApp, platform.SettingKnowledgeEmbeddingModel
-	default:
-		return platform.AIApp, platform.AISettingAppModel
-	}
-}
-
 // Purpose defaults remain settings of the original app. The model owner owns
 // facts/defaults; consumers retain the resolved binding in their accepted work.
 func (t *Tenant) resolveModel(purpose, name string, override platform.ModelOptions) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
-	app, key := modelPurposeSetting(purpose)
+	app, key := aigateway.PurposeSetting(purpose)
 	if name == "" {
 		name = t.setting(t.automation(app, false), key)
 	}
@@ -130,14 +119,14 @@ func (t *Tenant) resolveModel(purpose, name string, override platform.ModelOptio
 }
 
 func (t *Tenant) checkModelSetting(id, value string) *kernel.Error {
-	if id == platform.AIApp+"/"+platform.AISettingMaxTokens || id == platform.AIApp+"/"+platform.AISettingDailyTokens || id == platform.AIApp+"/"+platform.AISettingPerMinute || id == AgentApp+"/"+SettingAgentDaily {
+	if id == platform.AIApp+"/"+platform.AISettingMaxTokens || id == platform.AIApp+"/"+platform.AISettingDailyTokens || id == platform.AIApp+"/"+platform.AISettingPerMinute || id == platform.AgentApp+"/"+platform.SettingAgentDaily {
 		n, err := strconv.Atoi(value)
 		if err != nil || n < 0 {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Token and call limits cannot be negative")
 		}
 	}
 	for _, purpose := range []string{"generation", "agent", "embedding"} {
-		app, key := modelPurposeSetting(purpose)
+		app, key := aigateway.PurposeSetting(purpose)
 		if id != app+"/"+key && id != app+"/"+key+"-options" {
 			continue
 		}
@@ -172,16 +161,6 @@ func (t *Tenant) checkModelSetting(id, value string) *kernel.Error {
 		return err
 	}
 	return nil
-}
-
-// Model quality evidence uses the same effective configuration identity in
-// evaluation, publication gates and their read-only readiness projections.
-func modelConfigurationDigest(model platform.AIModel, provider platform.AIProvider, binding *platform.AIModelBinding) (string, error) {
-	identity := []any{model, provider}
-	if binding != nil {
-		identity = append(identity, *binding)
-	}
-	return acceptance.Digest(identity)
 }
 
 func (t *Tenant) modelStage(binding platform.AIModelBinding, provider platform.AIProvider, stage string) (platform.AIModelBinding, *kernel.Error) {

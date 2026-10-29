@@ -25,9 +25,8 @@ import (
 // recalled. A question the agent asks is TASK_STATE_INPUT_REQUIRED; the
 // caller answers with a message on the task.
 const (
-	A2AVersion       = "1.0"
-	SettingPublished = "published"
-	a2aWait          = 60 * time.Second // SendMessage waits this long for a run to finish, unless returnImmediately
+	A2AVersion = "1.0"
+	a2aWait    = 60 * time.Second // SendMessage waits this long for a run to finish, unless returnImmediately
 )
 
 type a2aPart struct {
@@ -80,7 +79,7 @@ func (t *Tenant) published(agent string) bool {
 	if _, ok := t.agents.AgentDeclaration(agent); !ok {
 		return false
 	}
-	list := strings.Split(t.setting(t.automation(AgentApp, false), SettingPublished), ",")
+	list := strings.Split(t.setting(t.automation(platform.AgentApp, false), platform.SettingPublished), ",")
 	return slices.ContainsFunc(list, func(s string) bool { return strings.TrimSpace(s) == agent })
 }
 
@@ -117,7 +116,7 @@ func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]an
 }
 
 // taskOf is a run as an A2A task.
-func taskOf(run AgentRunRecord, question string) a2aTask {
+func taskOf(run platform.AgentRunRecord, question string) a2aTask {
 	var x a2aTask
 	x.ID, x.ContextID, x.Status.Timestamp = run.ID, run.ID, run.Changed.At
 	say := func(text string) *a2aMessage {
@@ -187,10 +186,10 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 		reply(nil, -32001, "no published agent "+agent)
 		return
 	}
-	run := func(id string) (AgentRunRecord, string, bool) {
+	run := func(id string) (platform.AgentRunRecord, string, bool) {
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		x, ok := platform.Get[AgentRunRecord](t.automation(AgentApp, false), id)
+		x, ok := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), id)
 		if !ok || x.OnBehalf != m.ID || x.Agent != agent {
 			return x, "", false
 		}
@@ -202,7 +201,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	}
 	decide := func(schema, typ, id, key string, payload any) error {
 		raw, _ := json.Marshal(payload)
-		app := AgentApp
+		app := platform.AgentApp
 		if typ == platform.WorkTaskType {
 			app = platform.WorkApp
 		}
@@ -232,7 +231,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 				reply(nil, -32001, "task not found")
 				return
 			}
-			if x.State != "waiting" || !strings.HasPrefix(x.Task, platform.WorkApp+":") && !strings.HasPrefix(x.Task, AgentApp+":") {
+			if x.State != "waiting" || !strings.HasPrefix(x.Task, platform.WorkApp+":") && !strings.HasPrefix(x.Task, platform.AgentApp+":") {
 				reply(nil, -32004, "the task is not waiting for input")
 				return
 			}
@@ -243,7 +242,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 		} else {
 			sum := sha256.Sum256([]byte(m.ID + "\x00" + p.Message.MessageID))
 			id = "A2A-" + strings.ToUpper(hex.EncodeToString(sum[:6]))
-			if err := decide(SchemaRunStart, RunType, id, "a2a:"+p.Message.MessageID, map[string]any{"agent": agent, "goal": p.Message.text(), "act": true}); err != nil &&
+			if err := decide(platform.SchemaRunStart, platform.RunType, id, "a2a:"+p.Message.MessageID, map[string]any{"agent": agent, "goal": p.Message.text(), "act": true}); err != nil &&
 				!strings.Contains(err.Error(), "CONFLICT") { // a resent message: the same task
 				reply(nil, -32603, err.Error())
 				return
@@ -277,7 +276,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 			reply(nil, -32002, "the task has ended")
 			return
 		}
-		if err := decide(SchemaRunCancel, RunType, x.ID, "a2a-cancel:"+x.ID, map[string]any{}); err != nil {
+		if err := decide(platform.SchemaRunCancel, platform.RunType, x.ID, "a2a-cancel:"+x.ID, map[string]any{}); err != nil {
 			reply(nil, -32603, err.Error())
 			return
 		}
@@ -384,6 +383,7 @@ func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect, authorizationHeader boo
 
 // answerOf is what an external agent answered, as an agent's tool reads it:
 // the artifacts' text and data, or the message's.
+
 func answerOf(o platform.Outcome) string {
 	var task a2aTask
 	var parts []string

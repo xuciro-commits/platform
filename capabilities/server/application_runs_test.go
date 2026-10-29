@@ -10,8 +10,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 	"platformserver/platform/authz"
 )
@@ -44,7 +44,7 @@ func TestApplicationRunsCurrentFlowFailures(t *testing.T) {
 			{Name: "reserve", Act: shopAct("reserve"), Undo: shopAct("release"), Next: "attempt"},
 			{Name: "attempt", NoRetry: true, Evaluate: failure},
 		}}
-		return composeTenant(t, "application-current-flow", []Seat{seatOf("ana", "shop:clerk", "flow:admin")}, work.New("application-current-flow"), flow.New("application-current-flow"), newShop("application-current-flow", retry, fault, undo))
+		return composeTenant(t, "application-current-flow", []platform.Seat{seatOf("ana", "shop:clerk", "flow:admin")}, work.New("application-current-flow"), automation.New("application-current-flow"), newShop("application-current-flow", retry, fault, undo))
 	}
 	tn := compose()
 	var entries []Entry
@@ -53,13 +53,13 @@ func TestApplicationRunsCurrentFlowFailures(t *testing.T) {
 		return entry.Body, nil
 	}
 	root := platform.AssetRef{App: "shop", Kind: platform.AssetApp, Name: "shop"}
-	read := func(tn *Tenant, id, state string, failed bool, now time.Time) ApplicationRun {
+	read := func(tn *Tenant, id, state string, failed bool, now time.Time) platform.ApplicationRun {
 		t.Helper()
-		page, err := tn.ApplicationRuns(memberOf(t, tn, "ana"), root, 0, 100, now, ApplicationRunFilter{Kind: "flow"})
+		page, err := tn.ApplicationRuns(memberOf(t, tn, "ana"), root, 0, 100, now, platform.ApplicationRunFilter{Kind: "flow"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		i := slices.IndexFunc(page.Runs, func(run ApplicationRun) bool { return run.ID == id })
+		i := slices.IndexFunc(page.Runs, func(run platform.ApplicationRun) bool { return run.ID == id })
 		if i < 0 || page.Runs[i].State != state || (page.Runs[i].Error != "") != failed {
 			t.Fatalf("%s current run: %+v", id, page)
 		}
@@ -79,14 +79,14 @@ func TestApplicationRunsCurrentFlowFailures(t *testing.T) {
 	if run := read(tn, "shop.recover:retry-one", "waiting", true, at); run.Node != "attempt" {
 		t.Fatalf("retry lost current step: %+v", run)
 	}
-	runJob(t, tn, flow.ID, "timers", at.Add(time.Second))
+	runJob(t, tn, automation.ID, "timers", at.Add(time.Second))
 	read(tn, "shop.recover:retry-one", "waiting", false, at.Add(time.Second))
 	decide(t, tn, "ana", "shop", "shop.order.place", "shop.order", "fault-one", map[string]any{"item": "ordinary"}, at.Add(time.Second))
 	tn.Work(at.Add(time.Second))
 	read(tn, "shop.handled:fault-one", "waiting", false, at.Add(time.Second))
 	for _, id := range []string{"shop.recover:retry-one", "shop.handled:fault-one"} {
-		instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), id)
-		decide(t, tn, "ana", flow.ID, flow.SchemaFlowSkip, flow.InstanceType, id, map[string]any{"token": instance.Tokens[0].ID}, at.Add(2*time.Second))
+		instance, _ := platform.Get[platform.FlowInstance](tn.automation(automation.ID, false), id)
+		decide(t, tn, "ana", automation.ID, automation.SchemaFlowSkip, automation.InstanceType, id, map[string]any{"token": instance.Tokens[0].ID}, at.Add(2*time.Second))
 		read(tn, id, "done", false, at.Add(2*time.Second))
 	}
 	decide(t, tn, "ana", "shop", "shop.order.place", "shop.order", "undo-done", map[string]any{"item": "ordinary"}, at.Add(2*time.Second))
@@ -95,11 +95,11 @@ func TestApplicationRunsCurrentFlowFailures(t *testing.T) {
 	read(tn, "shop.undo:undo-done", "compensated", true, at.Add(2*time.Second))
 	read(tn, "shop.undo:undo-stuck", "compensating", true, at.Add(2*time.Second))
 	for attempt := 1; attempt <= 4; attempt++ {
-		runJob(t, tn, flow.ID, "timers", at.Add(time.Duration(attempt)*time.Hour))
+		runJob(t, tn, automation.ID, "timers", at.Add(time.Duration(attempt)*time.Hour))
 	}
 	read(tn, "shop.undo:undo-stuck", "stuck", true, at.Add(4*time.Hour))
-	instance, _ := platform.Get[platform.FlowInstance](tn.automation(flow.ID, false), "shop.undo:undo-stuck")
-	decide(t, tn, "ana", flow.ID, flow.SchemaFlowSkip, flow.InstanceType, instance.ID, map[string]any{"token": instance.Tokens[0].ID}, at.Add(4*time.Hour))
+	instance, _ := platform.Get[platform.FlowInstance](tn.automation(automation.ID, false), "shop.undo:undo-stuck")
+	decide(t, tn, "ana", automation.ID, automation.SchemaFlowSkip, automation.InstanceType, instance.ID, map[string]any{"token": instance.Tokens[0].ID}, at.Add(4*time.Hour))
 	read(tn, instance.ID, "compensated", true, at.Add(4*time.Hour))
 	recovered := compose()
 	if err := recovered.Replay(entries); err != nil {
@@ -132,7 +132,7 @@ func TestApplicationRunsComputeParentSubject(t *testing.T) {
 		}}, Steps: []platform.Step{{Name: "calculate", Operation: &platform.OperationStep{Request: func(platform.Caller, *platform.Run) (platform.OperationRequest, *kernel.Error) {
 			return platform.OperationRequest{App: "shop", Name: "calculate", Inputs: platform.Raw(map[string]int{"value": 3})}, nil
 		}}}}}
-		return composeTenant(t, tenant, []Seat{seatOf("ana", "shop:clerk", "flow:member"), seatOf("admin", "shop:clerk", "flow:admin", "platform:admin")}, work.New(tenant), flow.New(tenant), &applicationRunsShop{newShop(tenant, process)})
+		return composeTenant(t, tenant, []platform.Seat{seatOf("ana", "shop:clerk", "flow:member"), seatOf("admin", "shop:clerk", "flow:admin", "platform:admin")}, work.New(tenant), automation.New(tenant), &applicationRunsShop{newShop(tenant, process)})
 	}
 	tn := compose()
 	var entries []Entry
@@ -143,10 +143,10 @@ func TestApplicationRunsComputeParentSubject(t *testing.T) {
 	decide(t, tn, "ana", "shop", "shop.order.place", "shop.order", "one", map[string]any{"item": "ordinary"}, at)
 	tn.Work(at)
 	root := platform.AssetRef{App: "shop", Kind: platform.AssetApp, Name: "shop"}
-	parent := flow.InstanceType + "/shop.calculate:one"
-	read := func(tn *Tenant, member, subject string, count int) ApplicationRunPage {
+	parent := automation.InstanceType + "/shop.calculate:one"
+	read := func(tn *Tenant, member, subject string, count int) platform.ApplicationRunPage {
 		t.Helper()
-		page, err := tn.ApplicationRuns(memberOf(t, tn, member), root, 0, 100, at, ApplicationRunFilter{Kind: "compute", Subject: subject})
+		page, err := tn.ApplicationRuns(memberOf(t, tn, member), root, 0, 100, at, platform.ApplicationRunFilter{Kind: "compute", Subject: subject})
 		if err != nil || page.Total != count {
 			t.Fatalf("%s parent-filtered calls: %+v %v", member, page, err)
 		}
@@ -175,8 +175,8 @@ func TestApplicationRunsComputeParentSubject(t *testing.T) {
 	read(recovered, "ana", parent, 2)
 	// Current source permission is still required, even for the member whose
 	// invocation and parent were readable when the intent was accepted.
-	tn.app(flow.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
-		return []authz.Policy{{ID: "deny-flow-source", Effect: "deny", Permission: flow.InstanceType + ".read"}}
+	tn.app(automation.ID).Manifest().Actions.UsePolicies(func() []authz.Policy {
+		return []authz.Policy{{ID: "deny-flow-source", Effect: "deny", Permission: automation.InstanceType + ".read"}}
 	})
 	if _, err := tn.ReadOperation(memberOf(t, tn, "ana"), call.ID); err == nil {
 		t.Fatal("revoked source remained readable")

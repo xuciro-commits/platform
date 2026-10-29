@@ -3,6 +3,7 @@ package organization
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func queryFixture() *Enterprise {
 	}}}
 }
 
-func idsOf(r EnterpriseQueryResult) []string {
+func idsOf(r platform.EnterpriseQueryResult) []string {
 	out := make([]string, len(r.Elements))
 	for i, e := range r.Elements {
 		out[i] = e.ID
@@ -31,7 +32,7 @@ func idsOf(r EnterpriseQueryResult) []string {
 func TestQuery(t *testing.T) {
 	e := queryFixture()
 	now := time.Date(2026, 10, 9, 17, 0, 0, 0, time.UTC)
-	joined := func(r EnterpriseQueryResult, err *kernel.Error) string {
+	joined := func(r platform.EnterpriseQueryResult, err *kernel.Error) string {
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,16 +104,16 @@ func TestSDK(t *testing.T) {
 	}
 	for _, want := range []string{
 		`export type EnterpriseStereotype =`,
-		`	| "ActualLocation"`,
-		`	| "InformationElement"`,
+		`	| "ActualOrganization"`,
+		`	| "ActualPost"`,
+		`	| "ActualPerson"`,
 		`	| "organization"`,
-		`	| "control"`,
 		`export const enterpriseWrites = [`,
 		`	"enterprise.element.add",`,
 		`	"enterprise.relationship.change",`,
 		`export type EnterpriseWrite = (typeof enterpriseWrites)[number];`,
 		`stereotype: EnterpriseStereotype;`,
-		`viewpoint: EnterpriseViewpoint;`,
+		`export type EnterpriseViewpoint =`,
 		`until: string;`,
 		`export type EnterpriseWritePayloads = {`,
 		`export type EnterpriseTenantLinkSavePayload = {`,
@@ -128,7 +129,7 @@ func TestSDK(t *testing.T) {
 	}
 	// One payload type per declared write, and required fields typed required:
 	// element.close's "until" is required, relationship.end's is optional.
-	for _, a := range declarations() {
+	for _, a := range directoryActions() {
 		if !strings.Contains(got, "export type "+payloadType(a.Schema)+" = {\n") {
 			t.Errorf("SDK() has no payload for %s", a.Schema)
 		}

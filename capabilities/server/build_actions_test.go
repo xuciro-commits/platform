@@ -1,7 +1,5 @@
 package platformserver
 
-import ()
-
 // States and actions a tenant gives its own object: lost
 // property found at a desk, handed back to whoever claims it, with the rules
 // the builder wrote checked in the decision and again in replay.

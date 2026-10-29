@@ -79,6 +79,16 @@ SFT 需要声明的质量判据或适格审核；“Schema 合法/规则接受�
 
 JSONL 导出采用版本化封套和独立清单，`format=sft` 对应脱敏上下文与正确资格下的 accepted payload，`format=dpo` 对应同一上下文下 chosen/rejected 及公开 critique；附 schema_digest、source_refs、policy_revision、quality_evidence 与 dataset identity。字段白名单只从原声明/数据使用策略选择，保留可追踪假名而非原人员身份。导出前执行当前读取、字段、来源、训练使用和供应方条款资格检查；不导出密钥、凭据、私有 `Protocol`/签名推理块或不可读值。下载过的文件无法在用户机器物理收回，撤销阻止未来导出并在清单标记，不宣称远程删除。
 
+### 本批实现的证据归属
+
+Agent运行、提议、函数规划/固定绑定/对话及原能力编译归`engine/agents`，模型候选评估归`studio/authoring`；关键词、向量索引与空间生命周期算法归`engine/knowledge`。根组合仅传入原来源读取、当前授权、原模型网关和结果接受的窄能力，不迁移记录权威或新增执行器。
+
+新的Agent运行与MCP工具写入先保存原Agent运行中的提议。`agent.tool.propose`和受管工具复用同一原动作声明与模拟；工具目录排除静态控制动作，工具身份不能确认提议。人员在原Agent运行页确认、修改或拒绝；确认仍调用原业务动作并重查来源、动作定义及原主体授权条件。旧`Acts=true`运行停止并交回原Work，只有旧输入重放保留历史解释。
+
+训练候选作为可重建派生最多保留1024条、序列化JSON总量不超过原接受结果预算的四分之一（256 KiB），按事件时间及稳定身份保留最近证据。单条内容超限时仅留原有脱敏元数据；元数据仍超限则跳过该候选，原接受及撤销历史不变，不引入默认保留天数。训练策略、候选、审核与撤销保存在原AI接受状态中；原异步Work监听接受事件，使用该事件的历史记录映像派生候选，不以稍后版本覆盖过去证据。自动偏好配对必须有相同原主体及授权条件摘要；原证据缺失或授权变化只保留候选。函数原调用保存授权摘要，采纳时条件变化不生成偏好对。当前来源修订、字段读取和动作定义也在审核及导出前复核。配对选择相同条件下时间最近的前序拒绝，以稳定身份处理同一时间的多条证据，不依赖map遍历顺序，也不把之后的拒绝倒配给更早的接受。
+
+静态AI配置的`training`分区提供策略、资格问题、质量审核、撤销与SFT/DPO下载；审核时可查看接受/拒绝字段、来源证据与修订，导出前显示当前格式的合格样本数。`GET /v1/ai/training/export`由原AI管理权限过滤资格，保存固定格式JSONL与清单到原租户文件制品存储；格式、内容和清单共同确定数据集摘要，返回同一封套供下载。默认不回填历史、不复制抄录、不上传训练、不调用模型。上述实现仍需最后集中检查与浏览器验收；场景描述不代表已经运行。
+
 ### 6. 文件删除、合并与目录收敛对照
 
 下表路径均相对 `capabilities/server/`；是审阅后的实施目标，不表示当前文件已经删除。带“合并”的旧文件在迁移完调用方、测试与历史读取后同批删除，不留转发垫片。删除文件数与净删代码量分别统计；移动和新增阶段/训练行为不能算作净删代码。
@@ -90,11 +100,11 @@ JSONL 导出采用版本化封套和独立清单，`format=sft` 对应脱敏上�
 | `model_configuration.go`、`model_catalog.go` | 两文件内聚并删除旧根文件 | `aigateway/gateway_model_policy.go` | 原配置解析、目录证据与配置修订；实际保存仍归 AI/settings |
 | `mcp.go` | 移动并改为共用能力提议分派 | `aigateway/gateway_tools.go` | 已支持的协议版本、数字保真、当前权限、稳定请求身份 |
 | `agent.go`、`agent_engine.go`、`agent_control.go`、`agent_roles.go` | 合并并删除旧根文件 | `engine/agents/agent_runtime.go` | 运行状态机、原身份/角色、提议确认、停止与交接 |
-| `agent_host.go`、`agent_memory.go` | 合并并删除旧根文件 | `engine/agents/agent_context.go` | 当前来源读取和有界上下文；纯整理继续复用原算法 |
+| `agent_host.go`、`agent_memory.go` | 原上下文和记忆实现合并到engine；根agent_host只保组合接线 | `engine/agents/agent_context.go`、根`agent_host.go`窄适配 | 当前来源读取和有界上下文；纯整理继续复用原算法 |
 | `agent_eval.go`、`agent_candidate.go` | 合并并删除旧根文件 | `studio/authoring/authoring_ai_evaluation.go` | 确切候选、用例、模型和配置身份，评估不执行实际业务写入 |
 | `simulate_candidate.go` | 与原 Studio 预演内聚，删除旧根文件 | `studio/trials/trial_runtime.go` | 隔离实例、原权限/规则和原模型调用标识；不成为训练真值 |
-| `function.go`、`function_conversation.go` | 合并并删除旧根文件 | `engine/agents/agent_functions.go` | 函数原绑定、对话来源、严格输出、派发前后资格 |
-| `knowledge.go`、`knowledge_configuration.go`、`knowledge_vectors.go` | 三文件内聚为两个职责，删除旧根文件 | `engine/knowledge/knowledge_retrieval.go`、`engine/knowledge/knowledge_index.go` | 当前来源复核、关键词、向量空间重建/激活及嵌入工作；模型 I/O 委托 gateway |
+| `function.go`、`function_conversation.go` | 合并并删除旧根文件；SQL和安装接线归根function_host | `engine/agents/agent_functions.go`、根`function_host.go`窄适配 | 函数原绑定、对话来源、严格输出、派发前后资格 |
+| `knowledge.go`、`knowledge_configuration.go`、`knowledge_vectors.go` | 索引/检索/空间生命周期内聚到engine，删除两旧根文件；根knowledge只保来源和模型接线 | `engine/knowledge/knowledge_retrieval.go`、`engine/knowledge/knowledge_index.go`、根`knowledge.go`窄适配 | 当前来源复核、关键词、向量空间重建/激活及嵌入工作；模型 I/O 委托 gateway |
 | `transcripts.go` | 移动并删除旧根文件 | `aigateway/gateway_transcripts.go` | 保留期、删除、当前来源读取；不得变成原始训练数据镜像 |
 | `accepted_agent.go` | 由战役 1 合并并删除旧根文件 | `kernel/acceptance_pipeline.go`、`kernel/acceptance_records.go`、`kernel/acceptance_codec.go` | 原 Agent 封套解码、用量前驱与纯结果应用；旧历史字节不改 |
 | `business_refusal_facts.go` | 由战役 1 收敛并删除旧根文件 | `engine/business/refusal_engine.go`，封套部分归 kernel | 原公开拒绝证据，不为训练重新执行规则或降授权 |
@@ -119,7 +129,7 @@ JSONL 导出采用版本化封套和独立清单，`format=sft` 对应脱敏上�
 
 ## Migration Plan
 
-1. 负责人先确认本方案的行为变化和数据默认；建立只读证据基线及对应守门规则。本轮不执行后续步骤。
+1. 负责人已授权行为变化和数据默认；沿既有证据基线实施下列步骤，最终统一验收。
 2. 先按战役 1 的已确认边界搬移 provider、配置与共享工具目录，保持原业务行为及历史格式，移除已替代旧文件；验证导入图和原 owner 检查。
 3. 引入并固定阶段/部署策略，先为静态控制面分类目标提供方；运行中缺失阶段的调用在下一次派发前停止并交接，已封存结果仍纯应用。只读目录查询不触发生成。
 4. 在原 AI owner 落实 Token 预占/结算、准入取消与唯一 Work 交接；真实并发、未知返回和重启用例通过后去掉旧分散预占顺序。
@@ -131,4 +141,4 @@ JSONL 导出采用版本化封套和独立清单，`format=sft` 对应脱敏上�
 
 ## Review Decisions
 
-本方案供负责人确认的具体默认是：云端生成只在可信设计态；受管 Agent/MCP 写动作均须人工确认；训练默认自动记录候选元数据，原内容须字段/用途许可和质量门槛后导出；不做历史批量回填。它们属于这次拟议行为，尚未实施。提供方实际部署清单、业务场景质量判据和保留天数在原静态配置中明确选定，不在代码中猜测或写死。
+本方案供负责人确认的具体默认是：云端生成只在可信设计态；受管 Agent/MCP 写动作均须人工确认；训练默认自动记录候选元数据，原内容须字段/用途许可和质量门槛后导出；不做历史批量回填。这些默认已写入原归属方的实现，仍须按tasks完成集中业务与恢复验收。提供方实际部署清单、业务场景质量判据和保留天数在原静态配置中明确选定，不在代码中猜测或写死。

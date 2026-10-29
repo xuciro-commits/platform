@@ -3,7 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"errors"
-	"platformserver/internal/construction"
+	controlowner "platformserver/kernel/control"
+	"platformserver/studio/build"
 
 	"fmt"
 	"google.golang.org/protobuf/proto"
@@ -12,7 +13,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/apps/build"
+
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -23,10 +24,10 @@ func testTenantDefinedApproval(t *testing.T, accepted bool) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	var journal []Entry
 	compose := func() *Tenant {
-		seat := func(id, role string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{construction.ID: role}}}
+		seat := func(id, role string) platform.Seat {
+			return platform.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{build.ID: role}}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("dana", construction.Builder), seat("eli", construction.User), seat("sam", "manager")),
+		tn, err := NewTenant("t-1", newConsole("t-1", seat("dana", build.Builder), seat("eli", build.User), seat("sam", "manager")),
 			work.New("t-1"), build.New("t-1"))
 		if err != nil {
 			t.Fatal(err)
@@ -46,12 +47,15 @@ func testTenantDefinedApproval(t *testing.T, accepted bool) {
 		}
 	}
 	var retried []*pb.Submission
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	keys := 0
 	do := func(who, schema, typ, id string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		authority := construction.ID
+		authority := build.ID
 		if typ == work.ApprovalType {
 			authority = work.ID
 		}
@@ -102,29 +106,29 @@ func testTenantDefinedApproval(t *testing.T, accepted bool) {
 	} {
 		id := fmt.Sprintf("bad-%d", keys)
 		bad := merge(object, map[string]any{"name": fmt.Sprintf("bad%d", keys), "actions": []any{x.action}})
-		if got := do("dana", construction.ObjectType+".create", construction.ObjectType, id, bad); got != "ok" {
+		if got := do("dana", build.ObjectType+".create", build.ObjectType, id, bad); got != "ok" {
 			t.Fatalf("draft: %s", got)
 		}
-		if got := do("dana", construction.SchemaPublish, construction.ObjectType, id, map[string]any{}); !strings.Contains(got, x.want) {
+		if got := do("dana", build.SchemaPublish, build.ObjectType, id, map[string]any{}); !strings.Contains(got, x.want) {
 			t.Errorf("invalid approval: %s, want %q", got, x.want)
 		}
 	}
 	unknownRole := merge(object, map[string]any{"name": "unknownapprover", "access": []any{},
 		"actions": []any{merge(action, map[string]any{"approval": map[string]any{"pending": "pending", "levels": []map[string]any{{"title": "Unknown", "role": "unknown"}}}})}})
-	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "O-unknown", unknownRole); got != "ok" {
+	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-unknown", unknownRole); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := do("dana", construction.SchemaPublish, construction.ObjectType, "O-unknown", map[string]any{}); !strings.Contains(got, "cannot read every record") {
+	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-unknown", map[string]any{}); !strings.Contains(got, "cannot read every record") {
 		t.Fatalf("unknown approver role: %s", got)
 	}
-	if got := do("dana", construction.ObjectType+".create", construction.ObjectType, "O-1", object); got != "ok" {
+	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-1", object); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := do("dana", construction.SchemaPublish, construction.ObjectType, "O-1", map[string]any{}); got != "ok" {
+	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
 		t.Fatal(got)
 	}
-	lost := construction.TypeOf("lost")
-	declared, found := tn.app(construction.ID).Manifest().Actions.Action(lost + ".handback")
+	lost := build.TypeOf("lost")
+	declared, found := tn.app(build.ID).Manifest().Actions.Action(lost + ".handback")
 	if !found || !declared.NeedsApproval {
 		t.Fatal("the action is not offered as an approval")
 	}

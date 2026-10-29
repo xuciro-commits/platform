@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"platformserver/platform"
 	"testing"
 	"time"
 )
@@ -20,7 +21,7 @@ func TestPostgresHistoryChainBootstrapChecksOriginalHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer forgetJournal(t, j, id)
-	live := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
+	live := composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
 	if _, err := j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestPostgresHistoryChainBootstrapChecksOriginalHistory(t *testing.T) {
 	if _, err := j.Pool().Exec(ctx, `update runtime_history set query=jsonb_set(query,'{by}','"someone-else"') where tenant=$1`, id); err != nil {
 		t.Fatal(err)
 	}
-	fresh := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
+	fresh := composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
 	if err := fresh.Restore(original); err != nil {
 		t.Fatal(err)
 	}

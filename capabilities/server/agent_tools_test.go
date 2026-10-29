@@ -1,5 +1,7 @@
 package platformserver
 
+import agentowner "platformserver/engine/agents"
+
 import (
 	"encoding/json"
 	"platformserver/internal/agents"
@@ -10,23 +12,23 @@ import (
 
 func TestAgentToolInputsDoNotCollideWithTraceMetadata(t *testing.T) {
 	kit := newSystemTenant(t)
-	owner := kit.tenant.app(AgentApp).(*Agents)
+	owner := kit.tenant.app(platform.AgentApp).(*agentowner.Agents)
 	// This tests generic tool envelope compilation. The live system assistant
 	// no longer receives a write tool, and its owner refuses direct writes.
 	if err := owner.DeclareAgentApp(toolInputContractApp{kit.tenant.app("system")}); err != nil {
 		t.Fatal(err)
 	}
-	definition := owner.def("tool-input-contract.architect")
+	definition := owner.AgentEvaluationRuntime().Definition("tool-input-contract.architect")
 	if definition == nil {
 		t.Fatal("system architect missing")
 	}
-	for _, tool := range definition.tools {
-		if len(tool.tool.Required) != len(slices.Compact(slices.Sorted(slices.Values(tool.tool.Required)))) {
-			t.Fatalf("duplicate required keys in %s", tool.tool.Name)
+	for _, tool := range definition.Toolset {
+		if len(tool.Tool.Required) != len(slices.Compact(slices.Sorted(slices.Values(tool.Tool.Required)))) {
+			t.Fatalf("duplicate required keys in %s", tool.Tool.Name)
 		}
 	}
-	tool := definition.tools[agentToolName("system.change.propose")]
-	schema := tool.tool.Properties["payload"].(map[string]any)
+	tool := definition.Toolset["system_change_propose"]
+	schema := tool.Tool.Properties["payload"].(map[string]any)
 	if !slices.Contains(schema["required"].([]string), "rationale") {
 		t.Fatal("business rationale disappeared from the owner's input")
 	}

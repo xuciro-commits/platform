@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"platformkernel/kernel"
-	"platformserver/internal/records"
 	"platformserver/journal"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -82,7 +82,7 @@ func (t *Tenant) localizedFieldIssues(member platform.Member, issues []platform.
 		if translated := issues[i].Translations[language]; translated != "" {
 			issues[i].Message = translated
 		} else {
-			issues[i].Message = t.i18n.said(&kernel.Error{Message: issues[i].Message}, language).Message
+			issues[i].Message = t.i18n.Said(&kernel.Error{Message: issues[i].Message}, language).Message
 		}
 	}
 	return issues
@@ -106,47 +106,24 @@ func constraintValues(info platform.EntityInfo, value reflect.Value) map[string]
 	return values
 }
 
-func constraintEmpty(value any) bool {
-	v := reflect.ValueOf(value)
-	for v.IsValid() && (v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface) {
-		if v.IsNil() {
-			return true
-		}
-		v = v.Elem()
-	}
-	if !v.IsValid() {
-		return true
-	}
-	if v.Kind() == reflect.String {
-		return strings.TrimSpace(v.String()) == ""
-	}
-	if v.Kind() == reflect.Slice || v.Kind() == reflect.Map {
-		return v.Len() == 0
-	}
-	if v.Type() == reflect.TypeFor[time.Time]() {
-		return v.Interface().(time.Time).IsZero()
-	}
-	return false // a stored zero number or false is present
-}
-
 // Unique checks the complete owner index; member read filters never hide a
 // competing row. The tenant writer keeps this check and acceptance indivisible.
 func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key, err := s.uniqueKey(info, rule, value)
+	key, err := records.UniqueKey(s.indexImage, info, rule, value)
 	if err != nil || key == "" {
 		return err == nil, err
 	}
 	et := s.types[info.Type]
-	if s.historyStore != nil {
-		storage, ok := s.stateReader().(journal.UniqueState)
+	if s.current.Backend() != nil {
+		storage, ok := s.current.Reader().(journal.UniqueState)
 		if !ok {
 			panic("record storage does not provide derived unique keys")
 		}
 		changes := s.uniqueChanges()
 		if !et.fullImage {
-			ids, err := storage.StateUnique(context.Background(), s.tenant, info.Type, rule.Name, key, s.appliedPosition)
+			ids, err := storage.StateUnique(context.Background(), s.current.Tenant(), info.Type, rule.Name, key, s.current.Applied())
 			if err != nil {
 				// As with candidate reads, a storage failure cannot become a
 				// durable business refusal or silently pass a constraint.
@@ -261,7 +238,7 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 			return nil
 		}
 		for _, name := range rule.Fields {
-			if constraintEmpty(values[name]) {
+			if records.ConstraintEmpty(values[name]) {
 				return fail("required")
 			}
 		}
@@ -369,7 +346,7 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 				}
 				for _, rule := range et.info.Constraints {
 					if rule.Kind == "unique" {
-						for dependent := range d.records.scopeDependents(et.info, rule, typ, id).All() {
+						for dependent := range records.ScopeDependents(d.records.indexImage, et.info, rule, typ, id).All() {
 							candidates.Set(dependent, true)
 						}
 					}

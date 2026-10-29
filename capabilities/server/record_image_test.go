@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"platformserver/internal/acceptance"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
+
 	"reflect"
 	"testing"
 	"time"
@@ -65,7 +65,7 @@ func TestRecordImageRestoreAndReinstallRetainOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shape, _ := acceptance.Digest(view.Fields)
+	shape, _ := platform.CanonicalDigest(view.Fields)
 	projection := &records.Projection{From: "source-release", Shape: shape, Value: raw}
 	actual, _ := json.Marshal(currentModel{Record: platform.Record{ID: "one", Revision: 2}, Title: "Original"})
 	decoded, err := records.DecodeFormattedImage(view, actual, projection, "source-release", "item.v2")
@@ -137,7 +137,7 @@ func TestPostgresRecordImageConvertedFieldQueryRetainsOriginal(t *testing.T) {
 	if err := pg.InitializeState(ctx, tenant, 0, delta); err != nil {
 		t.Fatal(err)
 	}
-	store.historyStore, store.tenant, store.appliedPosition = pg, tenant, 0
+	store.current.Configure(pg, tenant, 0, nil)
 	matches, refusal := store.matchingQuery(store.types[info.Type], platform.Query{Domain: json.RawMessage(`[["title","=","Original"]]`)},
 		func(value reflect.Value) bool { return records.Header(value).ID != "row-000" })
 	if refusal != nil || len(matches) != 1 || matches[0].Interface().(currentModel).ID != "row-256" {

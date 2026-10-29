@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -141,9 +141,8 @@ func TestPostgresRetainedFlowAliasQueryUsesConvertedRows(t *testing.T) {
 	store := newRecordStore()
 	et := &entityType{store: store, info: current}
 	store.types[current.Type], store.byGo[current.Go] = et, et
-	store.historyStore = j
-	store.tenant = tenant
-	store.bindReadView(read)
+	store.current.Configure(j, tenant, 0, nil)
+	store.current.Bind(read)
 	store.useCurrentRows()
 	runtime := &flowExecutionRuntime{stagedDecision: &stagedDecision{records: store}, view: &Tenant{records: store}, release: "original", shapes: map[string]platform.EntityInfo{old.Type: old}}
 	projected, refusal := runtime.readView()
@@ -169,9 +168,9 @@ func TestPostgresRetainedFlowAliasQueryUsesConvertedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer next.Close()
-	store.bindReadView(next)
+	store.current.Bind(next)
 	second, refusal := runtime.readView()
-	if refusal != nil || second.records == projected.records || second.records.readView != next || store.generation != beforeGeneration {
+	if refusal != nil || second.records == projected.records || second.records.current.View() != next || store.generation != beforeGeneration {
 		t.Fatal("retained cache reused a closed SQL view without writes", refusal)
 	}
 	rows, total, refusal = second.records.find(second.records.types[old.Type], platform.Query{Domain: json.RawMessage(`[["name","=","Current"]]`)}, nil)

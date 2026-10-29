@@ -49,8 +49,8 @@ func TestPostgresIdleWorkKeepsAcceptedPositionAndResumesRealWork(t *testing.T) {
 	}
 	worker.idle = false
 	live.Work(at.Add(10 * time.Hour))
-	if live.quarantined() || live.work.jobs[0].Attempts != 1 || j.Position(id) <= position {
-		t.Fatalf("real work after idle polling did not commit: %+v fault=%+v", live.work.jobs[0], live.fault.Load())
+	if live.quarantined() || live.work.Jobs[0].Attempts != 1 || j.Position(id) <= position {
+		t.Fatalf("real work after idle polling did not commit: %+v fault=%+v", live.work.Jobs[0], live.fault.Load())
 	}
 	if raw, err := j.StateRecord(ctx, id, "worker.document", "job-"+at.Add(10*time.Hour).Format(time.RFC3339Nano)); err != nil || len(raw) == 0 {
 		t.Fatalf("accepted work row is unavailable from SQL: %v", err)

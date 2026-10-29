@@ -141,7 +141,6 @@ func (c Caller) Enterprise() Enterprise { return Enterprise{c} }
 // It supplies no new read or write grant to the calling application.
 type EnterpriseUsageRuntime interface {
 	CheckEnterpriseUsage(Caller, string, string, bool, time.Time) *kernel.Error
-	CheckEnterpriseTenantLink(Caller, string, uint32, time.Time) *kernel.Error
 	CheckEnterpriseTenantConnection(Caller, string, time.Time) *kernel.Error
 }
 
@@ -151,16 +150,6 @@ func (e Enterprise) CheckUsage(id, until string, deleting bool, now time.Time) *
 	}
 	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
 		return runtime.CheckEnterpriseUsage(e.c, id, until, deleting, now)
-	}
-	return nil
-}
-
-func (e Enterprise) CheckTenantLink(id string, revision uint32, now time.Time) *kernel.Error {
-	if e.c.Replaying {
-		return nil
-	}
-	if runtime, ok := e.c.rt.(EnterpriseUsageRuntime); ok {
-		return runtime.CheckEnterpriseTenantLink(e.c, id, revision, now)
 	}
 	return nil
 }
@@ -215,4 +204,48 @@ func (e Enterprise) Located(element string, now time.Time) []string {
 // Of are the elements the organisation owns («OwnsProcess»: posts, resources, goals, projects).
 func (e Enterprise) Of(organisation string, now time.Time) []string {
 	return e.Related(organisation, "OwnsProcess", true, now)
+}
+
+type EnterpriseQueryElement struct {
+	ID         string   `json:"id"`
+	Stereotype string   `json:"stereotype"`
+	Name       string   `json:"name"`
+	Kind       string   `json:"kind,omitempty"`
+	ShortName  string   `json:"shortName,omitempty"`
+	Legal      bool     `json:"legal,omitempty"`
+	From       Date     `json:"from,omitempty"`
+	Until      Date     `json:"until,omitempty"`
+	Periods    []Period `json:"periods,omitempty"`
+	// Closed marks an element that is no longer live today (ended, merged,
+	// decommissioned): resolve returns it so a stored reference still reads.
+	Closed bool `json:"closed,omitempty"`
+}
+
+type EnterpriseQueryResult struct {
+	Elements []EnterpriseQueryElement `json:"elements"`
+}
+
+// EnterpriseQueries is the typed member read capability, separate from the
+// directory's private model mutation and metamodel storage.
+type EnterpriseQueries interface {
+	Query(stereotypes []string, kind, words, alive string, limit int, now time.Time) (EnterpriseQueryResult, *kernel.Error)
+	Resolve(ids []string, now time.Time) (EnterpriseQueryResult, *kernel.Error)
+}
+
+type Directory interface {
+	// Units are the units party ("member:<id>") belongs to on day, and those
+	// below them in structure ("" for the units themselves).
+	Units(party, structure string, day Date) []string
+	// Below expands units only through active placements of this structure.
+	Below(units []string, structure string, day Date) []string
+	// Holders are the members with role (any, when empty) in unit or a unit above it in structure on day.
+	Holders(structure, unit, role string, day Date) []string
+	// Calendar is the working calendar of party ("member:<id>"; "" for the
+	// tenant's) on day.
+	Calendar(party string, day Date) Calendar
+	// Element is an element of the enterprise model live on day.
+	Element(id string, day Date) (ElementInfo, bool)
+	// Related are the elements joined to element by a relationship stereotype
+	// on day: those it points at (outgoing) or those pointing at it.
+	Related(element, stereotype string, outgoing bool, day Date) []string
 }

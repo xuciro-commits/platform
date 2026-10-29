@@ -1,3 +1,5 @@
+import {validApplicationHeader} from "../pageui/application-header";
+import type {Definition as WorkspaceDefinition} from "../index";
 import {pageUIManifest} from "../pageui/manifest";
 import type {ScalarValue} from "./decimal";
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -8,14 +10,15 @@ import { ApplicationSessionHub, type ApplicationSession } from "./ApplicationSes
 import { useApplicationQueries } from "./ApplicationQueries";
 import {recordReadReference, type RecordReference} from "./Session";
 import { compileVariables, evaluateVariables, type VariableResult } from "./variables";
+import {initializeRules} from "./rule-engine";
 
 const Hub = createContext<ApplicationSessionHub | undefined>(undefined);
-type Context = { definition: Api.Definition; session: ApplicationSession; instance: string; identity: string; preview: boolean; routeParams: Record<string, string> };
+type Context = { definition: WorkspaceDefinition; session: ApplicationSession; instance: string; identity: string; preview: boolean; routeParams: Record<string, string> };
 const ApplicationContext = createContext<Context | undefined>(undefined);
 export const useApplicationContext = () => useContext(ApplicationContext);
 const empty = Object.freeze({}) as Record<string, ScalarValue>;
 const emptySnapshot = () => empty, emptySubscribe = () => () => {};
-const idOf = (d: Api.Definition) => `${d.ref.app}:${d.ref.name}`;
+const idOf = (d: WorkspaceDefinition) => `${d.ref.app}:${d.ref.name}`;
 
 export function ApplicationSessionsProvider({ children }: { children: ReactNode }) {
   const { me } = useHost();
@@ -58,6 +61,7 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview: reque
   }, [session, owner, routeKey]);
   const context = useMemo(() => definition && session ? { definition, session, instance, identity, preview, routeParams: sessionParams(id, instance) } : undefined, [definition, session, instance, identity, preview, id, route.params?.application]);
   const showSessionControls = holders.length > 0 && (preview || holders.length > 1 || Object.keys(definition?.application?.variables ?? {}).length > 0);
+  const headerValid=validApplicationHeader(definition?.application?.header,definition?.application?.pages??[]);
   const collapsed=useSyncExternalStore(session?.subscribe??emptySubscribe,session?.headerSnapshot??(()=>undefined),()=>undefined);
   const navigate = (application: string, instance: string) => { const params:Record<string,string> = { ...route.params, ...sessionParams(application, instance) }; delete params.call; workspace.open({ ...route, params }); };
   if (!preview && requested?.includes(":") && !definition) return <Panel role="alert">{t("This application is unavailable. Reopen it from the application list.")}</Panel>;
@@ -69,7 +73,8 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview: reque
       <span className="min-w-0 max-w-full break-all text-xs text-muted">{t("Instance")}: {instance === "main" ? "main" : instance.slice(-8)}</span>
     </div>}
     {definition && !session && <Panel role="alert">{t("The application instance is unavailable.")}</Panel>}
-    {definition?.application?.header?<ApplicationHeader key={identity} header={definition.application.header} collapsed={collapsed} onCollapsedChange={session?.setHeaderCollapsed} pages={definition.application.pages.flatMap(name=>{const page=definitions.find(d=>d.ref.app===pageRef.app&&d.ref.kind==="page"&&d.ref.name===name)?.page;return page?[{name,title:page.title}]:[];})} currentPage={pageRef.name} onPage={name=>workspace.open({view:preview?"page-preview":"page",params:{app:pageRef.app,kind:"page",name,...sessionParams(id,instance)}})} onRefresh={refresh?()=>void refresh():undefined} onTheme={appearance.toggle}>{children}</ApplicationHeader>:children}
+    {!headerValid&&<Panel role="alert">{t("The application header configuration is invalid.")}</Panel>}
+    {headerValid&&definition?.application?.header?<ApplicationHeader key={identity} header={definition.application.header} collapsed={collapsed} onCollapsedChange={session?.setHeaderCollapsed} pages={definition.application.pages.flatMap(name=>{const page=definitions.find(d=>d.ref.app===pageRef.app&&d.ref.kind==="page"&&d.ref.name===name)?.page;return page?[{name,title:page.title}]:[];})} currentPage={pageRef.name} onPage={name=>workspace.open({view:preview?"page-preview":"page",params:{app:pageRef.app,kind:"page",name,...sessionParams(id,instance)}})} onRefresh={refresh?()=>void refresh():undefined} onTheme={appearance.toggle}>{children}</ApplicationHeader>:children}
   </div></ApplicationContext.Provider></AuthoringPreview.Provider>;
 }
 
@@ -77,20 +82,23 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
   const context = useApplicationContext();
   const state = useSyncExternalStore(context?.session.subscribe ?? emptySubscribe, context?.session.snapshot ?? emptySnapshot, emptySnapshot);
   const declarations = context?.definition.application?.variables ?? {};
+  const needed=Object.values(declarations).some(variable=>variable.mode==="derived"),[runtime,setRuntime]=useState<{ready:boolean;error?:string}>({ready:false});
+  useEffect(()=>{if(needed)void initializeRules().then(()=>setRuntime({ready:true}),error=>setRuntime({ready:false,error:error instanceof Error?error.message:String(error)}));},[needed]);
   const recordResources:Record<string,VariableResult>={};
   for(const [id,v] of Object.entries(declarations)){if(v.type!=="record"||v.mode!=="resource")continue;const read=context?.session.reads?.snapshot().records[id];recordResources[id]=read?.status==="value"?{status:"value",value:{kind:"record",reference:read.value}}:read?.status==="pending"?{status:"pending"}:read?.status==="error"?{status:"error",code:"Resource read failed"}:{status:"empty"};}
   for(const [id,v] of Object.entries(declarations)){if(v.type!=="record-set"||v.mode!=="resource")continue;const read=context?.session.reads?.snapshot().recordSets[id],payload={kind:"record-set" as const,object:v.source?.object?.name??"",records:read?.status==="value"?read.value:[]};recordResources[id]=read?.status==="value"?{status:"value",value:payload}:read?.status==="pending"?{status:"pending"}:read?.status==="error"?{status:"error",code:"Selection read failed"}:{status:"empty",value:payload};}
   for(const [id,v] of Object.entries(declarations)){if(v.type!=="filter"||v.mode!=="resource")continue;const fields=context?.session.reads?.snapshot().filters[id]??{};recordResources[id]={status:Object.keys(fields).length?"value":"empty",value:{kind:"filter",object:v.source?.object?.name??"",fields}};}
-  const inputs=useMemo(()=>evaluateVariables(declarations,state,pageUIManifest.runtime,recordResources,undefined,undefined,context?.session.reads?.property),[declarations,state]);
+  const inputs=useMemo(()=>evaluateVariables(declarations,state,pageUIManifest.runtime,recordResources,undefined,undefined,context?.session.reads?.property),[declarations,state,runtime]);
   const queries=useApplicationQueries(context?.session,inputs);
-  const values = useMemo(() => evaluateVariables(declarations,state,pageUIManifest.runtime,{...queries.resources,...recordResources},undefined,undefined,context?.session.reads?.property),[declarations,state,JSON.stringify(queries.resources)]);
+  const values = useMemo(() => evaluateVariables(declarations,state,pageUIManifest.runtime,{...queries.resources,...recordResources},undefined,undefined,context?.session.reads?.property),[declarations,state,JSON.stringify(queries.resources),runtime]);
   const invalid = useMemo(() => compileVariables(declarations, pageUIManifest.runtime).issues.length > 0, [declarations]);
   const resources: Record<string, VariableResult> = {};
   let error: string | undefined;
   for (const [id, variable] of Object.entries(variables)) {
     if (variable.mode !== "shared") continue;
     const source = variable.source?.variable ?? "", declaration = declarations[source];
-    if (!context) error = "Choose an application to use its shared variables.";
+    if(needed&&!runtime.ready)error=runtime.error??"Rule runtime is loading.";
+    else if (!context) error = "Choose an application to use its shared variables.";
     else if (!declaration || declaration.type !== variable.type || variable.writable && declaration.mode !== "state" && !["record","filter","record-set"].includes(variable.type) || variable.type==="object-set"&&(declaration.mode!=="resource"||!declaration.source?.query||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==context.definition.application?.queries?.[declaration.source!.query!]?.object[key as keyof Api.AssetRef])) || ["record","filter","record-set"].includes(variable.type)&&(declaration.mode!=="resource"||declaration.source?.kind!==variable.type||!variable.source?.object||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==declaration.source?.object?.[key as keyof Api.AssetRef])) || invalid) error = "The application does not satisfy this page's shared bindings.";
     resources[id] = error ? { status: "error", code: error } : values[source] ?? { status: "empty" };
   }

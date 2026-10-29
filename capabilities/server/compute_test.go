@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -9,8 +9,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"platformserver/apps/build"
-	"platformserver/internal/acceptance"
+	computeowner "platformserver/engine/compute"
+	"platformserver/engine/resources"
+
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ type fixtureCodeCompiler struct{}
 
 func (fixtureCodeCompiler) Compile(_ context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, []byte, error) {
 	hash := sha256.Sum256([]byte(q.Source))
-	buildHash, _ := acceptance.Digest(q)
+	buildHash, _ := platform.CanonicalDigest(q)
 	module := []byte{0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 7, 10, 1, 6, 95, 115, 116, 97, 114, 116, 0, 0, 10, 4, 1, 2, 0, 11}
 	return platform.CodeBuildResult{SourceHash: hex.EncodeToString(hash[:]), BuildHash: buildHash, Toolchain: "fixture@sha256:123"}, module, nil
 }
@@ -46,7 +47,7 @@ func (s *computeStock) Compute(_ context.Context, _ string, input json.RawMessag
 func TestOperationAcceptedGenerationReplay(t *testing.T) {
 	compose := func() (*Tenant, *computeStock) {
 		app := &computeStock{stock: newStock("operation-accepted")}
-		tn, err := NewTenant("operation-accepted", NewConsole("operation-accepted", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}), app)
+		tn, err := NewTenant("operation-accepted", newConsole("operation-accepted", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}), app)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,13 +92,13 @@ func TestOperationAcceptedGenerationReplay(t *testing.T) {
 }
 
 func TestWasmCommandCompilerProfiles(t *testing.T) {
-	compiler := ContainerCompiler{GoImage: os.Getenv("PLATFORM_GO_WASM_IMAGE"), TinyGoImage: os.Getenv("PLATFORM_TINYGO_WASM_IMAGE")}
+	compiler := computeowner.ContainerCompiler{GoImage: os.Getenv("PLATFORM_GO_WASM_IMAGE"), TinyGoImage: os.Getenv("PLATFORM_TINYGO_WASM_IMAGE")}
 	if compiler.GoImage == "" || compiler.TinyGoImage == "" {
 		t.Skip("pinned Go/TinyGo compiler images are not configured")
 	}
 	input := platform.ValueSchema{Type: "variant", Nullable: true, Discriminator: "kind", Variants: map[string]platform.ValueSchema{"calculate": {Type: "object", Properties: map[string]platform.ValueSchema{"kind": {Type: "string", Enum: []string{"calculate"}}, "value": {Type: "integer"}, "note": {Type: "string", Nullable: true}}, Required: []string{"kind", "value", "note"}}}}
 	output := platform.ValueSchema{Type: "variant", Nullable: true, Discriminator: "kind", Variants: map[string]platform.ValueSchema{"calculated": {Type: "object", Properties: map[string]platform.ValueSchema{"kind": {Type: "string", Enum: []string{"calculated"}}, "doubled": {Type: "integer"}, "note": {Type: "string", Nullable: true}}, Required: []string{"kind", "doubled", "note"}}}}
-	engine := NewWasmEngine(2)
+	engine := computeowner.NewWasmEngine(2)
 	defer engine.Close(context.Background())
 	for _, language := range []string{"go", "tinygo"} {
 		t.Run(language, func(t *testing.T) {
@@ -107,13 +108,13 @@ func TestWasmCommandCompilerProfiles(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := ValidateWasm(ctx, module); err != nil {
+			if err := computeowner.ValidateWasm(ctx, module); err != nil {
 				t.Fatal(err)
 			}
 			digest := sha256.Sum256(module)
 			hash := hex.EncodeToString(digest[:])
 			limits := platform.OperationLimits{TimeoutMillis: 2000, MemoryPages: 1024, MaxInputBytes: 4096, MaxOutputBytes: 4096}
-			result, err := engine.Execute(ctx, WasmRequest{Module: module, Digest: hash, Input: json.RawMessage(`{"kind":"calculate","value":7,"note":"slash\/\u0001\uD83D\uDE00"}`), Limits: limits})
+			result, err := engine.Execute(ctx, platform.WasmRequest{Module: module, Digest: hash, Input: json.RawMessage(`{"kind":"calculate","value":7,"note":"slash\/\u0001\uD83D\uDE00"}`), Limits: limits})
 			var saved struct {
 				Kind    string
 				Doubled int
@@ -126,7 +127,7 @@ func TestWasmCommandCompilerProfiles(t *testing.T) {
 			if err := output.Validate(result.Output, 4096); err != nil {
 				t.Fatal(err)
 			}
-			null, err := engine.Execute(ctx, WasmRequest{Module: module, Digest: hash, Input: json.RawMessage(`null`), Limits: limits})
+			null, err := engine.Execute(ctx, platform.WasmRequest{Module: module, Digest: hash, Input: json.RawMessage(`null`), Limits: limits})
 			if err != nil || string(null.Output) != "null" {
 				t.Fatalf("%s nullable variant: %+v %v", language, null, err)
 			}
@@ -136,7 +137,7 @@ func TestWasmCommandCompilerProfiles(t *testing.T) {
 }
 
 func TestWasmDataABIChannels(t *testing.T) {
-	compiler := ContainerCompiler{GoImage: os.Getenv("PLATFORM_GO_WASM_IMAGE"), TinyGoImage: os.Getenv("PLATFORM_TINYGO_WASM_IMAGE")}
+	compiler := computeowner.ContainerCompiler{GoImage: os.Getenv("PLATFORM_GO_WASM_IMAGE"), TinyGoImage: os.Getenv("PLATFORM_TINYGO_WASM_IMAGE")}
 	if compiler.GoImage == "" || compiler.TinyGoImage == "" {
 		t.Skip("pinned Go/TinyGo compiler images are not configured")
 	}
@@ -149,9 +150,9 @@ func TestWasmDataABIChannels(t *testing.T) {
 	defer os.RemoveAll(dir)
 	socket := filepath.Join(dir, "worker.sock")
 	done := make(chan error, 1)
-	go func() { done <- ServeWasmWorker(ctx, socket, 2) }()
+	go func() { done <- computeowner.ServeWasmWorker(ctx, socket, 2) }()
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		if CheckComputeSocket(socket) == nil {
+		if computeowner.CheckComputeSocket(socket) == nil {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -178,8 +179,9 @@ func TestWasmDataABIChannels(t *testing.T) {
 			hash := sha256.Sum256(module)
 			raw := json.RawMessage(`"` + strings.Repeat("<", (1<<20)+17) + `"`)
 			digest := sha256.Sum256(raw)
-			request := WasmRequest{ABI: platform.WasmDataABI, Module: module, Digest: hex.EncodeToString(hash[:]), Data: &WasmDataInput{Tenant: "data", Call: "data:call-1", Bytes: raw, Digest: hex.EncodeToString(digest[:])}, Limits: platform.OperationLimits{TimeoutMillis: 30000, MemoryPages: 2048, MaxInputBytes: 4096, MaxOutputBytes: 4096, DataInputBytes: 4 << 20, StagedOutputBytes: 8 << 20}}
-			worker := socketWasmWorker{socket: socket}
+			request := platform.WasmRequest{ABI: platform.WasmDataABI, Module: module, Digest: hex.EncodeToString(hash[:]), Data: &platform.WasmDataInput{Tenant: "data", Call: "data:call-1", Bytes: raw, Digest: hex.EncodeToString(digest[:])}, Limits: platform.OperationLimits{TimeoutMillis: 30000, MemoryPages: 2048, MaxInputBytes: 4096, MaxOutputBytes: 4096, DataInputBytes: 4 << 20, StagedOutputBytes: 8 << 20}}
+			t.Setenv("PLATFORM_WASM_WORKER_SOCKET", socket)
+			worker := computeowner.EnvironmentWasmWorker()
 			result, err := worker.Execute(t.Context(), request)
 			if err != nil {
 				t.Fatal(err)
@@ -196,7 +198,7 @@ func TestWasmDataABIChannels(t *testing.T) {
 			if err != nil || json.Unmarshal(inline.Output, &value) != nil || value != strings.Repeat("<", 70000) {
 				t.Fatalf("v2 inline input did not use the call channel: %v", err)
 			}
-			if err := ValidateWasm(t.Context(), module); err == nil {
+			if err := computeowner.ValidateWasm(t.Context(), module); err == nil {
 				t.Fatal("v2 imports were accepted as legacy WASI")
 			}
 			request.Data.Digest = strings.Repeat("0", 64)
@@ -216,7 +218,7 @@ func TestWasmDataABIChannels(t *testing.T) {
 
 			// The same ABI goes through the original compilation, candidate,
 			// operation outbox and accepted-result recovery owners.
-			files := &memoryFiles{}
+			files := &resources.MemoryFiles{}
 			compose := func() *Tenant {
 				tn := builderTenant(t, "data-"+language)
 				tn.Files = files
@@ -230,11 +232,11 @@ func TestWasmDataABIChannels(t *testing.T) {
 			now := time.Now().UTC()
 			limits := request.Limits
 			limits.StagedOutputBytes = 8 << 20
-			decide(t, tn, "builder", construction.ID, "build.code.create", construction.CodeType, "C", map[string]any{
+			decide(t, tn, "builder", build.ID, "build.code.create", build.CodeType, "C", map[string]any{
 				"name": "data", "title": "Data", "abi": platform.WasmDataABI, "language": language, "source": source,
-				"input": schema, "output": schema, "roles": []string{construction.Builder}, "limits": limits,
+				"input": schema, "output": schema, "roles": []string{build.Builder}, "limits": limits,
 			}, now)
-			decide(t, tn, "builder", construction.ID, build.SchemaCodeCompile, construction.CodeType, "C", map[string]any{}, now)
+			decide(t, tn, "builder", build.ID, build.SchemaCodeCompile, build.CodeType, "C", map[string]any{}, now)
 			for _, run := range tn.operationDispatches(now) {
 				run()
 			}
@@ -247,37 +249,33 @@ func TestWasmDataABIChannels(t *testing.T) {
 			if _, err := tn.SaveReleaseCandidate(member, platform.AssetCompute, "C", preview.CandidateID, "save", now); err != nil {
 				t.Fatal(err)
 			}
-			decide(t, tn, "builder", construction.ID, "build.code.edit", construction.CodeType, "C", map[string]any{"abi": ""}, now)
+			decide(t, tn, "builder", build.ID, "build.code.edit", build.CodeType, "C", map[string]any{"abi": ""}, now)
 			if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", now); err != nil {
 				t.Fatal(err)
 			}
-			op, _, ok := operationDefinition(tn.app(construction.ID), "data", 1)
+			op, _, ok := operationDefinition(tn.app(build.ID), "data", 1)
 			if !ok || op.Binding.ABI != platform.WasmDataABI {
 				t.Fatal("activation lost the frozen ABI")
 			}
-			call, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: construction.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
+			call, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
 			if refusal != nil {
 				t.Fatal(refusal)
 			}
 			// The accepted input remains small; the original FileStore holds
 			// its immutable bytes. Repeated preparation leaves no extra file.
 			beforeRetry := len(entries)
-			files.mu.Lock()
-			beforeFiles := len(files.m)
-			files.mu.Unlock()
-			retry, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: construction.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
-			files.mu.Lock()
-			afterFiles := len(files.m)
-			files.mu.Unlock()
+			beforeFiles := len(storedFiles(t, files))
+			retry, refusal := tn.InvokeOperation(member, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: raw}, now)
+			afterFiles := len(storedFiles(t, files))
 			if refusal != nil || retry.ID != call.ID || len(entries) != beforeRetry || beforeFiles != afterFiles {
 				t.Fatalf("sealed retry changed its original intent or retained another file: %v", refusal)
 			}
 			for _, entry := range entries {
-				if len(entry.Body) > acceptance.MaxResultBytes {
+				if len(entry.Body) > platform.AcceptedResultMaxBytes {
 					t.Fatal("large input was copied into the accepted result")
 				}
 			}
-			var inputRef operationInputArtifact
+			var inputRef platform.OperationInputArtifact
 			for _, effect := range tn.outbound {
 				if effect.ID == call.ID {
 					var binding operationBinding
@@ -291,9 +289,9 @@ func TestWasmDataABIChannels(t *testing.T) {
 				t.Fatal("the input artifact lost its size")
 			}
 			for _, altered := range []platform.OperationRequest{
-				{App: construction.ID, Name: "data", Version: 1, Key: "invoke", Inputs: json.RawMessage(`"different"`)},
-				{App: construction.ID, Name: "data", Version: 1, Key: "unreadable", Inputs: raw, Sources: []string{"build.code/missing"}},
-				{App: construction.ID, Name: "data", Version: 1, Key: "over-budget", Inputs: json.RawMessage(`"` + strings.Repeat("x", limits.DataInputBytes) + `"`)},
+				{App: build.ID, Name: "data", Version: 1, Key: "invoke", Inputs: json.RawMessage(`"different"`)},
+				{App: build.ID, Name: "data", Version: 1, Key: "unreadable", Inputs: raw, Sources: []string{"build.code/missing"}},
+				{App: build.ID, Name: "data", Version: 1, Key: "over-budget", Inputs: json.RawMessage(`"` + strings.Repeat("x", limits.DataInputBytes) + `"`)},
 			} {
 				if _, refusal := tn.InvokeOperation(member, altered, now); refusal == nil {
 					t.Fatal("changed, unreadable or over-budget input was accepted")
@@ -301,28 +299,26 @@ func TestWasmDataABIChannels(t *testing.T) {
 			}
 			foreign := member
 			foreign.Tenant = "other"
-			if _, refusal := tn.InvokeOperation(foreign, platform.OperationRequest{App: construction.ID, Name: "data", Version: 1, Key: "foreign", Inputs: raw}, now); refusal == nil {
+			if _, refusal := tn.InvokeOperation(foreign, platform.OperationRequest{App: build.ID, Name: "data", Version: 1, Key: "foreign", Inputs: raw}, now); refusal == nil {
 				t.Fatal("another tenant prepared the input")
 			}
-			files.mu.Lock()
-			remainingFiles := len(files.m)
-			files.mu.Unlock()
+			remainingFiles := len(storedFiles(t, files))
 			if remainingFiles != beforeFiles {
 				t.Fatal("known input rejection retained an unused artifact")
 			}
-			for _, change := range []func(*operationInputArtifact){
-				func(ref *operationInputArtifact) { ref.Tenant = "other" },
-				func(ref *operationInputArtifact) { ref.Call = "other" },
-				func(ref *operationInputArtifact) { ref.Member = "other" },
-				func(ref *operationInputArtifact) { ref.Size = maxOperationInputBytes + 1 },
+			for _, change := range []func(*platform.OperationInputArtifact){
+				func(ref *platform.OperationInputArtifact) { ref.Tenant = "other" },
+				func(ref *platform.OperationInputArtifact) { ref.Call = "other" },
+				func(ref *platform.OperationInputArtifact) { ref.Member = "other" },
+				func(ref *platform.OperationInputArtifact) { ref.Size = computeowner.MaxOperationInputBytes + 1 },
 			} {
 				altered := inputRef
 				change(&altered)
-				if _, err := tn.staged.readInput(t.Context(), altered); err == nil {
+				if _, err := tn.staged.ReadInput(t.Context(), altered); err == nil {
 					t.Fatal("a foreign or over-budget input artifact was read")
 				}
 			}
-			inputKey, err := tn.staged.inputKey(inputRef)
+			inputKey, err := tn.staged.InputKey(inputRef)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -331,7 +327,7 @@ func TestWasmDataABIChannels(t *testing.T) {
 			if err := files.Put(t.Context(), inputKey, damaged, "application/json"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := tn.staged.readInput(t.Context(), inputRef); err == nil {
+			if _, err := tn.staged.ReadInput(t.Context(), inputRef); err == nil {
 				t.Fatal("changed sealed bytes passed their digest")
 			}
 			if err := files.Put(t.Context(), inputKey, raw, "application/json"); err != nil {

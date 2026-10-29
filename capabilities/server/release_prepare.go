@@ -1,18 +1,20 @@
 package platformserver
 
+import releaseowner "platformserver/studio/releases"
+
 import (
 	"encoding/json"
 	"fmt"
-	resultformat "platformserver/internal/acceptance/result"
+
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
-	"platformserver/internal/records"
+	"platformserver/studio/build"
+
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -22,27 +24,7 @@ func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, con
 	return t.bootstrapOwnerDraftsLocked(candidate, context, len(definitionOnly) > 0 && definitionOnly[0], nil)
 }
 
-type ownerDraftRequest struct {
-	Key         string
-	From, Until int
-	Refs        map[platform.AssetRef]bool
-}
-
-func assetDraftPayload(info platform.EntityInfo, image json.RawMessage) (json.RawMessage, error) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(image, &fields); err != nil {
-		return nil, err
-	}
-	payload := map[string]json.RawMessage{}
-	for _, field := range info.Fields {
-		if value, ok := fields[field.Name]; ok && !field.ReadOnly && string(value) != "null" {
-			payload[field.Name] = value
-		}
-	}
-	return json.Marshal(payload)
-}
-
-func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *ownerDraftRequest) (*stagedDecision, json.RawMessage, error) {
+func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool, request *releaseowner.OwnerDraftRequest) (*stagedDecision, json.RawMessage, error) {
 	registry, err := t.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -51,14 +33,9 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	if err != nil {
 		return nil, nil, err
 	}
-	if request != nil && request.Refs != nil {
-		drafts = slices.DeleteFunc(drafts, func(draft platform.AssetDraft) bool { return !request.Refs[draft.Ref] })
-	}
-	if request != nil && request.Until != 0 {
-		if !context.DraftsOnly || request.From < 0 || request.Until > len(drafts) || request.From >= request.Until || request.Until-request.From > 64 {
-			return nil, nil, fmt.Errorf("draft batch must contain one to 64 selected owner drafts")
-		}
-		drafts = drafts[request.From:request.Until]
+	drafts, err = releaseowner.SelectOwnerDrafts(drafts, context, request)
+	if err != nil {
+		return nil, nil, err
 	}
 	decision := t.newStagedDecision()
 	view, err := t.assetInstallationView(decision.records)
@@ -79,14 +56,14 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		}
 	}
 	decision.tenant, decision.records = view, view.records
-	decision.records.readRelease = candidate.ID
+	decision.records.current.SelectRelease(candidate.ID)
 	for i, app := range view.apps {
 		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
 			continue
 		}
 		private := decision.stateApp(app)
 		view.apps[i] = private
-		host.Attach(private, hostView{t: view, app: private})
+		(hostView{t: view, app: private}).bindOwner(private)
 	}
 	for key, app := range view.owner {
 		view.owner[key] = view.app(app.Manifest().ID)
@@ -147,7 +124,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		matches := 0
 		logicalName := draft.Ref.Name
 		if draft.Ref.Kind == platform.AssetObject || draft.Ref.Kind == platform.AssetFlow {
-			logicalName = strings.TrimPrefix(logicalName, construction.ID+".")
+			logicalName = strings.TrimPrefix(logicalName, build.ID+".")
 		}
 		for _, row := range et.rows.All() {
 			if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
@@ -162,7 +139,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		}
 		app := view.app(et.info.App)
 		if matches == 0 {
-			raw, err := assetDraftPayload(et.info, draft.Image)
+			raw, err := releaseowner.AssetDraftPayload(et.info, draft.Image)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -197,7 +174,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 				view.apps[i] = private
 			}
 		}
-		host.Attach(private, hostView{t: view, app: private})
+		(hostView{t: view, app: private}).bindOwner(private)
 		registry, err = view.assetRegistryLocked()
 		if err != nil {
 			return nil, nil, err
@@ -228,16 +205,16 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	return decision, raw, err
 }
 
-func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]resultformat.ReleaseInstallation, json.RawMessage, error) {
+func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
 	if err := checkApplicationProposalFunctions(candidate); err != nil {
 		return nil, nil, err
 	}
 	return t.prepareReleaseInstallationLocked(candidate, member, at, upgrade, true)
 }
 
-func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]resultformat.ReleaseInstallation, json.RawMessage, error) {
+func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
 	if t.agents == nil && slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
-		return asset.Ref.App == construction.ID && asset.Ref.Kind == platform.AssetAgent
+		return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetAgent
 	}) {
 		return nil, nil, fmt.Errorf("agent artifacts require the target's original agent runtime")
 	}
@@ -267,14 +244,9 @@ func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCand
 	if err != nil {
 		return nil, nil, err
 	}
-	installations := make([]resultformat.ReleaseInstallation, 0, len(plans))
-	for _, plan := range plans {
-		before, err := view.installationPredecessor(plan.Record)
-		if err != nil {
-			return nil, nil, err
-		}
-		ref := plan.Ref
-		installations = append(installations, resultformat.ReleaseInstallation{ReleasePublication: construction.ReleasePublication{Schema: plan.Schema, Image: plan.Image}, Before: before, Ref: &ref, Record: plan.Record})
+	installations, err := releaseowner.BindInstallationPredecessors(plans, view.installationPredecessor)
+	if err != nil {
+		return nil, nil, err
 	}
 	trial, err := view.stageReleaseInstallationLocked(installations, true, upgrade)
 	if err != nil {

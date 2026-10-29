@@ -2,8 +2,8 @@ package platformserver
 
 import (
 	"encoding/json"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"slices"
 	"testing"
 	"time"
@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -20,8 +20,8 @@ type resultStockCount struct{ *stock }
 func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.T) {
 	id := "canonical-history"
 	build := func() *Tenant {
-		seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}, Grants: []platform.Grant{{App: "stock", Role: "clerk"}, {App: "stock", Role: "line"}}}}
-		tn, err := NewTenant(id, NewConsole(id, seat), &resultStockCount{newStock(id)})
+		seat := platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}, Grants: []platform.Grant{{App: "stock", Role: "clerk"}, {App: "stock", Role: "line"}}}}
+		tn, err := NewTenant(id, newConsole(id, seat), &resultStockCount{newStock(id)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +53,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if encodeErr != nil {
 		t.Fatal(encodeErr)
 	}
-	legacyBefore, encodeErr := acceptance.Digest(legacyPrior)
+	legacyBefore, encodeErr := platform.CanonicalDigest(legacyPrior)
 	if encodeErr != nil {
 		t.Fatal(encodeErr)
 	}
@@ -66,16 +66,16 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if len(entries) != 2 {
 		t.Fatalf("expected two accepted inputs, got %d", len(entries))
 	}
-	result, _, err := resultformat.DecodeBatch(entries[1].Body)
+	result, _, err := acceptedformat.DecodeBatch(entries[1].Body)
 	if err != nil || len(result.Rows) != 1 {
 		t.Fatalf("count did not save its canonical batch: %+v, %v", result, err)
 	}
 	if result.Version != 8 || result.Rows[0].HistoryRef == nil || result.Rows[0].HistoryRef.Base != 1 || result.Rows[0].HistoryBase != 1 || len(result.Rows[0].History) != 1 || tn.records.types["stock.item"].rows.Get("I1").HistoryLength() != 2 {
 		t.Fatal("a new result must append one change without discarding its history")
 	}
-	encode := func(batch resultformat.Batch) []byte {
+	encode := func(batch acceptedformat.Batch) []byte {
 		t.Helper()
-		batch.Digest, err = resultformat.DigestBatch(batch)
+		batch.Digest, err = acceptedformat.DigestBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,7 +114,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if err := recoveredSuffix.Replay([]Entry{entries[0], legacySuffixSecond, entries[2]}); err != nil || recoveredSuffix.records.types["stock.item"].rows.Get("I1").HistoryLength() != 3 {
 		t.Fatalf("old suffix followed by a new suffix failed to recover: %v", err)
 	}
-	result, _, err = resultformat.DecodeBatch(entries[2].Body)
+	result, _, err = acceptedformat.DecodeBatch(entries[2].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	ref.Base = 3
 	ref.Head = ref.Prior
 	for i, change := range result.Rows[0].History {
-		ref.Head, err = records.AppendHistory(ref.Head, ref.Base+i, jsonOf(change))
+		ref.Head, err = platform.AppendRecordHistory(ref.Head, ref.Base+i, jsonOf(change))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -143,8 +143,8 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 func TestAcceptedBatchReplaysPostgresTimestampPrecision(t *testing.T) {
 	id := "journal-clock"
 	build := func() *Tenant {
-		seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
-		tn, err := NewTenant(id, NewConsole(id, seat), &resultStockCount{newStock(id)})
+		seat := platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}
+		tn, err := NewTenant(id, newConsole(id, seat), &resultStockCount{newStock(id)})
 		if err != nil {
 			t.Fatal(err)
 		}

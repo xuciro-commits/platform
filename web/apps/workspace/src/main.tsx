@@ -1,4 +1,3 @@
-import {initializeRules} from "@platform/app/rules";
 import { currentSession, signIn, type Api, type OidcConfig } from "@platform/kernel";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
@@ -10,7 +9,6 @@ import {t} from "@platform/ui";
 
 const root = createRoot(document.getElementById("root")!);
 async function start(){
-await initializeRules();
 const previewWorkspace = new URLSearchParams(location.search).get("preview") === "pattern/workspace";
 if (previewWorkspace) {
   // Only the fixture Workspace shell needs its own window. Ordinary examples

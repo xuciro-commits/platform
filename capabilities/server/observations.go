@@ -7,16 +7,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"platformserver/internal/acceptance"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
+
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
-	"platformserver/internal/host"
+	"platformserver/studio/build"
+
 	"platformserver/platform"
 )
 
@@ -55,7 +55,7 @@ type observationReadPlan struct {
 	info       ObservationInfo
 	entity     platform.EntityInfo
 	record     json.RawMessage
-	connection construction.Connection
+	connection build.Connection
 	header     string
 	device     string
 	stamp      string
@@ -162,7 +162,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if json.Unmarshal(plan.record, &values) != nil || json.Unmarshal(values[definition.DeviceField], &plan.device) != nil || strings.TrimSpace(plan.device) == "" || len(plan.device) > 256 {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The original record needs a readable observation device identifier")
 	}
-	connections, _, refusal := platform.Find[construction.Connection](t.automation(construction.ID, false), platform.Query{Limit: 500})
+	connections, _, refusal := platform.Find[build.Connection](t.automation(build.ID, false), platform.Query{Limit: 500})
 	if refusal != nil {
 		return plan, refusal
 	}
@@ -177,7 +177,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if plan.connection.ID == "" || plan.connection.State != "ready" {
 		return plan, observationUnavailable(fmt.Errorf("observation connection is not ready"))
 	}
-	owner, ok := t.app(definition.Connection.App).(host.IntegrationDefinitions)
+	owner, ok := t.app(definition.Connection.App).(build.IntegrationDefinitions)
 	if !ok {
 		return plan, observationUnavailable(fmt.Errorf("observation connection has no original owner"))
 	}
@@ -190,8 +190,8 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	}
 	// Connection markings retain the existing integration restriction; source
 	// roles never downgrade confidential input for an ordinary business user.
-	if construction.Guarded(plan.connection.Marking) {
-		marking := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: construction.ConnectionType, Record: plan.connection.ID}, at, false)
+	if build.Guarded(plan.connection.Marking) {
+		marking := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: build.ConnectionType, Record: plan.connection.ID}, at, false)
 		if refusal := authorizationRefusal(marking); refusal != nil {
 			return plan, refusal
 		}
@@ -223,7 +223,7 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 		}
 		actionVersion = &version
 	}
-	plan.stamp, err = acceptance.Digest([]any{plan.info, plan.entity, plan.record, plan.connection, m, plan.header, actionVersion})
+	plan.stamp, err = platform.CanonicalDigest([]any{plan.info, plan.entity, plan.record, plan.connection, m, plan.header, actionVersion})
 	if err != nil {
 		return plan, observationUnavailable(err)
 	}

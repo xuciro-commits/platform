@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"platformserver/platform"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	}
 	defer forgetJournal(t, j, id)
 	compose := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
+		return composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
 	}
 	live := compose()
 	if _, err = j.Entries(ctx, id, 0); err != nil {
@@ -51,15 +52,15 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	}
 	defer oldView.Close()
 	live.mu.Lock()
-	previousView := live.records.readView
-	live.records.bindReadView(oldView)
+	previousView := live.records.current.View()
+	live.records.current.Bind(oldView)
 	row := live.records.types["stock.item"].rows.Get("I1")
-	live.records.bindReadView(previousView)
+	live.records.current.Bind(previousView)
 	live.mu.Unlock()
 	if row.History != nil || row.LoadHistory == nil || len(row.RecordHistory()) != 5 {
 		t.Fatal("complete record history remained resident or was lost")
 	}
-	if len(live.committed.allAnswers()) == 0 && len(live.app("stock").AcceptedLedger().RecordsFor(id)) != 5 {
+	if len(live.committed.AllAnswers()) == 0 && len(live.app("stock").AcceptedLedger().RecordsFor(id)) != 5 {
 		t.Fatal("receipt history was lost")
 	}
 	position := j.Position(id)
@@ -67,7 +68,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if refusal != nil || !proto.Equal(repeated, first) || j.Position(id) != position {
 		t.Fatalf("archived retry changed its original answer: %v", refusal)
 	}
-	if len(live.committed.answers) > 1 || len(live.committed.schemaVersions) > 1 {
+	if answers, schemas := live.committed.CacheSizes(); answers > 1 || schemas > 1 {
 		t.Fatal("historical answers accumulated in memory")
 	}
 	var storedPosition int64
@@ -119,7 +120,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if len(row.RecordHistory()) != 5 {
 		t.Fatal("committed future history leaked into the old working set")
 	}
-	if len(live.committed.answer("stock/"+next.GetSubmission().GetIdempotencyKey())) != 0 {
+	if len(live.committed.Answer("stock/"+next.GetSubmission().GetIdempotencyKey())) != 0 {
 		t.Fatal("unapplied SQL answer bypassed the original result application")
 	}
 	if got, refusal := live.submitAccepted(live.app("stock"), retryMember, next.GetSubmission(), at.Add(time.Minute), false); refusal != nil || !proto.Equal(got, next) {
@@ -166,7 +167,7 @@ func TestPostgresRuntimeStateRefusesMigrationDifference(t *testing.T) {
 	if _, err = j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}
-	live := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, newStock(id))
+	live := composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, newStock(id))
 	live.attachJournal(ctx, j)
 	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "one", "qty": 1}, time.Now().UTC())
 	if err = live.migrateRuntimeState(ctx, j); err != nil {
@@ -201,7 +202,7 @@ func TestPostgresRuntimeStateRetainedSuffix(t *testing.T) {
 			}
 			defer forgetJournal(t, j, id)
 			compose := func() *Tenant {
-				return composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
+				return composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
 			}
 			if _, err = j.Entries(ctx, id, 0); err != nil {
 				t.Fatal(err)

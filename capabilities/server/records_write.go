@@ -4,7 +4,7 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"reflect"
 	"time"

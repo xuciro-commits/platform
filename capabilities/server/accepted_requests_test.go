@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -63,7 +64,7 @@ func requestsResultTenant(t *testing.T) *Tenant {
 func requestsResultTenantFor(t *testing.T, id string) *Tenant {
 	t.Helper()
 	source := newRequestsTenant(t, true)
-	tn, err := NewTenant(id, NewConsole(id, seatOf("buyer", "cart:buyer", "stock:keeper")),
+	tn, err := NewTenant(id, newConsole(id, seatOf("buyer", "cart:buyer", "stock:keeper")),
 		&resultCart{&cart{ledger: platform.NewLedger(id, "cart", source.app("cart").(*cart).ledger.Catalog, "cart.line")}},
 		&resultDepot{depot: &depot{ledger: platform.NewLedger(id, "stock", source.app("stock").(*depot).ledger.Catalog, "stock.hold")}})
 	if err != nil {
@@ -102,7 +103,7 @@ func TestAcceptedProtocolRequestAndReplyShareCommit(t *testing.T) {
 	if refusal != nil || len(entries) != 1 {
 		t.Fatalf("protocol transaction did not commit: %+v %s, entries=%d", refusal, platform.Raw(issues), len(entries))
 	}
-	saved, _, err := resultformat.DecodeBatch(entries[0].Body)
+	saved, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(saved.Decisions) != 3 || len(saved.Rows) != 2 {
 		t.Fatalf("request and reply were not one result: %+v, %v", saved, err)
 	}
@@ -144,7 +145,7 @@ func TestAcceptedProtocolRefusalKeepsRequestAndReplyOnly(t *testing.T) {
 			if _, err := tn.Submit(member, sub, at); err != nil || len(entries) != 1 {
 				t.Fatalf("the accepted request's refused answer did not commit: %v", err)
 			}
-			saved, _, err := resultformat.DecodeBatch(entries[0].Body)
+			saved, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 			if err != nil || len(saved.Decisions) != 2 || len(saved.Rows) != 1 ||
 				tn.records.types["stock.hold"].rows.Len() != 0 {
 				t.Fatalf("refused provider left a decision or record: %+v, %v", saved, err)
@@ -236,7 +237,7 @@ func TestJournalAcceptedProtocolCrashBeforeApplication(t *testing.T) {
 func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
 	compose := func() *Tenant {
 		source := newRequestsTenant(t, false)
-		tn, err := NewTenant("t", NewConsole("t", seatOf("buyer", "cart:buyer")), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: "local/chosen"})
+		tn, err := NewTenant("t", newConsole("t", seatOf("buyer", "cart:buyer")), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: "local/chosen"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -271,7 +272,7 @@ func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
 	for i, intent := range tn.outbound {
 		var ask modelAsk
 		if json.Unmarshal([]byte(intent.Body), &ask) != nil || intent.Key != fmt.Sprintf("%s#%d", receipt.GetChangeId(), i) ||
-			intent.Endpoint != resultformat.ModelEndpoint || !intent.At.Equal(at) || ask.Model != "local/chosen" ||
+			intent.Endpoint != acceptedformat.ModelEndpoint || !intent.At.Equal(at) || ask.Model != "local/chosen" ||
 			ask.Record != "cart.line/L1" || ask.Reply != "cart.line.answer" || ask.Prompt.MaxTokens != 12 {
 			t.Fatalf("model intent lost its committed input: %+v, %+v", intent, ask)
 		}
@@ -298,8 +299,8 @@ func TestAcceptedModelDefaultIsPinnedBeforeDispatch(t *testing.T) {
 			at := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
 			compose := func() *Tenant {
 				source := newRequestsTenant(t, false)
-				tn, err := NewTenant("t", NewConsole("t", Seat{Subjects: []string{"buyer"}, Member: platform.Member{
-					ID: "buyer", Roles: map[string]string{"cart": "buyer", PlatformApp: Admin, ai.ID: ai.Admin}}}),
+				tn, err := NewTenant("t", newConsole("t", platform.Seat{Subjects: []string{"buyer"}, Member: platform.Member{
+					ID: "buyer", Roles: map[string]string{"cart": "buyer", controlowner.PlatformApp: controlowner.Admin, ai.ID: ai.Admin}}}),
 					ai.New("t"), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: tc.explicit})
 				if err != nil {
 					t.Fatal(err)
@@ -326,7 +327,7 @@ func TestAcceptedModelDefaultIsPinnedBeforeDispatch(t *testing.T) {
 				}
 			}
 			setting := func(value string) {
-				submit(PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": value})
+				submit(controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, "ai/app-model", map[string]string{"value": value})
 			}
 			submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL + "/v1"})
 			for _, name := range []string{"echo", "busy"} {

@@ -7,12 +7,15 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+
+	"platformserver/platform"
+
 	"testing"
 	"time"
 )
 
 func TestStaticHostMaintenanceWithoutDynamicDefinitions(t *testing.T) {
-	tenant := composeTenant(t, "system", []Seat{seatOf("operator", "platform:admin")})
+	tenant := composeTenant(t, "system", []platform.Seat{seatOf("operator", "platform:admin")})
 	host := NewHost(Tokens(map[string]string{"operator-token": "operator", "ops-token": "ops", "viewer-token": "viewer"}), tenant)
 	host.HostAdmins = map[string]bool{"ops": true}
 	handler := host.Handler()
@@ -60,7 +63,7 @@ func TestFoundationalSelectionPreservesAcceptedStateAndNeedsMaintenanceRestart(t
 	alternative.Engine = selectedRules
 	providers.Rules = append(providers.Rules, alternative)
 	compose := func(id string, services RuntimeCapabilities) (*Tenant, error) {
-		return NewTenantWithCapabilities(id, services, NewConsole(id, seatOf("operator", "platform:admin", "stock:clerk")), newStock(id))
+		return newTestTenantWithCapabilities(id, services, newConsole(id, seatOf("operator", "platform:admin", "stock:clerk")), newStock(id))
 	}
 	tn, err := compose("provider-restart", DefaultRuntimeCapabilities())
 	if err != nil {
@@ -167,7 +170,7 @@ func TestRetiredPlatformOwnerKeepsHistoryAndOtherOwnersActive(t *testing.T) {
 	}
 	defer store.Close()
 	compose := func() *Tenant {
-		return composeTenant(t, "retired-owner", []Seat{seatOf("operator", "platform:admin", "stock:clerk", "p:member")}, newStock("retired-owner"), newNotes("retired-owner", "p"))
+		return composeTenant(t, "retired-owner", []platform.Seat{seatOf("operator", "platform:admin", "stock:clerk", "p:member")}, newStock("retired-owner"), newNotes("retired-owner", "p"))
 	}
 	live := compose()
 	if _, err = store.Entries(ctx, live.ID, 0); err != nil {
@@ -255,7 +258,7 @@ func TestRetiredPlatformOwnerKeepsHistoryAndOtherOwnersActive(t *testing.T) {
 func TestMaintenanceStopsScheduledJobsAndNewOutsideWork(t *testing.T) {
 	id := "maintenance-work"
 	owner := &stateOnlyJob{&statefulStock{stock: newStock(id)}}
-	tenant := composeTenant(t, id, []Seat{seatOf("operator", "platform:admin", "stock:clerk")}, owner)
+	tenant := composeTenant(t, id, []platform.Seat{seatOf("operator", "platform:admin", "stock:clerk")}, owner)
 	at := time.Now().UTC()
 	if err := tenant.setHostLifecycle("suspend", "maintenance", "ops", at); err != nil {
 		t.Fatal(err)

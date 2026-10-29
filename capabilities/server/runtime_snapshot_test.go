@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
+	pgx "github.com/jackc/pgx/v5"
+
 	"google.golang.org/protobuf/proto"
 	"os"
-	"platformserver/apps/flow"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/construction"
+	automation "platformserver/engine/automation"
 	"platformserver/journal"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"platformserver/platform"
+	"platformserver/studio/build"
 	"testing"
 	"time"
 )
@@ -29,7 +30,7 @@ func TestPostgresSQLCheckpointRestoresTailWithoutResidentRecords(t *testing.T) {
 	}
 	defer forgetJournal(t, j, id)
 	compose := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
+		return composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
 	}
 	live := compose()
 	if _, err = j.Entries(ctx, id, 0); err != nil {
@@ -86,7 +87,7 @@ func TestPostgresSQLCheckpointRestoresTailWithoutResidentRecords(t *testing.T) {
 		t.Fatal("startup did not save the recovered owner state at the current position")
 	}
 	for typ, et := range restored.records.types {
-		if !et.rows.Sourced() || et.rows.Stored() != 0 || len(et.uniqueIndexes) != 0 || len(et.referenceIndexes) != 0 {
+		if !et.rows.Sourced() || et.rows.Stored() != 0 || uniqueIndexCount(et) != 0 || referenceIndexCount(et) != 0 {
 			t.Fatalf("current SQL state remained resident for %s", typ)
 		}
 	}
@@ -123,7 +124,7 @@ func TestPostgresSQLCheckpointUpgradesAnUnchangedPortableSnapshot(t *testing.T) 
 	}
 	defer forgetJournal(t, j, id)
 	compose := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
+		return composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
 	}
 	live := compose()
 	if _, err = j.Entries(ctx, id, 0); err != nil {
@@ -182,17 +183,17 @@ func TestPostgresSQLCheckpointRestoresPublishedTypesAndTailPublication(t *testin
 	}
 	live.attachJournal(ctx, j)
 	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	firstType := publishObject(t, live, "builder", "FIRST", map[string]any{"name": "first", "title": "First", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
-	decide(t, live, "builder", construction.ID, firstType+".create", firstType, "A1", map[string]any{"note": "before"}, at.Add(time.Second))
+	firstType := publishObject(t, live, "builder", "FIRST", map[string]any{"name": "first", "title": "First", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at)
+	decide(t, live, "builder", build.ID, firstType+".create", firstType, "A1", map[string]any{"note": "before"}, at.Add(time.Second))
 	if err = live.migrateRuntimeState(ctx, j); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = live.checkpointRuntime(ctx, j, "build-checkpoint"); err != nil {
 		t.Fatal(err)
 	}
-	decide(t, live, "builder", construction.ID, firstType+".edit", firstType, "A1", map[string]any{"note": "after"}, at.Add(2*time.Second))
-	secondType := publishObject(t, live, "builder", "SECOND", map[string]any{"name": "second", "title": "Second", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}}, at.Add(3*time.Second))
-	decide(t, live, "builder", construction.ID, secondType+".create", secondType, "B1", map[string]any{"note": "new type"}, at.Add(4*time.Second))
+	decide(t, live, "builder", build.ID, firstType+".edit", firstType, "A1", map[string]any{"note": "after"}, at.Add(2*time.Second))
+	secondType := publishObject(t, live, "builder", "SECOND", map[string]any{"name": "second", "title": "Second", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}}, at.Add(3*time.Second))
+	decide(t, live, "builder", build.ID, secondType+".create", secondType, "B1", map[string]any{"note": "new type"}, at.Add(4*time.Second))
 	restored := compose()
 	deployed := Deployment{SnapshotEvery: 1}
 	if err = deployed.restoreTenants(ctx, j, "next-build", []*Tenant{restored}, map[string]int64{}, map[string]bool{}); err != nil || restored.quarantined() {
@@ -237,7 +238,7 @@ func TestPostgresSQLCheckpointKeepsOrdinaryBatchAnswersOnDemand(t *testing.T) {
 	compose := func() *Tenant {
 		seat := seatOf("ana", "stock:clerk")
 		seat.Member.Grants = []platform.Grant{{App: "stock", Role: "clerk"}, {App: "stock", Role: "line"}}
-		return composeTenant(t, id, []Seat{seat}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
+		return composeTenant(t, id, []platform.Seat{seat}, &formattedStock{stock: newStock(id), format: "stock.ledger.v1"})
 	}
 	live := compose()
 	if _, err = j.Entries(ctx, id, 0); err != nil {
@@ -255,11 +256,11 @@ func TestPostgresSQLCheckpointKeepsOrdinaryBatchAnswersOnDemand(t *testing.T) {
 	if err != nil || len(original) == 0 {
 		t.Fatalf("SQL lost its original batch answer bytes: %v", err)
 	}
-	batch, answer, err := resultformat.DecodeBatch(original)
+	batch, answer, err := acceptedformat.DecodeBatch(original)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sub, err := resultformat.BatchSubmission(batch, answer)
+	sub, err := acceptedformat.BatchSubmission(batch, answer)
 	if err != nil || batch.HasSavedAnswer(sub) {
 		t.Fatalf("test did not produce an ordinary batch: %v", err)
 	}
@@ -332,7 +333,7 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 		t.Fatal(err)
 	}
 	defer forgetJournal(t, j, id)
-	compose := func() *Tenant { return builderTenant(t, id, flow.New(id)) }
+	compose := func() *Tenant { return builderTenant(t, id, automation.New(id)) }
 	live := compose()
 	if _, err = j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
@@ -345,11 +346,11 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 		t.Fatal(err)
 	}
 	at := time.Now().UTC()
-	publishObject(t, live, "builder", "OBJECT", map[string]any{"name": "visit", "title": "Visit", "fields": []construction.Field{{Name: "note", Title: "Note", Type: "text"}}, "states": []construction.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "actions": []construction.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}}}, at)
-	decide(t, live, "builder", construction.ID, "build.process.create", construction.ProcessType, "PROCESS", map[string]any{"name": "review", "title": "Review", "object": "build.visit", "when": "open", "steps": []construction.ProcessStep{{Name: "close", Kind: "action", Act: "close"}}}, at)
-	decide(t, live, "builder", construction.ID, construction.SchemaProcess, construction.ProcessType, "PROCESS", map[string]any{}, at)
-	ref := platform.AssetRef{App: construction.ID, Kind: platform.AssetFlow, Name: "build.review"}
-	decide(t, live, "builder", construction.ID, "build.app.create", construction.AppType, "APP", map[string]any{"name": "desk", "title": "Desk", "resources": []platform.AssetRef{ref}}, at)
+	publishObject(t, live, "builder", "OBJECT", map[string]any{"name": "visit", "title": "Visit", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "actions": []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}}}, at)
+	decide(t, live, "builder", build.ID, "build.process.create", build.ProcessType, "PROCESS", map[string]any{"name": "review", "title": "Review", "object": "build.visit", "when": "open", "steps": []build.ProcessStep{{Name: "close", Kind: "action", Act: "close"}}}, at)
+	decide(t, live, "builder", build.ID, build.SchemaProcess, build.ProcessType, "PROCESS", map[string]any{}, at)
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFlow, Name: "build.review"}
+	decide(t, live, "builder", build.ID, "build.app.create", build.AppType, "APP", map[string]any{"name": "desk", "title": "Desk", "resources": []platform.AssetRef{ref}}, at)
 	member := memberOf(t, live, "builder")
 	preview, err := live.PreviewRelease(member, platform.AssetApp, "APP")
 	if err != nil || preview.Diagnostic != "" {
@@ -362,7 +363,7 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 	if legacy {
 		persist := live.AcceptResult
 		live.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
-			saved, err := resultformat.DecodeRelease(entry.Body)
+			saved, err := acceptedformat.DecodeRelease(entry.Body)
 			if err != nil {
 				return nil, err
 			}
@@ -371,7 +372,7 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 				saved.Installations[i].Record = ""
 				saved.Installations[i].Ref = nil
 			}
-			entry.Body, err = resultformat.EncodeRelease(saved)
+			entry.Body, err = acceptedformat.EncodeRelease(saved)
 			if err != nil {
 				return nil, err
 			}
@@ -397,7 +398,7 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 		if _, err = db.Exec(ctx, `update runtime_tenants set format=1 where tenant=$1`, id); err != nil {
 			t.Fatal(err)
 		}
-		original, err := j.StateRecord(ctx, id, construction.ObjectType, "OBJECT")
+		original, err := j.StateRecord(ctx, id, build.ObjectType, "OBJECT")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -416,7 +417,7 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 		if err = deployment.restoreTenants(ctx, j, "flow-release", []*Tenant{broken}, map[string]int64{}, map[string]bool{}); err != nil || !broken.quarantined() {
 			t.Fatal("damaged old SQL state was admitted", err)
 		}
-		retained, err := j.StateRecord(ctx, id, construction.ObjectType, "OBJECT")
+		retained, err := j.StateRecord(ctx, id, build.ObjectType, "OBJECT")
 		needed, upgradeErr := j.StateNeedsUpgrade(ctx, id)
 		if err != nil || upgradeErr != nil || !needed || !bytes.Equal(retained, bad) {
 			t.Fatal("rejected upgrade changed old SQL data", err, upgradeErr)
@@ -430,11 +431,11 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 	if err = deployment.restoreTenants(ctx, j, "flow-release", []*Tenant{restored}, map[string]int64{}, map[string]bool{}); err != nil || restored.quarantined() {
 		t.Fatalf("release tail recovery: %v %+v", err, restored.fault.Load())
 	}
-	got, err := restored.ReleaseCandidate([]platform.AssetRef{{App: construction.ID, Kind: platform.AssetApp, Name: "desk"}})
+	got, err := restored.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "desk"}})
 	if err != nil || got.ID != candidate || restored.ActiveRelease() != candidate {
 		t.Fatalf("restored flow closure differs: %+v %v", got, err)
 	}
-	if restored.records.types[construction.ProcessType].rows.Stored() != 0 {
+	if restored.records.types[build.ProcessType].rows.Stored() != 0 {
 		t.Fatal("restored process records remained resident")
 	}
 }

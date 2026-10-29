@@ -7,6 +7,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"slices"
 	"testing"
 	"time"
 )
@@ -48,14 +49,14 @@ func TestOrgProjection(t *testing.T) {
 		return rec
 	}
 	submit(SchemaElementAdd, "post-1", map[string]any{"stereotype": Post, "name": "Line lead"})
-	submit(SchemaElementAdd, "cap-1", map[string]any{"stereotype": Capability, "name": "Assemble", "properties": map[string]any{"kind": "Operational"}})
-	submit(SchemaRelationshipAdd, "r-1", map[string]any{"stereotype": Performs, "source": "l1", "target": "cap-1"})
-	raw, _ := json.Marshal(map[string]any{"stereotype": Capability, "name": "Bad", "properties": map[string]any{"kind": "Nope"}})
+	submit(SchemaElementAdd, "person-1", map[string]any{"stereotype": Person, "name": "Ann"})
+	submit(SchemaRelationshipAdd, "r-1", map[string]any{"stereotype": FillsPost, "source": "person-1", "target": "post-1"})
+	raw, _ := json.Marshal(map[string]any{"stereotype": Capability, "name": "Bad"})
 	if _, err := e.Submit(c, sub(SchemaElementAdd, "cap-2", raw), time.Now()); err == nil {
-		t.Fatal("a bad enumeration literal passed")
+		t.Fatal("a retired standard type passed")
 	}
-	if got := e.Model().Of("l1", Performs, true, "2026-02-01"); len(got) != 1 || got[0] != "cap-1" {
-		t.Fatalf("capabilities of l1 %v", got)
+	if got := e.Model().Of("person-1", FillsPost, true, "2026-02-01"); len(got) != 1 || got[0] != "post-1" {
+		t.Fatalf("post of person-1 %v", got)
 	}
 	// what the host's Directory answers the apps
 	if info, ok := e.Element("l1", "2026-02-01"); !ok || info.Stereotype != Organization || info.Kind != "line" {
@@ -64,61 +65,8 @@ func TestOrgProjection(t *testing.T) {
 	if _, ok := e.Element("l1", "2019-01-01"); ok {
 		t.Fatal("l1 is live before it starts")
 	}
-	if got := e.Related("cap-1", Performs, false, "2026-02-01"); len(got) != 1 || got[0] != "l1" {
-		t.Fatalf("performers of cap-1 %v", got)
-	}
-}
-
-// Federation: a subsidiary publishes, the group imports read-only.
-func TestFederation(t *testing.T) {
-	sub := New("sub", platform.OrgSeed{})
-	grp := New("grp", platform.OrgSeed{})
-	at := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	do := func(e *Enterprise, tenant, schema, typ, id string, body any) *kernel.Error {
-		raw, _ := json.Marshal(body)
-		c := platform.Caller{Tenant: tenant, ID: "ann", App: ID, Roles: map[string]string{ID: Admin}}
-		_, err := e.Submit(c, &pb.Submission{TenantId: tenant, PrincipalId: "ann", Authority: ID, IdempotencyKey: schema + id, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Target: &pb.EntityRef{Type: typ, Id: id}, Payload: raw}, at)
-		return err
-	}
-	must := func(err *kernel.Error) {
-		t.Helper()
-		if err != nil {
-			t.Fatalf("%v: %s", err, err.Message)
-		}
-	}
-	must(do(sub, "sub", SchemaElementAdd, ElementType, "co", map[string]any{"stereotype": Organization, "name": "Acme Industrial", "legal": true}))
-	must(do(sub, "sub", SchemaElementAdd, ElementType, "hr", map[string]any{"stereotype": Organization, "name": "HR"}))
-	must(do(sub, "sub", SchemaElementAdd, ElementType, "cap", map[string]any{"stereotype": Capability, "name": "Machining"}))
-	must(do(sub, "sub", SchemaRelationshipAdd, RelationshipType, "r1", map[string]any{"stereotype": Performs, "source": "co", "target": "cap"}))
-	published := true
-	for _, id := range []string{"co", "cap"} {
-		must(do(sub, "sub", SchemaElementEdit, ElementType, id, map[string]any{"published": published}))
-	}
-	slice, _ := sub.Read(platform.Caller{}, ReadPublished)
-	sl := slice.(Slice)
-	if len(sl.Elements) != 2 || len(sl.Relationships) != 1 || sl.Elements[0].Owner != "tenant:sub" {
-		t.Fatalf("slice %+v", sl)
-	}
-	must(do(grp, "grp", SchemaElementAdd, ElementType, "group", map[string]any{"stereotype": Organization, "name": "Acme Group", "legal": true}))
-	must(do(grp, "grp", SchemaKindAdd, ModelType, "legal", map[string]any{"name": "Ownership", "kind": "legal"}))
-	must(do(grp, "grp", SchemaSliceImport, ModelType, "sub", map[string]any{"slice": sl}))
-	company := ImportedElementID("sub", "co")
-	must(do(grp, "grp", SchemaRelationshipAdd, RelationshipType, "own", map[string]any{"stereotype": Placement, "kind": "legal", "source": company, "target": "group", "share": 1}))
-	if err := do(grp, "grp", SchemaElementEdit, ElementType, company, map[string]any{"name": "Renamed"}); err == nil {
-		t.Fatal("a mirrored element was edited in the group")
-	}
-	if got := grp.Units("", "legal", "2026-02-01"); len(got) != 0 {
-		t.Fatalf("units %v", got)
-	}
-	if !grp.Model().BelowIn("legal", "group", company, "2026-02-01") {
-		t.Fatal("the subsidiary is not below the group in the legal kind")
-	}
-	// a second import with the capability unpublished drops it, keeps the group's own ownership edge
-	sl.Elements = sl.Elements[:1]
-	sl.Relationships = nil
-	must(do(grp, "grp", SchemaSliceImport, ModelType, "sub-2", map[string]any{"slice": sl}))
-	if m := grp.Model(); len(m.Elements) != 3 || len(m.Relationships) != 2 || m.ElementOf(ImportedElementID("sub", "cap")).Until == "" || m.RelationshipOf("own") == nil {
-		t.Fatalf("after re-import: %d elements %+v", len(m.Elements), m.Relationships)
+	if got := e.Related("post-1", FillsPost, false, "2026-02-01"); len(got) != 1 || got[0] != "person-1" {
+		t.Fatalf("holders of post-1 %v", got)
 	}
 }
 
@@ -254,27 +202,17 @@ func TestRelationshipLifecycleChecksIntervalsSourcesAndUses(t *testing.T) {
 	}
 }
 
-func TestSubmitSourceSyncParsesElementObjectsAndKeepsSourceValidation(t *testing.T) {
+func TestSourceSyncRetirementPreservesExistingSourceState(t *testing.T) {
 	e := New("sync-submit", platform.OrgSeed{})
+	e.model.Elements = []Element{{ID: "source:hr:cap", Stereotype: Capability, Name: "Capability", Owner: "source:hr"}}
 	c := platform.Caller{Tenant: "sync-submit", ID: "pipeline", App: ID, Roles: map[string]string{ID: Admin}, Automation: true}
-	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	elements := []Element{{ID: "team", Stereotype: Organization, Name: "Team"}, {ID: "cap", Stereotype: Capability, Name: "Capability"}}
-	body := map[string]any{"source": "hr", "elements": elements, "relationships": []Relationship{{ID: "ability", Stereotype: Performs, Source: "team", Target: "cap"}}}
-	if err := lifecycleSubmit(e, c, SchemaSliceSync, ModelType, "hr", body, at); err != nil {
-		t.Fatalf("valid source sync refused: %v %s", err, err.Message)
-	}
-	model := e.Model()
-	if model.ElementOf("team") == nil || model.ElementOf("team").Owner != "source:hr" || model.RelationshipOf("sync:hr:ability") == nil {
-		t.Fatal("source objects or relationship not saved")
-	}
 	before, _ := e.AcceptedState()
-	body["elements"] = []Element{{ID: "team", Stereotype: Organization, Name: "Team"}, {ID: "cap", Stereotype: Organization, Name: "Invalid changed type"}}
-	if err := lifecycleSubmit(e, c, SchemaSliceSync, ModelType, "hr", body, at); err == nil || err.Message != "A source element keeps its identity and type" {
-		t.Fatalf("source owner validation was bypassed: %v", err)
+	if err := lifecycleSubmit(e, c, SchemaSliceSync, ModelType, "hr", map[string]any{"source": "hr", "elements": []Element{{ID: "unit", Stereotype: Organization, Name: "Unit"}}}, time.Now()); err == nil {
+		t.Fatal("retired full source sync accepted")
 	}
 	after, _ := e.AcceptedState()
 	if string(before) != string(after) {
-		t.Fatal("refused source sync changed the model")
+		t.Fatal("retired sync changed source-owned history")
 	}
 }
 
@@ -292,9 +230,6 @@ func (r lifecycleRuntime) CheckEnterpriseUsage(platform.Caller, string, string, 
 	return nil
 }
 func (r lifecycleRuntime) CheckEnterpriseTenantConnection(platform.Caller, string, time.Time) *kernel.Error {
-	return nil
-}
-func (r lifecycleRuntime) CheckEnterpriseTenantLink(platform.Caller, string, uint32, time.Time) *kernel.Error {
 	return nil
 }
 
@@ -322,41 +257,46 @@ func TestElementUsageRefusalRunsOutsideModelLockAndKeepsState(t *testing.T) {
 	}
 }
 
-func TestViewCanRemoveAnUnreadableOldPinAndSourceEndpointsCannotChange(t *testing.T) {
-	e := New("view", platform.OrgSeed{Units: []platform.Unit{{ID: "unit", Name: "Unit"}}})
-	e.model.Views = []View{{ID: "view", Name: "View", Viewpoint: "organization", Elements: []string{"unit"}, Pins: []Pin{{Ref: "record:work.task/hidden", Anchor: "unit"}}}}
+func TestRetiredViewWritesKeepOriginalPinsAndLayout(t *testing.T) {
+	e := New("view", platform.OrgSeed{})
+	e.model.Views = []View{{ID: "old", Name: "Original", Viewpoint: "organization", Elements: []string{}, Pins: []Pin{{Ref: "record:work.task/hidden", Anchor: "unit"}}}}
 	c := platform.Caller{Tenant: "view", ID: "admin", App: ID, Roles: map[string]string{ID: Admin}}
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	if err := lifecycleSubmit(e, c, SchemaViewSave, ViewType, "view", map[string]any{"name": "View", "viewpoint": "organization", "elements": []string{"unit"}, "pins": []Pin{}}, at); err != nil {
-		t.Fatalf("removing unreadable pin: %v", err)
+	before, _ := e.AcceptedState()
+	for _, schema := range []string{SchemaViewSave, SchemaViewDelete} {
+		if err := lifecycleSubmit(e, c, schema, ViewType, "old", map[string]any{"name": "Replacement", "viewpoint": "organization", "elements": []string{}, "id": "old"}, time.Now()); err == nil {
+			t.Fatal("retired view editor accepted", schema)
+		}
 	}
-	if len(e.Model().Views[0].Pins) != 0 {
-		t.Fatal("old pin was retained")
+	after, _ := e.AcceptedState()
+	if string(before) != string(after) {
+		t.Fatal("view retirement rewrote existing history")
 	}
-	e.model.Elements = append(e.model.Elements, Element{ID: "source", Stereotype: Organization, Name: "Source", Owner: "source:hr"}, Element{ID: "cap", Stereotype: Capability, Name: "Capability", Owner: "source:hr"})
-	e.model.Relationships = append(e.model.Relationships, Relationship{ID: "sync:hr:ability", Stereotype: Performs, Source: "source", Target: "cap"})
-	c.Automation = true
-	if err := lifecycleSubmit(e, c, SchemaSliceSync, ModelType, "hr", map[string]any{"source": "hr", "elements": []Element{{ID: "source", Stereotype: Organization, Name: "Source"}, {ID: "cap", Stereotype: Capability, Name: "Capability"}}, "relationships": []Relationship{{ID: "ability", Stereotype: Performs, Source: "unit", Target: "cap"}}}, at); err == nil {
-		t.Fatal("source relationship endpoints changed under the same ID")
+	restarted := New("view", platform.OrgSeed{})
+	if err := restarted.ApplyAcceptedState(before); err != nil {
+		t.Fatal(err)
+	}
+	restored, _ := restarted.AcceptedState()
+	if string(before) != string(restored) {
+		t.Fatal("accepted historical view lost its original bytes")
 	}
 }
 
-func TestSharedPlacementKindsUseSourceIdentityAndStayReadOnly(t *testing.T) {
-	e := New("kind-import", platform.OrgSeed{Units: []platform.Unit{{ID: "local", Name: "Local"}}})
-	e.model.TenantLinks = []TenantLink{{ID: "link", Organization: "local", Tenant: "source", Root: "root", Connection: "CONNECTION"}}
-	slice := Slice{Tenant: "source", UAF: "1.3", Kinds: []Kind{{ID: "management", Name: "Management", Kind: "management"}}, Elements: []Element{{ID: "root", Stereotype: Organization, Name: "Root"}, {ID: "child", Stereotype: Organization, Name: "Child"}}, Relationships: []Relationship{{ID: "placement", Stereotype: Placement, Kind: "management", Source: "child", Target: "root"}}}
-	c := platform.Caller{Tenant: "kind-import", ID: "admin", App: ID, Roles: map[string]string{ID: Admin}}
-	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	if err := lifecycleSubmit(e, c, SchemaSliceImport, ModelType, "link", map[string]any{"slice": slice, "link": "link", "base": e.Model().Fingerprint(), "content": slice.Fingerprint()}, at); err != nil {
-		t.Fatalf("shared hierarchy import: %v %s", err, err.Message)
-	}
-	model := e.Model()
+func TestRetainedSharedKindsAndElementsStaySourceOwned(t *testing.T) {
+	e := New("kind-import", platform.OrgSeed{})
 	kindID := ImportedElementID("source", "management")
-	if model.KindOf(kindID) == nil || model.RelationshipOf("fed:source:placement").Kind != kindID {
-		t.Fatal("shared hierarchy lost the source kind identity")
+	e.model.Kinds = []Kind{{ID: kindID, Name: "Management", Kind: "management", Owner: "tenant:source"}}
+	e.model.Elements = []Element{{ID: "tenant:source:root", Stereotype: Organization, Name: "Root", Owner: "tenant:source"}}
+	c := platform.Caller{Tenant: "kind-import", ID: "admin", App: ID, Roles: map[string]string{ID: Admin}}
+	before, _ := e.AcceptedState()
+	if err := lifecycleSubmit(e, c, SchemaKindEdit, ModelType, kindID, map[string]any{"name": "Overwrite"}, time.Now()); err == nil {
+		t.Fatal("shared kind renamed locally")
 	}
-	if err := lifecycleSubmit(e, c, SchemaKindEdit, ModelType, kindID, map[string]any{"name": "Local overwrite"}, at); err == nil {
-		t.Fatal("source kind was renamed locally")
+	if err := lifecycleSubmit(e, c, SchemaElementEdit, ElementType, "tenant:source:root", map[string]any{"name": "Overwrite"}, time.Now()); err == nil {
+		t.Fatal("shared element renamed locally")
+	}
+	after, _ := e.AcceptedState()
+	if string(before) != string(after) {
+		t.Fatal("source-owned facts changed")
 	}
 }
 
@@ -456,5 +396,48 @@ func TestOrganisationPeriodsSurviveProjectionAndDriveDirectoryApproversAndCalend
 	out.Units[0].Periods[0].Until = "2026-01-02"
 	if _, ok := e.Element("root", "2026-01-15"); !ok {
 		t.Fatal("organization projection shared mutable period values")
+	}
+}
+
+func TestDirectoryWritesRetireStandardTypesWithoutChangingHistory(t *testing.T) {
+	e := New("directory-only", platform.OrgSeed{Units: []platform.Unit{{ID: "unit", Name: "Unit"}}})
+	e.model.Elements = append(e.model.Elements, Element{ID: "legacy", Stereotype: Capability, Name: "Original capability", Properties: map[string]any{"kind": "Capability"}})
+	e.model.Views = []View{{ID: "original", Name: "Original", Viewpoint: "function", Elements: []string{"legacy"}}}
+	c := platform.Caller{Tenant: "directory-only", ID: "admin", App: ID, Roles: map[string]string{ID: Admin}}
+	before, _ := e.AcceptedState()
+	at := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
+	for _, v := range []struct {
+		schema, typ, id string
+		p               map[string]any
+	}{
+		{SchemaElementAdd, ElementType, "new-cap", map[string]any{"name": "Cap", "stereotype": Capability}},
+		{SchemaElementEdit, ElementType, "legacy", map[string]any{"properties": map[string]any{}}},
+		{SchemaRelationshipAdd, RelationshipType, "bad", map[string]any{"stereotype": FillsPost, "source": "unit", "target": "legacy"}},
+		{SchemaSliceImport, ModelType, "model", map[string]any{"slice": Slice{Tenant: "other", UAF: "1.3"}}},
+	} {
+		if err := lifecycleSubmit(e, c, v.schema, v.typ, v.id, v.p, at); err == nil {
+			t.Fatal("unsupported directory write accepted", v.schema)
+		}
+	}
+	after, _ := e.AcceptedState()
+	if string(before) != string(after) {
+		t.Fatal("directory refusal changed historical model")
+	}
+	saved, err := e.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered := New("directory-only", platform.OrgSeed{})
+	if err := recovered.Restore(saved); err != nil {
+		t.Fatal(err)
+	}
+	original, _ := recovered.AcceptedState()
+	if string(before) != string(original) {
+		t.Fatal("historical standard properties or view changed on recovery")
+	}
+	for _, schema := range []string{SchemaViewSave, SchemaViewDelete, SchemaSliceImport, SchemaSliceSync} {
+		if slices.ContainsFunc(directoryActions(), func(action platform.Action) bool { return action.Schema == schema }) {
+			t.Fatal("retired action remains discoverable", schema)
+		}
 	}
 }

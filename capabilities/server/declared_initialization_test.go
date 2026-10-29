@@ -13,16 +13,16 @@ import (
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
 	enterprise "platformserver/engine/organization"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 func TestPackageInitializationRetainsAcceptedPrefixAcrossLostReply(t *testing.T) {
 	const id = "package-initialization"
 	at := time.Date(2026, 10, 23, 9, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("builder", "build:builder", "enterprise:admin"), seatOf("limited", "build:builder")}, build.New(id), enterprise.New(id, platform.OrgSeed{}))
+		return composeTenant(t, id, []platform.Seat{seatOf("builder", "build:builder", "enterprise:admin"), seatOf("limited", "build:builder")}, build.New(id), enterprise.New(id, platform.OrgSeed{}))
 	}
 	tn := compose()
 	var entries []Entry

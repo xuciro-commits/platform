@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"testing"
 	"time"
 
@@ -16,9 +18,9 @@ import (
 
 func TestAcceptedConsoleMemberStateCommitsWithReceipt(t *testing.T) {
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"admin"}, Member: platform.Member{
-			ID: "admin", Roles: map[string]string{PlatformApp: Admin, "stock": "clerk"}}}
-		tn, err := NewTenant("console-accepted", NewConsole("console-accepted", seat), newStock("console-accepted"))
+		seat := platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{
+			ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, "stock": "clerk"}}}
+		tn, err := NewTenant("console-accepted", newConsole("console-accepted", seat), newStock("console-accepted"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -27,9 +29,9 @@ func TestAcceptedConsoleMemberStateCommitsWithReceipt(t *testing.T) {
 	tn := compose()
 	admin, _ := tn.Member("admin")
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
-	sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp,
-		IdempotencyKey: "add-operator", Target: &pb.EntityRef{Type: MemberType, Id: "operator"},
-		Schema: &pb.SchemaRef{Name: SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:operator@example.com"}`)}
+	sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp,
+		IdempotencyKey: "add-operator", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "operator"},
+		Schema: &pb.SchemaRef{Name: controlowner.SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:operator@example.com"}`)}
 	var entries []Entry
 	fail := true
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
@@ -53,11 +55,11 @@ func TestAcceptedConsoleMemberStateCommitsWithReceipt(t *testing.T) {
 	if err != nil || receipt == nil || len(entries) != 1 {
 		t.Fatalf("member decision not accepted: %v", err)
 	}
-	batch, _, decodeErr := resultformat.DecodeBatch(entries[0].Body)
-	if decodeErr != nil || len(batch.States) != 1 || batch.States[0].App != PlatformApp || len(batch.Rows) != 0 {
+	batch, _, decodeErr := acceptedformat.DecodeBatch(entries[0].Body)
+	if decodeErr != nil || len(batch.States) != 1 || batch.States[0].App != controlowner.PlatformApp || len(batch.Rows) != 0 {
 		t.Fatalf("directory was not saved as a single owned state: %+v %v", batch, decodeErr)
 	}
-	if operator, ok := tn.app(PlatformApp).(*Console).MemberBySubject("user:operator@example.com"); !ok || operator.ID != "operator" {
+	if operator, ok := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("user:operator@example.com"); !ok || operator.ID != "operator" {
 		t.Fatal("accepted member was not installed")
 	}
 	retry, err := tn.Submit(admin, sub, now.Add(time.Hour))
@@ -67,12 +69,12 @@ func TestAcceptedConsoleMemberStateCommitsWithReceipt(t *testing.T) {
 	CheckReplay(t, tn, entries, compose)
 
 	damaged := entries[0]
-	var result resultformat.Batch
+	var result acceptedformat.Batch
 	if err := json.Unmarshal(damaged.Body, &result); err != nil {
 		t.Fatal(err)
 	}
 	result.States[0].Image = []byte(`{"members":{},"subjects":{"orphan":"missing"}}`)
-	result.Digest, _ = resultformat.DigestBatch(result)
+	result.Digest, _ = acceptedformat.DigestBatch(result)
 	damaged.Body, _ = json.Marshal(result)
 	if err := compose().Replay([]Entry{damaged}); err == nil {
 		t.Fatal("invalid directory image was accepted on recovery")
@@ -96,9 +98,9 @@ func TestJournalAcceptedConsoleCrashAfterCommit(t *testing.T) {
 		t.Fatalf("new tenant's journal is not empty: %v %v", entries, err)
 	}
 	compose := func() *Tenant {
-		seat := Seat{Subjects: []string{"admin"}, Member: platform.Member{
-			ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}
-		tn, err := NewTenant(id, NewConsole(id, seat))
+		seat := platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{
+			ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}
+		tn, err := NewTenant(id, newConsole(id, seat))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -107,9 +109,9 @@ func TestJournalAcceptedConsoleCrashAfterCommit(t *testing.T) {
 	live := compose()
 	admin, _ := live.Member("admin")
 	now := time.Date(2026, 9, 28, 13, 0, 0, 0, time.UTC)
-	sub := &pb.Submission{TenantId: id, PrincipalId: admin.ID, Authority: PlatformApp,
-		IdempotencyKey: "create-after-crash", Target: &pb.EntityRef{Type: MemberType, Id: "new-member"},
-		Schema: &pb.SchemaRef{Name: SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:new@example.com"}`)}
+	sub := &pb.Submission{TenantId: id, PrincipalId: admin.ID, Authority: controlowner.PlatformApp,
+		IdempotencyKey: "create-after-crash", Target: &pb.EntityRef{Type: controlowner.MemberType, Id: "new-member"},
+		Schema: &pb.SchemaRef{Name: controlowner.SchemaAdd, Version: 1}, Payload: []byte(`{"subject":"user:new@example.com"}`)}
 	live.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
 		if _, ok := live.Member("new-member"); ok {
 			t.Fatal("member was visible before PostgreSQL accepted the result")
@@ -138,7 +140,7 @@ func TestJournalAcceptedConsoleCrashAfterCommit(t *testing.T) {
 	if err := recovered.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if member, ok := recovered.app(PlatformApp).(*Console).MemberBySubject("user:new@example.com"); !ok || member.ID != "new-member" {
+	if member, ok := recovered.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("user:new@example.com"); !ok || member.ID != "new-member" {
 		t.Fatal("recovery did not install the persisted directory image")
 	}
 	recovered.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
@@ -155,9 +157,9 @@ func TestJournalAcceptedConsoleCrashAfterCommit(t *testing.T) {
 // grants exercises slice compaction, rather than only appending a first grant.
 func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 	compose := func() *Tenant {
-		tn, err := NewTenant("access-isolation", NewConsole("access-isolation",
-			Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}},
-			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}}), newNotes("access-isolation", "a"))
+		tn, err := NewTenant("access-isolation", newConsole("access-isolation",
+			platform.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}},
+			platform.Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}}), newNotes("access-isolation", "a"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,12 +174,12 @@ func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 		t.Helper()
 		seq++
 		admin, _ := tn.Member("admin")
-		sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: PlatformApp, IdempotencyKey: fmt.Sprint(seq), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}
+		sub := &pb.Submission{TenantId: tn.ID, PrincipalId: admin.ID, Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprint(seq), Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}
 		before, _ := d.AcceptedState()
 		permitted := tn.app("a").Manifest().Actions.PermitsAny([]string{"scribe"}, "a.note")
 		tn.AcceptResult = func(Entry, string, string) ([]byte, error) {
 			got, _ := d.AcceptedState()
-			if schema == SchemaMemberSuspend && !d.NoticeSession("bo", "old-session", "", "sign-in", now) {
+			if schema == controlowner.SchemaMemberSuspend && !d.NoticeSession("bo", "old-session", "", "sign-in", now) {
 				t.Fatal("failed append ended a session")
 			}
 			if string(got) != string(before) {
@@ -200,21 +202,21 @@ func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	decide(SchemaRoleSave, RoleType, "scribe", `{"app":"a","actions":["a.note"]}`)
-	decide(SchemaGrant, MemberType, "bo", `{"app":"a","role":"scribe"}`)
-	decide(SchemaGrant, MemberType, "bo", `{"app":"a","role":"scribe","reason":"replacement"}`)
-	decide(SchemaGrant, MemberType, "bo", `{"app":"a","role":"writer"}`)
-	decide(SchemaRevoke, MemberType, "bo", `{"app":"a","role":"writer"}`)
+	decide(platform.SchemaRoleSave, platform.RoleType, "scribe", `{"app":"a","actions":["a.note"]}`)
+	decide(controlowner.SchemaGrant, controlowner.MemberType, "bo", `{"app":"a","role":"scribe"}`)
+	decide(controlowner.SchemaGrant, controlowner.MemberType, "bo", `{"app":"a","role":"scribe","reason":"replacement"}`)
+	decide(controlowner.SchemaGrant, controlowner.MemberType, "bo", `{"app":"a","role":"writer"}`)
+	decide(controlowner.SchemaRevoke, controlowner.MemberType, "bo", `{"app":"a","role":"writer"}`)
 	if bo, _ := tn.Member("bo"); !bo.Holds("a", "scribe") || bo.Holds("a", "writer") {
 		t.Fatal("role-specific revoke changed another grant")
 	}
-	decide(SchemaProfileUpdate, ProfileType, "bo", `{"mail":true,"displayName":"Before"}`)
-	decide(SchemaProfileUpdate, ProfileType, "bo", `{"mail":false,"displayName":"After"}`)
+	decide(controlowner.SchemaProfileUpdate, controlowner.ProfileType, "bo", `{"mail":true,"displayName":"Before"}`)
+	decide(controlowner.SchemaProfileUpdate, controlowner.ProfileType, "bo", `{"mail":false,"displayName":"After"}`)
 	if a := d.Account("bo"); a.Mail == nil || *a.Mail || a.DisplayName != "After" {
 		t.Fatal("profile not committed")
 	}
 	d.NoticeSession("bo", "old-session", "", "sign-in", now)
-	decide(SchemaTokenIssue, TokenType, "ci", `{"label":"CI"}`)
+	decide(controlowner.SchemaTokenIssue, controlowner.TokenType, "ci", `{"label":"CI"}`)
 	secret, ok := d.Minted("ci", "admin", now)
 	if !ok {
 		t.Fatal("token secret unavailable")
@@ -225,16 +227,16 @@ func TestAcceptedConsoleAccessIsolation(t *testing.T) {
 	if sessions := d.Sessions("admin", secret, now); len(sessions) != 1 || sessions[0].Token != "ci" {
 		t.Fatal("token session lacks owning token")
 	}
-	decide(SchemaTokenRevoke, TokenType, "ci", `{}`)
+	decide(controlowner.SchemaTokenRevoke, controlowner.TokenType, "ci", `{}`)
 	if ss := d.Sessions("admin", secret, now); len(ss) != 1 || ss[0].Ended.IsZero() || d.NoticeSession("admin", secret, "", "token", now) {
 		t.Fatal("revoked token session survived")
 	}
-	decide(SchemaMemberSuspend, MemberType, "bo", `{}`)
-	decide(SchemaMemberResume, MemberType, "bo", `{}`)
+	decide(controlowner.SchemaMemberSuspend, controlowner.MemberType, "bo", `{}`)
+	decide(controlowner.SchemaMemberResume, controlowner.MemberType, "bo", `{}`)
 	if d.NoticeSession("bo", "old-session", "", "sign-in", now) {
 		t.Fatal("resume revived a suspended session")
 	}
-	decide(SchemaRoleRemove, RoleType, "scribe", `{}`)
+	decide(platform.SchemaRoleRemove, platform.RoleType, "scribe", `{}`)
 	if x, _ := tn.Explain("bo", "a.note"); x.Verdict.Allow {
 		t.Fatal("removed role still permits actions")
 	}

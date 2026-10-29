@@ -13,8 +13,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	resultformat "platformserver/internal/acceptance/result"
 	"platformserver/internal/systemscope"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
 	"time"
 )
@@ -50,7 +51,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	// before the decision path; business-action replay continues inside the
 	// Flow app's own submission handling.
 	// flow.SchemaFlowReplay, named literally so the runtime never imports the
-	// concrete Flow app (the boundary check): the constant lives in apps/flow/flow.go.
+	// concrete Flow app (the boundary check): the constant lives in engine/automation/automation_owner.go.
 	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
 		record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, contentVersion...)
 		if handled {
@@ -76,8 +77,8 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	}
 	if retired {
 		key := a.Manifest().ID + "/" + s.GetIdempotencyKey()
-		_, refused := t.committed.refusal(key)
-		if !refused && len(t.committed.answer(key)) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
+		_, refused := t.committed.Refusal(key)
+		if !refused && len(t.committed.Answer(key)) == 0 && a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()) == nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 		}
 	}
@@ -96,8 +97,8 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	} else {
 		s = t.currentSubmissionSchema(a, s)
 	}
-	if prior, ok := t.committed.refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
-		hash, _ := resultformat.SubmissionHash(s, binding)
+	if prior, ok := t.committed.Refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
+		hash, _ := acceptedformat.SubmissionHash(s, binding)
 		if hash != prior.RequestHash || s.GetPrincipalId() != m.ID {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -112,8 +113,8 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	defer func() { end(outcomeOf(err)) }()
 	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal, nil)
 	if report != nil && err != nil {
-		if prior, ok := t.committed.refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
-			hash, _ := resultformat.SubmissionHash(s, binding)
+		if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
+			hash, _ := acceptedformat.SubmissionHash(s, binding)
 			if prior.RequestHash == hash {
 				report(err, prior.Issues)
 			}
@@ -126,7 +127,7 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 	return t.submitAcceptedVersion(a, m, t.currentSubmissionSchema(a, s), now, automation, nil, nil, nil, input...)
 }
 
-func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *resultformat.ObservationDecisionEvidence, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *platform.ObservationDecisionEvidence, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	if t.businessStopped() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
 	}
@@ -143,9 +144,9 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
 	}
 	ledger := a.AcceptedLedger()
-	if saved := t.committed.answer(a.Manifest().ID + "/" + s.GetIdempotencyKey()); len(saved) > 0 {
-		result, receipt, err := resultformat.DecodeBatch(saved)
-		hash, hashErr := resultformat.SubmissionHash(s, binding)
+	if saved := t.committed.Answer(a.Manifest().ID + "/" + s.GetIdempotencyKey()); len(saved) > 0 {
+		result, receipt, err := acceptedformat.DecodeBatch(saved)
+		hash, hashErr := acceptedformat.SubmissionHash(s, binding)
 		if err != nil || hashErr != nil || result.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -155,17 +156,17 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		if !proto.Equal(prior.GetSubmission(), s) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
-		saved, bound := t.committed.schemaVersion(a.Manifest().ID + "/" + s.GetIdempotencyKey())
+		saved, bound := t.committed.SchemaVersion(a.Manifest().ID + "/" + s.GetIdempotencyKey())
 		if bound != (binding != nil) || binding != nil && saved != *binding {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
 		return prior, nil
 	}
-	hash, err := resultformat.SubmissionHash(s, binding)
+	hash, err := acceptedformat.SubmissionHash(s, binding)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
 	}
-	if prior, ok := t.committed.refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
+	if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 		if prior.RequestHash != hash {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
@@ -173,8 +174,8 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		return nil, &answer
 	}
 	// Reject plaintext or invalid envelopes before a durable refusal captures input.
-	if s.GetSchema().GetName() == SchemaCredentialSave {
-		if _, failure := decodeCredentialWrite(t.ID, s.GetPayload()); failure != nil {
+	if s.GetSchema().GetName() == controlowner.SchemaCredentialSave {
+		if _, failure := controlowner.DecodeCredentialWrite(t.ID, s.GetPayload()); failure != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid credential configuration or encrypted value")
 		}
 	}
@@ -217,7 +218,7 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		if business {
 			businessFact = &fact
 		}
-		raw, err = resultformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.inputIssues[refusal]...)
+		raw, err = acceptedformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.inputIssues[refusal]...)
 	} else {
 		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
 		if err != nil {
@@ -226,11 +227,11 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 			if errors.As(err, &preparationRefusal) {
 				refusal = preparationRefusal
 			}
-			var budget *resultformat.ResultBudgetError
+			var budget *acceptedformat.ResultBudgetError
 			if errors.As(err, &budget) {
 				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Accepted result needs {bytes} bytes; limit is {limit} bytes / 接受结果超出字节预算", budget.Bytes, budget.Limit)
 			}
-			raw, err = resultformat.EncodeSchemaRefusal(s, now, refusal, binding)
+			raw, err = acceptedformat.EncodeSchemaRefusal(s, now, refusal, binding)
 		}
 	}
 	if err != nil {
@@ -265,21 +266,21 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if envelope.Kind == "refusal" {
-		saved, sub, err := resultformat.DecodeRefusal(committed)
+		saved, sub, err := acceptedformat.DecodeRefusal(committed)
 		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
 			saved.RequestHash != hash || sub.GetPrincipalId() != m.ID {
 			t.quarantine(fmt.Errorf("committed refusal differs from the accepted request: %v", err))
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
-		t.committed.saveRefusal(saved.App+"/"+sub.GetIdempotencyKey(), saved)
+		t.committed.SaveRefusal(saved.App+"/"+sub.GetIdempotencyKey(), saved)
 		t.acceptedResultApplied()
 		t.changedOwner(saved.App)
 		answer := saved.Error
 		return nil, &answer
 	}
 	if envelope.Kind == "record-batch" {
-		saved, receipt, err := resultformat.DecodeBatch(committed)
-		sub, subErr := resultformat.BatchSubmission(saved, receipt)
+		saved, receipt, err := acceptedformat.DecodeBatch(committed)
+		sub, subErr := acceptedformat.BatchSubmission(saved, receipt)
 		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
 			saved.RequestHash != hash || subErr != nil || sub.GetPrincipalId() != m.ID {
 			t.quarantine(fmt.Errorf("committed batch differs from the accepted request: %v", err))
@@ -292,14 +293,14 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		}
 		t.acceptedResultApplied()
 		if applied {
-			t.audit.remember(submitted(m.ID, a, sub, saved.At))
+			t.audit.Remember(submitted(m.ID, a, sub, saved.At))
 			t.publishAcceptedBatch(saved)
 			t.changedOwner(saved.App)
 		}
 		t.enqueue(saved.At)
 		return receipt, nil
 	}
-	saved, receipt, err := resultformat.DecodeRecord(committed)
+	saved, receipt, err := acceptedformat.DecodeRecord(committed)
 	if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
 		saved.RequestHash != hash || receipt.GetSubmission().GetPrincipalId() != m.ID {
 		t.quarantine(fmt.Errorf("committed result differs from the accepted request: %v", err))
@@ -321,7 +322,7 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 		saved.At = receipt.GetRecordedTime().AsTime()
 	}
 	if applied {
-		t.audit.remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
+		t.audit.Remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
 		t.publishAccepted(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
 		t.changedOwner(saved.App)
 	}

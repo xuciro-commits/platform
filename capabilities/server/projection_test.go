@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"platformserver/platform"
 	"testing"
 	"time"
 
-	"platformserver/apps/build"
+	"platformserver/studio/build"
 )
 
 func TestProjectionChangedIDsAndHistorySuffix(t *testing.T) {
@@ -70,7 +71,7 @@ func TestPostgresProjectionRetainsTablesAndAppendsHistory(t *testing.T) {
 		j.Pool().Exec(ctx, "drop schema if exists "+q(schema)+" cascade")
 		j.Pool().Exec(ctx, "drop role if exists "+q(ReaderRole(id)))
 	}()
-	tenant := composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk", "build:builder")}, newStock(id), build.New(id))
+	tenant := composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk", "build:builder")}, newStock(id), build.New(id))
 	if _, err := j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
 	}

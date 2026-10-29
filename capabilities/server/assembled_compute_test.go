@@ -1,19 +1,21 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"platformserver/engine/resources"
+
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
+
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -63,9 +65,9 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 	}
 	const id = "assembly-route"
 	at := time.Date(2026, 9, 30, 16, 0, 0, 0, time.UTC)
-	store := &memoryFiles{}
+	store := &resources.MemoryFiles{}
 	compose := func() *Tenant {
-		tenant, err := NewTenant(id, NewConsole(id, Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{construction.ID: construction.Builder, flow.ID: flow.Admin, "source": "operator"}}}), newAssemblyOwner(id), work.New(id), flow.New(id), build.New(id))
+		tenant, err := NewTenant(id, newConsole(id, platform.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, automation.ID: automation.Admin, "source": "operator"}}}), newAssemblyOwner(id), work.New(id), automation.New(id), build.New(id))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,12 +94,12 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 		if language == "tinygo" {
 			source = "package main\nfunc Run(input Input)(Output,error){return Output{Result:input.Value+1,Accept:input.Value>0},nil}"
 		}
-		submit(construction.ID, construction.CodeType, language, construction.CodeType+".create", map[string]any{"name": language, "title": language, "language": language, "source": source, "input": input, "output": output, "roles": []string{construction.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 2000, MemoryPages: 1024, MaxInputBytes: 4096, MaxOutputBytes: 4096}})
-		submit(construction.ID, construction.CodeType, language, build.SchemaCodeCompile, map[string]any{})
+		submit(build.ID, build.CodeType, language, build.CodeType+".create", map[string]any{"name": language, "title": language, "language": language, "source": source, "input": input, "output": output, "roles": []string{build.Builder}, "limits": platform.OperationLimits{TimeoutMillis: 2000, MemoryPages: 1024, MaxInputBytes: 4096, MaxOutputBytes: 4096}})
+		submit(build.ID, build.CodeType, language, build.SchemaCodeCompile, map[string]any{})
 		for _, run := range tenant.operationDispatches(at) {
 			run()
 		}
-		code, _ := platform.Get[build.Code](tenant.automation(construction.ID, false), language)
+		code, _ := platform.Get[build.Code](tenant.automation(build.ID, false), language)
 		if code.State != "compiled" {
 			t.Fatalf("%s build: %s (%s)", language, code.State, code.Diagnostics)
 		}
@@ -118,22 +120,22 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 	literal := func(raw string) *platform.Binding {
 		return &platform.Binding{Source: "literal", Value: json.RawMessage(raw)}
 	}
-	steps := []construction.ProcessStep{
+	steps := []build.ProcessStep{
 		{Name: "query", Kind: "query", App: "source", Query: "items", Next: "each"},
 		{Name: "each", Kind: "foreach", Collection: from("query", "records"), Body: "go", MaxIterations: 4, Concurrency: 2, Next: "output"},
-		{Name: "go", Kind: "compute", Operation: &construction.OperationRef{App: construction.ID, Name: "go", Version: 1}, Inputs: map[string]platform.Binding{"value": {Source: "item", Path: []string{"quantity"}}}, Next: "tinygo"},
-		{Name: "tinygo", Kind: "compute", Operation: &construction.OperationRef{App: construction.ID, Name: "tinygo", Version: 1}, Inputs: map[string]platform.Binding{"value": *from("go", "result")}, Next: "branch"},
+		{Name: "go", Kind: "compute", Operation: &build.OperationRef{App: build.ID, Name: "go", Version: 1}, Inputs: map[string]platform.Binding{"value": {Source: "item", Path: []string{"quantity"}}}, Next: "tinygo"},
+		{Name: "tinygo", Kind: "compute", Operation: &build.OperationRef{App: build.ID, Name: "tinygo", Version: 1}, Inputs: map[string]platform.Binding{"value": *from("go", "result")}, Next: "branch"},
 		{Name: "branch", Kind: "branch", Condition: &platform.Predicate{Op: "eq", Left: from("tinygo", "accept"), Right: literal("true")}, Cases: map[string]string{"true": "mark", "false": "skip"}},
 		{Name: "mark", Kind: "action", Act: "source.item.mark", Target: &platform.Binding{Source: "item", Path: []string{"id"}}, Inputs: map[string]platform.Binding{"result": *from("tinygo", "result")}, Next: "review"},
-		{Name: "review", Kind: "ask", Ask: construction.Builder, Answers: []string{"continue"}, Next: "itemdone"},
+		{Name: "review", Kind: "ask", Ask: build.Builder, Answers: []string{"continue"}, Next: "itemdone"},
 		{Name: "skip", Kind: "transform", Value: literal(`"empty quantity"`), Next: "itemdone"},
 		{Name: "itemdone", Kind: "end", Value: from("tinygo")},
 		{Name: "output", Kind: "end", Value: from("each")},
 	}
-	submit(construction.ID, construction.ProcessType, "P", construction.ProcessType+".create", map[string]any{"name": "assembled", "title": "Assembled capability route", "manual": true, "input": json.RawMessage(`{}`), "steps": steps})
-	submit(construction.ID, construction.ProcessType, "P", construction.SchemaProcess, map[string]any{})
-	submit(construction.ID, construction.ProcessType, "P", construction.SchemaProcessRun, map[string]string{"key": "route"})
-	var run flow.FlowInstance
+	submit(build.ID, build.ProcessType, "P", build.ProcessType+".create", map[string]any{"name": "assembled", "title": "Assembled capability route", "manual": true, "input": json.RawMessage(`{}`), "steps": steps})
+	submit(build.ID, build.ProcessType, "P", build.SchemaProcess, map[string]any{})
+	submit(build.ID, build.ProcessType, "P", build.SchemaProcessRun, map[string]string{"key": "route"})
+	var run automation.FlowInstance
 	answered := false
 	for tick := 0; tick < 12; tick++ {
 		now := at.Add(time.Duration(tick) * time.Second)
@@ -149,7 +151,7 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 			submit(work.ID, work.TaskType, task.ID, work.TaskType+".complete", map[string]string{"answer": "continue"})
 			answered = true
 		}
-		list, _, err := platform.Find[flow.FlowInstance](tenant.automation(flow.ID, false), platform.Query{})
+		list, _, err := platform.Find[automation.FlowInstance](tenant.automation(automation.ID, false), platform.Query{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,7 +174,7 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 	if len(run.Sources) == 0 || len(journal) < 8 {
 		t.Fatal("route lost source provenance or bypassed accepted results")
 	}
-	page, refusal := tenant.InvokeCapability(member, platform.CapabilityInvocation{Ref: platform.AssetRef{App: construction.ID, Kind: platform.AssetCompute, Name: "tinygo"}, Version: 1, Key: "page-result", Inputs: json.RawMessage(`{}`), Record: "source.item/positive", Bindings: map[string]platform.Binding{"value": {Source: "subject", Path: []string{"result"}}}}, at)
+	page, refusal := tenant.InvokeCapability(member, platform.CapabilityInvocation{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetCompute, Name: "tinygo"}, Version: 1, Key: "page-result", Inputs: json.RawMessage(`{}`), Record: "source.item/positive", Bindings: map[string]platform.Binding{"value": {Source: "subject", Path: []string{"result"}}}}, at)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
@@ -191,7 +193,7 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 	if err := recovered.Replay(journal); err != nil {
 		t.Fatal(err)
 	}
-	saved, ok := platform.Get[flow.FlowInstance](recovered.automation(flow.ID, false), run.ID)
+	saved, ok := platform.Get[automation.FlowInstance](recovered.automation(automation.ID, false), run.ID)
 	marked, _ := platform.Get[assemblyRecord](recovered.automation("source", false), "positive")
 	if !ok || saved.State != "done" || string(saved.Outputs["output"]) != string(run.Outputs["output"]) || marked.Revision != 1 || len(recovered.operationDispatches(at)) != 0 {
 		t.Fatal("whole-route replay lost output or repeated accepted work")

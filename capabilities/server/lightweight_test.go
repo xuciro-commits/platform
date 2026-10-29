@@ -10,7 +10,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"platformserver/engine/resources"
 	"platformserver/idp"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -25,11 +27,11 @@ import (
 // would leave the directory is refused rather than cleaned up.
 func TestLocalFilesKeepsTheSameContract(t *testing.T) {
 	ctx := context.Background()
-	local, err := NewLocalFiles(filepath.Join(t.TempDir(), "files"))
+	local, err := resources.NewLocalFiles(filepath.Join(t.TempDir(), "files"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, store := range map[string]FileStore{"memory": &memoryFiles{}, "local": local} {
+	for name, store := range map[string]platform.FileStore{"memory": &resources.MemoryFiles{}, "local": local} {
 		t.Run(name, func(t *testing.T) {
 			key := "t-1/9f2c0b" // what the host writes: <tenant>/<hash>
 			if store.Exists(ctx, key) {
@@ -138,8 +140,8 @@ func TestLightweightProfileServesSignedSeats(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer journal.Close()
-	tenant, err := NewTenant("t-lite", NewConsole("t-lite", Seat{Subjects: []string{"ana"},
-		Member: platform.Member{ID: "ana", Roles: map[string]string{PlatformApp: Admin}}}))
+	tenant, err := NewTenant("t-lite", newConsole("t-lite", platform.Seat{Subjects: []string{"ana"},
+		Member: platform.Member{ID: "ana", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +165,7 @@ func TestLightweightProfileServesSignedSeats(t *testing.T) {
 		t.Fatalf("sign-in: %d %s", code, body)
 	}
 	var signIn struct {
-		Identities []Identity `json:"identities"`
+		Identities []platform.LoginIdentity `json:"identities"`
 	}
 	if err := json.Unmarshal([]byte(body), &signIn); err != nil {
 		t.Fatal(err)
@@ -206,14 +208,14 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 	at := time.Now().UTC()
 	dir := t.TempDir()
 	compose := func() *Tenant {
-		tenant, err := NewTenant("t-lite", NewConsole("t-lite", Seat{Subjects: []string{"admin"},
-			Member: platform.Member{ID: "admin", Roles: map[string]string{PlatformApp: Admin}}}))
+		tenant, err := NewTenant("t-lite", newConsole("t-lite", platform.Seat{Subjects: []string{"admin"},
+			Member: platform.Member{ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}))
 		if err != nil {
 			t.Fatal(err)
 		}
 		return tenant
 	}
-	start := func() (Journals, FileStore, *idp.Local, *Tenant, int64) {
+	start := func() (Journals, platform.FileStore, *idp.Local, *Tenant, int64) {
 		d := &Deployment{Profile: "lightweight", Data: dir, SnapshotEvery: 10000, TokenTTL: time.Hour}
 		if err := d.validate(); err != nil {
 			t.Fatal(err)
@@ -242,15 +244,15 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 	}
 	submit := func(tenant *Tenant, key, id, subject string, when time.Time) (*pb.ChangeRecord, *kernel.Error) {
 		m, _ := tenant.Member("admin")
-		return tenant.Submit(m, &pb.Submission{TenantId: "t-lite", PrincipalId: m.ID, Authority: PlatformApp,
-			IdempotencyKey: key, Target: &pb.EntityRef{Type: MemberType, Id: id},
-			Schema: &pb.SchemaRef{Name: SchemaAdd, Version: 1}, Payload: []byte(fmt.Sprintf(`{"subject":%q}`, subject))}, when)
+		return tenant.Submit(m, &pb.Submission{TenantId: "t-lite", PrincipalId: m.ID, Authority: controlowner.PlatformApp,
+			IdempotencyKey: key, Target: &pb.EntityRef{Type: controlowner.MemberType, Id: id},
+			Schema: &pb.SchemaRef{Name: controlowner.SchemaAdd, Version: 1}, Payload: []byte(fmt.Sprintf(`{"subject":%q}`, subject))}, when)
 	}
 	first, failure := submit(live, "k1", "m-ana", "user:ana@example.com", at)
 	if failure != nil {
 		t.Fatal(failure)
 	}
-	if _, known := live.app(PlatformApp).(*Console).MemberBySubject("user:ana@example.com"); !known {
+	if _, known := live.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("user:ana@example.com"); !known {
 		t.Fatal("the first decision was not applied")
 	}
 	if err := files.Put(ctx, "t-lite/9f2c0b", []byte("a picture"), "image/png"); err != nil {
@@ -286,7 +288,7 @@ func TestLightweightProfileRestartsAndContinues(t *testing.T) {
 		t.Fatalf("the restart took the snapshot at %d, not %d", restoredAt, seq)
 	}
 	for _, subject := range []string{"user:ana@example.com", "user:bo@example.com"} {
-		if _, known := again.app(PlatformApp).(*Console).MemberBySubject(subject); !known {
+		if _, known := again.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(subject); !known {
 			t.Fatalf("%s is missing after the restart", subject)
 		}
 	}

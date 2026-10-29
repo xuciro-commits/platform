@@ -2,7 +2,7 @@
 // actions, the entity types and definitions the host projects for them, the
 // record source, the decision path (K5 outbox, idempotent send) and the
 // `opens` map from record types to the view that shows them.
-import { confirmedDecision, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
+import { decodeDefinitions, confirmedDecision, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { OfflineReadError, queryElements, resolveElements, type EnterpriseStereotype, type EdgeClient, type ActionDeclaration, type Entry, type Api } from "@platform/kernel";
 import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
@@ -48,8 +48,8 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   const entities = entityQuery.data ?? [];
   // The installed assets, so an app's navigation can offer the pages it has —
   // a code page, or one someone composed in this tenant.
-  const definitionQuery = read<Definition[]>("/v1/definitions");
-  const definitions = definitionQuery.data ?? [];
+  const definitionQuery = read<Api.Definition[]>("/v1/definitions");
+  const definitions = useMemo(()=>decodeDefinitions(definitionQuery.data??[]),[definitionQuery.data]);
   // Boot waits for the three discovery reads once per identity; once they have
   // answered, later refreshes never bounce the shell back to a start screen.
   const discoveryLatch = useRef(false);

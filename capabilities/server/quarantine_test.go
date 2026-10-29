@@ -1,5 +1,9 @@
 package platformserver
 
+import automation "platformserver/engine/automation"
+
+import agentowner "platformserver/engine/agents"
+
 import (
 	"context"
 	"encoding/json"
@@ -9,7 +13,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -20,8 +25,8 @@ import (
 
 func isolatedStock(t *testing.T, id string) *Tenant {
 	t.Helper()
-	seat := Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{PlatformApp: Admin, "stock": "clerk"}}}
-	tenant, err := NewTenant(id, NewConsole(id, seat), newStock(id))
+	seat := platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin, "stock": "clerk"}}}
+	tenant, err := NewTenant(id, newConsole(id, seat), newStock(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,13 +135,13 @@ func TestReplayPanicCannotTakeDownNeighbor(t *testing.T) {
 	if _, err := source.Submit(member, acceptedBin(t, source, "missing-listener"), at); err != nil {
 		t.Fatal(err)
 	}
-	var result resultformat.Record
+	var result acceptedformat.Record
 	if err := json.Unmarshal(durable.Body, &result); err != nil {
 		t.Fatal(err)
 	}
 	result.Event.Subscribers = append(result.Event.Subscribers, "removed-app")
 	var err error
-	result.Digest, err = resultformat.DigestRecord(result)
+	result.Digest, err = acceptedformat.DigestRecord(result)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +249,7 @@ func TestOwnedWorkPanicIsTenantLocal(t *testing.T) {
 	bad := isolatedStock(t, "t-1")
 	good := isolatedStock(t, "t-2")
 	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
-	bad.work.queues["stock"] = []*Task{{ID: "broken", Kind: "delivery", App: "stock", State: "queued", Due: at}}
+	bad.work.Queues["stock"] = []*automation.Task{{ID: "broken", Kind: "delivery", App: "stock", State: "queued", Due: at}}
 	if bad.Round(at, 1) || !bad.quarantined() {
 		t.Fatal("malformed owned work did not isolate its tenant")
 	}
@@ -256,11 +261,13 @@ func TestOwnedWorkPanicIsTenantLocal(t *testing.T) {
 func TestQuarantinedTenantCannotRecordLateWorkOrSnapshot(t *testing.T) {
 	tn := isolatedStock(t, "t-1")
 	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
-	tn.agents = &Agents{host: hostView{t: tn}}
+	owner := agentowner.New(tn.ID)
+	owner.AttachAgent(hostView{t: tn})
+	tn.agents = owner
 	tn.quarantine(fmt.Errorf("damaged accepted result"))
 	tn.Record = func(Entry) { t.Error("quarantined tenant wrote to its journal") }
 	tn.settle("missing-effect", platform.Outcome{Effect: "missing-effect"}, now)
-	tn.agentStep(stepBody{Run: "missing-run"}, now)
+	tn.agentStep(platform.AgentResultStep{Run: "missing-run"}, now)
 	if _, _, err := tn.Snapshot(func() int64 { return 1 }); err == nil {
 		t.Fatal("quarantined tenant produced a snapshot")
 	}

@@ -1,6 +1,6 @@
 package platformserver
 
-import "platformserver/internal/construction"
+import "platformserver/studio/build"
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"platformkernel/kernel"
-	"platformserver/apps/build"
+
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -48,7 +48,7 @@ func TestPostgresBusinessRefusalEscalationReadsSavedFacts(t *testing.T) {
 	check := func(tenant *Tenant) {
 		t.Helper()
 		tasks, refusal := recordRead(tenant, ctx, func() ([]work.WorkTask, *kernel.Error) {
-			facts := storedValues(&tenant.committed, "answer", tenant.committed.answers, "business")
+			facts := tenant.committed.AllAnswers("business")
 			if len(facts) != 2 {
 				t.Fatalf("business selection returned ordinary replies: %d", len(facts))
 			}
@@ -79,16 +79,16 @@ func TestPostgresBusinessRefusalEscalationReadsSavedFacts(t *testing.T) {
 
 func businessRefusalEscalationTenant(t *testing.T) *Tenant {
 	t.Helper()
-	return composeTenant(t, "business-txn", []Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:operator"), seatOf("limited", "build:limited"), seatOf("manager", "build:manager")}, work.New("business-txn"), build.New("business-txn"))
+	return composeTenant(t, "business-txn", []platform.Seat{seatOf("builder", "build:builder"), seatOf("operator", "build:operator"), seatOf("limited", "build:limited"), seatOf("manager", "build:manager")}, work.New("business-txn"), build.New("business-txn"))
 }
 
 func setBusinessRefusalEscalation(t *testing.T, tn *Tenant, level string, policy *platform.RefusalEscalation) {
 	t.Helper()
-	view, err := tn.RecordOf(memberOf(t, tn, "builder"), construction.ObjectType, "REQUEST", txnAt)
+	view, err := tn.RecordOf(memberOf(t, tn, "builder"), build.ObjectType, "REQUEST", txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var object construction.Object
+	var object build.Object
 	if err := json.Unmarshal(platform.Raw(view.Record), &object); err != nil {
 		t.Fatal(err)
 	}
@@ -100,8 +100,8 @@ func setBusinessRefusalEscalation(t *testing.T, tn *Tenant, level string, policy
 			}
 		}
 	}
-	decide(t, tn, "builder", construction.ID, construction.ObjectType+".edit", construction.ObjectType, "REQUEST", map[string]any{"actions": object.Actions}, txnAt)
-	decide(t, tn, "builder", construction.ID, construction.ObjectType+".publish", construction.ObjectType, "REQUEST", map[string]any{}, txnAt)
+	decide(t, tn, "builder", build.ID, build.ObjectType+".edit", build.ObjectType, "REQUEST", map[string]any{"actions": object.Actions}, txnAt)
+	decide(t, tn, "builder", build.ID, build.ObjectType+".publish", build.ObjectType, "REQUEST", map[string]any{}, txnAt)
 }
 func TestBusinessRefusalEscalationCannotBeForged(t *testing.T) {
 	tn := businessRefusalEscalationTenant(t)

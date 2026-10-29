@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"maps"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
 	"strings"
 	"time"
 
@@ -18,14 +18,14 @@ func (d *stagedDecision) BusinessRefused(answer *kernel.Error, fact platform.Bus
 		return
 	}
 	app, _, _ := strings.Cut(fact.Action, ".")
-	if err := resultformat.ValidateBusinessFact(app, fact); err != nil {
+	if err := acceptedformat.ValidateBusinessFact(app, fact); err != nil {
 		d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal evidence exceeds its declared bounds")
 		return
 	}
 	if d.businessRefusals == nil {
 		d.businessRefusals = map[*kernel.Error]platform.BusinessRefusalFact{}
 	}
-	d.businessRefusals[answer] = resultformat.CloneBusinessFact(fact)
+	d.businessRefusals[answer] = acceptedformat.CloneBusinessFact(fact)
 	d.InputRefused(answer, []platform.FieldIssue{{Code: "business_refusal", BusinessCode: fact.Code, Record: fact.Subject, Message: fact.Message, Translations: maps.Clone(fact.Translations), Path: []string{"$business"}}})
 }
 
@@ -33,13 +33,13 @@ func (d *stagedDecision) CaptureBusinessRefusal(c platform.Caller, receipt *pb.C
 	if !c.Staging() || c.Replaying || receipt.GetSubmission().GetAuthority() != c.App || receipt.GetSubmission().GetPrincipalId() != c.ID || fact.Member != c.ID || !fact.At.Equal(d.at) || fact.Subject != target(receipt.GetSubmission()) || fact.Action != receipt.GetSubmission().GetSchema().GetName() || fact.Level == "block" {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal evidence must belong to its original decision")
 	}
-	if err := resultformat.ValidateBusinessFact(c.App, fact); err != nil {
+	if err := acceptedformat.ValidateBusinessFact(c.App, fact); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	if len(d.businessFacts) >= 64 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business refusal evidence exceeds its declared bounds")
 	}
-	d.businessFacts = append(d.businessFacts, resultformat.CloneBusinessFact(fact))
+	d.businessFacts = append(d.businessFacts, acceptedformat.CloneBusinessFact(fact))
 	return nil
 }
 

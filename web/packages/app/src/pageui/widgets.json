@@ -62,6 +62,9 @@
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -118,6 +121,32 @@
                 "maxLength": 256
               }
             }
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "variable": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "kind": {
+                  "type": "string",
+                  "maxLength": 80
+                }
+              },
+              "required": [
+                "field",
+                "variable",
+                "kind"
+              ]
+            },
+            "maxItems": 64
           }
         }
       },
@@ -213,6 +242,17 @@
         "selection",
         "showSearch",
         "tableColumns"
+      ],
+      "declarationTexts": [
+        "tableColumns.*.title",
+        "tablePresentation.titleTemplate",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "tablePresentation",
+          "requiredUIProfile": "platform.page.v2.90"
+        }
       ]
     },
     {
@@ -244,6 +284,29 @@
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "detailPresentation": {
+            "type": "object",
+            "properties": {
+              "columns": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              },
+              "hideNull": {
+                "type": "boolean"
+              },
+              "barcode": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "print": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "columns"
             ]
           }
         }
@@ -280,6 +343,22 @@
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "detailPresentation.barcode",
+          "requiredUIProfile": "platform.page.v2.107"
+        },
+        {
+          "path": "detailPresentation.print",
+          "requiredUIProfile": "platform.page.v2.107",
+          "values": [
+            true
+          ]
+        }
       ]
     },
     {
@@ -332,6 +411,9 @@
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -426,6 +508,15 @@
         "object",
         "parentSelection",
         "relation"
+      ],
+      "declarationTexts": [
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "chartVariant",
+          "requiredUIProfile": "platform.page.v2.44"
+        }
       ]
     },
     {
@@ -549,6 +640,18 @@
         "object",
         "parentSelection",
         "relation"
+      ],
+      "declarationTexts": [
+        "metricPresentation.annotation.text",
+        "metricPresentation.prefix",
+        "metricPresentation.suffix",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "metricPresentation.annotation",
+          "requiredUIProfile": "platform.page.v2.90"
+        }
       ]
     },
     {
@@ -587,7 +690,11 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "declarationTexts": [
+        "text",
+        "title"
+      ]
     },
     {
       "componentID": "filter",
@@ -619,6 +726,32 @@
               "full",
               "half"
             ]
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "variable": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "kind": {
+                  "type": "string",
+                  "maxLength": 80
+                }
+              },
+              "required": [
+                "field",
+                "variable",
+                "kind"
+              ]
+            },
+            "maxItems": 64
           }
         }
       },
@@ -649,6 +782,9 @@
         "filterSearchVariable",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -696,6 +832,9 @@
         "object",
         "parentSelection",
         "relation"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -751,6 +890,9 @@
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -801,6 +943,9 @@
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -842,6 +987,9 @@
       "configurationFields": [
         "function",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -885,6 +1033,9 @@
         "inputs",
         "operation",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -945,7 +1096,10 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "declarationTexts": [
+        "title"
+      ]
     },
     {
       "componentID": "input",
@@ -995,7 +1149,26 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "declarationTexts": [
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "inputKind",
+          "requiredUIProfile": "platform.page.v2.66",
+          "values": [
+            "search"
+          ]
+        },
+        {
+          "path": "inputKind",
+          "requiredUIProfile": "platform.page.v2.107",
+          "values": [
+            "scan"
+          ]
+        }
+      ]
     },
     {
       "componentID": "pivot",
@@ -1082,6 +1255,9 @@
         "object",
         "parentSelection",
         "relation"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -1168,6 +1344,9 @@
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -1247,6 +1426,9 @@
         "model",
         "object",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -1280,6 +1462,27 @@
               "full",
               "half"
             ]
+          },
+          "recordView": {
+            "type": "object",
+            "properties": {
+              "tabs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "overview",
+                    "properties",
+                    "links",
+                    "history"
+                  ]
+                },
+                "maxItems": 4
+              }
+            },
+            "required": [
+              "tabs"
+            ]
           }
         }
       },
@@ -1312,6 +1515,9 @@
         "object",
         "recordView",
         "selection"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -1349,6 +1555,45 @@
               "full",
               "half"
             ]
+          },
+          "buttons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "variant": {
+                  "type": "string",
+                  "enum": [
+                    "default",
+                    "primary",
+                    "ghost",
+                    "danger"
+                  ]
+                },
+                "icon": {
+                  "type": "string",
+                  "enum": [
+                    "arrow",
+                    "edit",
+                    "plus",
+                    "trash"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "title"
+              ]
+            },
+            "maxItems": 16
           }
         }
       },
@@ -1376,6 +1621,10 @@
       },
       "configurationFields": [
         "buttons"
+      ],
+      "declarationTexts": [
+        "buttons.*.title",
+        "title"
       ]
     },
     {
@@ -1407,6 +1656,60 @@
               "full",
               "half"
             ]
+          },
+          "recordLinks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "object": {
+                  "type": "object",
+                  "properties": {
+                    "app": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "kind": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "name": {
+                      "type": "string",
+                      "maxLength": 256
+                    }
+                  },
+                  "required": [
+                    "app",
+                    "kind",
+                    "name"
+                  ]
+                },
+                "relation": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "field": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "maxItems": 64
+                }
+              },
+              "required": [
+                "object"
+              ]
+            },
+            "maxItems": 16
           }
         }
       },
@@ -1437,6 +1740,10 @@
         "object",
         "recordLinks",
         "selection"
+      ],
+      "declarationTexts": [
+        "recordLinks.*.title",
+        "title"
       ]
     },
     {
@@ -1498,6 +1805,9 @@
         "object",
         "selection",
         "statusTracker"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -1531,7 +1841,8 @@
             "type": "string",
             "maxLength": 4096,
             "title": "Heading text",
-            "editor": "textarea"
+            "editor": "textarea",
+            "minLength": 1
           },
           "headingLevel": {
             "type": "string",
@@ -1543,14 +1854,21 @@
             "title": "Heading level"
           }
         },
-        "description": "Heading text is plain text; markup and scripts are not interpreted."
+        "description": "Heading text is plain text; markup and scripts are not interpreted.",
+        "required": [
+          "text"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
       },
-      "propertyEditor": "schema"
+      "propertyEditor": "schema",
+      "declarationTexts": [
+        "text",
+        "title"
+      ]
     },
     {
       "componentID": "collection-title",
@@ -1632,6 +1950,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -1757,6 +2078,9 @@
           "optional": true,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -1881,6 +2205,9 @@
             "decimal"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -2032,6 +2359,9 @@
             "choice"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -2082,7 +2412,8 @@
               },
               "initialMonth": {
                 "type": "string",
-                "maxLength": 7
+                "maxLength": 7,
+                "pattern": "^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])$"
               }
             },
             "required": [
@@ -2150,6 +2481,9 @@
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -2326,6 +2660,9 @@
             "choice"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -2388,7 +2725,11 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "declarationTexts": [
+        "progressLabel",
+        "title"
+      ]
     },
     {
       "componentID": "gauge",
@@ -2425,7 +2766,8 @@
             "type": "object",
             "properties": {
               "max": {
-                "type": "number"
+                "type": "number",
+                "exclusiveMinimum": 0
               },
               "warnAt": {
                 "type": "number"
@@ -2458,7 +2800,12 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
-      }
+      },
+      "declarationTexts": [
+        "gauge.label",
+        "gauge.suffix",
+        "title"
+      ]
     },
     {
       "componentID": "summary-stats",
@@ -2552,6 +2899,9 @@
             "decimal"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -2682,6 +3032,9 @@
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -2709,8 +3062,41 @@
               "full",
               "half"
             ]
+          },
+          "rangeInput": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "max": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "step": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "unit": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "min",
+              "max",
+              "step"
+            ]
           }
-        }
+        },
+        "required": [
+          "rangeInput"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [
@@ -2775,6 +3161,11 @@
           "max": 2,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "rangeInput.label",
+        "rangeInput.unit",
+        "title"
       ]
     },
     {
@@ -2854,7 +3245,17 @@
           "binding-change",
           "close"
         ]
-      }
+      },
+      "declarationTexts": [
+        "booleanLabel",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "booleanVariant",
+          "requiredUIProfile": "platform.page.v2.54"
+        }
+      ]
     },
     {
       "componentID": "choice-input",
@@ -2881,8 +3282,55 @@
               "full",
               "half"
             ]
+          },
+          "choiceInput": {
+            "type": "object",
+            "properties": {
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "select",
+                  "radio",
+                  "segments",
+                  "multiple",
+                  "steps",
+                  "tabs"
+                ]
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 256,
+                  "minLength": 1
+                },
+                "maxItems": 64
+              },
+              "optionLabels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "maxItems": 64
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "clearable": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "variant",
+              "options"
+            ]
           }
-        }
+        },
+        "required": [
+          "choiceInput"
+        ]
       },
       "inputPorts": [
         {
@@ -2926,6 +3374,35 @@
       },
       "configurationFields": [
         "choiceInput"
+      ],
+      "declarationTexts": [
+        "choiceInput.label",
+        "choiceInput.optionLabels.*",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "choiceInput.variant",
+          "requiredUIProfile": "platform.page.v2.56",
+          "values": [
+            "multiple"
+          ]
+        },
+        {
+          "path": "choiceInput.variant",
+          "requiredUIProfile": "platform.page.v2.75",
+          "values": [
+            "steps",
+            "tabs"
+          ]
+        },
+        {
+          "path": "choiceInput.clearable",
+          "requiredUIProfile": "platform.page.v2.65",
+          "values": [
+            true
+          ]
+        }
       ]
     },
     {
@@ -2967,7 +3444,8 @@
           },
           "dateOffset": {
             "type": "string",
-            "maxLength": 6
+            "maxLength": 6,
+            "pattern": "^(Z|[+-](0[0-9]|1[0-9]|2[0-3]):[0-5][0-9])$"
           }
         }
       },
@@ -3009,7 +3487,20 @@
           "binding-change",
           "close"
         ]
-      }
+      },
+      "declarationTexts": [
+        "dateLabel",
+        "title"
+      ],
+      "propertyProfiles": [
+        {
+          "path": "dateKind",
+          "requiredUIProfile": "platform.page.v2.59",
+          "values": [
+            "datetime"
+          ]
+        }
+      ]
     },
     {
       "componentID": "record-picker",
@@ -3039,6 +3530,22 @@
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "recordPicker": {
+            "type": "object",
+            "properties": {
+              "labelField": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            },
+            "required": [
+              "labelField"
             ]
           }
         }
@@ -3098,6 +3605,10 @@
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "recordPicker.label",
+        "title"
       ]
     },
     {
@@ -3185,7 +3696,11 @@
           "binding-change",
           "close"
         ]
-      }
+      },
+      "declarationTexts": [
+        "alertBanner.message",
+        "title"
+      ]
     },
     {
       "componentID": "notice",
@@ -3249,14 +3764,22 @@
             ]
           }
         },
-        "description": "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions."
+        "description": "Use plain text for operator instructions. HTML and placeholders remain literal; a static note performs no reads or actions.",
+        "required": [
+          "notice"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
       },
-      "propertyEditor": "schema"
+      "propertyEditor": "schema",
+      "declarationTexts": [
+        "notice.message",
+        "notice.title",
+        "title"
+      ]
     },
     {
       "componentID": "separator",
@@ -3297,14 +3820,21 @@
             }
           }
         },
-        "description": "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity."
+        "description": "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity.",
+        "required": [
+          "separator"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
       },
-      "propertyEditor": "schema"
+      "propertyEditor": "schema",
+      "declarationTexts": [
+        "separator.label",
+        "title"
+      ]
     },
     {
       "componentID": "spacer",
@@ -3350,14 +3880,20 @@
             ]
           }
         },
-        "description": "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target."
+        "description": "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target.",
+        "required": [
+          "spacer"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "inline"
       },
-      "propertyEditor": "schema"
+      "propertyEditor": "schema",
+      "declarationTexts": [
+        "title"
+      ]
     },
     {
       "componentID": "term-counts",
@@ -3438,6 +3974,9 @@
             "choice"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -3516,6 +4055,9 @@
             "decimal"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -3664,6 +4206,9 @@
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -3852,6 +4397,9 @@
           "max": 4,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -3970,6 +4518,9 @@
           "min": 0,
           "max": 1
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4091,6 +4642,11 @@
           "min": 1,
           "max": 1
         }
+      ],
+      "declarationTexts": [
+        "sparkline.label",
+        "sparkline.suffix",
+        "title"
       ]
     },
     {
@@ -4220,6 +4776,9 @@
           "optional": true,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4324,6 +4883,9 @@
           "optional": true,
           "distinct": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4434,6 +4996,9 @@
           "min": 0,
           "max": 1
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4507,6 +5072,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4580,6 +5148,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4644,6 +5215,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4717,6 +5291,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4768,7 +5345,10 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "declarationTexts": [
+        "title"
+      ]
     },
     {
       "componentID": "notification-feed",
@@ -4819,7 +5399,10 @@
           "scope-close"
         ],
         "hidden": "unmount"
-      }
+      },
+      "declarationTexts": [
+        "title"
+      ]
     },
     {
       "componentID": "breadcrumb",
@@ -4847,6 +5430,27 @@
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "breadcrumb": {
+            "type": "object",
+            "properties": {
+              "homeLabel": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "pageLabel": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "homeLabel",
+              "pageLabel"
             ]
           }
         }
@@ -4892,6 +5496,11 @@
         "breadcrumb",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "breadcrumb.homeLabel",
+        "breadcrumb.pageLabel",
+        "title"
       ]
     },
     {
@@ -4962,6 +5571,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -4989,8 +5601,29 @@
               "full",
               "half"
             ]
+          },
+          "image": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "caption": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "height": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 4096
+              }
+            }
           }
-        }
+        },
+        "required": [
+          "image"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -5009,6 +5642,10 @@
       },
       "configurationFields": [
         "image"
+      ],
+      "declarationTexts": [
+        "image.caption",
+        "title"
       ]
     },
     {
@@ -5093,6 +5730,9 @@
             "text"
           ]
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5119,6 +5759,71 @@
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "assetDirectory": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    "asset": {
+                      "type": "object",
+                      "properties": {
+                        "ref": {
+                          "type": "object",
+                          "properties": {
+                            "app": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 80
+                            },
+                            "name": {
+                              "type": "string",
+                              "maxLength": 256
+                            }
+                          },
+                          "required": [
+                            "app",
+                            "kind",
+                            "name"
+                          ]
+                        },
+                        "sourceVersion": {
+                          "type": "string",
+                          "maxLength": 256
+                        }
+                      },
+                      "required": [
+                        "ref",
+                        "sourceVersion"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "asset"
+                  ]
+                },
+                "maxItems": 4
+              }
+            },
+            "required": [
+              "items"
             ]
           }
         }
@@ -5156,6 +5861,10 @@
       ],
       "configurationFields": [
         "assetDirectory"
+      ],
+      "declarationTexts": [
+        "assetDirectory.items.*.label",
+        "title"
       ]
     },
     {
@@ -5220,6 +5929,9 @@
         "graphExplorer",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5278,6 +5990,9 @@
         "model",
         "object",
         "vertexGraph"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5384,6 +6099,9 @@
         "analysis",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5459,6 +6177,9 @@
         "actions",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5524,7 +6245,10 @@
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "declarationTexts": [
+        "title"
+      ]
     },
     {
       "componentID": "observation",
@@ -5643,6 +6367,9 @@
         "model",
         "object",
         "observation"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5689,6 +6416,9 @@
       },
       "configurationFields": [
         "embedding"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5716,8 +6446,33 @@
               "full",
               "half"
             ]
+          },
+          "externalFrame": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "origin": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4096
+              }
+            },
+            "required": [
+              "url",
+              "origin"
+            ]
           }
-        }
+        },
+        "required": [
+          "externalFrame"
+        ]
       },
       "inputPorts": [],
       "outputPorts": [],
@@ -5735,6 +6490,9 @@
       },
       "configurationFields": [
         "externalFrame"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5791,6 +6549,9 @@
         "function",
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5920,6 +6681,9 @@
           ],
           "allowID": true
         }
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -5984,6 +6748,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -6184,6 +6951,10 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "scene.layers.*.name",
+        "title"
       ]
     },
     {
@@ -6265,6 +7036,9 @@
       "configurationFields": [
         "model",
         "object"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -6467,6 +7241,9 @@
       },
       "configurationFields": [
         "composite"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     },
     {
@@ -6556,6 +7333,9 @@
       },
       "configurationFields": [
         "composite"
+      ],
+      "declarationTexts": [
+        "title"
       ]
     }
   ],

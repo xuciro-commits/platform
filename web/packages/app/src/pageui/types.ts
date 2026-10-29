@@ -2,11 +2,12 @@
 
 export type * from "@platform/kernel/host-contract";
 
-import type {AssetBinding, AssetRef, Binding, ModelBinding, PageComposite, PageEventBinding, PageGraphObject, PageGraphOutput, PageGraphRelation, PageInterface, PageObservation, PageQuery, PageVariable} from "@platform/kernel/host-contract";
+import type {AssetBinding, AssetRef, Binding, ModelBinding, ModelViewBinding, Expr, PageEventBinding, PageInterface, PageQuery, PageVariable} from "@platform/kernel/host-contract";
 
 import type {ActionParameterOptions, AnalysisStepOptions, ButtonOptions, DetailPresentationOptions, EventToneOptions, LayoutSizeOptions, LeaderboardOptions, MetricAnnotationOptions, MetricPresentationOptions, RecordCardOptions, RecordEventsOptions, RecordGanttOptions, RecordLinkOptions, RecordScatterOptions, RegionPresentationOptions, SceneConfigOptions, SceneLayerOptions, SceneMappingOptions, StatusTrackerOptions, TableColumnOptions, TablePresentationOptions} from "@platform/ui";
 
 export type Page = {
+  presentationWords?: Record<string,string>;
   name: string;
   title: string;
   description?: string;
@@ -18,6 +19,23 @@ export type Page = {
   sections?: Section[];
   document?: PageDocument;
   selections?: SelectionVariable[];
+};
+
+export type PageComposite = {
+ bindings:Record<string,ModelViewBinding>;
+ value?:Expr;
+ tones?:Record<string,string>;
+ direction?:"right"|"down";
+ acyclic?:boolean;
+};
+export type PageGraphObject = {object:AssetRef;labelField:string};
+export type PageGraphOutput = {id:string;object:AssetRef;variable:string};
+export type PageGraphRelation = {id:string;binding:AssetBinding};
+export type PageObservationSignal = {field:string;unit:string;group?:string};
+export type PageObservationMetadata = {plant?:string;device?:string;asset?:string;status?:string};
+export type PageObservation = {
+ kind:string;timeField:string;signals:PageObservationSignal[];metadata?:PageObservationMetadata;
+ rowHeight?:number;assetObject?:AssetRef;assetField?:string;rowOutput?:string;assetOutput?:string;averageField?:string;
 };
 
 export type PageAI = {
@@ -446,7 +464,7 @@ export type Section = {
   filterVariable?: string;
   parentSelection?: string;
   relation?: string;
-  query?: AssetRef;
+  query?: AssetRef&{sourceVersion?:string};
   fields?: string[];
   actions?: AssetRef[];
   group?: string;
@@ -475,8 +493,9 @@ import type {pageUIManifest} from "./manifest";
 type Contract = typeof pageUIManifest.widgets[number];
 export type PageWidgetID = Contract['componentID'];
 type RequiredKeys<S> = S extends {required: readonly (infer K)[]} ? K : never;
-type SchemaObject<P, R> = {[K in keyof P as K extends R ? K : never]: SchemaValue<P[K]>}
-  & {[K in keyof P as K extends R ? never : K]?: SchemaValue<P[K]>};
+type Flatten<T> = {-readonly [K in keyof T]:T[K]};
+type SchemaObject<P, R> = Flatten<{-readonly [K in keyof P as K extends R ? K : never]: SchemaValue<P[K]>}
+  & {-readonly [K in keyof P as K extends R ? never : K]?: SchemaValue<P[K]>}>;
 type SchemaValue<S> = S extends {enum: readonly (infer E)[]} ? E
   : S extends {type: 'object'; properties: infer P} ? SchemaObject<P, RequiredKeys<S>>
   : S extends {type: 'array'; items: infer I} ? SchemaValue<I>[]
@@ -488,7 +507,7 @@ type UnionIntersection<U> = (U extends unknown ? (item: U) => void : never) exte
 type Ports<C extends Contract> = C extends {inputPorts: infer I extends readonly unknown[]; outputPorts: infer O extends readonly unknown[]}
   ? UnionIntersection<(I[number] | O[number]) extends infer P ? P extends {bindingField: infer F extends string} ? F extends 'enabledWhen' ? {} : PortPath<F> : never : never> : {};
 type ConfigurationFields<C extends Contract> = C extends {configurationFields: readonly (infer K)[]}
-  ? Pick<Section, Extract<K, keyof Section>> : {};
+  ? Pick<Section, Exclude<Extract<K, keyof Section>,keyof C["propsSchema"]["properties"]>> : {};
 
 /** The same manifest generates the source author's discriminated presentation
  * and port types. Business models and actions keep their original declarations;

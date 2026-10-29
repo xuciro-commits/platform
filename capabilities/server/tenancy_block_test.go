@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"testing"
 	"time"
@@ -19,14 +21,14 @@ import (
 // factor is demanded), a unit-bound grant that narrows what is read,
 // offboarding that hands over and ends the tenure.
 func TestTenancyBlock(t *testing.T) {
-	seat := func(id string, roles map[string]string) Seat {
-		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
+	seat := func(id string, roles map[string]string) platform.Seat {
+		return platform.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 	}
 	org := enterprise.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
 		Units:       []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}, {ID: "L2", Kind: "line"}},
 		Edges:       []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}},
 		Memberships: []platform.Membership{{Party: "member:lead", Unit: "plant", Role: "lead", From: "2026-10-07"}, {Party: "member:lead", Unit: "L2", Role: "other", From: "2026-10-06"}, {Party: "member:boss", Unit: "plant", Role: "lead"}}})
-	tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{PlatformApp: Admin, "stock": "clerk"}), seat("bo", map[string]string{"stock": "clerk"}),
+	tn, err := NewTenant("t-1", newConsole("t-1", seat("ana", map[string]string{controlowner.PlatformApp: controlowner.Admin, "stock": "clerk"}), seat("bo", map[string]string{"stock": "clerk"}),
 		seat("lead", map[string]string{"stock": "lead"}), seat("boss", map[string]string{"stock": "lead"})), org, newStock("t-1"))
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +59,7 @@ func TestTenancyBlock(t *testing.T) {
 	ana := member("ana")
 	set := func(name, value string) {
 		t.Helper()
-		if got := submit(ana, PlatformApp, SchemaSettingSet, SettingType, PlatformApp+"/"+name, map[string]string{"value": value}); got != "ok" {
+		if got := submit(ana, controlowner.PlatformApp, controlowner.SchemaSettingSet, controlowner.SettingType, controlowner.PlatformApp+"/"+name, map[string]string{"value": value}); got != "ok" {
 			t.Fatal(got)
 		}
 	}
@@ -66,7 +68,7 @@ func TestTenancyBlock(t *testing.T) {
 	if _, ok := whoIs("new-token"); ok {
 		t.Fatal("a stranger was admitted before any domain was listed")
 	}
-	set(SettingDomains, "Acme.test, partner.example")
+	set(controlowner.SettingDomains, "Acme.test, partner.example")
 	joined, ok := whoIs("new-token")
 	if !ok || joined.ID != "new" || len(joined.RolesIn("stock")) != 0 || joined.Status != "" {
 		t.Fatalf("self-join: %+v %v", joined, ok)
@@ -82,7 +84,7 @@ func TestTenancyBlock(t *testing.T) {
 	}
 
 	// Session hours: a sign-in older than the setting is refused until the provider is asked again.
-	set(SettingSessionHours, "2")
+	set(controlowner.SettingSessionHours, "2")
 	if _, ok := whoIs("bo-token"); !ok {
 		t.Fatal("bo cannot sign in")
 	}
@@ -98,7 +100,7 @@ func TestTenancyBlock(t *testing.T) {
 	}
 
 	// Second factor: without the provider's word nobody signs in; with it, those attested.
-	set(SettingMFA, "true")
+	set(controlowner.SettingMFA, "true")
 	if _, ok := whoIs("bo-token"); ok {
 		t.Fatal("a sign-in without a second factor was admitted")
 	}
@@ -109,7 +111,7 @@ func TestTenancyBlock(t *testing.T) {
 	if _, ok := whoIs("ana-token"); ok {
 		t.Fatal("an unattested sign-in was admitted")
 	}
-	set(SettingMFA, "false")
+	set(controlowner.SettingMFA, "false")
 
 	// A unit-bound grant narrows reading to that unit; held outright, the whole of what one belongs to.
 	if got := submit(member("lead"), "stock", "stock.bin.create", "stock.bin", "B1", map[string]any{"code": "A-01"}); got != "ok" {
@@ -128,13 +130,13 @@ func TestTenancyBlock(t *testing.T) {
 		}
 		return page.Total
 	}
-	if got := submit(ana, PlatformApp, SchemaGrant, MemberType, "new", map[string]string{"app": "stock", "role": "lead", "unit": "L2", "structure": "site"}); got != "ok" {
+	if got := submit(ana, controlowner.PlatformApp, controlowner.SchemaGrant, controlowner.MemberType, "new", map[string]string{"app": "stock", "role": "lead", "unit": "L2", "structure": "site"}); got != "ok" {
 		t.Fatal(got)
 	}
 	if n := count("new"); n != 1 {
 		t.Fatalf("unit-bound grant reads %d items, want the one in L2", n)
 	}
-	if got := submit(ana, PlatformApp, SchemaGrant, MemberType, "new", map[string]string{"app": "stock", "role": "lead", "unit": "plant", "structure": "site"}); got != "ok" {
+	if got := submit(ana, controlowner.PlatformApp, controlowner.SchemaGrant, controlowner.MemberType, "new", map[string]string{"app": "stock", "role": "lead", "unit": "plant", "structure": "site"}); got != "ok" {
 		t.Fatal(got)
 	}
 	if n := count("new"); n != 2 {
@@ -142,13 +144,13 @@ func TestTenancyBlock(t *testing.T) {
 	}
 
 	// Offboarding with a successor: delegations pass on, the successor is told, the enterprise tenure ends today.
-	if got := submit(member("lead"), PlatformApp, SchemaDelegate, MemberType, "bo", map[string]string{"app": "stock", "until": "2027-01-01"}); got != "ok" {
+	if got := submit(member("lead"), controlowner.PlatformApp, platform.SchemaDelegate, controlowner.MemberType, "bo", map[string]string{"app": "stock", "until": "2027-01-01"}); got != "ok" {
 		t.Fatal(got)
 	}
-	if got := submit(ana, PlatformApp, SchemaOffboard, MemberType, "lead", map[string]string{"successor": "ghost"}); !strings.Contains(got, "POLICY_DENIED") {
+	if got := submit(ana, controlowner.PlatformApp, controlowner.SchemaOffboard, controlowner.MemberType, "lead", map[string]string{"successor": "ghost"}); !strings.Contains(got, "POLICY_DENIED") {
 		t.Fatalf("an unknown successor was accepted: %s", got)
 	}
-	if got := submit(ana, PlatformApp, SchemaOffboard, MemberType, "lead", map[string]string{"successor": "boss", "reason": "left the company"}); got != "ok" {
+	if got := submit(ana, controlowner.PlatformApp, controlowner.SchemaOffboard, controlowner.MemberType, "lead", map[string]string{"successor": "boss", "reason": "left the company"}); got != "ok" {
 		t.Fatal(got)
 	}
 	for _, g := range member("bo").Grants {

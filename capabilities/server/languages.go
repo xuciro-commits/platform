@@ -4,6 +4,8 @@ import (
 	"embed"
 	"encoding/json"
 	"net/http"
+	controlowner "platformserver/kernel/control"
+	"platformserver/kernel/transport"
 	"slices"
 	"strings"
 
@@ -21,9 +23,6 @@ var platformFiles embed.FS
 
 // PlatformLanguages translate the platform apps' titles and descriptions.
 var PlatformLanguages = platform.LoadLanguages(platformFiles, "i18n")
-
-// translated are the keys whose string values are declaration texts.
-var translated = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "synonyms": true}
 
 // declarationReads are named reads that serve declarations, not records;
 // messageReads serve texts apps wrote for people (notifications, tasks,
@@ -43,7 +42,7 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if lang, asked := t.asked(r); asked {
 		return lang
 	}
-	if d, ok := t.app(PlatformApp).(IdentityProfile); ok {
+	if d, ok := t.app(controlowner.PlatformApp).(platform.IdentityProfile); ok {
 		return d.Language("")
 	}
 	return ""
@@ -64,7 +63,7 @@ func (t *Tenant) asked(r *http.Request) (string, bool) {
 			continue
 		}
 		if known == nil {
-			known = t.i18n.languages()
+			known = t.i18n.Languages()
 		}
 		if strings.HasPrefix(tag, "en") {
 			if slices.Contains(known, "en") {
@@ -94,71 +93,6 @@ func canonical(tag string) string {
 		}
 	}
 	return "zh-CN"
-}
-
-// walkChoices calls f for each object of a JSON tree that lists choices.
-func walkChoices(v any, f func(map[string]any, []any)) {
-	walkChoicesWithApp(v, "", func(_ string, m map[string]any, c []any) { f(m, c) })
-}
-
-func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any, []any)) {
-	switch x := v.(type) {
-	case map[string]any:
-		app := currentApp
-		if a, ok := x["app"].(string); ok && a != "" {
-			app = a
-		} else if target, ok := x["target"].(string); ok && target != "" && strings.Contains(target, ".") {
-			app, _, _ = strings.Cut(target, ".")
-		} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
-			app, _, _ = strings.Cut(schema, ".")
-		}
-		if choices, ok := x["choices"].([]any); ok {
-			f(app, x, choices)
-		}
-		for key, child := range x {
-			if key == "languages" {
-				continue
-			}
-			walkChoicesWithApp(child, app, f)
-		}
-	case []any:
-		for _, child := range x {
-			walkChoicesWithApp(child, currentApp, f)
-		}
-	}
-}
-
-// walkTexts replaces each declaration text in a JSON tree.
-func walkTexts(v any, f func(string) string) {
-	walkTextsWithApp(v, "", func(_ string, s string) string { return f(s) })
-}
-
-func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
-	switch x := v.(type) {
-	case map[string]any:
-		app := currentApp
-		if a, ok := x["app"].(string); ok && a != "" {
-			app = a
-		} else if target, ok := x["target"].(string); ok && target != "" && strings.Contains(target, ".") {
-			app, _, _ = strings.Cut(target, ".")
-		} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
-			app, _, _ = strings.Cut(schema, ".")
-		}
-		for k, child := range x {
-			if k == "languages" {
-				continue
-			}
-			if s, ok := child.(string); ok && translated[k] {
-				x[k] = f(app, s)
-				continue
-			}
-			walkTextsWithApp(child, app, f)
-		}
-	case []any:
-		for _, child := range x {
-			walkTextsWithApp(child, currentApp, f)
-		}
-	}
 }
 
 // Texts are every declaration text of an app, as the host serves them: what a
@@ -205,8 +139,8 @@ func (t *Tenant) Texts(app string) []string {
 			}
 			return s
 		}
-		walkTexts(tree, add)
-		walkChoices(tree, func(_ map[string]any, choices []any) {
+		transport.WalkTexts(tree, add)
+		transport.WalkChoices(tree, func(_ map[string]any, choices []any) {
 			for _, c := range choices {
 				if s, ok := c.(string); ok {
 					add(s)
@@ -224,7 +158,7 @@ func (t *Tenant) Texts(app string) []string {
 func (t *Tenant) Untranslated(app, lang string) []string {
 	out := []string{}
 	for _, s := range t.Texts(app) {
-		if !t.i18n.says(lang, s, 0) {
+		if !t.i18n.CanSay(lang, s) {
 			out = append(out, s)
 		}
 	}
@@ -290,7 +224,7 @@ func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
 	lower := " " + strings.ToLower(strings.Join(strings.Fields(q), " ")) + " "
 	candidates := []string{info.Type, info.Title, info.Plural}
 	candidates = append(candidates, strings.Split(info.Synonyms, ",")...)
-	for _, lang := range t.i18n.languages() {
+	for _, lang := range t.i18n.Languages() {
 		dict := t.i18n.Dictionary(lang)
 		for _, s := range []string{info.Title, info.Plural, info.Synonyms} {
 			if tr := dict[s]; tr != "" {
@@ -365,34 +299,6 @@ func (t *Tenant) glossary(app string) string {
 		b.WriteString("\n")
 	}
 	return strings.TrimSpace(b.String())
-}
-
-// splits are the ways s fills the pattern's placeholders, at most limit of
-// them: "Kind: Where it goes: out" fills "{field}: {help}" twice (F-25).
-func (p pattern) splits(s string, limit int) [][]string {
-	var out [][]string
-	var fill func(rest string, i int, values []string)
-	fill = func(rest string, i int, values []string) {
-		if len(out) >= limit {
-			return
-		}
-		lit := p.parts[i+1]
-		if i == len(p.names)-1 { // the last placeholder takes all but the closing text
-			if v, ok := strings.CutSuffix(rest, lit); ok && v != "" {
-				out = append(out, append(slices.Clone(values), v))
-			}
-			return
-		}
-		for j := 1; j < len(rest); j++ {
-			if strings.HasPrefix(rest[j:], lit) {
-				fill(rest[j+len(lit):], i+1, append(values, rest[:j]))
-			}
-		}
-	}
-	if rest, ok := strings.CutPrefix(s, p.parts[0]); ok && len(p.names) > 0 {
-		fill(rest, 0, nil)
-	}
-	return out
 }
 
 // Say is the translation of s into lang for the apps' servers (apps/*/server),

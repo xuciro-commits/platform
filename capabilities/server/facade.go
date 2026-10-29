@@ -6,6 +6,7 @@ package platformserver
 import (
 	"cmp"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"slices"
 )
@@ -13,12 +14,12 @@ import (
 // Catalog is what m may call: each app's actions for m's role there, and an
 // action that uses protocol actions only when m may call the bound provider's.
 func (t *Tenant) Catalog(m platform.Member) []platform.Action {
-	gen, key := t.definitionsFingerprint(), rights(m)
-	if out, ok := t.cachedCatalog(m, gen, key); ok {
+	gen, key := t.definitionsFingerprint(), transport.Rights(m)
+	if out, ok := t.views.Catalog(gen, key); ok {
 		return out
 	}
 	out := t.buildCatalog(m)
-	t.storeCatalog(gen, key, out)
+	t.views.StoreCatalog(gen, key, out)
 	return out
 }
 
@@ -36,7 +37,7 @@ func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
 	gen := t.definitionsFingerprint()
 	for _, a := range t.liveApps() {
-		m := t.manifestOf(a, gen)
+		m := transport.ManifestOf(a, gen)
 		info := AppInfo{ID: m.ID, Title: m.Title, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
 			Roles: m.AllRoles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...), Interfaces: append([]platform.Interface{}, m.Interfaces...)}
 		for input, journaled := range m.Inputs {
@@ -72,7 +73,7 @@ func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
 	out := []AppEntry{}
 	gen := t.definitionsFingerprint()
 	for _, a := range t.liveApps() {
-		man := t.manifestOf(a, gen)
+		man := transport.ManifestOf(a, gen)
 		if role := m.Roles[man.ID]; role != "" {
 			out = append(out, AppEntry{ID: man.ID, Title: cmp.Or(man.Title, man.ID), Role: role})
 		}
@@ -145,7 +146,7 @@ func (t *Tenant) AppIDs() []string {
 	gen := t.definitionsFingerprint()
 	out := make([]string, 0, len(t.apps))
 	for _, a := range t.apps {
-		out = append(out, t.manifestOf(a, gen).ID)
+		out = append(out, transport.ManifestOf(a, gen).ID)
 	}
 	return out
 }
@@ -155,5 +156,5 @@ func (t *Tenant) manifestById(id string) platform.Manifest {
 	if a == nil {
 		return platform.Manifest{}
 	}
-	return t.manifestOf(a, t.definitionsFingerprint())
+	return transport.ManifestOf(a, t.definitionsFingerprint())
 }

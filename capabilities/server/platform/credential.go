@@ -1,6 +1,8 @@
 package platform
 
-import "time"
+import (
+	"time"
+)
 
 // CredentialBinding grants use by an original consumer at a specific network origin.
 // It does not grant anyone permission to read the value.
@@ -35,4 +37,13 @@ type CredentialSealRequest struct {
 type CredentialCatalog struct {
 	Credentials      []CredentialInfo `json:"credentials"`
 	ManagedAvailable bool             `json:"managedAvailable"`
+}
+
+type Credentials interface {
+	Credential(string) (CredentialState, bool)
+}
+type CredentialState struct {
+	CredentialInfo
+	SealedVersion int    `json:"sealedVersion,omitempty"`
+	Sealed        string `json:"sealed,omitempty"`
 }

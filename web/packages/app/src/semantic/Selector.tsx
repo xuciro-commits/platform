@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "../index";
 import { Select, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useHost } from "../index";
@@ -12,7 +13,7 @@ import { assetBindingKey, semanticModelView, semanticPropertyTypes, type Propert
  */
 export function SemanticObjectSelect({ value, onChange, label, disabled, filter, drafts, enterprise = false }: {
   value?: string; onChange: (ref?: Api.AssetRef) => void; label: string; disabled?: boolean;
-  filter?: (definition: Api.Definition) => boolean;
+  filter?: (definition: WorkspaceDefinition) => boolean;
   drafts?: { name: string; title?: string }[];
   enterprise?: boolean;
 }) {

@@ -1,26 +1,14 @@
 package platformserver
 
+import transport "platformserver/kernel/transport"
+
 import (
-	"fmt"
 	"net/http"
-	"platformserver/internal/host"
+	controlowner "platformserver/kernel/control"
+	"platformserver/platform"
 	"slices"
 	"strings"
-
-	"platformserver/platform"
 )
-
-func packageContract(id string) platform.CapabilityContract {
-	return platform.CapabilityContract{ID: "package." + id, Version: "1", Semantics: "1"}
-}
-
-func packageModule(p PackageDescriptor) platform.CapabilityModule {
-	module := platform.CapabilityModule{ID: "package." + p.ID, Version: p.Version, Title: p.Title, Scope: "tenant", Replacement: "drain", Provides: []platform.CapabilityContract{packageContract(p.ID)}, Requires: slices.Clone(p.Capabilities)}
-	for _, id := range p.Requires {
-		module.Requires = append(module.Requires, packageContract(id))
-	}
-	return module
-}
 
 func (t *Tenant) baseModules() []platform.CapabilityModule {
 	modules := []platform.CapabilityModule{t.services.RuleModule, t.services.AuthModule, t.services.KernelModule, t.services.StorageModule}
@@ -48,9 +36,9 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 				}
 			}
 		}
-		if m.ID == PlatformApp {
+		if m.ID == controlowner.PlatformApp {
 			for _, app := range t.apps {
-				if _, ok := app.(host.Directory); ok {
+				if _, ok := app.(platform.Directory); ok {
 					needs[app.Manifest().ID] = true
 				}
 			}
@@ -67,35 +55,8 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 	return modules
 }
 
-func (d *Console) packageComposition(candidate PackageDescriptor, index *PackageIndex) (platform.CompositionPlan, error) {
-	modules := d.host.BaseModules()
-	installed := d.packagesOf()
-	for id, held := range installed {
-		if id == candidate.ID || held.State != "active" {
-			continue
-		}
-		var descriptor PackageDescriptor
-		var err error
-		if held.Artifact != "" {
-			descriptor, err = d.sealedPackageDescriptor(id, held.Version, held.Artifact)
-		} else {
-			var found bool
-			descriptor, found = index.find(id, held.Version)
-			if !found {
-				err = fmt.Errorf("installed package %s has no retained declaration", id)
-			}
-		}
-		if err != nil {
-			return platform.CompositionPlan{}, err
-		}
-		modules = append(modules, packageModule(descriptor))
-	}
-	modules = append(modules, packageModule(candidate))
-	return platform.ResolveComposition(modules, nil)
-}
-
 func (h *Host) routesComposition(rt *routes) {
-	rt.authorized(Route{Pattern: "GET /v1/composition", Summary: "Selected runtime contracts, implementations and immutable dependency order", Answer: platform.CompositionPlan{}}, PlatformApp, []string{Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/composition", Summary: "Selected runtime contracts, implementations and immutable dependency order", Answer: platform.CompositionPlan{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		modules := slices.DeleteFunc(t.baseModules(), func(m platform.CapabilityModule) bool {
 			id, owner := strings.CutPrefix(m.ID, "platform.owner.")
 			return owner && !t.ownerActive(id)

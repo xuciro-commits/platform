@@ -3,16 +3,16 @@ package platformserver
 import (
 	"testing"
 
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 func TestConditionalImmutabilityUsesOriginalParentAndCurrentReadPermission(t *testing.T) {
 	tn := builderTenant(t, "conditional-freeze")
-	publishObject(t, tn, "builder", "PARENT", map[string]any{"name": "freezedocument", "title": "Document", "fields": []construction.Field{{Name: "frozen", Title: "Frozen", Type: "boolean", Read: []string{"builder"}}}, "access": []construction.Access{{Role: "user", Read: "all"}}}, txnAt)
+	publishObject(t, tn, "builder", "PARENT", map[string]any{"name": "freezedocument", "title": "Document", "fields": []build.Field{{Name: "frozen", Title: "Frozen", Type: "boolean", Read: []string{"builder"}}}, "access": []build.Access{{Role: "user", Read: "all"}}}, txnAt)
 	parent := platform.ExprReference("reference", "document")
 	condition := platform.Expr{Op: "path", Kind: "boolean", Args: []platform.Expr{parent}, Path: []string{"frozen"}}
-	publishObject(t, tn, "builder", "LINE", map[string]any{"name": "freezeline", "title": "Line", "fields": []construction.Field{{Name: "document", Title: "Document", Type: "reference", Ref: "build.freezedocument", Required: true}, {Name: "amount", Title: "Amount", Type: "decimal"}}, "access": []construction.Access{{Role: "user", Read: "all", Create: true, Edit: true, Archive: true}}, "constraints": []platform.Constraint{{Name: "originalfreeze", Kind: "immutable", Fields: []string{"document", "amount", "archived"}, Expr: &condition, Message: "The original document freezes this line."}}}, txnAt)
+	publishObject(t, tn, "builder", "LINE", map[string]any{"name": "freezeline", "title": "Line", "fields": []build.Field{{Name: "document", Title: "Document", Type: "reference", Ref: "build.freezedocument", Required: true}, {Name: "amount", Title: "Amount", Type: "decimal"}}, "access": []build.Access{{Role: "user", Read: "all", Create: true, Edit: true, Archive: true}}, "constraints": []platform.Constraint{{Name: "originalfreeze", Kind: "immutable", Fields: []string{"document", "amount", "archived"}, Expr: &condition, Message: "The original document freezes this line."}}}, txnAt)
 	for _, id := range []string{"one", "two"} {
 		decide(t, tn, "builder", "build", "build.freezedocument.create", "build.freezedocument", id, map[string]any{"frozen": false}, txnAt)
 	}
@@ -35,8 +35,8 @@ func TestConditionalImmutabilityUsesOriginalParentAndCurrentReadPermission(t *te
 func TestRecursiveCreationRefusesWithoutKeepingAnyChild(t *testing.T) {
 	tn := builderTenant(t, "bounded-creation")
 	publishObject(t, tn, "builder", "NODE", map[string]any{"name": "creationnode", "title": "Creation node"}, txnAt)
-	decide(t, tn, "builder", "build", "build.object.edit", construction.ObjectType, "NODE", map[string]any{"fields": []construction.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.creationnode"}}, "createTransaction": &platform.BusinessTxn{Subject: "build.creationnode", Steps: []platform.TxnStep{{Name: "child", Kind: "create", Target: platform.TxnRef{Type: "build.creationnode"}, Changes: []platform.TxnSet{{Field: "parent", From: "$subject"}}}}}}, txnAt)
-	decide(t, tn, "builder", "build", "build.object.publish", construction.ObjectType, "NODE", nil, txnAt)
+	decide(t, tn, "builder", "build", "build.object.edit", build.ObjectType, "NODE", map[string]any{"fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.creationnode"}}, "createTransaction": &platform.BusinessTxn{Subject: "build.creationnode", Steps: []platform.TxnStep{{Name: "child", Kind: "create", Target: platform.TxnRef{Type: "build.creationnode"}, Changes: []platform.TxnSet{{Field: "parent", From: "$subject"}}}}}}, txnAt)
+	decide(t, tn, "builder", "build", "build.object.publish", build.ObjectType, "NODE", nil, txnAt)
 	before := txnState(tn)
 	if got := refuse(t, tn, "user", "build", "build.creationnode.create", "build.creationnode", "root", nil, txnAt); got == "ok" || txnState(tn) != before {
 		t.Fatal("recursive creation exceeded its depth bound or retained partial children")
@@ -45,7 +45,7 @@ func TestRecursiveCreationRefusesWithoutKeepingAnyChild(t *testing.T) {
 
 func TestRequiredBusinessScalarsAcceptZeroAndFalseButRejectAbsentInputs(t *testing.T) {
 	tn := builderTenant(t, "required-business-scalars")
-	publishObject(t, tn, "builder", "SCALARS", map[string]any{"name": "providedscalar", "title": "Provided scalar", "fields": []construction.Field{{Name: "quantity", Title: "Quantity", Type: "decimal", Required: true}, {Name: "final", Title: "Final", Type: "boolean", Required: true}}}, txnAt)
+	publishObject(t, tn, "builder", "SCALARS", map[string]any{"name": "providedscalar", "title": "Provided scalar", "fields": []build.Field{{Name: "quantity", Title: "Quantity", Type: "decimal", Required: true}, {Name: "final", Title: "Final", Type: "boolean", Required: true}}}, txnAt)
 	decide(t, tn, "user", "build", "build.providedscalar.create", "build.providedscalar", "present", map[string]any{"quantity": 0, "final": false}, txnAt)
 	caller := tn.caller(memberOf(t, tn, "user"), tn.app("build"), false)
 	for name, want := range map[string]string{"quantity": "0", "final": "false"} {

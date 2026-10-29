@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/internal/acceptance"
-	resultformat "platformserver/internal/acceptance/result"
-	"platformserver/internal/records"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
+	"platformserver/kernel/records"
 	"reflect"
 	"slices"
 	"strings"
@@ -16,7 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
+
 	"platformserver/platform"
 )
 
@@ -28,9 +28,9 @@ type stagedDecision struct {
 	businessRefusals       map[*kernel.Error]platform.BusinessRefusalFact
 	businessFacts          []platform.BusinessRefusalFact
 	simulation             bool
-	definitions            map[string]*resultformat.DecisionDefinition
+	definitions            map[string]*platform.DecisionDefinition
 	schemaVersion          *platform.SchemaVersion
-	authorizations         []resultformat.AuthorizationEvidence
+	authorizations         []acceptedformat.AuthorizationEvidence
 	iterations             []platform.TxnIteration
 	constraintWrites       map[string]constraintWrite
 	callbackOrigin         *platform.Effect
@@ -56,10 +56,10 @@ type stagedDecision struct {
 	noticeChanged          bool
 	writers                map[string][]string
 	changed                map[string][]string
-	publications           map[string]*resultformat.Publication
+	publications           map[string]*acceptedformat.Publication
 	intents                []platform.Effect
 	transactionSteps       int
-	observations           []resultformat.Observation
+	observations           []acceptedformat.Observation
 	observed               bool
 	hops                   int
 	requests               []request
@@ -69,11 +69,11 @@ type stagedDecision struct {
 	states                 map[string]platform.AcceptedStateApp
 	stateBases             map[string]json.RawMessage
 	connectors             platform.Connectors
-	deliveries             []resultformat.ConnectorDelivery
+	deliveries             []acceptedformat.ConnectorDelivery
 	operationAnswers       map[string]platform.OperationResult
 	operationCancels       map[string]bool
 	operationInputs        map[string][]*preparedOperationInput
-	observationInput       *resultformat.ObservationDecisionEvidence
+	observationInput       *platform.ObservationDecisionEvidence
 }
 
 // HoldChanges tracks the stack that owns a private ledger receive. Savepoints
@@ -105,8 +105,8 @@ func (d *stagedDecision) FailDecision(err *kernel.Error) {
 }
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
-	sequences := t.sequences.clone()
-	notices, noticeSeq := t.notices.state()
+	sequences := t.sequences.Clone()
+	notices, noticeSeq := t.notices.State()
 	t.opsMu.Lock()
 	descriptors, marks := t.connectors.kernel.State()
 	t.opsMu.Unlock()
@@ -115,7 +115,7 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	}
 	connectors := t.services.Kernel.Connectors()
 	connectors.Restore(descriptors, marks)
-	before, _ := acceptance.Digest(notices)
+	before, _ := platform.CanonicalDigest(notices)
 	return &stagedDecision{simulation: t.simulation, tenant: t, records: t.records.forkRecords(),
 		logs: map[*platform.Ledger]platform.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
@@ -129,11 +129,11 @@ func (d *stagedDecision) Decide(c platform.Caller, app platform.App, s *pb.Submi
 
 func (d *stagedDecision) decideApp(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if d.simulation {
-		if candidate, err := d.tenant.releases.candidate(d.tenant.releases.active); err == nil {
+		if candidate, err := d.tenant.releases.Candidate(d.tenant.releases.Active()); err == nil {
 			return d.decideAppFrom(c, app, s, at, d.routingTenant(), candidate.ID, candidate.Assets)
 		}
 	}
-	return d.decideAppFrom(c, app, s, at, d.routingTenant(), d.tenant.releases.active)
+	return d.decideAppFrom(c, app, s, at, d.routingTenant(), d.tenant.releases.Active())
 }
 
 func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *pb.Submission, at time.Time, view *Tenant, release string, retained ...[]platform.ReleaseAsset) (*pb.ChangeRecord, *kernel.Error) {
@@ -144,7 +144,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 	if d.receiving[app.AcceptedLedger()] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held owner")
 	}
-	if d.active[id] || len(d.active) >= resultformat.MaxHops {
+	if d.active[id] || len(d.active) >= acceptedformat.MaxHops {
 		unsupportedStagedEffect()
 	}
 	d.active[id] = true
@@ -175,7 +175,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		}
 		definition.Contract.Family = r.GetSubmission().GetSchema().GetVersion()
 		if d.definitions == nil {
-			d.definitions = map[string]*resultformat.DecisionDefinition{}
+			d.definitions = map[string]*platform.DecisionDefinition{}
 		}
 		d.definitions[id+"/"+r.GetChangeId()] = definition
 	}
@@ -298,9 +298,9 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 			return
 		}
 		if d.publications == nil {
-			d.publications = map[string]*resultformat.Publication{}
+			d.publications = map[string]*acceptedformat.Publication{}
 		}
-		d.publications[c.App+"/"+record.GetChangeId()] = &resultformat.Publication{Schema: schema, Image: raw}
+		d.publications[c.App+"/"+record.GetChangeId()] = &acceptedformat.Publication{Schema: schema, Image: raw}
 	}
 }
 
@@ -367,9 +367,6 @@ func (d *stagedDecision) CheckEnterpriseUsage(c platform.Caller, id, until strin
 	view := d.enterpriseUsageTenant()
 	return view.checkEnterpriseUsage(c, d.records, id, until, deleting, now)
 }
-func (d *stagedDecision) CheckEnterpriseTenantLink(c platform.Caller, id string, revision uint32, now time.Time) *kernel.Error {
-	return d.enterpriseUsageTenant().checkTenantLink(c, id, revision, now)
-}
 func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id string, now time.Time) *kernel.Error {
 	return d.routingTenant().checkTenantConnection(c, id, now)
 }
@@ -377,7 +374,7 @@ func (d *stagedDecision) CheckEnterpriseTenantConnection(c platform.Caller, id s
 func (d *stagedDecision) enterpriseUsageTenant() *Tenant {
 	original := d.routingTenant()
 	view := &Tenant{services: original.services, disabledOwners: original.disabledOwners, ID: original.ID, apps: slices.Clone(original.apps), appIndex: original.appIndex, records: d.records, identity: original.identity, Secrets: original.Secrets, releases: original.releases}
-	view.settings.restore(original.settings.clone())
+	view.settings.Restore(original.settings.Snapshot())
 	for i, app := range view.apps {
 		view.apps[i] = d.stateApp(app)
 	}
@@ -405,7 +402,7 @@ func (d *stagedDecision) Related(c platform.Caller, element, stereotype string, 
 func (d *stagedDecision) Links(c platform.Caller, entity string) []string {
 	var out []string
 	if d.tenant.linker != nil {
-		out = d.stateApp(d.tenant.linker.(platform.App)).(host.Linker).Links(c, entity)
+		out = d.stateApp(d.tenant.linker.(platform.App)).(platform.Linker).Links(c, entity)
 	}
 	return appendOwnedRelationNeighbors(out, c.OwnedRelations(entity), entity)
 }
@@ -414,7 +411,7 @@ func (d *stagedDecision) Link(c platform.Caller, from, to *pb.EntityRef, key str
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	owner := d.stateApp(d.tenant.linker.(platform.App))
-	err := owner.(host.Linker).Link(c, from, to, key, now)
+	err := owner.(platform.Linker).Link(c, from, to, key, now)
 	if err != nil && d.failure == nil {
 		d.failure = err
 	}
@@ -432,7 +429,7 @@ func (d *stagedDecision) Deliver(c platform.Caller, dataClass, from, to string, 
 			break
 		}
 	}
-	before, err := acceptance.Digest(prior)
+	before, err := platform.CanonicalDigest(prior)
 	if err != nil {
 		unsupportedStagedEffect()
 	}
@@ -442,7 +439,7 @@ func (d *stagedDecision) Deliver(c platform.Caller, dataClass, from, to string, 
 		}
 		return refusal
 	}
-	d.deliveries = append(d.deliveries, resultformat.ConnectorDelivery{
+	d.deliveries = append(d.deliveries, acceptedformat.ConnectorDelivery{
 		Connector: c.ID, DataClass: dataClass, From: from, To: to, At: now, Before: before})
 	return nil
 }
@@ -516,9 +513,9 @@ func (d *stagedDecision) BoundProvider(c platform.Caller, protocol string) (stri
 	return d.routingTenant().boundProvider(c, protocol)
 }
 
-func (d *stagedDecision) directoryView() host.Directory {
+func (d *stagedDecision) directoryView() platform.Directory {
 	if owner, ok := d.tenant.directory.(platform.App); ok {
-		return d.stateApp(owner).(host.Directory)
+		return d.stateApp(owner).(platform.Directory)
 	}
 	return d.tenant.directory
 }

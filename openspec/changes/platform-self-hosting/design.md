@@ -68,29 +68,29 @@ UAF 当前参与元素类别及继承、关系端点、属性/枚举/引用校�
 
 保留轻量单位/岗位/任职、指定结构、有界上下级、有效期间、已存引用解析、关闭/重开与来源所有权检查。组织类型与关系端点成为有界平台目录规则，不复制 272 构造型全集；普通业务台账和流转仍交原 Build/Flow owner。
 
-新写不再接受任意 UAF 类别、标准属性、视图或完整切片导入。历史已保存的资源、场所、能力、视图及属性保留原 ID 与字节，通过原 owner 的只读历史解释可辨认；不能全部强转为单位、丢弃未知属性，或把旧来源改成本地。已封存结果只应用原映像；需要原 UAF 解释器重建的旧输入在独立保留的兼容二进制完成原恢复和受检交接前阻止升级，不把外移工具自动挂回普通运行路径。
+新写只接受 ActualOrganization、ActualPost、ActualPerson 以及 Placement、Membership、FillsPost、ResponsibleFor 的固定目录端点；这些字符串保留原身份。目录字段沿原模型，标准属性只读；完整视图/切片导入和pipeline企业切片输出已退役。原ledger保留退休schema及回执，当前Manifest/SDK只暴露目录写。新写不再接受任意 UAF 类别、标准属性、视图或完整切片导入。历史已保存的资源、场所、能力、视图及属性保留原 ID 与字节，通过原 owner 的只读历史解释可辨认；不能全部强转为单位、丢弃未知属性，或把旧来源改成本地。历史标准属性中的引用按冻结的引用字段表解释，不将普通文本误当引用，不载入完整元模型。已封存结果只应用原映像；需要原 UAF 解释器重建的旧输入在独立保留的兼容二进制完成原恢复和受检交接前阻止升级，不把外移工具自动挂回普通运行路径。
 
 ### 5. 精确文件删除、合并与目录收敛对照
 
-下列是统一实施目标，原组织owner已按表内聚；UAF标准与工具尚未外移。外部导入工具的仓库名 `platform-uaf-importer` 是交付目标名，不在本轮创建仓库；转移须保留原来源文件、校验摘要、许可证及版本。
+原组织owner已按表内聚，完整标准与工具已迁至 `tools/platform-uaf-importer/` 独立可选 Go 模块，默认服务和构建不导入它。该目录保持可独立交付，当前没有创建外部仓库。SHA256SUMS、原XMI/生成JSON/HTML及来源与原许可说明随工具保留；只改生成工具的模块导入和相对入口。
 
 #### UAF 从核心外移的 13 个文件
 
 | 当前精确文件 | 目标（可选外部工具仓库内） | 核心处理 |
 |---|---|---|
-| `capabilities/server/internal/enterprise/uaf/data.go` | `platform-uaf-importer/uaf/data.go` | 外移后删除 |
-| `capabilities/server/internal/enterprise/uaf/uaf.go` | `platform-uaf-importer/uaf/uaf.go` | 外移完整标准模型，核心不保留导入 |
-| `capabilities/server/internal/enterprise/uaf/releases.go` | `platform-uaf-importer/uaf/releases.go` | 撤掉核心 JSON embed |
-| `capabilities/server/internal/enterprise/uaf/uaf_test.go` | `platform-uaf-importer/uaf/uaf_test.go` | 标准测试随工具走 |
-| `capabilities/server/internal/enterprise/uaf/gen/uaf-1.3.json` | `platform-uaf-importer/uaf/gen/uaf-1.3.json` | 原生成字节保留 |
-| `capabilities/server/internal/enterprise/uaf/spec/uaf-1.3-profile.xmi` | `platform-uaf-importer/spec/uaf-1.3-profile.xmi` | 原件与摘要保留 |
-| `capabilities/server/internal/enterprise/uaf/spec/uaf-1.3-measurements.xmi` | `platform-uaf-importer/spec/uaf-1.3-measurements.xmi` | 原件与摘要保留 |
-| `capabilities/server/internal/enterprise/uafgen/generate.go` | `platform-uaf-importer/generate/generate.go` | 生成职责外移 |
-| `capabilities/server/internal/enterprise/uafgen/profile.go` | `platform-uaf-importer/generate/profile.go` | XML 解析职责外移 |
-| `capabilities/server/internal/enterprise/uafgen/generate_test.go` | `platform-uaf-importer/generate/generate_test.go` | 来源/生成一致性验证随工具走 |
-| `capabilities/server/cmd/uaf-gen/main.go` | `platform-uaf-importer/cmd/uaf-gen/main.go` | 核心命令退出 |
-| `docs/standards/uaf/1.3/SOURCE.md` | `platform-uaf-importer/docs/1.3/SOURCE.md` | 修正外部仓库内路径，保留来源 |
-| `docs/standards/uaf/1.3/uaf-1.3-specification.html` | `platform-uaf-importer/docs/1.3/uaf-1.3-specification.html` | 标准说明外移 |
+| `capabilities/server/internal/enterprise/uaf/data.go` | `tools/platform-uaf-importer/uaf/data.go` | 外移后删除 |
+| `capabilities/server/internal/enterprise/uaf/uaf.go` | `tools/platform-uaf-importer/uaf/uaf.go` | 外移完整标准模型，核心不保留导入 |
+| `capabilities/server/internal/enterprise/uaf/releases.go` | `tools/platform-uaf-importer/uaf/releases.go` | 撤掉核心 JSON embed |
+| `capabilities/server/internal/enterprise/uaf/uaf_test.go` | `tools/platform-uaf-importer/uaf/uaf_test.go` | 标准测试随工具走 |
+| `capabilities/server/internal/enterprise/uaf/gen/uaf-1.3.json` | `tools/platform-uaf-importer/uaf/gen/uaf-1.3.json` | 原生成字节保留 |
+| `capabilities/server/internal/enterprise/uaf/spec/uaf-1.3-profile.xmi` | `tools/platform-uaf-importer/uaf/spec/uaf-1.3-profile.xmi` | 原件与摘要保留 |
+| `capabilities/server/internal/enterprise/uaf/spec/uaf-1.3-measurements.xmi` | `tools/platform-uaf-importer/uaf/spec/uaf-1.3-measurements.xmi` | 原件与摘要保留 |
+| `capabilities/server/internal/enterprise/uafgen/generate.go` | `tools/platform-uaf-importer/generate/generate.go` | 生成职责外移 |
+| `capabilities/server/internal/enterprise/uafgen/profile.go` | `tools/platform-uaf-importer/generate/profile.go` | XML 解析职责外移 |
+| `capabilities/server/internal/enterprise/uafgen/generate_test.go` | `tools/platform-uaf-importer/generate/generate_test.go` | 来源/生成一致性验证随工具走 |
+| `capabilities/server/cmd/uaf-gen/main.go` | `tools/platform-uaf-importer/cmd/uaf-gen/main.go` | 核心命令退出 |
+| `docs/standards/uaf/1.3/SOURCE.md` | `tools/platform-uaf-importer/docs/1.3/SOURCE.md` | 修正外部仓库内路径，保留来源 |
+| `docs/standards/uaf/1.3/uaf-1.3-specification.html` | `tools/platform-uaf-importer/docs/1.3/uaf-1.3-specification.html` | 标准说明外移 |
 
 #### 组织能力内聚的逐文件映射
 

@@ -1,7 +1,7 @@
 package platformserver
 
 import (
-	"platformserver/internal/host"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"time"
@@ -37,7 +37,7 @@ type AppPermissions struct {
 
 // Permissions is the tenant's catalog: every app it runs, every role, every action.
 func (t *Tenant) Permissions() []AppPermissions {
-	d, _ := t.app(PlatformApp).(host.IdentityDirectory)
+	d, _ := t.app(controlowner.PlatformApp).(platform.IdentityDirectory)
 	out := []AppPermissions{}
 	for _, a := range t.liveApps() {
 		m := a.Manifest()
@@ -58,7 +58,7 @@ func (t *Tenant) Permissions() []AppPermissions {
 		out = append(out, ap)
 	}
 	key := func(a AppPermissions) string { // the platform first
-		if a.App == PlatformApp {
+		if a.App == controlowner.PlatformApp {
 			return " "
 		}
 		return a.App

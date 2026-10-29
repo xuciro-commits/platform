@@ -2,86 +2,17 @@ package platformserver
 
 import (
 	"encoding/json"
-	"maps"
-	"slices"
-	"strings"
-	"sync"
-	"time"
+	"platformserver/kernel/transport"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
+	"slices"
+	"strings"
+
+	"time"
 )
-
-// Tenant words: the tenant's own dictionary, one more layer on
-// the platform's and the apps'. An administrator says what a
-// declaration text — above all one the tenant defined in Build: an object
-// type, a field, a state, an action, an application — reads as in each
-// language; the host then serves it like any shipped translation. Names are
-// written once in one language and said in the others: never "EN/中文" in one
-// title.
-const (
-	BuildApp             = "build" // the app whose definitions the tenant writes
-	TranslationType      = "platform.translation"
-	SchemaTranslationSet = "platform.translation.set"
-)
-
-// tenantWords are the entries, language → text → translation, under their own
-// lock as settings are: read by the translator, set by one console action.
-type tenantWords struct {
-	mu    sync.Mutex
-	words map[string]map[string]string
-}
-
-func (w *tenantWords) set(lang, text, translation string) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.words == nil {
-		w.words = map[string]map[string]string{}
-	}
-	if translation == "" {
-		delete(w.words[lang], text)
-		if len(w.words[lang]) == 0 {
-			delete(w.words, lang)
-		}
-		return
-	}
-	if w.words[lang] == nil {
-		w.words[lang] = map[string]string{}
-	}
-	w.words[lang][text] = translation
-}
-
-// clone is a copy of every language's entries: what the translator layers.
-func (w *tenantWords) clone() map[string]map[string]string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	out := map[string]map[string]string{}
-	for lang, d := range w.words {
-		out[lang] = maps.Clone(d)
-	}
-	return out
-}
-
-func (w *tenantWords) restore(words map[string]map[string]string) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.words = words
-	if w.words == nil {
-		w.words = map[string]map[string]string{}
-	}
-}
-
-func wordsActions() []platform.Action {
-	return []platform.Action{
-		{Schema: SchemaTranslationSet, Target: TranslationType, Capability: "settings", Title: "Translate a text",
-			Description: "Say a declaration text (an object type, field, state, action or application name the tenant defined, or any shipped one) in a language (target: the language tag, such as zh-CN). An empty translation removes the tenant's entry.",
-			Payload: []platform.Field{
-				{Name: "text", Type: "string", Required: true, Description: "The text as declared, in its source language"},
-				{Name: "translation", Type: "string", Description: "What it reads as in the target language; empty removes"},
-			}, Roles: []string{Admin}},
-	}
-}
 
 // decideTranslation decides platform.translation.set: a language tag and a
 // text are required; the entry applies to every declaration served from then on.
@@ -93,8 +24,8 @@ func (t *Tenant) decideTranslation(_ platform.Caller, s *pb.Submission, _ time.T
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	return func(*pb.ChangeRecord) {
-		t.words.set(lang, p.Text, strings.TrimSpace(p.Translation))
-		t.i18n.reset()
+		t.words.Set(lang, p.Text, strings.TrimSpace(p.Translation))
+		t.i18n.Reset()
 	}, nil
 }
 
@@ -119,26 +50,26 @@ type WordsView struct {
 // Words lists an app's declaration texts ( Texts, plus the tenant's
 // installed definitions for Build) with what every language says for each.
 func (t *Tenant) Words(app string) WordsView {
-	view := WordsView{App: app, Apps: []string{}, Languages: t.i18n.languages(), Words: []Word{}}
+	view := WordsView{App: app, Apps: []string{}, Languages: t.i18n.Languages(), Words: []Word{}}
 	for _, a := range t.apps {
 		view.Apps = append(view.Apps, a.Manifest().ID)
 	}
 	texts := t.Texts(app)
-	if app == BuildApp {
+	if app == controlowner.BuildApp {
 		seen := map[string]bool{}
 		for _, s := range texts {
 			seen[s] = true
 		}
 		var parts []any
 		for _, d := range t.definitions {
-			if d.Ref.App == BuildApp {
+			if d.Ref.App == controlowner.BuildApp {
 				parts = append(parts, d)
 			}
 		}
 		raw, _ := json.Marshal(parts)
 		var tree any
 		json.Unmarshal(raw, &tree)
-		walkTexts(tree, func(s string) string {
+		transport.WalkTexts(tree, func(s string) string {
 			if s != "" && !seen[s] {
 				seen[s] = true
 				texts = append(texts, s)
@@ -147,7 +78,7 @@ func (t *Tenant) Words(app string) WordsView {
 		})
 		slices.Sort(texts)
 	}
-	own := t.words.clone()
+	own := t.words.Clone()
 	for _, s := range texts {
 		w := Word{Text: s, Translations: map[string]string{}, Own: map[string]string{}}
 		for _, lang := range view.Languages {

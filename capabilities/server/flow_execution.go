@@ -4,16 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"platformserver/internal/acceptance"
+	automation "platformserver/engine/automation"
 	"platformserver/journal"
+
 	"reflect"
 	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
-	"platformserver/internal/records"
+
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -41,22 +42,22 @@ type retainedReadOrigin struct {
 	rows records.Rows
 }
 
-func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding host.FlowBinding) (host.FlowHost, error) {
+func (h hostView) FlowExecution(c platform.Caller, app, name string, version int, binding platform.FlowBinding) (platform.FlowHost, error) {
 	if binding.Release == "" {
 		return h, nil
 	}
-	current, _, err := h.flowClosure(app, name, version)
+	current, _, err := h.flowBindings().Closure(app, name, version)
 	if err == nil && current.ID == binding.Dependencies {
 		return h, nil
 	}
-	closed, err := h.retainedFlowClosure(app, name, version, binding)
+	closed, err := h.flowBindings().Retained(app, name, version, binding)
 	if err != nil {
 		return nil, err
 	}
 	return h.retainedExecution(c, binding.Release, closed.Assets)
 }
 
-func (h hostView) retainedExecution(c platform.Caller, release string, assets []platform.ReleaseAsset) (host.FlowHost, error) {
+func (h hostView) retainedExecution(c platform.Caller, release string, assets []platform.ReleaseAsset) (platform.FlowHost, error) {
 	if h.decision == nil || !c.Staging() {
 		return nil, fmt.Errorf("retained flow execution requires its private decision")
 	}
@@ -73,7 +74,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 		if len(selected) == 0 {
 			continue
 		}
-		compiler, ok := owner.(host.ReleaseExecutionOwner)
+		compiler, ok := owner.(platform.ReleaseExecutionOwner)
 		if !ok {
 			current, err := h.t.releaseAssetsLocked(nil, false)
 			if err != nil {
@@ -81,7 +82,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 			}
 			for _, asset := range selected {
 				a := slices.IndexFunc(current, func(x platform.ReleaseAsset) bool { return x.Ref == asset.Ref })
-				before, _ := acceptance.Digest(asset)
+				before, _ := platform.CanonicalDigest(asset)
 				var after string
 				if a >= 0 {
 					selected := current[a]
@@ -94,7 +95,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 							}
 						}
 					}
-					after, _ = acceptance.Digest(selected)
+					after, _ = platform.CanonicalDigest(selected)
 				}
 				if before != after {
 					return nil, fmt.Errorf("retained dependency %s has no compatible execution owner", asset.Ref)
@@ -123,7 +124,7 @@ func (h hostView) retainedExecution(c platform.Caller, release string, assets []
 			rt.shapes[info.Type] = info
 			view.owner[info.Type] = bound
 		}
-		host.Attach(bound, hostView{t: view, app: bound, decision: h.decision})
+		(hostView{t: view, app: bound, decision: h.decision}).bindOwner(bound)
 	}
 	view.definitions = slices.Clone(view.definitions)
 	for i, definition := range view.definitions {
@@ -200,9 +201,10 @@ func (r *flowExecutionRuntime) DecisionCatalog(ledger *platform.Ledger) *platfor
 func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if app.Manifest().ID == platform.WorkApp {
 		private := r.stateApp(r.tenant.app(platform.WorkApp))
-		if work, ok := private.(host.AttachedWork); ok {
-			work.AttachWork(flowExecution{hostView: hostView{t: r.tenant, app: private, decision: r.stagedDecision}, rt: r})
-		}
+		context := hostView{t: r.tenant, app: private, decision: r.stagedDecision}
+		bindings := context.ownerBindings()
+		bindings.Work = flowExecution{hostView: context, rt: r}
+		r.tenant.services.BindOwner(private, bindings)
 		return r.decideAppFrom(c, private, s, at, r.view, r.release, r.assets)
 	}
 	if bound := r.view.app(app.Manifest().ID); bound != nil {
@@ -232,7 +234,7 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 		} else if !found || next.Type != old.Type || next.Ref != old.Ref || next.ReadOnly && !old.ReadOnly && records.ProjectionFor(value.Projection, r.release) != nil {
 			if prior == nil {
 				source := records.ProjectionFor(value.Projection, r.release)
-				shape, _ := acceptance.Digest(info.Fields)
+				shape, _ := platform.CanonicalDigest(info.Fields)
 				if source == nil || source.Shape != shape || json.Unmarshal(source.Value, &prior) != nil {
 					return nil, conflictRefusal(fmt.Errorf("retained field %s.%s has no saved source image", info.Type, old.Name))
 				}
@@ -289,7 +291,7 @@ func (r *flowExecutionRuntime) recoverRetainedRead(refusal **kernel.Error) {
 
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 	r.records.mu.Lock()
-	valid := r.readSource == r.records && r.readStore != nil && r.readSQLView == r.records.readView
+	valid := r.readSource == r.records && r.readStore != nil && r.readSQLView == r.records.current.View()
 	for typ, et := range r.records.types {
 		origin, exists := r.readOrigins[typ]
 		if !exists || origin.typ != et || origin.rows != et.rows {
@@ -319,7 +321,7 @@ func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
 			store.types[typ] = &entityType{store: store, info: info, rows: records.SourceRows(source), knowledge: current.knowledge, retainedProjection: true}
 			store.byGo[info.Go] = store.types[typ]
 		}
-		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.records, store, origins, store.readView
+		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.records, store, origins, store.current.View()
 	}
 	return (hostView{t: r.view}).installationView(store), nil
 }
@@ -407,7 +409,7 @@ func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string,
 		return nil, nil, err
 	}
 	// The shared traversal calls the same scoped ReadRecord implementation.
-	return readRecordPath(c, typ, id, path, at, view.entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
+	return automation.ReadRecordPath(c, typ, id, path, at, view.entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
 		return r.ReadRecord(c, typ, id, at)
 	})
 }

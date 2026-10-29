@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type {PageUI} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import type { ApplicationUIInfo } from "@platform/app";
@@ -15,7 +16,7 @@ export function installedStudioRef(id?: string): Api.AssetRef | undefined {
 
 export type StudioApplication = {
   id: string; ref: Api.AssetRef; title: string; description?: string; version?: string;
-  project?: Project; definition?: Api.Definition;
+  project?: Project; definition?: WorkspaceDefinition;
 };
 
 /** Original navigation remains a replaceable slot after its renderer retires. */
@@ -36,7 +37,7 @@ export function applicationViewOptions(entry?: ApplicationUIInfo): { id: string;
   return [...views.values()];
 }
 
-export function studioApplications(apps: readonly Api.AppInfo[], definitions: readonly Api.Definition[], projects: readonly Project[]): StudioApplication[] {
+export function studioApplications(apps: readonly Api.AppInfo[], definitions: readonly WorkspaceDefinition[], projects: readonly Project[]): StudioApplication[] {
   const entries = new Map<string, StudioApplication>();
   for (const app of apps) {
     const ref: Api.AssetRef = { app: app.id, kind: "app", name: app.id };

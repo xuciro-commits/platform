@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/mail"
 	"net/textproto"
+	controlowner "platformserver/kernel/control"
 	"strings"
 	"sync"
 	"testing"
@@ -97,11 +98,11 @@ func TestNotificationsByEmail(t *testing.T) {
 	box, addr := newMailbox(t)
 	var journal []Entry
 	build := func() *Tenant {
-		dir := NewConsole("t-1",
-			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{PlatformApp: Admin}}},
-			Seat{Subjects: []string{"sup", "user:sup@example.com"}, Member: platform.Member{ID: "sup", Roles: map[string]string{}}},
-			Seat{Subjects: []string{"client:bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{}}},
-			Seat{Subjects: []string{"gw"}, Member: platform.Member{ID: "gw", Roles: map[string]string{}}})
+		dir := newConsole("t-1",
+			platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}},
+			platform.Seat{Subjects: []string{"sup", "user:sup@example.com"}, Member: platform.Member{ID: "sup", Roles: map[string]string{}}},
+			platform.Seat{Subjects: []string{"client:bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{}}},
+			platform.Seat{Subjects: []string{"gw"}, Member: platform.Member{ID: "gw", Roles: map[string]string{}}})
 		org := enterprise.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Sites", Kind: "site"}},
 			Units:       []platform.Unit{{ID: "L1", Kind: "line"}},
 			Memberships: []platform.Membership{{Party: "member:sup", Unit: "L1", Role: "supervisor"}, {Party: "member:bot", Unit: "L1", Role: "supervisor"}}})
@@ -117,15 +118,18 @@ func TestNotificationsByEmail(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id); return m }
+	member := func(id string) platform.Member {
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
+		return m
+	}
 	ana, gw := member("ana"), member("gw")
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	add := func(id string, endpoint map[string]any) string {
 		keys++
 		raw, _ := json.Marshal(endpoint)
-		if _, err := tn.Submit(ana, &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: PlatformApp, IdempotencyKey: fmt.Sprint("e", keys),
-			Target: &pb.EntityRef{Type: EndpointType, Id: id}, Schema: &pb.SchemaRef{Name: SchemaEndpointAdd, Version: 1}, Payload: raw}, now); err != nil {
+		if _, err := tn.Submit(ana, &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: controlowner.PlatformApp, IdempotencyKey: fmt.Sprint("e", keys),
+			Target: &pb.EntityRef{Type: controlowner.EndpointType, Id: id}, Schema: &pb.SchemaRef{Name: controlowner.SchemaEndpointAdd, Version: 1}, Payload: raw}, now); err != nil {
 			return err.Error()
 		}
 		return "ok"

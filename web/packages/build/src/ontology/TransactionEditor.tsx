@@ -1,3 +1,4 @@
+import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useProvidedCapabilities, useRecordInventory } from "@platform/app";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
@@ -16,7 +17,7 @@ const expressionKind = (type: string) => ({ longtext: "text", number: "decimal",
 const resultChoice = (step: Api.TxnStep): ExpressionChoice[] => step.kind === "create" || step.kind === "post" ? [{ value: `step.${step.name}`, label: t("Result of {step}", { step: step.name }), type: "reference", ref: step.target?.type }] : step.kind === "sequence" ? [{ value: `step.${step.name}`, label: t("Number from {step}", { step: step.name }), type: "text" }] : step.call ? [{ value: `step.${step.name}`, label: t("Result of {step}", { step: step.name }), type: step.call.resultType.kind, ref: step.call.resultType.object }] : [];
 type EditorContext = {
   collections?:Api.RuleReadSpec["collections"];subject: string; actionName?: string; process: Process; inputs: Input_[]; choices: ExpressionChoice[]; objects: EntityInfo[];
-  lookup: (type: string) => EntityInfo | undefined; roles: string[]; definitions: Api.Definition[];
+  lookup: (type: string) => EntityInfo | undefined; roles: string[]; definitions: WorkspaceDefinition[];
   rename: (path: number[], after: string) => void;
   pure: Api.ProvidedCapability[]; writes: { id: string; name: string; title: string; object: string; on: string; state: string }[];
 };

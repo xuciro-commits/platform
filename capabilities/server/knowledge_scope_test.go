@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
@@ -10,10 +11,10 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/files"
-	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
 
@@ -22,9 +23,9 @@ import (
 // flow merely because it names that subject.
 func TestKnowledgeAndContextScope(t *testing.T) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
-	tn := stockTenant(t, knowledge.New("t-1"), work.New("t-1"), flow.New("t-1"), files.New("t-1"), relations.New("t-1"))
+	tn := stockTenant(t, knowledge.New("t-1"), work.New("t-1"), automation.New("t-1"), files.New("t-1"), relations.New("t-1"))
 	member := func(id string) platform.Member {
-		m, _ := tn.app(PlatformApp).(*Console).MemberBySubject(id)
+		m, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject(id)
 		return m
 	}
 	for i, x := range []struct{ who, id, line string }{{"ana", "I1", "L1"}, {"bo", "I2", "L2"}} {
@@ -87,8 +88,8 @@ func TestKnowledgeAndContextScope(t *testing.T) {
 		}
 	}
 
-	if err := tn.automation(flow.ID, true).PutAt(now, "test.flow", flow.FlowInstance{Record: platform.Record{ID: "F1"}, Key: "I1", Flow: "stock.private", State: "waiting", OnBehalf: "lead",
-		Trace: []flow.TraceLine{{Detail: "private flow reason"}}}); err != nil {
+	if err := tn.automation(automation.ID, true).PutAt(now, "test.flow", automation.FlowInstance{Record: platform.Record{ID: "F1"}, Key: "I1", Flow: "stock.private", State: "waiting", OnBehalf: "lead",
+		Trace: []automation.TraceLine{{Detail: "private flow reason"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := tn.automation(work.ID, true).PutAt(now, "test.task", work.WorkTask{Record: platform.Record{ID: "T1"}, Ref: "stock.item/I1", Title: "Private task", Answer: "private answer", Candidates: []string{"lead"}, State: "open"}); err != nil {
@@ -133,7 +134,7 @@ func TestKnowledgeIndexesPastFirstPage(t *testing.T) {
 	if got := len(tn.sources()); got != 501 {
 		t.Fatalf("indexed %d of 501 knowledge fields", got)
 	}
-	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
+	ana, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
 	found := tn.Knowledge(&ana, "", "inspection needle I500", 3, now)
 	if len(found) == 0 || found[0].Document != "stock.item/I500#note" {
 		t.Fatalf("last page was not searchable: %+v", found)

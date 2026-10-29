@@ -2,7 +2,7 @@ package platformserver
 
 import (
 	"fmt"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"slices"
 	"strconv"

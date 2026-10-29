@@ -10,15 +10,15 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"platformserver/internal/host"
+
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 // Data source pulls. A pull is an import whose
@@ -31,16 +31,16 @@ import (
 // PullSources pulls every due source of the tenant once; it runs on the
 // five-second outside loop beside evaluations and embeddings.
 func (t *Tenant) PullSources(now time.Time) {
-	if t.businessStopped() || !t.ownerActive(construction.ID) {
+	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
 	}
-	sources, refusal := coordinatedRecordRead(t, context.Background(), func() ([]construction.Source, *kernel.Error) {
-		found, _, err := platform.Find[construction.Source](t.automation(construction.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
+	sources, refusal := coordinatedRecordRead(t, context.Background(), func() ([]build.Source, *kernel.Error) {
+		found, _, err := platform.Find[build.Source](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["state","=","published"]]`), Sort: []string{"id"}, Limit: 200})
 		if err != nil {
 			return nil, err
 		}
-		owner := t.app(construction.ID).(host.IntegrationDefinitions)
-		var fixed []construction.Source
+		owner := t.app(build.ID).(build.IntegrationDefinitions)
+		var fixed []build.Source
 		for _, source := range found {
 			source, err := owner.ExecutionSource(source)
 			if err != nil {
@@ -68,18 +68,18 @@ func (t *Tenant) PullSources(now time.Time) {
 // integrationPreparation is immutable input and resolved output, held by the
 // existing file owner rather than copied into every accepted result.
 type integrationPreparation struct {
-	Type       string                         `json:"type"`
-	ID         string                         `json:"id"`
-	Rows       []construction.SourceRow       `json:"rows,omitempty"`
-	Data       []map[string]any               `json:"data"`
-	Object     string                         `json:"object,omitempty"`
-	Dataset    string                         `json:"dataset,omitempty"`
-	Enterprise *construction.EnterpriseTarget `json:"enterprise,omitempty"`
-	Producer   string                         `json:"producer"`
-	Marking    string                         `json:"marking,omitempty"`
+	Type       string                  `json:"type"`
+	ID         string                  `json:"id"`
+	Rows       []build.SourceRow       `json:"rows,omitempty"`
+	Data       []map[string]any        `json:"data"`
+	Object     string                  `json:"object,omitempty"`
+	Dataset    string                  `json:"dataset,omitempty"`
+	Enterprise *build.EnterpriseTarget `json:"enterprise,omitempty"`
+	Producer   string                  `json:"producer"`
+	Marking    string                  `json:"marking,omitempty"`
 }
 
-func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*construction.IntegrationExecution, error) {
+func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*build.IntegrationExecution, error) {
 	raw, err := json.Marshal(plan)
 	if err != nil {
 		return nil, err
@@ -92,26 +92,26 @@ func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now
 		return nil, err
 	}
 	identity := sha256.Sum256(platform.Raw([]any{t.ID, plan.Type, plan.ID, revision, now.UTC()}))
-	return &construction.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Scopes: slices.Clone(member.Scopes), Pending: true, Snapshot: digest}, nil
+	return &build.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Scopes: slices.Clone(member.Scopes), Pending: true, Snapshot: digest}, nil
 }
 
 // integrationPending reads the already accepted execution, without journaling
 // another artificial resume operation. A paused/replaced source cannot start
 // more work, and the definition/actor of an accepted input stays fixed.
-func (t *Tenant) integrationPending(typ, id string, execution *construction.IntegrationExecution) bool {
+func (t *Tenant) integrationPending(typ, id string, execution *build.IntegrationExecution) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	c := t.automation(construction.ID, false)
-	var current *construction.IntegrationExecution
+	c := t.automation(build.ID, false)
+	var current *build.IntegrationExecution
 	switch typ {
-	case construction.SourceType:
-		source, ok := platform.Get[construction.Source](c, id)
+	case build.SourceType:
+		source, ok := platform.Get[build.Source](c, id)
 		if !ok || source.Archived || source.State != "published" || source.Last == nil {
 			return false
 		}
 		current = source.Last.Execution
-	case construction.PipelineType:
-		pipeline, ok := platform.Get[construction.Pipeline](c, id)
+	case build.PipelineType:
+		pipeline, ok := platform.Get[build.Pipeline](c, id)
 		if !ok || pipeline.Archived || pipeline.State != "published" || pipeline.Last == nil {
 			return false
 		}
@@ -120,7 +120,7 @@ func (t *Tenant) integrationPending(typ, id string, execution *construction.Inte
 	return current != nil && current.Pending && current.ID == execution.ID && current.Snapshot == execution.Snapshot && current.Member == execution.Member && slices.Equal(current.Scopes, execution.Scopes)
 }
 
-func (t *Tenant) integrationPreparation(execution *construction.IntegrationExecution) (integrationPreparation, error) {
+func (t *Tenant) integrationPreparation(execution *build.IntegrationExecution) (integrationPreparation, error) {
 	var plan integrationPreparation
 	digest, err := hex.DecodeString(execution.Snapshot)
 	if err != nil || len(digest) != sha256.Size {
@@ -147,19 +147,19 @@ func (t *Tenant) integrationPreparation(execution *construction.IntegrationExecu
 	return plan, err
 }
 
-func (t *Tenant) sourceResult(member platform.Member, s construction.Source, pull construction.SourcePull, phase string, revision *uint32, now time.Time) *kernel.Error {
+func (t *Tenant) sourceResult(member platform.Member, s build.Source, pull build.SourcePull, phase string, revision *uint32, now time.Time) *kernel.Error {
 	payload := platform.Raw(map[string]any{"pull": pull})
 	key := "pulled:" + s.ID + ":" + now.UTC().Format(time.RFC3339Nano)
 	if pull.Execution != nil {
 		key = "source:" + pull.Execution.ID + ":" + phase
 	}
-	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key, ExpectedRevision: revision,
-		Target: &pb.EntityRef{Type: construction.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: construction.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
+	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key, ExpectedRevision: revision,
+		Target: &pb.EntityRef{Type: build.SourceType, Id: s.ID}, Schema: &pb.SchemaRef{Name: build.SchemaSourcePulled, Version: 1}, Payload: payload}, now)
 	return err
 }
 
-func (t *Tenant) pullSource(s construction.Source, now time.Time) {
-	pull := construction.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
+func (t *Tenant) pullSource(s build.Source, now time.Time) {
+	pull := build.SourcePull{At: now, DefinitionVersion: s.ExecutionVersion()}
 	member, ok := t.Member(s.Puller)
 	if s.PullerScopes != "" && json.Unmarshal([]byte(s.PullerScopes), &member.Scopes) != nil {
 		log.Printf("source execution scopes are invalid")
@@ -188,7 +188,7 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 		}
 		pull.Cursor, pull.Rows = s.Advance(raw), len(raw)
 		plan = integrationPreparation{Object: s.Object, Dataset: s.Dataset, Producer: "source:" + s.Name, Marking: marking}
-		plan.Type, plan.ID = construction.SourceType, s.ID
+		plan.Type, plan.ID = build.SourceType, s.ID
 		if s.Dataset != "" {
 			if len(raw) > 0 || s.Cursor == "" {
 				plan.Data = raw
@@ -196,7 +196,7 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 					plan.Data = []map[string]any{}
 				}
 			}
-		} else if construction.Guarded(plan.Marking) {
+		} else if build.Guarded(plan.Marking) {
 			pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
 		} else if rows, err := s.MapRows(raw); err != nil {
 			pull.Error = err.Error()
@@ -222,10 +222,10 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 		}
 	}
 	if member.ID == "" {
-		member = t.automation(construction.ID, false).Member
+		member = t.automation(build.ID, false).Member
 	}
 	if pull.Execution != nil {
-		if !t.integrationPending(construction.SourceType, s.ID, pull.Execution) {
+		if !t.integrationPending(build.SourceType, s.ID, pull.Execution) {
 			return
 		}
 		if !ok {
@@ -234,7 +234,7 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 			if plan.Data != nil {
 				key := "source:" + pull.Execution.ID + ":dataset"
 				if err := t.loadDatasetKey(member, plan.Dataset, plan.Producer, plan.Marking, plan.Data, key, pull.At); err != nil {
-					if !t.integrationRefused(construction.ID, key) {
+					if !t.integrationRefused(build.ID, key) {
 						return
 					}
 					pull.Error = err.Message
@@ -253,7 +253,7 @@ func (t *Tenant) pullSource(s construction.Source, now time.Time) {
 }
 
 // prepareRows fixes matching and create/edit selection before accepting the input.
-func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []construction.SourceRow, now time.Time) (int, *kernel.Error) {
+func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time) (int, *kernel.Error) {
 	return recordRead(t, context.Background(), func() (int, *kernel.Error) {
 		merged := 0
 		if resolver := t.resolver(member, object, producer, now); resolver != nil {
@@ -286,11 +286,11 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 func (t *Tenant) integrationRefused(authority, key string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	_, ok := t.committed.refusal(authority + "/" + key)
+	_, ok := t.committed.Refusal(authority + "/" + key)
 	return ok
 }
 
-func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *construction.IntegrationExecution, now time.Time, pull *construction.SourcePull) bool {
+func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *build.IntegrationExecution, now time.Time, pull *build.SourcePull) bool {
 	t.records.mu.Lock()
 	et := t.records.types[plan.Object]
 	t.records.mu.Unlock()
@@ -326,8 +326,8 @@ func (t *Tenant) connectionMarking(connection string) string {
 	if connection == "" {
 		return ""
 	}
-	conn, _ := platform.Get[construction.Connection](t.automation(construction.ID, false), connection)
-	fixed, err := t.app(construction.ID).(host.IntegrationDefinitions).ExecutionConnection(conn)
+	conn, _ := platform.Get[build.Connection](t.automation(build.ID, false), connection)
+	fixed, err := t.app(build.ID).(build.IntegrationDefinitions).ExecutionConnection(conn)
 	if err != nil {
 		return "restricted"
 	}
@@ -336,10 +336,10 @@ func (t *Tenant) connectionMarking(connection string) string {
 
 // resolver is the object's published matching rule over its
 // records as they are now, or nil when rows land as they come.
-func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *construction.Resolver {
-	rules, _, _ := platform.Find[construction.Match](t.automation(construction.ID, false), platform.Query{Limit: 500})
-	owner := t.app(construction.ID).(host.IntegrationDefinitions)
-	var fixed []construction.Match
+func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
+	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
+	owner := t.app(build.ID).(build.IntegrationDefinitions)
+	var fixed []build.Match
 	for _, rule := range rules {
 		execution, err := owner.ExecutionMatching(rule)
 		if err != nil {
@@ -349,7 +349,7 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 		fixed = append(fixed, execution)
 	}
 	rules = fixed
-	i := slices.IndexFunc(rules, func(m construction.Match) bool { return m.Object == object && m.State == "published" })
+	i := slices.IndexFunc(rules, func(m build.Match) bool { return m.Object == object && m.State == "published" })
 	if i < 0 {
 		return nil
 	}
@@ -370,7 +370,7 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 			break
 		}
 	}
-	return construction.NewResolver(rules[i], producer, records)
+	return build.NewResolver(rules[i], producer, records)
 }
 
 // loadDataset appends rows as the dataset's next version, one journaled input.
@@ -383,21 +383,21 @@ func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marki
 		rows = []map[string]any{}
 	}
 	payload, _ := json.Marshal(map[string]any{"rows": rows, "producer": producer, "marking": marking})
-	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: construction.ID, IdempotencyKey: key,
-		Target: &pb.EntityRef{Type: construction.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: construction.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
+	_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
+		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetLoad, Version: 1}, Payload: payload}, now)
 	return err
 }
 
 // readSource reads the source's rows by its profile: json and csv
 // fetch one body, odata walks an entity set's pages, table queries a database.
-func (t *Tenant) readSource(s construction.Source) ([]map[string]any, error) {
-	var conn *construction.Connection
+func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
+	var conn *build.Connection
 	if s.Connection != "" {
 		t.mu.Lock()
-		c, ok := platform.Get[construction.Connection](t.automation(construction.ID, false), s.Connection)
+		c, ok := platform.Get[build.Connection](t.automation(build.ID, false), s.Connection)
 		if ok {
 			var err error
-			c, err = t.app(construction.ID).(host.IntegrationDefinitions).ExecutionConnection(c)
+			c, err = t.app(build.ID).(build.IntegrationDefinitions).ExecutionConnection(c)
 			if err != nil {
 				ok = false
 			}
@@ -416,7 +416,7 @@ func (t *Tenant) readSource(s construction.Source) ([]map[string]any, error) {
 	return t.readSourceWithConnection(s, conn)
 }
 
-func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construction.Connection) ([]map[string]any, error) {
+func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection) ([]map[string]any, error) {
 	switch s.Profile {
 	case "odata":
 		return t.readOData(s, *conn)
@@ -443,7 +443,7 @@ func (t *Tenant) readSourceWithConnection(s construction.Source, conn *construct
 }
 
 // authorization is the Authorization header a connection's secret gives, or none.
-func (t *Tenant) authorization(c construction.Connection, target ...string) string {
+func (t *Tenant) authorization(c build.Connection, target ...string) string {
 	address := c.Address
 	if len(target) > 0 {
 		address = target[0]
@@ -477,15 +477,15 @@ func (t *Tenant) fetchSource(url, header string, allowPrivate bool, accept strin
 		return nil, fmt.Errorf("the endpoint did not answer: %v", err)
 	}
 	defer resp.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, construction.SourceBody+1))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, build.SourceBody+1))
 	if readErr != nil {
 		return nil, fmt.Errorf("the response body could not be read")
 	}
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("the endpoint answered %d", resp.StatusCode)
 	}
-	if len(body) > construction.SourceBody {
-		return nil, fmt.Errorf("the answer exceeds %d bytes", construction.SourceBody)
+	if len(body) > build.SourceBody {
+		return nil, fmt.Errorf("the answer exceeds %d bytes", build.SourceBody)
 	}
 	return body, nil
 }

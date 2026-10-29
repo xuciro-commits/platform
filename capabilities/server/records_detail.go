@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/construction"
-	"platformserver/internal/records"
+	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/studio/build"
 	"reflect"
 	"slices"
 	"strings"
@@ -182,7 +182,7 @@ func (t *Tenant) recordDeliveries(m platform.Member, target string, now time.Tim
 	out := make([]RecordDelivery, 0, len(effects))
 	for _, effect := range effects {
 		delivery := RecordDelivery{ID: effect.ID, Event: effect.Event, State: effect.State, At: effect.At, Message: effect.PublicMessage}
-		if effect.Endpoint == construction.BooksEndpoint && effect.State == "delivered" {
+		if effect.Endpoint == build.BooksEndpoint && effect.State == "delivered" {
 			var journal platform.Journal
 			if json.Unmarshal([]byte(effect.Body), &journal) == nil && journal.ID != "" {
 				domain, _ := json.Marshal([]any{[]any{"id", "=", journal.ID}})
@@ -221,7 +221,7 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 		out[i].Records = append(out[i].Records, page.Records[0])
 		out[i].Total++
 	}
-	if notes, err := readApp(rel, c, "timeline"); err == nil {
+	if notes, err := platform.CallRead(rel, c, "timeline"); err == nil {
 		for _, n := range notes.([]platform.RelationNote) {
 			if n.Entity == entity {
 				activity = append(activity, n)
@@ -233,13 +233,6 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 
 // PersonalRead is one read of personal data: who read which
 // records' personal fields, and when. Kept outside the journal, like transcripts.
-type PersonalRead struct {
-	At     time.Time `json:"at"`
-	Member string    `json:"member"`
-	Type   string    `json:"type"`
-	IDs    []string  `json:"ids"`
-	Fields []string  `json:"fields"`
-}
 
 // readPersonal notes that m read the personal fields view shows of records ids.
 func (t *Tenant) readPersonal(m platform.Member, view *entityType, ids []string, now time.Time) {
@@ -252,8 +245,8 @@ func (t *Tenant) readPersonal(m platform.Member, view *entityType, ids []string,
 	if len(fields) == 0 || len(ids) == 0 || strings.HasPrefix(m.ID, "app:") {
 		return
 	}
-	t.audit.readPersonal(PersonalRead{At: now, Member: m.ID, Type: view.info.Type, IDs: ids, Fields: fields})
+	t.audit.ReadPersonal(platform.PersonalRead{At: now, Member: m.ID, Type: view.info.Type, IDs: ids, Fields: fields})
 }
 
 // PersonalReads are the latest reads of personal data, newest first.
-func (t *Tenant) PersonalReads() []PersonalRead { return t.audit.personalReads() }
+func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.audit.PersonalReads() }

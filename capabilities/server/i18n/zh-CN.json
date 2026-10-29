@@ -2660,5 +2660,16 @@
   "Set a positive generation token limit before calling this model": "调用该模型前，请设置大于零的生成 Token 上限",
   "The model usage differs from its accepted reading": "模型用量与已接受的计量结果不一致",
   "The embedding call was not dispatched": "嵌入请求尚未派发",
-  "The provider reported usage above the reserved token bound": "提供方报告用量超出预占 Token 上限，本次输出不能执行"
+  "The provider reported usage above the reserved token bound": "提供方报告用量超出预占 Token 上限，本次输出不能执行",
+  "Add an organisational unit, post or person.": "添加组织单元、岗位或人员。",
+  "Directory relationship: ActualResourceRelationship, ActualOrganizationRole, FillsPost or ResponsibleFor": "目录关系：ActualResourceRelationship、ActualOrganizationRole、FillsPost 或 ResponsibleFor",
+  "Directory type: ActualOrganization, ActualPost or ActualPerson": "目录类型：ActualOrganization、ActualPost 或 ActualPerson",
+  "ActionTriggers": "动作触发",
+  "DataBindings": "数据绑定",
+  "Format": "格式",
+  "InputSchema": "输入结构",
+  "ScopeVisibility": "作用域可见性",
+  "TrainingAuthorization": "训练授权",
+  "TrainingSources": "训练来源",
+  "WidgetSpec": "组件配置"
 }

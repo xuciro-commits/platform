@@ -6,17 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+
 	"slices"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/apps/build"
-	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	automation "platformserver/engine/automation"
 	"platformserver/platform"
+	"platformserver/studio/build"
 )
 
 type workDocument struct {
@@ -107,7 +108,7 @@ func (w *resultWorker) Listen(c platform.Caller, e platform.Event, _ []string, n
 
 func resultWorkTenant(t *testing.T, id string) *Tenant {
 	t.Helper()
-	tn, err := NewTenant(id, NewConsole(id, Seat{Subjects: []string{"ana"},
+	tn, err := NewTenant(id, newConsole(id, platform.Seat{Subjects: []string{"ana"},
 		Member: platform.Member{ID: "ana", Roles: map[string]string{"stock": "clerk"}}}),
 		newStock(id), newResultWorker(id), work.New(id))
 	if err != nil {
@@ -137,7 +138,7 @@ func (s *stateOnlyJob) Run(platform.Caller, string, time.Time) *kernel.Error {
 func TestAcceptedWorkKeepsStateOnlyJobResult(t *testing.T) {
 	const id = "state-only-job"
 	compose := func() *Tenant {
-		return composeTenant(t, id, []Seat{seatOf("ana", "stock:clerk")}, &stateOnlyJob{&statefulStock{stock: newStock(id)}})
+		return composeTenant(t, id, []platform.Seat{seatOf("ana", "stock:clerk")}, &stateOnlyJob{&statefulStock{stock: newStock(id)}})
 	}
 	live := compose()
 	owner := live.app("stock").(*stateOnlyJob)
@@ -180,7 +181,7 @@ func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) 
 		return tn
 	}
 	live := newTenant()
-	job := live.work.jobs[0]
+	job := live.work.Jobs[0]
 	if len(job.Applications) != 0 {
 		t.Fatal("startup rewrote the historical job predecessor")
 	}
@@ -229,7 +230,7 @@ func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) 
 	}
 	CheckReplay(t, live, entries, newTenant)
 	wrong := newTenant()
-	wrong.work.jobs[0].Applications = second.After.Applications
+	wrong.work.Jobs[0].Applications = second.After.Applications
 	if _, err := wrong.applyAcceptedWork(entries[0].Body); err == nil {
 		t.Fatal("a different job predecessor bypassed recovery validation")
 	}
@@ -261,7 +262,7 @@ func TestAcceptedIdleWorkDoesNotWriteWakeOrAdvanceHistory(t *testing.T) {
 		t.Fatal("idle job woke change followers")
 	default:
 	}
-	if job := live.work.all(live.apps)[0]; !job.Due.Equal(at.Add(2*time.Hour)) || job.Attempts != 0 || !job.Last.IsZero() {
+	if job := live.work.All(live.apps)[0]; !job.Due.Equal(at.Add(2*time.Hour)) || job.Attempts != 0 || !job.Last.IsZero() {
 		t.Fatalf("idle polling was not shown separately from accepted attempts: %+v", job)
 	}
 	if len(live.works.All()) != 0 {
@@ -269,7 +270,7 @@ func TestAcceptedIdleWorkDoesNotWriteWakeOrAdvanceHistory(t *testing.T) {
 	}
 	retryAt := at.Add(time.Hour + time.Minute)
 	live.mu.Lock()
-	retried := live.retry(live.work.jobs[0].ID, retryAt)
+	retried := live.retry(live.work.Jobs[0].ID, retryAt)
 	live.mu.Unlock()
 	live.Work(retryAt)
 	if !retried || worker.polls != 3 {
@@ -296,8 +297,8 @@ func TestAcceptedWorkReplaysAfterIdlePollsAndFailedAppend(t *testing.T) {
 	live.Work(at)
 	worker.idle, fail = false, true
 	live.Work(at.Add(time.Hour))
-	if attempts != 1 || len(entries) != 0 || live.work.jobs[0].Attempts != 0 || live.quarantined() {
-		t.Fatalf("failed append retried immediately or advanced history: attempts=%d task=%+v", attempts, live.work.jobs[0])
+	if attempts != 1 || len(entries) != 0 || live.work.Jobs[0].Attempts != 0 || live.quarantined() {
+		t.Fatalf("failed append retried immediately or advanced history: attempts=%d task=%+v", attempts, live.work.Jobs[0])
 	}
 	fail = false
 	live.Work(at.Add(2 * time.Hour))
@@ -305,8 +306,8 @@ func TestAcceptedWorkReplaysAfterIdlePollsAndFailedAppend(t *testing.T) {
 	live.Work(at.Add(3 * time.Hour))
 	worker.idle = false
 	live.Work(at.Add(4 * time.Hour))
-	if attempts != 3 || live.work.jobs[0].Attempts != 2 {
-		t.Fatalf("accepted generations counted empty or failed polls: attempts=%d task=%+v", attempts, live.work.jobs[0])
+	if attempts != 3 || live.work.Jobs[0].Attempts != 2 {
+		t.Fatalf("accepted generations counted empty or failed polls: attempts=%d task=%+v", attempts, live.work.Jobs[0])
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return resultWorkTenant(t, live.ID) })
 	// Restoring a snapshot drops transient deadlines, but retains the exact
@@ -328,9 +329,9 @@ func TestAcceptedWorkReplaysAfterIdlePollsAndFailedAppend(t *testing.T) {
 
 func TestAcceptedPlatformJobsDoNotJournalEmptyPolls(t *testing.T) {
 	id := "idle-platform-jobs"
-	live := composeTenant(t, id, []Seat{seatOf("ana")}, build.New(id), flow.New(id), work.New(id))
-	if len(live.work.jobs) != 6 {
-		t.Fatalf("expected all platform jobs, got %d", len(live.work.jobs))
+	live := composeTenant(t, id, []platform.Seat{seatOf("ana")}, build.New(id), automation.New(id), work.New(id))
+	if len(live.work.Jobs) != 6 {
+		t.Fatalf("expected all platform jobs, got %d", len(live.work.Jobs))
 	}
 	live.AcceptResult = func(Entry, string, string) ([]byte, error) {
 		t.Fatal("empty platform job reached the journal")
@@ -369,7 +370,7 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	if _, err := live.Submit(ana, sub, at); err != nil {
 		t.Fatal(err)
 	}
-	task := live.work.queues["worker"][0]
+	task := live.work.Queues["worker"][0]
 	before, fail = snapshot(live), true
 	live.mu.Lock()
 	out := live.attempt(task, at, false)
@@ -381,15 +382,15 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	live.mu.Lock()
 	out = live.attempt(task, at, false)
 	live.mu.Unlock()
-	if out != "ok" || len(entries) != 2 || len(live.work.queues["worker"]) != 0 ||
-		len(live.notices.all) != 2 || live.sequences.last["worker/document/0"] != 1 {
+	if out != "ok" || len(entries) != 2 || len(live.work.Queues["worker"]) != 0 ||
+		len(noticeValues(live)) != 2 || live.sequences.Clone()["worker/document/0"] != 1 {
 		t.Fatalf("accepted work did not apply once: %s fault=%+v", out, live.fault.Load())
 	}
 	saved, err := decodeAcceptedWork(entries[1].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch, _, err := resultformat.DecodeBatch(saved.Changes)
+	batch, _, err := acceptedformat.DecodeBatch(saved.Changes)
 	if err != nil || len(batch.Rows) != 2 || len(batch.Decisions) != 1 || batch.Notices == nil {
 		t.Fatalf("work omitted foreign task or notice intents: %+v %v", batch, err)
 	}
@@ -409,13 +410,13 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 	for _, when := range []time.Time{at.Add(time.Hour), at.Add(2 * time.Hour)} {
 		before = snapshot(live)
 		live.mu.Lock()
-		out = live.run(live.work.jobs[0], when, false)
+		out = live.run(live.work.Jobs[0], when, false)
 		live.mu.Unlock()
 		if out != "ok" {
 			t.Fatalf("job result: %s fault=%+v", out, live.fault.Load())
 		}
 	}
-	if live.sequences.last["worker/document/0"] != 3 {
+	if live.sequences.Clone()["worker/document/0"] != 3 {
 		t.Fatal("jobs did not allocate exactly the next numbers")
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return resultWorkTenant(t, live.ID) })
@@ -434,17 +435,17 @@ func TestAcceptedWorkRefusalDiscardsBusinessChangesAndCommitsRetry(t *testing.T)
 	if refused != nil {
 		t.Fatal(refused)
 	}
-	task := live.work.queues["worker"][0]
+	task := live.work.Queues["worker"][0]
 	for _, when := range []time.Time{at, at.Add(time.Second)} {
 		live.mu.Lock()
 		out := live.attempt(task, when, false)
 		live.mu.Unlock()
 		if out == "ok" || live.records.types["worker.document"].rows.Len() != 0 ||
-			live.sequences.last["worker/document/0"] != 0 || len(live.notices.all) != 0 {
+			live.sequences.Clone()["worker/document/0"] != 0 || len(noticeValues(live)) != 0 {
 			t.Fatalf("refused work exposed partial business changes: %s", out)
 		}
 	}
-	if task.State != "failed" || task.Attempts != 2 || len(live.work.failed) != 1 {
+	if task.State != "failed" || task.Attempts != 2 || len(live.work.Failed) != 1 {
 		t.Fatalf("failed delivery did not retain its K9 generations: %+v", task)
 	}
 	CheckReplay(t, live, entries, func() *Tenant {
@@ -478,7 +479,7 @@ func TestJournalAcceptedWorkCrashBeforeApplication(t *testing.T) {
 	// User-selected keys cannot reserve the host's owned-work namespace.
 	ana, _ := live.Member("ana")
 	colliding := &pb.Submission{TenantId: id, PrincipalId: ana.ID, Authority: "worker",
-		IdempotencyKey: "work:" + live.work.jobs[0].ID + ":1", Target: &pb.EntityRef{Type: "worker.document", Id: "denied"},
+		IdempotencyKey: "work:" + live.work.Jobs[0].ID + ":1", Target: &pb.EntityRef{Type: "worker.document", Id: "denied"},
 		Schema: &pb.SchemaRef{Name: "worker.document.write", Version: 1}, Payload: []byte(`{}`)}
 	if _, err := live.Submit(ana, colliding, at); err == nil || journal.Position(id) != 1 {
 		t.Fatalf("user refusal was not durable: %v", err)
@@ -492,7 +493,7 @@ func TestJournalAcceptedWorkCrashBeforeApplication(t *testing.T) {
 	}
 	before := snapshot(live)
 	live.mu.Lock()
-	out := live.run(live.work.jobs[0], at, false)
+	out := live.run(live.work.Jobs[0], at, false)
 	live.mu.Unlock()
 	if out == "ok" || !live.quarantined() || snapshot(live) != before || journal.Position(id) != 2 {
 		t.Fatalf("work crash crossed the application boundary: %s", out)
@@ -511,7 +512,7 @@ func TestJournalAcceptedWorkCrashBeforeApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	if recovered.app("worker").(*resultWorker).calls != 0 ||
-		recovered.sequences.last["worker/document/0"] != 1 || len(recovered.notices.all) != 2 {
+		recovered.sequences.Clone()["worker/document/0"] != 1 || len(noticeValues(recovered)) != 2 {
 		t.Fatal("durable work result was lost or re-executed")
 	}
 	CheckReplay(t, recovered, entries, func() *Tenant { return resultWorkTenant(t, id) })
@@ -540,14 +541,14 @@ func TestAcceptedWorkOutboundIntentCommitsWithoutDispatchOrReplanning(t *testing
 	}
 	before := snapshot(live)
 	live.mu.Lock()
-	out := live.run(live.work.jobs[0], at, false)
+	out := live.run(live.work.Jobs[0], at, false)
 	live.mu.Unlock()
 	if out == "ok" || snapshot(live) != before {
 		t.Fatal("failed outbound-intent append changed state")
 	}
 	fail = false
 	live.mu.Lock()
-	out = live.run(live.work.jobs[0], at, false)
+	out = live.run(live.work.Jobs[0], at, false)
 	live.mu.Unlock()
 	if out != "ok" || len(live.outbound) != 1 || live.outbound[0].State != "pending" {
 		t.Fatalf("accepted work omitted its effect: %s fault=%+v", out, live.fault.Load())
@@ -568,18 +569,18 @@ func TestAcceptedWorkerDirectLedgerKeepsParentAcrossSavepoint(t *testing.T) {
 	var entries []Entry
 	live.Record = func(e Entry) { entries = append(entries, e) }
 	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I", map[string]any{"name": "Bolt", "qty": 2, "line": "L1"}, at)
-	task := live.work.queues["worker"][0]
+	task := live.work.Queues["worker"][0]
 	live.mu.Lock()
 	outcome := live.attempt(task, at, false)
 	live.mu.Unlock()
-	if outcome != "ok" || len(entries) != 2 || len(live.notices.all) != 3 {
-		t.Fatalf("parent ledger lost its receipt after a child savepoint: %s fault=%v notices=%d entries=%d", outcome, live.fault.Load(), len(live.notices.all), len(entries))
+	if outcome != "ok" || len(entries) != 2 || len(noticeValues(live)) != 3 {
+		t.Fatalf("parent ledger lost its receipt after a child savepoint: %s fault=%v notices=%d entries=%d", outcome, live.fault.Load(), len(noticeValues(live)), len(entries))
 	}
 	saved, err := decodeAcceptedWork(entries[1].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch, _, err := resultformat.DecodeBatch(saved.Changes)
+	batch, _, err := acceptedformat.DecodeBatch(saved.Changes)
 	if err != nil || len(batch.Decisions) != 1 {
 		t.Fatalf("parent worker decision not sealed: %v", err)
 	}
@@ -596,18 +597,18 @@ func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
 		t.Fatal(refusal)
 	}
 	tn.outbound = append(tn.outbound, &effect{Effect: platform.Effect{ID: operationID, App: "worker",
-		Endpoint: resultformat.OperationEndpoint, State: "running", Generation: generation, At: at, Due: at}})
+		Endpoint: acceptedformat.OperationEndpoint, State: "running", Generation: generation, At: at, Due: at}})
 	var saved []byte
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
 		saved = entry.Body
 		return nil, errors.New("leave the accepted input unapplied")
 	}
-	_ = tn.acceptWork(tn.work.jobs[0], at)
+	_ = tn.acceptWork(tn.work.Jobs[0], at)
 	result, err := decodeAcceptedWork(saved)
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, _, err := resultformat.DecodeBatch(result.Changes)
+	child, _, err := acceptedformat.DecodeBatch(result.Changes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,7 +617,7 @@ func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	child.Operations = append(child.Operations, cancel)
-	child.Digest, _ = resultformat.DigestBatch(child)
+	child.Digest, _ = acceptedformat.DigestBatch(child)
 	result.Changes, _ = json.Marshal(child)
 	result.Digest, _ = digestAcceptedWork(result)
 	raw, _ := json.Marshal(result)

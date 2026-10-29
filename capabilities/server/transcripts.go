@@ -12,9 +12,6 @@ import (
 // Transcript is one model call in full: what was sent and what came back.
 // It may hold personal data, so it stays outside
 // the journal, for as many days as the agent app's setting keeps it.
-const (
-	SettingTranscriptDays = "transcript-days"
-)
 
 // purgeAll is a moment after any transcript: forgetting every one is a purge
 // with this cutoff.
@@ -24,7 +21,7 @@ var purgeAll = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 // kept at all: 0 or less keeps none, so the setting is a switch, not only a
 // period.
 func (t *Tenant) transcriptDays() int {
-	days, err := strconv.Atoi(t.setting(t.automation(AgentApp, false), SettingTranscriptDays))
+	days, err := strconv.Atoi(t.setting(t.automation(platform.AgentApp, false), platform.SettingTranscriptDays))
 	if err != nil {
 		return 0
 	}
@@ -80,7 +77,7 @@ func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now ti
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	if m.Roles[AgentApp] != AgentAdmin && m.Roles[platform.AIApp] != platform.AIAdmin {
+	if m.Roles[platform.AgentApp] != platform.AgentAdmin && m.Roles[platform.AIApp] != platform.AIAdmin {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "only an administrator of the agent or AI app reads transcripts"}
 	}
 	found := t.Transcripts(run, limit)
@@ -108,9 +105,9 @@ func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {
 	if t.agents == nil || run == "" {
 		return true
 	}
-	r, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), run)
+	r, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), run)
 	if !known {
 		return true
 	}
-	return !t.narrower(m, now, false).readable(sourcesOf(r))
+	return !t.narrower(m, now, false).readable(r.SourceRefs())
 }

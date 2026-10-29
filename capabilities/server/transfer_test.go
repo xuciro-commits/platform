@@ -2,8 +2,8 @@ package platformserver
 
 import (
 	"encoding/json"
-	"platformserver/apps/build"
 	"platformserver/platform"
+	"platformserver/studio/build"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +12,7 @@ import (
 func TestRecordImportChoosesPartialEditsAndRetainsOriginalFileReceipts(t *testing.T) {
 	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	compose := func() *Tenant {
-		return composeTenant(t, "import-owner", []Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user"), seatOf("other", "build:user")}, build.New("import-owner"))
+		return composeTenant(t, "import-owner", []platform.Seat{seatOf("builder", "build:builder"), seatOf("user", "build:user"), seatOf("other", "build:user")}, build.New("import-owner"))
 	}
 	tn := compose()
 	var entries []Entry

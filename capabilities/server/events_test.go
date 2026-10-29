@@ -2,7 +2,8 @@ package platformserver
 
 import (
 	"encoding/json"
-	resultformat "platformserver/internal/acceptance/result"
+	acceptedformat "platformserver/kernel/acceptedformat"
+	controlowner "platformserver/kernel/control"
 	"slices"
 	"strings"
 	"testing"
@@ -80,7 +81,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	}
 	var journal []Entry
 	build := func() (*Tenant, *notes) {
-		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}})
+		dir := newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", controlowner.PlatformApp: controlowner.Admin}}})
 		w := newNotes("t-1", "w")
 		tn, err := NewTenant("t-1", dir, published{newNotes("t-1", "a")}, watcher{w})
 		if err != nil {
@@ -95,7 +96,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		json.Unmarshal(raw, &stored)
 		journal = append(journal, stored)
 	}
-	ana, _ := tn.app(PlatformApp).(*Console).MemberBySubject("ana")
+	ana, _ := tn.app(controlowner.PlatformApp).(*controlowner.Console).MemberBySubject("ana")
 	start := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	at := func(s int) time.Time { return start.Add(time.Duration(s) * time.Second) }
 	submit := func(key, topic, text string, s int) {
@@ -143,8 +144,8 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		t.Fatalf("the handler's decision is attributed to %s", r.GetSubmission().GetPrincipalId())
 	}
 	// An administrator retries the failed delivery: a full schedule of attempts again.
-	retry := &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: PlatformApp, IdempotencyKey: "r1",
-		Target: &pb.EntityRef{Type: WorkType, Id: failed[0].ID}, Schema: &pb.SchemaRef{Name: SchemaWorkRetry, Version: 1}, Payload: []byte("{}")}
+	retry := &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: controlowner.PlatformApp, IdempotencyKey: "r1",
+		Target: &pb.EntityRef{Type: controlowner.WorkType, Id: failed[0].ID}, Schema: &pb.SchemaRef{Name: controlowner.SchemaWorkRetry, Version: 1}, Payload: []byte("{}")}
 	if _, err := tn.Submit(ana, retry, at(50)); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +221,7 @@ func (e echo) Handle(c platform.Caller, ev platform.Event) *kernel.Error {
 }
 
 func TestSubscriptionCycleStops(t *testing.T) {
-	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"e": "writer"}}})
+	dir := newConsole("t-1", platform.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"e": "writer"}}})
 	tn, err := NewTenant("t-1", dir, echo{newNotes("t-1", "e"), ""}.as("e.note"))
 	if err != nil {
 		t.Fatal(err)
@@ -234,7 +235,7 @@ func TestSubscriptionCycleStops(t *testing.T) {
 		tn.Work(now)
 	}
 	d := tn.Deliveries()
-	if len(d) != resultformat.MaxHops+2 || !strings.HasPrefix(d[len(d)-1].Outcome, "stopped") || len(tn.Tasks()) != 0 {
+	if len(d) != acceptedformat.MaxHops+2 || !strings.HasPrefix(d[len(d)-1].Outcome, "stopped") || len(tn.Tasks()) != 0 {
 		t.Fatalf("%d deliveries, last %+v, work %v", len(d), d[len(d)-1], tn.Tasks())
 	}
 }
