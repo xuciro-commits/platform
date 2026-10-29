@@ -3,25 +3,16 @@
 contract/lean/.lake/
 .DS_Store
 target/
-# Build outputs of `go build` and `go test -c` in a module directory
 *.test
-# local tool binaries
 capabilities/server/cmd/webhook-sink/webhook-sink
 node_modules/
-# Playwright's results of the route tests
 dist/
 
-# Local secrets (never committed)
 .env
 
-
-# Python bytecode: `make check-local` and the deploy rehearsal scripts write it
-# under deploy/ and scripts/, which update.sh's committed-source gate watches.
 __pycache__/
 
-# Toolchains and vendored dependencies
 tools/
 capabilities/server/vendor/
 
-# Retired browser rule-engine build artifacts
 web/public/rules/

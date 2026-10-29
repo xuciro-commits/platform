@@ -4,6 +4,8 @@
 
 **实测现状（2026-10-29）：** 生产Go文件共355（目标≤339），根包168（目标≤25），platform 25、studio/build 23。记录Store及查询/历史/索引已归kernel/records，宿主控制和租户注册归kernel/control，原运行结果封套归kernel/acceptedformat，SQL delta与检查点归kernel；候选规划/安装次序归studio/releases，包准备归studio/packages。原根包路径同批删除，基线由182收紧至168。下列已完成项按原owner检查确认；9.3、10.1和最终预算仍未完成：Tenant还保留跨子系统协调及大量适配器，不把接口外移或归档其他change冒充整个结构目标完成。
 
+**验证口径（2026-10-29）：** 负责人要求删除全部测试代码与浏览器路线并清除源码注释，此后本change只能以构建、vet、`make check`、边界检查与`scripts/verify.sh contract web-check composition`作为证据；各任务中"运行owner测试/真实PostgreSQL恢复"等条目不再可执行，未验证的行为按未验证报告，不能报为通过。
+
 ## 7. 本轮已授权的守门与规划
 
 - [x] 7.1 升级原cmd/check-boundaries及baseline：4超额配额263/166/73/42，82组195同名路径，37视觉AST指纹/22文件及2退役目录；禁止HEAD基线扩张与失效项，限制provider和pure rules I/O，并检查四职责星形依赖。原make check已通过；新依赖规则的owner测试及全边界检查通过，初次验证时尚未业务迁移；后续迁移同批收紧原基线。
