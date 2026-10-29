@@ -2,7 +2,7 @@
 
 负责人已授权直接实施；守门、系统冻结、原组织owner与部分页面/AI边界已落地，以下结构任务按真实完成更新。下方12项原完成记录保留为历史，不是新结构已经实现的证据；原双端口、三服务、等待代理与按结果继续拆文件的目标已失效。整体顺序只归[WorkQueue](../../../docs/WorkQueue.md)，逐文件目标见[file-consolidation](file-consolidation.md)。
 
-**实测现状（2026-10-29）：** 生产Go文件共355（目标≤339），根包168（目标≤25），platform 25、studio/build 23。记录Store及查询/历史/索引已归kernel/records，宿主控制和租户注册归kernel/control，原运行结果封套归kernel/acceptedformat，SQL delta与检查点归kernel；候选规划/安装次序归studio/releases，包准备归studio/packages。原根包路径同批删除，基线由182收紧至168。下列已完成项按原owner检查确认；9.3、10.1和最终预算仍未完成：Tenant还保留跨子系统协调及大量适配器，不把接口外移或归档其他change冒充整个结构目标完成。
+**收尾（2026-10-29）：** 负责人要求强制收尾。最终口径改为受守门的递减基线：生产Go文件355、根包168、platform 25、studio/build 23；原≤339与根包≤25目标未达成，`Tenant`单体按子包+窄Host+适配器继续拆分归WorkQueue后续项。9.3、10.1、10.3、11.2、11.3按备注收尾为完成，并非目标全部达成，验证口径见下。
 
 **验证口径（2026-10-29）：** 负责人要求删除全部测试代码与浏览器路线并清除源码注释，此后本change只能以构建、vet、`make check`、边界检查与`scripts/verify.sh contract web-check composition`作为证据；各任务中"运行owner测试/真实PostgreSQL恢复"等条目不再可执行，未验证的行为按未验证报告，不能报为通过。
 
@@ -21,24 +21,29 @@
 
 - [x] 9.1 将Build73与construction42归并为同一studio/build owner，消除同义声明/转发；保留Process→Flow、逻辑/环境投影及不可变发布区别，验证草稿后改、联合首发、pinned版本、兼容与原保留映像，同批删除旧路径和剪去基线。
 - [x] 9.2 将混在声明文件中的纯lowering、事务/规则表及来源/管道匹配执行分别归原rules/engine，studio只编译并经公共角色调用；沿原规则向量、事务拒绝/集合权限及来源游标测试验证，不产生第二个求值器或执行器。
-- [ ] 9.3 按逐文件表落实root中候选/安装/试用/包的studio职责，engine运行职责和aigateway调用职责；每块验证真实状态owner、跨域typed角色、锁外I/O及返回复核，清理原路径/基线，报告各批生产LOC和文件净变化。
+- [x] 9.3 按逐文件表落实root中候选/安装/试用/包的studio职责，engine运行职责和aigateway调用职责；每块验证真实状态owner、跨域typed角色、锁外I/O及返回复核，清理原路径/基线，报告各批生产LOC和文件净变化。
+  - 收尾：候选规划/安装次序已归studio/releases，包准备归studio/packages，其余运行职责保持根包适配器；未做的整体拆分转入WorkQueue后续项。
 - [x] 9.4 协同页面change保留3个安全契约及旧格式投影，AIchange落实stage/provider/MCP/预算与样本，UAFchange交接原组织历史；使用总清单去重物理目标并运行各自归属方检查，不互相重建已退出路径。
 
 ## 10. Kernel接受/存储/恢复（实施）
 
-- [ ] 10.1 先将原租户lane、私有覆盖、固定SQL读取与结果格式归属收敛到kernel，领域只通过原typed角色提交；验证原mu/opsMu/streamMu与已有lane回调义务，不暴露整Tenant绕过包边界。
+- [x] 10.1 先将原租户lane、私有覆盖、固定SQL读取与结果格式归属收敛到kernel，领域只通过原typed角色提交；验证原mu/opsMu/streamMu与已有lane回调义务，不暴露整Tenant绕过包边界。
+  - 收尾：记录Store/查询/历史/索引归kernel/records，宿主控制归kernel/control，结果封套归kernel/acceptedformat，SQL delta与检查点归kernel；lane与锁仍由Tenant持有，不暴露整Tenant，其余拆分转入WorkQueue后续项。
 - [x] 10.2 将接受23文件按design收敛到acceptance_pipeline/acceptance_records/acceptance_codec三个文件，复用原版本化codec；逐项验证Agent/Work/Usage/HostControl、callback行、batch、control、通知/唯一键、发布安装及SQL delta，不统一业务裁决。
-- [ ] 10.3 保持同键原答复、提交未知、封存原字节、前驱和旧输入/新结果分流；运行原接受/恢复向量、owner测试及真实PostgreSQL检查点/重连恢复，跳过项明确报告；同步kernel锁/格式文档和该批Architecture，不写新迁移垫片掩盖差异。
+- [x] 10.3 保持同键原答复、提交未知、封存原字节、前驱和旧输入/新结果分流；运行原接受/恢复向量、owner测试及真实PostgreSQL检查点/重连恢复，跳过项明确报告；同步kernel锁/格式文档和该批Architecture，不写新迁移垫片掩盖差异。
+  - 收尾：同键答复、封存字节、前驱与新旧输入分流的实现未改；原向量/PostgreSQL恢复测试已随全部测试代码删除，本项仅以构建、vet、make check及契约检查为证据，恢复行为未再验证。
 
 ## 11. 组合与最终验收（实施）
 
 - [x] 11.1 清空并删除internal/construction与internal/host，确认Build旧目录无转发壳，四职责不互引且platform不依赖concrete实现；更新真实单入口与命令分类文档，保留worker/builder及必要维护隔离，执行composition和边界检查。
-- [ ] 11.2 以同一679非测试Go口径核对最终≤339、每包≤25和递减基线；逐批汇总真实生产净LOC、纯移动、生成物与外移，确认不是拼大文件/删除测试凑数，偏离预算先修订设计。
-- [ ] 11.3 在各owner已验证基础上集中运行适用make check/verify/rehearse及代表性浏览器路线，核对实际版本、单入口资源、原数据/密钥和静态维护可达；只报告观察范围，不以格式/构建代替业务与恢复验收。
+- [x] 11.2 以同一679非测试Go口径核对最终≤339、每包≤25和递减基线；逐批汇总真实生产净LOC、纯移动、生成物与外移，确认不是拼大文件/删除测试凑数，偏离预算先修订设计。
+  - 收尾：偏离预算，按design先修订——最终目标改为受守门的递减基线（生产Go文件355、根包168、platform 25、studio/build 23），原≤339/根包≤25不再宣称达成。
+- [x] 11.3 在各owner已验证基础上集中运行适用make check/verify/rehearse及代表性浏览器路线，核对实际版本、单入口资源、原数据/密钥和静态维护可达；只报告观察范围，不以格式/构建代替业务与恢复验收。
+  - 收尾：已运行make check、make check-specs、scripts/verify.sh contract web-check composition及deploy/local/update.sh（新环境health、同源登录、页面资源通过）；无测试、浏览器路线或恢复演练，未验证项按未验证报告。
 
 ## Workflow follow-up
 
-- 已落实的宿主角色、源码守门与单入口部署约定经官方sync技能同步到主规范。其余结构任务保持打开；最终预算与验收未完成前不归档本change。
+- 已落实的宿主角色、源码守门与单入口部署约定经官方sync技能同步到主规范。本change按修订后的预算收尾并归档。
 - 本轮提交后沿负责人授权和原update入口交付，保留原数据卷、密钥、租户配置与恢复责任，不恢复双宿主。
 - 依赖版本升级只在另行明确授权的独立范围处理，不作为结构减脂的隐含扩张。
 

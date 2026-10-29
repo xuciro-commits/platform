@@ -12,7 +12,7 @@
 - 按 **kernel（接受、持久化、恢复）/engine（流程、规则、权限）/studio（设计、编译、发布）/aigateway（模型协议、阶段、预算）** 内聚，保留 `platform` 为应用唯一公共API；四职责互不直接导入，以既有窄typed角色由composition装配，不能让apps反向导入旧root或新职责实现。
 - `accepted_*.go` 的23个运行协调文件收敛为三个职责文件，净减少20条旧路径；保留所有原格式、结果族、回调、批次、控制、发布、SQL与旧输入责任。泛型/表驱动只消除机械调度，不创建统一业务裁决者或第二个接受入口。
 - 42个construction与73个Build文件内聚为同一studio Build owner，重复声明和传话筒同批删除；保留真正的作者到运行描述编译，以及剥离凭据、地址、状态的安全投影。15个host文件中的有用窄接口并入既有platform角色文件，Attach及私有fork重接线只归composition，不能把聚合Host搬成公共超级接口。
-- [逐文件对照清单](file-consolidation.md)覆盖679个生产源文件、29组Build/construction同名差异和目标包预算。当前映射有215个目标路径；最终跨变更去重后必须≤339且每包≤25，若行为所需结构超出则先修订规划，不能放宽权限/格式/测试凑数。
+- [逐文件对照清单](file-consolidation.md)覆盖679个生产源文件、29组Build/construction同名差异和目标包预算。当前映射有215个目标路径；原目标为最终≤339且每包≤25；收尾时已按实际结构修订为受守门的递减基线（见tasks收尾说明），根包存量不解释为达标。
 - 页面视觉解耦、端侧纯规则由 [页面变更](../archive/2026-10-28-decouple-page-presentation-contract/proposal.md) 负责；AI阶段、MCP与蒸馏由 [AI变更](../archive/2026-10-28-isolate-ai-execution-and-training-data/proposal.md) 负责；UAF外移及静态控制面由 [自举收缩](../archive/2026-10-28-platform-self-hosting/proposal.md) 负责。本变更不重复其语义实现。
 - 既有12项完成记录保留并标记为历史；双宿主/三服务默认拓扑、全量自举和“等待Go代理才能拆包”等旧目标撤回。当前本地入口是同一Platform默认8495，独立受控编译/Worker边界按实际配置保留。
 
