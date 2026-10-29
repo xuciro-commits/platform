@@ -1,7 +1,6 @@
 package automation
 
 import (
-	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel/trace"
 	"maps"
@@ -14,7 +13,7 @@ import (
 type WorkState struct {
 	Queues map[string][]string
 	Failed []string
-	Tasks  []TaskState
+	Tasks  []platform.ScheduledTaskState
 	Jobs   []Task
 }
 type WorkLoop struct {
@@ -29,21 +28,11 @@ type WorkLoop struct {
 
 // Task is one piece of owned work: an event for a subscriber, or a job.
 type Task struct {
-	Applications []platform.AssetBinding `json:"applications,omitempty"`
-	ID           string                  `json:"id" source:"record"`
-	Kind         string                  `json:"kind" source:"record"` // delivery, job
-	App          string                  `json:"app" source:"record"`  // the subscriber, or the job's app
-	Title        string                  `json:"title" source:"record"`
-	State        string                  `json:"state" source:"record"` // queued, retrying, failed, scheduled
-	Attempts     int                     `json:"attempts"`
-	Last         time.Time               `json:"last,omitzero"`
-	Due          time.Time               `json:"due,omitzero"`
-	Error        string                  `json:"error,omitempty"`
-	Withheld     bool                    `json:"withheld,omitempty"`
-	Since        int                     `json:"-"` // attempts before the last manual retry: each retry gets a full schedule
-	Event        *QueuedEvent            `json:"-"`
-	Job          platform.Job            `json:"-"`
-	NextRun      time.Time               `json:"-"` // transient polling deadline; not part of the accepted predecessor
+	platform.ScheduledTask
+	Since   int          `json:"-"` // attempts before the last manual retry: each retry gets a full schedule
+	Event   *QueuedEvent `json:"-"`
+	Job     platform.Job `json:"-"`
+	NextRun time.Time    `json:"-"` // transient polling deadline; not part of the accepted predecessor
 }
 
 // caused is an accepted decision with how many deliveries caused it.
@@ -54,18 +43,8 @@ type QueuedEvent struct {
 	Plan *platform.AcceptedEventPlan // durable work/effect intent; nil for legacy entries
 }
 
-type TaskState struct {
-	Task
-	Since    int                         `json:"since,omitempty"`
-	EventApp string                      `json:"eventApp,omitempty"` // the event it delivers
-	Event    json.RawMessage             `json:"event,omitempty"`
-	Hops     int                         `json:"hops,omitempty"`
-	Changed  []string                    `json:"changed,omitempty"` // the records its decision put
-	Plan     *platform.AcceptedEventPlan `json:"plan,omitempty"`    // accepted-result delivery routing
-}
-
-func StateOfTask(task *Task) (TaskState, error) {
-	s := TaskState{Task: *task, Since: task.Since}
+func StateOfTask(task *Task) (platform.ScheduledTaskState, error) {
+	s := platform.ScheduledTaskState{ScheduledTask: task.ScheduledTask, Since: task.Since}
 	if task.Event != nil {
 		s.EventApp, s.Hops, s.Changed, s.Plan = task.Event.App, task.Event.Hops, slices.Clone(task.Event.Changed), task.Event.Plan
 		var err error
@@ -232,7 +211,7 @@ func (b *WorkBoard) Snapshot() (WorkState, error) {
 func (b *WorkBoard) Restore(tenant string, s WorkState) error {
 	tasks := map[string]*Task{}
 	for _, x := range s.Tasks {
-		task := x.Task
+		task := Task{ScheduledTask: x.ScheduledTask}
 		task.Since = x.Since
 		if x.Event != nil {
 			records, err := platform.Unprotos[*pb.ChangeRecord](x.Event)

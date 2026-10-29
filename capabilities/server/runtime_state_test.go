@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import (
 	"context"
 	"encoding/json"
@@ -52,10 +54,10 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	}
 	defer oldView.Close()
 	live.mu.Lock()
-	previousView := live.records.current.View()
-	live.records.current.Bind(oldView)
-	row := live.records.types["stock.item"].rows.Get("I1")
-	live.records.current.Bind(previousView)
+	previousView := live.records.Current().View()
+	live.records.Current().Bind(oldView)
+	row := live.records.Type("stock.item").Rows().Get("I1")
+	live.records.Current().Bind(previousView)
 	live.mu.Unlock()
 	if row.History != nil || row.LoadHistory == nil || len(row.RecordHistory()) != 5 {
 		t.Fatal("complete record history remained resident or was lost")
@@ -126,7 +128,7 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	if got, refusal := live.submitAccepted(live.app("stock"), retryMember, next.GetSubmission(), at.Add(time.Minute), false); refusal != nil || !proto.Equal(got, next) {
 		t.Fatalf("unknown-outcome retry did not apply its original result: %v", refusal)
 	}
-	qty := live.records.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Qty
+	qty := live.records.Type("stock.item").Rows().Get("I1").Value.Interface().(Item).Qty
 	live.mu.Unlock()
 	if qty != 6 || j.Position(id) != position+1 {
 		t.Fatalf("unknown-outcome retry returned without applying or appended twice: %d", qty)
@@ -139,12 +141,12 @@ func TestPostgresRuntimeStateMigrationAcceptedHistoryAndRetry(t *testing.T) {
 	func() {
 		restored.mu.Lock()
 		defer restored.mu.Unlock()
-		current := restored.records.types["stock.item"].rows.Get("I1")
+		current := restored.records.Type("stock.item").Rows().Get("I1")
 		if current.History != nil || len(current.RecordHistory()) != 6 || current.Value.Interface().(Item).Qty != 6 {
 			t.Fatal("restart did not load committed current/history")
 		}
 	}()
-	if saved, err := j.AppendAccepted(ctx, id, entry, identity.Key, identity.Hash); err != nil || !sameStoredJSON(saved, raw) || j.Position(id) != position+1 {
+	if saved, err := j.AppendAccepted(ctx, id, entry, identity.Key, identity.Hash); err != nil || !runtimekernel.StoredJSONEqual(saved, raw) || j.Position(id) != position+1 {
 		t.Fatal("unknown-outcome retry appended again")
 	}
 	if got, refusal := restored.Submit(memberOf(t, restored, "ana"), next.GetSubmission(), at.Add(time.Hour)); refusal != nil || !proto.Equal(got, next) {
@@ -307,7 +309,7 @@ func TestPostgresRuntimeStateRetainedSuffix(t *testing.T) {
 				t.Fatalf("journal changed: %v", err)
 			}
 			for i, entry := range suffix {
-				if !sameStoredJSON(originalEntries[i].Body, entry.Body) {
+				if !runtimekernel.StoredJSONEqual(originalEntries[i].Body, entry.Body) {
 					t.Fatal("retained journal result changed")
 				}
 				identity, err := acceptedIdentity(entry.Body)
@@ -315,7 +317,7 @@ func TestPostgresRuntimeStateRetainedSuffix(t *testing.T) {
 					t.Fatal(err)
 				}
 				raw, err := j.AppendAccepted(ctx, id, entry, identity.Key, identity.Hash)
-				if err != nil || !sameStoredJSON(raw, originalEntries[i].Body) || j.Position(id) != head {
+				if err != nil || !runtimekernel.StoredJSONEqual(raw, originalEntries[i].Body) || j.Position(id) != head {
 					t.Fatalf("recovered answer changed: %v", err)
 				}
 			}

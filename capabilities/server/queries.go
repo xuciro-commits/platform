@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"encoding/json"
 	"time"
@@ -47,7 +49,7 @@ func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version strin
 	return t.runDeclaredQueryWindowFrom(t.records, m, *declared, of, window, now)
 }
 
-func (t *Tenant) runQueryFrom(store *recordStore, m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Tenant) runQueryFrom(store *records.Store, m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
 	q, ok := t.namedQuery(app, name)
 	if !ok {
 		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -55,11 +57,11 @@ func (t *Tenant) runQueryFrom(store *recordStore, m platform.Member, app, name, 
 	return t.runDeclaredQueryFrom(store, m, q, of, now)
 }
 
-func (t *Tenant) runDeclaredQueryFrom(store *recordStore, m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Tenant) runDeclaredQueryFrom(store *records.Store, m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *kernel.Error) {
 	return t.runDeclaredQueryWindowFrom(store, m, q, of, platform.Query{}, now)
 }
 
-func (t *Tenant) runDeclaredQueryWindowFrom(store *recordStore, m platform.Member, q platform.NamedQuery, of string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+func (t *Tenant) runDeclaredQueryWindowFrom(store *records.Store, m platform.Member, q platform.NamedQuery, of string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	if q.By != "" && of == "" {
 		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{query} needs the record it is run for", q.Title)
 	}

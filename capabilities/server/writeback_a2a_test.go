@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"platformserver/kernel/acceptedformat"
 	"strings"
 	"sync"
 	"testing"
@@ -53,7 +54,7 @@ func TestDeclaredA2AWritebackKeepsOriginalMessageAndAcceptedAnswer(t *testing.T)
 		mu.Lock()
 		ids = append(ids, rpc.ID)
 		body := rpc.Params.Message.Parts[1].Data
-		if previous := requests[rpc.ID]; previous != nil && !sameCompositePayload(previous, body) {
+		if previous := requests[rpc.ID]; previous != nil && !acceptedformat.SameCompositePayload(previous, body) {
 			t.Error("the same message changed its frozen payload")
 		}
 		requests[rpc.ID] = body

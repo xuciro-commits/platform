@@ -486,16 +486,16 @@ type indexNode[V any] struct {
 }
 
 func (s Index[V]) Get(key string) V {
-	if n := s.find(key); n != nil {
+	if n := s.Find(key); n != nil {
 		return n.value
 	}
 	var absent V
 	return absent
 }
 
-func (s Index[V]) Has(key string) bool { return s.find(key) != nil }
+func (s Index[V]) Has(key string) bool { return s.Find(key) != nil }
 
-func (s Index[V]) find(key string) *indexNode[V] {
+func (s Index[V]) Find(key string) *indexNode[V] {
 	for n := s.root; n != nil; {
 		switch {
 		case key < n.key:
@@ -784,10 +784,10 @@ type ImageLookup func(string) (IndexImage, bool)
 func (i DerivedIndexes) Fork() DerivedIndexes {
 	return DerivedIndexes{references: maps.Clone(i.references), unique: maps.Clone(i.unique)}
 }
-func (i *DerivedIndexes) Reset()                               { i.references = nil; i.unique = nil }
-func (i *DerivedIndexes) ResetUnique()                         { i.unique = nil }
-func (i *DerivedIndexes) Counts() (references, unique int)     { return len(i.references), len(i.unique) }
-func (i *DerivedIndexes) CachedUnique(name string) UniqueIndex { return i.unique[name] }
+func (i *DerivedIndexes) Reset()                              { i.references = nil; i.unique = nil }
+func (i *DerivedIndexes) ResetUnique()                        { i.unique = nil }
+func (i DerivedIndexes) Counts() (references, unique int)     { return len(i.references), len(i.unique) }
+func (i DerivedIndexes) CachedUnique(name string) UniqueIndex { return i.unique[name] }
 
 // The schema owner extracts primitive references; the records component owns
 // their immutable buckets, archive counts and incremental replacement rules.

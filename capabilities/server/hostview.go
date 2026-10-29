@@ -58,10 +58,10 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 // Validation uses the same installation code against a private registry and
 // record store; a failed or refused publication cannot change live metadata.
 func (h hostView) installationDraft() *Tenant {
-	return h.installationView(h.t.records.forkRecords())
+	return h.installationView(h.t.records.ForkRecords())
 }
 
-func (h hostView) installationView(recordView *recordStore) *Tenant {
+func (h hostView) installationView(recordView *records.Store) *Tenant {
 	draft := &Tenant{services: h.t.services, disabledOwners: h.t.disabledOwners, ID: h.t.ID, apps: h.t.apps, appIndex: h.t.appIndex, owner: maps.Clone(h.t.owner),
 		identity: h.t.identity, directory: h.Directory(), records: recordView, definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs, releases: h.t.releases}
 	draft.systemDefinitionState.published.Store(h.t.systemDefinitionState.published.Load())
@@ -85,10 +85,10 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 		}
 	}
 	draft := h.installationDraft()
-	if current := draft.records.types[e.Type]; current != nil && current.info.Go != reflect.TypeOf(e.Model) {
+	if current := draft.records.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
 		// Definition review cannot decode source rows as the unmigrated target.
 		// Admission of actual rows is checked by migration and activation.
-		current.setRows(records.Index[*records.Row]{})
+		current.SetRows(records.Index[*records.Row]{})
 	}
 	if err := draft.Install(h.app, e, actions, pages...); err != nil {
 		return err
@@ -97,11 +97,11 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 	if c.Replaying {
 		engine = platform.NativeRules{} // saved publication shape, without running the selected provider
 	}
-	for _, et := range draft.records.sortedTypes() {
-		if err := draft.checkRecordSetDeclarations(et.info, engine); err != nil {
+	for _, et := range draft.records.SortedTypes() {
+		if err := draft.checkRecordSetDeclarations(et.Info(), engine); err != nil {
 			return err
 		}
-		if err := platform.CheckConstraints(et.info, draft.entity, true, engine); err != nil {
+		if err := platform.CheckConstraints(et.Info(), draft.entity, true, engine); err != nil {
 			return err
 		}
 	}
@@ -460,3 +460,18 @@ func (h hostView) ownerBindings() platform.OwnerBindings {
 	return platform.OwnerBindings{Training: h, System: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
 }
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
+
+// BuildProcessConsumptions reads installed declarations without creating a
+// private execution owner while its manifest is being assembled.
+func (h hostView) BuildProcessConsumptions() []platform.Consumption {
+	processes := h.t.procs
+	if h.decision != nil {
+		if app := h.decision.privateApps[platform.FlowApp]; app != nil {
+			processes = app.(platform.Processes)
+		}
+	}
+	if processes == nil {
+		return nil
+	}
+	return processes.Consumptions("build")
+}

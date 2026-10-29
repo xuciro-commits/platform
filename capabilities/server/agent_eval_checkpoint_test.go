@@ -1,5 +1,7 @@
 package platformserver
 
+import acceptedformat "platformserver/kernel/acceptedformat"
+
 import agentowner "platformserver/engine/agents"
 
 import (
@@ -55,7 +57,7 @@ func TestEvaluationCheckpointRestart(t *testing.T) {
 	live.Record = func(e Entry) { entries = append(entries, e) }
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if e.App == platform.AgentApp {
-			var saved acceptedAgent
+			var saved acceptedformat.RuntimeAgent
 			if json.Unmarshal(e.Body, &saved) == nil && saved.Step.Evaluation != nil {
 				ev := saved.Step.Evaluation
 				if ev.State == "queued" && len(ev.Cases) > 0 && ev.Cases[0].Runs == 2 {

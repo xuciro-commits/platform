@@ -43,7 +43,7 @@ func TestSnapshotRestoreFormatsAndLegacyEligibility(t *testing.T) {
 			countBins := func(tenant *Tenant) int {
 				tenant.mu.Lock()
 				defer tenant.mu.Unlock()
-				return tenant.records.types["stock.bin"].rows.Len()
+				return tenant.records.Type("stock.bin").Rows().Len()
 			}
 			expectedSaved := func(original int64) int64 {
 				if sqlCheckpoint {

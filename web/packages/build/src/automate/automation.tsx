@@ -35,7 +35,7 @@ const sentence = (titleOf: (type: string) => string, stateOf: (type: string, nam
 
 /** Automations as cards: trigger on the left, effects on the right, state as a tag. */
 export function Automations() {
-  const { role, entities } = useHost(), { open } = useApplicationWorkspace();
+  const { entities , holds} = useHost(), { open } = useApplicationWorkspace();
   const query = useReadQuery<{ records?: Row[] }>("/v1/records/build.process?limit=200");
   const [search, setSearch] = useState("");
   const rows = (query.data?.records ?? []).filter((row) => row.kind === "automation");
@@ -45,7 +45,7 @@ export function Automations() {
   const stateOf = (type: string, name: string) => entities.find((entity) => entity.type === type)?.lifecycle?.states.find((state) => state.name === name)?.title ?? name;
   return <div className="grid content-start gap-3 p-4">
     <PageHeader title={t("Automations")} help={t("When a record reaches a state, run effects. Each automation is one sentence; open it to shape the effects on the map.")}
-      actions={role("build") === "builder" && <Button onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
+      actions={holds("build", "builder") && <Button onClick={() => open({ view: "automation", params: { id: "new" } })}><Plus />{t("New automation")}</Button>} />
     <div className="flex flex-wrap items-center gap-2">
       <Input type="search" aria-label={t("Filter automations")} placeholder={t("Filter automations")} value={search} onChange={(event) => setSearch(event.target.value)} className="max-w-xs" />
       <Button variant="ghost" size="sm" onClick={() => open({ view: "runs" })}><Clock />{t("Runs")}</Button>
@@ -73,7 +73,7 @@ type Chosen = "trigger" | "condition" | string;
 
 /** One automation as a sentence of cards: trigger → condition → effects, each effect's parameters in the inspector. */
 export function AutomationEditor({ id }: { id: string }) {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { holds} = useHost(), { open } = useApplicationWorkspace();
   const model = useAuthoringModel();
   const catalogQuery = useAuthoringCapabilities<Capability>();
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
@@ -114,7 +114,7 @@ export function AutomationEditor({ id }: { id: string }) {
   };
   const saveRef = useRef<() => Promise<unknown>>(async () => false); saveRef.current = () => perform(save);
   useAutoSave({enabled: !sourceApplied && editable, generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
-  if (role("build") !== "builder") return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
+  if (!holds("build", "builder")) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{query.isError ? t("The automation could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const chosenStep = effects.find((step) => `step:${step.name}` === chosen);
   const card = (key: string, label: string, body: React.ReactNode, extra?: React.ReactNode) => <div key={key} role="button" tabIndex={0} aria-pressed={chosen === key} onClick={() => setChosen(key)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setChosen(key); }}

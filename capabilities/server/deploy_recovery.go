@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	controlowner "platformserver/kernel/control"
 	"reflect"
 	"time"
 )
@@ -21,8 +22,8 @@ func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
 // possibly half-applied in-memory tenant. A damaged snapshot can be bypassed
 // because the full journal is retained; a damaged journal cannot be bypassed.
 // No new generation is visible to HTTP, work or metrics until it is checked.
-func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry *tenantRegistry, code, id string) (err error) {
-	old := registry.current(id)
+func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry *controlowner.Registry[*Tenant], code, id string) (err error) {
+	old := registry.Current(id)
 	if old == nil || !old.quarantined() {
 		return fmt.Errorf("tenant %s is not quarantined", id)
 	}
@@ -96,10 +97,10 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	if err := fresh.deactivateOwners(fresh.desiredDisabledOwners()); err != nil {
 		return fmt.Errorf("restore tenant %s module selection: %w", id, err)
 	}
-	if err := registry.replace(id, old, fresh); err != nil {
+	if err := registry.Replace(id, old, fresh); err != nil {
 		return err
 	}
-	(&Host{}).bindSystemDefinitions(registry.list())
+	(&Host{}).bindSystemDefinitions(registry.List())
 	if projection != nil {
 		d.runProjection(registry, fresh, projection)
 	}
@@ -107,7 +108,7 @@ func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry
 	return nil
 }
 
-func (d *Deployment) runProjection(registry *tenantRegistry, tenant *Tenant, projection *Projection) {
+func (d *Deployment) runProjection(registry *controlowner.Registry[*Tenant], tenant *Tenant, projection *Projection) {
 	if d.background == nil || d.runtimeContext == nil {
 		return
 	}
@@ -123,7 +124,7 @@ func (d *Deployment) runProjection(registry *tenantRegistry, tenant *Tenant, pro
 				return
 			case <-tick.C:
 			}
-			if registry.current(tenant.ID) != tenant {
+			if registry.Current(tenant.ID) != tenant {
 				return
 			}
 			if tenant.quarantined() {
@@ -134,4 +135,8 @@ func (d *Deployment) runProjection(registry *tenantRegistry, tenant *Tenant, pro
 			}
 		}
 	}()
+}
+
+func newTenantRegistry(tenants []*Tenant) *controlowner.Registry[*Tenant] {
+	return controlowner.NewRegistry(tenants, func(t *Tenant) string { return t.ID }, func(t *Tenant) bool { return t.quarantined() })
 }

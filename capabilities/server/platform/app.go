@@ -1243,3 +1243,105 @@ type ConsolePolicies interface {
 	ProjectGrants(string, bool) []Grant
 	ApplyAccess()
 }
+
+// SupportGrant is one authorized support session: who may look at which
+// tenant, why, until when, and who opened it.
+type SupportGrant struct {
+	ID      string    `json:"id"`
+	Tenant  string    `json:"tenant"`
+	Member  string    `json:"member"`
+	Reason  string    `json:"reason"`
+	Opened  string    `json:"opened"`
+	Expires time.Time `json:"expires"`
+	Uses    int       `json:"uses"`
+}
+
+// MigrationType is one type's part of a migration.
+type MigrationType struct {
+	Type    string      `json:"type"`
+	Rows    int         `json:"rows"`
+	Written int         `json:"written"`
+	Refused []ImportRow `json:"refused,omitempty"`
+}
+
+// MigrationResult is one migration run: which types, how many rows, and the key
+// that makes a second run repeat nothing.
+type MigrationResult struct {
+	From  string          `json:"from"`
+	To    string          `json:"to"`
+	Key   string          `json:"key"`
+	Types []MigrationType `json:"types"`
+}
+
+// MigrationManifest is the console's record of a migration between environments.
+type MigrationManifest struct {
+	At     time.Time       `json:"at"`
+	From   string          `json:"from"`
+	To     string          `json:"to"`
+	Key    string          `json:"key"`
+	Member string          `json:"member"`
+	Types  []MigrationType `json:"types"`
+}
+
+// ImportRow is what one row did, or would do.
+type ImportRow struct {
+	Row     int        `json:"row"` // from 1, after the header
+	ID      string     `json:"id"`
+	Action  string     `json:"action"`  // the generated action it is
+	Outcome string     `json:"outcome"` // ok, or the refusal's code
+	Error   *ErrorBody `json:"error,omitempty"`
+}
+
+type ErrorBody struct {
+	Message string       `json:"message,omitempty"`
+	Issues  []FieldIssue `json:"issues,omitempty"`
+	Code    string       `json:"code"`
+	Status  int          `json:"status,omitempty"`
+	Detail  string       `json:"detail,omitempty"`
+}
+
+// The host console owns lifecycle, bounded support authority and migration
+// manifests. These images contain no ordinary tenant records or execution state.
+type HostControlImage struct {
+	Lifecycle        string                        `json:"lifecycle"`
+	Support          []SupportGrant                `json:"support"`
+	Migrations       []MigrationManifest           `json:"migrations"`
+	Requests         map[string]HostControlReceipt `json:"requests"`
+	RuntimeSelection map[string]string             `json:"runtimeSelection,omitempty"`
+	DisabledOwners   []string                      `json:"disabledOwners,omitempty"`
+}
+
+type HostControlReceipt struct {
+	RequestHash string       `json:"requestHash"`
+	Answer      SupportGrant `json:"answer,omitempty"`
+}
+
+// TenantSpec is one tenant as configured.
+type TenantSpec struct {
+	ID       string            `json:"id"`
+	Name     string            `json:"name,omitempty"`
+	Template string            `json:"template,omitempty"`
+	Seats    []Seat            `json:"seats"`
+	Settings map[string]string `json:"settings,omitempty"` // platform settings decided when the tenant first starts
+	Created  time.Time         `json:"created,omitempty"`
+	By       string            `json:"by,omitempty"` // the host administrator who created it
+}
+
+// TenantTemplate is a starting point for a tenant (deploy/templates/<name>.json):
+// default settings and the roles its first administrator holds in each app.
+type TenantTemplate struct {
+	Name        string            `json:"name"`
+	Title       string            `json:"title"`
+	Description string            `json:"description,omitempty"`
+	Settings    map[string]string `json:"settings,omitempty"`
+	AdminRoles  map[string]string `json:"adminRoles,omitempty"` // app → role; empty: "admin" in every app that defines it
+}
+
+// CreateTenantRequest is the host console's request for a new tenant.
+type CreateTenantRequest struct {
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	Template string            `json:"template,omitempty"`
+	Admin    string            `json:"admin"` // user:<email> or client:<id> of the first administrator
+	Settings map[string]string `json:"settings,omitempty"`
+}

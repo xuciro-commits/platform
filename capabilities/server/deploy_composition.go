@@ -1,5 +1,7 @@
 package platformserver
 
+import platform "platformserver/platform"
+
 import (
 	"context"
 	"fmt"
@@ -7,11 +9,11 @@ import (
 	"reflect"
 )
 
-func (d *Deployment) providers() RuntimeProviders {
+func (d *Deployment) providers() platform.RuntimeProviders {
 	if d.RuntimeProviders != nil {
 		return *d.RuntimeProviders
 	}
-	return DefaultRuntimeProviders()
+	return platform.DefaultRuntimeProviders()
 }
 
 func (d *Deployment) composeRuntime(id string, selection map[string]string) (*Tenant, error) {
@@ -56,7 +58,7 @@ func (d *Deployment) restoreRuntimeSelections(ctx context.Context, journal Journ
 			}
 			continue
 		}
-		if !old.console.suspended() {
+		if !old.console.Suspended() {
 			old.quarantine(fmt.Errorf("provider change requires maintenance"))
 			continue
 		}

@@ -167,7 +167,7 @@ func TestSimulationRouteAllowsOwnActionAndRefreshesRevokedPermissions(t *testing
 	if refusal == nil && out.Accepted {
 		t.Fatal("stale caller permissions survived revocation")
 	}
-	if len(tn.app("stock").AcceptedLedger().RecordsFor(tn.ID)) != 0 || tn.records.types["stock.bin"].rows.Len() != 0 {
+	if len(tn.app("stock").AcceptedLedger().RecordsFor(tn.ID)) != 0 || tn.records.Type("stock.bin").Rows().Len() != 0 {
 		t.Fatal("HTTP trial persisted a record")
 	}
 }

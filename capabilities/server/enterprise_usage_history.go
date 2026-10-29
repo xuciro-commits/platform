@@ -20,7 +20,7 @@ type enterpriseReferenceDeclaration struct {
 
 // enterpriseHistoricalReferencePaths reads retained owner declarations once
 // per usage request. It indexes no new state and never replays the journal.
-func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[string][][]string {
+func (t *Tenant) enterpriseHistoricalReferencePaths(store *records.Store) map[string][][]string {
 	paths := map[string][][]string{}
 	seen := map[string]bool{}
 	add := func(typ string, path []string) {
@@ -49,15 +49,15 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *recordStore) map[stri
 	}
 	var bodies []retainedBody
 	func() {
-		store.mu.Lock()
-		defer store.mu.Unlock()
-		for _, et := range store.types {
-			fields(et.info.Type, et.info.Fields, nil)
+		store.Lock()
+		defer store.Unlock()
+		for _, et := range store.Types() {
+			fields(et.Info().Type, et.Info().Fields, nil)
 		}
-		if objects := store.types[build.ObjectType]; objects != nil {
-			for _, row := range objects.rows.All() {
-				typ := build.TypeOf(businessField(objects.info, row.Value, "name"))
-				if published := businessField(objects.info, row.Value, "published"); published != "" {
+		if objects := store.Type(build.ObjectType); objects != nil {
+			for _, row := range objects.Rows().All() {
+				typ := build.TypeOf(records.BusinessField(objects.Info(), row.Value, "name"))
+				if published := records.BusinessField(objects.Info(), row.Value, "published"); published != "" {
 					bodies = append(bodies, retainedBody{typ, json.RawMessage(published)})
 				}
 				for _, change := range row.RecordHistory() {

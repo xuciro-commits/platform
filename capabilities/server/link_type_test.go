@@ -88,34 +88,34 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 		for i, id := range []string{"C1", "C2"} {
 			decide(t, tn, "user", build.ID, child+".create", child, id, map[string]any{"parent": fmt.Sprintf("P%d", i+1)}, txnAt)
 		}
-		et := tn.records.types[child]
-		field, _ := et.info.Field("parent")
-		initial := et.referenceIndex(field)
+		et := tn.records.Type(child)
+		field, _ := et.Info().Field("parent")
+		initial := et.ReferenceIndex(field)
 		decide(t, tn, "user", build.ID, parent+".edit", parent, "P4", map[string]any{"note": "Unrelated update"}, txnAt)
-		et = tn.records.types[child]
-		if et.referenceIndex(field) != initial {
+		et = tn.records.Type(child)
+		if et.ReferenceIndex(field) != initial {
 			t.Fatal("unrelated write invalidated the reference index")
 		}
-		draft := tn.records.forkRecords()
-		private := draft.types[child]
-		changed := *private.rows.Get("C2")
-		changed.Value = records.Copy(private.info.Go, changed.Value.Interface())
+		draft := tn.records.ForkRecords()
+		private := draft.Type(child)
+		changed := *private.Rows().Get("C2")
+		changed.Value = records.Copy(private.Info().Go, changed.Value.Interface())
 		changed.Value.FieldByIndex(field.Index).SetString("P1")
-		private.setRow("C2", &changed)
-		draft.writes[child+"/C2"] = true
-		if private.referenceIndex(field).Get("P1").IDs.Len() != 2 || et.referenceIndex(field).Get("P1").IDs.Len() != 1 {
+		private.SetRow("C2", &changed)
+		draft.TrackWrite(child + "/C2")
+		if private.ReferenceIndex(field).Get("P1").IDs.Len() != 2 || et.ReferenceIndex(field).Get("P1").IDs.Len() != 1 {
 			t.Fatal("private reverse-index updates leaked into live records")
 		}
-		if err := tn.records.promoteRecords(draft); err == nil || et.referenceIndex(field) != initial {
+		if err := tn.records.PromoteRecords(draft); err == nil || et.ReferenceIndex(field) != initial {
 			t.Fatal("final image admitted conflicting references or changed its predecessor")
 		}
-		bulk := tn.records.forkRecords()
-		image, err := records.From([]records.Entry[*records.Row]{{Key: "C1", Value: et.rows.Get("C1")}, {Key: "C2", Value: &changed}})
+		bulk := tn.records.ForkRecords()
+		image, err := records.From([]records.Entry[*records.Row]{{Key: "C1", Value: et.Rows().Get("C1")}, {Key: "C2", Value: &changed}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		bulk.types[child].setRows(image)
-		if err := tn.records.promoteRecords(bulk); err == nil {
+		bulk.Type(child).SetRows(image)
+		if err := tn.records.PromoteRecords(bulk); err == nil {
 			t.Fatal("bulk schema image skipped complete relation admission")
 		}
 		if got := refuse(t, tn, "user", build.ID, child+".edit", child, "C2", map[string]any{"parent": "P1"}, txnAt); got == "ok" {
@@ -134,8 +134,8 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 			t.Fatal("an active child was attached to an archived parent")
 		}
 		decide(t, tn, "user", build.ID, child+".edit", child, "C1", map[string]any{"parent": "P4"}, txnAt)
-		et = tn.records.types[child]
-		if et.referenceIndex(field).Get("P1").IDs.Len() != 0 || et.referenceIndex(field).Get("P4").IDs.Len() != 1 {
+		et = tn.records.Type(child)
+		if et.ReferenceIndex(field).Get("P1").IDs.Len() != 0 || et.ReferenceIndex(field).Get("P4").IDs.Len() != 1 {
 			t.Fatal("changing a reference left the old key behind")
 		}
 		decide(t, tn, "user", build.ID, child+".edit", child, "C1", map[string]any{"parent": ""}, txnAt)
@@ -144,11 +144,11 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 			t.Fatalf("empty reference filtering: total=%d %v", page.Total, refusal)
 		}
 		// Bulk replacement invalidates only this type's derived indexes.
-		before := tn.records.types[child]
-		if err := tn.records.install(before.info); err != nil {
+		before := tn.records.Type(child)
+		if err := tn.records.Install(before.Info()); err != nil {
 			t.Fatal(err)
 		}
-		if next := tn.records.types[child]; next == before || referenceIndexCount(next) != 0 || !reflect.DeepEqual(next.rows.Get("C1").Value.Interface(), before.rows.Get("C1").Value.Interface()) {
+		if next := tn.records.Type(child); next == before || referenceIndexCount(next) != 0 || !reflect.DeepEqual(next.Rows().Get("C1").Value.Interface(), before.Rows().Get("C1").Value.Interface()) {
 			t.Fatal("schema replacement retained a stale index or changed record facts")
 		}
 	})
@@ -274,11 +274,11 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	if issue != nil || rows.Total != 2 || len(rows.Records) != 1 {
 		t.Fatal("typed record traversal did not use its original window")
 	}
-	stats, issue := tn.Aggregate(reader, "build.child", AggregateQuery{Traversal: edge, Measures: []string{"count"}}, at)
+	stats, issue := tn.Aggregate(reader, "build.child", records.AggregateQuery{Traversal: edge, Measures: []string{"count"}}, at)
 	if issue != nil || len(stats.Rows) != 1 || stats.Rows[0]["count"] != 2 {
 		t.Fatal("aggregate traversal lost complete membership")
 	}
-	if _, issue := tn.Aggregate(restricted, "build.child", AggregateQuery{Traversal: edge, Measures: []string{"count"}}, at); issue == nil {
+	if _, issue := tn.Aggregate(restricted, "build.child", records.AggregateQuery{Traversal: edge, Measures: []string{"count"}}, at); issue == nil {
 		t.Fatal("aggregate traversed an unreadable start")
 	}
 	assert(tn)

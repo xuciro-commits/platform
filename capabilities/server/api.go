@@ -74,16 +74,8 @@ type InboxTask struct {
 // SubmissionAnswer is what a decision's route answers: the accepted change
 // record, or an error with the code the kernel's errors name (contract/spec/errors.md).
 type SubmissionAnswer struct {
-	Record *pb.ChangeRecord `json:"record,omitempty"`
-	Error  *ErrorBody       `json:"error,omitempty"`
-}
-
-type ErrorBody struct {
-	Message string                `json:"message,omitempty"`
-	Issues  []platform.FieldIssue `json:"issues,omitempty"`
-	Code    string                `json:"code"`
-	Status  int                   `json:"status,omitempty"`
-	Detail  string                `json:"detail,omitempty"`
+	Record *pb.ChangeRecord    `json:"record,omitempty"`
+	Error  *platform.ErrorBody `json:"error,omitempty"`
 }
 
 // ProtocolCall is the body of a call to a protocol's action.

@@ -94,3 +94,32 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 	}
 	return out, nil
 }
+
+// One private input can decide many edits against the same installed contract.
+// Reuse only the closed, pure metadata; each edit still decides and authorizes.
+type definitionPlanKey struct {
+	view                 *Tenant
+	generation           uint64
+	app, action, release string
+	family               uint32
+}
+
+func (d *stagedDecision) decisionDefinition(view *Tenant, owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*platform.DecisionDefinition, error) {
+	if len(retained) > 0 {
+		return view.decisionDefinition(owner, request, release, retained...)
+	}
+	key := definitionPlanKey{view: view, generation: view.definitionsFingerprint(), app: owner.Manifest().ID, action: request.GetSchema().GetName(), family: request.GetSchema().GetVersion(), release: release}
+	if saved, ok := d.definitionPlans[key]; ok {
+		// Receipt-specific schema and observation fields must never alter the plan.
+		definition := saved
+		return &definition, nil
+	}
+	definition, err := view.decisionDefinition(owner, request, release)
+	if err == nil && definition != nil && definition.DependenciesState == "closed" {
+		if d.definitionPlans == nil {
+			d.definitionPlans = map[definitionPlanKey]platform.DecisionDefinition{}
+		}
+		d.definitionPlans[key] = *definition
+	}
+	return definition, err
+}

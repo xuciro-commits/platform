@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import fileowner "platformserver/engine/resources"
 
 import (
@@ -39,10 +41,10 @@ type Deployment struct {
 	// settings; the console appends to it. Empty: the
 	// binary's development tenant. TemplatesDir holds tenant templates.
 	TenantsFile, TemplatesDir string
-	system                    TenantSpec
+	system                    platform.TenantSpec
 	Release                   int
 	ReleaseDigest             string
-	specs                     *specs
+	specs                     *controlowner.Specs
 	Files                     string // http(s)://host:port/bucket of an S3-compatible store; empty: memory
 	Project                   bool
 	SnapshotEvery             int64
@@ -69,8 +71,8 @@ type Deployment struct {
 	// Rebuild composes a fresh, unstarted tenant with the same durable app and
 	// connector declarations. Required for an in-process recovery retry.
 	Rebuild                 func(id string) (*Tenant, error)
-	RebuildWithCapabilities func(id string, services RuntimeCapabilities) (*Tenant, error)
-	RuntimeProviders        *RuntimeProviders
+	RebuildWithCapabilities func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
+	RuntimeProviders        *platform.RuntimeProviders
 	HostAuthorization       authz.Engine
 	Storage                 *JournalProvider
 	runtimeContext          context.Context
@@ -262,7 +264,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 					continue
 				}
-				runtime, runtimeErr := runtimeCheckpoint(state)
+				runtime, runtimeErr := runtimekernel.ReadCheckpoint(state)
 				if runtimeErr != nil {
 					t.quarantine(runtimeErr)
 					continue
@@ -563,9 +565,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 			d.runProjection(registry, t, p)
 		}
 	}
-	unregister := observeFrom(registry.list)
+	unregister := observeFrom(registry.List)
 	_ = resources.Track("metrics callback", func(context.Context) error { return unregister() })
-	_ = resources.Track("background work", runWorkFrom(registry.list))
+	_ = resources.Track("background work", runWorkFrom(registry.List))
 	var snapshots *snapshotter
 	watch := func(original *Tenant) {
 		if snapshots == nil {
@@ -584,7 +586,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					snapshots.save(ctx, registry.current(original.ID), false)
+					snapshots.save(ctx, registry.Current(original.ID), false)
 				}
 			}
 		}()
@@ -602,11 +604,11 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	}
 	host.SecondFactor = attest
 	host.HostAdmins = d.hostAdministrators()
-	host.tenantsFrom = registry.list
+	host.tenantsFrom = registry.List
 	host.Templates = d.Templates
 	if d.Rebuild != nil { // the host console creates tenants
 		var createMu sync.Mutex
-		host.CreateTenant = func(req CreateTenantRequest, by string) (*Tenant, error) {
+		host.CreateTenant = func(req platform.CreateTenantRequest, by string) (*Tenant, error) {
 			createMu.Lock()
 			defer createMu.Unlock()
 			t, err := d.createTenant(req, by, files, func(t *Tenant) error {
@@ -619,7 +621,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 			if err != nil {
 				return nil, err
 			}
-			registry.add(t)
+			registry.Add(t)
 			watch(t)
 			return t, nil
 		}
@@ -653,7 +655,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		}
 		cancel()
 		if snapshots != nil {
-			for _, t := range registry.list() {
+			for _, t := range registry.List() {
 				snapshots.save(shutdown, t, true)
 			}
 		}
@@ -689,16 +691,16 @@ func (d *Deployment) listen(ctx context.Context, host *Host, atExit func(context
 
 // createTenant records a new tenant's spec, builds it, opens its journal and
 // files, seeds it and applies the template's first decisions.
-func (d *Deployment) createTenant(req CreateTenantRequest, by string, files platform.FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
+func (d *Deployment) createTenant(req platform.CreateTenantRequest, by string, files platform.FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
 	now := Now()
 	spec, tpl, err := d.spec(req, by, now)
 	if err != nil {
 		return nil, err
 	}
 	if d.specs == nil {
-		d.specs = &specs{file: d.TenantsFile}
+		d.specs = controlowner.NewSpecs(d.TenantsFile)
 	}
-	if err := d.specs.add(spec); err != nil {
+	if err := d.specs.Add(spec); err != nil {
 		return nil, err
 	}
 	t, err := d.rebuildTenant(spec.ID)
@@ -767,7 +769,7 @@ func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
 		var key string
 		key, err = t.snapshotStorageKey(s.code, state)
 		if err == nil {
-			err = saveRuntimeSnapshot(ctx, s.journal, t.ID, seq, key, state)
+			err = runtimekernel.SaveCheckpoint(ctx, s.journal, t.ID, seq, key, state)
 		}
 	}
 	if err != nil {
@@ -930,5 +932,5 @@ func (d *Deployment) bindPackageIndex(tenant *Tenant) {
 
 // Recovery and host-created tenants receive the same offered catalogue.
 func (d *Deployment) rebuildTenant(id string) (*Tenant, error) {
-	return d.composeRuntime(id, DefaultRuntimeCapabilities().Selection())
+	return d.composeRuntime(id, platform.DefaultRuntimeCapabilities().Selection())
 }

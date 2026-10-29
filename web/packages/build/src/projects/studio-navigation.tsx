@@ -17,7 +17,7 @@ export function StudioNavigation({ route }: { route?: Route }) {
   const { owned, unavailable } = useProjectResources(project, owner, !installed, { enabledKinds: studioAreaKinds(requestedArea) });
   const [filter, setFilter] = useState("");
   useEffect(() => setFilter(""), [id]);
-  if (host.role("build") !== "builder" || !id) return null;
+  if (!host.holds("build", "builder") || !id) return null;
   if (!project) return <p role={query.isError ? "alert" : "status"} className="p-2 text-xs text-muted">{installed ? t("Application structure is not available with your current access.") : query.isError ? t("The project could not be loaded.") : t("Loading…")}</p>;
   const { selected, ref, area } = studioContext(route, owned, host.definitions);
   const showAssets = route?.view !== "project" || !!route.params?.asset;

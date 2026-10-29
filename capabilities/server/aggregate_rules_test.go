@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import "platformserver/studio/build"
 
 import (
@@ -20,7 +22,7 @@ func TestAggregateUsesTheExactRuleFold(t *testing.T) {
 		body["qty"] = qty
 		decide(t, tn, "writer", "invariants", "invariants.entry.create", owner.entity.Type, string(rune('A'+i)), body, txnAt)
 	}
-	got, err := tn.Aggregate(memberOf(t, tn, "writer"), owner.entity.Type, AggregateQuery{Measures: []string{"count", "sum:qty", "min:qty", "max:qty", "avg:qty"}}, txnAt)
+	got, err := tn.Aggregate(memberOf(t, tn, "writer"), owner.entity.Type, records.AggregateQuery{Measures: []string{"count", "sum:qty", "min:qty", "max:qty", "avg:qty"}}, txnAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +61,7 @@ func TestDeclaredAggregateAndTenThousandRuleMembers(t *testing.T) {
 		decide(t, tn, "writer", "invariants", "invariants.entry.create", owner.entity.Type, id, validConstraintEntry(id), txnAt)
 	}
 	decide(t, tn, "writer", "invariants", "invariants.entry.attach", owner.entity.Type, "root", map[string]any{"child": "child"}, txnAt)
-	out, err := tn.Aggregate(memberOf(t, tn, "writer"), owner.entity.Type, AggregateQuery{Collection: &platform.RecordSetRef{Object: owner.entity.Type, ID: "root", Name: "children"}, Measures: []string{"count", "sum:qty"}}, txnAt)
+	out, err := tn.Aggregate(memberOf(t, tn, "writer"), owner.entity.Type, records.AggregateQuery{Collection: &platform.RecordSetRef{Object: owner.entity.Type, ID: "root", Name: "children"}, Measures: []string{"count", "sum:qty"}}, txnAt)
 	if err != nil || len(out.Rows) != 1 || out.Rows[0]["count"] != 1 || string(platform.Raw(out.Rows[0]["sum:qty"])) != "2" {
 		t.Fatalf("declared aggregate: %v %v", out, err)
 	}

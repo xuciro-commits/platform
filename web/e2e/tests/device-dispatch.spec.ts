@@ -67,7 +67,7 @@ test("a declared device command is read back without blind resend and a stuck co
     await operator.decide(`${type}.create`, { type, id: first }, { status: "new" });
     await operator.decide(`${type}.start`, { type, id: first }, {});
     await operator.open(page, `/record?type=${type}&id=${first}`);
-    const progress = page.getByRole("region", { name: "Device dispatch progress", exact: true });
+    const progress = page.getByRole("region", { name: "Dispatch progress", exact: true });
     await expect(progress).toBeVisible();
     await expect(progress.locator('[data-ui="tag"]').filter({ hasText: /^Outcome unknown$/ })).toBeVisible({ timeout: 20_000 });
     await shots(page, progress, "device-dispatch-unknown", info);

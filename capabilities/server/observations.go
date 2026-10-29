@@ -235,14 +235,14 @@ func (t *Tenant) observationSourceActive(record string) bool {
 	if !valid {
 		return false
 	}
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
-	owner := t.records.types[typ]
+	t.records.Lock()
+	defer t.records.Unlock()
+	owner := t.records.Type(typ)
 	if owner == nil {
 		return false
 	}
-	row := owner.rows.Get(id)
-	return row != nil && !records.Header(row.Value).Archived && businessField(owner.info, row.Value, "state") == "published"
+	row := owner.Rows().Get(id)
+	return row != nil && !records.Header(row.Value).Archived && records.BusinessField(owner.Info(), row.Value, "state") == "published"
 }
 
 func observationDecisionFields(decision platform.ObservationDecision) []string {

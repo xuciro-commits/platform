@@ -52,6 +52,7 @@ for (const fixture of [
         await page.getByRole("combobox", { name: "Rows go to", exact: true }).selectOption("dataset");
         await page.getByRole("combobox", { name: /^Target dataset/ }).selectOption(raw);
         await page.getByRole("button", { name: "Publish", exact: true }).click();
+        await page.getByRole("button", { name: "Pull now", exact: true }).click();
         await expect.poll(async () => (await record("build.dataset", raw))?.version, { timeout: 15_000 }).toBe(1);
         await expect(page.getByRole("tab", { name: /^Data sources(?: ·|$)/ })).toHaveCount(1);
         await builder.open(page, "/pipeline?id=new");
@@ -73,6 +74,7 @@ for (const fixture of [
         await page.locator("select").filter({ has: page.locator('option[value="range"]') }).nth(1).selectOption("range");
         await page.getByPlaceholder("0..100", { exact: true }).fill("0..10");
         await page.getByRole("button", { name: "Publish", exact: true }).click();
+        await page.getByRole("button", { name: "Run now", exact: true }).click();
         await expect.poll(async () => (await record("build.dataset", clean))?.version, { timeout: 15_000 }).toBe(1);
         await expect(page.getByRole("tab", { name: /^Pipelines(?: ·|$)/ })).toHaveCount(1);
         const pipe = new URLSearchParams(new URL(page.url()).hash.split("?")[1]).get("id")!;
@@ -120,6 +122,7 @@ for (const fixture of [
         await page.getByRole("combobox", { name: /^Output object/ }).selectOption(type);
         await page.getByRole("textbox", { name: /^Record id column/ }).fill("id");
         await page.getByRole("button", { name: "Publish", exact: true }).click();
+        await page.getByRole("button", { name: "Run now", exact: true }).click();
         await expect.poll(async () => (await record("build.pipeline", land)).last?.written, { timeout: 15_000 }).toBe(1);
         const wb = fresh("WB"), receipt = "IN-A";
         expect(await record(type, receipt)).toMatchObject({ item: "A", qty: 3, state: "open" });

@@ -1,6 +1,5 @@
 import { PropertyList, StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
-import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
@@ -22,8 +21,8 @@ const conversions = ["", "string", "number", "boolean", "date"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function DataSources() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Data sources")} help={t("Pull rows from a JSON or CSV endpoint, an OData entity set or a database table into one object, on a period or on request. Retrying a pull keeps its previous row results. A new pull can update records even when the source content is unchanged.")}
       actions={<Button onClick={() => open({ view: "data-source", params: { id: "new" } })}>{t("New data source")}</Button>} />
@@ -32,10 +31,10 @@ export function DataSources() {
 }
 
 export function DataSourceEditor({ id }: { id: string }) {
-  const host = useHost(), { role } = host, { open, transfer } = useApplicationWorkspace();
+  const host = useHost(), { holds} = host, { open, transfer } = useApplicationWorkspace();
   const application = useApplicationScope();
   const model = useAuthoringModel();
-  const entities = role("build") === "builder" ? model.entities : host.entities;
+  const entities = holds("build", "builder") ? model.entities : host.entities;
   const connectionQuery = useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100");
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired");
   const datasetQuery = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200");
@@ -56,7 +55,7 @@ export function DataSourceEditor({ id }: { id: string }) {
   };
   const writable = (target?.fields ?? []).filter((field) => !field.readOnly);
   const setMapping = (mapping: Api.SourceField[]) => patch({ mapping });
-  if (!integrates(role("build"))) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Data sources")} description={query.isError ? t("The data source could not be loaded.") : t("Loading…")} />;
   const last = draft.last;
   const profile = draft.profile || "json", conn = connections.find((c) => c.id === draft.connection);
@@ -66,7 +65,7 @@ export function DataSourceEditor({ id }: { id: string }) {
         <Button onClick={() => open({ view: "data-source" })}>{t("Data sources")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save data source")}</Button>
-        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
+        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
         {draft.state === "published" && !draft.stream && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("pull"))}>{draft.requested ? t("Pull requested…") : t("Pull now")}</Button>}
         {draft.state === "published" && !draft.stream && !!draft.since && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("reset"))}>{t("Reset cursor")}</Button>}
@@ -75,7 +74,7 @@ export function DataSourceEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {connectionQuery.isError && <Panel role="alert" className="text-danger">{t("The connections could not be loaded.")}</Panel>}
     {datasetQuery.isError && <Panel role="alert" className="text-danger">{t("The datasets could not be loaded.")}</Panel>}
-    {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
+    {holds("build", "builder") && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
     {conn && conn.state !== "ready" && <Panel role="status" className="flex flex-wrap items-center gap-2 text-xs text-warning"><p>{t("This logical connection is not configured for use. You can publish the declaration; configure and check it before running the integration.")}</p><Button size="sm" variant="ghost" onClick={() => open({ view: "connection", params: { id: conn.id } })}>{t("Open connection")}</Button></Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Endpoint")} className="grid min-w-0 content-start gap-3">

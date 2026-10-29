@@ -47,6 +47,8 @@ type lifecycleHost struct {
 	info    platform.EntityInfo
 }
 
+func (h lifecycleHost) BuildProcessConsumptions() []platform.Consumption { return nil }
+
 func (h lifecycleHost) Automation(platform.Caller, string) platform.Caller {
 	return platform.NewCaller(h.runtime, platform.Member{ID: "app:build", Tenant: "target"}, ID, false, true)
 }

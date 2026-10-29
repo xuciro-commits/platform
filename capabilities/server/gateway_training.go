@@ -195,13 +195,13 @@ func (h hostView) trainingRecordAt(ref, change string) (json.RawMessage, bool) {
 	if !ok {
 		return nil, false
 	}
-	h.t.records.mu.Lock()
-	entity := h.t.records.types[typ]
+	h.t.records.Lock()
+	entity := h.t.records.Type(typ)
 	var row *records.Row
 	if entity != nil {
-		row = entity.rows.Get(id)
+		row = entity.Rows().Get(id)
 	}
-	h.t.records.mu.Unlock()
+	h.t.records.Unlock()
 	if row == nil {
 		return nil, false
 	}

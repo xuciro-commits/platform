@@ -202,7 +202,7 @@ func (h hostView) ResolveConfirmationDelivery(c platform.Caller, run platform.Co
 	view := h.decision.controlHost()
 	resolve := func(id, state, reason string) *kernel.Error {
 		for _, effect := range view.outbound {
-			if effect.ID != id || settled(effect.State) {
+			if effect.ID != id || platform.EffectSettled(effect.State) {
 				continue
 			}
 			var request build.WritebackRequest
@@ -269,7 +269,7 @@ func (h hostView) CheckConfirmationRead(run platform.ConfirmationRun, index int,
 	if policy == nil || json.Unmarshal(run.Parties[index].Source, &source) != nil || json.Unmarshal(run.Parties[index].Connection, &connection) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original reconciliation descriptor is unavailable")
 	}
-	publisher, known := h.Member(source.Puller)
+	publisher, known := h.t.sourcePublisher(source)
 	if !known || !publisher.Active() || !h.Readable(publisher, build.SourceType+"/"+policy.Source, at) || build.Guarded(connection.Marking) || build.Guarded(h.t.connectionMarking(connection.ID)) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Reconciliation source access is unavailable")
 	}

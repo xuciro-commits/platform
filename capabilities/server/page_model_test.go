@@ -268,3 +268,34 @@ func TestPageModelPartialVisibilityIsExplicitAndStrictByDefault(t *testing.T) {
 		t.Fatalf("strict model exposed an incomplete collection: %+v", out)
 	}
 }
+
+func TestInlineEditingCandidateKeepsOriginalStandardAction(t *testing.T) {
+	at := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	tn := builderTenant(t, "inline-candidate")
+	object := publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "inlinecandidate", "title": "Inline candidate", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "note", Title: "Protected note", Type: "text", Write: []string{build.Builder}}}}, at)
+	edit := platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: object + ".edit"}
+	page := modelTestPage(object, []platform.PageDataBinding{{ID: "items", Kind: "records", Model: &platform.ModelBinding{Type: object}}})
+	page.Name, page.Title = "inlinecandidate", "Inline candidate"
+	page.ActionTriggers = []platform.PageActionTrigger{{ID: "page", Binding: "page", Actions: []platform.AssetRef{edit}}, {ID: "items", Binding: "items", InlineEdit: &platform.PageInlineEdit{Action: edit, Fields: []string{"name", "note"}}}}
+	decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", modelDraftPayload(page), at)
+	member := memberOf(t, tn, "builder")
+	preview, err := tn.PreviewRelease(member, platform.AssetPage, "PAGE")
+	if err != nil || preview.CandidateID == "" {
+		t.Fatalf("the original edit action was lost from the frozen object: %+v %v", preview, err)
+	}
+	if _, err := tn.SaveReleaseCandidate(member, platform.AssetPage, "PAGE", preview.CandidateID, "save", at); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", at); err != nil {
+		t.Fatal(err)
+	}
+	published := false
+	for _, definition := range tn.Definitions(member) {
+		if definition.Ref == (platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: page.Name}) {
+			published = true
+		}
+	}
+	if !published {
+		t.Fatal("activated inline editing page was not discoverable")
+	}
+}

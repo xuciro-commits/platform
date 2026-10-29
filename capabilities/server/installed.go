@@ -3,14 +3,14 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
+	releaseowner "platformserver/studio/releases"
+
 	pageowner "platformserver/studio/pages"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 
-	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -44,7 +44,7 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 			return err
 		}
 	}
-	if err := t.records.install(info); err != nil {
+	if err := t.records.Install(info); err != nil {
 		return err
 	}
 	for _, action := range actions {
@@ -79,98 +79,6 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 		t.setDefinitions(kept)
 	}
 	return t.installDefinitions(id, info, actions, pages, e.Protocols...)
-}
-
-// decodeRowImage reads one saved row into the current declaration. A type
-// declared again may name fewer fields than the row carries: the ones it
-// dropped are left out and the rest keep their value, so a re-declared type
-// never refuses the rows it already holds.
-func decodeRowImage(info platform.EntityInfo, raw json.RawMessage, projection *records.Projection, release, format string) (json.RawMessage, error) {
-	decode, err := records.DecodeFormattedImage(info, raw, projection, release, format)
-	if err == nil {
-		return decode, nil
-	}
-	pruned, pruneErr := records.PruneImage(info, raw)
-	if pruneErr != nil {
-		return nil, err
-	}
-	return records.DecodeFormattedImage(info, pruned, projection, release, format)
-}
-
-// install declares a type, or declares it again: the rows are carried into the
-// new Go type through their JSON, so a record keeps the value of every field
-// that is still there.
-func (s *recordStore) install(info platform.EntityInfo) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if other := s.byGo[info.Go]; other != nil && other.info.Type != info.Type {
-		return fmt.Errorf("%s: another type is already this Go type", info.Type)
-	}
-	et := &entityType{store: s, info: info, rows: records.Rows{}, knowledge: records.KnowledgeBearing(info)}
-	if before := s.types[info.Type]; before != nil {
-		if before.info.App != info.App {
-			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
-		}
-		if before.info.Versioning != nil && !reflect.DeepEqual(before.info.Versioning, info.Versioning) || len(before.info.VersionPins) > 0 && !reflect.DeepEqual(before.info.VersionPins, info.VersionPins) {
-			return fmt.Errorf("published business versioning and pin bindings are retained")
-		}
-		rows := before.rows
-		if rows.Sourced() && s.current.Backend() != nil && !before.retainedProjection {
-			// Migrated SQL bytes may already have the target shape while this
-			// private installation still catalogs the source declaration. Read
-			// them using the target, then perform the same strict conversion.
-			rows = rows.Rebind(s.current.Source(info.Type, &info))
-		}
-		entries := make([]records.Entry[*records.Row], 0, rows.Len())
-		for id, r := range rows.All() {
-			raw, err := r.Image()
-			if err != nil {
-				return err
-			}
-			v := reflect.New(info.Go).Elem()
-			decode, err := decodeRowImage(info, raw, r.Projection, s.current.Release(), r.Format)
-			if err != nil {
-				return err
-			}
-			if err := json.Unmarshal(decode, v.Addr().Interface()); err != nil {
-				return err
-			}
-			platform.ApplyFieldAliases(info, v)
-			records.EmptyLists(v)
-			installed := &records.Row{Value: v, Format: r.Format, HistoryParent: r.HistoryParent, HistoryHead: r.HistoryHead, History: r.History, LoadHistory: r.LoadHistory, HistoryCount: r.HistoryCount, Projection: r.Projection, Extraction: r.Extraction}
-			installed.RetainOriginal(raw)
-			entries = append(entries, records.Entry[*records.Row]{Key: id, Value: installed})
-		}
-		index, err := records.From(entries)
-		if err != nil {
-			return err
-		}
-		et.setRows(index)
-		delete(s.byGo, before.info.Go)
-	} else if s.current.Backend() != nil && s.current.View() != nil {
-		// An owner-only SQL checkpoint restores dynamic declarations after native
-		// types. Their accepted rows already belong to the same fixed read view.
-		et.rows = records.SourceRows(s.current.Source(info.Type, nil))
-	}
-	s.types[info.Type], s.byGo[info.Go] = et, et
-	s.generation++
-	return nil
-}
-
-// retainedDefinitionVersions leaves the original history untouched; callers
-// publish the current version only after their installation checks succeed.
-func retainedDefinitionVersions[T any](history map[string]T, previousVersion string, previous *T, version string, current T) (map[string]T, bool) {
-	versions := maps.Clone(history)
-	if versions == nil {
-		versions = map[string]T{}
-	}
-	if previous != nil {
-		versions[previousVersion] = *previous
-	}
-	if prior, ok := versions[version]; ok && string(platform.Raw(prior)) != string(platform.Raw(current)) {
-		return nil, false
-	}
-	return versions, true
 }
 
 // storeDefinition updates the existing discovery registry; callers own
@@ -211,34 +119,8 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 		}
 		t.setDefinitions(append(t.definitions, def))
 	}
-	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
-	entity := info
-	put(platform.Definition{Ref: object, Source: "tenant", Version: "1", ContractVersion: 1, Entity: &entity})
-	for _, action := range actions {
-		a := action
-		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetAction, Name: a.Schema}, Source: "tenant", Version: "1",
-			ContractVersion: 1, Action: &a})
-	}
-	for _, page := range pages {
-		p := page
-		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetPage, Name: p.Name}, Source: "tenant", Version: "1",
-			ContractVersion: 1, Page: &p})
-	}
-	for _, provision := range protocols {
-		protocol := platform.ProtocolReleaseDescriptor{Name: provision.Protocol.Name, Version: provision.Protocol.Version, Actions: slices.Clone(provision.Protocol.Actions), Reads: slices.Clone(provision.Protocol.Reads), ActionBindings: map[string]platform.AssetRef{}, ActionRoles: map[string][]string{}, ReadBindings: map[string]platform.AssetRef{}}
-		for _, action := range protocol.Actions {
-			mapped := provision.Actions[action.Schema]
-			protocol.ActionBindings[action.Schema] = platform.AssetRef{App: app, Kind: platform.AssetAction, Name: mapped}
-			for _, actual := range actions {
-				if actual.Schema == mapped {
-					protocol.ActionRoles[action.Schema] = slices.Clone(actual.Roles)
-				}
-			}
-		}
-		for _, read := range protocol.Reads {
-			protocol.ReadBindings[read] = object
-		}
-		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetProtocol, Name: protocol.Name}, Source: "tenant", Version: "1", ContractVersion: protocol.Version, Protocol: &protocol})
+	for _, definition := range releaseowner.ObjectDefinitions(app, info, actions, pages, protocols...) {
+		put(definition)
 	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return describeErr
@@ -513,13 +395,13 @@ func (t *Tenant) checkAction(page, schema, object string) error {
 
 // entity is an entity type's declaration, as the app that composes over it sees it.
 func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
-	et := t.records.types[typ]
+	t.records.Lock()
+	defer t.records.Unlock()
+	et := t.records.Type(typ)
 	if et == nil {
 		return platform.EntityInfo{}, false
 	}
-	return et.info, true
+	return et.Info(), true
 }
 
 // InstallApplication offers an application a tenant handed to its people: a
@@ -594,47 +476,12 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	return nil
 }
 
-func (t *Tenant) checkApplicationExtension(ref platform.AssetRef, a platform.Application) error {
-	if err := a.CheckExtension(); err != nil {
-		return err
-	}
-	if a.Extends == nil {
-		return nil
-	}
-	if *a.Extends == ref {
-		return fmt.Errorf("an application cannot extend itself")
-	}
-	if !slices.ContainsFunc(t.definitions, func(definition platform.Definition) bool {
-		return definition.Ref == *a.Extends && definition.Source == "code" && definition.Application != nil
-	}) {
-		return fmt.Errorf("application %s can only extend an installed code application", ref)
-	}
-	entry := a.Entry
-	if entry == "" {
-		entry = a.Extends.App
-	}
-	for _, other := range t.definitions {
-		if other.Ref == ref || other.Application == nil || other.Application.Extends == nil {
-			continue
-		}
-		otherEntry := other.Application.Entry
-		if otherEntry == "" {
-			otherEntry = other.Application.Extends.App
-		}
-		if otherEntry != entry {
-			continue
-		}
-		for _, replacement := range a.Replacements {
-			if slices.ContainsFunc(other.Application.Replacements, func(previous platform.ApplicationPageReplacement) bool { return previous.View == replacement.View }) {
-				return fmt.Errorf("application view %s/%s is already replaced by %s", entry, replacement.View, other.Ref)
-			}
-		}
-	}
-	return nil
-}
-
 func (t *Tenant) checkPageQueries(p platform.Page) error {
 	bindings := pageowner.Bindings{Entity: t.entity, Criteria: t.modelCriteria, Rules: t.services.Rules,
 		Operation: t.pageOperation, Definitions: t.definitions, Interface: t.bindInterfaceQuery}
 	return bindings.CheckQueries(p)
+}
+
+func (t *Tenant) checkApplicationExtension(ref platform.AssetRef, a platform.Application) error {
+	return releaseowner.CheckApplicationExtension(ref, a, t.definitions)
 }

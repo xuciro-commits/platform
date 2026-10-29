@@ -31,7 +31,7 @@ func (d *stagedDecision) RequestFunction(c platform.Caller, r *pb.ChangeRecord, 
 	return call, nil
 }
 
-func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, store *recordStore, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *kernel.Error) {
+func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request platform.FunctionRequest, store *records.Store, pending []platform.Effect) (platform.FunctionCall, platform.Effect, *kernel.Error) {
 	ctx := agentowner.FunctionContext{Tenant: t.ID, App: t.app, Member: t.Member, AuthorityOf: t.authorityOf,
 		Authorize: func(c platform.Caller, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) *kernel.Error {
 			return authorizationRefusal(t.authorizeCapability(c, owner, f.Name, f.Roles, f.Check() == nil, authorizationDetails{Store: store, At: at, Sources: sources, Definition: definition}))
@@ -46,19 +46,19 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			var historySources []string
 			var conversationErr error
 			if refusal := func() *kernel.Error {
-				store.mu.Lock()
-				defer store.mu.Unlock()
-				et := store.types[f.Object]
+				store.Lock()
+				defer store.Unlock()
+				et := store.Type(f.Object)
 				if et == nil {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function source is not readable")
 				}
-				row := et.rows.Get(source)
+				row := et.Rows().Get(source)
 				if row == nil || records.Header(row.Value).Archived || !t.readableIn(store, member, sourceRef, at) {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 				}
 				input := map[string]any{}
 				for _, name := range f.Fields {
-					field, found := et.info.Field(name)
+					field, found := et.Info().Field(name)
 					if !found || field.AIInput != nil && !*field.AIInput {
 						return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The AI function source is not readable")
 					}
@@ -127,14 +127,14 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 			return t.authorizeCapability(c, owner, f.Name, f.Roles, true, authorizationDetails{At: at, Sources: sources, Definition: definition}).Allow
 		},
 		Source: func(typ, id string) (platform.EntityInfo, bool) {
-			t.records.mu.Lock()
-			defer t.records.mu.Unlock()
-			et := t.records.types[typ]
+			t.records.Lock()
+			defer t.records.Unlock()
+			et := t.records.Type(typ)
 			if et == nil {
 				return platform.EntityInfo{}, false
 			}
-			row := et.rows.Get(id)
-			return et.info, row != nil && !records.Header(row.Value).Archived
+			row := et.Rows().Get(id)
+			return et.Info(), row != nil && !records.Header(row.Value).Archived
 		},
 	}
 	return agentowner.FunctionAllowed(ctx, app, ask.Function, ask.Model, ask.Record, ask.Call, ask.Prompt, at)
@@ -145,10 +145,10 @@ func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
 		return err
 	}
 	manifest := h.app.Manifest()
-	h.t.records.mu.Lock()
-	defer h.t.records.mu.Unlock()
-	et := h.t.records.types[f.Object]
-	if et == nil || et.info.App != manifest.ID {
+	h.t.records.Lock()
+	defer h.t.records.Unlock()
+	et := h.t.records.Type(f.Object)
+	if et == nil || et.Info().App != manifest.ID {
 		return fmt.Errorf("function %s needs its owner's source object", f.Name)
 	}
 	for _, role := range f.Roles {
@@ -157,7 +157,7 @@ func (h hostView) ValidateInstallFunction(f platform.AIFunction) error {
 		}
 	}
 	for _, name := range f.Fields {
-		field, ok := et.info.Field(name)
+		field, ok := et.Info().Field(name)
 		if !ok || field.AIInput != nil && !*field.AIInput || !slices.Contains([]string{"text", "longtext", "choice", "integer", "decimal", "boolean"}, field.Type) || slices.Contains(h.t.narrowable(et), name) {
 			return fmt.Errorf("function %s needs direct scalar source fields", f.Name)
 		}
@@ -218,17 +218,17 @@ func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int,
 	}
 	return t.capabilityClosure(platform.AssetRef{App: app, Kind: platform.AssetFunction, Name: f.Name}, body, sourceVersion, retained)
 }
-func (t *Tenant) functionHistory(store *recordStore, member platform.Member, id string) (agentowner.FunctionHistory, error) {
-	et := store.types[build.FunctionCallType]
+func (t *Tenant) functionHistory(store *records.Store, member platform.Member, id string) (agentowner.FunctionHistory, error) {
+	et := store.Type(build.FunctionCallType)
 	if et == nil {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history is unavailable")
 	}
-	reader := platform.NewCaller(runtime{t}, member, et.info.App, false, false)
-	decision := t.authorizeFrom(store, reader, platform.AuthzRequest{Principal: member.ID, Tenant: member.Tenant, Kind: "derive", Type: et.info.Type, Record: id, Fields: []string{"question", "output"}}, time.Now(), true)
+	reader := platform.NewCaller(runtime{t}, member, et.Info().App, false, false)
+	decision := t.authorizeFrom(store, reader, platform.AuthzRequest{Principal: member.ID, Tenant: member.Tenant, Kind: "derive", Type: et.Info().Type, Record: id, Fields: []string{"question", "output"}}, time.Now(), true)
 	if !decision.Allow || len(decision.Withheld) > 0 {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history is not readable")
 	}
-	row := et.rows.Get(id)
+	row := et.Rows().Get(id)
 	if row == nil {
 		return agentowner.FunctionHistory{}, fmt.Errorf("conversation history is unavailable")
 	}

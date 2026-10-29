@@ -17,8 +17,8 @@ const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", object: 
 const fieldClass = "grid gap-1 text-xs";
 
 export function Alerts() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder")) return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Alert rules")} help={t("Tell a role when a record comes to match a condition: a late order, a stock below its minimum, a receipt without a supplier.")}
       actions={<Button onClick={() => open({ view: "alert", params: { id: "new" } })}>{t("New alert rule")}</Button>} />
@@ -27,7 +27,7 @@ export function Alerts() {
 }
 
 export function AlertEditor({ id }: { id: string }) {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { holds} = useHost(), { open } = useApplicationWorkspace();
   const { draft, structured, query, dirty, joining, busy, error, inputs, patch: change, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.alertrule", kind: "alert", view: "alert", empty,
     failure: t("The alert rule could not be saved. Your draft is still here."),
@@ -41,7 +41,7 @@ export function AlertEditor({ id }: { id: string }) {
   const fields = object?.fields ?? [];
   const roles = [...new Set(["builder", ...objects.flatMap((o) => (o.access ?? []).map((a) => a.role))])];
   const noValue = draft.operator === "empty" || draft.operator === "not empty";
-  if (role("build") !== "builder") return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
+  if (!holds("build", "builder")) return <PageHeader title={t("Alert rules")} description={t("Only a builder can edit alert rules.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Alert rules")} description={query.isError ? t("The alert rule could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 gap-3">
     <PageHeader title={draft.title || t("New alert rule")} help={t("Checked after every change to a record of the object. People holding the role get a notification that opens the record.")}

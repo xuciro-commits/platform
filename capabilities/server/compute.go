@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import computeowner "platformserver/engine/compute"
 
 import (
@@ -72,7 +74,7 @@ func (d *stagedDecision) RequestOperation(c platform.Caller, r *pb.ChangeRecord,
 	}
 	return call, nil
 }
-func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *recordStore, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
+func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform.OperationRequest, store *records.Store, pending []platform.Effect, sealed ...*platform.OperationInputArtifact) (platform.OperationCall, platform.Effect, *kernel.Error) {
 	refuse := func(code pb.ErrorCode, msg string) (platform.OperationCall, platform.Effect, *kernel.Error) {
 		return platform.OperationCall{}, platform.Effect{}, platform.Refuse(code, msg)
 	}
@@ -145,7 +147,7 @@ func (t *Tenant) planOperation(c platform.Caller, r *pb.ChangeRecord, q platform
 	exists := slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id })
 	queued := 0
 	for _, x := range t.outbound {
-		if x.Endpoint == acceptedformat.OperationEndpoint && !settled(x.State) {
+		if x.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(x.State) {
 			queued++
 		}
 	}
@@ -325,7 +327,7 @@ func (d *stagedDecision) RequestCompilation(c platform.Caller, r *pb.ChangeRecor
 	d.tenant.opsMu.Lock()
 	queued := 0
 	for _, x := range d.tenant.outbound {
-		if x.Endpoint == acceptedformat.OperationEndpoint && !settled(x.State) {
+		if x.Endpoint == acceptedformat.OperationEndpoint && !platform.EffectSettled(x.State) {
 			queued++
 		}
 	}

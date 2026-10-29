@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import automation "platformserver/engine/automation"
 
 import (
@@ -31,24 +33,22 @@ type indexedUniqueChild struct {
 	Enabled bool   `json:"enabled"`
 }
 
-func uniqueIndexStore(t *testing.T) (*recordStore, platform.Constraint) {
+func uniqueIndexStore(t *testing.T) (*records.Store, platform.Constraint) {
 	t.Helper()
 	rule := platform.Constraint{Name: "code", Kind: "unique", Fields: []string{"code", "number", "enabled"}, Scope: "parent.group"}
-	store := newRecordStore()
+	store := records.NewStore()
 	for _, entity := range []platform.Entity{{Type: "unique.parent", Model: indexedUniqueParent{}}, {Type: "unique.child", Model: indexedUniqueChild{}, Constraints: []platform.Constraint{rule}}} {
 		info, err := platform.Describe("unique", entity, func(reflect.Type) string { return "" })
 		if err != nil {
 			t.Fatal(err)
 		}
-		et := &entityType{store: store, info: info}
-		store.types[info.Type] = et
-		store.byGo[info.Go] = et
+		store.ReplaceReadType(info, records.Rows{}, false)
 	}
 	return store, rule
 }
-func putUniqueTest(store *recordStore, typ string, value any) {
+func putUniqueTest(store *records.Store, typ string, value any) {
 	v := records.Copy(reflect.TypeOf(value), value)
-	store.types[typ].setRow(records.Header(v).ID, &records.Row{Value: v})
+	store.Type(typ).SetRow(records.Header(v).ID, &records.Row{Value: v})
 }
 func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 	store, rule := uniqueIndexStore(t)
@@ -56,46 +56,46 @@ func TestUniqueIndexScopeChangesAndPrivateIsolation(t *testing.T) {
 		putUniqueTest(store, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: fmt.Sprint(i)}, Group: fmt.Sprint(i)})
 		putUniqueTest(store, "unique.child", indexedUniqueChild{Record: platform.Record{ID: fmt.Sprint(i)}, Parent: fmt.Sprint(i), Code: "same"})
 	}
-	et := store.types["unique.child"]
-	store.prepareUniqueIndexes()
-	original := et.indexes.CachedUnique(rule.Name)
+	et := store.Type("unique.child")
+	store.PrepareUniqueIndexes()
+	original := et.DerivedSnapshot().CachedUnique(rule.Name)
 	candidate := indexedUniqueChild{Record: platform.Record{ID: "new"}, Parent: "1", Code: "same"}
-	if ok, err := store.uniqueConstraint(et.info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
+	if ok, err := store.UniqueConstraint(et.Info(), rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
 		t.Fatal("zero/false did not occupy scope", ok, err)
 	}
 	candidate.Code = " "
-	if ok, err := store.uniqueConstraint(et.info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
+	if ok, err := store.UniqueConstraint(et.Info(), rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
 		t.Fatal("blank field occupied a key", ok, err)
 	}
 	candidate.Code = "same"
 	candidate.Archived = true
-	if ok, _ := store.uniqueConstraint(et.info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok {
+	if ok, _ := store.UniqueConstraint(et.Info(), rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok {
 		t.Fatal("archived record bypassed original rule")
 	}
-	draft := store.forkRecords()
+	draft := store.ForkRecords()
 	putUniqueTest(draft, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "2"}, Group: "1"})
-	draft.writes["unique.parent/2"] = true
-	updated := draft.types["unique.child"].indexes.CachedUnique(rule.Name)
-	key, _ := records.UniqueKey(draft.indexImage, et.info, rule, draft.types["unique.child"].rows.Get("1").Value)
+	draft.TrackWrite("unique.parent/2")
+	updated := draft.Type("unique.child").DerivedSnapshot().CachedUnique(rule.Name)
+	key, _ := records.UniqueKey(draft.IndexImage, et.Info(), rule, draft.Type("unique.child").Rows().Get("1").Value)
 	if updated.Keys.Get(key).Len() != 2 {
 		t.Fatal("parent scope change missed dependent key")
 	}
-	if original.Keys.Get(key).Len() != 1 || store.types["unique.child"].indexes.CachedUnique(rule.Name).Keys != original.Keys {
+	if original.Keys.Get(key).Len() != 1 || store.Type("unique.child").DerivedSnapshot().CachedUnique(rule.Name).Keys != original.Keys {
 		t.Fatal("private index leaked")
 	}
 	if updated.Rows.Get("3") != original.Rows.Get("3") {
 		t.Fatal("unrelated key changed")
 	}
-	changes := draft.uniqueChanges()
+	changes := draft.UniqueChanges()
 	if len(changes) != 2 || changes["unique.child/2"][rule.Name] != key {
 		t.Fatal("derived changes missed unchanged child", changes)
 	}
-	if store.types["unique.parent"].rows.Get("2").Value.Interface().(indexedUniqueParent).Group != "2" {
+	if store.Type("unique.parent").Rows().Get("2").Value.Interface().(indexedUniqueParent).Group != "2" {
 		t.Fatal("discarded change reached live state")
 	}
-	draft = store.forkRecords()
+	draft = store.ForkRecords()
 	putUniqueTest(draft, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "1"}, Parent: "1", Code: "different"})
-	if draft.types["unique.child"].indexes.CachedUnique(rule.Name).Keys.Has(key) {
+	if draft.Type("unique.child").DerivedSnapshot().CachedUnique(rule.Name).Keys.Has(key) {
 		t.Fatal("replacement retained old key")
 	}
 	if original.Keys.Get(key).Len() != 1 {
@@ -109,50 +109,48 @@ func TestUniqueIndexPreservesHistoricalDuplicatesAndMissingScopes(t *testing.T) 
 		putUniqueTest(store, "unique.child", indexedUniqueChild{Record: platform.Record{ID: id}, Parent: "p", Code: "same"})
 	}
 	putUniqueTest(store, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "incomplete"}, Parent: "missing", Code: "same"})
-	et := store.types["unique.child"]
-	store.prepareUniqueIndexes()
-	existing := et.rows.Get("a").Value
-	if ok, err := store.uniqueConstraint(et.info, rule, existing); ok || err != nil {
+	et := store.Type("unique.child")
+	store.PrepareUniqueIndexes()
+	existing := et.Rows().Get("a").Value
+	if ok, err := store.UniqueConstraint(et.Info(), rule, existing); ok || err != nil {
 		t.Fatal("historical duplicate lost", ok, err)
 	}
-	if len(store.uniqueKeys(et.info.Type, "incomplete")) != 0 {
+	if len(store.UniqueKeys(et.Info().Type, "incomplete")) != 0 {
 		t.Fatal("missing scope occupied a key")
 	}
 	putUniqueTest(store, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "missing"}, Group: "g"})
-	key, _ := records.UniqueKey(store.indexImage, et.info, rule, existing)
-	if et.indexes.CachedUnique(rule.Name).Keys.Get(key).Len() != 3 {
+	key, _ := records.UniqueKey(store.IndexImage, et.Info(), rule, existing)
+	if et.DerivedSnapshot().CachedUnique(rule.Name).Keys.Get(key).Len() != 3 {
 		t.Fatal("new parent missed old child")
 	}
-	et.setRows(et.rows.Overlay())
+	et.SetRows(et.Rows().Overlay())
 	if uniqueIndexCount(et) != 0 {
 		t.Fatal("bulk retained obsolete roots")
 	}
-	store.prepareUniqueIndexes()
-	if et.indexes.CachedUnique(rule.Name).Keys.Get(key).Len() != 3 {
+	store.PrepareUniqueIndexes()
+	if et.DerivedSnapshot().CachedUnique(rule.Name).Keys.Get(key).Len() != 3 {
 		t.Fatal("bulk changed occupants")
 	}
 }
 func BenchmarkUniqueIndexLookup(b *testing.B) {
 	for _, count := range []int{1000, 10000, 100000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			store := newRecordStore()
+			store := records.NewStore()
 			rule := platform.Constraint{Name: "code", Kind: "unique", Fields: []string{"code"}, Scope: "tenant"}
 			info, err := platform.Describe("unique", platform.Entity{Type: "unique.child", Model: indexedUniqueChild{}, Constraints: []platform.Constraint{rule}}, func(reflect.Type) string { return "" })
 			if err != nil {
 				b.Fatal(err)
 			}
-			et := &entityType{store: store, info: info}
-			store.types[info.Type] = et
-			store.byGo[info.Go] = et
+			store.ReplaceReadType(info, records.Rows{}, false)
 			for i := 0; i < count; i++ {
 				putUniqueTest(store, info.Type, indexedUniqueChild{Record: platform.Record{ID: fmt.Sprint(i)}, Code: fmt.Sprint(i)})
 			}
-			store.prepareUniqueIndexes()
+			store.PrepareUniqueIndexes()
 			candidate := indexedUniqueChild{Record: platform.Record{ID: "new"}, Code: "new"}
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				if ok, err := store.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
+				if ok, err := store.UniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
 					b.Fatal(ok, err)
 				}
 			}
@@ -173,11 +171,11 @@ func TestScopedUniqueParentEditChecksOnlyDependentChildren(t *testing.T) {
 		decide(t, tn, "builder", "build", parent+".create", parent, id, map[string]any{"group": fmt.Sprintf("G%d", i+1)}, txnAt)
 		decide(t, tn, "builder", "build", child+".create", child, fmt.Sprintf("C%d", i+1), map[string]any{"parent": id, "code": "same"}, txnAt)
 	}
-	original := tn.records.types[child].indexes.CachedUnique(rule.Name).Keys
+	original := tn.records.Type(child).DerivedSnapshot().CachedUnique(rule.Name).Keys
 	if result := refuse(t, tn, "builder", "build", parent+".edit", parent, "P2", map[string]any{"group": "G1"}, txnAt); !strings.Contains(result, rule.Message) {
 		t.Fatal("parent scope edit escaped unchanged child rule", result)
 	}
-	if tn.records.types[child].indexes.CachedUnique(rule.Name).Keys != original {
+	if tn.records.Type(child).DerivedSnapshot().CachedUnique(rule.Name).Keys != original {
 		t.Fatal("refused parent edit published private keys")
 	}
 	record, err := tn.RecordOf(memberOf(t, tn, "builder"), parent, "P2", txnAt)
@@ -211,34 +209,34 @@ func TestUniqueSQLReadsPrivateKeyChangesWithoutResidentIndex(t *testing.T) {
 		putUniqueTest(store, "unique.child", indexedUniqueChild{Record: platform.Record{ID: fmt.Sprint(i)}, Parent: fmt.Sprint(i), Code: "same"})
 	}
 	backend := &indexedUniqueState{byKey: map[string][]string{}, applied: 7}
-	for id := range store.types["unique.child"].rows.All() {
-		key := store.uniqueKeys("unique.child", id)[rule.Name]
+	for id := range store.Type("unique.child").Rows().All() {
+		key := store.UniqueKeys("unique.child", id)[rule.Name]
 		backend.byKey[key] = append(backend.byKey[key], id)
 	}
-	store.current.UseBackend(backend)
-	store.current.MarkApplied(7)
+	store.Current().UseBackend(backend)
+	store.Current().MarkApplied(7)
 	candidate := indexedUniqueChild{Record: platform.Record{ID: "new"}, Parent: "1", Code: "same"}
-	info := store.types["unique.child"].info
-	if ok, err := store.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
+	info := store.Type("unique.child").Info()
+	if ok, err := store.UniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
 		t.Fatal("SQL occupant ignored", ok, err)
 	}
-	draft := store.forkRecords()
+	draft := store.ForkRecords()
 	putUniqueTest(draft, "unique.child", indexedUniqueChild{Record: platform.Record{ID: "1"}, Parent: "1", Code: "different"})
-	draft.writes["unique.child/1"] = true
-	if ok, err := draft.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
+	draft.TrackWrite("unique.child/1")
+	if ok, err := draft.UniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); !ok || err != nil {
 		t.Fatal("private key replacement retained SQL predecessor", ok, err)
 	}
 	putUniqueTest(draft, "unique.parent", indexedUniqueParent{Record: platform.Record{ID: "2"}, Group: "1"})
-	draft.writes["unique.parent/2"] = true
-	if ok, err := draft.uniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
+	draft.TrackWrite("unique.parent/2")
+	if ok, err := draft.UniqueConstraint(info, rule, records.Copy(reflect.TypeOf(candidate), candidate)); ok || err != nil {
 		t.Fatal("private parent scope omitted child key", ok, err)
 	}
-	for _, et := range draft.types {
+	for _, et := range draft.Types() {
 		if uniqueIndexCount(et) != 0 {
 			t.Fatal("SQL lookup built complete resident key table")
 		}
 	}
-	if uniqueIndexCount(store.types["unique.child"]) != 0 {
+	if uniqueIndexCount(store.Type("unique.child")) != 0 {
 		t.Fatal("SQL lookup retained complete live key table")
 	}
 }
@@ -270,15 +268,15 @@ func TestPostgresBusinessUniqueKeysSurvivePrivateFailureAndRestart(t *testing.T)
 	}
 	checkKeys := func(tn *Tenant, key string, want ...string) {
 		t.Helper()
-		store, ok := tn.records.current.Backend().(journal.UniqueState)
+		store, ok := tn.records.Current().Backend().(journal.UniqueState)
 		if !ok {
 			t.Fatal("SQL unique-key lookup not installed")
 		}
-		ids, err := store.StateUnique(ctx, id, typ, "number", string(platform.Raw([]string{key})), tn.records.current.Applied())
+		ids, err := store.StateUnique(ctx, id, typ, "number", string(platform.Raw([]string{key})), tn.records.Current().Applied())
 		if err != nil || !slices.Equal(ids, want) {
 			t.Fatalf("unique key %s: %v, want %v: %v", key, ids, want, err)
 		}
-		if uniqueIndexCount(tn.records.types[typ]) != 0 {
+		if uniqueIndexCount(tn.records.Type(typ)) != 0 {
 			t.Fatal("SQL tenant retained a complete Go unique-key table")
 		}
 	}
@@ -349,7 +347,7 @@ func TestPostgresNonRecordResultsAdvanceOnlyAfterApplication(t *testing.T) {
 	mode := "ok"
 	var lastKind string
 	live.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {
-		before := live.records.current.Applied()
+		before := live.records.Current().Applied()
 		if mode == "failed" {
 			return nil, errors.New("append unavailable")
 		}
@@ -357,7 +355,7 @@ func TestPostgresNonRecordResultsAdvanceOnlyAfterApplication(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		if live.records.current.Applied() != before {
+		if live.records.Current().Applied() != before {
 			t.Fatal("record read view advanced before result application")
 		}
 		var envelope struct{ Kind string }
@@ -365,7 +363,7 @@ func TestPostgresNonRecordResultsAdvanceOnlyAfterApplication(t *testing.T) {
 			t.Fatal(err)
 		}
 		lastKind = envelope.Kind
-		delta, err := acceptedStorageDelta(raw)
+		delta, err := runtimekernel.StorageDelta(raw)
 		if err != nil || len(delta.Records) != 0 {
 			t.Fatalf("test result unexpectedly changes record rows: %s %d %v", lastKind, len(delta.Records), err)
 		}
@@ -376,11 +374,11 @@ func TestPostgresNonRecordResultsAdvanceOnlyAfterApplication(t *testing.T) {
 	}
 	check := func(kind string, before int64) {
 		t.Helper()
-		if lastKind != kind || live.records.current.Applied() != before+1 || j.Position(id) != before+1 {
-			t.Fatalf("%s did not publish exactly its applied result position: kind=%s applied=%d journal=%d before=%d", kind, lastKind, live.records.current.Applied(), j.Position(id), before)
+		if lastKind != kind || live.records.Current().Applied() != before+1 || j.Position(id) != before+1 {
+			t.Fatalf("%s did not publish exactly its applied result position: kind=%s applied=%d journal=%d before=%d", kind, lastKind, live.records.Current().Applied(), j.Position(id), before)
 		}
-		store := live.records.current.Backend().(journal.UniqueState)
-		ids, err := store.StateUnique(ctx, id, "invariants.entry", "number", `["ORIGINAL"]`, live.records.current.Applied())
+		store := live.records.Current().Backend().(journal.UniqueState)
+		ids, err := store.StateUnique(ctx, id, "invariants.entry", "number", `["ORIGINAL"]`, live.records.Current().Applied())
 		if err != nil || !slices.Equal(ids, []string{"A"}) {
 			t.Fatal("nonrecord result invalidated original unique read view", ids, err)
 		}
@@ -418,17 +416,20 @@ func TestPostgresNonRecordResultsAdvanceOnlyAfterApplication(t *testing.T) {
 	if _, refusal := live.Input(memberOf(t, live, "writer"), "a-feed", []byte("failed"), txnAt); refusal == nil {
 		t.Fatal("failed append accepted input")
 	}
-	if live.records.current.Applied() != before || j.Position(id) != before || live.app("a").(*notes).texts["feed"] != "first" {
+	if live.records.Current().Applied() != before || j.Position(id) != before || live.app("a").(*notes).texts["feed"] != "first" {
 		t.Fatal("failed append published state or position")
 	}
 	mode = "unknown"
 	if _, refusal := live.Input(memberOf(t, live, "writer"), "a-feed", []byte("unknown"), txnAt); refusal == nil {
 		t.Fatal("unknown commit accepted input")
 	}
-	if !live.quarantined() || live.records.current.Applied() != before || j.Position(id) != before+1 || live.app("a").(*notes).texts["feed"] != "first" {
+	if !live.quarantined() || live.records.Current().Applied() != before || j.Position(id) != before+1 || live.app("a").(*notes).texts["feed"] != "first" {
 		t.Fatal("unapplied unknown commit published read view or did not stop tenant")
 	}
 }
 
-func uniqueIndexCount(et *entityType) int    { _, count := et.indexes.Counts(); return count }
-func referenceIndexCount(et *entityType) int { count, _ := et.indexes.Counts(); return count }
+func uniqueIndexCount(et *records.Type) int { _, count := et.DerivedSnapshot().Counts(); return count }
+func referenceIndexCount(et *records.Type) int {
+	count, _ := et.DerivedSnapshot().Counts()
+	return count
+}

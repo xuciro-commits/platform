@@ -964,3 +964,28 @@ func (f *Flows) NativeFlowAsset(manifest platform.Manifest, name string, version
 	}
 	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetFlow, Name: descriptor.Name}, ContractVersion: 1, SourceVersion: manifest.Version + ".native-flow-" + strconv.Itoa(version), Body: raw})
 }
+
+// Consumptions are derived from the same installed versions that execute.
+// Retained versions keep their protocol grants while their runs may resume.
+func (f *Flows) Consumptions(app string) []platform.Consumption {
+	protocols := map[string]bool{}
+	for _, versions := range f.defs {
+		for _, definition := range versions {
+			if definition.app != app {
+				continue
+			}
+			for _, step := range definition.Steps {
+				for _, action := range []*platform.Act{step.Act, step.Undo} {
+					if action != nil && action.Protocol != "" {
+						protocols[action.Protocol] = true
+					}
+				}
+			}
+		}
+	}
+	out := make([]platform.Consumption, 0, len(protocols))
+	for _, id := range slices.Sorted(maps.Keys(protocols)) {
+		out = append(out, platform.Consumption{Protocol: id, Optional: true})
+	}
+	return out
+}

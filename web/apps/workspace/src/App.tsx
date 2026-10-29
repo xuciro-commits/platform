@@ -73,7 +73,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const meRefetch = useRef(meQuery.refetch); meRefetch.current = meQuery.refetch;
   useEffect(() => client.subscribeRead("/v1/me", () => { void meRefetch.current(); }), [client]);
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
-  const selectedPackages = me ? availablePackages(me.apps.map((app) => app.id), me.profile.roles) : [];
+  const selectedPackages = me ? availablePackages(me.apps.map((app) => app.id), me.profile) : [];
   const packageScope = me ? JSON.stringify([identityScope, selectedPackages.map((p) => packages.indexOf(p))]) : undefined;
   // Bootstrap is a sequence of original reads, each with its own failure and
   // retry: the member's declarations, the discovery metadata, the packages.
@@ -311,7 +311,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           { id: "search", label: t("Search"), run: () => { location.hash = "#/search"; } },
           { id: "observations", label: t("Read observations"), group: t("Ontology"), run: () => { location.hash = "#/observations"; } },
           { id: "explorer", label: t("Object Explorer"), group: t("Ontology"), run: () => { location.hash = "#/explorer"; } },
-          ...(host.role("build") === "builder" ? [
+          ...(host.holds("build", "builder") ? [
             { id: "lineage", label: t("Lineage"), group: t("Ontology"), run: () => { location.hash = "#/lineage"; } },
             { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
             { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },

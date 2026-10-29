@@ -1,6 +1,6 @@
 {
   "packages": {
-    "capabilities/server": 182
+    "capabilities/server": 168
   },
   "duplicates": {
     "aggregate.go": [

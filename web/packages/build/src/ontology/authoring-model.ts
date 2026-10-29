@@ -45,7 +45,7 @@ export function authoringObject(record: AuthoringObject, installed?: EntityInfo)
 
 export function useAuthoringModel() {
   const host = useHost();
-  const builder = host.role("build") === "builder";
+  const builder = host.holds("build", "builder");
   const query = useRecordInventory<ObjectRecord & { archived?: boolean }>("build.object", 1000, builder);
   // A disabled query can still return cached builder data. Do not expose that
   // answer to another role, including consumers of the returned draft inventory.
@@ -72,7 +72,7 @@ export function useAuthoringModel() {
 /** Draft actions replace their object's installed actions for editing only.
  * All other blocks retain their original published source and version. */
 export function useAuthoringCapabilities<T extends Api.CapabilityDescriptor = Api.CapabilityDescriptor>() {
-  const builder = useHost().role("build") === "builder";
+  const builder = useHost().holds("build", "builder");
   const catalog = useReadQuery<T[]>("/v1/capabilities");
   const actions = useReadQuery<T[]>("/v1/build/drafts/actions", undefined, builder);
   const drafts = builder ? actions.data ?? [] : [];

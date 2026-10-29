@@ -135,7 +135,9 @@ func TestPackageBusinessRoleBecomesGrantableOnlyAfterDefinitionsActivate(t *test
 		if refused != nil {
 			t.Fatal(refused)
 		}
-		role := slices.IndexFunc(plan.Roles, func(role PackageRoleRequirement) bool { return role.App == "build" && role.Role == "accountant" })
+		role := slices.IndexFunc(plan.Roles, func(role packages.PackageRoleRequirement) bool {
+			return role.App == "build" && role.Role == "accountant"
+		})
 		if role < 0 || plan.Roles[role].Available != available || plan.Roles[role].Held != held {
 			t.Fatalf("incorrect preparation role state: %+v", plan.Roles)
 		}

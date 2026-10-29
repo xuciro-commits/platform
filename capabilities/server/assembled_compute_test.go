@@ -4,7 +4,7 @@ import "platformserver/studio/build"
 
 import (
 	"encoding/json"
-	"fmt"
+
 	"os"
 	"platformserver/engine/resources"
 
@@ -44,7 +44,10 @@ func newAssemblyOwner(id string) *assemblyOwner {
 	return a
 }
 func (a *assemblyOwner) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "source", Title: "Source", Version: "1", Actions: a.ledger.Catalog, Entities: []platform.Entity{a.entity()}, Queries: []platform.NamedQuery{{Name: "items", Title: "Items", Object: "source.item", Sort: []string{"id"}, Limit: 10}}}
+	action := platform.EntityActions(a.entity())[0]
+	action.Schema = "source.item.mark"
+	contract := platform.Protocol{Name: "assembly-results", Version: 1, Actions: []platform.Action{action}}
+	return platform.Manifest{ID: "source", Title: "Source", Version: "1", Actions: a.ledger.Catalog, Entities: []platform.Entity{a.entity()}, Provides: []platform.Provision{{Protocol: contract, Actions: map[string]string{"source.item.mark": "source.item.mark"}}}, Queries: []platform.NamedQuery{{Name: "items", Title: "Items", Object: "source.item", Sort: []string{"id"}, Limit: 10}}}
 }
 func (a *assemblyOwner) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 func (a *assemblyOwner) AcceptedLedger() *platform.Ledger         { return a.ledger }
@@ -78,15 +81,11 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 	member, _ := tenant.Member("builder")
 	var journal []Entry
 	tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { journal = append(journal, e); return e.Body, nil }
-	key := 0
 	submit := func(owner, typ, target, schema string, payload any) {
-		t.Helper()
-		key++
-		raw, _ := json.Marshal(payload)
-		if _, refusal := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: owner, IdempotencyKey: fmt.Sprintf("input-%d", key), Target: &pb.EntityRef{Type: typ, Id: target}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, at); refusal != nil {
-			t.Fatalf("%s: %s", schema, refusal.Message)
-		}
+		receipt := decide(t, tenant, "builder", owner, schema, typ, target, payload, at)
+		at = receipt.GetRecordedTime().AsTime()
 	}
+
 	input := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"value": {Type: "integer"}}, Required: []string{"value"}}
 	for _, language := range []string{"go", "tinygo"} {
 		output := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"result": {Type: "integer"}, "accept": {Type: "boolean"}}, Required: []string{"result", "accept"}}
@@ -101,7 +100,7 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 		}
 		code, _ := platform.Get[build.Code](tenant.automation(build.ID, false), language)
 		if code.State != "compiled" {
-			t.Fatalf("%s build: %s (%s)", language, code.State, code.Diagnostics)
+			t.Fatalf("%s build: %s (%s), effects=%+v, fault=%v", language, code.State, code.Diagnostics, tenant.Effects(time.Now().UTC()), tenant.fault.Load())
 		}
 		preview, err := tenant.PreviewRelease(member, platform.AssetCompute, language)
 		if err != nil {
@@ -126,7 +125,7 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 		{Name: "go", Kind: "compute", Operation: &build.OperationRef{App: build.ID, Name: "go", Version: 1}, Inputs: map[string]platform.Binding{"value": {Source: "item", Path: []string{"quantity"}}}, Next: "tinygo"},
 		{Name: "tinygo", Kind: "compute", Operation: &build.OperationRef{App: build.ID, Name: "tinygo", Version: 1}, Inputs: map[string]platform.Binding{"value": *from("go", "result")}, Next: "branch"},
 		{Name: "branch", Kind: "branch", Condition: &platform.Predicate{Op: "eq", Left: from("tinygo", "accept"), Right: literal("true")}, Cases: map[string]string{"true": "mark", "false": "skip"}},
-		{Name: "mark", Kind: "action", Act: "source.item.mark", Target: &platform.Binding{Source: "item", Path: []string{"id"}}, Inputs: map[string]platform.Binding{"result": *from("tinygo", "result")}, Next: "review"},
+		{Name: "mark", Kind: "action", Act: "source.item.mark", Protocol: "assembly-results/1", App: "source", Target: &platform.Binding{Source: "item", Path: []string{"id"}}, Inputs: map[string]platform.Binding{"result": *from("tinygo", "result")}, Next: "review"},
 		{Name: "review", Kind: "ask", Ask: build.Builder, Answers: []string{"continue"}, Next: "itemdone"},
 		{Name: "skip", Kind: "transform", Value: literal(`"empty quantity"`), Next: "itemdone"},
 		{Name: "itemdone", Kind: "end", Value: from("tinygo")},
@@ -169,7 +168,7 @@ func TestAssembledQueryWasmLoopActionAndHumanWork(t *testing.T) {
 	empty, _ := platform.Get[assemblyRecord](tenant.automation("source", false), "empty")
 	var result struct{ Count int }
 	if run.State != "done" || json.Unmarshal(run.Outputs["output"], &result) != nil || result.Count != 2 || !answered || positive.State != "done" || positive.Result != 7 || positive.Revision != 1 || empty.State != "open" || empty.Revision != 0 {
-		t.Fatalf("route not complete: state=%s output=%s positive=%+v empty=%+v answered=%v", run.State, run.Outputs["output"], positive, empty, answered)
+		t.Fatalf("route not complete: state=%s output=%s positive=%+v empty=%+v answered=%v trace=%+v tokens=%+v", run.State, run.Outputs["output"], positive, empty, answered, run.Trace, run.Tokens)
 	}
 	if len(run.Sources) == 0 || len(journal) < 8 {
 		t.Fatal("route lost source provenance or bypassed accepted results")

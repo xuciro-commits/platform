@@ -223,11 +223,11 @@ func (t *Tenant) unguarded(object, marking string) []string {
 	if !build.Guarded(marking) {
 		return nil
 	}
-	t.records.mu.Lock()
-	et := t.records.types[object]
-	t.records.mu.Unlock()
+	t.records.Lock()
+	et := t.records.Type(object)
+	t.records.Unlock()
 	if et == nil {
 		return nil
 	}
-	return build.UnguardedFields(et.info, nil)
+	return build.UnguardedFields(et.Info(), nil)
 }

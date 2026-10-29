@@ -34,9 +34,9 @@ import { ApplicationLifecycleControls } from "./application-lifecycle";
 
 /** Every project the builder may open, with what each holds. */
 export function ProjectsList() {
-  const { role, me, definitions } = useHost();
+  const { me, definitions , holds} = useHost();
   const { open } = useWorkspace();
-  const projects = useRecordInventory<Project>("build.app", 1000, role("build") === "builder");
+  const projects = useRecordInventory<Project>("build.app", 1000, holds("build", "builder"));
   const installedApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   // A builder role held only through projects (#141): the Studio opens, edits stay within the assets they name.
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
@@ -47,7 +47,7 @@ export function ProjectsList() {
   // package review, precheck and draft generation. Page-layout templates stay
   // in the application's Interface area. No second wizard and no seeded app.
   const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));
-  const builder = role("build") === "builder";
+  const builder = holds("build", "builder");
   const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
     .filter(item => `${item.title} ${item.ref.app} ${item.ref.name}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="grid min-w-0 gap-4">
@@ -79,10 +79,10 @@ const editorCreatedKinds = new Set(["table", "alert", "function", "agent", "eval
 
 /** Dedicated editors own their creation; only remaining forms keep a dialog session. */
 function NewResourceMenu({ application, onCreated, children, disabled, area }: { application: string; area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
-  const { role, catalog } = useHost();
+  const { catalog , holds} = useHost();
   const { open } = useWorkspace();
   const creators = Object.fromEntries(resourceKinds.filter(kind => !editorCreatedKinds.has(kind.kind)).map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
-  if (role("build") !== "builder") return null;
+  if (!holds("build", "builder")) return null;
   const sections = [...studioAreas.filter(section => section.id === area), ...studioAreas.filter(section => section.id !== area)];
   const offered = new Set<string>();
   const commands: ContextCommand[] = sections.flatMap((section, index) => resourceKinds.filter(kind => (section.kinds as readonly string[]).includes(kind.ref ?? kind.kind) && !offered.has(kind.kind) && catalog.some(action => action.target === kind.type && action.new))
@@ -104,11 +104,11 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
 
 function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan, initialTemplate }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string; initialTemplate?: string }) {
   const activeArea = studioArea(area, initialSelected?.split("/")[1]);
-  const { client, decide, role, definitions, action } = useHost();
+  const { client, decide, definitions, action , holds} = useHost();
   const { open, transfer, notify } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
-  const builder = role("build") === "builder";
+  const builder = holds("build", "builder");
   const savedChanges = useSavedDraftChanges(id, undefined, builder);
 
   const [filter, setFilter] = useState("");

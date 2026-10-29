@@ -1,4 +1,4 @@
-package platformserver
+package releases
 
 import (
 	"bytes"

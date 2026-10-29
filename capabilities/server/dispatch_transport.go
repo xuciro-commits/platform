@@ -102,7 +102,7 @@ func (h hostView) ResolveDispatchDelivery(c platform.Caller, run platform.Dispat
 	}
 	view := h.decision.controlHost()
 	for _, x := range view.outbound {
-		if !owned(x.Effect) || settled(x.State) {
+		if !owned(x.Effect) || platform.EffectSettled(x.State) {
 			continue
 		}
 		x.State, x.Error, x.Last = "discarded", run.Reason, at
@@ -134,7 +134,7 @@ func (h hostView) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ker
 		if json.Unmarshal(run.Source, &source) != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The original dispatch status source is unavailable")
 		}
-		publisher, found := h.Member(source.Puller)
+		publisher, found := h.t.sourcePublisher(source)
 		if !found || !publisher.Active() || !h.Readable(publisher, build.SourceType+"/"+read.Source, at) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Dispatch status source access is unavailable")
 		}

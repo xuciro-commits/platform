@@ -45,7 +45,7 @@ func checkRunApplicationBindings(record any) error {
 	case build.FunctionRun:
 		bindings = run.Applications
 	}
-	return appowner.CheckBindings(bindings)
+	return platform.CheckApplicationBindings(bindings)
 }
 func (h hostView) ApplicationBindings(resource platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 	return h.t.bindApplications(resource, release, dependencies)
@@ -66,7 +66,7 @@ func (t *Tenant) ApplicationRecordDiagnostic(m platform.Member, ref platform.Ass
 		return out, refusal
 	}
 	t.mu.Lock()
-	owner := t.records.types[typ].info.App
+	owner := t.records.Type(typ).Info().App
 	ledger := t.app(owner).AcceptedLedger()
 	receipts := ledger.RecordsFor(t.ID)
 	visible := map[platform.AssetRef]bool{}

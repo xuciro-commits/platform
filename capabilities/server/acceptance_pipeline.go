@@ -14,9 +14,9 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	appowner "platformserver/engine/applications"
+
 	"platformserver/internal/systemscope"
-	"platformserver/journal"
+
 	"platformserver/kernel/acceptedformat"
 	controlowner "platformserver/kernel/control"
 	"platformserver/platform"
@@ -26,52 +26,6 @@ import (
 	"strings"
 	"time"
 )
-
-// An agent answer includes the tool decision, resulting run/evaluation record
-// and measured spend in one accepted result; recovery never invokes the tool.
-type acceptedAgent struct {
-	Version     int                      `json:"version"`
-	Kind        string                   `json:"kind"`
-	Tenant      string                   `json:"tenant"`
-	App         string                   `json:"app"`
-	Member      string                   `json:"member"`
-	Key         string                   `json:"key"`
-	At          time.Time                `json:"at"`
-	RequestHash string                   `json:"requestHash"`
-	Digest      string                   `json:"digest"`
-	Step        platform.AgentResultStep `json:"step"`
-	UsageBefore string                   `json:"usageBefore,omitempty"`
-	Changes     json.RawMessage          `json:"changes"`
-}
-
-func digestAgent(r acceptedAgent) (string, error) { r.Digest = ""; return platform.CanonicalDigest(r) }
-func agentHash(r acceptedAgent) (string, error) {
-	return platform.CanonicalDigest([]any{r.Tenant, r.Member, r.Step, r.UsageBefore})
-}
-func decodeAcceptedAgent(raw []byte) (acceptedAgent, error) {
-	var r acceptedAgent
-	if len(raw) == 0 || len(raw) > platform.AcceptedResultMaxBytes {
-		return r, fmt.Errorf("agent result is empty or too large")
-	}
-	if err := platform.DecodeJSON(raw, &r, "agent result"); err != nil {
-		return r, err
-	}
-	hash, err := agentHash(r)
-	digest, digestErr := digestAgent(r)
-	batch, receipt, batchErr := acceptedformat.DecodeBatch(r.Changes)
-	if err != nil || digestErr != nil || batchErr != nil || r.Version != 1 || r.Kind != "agent-result" || r.Tenant == "" || r.App != platform.AgentApp || r.Member == "" || r.At.IsZero() || r.Step.Run == "" || r.RequestHash != hash || r.Digest != digest ||
-		batch.Tenant != r.Tenant || batch.App != platform.AgentApp || !batch.At.Equal(r.At) || receipt.GetSubmission().GetPrincipalId() != r.Member || r.Key != "agent:"+receipt.GetSubmission().GetIdempotencyKey() {
-		return r, fmt.Errorf("agent result has inconsistent identity or changes")
-	}
-	if r.Step.Evaluation == nil && r.Step.Usage.Model != "" {
-		if !acceptedformat.ValidUsage(r.Step.Usage) || r.UsageBefore == "" || r.Step.Usage.Member != r.Member {
-			return r, fmt.Errorf("agent result has invalid usage")
-		}
-	} else if r.UsageBefore != "" {
-		return r, fmt.Errorf("agent result has unexpected usage")
-	}
-	return r, nil
-}
 
 func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 	defer func() {
@@ -95,7 +49,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 		member = platform.Member{ID: "app:" + platform.AgentApp, Tenant: t.ID}
 	}
 	c := platform.NewCaller(draft, member, platform.AgentApp, false, true)
-	r := acceptedAgent{Version: 1, Kind: "agent-result", Tenant: t.ID, App: platform.AgentApp, Member: member.ID, At: at.UTC(), Step: b}
+	r := acceptedformat.RuntimeAgent{Version: 1, Kind: "agent-result", Tenant: t.ID, App: platform.AgentApp, Member: member.ID, At: at.UTC(), Step: b}
 	var err error
 	if b.Evaluation == nil && b.Usage.Model != "" {
 		r.UsageBefore, err = t.usagePredecessor()
@@ -125,16 +79,16 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 		return
 	}
 	r.Key = "agent:" + last.Record.GetSubmission().GetIdempotencyKey()
-	r.RequestHash, err = agentHash(r)
+	r.RequestHash, err = acceptedformat.AgentRequestHash(r)
 	if err == nil {
-		r.Digest, err = digestAgent(r)
+		r.Digest, err = acceptedformat.DigestAgent(r)
 	}
 	var raw []byte
 	if err == nil {
 		raw, err = json.Marshal(r)
 	}
 	if err == nil {
-		_, err = decodeAcceptedAgent(raw)
+		_, err = acceptedformat.DecodeAgent(raw)
 	}
 	if err != nil {
 		t.quarantine(err)
@@ -145,7 +99,7 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 	if err != nil {
 		return
 	}
-	saved, err := decodeAcceptedAgent(committed)
+	saved, err := acceptedformat.DecodeAgent(committed)
 	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
 		t.quarantine(fmt.Errorf("committed agent answer differs: %v", err))
 		return
@@ -159,8 +113,8 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 	t.changedOwner(platform.AgentApp)
 }
 
-func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedAgent, error) {
-	r, err := decodeAcceptedAgent(raw)
+func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, error) {
+	r, err := acceptedformat.DecodeAgent(raw)
 	if err != nil {
 		return r, err
 	}
@@ -279,7 +233,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		t.quarantine(fmt.Errorf("external answer for an unknown or different effect %s", id))
 		return
 	}
-	if settled(before.State) && before.State != "discarded" {
+	if platform.EffectSettled(before.State) && before.State != "discarded" {
 		return // A late transport answer cannot replace an accepted human/source resolution.
 	}
 	if usage != nil {
@@ -344,7 +298,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			Body: after.Error + ". Retry it in Settings → Automation once the cause is fixed.",
 			Key:  "failed:" + after.ID}, at, platform.Recipient{AppRole: controlowner.Admin})
 	}
-	if (settled(after.State) || after.State == "unknown") && before.State != "discarded" {
+	if (platform.EffectSettled(after.State) || after.State == "unknown") && before.State != "discarded" {
 		if err := t.stageEffectAnswer(draft, after.Effect, out, usage, at); err != nil {
 			if t.quarantined() {
 				return
@@ -407,11 +361,11 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			// A direct observation and a child decision may write disjoint
 			// records in one callback. The child batch owns only its events;
 			// direct rows retain their own preimages in the outer result.
-			writes := draft.records.writes
-			draft.records.writes = eventRows
+			writes := draft.records.WriteSnapshot()
+			draft.records.UseWrites(eventRows)
 			last := draft.events[len(draft.events)-1]
 			result.Changes, err = draft.batchResult(last.App, last.Record.GetSubmission(), last.Record, at)
-			draft.records.writes = writes
+			draft.records.UseWrites(writes)
 		} else if err == nil {
 			var plan acceptedformat.ChangePlan
 			plan, err = draft.savedChangePlan()
@@ -549,227 +503,85 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	return nil
 }
 
-// The host console owns lifecycle, bounded support authority and migration
-// manifests. These images contain no ordinary tenant records or execution state.
-type hostControlImage struct {
-	Lifecycle        string                        `json:"lifecycle"`
-	Support          []SupportGrant                `json:"support"`
-	Migrations       []MigrationManifest           `json:"migrations"`
-	Requests         map[string]hostControlReceipt `json:"requests"`
-	RuntimeSelection map[string]string             `json:"runtimeSelection,omitempty"`
-	DisabledOwners   []string                      `json:"disabledOwners,omitempty"`
-}
-type hostControlReceipt struct {
-	RequestHash string       `json:"requestHash"`
-	Answer      SupportGrant `json:"answer,omitempty"`
-}
-type acceptedHostControl struct {
-	Authorizations []acceptedformat.AuthorizationEvidence `json:"authorizations,omitempty"`
-	Version        int                                    `json:"version"`
-	Kind           string                                 `json:"kind"`
-	Tenant         string                                 `json:"tenant"`
-	App            string                                 `json:"app"`
-	Member         string                                 `json:"member"`
-	Key            string                                 `json:"key"`
-	At             time.Time                              `json:"at"`
-	Action         string                                 `json:"action"`
-	Request        json.RawMessage                        `json:"request"`
-	RequestHash    string                                 `json:"requestHash"`
-	Digest         string                                 `json:"digest"`
-	Before         string                                 `json:"before"`
-	AuditBefore    string                                 `json:"auditBefore"`
-	Image          hostControlImage                       `json:"image"`
-	Audit          platform.AuditEntry                    `json:"audit"`
-	Answer         SupportGrant                           `json:"answer,omitempty"`
-}
-
-func (h *hostControl) image() (hostControlImage, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	// Encode the complete owned shape to isolate nested migration row diagnostics.
-	raw, err := json.Marshal(hostControlImage{Lifecycle: h.state(), Support: h.support, Migrations: h.migrations, Requests: h.requests, RuntimeSelection: h.runtimeSelection, DisabledOwners: h.disabledOwners})
-	var image hostControlImage
-	if err == nil {
-		err = json.Unmarshal(raw, &image)
-	}
-	return image, err
-}
-func validateHostImage(tenant string, image hostControlImage) error {
-	owners := map[string]bool{}
-	for _, id := range image.DisabledOwners {
-		if id == "" || len(id) > 128 || owners[id] {
-			return fmt.Errorf("invalid inactive owner")
-		}
-		owners[id] = true
-	}
-	if image.RuntimeSelection != nil {
-		if len(image.RuntimeSelection) != 3 {
-			return fmt.Errorf("invalid runtime selection")
-		}
-		for _, id := range []string{"platform.rules", "platform.authorization", "platform.kernel"} {
-			if _, found := image.RuntimeSelection[id]; !found {
-				return fmt.Errorf("missing runtime contract %s", id)
-			}
-		}
-	}
-	if !slices.Contains([]string{"", "open", "suspend", "decommission", "suspended", "decommissioned"}, image.Lifecycle) {
-		return fmt.Errorf("invalid host lifecycle")
-	}
-	ids := map[string]bool{}
-	for _, grant := range image.Support {
-		if grant.ID == "" || ids[grant.ID] || grant.Tenant != tenant || grant.Member == "" || grant.Reason == "" || grant.Opened == "" || grant.Expires.IsZero() || grant.Uses < 0 {
-			return fmt.Errorf("invalid host support grant")
-		}
-		ids[grant.ID] = true
-	}
-	for _, m := range image.Migrations {
-		if m.At.IsZero() || m.Key == "" || m.From == "" || m.To != tenant || m.From == m.To || m.Member == "" {
-			return fmt.Errorf("invalid host migration manifest")
-		}
-		for _, part := range m.Types {
-			if part.Type == "" || part.Rows < 0 || part.Written < 0 || part.Written > part.Rows {
-				return fmt.Errorf("invalid host migration counts")
-			}
-		}
-	}
-	for key, receipt := range image.Requests {
-		tag, _, found := strings.Cut(strings.TrimPrefix(key, "host:"), ":")
-		if !strings.HasPrefix(key, "host:") || !found || !slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration", "composition"}, tag) || len(receipt.RequestHash) != 64 || !strings.HasSuffix(key, ":"+receipt.RequestHash) {
-			return fmt.Errorf("invalid host receipt")
-		}
-		if tag == "support.open" || tag == "support.use" {
-			i := slices.IndexFunc(image.Support, func(g SupportGrant) bool { return g.ID == receipt.Answer.ID })
-			if i < 0 {
-				return fmt.Errorf("host receipt names no support grant")
-			}
-			current := image.Support[i]
-			if receipt.Answer.Uses < 0 || receipt.Answer.Uses > current.Uses {
-				return fmt.Errorf("host receipt has an invalid support count")
-			}
-			current.Uses = receipt.Answer.Uses
-			if current != receipt.Answer {
-				return fmt.Errorf("host receipt rewrites its support authority")
-			}
-		} else if receipt.Answer != (SupportGrant{}) {
-			return fmt.Errorf("host receipt has an unrelated answer")
-		}
-	}
-	return nil
-}
-func hostRequestHash(r acceptedHostControl) (string, error) {
-	return platform.CanonicalDigest([]any{r.Tenant, r.Member, r.Action, r.Request, r.At})
-}
-func hostResultDigest(r acceptedHostControl) (string, error) {
-	r.Digest = ""
-	return platform.CanonicalDigest(r)
-}
-func decodeAcceptedHostControl(raw []byte) (acceptedHostControl, error) {
-	var r acceptedHostControl
-	if len(raw) == 0 || len(raw) > platform.AcceptedResultMaxBytes {
-		return r, fmt.Errorf("host result is empty or too large")
-	}
-	if err := platform.DecodeJSON(raw, &r, "host result"); err != nil {
-		return r, err
-	}
-	if err := acceptedformat.ValidateAuthorizationEvidence(r.Tenant, r.Authorizations); err != nil {
-		return r, err
-	}
-	hash, hashErr := hostRequestHash(r)
-	digest, digestErr := hostResultDigest(r)
-	if hashErr != nil || digestErr != nil || r.Version != 1 || r.Kind != "host-result" || r.Tenant == "" || r.App != controlowner.PlatformApp || r.Member == "" || r.At.IsZero() ||
-		!slices.Contains([]string{"lifecycle", "support.open", "support.use", "migration", "composition"}, r.Action) || r.Key != "host:"+r.Action+":"+hash || r.RequestHash != hash || r.Digest != digest || r.Before == "" || r.AuditBefore == "" ||
-		r.Audit.Member != r.Member || r.Audit.App != controlowner.PlatformApp || !r.Audit.At.Equal(r.At) || r.Audit.Action == "" {
-		return r, fmt.Errorf("host result identity differs")
-	}
-	if err := validateHostImage(r.Tenant, r.Image); err != nil {
-		return r, err
-	}
-	receipt, ok := r.Image.Requests[r.Key]
-	if !ok || receipt.RequestHash != hash || receipt.Answer != r.Answer {
-		return r, fmt.Errorf("host result has no matching receipt")
-	}
-	return r, nil
-}
-
 // acceptHostControl holds Tenant.mu from private image capture through append
 // and application. The accepted clock is part of identity because these APIs
 // predate caller supplied keys; repeating that same request returns its receipt.
-func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit platform.AuditEntry, decide func(*hostControlImage) (SupportGrant, error), evidence ...acceptedformat.AuthorizationEvidence) (SupportGrant, error) {
-	r := acceptedHostControl{Version: 1, Kind: "host-result", Tenant: t.ID, App: controlowner.PlatformApp, Member: member, Action: action, At: now.UTC(), Request: platform.Raw(request)}
+func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit platform.AuditEntry, decide func(*platform.HostControlImage) (platform.SupportGrant, error), evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
+	r := acceptedformat.HostControl{Version: 1, Kind: "host-result", Tenant: t.ID, App: controlowner.PlatformApp, Member: member, Action: action, At: now.UTC(), Request: platform.Raw(request)}
 	r.Authorizations = slices.Clone(evidence)
 	var err error
-	r.RequestHash, err = hostRequestHash(r)
+	r.RequestHash, err = acceptedformat.HostRequestHash(r)
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
 	r.Key = "host:" + action + ":" + r.RequestHash
-	image, err := t.console.image()
+	image, err := t.console.Image()
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
 	if prior, ok := image.Requests[r.Key]; ok {
 		if prior.RequestHash != r.RequestHash {
-			return SupportGrant{}, fmt.Errorf("host request key changed")
+			return platform.SupportGrant{}, fmt.Errorf("host request key changed")
 		}
 		return prior.Answer, nil
 	}
 	r.Before, err = platform.CanonicalDigest(image)
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
 	r.AuditBefore, err = platform.CanonicalDigest(t.audit.All())
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
 	r.Answer, err = decide(&image)
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
 	if image.Requests == nil {
-		image.Requests = map[string]hostControlReceipt{}
+		image.Requests = map[string]platform.HostControlReceipt{}
 	}
-	image.Requests[r.Key] = hostControlReceipt{r.RequestHash, r.Answer}
+	image.Requests[r.Key] = platform.HostControlReceipt{RequestHash: r.RequestHash, Answer: r.Answer}
 	r.Image = image
 	audit.At, audit.Member, audit.App = r.At, member, controlowner.PlatformApp
 	r.Audit = audit
-	r.Digest, err = hostResultDigest(r)
+	r.Digest, err = acceptedformat.HostResultDigest(r)
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
 	raw, err := json.Marshal(r)
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
-	if _, err = decodeAcceptedHostControl(raw); err != nil {
-		return SupportGrant{}, err
+	if _, err = acceptedformat.DecodeHostControl(raw); err != nil {
+		return platform.SupportGrant{}, err
 	}
 	principal, _ := json.Marshal(platform.Member{ID: member, Tenant: t.ID})
 	committed, err := t.acceptResult(Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: r.At}, r.Key, r.RequestHash)
 	if err != nil {
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
-	saved, err := decodeAcceptedHostControl(committed)
+	saved, err := acceptedformat.DecodeHostControl(committed)
 	if err != nil || saved.Key != r.Key || saved.RequestHash != r.RequestHash {
 		t.quarantine(fmt.Errorf("committed host result differs: %v", err))
-		return SupportGrant{}, fmt.Errorf("committed host result differs: %v", err)
+		return platform.SupportGrant{}, fmt.Errorf("committed host result differs: %v", err)
 	}
 	if _, err = t.applyAcceptedHostControl(committed); err != nil {
 		t.quarantine(err)
-		return SupportGrant{}, err
+		return platform.SupportGrant{}, err
 	}
 	t.acceptedResultApplied()
 	t.changed()
 	return saved.Answer, nil
 }
-func (t *Tenant) applyAcceptedHostControl(raw []byte) (acceptedHostControl, error) {
-	r, err := decodeAcceptedHostControl(raw)
+func (t *Tenant) applyAcceptedHostControl(raw []byte) (acceptedformat.HostControl, error) {
+	r, err := acceptedformat.DecodeHostControl(raw)
 	if err != nil {
 		return r, err
 	}
 	if r.Tenant != t.ID {
 		return r, fmt.Errorf("host result belongs to another tenant")
 	}
-	current, err := t.console.image()
+	current, err := t.console.Image()
 	if err != nil {
 		return r, err
 	}
@@ -787,28 +599,23 @@ func (t *Tenant) applyAcceptedHostControl(raw []byte) (acceptedHostControl, erro
 	if err := validateHostTransition(current, r); err != nil {
 		return r, err
 	}
-	t.console.mu.Lock()
-	t.console.setState(r.Image.Lifecycle)
-	t.console.support, t.console.migrations, t.console.requests = r.Image.Support, r.Image.Migrations, maps.Clone(r.Image.Requests)
-	t.console.runtimeSelection = maps.Clone(r.Image.RuntimeSelection)
-	t.console.disabledOwners = slices.Clone(r.Image.DisabledOwners)
-	t.console.mu.Unlock()
+	t.console.Restore(r.Image)
 	t.audit.Remember(r.Audit)
 	return r, nil
 }
 
 // A saved image may only perform the one requested host-owned transition. This
 // checks frozen bytes and predecessors; it does not rerun current authorization.
-func validateHostTransition(current hostControlImage, r acceptedHostControl) error {
+func validateHostTransition(current platform.HostControlImage, r acceptedformat.HostControl) error {
 	raw, err := json.Marshal(current)
-	var expected hostControlImage
+	var expected platform.HostControlImage
 	if err == nil {
 		err = json.Unmarshal(raw, &expected)
 	}
 	if err != nil {
 		return err
 	}
-	var answer SupportGrant
+	var answer platform.SupportGrant
 	audit := platform.AuditEntry{At: r.At, Member: r.Member, App: controlowner.PlatformApp}
 	switch r.Action {
 	case "composition":
@@ -858,7 +665,7 @@ func validateHostTransition(current hostControlImage, r acceptedHostControl) err
 		if err := decodeControl(r.Request, &body); err != nil {
 			return err
 		}
-		i := slices.IndexFunc(expected.Support, func(g SupportGrant) bool { return g.ID == body.ID })
+		i := slices.IndexFunc(expected.Support, func(g platform.SupportGrant) bool { return g.ID == body.ID })
 		if i < 0 || !expected.Support[i].Expires.After(r.At) || !strings.HasPrefix(r.Member, "host:") {
 			return fmt.Errorf("host support use predecessor differs")
 		}
@@ -866,17 +673,17 @@ func validateHostTransition(current hostControlImage, r acceptedHostControl) err
 		answer = expected.Support[i]
 		audit.Action, audit.Target = "host.support.use", body.ID
 	case "migration":
-		var body MigrationResult
+		var body platform.MigrationResult
 		if err := decodeControl(r.Request, &body); err != nil {
 			return err
 		}
-		expected.Migrations = append(expected.Migrations, MigrationManifest{At: r.At, From: body.From, To: body.To, Key: body.Key, Member: r.Member, Types: body.Types})
+		expected.Migrations = append(expected.Migrations, platform.MigrationManifest{At: r.At, From: body.From, To: body.To, Key: body.Key, Member: r.Member, Types: body.Types})
 		audit.Action, audit.Target = "host.migration", body.Key
 	}
 	if expected.Requests == nil {
-		expected.Requests = map[string]hostControlReceipt{}
+		expected.Requests = map[string]platform.HostControlReceipt{}
 	}
-	expected.Requests[r.Key] = hostControlReceipt{r.RequestHash, answer}
+	expected.Requests[r.Key] = platform.HostControlReceipt{RequestHash: r.RequestHash, Answer: answer}
 	want, err := platform.CanonicalDigest(expected)
 	got, gotErr := platform.CanonicalDigest(r.Image)
 	wantAudit, auditErr := platform.CanonicalDigest(audit)
@@ -1163,7 +970,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		if err != nil {
 			return saved, err
 		}
-		view.records.current.SelectRelease(saved.CandidateID)
+		view.records.Current().SelectRelease(saved.CandidateID)
 		draft, err := view.stageReleaseInstallationLocked(saved.Installations, false)
 		if err != nil {
 			return saved, err
@@ -1186,7 +993,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 			if _, err := t.promoteAcceptedBatch(bootstrap); err != nil {
 				return saved, err
 			}
-		} else if err := t.records.promoteRecords(draft.records); err != nil {
+		} else if err := t.records.PromoteRecords(draft.records); err != nil {
 			return saved, err
 		}
 		t.setDefinitions(draft.definitions)
@@ -1216,7 +1023,7 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 		return saved, err
 	}
 	if saved.Active {
-		t.records.current.SelectRelease(saved.CandidateID)
+		t.records.Current().SelectRelease(saved.CandidateID)
 	}
 	t.releases.RememberRequest(saved.Key, saved.RequestHash)
 	if saved.Version >= 3 {
@@ -1690,36 +1497,6 @@ func (t *Tenant) applyAcceptedUsage(raw []byte) (acceptedformat.Usage, error) {
 	return r, nil
 }
 
-// A job or delivery is a top-level input in its own right. Its immutable
-// result includes the K9 generation, scheduling outcome, business changes and
-// notices. No runner/listener executes when this result is recovered.
-type acceptedWork struct {
-	Unique         []journal.StateUnique                  `json:"unique,omitempty"`
-	Authorizations []acceptedformat.AuthorizationEvidence `json:"authorizations,omitempty"`
-	Version        int                                    `json:"version"`
-	Kind           string                                 `json:"kind"`
-	Tenant         string                                 `json:"tenant"`
-	App            string                                 `json:"app"`
-	Key            string                                 `json:"key"`
-	At             time.Time                              `json:"at"`
-	RequestHash    string                                 `json:"requestHash"`
-	Digest         string                                 `json:"digest"`
-	Input          automation.TaskState                   `json:"input"`
-	PriorWork      json.RawMessage                        `json:"priorWork,omitempty"`
-	Work           json.RawMessage                        `json:"work"`
-	Outcome        string                                 `json:"outcome"`
-	After          automation.Task                        `json:"after"`
-	Changes        json.RawMessage                        `json:"changes,omitempty"`
-	Notices        *acceptedformat.Notices                `json:"notices,omitempty"`
-	Intents        []platform.Effect                      `json:"intents,omitempty"`
-	States         []acceptedformat.State                 `json:"states,omitempty"`
-	Control        *acceptedformat.Control                `json:"control,omitempty"`
-}
-
-func workInputHash(input automation.TaskState, prior json.RawMessage) (string, error) {
-	return platform.CanonicalDigest([]any{input, prior})
-}
-
 func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome string) {
 	if task.Event != nil {
 		end := t.begin("deliver "+task.Event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.Event.Span,
@@ -1738,7 +1515,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
-	result := acceptedWork{Version: 3, Kind: "work-result", Tenant: t.ID, App: task.App,
+	result := acceptedformat.Work{Version: 3, Kind: "work-result", Tenant: t.ID, App: task.App,
 		At: now.UTC(), Input: input, Outcome: "ok"}
 	works := t.forkWorkState()
 	if prior, err := works.Get(task.ID); err == nil {
@@ -1749,7 +1526,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		return refusal.Error()
 	}
 	result.Key = fmt.Sprintf("work:%s:%d", task.ID, generation)
-	result.RequestHash, err = workInputHash(input, result.PriorWork)
+	result.RequestHash, err = acceptedformat.WorkInputHash(input, result.PriorWork)
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
@@ -1773,7 +1550,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	}
 	finished, _ := works.Get(task.ID)
 	result.Work, _ = protojson.Marshal(finished)
-	result.After = *task
+	result.After = task.ScheduledTask
 	result.After.Attempts, result.After.Last, result.After.Error = int(generation), now, ""
 	if task.Kind == "job" {
 		result.After.Due = now.Add(task.Job.Every)
@@ -1804,7 +1581,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		if err != nil {
 			return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 		}
-	} else if len(draft.records.writes) > 0 || len(draft.deliveries) > 0 || draft.failure != nil ||
+	} else if draft.records.WriteCount() > 0 || len(draft.deliveries) > 0 || draft.failure != nil ||
 		len(draft.observations) > 0 || len(draft.allocated) > 0 || len(draft.logs) > 0 || len(draft.operationCancels) > 0 || len(draft.requests) > 0 {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	} else {
@@ -1830,7 +1607,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 		}
 		result.After.Applications = bindings
 	}
-	result.Digest, err = digestAcceptedWork(result)
+	result.Digest, err = acceptedformat.DigestWork(result)
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
@@ -1838,7 +1615,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
-	if _, err := decodeAcceptedWork(raw); err != nil {
+	if _, err := acceptedformat.DecodeWork(raw); err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
 	if _, err := t.prepareAcceptedChanges(result.ChangePlan()); err != nil {
@@ -1850,7 +1627,7 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	if err != nil {
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
 	}
-	saved, err := decodeAcceptedWork(committed)
+	saved, err := acceptedformat.DecodeWork(committed)
 	if err != nil || saved.Tenant != t.ID || saved.App != task.App || saved.Key != result.Key || saved.RequestHash != result.RequestHash {
 		t.quarantine(fmt.Errorf("committed work differs from input: %v", err))
 		return pb.ErrorCode_ERROR_CODE_CONFLICT.String()
@@ -1919,82 +1696,8 @@ func decideWork(t *Tenant, d *stagedDecision, c platform.Caller, task *automatio
 	return refusal
 }
 
-func digestAcceptedWork(result acceptedWork) (string, error) {
-	result.Digest = ""
-	return platform.CanonicalDigest(result)
-}
-
-func decodeAcceptedWork(raw []byte) (acceptedWork, error) {
-	var result acceptedWork
-	if len(raw) == 0 || len(raw) > platform.AcceptedResultMaxBytes {
-		return result, fmt.Errorf("work result is empty or too large")
-	}
-	if err := platform.DecodeJSON(raw, &result, "work result"); err != nil {
-		return result, err
-	}
-	if err := acceptedformat.ValidateAuthorizationEvidence(result.Tenant, result.Authorizations); err != nil {
-		return result, err
-	}
-
-	if result.Version < 3 && len(result.Unique) > 0 {
-		return result, fmt.Errorf("legacy work result carries derived unique keys")
-	}
-	digest, err := digestAcceptedWork(result)
-	hash, hashErr := workInputHash(result.Input, result.PriorWork)
-	finished := new(pb.Work)
-	workErr := protojson.Unmarshal(result.Work, finished)
-	if err != nil || hashErr != nil || result.Digest != digest || result.RequestHash != hash || workErr != nil ||
-		(result.Version != 1 && result.Version != 2 && result.Version != 3) || result.Version == 1 && (result.Control != nil || len(result.States) > 0) || result.Kind != "work-result" || result.Tenant == "" || result.App == "" || result.At.IsZero() ||
-		result.Input.ID == "" || result.Input.App != result.App || result.Input.Kind != "delivery" && result.Input.Kind != "job" ||
-		result.After.ID != result.Input.ID || result.After.App != result.App || result.After.Kind != result.Input.Kind ||
-		result.After.Title != result.Input.Title || result.After.Attempts != result.Input.Attempts+1 ||
-		!result.After.Last.Equal(result.At) || result.Key != fmt.Sprintf("work:%s:%d", result.Input.ID, result.After.Attempts) ||
-		finished.GetWorkId() != result.Input.ID || finished.GetOwnerId() != "host" ||
-		int(finished.GetGeneration()) != result.After.Attempts || result.Outcome == "" {
-		return result, fmt.Errorf("work result has inconsistent identity, outcome or digest")
-	}
-	if err := appowner.CheckBindings(result.After.Applications); err != nil {
-		return result, err
-	}
-	if result.Input.Since < 0 || result.Input.Since > result.Input.Attempts {
-		return result, fmt.Errorf("work result has an invalid retry base")
-	}
-	if len(result.PriorWork) > 0 {
-		prior := new(pb.Work)
-		if protojson.Unmarshal(result.PriorWork, prior) != nil || prior.GetWorkId() != result.Input.ID ||
-			int(prior.GetGeneration()) != result.Input.Attempts || prior.GetState() == pb.WorkState_WORK_STATE_RUNNING {
-			return result, fmt.Errorf("work result has an invalid prior generation")
-		}
-	} else if result.Input.Attempts != 0 {
-		return result, fmt.Errorf("work result omits its prior generation")
-	}
-	if result.Input.Kind == "job" {
-		if result.Input.State != "scheduled" || result.After.State != "scheduled" || !result.After.Due.After(result.At) ||
-			result.Outcome == "ok" && result.After.Error != "" ||
-			result.Outcome != "ok" && result.After.Error != result.Outcome {
-			return result, fmt.Errorf("work result has an invalid job outcome")
-		}
-	} else {
-		if result.Input.State != "queued" && result.Input.State != "retrying" ||
-			result.Outcome == "ok" && (result.After.State != "done" || result.After.Error != "") ||
-			result.Outcome != "ok" && (result.After.State != "failed" && result.After.State != "retrying" || result.After.Error != result.Outcome) ||
-			result.After.State == "retrying" && !result.After.Due.After(result.At) ||
-			result.After.State != "retrying" && !result.After.Due.Equal(result.Input.Due) {
-			return result, fmt.Errorf("work result has an invalid delivery outcome")
-		}
-	}
-	if len(result.Changes) > 0 {
-		changes, _, err := acceptedformat.DecodeBatch(result.Changes)
-		if err != nil || changes.Tenant != result.Tenant || !changes.At.Equal(result.At) || result.Notices != nil || len(result.Intents) > 0 || len(result.States) > 0 || result.Control != nil ||
-			result.Outcome != "ok" {
-			return result, fmt.Errorf("work result has invalid business changes")
-		}
-	}
-	return result, nil
-}
-
 func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
-	result, err := decodeAcceptedWork(raw)
+	result, err := acceptedformat.DecodeWork(raw)
 	if err != nil || result.Tenant != t.ID || t.app(result.App) == nil {
 		return false, fmt.Errorf("work result cannot be applied: %v", err)
 	}
@@ -2023,7 +1726,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	if previousErr == nil {
 		prior, _ = protojson.Marshal(previous)
 	}
-	hash, hashErr := workInputHash(before, prior)
+	hash, hashErr := acceptedformat.WorkInputHash(before, prior)
 	if err != nil || hashErr != nil || hash != result.RequestHash {
 		return false, fmt.Errorf("work result predecessor differs")
 	}
@@ -2047,7 +1750,7 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	}
 	t.installAcceptedWork(finished)
 	t.opsMu.Lock()
-	task.RestoreOutcome(result.After)
+	task.RestoreOutcome(automation.Task{ScheduledTask: result.After})
 	if task.Kind == "delivery" {
 		switch task.State {
 		case "done", "failed":

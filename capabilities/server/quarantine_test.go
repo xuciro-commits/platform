@@ -48,7 +48,7 @@ func TestCommittedResultCorruptionQuarantinesOnlyItsTenant(t *testing.T) {
 	if receipt, err := bad.Submit(member, acceptedBin(t, bad, "bad"), at); receipt != nil || err == nil {
 		t.Fatalf("corrupt commit answered: %+v %v", receipt, err)
 	}
-	if !bad.quarantined() || bad.records.types["stock.bin"].rows.Get("B1") != nil {
+	if !bad.quarantined() || bad.records.Type("stock.bin").Rows().Get("B1") != nil {
 		t.Fatal("partial tenant remained writable")
 	}
 	if bad.Health(at).Status != "quarantined" || bad.Health(at).RecoveryError == "" {
@@ -117,7 +117,7 @@ func TestReplayCorruptionQuarantinesWithoutSideEffects(t *testing.T) {
 	if err := bad.recoverEntries([]Entry{durable}); err == nil || !bad.quarantined() {
 		t.Fatalf("corrupt accepted history did not isolate its tenant: %v", err)
 	}
-	if bad.records.types["stock.bin"].rows.Get("B1") != nil || bad.Round(at, 1) {
+	if bad.records.Type("stock.bin").Rows().Get("B1") != nil || bad.Round(at, 1) {
 		t.Fatal("corrupt result was applied or work continued")
 	}
 	healthy := isolatedStock(t, "t-2")
@@ -249,7 +249,7 @@ func TestOwnedWorkPanicIsTenantLocal(t *testing.T) {
 	bad := isolatedStock(t, "t-1")
 	good := isolatedStock(t, "t-2")
 	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
-	bad.work.Queues["stock"] = []*automation.Task{{ID: "broken", Kind: "delivery", App: "stock", State: "queued", Due: at}}
+	bad.work.Queues["stock"] = []*automation.Task{{ScheduledTask: platform.ScheduledTask{ID: "broken", Kind: "delivery", App: "stock", State: "queued", Due: at}}}
 	if bad.Round(at, 1) || !bad.quarantined() {
 		t.Fatal("malformed owned work did not isolate its tenant")
 	}

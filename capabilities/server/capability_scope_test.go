@@ -54,7 +54,7 @@ func TestPostgresCapabilityPreparationUsesCurrentReadScope(t *testing.T) {
 	if refusal != nil || row.Record.(Item).Qty != 7 || row.Record.(Item).Revision != 2 {
 		t.Fatal(row, refusal)
 	}
-	if live.records.current.View() != nil || live.records.types["stock.item"].rows.Stored() != 0 {
+	if live.records.Current().View() != nil || live.records.Type("stock.item").Rows().Stored() != 0 {
 		t.Fatal("capability retained an SQL transaction or row cache")
 	}
 	// Refusal details also read current records. Filter them before leaving

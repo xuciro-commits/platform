@@ -15,12 +15,12 @@ const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:
 const hydrate=(record:Draft):Draft=>({...empty(),...record,storage:record.storage||"reference"});
 
 export function LinkTypes() {
- const {source,role}=useHost(),{open}=useApplicationWorkspace();
- if(role("build")!=="builder")return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
+ const {source, holds}=useHost(),{open}=useApplicationWorkspace();
+ if(!holds("build", "builder"))return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
  return <div className="grid gap-3"><PageHeader title={t("Relationships")} help={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"link-type",params:{id:"new"}})}>{t("New relationship")}</Button>}/><ResourceList source={source} type="build.linktype" fields={["title","name","parent","child","version"]} onOpen={(record)=>open({view:"link-type",params:{id:record.id}})}/></div>;
 }
 export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;child?:string;via?:string}) {
- const {decide,role,definitions,client}=useHost(),{open}=useApplicationWorkspace();
+ const {decide,definitions,client, holds}=useHost(),{open}=useApplicationWorkspace();
  const authoring=useAuthoringModel();
  const objects=(authoring.drafts.data?.records??[]).filter(draft=>!draft.archived).map(draft=>({name:`build.${draft.name}`,title:draft.title}));
  const [migration,setMigration]=useState<Api.RelationMigrationPlan>();
@@ -37,7 +37,7 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const directInstall = useDirectInstall();
  const installed=definitions.find((d)=>d.ref.kind==="link-type"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.linkVersions??{});
- if(role("build")!=="builder")return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
+ if(!holds("build", "builder"))return <PageHeader title={t("Relationships")} description={t("Only a builder can edit relationships.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Relationships")} description={query.isError?t("The relationship could not be loaded."):t("Loading…")}/>;
  return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New relationship")} help={t("Declare relationships in their object owner and bind pages to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"link-type"})}>{t("Relationships")}</Button><AssetControls type="build.linktype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"link-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved relationship")}</Button><Button disabled={busy||inputs?.invalid||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save relationship")}</Button>{directInstall&&<Button disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
  <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>

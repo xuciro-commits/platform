@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"platformserver/kernel/records"
 	"platformserver/platform"
+	releaseowner "platformserver/studio/releases"
 	"slices"
 	"strconv"
 )
@@ -75,7 +76,7 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 		}
 		previous := *old.Query
 		var ok bool
-		def.QueryVersions, ok = retainedDefinitionVersions(old.QueryVersions, old.Version, &previous, def.Version, q)
+		def.QueryVersions, ok = releaseowner.RetainedDefinitionVersions(old.QueryVersions, old.Version, &previous, def.Version, q)
 		if !ok {
 			return fmt.Errorf("query version bytes cannot change")
 		}

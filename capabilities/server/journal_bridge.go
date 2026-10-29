@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import (
 	"context"
 
@@ -23,7 +25,7 @@ type resultIdentity = journal.Identity
 func OpenJournal(ctx context.Context, url string) (*journal.Postgres, error) {
 	j, err := journal.OpenPostgres(ctx, url, acceptedIdentity)
 	if err == nil {
-		j.Delta = acceptedStorageDelta
+		j.Delta = runtimekernel.StorageDelta
 	}
 	return j, err
 }

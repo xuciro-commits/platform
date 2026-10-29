@@ -103,7 +103,7 @@ func TestDefinitionValidation(t *testing.T) {
 	}
 	t.Run("incompatible record reference", func(t *testing.T) {
 		tn := stockTenant(t)
-		field := &tn.records.types["stock.item"].info.Fields[0]
+		field := &tn.records.Type("stock.item").Info().Fields[0]
 		field.Type, field.Ref = "integer", "stock.bin"
 		tn.definitions = nil
 		if err := tn.registerDefinitions(); err == nil || !strings.Contains(err.Error(), "incompatible type") {
@@ -112,7 +112,7 @@ func TestDefinitionValidation(t *testing.T) {
 	})
 	t.Run("directory reference", func(t *testing.T) {
 		tn := stockTenant(t)
-		field := &tn.records.types["stock.item"].info.Fields[0]
+		field := &tn.records.Type("stock.item").Info().Fields[0]
 		field.Type, field.Ref = "reference", "enterprise.element"
 		for i, app := range tn.apps {
 			if app.Manifest().ID != "stock" {

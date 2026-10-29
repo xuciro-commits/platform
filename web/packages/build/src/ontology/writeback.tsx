@@ -1,6 +1,5 @@
 import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
-import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
@@ -20,8 +19,8 @@ const conversions = ["", "string", "number", "boolean", "date"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function Writebacks() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Writebacks")} help={t("Declare the connection and request mapping for external writes. Accepted actions, business confirmations and dispatches keep their own sending and retry rules.")}
       actions={<Button onClick={() => open({ view: "writeback", params: { id: "new" } })}>{t("New writeback")}</Button>} />
@@ -30,9 +29,9 @@ export function Writebacks() {
 }
 
 export function WritebackEditor({ id }: { id: string }) {
-  const host = useHost(), { role } = host, { open } = useApplicationWorkspace();
+  const host = useHost(), { holds} = host, { open } = useApplicationWorkspace();
   const model = useAuthoringModel();
-  const entities = role("build") === "builder" ? model.entities : host.entities;
+  const entities = holds("build", "builder") ? model.entities : host.entities;
   const connectionQuery = useReadQuery<{ records: ConnectionRow[] }>("/v1/records/build.connection?limit=100");
   const connections = (connectionQuery.data?.records ?? []).filter((c) => c.state !== "retired" && c.kind !== "postgres");
   const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 5000).data ?? [];
@@ -44,7 +43,7 @@ export function WritebackEditor({ id }: { id: string }) {
       return { name, title, connection, object, on, method: method ?? "POST", transport: transport ?? "", path: path ?? "", mapping, result };
     },
   });
-  if (!integrates(role("build"))) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Writebacks")} description={t("Only a builder or integrator can edit writebacks.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Writebacks")} description={query.isError ? t("The writeback could not be loaded.") : t("Loading…")} />;
   const target = entities.find((entity) => entity.type === draft.object);
   const fields = target?.fields ?? [], writable = fields.filter((f) => !f.readOnly);
@@ -67,13 +66,13 @@ export function WritebackEditor({ id }: { id: string }) {
         <Button onClick={() => open({ view: "writeback" })}>{t("Writebacks")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save writeback")}</Button>
-        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
+        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
         {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {connectionQuery.isError && <Panel role="alert" className="text-danger">{t("The connections could not be loaded.")}</Panel>}
-    {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
+    {holds("build", "builder") && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
     {connection && connection.state !== "ready" && <Panel role="status" className="flex flex-wrap items-center gap-2 text-xs text-warning"><p>{t("This logical connection is not configured for use. You can publish the declaration; configure and check it before running the integration.")}</p><Button size="sm" variant="ghost" onClick={() => open({ view: "connection", params: { id: connection.id } })}>{t("Open connection")}</Button></Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Trigger")} className="grid min-w-0 content-start gap-3">

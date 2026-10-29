@@ -41,7 +41,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if _, err := tn.Submit(ana, create, now); err != nil {
 		t.Fatal(err)
 	}
-	row := tn.records.types["stock.item"].rows.Get("I1")
+	row := tn.records.Type("stock.item").Rows().Get("I1")
 	if len(row.History) == 0 || len(row.History[0].Fields) == 0 {
 		t.Fatal("missing first history")
 	}
@@ -70,7 +70,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	if err != nil || len(result.Rows) != 1 {
 		t.Fatalf("count did not save its canonical batch: %+v, %v", result, err)
 	}
-	if result.Version != 8 || result.Rows[0].HistoryRef == nil || result.Rows[0].HistoryRef.Base != 1 || result.Rows[0].HistoryBase != 1 || len(result.Rows[0].History) != 1 || tn.records.types["stock.item"].rows.Get("I1").HistoryLength() != 2 {
+	if result.Version != 8 || result.Rows[0].HistoryRef == nil || result.Rows[0].HistoryRef.Base != 1 || result.Rows[0].HistoryBase != 1 || len(result.Rows[0].History) != 1 || tn.records.Type("stock.item").Rows().Get("I1").HistoryLength() != 2 {
 		t.Fatal("a new result must append one change without discarding its history")
 	}
 	encode := func(batch acceptedformat.Batch) []byte {
@@ -91,7 +91,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	legacy.Version, legacy.Rows[0].HistoryBase = 1, 0
 	legacy.Rows[0].Format, legacy.Rows[0].Predecessor, legacy.Rows[0].HistoryRef = "", "", nil
 	legacy.Rows[0].Before = legacyBefore
-	legacy.Rows[0].History = records.CopyHistory(tn.records.types["stock.item"].rows.Get("I1").RecordHistory())
+	legacy.Rows[0].History = records.CopyHistory(tn.records.Type("stock.item").Rows().Get("I1").RecordHistory())
 	legacySecond := entries[1]
 	legacySecond.Body = encode(legacy)
 	legacySuffix := legacy
@@ -107,11 +107,11 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 		t.Fatal(err)
 	}
 	recovered := build()
-	if err := recovered.Replay([]Entry{entries[0], legacySecond, entries[2]}); err != nil || recovered.records.types["stock.item"].rows.Get("I1").HistoryLength() != 3 {
+	if err := recovered.Replay([]Entry{entries[0], legacySecond, entries[2]}); err != nil || recovered.records.Type("stock.item").Rows().Get("I1").HistoryLength() != 3 {
 		t.Fatalf("old history followed by a new suffix failed to recover: %v", err)
 	}
 	recoveredSuffix := build()
-	if err := recoveredSuffix.Replay([]Entry{entries[0], legacySuffixSecond, entries[2]}); err != nil || recoveredSuffix.records.types["stock.item"].rows.Get("I1").HistoryLength() != 3 {
+	if err := recoveredSuffix.Replay([]Entry{entries[0], legacySuffixSecond, entries[2]}); err != nil || recoveredSuffix.records.Type("stock.item").Rows().Get("I1").HistoryLength() != 3 {
 		t.Fatalf("old suffix followed by a new suffix failed to recover: %v", err)
 	}
 	result, _, err = acceptedformat.DecodeBatch(entries[2].Body)
@@ -132,7 +132,7 @@ func TestAcceptedBatchComparesCanonicalHistoryAfterJSONNormalization(t *testing.
 	wrong := entries[2]
 	wrong.Body = encode(result)
 	refused := build()
-	if err := refused.Replay([]Entry{entries[0], legacySecond, wrong}); err == nil || refused.records.types["stock.item"].rows.Get("I1").HistoryLength() != 2 {
+	if err := refused.Replay([]Entry{entries[0], legacySecond, wrong}); err == nil || refused.records.Type("stock.item").Rows().Get("I1").HistoryLength() != 2 {
 		t.Fatal("an incorrect history predecessor was accepted or partly applied")
 	}
 	if err := build().Replay([]Entry{entries[0], legacySecond}); err != nil {

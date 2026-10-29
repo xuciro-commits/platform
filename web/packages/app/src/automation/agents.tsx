@@ -61,7 +61,7 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
 
 /** A run's page: goal, state, the draft waiting for the member, each step and why, and what people made of it. */
 export function RunView({ id, compact, application, project }: { id: string; compact?: boolean; application?: string; project?: string }) {
-  const { me, can, role } = useHost();
+  const { me, can , holds} = useHost();
   const control = useRunControl("agent.run", id);
   const openRecord = useOpenRecord();
   const record=useReadQuery<{record:AgentRun}>(`/v1/records/agent.run/${encodeURIComponent(id)}`);
@@ -80,7 +80,7 @@ export function RunView({ id, compact, application, project }: { id: string; com
       {control.pending && <Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p>
         <Button disabled={control.busy} onClick={() => void control.retry()}>{t("Retry original operation")}</Button></Panel>}
       {!compact && <PageHeader title={run.title}
-        actions={live && (mine || role("agent") === "admin") && can("agent.run.cancel")
+        actions={live && (mine || holds("agent", "admin")) && can("agent.run.cancel")
           ? <Button size="sm" variant="danger" disabled={control.busy || !!control.pending} onClick={() => void control.control("agent.run.cancel")}>{t("Stop")}</Button> : undefined} />}
       <div className="flex flex-wrap items-center gap-2">
         <StatusTag status={run.state} registry={runStates} />
@@ -142,7 +142,7 @@ export function RunView({ id, compact, application, project }: { id: string; com
           ))}
         </div>
       )}
-      {!compact && role("agent") === "admin" && <Transcripts run={run.id} />}
+      {!compact && holds("agent", "admin") && <Transcripts run={run.id} />}
       {!!run.signals?.length && (
         <div className="grid gap-1">
           <div className="text-xs text-muted">{t("What people made of it")}</div>

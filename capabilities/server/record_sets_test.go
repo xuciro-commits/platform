@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"encoding/json"
 	"strings"
@@ -87,7 +89,7 @@ func TestOwnedRelationsAtomicCardinalityAndReplay(t *testing.T) {
 	if got := refuse(t, tn, "writer", "invariants", "invariants.entry.attach", owner.entity.Type, "root", map[string]any{"child": "rejected", "create": true}, at); !strings.Contains(got, "Constraint relation.children") {
 		t.Fatalf("duplicate parent: %s", got)
 	}
-	if tn.records.types[platform.OwnedRelationType("invariants")].rows.Len() != 1 {
+	if tn.records.Type(platform.OwnedRelationType("invariants")).Rows().Len() != 1 {
 		t.Fatal("refusal left a relationship row")
 	}
 	if _, err := tn.RecordOf(memberOf(t, tn, "writer"), owner.entity.Type, "rejected", at); err == nil {
@@ -131,7 +133,7 @@ func TestDeclaredSetVisibilityOrderAndLimit(t *testing.T) {
 	if err != nil || !visible.Partial || len(visible.Records) != 1 || strings.Contains(string(platform.Raw(visible)), "invariants.entry/a") {
 		t.Fatalf("visibility: %+v %v", visible, err)
 	}
-	aggregate, aggregateErr := tn.Aggregate(memberOf(t, tn, "viewer"), owner.entity.Type, AggregateQuery{Collection: &platform.RecordSetRef{Object: owner.entity.Type, ID: "root", Name: "children"}, Measures: []string{"count"}}, at)
+	aggregate, aggregateErr := tn.Aggregate(memberOf(t, tn, "viewer"), owner.entity.Type, records.AggregateQuery{Collection: &platform.RecordSetRef{Object: owner.entity.Type, ID: "root", Name: "children"}, Measures: []string{"count"}}, at)
 	if aggregateErr != nil || !aggregate.Partial || len(aggregate.Rows) != 1 || aggregate.Rows[0]["count"] != 1 {
 		t.Fatalf("aggregate leaked hidden membership: %v %v", aggregate, aggregateErr)
 	}

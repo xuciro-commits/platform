@@ -35,15 +35,14 @@ type HostComposition struct {
 }
 
 func (t *Tenant) desiredRuntime() map[string]string {
-	t.console.mu.Lock()
-	defer t.console.mu.Unlock()
-	if t.console.runtimeSelection == nil {
+	selection := t.console.RuntimeSelection()
+	if selection == nil {
 		return t.services.Selection()
 	}
-	return maps.Clone(t.console.runtimeSelection)
+	return selection
 }
 
-func (t *Tenant) compositionView(providers RuntimeProviders) HostComposition {
+func (t *Tenant) compositionView(providers platform.RuntimeProviders) HostComposition {
 	view := HostComposition{Current: t.services.Selection(), Desired: t.desiredRuntime(), Available: providers.Modules(), State: "ready", Storage: t.services.StorageModule}
 	view.DisabledOwners, view.DesiredDisabledOwners = t.currentDisabledOwners(), t.desiredDisabledOwners()
 	view.Owners = []platform.CapabilityModule{}
@@ -56,7 +55,7 @@ func (t *Tenant) compositionView(providers RuntimeProviders) HostComposition {
 		view.State, view.Reason = "maintenance", "A required implementation is removed; business access remains stopped"
 	} else if !maps.Equal(view.Current, view.Desired) || !slices.Equal(view.DisabledOwners, view.DesiredDisabledOwners) {
 		view.State, view.Reason = "restart-required", "The selection is saved; restart this host to activate the checked composition"
-	} else if t.console.suspended() {
+	} else if t.console.Suspended() {
 		view.State = "suspended"
 	}
 	return view
@@ -100,14 +99,14 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		_, err := t.acceptHostControl("composition", "host:"+subject, body, body.At, platform.AuditEntry{Action: "host.composition", Target: t.ID + ":" + body.Reason}, func(image *hostControlImage) (SupportGrant, error) {
+		_, err := t.acceptHostControl("composition", "host:"+subject, body, body.At, platform.AuditEntry{Action: "host.composition", Target: t.ID + ":" + body.Reason}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
 			if t.quarantined() {
-				return SupportGrant{}, fmt.Errorf("Repair this tenant before changing its implementation")
+				return platform.SupportGrant{}, fmt.Errorf("Repair this tenant before changing its implementation")
 			}
 			image.RuntimeSelection = maps.Clone(body.Selection)
 			image.DisabledOwners = slices.Clone(body.DisabledOwners)
 			image.Lifecycle = "suspend"
-			return SupportGrant{}, nil
+			return platform.SupportGrant{}, nil
 		}, hostRequestAuthorization(r, t.ID)...)
 		t.mu.Unlock()
 		if err != nil {
@@ -116,4 +115,13 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 		}
 		WriteJSON(w, http.StatusOK, t.compositionView(providers))
 	})
+}
+
+func missingRuntime(selection map[string]string) bool {
+	for _, provider := range selection {
+		if provider == "" {
+			return true
+		}
+	}
+	return false
 }

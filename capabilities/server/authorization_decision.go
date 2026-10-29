@@ -53,8 +53,8 @@ func (d *stagedDecision) Authorize(c platform.Caller, q platform.AuthzRequest, a
 	app := c.App
 	if owner := d.tenant.owner["action:"+q.Action]; owner != nil {
 		app = owner.Manifest().ID
-	} else if et := d.records.types[q.Type]; et != nil {
-		app = et.info.App
+	} else if et := d.records.Type(q.Type); et != nil {
+		app = et.Info().App
 	}
 	d.authorizations = append(d.authorizations, acceptedformat.AuthorizationEvidence{Request: q, Decision: decision, Roles: slices.Clone(c.RolesIn(app))})
 	return decision
@@ -71,7 +71,7 @@ func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.Authz
 // Native entry facts are host declarations, not an authorization bypass.
 // They retain the same deny precedence and nine layers as record operations.
 type authorizationDetails struct {
-	Store      *recordStore
+	Store      *records.Store
 	At         time.Time
 	Sources    []string
 	Definition string
@@ -222,7 +222,7 @@ func (t *Tenant) authorizationMember(m platform.Member) platform.Member {
 // authorizeFrom is the host's one fact resolver. Scope implementations remain
 // with the record owner, but every result passes the engine's fixed order.
 // held belongs to read projections and avoids reacquiring the record lock.
-func (t *Tenant) authorizeFrom(store *recordStore, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool) (decision platform.AuthzDecision) {
+func (t *Tenant) authorizeFrom(store *records.Store, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool) (decision platform.AuthzDecision) {
 	if t.simulationTrace != nil {
 		defer func() {
 			t.simulationTrace(platform.DecisionTrace{Kind: "authorization", Request: &q, Authorization: &decision})
@@ -240,7 +240,7 @@ func newAuthorizationWalk() *authorizationWalk {
 	return &authorizationWalk{decisions: map[string]platform.AuthzDecision{}, active: map[string]bool{}}
 }
 
-func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool, depth int, walk *authorizationWalk) platform.AuthzDecision {
+func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool, depth int, walk *authorizationWalk) platform.AuthzDecision {
 	c.Member = t.authorizationMember(c.Member)
 	key := string(platform.Raw(q))
 	if decision, known := walk.decisions[key]; known && depth < 16 {
@@ -274,35 +274,35 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 			}
 		}
 	}
-	var et *entityType
+	var et *records.Type
 	var current *records.Row
 	func() {
 		if !held {
-			store.mu.Lock()
-			defer store.mu.Unlock()
+			store.Lock()
+			defer store.Unlock()
 		}
-		et = store.types[q.Type]
+		et = store.Type(q.Type)
 		if et != nil {
-			current = et.rows.Get(q.Record)
+			current = et.Rows().Get(q.Record)
 		}
 	}()
 	if q.Action == "" {
 		if et != nil {
-			request.Subject.App = et.info.App
-			request.Subject.Roles = c.RolesIn(et.info.App)
+			request.Subject.App = et.Info().App
+			request.Subject.Roles = c.RolesIn(et.Info().App)
 			request.Allowed = slices.Clone(request.Subject.Roles)
-			request.Permission = et.info.Type + "." + q.Kind
+			request.Permission = et.Info().Type + "." + q.Kind
 			if q.Kind == "derive" {
-				request.Permission = et.info.Type + ".read"
+				request.Permission = et.Info().Type + ".read"
 			}
-			request.Attributes = map[string]string{"member": c.ID, "app": et.info.App, "target": et.info.Type}
-			if owner := t.app(et.info.App); owner != nil {
+			request.Attributes = map[string]string{"member": c.ID, "app": et.Info().App, "target": et.Info().Type}
+			if owner := t.app(et.Info().App); owner != nil {
 				policies = owner.Manifest().Actions.AuthorizationPolicies()
 			}
-			if et.info.Scope.Participants != nil || et.info.Scope.Through != nil {
+			if et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil {
 				request.Allowed = []string{authz.AnyMember}
 			}
-			if et.info.Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
+			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
 				request.Allowed = []string{authz.AnyMember}
 			}
 		} else {
@@ -310,7 +310,7 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 		}
 	}
 	if et != nil {
-		context.Definition = et.info.Type
+		context.Definition = et.Info().Type
 		if digest, err := platform.CanonicalDigest(struct {
 			Fields                          []platform.FieldInfo
 			Derived                         []platform.DerivationInfo
@@ -318,15 +318,15 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 			Policies                        []authz.Policy
 			Default, Owner, Unit, Structure string
 			Levels                          map[string]string
-		}{et.info.Fields, et.info.Derived, et.info.Withheld, policies, et.info.Scope.Default, et.info.Scope.Owner, et.info.Scope.Unit, et.info.Scope.Structure, et.info.Scope.Levels}); err == nil {
+		}{et.Info().Fields, et.Info().Derived, et.Info().Withheld, policies, et.Info().Scope.Default, et.Info().Scope.Owner, et.Info().Scope.Unit, et.Info().Scope.Structure, et.Info().Scope.Levels}); err == nil {
 			context.Definition = digest
 		}
 		if q.Record != "" && q.Kind != "create" && (q.Kind != "action" || current != nil) {
-			if c.Automation && c.App == et.info.App {
+			if c.Automation && c.App == et.Info().App {
 				context.Row = authorizationPass("the declared owner service boundary")
-			} else if et.info.Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
+			} else if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
 				context.Row = authz.Gate{Allowed: t.knowledgeSourceReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
-			} else if through := et.info.Scope.Through; through != nil {
+			} else if through := et.Info().Scope.Through; through != nil {
 				if current != nil && depth < 16 && !cycle {
 					typ, id, _ := strings.Cut(through(current.Value.Interface()), "/")
 					parent := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk)
@@ -335,13 +335,13 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 					context.Row = authz.Gate{Reason: "The owning record is unavailable or exceeds 16 segments"}
 				}
 			} else {
-				visible, err := records.ScopeVisibility(et.info, c.Member, t.directory, at)
+				visible, err := records.ScopeVisibility(et.Info(), c.Member, t.directory, at)
 				context.Row = authz.Gate{Allowed: current != nil && err == nil && (visible == nil || visible(current.Value)), Reason: "The record is outside the caller's row scope"}
 			}
 		}
 		for _, name := range q.Fields {
-			field, known := et.info.Field(name)
-			if q.Action != "" && (q.Kind == "write" || q.Kind == "create") && !slices.Contains(et.info.Standard, q.Action) {
+			field, known := et.Info().Field(name)
+			if q.Action != "" && (q.Kind == "write" || q.Kind == "create") && !slices.Contains(et.Info().Standard, q.Action) {
 				// A typed owner action may intentionally accept a blind input.
 				// read/write tags define the generated form contract, not its payload.
 				context.Fields.Reason = "The typed owner action declares its accepted input fields"
@@ -350,16 +350,16 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 			if !known && q.Action != "" {
 				continue
 			} // payload validation owns unknown keys
-			allowed := known && field.ReadsAny(c.RolesIn(et.info.App)) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
-			if et.info.Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
+			allowed := known && field.ReadsAny(c.RolesIn(et.Info().App)) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
+			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
 				allowed = t.knowledgeSourceReadable(store, c.Member, q.Record, name)
 			}
 			if q.Kind == "write" || q.Kind == "create" {
 				if field.ReadOnly {
 					continue
 				} // immutable shape is an input validation failure
-				allowed = known && field.WritesAny(c.RolesIn(et.info.App))
-				if c.Automation && c.App == et.info.App {
+				allowed = known && field.WritesAny(c.RolesIn(et.Info().App))
+				if c.Automation && c.App == et.Info().App {
 					allowed = true
 				}
 			}
@@ -388,8 +388,8 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 		readable := false
 		func() {
 			if !held {
-				store.mu.Lock()
-				defer store.mu.Unlock()
+				store.Lock()
+				defer store.Unlock()
 			}
 			typ, id, _ := strings.Cut(ref, "/")
 			fields := []string{}
@@ -422,32 +422,32 @@ func (t *Tenant) authorizeDepth(store *recordStore, c platform.Caller, q platfor
 
 // sourceWithheld resolves declared provenance before a value is projected.
 // A list is reported by its public field name, never by a hidden source ID.
-func (t *Tenant) sourceWithheld(store *recordStore, c platform.Caller, et *entityType, value reflect.Value, fields []string, at time.Time, depth int, walk *authorizationWalk) []string {
+func (t *Tenant) sourceWithheld(store *records.Store, c platform.Caller, et *records.Type, value reflect.Value, fields []string, at time.Time, depth int, walk *authorizationWalk) []string {
 	w := narrower{store: store, m: c.Member, held: true}
 	all := []string{}
-	for _, d := range et.info.Derived {
+	for _, d := range et.Info().Derived {
 		if !d.All {
 			all = append(all, w.sources(value, d)...)
 		}
 	}
 	withheld := []string{}
-	for _, alias := range et.info.Fields {
+	for _, alias := range et.Info().Fields {
 		if alias.AliasOf == "" || len(fields) > 0 && !slices.Contains(fields, alias.Name) {
 			continue
 		}
-		request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: et.info.Type, Record: records.Header(value).ID, Fields: []string{alias.AliasOf}}
+		request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "derive", Type: et.Info().Type, Record: records.Header(value).ID, Fields: []string{alias.AliasOf}}
 		grant := t.authorizeDepth(store, c, request, at, true, depth+1, walk)
 		if !grant.Allow || len(grant.Withheld) > 0 {
 			withheld = append(withheld, alias.Name)
 		}
 	}
-	for _, d := range et.info.Derived {
+	for _, d := range et.Info().Derived {
 		names := []string{}
 		if len(d.List) > 0 {
-			names = append(names, fieldName(et.info.Go, d.List))
+			names = append(names, fieldName(et.Info().Go, d.List))
 		} else {
 			for _, path := range d.Fields {
-				names = append(names, fieldName(et.info.Go, path))
+				names = append(names, fieldName(et.Info().Go, path))
 			}
 		}
 		if len(fields) > 0 && !slices.ContainsFunc(names, func(name string) bool { return slices.Contains(fields, name) }) {
@@ -458,13 +458,13 @@ func (t *Tenant) sourceWithheld(store *recordStore, c platform.Caller, et *entit
 			refs = w.sources(value, d)
 		}
 		denied := len(refs) == 0 && slices.ContainsFunc(names, func(name string) bool {
-			field, known := et.info.Field(name)
+			field, known := et.Info().Field(name)
 			return known && field.SourceType == "generated" && !value.FieldByIndex(field.Index).IsZero()
 		})
 		for _, ref := range refs {
 			// Collection/formula witnesses retain their own owner identity.
 			// Its row scope was already checked; it is not a copied source field.
-			if ref == et.info.Type+"/"+records.Header(value).ID {
+			if ref == et.Info().Type+"/"+records.Header(value).ID {
 				continue
 			}
 			if name, named := strings.CutPrefix(ref, "read:"); named {
@@ -492,12 +492,12 @@ func (t *Tenant) sourceWithheld(store *recordStore, c platform.Caller, et *entit
 }
 
 // visibleIn supplies the original query engine with a per-record decision.
-func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t}, m, et.info.App, false, false), et, at)
+func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
+	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t}, m, et.Info().App, false, false), et, at)
 }
 
-func (t *Tenant) visibleForCallerIn(store *recordStore, c platform.Caller, et *entityType, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.info.Type}
+func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
+	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.Info().Type}
 	if refusal := authorizationRefusal(t.authorizeFrom(store, c, question, at, true)); refusal != nil {
 		return nil, refusal
 	}

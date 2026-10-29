@@ -15,50 +15,8 @@ import (
 	"platformserver/platform"
 )
 
-// The async claim is an accepted-result of the existing K9 owner. The effect
-// remains the sole queue item; this payload only freezes its current generation.
-type acceptedOperationClaim struct {
-	Version     int             `json:"version"`
-	Kind        string          `json:"kind"`
-	Tenant      string          `json:"tenant"`
-	App         string          `json:"app"`
-	Key         string          `json:"key"`
-	At          time.Time       `json:"at"`
-	RequestHash string          `json:"requestHash"`
-	Digest      string          `json:"digest"`
-	Before      platform.Effect `json:"before"`
-	After       platform.Effect `json:"after"`
-	PriorWork   json.RawMessage `json:"priorWork,omitempty"`
-	Work        json.RawMessage `json:"work"`
-}
-
-func operationClaimDigest(r acceptedOperationClaim) (string, error) {
-	r.Digest = ""
-	return platform.CanonicalDigest(r)
-}
-
-// Decode before journal admission without applying the K9 transition.
-func decodeOperationClaim(raw []byte) (acceptedOperationClaim, error) {
-	var saved acceptedOperationClaim
-	if _, err := platform.DecodeValue(raw, platform.AcceptedResultMaxBytes); err != nil {
-		return saved, err
-	}
-	if err := json.Unmarshal(raw, &saved); err != nil {
-		return saved, err
-	}
-	digest, err := operationClaimDigest(saved)
-	hash, _ := platform.CanonicalDigest([]any{saved.Before, saved.PriorWork})
-	if err != nil || saved.Kind != "operation-claim" || saved.Version != 1 || saved.Tenant == "" || saved.App != controlowner.PlatformApp || saved.RequestHash != hash || saved.Digest != digest || saved.Before.Endpoint != acceptedformat.OperationEndpoint || saved.Before.ID == "" || settled(saved.Before.State) || saved.At.IsZero() {
-		return saved, fmt.Errorf("invalid operation ownership result")
-	}
-	if saved.After.Generation == 0 || saved.Key != fmt.Sprintf("operation-claim:%s:%d", saved.Before.ID, saved.After.Generation) {
-		return saved, fmt.Errorf("operation claim identity differs")
-	}
-	return saved, nil
-}
-
-func (t *Tenant) applyOperationClaim(raw []byte) (acceptedOperationClaim, error) {
-	saved, err := decodeOperationClaim(raw)
+func (t *Tenant) applyOperationClaim(raw []byte) (acceptedformat.OperationClaim, error) {
+	saved, err := acceptedformat.DecodeOperationClaim(raw)
 	if err != nil {
 		return saved, err
 	}
@@ -124,7 +82,7 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 	}
 	t.opsMu.Lock()
 	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id })
-	if i < 0 || t.outbound[i].sending || settled(t.outbound[i].State) || t.outbound[i].Due.After(now) {
+	if i < 0 || t.outbound[i].sending || platform.EffectSettled(t.outbound[i].State) || t.outbound[i].Due.After(now) {
 		t.opsMu.Unlock()
 		return platform.Effect{}, false
 	}
@@ -151,9 +109,9 @@ func (t *Tenant) claimOperation(id string, now time.Time) (platform.Effect, bool
 	rawWork, _ := protojson.Marshal(work)
 	after := before
 	after.Generation = generation
-	r := acceptedOperationClaim{Version: 1, Kind: "operation-claim", Tenant: t.ID, App: controlowner.PlatformApp, At: now.UTC(), Key: fmt.Sprintf("operation-claim:%s:%d", id, generation), Before: before, After: after, PriorWork: prior, Work: rawWork}
+	r := acceptedformat.OperationClaim{Version: 1, Kind: "operation-claim", Tenant: t.ID, App: controlowner.PlatformApp, At: now.UTC(), Key: fmt.Sprintf("operation-claim:%s:%d", id, generation), Before: before, After: after, PriorWork: prior, Work: rawWork}
 	r.RequestHash, _ = platform.CanonicalDigest([]any{before, prior})
-	r.Digest, _ = operationClaimDigest(r)
+	r.Digest, _ = acceptedformat.OperationClaimDigest(r)
 	raw, _ := json.Marshal(r)
 	principal, _ := json.Marshal(t.automation(controlowner.PlatformApp, false).Member)
 	saved, err := t.acceptResult(Entry{App: controlowner.PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: now}, r.Key, r.RequestHash)
@@ -176,7 +134,9 @@ func (t *Tenant) operationCurrent(id string, generation uint32) bool {
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	return slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id && x.Generation == generation && !settled(x.State) })
+	return slices.ContainsFunc(t.outbound, func(x *effect) bool {
+		return x.ID == id && x.Generation == generation && !platform.EffectSettled(x.State)
+	})
 }
 func (t *Tenant) operationDispatches(now time.Time) []func() {
 	t.opsMu.Lock()
@@ -188,7 +148,7 @@ func (t *Tenant) operationDispatches(now time.Time) []func() {
 		}
 	}
 	for _, x := range t.outbound {
-		if x.Endpoint == acceptedformat.OperationEndpoint && !x.sending && !settled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
+		if x.Endpoint == acceptedformat.OperationEndpoint && !x.sending && !platform.EffectSettled(x.State) && !x.Due.After(now) && len(ids)+active < 4 {
 			ids = append(ids, x.ID)
 		}
 	}

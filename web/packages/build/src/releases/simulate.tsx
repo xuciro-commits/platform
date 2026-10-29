@@ -31,7 +31,7 @@ export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
 function CandidateTestForm({ applicationId = "", processId = "", functionId = "", objectId = "", planId = "", embedded = false, evaluationSet = false, onStepSelect }: {
   applicationId?: string; processId?: string; functionId?: string; objectId?: string; planId?: string; embedded?: boolean; evaluationSet?: boolean; onStepSelect?: (step: string) => void;
 }) {
-  const host = useHost(), { client, role, decide, action } = host;
+  const host = useHost(), { client, decide, action , holds} = host;
   const trial = useActionTrial(), declarationFields = host.source.entity("build.testplan")?.fields ?? [];
   const constructionApplication = useApplicationScope();
   const { open } = useApplicationWorkspace();
@@ -91,7 +91,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
       if (!response.ok) throw new Error(apiErrorMessage(response.body) ?? t("Candidate input fields are unavailable. Use advanced JSON or check the saved draft."));
       return response.body;
     },
-    enabled: !!id && role("build") === "builder",
+    enabled: !!id && holds("build", "builder"),
   });
   const declaredInputs = (schema: string) => {
     // Only fixed platform test-entry actions use the installed catalog. Draft
@@ -319,7 +319,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     <Disclosure summary={`${t("Record changes")} · ${step.changes.length}`} defaultOpen={!comparison && !step.accepted}>{changes}</Disclosure>
     </div>;
   };
-  if (role("build") !== "builder") return <PageHeader title={t("Test a candidate")} description={t("Only a builder can test saved definitions.")} />;
+  if (!holds("build", "builder")) return <PageHeader title={t("Test a candidate")} description={t("Only a builder can test saved definitions.")} />;
   return <div className="grid gap-3">
     {!embedded && <PageHeader title={t("Test a candidate")} help={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
       actions={<Button disabled={!id || blocked} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}

@@ -7,6 +7,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 	pageowner "platformserver/studio/pages"
+	releaseowner "platformserver/studio/releases"
 	"slices"
 	"strconv"
 	"time"
@@ -25,9 +26,9 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 		return err
 	}
 	if l.Storage == "edge" {
-		h.t.records.mu.Lock()
-		defer h.t.records.mu.Unlock()
-		violations, err := h.t.records.ownedRelationViolations(l)
+		h.t.records.Lock()
+		defer h.t.records.Unlock()
+		violations, err := ownedRelationViolations(h.t.records, l)
 		if err != nil {
 			return err
 		}
@@ -36,15 +37,15 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 		}
 		return nil
 	}
-	h.t.records.mu.Lock()
-	defer h.t.records.mu.Unlock()
+	h.t.records.Lock()
+	defer h.t.records.Unlock()
 	if l.Cardinality == "one-to-one" {
-		if err := h.t.records.validateUniqueLinkLocked(l); err != nil {
+		if err := h.t.records.ValidateUniqueLinkLocked(l); err != nil {
 			return err
 		}
 	}
 	if l.DeletePolicy == "restrict-active" {
-		return h.t.records.validateArchiveLinkLocked(l)
+		return h.t.records.ValidateArchiveLinkLocked(l)
 	}
 	return nil
 }
@@ -71,12 +72,12 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 			return fmt.Errorf("link type is owned by code")
 		}
 		var ok bool
-		def.LinkVersions, ok = retainedDefinitionVersions(old.LinkVersions, old.Version, old.LinkType, def.Version, l)
+		def.LinkVersions, ok = releaseowner.RetainedDefinitionVersions(old.LinkVersions, old.Version, old.LinkType, def.Version, l)
 		if !ok {
 			return fmt.Errorf("link version bytes cannot change")
 		}
 	}
-	if err := h.t.records.installLinkConstraint(l); err != nil {
+	if err := h.t.records.InstallLinkConstraint(l); err != nil {
 		return err
 	}
 	def.LinkVersions[def.Version] = l

@@ -64,10 +64,6 @@ const (
 	effectTimeout = 10 * time.Second
 )
 
-func settled(state string) bool {
-	return state == "delivered" || state == "rejected" || state == "failed" || state == "discarded" || state == "compensated"
-}
-
 // emit reconstructs effects for a historical input without a saved event plan.
 // New decisions save their transaction intents and subscription plan privately.
 func (t *Tenant) emit(e platform.Event, names []string) {
@@ -112,7 +108,7 @@ func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) 
 
 func (t *Tenant) trimEffects() {
 	for len(t.outbound) > effectsKept {
-		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return settled(x.State) })
+		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return platform.EffectSettled(x.State) })
 		if i < 0 {
 			return
 		}
@@ -228,7 +224,7 @@ func (t *Tenant) Endpoints() []EndpointView {
 			case x.Endpoint != ep.ID:
 			case x.State == "delivered":
 				v.Delivers++
-			case !settled(x.State):
+			case !platform.EffectSettled(x.State):
 				v.Pending++
 				if x.State == "retrying" && v.Failing == 0 {
 					v.Failing, v.Health = x.Attempts, "failing"
@@ -289,7 +285,9 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			continue
 		}
 		// A held effect waits for its approval outside the endpoint's order.
-		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && !settled(x.State) && x.State != "held" })
+		i := slices.IndexFunc(t.outbound, func(x *effect) bool {
+			return x.Endpoint == ep.ID && !platform.EffectSettled(x.State) && x.State != "held"
+		})
 		if i >= 0 && t.outbound[i].State == "unknown" {
 			blocked := t.outbound[i].ID
 			i = slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && x.Compensates == blocked && x.State == "pending" })
@@ -475,7 +473,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 		// updates only the effect here and reads that saved reply later.
 		return true
 	}
-	if x.App != "" && settled(x.State) && x.State != "discarded" {
+	if x.App != "" && platform.EffectSettled(x.State) && x.State != "discarded" {
 		if a, ok := t.app(x.App).(platform.Answerer); ok {
 			a.Answer(t.automation(x.App, replaying), x, o, at)
 			t.enqueue(at)
@@ -542,7 +540,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 			t.endpoints = slices.DeleteFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id })
 			var dropped []platform.Effect
 			for _, x := range t.outbound {
-				if x.Endpoint == id && !settled(x.State) {
+				if x.Endpoint == id && !platform.EffectSettled(x.State) {
 					x.State = "discarded"
 					dropped = append(dropped, x.Effect)
 				}
@@ -634,7 +632,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 		if x != nil && x.State == "unknown" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "An unknown delivery needs reconciliation or a recorded human decision")
 		}
-		if x == nil || settled(x.State) {
+		if x == nil || platform.EffectSettled(x.State) {
 			return nil, notFound
 		}
 		return func(r *pb.ChangeRecord) {

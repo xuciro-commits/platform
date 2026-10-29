@@ -75,8 +75,8 @@ class EnvironmentModeTests(unittest.TestCase):
         self.assertEqual(stop.call_count, 2)
 
     def native_fixture(self):
-        table = {100: (1, 'supervisor'), 101: (100, 'platform-air'), 102: (100, 'platform-vite'), 201: (101, 'platform-api')}
-        children = [{'kind': kind, 'pid': pid, 'stamp': table[pid][1]} for kind, pid in [('api', 101), ('web', 102)]]
+        table = {100: (1, 'supervisor'), 101: (100, 'platform-air'), 102: (100, 'platform-vite'), 103: (100, 'wasm-worker'), 104: (100, 'code-builder'), 201: (101, 'platform-api')}
+        children = [{'kind': kind, 'pid': pid, 'stamp': table[pid][1]} for kind, pid in [('worker', 103), ('builder', 104), ('api', 101), ('web', 102)]]
         state = {'mode': 'native', 'pid': 100, 'stamp': 'supervisor', 'status': 'ready', 'children': children}
         listeners = {18495: {201}, 8495: {102}}
         return state, table, listeners
@@ -90,6 +90,7 @@ class EnvironmentModeTests(unittest.TestCase):
         table[201] = (1, 'platform-api')
         with patch.object(environment, '_processes', return_value=table), \
                 patch.object(environment, '_listeners', side_effect=lambda port: listeners[port]), \
+                patch.object(environment.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), \
                 patch.object(environment.urllib.request, 'urlopen', side_effect=self.healthy_response) as read:
             self.assertFalse(environment.ready(state))
         read.assert_not_called()
@@ -98,10 +99,22 @@ class EnvironmentModeTests(unittest.TestCase):
         state, table, listeners = self.native_fixture()
         with patch.object(environment, '_processes', return_value=table), \
                 patch.object(environment, '_listeners', side_effect=lambda port: listeners[port]), \
+                patch.object(environment.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), \
                 patch.object(environment.urllib.request, 'urlopen', side_effect=self.healthy_response) as read:
             self.assertTrue(environment.ready(state))
             self.assertEqual(environment.native_listeners(state)['api'], 201)
         self.assertEqual(read.call_count, 3)
+
+    def test_ready_requires_connected_compute_sockets_not_only_healthy_http(self):
+        state, table, listeners = self.native_fixture()
+        with patch.object(environment, '_processes', return_value=table), \
+                patch.object(environment, '_listeners', side_effect=lambda port: listeners[port]), \
+                patch.object(environment.subprocess, 'run', return_value=SimpleNamespace(returncode=1)) as check, \
+                patch.object(environment.urllib.request, 'urlopen') as read:
+            self.assertFalse(environment.ready(state))
+        self.assertEqual(check.call_count, 2)
+        self.assertTrue(all('-check' in call.args[0] for call in check.call_args_list))
+        read.assert_not_called()
 
     def test_ready_rejects_another_startup_that_reused_a_child_pid(self):
         state, table, listeners = self.native_fixture()
@@ -163,7 +176,7 @@ class EnvironmentModeTests(unittest.TestCase):
         self.assertEqual(signals, [(10, signal.SIGINT), (10, signal.SIGKILL), (30, signal.SIGKILL)])
         self.assertEqual(set(table), {20, 99})
 
-    def test_supervisor_starts_air_and_vite_directly_and_waits_for_their_cleanup(self):
+    def test_supervisor_owns_compute_air_and_vite_and_waits_for_their_cleanup(self):
         state, table, _ = self.native_fixture()
         processes = [SimpleNamespace(pid=child['pid'], poll=lambda: None, wait=Mock()) for child in state['children']]
         handlers, ticks = {}, [0]
@@ -186,16 +199,22 @@ class EnvironmentModeTests(unittest.TestCase):
                 patch.object(environment, 'run') as run, \
                 patch.object(environment.shutil, 'which', side_effect=lambda name: {'air': '/air', 'node': '/node'}[name]), \
                 patch.dict(environment.os.environ, {'AIR': '/air'}), \
+                patch.object(environment.subprocess, 'check_output', return_value=json.dumps({'services': {'code-builder': {'environment': {'PLATFORM_GO_WASM_IMAGE': 'go-image', 'PLATFORM_TINYGO_WASM_IMAGE': 'tinygo-image'}}}})), \
                 patch.object(environment.subprocess, 'Popen', side_effect=processes) as start, \
                 patch.object(environment.signal, 'signal', side_effect=lambda sig, handler: handlers.update({sig: handler})), \
                 patch.object(environment.time, 'sleep', side_effect=advance), \
                 patch.object(environment.time, 'monotonic', side_effect=lambda: ticks[0] / 2), \
                 patch.object(environment, '_stop_native_processes') as cleanup:
             environment.serve()
-        self.assertEqual([call.args[0][0] for call in start.call_args_list], ['/air', '/node'])
-        self.assertTrue(str(start.call_args_list[1].args[0][1]).endswith('/vite/bin/vite.js'))
+        self.assertEqual([Path(call.args[0][0]).name for call in start.call_args_list], ['wasm-worker', 'code-builder', 'air', 'node'])
+        self.assertTrue(str(start.call_args_list[3].args[0][1]).endswith('/vite/bin/vite.js'))
         self.assertNotIn('SOLUTION', start.call_args_list[0].kwargs['env'])
-        self.assertEqual(start.call_args_list[1].kwargs['env']['PLATFORM_HOST'], 'http://127.0.0.1:18495')
+        env = start.call_args_list[2].kwargs['env']
+        self.assertEqual(env['PLATFORM_HOST'], 'http://127.0.0.1:18495')
+        self.assertEqual(env['PLATFORM_CODE_BUILDER_SOCKET'], str(environment.COMPUTE / 'builder.sock'))
+        self.assertEqual(start.call_args_list[1].kwargs['env']['PLATFORM_GO_WASM_IMAGE'], 'go-image')
+        self.assertNotIn('PLATFORM_PUBLIC_URL', start.call_args_list[0].kwargs['env'])
+        self.assertNotIn('PLATFORM_PUBLIC_URL', start.call_args_list[1].kwargs['env'])
         run.assert_not_called()
         self.assertEqual(cleanup.call_args.args[0], state['children'])
         self.assertIn(203, cleanup.call_args.args[1])

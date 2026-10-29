@@ -34,23 +34,23 @@ func (t *Tenant) sources() []knowledgeindex.Source {
 		out = append(out, knowledgeindex.DocumentSource(d))
 	}
 	out = append(out, t.fileSources()...)
-	t.records.mu.Lock()
-	types := slices.Collect(func(yield func(*entityType) bool) {
-		for _, et := range t.records.types {
-			if slices.ContainsFunc(et.info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge }) && !yield(et) {
+	t.records.Lock()
+	types := slices.Collect(func(yield func(*records.Type) bool) {
+		for _, et := range t.records.Types() {
+			if slices.ContainsFunc(et.Info().Fields, func(f platform.FieldInfo) bool { return f.Knowledge }) && !yield(et) {
 				return
 			}
 		}
 	})
-	t.records.mu.Unlock()
+	t.records.Unlock()
 	for _, et := range types {
 		for offset := 0; ; offset += 500 {
-			page, err := t.recordsRead(t.host(), et.info.Type, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
+			page, err := t.recordsRead(t.host(), et.Info().Type, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
 			if err != nil {
 				break
 			}
 			for _, r := range page.Records {
-				out = append(out, knowledgeindex.RecordSources(et.info, reflect.ValueOf(r))...)
+				out = append(out, knowledgeindex.RecordSources(et.Info(), reflect.ValueOf(r))...)
 			}
 			if offset+len(page.Records) >= page.Total || len(page.Records) == 0 {
 				break
@@ -85,20 +85,20 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
 				}
 			}
 		default:
-			var et *entityType
+			var et *records.Type
 			var v reflect.Value
 			func() {
-				t.records.mu.Lock()
-				defer t.records.mu.Unlock()
-				et = t.records.types[typ]
-				if et != nil && et.rows.Get(id) != nil {
-					v = et.rows.Get(id).Value
+				t.records.Lock()
+				defer t.records.Unlock()
+				et = t.records.Type(typ)
+				if et != nil && et.Rows().Get(id) != nil {
+					v = et.Rows().Get(id).Value
 				}
 			}()
 			if et == nil || !v.IsValid() || v.FieldByName("Record").Interface().(platform.Record).Archived {
 				continue
 			}
-			out = append(out, knowledgeindex.RecordSources(et.info, v)...)
+			out = append(out, knowledgeindex.RecordSources(et.Info(), v)...)
 		}
 	}
 	return out
@@ -109,10 +109,9 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
 // they are irrelevant, so they are only cleared.
 func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
 	s := t.records
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := s.dirty
-	s.dirty = records.Index[bool]{}
+	s.Lock()
+	defer s.Unlock()
+	out := s.TakeDirty()
 	if !walked {
 		return nil
 	}
@@ -126,15 +125,15 @@ func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
 // knowledgeSourceReadable checks the content grant used by knowledge search,
 // not the editor's permission to inspect document metadata. The record lock
 // is held by the derived-source reader; no index or cached grant is consulted.
-func (t *Tenant) knowledgeSourceReadable(store *recordStore, m platform.Member, id, field string) bool {
+func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member, id, field string) bool {
 	if m.Tenant != t.ID || field != "" && field != "title" && field != "text" {
 		return false
 	}
-	et := store.types[platform.KnowledgeDocumentType]
-	if et == nil || et.rows.Get(id) == nil {
+	et := store.Type(platform.KnowledgeDocumentType)
+	if et == nil || et.Rows().Get(id) == nil {
 		return false
 	}
-	d, ok := et.rows.Get(id).Value.Interface().(platform.KnowledgeDocument)
+	d, ok := et.Rows().Get(id).Value.Interface().(platform.KnowledgeDocument)
 	return ok && !d.Archived && knowledgeindex.AppsReadable(d.Apps, &m, "")
 }
 
@@ -271,13 +270,13 @@ func (t *Tenant) fileSource(f platform.File) (knowledgeindex.Source, bool) {
 			}
 			apps = d.Apps
 		default:
-			t.records.mu.Lock()
-			et := t.records.types[typ]
-			t.records.mu.Unlock()
-			if et == nil || !et.info.KnowledgeFiles {
+			t.records.Lock()
+			et := t.records.Type(typ)
+			t.records.Unlock()
+			if et == nil || !et.Info().KnowledgeFiles {
 				return knowledgeindex.Source{}, false
 			}
-			apps = []string{et.info.App}
+			apps = []string{et.Info().App}
 		}
 		text, ok := t.index.Text(f.Hash, func() (string, bool) {
 			body, _, err := t.files().Get(context.Background(), t.ID+"/"+f.Hash)
@@ -355,16 +354,16 @@ func (t *Tenant) checkEmbeddingSetting(id, value string) *kernel.Error {
 func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []string, reader *platform.Member, app string, now time.Time) bool {
 	if scope == "" {
 		id, isDocument := strings.CutPrefix(document, platform.KnowledgeDocumentType+"/")
-		t.records.mu.Lock()
-		defer t.records.mu.Unlock()
+		t.records.Lock()
+		defer t.records.Unlock()
 		if !isDocument {
 			// Attached text uses its current document's content grant too.
 			fileID, fileSource := strings.CutPrefix(document, platform.FileType+"/")
-			files := t.records.types[platform.FileType]
+			files := t.records.Type(platform.FileType)
 			if !fileSource || files == nil {
 				return false
 			}
-			r := files.rows.Get(fileID)
+			r := files.Rows().Get(fileID)
 			if r == nil {
 				return false
 			}
@@ -377,11 +376,11 @@ func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []s
 				return false
 			}
 		}
-		et := t.records.types[platform.KnowledgeDocumentType]
+		et := t.records.Type(platform.KnowledgeDocumentType)
 		if et == nil {
 			return false
 		}
-		r := et.rows.Get(id)
+		r := et.Rows().Get(id)
 		if r == nil {
 			return false
 		}

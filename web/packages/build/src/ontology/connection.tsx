@@ -5,7 +5,7 @@ import { ResourceList } from "../editor/ResourceList";
 import { useId } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
-import { MarkingField, integrates } from "./marking";
+import { MarkingField } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
 // Connections: the external systems a tenant reads through - a kind,
@@ -16,8 +16,8 @@ const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.St
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function Connections() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (!integrates(role("build"))) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Connections")} help={t("The systems this tenant reads from. A connection names its credential in the host's secret store; the credential itself never enters a definition or a release.")}
       actions={<Button onClick={() => open({ view: "connection", params: { id: "new" } })}>{t("New connection")}</Button>} />
@@ -26,7 +26,7 @@ export function Connections() {
 }
 
 export function ConnectionEditor({ id }: { id: string }) {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { holds} = useHost(), { open } = useApplicationWorkspace();
   const fieldID = useId();
   const kinds = useReadQuery<{ items: Api.ConnectionKind[] }>("/v1/connection-kinds");
   const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
@@ -37,7 +37,7 @@ export function ConnectionEditor({ id }: { id: string }) {
       return { name, title, kind, address, secret: secret ?? "", allowPrivate: !!allowPrivate, marking: marking ?? "" };
     },
   });
-  if (!integrates(role("build"))) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Connections")} description={t("Only a builder or integrator can edit connections.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Connections")} description={query.isError ? t("The connection could not be loaded.") : t("Loading…")} />;
   const last = draft.last;
   const options = kinds.data?.items ?? [];
@@ -53,7 +53,7 @@ export function ConnectionEditor({ id }: { id: string }) {
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save connection")}</Button>
         <Button variant="primary" disabled={busy || !!inputs?.invalid || !!draft.requested} onClick={() => void perform(() => transition("check"))}>{draft.requested ? t("Checking…") : t("Check")}</Button>
-        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
+        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         {draft.state === "ready" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("retire"))}>{t("Retire")}</Button>}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

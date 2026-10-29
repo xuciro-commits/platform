@@ -15,7 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"sync"
+
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -28,115 +28,16 @@ import (
 // binary still decides which apps a tenant runs (its Rebuild); the file and
 // the console decide who the tenants are.
 
-// TenantSpec is one tenant as configured.
-type TenantSpec struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name,omitempty"`
-	Template string            `json:"template,omitempty"`
-	Seats    []platform.Seat   `json:"seats"`
-	Settings map[string]string `json:"settings,omitempty"` // platform settings decided when the tenant first starts
-	Created  time.Time         `json:"created,omitempty"`
-	By       string            `json:"by,omitempty"` // the host administrator who created it
-}
-
-// TenantTemplate is a starting point for a tenant (deploy/templates/<name>.json):
-// default settings and the roles its first administrator holds in each app.
-type TenantTemplate struct {
-	Name        string            `json:"name"`
-	Title       string            `json:"title"`
-	Description string            `json:"description,omitempty"`
-	Settings    map[string]string `json:"settings,omitempty"`
-	AdminRoles  map[string]string `json:"adminRoles,omitempty"` // app → role; empty: "admin" in every app that defines it
-}
-
-// CreateTenantRequest is the host console's request for a new tenant.
-type CreateTenantRequest struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	Template string            `json:"template,omitempty"`
-	Admin    string            `json:"admin"` // user:<email> or client:<id> of the first administrator
-	Settings map[string]string `json:"settings,omitempty"`
-}
-
-var tenantID = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-
-// specs are the host's tenant specs, from the -tenants file or the binary's development default.
-type specs struct {
-	mu   sync.Mutex
-	file string
-	list []TenantSpec
-}
-
-func (s *specs) load(file string, development TenantSpec) error {
-	s.file = file
-	if file == "" {
-		s.list = []TenantSpec{development}
-		return nil
-	}
-	raw, err := os.ReadFile(file)
-	if err != nil {
-		return err
-	}
-	var list []TenantSpec
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return fmt.Errorf("%s: %w", file, err)
-	}
-	seen := map[string]bool{}
-	for _, t := range list {
-		if !tenantID.MatchString(t.ID) || seen[t.ID] {
-			return fmt.Errorf("%s: tenant id %q is invalid or repeated", file, t.ID)
-		}
-		seen[t.ID] = true
-	}
-	s.list = list
-	return nil
-}
-
-func (s *specs) get(id string) (TenantSpec, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, t := range s.list {
-		if t.ID == id {
-			return t, true
-		}
-	}
-	return TenantSpec{}, false
-}
-
-func (s *specs) all() []TenantSpec {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return slices.Clone(s.list)
-}
-
-// add appends a spec and writes the file back, so the tenant exists on the next start too.
-func (s *specs) add(spec TenantSpec) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if slices.ContainsFunc(s.list, func(t TenantSpec) bool { return t.ID == spec.ID }) {
-		return fmt.Errorf("tenant %s exists", spec.ID)
-	}
-	next := append(slices.Clone(s.list), spec)
-	if s.file != "" {
-		raw, _ := json.MarshalIndent(next, "", "  ")
-		if err := os.WriteFile(s.file, append(raw, '\n'), 0o644); err != nil {
-			return err
-		}
-	}
-	s.list = next
-	return nil
-}
-
 // Tenants are the tenant specs a host starts with: the -tenants file, or the
 // binary's development tenant. Call it before Rebuild; SeatsFor answers from it.
-func (d *Deployment) Tenants(development TenantSpec) []TenantSpec {
-	d.specs = &specs{}
-	if err := d.specs.load(d.TenantsFile, development); err != nil {
+func (d *Deployment) Tenants(development platform.TenantSpec) []platform.TenantSpec {
+	d.specs = &controlowner.Specs{}
+	if err := d.specs.Load(d.TenantsFile, development); err != nil {
 		log.Fatalf("tenants: %v", err)
 	}
 	d.system = d.systemSpec(development)
-	list := d.specs.all()
-	if _, ok := d.specs.get(systemscope.Tenant); ok {
+	list := d.specs.All()
+	if _, ok := d.specs.Get(systemscope.Tenant); ok {
 		return list
 	}
 	return append(list, d.system)
@@ -145,7 +46,7 @@ func (d *Deployment) Tenants(development TenantSpec) []TenantSpec {
 // systemSpec is the host-level tenant that owns the system itself. It is not
 // created, renamed or deleted through the console: the host always serves it,
 // with the host administrators as the people who may change the system.
-func (d *Deployment) systemSpec(development TenantSpec) TenantSpec {
+func (d *Deployment) systemSpec(development platform.TenantSpec) platform.TenantSpec {
 	roles := map[string]string{
 		"platform": controlowner.Admin, "system": "publisher", "build": "builder",
 		platform.AIApp: platform.AIAdmin, platform.AgentApp: platform.AgentAdmin,
@@ -174,7 +75,7 @@ func (d *Deployment) systemSpec(development TenantSpec) TenantSpec {
 			seats = append(seats, platform.Seat{Subjects: seat.Subjects, Member: merged})
 		}
 	}
-	return TenantSpec{ID: systemscope.Tenant, Name: "Platform", Seats: seats}
+	return platform.TenantSpec{ID: systemscope.Tenant, Name: "Platform", Seats: seats}
 }
 
 // SeatsFor are the configured seats of a tenant, for the binary's Rebuild.
@@ -182,7 +83,7 @@ func (d *Deployment) SeatsFor(id string) []platform.Seat {
 	if d.specs == nil {
 		return nil
 	}
-	spec, found := d.specs.get(id)
+	spec, found := d.specs.Get(id)
 	if !found && id == systemscope.Tenant {
 		return d.system.Seats
 	}
@@ -190,8 +91,8 @@ func (d *Deployment) SeatsFor(id string) []platform.Seat {
 }
 
 // Templates are the tenant templates of -templates, sorted by name.
-func (d *Deployment) Templates() []TenantTemplate {
-	out := []TenantTemplate{}
+func (d *Deployment) Templates() []platform.TenantTemplate {
+	out := []platform.TenantTemplate{}
 	if d.TemplatesDir == "" {
 		return out
 	}
@@ -204,7 +105,7 @@ func (d *Deployment) Templates() []TenantTemplate {
 		if err != nil {
 			continue
 		}
-		var t TenantTemplate
+		var t platform.TenantTemplate
 		if json.Unmarshal(raw, &t) != nil {
 			log.Printf("template %s: not a tenant template", e.Name())
 			continue
@@ -215,24 +116,24 @@ func (d *Deployment) Templates() []TenantTemplate {
 		}
 		out = append(out, t)
 	}
-	slices.SortFunc(out, func(a, b TenantTemplate) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out, func(a, b platform.TenantTemplate) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
 
 // spec turns a console request into a tenant spec: the template's settings
 // under the request's, and the first administrator's seat.
-func (d *Deployment) spec(req CreateTenantRequest, by string, now time.Time) (TenantSpec, TenantTemplate, error) {
-	var tpl TenantTemplate
-	if !tenantID.MatchString(req.ID) {
-		return TenantSpec{}, tpl, fmt.Errorf("tenant id: 2-32 lower-case letters, digits and dashes, starting with a letter")
+func (d *Deployment) spec(req platform.CreateTenantRequest, by string, now time.Time) (platform.TenantSpec, platform.TenantTemplate, error) {
+	var tpl platform.TenantTemplate
+	if !controlowner.ValidTenantID(req.ID) {
+		return platform.TenantSpec{}, tpl, fmt.Errorf("tenant id: 2-32 lower-case letters, digits and dashes, starting with a letter")
 	}
 	if !strings.HasPrefix(req.Admin, "user:") && !strings.HasPrefix(req.Admin, "client:") {
-		return TenantSpec{}, tpl, fmt.Errorf("admin: user:<email> or client:<id>")
+		return platform.TenantSpec{}, tpl, fmt.Errorf("admin: user:<email> or client:<id>")
 	}
 	if req.Template != "" {
-		i := slices.IndexFunc(d.Templates(), func(t TenantTemplate) bool { return t.Name == req.Template })
+		i := slices.IndexFunc(d.Templates(), func(t platform.TenantTemplate) bool { return t.Name == req.Template })
 		if i < 0 {
-			return TenantSpec{}, tpl, fmt.Errorf("template %q: not offered", req.Template)
+			return platform.TenantSpec{}, tpl, fmt.Errorf("template %q: not offered", req.Template)
 		}
 		tpl = d.Templates()[i]
 	}
@@ -253,13 +154,13 @@ func (d *Deployment) spec(req CreateTenantRequest, by string, now time.Time) (Te
 		id = "admin"
 	}
 	seat := platform.Seat{Subjects: []string{req.Admin}, Member: platform.Member{ID: id, Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}
-	return TenantSpec{ID: req.ID, Name: req.Name, Template: req.Template, Seats: []platform.Seat{seat}, Settings: settings, Created: now.UTC(), By: by}, tpl, nil
+	return platform.TenantSpec{ID: req.ID, Name: req.Name, Template: req.Template, Seats: []platform.Seat{seat}, Settings: settings, Created: now.UTC(), By: by}, tpl, nil
 }
 
 // firstDecisions gives a new tenant its configured settings and its first
 // administrator's roles through ordinary decisions, so they are journaled and
 // audited like any later change.
-func firstDecisions(t *Tenant, spec TenantSpec, tpl TenantTemplate, now time.Time) error {
+func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemplate, now time.Time) error {
 	if len(spec.Seats) == 0 {
 		return nil
 	}
@@ -316,21 +217,21 @@ func firstDecisions(t *Tenant, spec TenantSpec, tpl TenantTemplate, now time.Tim
 
 // tenantRoutes are the host console's tenant creation: templates and POST /v1/host/tenants.
 func (h *Host) tenantRoutes(mux *http.ServeMux) {
-	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []TenantTemplate{}},
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []platform.TenantTemplate{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, _ *Tenant) {
-			out := []TenantTemplate{}
+			out := []platform.TenantTemplate{}
 			if h.Templates != nil {
 				out = h.Templates()
 			}
 			WriteJSON(w, http.StatusOK, out)
 		})
-	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: CreateTenantRequest{}, Answer: HostTenantView{}},
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants", Summary: "Create a tenant from a template with its first administrator; it serves on the next request and survives restarts (host administrators)", Body: platform.CreateTenantRequest{}, Answer: HostTenantView{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, _ *Tenant) {
 			if h.CreateTenant == nil {
 				WriteJSON(w, http.StatusNotImplemented, map[string]any{"error": "this host does not create tenants"})
 				return
 			}
-			var body CreateTenantRequest
+			var body platform.CreateTenantRequest
 			if err := decodeBody(r, &body); err != nil {
 				WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 				return
@@ -350,7 +251,7 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 
 // Run is a host binary's whole main after its flags and Rebuild: compose
 // every configured tenant (the -tenants file, or development) and serve.
-func (d *Deployment) Run(development TenantSpec) error {
+func (d *Deployment) Run(development platform.TenantSpec) error {
 	if d.Rebuild == nil && d.RebuildWithCapabilities == nil {
 		return fmt.Errorf("run: no tenant factory")
 	}

@@ -7,7 +7,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { MarkingTag, integrates } from "./marking";
+import { MarkingTag } from "./marking";
 import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef, type FlowCatalog, type FlowEdge, type FlowNode } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
@@ -69,8 +69,8 @@ const kindHelp = (kind: string): string => ({
   dedupe: t("First row per key wins"), aggregate: t("Group by columns and measure"), sort: t("Order rows by a column") } as Record<string, string>)[kind] ?? "";
 
 export function Pipelines() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (!integrates(role("build"))) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Pipelines")} help={t("Transform a dataset into another dataset or into records of an object, step by step, with expectations that quarantine bad rows instead of writing them.")}
       actions={<Button onClick={() => open({ view: "pipeline", params: { id: "new" } })}>{t("New pipeline")}</Button>} />
@@ -79,7 +79,7 @@ export function Pipelines() {
 }
 
 export function PipelineEditor({ id }: { id: string }) {
-  const { client, role } = useHost(), { open } = useApplicationWorkspace();
+  const { client , holds} = useHost(), { open } = useApplicationWorkspace();
   const { entities, drafts: objects } = useAuthoringModel();
   const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
   // The enterprise model's own kinds and elements, so a pipeline writing into
@@ -103,7 +103,7 @@ export function PipelineEditor({ id }: { id: string }) {
     if (!response.ok) throw Error(apiErrorMessage(response.body) ?? t("The pipeline trial could not be completed. Your draft is still here."));
     setPreview({ signature, result: response.body });
   };
-  if (!integrates(role("build"))) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Pipelines")} description={t("Only a builder or integrator can edit pipelines.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Pipelines")} description={query.isError ? t("The pipeline could not be loaded.") : t("Loading…")} />;
   const last = draft.last, input = datasets.find((d) => d.id === draft.input);
   const columns = input?.schema?.map((f) => f.name) ?? [];
@@ -136,12 +136,12 @@ export function PipelineEditor({ id }: { id: string }) {
         <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save pipeline")}</Button>
         <Button disabled={busy || !!inputs?.invalid || !draft.input} onClick={() => void perform(trial)}>{t("Trial pipeline")}</Button>
         <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
-        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
+        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         {draft.state === "published" && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("run"))}>{draft.requested ? t("Run requested…") : t("Run now")}</Button>}
         {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    {objects.isError && role("build") === "builder" && <Panel role="alert" className="text-danger">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
+    {objects.isError && holds("build", "builder") && <Panel role="alert" className="text-danger">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
     {previewResult && <Panel title={t("Draft trial")} role="region" aria-label={t("Pipeline trial results")} className="grid min-w-0 gap-3">
       <p className="text-xs text-muted">{t("Transforms the current draft over readable dataset versions. No pipeline is published, and no dataset versions or business records are written.")}</p>
       <p className="flex flex-wrap items-center gap-2 text-xs"><MarkingTag marking={previewResult.marking} /><span>{t("Input v{version}: {sampled} of {total} rows · {rows} output rows · {quarantined} quarantined", { version: previewResult.inputVersion, sampled: previewResult.sampledRows, total: previewResult.inputRows, rows: previewResult.rows.length, quarantined: previewResult.quarantine.length })}</span></p>

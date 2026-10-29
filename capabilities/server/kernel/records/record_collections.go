@@ -37,7 +37,7 @@ func CompileOrder(info platform.EntityInfo, names []string) (SortOrder, error) {
 func (order SortOrder) Keys(value reflect.Value) []any {
 	keys := make([]any, 0, len(order.keys)+1)
 	for _, key := range order.keys {
-		keys = append(keys, key.of(value))
+		keys = append(keys, key.Of(value))
 	}
 	return append(keys, Header(value).ID)
 }
@@ -181,7 +181,7 @@ type sortKey struct {
 	desc  bool
 }
 
-func (k sortKey) of(v reflect.Value) any {
+func (k sortKey) Of(v reflect.Value) any {
 	switch k.stamp {
 	case "id":
 		return Header(v).ID

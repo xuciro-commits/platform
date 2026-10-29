@@ -1,16 +1,16 @@
 package platformserver
 
-import releaseowner "platformserver/studio/releases"
-
 import (
 	"encoding/json"
 	"fmt"
-	pageowner "platformserver/studio/pages"
-
+	"platformserver/kernel/records"
 	"platformserver/platform"
+	pageowner "platformserver/studio/pages"
+	releaseowner "platformserver/studio/releases"
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 )
 
 func (t *Tenant) installationPredecessor(record string) (string, error) {
@@ -18,13 +18,13 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid installation record %s", record)
 	}
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
-	et := t.records.types[typ]
-	if et == nil || et.rows.Get(id) == nil {
+	t.records.Lock()
+	defer t.records.Unlock()
+	et := t.records.Type(typ)
+	if et == nil || et.Rows().Get(id) == nil {
 		return "", fmt.Errorf("release metadata needs its predecessor %s", record)
 	}
-	image, err := et.rows.Get(id).Image()
+	image, err := et.Rows().Get(id).Image()
 	if err != nil {
 		return "", err
 	}
@@ -56,16 +56,16 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 			return nil, err
 		}
 		typ, id, _ := strings.Cut(plan.Record, "/")
-		et := draft.records.types[typ]
-		value := reflect.New(et.info.Go).Elem()
+		et := draft.records.Type(typ)
+		value := reflect.New(et.Info().Go).Elem()
 		if err := json.Unmarshal(plan.Image, value.Addr().Interface()); err != nil {
 			return nil, err
 		}
-		installed := *et.rows.Get(id)
+		installed := *et.Rows().Get(id)
 		installed.Value, installed.Original = value, nil
 		installed.RetainOriginal(plan.Image)
-		et.setRow(id, &installed)
-		draft.records.writes[plan.Record] = true
+		et.SetRow(id, &installed)
+		draft.records.TrackWrite(plan.Record)
 		if err := draft.registerInstalledAsset(plan); err != nil {
 			return nil, err
 		}
@@ -82,12 +82,10 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []platform.Release
 	return draft, nil
 }
 
-func (t *Tenant) assetInstallationView(recordView *recordStore) (*Tenant, error) {
+func (t *Tenant) assetInstallationView(recordView *records.Store) (*Tenant, error) {
 	draft := (hostView{t: t}).installationDraft()
-	draft.records = recordView.forkRecords()
-	var control tenantState
-	t.console.snapshot(&control)
-	draft.console.restore(&control)
+	draft.records = recordView.ForkRecords()
+	draft.console.Restore(t.console.SnapshotState())
 	draft.Secrets = t.Secrets
 	draft.apps = slices.Clone(t.apps)
 	if t.procs != nil {
@@ -125,82 +123,78 @@ func (t *Tenant) assetInstallationView(recordView *recordStore) (*Tenant, error)
 }
 
 func (t *Tenant) validateAssetStorage(draft *Tenant, upgrade bool) error {
-	for typ, old := range t.records.types {
-		next := draft.records.types[typ]
-		if next == nil || old.rows.Len() == 0 {
-			continue
-		}
-		if !releaseowner.SameStoredFields(old.info, next.info) && (!upgrade || releaseowner.OptionalStoredAddition(old.info, next.info) == nil) {
-			return fmt.Errorf("object %s has records; changing their storage shape needs a supported upgrade plan", typ)
+	shapes := []releaseowner.StoredShape{}
+	for typ, old := range t.records.Types() {
+		if next := draft.records.Type(typ); next != nil {
+			shapes = append(shapes, releaseowner.StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
 		}
 	}
-	for _, definition := range t.definitions {
-		if definition.Action != nil && definition.Source != "code" && !slices.ContainsFunc(draft.definitions, func(next platform.Definition) bool { return next.Ref == definition.Ref }) {
-			action := definition.Ref.Name
-			if definition.Action.Automation {
-				for _, suffix := range []string{platform.ApprovalHeld, platform.ApprovalRejected, platform.ApprovalReturned} {
-					action = strings.TrimSuffix(action, suffix)
-				}
-			}
-			return fmt.Errorf("retiring action %s is not part of a supported upgrade; keep the action in the new release", definition.Ref.Name)
-		}
-	}
-	return nil
+	return releaseowner.CheckStorage(shapes, t.definitions, draft.definitions, upgrade)
+}
+func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
+	return releaseowner.ValidateSet(releaseowner.ValidationContext{
+		Entities: t.releaseStoredShapes(), Definitions: t.definitions, Lookup: t.entity, Properties: t.checkObjectProperties, RecordSets: t.checkRecordSetDeclarations,
+		Link: func(app string, link platform.LinkType) error {
+			return (hostView{t: t, app: t.app(app)}).ValidateInstallLinkType(link)
+		},
+		Application: t.checkApplicationExtension, PageQueries: t.checkPageQueries,
+		Navigation: func(page platform.Page, app string) error { return pageowner.CheckNavigation(page, app, t.definitions) },
+	}, engines...)
 }
 
-func (t *Tenant) validateAssetSet(engines ...platform.RuleEngine) error {
-	for _, et := range t.records.sortedTypes() {
-		if err := t.checkObjectProperties(et.info); err != nil {
-			return err
+func (t *Tenant) releaseStoredShapes() []platform.EntityInfo {
+	entities := []platform.EntityInfo{}
+	for _, et := range t.records.SortedTypes() {
+		entities = append(entities, et.Info())
+	}
+	return entities
+}
+func (t *Tenant) checkExtensionSet() error {
+	return releaseowner.CheckExtensions(t.releaseStoredShapes(), t.entity)
+}
+func (t *Tenant) releaseExtensionReview(candidate platform.ReleaseCandidate) ([]releaseowner.ReleaseExtensionReview, error) {
+	shapes, err := releaseowner.AssetShapes(t.apps, candidate.Assets)
+	if err != nil {
+		return nil, err
+	}
+	return releaseowner.ExtensionReview(candidate, t.releaseStoredShapes(), shapes, t.entity, (hostView{t: t}).EntitySource)
+}
+func (t *Tenant) releaseAssetShapes(available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
+	return releaseowner.AssetShapes(t.apps, available)
+}
+
+// The plan is derived from immutable candidate bytes and current storage;
+// callers cannot supply migration instructions or replace its source binding.
+func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, members ...platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {
+	var member platform.Member
+	if len(members) > 0 {
+		member = members[0]
+	}
+	installations, bootstrap, err := t.prepareReleaseLifecycleLocked(candidate, member, time.Now().UTC(), true)
+	if err != nil {
+		return nil, err
+	}
+	records := t.records
+	if len(bootstrap) > 0 {
+		prepared, err := t.prepareAcceptedBatch(t.app("build").AcceptedLedger(), bootstrap)
+		if err != nil || prepared == nil {
+			return nil, fmt.Errorf("upgrade bootstrap cannot prepare: %v", err)
 		}
-		if err := t.checkRecordSetDeclarations(et.info, engines...); err != nil {
-			return err
-		}
-		if err := platform.CheckConstraints(et.info, t.entity, true, engines...); err != nil {
-			return err
+		records = prepared.records
+	}
+	view, err := t.assetInstallationView(records)
+	if err != nil {
+		return nil, err
+	}
+	trial, err := view.stageReleaseInstallationLocked(installations, true, true)
+	if err != nil {
+		return nil, err
+	}
+	shapes := []releaseowner.StoredShape{}
+	for typ, old := range t.records.Types() {
+		if next := trial.records.Type(typ); next != nil {
+			shapes = append(shapes, releaseowner.StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
 		}
 	}
-	pages := map[platform.AssetRef]platform.Page{}
-	for _, definition := range t.definitions {
-		if definition.LinkType != nil {
-			view := hostView{t: t, app: t.app(definition.Ref.App)}
-			if err := view.ValidateInstallLinkType(*definition.LinkType); err != nil {
-				return err
-			}
-			for _, link := range definition.LinkVersions {
-				if err := view.ValidateInstallLinkType(link); err != nil {
-					return err
-				}
-			}
-		}
-		if definition.Page != nil {
-			pages[definition.Ref] = *definition.Page
-		}
-	}
-	for _, definition := range t.definitions {
-		if definition.Application != nil {
-			if err := t.checkApplicationExtension(definition.Ref, *definition.Application); err != nil {
-				return err
-			}
-			if err := t.checkPageQueries(definition.Application.QueryPage()); err != nil {
-				return err
-			}
-			for _, name := range definition.Application.Pages {
-				ref := platform.AssetRef{App: definition.Ref.App, Kind: platform.AssetPage, Name: name}
-				page, ok := pages[ref]
-				if !ok {
-					return fmt.Errorf("application page %s is unavailable", ref)
-				}
-				if err := definition.Application.CheckPageVariables(page); err != nil {
-					return err
-				}
-			}
-		}
-		if definition.Page != nil {
-			if err := pageowner.CheckNavigation(*definition.Page, definition.Ref.App, t.definitions); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return releaseowner.UpgradePlan(candidate.ID, t.releases.Active(), shapes)
 }

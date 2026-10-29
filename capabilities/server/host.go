@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import automation "platformserver/engine/automation"
 
 import (
@@ -31,7 +33,7 @@ import (
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
 	agentEvaluator        platform.AgentEvaluator
-	services              RuntimeCapabilities
+	services              platform.RuntimeCapabilities
 	disabledOwners        map[string]bool
 	systemDefinitions     atomic.Pointer[systemDefinitionProjection]
 	systemDefinitionState systemDefinitionState
@@ -73,7 +75,7 @@ type Tenant struct {
 	appIndex      map[string]int          // immutable composition identity; private views replace owners in the same positions
 	committed     runtimekernel.Committed // answers by idempotency key (kernel/tenant_state.go)
 	releases      releases.Store          // studio/releases/release_retention.go
-	console       hostControl             // the host console's lifecycle, support sessions, migrations (host_control.go)
+	console       controlowner.HostState  // the host console's lifecycle, support sessions, migrations (host_control.go)
 	staged        computeowner.Channel    // the per-call result channel (compute_channel.go)
 	definitions   []platform.Definition   // installed code assets; member views are derived on read
 	owner         map[string]platform.App // "action:", "read:" and "input:" names → app
@@ -114,7 +116,7 @@ type Tenant struct {
 	// unless the provider is local); tests replace it.
 	AIClient  func(req *http.Request) (*http.Response, error)
 	ai        models                // the AI app: the models the host calls
-	records   *recordStore          // the apps' entity records
+	records   *records.Store        // the apps' entity records
 	tasks     platform.Tasks        // serves Caller.Assign: the work app
 	procs     platform.Processes    // the flow app
 	listeners []string              // platform apps given other apps' events as owned work (platform.Listener)
@@ -134,7 +136,7 @@ type Tenant struct {
 // Audit is the tenant's recent accepted inputs, oldest first.
 func (t *Tenant) Audit() []platform.AuditEntry { return t.audit.All() }
 
-func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
+func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
 	if services.BindOwner == nil {
 		return nil, fmt.Errorf("tenant composition requires owner bindings")
 	}
@@ -145,7 +147,7 @@ func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...
 		return nil, err
 	}
 	t := &Tenant{ID: id, apps: apps, appIndex: map[string]int{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: services.Kernel.Works(), work: automation.NewWorkBoard(),
-		connectors: newConnectorRoster(services.Kernel), records: newRecordStore()}
+		connectors: newConnectorRoster(services.Kernel), records: records.NewStore()}
 	t.mu.BindReadScope(t.beginRecordRead, t.closeRecordRead)
 	for i, app := range apps {
 		id := app.Manifest().ID
@@ -165,7 +167,7 @@ func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...
 			}
 		}
 	}
-	t.records.rules = services.Rules
+	t.records.SetRules(services.Rules)
 	t.staged = computeowner.NewChannel(id, t.files)
 	t.i18n = transport.NewTranslator(func() []platform.App { return t.apps },
 		func(a platform.App) platform.Manifest { return transport.ManifestOf(a, t.definitionsFingerprint()) },
@@ -249,11 +251,11 @@ func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...
 		if err := build.CheckManifest(a.Manifest(), runsJobs); err != nil {
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
-		if err := t.records.declare(a); err != nil {
+		if err := t.records.Declare(a); err != nil {
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
 		for _, j := range m.Jobs {
-			t.work.AddJob(&automation.Task{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled", Job: j})
+			t.work.AddJob(&automation.Task{ScheduledTask: platform.ScheduledTask{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled"}, Job: j})
 		}
 		var names []string
 		for _, r := range m.Reads {
@@ -299,8 +301,8 @@ func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...
 		for k, a := range apps {
 			manifests[k] = a.Manifest()
 		}
-		for _, et := range t.records.sortedTypes() {
-			infos[et.info.Type] = et.info
+		for _, et := range t.records.SortedTypes() {
+			infos[et.Info().Type] = et.Info()
 		}
 		if err := platform.CheckInterfaces(manifests, infos); err != nil {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
@@ -309,12 +311,12 @@ func NewTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...
 	if err := t.registerDefinitions(); err != nil {
 		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
-	for _, et := range t.records.sortedTypes() {
-		if err := t.checkRecordSetDeclarations(et.info); err != nil {
-			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.info.Type, err)
+	for _, et := range t.records.SortedTypes() {
+		if err := t.checkRecordSetDeclarations(et.Info()); err != nil {
+			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
-		if err := platform.CheckConstraints(et.info, t.entity, true); err != nil {
-			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.info.Type, err)
+		if err := platform.CheckConstraints(et.Info(), t.entity, true); err != nil {
+			return nil, fmt.Errorf("tenant %s object %s: %w", id, et.Info().Type, err)
 		}
 	}
 	var assetOwners []platform.AssetLifecycleOwner

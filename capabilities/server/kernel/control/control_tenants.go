@@ -7,10 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"maps"
+	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -512,4 +515,133 @@ func (d *Console) JoinableSubject(subject string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.subjects[subject] == ""
+}
+
+// specs are the host's tenant specs, from the -tenants file or the binary's development default.
+type Specs struct {
+	mu   sync.Mutex
+	file string
+	list []platform.TenantSpec
+}
+
+func (s *Specs) Load(file string, development platform.TenantSpec) error {
+	s.file = file
+	if file == "" {
+		s.list = []platform.TenantSpec{development}
+		return nil
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	var list []platform.TenantSpec
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
+	seen := map[string]bool{}
+	for _, t := range list {
+		if !ValidTenantID(t.ID) || seen[t.ID] {
+			return fmt.Errorf("%s: tenant id %q is invalid or repeated", file, t.ID)
+		}
+		seen[t.ID] = true
+	}
+	s.list = list
+	return nil
+}
+
+func (s *Specs) Get(id string) (platform.TenantSpec, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, t := range s.list {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return platform.TenantSpec{}, false
+}
+
+func (s *Specs) All() []platform.TenantSpec {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.list)
+}
+
+// add appends a spec and writes the file back, so the tenant exists on the next start too.
+func (s *Specs) Add(spec platform.TenantSpec) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if slices.ContainsFunc(s.list, func(t platform.TenantSpec) bool { return t.ID == spec.ID }) {
+		return fmt.Errorf("tenant %s exists", spec.ID)
+	}
+	next := append(slices.Clone(s.list), spec)
+	if s.file != "" {
+		raw, _ := json.MarshalIndent(next, "", "  ")
+		if err := os.WriteFile(s.file, append(raw, '\n'), 0o644); err != nil {
+			return err
+		}
+	}
+	s.list = next
+	return nil
+}
+
+var tenantID = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+
+func ValidTenantID(id string) bool { return tenantID.MatchString(id) }
+func NewSpecs(file string) *Specs  { return &Specs{file: file} }
+
+// tenantRegistry keeps the host, work runner, telemetry and snapshotter on the
+// same tenant generation. Rebuilding never reuses a partially restored Tenant.
+type Registry[T comparable] struct {
+	id          func(T) string
+	unavailable func(T) bool
+	mu          sync.RWMutex
+	tenants     []T
+}
+
+func NewRegistry[T comparable](tenants []T, id func(T) string, unavailable func(T) bool) *Registry[T] {
+	return &Registry[T]{tenants: append([]T(nil), tenants...), id: id, unavailable: unavailable}
+}
+
+func (r *Registry[T]) List() []T {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]T(nil), r.tenants...)
+}
+
+// add hosts a new tenant; ids are unique.
+func (r *Registry[T]) Add(t T) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tenants = append(r.tenants, t)
+}
+
+func (r *Registry[T]) Current(id string) T {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, t := range r.tenants {
+		if r.id(t) == id {
+			return t
+		}
+	}
+	var empty T
+	return empty
+}
+
+func (r *Registry[T]) Replace(id string, old, fresh T) error {
+	var empty T
+	if fresh == empty || r.id(fresh) != id || r.unavailable(fresh) || old == empty || !r.unavailable(old) {
+		return fmt.Errorf("tenant %s: recovery candidate or predecessor is not eligible", id)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, t := range r.tenants {
+		if r.id(t) == id {
+			if t != old {
+				return fmt.Errorf("tenant %s: another recovery already replaced this generation", id)
+			}
+			r.tenants[i] = fresh
+			return nil
+		}
+	}
+	return fmt.Errorf("tenant %s: not hosted", id)
 }

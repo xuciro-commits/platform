@@ -77,34 +77,34 @@ func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name strin
 // A proposed owner row supplies reference values to its own rules before Put.
 // The copied read view has no history, writes or authoritative side effects.
 func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *kernel.Error) {
-	store := d.records.forkRecords()
-	et := store.types[object]
-	if !c.Staging() || et == nil || et.info.App != c.App || id == "" {
+	store := d.records.ForkRecords()
+	et := store.Type(object)
+	if !c.Staging() || et == nil || et.Info().App != c.App || id == "" {
 		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection candidate is outside its owner")
 	}
-	value := reflect.New(et.info.Go).Elem()
+	value := reflect.New(et.Info().Go).Elem()
 	if json.Unmarshal(raw, value.Addr().Interface()) != nil || records.Header(value).ID != id {
 		return platform.RecordSetResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Collection candidate is invalid")
 	}
-	if before := et.rows.Get(id); before != nil {
+	if before := et.Rows().Get(id); before != nil {
 		records.Header(value).Created = records.Header(before.Value).Created
 	} else {
 		records.Header(value).Created.By = c.ID
 	}
-	et.setRow(id, &records.Row{Value: value})
+	et.SetRow(id, &records.Row{Value: value})
 	return d.tenant.readRecordSetFrom(store, c, object, id, name, at)
 }
 
-func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
+func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, object, id, name string, at time.Time) (platform.RecordSetResult, *kernel.Error) {
 	result := platform.RecordSetResult{Records: []json.RawMessage{}}
 	lookup := func(typ string) (platform.EntityInfo, bool) {
-		store.mu.Lock()
-		defer store.mu.Unlock()
-		et := store.types[typ]
+		store.Lock()
+		defer store.Unlock()
+		et := store.Type(typ)
 		if et == nil {
 			return platform.EntityInfo{}, false
 		}
-		return et.info, true
+		return et.Info(), true
 	}
 	info, known := lookup(object)
 	if !known || !slices.ContainsFunc(info.Sets, func(set platform.RecordSet) bool { return set.Name == name }) {
@@ -179,9 +179,9 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 		field := target.Fields[index]
 		domain = append(domain, []any{field.Name, "=", id})
 	}
-	store.mu.Lock()
-	et := store.types[set.Object]
-	store.mu.Unlock()
+	store.Lock()
+	et := store.Type(set.Object)
+	store.Unlock()
 	if et == nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable")
 	}
@@ -195,11 +195,11 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	decisions := map[string]platform.AuthzDecision{}
 	var rows []any
 	if refusal := func() *kernel.Error {
-		store.mu.Lock()
-		defer store.mu.Unlock()
-		query := businessQuery(et.info, platform.Query{Domain: platform.Raw(domain), BusinessTime: set.BusinessTime}, c.Member, at)
-		raw, queryErr := store.matchingQuery(et, query, nil)
-		values, visibleErr := store.matchingQuery(view, query, visible)
+		store.Lock()
+		defer store.Unlock()
+		query := businessQuery(et.Info(), platform.Query{Domain: platform.Raw(domain), BusinessTime: set.BusinessTime}, c.Member, at)
+		raw, queryErr := store.MatchingQuery(et, query, nil)
+		values, visibleErr := store.MatchingQuery(view, query, visible)
 		if queryErr != nil || visibleErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection membership is unavailable")
 		}
@@ -219,8 +219,8 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 		narrower := t.narrowerIn(store, c.Member, at, true)
 		rows = make([]any, 0, len(values))
 		for _, value := range values {
-			v := records.Mask(et.info, value, hidden)
-			if et.info.HasReadSources() || len(et.info.VersionPins) > 0 {
+			v := records.Mask(et.Info(), value, hidden)
+			if et.Info().HasReadSources() || len(et.Info().VersionPins) > 0 {
 				narrowed, _ := narrower.derive(et, reflect.ValueOf(v))
 				v = narrowed.Interface()
 			}
@@ -278,7 +278,7 @@ func (t *Tenant) readRecordSetFrom(store *recordStore, c platform.Caller, object
 	for _, row := range rows {
 		value := reflect.New(reflect.TypeOf(row)).Elem()
 		value.Set(reflect.ValueOf(row))
-		rowValues := constraintValues(et.info, value)
+		rowValues := constraintValues(et.Info(), value)
 		keep := true
 		for _, where := range predicates {
 			value, err := evaluate(where, rowValues)

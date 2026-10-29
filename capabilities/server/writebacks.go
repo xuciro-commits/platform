@@ -176,7 +176,7 @@ func (t *Tenant) checkWritebackCredential(request build.WritebackRequest) *kerne
 func (t *Tenant) connectionEndpoints() []*Endpoint {
 	var out []*Endpoint
 	for _, x := range t.outbound {
-		if !strings.HasPrefix(x.Endpoint, build.WritebackEndpoint) || settled(x.State) {
+		if !strings.HasPrefix(x.Endpoint, build.WritebackEndpoint) || platform.EffectSettled(x.State) {
 			continue
 		}
 		if !slices.ContainsFunc(out, func(ep *Endpoint) bool { return ep.ID == x.Endpoint }) {

@@ -134,7 +134,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 		return nil
 	}
 	if envelope.Kind == "host-result" {
-		saved, err := decodeAcceptedHostControl(e.Body)
+		saved, err := acceptedformat.DecodeHostControl(e.Body)
 		if err != nil || saved.App != e.App || saved.Member != m.ID || saved.Tenant != t.ID || !journal.SameTime(saved.At, e.At) {
 			return fmt.Errorf("entry %d: invalid host result: %v", i+1, err)
 		}
@@ -174,7 +174,7 @@ func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platf
 	}
 	ra := a
 	if envelope.Kind == "work-result" {
-		saved, decodeErr := decodeAcceptedWork(e.Body)
+		saved, decodeErr := acceptedformat.DecodeWork(e.Body)
 		if decodeErr != nil || saved.App != e.App || !journal.SameTime(saved.At, e.At) || m.ID != "app:"+e.App {
 			return fmt.Errorf("entry %d: invalid work result: %v", i+1, decodeErr)
 		}

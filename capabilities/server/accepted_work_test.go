@@ -164,7 +164,7 @@ func TestAcceptedWorkKeepsStateOnlyJobResult(t *testing.T) {
 	if owner.accepted != 1 || len(entries) != 1 {
 		t.Fatalf("state-only job was discarded as idle: state=%d entries=%d", owner.accepted, len(entries))
 	}
-	saved, err := decodeAcceptedWork(entries[0].Body)
+	saved, err := acceptedformat.DecodeWork(entries[0].Body)
 	if err != nil || len(saved.Changes) != 0 || len(saved.States) != 1 {
 		t.Fatalf("state-only work result differs: %+v %v", saved.States, err)
 	}
@@ -189,7 +189,7 @@ func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) 
 	legacy := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if legacy {
-			result, err := decodeAcceptedWork(e.Body)
+			result, err := acceptedformat.DecodeWork(e.Body)
 			if err != nil {
 				return nil, err
 			}
@@ -198,7 +198,7 @@ func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) 
 			result.After.Applications = nil
 			result.Changes, result.Notices, result.Intents = nil, nil, nil
 			result.States, result.Control, result.Unique = nil, nil, nil
-			result.Digest, err = digestAcceptedWork(result)
+			result.Digest, err = acceptedformat.DigestWork(result)
 			if err != nil {
 				return nil, err
 			}
@@ -220,11 +220,11 @@ func TestAcceptedWorkLegacyJobPredecessorAndNewApplicationBinding(t *testing.T) 
 		}
 		legacy = false
 	}
-	first, err := decodeAcceptedWork(entries[0].Body)
+	first, err := acceptedformat.DecodeWork(entries[0].Body)
 	if err != nil || len(first.Input.Applications) != 0 || len(first.After.Applications) != 0 {
 		t.Fatalf("legacy job image changed: %v", err)
 	}
-	second, err := decodeAcceptedWork(entries[1].Body)
+	second, err := acceptedformat.DecodeWork(entries[1].Body)
 	if err != nil || len(second.Input.Applications) != 0 || len(second.After.Applications) == 0 {
 		t.Fatalf("new labels did not join the accepted result: %v", err)
 	}
@@ -386,7 +386,7 @@ func TestAcceptedWorkCommitsAttemptRecordsTasksAndNoticesTogether(t *testing.T) 
 		len(noticeValues(live)) != 2 || live.sequences.Clone()["worker/document/0"] != 1 {
 		t.Fatalf("accepted work did not apply once: %s fault=%+v", out, live.fault.Load())
 	}
-	saved, err := decodeAcceptedWork(entries[1].Body)
+	saved, err := acceptedformat.DecodeWork(entries[1].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestAcceptedWorkRefusalDiscardsBusinessChangesAndCommitsRetry(t *testing.T)
 		live.mu.Lock()
 		out := live.attempt(task, when, false)
 		live.mu.Unlock()
-		if out == "ok" || live.records.types["worker.document"].rows.Len() != 0 ||
+		if out == "ok" || live.records.Type("worker.document").Rows().Len() != 0 ||
 			live.sequences.Clone()["worker/document/0"] != 0 || len(noticeValues(live)) != 0 {
 			t.Fatalf("refused work exposed partial business changes: %s", out)
 		}
@@ -576,7 +576,7 @@ func TestAcceptedWorkerDirectLedgerKeepsParentAcrossSavepoint(t *testing.T) {
 	if outcome != "ok" || len(entries) != 2 || len(noticeValues(live)) != 3 {
 		t.Fatalf("parent ledger lost its receipt after a child savepoint: %s fault=%v notices=%d entries=%d", outcome, live.fault.Load(), len(noticeValues(live)), len(entries))
 	}
-	saved, err := decodeAcceptedWork(entries[1].Body)
+	saved, err := acceptedformat.DecodeWork(entries[1].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,7 +604,7 @@ func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
 		return nil, errors.New("leave the accepted input unapplied")
 	}
 	_ = tn.acceptWork(tn.work.Jobs[0], at)
-	result, err := decodeAcceptedWork(saved)
+	result, err := acceptedformat.DecodeWork(saved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -619,7 +619,7 @@ func TestAcceptedWorkCompletionPreservesChildCancellation(t *testing.T) {
 	child.Operations = append(child.Operations, cancel)
 	child.Digest, _ = acceptedformat.DigestBatch(child)
 	result.Changes, _ = json.Marshal(child)
-	result.Digest, _ = digestAcceptedWork(result)
+	result.Digest, _ = acceptedformat.DigestWork(result)
 	raw, _ := json.Marshal(result)
 	if applied, err := tn.applyAcceptedWork(raw); err != nil || !applied {
 		t.Fatalf("work with a cancelling child: %v (applied=%t)", err, applied)

@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import (
 	"bytes"
 	"context"
@@ -74,7 +76,7 @@ func TestPostgresSQLCheckpointRestoresTailWithoutResidentRecords(t *testing.T) {
 	decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I3", map[string]any{"name": "three", "qty": 7}, at.Add(3*time.Second))
 	// A stale capture cannot publish an archive of the newer rows under its
 	// original owner position. The older valid checkpoint remains available.
-	if err = saveRuntimeSnapshot(ctx, j, id, savedPosition, key, raw); err == nil {
+	if err = runtimekernel.SaveCheckpoint(ctx, j, id, savedPosition, key, raw); err == nil {
 		t.Fatal("stale owner snapshot captured newer SQL records")
 	}
 	restored := compose()
@@ -86,8 +88,8 @@ func TestPostgresSQLCheckpointRestoresTailWithoutResidentRecords(t *testing.T) {
 	if positions[id] != j.Position(id) {
 		t.Fatal("startup did not save the recovered owner state at the current position")
 	}
-	for typ, et := range restored.records.types {
-		if !et.rows.Sourced() || et.rows.Stored() != 0 || uniqueIndexCount(et) != 0 || referenceIndexCount(et) != 0 {
+	for typ, et := range restored.records.Types() {
+		if !et.Rows().Sourced() || et.Rows().Stored() != 0 || uniqueIndexCount(et) != 0 || referenceIndexCount(et) != 0 {
 			t.Fatalf("current SQL state remained resident for %s", typ)
 		}
 	}
@@ -159,7 +161,7 @@ func TestPostgresSQLCheckpointUpgradesAnUnchangedPortableSnapshot(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved, err := runtimeCheckpoint(state)
+	saved, err := runtimekernel.ReadCheckpoint(state)
 	if err != nil || saved == nil {
 		t.Fatalf("unchanged portable snapshot was not upgraded at its original position: %v", err)
 	}
@@ -216,7 +218,7 @@ func TestPostgresSQLCheckpointRestoresPublishedTypesAndTailPublication(t *testin
 		if value["note"] != want.note || len(view.History) != want.history {
 			t.Fatalf("published record lost its accepted state: %s %+v", want.typ, value)
 		}
-		if restored.records.types[want.typ].rows.Stored() != 0 {
+		if restored.records.Type(want.typ).Rows().Stored() != 0 {
 			t.Fatalf("published current records remained resident: %s", want.typ)
 		}
 	}
@@ -435,7 +437,7 @@ func testPostgresSQLCheckpointReleaseTail(t *testing.T, legacy bool) {
 	if err != nil || got.ID != candidate || restored.ActiveRelease() != candidate {
 		t.Fatalf("restored flow closure differs: %+v %v", got, err)
 	}
-	if restored.records.types[build.ProcessType].rows.Stored() != 0 {
+	if restored.records.Type(build.ProcessType).Rows().Stored() != 0 {
 		t.Fatal("restored process records remained resident")
 	}
 }

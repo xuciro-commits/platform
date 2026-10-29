@@ -1636,3 +1636,17 @@ type ConsolePackages interface {
 }
 
 const PackageType = "platform.package"
+
+// CompositeEdit is one asset edit of a composite command.
+type CompositeEdit struct {
+	Schema  string          `json:"schema"`
+	Target  *pb.EntityRef   `json:"target"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+// CompositeAnswer says what the tenant accepted.
+type CompositeAnswer struct {
+	Key     string `json:"key"`
+	Applied int    `json:"applied"`
+	Digest  string `json:"digest,omitempty"`
+}

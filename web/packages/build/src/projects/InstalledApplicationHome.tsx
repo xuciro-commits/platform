@@ -23,7 +23,7 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
   const title = application?.title || installedApps.data?.find(app => app.id === ref.app)?.title || ref.app;
   const { owned, unavailable } = useProjectResources(application, ref.app, false);
   const activeArea = studioArea(area, selected?.split("/")[1]);
-  const inventory = useRecordInventory<Project>("build.app", 1000, host.role("build") === "builder");
+  const inventory = useRecordInventory<Project>("build.app", 1000, host.holds("build", "builder"));
   const extensions = (inventory.data?.records ?? []).filter(project => !project.archived && project.extends && refKey(project.extends) === refKey(ref));
   const [targetID, setTargetID] = useState("");
   const target = extensions.find(project => project.id === targetID) ?? extensions[0];

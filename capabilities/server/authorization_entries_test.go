@@ -1,5 +1,7 @@
 package platformserver
 
+import acceptedformat "platformserver/kernel/acceptedformat"
+
 import agentowner "platformserver/engine/agents"
 
 import "platformserver/studio/build"
@@ -39,7 +41,7 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 		freeze(tn, "stock")
 		_, err := tn.Submit(memberOf(t, tn, "ana"), submission(tn, memberOf(t, tn, "ana"), "stock", "stock.item.create", "stock.item", "blocked", map[string]any{"name": "Press"}), txnAt)
 		denied(err)
-		if tn.records.types["stock.item"].rows.Len() != 0 {
+		if tn.records.Type("stock.item").Rows().Len() != 0 {
 			t.Fatal("refused submit wrote a row")
 		}
 	})
@@ -62,10 +64,10 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 		owner := newResultWorker("work-authz")
 		tn := composeTenant(t, "work-authz", []platform.Seat{seatOf("ana")}, owner)
 		freeze(tn, "worker")
-		var saved acceptedWork
+		var saved acceptedformat.Work
 		tn.Record = func(entry Entry) {
 			var err error
-			saved, err = decodeAcceptedWork(entry.Body)
+			saved, err = acceptedformat.DecodeWork(entry.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,7 +87,7 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 			t.Fatalf("callback lost typed authorization refusal: %v", err)
 		}
 		denied(refusal)
-		if len(draft.records.writes) != 0 {
+		if draft.records.WriteCount() != 0 {
 			t.Fatal("refused callback wrote state")
 		}
 	})
@@ -99,7 +101,7 @@ func TestAuthorizationNineEntryFamilies(t *testing.T) {
 		c := platform.NewCaller(draft, tn.automation(platform.AgentApp, false).Member, platform.AgentApp, false, true)
 		err := draft.stateApp(tn.agents).(platform.AgentRuntime).ApplyAgentStepCaller(c, platform.AgentResultStep{Run: "R", Stop: "stopped"}, txnAt)
 		denied(err)
-		if len(draft.records.writes) != 0 {
+		if draft.records.WriteCount() != 0 {
 			t.Fatal("refused agent step wrote state")
 		}
 	})
@@ -196,19 +198,19 @@ func TestHostHTTPRetainsItsExplicitAuthorityAndRecoversWithoutAuthorization(t *t
 		handler.ServeHTTP(response, request)
 		return response
 	}
-	if response := call("tenant-token"); response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), "ERROR_CODE_POLICY_DENIED") || tn.console.suspended() {
+	if response := call("tenant-token"); response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), "ERROR_CODE_POLICY_DENIED") || tn.console.Suspended() {
 		t.Fatal("tenant rights changed host control")
 	}
-	if response := call("host-token"); response.Code != http.StatusOK || !tn.console.suspended() || len(entries) != 1 {
+	if response := call("host-token"); response.Code != http.StatusOK || !tn.console.Suspended() || len(entries) != 1 {
 		t.Fatalf("explicit host authority did not commit: %d %s", response.Code, response.Body.String())
 	}
-	saved, err := decodeAcceptedHostControl(entries[0].Body)
+	saved, err := acceptedformat.DecodeHostControl(entries[0].Body)
 	if err != nil || len(saved.Authorizations) != 1 || saved.Authorizations[0].Request.Principal != "host:operator" || !slices.Contains(saved.Authorizations[0].Roles, "host-admin") {
 		t.Fatal("host result omitted its original authority")
 	}
 	recovered := buildTenant()
 	recovered.app(controlowner.PlatformApp).Manifest().Actions.UsePolicies(func() []authz.Policy { t.Fatal("host recovery reauthorized"); return nil })
-	if err := recovered.Replay(entries); err != nil || !recovered.console.suspended() {
+	if err := recovered.Replay(entries); err != nil || !recovered.console.Suspended() {
 		t.Fatal("recorded host authority was not restored")
 	}
 }

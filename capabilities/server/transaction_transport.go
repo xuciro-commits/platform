@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -33,14 +35,14 @@ func (h hostView) TakeTxnStep() *kernel.Error {
 type txnCalls struct {
 	decision *stagedDecision
 	caller   platform.Caller
-	snapshot *recordStore
+	snapshot *records.Store
 }
 
 func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCalls, *kernel.Error) {
 	if h.decision == nil || !c.Staging() || c.App != build.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Transaction calls require their original private owner")
 	}
-	return &txnCalls{decision: h.decision, caller: c, snapshot: h.decision.records.forkRecords()}, nil
+	return &txnCalls{decision: h.decision, caller: c, snapshot: h.decision.records.ForkRecords()}, nil
 }
 
 // CheckTxnCall resolves the actual synchronous owner, rather than accepting a

@@ -121,7 +121,7 @@ func TestRuntimeWorkAndEffectAcceptInRecordMode(t *testing.T) {
 	if outcome != "ok" || len(entries) != 2 {
 		t.Fatalf("work Record acceptance: %s %+v", outcome, live.fault.Load())
 	}
-	saved, err := decodeAcceptedWork(entries[1].Body)
+	saved, err := acceptedformat.DecodeWork(entries[1].Body)
 	if err != nil || saved.Kind != "work-result" {
 		t.Fatalf("work generated legacy row: %v", err)
 	}

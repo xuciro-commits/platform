@@ -124,14 +124,14 @@ test("an application assembles integration drafts over a saved model before join
     await page.getByRole("textbox", { name: "Source name", exact: true }).fill(`${name}source`);
     await page.getByRole("textbox", { name: "Source title", exact: true }).fill("Saved receiving feed");
     await page.getByRole("combobox", { name: /^Connection/ }).selectOption(connection);
-    await expect(page.getByRole("status").filter({ hasText: "This saved connection is not ready." })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "This logical connection is not configured for use. You can publish the declaration; configure and check it before running the integration." })).toBeVisible();
     await page.getByRole("textbox", { name: /^URL/ }).fill("rows");
     await page.getByRole("combobox", { name: "Target object", exact: true }).selectOption(type);
     await page.getByRole("button", { name: "Add mapping", exact: true }).click();
     await page.getByRole("textbox", { name: "Row field", exact: true }).fill("note");
     await page.getByRole("combobox", { name: "Object field", exact: true }).selectOption("note");
     await page.getByRole("button", { name: "Publish", exact: true }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "The connection is not ready" })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: `The target object ${type} is not installed` })).toBeVisible();
     await expect(page).toHaveURL(/[?&]id=new(?:&|$)/);
     const sources = await builder.read<{ records: { id: string; name: string; revision: number }[] }>("records/build.source?limit=1000");
     const sourceDraft = sources.records.find(record => record.name === `${name}source`)!;
@@ -194,6 +194,10 @@ test("an application assembles integration drafts over a saved model before join
     expect(await operator.definitions()).toEqual(original);
     await verify.getByRole("button", { name: "Activate release", exact: true }).click();
     await expect(verify.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
+    expect(pulls).toBe(0);
+    expect(deliveries).toBe(0);
+    await builder.open(page, `/data-source?id=${source}&application=${application.id}`);
+    await page.getByRole("button", { name: "Pull now", exact: true }).click();
     await expect.poll(async () => (await builder.record(type, "FROM-SOURCE"))?.receipt, { timeout: 20_000 }).toBe("EXTERNAL-RECEIPT");
     expect(pulls).toBeGreaterThan(0);
     expect(deliveries).toBe(1);

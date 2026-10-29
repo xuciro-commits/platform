@@ -64,11 +64,11 @@ func (d *stagedDecision) putOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 	}
 	id := ownedRelationID(request.Binding.Ref.String(), parent, child)
 	entity := platform.RelationEntity(c.App)
-	et := d.records.types[entity.Type]
-	if et == nil || et.info.App != c.App {
+	et := d.records.Type(entity.Type)
+	if et == nil || et.Info().App != c.App {
 		return fail("Relationship owner has not declared its relation records")
 	}
-	prior := et.rows.Get(id)
+	prior := et.Rows().Get(id)
 	if remove && (prior == nil || records.Header(prior.Value).Archived) {
 		return fail("Owned relationship does not exist")
 	}
@@ -78,7 +78,7 @@ func (d *stagedDecision) putOwnedRelation(c platform.Caller, receipt *pb.ChangeR
 	return d.Put(c, receipt, platform.RelationValue(entity, id, request.Binding.Ref.Name, request.Binding.SourceVersion, parent, child, remove, legacy...))
 }
 
-func (t *Tenant) ownedRelationTargets(store *recordStore, c platform.Caller, link platform.LinkType, direction, id string, at time.Time) ([]string, bool, *kernel.Error) {
+func (t *Tenant) ownedRelationTargets(store *records.Store, c platform.Caller, link platform.LinkType, direction, id string, at time.Time) ([]string, bool, *kernel.Error) {
 	object, target := link.Parent.Name, link.Child.Name
 	if direction == "reverse" {
 		object, target = target, object
@@ -88,11 +88,11 @@ func (t *Tenant) ownedRelationTargets(store *recordStore, c platform.Caller, lin
 	}
 	refs := []string{}
 	func() {
-		store.mu.Lock()
-		defer store.mu.Unlock()
-		et := store.types[platform.OwnedRelationType(link.Child.App)]
+		store.Lock()
+		defer store.Unlock()
+		et := store.Type(platform.OwnedRelationType(link.Child.App))
 		if et != nil {
-			for _, row := range et.rows.All() {
+			for _, row := range et.Rows().All() {
 				if records.Header(row.Value).Archived {
 					continue
 				}
@@ -136,15 +136,15 @@ type ownedRelationViolation struct {
 
 // Count the final membership first so conflicts do not depend on map order.
 // Publication and the transaction gate use the same cardinality semantics.
-func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRelationViolation, error) {
-	et := s.types[platform.OwnedRelationType(link.Child.App)]
-	if et == nil || !ownedRelationSchema(et.info) {
+func ownedRelationViolations(s *records.Store, link platform.LinkType) ([]ownedRelationViolation, error) {
+	et := s.Type(platform.OwnedRelationType(link.Child.App))
+	if et == nil || !ownedRelationSchema(et.Info()) {
 		return nil, fmt.Errorf("owned relationship storage is unavailable")
 	}
 	type edge struct{ id, parent, child string }
 	var edges []edge
 	parents, children := map[string]int{}, map[string]int{}
-	for id, row := range et.rows.All() {
+	for id, row := range et.Rows().All() {
 		if records.Header(row.Value).Archived {
 			continue
 		}
@@ -171,10 +171,10 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 		}
 		parentType, parentID, parentOK := strings.Cut(value.parent, "/")
 		childType, childID, childOK := strings.Cut(value.child, "/")
-		parent, child := s.types[parentType], s.types[childType]
-		if !parentOK || !childOK || parentType != link.Parent.Name || childType != link.Child.Name || parent == nil || child == nil || parent.rows.Get(parentID) == nil || child.rows.Get(childID) == nil {
+		parent, child := s.Type(parentType), s.Type(childType)
+		if !parentOK || !childOK || parentType != link.Parent.Name || childType != link.Child.Name || parent == nil || child == nil || parent.Rows().Get(parentID) == nil || child.Rows().Get(childID) == nil {
 			invalid = "endpoint"
-		} else if link.DeletePolicy == "restrict-active" && records.Header(parent.rows.Get(parentID).Value).Archived && !records.Header(child.rows.Get(childID).Value).Archived {
+		} else if link.DeletePolicy == "restrict-active" && records.Header(parent.Rows().Get(parentID).Value).Archived && !records.Header(child.Rows().Get(childID).Value).Archived {
 			invalid = "archive"
 		}
 		if invalid != "" {
@@ -182,19 +182,19 @@ func (s *recordStore) ownedRelationViolations(link platform.LinkType) ([]ownedRe
 		}
 	}
 	if link.Required {
-		child := s.types[link.Child.Name]
+		child := s.Type(link.Child.Name)
 		if child == nil {
 			return nil, fmt.Errorf("required relationship child is unavailable")
 		}
 		ids := []string{}
-		for id, row := range child.rows.All() {
-			if !records.Header(row.Value).Archived && children[child.info.Type+"/"+id] == 0 {
+		for id, row := range child.Rows().All() {
+			if !records.Header(row.Value).Archived && children[child.Info().Type+"/"+id] == 0 {
 				ids = append(ids, id)
 			}
 		}
 		slices.Sort(ids)
 		for _, id := range ids {
-			violations = append(violations, ownedRelationViolation{child: child.info.Type + "/" + id, reason: "required"})
+			violations = append(violations, ownedRelationViolation{child: child.Info().Type + "/" + id, reason: "required"})
 		}
 	}
 	return violations, nil
@@ -206,7 +206,7 @@ func (d *stagedDecision) checkOwnedRelationConstraints() *kernel.Error {
 		if link == nil || link.Storage != "edge" {
 			continue
 		}
-		violations, err := d.records.ownedRelationViolations(*link)
+		violations, err := ownedRelationViolations(d.records, *link)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
@@ -222,8 +222,8 @@ func (d *stagedDecision) checkOwnedRelationConstraints() *kernel.Error {
 						continue
 					}
 					id := strings.TrimPrefix(edgeRef, platform.OwnedRelationType(link.Child.App)+"/")
-					et := d.records.types[platform.OwnedRelationType(link.Child.App)]
-					for _, row := range []*records.Row{candidate.before, et.rows.Get(id)} {
+					et := d.records.Type(platform.OwnedRelationType(link.Child.App))
+					for _, row := range []*records.Row{candidate.before, et.Rows().Get(id)} {
 						image := relationImage(row)
 						if image.Binding == link.Name && image.Child == violation.child {
 							write, changed = candidate, true

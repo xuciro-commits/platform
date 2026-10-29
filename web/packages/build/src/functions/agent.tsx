@@ -21,8 +21,8 @@ const empty = (): Draft => ({ id: "", revision: 0, name: "", title: "", descript
 const fieldClass = "grid gap-1 text-xs";
 
 export function Agents() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Agents")} description={t("Only a builder can edit agents.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder")) return <PageHeader title={t("Agents")} description={t("Only a builder can edit agents.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Agents")} help={t("An agent works on the ontology with the actions and queries you give it, within a budget. What it cannot take back waits for a person; every step is kept.")}
       actions={<Button onClick={() => open({ view: "agent", params: { id: "new" } })}>{t("New agent")}</Button>} />
@@ -31,7 +31,7 @@ export function Agents() {
 }
 
 export function AgentEditor({ id }: { id: string }) {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { holds} = useHost(), { open } = useApplicationWorkspace();
   const model = useAuthoringModel(), queries = useRecordInventory<QueryRecord>("build.query");
   const objects = (model.drafts.data?.records ?? []).filter(object => !object.archived);
   const objectTitles = new Map(objects.map(object => [`build.${object.name}`, object.title]));
@@ -64,7 +64,7 @@ export function AgentEditor({ id }: { id: string }) {
     const saved = dirty || id === "new" ? await save() : { id: draft.id, revision: draft.revision };
     if (saved) await editor.transition("publish", saved);
   };
-  if (role("build") !== "builder") return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{t("Only a builder can edit agents.")}</WorkbenchMessage></Workbench>;
+  if (!holds("build", "builder")) return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{t("Only a builder can edit agents.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="agent" title={t("Agent")}><WorkbenchMessage>{query.isError ? t("The agent could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const cases = draft.cases ?? [];
   const setCase = (i: number, patch: Partial<Case>) => change({ cases: cases.map((c, at) => at === i ? { ...c, ...patch } : c) });

@@ -43,7 +43,7 @@ func relationMigrationID(binding platform.AssetRef) string {
 	return ownedRelationID(binding.String(), "migration", "migration")
 }
 
-func (t *Tenant) relationMigrationPlan(store *recordStore, c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *kernel.Error) {
+func (t *Tenant) relationMigrationPlan(store *records.Store, c platform.Caller, binding platform.AssetBinding, at time.Time) (platform.RelationMigrationPlan, *kernel.Error) {
 	plan := platform.RelationMigrationPlan{Binding: binding, Links: []platform.RelationLink{}}
 	definition, ok := t.recordSetBinding(binding)
 	if !ok || definition.LinkType == nil || definition.LinkType.Storage != "edge" || binding.Ref.App != c.App {
@@ -53,13 +53,13 @@ func (t *Tenant) relationMigrationPlan(store *recordStore, c platform.Caller, bi
 	if !slices.ContainsFunc(link.Roles, func(role string) bool { return slices.Contains(c.RolesHere(), role) }) {
 		return plan, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The caller cannot migrate this relationship")
 	}
-	var et *entityType
+	var et *records.Type
 	func() {
-		store.mu.Lock()
-		defer store.mu.Unlock()
-		et = store.types[platform.OwnedRelationType(c.App)]
+		store.Lock()
+		defer store.Unlock()
+		et = store.Type(platform.OwnedRelationType(c.App))
 		if et != nil {
-			plan.Migrated = relationImage(et.rows.Get(relationMigrationID(binding.Ref))).Migration
+			plan.Migrated = relationImage(et.Rows().Get(relationMigrationID(binding.Ref))).Migration
 		}
 	}()
 	if et == nil {
@@ -86,8 +86,8 @@ func (t *Tenant) relationMigrationPlan(store *recordStore, c platform.Caller, bi
 		}
 		var readable bool
 		func() {
-			store.mu.Lock()
-			defer store.mu.Unlock()
+			store.Lock()
+			defer store.Unlock()
 			readable = t.readableIn(store, c.Member, legacy.From, at) && t.readableIn(store, c.Member, legacy.To, at)
 		}()
 		if !readable {
@@ -141,7 +141,7 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 		childType, childID, _ := strings.Cut(child, "/")
 		request := platform.TxnLink{Binding: binding, Parent: platform.TxnRef{Type: parentType, ID: parentID}, Child: platform.TxnRef{Type: childType, ID: childID}}
 		id := ownedRelationID(binding.Ref.String(), parent, child)
-		prior := d.records.types[entity.Type].rows.Get(id)
+		prior := d.records.Type(entity.Type).Rows().Get(id)
 		if prior != nil && !records.Header(prior.Value).Archived {
 			return fail(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Migration overlaps an existing owned relationship"))
 		}
@@ -156,15 +156,15 @@ func (d *stagedDecision) MigrateOwnedRelations(c platform.Caller, receipt *pb.Ch
 	return d.Put(c, receipt, copy.Interface())
 }
 
-func (t *Tenant) ownedRelations(store *recordStore, c platform.Caller, entity string, at time.Time) []platform.RelationLink {
-	store.mu.Lock()
-	defer store.mu.Unlock()
+func (t *Tenant) ownedRelations(store *records.Store, c platform.Caller, entity string, at time.Time) []platform.RelationLink {
+	store.Lock()
+	defer store.Unlock()
 	out := []platform.RelationLink{}
-	for _, et := range store.types {
-		if !ownedRelationSchema(et.info) {
+	for _, et := range store.Types() {
+		if !ownedRelationSchema(et.Info()) {
 			continue
 		}
-		for _, row := range et.rows.All() {
+		for _, row := range et.Rows().All() {
 			image := relationImage(row)
 			if image.Archived || image.Migration || entity != "" && image.Parent != entity && image.Child != entity {
 				continue
@@ -188,14 +188,14 @@ func (t *Tenant) ownedRelations(store *recordStore, c platform.Caller, entity st
 	return out
 }
 
-func (t *Tenant) legacyRelationActive(store *recordStore, link platform.RelationLink) bool {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	for _, et := range store.types {
-		if !ownedRelationSchema(et.info) {
+func (t *Tenant) legacyRelationActive(store *records.Store, link platform.RelationLink) bool {
+	store.Lock()
+	defer store.Unlock()
+	for _, et := range store.Types() {
+		if !ownedRelationSchema(et.Info()) {
 			continue
 		}
-		for _, row := range et.rows.All() {
+		for _, row := range et.Rows().All() {
 			image := relationImage(row)
 			if !image.Migration || image.Archived {
 				continue
@@ -208,13 +208,13 @@ func (t *Tenant) legacyRelationActive(store *recordStore, link platform.Relation
 	return true
 }
 
-func (t *Tenant) legacyRelationWritable(store *recordStore, from, to string) bool {
+func (t *Tenant) legacyRelationWritable(store *records.Store, from, to string) bool {
 	fromType, _, fromOK := strings.Cut(from, "/")
 	toType, _, toOK := strings.Cut(to, "/")
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	a, b := store.types[fromType], store.types[toType]
-	return !fromOK || !toOK || a == nil || b == nil || a.info.App != b.info.App
+	store.Lock()
+	defer store.Unlock()
+	a, b := store.Type(fromType), store.Type(toType)
+	return !fromOK || !toOK || a == nil || b == nil || a.Info().App != b.Info().App
 }
 
 func (r runtime) OwnedRelations(c platform.Caller, entity string) []platform.RelationLink {

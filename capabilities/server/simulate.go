@@ -75,7 +75,7 @@ func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, n
 	// Privacy read auditing is private to this view and is discarded too.
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, records: draft.records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
-		for k := range draft.records.writes {
+		for k := range draft.records.Writes() {
 			if !yield(k) {
 				return
 			}
@@ -111,7 +111,7 @@ func (d *stagedDecision) Simulating() bool { return d.simulation || d.tenant.sim
 
 type simulationEnvironment struct {
 	trialowner.Environment
-	Services RuntimeCapabilities
+	Services platform.RuntimeCapabilities
 }
 
 func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samples []trialowner.SimulationSample) (simulationEnvironment, error) {

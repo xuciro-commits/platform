@@ -19,7 +19,7 @@ beforeEach(() => {
   localStorage.clear(); setLanguage("en"); state.open.mockReset(); state.read.mockReset();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.stubGlobal("crypto", webcrypto);
   const outbox = [];
-  state.host = { me: { principalId: "builder" }, role: () => "builder", can: () => true, decide: vi.fn().mockResolvedValue(true),
+  state.host = { me: { principalId: "builder" }, role: () => "builder", holds: (_app, ...names) => names.includes("builder"), can: () => true, decide: vi.fn().mockResolvedValue(true),
     outbox, catalog: [{ schema: "build.entry.create", schemaVersion: { family: 1, version: "1" } }],
     client: { connection: { server: "", tenant: "tenant", principal: "builder" }, authorities: { outbox }, call: vi.fn(), draft: vi.fn(), refreshDeclarations: vi.fn().mockResolvedValue(undefined) } };
   state.query = { isError: false, isLoading: false, refetch: vi.fn().mockResolvedValue({}), data: { package: "sample", version: "1.0.0", installed: true,

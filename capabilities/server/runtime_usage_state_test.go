@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import agentowner "platformserver/engine/agents"
 
 import (
@@ -157,7 +159,7 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !sameStoredJSON(expected, after) {
+	if !runtimekernel.StoredJSONEqual(expected, after) {
 		t.Fatal("checkpoint plus usage suffix changed metering")
 	}
 	// Administrative recovery deliberately rebuilds from the complete original
@@ -168,13 +170,13 @@ func TestPostgresUsageResultsKeepAIStateAcrossCheckpointAndFullRecovery(t *testi
 	if err = deployment.retryTenant(ctx, j, registry, CodeOf(restored), id); err != nil {
 		t.Fatal(err)
 	}
-	repaired := registry.current(id)
+	repaired := registry.Current(id)
 	check(repaired, 3)
 	final, err := repaired.ai.(*ai.AI).AcceptedState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !sameStoredJSON(expected, final) || j.Position(id) != position {
+	if !runtimekernel.StoredJSONEqual(expected, final) || j.Position(id) != position {
 		t.Fatal("full-log recovery repeated usage or appended another result")
 	}
 }

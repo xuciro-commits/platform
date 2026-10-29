@@ -711,6 +711,7 @@ func (b *Build) ExecutionSource(live Source) (Source, error) {
 		return Source{}, err
 	}
 	r := fixed.(Source)
+	r.Publisher, r.PublisherScopes = live.Publisher, live.PublisherScopes
 	r.Record, r.State, r.Puller, r.PullerScopes, r.Cursor, r.Requested, r.Last = live.Record, live.State, live.Puller, live.PullerScopes, live.Cursor, live.Requested, live.Last
 	r.DefinitionVersion, r.Published, r.Versions = live.DefinitionVersion, live.Published, live.Versions
 	return r, nil
@@ -1877,6 +1878,10 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 				owner, _, _ = strings.Cut(name, ".")
 			}
 			actions = append(actions, platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: name})
+			if step.Protocol != "" {
+				protocol, _, _ := strings.Cut(step.Protocol, "/")
+				dependencies = append(dependencies, platform.AssetRef{App: owner, Kind: platform.AssetProtocol, Name: protocol})
+			}
 		}
 		if step.Function != nil {
 			owner := step.Function.App

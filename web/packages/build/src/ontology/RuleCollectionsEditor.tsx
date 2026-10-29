@@ -10,7 +10,7 @@ const ordinal=(version:string)=>Number(version.match(/\.query-(\d+)$/)?.[1]??0);
 // These are bindings on the same owner draft as its expressions. Reads and
 // completeness are decided by the original query/set owners at execution.
 export function RuleCollectionsEditor({value,onChange,subject,inputs=[]}:{value?:Api.RuleReadSpec;onChange:(next:Api.RuleReadSpec|undefined)=>void;subject:EntityInfo;inputs?:Input_[]}){
- const host=useHost(),builder=host.role("build")==="builder";
+ const host=useHost(),builder=host.holds("build", "builder");
  const drafts=useRecordInventory<QueryDraft>("build.query",1000,builder);
  const published=host.definitions.filter(d=>d.ref.kind==="query"&&d.query?.object).map(d=>({app:d.ref.app,name:d.ref.name,title:d.query!.title,object:d.query!.object,by:d.query!.by,version:ordinal(d.version),draft:false}));
  const available=[...published,...(builder?drafts.data?.records??[]:[]).filter(q=>!q.archived&&q.object&&(!q.published||q.state==="draft")).map(q=>({app:"build",name:q.name,title:q.title,object:q.object,by:q.by,version:(q.version??0)+1,draft:true}))];

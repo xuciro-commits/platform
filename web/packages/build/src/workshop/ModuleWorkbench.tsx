@@ -74,7 +74,7 @@ function ModulesList() {
 }
 
 function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?: string; openPage: (id: string) => void; initialFocus?: string }) {
-  const { decide, role, client, source } = useHost();
+  const { decide, client, source , holds} = useHost();
   const declarationFields = source.entity("build.app")?.fields ?? [], trial = useActionTrial();
   const [sourceApplied, setSourceApplied] = useState(false);
   const { open } = useWorkspace();
@@ -91,7 +91,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const [templates, setTemplates] = useState(false), [templateBusy, setTemplateBusy] = useState(false);
   const templateClose = useRef<(() => void) | undefined>(undefined);
   useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project,declarationFields));baseRevision.current=project.revision; loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
-  const canEdit = role("build") === "builder";
+  const canEdit = holds("build", "builder");
   const pages = useMemo(() => (draft.pages ?? []).map((name) => { const record = pageRecords.data?.records.find((item) => item.name === name && !item.archived); return { name, title: record?.title ?? name, id: record?.id, state: record?.state }; }), [draft.pages, pageRecords.data]);
   const headerInvalid = !validApplicationHeader(draft.header,draft.pages??[]);
   const invalid = session.inputs.invalid || headerInvalid;

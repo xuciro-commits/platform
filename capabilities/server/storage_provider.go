@@ -20,17 +20,11 @@ type JournalProvider struct {
 	Open               func(context.Context) (Journals, error)
 }
 
-// MemoryStorageModule describes the existing process-local development journal.
-// It does not claim durability or implement a delivery storage substitute.
-func MemoryStorageModule() platform.CapabilityModule {
-	return platform.CapabilityModule{ID: "platform.storage.memory", Title: "In-memory development storage", Version: "1", Scope: "deployment", Replacement: "restart", StateFormat: "platform.memory.v1", Provides: []platform.CapabilityContract{{ID: "platform.storage", Version: "1", Semantics: "1"}}}
-}
-
 func (d *Deployment) storageModule() platform.CapabilityModule {
 	if d.Profile == "lightweight" || d.Database != "" || d.Storage != nil {
 		return d.journalProvider().Module
 	}
-	return MemoryStorageModule()
+	return platform.MemoryStorageModule()
 }
 
 func PostgresProvider(address string) JournalProvider {

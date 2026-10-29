@@ -271,10 +271,10 @@ func TestHostConsoleLifecycleAndSupport(t *testing.T) {
 	if err := tn.setHostLifecycle("suspend", "maintenance window", "user:ops@example.test", now); err != nil {
 		t.Fatal(err)
 	}
-	if !tn.console.suspended() {
+	if !tn.console.Suspended() {
 		t.Fatal("a suspended tenant kept running")
 	}
-	if err := tn.setHostLifecycle("open", "window over", "user:ops@example.test", now); err != nil || tn.console.suspended() {
+	if err := tn.setHostLifecycle("open", "window over", "user:ops@example.test", now); err != nil || tn.console.Suspended() {
 		t.Fatalf("resume: %v", err)
 	}
 	grant, err := tn.openSupport("dana", "diagnose the failed job", "user:ops@example.test", 30, now)
@@ -532,7 +532,7 @@ func TestCompositeEditsAllOrNothing(t *testing.T) {
 		"fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
-	edits := []CompositeEdit{
+	edits := []platform.CompositeEdit{
 		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)},
 		{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "missing"}, Payload: json.RawMessage(`{"name":"missing","title":"Missing"}`)},
 	}
@@ -544,7 +544,7 @@ func TestCompositeEditsAllOrNothing(t *testing.T) {
 	if !ok || visit.Title != "Visit" {
 		t.Fatalf("the refused composite changed the first edit: %+v", visit)
 	}
-	good := []CompositeEdit{edits[0]}
+	good := []platform.CompositeEdit{edits[0]}
 	answer, err := tn.Composite(member("dana"), "composite-2", good, now)
 	if err != nil || answer.Applied != 1 {
 		t.Fatalf("composite: %+v %v", answer, err)

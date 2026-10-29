@@ -3,6 +3,7 @@ package platformserver
 import (
 	"fmt"
 	"platformserver/platform"
+	releaseowner "platformserver/studio/releases"
 	"slices"
 	"strconv"
 )
@@ -45,7 +46,7 @@ func (h hostView) InstallPropertyType(c platform.Caller, p platform.PropertyType
 			return fmt.Errorf("property type is owned by code")
 		}
 		var ok bool
-		d.PropertyVersions, ok = retainedDefinitionVersions(old.PropertyVersions, old.Version, old.PropertyType, d.Version, p)
+		d.PropertyVersions, ok = releaseowner.RetainedDefinitionVersions(old.PropertyVersions, old.Version, old.PropertyType, d.Version, p)
 		if !ok {
 			return fmt.Errorf("property version bytes cannot change")
 		}

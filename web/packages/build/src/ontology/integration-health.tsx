@@ -1,4 +1,3 @@
-import { integrates } from "./marking";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
@@ -11,12 +10,12 @@ import { useIntegrationEvidence } from "./lineage";
 type Row = { id: string; title: string; view: string; state: string; when?: string; summary: string; tone: "success" | "warning" | "danger" | undefined };
 
 export function IntegrationHealth() {
-  const { role } = useHost(), { open } = useApplicationWorkspace(), l = useIntegrationEvidence();
+  const { role , holds} = useHost(), { open } = useApplicationWorkspace(), l = useIntegrationEvidence();
   const sources = useReadQuery<{ records: (Api.Source & { dataset?: string })[] }>("/v1/records/build.source?limit=200", 15000).data?.records ?? [];
   const pipelines = useReadQuery<{ records: { id: string; title: string; name: string; state: string; last?: { at: string; error?: string; rows: number; written: number; quarantined: number; failed: number } }[] }>("/v1/records/build.pipeline?limit=200", 15000).data?.records ?? [];
   const connections = useReadQuery<{ records: { id: string; title: string; kind: string; state: string; last?: { at: string; ok: boolean; error?: string; detail?: string } }[] }>("/v1/records/build.connection?limit=200", 15000).data?.records ?? [];
   const effects = useReadQuery<Api.IntegrationEffect[]>("/v1/integration-effects", 10000).data ?? [];
-  if (!integrates(role("build"))) return <PageHeader title={t("Integration health")} description={t("Only a builder can see integration health.")} />;
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Integration health")} description={t("Only a builder can see integration health.")} />;
   const when = (at?: string) => at ? new Date(at).toLocaleString() : "";
   const rows: Row[] = [
     ...effects.filter((x) => x.endpoint === "core:books" && x.event.startsWith("journal/")).map((x): Row => ({ id: x.id, title: `${t("Journal entry")} · ${x.event.slice(8)}`, view: role("core") ? "master-data" : "", state: x.state, when: when(x.last), summary: x.error ? t(x.error) : t(x.state), tone: x.state === "delivered" ? "success" : x.state === "pending" || x.state === "retrying" ? "warning" : "danger" })),

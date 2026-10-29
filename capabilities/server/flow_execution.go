@@ -31,14 +31,14 @@ type flowExecutionRuntime struct {
 	assets  []platform.ReleaseAsset
 	// Retain only source and definition identities. Row conversion is lazy,
 	// and every protected read still checks current membership and field grants.
-	readStore   *recordStore
-	readSource  *recordStore
+	readStore   *records.Store
+	readSource  *records.Store
 	readOrigins map[string]retainedReadOrigin
 	readSQLView journal.StateReadView
 }
 
 type retainedReadOrigin struct {
-	typ  *entityType
+	typ  *records.Type
 	rows records.Rows
 }
 
@@ -290,38 +290,36 @@ func (r *flowExecutionRuntime) recoverRetainedRead(refusal **kernel.Error) {
 }
 
 func (r *flowExecutionRuntime) readView() (*Tenant, *kernel.Error) {
-	r.records.mu.Lock()
-	valid := r.readSource == r.records && r.readStore != nil && r.readSQLView == r.records.current.View()
-	for typ, et := range r.records.types {
+	r.records.Lock()
+	valid := r.readSource == r.records && r.readStore != nil && r.readSQLView == r.records.Current().View()
+	for typ, et := range r.records.Types() {
 		origin, exists := r.readOrigins[typ]
-		if !exists || origin.typ != et || origin.rows != et.rows {
+		if !exists || origin.typ != et || origin.rows != et.Rows() {
 			valid = false
 			break
 		}
 	}
-	valid = valid && len(r.readOrigins) == len(r.records.types)
+	valid = valid && len(r.readOrigins) == r.records.TypeCount()
 	store := r.readStore
 	var origins map[string]retainedReadOrigin
 	if !valid {
-		store = r.records.forkRecordsLocked()
+		store = r.records.ForkRecordsLocked()
 		origins = map[string]retainedReadOrigin{}
-		for typ, et := range r.records.types {
-			origins[typ] = retainedReadOrigin{typ: et, rows: et.rows}
+		for typ, et := range r.records.Types() {
+			origins[typ] = retainedReadOrigin{typ: et, rows: et.Rows()}
 		}
 	}
-	r.records.mu.Unlock()
+	r.records.Unlock()
 	if !valid {
 		for typ, info := range r.shapes {
-			current := store.types[typ]
+			current := store.Type(typ)
 			if current == nil {
 				return nil, conflictRefusal(fmt.Errorf("retained object %s has no current storage", typ))
 			}
-			source := &retainedRows{runtime: r, current: current.info, info: info, rows: origins[typ].rows}
-			delete(store.byGo, current.info.Go)
-			store.types[typ] = &entityType{store: store, info: info, rows: records.SourceRows(source), knowledge: current.knowledge, retainedProjection: true}
-			store.byGo[info.Go] = store.types[typ]
+			source := &retainedRows{runtime: r, current: current.Info(), info: info, rows: origins[typ].rows}
+			store.ReplaceReadType(info, records.SourceRows(source), true)
 		}
-		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.records, store, origins, store.current.View()
+		r.readSource, r.readStore, r.readOrigins, r.readSQLView = r.records, store, origins, store.Current().View()
 	}
 	return (hostView{t: r.view}).installationView(store), nil
 }
@@ -334,11 +332,11 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 		var value *records.Row
 		var stored platform.EntityInfo
 		func() {
-			r.records.mu.Lock()
-			defer r.records.mu.Unlock()
-			current := r.records.types[name]
+			r.records.Lock()
+			defer r.records.Unlock()
+			current := r.records.Type(name)
 			if current != nil {
-				value, stored = current.rows.Get(id), current.info
+				value, stored = current.Rows().Get(id), current.Info()
 			}
 		}()
 		if value == nil {
@@ -351,7 +349,7 @@ func (r *flowExecutionRuntime) Get(c platform.Caller, typ reflect.Type, id strin
 		}
 		return decoded.Value.Interface(), true
 	}
-	return r.records.get(c, typ, id)
+	return r.records.Get(c, typ, id)
 }
 func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) (refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -359,7 +357,7 @@ func (r *flowExecutionRuntime) Check(c platform.Caller, entity any) (refusal *ke
 	if err != nil {
 		return err
 	}
-	return view.records.check(c, entity, r.at)
+	return view.records.Check(c, entity, r.at)
 }
 func (r *flowExecutionRuntime) Find(c platform.Caller, typ reflect.Type, q platform.Query) (out []any, total int, refusal *kernel.Error) {
 	defer r.recoverRetainedRead(&refusal)
@@ -388,13 +386,13 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 	// revoked. Current membership and policy still govern every retained read.
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &fields)
-	if current := r.records.types[typ]; current != nil {
+	if current := r.records.Type(typ); current != nil {
 		for name := range fields {
-			field, declared := current.info.Field(name)
+			field, declared := current.Info().Field(name)
 			if declared && field.AliasOf != "" {
-				field, declared = current.info.Field(field.AliasOf)
+				field, declared = current.Info().Field(field.AliasOf)
 			}
-			if declared && !field.ReadsAny(c.RolesIn(current.info.App)) {
+			if declared && !field.ReadsAny(c.RolesIn(current.Info().App)) {
 				delete(fields, name)
 			}
 		}
@@ -474,43 +472,43 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if err != nil {
 		return err
 	}
-	old := view.records.of(c, reflect.TypeOf(entity))
+	old := view.records.Of(c, reflect.TypeOf(entity))
 	if old == nil {
 		return r.stagedDecision.Put(c, receipt, entity)
 	}
-	if _, retained := r.shapes[old.info.Type]; !retained {
+	if _, retained := r.shapes[old.Info().Type]; !retained {
 		return r.stagedDecision.Put(c, receipt, entity)
 	}
-	current := r.records.types[old.info.Type]
-	id := records.Header(records.Copy(old.info.Go, entity)).ID
+	current := r.records.Type(old.Info().Type)
+	id := records.Header(records.Copy(old.Info().Go, entity)).ID
 	var input, before, result map[string]json.RawMessage
 	if json.Unmarshal(jsonOf(entity), &input) != nil {
 		return conflictRefusal(fmt.Errorf("retained action wrote an invalid record"))
 	}
-	if prior := old.rows.Get(id); prior != nil {
+	if prior := old.Rows().Get(id); prior != nil {
 		_ = json.Unmarshal(jsonOf(prior.Value.Interface()), &before)
 	}
-	mappedBefore, mappedInput, mappingErr := r.mapRetainedWrite(old.info.Type, before, input)
+	mappedBefore, mappedInput, mappingErr := r.mapRetainedWrite(old.Info().Type, before, input)
 	if mappingErr != nil {
 		return conflictRefusal(mappingErr)
 	}
-	if prior := current.rows.Get(id); prior != nil {
+	if prior := current.Rows().Get(id); prior != nil {
 		raw, _ := prior.Image()
 		_ = json.Unmarshal(raw, &result)
 	} else {
 		result = maps.Clone(mappedInput)
 	}
 	fields := []string{}
-	for _, target := range current.info.Fields {
+	for _, target := range current.Info().Fields {
 		if string(mappedInput[target.Name]) == string(mappedBefore[target.Name]) {
 			continue
 		}
 		name := target.Name
 		if target.AliasOf != "" {
-			target, _ = current.info.Field(target.AliasOf)
+			target, _ = current.Info().Field(target.AliasOf)
 		}
-		lifecycle := current.info.Lifecycle != nil && current.info.Lifecycle.Field == target.Name
-		original, declared := old.info.Field(name)
+		lifecycle := current.Info().Lifecycle != nil && current.Info().Lifecycle.Field == target.Name
+		original, declared := old.Info().Field(name)
 		// The original owner still computes its declared readonly metadata.
 		// Turning a formerly writable field readonly retires that old write.
 		if target.ReadOnly && !lifecycle && (!declared || !original.ReadOnly) {
@@ -519,8 +517,8 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		result[target.Name] = mappedInput[name]
 		fields = append(fields, target.Name)
 	}
-	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: current.info.Type, Record: id, Fields: fields}
-	if current.rows.Get(id) == nil {
+	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "write", Type: current.Info().Type, Record: id, Fields: fields}
+	if current.Rows().Get(id) == nil {
 		question.Kind = "create"
 	}
 	grant := r.tenant.authorizeFrom(r.records, c, question, r.at, false)
@@ -529,7 +527,7 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		return refusal
 	}
 	result["id"], result["archived"] = input["id"], input["archived"]
-	decoded := reflect.New(current.info.Go)
+	decoded := reflect.New(current.Info().Go)
 	raw, _ := json.Marshal(result)
 	if json.Unmarshal(raw, decoded.Interface()) != nil {
 		return conflictRefusal(fmt.Errorf("retained action result does not match current storage"))
@@ -541,14 +539,14 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		return refusal
 	}
 	// Keep the newly accepted source values for another old-version step.
-	updated := *current.rows.Get(id)
+	updated := *current.Rows().Get(id)
 	updated.Projection = records.CloneProjection(updated.Projection)
 	if source := records.ProjectionFor(updated.Projection, r.release); source != nil {
 		source.Value = jsonOf(input)
 		if err := records.RefreshProjection(updated.Projection, updated.Value.Interface()); err != nil {
 			return conflictRefusal(err)
 		}
-		current.setRow(id, &updated)
+		current.SetRow(id, &updated)
 	}
 	return nil
 }
@@ -559,8 +557,8 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 func (r *flowExecutionRuntime) mapRetainedWrite(typ string, before, after map[string]json.RawMessage) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
 	before, after = maps.Clone(before), maps.Clone(after)
 	declared := r.shapes
-	current := r.records.types[typ]
-	for _, target := range current.info.Fields {
+	current := r.records.Type(typ)
+	for _, target := range current.Info().Fields {
 		if string(before[target.Name]) == string(after[target.Name]) {
 			continue
 		}

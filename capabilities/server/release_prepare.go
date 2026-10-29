@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -50,13 +49,13 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 			return nil, nil, err
 		}
 		for typ, shape := range shapes {
-			if old := view.records.types[typ]; old != nil && old.info.Go != shape.Go {
-				old.setRows(records.Index[*records.Row]{})
+			if old := view.records.Type(typ); old != nil && old.Info().Go != shape.Go {
+				old.SetRows(records.Index[*records.Row]{})
 			}
 		}
 	}
 	decision.tenant, decision.records = view, view.records
-	decision.records.current.SelectRelease(candidate.ID)
+	decision.records.Current().SelectRelease(candidate.ID)
 	for i, app := range view.apps {
 		if _, ok := app.(platform.AssetLifecycleOwner); !ok {
 			continue
@@ -113,11 +112,11 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	}
 	var receipt *pb.ChangeRecord
 	for ordinal, draft := range drafts {
-		et := decision.records.types[draft.Type]
+		et := decision.records.Type(draft.Type)
 		if et == nil {
 			return nil, nil, fmt.Errorf("%s does not host %s", t.ID, draft.Type)
 		}
-		nameField, ok := et.info.Field("name")
+		nameField, ok := et.Info().Field("name")
 		if !ok {
 			return nil, nil, fmt.Errorf("asset draft %s has no owner identity", draft.Type)
 		}
@@ -126,7 +125,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		if draft.Ref.Kind == platform.AssetObject || draft.Ref.Kind == platform.AssetFlow {
 			logicalName = strings.TrimPrefix(logicalName, build.ID+".")
 		}
-		for _, row := range et.rows.All() {
+		for _, row := range et.Rows().All() {
 			if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && row.Value.FieldByIndex(nameField.Index).String() == logicalName {
 				matches++
 			}
@@ -134,12 +133,12 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		if matches > 1 {
 			return nil, nil, fmt.Errorf("asset draft %s/%s is ambiguous", draft.Type, draft.Name)
 		}
-		if request != nil && (matches > 0 || et.rows.Get(draft.Name) != nil) {
+		if request != nil && (matches > 0 || et.Rows().Get(draft.Name) != nil) {
 			return nil, nil, fmt.Errorf("asset %s already has a draft; open that draft instead", draft.Ref)
 		}
-		app := view.app(et.info.App)
+		app := view.app(et.Info().App)
 		if matches == 0 {
-			raw, err := releaseowner.AssetDraftPayload(et.info, draft.Image)
+			raw, err := releaseowner.AssetDraftPayload(et.Info(), draft.Image)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -147,7 +146,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 			if request != nil {
 				key = request.Key + "#" + strconv.Itoa(ordinal)
 			}
-			submission := &pb.Submission{TenantId: t.ID, PrincipalId: context.Member.ID, Authority: et.info.App,
+			submission := &pb.Submission{TenantId: t.ID, PrincipalId: context.Member.ID, Authority: et.Info().App,
 				IdempotencyKey: key,
 				Target:         &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Schema: &pb.SchemaRef{Name: draft.Schema, Version: 1}, Payload: raw}
 			if request != nil {
@@ -155,7 +154,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 					return nil, nil, refusal
 				}
 			}
-			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, et.info.App, false, false), app, submission, context.At)
+			answer, rejected := platform.Decide(platform.NewCaller(decision, context.Member, et.Info().App, false, false), app, submission, context.At)
 			if rejected != nil {
 				if rejected.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 					action, _ := app.Manifest().Actions.Action(draft.Schema)
@@ -170,7 +169,7 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		}
 		private := decision.stateApp(app)
 		for i, registered := range view.apps {
-			if registered.Manifest().ID == et.info.App {
+			if registered.Manifest().ID == et.Info().App {
 				view.apps[i] = private
 			}
 		}
@@ -213,57 +212,42 @@ func (t *Tenant) prepareReleaseLifecycleLocked(candidate platform.ReleaseCandida
 }
 
 func (t *Tenant) prepareReleaseInstallationLocked(candidate platform.ReleaseCandidate, member platform.Member, at time.Time, upgrade, activating bool) ([]platform.ReleaseInstallation, json.RawMessage, error) {
-	if t.agents == nil && slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool {
-		return asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetAgent
-	}) {
-		return nil, nil, fmt.Errorf("agent artifacts require the target's original agent runtime")
-	}
-	registry, err := t.assetRegistryLocked()
+	return releaseowner.PrepareInstallation(releaseInstallationRuntime{t}, candidate, member, at, upgrade, activating)
+}
+
+type releaseInstallationRuntime struct{ t *Tenant }
+
+func (r releaseInstallationRuntime) HasAgentRuntime() bool { return r.t.agents != nil }
+func (r releaseInstallationRuntime) Registry() (*platform.AssetRegistry, error) {
+	return r.t.assetRegistryLocked()
+}
+func (r releaseInstallationRuntime) Bootstrap(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly bool) (releaseowner.InstallationRuntime, json.RawMessage, error) {
+	decision, raw, err := r.t.releaseBootstrapLocked(candidate, context, definitionOnly)
 	if err != nil {
 		return nil, nil, err
 	}
-	context := platform.AssetReleaseContext{Member: member, At: at, Upgrade: upgrade}
-	decision, bootstrap, err := t.releaseBootstrapLocked(candidate, context, !activating)
+	view, err := r.t.assetInstallationView(decision.records)
 	if err != nil {
 		return nil, nil, err
 	}
-	view, err := t.assetInstallationView(decision.records)
+	return releaseInstallationRuntime{view}, raw, nil
+}
+func (r releaseInstallationRuntime) Predecessor(record string) (string, error) {
+	return r.t.installationPredecessor(record)
+}
+func (r releaseInstallationRuntime) Stage(plans []platform.ReleaseInstallation, upgrade bool) (releaseowner.InstallationRuntime, error) {
+	trial, err := r.t.stageReleaseInstallationLocked(plans, true, upgrade)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	registry, err = view.assetRegistryLocked()
-	if err != nil {
-		return nil, nil, err
-	}
-	end, err := registry.BeginBootstrap(candidate.Assets)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer end()
-	plans, err := registry.PrepareReleaseAssets(candidate.Assets, context)
-	if err != nil {
-		return nil, nil, err
-	}
-	installations, err := releaseowner.BindInstallationPredecessors(plans, view.installationPredecessor)
-	if err != nil {
-		return nil, nil, err
-	}
-	trial, err := view.stageReleaseInstallationLocked(installations, true, upgrade)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := trial.checkExtensionSet(); err != nil {
-		return nil, nil, err
-	}
-	if activating {
-		if err := t.validateAssetStorage(trial, upgrade); err != nil {
-			return nil, nil, err
-		}
-	}
-	if err := t.pendingWorkFitsLocked(candidate.ID, candidate.Bytes); err != nil {
-		return nil, nil, err
-	}
-	return installations, bootstrap, nil
+	return releaseInstallationRuntime{trial}, nil
+}
+func (r releaseInstallationRuntime) CheckExtensions() error { return r.t.checkExtensionSet() }
+func (r releaseInstallationRuntime) CheckStorage(trial releaseowner.InstallationRuntime, upgrade bool) error {
+	return r.t.validateAssetStorage(trial.(releaseInstallationRuntime).t, upgrade)
+}
+func (r releaseInstallationRuntime) Pending(id string, raw []byte) error {
+	return r.t.pendingWorkFitsLocked(id, raw)
 }
 
 // Integration identity discovery contains no executable body or environment
@@ -286,31 +270,11 @@ func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
 // A release may prepare owner creates and definitions on successive private
 // views. Collapse only that proven descendant chain; the normal store gate
 // still requires the exact live predecessor and unchanged generation.
-func (t *Tenant) anchorReleaseRecords(draft *recordStore) error {
+func (t *Tenant) anchorReleaseRecords(draft *records.Store) error {
 	if draft == nil {
 		return fmt.Errorf("release has no prepared record view")
 	}
-	writes := map[string]bool{}
-	cursor := draft
-	var generation uint64
-	for cursor != t.records {
-		if cursor == nil || cursor.parent == nil || cursor.sealed {
-			return fmt.Errorf("release record view is not an unpromoted descendant")
-		}
-		parent := cursor.parent
-		if parent.generation != cursor.baseGeneration {
-			return fmt.Errorf("release record predecessor changed")
-		}
-		for ref := range cursor.writes {
-			writes[ref] = true
-		}
-		generation = cursor.baseGeneration
-		cursor = parent
-	}
-	draft.parent = t.records
-	draft.baseGeneration = generation
-	draft.writes = writes
-	return nil
+	return draft.Anchor(t.records)
 }
 
 // Rebuild only the existing owners' publication index from their own stored

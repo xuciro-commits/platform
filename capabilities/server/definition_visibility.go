@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"maps"
 	pageowner "platformserver/studio/pages"
@@ -321,15 +323,15 @@ func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
 	if ref.App != build.ID || ref.Kind != platform.AssetApp {
 		return false
 	}
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
-	entity := t.records.types[build.AppType]
+	t.records.Lock()
+	defer t.records.Unlock()
+	entity := t.records.Type(build.AppType)
 	if entity == nil {
 		return false
 	}
-	for _, row := range entity.rows.All() {
-		if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && businessField(entity.info, row.Value, "name") == ref.Name {
-			return businessField(entity.info, row.Value, "state") == "withdrawn"
+	for _, row := range entity.Rows().All() {
+		if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && records.BusinessField(entity.Info(), row.Value, "name") == ref.Name {
+			return records.BusinessField(entity.Info(), row.Value, "state") == "withdrawn"
 		}
 	}
 	return false

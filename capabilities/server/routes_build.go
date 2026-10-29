@@ -53,13 +53,13 @@ func (h *Host) routesBuild(rt *routes) {
 		WriteJSON(w, http.StatusOK, actions)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/composites", Summary: "Edit several of an application's assets as one unit: every edit is probed, and either all apply or none", Body: struct {
-		Key   string          `json:"key"`
-		Edits []CompositeEdit `json:"edits"`
-	}{}, Answer: CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		Key   string                   `json:"key"`
+		Edits []platform.CompositeEdit `json:"edits"`
+	}{}, Answer: platform.CompositeAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 4<<20))
 		var request struct {
-			Key   string          `json:"key"`
-			Edits []CompositeEdit `json:"edits"`
+			Key   string                   `json:"key"`
+			Edits []platform.CompositeEdit `json:"edits"`
 		}
 		if json.Unmarshal(body, &request) != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a key and its edits are required"})

@@ -95,12 +95,12 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 			}
 			ownerRecord := ""
 			func() {
-				t.records.mu.Lock()
-				defer t.records.mu.Unlock()
-				if recordView := t.records.types[asset.Ref.App+".agent"]; recordView != nil {
-					for id, row := range recordView.rows.All() {
-						if businessField(recordView.info, row.Value, "name") == asset.Ref.Name && !records.Header(row.Value).Archived {
-							ownerRecord = recordView.info.Type + "/" + id
+				t.records.Lock()
+				defer t.records.Unlock()
+				if recordView := t.records.Type(asset.Ref.App + ".agent"); recordView != nil {
+					for id, row := range recordView.Rows().All() {
+						if records.BusinessField(recordView.Info(), row.Value, "name") == asset.Ref.Name && !records.Header(row.Value).Archived {
+							ownerRecord = recordView.Info().Type + "/" + id
 							break
 						}
 					}
@@ -117,18 +117,18 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 	var images []image
 	var datasetDefinitions []platform.Definition
 	if err := func() error {
-		t.records.mu.Lock()
-		defer t.records.mu.Unlock()
-		for typ, et := range t.records.types {
-			published, hasPublished := et.info.Go.FieldByName("Published")
-			version, hasVersion := et.info.Go.FieldByName("DefinitionVersion")
+		t.records.Lock()
+		defer t.records.Unlock()
+		for typ, et := range t.records.Types() {
+			published, hasPublished := et.Info().Go.FieldByName("Published")
+			version, hasVersion := et.Info().Go.FieldByName("DefinitionVersion")
 			if !hasPublished || !hasVersion || published.Type.Kind() != reflect.String || version.Type.Kind() != reflect.Int {
 				continue // other metadata retains its original installed index
 			}
-			if _, ok := t.app(et.info.App).(platform.AssetLifecycleOwner); !ok {
+			if _, ok := t.app(et.Info().App).(platform.AssetLifecycleOwner); !ok {
 				continue
 			}
-			for id, row := range et.rows.All() {
+			for id, row := range et.Rows().All() {
 				if records.Header(row.Value).Archived {
 					continue
 				}
@@ -138,8 +138,8 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 					// A dataset is usable from its original create/load path, without
 					// a publish action. Project only the descriptor its owner already
 					// offers; runtime rows and other unsealed drafts stay out.
-					if typ == et.info.App+".dataset" {
-						ref := platform.AssetRef{App: et.info.App, Kind: platform.AssetDataset, Name: businessField(et.info, row.Value, "name")}
+					if typ == et.Info().App+".dataset" {
+						ref := platform.AssetRef{App: et.Info().App, Kind: platform.AssetDataset, Name: records.BusinessField(et.Info(), row.Value, "name")}
 						if asset, exists := datasets[ref]; exists {
 							datasetDefinitions = append(datasetDefinitions, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: typ + "/" + id})
 						}
@@ -153,7 +153,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 				if err != nil {
 					return err
 				}
-				images = append(images, image{et.info.App, typ + ".publish", typ + "/" + id, slices.Clone(body)})
+				images = append(images, image{et.Info().App, typ + ".publish", typ + "/" + id, slices.Clone(body)})
 			}
 		}
 		return nil

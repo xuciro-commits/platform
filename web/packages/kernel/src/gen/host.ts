@@ -3327,14 +3327,6 @@ export type PipelineRun = {
   outputVersion?: number;
 };
 
-export type PlatformserverAggregate = {
-  partial?: boolean;
-  window?: AggregateWindowResult;
-  histogram?: HistogramResult;
-  columns: Column[];
-  rows: Record<string, unknown>[];
-};
-
 export type PolicyRecord = {
   id: string;
   title: string;
@@ -3695,6 +3687,14 @@ export type RecordView = {
   linked: Related[];
   activity: unknown[];
   deliveries?: RecordDelivery[];
+};
+
+export type RecordsAggregate = {
+  partial?: boolean;
+  window?: AggregateWindowResult;
+  histogram?: HistogramResult;
+  columns: Column[];
+  rows: Record<string, unknown>[];
 };
 
 export type Refusal = {
@@ -4119,6 +4119,8 @@ export type Source = {
   stream?: boolean;
   every?: string;
   state: string;
+  publisher?: string;
+  publisherScopes?: string;
   puller?: string;
   pullerScopes?: string;
   requested?: boolean;

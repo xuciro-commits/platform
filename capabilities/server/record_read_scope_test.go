@@ -80,7 +80,7 @@ func TestPostgresRecordReadScopeCoversNestedReadsCommitAndHTTP(t *testing.T) {
 		if refusal != nil || detail.Record.(Item).Qty != want {
 			t.Fatal(detail, refusal)
 		}
-		if live.records.current.View() != nil || live.records.types["stock.item"].rows.Stored() != 0 {
+		if live.records.Current().View() != nil || live.records.Type("stock.item").Rows().Stored() != 0 {
 			t.Fatal("scope retained rows or SQL snapshot")
 		}
 	}
@@ -126,7 +126,7 @@ func TestPostgresRecordReadScopeCoversNestedReadsCommitAndHTTP(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		old := live.records.types["stock.item"].rows.Get("I1")
+		old := live.records.Type("stock.item").Rows().Get("I1")
 		if old.Value.Interface().(Item).Qty != 2 {
 			return nil, fmt.Errorf("old execution view observed committed future state")
 		}
@@ -165,8 +165,8 @@ func TestPostgresRecordReadScopeCoversNestedReadsCommitAndHTTP(t *testing.T) {
 	}
 	assertQty(3)
 
-	store := live.records.current.Backend()
-	live.records.current.UseBackend(failingReadStorage{RuntimeState: store})
+	store := live.records.Current().Backend()
+	live.records.Current().UseBackend(failingReadStorage{RuntimeState: store})
 	before := j.Position(id)
 	if _, refusal := live.Records(member, "stock.item", platform.Query{}, now); refusal == nil || live.quarantined() {
 		t.Fatal("temporary read failure stopped tenant or became empty success")
@@ -175,7 +175,7 @@ func TestPostgresRecordReadScopeCoversNestedReadsCommitAndHTTP(t *testing.T) {
 	if _, refusal := live.Submit(member, bad, now); refusal == nil || live.quarantined() || j.Position(id) != before {
 		t.Fatal("writer bypassed unavailable read view")
 	}
-	live.records.current.UseBackend(store)
+	live.records.Current().UseBackend(store)
 	assertQty(3)
 
 	handler := NewHost(Tokens(map[string]string{"ana-token": "ana"}), live).Handler()
@@ -231,7 +231,7 @@ func TestPostgresRecordReadScopeCoversNestedReadsCommitAndHTTP(t *testing.T) {
 	// Navigation must not leave its mutex held after the request is refused.
 	for _, during := range []string{"detail", "authorization"} {
 		interrupted := &interruptedRowStorage{RuntimeState: store, views: store.(journal.StateReadViews), entered: make(chan struct{}), release: make(chan struct{})}
-		live.records.current.UseBackend(interrupted)
+		live.records.Current().UseBackend(interrupted)
 		detailCtx, stopDetail := context.WithCancel(ctx)
 		detailRequest := httptest.NewRequest(http.MethodGet, "/v1/records/stock.item/I1", nil).WithContext(detailCtx)
 		detailRequest.Header.Set("Authorization", "Bearer ana-token")
@@ -259,7 +259,7 @@ func TestPostgresRecordReadScopeCoversNestedReadsCommitAndHTTP(t *testing.T) {
 		case <-time.After(3 * time.Second):
 			t.Fatal("cancelled detail request did not finish")
 		}
-		live.records.current.UseBackend(store)
+		live.records.Current().UseBackend(store)
 		discoveryDone := make(chan int, 1)
 		go func() {
 			request := httptest.NewRequest(http.MethodGet, "/v1/actions", nil)

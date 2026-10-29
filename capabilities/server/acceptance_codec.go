@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import (
 	"bytes"
 	"context"
@@ -35,12 +37,12 @@ func acceptedIdentity(raw []byte) (resultIdentity, error) {
 	}
 	identity.Scope = "submission"
 	if envelope.Kind == "host-result" {
-		r, e := decodeAcceptedHostControl(raw)
+		r, e := acceptedformat.DecodeHostControl(raw)
 		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "host"
 		return identity, e
 	}
 	if envelope.Kind == "composite-result" {
-		r, e := decodeAcceptedComposite(raw)
+		r, e := acceptedformat.DecodeComposite(raw)
 		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "composite"
 		return identity, e
 	}
@@ -50,12 +52,12 @@ func acceptedIdentity(raw []byte) (resultIdentity, error) {
 		return identity, e
 	}
 	if envelope.Kind == "agent-result" {
-		r, e := decodeAcceptedAgent(raw)
+		r, e := acceptedformat.DecodeAgent(raw)
 		identity.Tenant, identity.App, identity.Key, identity.Hash, identity.Scope = r.Tenant, r.App, r.Key, r.RequestHash, "agent"
 		return identity, e
 	}
 	if envelope.Kind == "operation-claim" {
-		result, err := decodeOperationClaim(raw)
+		result, err := acceptedformat.DecodeOperationClaim(raw)
 		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
 		return identity, err
 	}
@@ -74,7 +76,7 @@ func acceptedIdentity(raw []byte) (resultIdentity, error) {
 		return identity, err
 	}
 	if envelope.Kind == "work-result" {
-		result, err := decodeAcceptedWork(raw)
+		result, err := acceptedformat.DecodeWork(raw)
 		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
 		identity.Scope = "work"
 		return identity, err
@@ -131,7 +133,7 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		d.observed && len(d.tenant.observers) > 0 {
 		return nil, fmt.Errorf("decision needs a result carrying all state and intents")
 	}
-	if receipt == nil || len(d.events) != 1 || len(d.records.writes) != 1 || len(d.logs) != 1 {
+	if receipt == nil || len(d.events) != 1 || d.records.WriteCount() != 1 || len(d.logs) != 1 {
 		return nil, fmt.Errorf("one accepted record and event are required")
 	}
 	accepted := false
@@ -143,25 +145,25 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	}
 	typ, id := receipt.GetSubmission().GetTarget().GetType(), receipt.GetSubmission().GetTarget().GetId()
 	ref := typ + "/" + id
-	if !d.records.writes[ref] || d.events[0].App != app || !proto.Equal(d.events[0].Record, receipt) ||
+	if !d.records.Written(ref) || d.events[0].App != app || !proto.Equal(d.events[0].Record, receipt) ||
 		len(d.events[0].Changed) != 1 || d.events[0].Changed[0] != ref {
 		return nil, fmt.Errorf("decision has other record or event effects")
 	}
 	image, err := func() (records.Image, error) {
-		d.records.mu.Lock()
-		defer d.records.mu.Unlock()
-		et := d.records.types[typ]
-		if et == nil || et.info.App != app || et.rows.Get(id) == nil {
+		d.records.Lock()
+		defer d.records.Unlock()
+		et := d.records.Type(typ)
+		if et == nil || et.Info().App != app || et.Rows().Get(id) == nil {
 			return records.Image{}, fmt.Errorf("decision has no declared record image")
 		}
-		if et.rows.Get(id).Projection != nil {
+		if et.Rows().Get(id).Projection != nil {
 			return records.Image{}, fmt.Errorf("versioned migration row requires the complete record batch")
 		}
 		var prior *records.Row
-		if old := d.records.parent.types[typ]; old != nil {
-			prior = old.rows.Get(id)
+		if old := d.records.Parent().Type(typ); old != nil {
+			prior = old.Rows().Get(id)
 		}
-		image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
+		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
 		if err == nil {
 			image.Predecessor, err = records.Predecessor(typ, id, prior)
 		}
@@ -228,31 +230,31 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return false, fmt.Errorf("accepted result belongs to another tenant or authority")
 	}
 	s := t.records
-	draft := s.forkRecords()
-	draft.mu.Lock()
-	et := draft.types[result.Row.Type]
-	if et == nil || et.info.App != result.App {
-		draft.mu.Unlock()
+	draft := s.ForkRecords()
+	draft.Lock()
+	et := draft.Type(result.Row.Type)
+	if et == nil || et.Info().App != result.App {
+		draft.Unlock()
 		return false, fmt.Errorf("accepted result needs installed entity %s", result.Row.Type)
 	}
-	value := reflect.New(et.info.Go).Elem()
-	decoded, err := records.DecodeFormattedImage(et.info, result.Row.Value, result.Row.Projection, draft.current.Release(), result.Row.Format)
+	value := reflect.New(et.Info().Go).Elem()
+	decoded, err := records.DecodeFormattedImage(et.Info(), result.Row.Value, result.Row.Projection, draft.Current().Release(), result.Row.Format)
 	if err != nil {
-		draft.mu.Unlock()
+		draft.Unlock()
 		return false, err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(decoded))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(value.Addr().Interface()); err != nil {
-		draft.mu.Unlock()
+		draft.Unlock()
 		return false, fmt.Errorf("accepted record image: %w", err)
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		draft.mu.Unlock()
+		draft.Unlock()
 		return false, fmt.Errorf("accepted record has trailing data")
 	}
 	if err := checkRunApplicationBindings(value.Interface()); err != nil {
-		draft.mu.Unlock()
+		draft.Unlock()
 		return false, err
 	}
 	rec := records.Header(value)
@@ -260,7 +262,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		rec.Changed.By != receipt.GetSubmission().GetPrincipalId() ||
 		rec.Changed.Change != receipt.GetChangeId() ||
 		!rec.Changed.At.Equal(receipt.GetRecordedTime().AsTime()) {
-		draft.mu.Unlock()
+		draft.Unlock()
 		return false, fmt.Errorf("accepted record image differs from receipt")
 	}
 	var publisher platform.AcceptedPublisher
@@ -269,18 +271,18 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		var ok bool
 		publisher, ok = t.app(result.App).(platform.AcceptedPublisher)
 		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
-			draft.mu.Unlock()
+			draft.Unlock()
 			return false, fmt.Errorf("accepted publication has no installer")
 		}
 		if err := publisher.ValidateAcceptedPublication(schema, decoded); err != nil {
-			draft.mu.Unlock()
+			draft.Unlock()
 			return false, fmt.Errorf("accepted publication is invalid: %w", err)
 		}
 	}
-	prior := et.rows.Get(rec.ID)
+	prior := et.Rows().Get(rec.ID)
 	if prior != nil && reflect.DeepEqual(prior.Value.Interface(), value.Interface()) &&
 		records.ImageAlreadyApplied(prior, result.Row) {
-		draft.mu.Unlock()
+		draft.Unlock()
 		changed, err := l.ApplyAcceptedChange(receipt)
 		if err == nil {
 			t.committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
@@ -290,12 +292,12 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}
 	if result.Version == 5 {
 		if err := records.CheckHistoryPredecessor(result.Row, prior); err != nil {
-			draft.mu.Unlock()
+			draft.Unlock()
 			return false, err
 		}
 		before, err := records.Predecessor(result.Row.Type, result.Row.ID, prior)
 		if err != nil || before != result.Row.Predecessor || prior != nil && !reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created) || prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) {
-			draft.mu.Unlock()
+			draft.Unlock()
 			return false, fmt.Errorf("accepted record predecessor differs: %v", err)
 		}
 	} else {
@@ -306,25 +308,25 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 			prior == nil && before != 0 || prior != nil && (len(prior.RecordHistory()) != before ||
 			before > 0 && !reflect.DeepEqual(prior.RecordHistory(), result.Row.History[:before]) ||
 			!reflect.DeepEqual(records.Header(prior.Value).Created, rec.Created)) {
-			draft.mu.Unlock()
+			draft.Unlock()
 			return false, fmt.Errorf("accepted record is missing its predecessor")
 		}
 	}
 	recovered := &records.Row{Value: value, Format: result.Row.Format, History: records.CopyHistory(result.Row.History)}
 	if result.Version == 5 {
 		if err := records.AppendRowHistory(recovered, prior, result.Row.History); err != nil {
-			draft.mu.Unlock()
+			draft.Unlock()
 			return false, err
 		}
 	}
 	recovered.RetainOriginal(result.Row.Value)
-	et.setRow(rec.ID, recovered)
-	draft.writes[result.Row.Type+"/"+rec.ID] = true
-	draft.recentChanges.Remember(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
-	if et.knowledge {
-		draft.dirty.Set(result.Row.Type+"/"+rec.ID, true)
+	et.SetRow(rec.ID, recovered)
+	draft.TrackWrite(result.Row.Type + "/" + rec.ID)
+	draft.RememberChange(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
+	if et.Knowledge() {
+		draft.MarkDirty(result.Row.Type + "/" + rec.ID)
 	}
-	draft.mu.Unlock()
+	draft.Unlock()
 	if result.Version == 5 {
 		if err := validateUniqueReplacements(draft, result.Unique); err != nil {
 			return false, err
@@ -336,7 +338,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	if err := s.promoteRecords(draft); err != nil {
+	if err := s.PromoteRecords(draft); err != nil {
 		return false, err
 	}
 	if result.Row.Type == build.AppType {
@@ -376,7 +378,7 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 			t.quarantine(fmt.Errorf("accepted result commit could not be resolved: %w", err))
 		}
 		if err == nil && t.runtimePosition != nil && t.runtimePosition() > before {
-			delta, decodeErr := acceptedStorageDelta(raw)
+			delta, decodeErr := runtimekernel.StorageDelta(raw)
 			if decodeErr != nil {
 				t.quarantine(fmt.Errorf("committed state delta: %w", decodeErr))
 				return nil, decodeErr
@@ -398,14 +400,14 @@ func (t *Tenant) recordsAcceptedResults() bool { return t.AcceptResult != nil ||
 // application must keep the prior position until their enclosing result ends.
 // The tenant writer lock covers acceptance, application and this transition.
 func (t *Tenant) acceptedResultApplied() {
-	t.records.mu.Lock()
-	if t.records.current.Position() != nil {
-		t.records.current.MarkApplied(t.records.current.Position()())
+	t.records.Lock()
+	if t.records.Current().Position() != nil {
+		t.records.Current().MarkApplied(t.records.Current().Position()())
 	}
 	if t.currentReadScopes {
-		t.records.useCurrentRows()
+		t.records.UseCurrentRows()
 	}
-	t.records.mu.Unlock()
+	t.records.Unlock()
 	if t.currentReadScopes {
 		t.closeRecordRead()
 		t.openRecordRead(context.Background())

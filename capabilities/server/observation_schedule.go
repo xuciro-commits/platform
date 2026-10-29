@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"context"
 	"encoding/json"
@@ -48,12 +50,12 @@ func (t *Tenant) EvaluateObservations(at time.Time) {
 			publisher := ""
 			var scopes []string
 			func() {
-				t.records.mu.Lock()
-				defer t.records.mu.Unlock()
-				owner := t.records.types[typ]
-				row := owner.rows.Get(id)
+				t.records.Lock()
+				defer t.records.Unlock()
+				owner := t.records.Type(typ)
+				row := owner.Rows().Get(id)
 				if row != nil {
-					publisher = businessField(owner.info, row.Value, "publisher")
+					publisher = records.BusinessField(owner.Info(), row.Value, "publisher")
 					var value struct {
 						Scopes string `json:"publisherScopes"`
 					}

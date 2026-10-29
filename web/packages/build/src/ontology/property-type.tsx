@@ -14,13 +14,13 @@ const hydrate = (record:Draft):Draft => ({...empty(),...record});
 const types = ["text","longtext","integer","decimal","date","datetime","boolean"];
 
 export function PropertyTypes() {
- const {source,role}=useHost(),{open}=useApplicationWorkspace();
- if(role("build")!=="builder")return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
+ const {source, holds}=useHost(),{open}=useApplicationWorkspace();
+ if(!holds("build", "builder"))return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
  return <div className="grid gap-3"><PageHeader title={t("Shared properties")} help={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button>}/><ResourceList source={source} type="build.propertytype" fields={["title","name","type","version"]} onOpen={record=>open({view:"property-type",params:{id:record.id}})}/></div>;
 }
 
 export function PropertyTypeEditor({id}:{id:string}) {
- const {role,definitions}=useHost(),{open}=useApplicationWorkspace();
+ const {definitions, holds}=useHost(),{open}=useApplicationWorkspace();
  const editor=useDefinitionDraft<Draft>({
   id,type:"build.propertytype",kind:"property-type",view:"property-type",empty,normalize:hydrate,joinApplication:false,
   failure:t("The shared property could not be saved or loaded. Your draft is still here."),
@@ -31,7 +31,7 @@ export function PropertyTypeEditor({id}:{id:string}) {
  const publish=()=>editor.transition("publish");
  const directInstall = useDirectInstall();
  const versions=semanticPropertyTypes(definitions).filter(p=>p.binding.ref.app==="build"&&p.binding.ref.name===draft.name);
- if(role("build")!=="builder")return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
+ if(!holds("build", "builder"))return <PageHeader title={t("Shared properties")} description={t("Only a builder can edit shared properties.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Shared properties")} description={query.isError?t("The shared property could not be loaded."):t("Loading…")}/>;
  return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New shared property")} help={t("Publish shared scalar meaning and bind object fields to an exact version.")} actions={<div className="flex min-w-0 flex-wrap gap-2"><Button onClick={()=>open({view:"property-type"})}>{t("Shared properties")}</Button><AssetControls type="build.propertytype" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"property-type",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved shared property")}</Button><Button disabled={busy||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save shared property")}</Button>{directInstall&&<Button disabled={busy||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
  <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>

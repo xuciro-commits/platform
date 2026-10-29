@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import (
 	"bytes"
 	"context"
@@ -283,8 +285,8 @@ func TestCredentialJournalCheckpointAndFullRecovery(t *testing.T) {
 			if err := deployment.retryTenant(ctx, journal, registry, CodeOf(restored), id); err != nil {
 				t.Fatal(err)
 			}
-			final, exists := testConsoleOf(registry.current(id)).Credential("api")
-			if !exists || !sameStoredJSON(platform.Raw(final), platform.Raw(credential)) || journal.Position(id) != position {
+			final, exists := testConsoleOf(registry.Current(id)).Credential("api")
+			if !exists || !runtimekernel.StoredJSONEqual(platform.Raw(final), platform.Raw(credential)) || journal.Position(id) != position {
 				t.Fatal("full recovery changed credential state or repeated writes")
 			}
 			entries, err := journal.Entries(ctx, id, 0)

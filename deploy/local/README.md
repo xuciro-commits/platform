@@ -36,7 +36,9 @@ make local-update  # 交付当前已提交版本，检查版本、健康、同�
 make infra-down    # 停止容器，不删除卷
 ```
 
-热更新使用回环18495作为内部API，原生开发 overlay 才向本机回环映射数据库5433、身份服务8480和对象存储9000，浏览器继续只访问8495。`make dev` 与 `make web` 可分别运行API和Vite；通常直接使用 `make local`。服务日志在 `.build/dev/`，Compose 项目为 `platform`，卷以本地生成的 `PLATFORM_DATA_NAMESPACE` 命名。
+热更新使用回环18495作为内部API，原生开发 overlay 才向本机回环映射数据库5433、身份服务8480和对象存储9000，浏览器继续只访问8495。`make local` 由同一监督器启动和停止原生Wasm worker、代码构建器、Air和Vite；计算通信仅使用 `.build/dev/compute/` 中的本机Unix socket，不从Docker虚拟机映射socket。代码构建器仍调用固定摘要的隔离编译容器，镜像配置复用原Compose声明；Docker部署中的独立计算容器保持原隔离。
+
+`make dev` 与 `make web` 可分别运行API和Vite；完整计算环境使用 `make local`，单独运行API时仅使用明确注入的计算socket，不根据遗留socket文件自动启用。`make build-compute` 只编译原生计算程序，不留下后台进程。服务日志在 `.build/dev/`，Compose 项目为 `platform`，卷以本地生成的 `PLATFORM_DATA_NAMESPACE` 命名。
 
 `make lite` 是独立的无Docker轻量运行形态，默认8495，数据在 `.build/lite/platform/`，沿原签名角色卡登录；它不是上述密码登录环境，不自动启动updater或监督换版。不要与另一个平台同时占用同一端口。
 

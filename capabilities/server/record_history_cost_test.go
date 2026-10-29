@@ -15,8 +15,8 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 			live := stockTenant(t)
 			at := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
 			decide(t, live, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Bolt", "qty": 1, "line": "L1"}, at)
-			et := live.records.types["stock.item"]
-			prior := et.rows.Get("I1")
+			et := live.records.Type("stock.item")
+			prior := et.Rows().Get("I1")
 			history := make([]records.RecordChange, count)
 			for i := range history {
 				history[i] = prior.RecordHistory()[0]
@@ -34,7 +34,7 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 			retained.History = nil
 			retained.HistoryHead = head
 			retained.LoadHistory = func(start int) []records.RecordChange { reads++; return history[start:] }
-			et.setRow("I1", &retained)
+			et.SetRow("I1", &retained)
 			var saved Entry
 			live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { saved = e; return e.Body, nil }
 			decide(t, live, "ana", "stock", "stock.item.edit", "stock.item", "I1", map[string]any{"qty": 2}, at.Add(time.Second))
@@ -48,9 +48,9 @@ func TestOrdinaryAcceptedEditDoesNotReadRetainedHistory(t *testing.T) {
 			if result.Version != 5 || result.Row.HistoryRef.Base != count || len(result.Row.History) != 1 || len(saved.Body) > 10000 {
 				t.Fatal("edit did not retain a bounded history suffix")
 			}
-			current := et.rows.Get("I1")
+			current := et.Rows().Get("I1")
 			_ = current // promotion replaces the type image
-			current = live.records.types["stock.item"].rows.Get("I1")
+			current = live.records.Type("stock.item").Rows().Get("I1")
 			if current.HistoryLength() != count+1 {
 				t.Fatal("history length lost")
 			}

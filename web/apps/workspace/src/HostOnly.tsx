@@ -16,7 +16,7 @@ function hostOnly(client: EdgeClient, admin: HostAdmin): Host {
     language: language(), languages: [], currency: "", account: {} as Me["account"], tenant: {} as Me["tenant"] };
   const refuse = () => Promise.reject(new Error("a host administrator reads no tenant records"));
   return {
-    client, me, role: () => undefined, can: () => false, action: () => undefined, catalog: [],
+    client, me, role: () => undefined, holds: () => false, can: () => false, action: () => undefined, catalog: [],
     decide: async () => { notify.error(t("A host administrator takes no tenant decisions.")); return false; },
     outbox: [], resend: async () => undefined, entities: [], definitions: [],
     source: { scope: `host:${admin.subject}`, entity: () => undefined, list: refuse, get: refuse },

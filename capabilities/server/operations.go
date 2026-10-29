@@ -97,8 +97,8 @@ func (t *Tenant) deliver(subscriber string, e automation.QueuedEvent, now time.T
 	s := e.Record.GetSubmission()
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	t.work.Queue(subscriber, &automation.Task{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
-		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now.UTC(), Event: &e})
+	t.work.Queue(subscriber, &automation.Task{ScheduledTask: platform.ScheduledTask{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
+		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now.UTC()}, Event: &e})
 }
 
 func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }

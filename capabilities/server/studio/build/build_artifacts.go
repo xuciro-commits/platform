@@ -702,7 +702,7 @@ func (b *Build) PrepareReleaseAssets(assets []platform.ReleaseAsset, ctx platfor
 		}
 		switch r := record.(type) {
 		case Source:
-			r.State = "published"
+			r.State, r.Publisher, r.PublisherScopes = "published", ctx.Member.ID, string(platform.Raw(ctx.Member.Scopes))
 			record = r
 		case Pipeline:
 			r.State = "published"

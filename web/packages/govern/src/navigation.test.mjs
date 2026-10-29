@@ -81,6 +81,7 @@ const { Automation } = await import("./operations.tsx");
 
 const host = (roles = {}, entities = []) => ({
   role: app => roles[app],
+  holds: (app, ...names) => names.includes(roles[app] ?? ""),
   can: () => false,
   entities,
   me: { tenantId: "test" },

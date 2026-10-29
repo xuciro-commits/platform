@@ -29,7 +29,7 @@ function ApplicationContextBar({ application, route }: { application: string; ro
   const related = links ? [...links.requires, ...links.usedBy] : [];
   const applicationRoute = studioRoute(application, area, selected ? refKey(selected.ref) : undefined);
   return <div role="navigation" aria-label={t("Application context")} className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border bg-surface px-2 py-1">
-    {host.role("build") === "builder" ? <Button size="sm" variant="ghost" onClick={() => open(applicationRoute)}>{project?.title || t("Application")}</Button> : <span>{project?.title || t("Application")}</span>}
+    {host.holds("build", "builder") ? <Button size="sm" variant="ghost" onClick={() => open(applicationRoute)}>{project?.title || t("Application")}</Button> : <span>{project?.title || t("Application")}</span>}
     {related.length > 0 && <Select aria-label={t("Related assets")} value="" className="ml-auto h-7 max-w-64 text-xs" onChange={event => { const ref = related.find(ref => refKey(ref) === event.target.value); if (ref) open(assetRoute(ref, owned, host.definitions, application)); }}>
       <option value="">{t("Related assets")}</option>
       {links && [["Uses", links.requires], ["Used by", links.usedBy]].map(([label, refs]) => <optgroup key={String(label)} label={t(String(label))}>{(refs as typeof related).map(ref => <option key={refKey(ref)} value={refKey(ref)}>{ref.name}</option>)}</optgroup>)}

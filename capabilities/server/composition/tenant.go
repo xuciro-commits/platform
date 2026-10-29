@@ -31,10 +31,10 @@ func NewTenant(id string, seats ...platform.Seat) (*platformserver.Tenant, error
 
 // NewTenantWithSource binds the running immutable source once, including recovery.
 func NewTenantWithSource(id string, source *platform.SystemSource, seats ...platform.Seat) (*platformserver.Tenant, error) {
-	return NewTenantWithSourceAndCapabilities(id, source, platformserver.DefaultRuntimeCapabilities(), seats...)
+	return NewTenantWithSourceAndCapabilities(id, source, platform.DefaultRuntimeCapabilities(), seats...)
 }
 
-func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource, services platformserver.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
+func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource, services platform.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
 	services.BindOwner = bindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = business.NewRuntime

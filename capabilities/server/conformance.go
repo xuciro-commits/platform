@@ -131,11 +131,11 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	}
 	recordView := map[string]any{}
 	func() {
-		t.records.mu.Lock()
-		defer t.records.mu.Unlock()
-		for typ, et := range t.records.types {
+		t.records.Lock()
+		defer t.records.Unlock()
+		for typ, et := range t.records.Types() {
 			rows := map[string]any{}
-			for id, r := range et.rows.All() {
+			for id, r := range et.Rows().All() {
 				rows[id] = []any{r.Value.Interface(), r.RecordHistory()}
 			}
 			recordView[typ] = rows

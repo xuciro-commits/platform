@@ -1141,3 +1141,7 @@ type PersonalRead struct {
 	IDs    []string  `json:"ids"`
 	Fields []string  `json:"fields"`
 }
+
+func EffectSettled(state string) bool {
+	return state == "delivered" || state == "rejected" || state == "failed" || state == "discarded" || state == "compensated"
+}

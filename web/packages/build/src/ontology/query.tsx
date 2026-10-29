@@ -16,12 +16,12 @@ const hydrate = (record:Draft):Draft => ({...empty(),...record,domain:record.dom
 const supported = ["text","choice","reference","boolean","integer","decimal","date","datetime"];
 
 export function Queries() {
- const {source,role}=useHost(),{open}=useApplicationWorkspace();
- if(role("build")!=="builder")return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
+ const {source, holds}=useHost(),{open}=useApplicationWorkspace();
+ if(!holds("build", "builder"))return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
  return <div className="grid gap-3"><PageHeader title={t("Queries")} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<Button onClick={()=>open({view:"query",params:{id:"new"}})}>{t("New query")}</Button>}/><ResourceList source={source} type="build.query" fields={["title","name","object","interface","version"]} onOpen={(record)=>open({view:"query",params:{id:record.id}})}/></div>;
 }
 export function QueryEditor({id}:{id:string}) {
- const {role,definitions}=useHost(),{open}=useApplicationWorkspace();
+ const {definitions, holds}=useHost(),{open}=useApplicationWorkspace();
  const apps=useReadQuery<Api.AppInfo[]>("/v1/apps").data ?? [];
  const interfaces=apps.flatMap(app=>app.interfaces??[]);
  const editor=useDefinitionDraft<Draft>({
@@ -39,7 +39,7 @@ export function QueryEditor({id}:{id:string}) {
  const directInstall = useDirectInstall();
  const installed=definitions.find((d)=>d.ref.kind==="query"&&d.ref.app==="build"&&d.ref.name===draft.name);
  const versions=Object.keys(installed?.queryVersions??{});
- if(role("build")!=="builder")return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
+ if(!holds("build", "builder"))return <PageHeader title={t("Queries")} description={t("Only a builder can edit queries.")}/>;
  if(id!=="new"&&!draft.id)return <PageHeader title={t("Queries")} description={query.isError?t("The query could not be loaded."):t("Loading…")}/>;
  return <div className="grid min-w-0 grid-cols-1 gap-3"><PageHeader title={draft.title||t("New query")} help={t("Publish reusable record reads and bind pages to an exact version.")} actions={<div className="flex flex-wrap gap-2"><Button onClick={()=>open({view:"query"})}>{t("Queries")}</Button><AssetControls type="build.query" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{view:"query",params:{id}}}/><Button disabled={busy||!draft.id} onClick={()=>confirmDiscard(()=>void perform(reload))}>{t("Reload saved query")}</Button><Button disabled={busy||inputs?.invalid||!dirty&&!!draft.id} onClick={()=>void perform(save)}>{t("Save query")}</Button>{directInstall&&<Button disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(publish)}>{t("Direct install")}</Button>}<Button variant="primary" disabled={busy||inputs?.invalid||!draft.id} onClick={()=>void perform(review)}>{t("Review release")}</Button></div>}/>
  <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>

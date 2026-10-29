@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"encoding/json"
 	"slices"
@@ -217,7 +219,7 @@ func TestProtectedFieldsKeepHistorySearchExportAndAuditAtOriginalOwner(t *testin
 	if _, problem := tn.Records(alice, "review.document", platform.Query{Domain: platform.Raw([]any{[]any{"secret", "=", "restricted fixture value"}})}, at); problem == nil {
 		t.Fatal("hidden filter was accepted")
 	}
-	if _, problem := tn.Aggregate(alice, "review.document", AggregateQuery{Groups: []string{"secret"}}, at); problem == nil {
+	if _, problem := tn.Aggregate(alice, "review.document", records.AggregateQuery{Groups: []string{"secret"}}, at); problem == nil {
 		t.Fatal("hidden aggregation was accepted")
 	}
 	publicCSV, problem := tn.Export(alice, "review.document", platform.Query{}, at)

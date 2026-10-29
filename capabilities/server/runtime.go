@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"platformserver/platform/authz"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -151,3 +152,15 @@ func (runtime) RequestCompilation(platform.Caller, *pb.ChangeRecord, string, str
 func (runtime) RequestFunction(platform.Caller, *pb.ChangeRecord, platform.FunctionRequest) (platform.FunctionCall, *kernel.Error) {
 	return platform.FunctionCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Function requests require a private decision")
 }
+
+func (r runtime) AuthorizationEngine() authz.Engine { return r.t.services.Authorization }
+func (d *stagedDecision) AuthorizationEngine() authz.Engine {
+	return d.tenant.services.Authorization
+}
+
+func (r runtime) Rules() platform.RuleEngine             { return r.t.services.Rules }
+func (d *stagedDecision) Rules() platform.RuleEngine     { return d.tenant.services.Rules }
+func (r runtime) Kernel() platform.KernelFactory         { return r.t.services.Kernel }
+func (d *stagedDecision) Kernel() platform.KernelFactory { return d.tenant.services.Kernel }
+
+func (t *Tenant) RuntimeCapabilities() platform.RuntimeCapabilities { return t.services }

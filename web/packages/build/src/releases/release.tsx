@@ -52,10 +52,10 @@ function DiagnosticResource({ kind, name, application, locked, onAdd }: { kind: 
 }
 
 export function ReleaseReview({ initialKind = "object", initialID = "", initialDrafts = [], selectionError, embedded = false, candidateID, applicationName }: { initialKind?: ReleaseKind; initialID?: string; initialDrafts?: JointChoice[]; selectionError?: string; embedded?: boolean; candidateID?: string; applicationName?: string } = {}) {
-  const { client, role, me, refresh } = useHost();
+  const { client, me, refresh , holds} = useHost();
   const systemScope = me.tenantId === "system";
-  const builder = role("build") === "builder";
-  const mayRelease = builder || role("build") === "publisher";
+  const builder = holds("build", "builder");
+  const mayRelease = builder || holds("build", "publisher");
   const scope = useApplicationScope();
   const { open } = useApplicationWorkspace();
   const [kind, setKind] = useState<ReleaseKind>(initialKind);

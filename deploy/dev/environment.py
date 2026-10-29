@@ -18,6 +18,7 @@ LOGS = STATE.parent
 COMPOSE = ['docker', 'compose', '--env-file', 'deploy/local/.env', '-f', 'deploy/local/compose.yaml']
 NATIVE_COMPOSE = [*COMPOSE, '-f', 'deploy/dev/compose.native.yaml']
 API_PORT = 18495
+COMPUTE = ROOT / '.build/dev/compute'
 
 
 def run(command):
@@ -115,6 +116,14 @@ def native_listeners(state=None, table=None):
             raise RuntimeError(f'端口 {port} 由其他进程占用（PID {sorted(listeners)}），不是当前 Platform {kind}。')
         else:
             bound[kind] = next(iter(listeners))
+    for kind, binary, socket in [('worker', 'wasm-worker', 'worker.sock'), ('builder', 'code-builder', 'builder.sock')]:
+        child = next((item for item in state.get('children', []) if item['kind'] == kind), {})
+        if not _matches(child, table) or table[child['pid']][0] != state['pid']:
+            raise RuntimeError(f'Platform {kind} 不属于当前本地监督进程。')
+        result = subprocess.run([str(COMPUTE / binary), '-check', '-socket=' + str(COMPUTE / socket)],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if result.returncode != 0:
+            waiting = True
     return None if waiting else bound
 
 
@@ -222,13 +231,22 @@ def serve():
         if not air or not node or not vite.is_file():
             raise RuntimeError('缺少 Air、Node 或 Vite，请先运行 make setup。')
         commands = [
+            ('worker', [str(COMPUTE / 'wasm-worker'), '-socket=' + str(COMPUTE / 'worker.sock')], ROOT),
+            ('builder', [str(COMPUTE / 'code-builder'), '-socket=' + str(COMPUTE / 'builder.sock')], ROOT),
             ('api', [air, '-c', 'deploy/dev/air.toml'], ROOT),
             ('web', [node, str(vite), '--host', '127.0.0.1', '--port', str(state['webPort'])], ROOT / 'web/apps/workspace'),
         ]
         env = {**os.environ, **config, 'PLATFORM_HOST': f'http://127.0.0.1:{API_PORT}'}
+        compose = json.loads(subprocess.check_output(COMPOSE + ['config', '--format', 'json'], cwd=ROOT))
+        env.update(PLATFORM_WASM_WORKER_SOCKET=str(COMPUTE / 'worker.sock'),
+                   PLATFORM_CODE_BUILDER_SOCKET=str(COMPUTE / 'builder.sock'))
+        compute_env = {key: os.environ[key] for key in ('PATH', 'HOME', 'TMPDIR') if key in os.environ}
+        builder_env = {**compute_env, **compose['services']['code-builder']['environment']}
+        builder_env.update({key: os.environ[key] for key in ('DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH') if key in os.environ})
         for kind, command, cwd in commands:
             with (LOGS / f'platform-{kind}.log').open('w') as log:
-                child = subprocess.Popen(command, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                child_env = compute_env if kind == 'worker' else builder_env if kind == 'builder' else env
+                child = subprocess.Popen(command, cwd=cwd, env=child_env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 children.append(child)
                 state['children'].append({'kind': kind, 'pid': child.pid, 'stamp': stamp(child.pid)})
                 write_state(state)
@@ -238,7 +256,7 @@ def serve():
             known.update(_owned(state['children'], table))
             for child in children:
                 if child.poll() is not None:
-                    raise RuntimeError(f'本地进程退出（{child.returncode}），请查看 .build/dev/*-api.log 或 *-web.log。')
+                    raise RuntimeError(f'本地进程退出（{child.returncode}），请查看 .build/dev/platform-*.log。')
             now = time.monotonic()
             if state['status'] != 'ready' or now - last_probe >= 5 or any(not _matches(item, table) for item in bound.values()):
                 listeners = native_listeners(state, table)
@@ -269,7 +287,7 @@ def local():
     stop()
     write_state({'mode': 'native', 'status': 'starting'})
     run(COMPOSE + ['stop', 'platform-server', 'wasm-worker', 'code-builder'])
-    run(['make', 'infra', 'infra-compute'])
+    run(['make', 'infra', 'build-compute'])
     LOGS.mkdir(parents=True, exist_ok=True)
     with (LOGS / 'environment.log').open('w') as log:
         supervisor = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'serve'], cwd=ROOT,
@@ -293,7 +311,6 @@ def prepare_docker():
     configuration()
     stop()
     write_state({'mode': 'docker', 'status': 'starting'})
-    run(COMPOSE + ['-p', 'platform-dev-compute', '-f', 'deploy/dev/compose.compute.yaml', 'down'])
     run(COMPOSE + ['up', '-d', '--wait', '--force-recreate', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
 
 

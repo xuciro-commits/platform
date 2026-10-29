@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -177,7 +179,7 @@ func TestMissingSourcesWithholdWholeListAndCombinedDerivations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tn.records.byGo[info.Go] = &entityType{info: info}
+	tn.records.ReplaceReadType(info, records.Rows{}, false)
 	input := report{Text: "generation without a source", Original: "original input", Steps: []step{{Text: "untracked step"}}, Citations: []step{{Text: "untracked citation"}}, Summary: "untracked summary"}
 	before := platform.Raw(input)
 	view := tn.narrowed(memberOf(t, tn, "ana"), input, txnAt, false).(report)

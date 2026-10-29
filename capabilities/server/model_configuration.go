@@ -3,9 +3,13 @@ package platformserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/aigateway"
+	"strings"
 
 	"platformserver/platform"
 	"strconv"
@@ -173,4 +177,30 @@ func (t *Tenant) modelStage(binding platform.AIModelBinding, provider platform.A
 		return pinned, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, err.Error())
 	}
 	return pinned, nil
+}
+
+// Inference approvals are static deployment input, never tenant model metadata.
+func bindAIInferencePolicy(services *platform.RuntimeCapabilities) error {
+	if services.AIInference == nil {
+		policy := platform.AIInferencePolicy{}
+		if raw := strings.TrimSpace(os.Getenv("PLATFORM_AI_INFERENCE_POLICY")); raw != "" {
+			decoder := json.NewDecoder(strings.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&policy); err != nil {
+				return fmt.Errorf("PLATFORM_AI_INFERENCE_POLICY: %w", err)
+			}
+			if err := decoder.Decode(new(any)); err != io.EOF {
+				return fmt.Errorf("PLATFORM_AI_INFERENCE_POLICY contains trailing data")
+			}
+		}
+		services.AIInference = &policy
+	}
+	if err := aigateway.CheckPolicy(*services.AIInference); err != nil {
+		return err
+	}
+	// Own a private copy: callers cannot mutate an instance's deployment approval.
+	policy := *services.AIInference
+	policy.Runtime = append([]platform.AIInferenceSite{}, policy.Runtime...)
+	services.AIInference = &policy
+	return nil
 }

@@ -152,7 +152,7 @@ func TestJournalAcceptedFunctionCrashBeforeApplication(t *testing.T) {
 		}()
 		live.settleWithUsage(effectID, out, usage, at.Add(time.Second))
 	}()
-	if live.outbound[0].State != "pending" || len(live.ai.Usage()) != 0 || live.records.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Note != "original" {
+	if live.outbound[0].State != "pending" || len(live.ai.Usage()) != 0 || live.records.Type("stock.item").Rows().Get("I1").Value.Interface().(Item).Note != "original" {
 		t.Fatal("unapplied result escaped")
 	}
 	entries, err := journal.Entries(ctx, id, 0)
@@ -167,7 +167,7 @@ func TestJournalAcceptedFunctionCrashBeforeApplication(t *testing.T) {
 	if err := restored.Replay(entries); err != nil {
 		t.Fatal(err)
 	}
-	if restored.outbound[0].State != "delivered" || len(restored.ai.Usage()) != 1 || restored.records.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Note != "Saved advice" {
+	if restored.outbound[0].State != "delivered" || len(restored.ai.Usage()) != 1 || restored.records.Type("stock.item").Rows().Get("I1").Value.Interface().(Item).Note != "Saved advice" {
 		t.Fatal("saved answer, reply and usage did not recover together")
 	}
 	CheckReplay(t, restored, entries, func() *Tenant { return functionTenantFor(t, id, "New instructions", []string{"name", "qty"}) })

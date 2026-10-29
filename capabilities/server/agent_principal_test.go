@@ -1,5 +1,7 @@
 package platformserver
 
+import acceptedformat "platformserver/kernel/acceptedformat"
+
 import agentowner "platformserver/engine/agents"
 
 import (
@@ -50,7 +52,7 @@ func TestAgentPrincipalRevocation(t *testing.T) {
 	if len(entries) != 1 || entries[0].Kind != "accepted-result" {
 		t.Fatalf("revocation did not accept exactly one result: %+v", entries)
 	}
-	recorded, decodeErr := decodeAcceptedAgent(entries[0].Body)
+	recorded, decodeErr := acceptedformat.DecodeAgent(entries[0].Body)
 	if decodeErr != nil || recorded.Step.Stop == "" || recorded.Step.Tool != "" || len(recorded.Step.Observation) != 0 {
 		t.Errorf("revocation not fixed in accepted step: %+v, %v", recorded.Step, decodeErr)
 	}

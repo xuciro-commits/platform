@@ -112,8 +112,8 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 	if binding.Version == current.Version && binding.Family == current.Family {
 		return binding, nil
 	}
-	if et := t.records.types["build.object"]; et != nil {
-		for _, row := range et.rows.All() {
+	if et := t.records.Type("build.object"); et != nil {
+		for _, row := range et.Rows().All() {
 			var metadata struct {
 				Published string `json:"published"`
 			}

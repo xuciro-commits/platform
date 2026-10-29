@@ -24,7 +24,7 @@ func setFixture(t *testing.T) *Tenant {
 	for i := range 620 {
 		id := fmt.Sprintf("I%03d", i)
 		change := &pb.ChangeRecord{ChangeId: "set-" + id, RecordedTime: at, Revision: 1, Submission: &pb.Submission{PrincipalId: "ana", Target: &pb.EntityRef{Type: "stock.item", Id: id}, Schema: &pb.SchemaRef{Name: "stock.item.create"}}}
-		if err := tn.records.put(c, change, Item{Record: platform.Record{ID: id}, Name: []string{"Bolt", "Wrench", "Nut"}[i%3], Qty: i, Line: []string{"L1", "L2"}[i%2], Owner: []string{"ana", "bo"}[i%2]}); err != nil {
+		if err := tn.records.Put(c, change, Item{Record: platform.Record{ID: id}, Name: []string{"Bolt", "Wrench", "Nut"}[i%3], Qty: i, Line: []string{"L1", "L2"}[i%2], Owner: []string{"ana", "bo"}[i%2]}); err != nil {
 			t.Fatal(err)
 		}
 	}

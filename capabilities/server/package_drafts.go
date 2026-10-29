@@ -1,19 +1,22 @@
 package platformserver
 
-import transport "platformserver/kernel/transport"
-
-import releaseowner "platformserver/studio/releases"
+import acceptedformat "platformserver/kernel/acceptedformat"
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	controlowner "platformserver/kernel/control"
+	"platformserver/kernel/records"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/studio/build"
 	"platformserver/studio/packages"
+	releaseowner "platformserver/studio/releases"
 	"time"
 )
 
@@ -107,7 +110,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	// logical asset name but uses a request-stable target ID when it is occupied.
 	context.DraftIDs = map[platform.AssetRef]string{}
 	commandKey := "package-drafts:" + m.ID + ":" + key
-	priorEdits := map[platform.AssetRef]CompositeEdit{}
+	priorEdits := map[platform.AssetRef]platform.CompositeEdit{}
 	for batch := 0; ; batch++ {
 		batchKey := "composite:" + commandKey
 		if batch > 0 {
@@ -117,7 +120,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		if len(raw) == 0 {
 			break
 		}
-		prior, err := decodeAcceptedComposite(raw)
+		prior, err := acceptedformat.DecodeComposite(raw)
 		if err != nil {
 			return answer, err
 		}
@@ -145,16 +148,16 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			createRefs[draft.Ref] = true
 			continue
 		}
-		if et := t.records.types[draft.Type]; et != nil {
-			for _, row := range et.rows.All() {
-				if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && businessField(et.info, row.Value, "name") == draft.Name {
+		if et := t.records.Type(draft.Type); et != nil {
+			for _, row := range et.Rows().All() {
+				if !row.Value.FieldByName("Record").Interface().(platform.Record).Archived && records.BusinessField(et.Info(), row.Value, "name") == draft.Name {
 					context.DraftIDs[draft.Ref] = row.Value.FieldByName("Record").Interface().(platform.Record).ID
 				}
 			}
 			if context.DraftIDs[draft.Ref] != "" {
 				continue
 			}
-			if row := et.rows.Get(draft.Name); row != nil && row.Value.FieldByName("Record").Interface().(platform.Record).Archived {
+			if row := et.Rows().Get(draft.Name); row != nil && row.Value.FieldByName("Record").Interface().(platform.Record).Archived {
 				context.DraftIDs[draft.Ref] = draft.Name + "-" + digest[:12]
 			}
 		}
@@ -169,7 +172,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if len(drafts) == 0 || len(drafts) > build.JointDraftLimit {
 		return answer, fmt.Errorf("an application package needs one to %d owner drafts", build.JointDraftLimit)
 	}
-	edits := make([]CompositeEdit, 0, len(drafts))
+	edits := make([]platform.CompositeEdit, 0, len(drafts))
 	answer = PackageDraftResult{Package: id, Version: version, Key: key, Drafts: make([]PackageDraft, 0, len(drafts))}
 	var primary platform.AssetRef
 	for _, root := range blueprint.Roots {
@@ -179,16 +182,16 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		}
 	}
 	for _, draft := range drafts {
-		et := t.records.types[draft.Type]
-		if et == nil || et.info.App != build.ID {
+		et := t.records.Type(draft.Type)
+		if et == nil || et.Info().App != build.ID {
 			return PackageDraftResult{}, fmt.Errorf("draft %s has no Build owner", draft.Ref)
 		}
-		payload, err := releaseowner.AssetDraftPayload(et.info, draft.Image)
+		payload, err := releaseowner.AssetDraftPayload(et.Info(), draft.Image)
 		if err != nil {
 			return PackageDraftResult{}, err
 		}
-		edit := CompositeEdit{Schema: draft.Schema, Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Payload: payload}
-		if prior, ok := priorEdits[draft.Ref]; ok && (!sameCompositePayload(prior.Payload, payload) || prior.Target.GetId() != draft.Name) {
+		edit := platform.CompositeEdit{Schema: draft.Schema, Target: &pb.EntityRef{Type: draft.Type, Id: draft.Name}, Payload: payload}
+		if prior, ok := priorEdits[draft.Ref]; ok && (!acceptedformat.SameCompositePayload(prior.Payload, payload) || prior.Target.GetId() != draft.Name) {
 			return answer, fmt.Errorf("package draft key belongs to another request")
 		}
 		if createRefs[draft.Ref] {
@@ -204,7 +207,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	}
 	contextHash := ""
 	if len(edits) > 64 {
-		contextHash, err = compositeRequestHash(t.ID, m.ID, commandKey, edits)
+		contextHash, err = acceptedformat.CompositeRequestHash(t.ID, m.ID, commandKey, edits)
 		if err != nil {
 			return answer, err
 		}
@@ -215,16 +218,16 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		if from > 0 {
 			batchKey = fmt.Sprintf("%s:%d", commandKey, from/64)
 		}
-		saved := acceptedComposite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: build.ID, Member: m.ID, Key: "composite:" + batchKey, Context: contextHash, At: at.UTC(), Edits: edits[from:until]}
+		saved := acceptedformat.Composite{Version: 2, Kind: "composite-result", Tenant: t.ID, App: build.ID, Member: m.ID, Key: "composite:" + batchKey, Context: contextHash, At: at.UTC(), Edits: edits[from:until]}
 		if contextHash != "" {
 			saved.Version = 3
 		}
-		saved.RequestHash, err = compositeRequestHash(t.ID, m.ID, saved.Key, saved.Edits, saved.Context)
+		saved.RequestHash, err = acceptedformat.CompositeRequestHash(t.ID, m.ID, saved.Key, saved.Edits, saved.Context)
 		if err != nil {
 			return answer, err
 		}
 		if prior := t.committed.CompositeAnswer(saved.Key); len(prior) > 0 {
-			accepted, err := decodeAcceptedComposite(prior)
+			accepted, err := acceptedformat.DecodeComposite(prior)
 			if err != nil || accepted.RequestHash != saved.RequestHash {
 				return PackageDraftResult{}, fmt.Errorf("package draft key belongs to another request")
 			}
@@ -238,7 +241,7 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 			return PackageDraftResult{}, err
 		}
 		saved.Changes = changes
-		raw, err := encodeAcceptedComposite(saved)
+		raw, err := acceptedformat.EncodeComposite(saved)
 		if err != nil {
 			return PackageDraftResult{}, err
 		}
@@ -252,4 +255,132 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 		}
 	}
 	return answer, nil
+}
+
+type packagePreparationSource interface {
+	PreparationBlueprint(id, version string) (platform.PackageBlueprint, *platform.InstalledPackage, error)
+}
+
+func (h *Host) routesPackagePreparation(rt *routes) {
+	rt.authorized(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: packages.PackagePreparation{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		value, err := t.PackagePreparation(m, r.PathValue("id"), r.URL.Query().Get("version"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		for i := range value.AI {
+			value.AI[i].Problem = t.i18n.Say(t.Language(m, r), value.AI[i].Problem)
+		}
+		WriteJSON(w, http.StatusOK, value)
+	})
+}
+
+func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at time.Time) (packages.PackagePreparation, *kernel.Error) {
+	return coordinatedRecordRead(t, context.Background(), func() (packages.PackagePreparation, *kernel.Error) {
+		fail := func(err error) (packages.PackagePreparation, *kernel.Error) {
+			return packages.PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
+		}
+		if !holdsIndependentBuildRole(m, build.Builder) {
+			return packages.PackagePreparation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Builder role required")
+		}
+		_, refusal := t.read(m, "packages")
+		if refusal != nil {
+			return packages.PackagePreparation{}, refusal
+		}
+		source, ok := t.app(controlowner.PlatformApp).(packagePreparationSource)
+		if !ok {
+			return fail(fmt.Errorf("package owner is unavailable"))
+		}
+		blueprint, installed, err := source.PreparationBlueprint(id, version)
+		if err != nil {
+			return fail(err)
+		}
+		owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+		if !ok {
+			return fail(fmt.Errorf("Build is unavailable"))
+		}
+		code, err := (hostView{t: t}).CodeReleaseAssets()
+		if err != nil {
+			return fail(err)
+		}
+		candidate, err := packages.BlueprintCandidate(blueprint, owner, code)
+		if err != nil {
+			return fail(err)
+		}
+		find := func(typ, name string) (packages.DraftState, error) {
+			page, refusal := t.recordsRead(m, typ, platform.Query{Domain: platform.Raw([]any{[]any{"name", "=", name}}), Limit: 2}, at)
+			if refusal != nil {
+				return packages.DraftState{}, refusal
+			}
+			if page.Total > 1 {
+				return packages.DraftState{}, fmt.Errorf("draft %s/%s is ambiguous", typ, name)
+			}
+			var state packages.DraftState
+			if len(page.Records) > 0 {
+				if err := json.Unmarshal(platform.Raw(page.Records[0]), &state); err != nil {
+					return state, err
+				}
+			}
+			return state, nil
+		}
+
+		answer, err := packages.Preparation(id, version, blueprint, installed, candidate, m, packages.PreparationSource{
+			Find: find, App: (hostView{t: t}).App,
+			Model: func(purpose, model string, options platform.ModelOptions) (string, string) {
+				binding, _, refusal := t.resolveModel(purpose, model, options)
+				if refusal != nil {
+					problem := refusal.Message
+					if problem == "" {
+						problem = "The selected model is disabled or missing"
+					}
+					return model, problem
+				}
+				if _, _, refusal = t.ai.Callable(m, binding.Model); refusal != nil {
+					return binding.Model, "Ask an AI administrator to grant access to this model"
+				}
+				return binding.Model, ""
+			},
+		})
+		if err != nil {
+			return fail(err)
+		}
+		return answer, nil
+	})
+}
+
+// The preview stores inert content-addressed bytes, not an installation or grant.
+func (h *Host) routesPackageSources(rt *routes) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: platform.PackageInspectRequest{}, Answer: platform.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var request platform.PackageInspectRequest
+		if err := decodeBodyLimit(r, &request, packages.MaxPackageImportBytes+4096); err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
+			return
+		}
+		preview, err := t.inspectPackage(r.Context(), request)
+		if err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
+			return
+		}
+		WriteJSON(w, http.StatusOK, preview)
+	})
+}
+
+func (t *Tenant) inspectPackage(ctx context.Context, request platform.PackageInspectRequest) (platform.PackagePreview, error) {
+	send := t.Outbound
+	if send == nil {
+		send = guarded
+	}
+	return packages.Inspect(ctx, t.ID, request, send, t.files(), func(ctx context.Context, descriptor platform.PackageDescriptor) (platform.Precheck, error) {
+		owner, ok := t.app(controlowner.PlatformApp).(interface {
+			Precheck(platform.PackageDescriptor) platform.Precheck
+		})
+		if !ok {
+			return platform.Precheck{}, fmt.Errorf("Package management is unavailable")
+		}
+		precheck, refusal := recordRead(t, ctx, func() (platform.Precheck, *kernel.Error) { return owner.Precheck(descriptor), nil })
+		if refusal != nil {
+			return platform.Precheck{}, fmt.Errorf("The package dependencies could not be inspected")
+		}
+		return precheck, nil
+	})
 }

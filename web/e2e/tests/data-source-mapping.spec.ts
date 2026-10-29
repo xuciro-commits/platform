@@ -1,4 +1,5 @@
 import { expect, fresh, shots, slug, test } from "./kit";
+import type * as Api from "../../packages/kernel/src/gen/host";
 
 test("source mappings retain both editors' input and use only permitted model metadata", async ({ page, builder, operator }, info) => {
   test.setTimeout(120_000);
@@ -19,7 +20,7 @@ test("source mappings retain both editors' input and use only permitted model me
   await builder.decide("build.source.create", { type: "build.source", id: source }, {
     name: slug("mapping"), title: "Source mapping task", url: "https://example.com/rows", object: object.type, key: "id", mapping: [{ from: "parent", to: "parent" }],
   });
-  const member = await operator.read<{ principalId: string; profile: { roles: { build: string }; grants?: { app: string; role: string }[] } }>("me");
+  const member = await operator.read<Api.MeView>("me");
   const originalRoles = new Set([member.profile.roles.build, ...(member.profile.grants ?? []).filter(grant => grant.app === "build").map(grant => grant.role)]);
   const addedRoles = new Set<string>();
   const revoke = (role: string) => builder.decide("platform.member.revoke", { type: "platform.member", id: member.principalId }, { app: "build", role }, "platform");
@@ -63,7 +64,10 @@ test("source mappings retain both editors' input and use only permitted model me
     // original member must remove those answers without requesting them again.
     await grant("integrator");
     if (addedRoles.has("builder")) await revoke("builder");
-    expect((await operator.read<typeof member>("me")).profile.roles.build).toBe("integrator");
+    const downgraded = (await operator.read<typeof member>("me")).profile;
+    expect(downgraded.roles.build).toBe(member.profile.roles.build);
+    expect(downgraded.grants).toEqual(expect.arrayContaining([{ app: "build", role: "integrator", by: expect.any(String), at: expect.any(String) }]));
+    expect(downgraded.grants?.some(grant => grant.app === "build" && grant.role === "builder")).toBe(false);
     await expect(page.getByRole("button", { name: "Edit target object", exact: true })).toHaveCount(0);
     await expect(page.getByText("Published model", { exact: true })).toBeVisible();
     await expect(mapping.getByRole("combobox", { name: "Object field", exact: true }).locator("option:checked")).toHaveText("Published parent");

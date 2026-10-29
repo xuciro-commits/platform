@@ -154,21 +154,21 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 	if err := p.refresh(ctx); err != nil {
 		return nil, err
 	}
-	t.records.mu.Lock()
-	t.records.touched = p.touch
-	t.records.mu.Unlock()
+	t.records.Lock()
+	t.records.SetTouched(p.touch)
+	t.records.Unlock()
 	return p, nil
 }
 
 // Startup and live declaration changes use the same table and history owner.
 func (p *Projection) refresh(ctx context.Context) error {
 	s := p.tenant.records
-	s.mu.Lock()
+	s.Lock()
 	infos := []platform.EntityInfo{}
-	for _, et := range s.types {
-		infos = append(infos, et.info)
+	for _, et := range s.Types() {
+		infos = append(infos, et.Info())
 	}
-	s.mu.Unlock()
+	s.Unlock()
 	slices.SortFunc(infos, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -338,10 +338,10 @@ func (p *Projection) readRows(typ string, ids map[string]bool) (rows [][]any, ch
 	}
 	p.mu.Unlock()
 	s := p.tenant.records
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	et := s.types[typ]
-	cols := columns(et.info)
+	s.Lock()
+	defer s.Unlock()
+	et := s.Type(typ)
+	cols := columns(et.Info())
 	ends = map[string]int{}
 	take := func(id string, r *records.Row) {
 		if r == nil {
@@ -360,12 +360,12 @@ func (p *Projection) readRows(typ string, ids map[string]bool) (rows [][]any, ch
 		ends[typ+"/"+id] = r.HistoryLength()
 	}
 	if ids == nil {
-		for id, row := range et.rows.All() {
+		for id, row := range et.Rows().All() {
 			take(id, row)
 		}
 	} else {
 		for id := range ids {
-			take(id, et.rows.Get(id))
+			take(id, et.Rows().Get(id))
 		}
 	}
 	return rows, changes, ends
@@ -386,15 +386,15 @@ func (p *Projection) recordHistory(ends map[string]int) {
 // every second, after the decisions that changed them are committed.
 func (p *Projection) Flush(ctx context.Context) (err error) {
 	s := p.tenant.records
-	s.mu.Lock()
-	changed := len(s.types) != len(p.shapes)
-	for typ, et := range s.types {
-		if p.shapes[typ] != et.info.Go {
+	s.Lock()
+	changed := s.TypeCount() != len(p.shapes)
+	for typ, et := range s.Types() {
+		if p.shapes[typ] != et.Info().Go {
 			changed = true
 			break
 		}
 	}
-	s.mu.Unlock()
+	s.Unlock()
 	if changed {
 		if err := p.refresh(ctx); err != nil {
 			return err
@@ -426,9 +426,9 @@ func (p *Projection) Flush(ctx context.Context) (err error) {
 	history := map[string]int{}
 	for typ, ids := range dirty {
 		s := p.tenant.records
-		s.mu.Lock()
-		info := s.types[typ].info
-		s.mu.Unlock()
+		s.Lock()
+		info := s.Type(typ).Info()
+		s.Unlock()
 		upsert, change := p.writeSQL(info)
 		rows, changes, ends, readErr := p.rows(ctx, typ, ids)
 		if readErr != nil {

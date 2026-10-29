@@ -40,7 +40,7 @@ func (rt *routes) handle(route transport.Route, f func(w http.ResponseWriter, r 
 				"error": map[string]string{"code": "TENANT_QUARANTINED"}})
 			return
 		}
-		if t.console.suspended() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") {
+		if t.console.Suspended() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") {
 			WriteJSON(w, http.StatusServiceUnavailable, map[string]any{
 				"error": map[string]string{"code": "TENANT_SUSPENDED"}})
 			return

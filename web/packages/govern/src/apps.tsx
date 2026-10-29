@@ -8,7 +8,7 @@ import { PackageSources } from "./package-sources";
 import { PackageRequirements } from "./package-preparation";
 
 export function Apps() {
-  const { role } = useHost(), { open } = useWorkspace();
+  const { holds} = useHost(), { open } = useWorkspace();
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   return (
     <>
@@ -16,7 +16,7 @@ export function Apps() {
       <PackageSources items={packages.data ?? []} />
       {packages.isError ? <div role="alert"><p>{t("Package inventory could not be loaded.")}</p><Button onClick={() => void packages.refetch()}>{t("Retry")}</Button></div> : packages.isPending ? <p role="status">{t("Loading packages…")}</p> : !packages.data?.length ? <p className="text-sm text-muted">{t("This library is empty. Download a package or import a local file to begin.")}</p> : null}
       <PackageList items={packages.data ?? []} />
-      {role("platform") === "admin" && <Button variant="link" className="mt-4" onClick={() => open({ view: "matrix" })}>{t("Inspect built-in modules in the capability matrix")}</Button>}
+      {holds("platform", "admin") && <Button variant="link" className="mt-4" onClick={() => open({ view: "matrix" })}>{t("Inspect built-in modules in the capability matrix")}</Button>}
     </>
   );
 }
@@ -184,7 +184,7 @@ function ModuleCard({ app: a }: { app: AppInfo }) {
 
 export function Matrix() {
   const apps = useRead<Api.AppInfo[]>("/v1/apps").data ?? [];
- const { role } = useHost();
+ const { holds} = useHost();
   const [q, setQ] = useState("");
   const needle = q.trim().toLocaleLowerCase();
   const shown = apps.filter((a) => !needle || [a.id, a.title, ...a.capabilities.map((c) => c.name + " " + capabilityTitle(c.name)), ...a.provides, ...a.consumes, ...a.roles].join(" ").toLocaleLowerCase().includes(needle));
@@ -194,7 +194,7 @@ export function Matrix() {
       <PageHeader title={t("Capability matrix")} help={t("What each module provides (capabilities and their actions, roles, reads, protocols) and what it uses (protocols, actions, events, connector inputs), read live from the host's registry. Packages are installed on the Packages page; this page explains what they bring.")}
         actions={<Input aria-label={t("Filter modules")} placeholder={t("Filter by module, capability, protocol or role")} value={q} onChange={(e) => setQ(e.target.value)} className="w-72" />} />
       <div className="mb-3"><PropertyList columns={2} items={[[t("Modules"), apps.length], [t("Capabilities"), capabilities]]} /></div>
-      {role("platform") === "admin" && <RuntimeContracts />}
+      {holds("platform", "admin") && <RuntimeContracts />}
       <div className="grid max-w-6xl gap-3">
         {shown.map((a) => <ModuleCard key={a.id} app={a} />)}
         {!shown.length && <p className="text-sm text-muted">{t("No module matches.")}</p>}

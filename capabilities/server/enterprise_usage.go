@@ -52,7 +52,7 @@ func enterpriseRecordCurrent(info platform.EntityInfo, value reflect.Value, now 
 	return err != nil || string(result.Value.Data) != "false"
 }
 
-func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, id, until string, now time.Time, details bool) EnterpriseUsage {
+func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *records.Store, id, until string, now time.Time, details bool) EnterpriseUsage {
 	result := EnterpriseUsage{CanDelete: true, CanClose: true, Items: []EnterpriseUsageItem{}}
 	historicalPaths := t.enterpriseHistoricalReferencePaths(store)
 	add := func(item EnterpriseUsageItem, visible bool) {
@@ -66,47 +66,47 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 			result.HasRestrictedUsage = true
 		}
 	}
-	var types []*entityType
+	var types []*records.Type
 	rows := map[string][]*records.Row{}
 	func() {
-		store.mu.Lock()
-		defer store.mu.Unlock()
-		types = make([]*entityType, 0, len(store.types))
-		for _, et := range store.types {
-			if len(historicalPaths[et.info.Type]) == 0 {
+		store.Lock()
+		defer store.Unlock()
+		types = make([]*records.Type, 0, store.TypeCount())
+		for _, et := range store.Types() {
+			if len(historicalPaths[et.Info().Type]) == 0 {
 				continue
 			}
 			types = append(types, et)
-			for _, r := range et.rows.All() {
-				rows[et.info.Type] = append(rows[et.info.Type], r)
+			for _, r := range et.Rows().All() {
+				rows[et.Info().Type] = append(rows[et.Info().Type], r)
 			}
 		}
 	}()
 	for _, et := range types {
-		for _, r := range rows[et.info.Type] {
-			paths := records.MatchingRefsWithAccess(et.info.Fields, "", r.Value, id, nil, true)
-			historical := historyNamesEnterprisePaths(historicalPaths[et.info.Type], r.RecordHistory(), id)
+		for _, r := range rows[et.Info().Type] {
+			paths := records.MatchingRefsWithAccess(et.Info().Fields, "", r.Value, id, nil, true)
+			historical := historyNamesEnterprisePaths(historicalPaths[et.Info().Type], r.RecordHistory(), id)
 			if len(paths) == 0 && !historical {
 				continue
 			}
-			current := len(paths) > 0 && enterpriseRecordCurrent(et.info, r.Value, now, t.services.Rules)
+			current := len(paths) > 0 && enterpriseRecordCurrent(et.Info(), r.Value, now, t.services.Rules)
 			visible := false
 			title, field := "", ""
 			if details {
-				if view, err := t.recordOf(c.Member, et.info.Type, records.Header(r.Value).ID, now); err == nil {
+				if view, err := t.recordOf(c.Member, et.Info().Type, records.Header(r.Value).ID, now); err == nil {
 					value := reflect.ValueOf(view.Record)
 					if value.Kind() == reflect.Pointer {
 						value = value.Elem()
 					}
-					allowed := records.MatchingRefs(et.info.Fields, "", value, id, c.RolesIn(et.info.App))
+					allowed := records.MatchingRefs(et.Info().Fields, "", value, id, c.RolesIn(et.Info().App))
 					if len(allowed) > 0 {
 						visible = true
-						title = records.RecordLabel(et.info, view.Record, records.Header(r.Value).ID)
+						title = records.RecordLabel(et.Info(), view.Record, records.Header(r.Value).ID)
 						field = allowed[0].Path
 					}
 				}
 			}
-			add(EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.info.Type + "/" + records.Header(r.Value).ID, Field: field, Current: current}, visible)
+			add(EnterpriseUsageItem{Kind: "record", Title: title, Ref: "record:" + et.Info().Type + "/" + records.Header(r.Value).ID, Field: field, Current: current}, visible)
 		}
 	}
 	if directory, ok := t.app(controlowner.PlatformApp).(platform.IdentityDirectory); ok {
@@ -125,7 +125,7 @@ func (t *Tenant) enterpriseExternalUsage(c platform.Caller, store *recordStore, 
 	return result
 }
 
-func (t *Tenant) checkEnterpriseUsage(c platform.Caller, store *recordStore, id, until string, deleting bool, now time.Time) *kernel.Error {
+func (t *Tenant) checkEnterpriseUsage(c platform.Caller, store *records.Store, id, until string, deleting bool, now time.Time) *kernel.Error {
 	if c.Replaying {
 		return nil
 	}

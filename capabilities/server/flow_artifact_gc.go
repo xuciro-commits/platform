@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"bytes"
 	"context"
@@ -44,10 +46,10 @@ func (t *Tenant) flowArtifactRecoveryComplete(started time.Time) {
 
 // flowArtifactReferences reads the complete original record owner's view.
 // Historical before/after values remain roots even after the live frame moves.
-func (s *recordStore) flowArtifactReferences(store flowFrameStore) (map[string]bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	entity := s.types[platform.FlowInstanceType]
+func flowArtifactReferences(s *records.Store, store flowFrameStore) (map[string]bool, error) {
+	s.Lock()
+	defer s.Unlock()
+	entity := s.Type(platform.FlowInstanceType)
 	if entity == nil {
 		return nil, fmt.Errorf("Flow artifact references have no installed record owner")
 	}
@@ -135,7 +137,7 @@ func (s *recordStore) flowArtifactReferences(store flowFrameStore) (map[string]b
 		}
 		return walk(value, depth)
 	}
-	for _, row := range entity.rows.All() {
+	for _, row := range entity.Rows().All() {
 		image, err := row.Image()
 		if err != nil {
 			return nil, err
@@ -247,7 +249,7 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 		t.mu.Unlock()
 		return nil
 	}
-	keep, err := t.records.flowArtifactReferences(flowFrameStore{tenant: t.ID, files: t.files()})
+	keep, err := flowArtifactReferences(t.records, flowFrameStore{tenant: t.ID, files: t.files()})
 	t.mu.Unlock()
 	if err != nil {
 		return err

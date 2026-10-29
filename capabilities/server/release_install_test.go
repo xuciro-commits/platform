@@ -293,18 +293,18 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 	if err != nil || upgradeReview.UpgradePlan == nil || upgradeReview.UpgradePlan.Additions[0].Records != 2 {
 		t.Fatal("the refreshed plan lost concurrent records")
 	}
-	priorRecord, _ := records.FullImage("build.visit", "V1", live.records.types["build.visit"].rows.Get("V1"))
+	priorRecord, _ := records.FullImage("build.visit", "V1", live.records.Type("build.visit").Rows().Get("V1"))
 	priorHash, _ := platform.CanonicalDigest(priorRecord)
 	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at); err != nil {
 		t.Fatal(err)
 	}
-	retained, _ := records.FullImage("build.visit", "V1", live.records.types["build.visit"].rows.Get("V1"))
+	retained, _ := records.FullImage("build.visit", "V1", live.records.Type("build.visit").Rows().Get("V1"))
 	retainedHash, _ := platform.CanonicalDigest(retained)
 	if retainedHash != priorHash {
 		t.Fatal("storage expansion changed values or history")
 	}
 	do(operator, "build.visit", "V1", "build.visit.edit", `{"priority":7}`)
-	if value, _ := live.records.types["build.visit"].rows.Get("V1").Image(); !bytes.Contains(value, []byte(`"priority":7`)) {
+	if value, _ := live.records.Type("build.visit").Rows().Get("V1").Image(); !bytes.Contains(value, []byte(`"priority":7`)) {
 		t.Fatal("the new write action cannot set the optional field")
 	}
 	if _, err := live.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at.Add(time.Second)); err != nil {
@@ -325,7 +325,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *journal.Postgres, id s
 	if _, err := upgraded.ActivateReleaseWithUpgrade(builder, changed, "optional-field", upgradeReview.UpgradePlan.ID, at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if field, ok := upgraded.records.types["build.visit"].info.Field("priority"); !ok || field.Required {
+	if field, ok := upgraded.records.Type("build.visit").Info().Field("priority"); !ok || field.Required {
 		t.Fatal("the restored optional field is missing")
 	}
 }

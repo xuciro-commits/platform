@@ -71,7 +71,7 @@ const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined
   if(record.format===3){
     const page=decodePage({...record,object:{app:record.object.split(".")[0],kind:"object",name:record.object}} as HostApi.Page);
     const lifted=pageDocumentFromSections((page.sections??[]).map(authoringSection));
-    return {...declarationValue(record,fields),sections:lifted.sections.map(section=>materializeModelSection(section,lookup,true)),document:page.document??lifted.document,selections:page.selections??[],title:record.title,description:record.description??""};
+    return {...declarationValue(record,fields),actions:page.actions.map(action=>action.name),sections:lifted.sections.map(section=>materializeModelSection(section,lookup,true)),document:page.document??lifted.document,selections:page.selections??[],title:record.title,description:record.description??""};
   }
   const shorthand: Draft[] = (record.list ?? []).length ? [
     { widget: "table", title: t("Table"), width: "half", fields: record.list },

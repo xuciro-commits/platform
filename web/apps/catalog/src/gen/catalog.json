@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:da4f1918944b7c55",
+  "revision": "sha256:7b6f88f05040cff2",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -14883,6 +14883,7 @@
         "isPageDecimal",
         "isPageDecimalDraft",
         "isPageDefinition",
+        "memberRoles",
         "modelOptionLabel",
         "newId",
         "pageDocumentFromSections",

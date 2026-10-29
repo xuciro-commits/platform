@@ -137,7 +137,7 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, chain)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller",
-		Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []ImportRow{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []platform.ImportRow{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))
 		rows, err := t.Import(m, r.PathValue("type"), body, r.URL.Query().Get("preview") == "true", h.Now())
 		if err != nil {
@@ -341,10 +341,10 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.recordRead(transport.Route{Pattern: "POST /v1/aggregates/{type}/query", Summary: "Aggregate authorized membership or explicitly declared recent business-time windows", Body: AggregateQuery{}, Answer: Aggregate{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "POST /v1/aggregates/{type}/query", Summary: "Aggregate authorized membership or explicitly declared recent business-time windows", Body: records.AggregateQuery{}, Answer: records.Aggregate{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
 		decoder.DisallowUnknownFields()
-		var q *AggregateQuery
+		var q *records.AggregateQuery
 		if decoder.Decode(&q) != nil || q == nil {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
@@ -361,9 +361,9 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/aggregates/{type}", Summary: "Groups and measures of an entity type's records within the caller's scope", Answer: Aggregate{}, Query: []transport.Param{{Name: "group", Description: "Fields or field:month, comma-separated"}, {Name: "measure", Description: "count, sum:field, avg:field, min:field, max:field"}, {Name: "domain", Description: "Filters, JSON"}, {Name: "search", Description: "Words to find"}, {Name: "archived", Description: "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.recordRead(transport.Route{Pattern: "GET /v1/aggregates/{type}", Summary: "Groups and measures of an entity type's records within the caller's scope", Answer: records.Aggregate{}, Query: []transport.Param{{Name: "group", Description: "Fields or field:month, comma-separated"}, {Name: "measure", Description: "count, sum:field, avg:field, min:field, max:field"}, {Name: "domain", Description: "Filters, JSON"}, {Name: "search", Description: "Words to find"}, {Name: "archived", Description: "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		p := r.URL.Query()
-		q := AggregateQuery{Domain: json.RawMessage(p.Get("domain")), Search: p.Get("search"), Archived: p.Get("archived") == "true"}
+		q := records.AggregateQuery{Domain: json.RawMessage(p.Get("domain")), Search: p.Get("search"), Archived: p.Get("archived") == "true"}
 		if g := p.Get("group"); g != "" {
 			q.Groups = strings.Split(g, ",")
 		}
@@ -418,11 +418,11 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 	}
 	// Conversion receives only visible fields, and cannot restore a hidden
 	// destination field when replacing an older expression.
-	t.records.mu.Lock()
-	et := t.records.types[build.ObjectType]
-	t.records.mu.Unlock()
+	t.records.Lock()
+	et := t.records.Type(build.ObjectType)
+	t.records.Unlock()
 	_, hidden := viewOf(m, et)
-	return records.Mask(et.info, reflect.ValueOf(canonical), hidden), nil
+	return records.Mask(et.Info(), reflect.ValueOf(canonical), hidden), nil
 }
 
 func (t *Tenant) objectDraftPage(m platform.Member, page RecordPage) (RecordPage, *kernel.Error) {

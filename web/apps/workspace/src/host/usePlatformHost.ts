@@ -2,7 +2,7 @@
 // actions, the entity types and definitions the host projects for them, the
 // record source, the decision path (K5 outbox, idempotent send) and the
 // `opens` map from record types to the view that shows them.
-import { decodeDefinitions, confirmedDecision, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
+import { memberRoles, decodeDefinitions, confirmedDecision, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { OfflineReadError, queryElements, resolveElements, type EnterpriseStereotype, type EdgeClient, type ActionDeclaration, type Entry, type Api } from "@platform/kernel";
 import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
@@ -201,6 +201,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     const host: Host = {
       client, me, entities, definitions, source, opens, outbox, decide, refresh,
       role: (app) => me.apps.some(enabled => enabled.id === app) ? me.profile.roles[app] || undefined : undefined,
+      holds: (app, ...roles) => me.apps.some(enabled => enabled.id === app) && memberRoles(me.profile, app).some(role => roles.includes(role)),
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
       catalog: actions ?? [],

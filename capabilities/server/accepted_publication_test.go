@@ -392,7 +392,7 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 		result.Version, result.Kind = 3, ""
 		result.Unique = nil
 		result.Row.Format, result.Row.Predecessor, result.Row.HistoryRef = "", "", nil
-		result.Row.History = records.CopyHistory(live.records.types[result.Row.Type].rows.Get(result.Row.ID).RecordHistory())
+		result.Row.History = records.CopyHistory(live.records.Type(result.Row.Type).Rows().Get(result.Row.ID).RecordHistory())
 		result.Digest, err = acceptedformat.DigestRecord(result)
 		if err != nil {
 			t.Fatal(err)

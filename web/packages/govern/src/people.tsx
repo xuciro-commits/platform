@@ -58,7 +58,7 @@ function Standing({ status }: { status?: string }) {
 }
 
 export function MemberDetail({ id }: { id: string }) {
-  const { can, role, me, decide } = useHost();
+  const { can, role, me, decide , holds} = useHost();
   const members = useRead<Member[]>("/v1/members").data ?? [];
   const member = members.find((m) => m.id === id);
   const tenant = useRead<TenantRecord>("/v1/tenant").data;
@@ -120,8 +120,8 @@ export function MemberDetail({ id }: { id: string }) {
         <GrantForm apps={apps.filter((a) => a.roles.length)} onCancel={() => setGranting(false)}
           onSubmit={async (g) => { if (await decide("platform.member.grant", { type: "platform.member", id: member.id }, g)) setGranting(false); }} />
       </Dialog>}
-      {(role("enterprise") || role("platform") === "admin") && <MemberUnits member={member.id} />}
-      {role("platform") === "admin" && <Panel title={t("Profile")}>
+      {(role("enterprise") || holds("platform", "admin")) && <MemberUnits member={member.id} />}
+      {holds("platform", "admin") && <Panel title={t("Profile")}>
         <ProfileForm member={member.id} account={account} languages={me.languages} tenant={tenant} self={member.id === me.principalId} />
       </Panel>}
     </div>

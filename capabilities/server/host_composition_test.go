@@ -56,16 +56,16 @@ func TestFoundationalSelectionPreservesAcceptedStateAndNeedsMaintenanceRestart(t
 		t.Fatal(err)
 	}
 	defer store.Close()
-	providers := DefaultRuntimeProviders()
+	providers := platform.DefaultRuntimeProviders()
 	selectedRules := &controlledRuleProvider{}
 	alternative := providers.Rules[0]
 	alternative.Module.ID = "test.alternative-rules"
 	alternative.Engine = selectedRules
 	providers.Rules = append(providers.Rules, alternative)
-	compose := func(id string, services RuntimeCapabilities) (*Tenant, error) {
+	compose := func(id string, services platform.RuntimeCapabilities) (*Tenant, error) {
 		return newTestTenantWithCapabilities(id, services, newConsole(id, seatOf("operator", "platform:admin", "stock:clerk")), newStock(id))
 	}
-	tn, err := compose("provider-restart", DefaultRuntimeCapabilities())
+	tn, err := compose("provider-restart", platform.DefaultRuntimeCapabilities())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,14 +96,14 @@ func TestFoundationalSelectionPreservesAcceptedStateAndNeedsMaintenanceRestart(t
 	oldPosition := store.Position(tn.ID)
 	original := tn.AcceptResult
 	tn.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append failed") }
-	if w := send("ops", request); w.Code == http.StatusOK || tn.console.suspended() {
+	if w := send("ops", request); w.Code == http.StatusOK || tn.console.Suspended() {
 		t.Fatal("failed append exposed new selection")
 	}
 	tn.AcceptResult = original
 	if w := send("ops", request); w.Code != http.StatusOK {
 		t.Fatal(w.Body.String())
 	}
-	if !tn.console.suspended() || tn.services.RuleModule.ID == alternative.Module.ID {
+	if !tn.console.Suspended() || tn.services.RuleModule.ID == alternative.Module.ID {
 		t.Fatal("saved choice mutated active generation")
 	}
 	if w := send("ops", request); w.Code != http.StatusOK || store.Position(tn.ID) != oldPosition+1 {
@@ -112,7 +112,7 @@ func TestFoundationalSelectionPreservesAcceptedStateAndNeedsMaintenanceRestart(t
 	if err = tn.setHostLifecycle("resume", "too early", "ops", at.Add(2*time.Second)); err == nil {
 		t.Fatal("resumed before selected implementation activation")
 	}
-	startup, err := compose(tn.ID, DefaultRuntimeCapabilities())
+	startup, err := compose(tn.ID, platform.DefaultRuntimeCapabilities())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestFoundationalSelectionPreservesAcceptedStateAndNeedsMaintenanceRestart(t
 		t.Fatal(err)
 	}
 	rebuilt := tenants[0]
-	if rebuilt == startup || rebuilt.quarantined() || rebuilt.services.Rules != selectedRules || !rebuilt.console.suspended() {
+	if rebuilt == startup || rebuilt.quarantined() || rebuilt.services.Rules != selectedRules || !rebuilt.console.Suspended() {
 		t.Fatalf("selection lost at restart: %+v", rebuilt.compositionView(providers))
 	}
 	if len(rebuilt.app("stock").AcceptedLedger().RecordsFor(tn.ID)) != 1 {
@@ -141,7 +141,7 @@ func TestFoundationalSelectionPreservesAcceptedStateAndNeedsMaintenanceRestart(t
 	if w := send("ops", request); w.Code != http.StatusOK {
 		t.Fatal(w.Body.String())
 	}
-	if rebuilt.compositionView(providers).State != "maintenance" || !rebuilt.console.suspended() {
+	if rebuilt.compositionView(providers).State != "maintenance" || !rebuilt.console.Suspended() {
 		t.Fatal("missing foundational provider did not preserve maintenance access")
 	}
 	if err = rebuilt.setHostLifecycle("resume", "invalid", "ops", at.Add(5*time.Second)); err == nil {

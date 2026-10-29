@@ -1,9 +1,8 @@
 package platformserver
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
+
 	"maps"
 	"reflect"
 	"slices"
@@ -11,7 +10,7 @@ import (
 	"time"
 
 	"platformkernel/kernel"
-	"platformserver/journal"
+
 	"platformserver/kernel/records"
 	"platformserver/platform"
 )
@@ -25,8 +24,8 @@ type constraintWrite struct {
 // Revoking a field/row grant must also narrow an idempotent refused answer.
 func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.FieldIssue, at time.Time) []platform.FieldIssue {
 	issues = slices.Clone(issues)
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
+	t.records.Lock()
+	defer t.records.Unlock()
 	for i, issue := range issues {
 		issues[i].Values = maps.Clone(issue.Values)
 		if issue.Code == "business_refusal" {
@@ -41,19 +40,19 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 			continue
 		}
 		typ, id, _ := strings.Cut(issue.Record, "/")
-		et := t.records.types[typ]
+		et := t.records.Type(typ)
 		if et == nil {
 			issues[i].Values = nil
 			continue
 		}
-		info := platform.ConstraintEntity(et.info)
-		if et.rows.Get(id) != nil && !t.readableIn(t.records, member, issue.Record, at) {
+		info := platform.ConstraintEntity(et.Info())
+		if et.Rows().Get(id) != nil && !t.readableIn(t.records, member, issue.Record, at) {
 			issues[i].Values = nil
 			continue
 		}
-		if current := et.rows.Get(id); current != nil && et.info.HasReadSources() {
+		if current := et.Rows().Get(id); current != nil && et.Info().HasReadSources() {
 			narrowed, _ := t.narrowerIn(t.records, member, at, true).derive(et, current.Value)
-			for _, derivation := range et.info.Derived {
+			for _, derivation := range et.Info().Derived {
 				paths := derivation.Fields
 				if len(derivation.List) > 0 {
 					paths = [][]int{derivation.List}
@@ -62,7 +61,7 @@ func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.F
 					if reflect.DeepEqual(current.Value.FieldByIndex(indices).Interface(), narrowed.FieldByIndex(indices).Interface()) {
 						continue
 					}
-					delete(issues[i].Values, fieldName(et.info.Go, indices))
+					delete(issues[i].Values, fieldName(et.Info().Go, indices))
 				}
 			}
 		}
@@ -89,13 +88,13 @@ func (t *Tenant) localizedFieldIssues(member platform.Member, issues []platform.
 }
 
 func (d *stagedDecision) constraintLookup(typ string) (platform.EntityInfo, bool) {
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
-	et := d.records.types[typ]
+	d.records.Lock()
+	defer d.records.Unlock()
+	et := d.records.Type(typ)
 	if et == nil {
 		return platform.EntityInfo{}, false
 	}
-	return platform.ConstraintEntity(et.info), true
+	return platform.ConstraintEntity(et.Info()), true
 }
 
 func constraintValues(info platform.EntityInfo, value reflect.Value) map[string]any {
@@ -104,51 +103,6 @@ func constraintValues(info platform.EntityInfo, value reflect.Value) map[string]
 		values[field.Name] = value.FieldByIndex(field.Index).Interface()
 	}
 	return values
-}
-
-// Unique checks the complete owner index; member read filters never hide a
-// competing row. The tenant writer keeps this check and acceptance indivisible.
-func (s *recordStore) uniqueConstraint(info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	key, err := records.UniqueKey(s.indexImage, info, rule, value)
-	if err != nil || key == "" {
-		return err == nil, err
-	}
-	et := s.types[info.Type]
-	if s.current.Backend() != nil {
-		storage, ok := s.current.Reader().(journal.UniqueState)
-		if !ok {
-			panic("record storage does not provide derived unique keys")
-		}
-		changes := s.uniqueChanges()
-		if !et.fullImage {
-			ids, err := storage.StateUnique(context.Background(), s.current.Tenant(), info.Type, rule.Name, key, s.current.Applied())
-			if err != nil {
-				// As with candidate reads, a storage failure cannot become a
-				// durable business refusal or silently pass a constraint.
-				panic(fmt.Errorf("record unique keys: %w", err))
-			}
-			for _, id := range ids {
-				if id == records.Header(value).ID {
-					continue
-				}
-				if _, replaced := changes[info.Type+"/"+id]; !replaced {
-					return false, nil
-				}
-			}
-		}
-		for ref, keys := range changes {
-			typ, id, _ := strings.Cut(ref, "/")
-			if typ == info.Type && id != records.Header(value).ID && keys[rule.Name] == key {
-				return false, nil
-			}
-		}
-		return true, nil
-	}
-	index := et.uniqueIndex(s, rule)
-	bucket := index.Keys.Get(key)
-	return bucket.Len() == 0 || bucket.Len() == 1 && bucket.Has(records.Header(value).ID), nil
 }
 
 func constraintLocked(info platform.EntityInfo, before *records.Row) bool {
@@ -252,7 +206,7 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 				return fail("scope_unavailable")
 			}
 		}
-		ok, err := d.records.uniqueConstraint(info, rule, after.Value)
+		ok, err := d.records.UniqueConstraint(info, rule, after.Value)
 		if err != nil {
 			return fail("scope_unavailable")
 		}
@@ -326,14 +280,14 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 		refs = append(refs, ref)
 	}
 	slices.Sort(refs)
-	for _, et := range d.records.sortedTypes() {
-		if len(et.info.Constraints) == 0 {
+	for _, et := range d.records.SortedTypes() {
+		if len(et.Info().Constraints) == 0 {
 			continue
 		}
-		plans := make([]constraintReadPlan, len(et.info.Constraints))
+		plans := make([]constraintReadPlan, len(et.Info().Constraints))
 		local := true
-		for i, rule := range et.info.Constraints {
-			plans[i] = d.constraintReadPlan(et.info, rule)
+		for i, rule := range et.Info().Constraints {
+			plans[i] = d.constraintReadPlan(et.Info(), rule)
 			local = local && (plans[i].local || rule.Kind == "unique" && rule.Reads == nil)
 		}
 		var ids []string
@@ -341,12 +295,12 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 			var candidates records.Index[bool]
 			for _, ref := range refs {
 				typ, id, _ := strings.Cut(ref, "/")
-				if typ == et.info.Type && et.rows.Get(id) != nil {
+				if typ == et.Info().Type && et.Rows().Get(id) != nil {
 					candidates.Set(id, true)
 				}
-				for _, rule := range et.info.Constraints {
+				for _, rule := range et.Info().Constraints {
 					if rule.Kind == "unique" {
-						for dependent := range records.ScopeDependents(d.records.indexImage, et.info, rule, typ, id).All() {
+						for dependent := range records.ScopeDependents(d.records.IndexImage, et.Info(), rule, typ, id).All() {
 							candidates.Set(dependent, true)
 						}
 					}
@@ -356,22 +310,22 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 				ids = append(ids, id)
 			}
 		} else {
-			ids = make([]string, 0, et.rows.Len())
-			for id := range et.rows.All() {
+			ids = make([]string, 0, et.Rows().Len())
+			for id := range et.Rows().All() {
 				ids = append(ids, id)
 			}
 		}
 		slices.Sort(ids)
 		for _, id := range ids {
-			ref := et.info.Type + "/" + id
-			for i, rule := range et.info.Constraints {
+			ref := et.Info().Type + "/" + id
+			for i, rule := range et.Info().Constraints {
 				write, touched := d.constraintWrites[ref]
 				if !touched {
 					for _, source := range refs {
 						candidate := d.constraintWrites[source]
-						if candidate.caller.App == et.info.App && d.constraintDepends(et.info, rule, plans[i], et.rows.Get(id), source, candidate.before) {
+						if candidate.caller.App == et.Info().App && d.constraintDepends(et.Info(), rule, plans[i], et.Rows().Get(id), source, candidate.before) {
 							write, touched = candidate, true
-							write.before = et.rows.Get(id)
+							write.before = et.Rows().Get(id)
 							break
 						}
 					}
@@ -379,7 +333,7 @@ func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 				if !touched {
 					continue
 				}
-				if err := d.checkConstraint(write.caller, et.info, rule, et.rows.Get(id), write.before); err != nil {
+				if err := d.checkConstraint(write.caller, et.Info(), rule, et.Rows().Get(id), write.before); err != nil {
 					d.failure = err
 					return err
 				}
@@ -415,15 +369,15 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			if !ok {
 				return true // missing evidence must refuse, never silently pass
 			}
-			et := d.records.types[typ]
+			et := d.records.Type(typ)
 			if et == nil {
 				return true
 			}
-			field, ok := et.info.Field(q.By)
+			field, ok := et.Info().Field(q.By)
 			if !ok {
 				return true
 			}
-			for _, candidate := range []*records.Row{et.rows.Get(id), old} {
+			for _, candidate := range []*records.Row{et.Rows().Get(id), old} {
 				if candidate != nil && candidate.Value.FieldByIndex(field.Index).String() == rootID {
 					return true
 				}
@@ -445,11 +399,11 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			if field.Ref == typ && targetID == id {
 				return true
 			}
-			target := d.records.types[field.Ref]
-			if target == nil || target.rows.Get(targetID) == nil {
+			target := d.records.Type(field.Ref)
+			if target == nil || target.Rows().Get(targetID) == nil {
 				break
 			}
-			current, currentInfo = target.rows.Get(targetID), target.info
+			current, currentInfo = target.Rows().Get(targetID), target.Info()
 		}
 		return false
 	}
@@ -465,16 +419,16 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 		set := rule.Reads.Collections[collection]
 		if set.Set != "" {
 			index := slices.IndexFunc(info.Sets, func(declaration platform.RecordSet) bool { return declaration.Name == set.Set })
-			et := d.records.types[set.Object]
+			et := d.records.Type(set.Object)
 			if index < 0 || et == nil {
 				return true
 			}
-			for itemID, item := range et.rows.All() {
-				if !d.declaredSetDepends(info, root, info.Sets[index], et.info.Type, itemID, nil) {
+			for itemID, item := range et.Rows().All() {
+				if !d.declaredSetDepends(info, root, info.Sets[index], et.Info().Type, itemID, nil) {
 					continue
 				}
 				for _, path := range itemPaths {
-					if follows(item, et.info, path) {
+					if follows(item, et.Info(), path) {
 						return true
 					}
 				}
@@ -482,19 +436,19 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			continue
 		}
 		q, _, ok := (hostView{t: d.tenant}).RuleQuery(set.App, set.Query, set.Version)
-		et := d.records.types[set.Object]
+		et := d.records.Type(set.Object)
 		if !ok || et == nil {
 			return true
 		}
 		// Reuse the original query's fixed domain. An unrelated source used
 		// only by excluded rows is not a historical clean-up obligation.
-		candidates, err := d.records.matchingQuery(et, platform.Query{Domain: q.Domain}, nil)
+		candidates, err := d.records.MatchingQuery(et, platform.Query{Domain: q.Domain}, nil)
 		if err != nil {
 			return true
 		}
 		for _, value := range candidates {
 			if set.Of == "$subject" {
-				field, ok := et.info.Field(q.By)
+				field, ok := et.Info().Field(q.By)
 				if !ok {
 					return true
 				}
@@ -503,7 +457,7 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 				}
 			}
 			for _, path := range itemPaths {
-				if follows(&records.Row{Value: value}, et.info, path) {
+				if follows(&records.Row{Value: value}, et.Info(), path) {
 					return true
 				}
 			}
@@ -601,11 +555,11 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *reco
 	rootID := records.Header(root.Value).ID
 	rootRef := info.Type + "/" + rootID
 	matchField := func(field platform.FieldInfo) bool {
-		et := d.records.types[typ]
+		et := d.records.Type(typ)
 		if et == nil {
 			return true
 		}
-		for _, candidate := range []*records.Row{et.rows.Get(id), old} {
+		for _, candidate := range []*records.Row{et.Rows().Get(id), old} {
 			if candidate != nil && candidate.Value.FieldByIndex(field.Index).String() == rootID {
 				return true
 			}
@@ -624,11 +578,11 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *reco
 			if query.By == "" {
 				return true
 			}
-			et := d.records.types[typ]
+			et := d.records.Type(typ)
 			if et == nil {
 				return true
 			}
-			field, ok := et.info.Field(query.By)
+			field, ok := et.Info().Field(query.By)
 			return !ok || matchField(field)
 		}
 		link := definition.LinkType
@@ -636,19 +590,19 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *reco
 			return true
 		}
 		if link.Storage == "edge" {
-			et := d.records.types[platform.OwnedRelationType(info.App)]
+			et := d.records.Type(platform.OwnedRelationType(info.App))
 			if et == nil {
 				return true
 			}
 			candidates := []*records.Row{}
-			if typ == et.info.Type {
-				candidates = append(candidates, et.rows.Get(id), old)
+			if typ == et.Info().Type {
+				candidates = append(candidates, et.Rows().Get(id), old)
 			} else {
-				for _, edge := range et.rows.All() {
+				for _, edge := range et.Rows().All() {
 					candidates = append(candidates, edge)
 				}
 				for ref, write := range d.constraintWrites {
-					if strings.HasPrefix(ref, et.info.Type+"/") {
+					if strings.HasPrefix(ref, et.Info().Type+"/") {
 						candidates = append(candidates, write.before)
 					}
 				}
@@ -666,7 +620,7 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *reco
 				if set.Direction == "reverse" {
 					from, to = to, from
 				}
-				if from == rootRef && (typ == et.info.Type || to == typ+"/"+id) {
+				if from == rootRef && (typ == et.Info().Type || to == typ+"/"+id) {
 					return true
 				}
 			}
@@ -679,22 +633,22 @@ func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *reco
 			field, ok := info.Field(link.Via)
 			return !ok || root.Value.FieldByIndex(field.Index).String() == id
 		}
-		et := d.records.types[typ]
+		et := d.records.Type(typ)
 		if et == nil {
 			return true
 		}
-		field, ok := et.info.Field(link.Via)
+		field, ok := et.Info().Field(link.Via)
 		return !ok || matchField(field)
 	}
 	if set.Direction == "reference" {
 		field, ok := info.Field(set.From)
 		return !ok || root.Value.FieldByIndex(field.Index).String() == id
 	}
-	et := d.records.types[typ]
+	et := d.records.Type(typ)
 	if et == nil {
 		return true
 	}
-	for _, field := range et.info.Fields {
+	for _, field := range et.Info().Fields {
 		if field.Inverse == set.From && field.Ref == info.Type {
 			return matchField(field)
 		}

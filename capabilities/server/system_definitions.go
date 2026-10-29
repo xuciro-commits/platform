@@ -221,7 +221,7 @@ func (t *Tenant) applySystemDefinitionProjection() error {
 	if err := t.anchorReleaseRecords(view.records); err != nil {
 		return err
 	}
-	if err := t.records.promoteRecords(view.records); err != nil {
+	if err := t.records.PromoteRecords(view.records); err != nil {
 		return err
 	}
 	// Validation ran against private owners. The original owners install the
@@ -317,21 +317,6 @@ func (h hostView) SystemDefinitionReadOnly(ref platform.AssetRef) bool {
 		}
 	}
 	return false
-}
-
-// A publisher's accepted installation is the only embedded release in these
-// publication schemas. SQL and replay reuse its original release result.
-func systemDefinitionInstallation(schema string, image json.RawMessage) (json.RawMessage, error) {
-	if schema != systemscope.SchemaActivate && schema != systemscope.SchemaFinished && schema != systemscope.SchemaRollback {
-		return nil, nil
-	}
-	var saved struct {
-		Installation json.RawMessage `json:"installation"`
-	}
-	if err := json.Unmarshal(image, &saved); err != nil {
-		return nil, err
-	}
-	return saved.Installation, nil
 }
 
 // Compatibility checks retain the existing tenant's own rows and grants.

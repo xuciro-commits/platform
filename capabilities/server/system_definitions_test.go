@@ -1,5 +1,7 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
 import agentowner "platformserver/engine/agents"
 
 import (
@@ -136,7 +138,7 @@ func TestSystemDefinitionsRetainedHistoryRemainsReadOnlyInBusinessTenants(t *tes
 	if definition.Source != "system" || definition.Entity.Title != "Retained system title" {
 		t.Fatalf("shared definition=%#v", definition)
 	}
-	if len(entries) != 0 || business.records.types[build.ObjectType].rows.Len() != 0 {
+	if len(entries) != 0 || business.records.Type(build.ObjectType).Rows().Len() != 0 {
 		t.Fatal("projection wrote system metadata into business owner")
 	}
 	if _, refusal := definitionDecision(business, "builder", "build.object.create", "build.object", "shadow", map[string]any{"name": "globalnote", "title": "Shadow", "fields": []any{}}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
@@ -151,7 +153,7 @@ func TestSystemDefinitionsRetainedHistoryRemainsReadOnlyInBusinessTenants(t *tes
 
 func TestSystemDefinitionsRetainedStorageDeltaKeepsOriginalInstallations(t *testing.T) {
 	entries := retainedSystemHistory(t, "definitions-active")
-	delta, err := acceptedStorageDelta(entries[len(entries)-1].Body)
+	delta, err := runtimekernel.StorageDelta(entries[len(entries)-1].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +183,7 @@ func TestSystemDefinitionsRetainedRecoveryPrecedesBusinessRecords(t *testing.T) 
 	if err := freshBusiness.Replay(businessEntries); err != nil {
 		t.Fatal(err)
 	}
-	if freshBusiness.records.types["build.globalnote"].rows.Get("local-note") == nil || freshBusiness.records.types["build.object"].rows.Len() != 0 {
+	if freshBusiness.records.Type("build.globalnote").Rows().Get("local-note") == nil || freshBusiness.records.Type("build.object").Rows().Len() != 0 {
 		t.Fatal("replay lost business data or copied system metadata")
 	}
 	ownerState, _, err := owner.Snapshot(func() int64 { return int64(len(ownerEntries)) })
@@ -200,7 +202,7 @@ func TestSystemDefinitionsRetainedRecoveryPrecedesBusinessRecords(t *testing.T) 
 	if err := snapshotBusiness.Restore(businessState); err != nil {
 		t.Fatal(err)
 	}
-	if snapshotBusiness.records.types["build.globalnote"].rows.Get("local-note") == nil || snapshotBusiness.records.types["build.object"].rows.Len() != 0 {
+	if snapshotBusiness.records.Type("build.globalnote").Rows().Get("local-note") == nil || snapshotBusiness.records.Type("build.object").Rows().Len() != 0 {
 		t.Fatal("checkpoint lost business data or copied system metadata")
 	}
 }
@@ -238,16 +240,16 @@ func TestSystemDefinitionsFreezeReconcilesOnlyOriginalMixedActivation(t *testing
 	if _, refusal := (hostView{t: owner}).PrepareSystemDefinitions(caller, platform.Raw(platform.SystemDefinitionCandidate{ID: "invented", Bytes: []byte("invented")}), "system:0001", time.Now()); refusal == nil {
 		t.Fatal("retained activation accepted a different candidate")
 	}
-	if _, exists := owner.records.types["build.globalnote"]; exists {
+	if owner.records.Type("build.globalnote") != nil {
 		t.Fatal("requested mixed release installed before original outcome")
 	}
 	mustDefinitionDecision(t, owner, "publisher", system.SchemaFinished, system.ActivationType, "0001", map[string]any{"result": system.StateActive, "evidence": "static maintenance verified original healthy process"})
-	if _, exists := owner.records.types["build.globalnote"]; !exists {
+	if owner.records.Type("build.globalnote") == nil {
 		t.Fatal("original successful outcome lost its frozen installation")
 	}
 	fresh := definitionOwnerTenant(t, "system")
 	restoreSystemDefinitions(t, fresh, "mixed-active")
-	if _, exists := fresh.records.types["build.globalnote"]; !exists {
+	if fresh.records.Type("build.globalnote") == nil {
 		t.Fatal("accepted mixed installation did not replay")
 	}
 }

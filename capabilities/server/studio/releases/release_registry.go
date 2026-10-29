@@ -2,6 +2,8 @@ package releases
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
 
 	"platformserver/platform"
 
@@ -91,4 +93,93 @@ func UniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 	}
 	slices.SortFunc(out, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	return out
+}
+
+// RetainedDefinitionVersions leaves the original history untouched; callers
+// publish the current version only after their installation checks succeed.
+func RetainedDefinitionVersions[T any](history map[string]T, previousVersion string, previous *T, version string, current T) (map[string]T, bool) {
+	versions := maps.Clone(history)
+	if versions == nil {
+		versions = map[string]T{}
+	}
+	if previous != nil {
+		versions[previousVersion] = *previous
+	}
+	if prior, ok := versions[version]; ok && string(platform.Raw(prior)) != string(platform.Raw(current)) {
+		return nil, false
+	}
+	return versions, true
+}
+
+func CheckApplicationExtension(ref platform.AssetRef, a platform.Application, definitions []platform.Definition) error {
+	if err := a.CheckExtension(); err != nil {
+		return err
+	}
+	if a.Extends == nil {
+		return nil
+	}
+	if *a.Extends == ref {
+		return fmt.Errorf("an application cannot extend itself")
+	}
+	if !slices.ContainsFunc(definitions, func(definition platform.Definition) bool {
+		return definition.Ref == *a.Extends && definition.Source == "code" && definition.Application != nil
+	}) {
+		return fmt.Errorf("application %s can only extend an installed code application", ref)
+	}
+	entry := a.Entry
+	if entry == "" {
+		entry = a.Extends.App
+	}
+	for _, other := range definitions {
+		if other.Ref == ref || other.Application == nil || other.Application.Extends == nil {
+			continue
+		}
+		otherEntry := other.Application.Entry
+		if otherEntry == "" {
+			otherEntry = other.Application.Extends.App
+		}
+		if otherEntry != entry {
+			continue
+		}
+		for _, replacement := range a.Replacements {
+			if slices.ContainsFunc(other.Application.Replacements, func(previous platform.ApplicationPageReplacement) bool { return previous.View == replacement.View }) {
+				return fmt.Errorf("application view %s/%s is already replaced by %s", entry, replacement.View, other.Ref)
+			}
+		}
+	}
+	return nil
+}
+
+func ObjectDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) []platform.Definition {
+	definitions := []platform.Definition{}
+	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
+	entity := info
+	definitions = append(definitions, platform.Definition{Ref: object, Source: "tenant", Version: "1", ContractVersion: 1, Entity: &entity})
+	for _, action := range actions {
+		a := action
+		definitions = append(definitions, platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetAction, Name: a.Schema}, Source: "tenant", Version: "1",
+			ContractVersion: 1, Action: &a})
+	}
+	for _, page := range pages {
+		p := page
+		definitions = append(definitions, platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetPage, Name: p.Name}, Source: "tenant", Version: "1",
+			ContractVersion: 1, Page: &p})
+	}
+	for _, provision := range protocols {
+		protocol := platform.ProtocolReleaseDescriptor{Name: provision.Protocol.Name, Version: provision.Protocol.Version, Actions: slices.Clone(provision.Protocol.Actions), Reads: slices.Clone(provision.Protocol.Reads), ActionBindings: map[string]platform.AssetRef{}, ActionRoles: map[string][]string{}, ReadBindings: map[string]platform.AssetRef{}}
+		for _, action := range protocol.Actions {
+			mapped := provision.Actions[action.Schema]
+			protocol.ActionBindings[action.Schema] = platform.AssetRef{App: app, Kind: platform.AssetAction, Name: mapped}
+			for _, actual := range actions {
+				if actual.Schema == mapped {
+					protocol.ActionRoles[action.Schema] = slices.Clone(actual.Roles)
+				}
+			}
+		}
+		for _, read := range protocol.Reads {
+			protocol.ReadBindings[read] = object
+		}
+		definitions = append(definitions, platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetProtocol, Name: protocol.Name}, Source: "tenant", Version: "1", ContractVersion: protocol.Version, Protocol: &protocol})
+	}
+	return definitions
 }

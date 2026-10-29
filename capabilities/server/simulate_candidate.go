@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import trialowner "platformserver/studio/trials"
 
 import (
@@ -615,8 +617,8 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			}
 		}
 	}
-	definitions := map[string][]recordState{build.ObjectType: {}}
-	processes := map[string][]recordState{}
+	definitions := map[string][]records.StoredState{build.ObjectType: {}}
+	processes := map[string][]records.StoredState{}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App != build.ID {
 			continue
@@ -637,7 +639,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 				return nil, fmt.Errorf("invalid candidate alert version")
 			}
 			alert := build.Alert{Record: platform.Record{ID: asset.Ref.Name}, Name: d.Name, Title: d.Title, Object: d.Object.Name, Field: d.Field, Operator: d.Operator, Value: d.Value, Message: d.Message, Role: d.Role, Every: d.Every, Active: d.Active, State: "published", Version: version, DefinitionVersion: version, Published: string(platform.Raw(asset))}
-			definitions[build.AlertType] = append(definitions[build.AlertType], recordState{Value: platform.Raw(alert)})
+			definitions[build.AlertType] = append(definitions[build.AlertType], records.StoredState{Value: platform.Raw(alert)})
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || b.DefinitionMetadataKind(asset.Ref.Kind) {
@@ -652,7 +654,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 				return nil, err
 			}
 			raw, _ := json.Marshal(process)
-			processes[build.ProcessType] = append(processes[build.ProcessType], recordState{Value: raw})
+			processes[build.ProcessType] = append(processes[build.ProcessType], records.StoredState{Value: raw})
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetAction || asset.Ref.Kind == platform.AssetPage || asset.Ref.Kind == platform.AssetApp {
@@ -672,7 +674,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		}
 		object.Published = string(published)
 		raw, _ := json.Marshal(object)
-		definitions[build.ObjectType] = append(definitions[build.ObjectType], recordState{Value: raw})
+		definitions[build.ObjectType] = append(definitions[build.ObjectType], records.StoredState{Value: raw})
 	}
 	if _, err := sandbox.restoreRecords(definitions); err != nil {
 		return nil, err
@@ -767,10 +769,10 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	if err := sandbox.validateAssetSet(sandbox.services.Rules); err != nil {
 		return nil, err
 	}
-	rows := map[string][]recordState{}
+	rows := map[string][]records.StoredState{}
 	for _, sample := range environment.Samples {
 		for _, raw := range sample.Records {
-			rows[sample.Type] = append(rows[sample.Type], recordState{Value: raw})
+			rows[sample.Type] = append(rows[sample.Type], records.StoredState{Value: raw})
 		}
 	}
 	if len(rows) > 0 {

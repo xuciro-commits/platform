@@ -63,14 +63,14 @@ func (t *Tenant) draftName(s *pb.Submission) string {
 		_ = json.Unmarshal(s.GetPayload(), &payload)
 		return payload.Name
 	}
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
-	et := t.records.types[s.GetTarget().GetType()]
+	t.records.Lock()
+	defer t.records.Unlock()
+	et := t.records.Type(s.GetTarget().GetType())
 	if et == nil {
 		return ""
 	}
-	row := et.rows.Get(s.GetTarget().GetId())
-	field, ok := et.info.Field("name")
+	row := et.Rows().Get(s.GetTarget().GetId())
+	field, ok := et.Info().Field("name")
 	if row == nil || !ok || field.Index == nil {
 		return ""
 	}

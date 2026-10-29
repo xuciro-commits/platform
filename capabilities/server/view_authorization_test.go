@@ -22,7 +22,7 @@ func (p principalAuthorization) Decide(q authz.Request, policies ...authz.Policy
 }
 
 func TestCatalogCacheKeepsTheSelectedAuthorizationsPrincipalBoundary(t *testing.T) {
-	services := DefaultRuntimeCapabilities()
+	services := platform.DefaultRuntimeCapabilities()
 	services.Authorization = principalAuthorization{}
 	services.AuthModule.ID = "test.principal-authorization"
 	seats := []platform.Seat{}

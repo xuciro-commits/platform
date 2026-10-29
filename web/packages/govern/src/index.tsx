@@ -27,8 +27,8 @@ import { HostMigrations, HostOverview, HostPromotions, HostTenant } from "./host
 
 import {SystemConsole} from "./system";
 
-const admin = (host: Host) => host.role("platform") === "admin";
-const auditor = (host: Host) => host.role("platform") === "auditor";
+const admin = (host: Host) => host.holds("platform", "admin");
+const auditor = (host: Host) => host.holds("platform", "auditor");
 
 // --- Control Panel: who may do what, which packages run, and the audit of it all.
 function controlPanelNavigation(host: Host): NavSection[] {
@@ -137,7 +137,7 @@ export const runs = defineApp({
 export const dataConnection = defineApp({
   id: "data-connection", serves: ["platform"], category: "ontology", title: t("Data Connection"), icon: <Database />,
   description: t("Connectors that bring facts in, webhooks that carry events out, and their health."),
-  for: (host) => admin(host) || ["builder", "integrator"].includes(host.role("build") ?? ""),
+  for: (host) => admin(host) || host.holds("build", "builder", "integrator"),
   // The entry the current member may actually use: connectors for governance,
   // the authorized observations of what enters and leaves for everyone else.
   home: (host) => admin(host) ? { view: "integrations" } : { view: "observations" },
@@ -195,7 +195,7 @@ export const ai = defineApp({
   nav: (host) => [{ label: t("AI assistance"), items: [
     { label: t("Playground"), icon: <MessageSquare />, route: { view: "ai-playground" } },
     { label: t("Usage"), icon: <BarChart3 />, route: { view: "ai-usage" } },
-    ...(host.role("ai") === "admin" ? [{ label: t("AI configuration"), icon: <Bot />, route: { view: "ai-configuration" } }, { label: t("Providers and models"), icon: <Bot />, route: { view: "ai-providers" } }] : []),
+    ...(host.holds("ai", "admin") ? [{ label: t("AI configuration"), icon: <Bot />, route: { view: "ai-configuration" } }, { label: t("Providers and models"), icon: <Bot />, route: { view: "ai-providers" } }] : []),
   ] }],
 });
 
@@ -262,7 +262,7 @@ const masterData = defineApp({
 export const enterprise = defineApp({
   id: "enterprise", serves: ["enterprise"], category: "ontology", title: t("Organisation directory"), icon: <Network />,
   description: t("Units, posts, people and assignments. Historical enterprise content is read-only."),
-  for: (host) => admin(host) || ["admin", "viewer"].includes(host.role("enterprise") ?? ""),
+  for: (host) => admin(host) || host.holds("enterprise", "admin", "viewer"),
   home: { view: "enterprise" },
   views: [{ id: "enterprise", title: () => t("Organisation directory"), render: params => <Enterprise element={params.element} section={params.section} /> }],
   nav: () => [{label:t("Organisation directory"),items:[{ label: t("Organisation directory"), icon: <Building2 />, route: {view:"enterprise"} }]}],

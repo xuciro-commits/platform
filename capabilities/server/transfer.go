@@ -26,25 +26,16 @@ import (
 // the row, so a file sent twice repeats nothing. A preview probes each row
 // and applies none. An export writes what a list shows the member.
 
-// ImportRow is what one row did, or would do.
-type ImportRow struct {
-	Row     int        `json:"row"` // from 1, after the header
-	ID      string     `json:"id"`
-	Action  string     `json:"action"`  // the generated action it is
-	Outcome string     `json:"outcome"` // ok, or the refusal's code
-	Error   *ErrorBody `json:"error,omitempty"`
-}
-
 // Import runs, or previews, a CSV of records of typ: a header of field names
 // with an id column, then one record per row.
-func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]ImportRow, *kernel.Error) {
+func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	t.records.mu.Lock()
-	et := t.records.types[typ]
-	t.records.mu.Unlock()
+	t.records.Lock()
+	et := t.records.Type(typ)
+	t.records.Unlock()
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -57,9 +48,9 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	sum := sha256.Sum256(data)
 	file := hex.EncodeToString(sum[:8])
 	currency := t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)
-	out := []ImportRow{}
+	out := []platform.ImportRow{}
 	for i, row := range rows[1:] {
-		r := ImportRow{Row: i + 1}
+		r := platform.ImportRow{Row: i + 1}
 		payload := map[string]any{}
 		for j, name := range header {
 			if j >= len(row) {
@@ -70,7 +61,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 				r.ID = value
 				continue
 			}
-			f, ok := view.info.Field(name)
+			f, ok := view.Info().Field(name)
 			if !ok {
 				r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
 				break
@@ -109,21 +100,21 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			try := func(verb, key string) *kernel.Error {
 				r.Error = nil
 				r.Action = typ + verb
-				if !slices.Contains(view.info.Standard, r.Action) {
+				if !slices.Contains(view.Info().Standard, r.Action) {
 					return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 				}
-				s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: view.info.App, IdempotencyKey: key,
+				s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: view.Info().App, IdempotencyKey: key,
 					Target: &pb.EntityRef{Type: typ, Id: r.ID}, Schema: &pb.SchemaRef{Name: r.Action, Version: 1}, Payload: raw}
 				if preview {
 					refusal, issues := t.probeDiagnosed(m, s, now)
 					if refusal != nil {
-						r.Error = &ErrorBody{Code: refusal.Code.String(), Message: refusal.Message, Issues: issues}
+						r.Error = &platform.ErrorBody{Code: refusal.Code.String(), Message: refusal.Message, Issues: issues}
 					}
 					return refusal
 				}
 				_, err, issues := t.submitDiagnosed(m, s, now)
 				if err != nil {
-					r.Error = &ErrorBody{Code: err.Code.String(), Message: err.Message, Issues: issues}
+					r.Error = &platform.ErrorBody{Code: err.Code.String(), Message: err.Message, Issues: issues}
 				}
 				return err
 			}
@@ -131,7 +122,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			verb := func() string {
 				t.mu.Lock()
 				defer t.mu.Unlock()
-				ledger := t.app(view.info.App).AcceptedLedger()
+				ledger := t.app(view.Info().App).AcceptedLedger()
 				if ledger.AcceptedFor(t.ID, key) != nil {
 					return ".create"
 				}
@@ -209,20 +200,20 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 	if err := t.admits(m); err != nil {
 		return nil, err
 	}
-	t.records.mu.Lock()
-	et := t.records.types[typ]
-	t.records.mu.Unlock()
+	t.records.Lock()
+	et := t.records.Type(typ)
+	t.records.Unlock()
 	if et == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	c := platform.NewCaller(runtime{t}, m, et.info.App, false, false)
+	c := platform.NewCaller(runtime{t}, m, et.Info().App, false, false)
 	if err := authorizationRefusal(t.authorizeFrom(t.records, c, platform.AuthzRequest{Principal: m.ID, Tenant: m.Tenant, Kind: "export", Type: typ}, now, false)); err != nil {
 		return nil, err
 	}
 	view, _ := viewOf(m, et)
 	var fields []platform.FieldInfo
 	header := []string{"id"}
-	for _, f := range view.info.Fields {
+	for _, f := range view.Info().Fields {
 		if f.Type != "lines" {
 			fields, header = append(fields, f), append(header, f.Name)
 		}

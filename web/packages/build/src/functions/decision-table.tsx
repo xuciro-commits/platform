@@ -20,8 +20,8 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 const cell = "h-8 min-w-24 px-2 text-xs";
 
 export function DecisionTables() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder")) return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Decision tables")} help={t("Condition columns to result columns; the first matching row decides. A published table is an operation any process step, page or caller can use.")}
       actions={<Button onClick={() => open({ view: "decision-table", params: { id: "new" } })}>{t("New decision table")}</Button>} />
@@ -30,7 +30,7 @@ export function DecisionTables() {
 }
 
 export function DecisionTableEditor({ id }: { id: string }) {
-  const { role } = useHost(), { open } = useApplicationWorkspace();
+  const { holds} = useHost(), { open } = useApplicationWorkspace();
   const { draft, structured, query, dirty, joining, busy, error, inputs: inputDrafts, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.table", kind: "table", view: "decision-table", empty,
     normalize: record => ({ ...record, rows: (record.rows ?? []).map(row => ({ ...row, when: row.when ?? row.expressions?.map(cellRuleText) ?? [] })), default: record.default ?? [] }),
@@ -76,7 +76,7 @@ export function DecisionTableEditor({ id }: { id: string }) {
       <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => moveRow(r, 1)}>↓</Button>
       <Button size="sm" variant="ghost" aria-label={t("Remove row")} disabled={(draft.rows ?? []).length <= 1} onClick={() => patch({ rows: (draft.rows ?? []).filter((_, j) => j !== r) })}>×</Button></div>; } },
   ], [(draft.inputs ?? []).length, (draft.outputs ?? []).length]);
-  if (role("build") !== "builder") return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
+  if (!holds("build", "builder")) return <PageHeader title={t("Decision tables")} description={t("Only a builder can edit decision tables.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Decision tables")} description={query.isError ? t("The decision table could not be loaded.") : t("Loading…")} />;
   return <div className="grid min-w-0 grid-cols-1 gap-3">
     <PageHeader title={draft.title || t("New decision table")} help={t("A condition cell is empty for any value, or = v, != v, < v, <= v, > v, >= v, a..b, a|b|c. The first row whose conditions all hold decides.")}

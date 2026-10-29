@@ -1,5 +1,7 @@
 package platformserver
 
+import acceptedformat "platformserver/kernel/acceptedformat"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -67,7 +69,7 @@ func TestScheduler(t *testing.T) {
 	record := func(who string, journal *[]Entry) func(Entry) {
 		return func(e Entry) {
 			*journal = append(*journal, e)
-			var result acceptedWork
+			var result acceptedformat.Work
 			if e.Kind == "accepted-result" && json.Unmarshal(e.Body, &result) == nil && result.Kind == "work-result" && result.Input.Kind == "delivery" {
 				order = append(order, who+" delivery")
 			}

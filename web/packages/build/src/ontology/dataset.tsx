@@ -5,7 +5,7 @@ import { joinProjectResource } from "../projects/membership";
 import { ResourceList } from "../editor/ResourceList";
 import { useRef, useState } from "react";
 import { RecordActions, useHost, useReadQuery } from "@platform/app";
-import { MarkingField, integrates } from "./marking";
+import { MarkingField } from "./marking";
 import { Button, DataTable, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
@@ -21,8 +21,8 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 const PREVIEW = 50;
 
 export function Datasets() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (!integrates(role("build"))) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Datasets")} help={t("Rows as they came, in versions. A source loads a dataset instead of mapping straight to an object; a pipeline reads one and writes another or an object.")}
       actions={<Button onClick={() => open({ view: "dataset", params: { id: "new" } })}>{t("New dataset")}</Button>} />
@@ -31,7 +31,7 @@ export function Datasets() {
 }
 
 export function DatasetEditor({ id }: { id: string }) {
-  const host = useHost(), { decide, role } = host, { open } = useApplicationWorkspace();
+  const host = useHost(), { decide , holds} = host, { open } = useApplicationWorkspace();
   const application = useApplicationScope();
   const { draft, structured, query, dirty, busy, error, setError, inputs, patch, perform, save, review, discardChanges } = useDefinitionDraft<Draft>({
     id, type: "build.dataset", kind: "dataset", view: "dataset", empty,
@@ -69,7 +69,7 @@ export function DatasetEditor({ id }: { id: string }) {
     if (application) await joinProjectResource(host, application, { app: "build", kind: "object", name: `build.${draftedObject.current.name}` });
     open({ view: "object-type", params: { id: draftedObject.current.id } }, { ifCurrent: { view: "dataset", params: { id } } });
   };
-  if (!integrates(role("build"))) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Datasets")} description={t("Only a builder or integrator can edit datasets.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Datasets")} description={query.isError ? t("The dataset could not be loaded.") : t("Loading…")} />;
   const last = draft.last, latest = draft.version ?? 0, keep = draft.keep || 3;
   const versions = Array.from({ length: Math.min(latest, keep) }, (_, i) => latest - i);
@@ -78,10 +78,10 @@ export function DatasetEditor({ id }: { id: string }) {
     <PageHeader title={draft.title || t("New dataset")} help={t("Name it, then point a source or a pipeline at it. Each load is a new version; the schema is inferred from the rows and drift is listed per load.")}
       actions={<div className="flex min-w-0 flex-wrap gap-2">
         <Button onClick={() => open({ view: "dataset" })}>{t("Datasets")}</Button>
-        {role("build") === "builder" && !!draft.schema?.length && <Button disabled={busy || dirty || !!inputs?.invalid} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
+        {holds("build", "builder") && !!draft.schema?.length && <Button disabled={busy || dirty || !!inputs?.invalid} onClick={() => void perform(draftObject)}>{t("Draft an object from this schema")}</Button>}
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button variant="primary" disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save dataset")}</Button>
-        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
+        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         {query.data?.record && !dirty && !busy && <RecordActions type="build.dataset" record={query.data.record} allowed={["build.dataset.load"]} />}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}

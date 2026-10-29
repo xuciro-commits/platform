@@ -210,7 +210,7 @@ func TestSystemFreezeRetainsOriginalReceiptsAndHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := readFiles(t, kit.tenant)
-	if len(files) != 2 || !files[0].Deleted || files[0].Revision != 2 || files[0].Content != "" || files[1].Content != "shared historical source" || files[1].Digest != systemscope.Digest([]byte("shared historical source")) || kit.tenant.records.types[system.BlobType].rows.Len() != 1 {
+	if len(files) != 2 || !files[0].Deleted || files[0].Revision != 2 || files[0].Content != "" || files[1].Content != "shared historical source" || files[1].Digest != systemscope.Digest([]byte("shared historical source")) || kit.tenant.records.Type(system.BlobType).Rows().Len() != 1 {
 		t.Fatalf("lost retained source/blob/tombstone: %+v", files)
 	}
 	for _, f := range files {

@@ -47,10 +47,10 @@ func seatOf(id string, roles ...string) platform.Seat {
 // composeTenant is a tenant on the Console with these seats and apps, failing
 // the test if the composition is refused.
 func composeTenant(t *testing.T, id string, seats []platform.Seat, apps ...platform.App) *Tenant {
-	return composeTenantWithCapabilities(t, id, DefaultRuntimeCapabilities(), seats, apps...)
+	return composeTenantWithCapabilities(t, id, platform.DefaultRuntimeCapabilities(), seats, apps...)
 }
 
-func composeTenantWithCapabilities(t *testing.T, id string, services RuntimeCapabilities, seats []platform.Seat, apps ...platform.App) *Tenant {
+func composeTenantWithCapabilities(t *testing.T, id string, services platform.RuntimeCapabilities, seats []platform.Seat, apps ...platform.App) *Tenant {
 	t.Helper()
 	tn, err := newTestTenantWithCapabilities(id, services, append([]platform.App{newConsole(id, seats...)}, apps...)...)
 	if err != nil {
@@ -219,13 +219,13 @@ func bindTestOwner(app platform.App, roles platform.OwnerBindings) {
 }
 
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
-	services := DefaultRuntimeCapabilities()
+	services := platform.DefaultRuntimeCapabilities()
 	services.BindOwner = bindTestOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = business.NewRuntime
 	return NewTenantWithCapabilities(id, services, apps...)
 }
-func newTestTenantWithCapabilities(id string, services RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
+func newTestTenantWithCapabilities(id string, services platform.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
 	services.BindOwner = bindTestOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator
 	services.NewTransactionExecutor = business.NewRuntime
@@ -320,20 +320,20 @@ func storedFiles(t *testing.T, files platform.FileInventory) []platform.StoredFi
 // unbound store refuses to answer. Memory and file tenants need no view.
 func readView(t *testing.T, tn *Tenant) func() {
 	t.Helper()
-	if tn.records.current.View() != nil {
+	if tn.records.Current().View() != nil {
 		return func() {}
 	}
-	views, ok := tn.records.current.Backend().(journal.StateReadViews)
+	views, ok := tn.records.Current().Backend().(journal.StateReadViews)
 	if !ok {
 		return func() {}
 	}
-	view, err := views.BeginStateRead(context.Background(), tn.ID, tn.records.current.Applied())
+	view, err := views.BeginStateRead(context.Background(), tn.ID, tn.records.Current().Applied())
 	if err != nil {
 		t.Fatal(err)
 	}
-	tn.records.current.Bind(view)
+	tn.records.Current().Bind(view)
 	return func() {
-		tn.records.current.Bind(nil)
+		tn.records.Current().Bind(nil)
 		_ = view.Close()
 	}
 }
@@ -341,5 +341,5 @@ func readView(t *testing.T, tn *Tenant) func() {
 func rowCount(t *testing.T, tn *Tenant, typ string) int {
 	t.Helper()
 	defer readView(t, tn)()
-	return tn.records.types[typ].rows.Len()
+	return tn.records.Type(typ).Rows().Len()
 }

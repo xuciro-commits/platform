@@ -1,5 +1,7 @@
 package platformserver
 
+import acceptedformat "platformserver/kernel/acceptedformat"
+
 import "platformserver/studio/build"
 
 import (
@@ -98,7 +100,7 @@ func TestCompositeIsolatesAcceptedApplicationFailure(t *testing.T) {
 		}
 		return e.Body, nil
 	}
-	edits := []CompositeEdit{{Schema: "build.object.publish", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{}`)}}
+	edits := []platform.CompositeEdit{{Schema: "build.object.publish", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{}`)}}
 	at := time.Date(2026, 10, 11, 15, 0, 0, 0, time.UTC)
 	if _, err := tn.Composite(member("dana"), "publish", edits, at); err == nil || !tn.quarantined() || appended != 1 {
 		t.Fatalf("accepted application failure was not isolated: %v, quarantined=%v, appended=%d", err, tn.quarantined(), appended)
@@ -118,7 +120,7 @@ func TestCompositeSealsOnceAndReplaysWithoutDeciding(t *testing.T) {
 		t.Fatal(result)
 	}
 	prior := append([]Entry(nil), entries...)
-	edits := []CompositeEdit{{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)}}
+	edits := []platform.CompositeEdit{{Schema: "build.object.edit", Target: &pb.EntityRef{Type: build.ObjectType, Id: "visit"}, Payload: json.RawMessage(`{"name":"visit","title":"Visit today"}`)}}
 	at := time.Date(2026, 10, 11, 15, 0, 0, 0, time.UTC)
 	tn.AcceptResult = func(Entry, string, string) ([]byte, error) { return nil, errors.New("append failed") }
 	if _, err := tn.Composite(member("dana"), "edit", edits, at); err == nil {
@@ -138,7 +140,7 @@ func TestCompositeSealsOnceAndReplaysWithoutDeciding(t *testing.T) {
 		t.Fatal("composite retry ran again")
 	}
 	raw := entries[len(entries)-1].Body
-	saved, err := decodeAcceptedComposite(raw)
+	saved, err := acceptedformat.DecodeComposite(raw)
 	if err != nil || saved.Version != 2 || len(saved.Changes) == 0 {
 		t.Fatal("composite saved edits without results")
 	}

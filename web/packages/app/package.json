@@ -14,7 +14,8 @@
     "./query-inventory": "./src/runtime/query-inventory.ts",
     "./rules": "./src/runtime/rule-engine.ts",
     "./model": "./src/runtime/model-bindings.ts",
-    "./page-contract": "./src/pageui/contract.ts"
+    "./page-contract": "./src/pageui/contract.ts",
+    "./roles": "./src/semantic/member-roles.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

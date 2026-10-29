@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"encoding/json"
 	automation "platformserver/engine/automation"
@@ -12,7 +14,7 @@ import (
 	"platformserver/platform"
 )
 
-func (t *Tenant) readQueryFrom(store *recordStore, c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (t *Tenant) readQueryFrom(store *records.Store, c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	q, ok := t.namedQuery(app, name)
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Named query is unavailable")
@@ -20,7 +22,7 @@ func (t *Tenant) readQueryFrom(store *recordStore, c platform.Caller, app, name 
 	return t.readDeclaredQueryFrom(store, c, q, inputs, now)
 }
 
-func (t *Tenant) readQueryVersionFrom(store *recordStore, c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (t *Tenant) readQueryVersionFrom(store *records.Store, c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	q, _, ok := t.memberQueryVersion(c.Member, platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}, version)
 	if !ok {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained query is unavailable to this member")
@@ -32,7 +34,7 @@ func (t *Tenant) readQueryVersionFrom(store *recordStore, c platform.Caller, app
 	return t.readDeclaredQueryFrom(store, c, q, inputs, now)
 }
 
-func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q platform.NamedQuery, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (t *Tenant) readDeclaredQueryFrom(store *records.Store, c platform.Caller, q platform.NamedQuery, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	values := struct {
 		For string `json:"for,omitempty"`
 	}{}
@@ -58,9 +60,9 @@ func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q 
 		return nil, refusal
 	}
 	sources := []string{}
-	store.mu.Lock()
-	et := store.types[q.Object]
-	store.mu.Unlock()
+	store.Lock()
+	et := store.Type(q.Object)
+	store.Unlock()
 	for _, value := range page.Records {
 		if row, ok := value.(InterfaceRecord); ok {
 			ref := row.Type + "/" + row.ID
@@ -81,8 +83,8 @@ func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q 
 		ref := q.Object + "/" + id
 		sources = append(sources, ref)
 		if et != nil {
-			for _, field := range et.info.Fields {
-				if field.ReadsAny(c.RolesIn(et.info.App)) {
+			for _, field := range et.Info().Fields {
+				if field.ReadsAny(c.RolesIn(et.Info().App)) {
 					sources = append(sources, ref+"#"+field.Name)
 				}
 			}
@@ -99,7 +101,7 @@ func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q 
 	return raw, nil
 }
 
-func (t *Tenant) readRecordFrom(store *recordStore, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
+func (t *Tenant) readRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
 	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now)
 	if refusal != nil {
@@ -112,14 +114,14 @@ func (t *Tenant) readRecordFrom(store *recordStore, c platform.Caller, typ, id s
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	store.mu.Lock()
-	et := store.types[typ]
-	store.mu.Unlock()
+	store.Lock()
+	et := store.Type(typ)
+	store.Unlock()
 	value := reflect.ValueOf(page.Records[0])
-	if et != nil && value.Type() == et.info.Go {
+	if et != nil && value.Type() == et.Info().Go {
 		var fields map[string]json.RawMessage
 		changed := false
-		for _, field := range et.info.Fields {
+		for _, field := range et.Info().Fields {
 			if len(field.Index) == 0 || field.Index[0] == 0 || field.Aside {
 				continue
 			}
@@ -172,7 +174,7 @@ func (d *stagedDecision) ReadRecord(c platform.Caller, typ, id string, now time.
 	return d.tenant.readRecordFrom(d.records, c, typ, id, now)
 }
 
-func (t *Tenant) readRecordPathFrom(store *recordStore, c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+func (t *Tenant) readRecordPathFrom(store *records.Store, c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
 	return automation.ReadRecordPath(c, typ, id, path, now, t.entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
 		return t.readRecordFrom(store, c, typ, id, at)
 	})
@@ -185,7 +187,7 @@ func (d *stagedDecision) ReadRecordPath(c platform.Caller, typ, id string, path 
 	return d.tenant.readRecordPathFrom(d.records, c, typ, id, path, now)
 }
 
-func (t *Tenant) readRuleQueryFrom(store *recordStore, c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+func (t *Tenant) readRuleQueryFrom(store *records.Store, c platform.Caller, set platform.RuleCollection, input json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	q, _, ok := t.memberQueryVersion(c.Member, platform.AssetRef{App: set.App, Kind: platform.AssetQuery, Name: set.Query}, set.Version)
 	if !ok || q.Object != set.Object || (q.By == "") != (set.Of == "") {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule collection declaration is unavailable")

@@ -26,7 +26,7 @@ func (d *stagedDecision) CancelOperation(c platform.Caller, r *pb.ChangeRecord, 
 	}
 	x := d.tenant.outbound[i].Effect
 	d.tenant.opsMu.Unlock()
-	if settled(x.State) {
+	if platform.EffectSettled(x.State) {
 		return nil
 	}
 	var b operationBinding
@@ -94,7 +94,7 @@ func (t *Tenant) validateOperationCancellations(saved []acceptedformat.Operation
 			return fmt.Errorf("duplicate operation cancellation")
 		}
 		seen[r.Before.ID] = true
-		if r.Before.Endpoint != acceptedformat.OperationEndpoint || settled(r.Before.State) || !strings.HasPrefix(r.Before.ID, t.ID+":") {
+		if r.Before.Endpoint != acceptedformat.OperationEndpoint || platform.EffectSettled(r.Before.State) || !strings.HasPrefix(r.Before.ID, t.ID+":") {
 			return fmt.Errorf("invalid operation cancellation")
 		}
 		expected, err := t.operationCancellation(r.Before.ID)

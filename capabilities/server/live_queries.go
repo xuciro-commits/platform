@@ -214,9 +214,9 @@ func (t *Tenant) liveVersion(query string) string {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
 	}
 	if strings.HasPrefix(p, "/v1/interfaces/") || strings.HasPrefix(p, "/v1/queries/") {
-		t.records.mu.Lock()
-		generation := t.records.generation
-		t.records.mu.Unlock()
+		t.records.Lock()
+		generation := t.records.Generation()
+		t.records.Unlock()
 		return fmt.Sprintf("%d/%d/%d", global, meta, generation)
 	}
 	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
@@ -245,9 +245,9 @@ func (t *Tenant) liveVersion(query string) string {
 		for _, owner := range relevant {
 			operationVersion += ops[owner]
 		}
-		t.records.mu.Lock()
-		a, b := t.records.liveVersions["flow.instance"], t.records.liveVersions["agent.run"]
-		t.records.mu.Unlock()
+		t.records.Lock()
+		a, b := t.records.LiveVersion("flow.instance"), t.records.LiveVersion("agent.run")
+		t.records.Unlock()
 		return fmt.Sprintf("%d/%d/%d/%d/%d", global, meta, a, b, operationVersion)
 	}
 	if liveOperationRead(p) || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
@@ -257,11 +257,11 @@ func (t *Tenant) liveVersion(query string) string {
 	for _, prefix := range []string{"/v1/records/", "/v1/aggregates/"} {
 		if rest, ok := strings.CutPrefix(p, prefix); ok {
 			typ, tail, _ := strings.Cut(rest, "/")
-			t.records.mu.Lock()
-			defer t.records.mu.Unlock()
-			version := t.records.liveVersions[typ]
-			if et := t.records.types[typ]; et != nil && (et.info.Scope.Through != nil || et.info.HasReadSources() || (tail != "" && tail != "query") || strings.Contains(body, `"set"`) || strings.Contains(body, `"traversal"`)) {
-				version = t.records.generation
+			t.records.Lock()
+			defer t.records.Unlock()
+			version := t.records.LiveVersion(typ)
+			if et := t.records.Type(typ); et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources() || (tail != "" && tail != "query") || strings.Contains(body, `"set"`) || strings.Contains(body, `"traversal"`)) {
+				version = t.records.Generation()
 			}
 			return fmt.Sprintf("%d/%d/%d", global, meta, version)
 		}
@@ -269,9 +269,9 @@ func (t *Tenant) liveVersion(query string) string {
 	// Reverse references and pin labels also depend on business records, not
 	// only decisions whose owner is enterprise.
 	if p == "/v1/enterprise" || p == "/v1/enterprise-references" || p == "/v1/enterprise-usage" {
-		t.records.mu.Lock()
-		generation := t.records.generation
-		t.records.mu.Unlock()
+		t.records.Lock()
+		generation := t.records.Generation()
+		t.records.Unlock()
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["enterprise"], generation)
 	}
 	owner := "platform"

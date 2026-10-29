@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -198,4 +199,29 @@ type AcceptedEventPlan struct {
 	Observed    bool     `json:"observed,omitempty"`
 	Hops        int      `json:"hops,omitempty"`
 	Stopped     []string `json:"stopped,omitempty"`
+}
+
+// ScheduledTask is the saved scheduling outcome; live callbacks stay in the scheduler.
+type ScheduledTask struct {
+	Applications []AssetBinding `json:"applications,omitempty"`
+	ID           string         `json:"id" source:"record"`
+	Kind         string         `json:"kind" source:"record"` // delivery, job
+	App          string         `json:"app" source:"record"`  // the subscriber, or the job's app
+	Title        string         `json:"title" source:"record"`
+	State        string         `json:"state" source:"record"` // queued, retrying, failed, scheduled
+	Attempts     int            `json:"attempts"`
+	Last         time.Time      `json:"last,omitzero"`
+	Due          time.Time      `json:"due,omitzero"`
+	Error        string         `json:"error,omitempty"`
+	Withheld     bool           `json:"withheld,omitempty"`
+}
+
+type ScheduledTaskState struct {
+	ScheduledTask
+	Since    int                `json:"since,omitempty"`
+	EventApp string             `json:"eventApp,omitempty"` // the event it delivers
+	Event    json.RawMessage    `json:"event,omitempty"`
+	Hops     int                `json:"hops,omitempty"`
+	Changed  []string           `json:"changed,omitempty"` // the records its decision put
+	Plan     *AcceptedEventPlan `json:"plan,omitempty"`    // accepted-result delivery routing
 }

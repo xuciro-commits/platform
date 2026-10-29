@@ -34,7 +34,7 @@ func TestProcessChecksBeyondFirstReadPage(t *testing.T) {
 		c := platform.NewCaller(runtime{tn}, platform.Member{ID: "fixture", Tenant: tn.ID}, app, true, true)
 		change := &pb.ChangeRecord{ChangeId: fmt.Sprintf("%s:%s:%d", typ, id, revision), Revision: revision,
 			Submission: &pb.Submission{Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".create"}}}
-		if err := tn.records.put(c, change, value); err != nil {
+		if err := tn.records.Put(c, change, value); err != nil {
 			t.Fatal(err)
 		}
 	}

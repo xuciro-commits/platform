@@ -27,9 +27,7 @@ func (t *Tenant) currentDisabledOwners() []string {
 	return ids
 }
 func (t *Tenant) desiredDisabledOwners() []string {
-	t.console.mu.Lock()
-	defer t.console.mu.Unlock()
-	ids := append([]string{}, t.console.disabledOwners...)
+	ids := append([]string{}, t.console.DisabledOwners()...)
 	slices.Sort(ids)
 	return ids
 }
@@ -60,7 +58,7 @@ func (t *Tenant) checkOwnerRemoval(disabled []string) error {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	for _, effect := range t.outbound {
-		if removed[effect.App] && !settled(effect.State) {
+		if removed[effect.App] && !platform.EffectSettled(effect.State) {
 			return fmt.Errorf("Resolve external attempt %s before removing %s", effect.ID, effect.App)
 		}
 	}
@@ -118,3 +116,5 @@ func (t *Tenant) deactivateOwners(disabled []string) error {
 	}
 	return nil
 }
+
+func (t *Tenant) businessStopped() bool { return t.quarantined() || t.console.Suspended() }

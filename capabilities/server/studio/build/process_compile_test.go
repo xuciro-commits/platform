@@ -29,6 +29,7 @@ type processStartHost struct {
 }
 
 func (h processStartHost) Automation(platform.Caller, string) platform.Caller { return h.caller }
+func (h processStartHost) BuildProcessConsumptions() []platform.Consumption   { return nil }
 
 func TestCompilerRejectsBranchOnlyAndEscapedIterationBindings(t *testing.T) {
 	branchOnly := Process{Steps: []ProcessStep{{Name: "branch", Kind: "branch", Cases: map[string]string{"true": "yes", "false": "no"}}, {Name: "yes", Kind: "transform", Next: "merge"}, {Name: "no", Kind: "transform", Next: "merge"}, {Name: "merge", Kind: "end", Value: &platform.Binding{Source: "step", Step: "yes"}}}}

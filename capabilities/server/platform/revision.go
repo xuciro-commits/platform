@@ -937,7 +937,9 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		shape.Lifecycle = &l
 	}
-	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
+	// Declarative objects always generate these three standard actions; native
+	// objects return their original EntityInfo above. Keep the retained body intact.
+	return EntityInfo{App: owner, Type: shape.Type, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
 // Use the original nested declaration while retaining legacy flat action bodies.

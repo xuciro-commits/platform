@@ -48,7 +48,7 @@ func TestIntegrationSourceAcceptsReturningValuesAndRetainsRefusals(t *testing.T)
 			t.Fatal("a new occurrence reused an earlier content identity")
 		}
 		previous = source.Last.Execution.ID
-		row := tn.records.types[typ].rows.Get("R1")
+		row := tn.records.Type(typ).Rows().Get("R1")
 		if row == nil || len(row.RecordHistory()) != n+1 {
 			t.Fatalf("returning value was lost: history after %q", value)
 		}
@@ -134,7 +134,7 @@ func TestIntegrationSourceResumesFrozenInputAfterRestart(t *testing.T) {
 				t.Fatalf("restart did not finish the original input: %+v", done.Last)
 			}
 			for _, rowID := range []string{"R1", "R2"} {
-				if row := restored.records.types[typ].rows.Get(rowID); row == nil || len(row.RecordHistory()) != 1 {
+				if row := restored.records.Type(typ).Rows().Get(rowID); row == nil || len(row.RecordHistory()) != 1 {
 					t.Fatalf("row %s was lost or applied twice", rowID)
 				}
 			}
@@ -350,7 +350,7 @@ func TestPostgresIntegrationPreparationUsesCurrentReadScope(t *testing.T) {
 	decide(t, live, "builder", build.ID, "build.source.create", build.SourceType, "SOURCE", map[string]any{"name": "feed", "title": "Feed", "url": "https://feed.example/rows", "object": typ, "key": "id", "mapping": []build.SourceField{{From: "value", To: "note"}}}, txnAt)
 	decide(t, live, "builder", build.ID, "build.source.publish", build.SourceType, "SOURCE", map[string]any{}, txnAt)
 	live.Outbound = func(*http.Request, bool) (*http.Response, error) {
-		if live.records.current.View() != nil {
+		if live.records.Current().View() != nil {
 			t.Fatal("Source I/O retained its preparation read view")
 		}
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`[{"id":"R1","value":"Updated"}]`))}, nil
@@ -370,7 +370,7 @@ func TestPostgresIntegrationPreparationUsesCurrentReadScope(t *testing.T) {
 	if refusal != nil || merged != 0 || rows[0].Verb != ".edit" || rows[1].Verb != ".create" {
 		t.Fatal("preparation did not read current SQL rows", rows, merged, refusal)
 	}
-	if live.records.current.View() != nil || live.records.types[typ].rows.Stored() != 0 {
+	if live.records.Current().View() != nil || live.records.Type(typ).Rows().Stored() != 0 {
 		t.Fatal("preparation retained a SQL view or current row")
 	}
 }

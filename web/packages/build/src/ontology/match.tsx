@@ -1,6 +1,5 @@
 import { StructuredEditor } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
-import { integrates } from "./marking";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
@@ -21,8 +20,8 @@ const NORMALIZE = ["exact", "folded", "digits"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
 
 export function Matches() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
-  if (!integrates(role("build"))) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("Matching rules")} help={t("Say when rows from different systems are the same party, material or site, and whose value wins per field. One published rule per object; it applies to every source and pipeline writing it.")}
       actions={<Button onClick={() => open({ view: "match", params: { id: "new" } })}>{t("New matching rule")}</Button>} />
@@ -31,9 +30,9 @@ export function Matches() {
 }
 
 export function MatchEditor({ id }: { id: string }) {
-  const host = useHost(), { role } = host, { open } = useApplicationWorkspace();
+  const host = useHost(), { holds} = host, { open } = useApplicationWorkspace();
   const model = useAuthoringModel();
-  const entities = role("build") === "builder" ? model.entities : host.entities;
+  const entities = holds("build", "builder") ? model.entities : host.entities;
   const pipelineQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.pipeline?limit=200");
   const sourceQuery = useReadQuery<{ records: Producer[] }>("/v1/records/build.source?limit=200");
   const pipelines = pipelineQuery.data?.records ?? [], sources = sourceQuery.data?.records ?? [];
@@ -45,7 +44,7 @@ export function MatchEditor({ id }: { id: string }) {
       return { name, title, object, keys: (keys ?? []).map(key => ({ fields: key.fields.filter(Boolean), normalize: key.normalize ?? "" })), prefer };
     },
   });
-  if (!integrates(role("build"))) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
+  if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Matching rules")} description={t("Only a builder or integrator can edit matching rules.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Matching rules")} description={query.isError ? t("The matching rule could not be loaded.") : t("Loading…")} />;
   const target = entities.find((entity) => entity.type === draft.object);
   const fields = target?.fields ?? [], writable = fields.filter((f) => !f.readOnly);
@@ -57,13 +56,13 @@ export function MatchEditor({ id }: { id: string }) {
         <Button onClick={() => open({ view: "match" })}>{t("Matching rules")}</Button>
         <Button disabled={busy || !dirty} onClick={discardChanges}>{t("Discard")}</Button>
         <Button disabled={busy || !!inputs?.invalid || !dirty && id !== "new"} onClick={() => void perform(save)}>{t("Save matching rule")}</Button>
-        {role("build") === "builder" && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
+        {holds("build", "builder") && <Button disabled={busy || !!inputs?.invalid} onClick={() => void perform(review)}>{t("Review and publish…")}</Button>}
         <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
         {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
       </div>} />
     {error && <Panel role="alert" className="text-danger">{error}</Panel>}
     {(pipelineQuery.isError || sourceQuery.isError) && <Panel role="alert" className="text-danger">{t("The pipelines or data sources could not be loaded.")}</Panel>}
-    {role("build") === "builder" && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
+    {holds("build", "builder") && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
     <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title={t("Object")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Rule name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="samematerial" onChange={(e) => patch({ name: e.target.value })} /></label>

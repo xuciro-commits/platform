@@ -45,11 +45,11 @@ type BuiltInRow = { key: string; definition: Definition; object?: Definition };
 /** Editable tenant actions and read-only published declarations share one list.
  * Code-owned declarations appear only when explicitly requested. */
 export function ActionTypes() {
-  const { role, definitions, me } = useHost(), { open } = useApplicationWorkspace();
+  const { definitions, me , holds} = useHost(), { open } = useApplicationWorkspace();
   const inventory = useRecordInventory<ObjectDraft>("build.object");
   const projects = useProjectIndex();
   const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
-  if (role("build") !== "builder") return <PageHeader title={t("Action types")} description={t("Only a builder can edit action types.")} />;
+  if (!holds("build", "builder")) return <PageHeader title={t("Action types")} description={t("Only a builder can edit action types.")} />;
   const drafts = (inventory.data?.records ?? []).filter((object) => !object.archived);
   const rows: ActionRow[] = drafts.flatMap((object) => (object.actions ?? []).map((action) => ({ key: `${object.id}:${action.name}`, object, action })));
   const stateTitle = (object: ObjectDraft, name?: string) => object.states?.find((s) => s.name === name)?.title ?? name ?? "";

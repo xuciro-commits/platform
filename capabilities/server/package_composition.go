@@ -28,10 +28,10 @@ func (t *Tenant) baseModules() []platform.CapabilityModule {
 			}
 		}
 		for _, entity := range m.Entities {
-			if declared := t.records.types[entity.Type]; declared != nil {
-				for _, field := range declared.info.Fields {
-					if referenced := t.records.types[field.Ref]; referenced != nil {
-						needs[referenced.info.App] = true
+			if declared := t.records.Type(entity.Type); declared != nil {
+				for _, field := range declared.Info().Fields {
+					if referenced := t.records.Type(field.Ref); referenced != nil {
+						needs[referenced.Info().App] = true
 					}
 				}
 			}

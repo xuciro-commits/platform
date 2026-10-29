@@ -35,19 +35,19 @@ func TestRecordImageRestoreAndReinstallRetainOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := newRecordStore()
-	if err := store.install(current); err != nil {
+	store := records.NewStore()
+	if err := store.Install(current); err != nil {
 		t.Fatal(err)
 	}
 	raw := json.RawMessage(`{ "id":"one", "revision":2, "name":"Original" }`)
 	tn := &Tenant{records: store}
-	held, err := tn.restoreRecords(map[string][]recordState{"example.item": {{Value: raw}}})
+	held, err := tn.restoreRecords(map[string][]records.StoredState{"example.item": {{Value: raw}}})
 	if err != nil || len(held) != 0 {
 		t.Fatalf("old snapshot restore: %+v, %v", held, err)
 	}
 	check := func() {
 		t.Helper()
-		saved := store.types["example.item"].rows.Get("one")
+		saved := store.Type("example.item").Rows().Get("one")
 		image, err := saved.Image()
 		value := saved.Value.Interface().(currentModel)
 		if err != nil || string(image) != string(raw) || saved.Format != "" || value.Title != "Original" || value.Revision != 2 {
@@ -55,7 +55,7 @@ func TestRecordImageRestoreAndReinstallRetainOriginal(t *testing.T) {
 		}
 	}
 	check()
-	if err := store.install(current); err != nil {
+	if err := store.Install(current); err != nil {
 		t.Fatalf("reinstall after conversion: %v", err)
 	}
 	check()
@@ -105,11 +105,11 @@ func TestPostgresRecordImageConvertedFieldQueryRetainsOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := newRecordStore()
-	if err := store.install(info); err != nil {
+	store := records.NewStore()
+	if err := store.Install(info); err != nil {
 		t.Fatal(err)
 	}
-	var states []recordState
+	var states []records.StoredState
 	var delta journal.StateDelta
 	var original json.RawMessage
 	// The visible match is on the second candidate page. Another matching row
@@ -123,7 +123,7 @@ func TestPostgresRecordImageConvertedFieldQueryRetainsOriginal(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := recordState{Value: raw}
+		state := records.StoredState{Value: raw}
 		states = append(states, state)
 		delta.Records = append(delta.Records, journal.StateRecord{Type: info.Type, ID: id, Image: jsonOf(state), HistoryBase: -1})
 		if n == 256 {
@@ -131,25 +131,25 @@ func TestPostgresRecordImageConvertedFieldQueryRetainsOriginal(t *testing.T) {
 		}
 	}
 	tn := &Tenant{records: store}
-	if held, err := tn.restoreRecords(map[string][]recordState{info.Type: states}); err != nil || len(held) != 0 {
+	if held, err := tn.restoreRecords(map[string][]records.StoredState{info.Type: states}); err != nil || len(held) != 0 {
 		t.Fatalf("restore old rows: %v, held=%d", err, len(held))
 	}
 	if err := pg.InitializeState(ctx, tenant, 0, delta); err != nil {
 		t.Fatal(err)
 	}
-	store.current.Configure(pg, tenant, 0, nil)
-	matches, refusal := store.matchingQuery(store.types[info.Type], platform.Query{Domain: json.RawMessage(`[["title","=","Original"]]`)},
+	store.Current().Configure(pg, tenant, 0, nil)
+	matches, refusal := store.MatchingQuery(store.Type(info.Type), platform.Query{Domain: json.RawMessage(`[["title","=","Original"]]`)},
 		func(value reflect.Value) bool { return records.Header(value).ID != "row-000" })
 	if refusal != nil || len(matches) != 1 || matches[0].Interface().(currentModel).ID != "row-256" {
 		t.Fatalf("converted-field query lost its visible match or bypassed filtering: %v, %v", matches, refusal)
 	}
-	saved := store.types[info.Type].rows.Get("row-256")
+	saved := store.Type(info.Type).Rows().Get("row-256")
 	image, err := saved.Image()
 	if err != nil || string(image) != string(original) || saved.Format != "" {
 		t.Fatalf("query rewrote the original Go image: %s, %v", image, err)
 	}
 	raw, err := pg.StateRecord(ctx, tenant, info.Type, "row-256")
-	var stored recordState
+	var stored records.StoredState
 	if err != nil || json.Unmarshal(raw, &stored) != nil || string(stored.Value) != string(original) || stored.Format != "" {
 		t.Fatalf("query rewrote the original SQL image: %s, %v", raw, err)
 	}

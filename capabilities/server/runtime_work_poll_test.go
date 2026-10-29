@@ -55,8 +55,8 @@ func TestPostgresIdleWorkKeepsAcceptedPositionAndResumesRealWork(t *testing.T) {
 	if raw, err := j.StateRecord(ctx, id, "worker.document", "job-"+at.Add(10*time.Hour).Format(time.RFC3339Nano)); err != nil || len(raw) == 0 {
 		t.Fatalf("accepted work row is unavailable from SQL: %v", err)
 	}
-	for typ, et := range live.records.types {
-		if et.rows.Stored() != 0 {
+	for typ, et := range live.records.Types() {
+		if et.Rows().Stored() != 0 {
 			t.Fatalf("real work left resident SQL rows in %s", typ)
 		}
 	}

@@ -37,7 +37,7 @@ func (h hostView) ConsoleSetting(name string) string {
 	return h.t.setting(h.t.automation(controlowner.PlatformApp, false), name)
 }
 func (h hostView) Languages() []string   { return h.t.i18n.Languages() }
-func (h hostView) TenantSuspended() bool { return h.t.console.suspended() }
+func (h hostView) TenantSuspended() bool { return h.t.console.Suspended() }
 func (h hostView) GovernanceRead(c platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "notifications":

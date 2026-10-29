@@ -31,13 +31,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	deployment.RebuildWithCapabilities = func(id string, services platformserver.RuntimeCapabilities) (*platformserver.Tenant, error) {
+	deployment.RebuildWithCapabilities = func(id string, services platform.RuntimeCapabilities) (*platformserver.Tenant, error) {
 		return composition.NewTenantWithSourceAndCapabilities(id, source, services, deployment.SeatsFor(id)...)
 	}
 	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
-		return deployment.RebuildWithCapabilities(id, platformserver.DefaultRuntimeCapabilities())
+		return deployment.RebuildWithCapabilities(id, platform.DefaultRuntimeCapabilities())
 	}
-	development := platformserver.TenantSpec{ID: *tenant}
+	development := platform.TenantSpec{ID: *tenant}
 	if *admin != "" {
 		roles := map[string]string{
 			controlowner.PlatformApp: controlowner.Admin,

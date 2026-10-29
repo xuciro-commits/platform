@@ -121,14 +121,14 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
 }
 
 export function Flows() {
-  const { source, role } = useHost(), { open } = useApplicationWorkspace();
+  const { source , holds} = useHost(), { open } = useApplicationWorkspace();
   return <div className="grid gap-3 p-4"><PageHeader title={t("Flows")} help={t("Branching logic: native capabilities, typed code, human tasks and AI on one map. For a plain trigger → effects rule, create an automation instead.")}
-    actions={role("build") === "builder" && <Button onClick={() => open({ view: "flow", params: { id: "new" } })}>{t("New flow")}</Button>} />
+    actions={holds("build", "builder") && <Button onClick={() => open({ view: "flow", params: { id: "new" } })}>{t("New flow")}</Button>} />
     <ResourceList source={source} type="build.process" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "flow", params: { id: record.id } })} /></div>;
 }
 
 export function FlowEditor({ id }: { id: string }) {
-  const { decide, role, client } = useHost(), { open } = useApplicationWorkspace();
+  const { decide, client , holds} = useHost(), { open } = useApplicationWorkspace();
   const model = useAuthoringModel();
   const catalogQuery = useAuthoringCapabilities<Capability>();
   const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
@@ -283,7 +283,7 @@ export function FlowEditor({ id }: { id: string }) {
   const filtered = catalogQuery.data.filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
     && [capability.title, t(capability.title), capability.description, capability.ref.app, capability.ref.name].some((value) => value.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
   const groups = [...new Set(filtered.map((capability) => capability.group))];
-  if (role("build") !== "builder") return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{t("Only a builder can edit flows.")}</WorkbenchMessage></Workbench>;
+  if (!holds("build", "builder")) return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{t("Only a builder can edit flows.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="flow" title={t("Flow")}><WorkbenchMessage>{query.isError ? t("The flow could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const problems: WorkbenchProblem[] = [
     ...Object.entries(inputProblems).filter(([, problem]) => problem).map(([key, problem]) => ({ id: `form:${key}`, text: problem, subject: key, locate: session.inputs.values[key]?.reveal })),

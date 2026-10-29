@@ -50,23 +50,6 @@ type PromotionResult struct {
 	Assets    int    `json:"assets"`
 }
 
-// MigrationType is one type's part of a migration.
-type MigrationType struct {
-	Type    string      `json:"type"`
-	Rows    int         `json:"rows"`
-	Written int         `json:"written"`
-	Refused []ImportRow `json:"refused,omitempty"`
-}
-
-// MigrationResult is one migration run: which types, how many rows, and the key
-// that makes a second run repeat nothing.
-type MigrationResult struct {
-	From  string          `json:"from"`
-	To    string          `json:"to"`
-	Key   string          `json:"key"`
-	Types []MigrationType `json:"types"`
-}
-
 // SealCandidate writes a saved candidate's exact bytes into the file store as a
 // sealed artifact and remembers its digest. Sealing is idempotent: the same
 // candidate seals to the same key and digest.
@@ -222,12 +205,12 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 // actions as the target's member. A type the target does not host refuses the
 // run before anything moves. The key is derived from the two tenants and the
 // types, so the same migration run twice imports nothing new.
-func MigrateRecords(from, to *Tenant, source, target platform.Member, types []string, now time.Time) (MigrationResult, error) {
+func MigrateRecords(from, to *Tenant, source, target platform.Member, types []string, now time.Time) (platform.MigrationResult, error) {
 	if from == nil || to == nil || from.ID == to.ID {
-		return MigrationResult{}, fmt.Errorf("migration needs two different environments")
+		return platform.MigrationResult{}, fmt.Errorf("migration needs two different environments")
 	}
 	if len(types) == 0 {
-		return MigrationResult{}, fmt.Errorf("name at least one type to migrate")
+		return platform.MigrationResult{}, fmt.Errorf("name at least one type to migrate")
 	}
 	sorted := slices.Clone(types)
 	slices.Sort(sorted)
@@ -235,12 +218,12 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 	hosted := to.hostedTypes()
 	for _, typ := range sorted {
 		if !hosted[typ] {
-			return MigrationResult{}, fmt.Errorf("%s does not host %s", to.ID, typ)
+			return platform.MigrationResult{}, fmt.Errorf("%s does not host %s", to.ID, typ)
 		}
 	}
 	sum := sha256.Sum256([]byte(from.ID + "\x00" + to.ID + "\x00" + strings.Join(sorted, ",")))
 	key := "migration:" + hex.EncodeToString(sum[:8])
-	result := MigrationResult{From: from.ID, To: to.ID, Key: key, Types: []MigrationType{}}
+	result := platform.MigrationResult{From: from.ID, To: to.ID, Key: key, Types: []platform.MigrationType{}}
 	for _, typ := range sorted {
 		data, refusal := from.Export(source, typ, platform.Query{}, now)
 		if refusal != nil {
@@ -250,7 +233,7 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 		if refusal != nil {
 			return result, fmt.Errorf("import %s into %s: %s", typ, to.ID, refusal.Code)
 		}
-		part := MigrationType{Type: typ, Rows: len(rows)}
+		part := platform.MigrationType{Type: typ, Rows: len(rows)}
 		for _, row := range rows {
 			if row.Outcome == "ok" {
 				part.Written++
@@ -269,38 +252,28 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 // hostedTypes are the entity types this tenant's apps declare.
 func (t *Tenant) hostedTypes() map[string]bool {
 	out := map[string]bool{}
-	for _, et := range t.records.sortedTypes() {
-		out[et.info.Type] = true
+	for _, et := range t.records.SortedTypes() {
+		out[et.Info().Type] = true
 	}
 	return out
 }
 
-// MigrationManifest is the console's record of a migration between environments.
-type MigrationManifest struct {
-	At     time.Time       `json:"at"`
-	From   string          `json:"from"`
-	To     string          `json:"to"`
-	Key    string          `json:"key"`
-	Member string          `json:"member"`
-	Types  []MigrationType `json:"types"`
-}
-
 // rememberMigration keeps the console's own view of what moved.
-func (t *Tenant) rememberMigration(result MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
+func (t *Tenant) rememberMigration(result platform.MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, err := t.acceptHostControl("migration", member, result, now,
-		platform.AuditEntry{Action: "host.migration", Target: result.Key}, func(image *hostControlImage) (SupportGrant, error) {
-			image.Migrations = append(image.Migrations, MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
-			return SupportGrant{}, nil
+		platform.AuditEntry{Action: "host.migration", Target: result.Key}, func(image *platform.HostControlImage) (platform.SupportGrant, error) {
+			image.Migrations = append(image.Migrations, platform.MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
+			return platform.SupportGrant{}, nil
 		}, evidence...)
 	return err
 }
 
 // Migrations lists what the console moved in or out of this tenant.
-func (t *Tenant) Migrations() []MigrationManifest { return t.console.migrationList() }
+func (t *Tenant) Migrations() []platform.MigrationManifest { return t.console.Migrations() }
 
 // grantUsable resolves an open support session of this tenant.
-func (t *Tenant) grantUsable(id string, now time.Time) (SupportGrant, error) {
-	return t.console.usableSupport(t.ID, id, now)
+func (t *Tenant) grantUsable(id string, now time.Time) (platform.SupportGrant, error) {
+	return t.console.UsableSupport(t.ID, id, now)
 }

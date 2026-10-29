@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import "platformserver/studio/build"
 
 import (
@@ -185,7 +187,7 @@ func TestEnterpriseHTTPAndLiveReads(t *testing.T) {
 }
 
 func TestLiveQueriesFilterDependenciesAndInvalidateDeniedReads(t *testing.T) {
-	tenant := &Tenant{records: newRecordStore()}
+	tenant := &Tenant{records: records.NewStore()}
 	mux := http.NewServeMux()
 	var reads atomic.Int32
 	var denied atomic.Bool
@@ -228,9 +230,9 @@ func TestLiveQueriesFilterDependenciesAndInvalidateDeniedReads(t *testing.T) {
 	if f := frame(); len(f.Results) != 1 || f.Results[0].Status != 200 {
 		t.Fatalf("initial=%+v", f)
 	}
-	tenant.records.mu.Lock()
-	tenant.records.liveTouched("other.note")
-	tenant.records.mu.Unlock()
+	tenant.records.Lock()
+	tenant.records.LiveTouched("other.note")
+	tenant.records.Unlock()
 	tenant.changedOwner("other")
 	time.Sleep(200 * time.Millisecond)
 	if reads.Load() != 1 {
@@ -241,9 +243,9 @@ func TestLiveQueriesFilterDependenciesAndInvalidateDeniedReads(t *testing.T) {
 	if reads.Load() != 1 {
 		t.Fatal("queue progress triggered a business read")
 	}
-	tenant.records.mu.Lock()
-	tenant.records.liveTouched("sample.note")
-	tenant.records.mu.Unlock()
+	tenant.records.Lock()
+	tenant.records.LiveTouched("sample.note")
+	tenant.records.Unlock()
 	tenant.changedOwner("sample")
 	if f := frame(); f.Results[0].Status != 200 || reads.Load() != 2 {
 		t.Fatalf("relevant=%+v, reads=%d", f, reads.Load())
@@ -256,7 +258,7 @@ func TestLiveQueriesFilterDependenciesAndInvalidateDeniedReads(t *testing.T) {
 }
 
 func TestLiveRegistrationRejectsWritesAndStreams(t *testing.T) {
-	tenant := &Tenant{records: newRecordStore()}
+	tenant := &Tenant{records: records.NewStore()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/records/sample.note/query", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"records":[]}`)) })
 	mux.HandleFunc("POST /v1/releases/candidates/query", func(w http.ResponseWriter, r *http.Request) {

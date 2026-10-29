@@ -26,9 +26,9 @@ const empty = (): CodeDraft => ({ id: "", revision: 0, name: "", title: "", desc
   limits: { timeoutMillis: 1000, memoryPages: 1024, maxInputBytes: 65536, maxOutputBytes: 49152 } });
 
 export function CodeFunctions() {
-  const { source, role } = useHost();
+  const { source , holds} = useHost();
   const { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
+  if (!holds("build", "builder")) return <PageHeader title={t("Code functions")} description={t("Only a builder can edit code functions.")} />;
   return <div className="grid gap-3"><PageHeader title={t("Code functions")} help={t("Package a typed Go or TinyGo algorithm for pages and workflows.")}
     actions={<Button onClick={() => open({ view: "code", params: { id: "new" } })}>{t("New code function")}</Button>} />
     <ResourceList source={source} type="build.code" fields={["title", "name", "language", "state", "version"]} onOpen={(record) => open({ view: "code", params: { id: record.id } })} />
@@ -36,7 +36,7 @@ export function CodeFunctions() {
 }
 
 export function CodeEditor({ id }: { id: string }) {
-  const { decide, client, role } = useHost(), { open } = useApplicationWorkspace(), invoke = useInvokeCapability();
+  const { decide, client , holds} = useHost(), { open } = useApplicationWorkspace(), invoke = useInvokeCapability();
   const authoringHost = useHost(), trial = useActionTrial(), declarationFields = authoringHost.source.entity("build.code")?.fields ?? [];
   const [draft, setDraft] = useState<CodeDraft>(empty), [edited, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
  const [createID]=useState(()=>crypto.randomUUID());
@@ -106,7 +106,7 @@ export function CodeEditor({ id }: { id: string }) {
     const answer=await invoke({ref:{app:"build",kind:"compute",name:draft.name},key:crypto.randomUUID(),version:draft.version,inputs:input});
     setCall(answer.call ?? "");
   };
-  if (role("build") !== "builder") return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{t("Only a builder can edit code functions.")}</WorkbenchMessage></Workbench>;
+  if (!holds("build", "builder")) return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{t("Only a builder can edit code functions.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{query.isError ? t("The code function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const invalid = !!inputs?.invalid;
   let published: CodeDraft | undefined;

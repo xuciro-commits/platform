@@ -381,6 +381,7 @@ type FlowBinding struct {
 // Listener is a platform app delivered other apps' events as owned work, with
 // every name an event goes by (its action and the protocol events it is).
 type Processes interface {
+	Consumptions(app string) []Consumption
 	Declare(a App) error
 	// Install registers a flow an app composed at runtime as its next version;
 	// Validate checks one without registering it (#132).

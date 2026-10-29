@@ -54,10 +54,10 @@ docker: bootstrap ## 切到 Docker 单入口平台；保留新环境数据
 infra: bootstrap ## 启动基础服务容器（数据持久化保留在 platform_* 数据卷中）
 	$(NATIVE_COMPOSE) up -d --wait $(INFRA)
 
-.PHONY: infra-compute
-infra-compute: bootstrap ## 启动计算与编译支持（Wasm worker 与代码构建器，socket 位于 .build/dev/compute）
+.PHONY: build-compute
+build-compute: ## 编译原生计算进程；由 make local 监督启动与停止
 	mkdir -p .build/dev/compute
-	$(COMPOSE) -p platform-dev-compute -f deploy/dev/compose.compute.yaml up -d wasm-worker code-builder
+	cd capabilities/server && $(GO) build -o ../../.build/dev/compute ./cmd/wasm-worker ./cmd/code-builder
 
 .PHONY: infra-down
 infra-down: ## 停止基础服务容器（保留数据卷）

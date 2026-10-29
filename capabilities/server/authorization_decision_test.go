@@ -157,10 +157,12 @@ func TestAuthorizationDefinitionChangesWithItsSourceContractAndPolicies(t *testi
 	c := platform.NewCaller(runtime{tn}, memberOf(t, tn, "ana"), "stock", false, false)
 	request := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: "stock.item"}
 	before := c.Authorize(request, txnAt)
-	et := tn.records.types["stock.item"]
-	note, _ := et.info.Field("note")
-	bin, _ := et.info.Field("bin")
-	et.info.Derived = []platform.DerivationInfo{{Refs: [][]int{bin.Index}, Fields: [][]int{note.Index}, Names: []string{"bin", "note"}}}
+	et := tn.records.Type("stock.item")
+	note, _ := et.Info().Field("note")
+	bin, _ := et.Info().Field("bin")
+	info := et.Info()
+	info.Derived = []platform.DerivationInfo{{Refs: [][]int{bin.Index}, Fields: [][]int{note.Index}, Names: []string{"bin", "note"}}}
+	tn.records.ReplaceReadType(info, et.Rows(), false)
 	sourced := c.Authorize(request, txnAt)
 	if before.Definition == "" || sourced.Definition == before.Definition {
 		t.Fatal("different source contracts retained the same authorization basis")
@@ -199,10 +201,10 @@ func TestDeclaredInputAndWorkShareDenyPrecedence(t *testing.T) {
 
 func TestGeneratedTextWithMissingSourceIsWithheld(t *testing.T) {
 	tn := stockTenant(t)
-	et := tn.records.types["stock.item"]
-	for i := range et.info.Fields {
-		if et.info.Fields[i].Name == "note" {
-			et.info.Fields[i].SourceType = "generated"
+	et := tn.records.Type("stock.item")
+	for i := range et.Info().Fields {
+		if et.Info().Fields[i].Name == "note" {
+			et.Info().Fields[i].SourceType = "generated"
 		}
 	}
 	note := Item{Record: platform.Record{ID: "missing-source"}, Name: "Press", Note: "Generated detail"}
@@ -226,19 +228,19 @@ func TestDerivedSourceUsesTheOriginalReadPolicy(t *testing.T) {
 func TestDerivedFreeTextRequiresDeclaredSourceType(t *testing.T) {
 	tn := stockTenant(t)
 	decide(t, tn, "ana", "stock", "stock.item.create", "stock.item", "I1", map[string]any{"name": "Machine", "line": "L1", "note": "Inspection"}, txnAt)
-	tn.records.mu.Lock()
-	et := tn.records.types["stock.item"]
-	value := et.rows.Get("I1").Value.Interface()
-	tn.records.mu.Unlock()
+	tn.records.Lock()
+	et := tn.records.Type("stock.item")
+	value := et.Rows().Get("I1").Value.Interface()
+	tn.records.Unlock()
 	read := tn.narrowed(memberOf(t, tn, "ana"), value, txnAt, false)
 	var fields map[string]any
 	_ = json.Unmarshal(platform.Raw(read), &fields)
 	if fields["note"] != "" {
 		t.Fatal("undeclared text escaped through derived read")
 	}
-	for i := range et.info.Fields {
-		if et.info.Fields[i].Name == "note" {
-			et.info.Fields[i].SourceType = "user-input"
+	for i := range et.Info().Fields {
+		if et.Info().Fields[i].Name == "note" {
+			et.Info().Fields[i].SourceType = "user-input"
 		}
 	}
 	read = tn.narrowed(memberOf(t, tn, "ana"), value, txnAt, false)

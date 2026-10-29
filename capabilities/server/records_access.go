@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-func viewOf(m platform.Member, et *entityType) (*entityType, []platform.FieldInfo) {
-	info, hidden := records.FieldView(m, et.info)
+func viewOf(m platform.Member, et *records.Type) (*records.Type, []platform.FieldInfo) {
+	info, hidden := records.FieldView(m, et.Info())
 	if len(hidden) == 0 {
 		return et, nil
 	}
-	return &entityType{info: info, rows: et.rows, retainedProjection: et.retainedProjection}, hidden
+	return records.NewTypeView(info, et.Rows(), et.RetainedProjection()), hidden
 }
 
 // Entities are the entity types m may read: those of apps m holds a role in.
@@ -31,17 +31,17 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 }
 
 func (t *Tenant) entityView(m platform.Member) []platform.EntityInfo {
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
+	t.records.Lock()
+	defer t.records.Unlock()
 	out := []platform.EntityInfo{}
-	for _, et := range t.records.types {
-		roles := m.RolesIn(et.info.App)
-		if len(roles) > 0 && et.info.Scope.LevelFor(roles) == platform.ScopeNone && et.info.Scope.Participants == nil {
+	for _, et := range t.records.Types() {
+		roles := m.RolesIn(et.Info().App)
+		if len(roles) > 0 && et.Info().Scope.LevelFor(roles) == platform.ScopeNone && et.Info().Scope.Participants == nil {
 			continue // a type none of these roles sees at all
 		}
-		if len(roles) > 0 || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
+		if len(roles) > 0 || et.Info().Scope.Participants != nil || et.Info().Scope.Through != nil { // participants, and what belongs to a record, are read without a role
 			view, _ := viewOf(m, et)
-			out = append(out, view.info)
+			out = append(out, view.Info())
 		}
 	}
 	slices.SortFunc(out, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
@@ -54,17 +54,17 @@ func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bo
 	return t.readableIn(t.records, m, ref, now)
 }
 
-func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, now time.Time) bool {
+func (t *Tenant) readableIn(store *records.Store, m platform.Member, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
 	if typ == "enterprise.element" && t.directory != nil { // the model is every member's to read
 		_, ok := t.directory.Element(id, now.UTC().Format(time.DateOnly))
 		return ok
 	}
-	et := store.types[typ]
+	et := store.Type(typ)
 	if et == nil {
 		return false
 	}
-	r := et.rows.Get(id)
+	r := et.Rows().Get(id)
 	if r == nil {
 		return false
 	}
@@ -74,12 +74,12 @@ func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, n
 
 // Readable reports whether m may read the record ref ("<type>/<id>").
 func (t *Tenant) readable(m platform.Member, ref string, now time.Time) bool {
-	t.records.mu.Lock()
-	defer t.records.mu.Unlock()
+	t.records.Lock()
+	defer t.records.Unlock()
 	return t.readableLocked(m, ref, now)
 }
 
 // visible is m's scope over a type's records on now's day (D4).
-func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
+func (t *Tenant) visible(m platform.Member, et *records.Type, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	return t.visibleIn(t.records, m, et, now)
 }

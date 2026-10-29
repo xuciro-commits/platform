@@ -1,5 +1,7 @@
 package platformserver
 
+import acceptedformat "platformserver/kernel/acceptedformat"
+
 import (
 	"encoding/json"
 	"errors"
@@ -16,7 +18,7 @@ func TestHostControlAcceptsBeforeExposureAndRestoresHistory(t *testing.T) {
 	live := build()
 	imageHash := func(tn *Tenant) string {
 		t.Helper()
-		image, err := tn.console.image()
+		image, err := tn.console.Image()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +79,7 @@ func TestHostControlAcceptsBeforeExposureAndRestoresHistory(t *testing.T) {
 	if _, err := live.useSupport(grant.ID, "operator", at.Add(time.Hour)); err == nil || imageHash(live) != before {
 		t.Fatal("expired support session changed state")
 	}
-	migration := MigrationResult{From: "source", To: id, Key: "migration:key", Types: []MigrationType{{Type: "example.record", Rows: 2, Written: 2}}}
+	migration := platform.MigrationResult{From: "source", To: id, Key: "migration:key", Types: []platform.MigrationType{{Type: "example.record", Rows: 2, Written: 2}}}
 	fail = true
 	if err := live.rememberMigration(migration, "ana", at.Add(2*time.Minute)); err == nil || imageHash(live) != before {
 		t.Fatal("migration manifest escaped failed append")
@@ -87,15 +89,15 @@ func TestHostControlAcceptsBeforeExposureAndRestoresHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	before = imageHash(live)
-	if err := live.setHostLifecycle("suspend", "maintenance", "operator", at.Add(3*time.Minute)); err != nil || !live.console.suspended() {
+	if err := live.setHostLifecycle("suspend", "maintenance", "operator", at.Add(3*time.Minute)); err != nil || !live.console.Suspended() {
 		t.Fatalf("suspension did not apply: %v", err)
 	}
 	before = imageHash(live)
-	if err := live.setHostLifecycle("open", "finished", "operator", at.Add(4*time.Minute)); err != nil || live.console.suspended() {
+	if err := live.setHostLifecycle("open", "finished", "operator", at.Add(4*time.Minute)); err != nil || live.console.Suspended() {
 		t.Fatalf("opening did not apply: %v", err)
 	}
 	for _, e := range entries {
-		r, err := decodeAcceptedHostControl(e.Body)
+		r, err := acceptedformat.DecodeHostControl(e.Body)
 		if err != nil || e.Kind != "accepted-result" || r.Tenant != id {
 			t.Fatalf("host write used no complete result: %v", err)
 		}
@@ -121,12 +123,12 @@ func TestHostControlAcceptsBeforeExposureAndRestoresHistory(t *testing.T) {
 		t.Fatalf("snapshot lost original receipt: %+v %v", got, err)
 	}
 	// Even a rehashed image cannot modify an unrelated support grant.
-	first, err := decodeAcceptedHostControl(entries[0].Body)
+	first, err := acceptedformat.DecodeHostControl(entries[0].Body)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first.Image.Support[0].Member = "other"
-	first.Digest, _ = hostResultDigest(first)
+	first.Digest, _ = acceptedformat.HostResultDigest(first)
 	corrupt, _ := json.Marshal(first)
 	empty := build()
 	original := imageHash(empty)
@@ -147,7 +149,7 @@ func TestHostControlRecordAndMemoryUseSameDecision(t *testing.T) {
 					if len(tn.supportGrants(at)) != 0 || len(tn.Audit()) != 0 {
 						t.Fatal("Record observed visible host changes before append")
 					}
-					if _, err := decodeAcceptedHostControl(e.Body); err != nil {
+					if _, err := acceptedformat.DecodeHostControl(e.Body); err != nil {
 						t.Fatal(err)
 					}
 				}

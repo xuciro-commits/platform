@@ -37,7 +37,7 @@ func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref s
 	return t.mayReadIn(t.records, m, now, held)
 }
 
-func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time, held bool) func(ref string) bool {
+func (t *Tenant) mayReadIn(store *records.Store, m platform.Member, now time.Time, held bool) func(ref string) bool {
 	seen := map[string]bool{}
 	walk := newAuthorizationWalk()
 	return func(ref string) bool {
@@ -55,15 +55,15 @@ func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time,
 		record, field, _ := strings.Cut(ref, "#")
 		typ, id, _ := strings.Cut(record, "/")
 		if !held {
-			store.mu.Lock()
+			store.Lock()
 		}
-		et := store.types[typ]
+		et := store.Type(typ)
 		if !held {
-			store.mu.Unlock()
+			store.Unlock()
 		}
 		app := ""
 		if et != nil {
-			app = et.info.App
+			app = et.Info().App
 		}
 		c := platform.NewCaller(runtime{t}, m, app, false, false)
 		fields := []string{}
@@ -87,18 +87,18 @@ func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
 }
 
 // narrowable are the fields a type's derivations may leave out.
-func (t *Tenant) narrowable(et *entityType) []string {
+func (t *Tenant) narrowable(et *records.Type) []string {
 	var out []string
-	for _, d := range et.info.Derived {
+	for _, d := range et.Info().Derived {
 		for _, path := range d.Fields {
 			if len(d.List) == 0 {
-				if f := fieldName(et.info.Go, path); f != "" {
+				if f := fieldName(et.Info().Go, path); f != "" {
 					out = append(out, f)
 				}
 			}
 		}
 		if len(d.List) > 0 {
-			if f := fieldName(et.info.Go, d.List); f != "" {
+			if f := fieldName(et.Info().Go, d.List); f != "" {
 				out = append(out, f)
 			}
 		}
@@ -146,7 +146,7 @@ func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *narrower
 	return t.narrowerIn(t.records, m, now, held)
 }
 
-func (t *Tenant) narrowerIn(store *recordStore, m platform.Member, now time.Time, held bool) *narrower {
+func (t *Tenant) narrowerIn(store *records.Store, m platform.Member, now time.Time, held bool) *narrower {
 	m = t.authorizationMember(m)
 	return &narrower{t: t, store: store, m: m, at: now, may: t.mayReadIn(store, m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}, decisions: map[string]platform.AuthzDecision{}, pointers: map[uintptr]bool{}}
 }
@@ -154,7 +154,7 @@ func (t *Tenant) narrowerIn(store *recordStore, m platform.Member, now time.Time
 type narrower struct {
 	derivedContext bool
 	t              *Tenant
-	store          *recordStore
+	store          *records.Store
 	m              platform.Member
 	at             time.Time
 	decisions      map[string]platform.AuthzDecision
@@ -166,12 +166,12 @@ type narrower struct {
 }
 
 // entity is the declared type of a Go struct type, or nil.
-func (w *narrower) entity(typ reflect.Type) *entityType {
+func (w *narrower) entity(typ reflect.Type) *records.Type {
 	if !w.held {
-		w.store.mu.Lock()
-		defer w.store.mu.Unlock()
+		w.store.Lock()
+		defer w.store.Unlock()
 	}
-	return w.store.byGo[typ]
+	return w.store.GoType(typ)
 }
 
 // value narrows what it finds inside v — records in slices, maps, pointers,
@@ -399,21 +399,21 @@ func projectionRefs(v reflect.Value, from string) []string {
 
 // record narrows one record: first the fields m's role may not read, then the
 // content the type declares it took from other records.
-func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool) {
+func (w *narrower) record(et *records.Type, v reflect.Value) (reflect.Value, bool) {
 	if !w.permitsRecord(v) {
 		return reflect.Zero(v.Type()), true
 	}
-	hidden, known := w.hidden[et.info.Go]
+	hidden, known := w.hidden[et.Info().Go]
 	if !known {
 		_, hidden = viewOf(w.m, et)
-		w.hidden[et.info.Go] = hidden
+		w.hidden[et.Info().Go] = hidden
 	}
 	changed := false
 	out := v
 	if len(hidden) > 0 {
-		out, changed = reflect.ValueOf(records.Mask(et.info, v, hidden)), true
+		out, changed = reflect.ValueOf(records.Mask(et.Info(), v, hidden)), true
 	}
-	if !et.info.HasReadSources() && len(et.info.VersionPins) == 0 && !w.derivedContext {
+	if !et.Info().HasReadSources() && len(et.Info().VersionPins) == 0 && !w.derivedContext {
 		return out, changed
 	}
 	derived, narrowed := w.derive(et, out)
@@ -448,17 +448,17 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 		}
 		return true
 	}
-	copy := records.Copy(et.info.Go, value.Interface())
+	copy := records.Copy(et.Info().Go, value.Interface())
 	id := records.Header(copy).ID
 	if id == "" {
 		return true
 	} // an input shape carries no stored row identity
-	key := et.info.Type + "/" + id
+	key := et.Info().Type + "/" + id
 	if decision, known := w.decisions[key]; known {
 		return decision.Allow
 	}
-	c := platform.NewCaller(runtime{w.t}, w.m, et.info.App, false, false)
-	decision := w.t.authorizeFrom(w.store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.info.Type, Record: id}, w.at, w.held)
+	c := platform.NewCaller(runtime{w.t}, w.m, et.Info().App, false, false)
+	decision := w.t.authorizeFrom(w.store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.Info().Type, Record: id}, w.at, w.held)
 	w.decisions[key] = decision
 	return decision.Allow
 }
@@ -466,9 +466,9 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 // derive applies a type's derivations to a copy of the record: content whose
 // source the reader may not read now is emptied, or its element left out, and
 // the declared withheld field says so.
-func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool) {
-	out := records.Copy(et.info.Go, v.Interface())
-	self := et.info.Type + "/" + records.Header(out).ID
+func (w *narrower) derive(et *records.Type, v reflect.Value) (reflect.Value, bool) {
+	out := records.Copy(et.Info().Go, v.Interface())
+	self := et.Info().Type + "/" + records.Header(out).ID
 	readable := func(refs []string) bool {
 		for _, ref := range refs {
 			if ref != self && !w.may(ref) {
@@ -478,18 +478,18 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 		return true
 	}
 	withheld, every := false, []string{}
-	for _, field := range et.info.Fields {
+	for _, field := range et.Info().Fields {
 		if field.AliasOf != "" && !w.may(self+"#"+field.AliasOf) {
 			out.FieldByIndex(field.Index).SetZero()
 			withheld = true
 		}
 	}
 	if w.derivedContext {
-		for _, field := range et.info.Fields {
+		for _, field := range et.Info().Fields {
 			if field.Type != "text" && field.Type != "longtext" {
 				continue
 			}
-			declared := slices.ContainsFunc(et.info.Derived, func(d platform.DerivationInfo) bool {
+			declared := slices.ContainsFunc(et.Info().Derived, func(d platform.DerivationInfo) bool {
 				return len(d.List) == 0 && slices.ContainsFunc(d.Fields, func(path []int) bool { return slices.Equal(path, field.Index) })
 			})
 			if field.SourceType == "" && !declared || field.SourceType == "generated" && !declared {
@@ -501,17 +501,17 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 	pins := records.Header(out).VersionPins
 	visiblePins := []platform.RecordVersionPin{}
 	for _, pin := range pins {
-		reference, visible := et.info.Field(pin.Reference)
-		version, known := et.info.Field(pin.VersionField)
+		reference, visible := et.Info().Field(pin.Reference)
+		version, known := et.Info().Field(pin.VersionField)
 		typ, _, _ := strings.Cut(pin.Source, "/")
 		if !w.held {
-			w.store.mu.Lock()
+			w.store.Lock()
 		}
-		source := w.store.types[typ]
+		source := w.store.Type(typ)
 		if !w.held {
-			w.store.mu.Unlock()
+			w.store.Unlock()
 		}
-		if source == nil || source.info.Versioning == nil || !visible || !known || !reference.ReadsAny(w.m.RolesIn(et.info.App)) || !version.ReadsAny(w.m.RolesIn(et.info.App)) || !w.may(pin.Source+"#"+source.info.Versioning.Version) {
+		if source == nil || source.Info().Versioning == nil || !visible || !known || !reference.ReadsAny(w.m.RolesIn(et.Info().App)) || !version.ReadsAny(w.m.RolesIn(et.Info().App)) || !w.may(pin.Source+"#"+source.Info().Versioning.Version) {
 			if known {
 				out.FieldByIndex(version.Index).SetZero()
 			}
@@ -521,12 +521,12 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 		visiblePins = append(visiblePins, pin)
 	}
 	records.Header(out).VersionPins = visiblePins
-	for _, d := range et.info.Derived { // every source the type names, for "*"
+	for _, d := range et.Info().Derived { // every source the type names, for "*"
 		if !d.All {
 			every = append(every, w.sources(out, d)...)
 		}
 	}
-	for _, d := range et.info.Derived {
+	for _, d := range et.Info().Derived {
 		fieldsToEmpty := func(refs []string, value reflect.Value, typ reflect.Type) ([][]int, bool) {
 			if len(refs) > 0 {
 				return d.Fields, !readable(refs)
@@ -539,15 +539,15 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 			}
 			missing := [][]int{}
 			for _, path := range d.Fields {
-				if typ == et.info.Go && slices.ContainsFunc(et.info.Derived, func(other platform.DerivationInfo) bool {
+				if typ == et.Info().Go && slices.ContainsFunc(et.Info().Derived, func(other platform.DerivationInfo) bool {
 					return other.Element && slices.Equal(other.List, path)
 				}) {
 					continue // each child is independently kept or dropped by its declared source
 				}
 				field := typ.FieldByIndex(path)
 				source := field.Tag.Get("source")
-				if typ == et.info.Go {
-					if info, known := et.info.Field(fieldName(typ, path)); known {
+				if typ == et.Info().Go {
+					if info, known := et.Info().Field(fieldName(typ, path)); known {
 						source = info.SourceType
 					}
 				}
@@ -559,13 +559,13 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 		}
 		switch {
 		case d.All:
-			if fields, denied := fieldsToEmpty(every, out, et.info.Go); denied {
+			if fields, denied := fieldsToEmpty(every, out, et.Info().Go); denied {
 				withheld = true
 				empty(out, fields)
 			}
 		case len(d.List) == 0:
 			refs := w.refsAt(out, d.Refs)
-			if fields, denied := fieldsToEmpty(refs, out, et.info.Go); denied {
+			if fields, denied := fieldsToEmpty(refs, out, et.Info().Go); denied {
 				withheld = true
 				empty(out, fields)
 			}
@@ -595,8 +595,8 @@ func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool)
 	if !withheld {
 		return v, false
 	}
-	if len(et.info.Withheld) > 0 {
-		out.FieldByIndex(et.info.Withheld).SetBool(true)
+	if len(et.Info().Withheld) > 0 {
+		out.FieldByIndex(et.Info().Withheld).SetBool(true)
 	}
 	return out, true
 }
@@ -678,12 +678,12 @@ func (t *Tenant) refsIn(v any) []string {
 			if _, ok := v.Interface().(time.Time); ok {
 				return
 			}
-			t.records.mu.Lock()
-			et := t.records.byGo[v.Type()]
-			t.records.mu.Unlock()
+			t.records.Lock()
+			et := t.records.GoType(v.Type())
+			t.records.Unlock()
 			if et != nil {
 				if id := v.Field(0).Interface().(platform.Record).ID; id != "" {
-					out = append(out, et.info.Type+"/"+id)
+					out = append(out, et.Info().Type+"/"+id)
 				}
 				return
 			}

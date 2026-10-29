@@ -1,5 +1,7 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
 import (
 	"encoding/json"
 	"platformserver/engine/business"
@@ -56,10 +58,10 @@ func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, lim
 		readable := t.readable(m, target(sub), at)
 		exists := false
 		func() {
-			t.records.mu.Lock()
-			defer t.records.mu.Unlock()
-			if et := t.records.types[typ]; et != nil {
-				exists = et.rows.Get(id) != nil
+			t.records.Lock()
+			defer t.records.Unlock()
+			if et := t.records.Type(typ); et != nil {
+				exists = et.Rows().Get(id) != nil
 			}
 		}()
 		if exists && !readable || !exists && !own {
@@ -164,12 +166,12 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 	}
 	typ, id, _ := strings.Cut(f.Subject, "/")
 	var readable bool
-	var et *entityType
+	var et *records.Type
 	func() {
-		t.records.mu.Lock()
-		defer t.records.mu.Unlock()
-		et = t.records.types[typ]
-		readable = et != nil && et.rows.Get(id) != nil && t.readableIn(t.records, m, f.Subject, at)
+		t.records.Lock()
+		defer t.records.Unlock()
+		et = t.records.Type(typ)
+		readable = et != nil && et.Rows().Get(id) != nil && t.readableIn(t.records, m, f.Subject, at)
 	}()
 	if !readable {
 		f.Original = nil
@@ -181,7 +183,7 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 		f.Original = nil
 		return f
 	}
-	info := et.info
+	info := et.Info()
 	// Re-run the existing derived-source projection on the historical value itself,
 	// not on today's record, whose source references may have changed.
 	historical := reflect.New(info.Go).Elem()

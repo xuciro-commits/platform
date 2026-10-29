@@ -262,15 +262,15 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 			}
 			merged = resolver.Merged
 		}
-		t.records.mu.Lock()
-		defer t.records.mu.Unlock()
-		et := t.records.types[object]
+		t.records.Lock()
+		defer t.records.Unlock()
+		et := t.records.Type(object)
 		seen := map[string]bool{}
 		for i := range rows {
 			row := &rows[i]
 			row.Key = fmt.Sprintf("row:%d", i)
 			row.Verb = ".create"
-			if seen[row.ID] || et != nil && et.rows.Get(row.ID) != nil {
+			if seen[row.ID] || et != nil && et.Rows().Get(row.ID) != nil {
 				row.Verb = ".edit"
 			}
 			if row.Error == "" {
@@ -291,9 +291,9 @@ func (t *Tenant) integrationRefused(authority, key string) bool {
 }
 
 func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, execution *build.IntegrationExecution, now time.Time, pull *build.SourcePull) bool {
-	t.records.mu.Lock()
-	et := t.records.types[plan.Object]
-	t.records.mu.Unlock()
+	t.records.Lock()
+	et := t.records.Type(plan.Object)
+	t.records.Unlock()
 	for _, row := range plan.Rows {
 		if t.quarantined() || !t.integrationPending(plan.Type, plan.ID, execution) {
 			return false
@@ -307,10 +307,10 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 			continue
 		}
 		key := "integration:" + execution.ID + ":" + row.Key
-		_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.info.App, IdempotencyKey: key,
+		_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.Info().App, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: plan.Object, Id: row.ID}, Schema: &pb.SchemaRef{Name: plan.Object + row.Verb, Version: 1}, Payload: row.Payload}, now)
 		if err != nil {
-			if !t.integrationRefused(et.info.App, key) {
+			if !t.integrationRefused(et.Info().App, key) {
 				return false
 			}
 			pull.Fail(row.ID, err.Code.String()+": "+err.Message)

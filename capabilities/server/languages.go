@@ -105,9 +105,9 @@ func (t *Tenant) Texts(app string) []string {
 	m := a.Manifest()
 	var parts []any
 	parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
-	for _, et := range t.records.types {
-		if et.info.App == app {
-			parts = append(parts, et.info)
+	for _, et := range t.records.Types() {
+		if et.Info().App == app {
+			parts = append(parts, et.Info())
 		}
 	}
 	for _, a := range m.Actions.All() {
@@ -170,8 +170,8 @@ func (t *Tenant) Untranslated(app, lang string) []string {
 // states hold. Only what is declared is said; "" when nothing is.
 func (t *Tenant) meaning(app string) string {
 	var b strings.Builder
-	for _, et := range t.records.sortedTypes() {
-		info := et.info
+	for _, et := range t.records.SortedTypes() {
+		info := et.Info()
 		if info.App != app {
 			continue
 		}
@@ -264,12 +264,12 @@ func (t *Tenant) termsFor(declaration string) []string {
 // declares tells whether a name is one of the tenant's declarations: an entity
 // type, one of its fields as <type>.<field>, or an action.
 func (t *Tenant) declares(name string) bool {
-	for _, et := range t.records.sortedTypes() {
-		if et.info.Type == name {
+	for _, et := range t.records.SortedTypes() {
+		if et.Info().Type == name {
 			return true
 		}
-		if field, ok := strings.CutPrefix(name, et.info.Type+"."); ok {
-			if _, ok := et.info.Field(field); ok {
+		if field, ok := strings.CutPrefix(name, et.Info().Type+"."); ok {
+			if _, ok := et.Info().Field(field); ok {
 				return true
 			}
 		}

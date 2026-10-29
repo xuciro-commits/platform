@@ -25,9 +25,9 @@ const scalarTypes = ["text", "longtext", "integer", "decimal", "boolean", "choic
 const toggle = (values: string[], name: string, enabled: boolean) => enabled ? [...new Set([...values, name])] : values.filter((value) => value !== name);
 
 export function Functions() {
-  const { source, role } = useHost();
+  const { source , holds} = useHost();
   const { open } = useApplicationWorkspace();
-  if (role("build") !== "builder") return <PageHeader title={t("AI functions")} description={t("Only a builder can edit AI functions.")} />;
+  if (!holds("build", "builder")) return <PageHeader title={t("AI functions")} description={t("Only a builder can edit AI functions.")} />;
   return <div className="grid gap-3">
     <PageHeader title={t("AI functions")} help={t("Turn readable record fields into typed suggestions for human review.")}
       actions={<Button onClick={() => open({ view: "function", params: { id: "new" } })}>{t("New AI function")}</Button>} />
@@ -36,7 +36,7 @@ export function Functions() {
 }
 
 export function FunctionEditor({ id }: { id: string }) {
-  const { role } = useHost();
+  const { holds} = useHost();
   const { open } = useApplicationWorkspace();
   const inventory = useRecordInventory<Source>("build.object");
   const objects = (inventory.data?.records ?? []).filter(object => !object.archived);
@@ -78,7 +78,7 @@ export function FunctionEditor({ id }: { id: string }) {
     if (saved) open({ view: "release-review", params: { kind: "function", id: saved.id } }, { ifCurrent: { view: "function", params: { id } }, replace: id === "new" });
   };
   const reload = () => editor.reload(t("The function could not be saved or loaded. Your draft is still here."));
-  if (role("build") !== "builder") return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{t("Only a builder can edit AI functions.")}</WorkbenchMessage></Workbench>;
+  if (!holds("build", "builder")) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{t("Only a builder can edit AI functions.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="function" title={t("AI function")}><WorkbenchMessage>{query.isError ? t("The function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const stages: { id: Stage; title: string }[] = [{ id: "settings", title: t("Function settings") }, { id: "source", title: t("Record inputs") }, { id: "model", title: t("Model inference") }, { id: "output", title: t("Strict output") }];
   return <Workbench storageKey="function" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "function" }) }, { label: t("AI functions"), onClick: () => open({ view: "function" }) }]} title={draft.title || t("New AI function")}

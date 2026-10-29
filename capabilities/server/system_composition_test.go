@@ -1,5 +1,7 @@
 package platformserver
 
+import platform "platformserver/platform"
+
 import agentowner "platformserver/engine/agents"
 
 import (
@@ -11,10 +13,10 @@ import (
 
 func TestSystemTenantFactoryKeepsTheConfiguredHostAdministrator(t *testing.T) {
 	d := Deployment{HostAdmins: "operator-subject"}
-	d.RebuildWithCapabilities = func(id string, services RuntimeCapabilities) (*Tenant, error) {
+	d.RebuildWithCapabilities = func(id string, services platform.RuntimeCapabilities) (*Tenant, error) {
 		return newTestTenantWithCapabilities(id, services, newConsole(id, d.SeatsFor(id)...), agentowner.New(id), ai.New(id), system.New(id, systemTestSource()))
 	}
-	d.Tenants(TenantSpec{ID: "workspace"})
+	d.Tenants(platform.TenantSpec{ID: "workspace"})
 	tenant, err := d.rebuildTenant("system")
 	if err != nil {
 		t.Fatal(err)

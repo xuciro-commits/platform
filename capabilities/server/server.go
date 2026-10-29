@@ -65,15 +65,15 @@ type Host struct {
 	Mint func(subject string) string
 	// HostAdmins are the subjects that may open the host console: an independent scope, not a tenant's administrators.
 	HostAdmins          map[string]bool
-	RuntimeProviders    RuntimeProviders
+	RuntimeProviders    platform.RuntimeProviders
 	AuthorizationEngine authz.Engine
 	stats               *transport.Stats
 	limiter             *transport.Limiter
 	web                 *transport.WebFiles
 	// Templates and CreateTenant are how the host console adds a tenant;
 	// a host without a Rebuild leaves CreateTenant nil.
-	Templates    func() []TenantTemplate
-	CreateTenant func(CreateTenantRequest, string) (*Tenant, error)
+	Templates    func() []platform.TenantTemplate
+	CreateTenant func(platform.CreateTenantRequest, string) (*Tenant, error)
 	routes       []transport.Route // as Handler registered them: the API contract's source (api.go)
 	SecondFactor Attest            // nil: the provider does not say
 }
@@ -97,7 +97,7 @@ func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 
 // NewHost serves tenants; a tenant's members come from its console (the platform app).
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
-	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: DefaultRuntimeProviders(), AuthorizationEngine: authz.Standard{}}
+	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: platform.DefaultRuntimeProviders(), AuthorizationEngine: authz.Standard{}}
 	h.bindSystemDefinitions(tenants)
 	return h
 }
@@ -310,7 +310,7 @@ var statuses = map[pb.ErrorCode]int{
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, issues ...platform.FieldIssue) {
 	switch {
 	case err != nil:
-		body := ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
+		body := platform.ErrorBody{Code: err.Error(), Message: err.Message, Issues: issues}
 		if len(issues) > 0 && issues[0].Constraint != "" {
 			body.Code = "CONSTRAINT_VIOLATION"
 			body.Message = issues[0].Constraint + ": " + issues[0].Message

@@ -2,7 +2,7 @@
 
 负责人已授权直接实施；守门、系统冻结、原组织owner与部分页面/AI边界已落地，以下结构任务按真实完成更新。下方12项原完成记录保留为历史，不是新结构已经实现的证据；原双端口、三服务、等待代理与按结果继续拆文件的目标已失效。整体顺序只归[WorkQueue](../../../docs/WorkQueue.md)，逐文件目标见[file-consolidation](file-consolidation.md)。
 
-**实测现状（2026-10-28）：** 生产Go文件共364（目标≤339），根包182（目标≤25，`Tenant`仍是承载全部子系统的单体），platform 25、studio/build 23；死代码清理后生产LOC净减约4.6%，但这只是删除，不是8–11节的结构迁移。8.1–11.3均未完成：剩余工作的核心是把`Tenant`按子包+窄Host接口+根包适配器的既有模式逐子系统拆出，每拆一块同批收紧边界基线。本change因此保持打开，不归档。
+**实测现状（2026-10-29）：** 生产Go文件共355（目标≤339），根包168（目标≤25），platform 25、studio/build 23。记录Store及查询/历史/索引已归kernel/records，宿主控制和租户注册归kernel/control，原运行结果封套归kernel/acceptedformat，SQL delta与检查点归kernel；候选规划/安装次序归studio/releases，包准备归studio/packages。原根包路径同批删除，基线由182收紧至168。下列已完成项按原owner检查确认；9.3、10.1和最终预算仍未完成：Tenant还保留跨子系统协调及大量适配器，不把接口外移或归档其他change冒充整个结构目标完成。
 
 ## 7. 本轮已授权的守门与规划
 
@@ -11,33 +11,33 @@
 
 ## 8. 静态边界与公共角色（实施）
 
-- [ ] 8.1 先按自举收缩change落实静态登录、维护、恢复及全量自举新写冻结，保留原历史/未知回执；以原API及元数据损坏路线证明真实边界，再开始业务迁移，不把guard通过当冻结完成。
-- [ ] 8.2 将host15个文件中的有用角色合并到已有platform角色文件，消除宽Host及私有类型泄漏，Attach/私有fork工厂只在composition；编译及组合owner测试验证初始、试用和私有决定均接同一真实能力，旧目录不留转发壳。
-- [ ] 8.3 按文件清单合并platform非page88文件的同义公共声明，保持API导入面、类型专属语义和接口角色；重生成host.ts及Catalog，执行现有API/owner检查并同步该批文档，不能直接抹掉公开协议。
+- [x] 8.1 先按自举收缩change落实静态登录、维护、恢复及全量自举新写冻结，保留原历史/未知回执；以原API及元数据损坏路线证明真实边界，再开始业务迁移，不把guard通过当冻结完成。
+- [x] 8.2 将host15个文件中的有用角色合并到已有platform角色文件，消除宽Host及私有类型泄漏，Attach/私有fork工厂只在composition；编译及组合owner测试验证初始、试用和私有决定均接同一真实能力，旧目录不留转发壳。
+- [x] 8.3 按文件清单合并platform非page88文件的同义公共声明，保持API导入面、类型专属语义和接口角色；重生成host.ts及Catalog，执行现有API/owner检查并同步该批文档，不能直接抹掉公开协议。
 
 ## 9. Studio内聚与原运行owner（实施）
 
-- [ ] 9.1 将Build73与construction42归并为同一studio/build owner，消除同义声明/转发；保留Process→Flow、逻辑/环境投影及不可变发布区别，验证草稿后改、联合首发、pinned版本、兼容与原保留映像，同批删除旧路径和剪去基线。
-- [ ] 9.2 将混在声明文件中的纯lowering、事务/规则表及来源/管道匹配执行分别归原rules/engine，studio只编译并经公共角色调用；沿原规则向量、事务拒绝/集合权限及来源游标测试验证，不产生第二个求值器或执行器。
+- [x] 9.1 将Build73与construction42归并为同一studio/build owner，消除同义声明/转发；保留Process→Flow、逻辑/环境投影及不可变发布区别，验证草稿后改、联合首发、pinned版本、兼容与原保留映像，同批删除旧路径和剪去基线。
+- [x] 9.2 将混在声明文件中的纯lowering、事务/规则表及来源/管道匹配执行分别归原rules/engine，studio只编译并经公共角色调用；沿原规则向量、事务拒绝/集合权限及来源游标测试验证，不产生第二个求值器或执行器。
 - [ ] 9.3 按逐文件表落实root中候选/安装/试用/包的studio职责，engine运行职责和aigateway调用职责；每块验证真实状态owner、跨域typed角色、锁外I/O及返回复核，清理原路径/基线，报告各批生产LOC和文件净变化。
-- [ ] 9.4 协同页面change保留3个安全契约及旧格式投影，AIchange落实stage/provider/MCP/预算与样本，UAFchange交接原组织历史；使用总清单去重物理目标并运行各自归属方检查，不互相重建已退出路径。
+- [x] 9.4 协同页面change保留3个安全契约及旧格式投影，AIchange落实stage/provider/MCP/预算与样本，UAFchange交接原组织历史；使用总清单去重物理目标并运行各自归属方检查，不互相重建已退出路径。
 
 ## 10. Kernel接受/存储/恢复（实施）
 
 - [ ] 10.1 先将原租户lane、私有覆盖、固定SQL读取与结果格式归属收敛到kernel，领域只通过原typed角色提交；验证原mu/opsMu/streamMu与已有lane回调义务，不暴露整Tenant绕过包边界。
-- [ ] 10.2 将接受23文件按design收敛到acceptance_pipeline/acceptance_records/acceptance_codec三个文件，复用原版本化codec；逐项验证Agent/Work/Usage/HostControl、callback行、batch、control、通知/唯一键、发布安装及SQL delta，不统一业务裁决。
+- [x] 10.2 将接受23文件按design收敛到acceptance_pipeline/acceptance_records/acceptance_codec三个文件，复用原版本化codec；逐项验证Agent/Work/Usage/HostControl、callback行、batch、control、通知/唯一键、发布安装及SQL delta，不统一业务裁决。
 - [ ] 10.3 保持同键原答复、提交未知、封存原字节、前驱和旧输入/新结果分流；运行原接受/恢复向量、owner测试及真实PostgreSQL检查点/重连恢复，跳过项明确报告；同步kernel锁/格式文档和该批Architecture，不写新迁移垫片掩盖差异。
 
 ## 11. 组合与最终验收（实施）
 
-- [ ] 11.1 清空并删除internal/construction与internal/host，确认Build旧目录无转发壳，四职责不互引且platform不依赖concrete实现；更新真实单入口与命令分类文档，保留worker/builder及必要维护隔离，执行composition和边界检查。
+- [x] 11.1 清空并删除internal/construction与internal/host，确认Build旧目录无转发壳，四职责不互引且platform不依赖concrete实现；更新真实单入口与命令分类文档，保留worker/builder及必要维护隔离，执行composition和边界检查。
 - [ ] 11.2 以同一679非测试Go口径核对最终≤339、每包≤25和递减基线；逐批汇总真实生产净LOC、纯移动、生成物与外移，确认不是拼大文件/删除测试凑数，偏离预算先修订设计。
 - [ ] 11.3 在各owner已验证基础上集中运行适用make check/verify/rehearse及代表性浏览器路线，核对实际版本、单入口资源、原数据/密钥和静态维护可达；只报告观察范围，不以格式/构建代替业务与恢复验收。
 
 ## Workflow follow-up
 
-- 主规范同步与归档只在本次业务任务真正完成并经负责人确认后使用官方技能执行；本轮不提前同步或归档。
-- 本轮没有源码部署；后续代码交付沿负责人授权和原update入口，保留原数据卷、密钥、租户配置与恢复责任，不恢复双宿主。
+- 已落实的宿主角色、源码守门与单入口部署约定经官方sync技能同步到主规范。其余结构任务保持打开；最终预算与验收未完成前不归档本change。
+- 本轮提交后沿负责人授权和原update入口交付，保留原数据卷、密钥、租户配置与恢复责任，不恢复双宿主。
 - 依赖版本升级只在另行明确授权的独立范围处理，不作为结构减脂的隐含扩张。
 
 ## Historical implementation record

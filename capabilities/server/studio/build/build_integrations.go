@@ -240,8 +240,12 @@ func (b *Build) bindConfirmationAssets(assets []platform.ReleaseAsset) ([]platfo
 	return assets, nil
 }
 
-func (b *Build) confirmationProtocols() []platform.Consumption {
+func (b *Build) consumedProtocols() []platform.Consumption {
 	out := []platform.Consumption{}
+	if b.host != nil {
+		out = b.host.BuildProcessConsumptions()
+	}
+
 	for _, entity := range b.installed {
 		if entity.Lifecycle == nil {
 			continue
@@ -2500,6 +2504,7 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 		s.Puller, s.Requested = c.ID, !s.Stream
 	}
 	if !c.Replaying {
+		s.Publisher, s.PublisherScopes = c.ID, string(platform.Raw(c.Member.Scopes))
 		fixed, err := b.freezeDirectIntegration(platform.AssetSource, *s)
 		if err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -3644,6 +3649,10 @@ type Source struct {
 	// Every is a period such as 15m or 24h; empty: pulled only when asked.
 	Every string `json:"every,omitempty" title:"Pull every" help:"A period such as 15m, 1h or 24h; empty: only when asked"`
 	State string `json:"state" field:"readonly"`
+	// The declaration publisher authorizes background status reads independently
+	// of an explicit pull request.
+	Publisher       string `json:"publisher,omitempty" field:"readonly"`
+	PublisherScopes string `json:"publisherScopes,omitempty" field:"readonly" type:"json" title:"Publisher scopes"`
 	// Puller and its token scopes belong to the explicit run request.
 	Puller       string      `json:"puller,omitempty" field:"readonly" title:"Pulls as"`
 	PullerScopes string      `json:"pullerScopes,omitempty" field:"readonly" type:"json"`

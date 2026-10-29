@@ -55,26 +55,25 @@ func TestRetainedFlowReadShapeConvertsOnlyRequestedRows(t *testing.T) {
 		index.Set(id, &records.Row{Value: value})
 	}
 	source := &retainedProjectionSource{rows: records.MemoryRows(index)}
-	store := newRecordStore()
-	et := &entityType{store: store, info: current, rows: records.SourceRows(source)}
-	store.types[current.Type], store.byGo[current.Go] = et, et
+	store := records.NewStore()
+	store.ReplaceReadType(current, records.SourceRows(source), false)
 	runtime := &flowExecutionRuntime{stagedDecision: &stagedDecision{records: store}, view: &Tenant{records: store}, release: "original", shapes: map[string]platform.EntityInfo{old.Type: old}}
 	view, err := runtime.readView()
 	if err != nil || source.reads != 0 {
 		t.Fatal("building a retained read view decoded rows", err, source.reads)
 	}
-	projected := view.records.types[old.Type]
-	if !projected.rows.Sourced() || projected.rows.Stored() != 0 {
+	projected := view.records.Type(old.Type)
+	if !projected.Rows().Sourced() || projected.Rows().Stored() != 0 {
 		t.Fatal("retained view materialized a complete current table")
 	}
-	row := projected.rows.Get("0001")
+	row := projected.Rows().Get("0001")
 	if row.Value.Interface().(oldModel).Name != "Current" || source.reads != 1 {
 		t.Fatal("lazy conversion lost the current alias", row, source.reads)
 	}
 	if _, err := runtime.readView(); err != nil || source.reads != 1 {
 		t.Fatal("reusing definition/source identities converted more rows", err, source.reads)
 	}
-	if ids := projected.rows.IDs("0255", 256); len(ids) != 256 || source.reads != 1 {
+	if ids := projected.Rows().IDs("0255", 256); len(ids) != 256 || source.reads != 1 {
 		t.Fatal("ID paging decoded retained values", len(ids), source.reads)
 	}
 	// A malformed stored image is still an explicit migration refusal. It must
@@ -129,7 +128,7 @@ func TestPostgresRetainedFlowAliasQueryUsesConvertedRows(t *testing.T) {
 	// Original bytes may retain the previous alias value. The selected owner
 	// interprets it through title; SQL must not prefilter by the stale name.
 	raw := jsonOf(newModel{Record: platform.Record{ID: "one"}, Name: "Old", Title: "Current"})
-	delta := journal.StateDelta{Records: []journal.StateRecord{{Type: current.Type, ID: "one", Image: jsonOf(recordState{Value: raw}), HistoryBase: -1}}}
+	delta := journal.StateDelta{Records: []journal.StateRecord{{Type: current.Type, ID: "one", Image: jsonOf(records.StoredState{Value: raw}), HistoryBase: -1}}}
 	if err = j.InitializeState(ctx, tenant, 0, delta); err != nil {
 		t.Fatal(err)
 	}
@@ -138,28 +137,27 @@ func TestPostgresRetainedFlowAliasQueryUsesConvertedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer read.Close()
-	store := newRecordStore()
-	et := &entityType{store: store, info: current}
-	store.types[current.Type], store.byGo[current.Go] = et, et
-	store.current.Configure(j, tenant, 0, nil)
-	store.current.Bind(read)
-	store.useCurrentRows()
+	store := records.NewStore()
+	et := store.ReplaceReadType(current, records.Rows{}, false)
+	store.Current().Configure(j, tenant, 0, nil)
+	store.Current().Bind(read)
+	store.UseCurrentRows()
 	runtime := &flowExecutionRuntime{stagedDecision: &stagedDecision{records: store}, view: &Tenant{records: store}, release: "original", shapes: map[string]platform.EntityInfo{old.Type: old}}
 	projected, refusal := runtime.readView()
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
-	view, _ := viewOf(platform.Member{}, projected.records.types[old.Type])
-	rows, total, refusal := projected.records.find(view, platform.Query{Domain: json.RawMessage(`[["name","=","Current"]]`)}, nil)
+	view, _ := viewOf(platform.Member{}, projected.records.Type(old.Type))
+	rows, total, refusal := projected.records.Find(view, platform.Query{Domain: json.RawMessage(`[["name","=","Current"]]`)}, nil)
 	if refusal != nil || total != 1 || len(rows) != 1 || rows[0].Interface().(oldModel).Name != "Current" {
 		t.Fatal("SQL field prefilter discarded a valid retained alias", rows, total, refusal)
 	}
-	if et.rows.Stored() != 0 || projected.records.types[old.Type].rows.Stored() != 0 {
+	if et.Rows().Stored() != 0 || projected.records.Type(old.Type).Rows().Stored() != 0 {
 		t.Fatal("retained query cached a current record")
 	}
 	// A new lane can use a new SQL snapshot at the same generation and position.
 	// Reusing the old metadata cache must not reuse its now-closed SQL reader.
-	beforeGeneration := store.generation
+	beforeGeneration := store.Generation()
 	if err := read.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -168,12 +166,12 @@ func TestPostgresRetainedFlowAliasQueryUsesConvertedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer next.Close()
-	store.current.Bind(next)
+	store.Current().Bind(next)
 	second, refusal := runtime.readView()
-	if refusal != nil || second.records == projected.records || second.records.current.View() != next || store.generation != beforeGeneration {
+	if refusal != nil || second.records == projected.records || second.records.Current().View() != next || store.Generation() != beforeGeneration {
 		t.Fatal("retained cache reused a closed SQL view without writes", refusal)
 	}
-	rows, total, refusal = second.records.find(second.records.types[old.Type], platform.Query{Domain: json.RawMessage(`[["name","=","Current"]]`)}, nil)
+	rows, total, refusal = second.records.Find(second.records.Type(old.Type), platform.Query{Domain: json.RawMessage(`[["name","=","Current"]]`)}, nil)
 	if refusal != nil || total != 1 || len(rows) != 1 {
 		t.Fatal("second SQL scope did not use its own candidates", total, refusal)
 	}

@@ -67,17 +67,27 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	}
 	var source build.Source
 	_ = json.Unmarshal(sourceRaw, &source)
-	publisher, _ := t.Member(source.Puller)
+	publisher, _ := t.sourcePublisher(source)
 	marking := ""
 	if connection.ID != "" {
 		marking = t.connectionMarking(connection.ID)
 	}
 	var generation uint64
 	if localRecords {
-		t.records.mu.Lock()
-		generation = t.records.generation
-		t.records.mu.Unlock()
+		t.records.Lock()
+		generation = t.records.Generation()
+		t.records.Unlock()
 	}
 	stamp, err := platform.CanonicalDigest([]any{revision, member, publisher, marking, credential, generation})
 	return stamp, err == nil
+}
+
+// Published status reads use the declaration's accepted publisher, not the
+// actor of an unrelated explicit source pull.
+func (t *Tenant) sourcePublisher(source build.Source) (platform.Member, bool) {
+	member, known := t.Member(source.Publisher)
+	if known && source.PublisherScopes != "" && json.Unmarshal([]byte(source.PublisherScopes), &member.Scopes) != nil {
+		return platform.Member{}, false
+	}
+	return member, known
 }

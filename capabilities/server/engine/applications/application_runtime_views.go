@@ -266,20 +266,6 @@ func CompareRef(a, b platform.AssetRef) int {
 	return 0
 }
 
-func CheckBindings(bindings []platform.AssetBinding) error {
-	if len(bindings) > 1000 {
-		return fmt.Errorf("application bindings exceed the owner budget")
-	}
-	seen := map[platform.AssetRef]bool{}
-	for _, binding := range bindings {
-		if binding.Ref.Check() != nil || binding.Ref.Kind != platform.AssetApp || binding.SourceVersion == "" || seen[binding.Ref] {
-			return fmt.Errorf("application binding is invalid or repeated")
-		}
-		seen[binding.Ref] = true
-	}
-	return nil
-}
-
 func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit int, now time.Time, filters ...platform.ApplicationRunFilter) (platform.ApplicationRunPage, *kernel.Error) {
 	out := platform.ApplicationRunPage{Application: ref, Runs: []platform.ApplicationRun{}}
 	if ref.Kind != platform.AssetApp || ref.Check() != nil || offset < 0 || limit < 1 || limit > 100 {

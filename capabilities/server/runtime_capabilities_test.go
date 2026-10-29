@@ -69,7 +69,7 @@ func TestSelectedRuntimeProvidersReachDecisionsAndDoNotRunDuringResultRecovery(t
 	rules := &controlledRuleProvider{}
 	authorization := &controlledAuthorization{}
 	selectedKernel := &controlledKernel{}
-	services := DefaultRuntimeCapabilities()
+	services := platform.DefaultRuntimeCapabilities()
 	services.Rules, services.Authorization = rules, authorization
 	services.Kernel = selectedKernel
 	services.KernelModule.ID = "test.selected-kernel"
@@ -141,7 +141,7 @@ func TestSelectedRuntimeProvidersReachDecisionsAndDoNotRunDuringResultRecovery(t
 	if refusal := refuse(t, recovered, "user", "build", "build.calculation.create", "build.calculation", "AFTER-RECOVERY", map[string]any{"qty": 2}, at); refusal == "ok" || !strings.Contains(refusal, "selected rule provider") {
 		t.Fatal("restored runtime reused another generation's compiled program", refusal)
 	}
-	if recovered.services.RuleModule.ID != "test.selected-rules" || recovered.records.rules != rules {
+	if recovered.services.RuleModule.ID != "test.selected-rules" || recovered.records.Rules() != rules {
 		t.Fatal("recovery silently installed default providers")
 	}
 }

@@ -61,7 +61,7 @@ func TestPostgresApplicationRuntimeAndDiagnosticReadScopes(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), answer); err != nil {
 			t.Fatal(err)
 		}
-		if tn.records.current.View() != nil {
+		if tn.records.Current().View() != nil {
 			t.Fatal("application read retained its SQL snapshot")
 		}
 	}

@@ -268,7 +268,7 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	fail := true
 	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		if _, exists := live.owner["action:build.visit.create"]; exists ||
-			live.records.types["build.visit"] != nil || len(live.app(build.ID).(platform.App).AcceptedLedger().RecordsFor(live.ID)) != 0 {
+			live.records.Type("build.visit") != nil || len(live.app(build.ID).(platform.App).AcceptedLedger().RecordsFor(live.ID)) != 0 {
 			t.Fatal("nested publication installed before the parent's commit")
 		}
 		if fail {
@@ -289,7 +289,7 @@ func TestAcceptedNestedPublicationSharesParentCommitAndInstallation(t *testing.T
 	result, _, err := acceptedformat.DecodeBatch(entries[0].Body)
 	if err != nil || len(result.Decisions) != 5 || len(result.Rows) != 3 ||
 		!slices.ContainsFunc(result.Decisions, func(d acceptedformat.Decision) bool { return d.Publication != nil }) ||
-		live.owner["action:build.visit.create"] == nil || live.records.types["build.visit"] == nil {
+		live.owner["action:build.visit.create"] == nil || live.records.Type("build.visit") == nil {
 		t.Fatalf("nested publication was not installed from its one saved result: %v", err)
 	}
 	CheckReplay(t, live, entries, compose)
@@ -311,7 +311,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 		// Neither the parent nor either nested decision may be public yet.
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
 			len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(live.ID)) != 0 ||
-			live.records.types["stock.item"].rows.Get("D1-child") != nil ||
+			live.records.Type("stock.item").Rows().Get("D1-child") != nil ||
 			live.sequences.Clone()["nested/document/0"] != 0 {
 			t.Fatal("a nested decision escaped before the one journal append")
 		}
@@ -337,7 +337,7 @@ func TestAcceptedNestedDecisionsShareOneCommitAndRecovery(t *testing.T) {
 	if live.sequences.Clone()["nested/document/0"] != 1 || result.SequenceBases["nested/document/0"] != 0 {
 		t.Fatal("the number was not committed with its predecessor")
 	}
-	item := live.records.types["stock.item"].rows.Get("D1-child")
+	item := live.records.Type("stock.item").Rows().Get("D1-child")
 	if item == nil || item.Value.Interface().(Item).Qty != 7 || item.HistoryLength() != 2 {
 		t.Fatal("the committed nested create/edit result is incomplete")
 	}
@@ -373,7 +373,7 @@ func TestAcceptedNestedRefusalDiscardsEveryChild(t *testing.T) {
 		}
 		if len(live.app("stock").(*stock).ledger.RecordsFor(live.ID)) != 0 ||
 			len(parent.ledger.RecordsFor(live.ID)) != 0 ||
-			live.records.types["stock.item"].rows.Len() != 0 || len(live.events) != 0 {
+			live.records.Type("stock.item").Rows().Len() != 0 || len(live.events) != 0 {
 			t.Fatal("a refused parent exposed a child receipt, record or event")
 		}
 	}
@@ -420,7 +420,7 @@ func TestAcceptedNestedBatchValidatesAllLedgersBeforeApplication(t *testing.T) {
 	}
 	if len(recovered.app("stock").(*stock).ledger.RecordsFor(recovered.ID)) != 0 ||
 		len(recovered.app("nested").(*nestedIssuer).ledger.RecordsFor(recovered.ID)) != 0 ||
-		recovered.records.types["stock.item"].rows.Len() != 0 || recovered.sequences.Clone()["nested/document/0"] != 0 {
+		recovered.records.Type("stock.item").Rows().Len() != 0 || recovered.sequences.Clone()["nested/document/0"] != 0 {
 		t.Fatal("a late invalid receipt exposed an earlier child's state")
 	}
 }
@@ -462,7 +462,7 @@ func TestJournalAcceptedNestedBatchCrashBeforeApplication(t *testing.T) {
 	}()
 	if len(live.app("stock").(*stock).ledger.RecordsFor(id)) != 0 ||
 		len(live.app("nested").(*nestedIssuer).ledger.RecordsFor(id)) != 0 ||
-		live.records.types["stock.item"].rows.Len() != 0 || live.sequences.Clone()["nested/document/0"] != 0 {
+		live.records.Type("stock.item").Rows().Len() != 0 || live.sequences.Clone()["nested/document/0"] != 0 {
 		t.Fatal("unapplied nested result leaked a record, receipt or number")
 	}
 	reopened, err := OpenJournal(ctx, url)

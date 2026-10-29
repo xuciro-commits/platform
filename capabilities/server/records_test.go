@@ -127,18 +127,17 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		store := newRecordStore()
-		et := &entityType{info: info}
-		store.byGo[info.Go] = et
+		store := records.NewStore()
+		store.ReplaceReadType(info, records.Rows{}, false)
 		caller := platform.As("stock", platform.Member{ID: "ana"})
 		record := window{Record: platform.Record{ID: "W1"}, Start: "2028-02-29", End: "2028-03-01"}
-		if err := store.check(caller, record, time.Now()); err != nil {
+		if err := store.Check(caller, record, time.Now()); err != nil {
 			t.Fatalf("zero/false lost their value: %v", err)
 		}
 		record.End = "2028-02-28"
 		var issues []platform.FieldIssue
 		caller = caller.WithInputDiagnostics(func(_ *kernel.Error, found []platform.FieldIssue) { issues = found })
-		if err := store.check(caller, record, time.Now()); err == nil || len(issues) != 1 || issues[0].Path[0] != "end" {
+		if err := store.Check(caller, record, time.Now()); err == nil || len(issues) != 1 || issues[0].Path[0] != "end" {
 			t.Fatalf("unchanged start bypassed comparison: %v %+v", err, issues)
 		}
 	})
@@ -149,99 +148,99 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 		return &pb.ChangeRecord{ChangeId: id, RecordedTime: at, Revision: revision,
 			Submission: submission(tn, c.Member, "stock", "stock.item.create", "stock.item", "I1", nil)}
 	}
-	put := func(s *recordStore, id string, revision uint32, qty int) {
+	put := func(s *records.Store, id string, revision uint32, qty int) {
 		t.Helper()
-		if err := s.put(c, change(id, revision), Item{Record: platform.Record{ID: "I1"}, Name: "Bolt", Qty: qty}); err != nil {
+		if err := s.Put(c, change(id, revision), Item{Record: platform.Record{ID: "I1"}, Name: "Bolt", Qty: qty}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	put(tn.records, "c1", 1, 2)
 	untouched := &records.Row{Value: reflect.ValueOf(Item{Record: platform.Record{ID: "I2"}, Tags: []string{"steel"}}),
 		Original: json.RawMessage(`{"id":"I2"}`), Projection: &records.Projection{From: "old", Value: json.RawMessage(`{"id":"I2"}`)}}
-	et := tn.records.types["stock.item"]
-	et.setRow("I2", untouched)
+	et := tn.records.Type("stock.item")
+	et.SetRow("I2", untouched)
 	var touched []string
-	tn.records.touched = func(typ, id string) { touched = append(touched, typ+"/"+id) }
-	discarded := tn.records.forkRecords()
-	if discarded.types["stock.item"].rows != et.rows || discarded.dirty != tn.records.dirty || discarded.recentChanges.Entries != tn.records.recentChanges.Entries {
+	tn.records.SetTouched(func(typ, id string) { touched = append(touched, typ+"/"+id) })
+	discarded := tn.records.ForkRecords()
+	if discarded.Type("stock.item").Rows() != et.Rows() || discarded.Dirty() != tn.records.Dirty() || discarded.ChangeRoot() != tn.records.ChangeRoot() {
 		t.Fatal("fork copied record or derived indexes")
 	}
-	read, _ := discarded.get(c, reflect.TypeFor[Item](), "I2")
+	read, _ := discarded.Get(c, reflect.TypeFor[Item](), "I2")
 	read.(Item).Tags[0] = "mutated"
 	held, _ := tn.Held("stock.item/I2")
 	held.(Item).Tags[0] = "mutated"
-	visible := records.Mask(et.info, untouched.Value, nil).(Item)
+	visible := records.Mask(et.Info(), untouched.Value, nil).(Item)
 	visible.Tags[0] = "mutated"
 	if untouched.Value.Interface().(Item).Tags[0] != "steel" {
 		t.Fatal("read boundary exposed a mutable accepted value")
 	}
 	put(discarded, "discarded", 2, 99)
-	live, _ := tn.records.get(c, reflect.TypeFor[Item](), "I1")
+	live, _ := tn.records.Get(c, reflect.TypeFor[Item](), "I1")
 	if live.(Item).Qty != 2 || len(touched) != 0 {
 		t.Fatal("discarded draft modified or projected a live row")
 	}
-	draft := tn.records.forkRecords()
+	draft := tn.records.ForkRecords()
 	put(draft, "c2", 2, 3)
-	if draft.types["stock.item"].rows.Get("I2") != untouched || tn.records.recentChanges.Entries.Get("stock/c2") != nil || tn.records.dirty.Get("stock.item/I2") {
+	if draft.Type("stock.item").Rows().Get("I2") != untouched || tn.records.ChangeRoot().Get("stock/c2") != nil || tn.records.Dirty().Get("stock.item/I2") {
 		t.Fatal("write copied an unrelated row or leaked index metadata")
 	}
-	child := draft.forkRecords()
+	child := draft.ForkRecords()
 	put(child, "nested", 3, 7)
-	if draft.types["stock.item"].rows.Get("I1").Value.Interface().(Item).Qty != 3 || child.types["stock.item"].rows.Get("I2") != untouched {
+	if draft.Type("stock.item").Rows().Get("I1").Value.Interface().(Item).Qty != 3 || child.Type("stock.item").Rows().Get("I2") != untouched {
 		t.Fatal("discarded nested write changed its parent or unrelated rows")
 	}
 	if got := len(touched); got != 0 {
 		t.Fatalf("uncommitted draft projected %d rows", got)
 	}
-	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
-	staged, _ := draft.get(c, reflect.TypeFor[Item](), "I1")
+	live, _ = tn.records.Get(c, reflect.TypeFor[Item](), "I1")
+	staged, _ := draft.Get(c, reflect.TypeFor[Item](), "I1")
 	if live.(Item).Qty != 2 || staged.(Item).Qty != 3 {
 		t.Fatalf("draft leaked into live records: live=%+v staged=%+v", live, staged)
 	}
-	if tn.records.types["stock.item"].rows.Get("I1").HistoryLength() != 1 {
+	if tn.records.Type("stock.item").Rows().Get("I1").HistoryLength() != 1 {
 		t.Fatal("draft changed live history before promotion")
 	}
-	draft.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] ^= 1
-	if draft.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] ==
-		tn.records.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] {
+	draft.Type("stock.item").Rows().Get("I1").History[0].Fields[0].After[0] ^= 1
+	if draft.Type("stock.item").Rows().Get("I1").History[0].Fields[0].After[0] ==
+		tn.records.Type("stock.item").Rows().Get("I1").History[0].Fields[0].After[0] {
 		t.Fatal("draft shares history bytes with live store")
 	}
-	draft.types["stock.item"].rows.Get("I1").History[0].Fields[0].After[0] ^= 1
-	if err := tn.records.promoteRecords(draft); err != nil {
+	draft.Type("stock.item").Rows().Get("I1").History[0].Fields[0].After[0] ^= 1
+	if err := tn.records.PromoteRecords(draft); err != nil {
 		t.Fatal(err)
 	}
 	if len(touched) != 1 || touched[0] != "stock.item/I1" {
 		t.Fatalf("projected rows after promotion: %v", touched)
 	}
-	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
-	if live.(Item).Qty != 3 || tn.records.types["stock.item"].rows.Get("I1").HistoryLength() != 2 {
+	live, _ = tn.records.Get(c, reflect.TypeFor[Item](), "I1")
+	if live.(Item).Qty != 3 || tn.records.Type("stock.item").Rows().Get("I1").HistoryLength() != 2 {
 		t.Fatalf("accepted image or history missing: %+v", live)
 	}
-	if err := tn.records.promoteRecords(draft); err == nil {
+	if err := tn.records.PromoteRecords(draft); err == nil {
 		t.Fatal("draft was promoted twice")
 	}
-	if err := draft.put(c, change("c3", 3), Item{Record: platform.Record{ID: "I1"}, Name: "Bolt", Qty: 4}); err == nil {
+	if err := draft.Put(c, change("c3", 3), Item{Record: platform.Record{ID: "I1"}, Name: "Bolt", Qty: 4}); err == nil {
 		t.Fatal("promoted draft remained writable")
 	}
-	stale := tn.records.forkRecords()
+	stale := tn.records.ForkRecords()
 	put(tn.records, "c3", 3, 4)
-	if err := tn.records.promoteRecords(stale); err == nil {
+	if err := tn.records.PromoteRecords(stale); err == nil {
 		t.Fatal("stale draft replaced a newer live record")
 	}
-	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
+	live, _ = tn.records.Get(c, reflect.TypeFor[Item](), "I1")
 	if live.(Item).Qty != 4 {
 		t.Fatal("rejecting stale draft changed live record")
 	}
 	t.Run("parent writes leave captured rows readable", func(t *testing.T) {
-		captured := tn.records.forkRecords()
+		captured := tn.records.ForkRecords()
 		var readers sync.WaitGroup
 		readers.Go(func() {
 			for range 200 {
-				value, _ := captured.get(c, reflect.TypeFor[Item](), "I1")
+				value, _ := captured.Get(c, reflect.TypeFor[Item](), "I1")
 				if value.(Item).Qty != 4 {
 					t.Error("parent write changed a captured record")
 				}
-				for _, row := range captured.types["stock.item"].rows.All() {
+				for _, row := range captured.Type("stock.item").Rows().All() {
 					_ = jsonOf(row.Value.Interface())
 				}
 			}
@@ -250,7 +249,7 @@ func TestRecordDraftIsolationAndPromotion(t *testing.T) {
 			put(tn.records, fmt.Sprintf("parent-%d", i), uint32(i+4), i+5)
 		}
 		readers.Wait()
-		if err := tn.records.promoteRecords(captured); err == nil {
+		if err := tn.records.PromoteRecords(captured); err == nil {
 			t.Fatal("concurrent parent writes did not stale the captured generation")
 		}
 	})
@@ -367,7 +366,7 @@ func TestRecords(t *testing.T) {
 		t.Fatalf("related %+v", bin.Related)
 	}
 	// Aggregates: the list's domain and scope, grouped and measured.
-	agg := func(who string, q AggregateQuery) string {
+	agg := func(who string, q records.AggregateQuery) string {
 		out, err := tn.Aggregate(member(who), "stock.item", q, now)
 		if err != nil {
 			return err.Error()
@@ -377,20 +376,20 @@ func TestRecords(t *testing.T) {
 	}
 	for _, c := range []struct {
 		who  string
-		q    AggregateQuery
+		q    records.AggregateQuery
 		want string
 	}{
-		{"lead", AggregateQuery{}, `[{"count":2}]`},
-		{"lead", AggregateQuery{Groups: []string{"line"}, Measures: []string{"count", "sum:qty"}, Archived: true}, `[{"count":2,"line":"L1","sum:qty":46},{"count":1,"line":"L2","sum:qty":2}]`},
-		{"lead", AggregateQuery{Groups: []string{"kind", "due:month"}}, `[{"count":1,"due:month":"2026-10","kind":"part"},{"count":1,"due:month":"","kind":"tool"}]`},
-		{"lead", AggregateQuery{Measures: []string{"sum:price", "avg:qty", "max:qty"}}, `[{"avg:qty":2,"max:qty":2,"price.currency":"","sum:price":0},{"avg:qty":6,"max:qty":6,"price.currency":"EUR","sum:price":150}]`},
-		{"lead", AggregateQuery{Groups: []string{"created:month"}, Domain: domain([]any{"kind", "=", "tool"})}, `[{"count":1,"created:month":"2026-09"}]`},
-		{"ana", AggregateQuery{Groups: []string{"line"}, Archived: true}, `[{"count":2,"line":"L1"}]`}, // scope: never a record ana could not list
-		{"bo", AggregateQuery{Measures: []string{"sum:qty"}}, `[{"sum:qty":2}]`},
-		{"lead", AggregateQuery{Groups: []string{"tags"}}, "ERROR_CODE_INVALID_ARGUMENT"},
-		{"lead", AggregateQuery{Measures: []string{"sum:name"}}, "ERROR_CODE_INVALID_ARGUMENT"},
-		{"lead", AggregateQuery{Groups: []string{"kind:month"}}, "ERROR_CODE_INVALID_ARGUMENT"},
-		{"lead", AggregateQuery{Groups: []string{"line:month"}}, `[{"count":2,"line:month":""}]`}, // text that is not a date has no bucket
+		{"lead", records.AggregateQuery{}, `[{"count":2}]`},
+		{"lead", records.AggregateQuery{Groups: []string{"line"}, Measures: []string{"count", "sum:qty"}, Archived: true}, `[{"count":2,"line":"L1","sum:qty":46},{"count":1,"line":"L2","sum:qty":2}]`},
+		{"lead", records.AggregateQuery{Groups: []string{"kind", "due:month"}}, `[{"count":1,"due:month":"2026-10","kind":"part"},{"count":1,"due:month":"","kind":"tool"}]`},
+		{"lead", records.AggregateQuery{Measures: []string{"sum:price", "avg:qty", "max:qty"}}, `[{"avg:qty":2,"max:qty":2,"price.currency":"","sum:price":0},{"avg:qty":6,"max:qty":6,"price.currency":"EUR","sum:price":150}]`},
+		{"lead", records.AggregateQuery{Groups: []string{"created:month"}, Domain: domain([]any{"kind", "=", "tool"})}, `[{"count":1,"created:month":"2026-09"}]`},
+		{"ana", records.AggregateQuery{Groups: []string{"line"}, Archived: true}, `[{"count":2,"line":"L1"}]`}, // scope: never a record ana could not list
+		{"bo", records.AggregateQuery{Measures: []string{"sum:qty"}}, `[{"sum:qty":2}]`},
+		{"lead", records.AggregateQuery{Groups: []string{"tags"}}, "ERROR_CODE_INVALID_ARGUMENT"},
+		{"lead", records.AggregateQuery{Measures: []string{"sum:name"}}, "ERROR_CODE_INVALID_ARGUMENT"},
+		{"lead", records.AggregateQuery{Groups: []string{"kind:month"}}, "ERROR_CODE_INVALID_ARGUMENT"},
+		{"lead", records.AggregateQuery{Groups: []string{"line:month"}}, `[{"count":2,"line:month":""}]`}, // text that is not a date has no bucket
 	} {
 		if got := agg(c.who, c.q); got != c.want {
 			t.Errorf("%s %+v: %s, want %s", c.who, c.q, got, c.want)

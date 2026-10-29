@@ -23,8 +23,8 @@ type PageSeed = { object: Api.AssetRef; field?: string; relation?: SemanticRelat
  * linked authoring resources; browsing never mutates or republishes them.
  */
 export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
-  const { role } = useHost();
-  return role("build") === "builder" ? <ModelInventory initialObject={initialObject} initialTab={initialTab} />
+  const { holds} = useHost();
+  return holds("build", "builder") ? <ModelInventory initialObject={initialObject} initialTab={initialTab} />
     : <PageHeader title={t("Objects")} description={t("Only a builder can edit application assets.")} />;
 }
 

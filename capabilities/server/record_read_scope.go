@@ -1,5 +1,9 @@
 package platformserver
 
+import runtimekernel "platformserver/kernel"
+
+import records "platformserver/kernel/records"
+
 import (
 	"context"
 	"errors"
@@ -31,7 +35,7 @@ func (t *Tenant) openRecordRead(ctx context.Context) {
 		return
 	}
 	t.recordReadError = nil
-	view, err := t.records.current.Open(ctx)
+	view, err := t.records.Current().Open(ctx)
 	if err != nil {
 		t.recordReadError = err
 		var mismatch *journal.StatePositionError
@@ -48,12 +52,12 @@ func (t *Tenant) closeRecordRead() {
 	if !t.currentReadScopes {
 		return
 	}
-	if t.records.current.Position() != nil && t.records.current.Position()() != t.records.current.Applied() {
-		t.quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", t.records.current.Position()(), t.records.current.Applied()))
+	if t.records.Current().Position() != nil && t.records.Current().Position()() != t.records.Current().Applied() {
+		t.quarantine(fmt.Errorf("SQL commit is at %d before in-memory application at %d", t.records.Current().Position()(), t.records.Current().Applied()))
 	}
-	if view := t.records.current.Detach(); view != nil {
-		if store, ok := t.records.current.Backend().(acceptedStateReader); ok {
-			t.installRuntimeHistory(store, t.records.current.Position())
+	if view := t.records.Current().Detach(); view != nil {
+		if store, ok := t.records.Current().Backend().(runtimekernel.AcceptedStateReader); ok {
+			t.installRuntimeHistory(store, t.records.Current().Position())
 		}
 		if err := view.Close(); err != nil && t.recordReadError == nil {
 			t.recordReadError = err
@@ -108,8 +112,8 @@ func (t *Tenant) Held(ref string) (value any, ok bool) {
 	return value, ok
 }
 
-func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now time.Time) (Aggregate, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (Aggregate, *kernel.Error) { return t.aggregateRead(m, typ, q, now) })
+func (t *Tenant) Aggregate(m platform.Member, typ string, q records.AggregateQuery, now time.Time) (records.Aggregate, *kernel.Error) {
+	return recordRead(t, context.Background(), func() (records.Aggregate, *kernel.Error) { return t.aggregateRead(m, typ, q, now) })
 }
 
 func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {

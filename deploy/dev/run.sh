@@ -14,8 +14,6 @@ fi
 if [[ -n ${PLATFORM_DEV_LIGHT:-} ]]; then
   exec .build/dev/platform-server -addr "127.0.0.1:$port" -tenants "$PLATFORM_TENANTS_FILE" -templates deploy/templates
 fi
-compute=.build/dev/compute
-[[ -S $compute/worker.sock ]] && export PLATFORM_WASM_WORKER_SOCKET=$compute/worker.sock PLATFORM_CODE_BUILDER_SOCKET=$compute/builder.sock
 export PLATFORM_PACKAGES_DIR="$PWD/deploy/packages"
 exec .build/dev/platform-server -addr "127.0.0.1:$port" \
   -database "postgres://platform:${POSTGRES_PASSWORD}@127.0.0.1:${PG_PORT}/${PLATFORM_DATABASE_NAME}" \

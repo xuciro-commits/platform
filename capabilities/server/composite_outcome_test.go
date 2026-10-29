@@ -1,5 +1,7 @@
 package platformserver
 
+import platform "platformserver/platform"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -20,8 +22,8 @@ func TestCompositeHTTPDistinguishesSavedRefusalFromUnknownOutcome(t *testing.T) 
 	decide(t, tn, "builder", build.ID, "build.object.create", build.ObjectType, "retained", map[string]any{"name": "retained", "title": "Retained", "fields": []map[string]any{{"name": "note", "title": "Note", "type": "text"}}}, at)
 	decide(t, tn, "builder", build.ID, "build.object.publish", build.ObjectType, "retained", map[string]any{}, at)
 	handler := NewHost(Tokens(map[string]string{"builder": "builder"}), tn).Handler()
-	edits := []CompositeEdit{{Schema: "build.object.archive", Target: &pb.EntityRef{Type: build.ObjectType, Id: "retained"}, Payload: json.RawMessage(`{}`)}}
-	post := func(edits []CompositeEdit) map[string]any {
+	edits := []platform.CompositeEdit{{Schema: "build.object.archive", Target: &pb.EntityRef{Type: build.ObjectType, Id: "retained"}, Payload: json.RawMessage(`{}`)}}
+	post := func(edits []platform.CompositeEdit) map[string]any {
 		t.Helper()
 		body, err := json.Marshal(map[string]any{"key": "original", "edits": edits})
 		if err != nil {

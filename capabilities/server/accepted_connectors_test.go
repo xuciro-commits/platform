@@ -95,7 +95,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 	fail := true
 	tn.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
 		status, _ := tn.connectors.kernel.Status(tn.ID, member.ID, now)
-		if status.GetCursor() != "" || tn.records.types["connector.order"].rows.Get("O1") != nil {
+		if status.GetCursor() != "" || tn.records.Type("connector.order").Rows().Get("O1") != nil {
 			t.Fatal("connector cursor or order escaped before the durable result")
 		}
 		if fail {
@@ -113,7 +113,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 		t.Fatalf("connector order was not accepted: %v", refusal)
 	}
 	status, _ := tn.connectors.kernel.Status(tn.ID, member.ID, now)
-	if status.GetCursor() != "cursor-1" || tn.records.types["connector.order"].rows.Get("O1") == nil {
+	if status.GetCursor() != "cursor-1" || tn.records.Type("connector.order").Rows().Get("O1") == nil {
 		t.Fatal("committed cursor and order were not installed together")
 	}
 	again, refusal := tn.Submit(member, sub, now.Add(time.Minute))
@@ -143,7 +143,7 @@ func TestAcceptedConnectorCursorAndDecisionShareOneResult(t *testing.T) {
 		t.Fatal("corrupt connector predecessor did not quarantine its tenant")
 	}
 	unchanged, _ := isolated.connectors.kernel.Status(isolated.ID, member.ID, now)
-	if unchanged.GetCursor() != "" || isolated.records.types["connector.order"].rows.Get("O1") != nil {
+	if unchanged.GetCursor() != "" || isolated.records.Type("connector.order").Rows().Get("O1") != nil {
 		t.Fatal("corrupt cursor transition changed a record or connector")
 	}
 }
@@ -206,7 +206,7 @@ func TestJournalAcceptedConnectorCrashAfterCommit(t *testing.T) {
 		t.Fatal("interrupted reply was accepted")
 	}
 	if mark, _ := live.connectors.kernel.Status(id, member.ID, now); mark.GetCursor() != "" ||
-		live.records.types["connector.order"].rows.Get("O1") != nil {
+		live.records.Type("connector.order").Rows().Get("O1") != nil {
 		t.Fatal("crash applied cursor or record without a recovered result")
 	}
 	next, err := OpenJournal(ctx, url)
@@ -226,7 +226,7 @@ func TestJournalAcceptedConnectorCrashAfterCommit(t *testing.T) {
 		t.Fatal("recovery reran the application decision")
 	}
 	if mark, _ := recovered.connectors.kernel.Status(id, member.ID, now); mark.GetCursor() != "cursor-1" ||
-		recovered.records.types["connector.order"].rows.Get("O1") == nil {
+		recovered.records.Type("connector.order").Rows().Get("O1") == nil {
 		t.Fatal("recovery did not apply both cursor and record")
 	}
 	recovered.AcceptResult = func(entry Entry, key, hash string) ([]byte, error) {

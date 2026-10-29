@@ -25,23 +25,23 @@ func TestCreateTenantFromTemplate(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "tenants.json")
 	os.WriteFile(file, []byte(`[]`), 0o644)
 	d := &Deployment{TenantsFile: file, TemplatesDir: dir}
-	d.Tenants(TenantSpec{ID: "dev"})
+	d.Tenants(platform.TenantSpec{ID: "dev"})
 	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
 
-	if _, _, err := d.spec(CreateTenantRequest{ID: "Bad ID", Admin: "user:a@b.c"}, "ops", now); err == nil {
+	if _, _, err := d.spec(platform.CreateTenantRequest{ID: "Bad ID", Admin: "user:a@b.c"}, "ops", now); err == nil {
 		t.Fatal("an invalid id was accepted")
 	}
-	if _, _, err := d.spec(CreateTenantRequest{ID: "acme", Admin: "user:a@b.c", Template: "none"}, "ops", now); err == nil {
+	if _, _, err := d.spec(platform.CreateTenantRequest{ID: "acme", Admin: "user:a@b.c", Template: "none"}, "ops", now); err == nil {
 		t.Fatal("an unknown template was accepted")
 	}
-	spec, tpl, err := d.spec(CreateTenantRequest{ID: "acme", Name: "Acme Ltd", Admin: "user:jane.doe@acme.test", Template: "plant", Settings: map[string]string{"currency": "USD"}}, "ops", now)
+	spec, tpl, err := d.spec(platform.CreateTenantRequest{ID: "acme", Name: "Acme Ltd", Admin: "user:jane.doe@acme.test", Template: "plant", Settings: map[string]string{"currency": "USD"}}, "ops", now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if spec.Seats[0].ID != "jane-doe" || spec.Settings["timezone"] != "Asia/Shanghai" || spec.Settings["currency"] != "USD" || spec.Settings[controlowner.SettingName] != "Acme Ltd" {
 		t.Fatalf("spec %+v", spec)
 	}
-	if err := d.specs.add(spec); err != nil {
+	if err := d.specs.Add(spec); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(file)

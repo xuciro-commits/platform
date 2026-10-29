@@ -1,7 +1,9 @@
-import { expect, fresh, pageUIProfile, slug, test } from "./kit";
+import { Builder, expect, fresh, pageUIProfile, slug, test as sharedTest } from "./kit";
 import type * as Api from "../../packages/kernel/src/gen/host";
 
-test.use({ actionTimeout: 10_000 });
+// Keep the no-model deployment separate from the primary host's AI authoring routes.
+const test = sharedTest.extend({ builder: async ({ request }, use) => { await use(new Builder(request, "supervisor")); } });
+test.use({ baseURL: "http://127.0.0.1:18497", actionTimeout: 10_000 });
 
 test("an application publishes without configured external services and refuses only the operations that need them", async ({ page, builder }) => {
   test.setTimeout(120_000);

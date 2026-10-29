@@ -9,17 +9,17 @@
 //	committed        kernel/tenant_state.go answers by idempotency key
 //	audit            kernel/tenant_diagnostics.go recent inputs, deliveries, personal reads
 //	releases         studio/releases/release_retention.go candidates, applied digests, active release
-//	console          host_control.go       lifecycle, support sessions, migrations
-//	staged           compute_channel.go    the per-call result channel
-//	work             work_board.go         queues, failed deliveries, jobs
-//	quota            automation.Quota.go              attempts per app per minute
+//	console          kernel/control/control_host.go       lifecycle, support sessions, migrations
+//	staged           engine/compute/compute_execution.go    the per-call result channel
+//	work             engine/automation/automation_work.go         queues, failed deliveries, jobs
+//	quota            engine/automation/automation_work.go              attempts per app per minute
 //	connectors       connector_roster.go   registry, descriptor index, last refusals
 //	notices          kernel/tenant_notifications.go notifications
 //	settings         kernel/control/control_settings.go app settings
-//	sequences        sequences.go          number counters
-//	uploads          uploads.go            file hashes not yet attached
-//	cancels          compute_cancel_registry.go
-//	i18n             translator.go         dictionaries and patterns
+//	sequences        kernel/tenant_state.go          number counters
+//	uploads          engine/resources/resource_files.go            file hashes not yet attached
+//	cancels          engine/compute/compute_lifecycle.go
+//	i18n             kernel/transport/transport_declarations.go         dictionaries and patterns
 //	memStore         journal/memory.go     the Store without one
 //
 // Consumer boundaries are named public roles in platform. composition binds
@@ -28,8 +28,8 @@
 // Build compilation live in studio. They receive their declared roles, never
 // Tenant. Credentials and settings keep their original state in kernel/control.
 // Record images, immutable history segments, recent changes, indexes and pure
-// field/scope/query compilation live in internal/records. Host recordStore owns authorized
-// storage access, private decision coordination and accepted application. SQL
+// field/scope/query compilation and Store live in kernel/records. Host adapters
+// own authorized reads, private decision coordination and accepted application. SQL
 // Rows use a lane-owned repeatable-read source and immutable private overlays;
 // accepted application clears overlays before admitting the next read view.
 // SQL owner checkpoints restore through their fixed archive plus accepted tail;
@@ -37,8 +37,9 @@
 // studio/build owns object/process compilation and declaration/member
 // projections; original owners supply narrow read roles and execute results.
 // Accepted versioned encoding, strict decoding, shared evidence and the typed
-// change plan live in kernel/acceptedformat. Runtime-owned Task/Agent/console formats keep
-// their owner-specific checks and use those same shared values and decoders.
+// change plan, including original Task/Agent/console result envelopes, live in
+// kernel/acceptedformat. Runtime owners keep their execution/application checks;
+// kernel/tenant_recovery.go maps saved results to SQL deltas and checkpoints.
 // Agent prompt/history compilation, observation bounds and budget arithmetic
 // live in internal/agents, which receives only already-authorized values.
 // internal/aistate owns the unchanged AI state format and pure usage updates;

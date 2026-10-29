@@ -84,11 +84,15 @@ export type ApplicationUIInfo = {
 };
 
 /** What an app's UI may use of the host, for the signed-in member. */
+export {memberRoles} from "./semantic/member-roles";
+
 export type Host = {
   client: EdgeClient;
   me: Me;
   /** The member's role in an app, or undefined. */
   role: (app: string) => string | undefined;
+  /** Tests membership across the primary role and every current grant. */
+  holds: (app: string, ...roles: string[]) => boolean;
   /** Whether the member's catalog offers the action: render from it, never re-check roles. */
   can: (schema: string) => boolean;
   action: (schema: string) => ActionDeclaration | undefined;

@@ -2,6 +2,8 @@ package platform
 
 import (
 	"fmt"
+	"maps"
+	"platformserver/platform/authz"
 	"slices"
 	"strings"
 )
@@ -181,4 +183,139 @@ type OwnerBindings struct {
 	Relations RelationsHost
 	Flow      FlowHost
 	Work      WorkHost
+}
+
+// RuntimeCapabilities binds trusted pure implementations for one tenant instance.
+// Rebuilding an instance carries this selection; callers never mutate it live.
+type RuntimeCapabilities struct {
+	NewTransactionExecutor func(BusinessRuntimeContext) TransactionExecutor
+	NewAgentEvaluator      func() AgentEvaluator
+	BindOwner              func(App, OwnerBindings)
+	AIInference            *AIInferencePolicy
+	Rules                  RuleEngine
+	Authorization          authz.Engine
+	Kernel                 KernelFactory
+	RuleModule             CapabilityModule
+	AuthModule             CapabilityModule
+	KernelModule           CapabilityModule
+	StorageModule          CapabilityModule
+}
+
+func DefaultRuntimeCapabilities() RuntimeCapabilities {
+	return RuntimeCapabilities{
+		Rules: NativeRules{}, Authorization: authz.Standard{}, Kernel: NativeKernel{}, StorageModule: MemoryStorageModule(),
+		KernelModule: CapabilityModule{ID: "platform.kernel.native", Version: "1", Title: "Kernel", Scope: "tenant", Replacement: "restart", StateFormat: "platform.kernel.v1", Provides: []CapabilityContract{{ID: "platform.kernel", Version: "1", Semantics: "1"}}},
+		RuleModule:   CapabilityModule{ID: "platform.rules.native", Version: "1", Title: "Business rules", Scope: "tenant", Replacement: "restart", Provides: []CapabilityContract{{ID: "platform.rules", Version: "1", Semantics: fmt.Sprint(ExprVersion)}}},
+		AuthModule:   CapabilityModule{ID: "platform.authorization.standard", Version: "1", Title: "Authorization", Scope: "tenant", Replacement: "restart", Provides: []CapabilityContract{{ID: "platform.authorization", Version: "1", Semantics: "1"}}},
+	}
+}
+
+func (c RuntimeCapabilities) Check() error {
+	if c.Rules == nil || c.Authorization == nil || c.Kernel == nil {
+		return fmt.Errorf("runtime needs explicit rule and authorization providers")
+	}
+	plan, err := ResolveComposition([]CapabilityModule{c.RuleModule, c.AuthModule, c.KernelModule}, nil)
+	if err != nil {
+		return err
+	}
+	for _, expected := range []CapabilityContract{{ID: "platform.rules", Version: "1", Semantics: fmt.Sprint(ExprVersion)}, {ID: "platform.authorization", Version: "1", Semantics: "1"}, {ID: "platform.kernel", Version: "1", Semantics: "1"}} {
+		found := false
+		for _, binding := range plan.Bindings {
+			found = found || binding.CapabilityContract == expected
+		}
+		if !found {
+			return fmt.Errorf("runtime provider does not implement %s", expected.ID)
+		}
+	}
+	return nil
+}
+
+type RuleProvider struct {
+	Module CapabilityModule
+	Engine RuleEngine
+}
+type AuthorizationProvider struct {
+	Module CapabilityModule
+	Engine authz.Engine
+}
+type KernelProvider struct {
+	Module CapabilityModule
+	Engine KernelFactory
+}
+
+// RuntimeProviders is the deployment's trusted, typed offer. Descriptors are
+// projections of these factories; importing JSON never adds executable providers.
+type RuntimeProviders struct {
+	Rules         []RuleProvider
+	Authorization []AuthorizationProvider
+	Kernel        []KernelProvider
+}
+
+func DefaultRuntimeProviders() RuntimeProviders {
+	c := DefaultRuntimeCapabilities()
+	return RuntimeProviders{Rules: []RuleProvider{{c.RuleModule, c.Rules}}, Authorization: []AuthorizationProvider{{c.AuthModule, c.Authorization}}, Kernel: []KernelProvider{{c.KernelModule, c.Kernel}}}
+}
+
+func (c RuntimeCapabilities) Selection() map[string]string {
+	return map[string]string{"platform.rules": c.RuleModule.ID, "platform.authorization": c.AuthModule.ID, "platform.kernel": c.KernelModule.ID}
+}
+
+func (p RuntimeProviders) Modules() []CapabilityModule {
+	var modules []CapabilityModule
+	for _, provider := range p.Rules {
+		modules = append(modules, provider.Module)
+	}
+	for _, provider := range p.Authorization {
+		modules = append(modules, provider.Module)
+	}
+	for _, provider := range p.Kernel {
+		modules = append(modules, provider.Module)
+	}
+	return modules
+}
+
+func (p RuntimeProviders) Resolve(selection map[string]string) (RuntimeCapabilities, error) {
+	plan, err := ResolveComposition(p.Modules(), selection)
+	if err != nil {
+		return RuntimeCapabilities{}, err
+	}
+	runtime := RuntimeCapabilities{StorageModule: MemoryStorageModule()}
+	for _, provider := range p.Rules {
+		if slices.Contains(plan.Order, provider.Module.ID) {
+			runtime.RuleModule, runtime.Rules = provider.Module, provider.Engine
+		}
+	}
+	for _, provider := range p.Authorization {
+		if slices.Contains(plan.Order, provider.Module.ID) {
+			runtime.AuthModule, runtime.Authorization = provider.Module, provider.Engine
+		}
+	}
+	for _, provider := range p.Kernel {
+		if slices.Contains(plan.Order, provider.Module.ID) {
+			runtime.KernelModule, runtime.Kernel = provider.Module, provider.Engine
+		}
+	}
+	return runtime, runtime.Check()
+}
+
+func (p RuntimeProviders) CheckSelection(selection map[string]string) error {
+	if len(selection) != 3 {
+		return fmt.Errorf("Select a provider or maintenance for each foundational capability")
+	}
+	complete := maps.Clone(selection)
+	for _, module := range p.Modules() {
+		for _, contract := range module.Provides {
+			if provider, found := complete[contract.ID]; found && provider == "" {
+				complete[contract.ID] = module.ID
+			}
+		}
+	}
+	_, err := p.Resolve(complete)
+	return err
+}
+
+// MemoryStorageModule describes the existing process-local development journal.
+// It does not claim durability or implement a delivery storage substitute.
+func MemoryStorageModule() CapabilityModule {
+	return CapabilityModule{ID: "platform.storage.memory", Title: "In-memory development storage", Version: "1", Scope: "deployment", Replacement: "restart", StateFormat: "platform.memory.v1", Provides: []CapabilityContract{{ID: "platform.storage", Version: "1", Semantics: "1"}}}
 }

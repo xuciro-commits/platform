@@ -83,12 +83,12 @@ func TestAttachedJournalCommitFailureIsTenantLocal(t *testing.T) {
 					}
 					registry := newTenantRegistry([]*Tenant{bad, good})
 					code := CodeOf(bad, good)
-					registry.add(compose(id + "-added"))
+					registry.Add(compose(id + "-added"))
 					deployment := Deployment{SnapshotEvery: 1, Rebuild: func(name string) (*Tenant, error) { return compose(name), nil }}
 					if err := deployment.retryTenant(ctx, store, registry, code, id); err != nil {
 						t.Fatalf("recovery after another tenant was added: %v", err)
 					}
-					bad = registry.current(id)
+					bad = registry.Current(id)
 				}
 				receipt, err := bad.Submit(member, sub, at.Add(time.Minute))
 				if err != nil || receipt == nil || store.Position(id) != 1 || rowCount(t, bad, "stock.bin") != 1 {
@@ -126,7 +126,7 @@ func TestTenantRecoveryChecksOnlyItsStartupComposition(t *testing.T) {
 	registry := newTenantRegistry([]*Tenant{neighbor, old})
 	for _, change := range []struct{ format, version string }{{"stock.v2", "1"}, {"stock.v1", "2"}} {
 		deployment := Deployment{Rebuild: func(string) (*Tenant, error) { return compose(change.format, change.version), nil }}
-		if err := deployment.retryTenant(ctx, store, registry, code, old.ID); err == nil || registry.current(old.ID) != old {
+		if err := deployment.retryTenant(ctx, store, registry, code, old.ID); err == nil || registry.Current(old.ID) != old {
 			t.Fatal("different target composition or restore format was accepted")
 		}
 	}
@@ -134,7 +134,7 @@ func TestTenantRecoveryChecksOnlyItsStartupComposition(t *testing.T) {
 	if err := deployment.retryTenant(ctx, store, registry, code, old.ID); err != nil {
 		t.Fatalf("unrelated tenant or registry order blocked recovery: %v", err)
 	}
-	if registry.current(old.ID) == old || registry.current(neighbor.ID) != neighbor {
+	if registry.Current(old.ID) == old || registry.Current(neighbor.ID) != neighbor {
 		t.Fatal("recovery replaced the wrong tenant generation")
 	}
 }
@@ -203,7 +203,7 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	}
 	deployment := &Deployment{SnapshotEvery: 1, Rebuild: func(name string) (*Tenant, error) { return compose(name) }}
 	host := NewHost(Tokens(map[string]string{"admin-token": "ana", "user-token": "bob"}), old, healthy)
-	host.tenantsFrom = registry.list
+	host.tenantsFrom = registry.List
 	host.Recover = func(ctx context.Context, name string) error {
 		return deployment.retryTenant(ctx, journal, registry, code, name)
 	}
@@ -220,7 +220,7 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 		t.Fatalf("non-admin could retry recovery: %d", code)
 	}
 	if code, body := call("admin-token", id, "/v1/recovery/retry", http.MethodPost); code != http.StatusConflict ||
-		!strings.Contains(body, "quarantined") || registry.current(id) != old {
+		!strings.Contains(body, "quarantined") || registry.Current(id) != old {
 		t.Fatalf("corrupt journal revived the tenant: %d %s", code, body)
 	}
 	if code, _ := call("admin-token", "healthy-neighbor", "/v1/me", http.MethodGet); code != http.StatusOK {
@@ -233,7 +233,7 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 		!strings.Contains(body, `"status":"ok"`) {
 		t.Fatalf("valid journal did not revive the tenant: %d %s", code, body)
 	}
-	recovered := registry.current(id)
+	recovered := registry.Current(id)
 	if recovered == old || recovered.quarantined() || !old.quarantined() {
 		t.Fatal("partially recovered tenant was reused")
 	}
@@ -243,7 +243,7 @@ func TestJournalRetryRepairsOnlyTheQuarantinedTenant(t *testing.T) {
 	}
 	fromCheckpoint, _ := compose(id)
 	if err := fromCheckpoint.recoverSnapshot(state, seq); err != nil ||
-		fromCheckpoint.records.types["stock.bin"].rows.Get("B1") == nil {
+		fromCheckpoint.records.Type("stock.bin").Rows().Get("B1") == nil {
 		t.Fatalf("repaired checkpoint still contains the damaged state: %v", err)
 	}
 	if code, _ := call("admin-token", id, "/v1/me", http.MethodGet); code != http.StatusOK {

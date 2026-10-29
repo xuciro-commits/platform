@@ -327,6 +327,7 @@ type BuildHost interface {
 	Operation(app, name string, version int) (Operation, int, bool)
 	RuleQuery(app, name string, version int) (NamedQuery, int, bool)
 	BuildProcesses() ProcessDefinitions
+	BuildProcessConsumptions() []Consumption
 	Record(ref string) (any, bool)
 	ResolvePropertyType(binding AssetBinding) (PropertyType, bool)
 	ValidateInstallApplication(a Application) error
@@ -1474,6 +1475,20 @@ func (p ProposalAdoption) CheckMapping(f AIFunction, inputs []Field) error {
 		if output < 0 || input < 0 || !(f.Output[output].Type == inputs[input].Type || f.Output[output].Type == "decimal" && inputs[input].Type == "number") {
 			return fmt.Errorf("Proposal mapping types do not match the business action")
 		}
+	}
+	return nil
+}
+
+func CheckApplicationBindings(bindings []AssetBinding) error {
+	if len(bindings) > 1000 {
+		return fmt.Errorf("application bindings exceed the owner budget")
+	}
+	seen := map[AssetRef]bool{}
+	for _, binding := range bindings {
+		if binding.Ref.Check() != nil || binding.Ref.Kind != AssetApp || binding.SourceVersion == "" || seen[binding.Ref] {
+			return fmt.Errorf("application binding is invalid or repeated")
+		}
+		seen[binding.Ref] = true
 	}
 	return nil
 }

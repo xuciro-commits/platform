@@ -12,14 +12,14 @@ const placementName = (placement: string) => t(({assist:"Read-only assistance",p
 
 /** One application projection, preserving original run readers and controls. */
 export function ApplicationRuns({ owner, name, project }: { owner: string; name: string; project?: string }) {
- const { role, can } = useHost(), { open } = useWorkspace(), openRecord = useOpenRecord();
+ const { can , holds} = useHost(), { open } = useWorkspace(), openRecord = useOpenRecord();
  const [offset,setOffset]=useState(0),[chosen,setChosen]=useState<string>();
  const [kind,setKind]=useState(""),[state,setState]=useState("");
  const [subject,setSubject]=useState("");
  const [since,setSince]=useState(""),[until,setUntil]=useState("");
  const timeParam=(value:string)=>value && Number.isFinite(Date.parse(value))?new Date(value).toISOString():"";
  const query=useReadQuery<Api.ApplicationRunPage>(`/v1/applications/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/runs?offset=${offset}&limit=50&kind=${encodeURIComponent(kind)}&state=${encodeURIComponent(state)}&subject=${encodeURIComponent(subject.trim())}&since=${encodeURIComponent(timeParam(since))}&until=${encodeURIComponent(timeParam(until))}`);
- const builder=role("build")==="builder" && !!query.data && !query.isError;
+ const builder=holds("build", "builder") && !!query.data && !query.isError;
  const applications=useRecordInventory<{id:string;name:string}>("build.app",1000,builder && owner==="build");
  const selected=query.isError?undefined:query.data?.runs.find(run=>`${run.kind}/${run.id}`===chosen);
  const processes=useRecordInventory<{id:string;name:string}>("build.process",1000,builder && selected?.resource?.app==="build" && selected.kind==="flow");

@@ -38,8 +38,8 @@ func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.En
 	fresh := q.InterfaceShape == nil
 	if fresh {
 		q.InterfaceShape = &shape
-		for _, et := range t.records.sortedTypes() {
-			info := et.info
+		for _, et := range t.records.SortedTypes() {
+			info := et.Info()
 			if next, ok := overlay[info.Type]; ok {
 				info = next
 			}
@@ -102,7 +102,7 @@ func (t *Tenant) interfaceRecordsRead(m platform.Member, name string, query plat
 }
 
 type interfaceRead struct {
-	entity, view *entityType
+	entity, view *records.Type
 	hidden       []platform.FieldInfo
 	visible      func(reflect.Value) bool
 }
@@ -112,7 +112,7 @@ type interfaceRow struct {
 	keys  []any
 }
 
-func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, declaration platform.NamedQuery, query platform.Query, now time.Time) (InterfaceRecordPage, *kernel.Error) {
+func (t *Tenant) interfaceRecordsFrom(store *records.Store, m platform.Member, declaration platform.NamedQuery, query platform.Query, now time.Time) (InterfaceRecordPage, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return InterfaceRecordPage{}, err
 	}
@@ -135,9 +135,9 @@ func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, dec
 	}
 	var reads []interfaceRead
 	for _, typ := range q.Implementations {
-		store.mu.Lock()
-		et := store.types[typ]
-		store.mu.Unlock()
+		store.Lock()
+		et := store.Type(typ)
+		store.Unlock()
 		if et == nil {
 			return InterfaceRecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published query implementation is unavailable")
 		}
@@ -149,32 +149,33 @@ func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, dec
 			return InterfaceRecordPage{}, err
 		}
 		view, hidden := viewOf(m, et)
-		if q.InterfaceShape.Implements(view.info) != nil {
+		if q.InterfaceShape.Implements(view.Info()) != nil {
 			continue
 		}
-		commonView := *view
-		commonView.info.Fields = slices.DeleteFunc(slices.Clone(view.info.Fields), func(field platform.FieldInfo) bool {
+		commonInfo := view.Info()
+		commonInfo.Fields = slices.DeleteFunc(slices.Clone(view.Info().Fields), func(field platform.FieldInfo) bool {
 			return !slices.ContainsFunc(q.InterfaceShape.Fields, func(common platform.InterfaceField) bool { return common.Name == field.Name })
 		})
-		reads = append(reads, interfaceRead{et, &commonView, hidden, visible})
+		commonView := records.NewTypeView(commonInfo, view.Rows(), view.RetainedProjection())
+		reads = append(reads, interfaceRead{et, commonView, hidden, visible})
 	}
-	store.mu.Lock()
-	defer store.mu.Unlock()
+	store.Lock()
+	defer store.Unlock()
 	var rows []interfaceRow
 	var order records.SortOrder
 	for _, read := range reads {
 		var problem error
-		order, problem = records.CompileOrder(read.view.info, query.Sort)
+		order, problem = records.CompileOrder(read.view.Info(), query.Sort)
 		if problem != nil {
 			return InterfaceRecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
-		part, err := store.matchingQuery(read.view, platform.Query{Domain: query.Domain, Search: query.Search, Archived: query.Archived}, read.visible)
+		part, err := store.MatchingQuery(read.view, platform.Query{Domain: query.Domain, Search: query.Search, Archived: query.Archived}, read.visible)
 		if err != nil {
 			return InterfaceRecordPage{}, err
 		}
 		for _, value := range part {
 			row := interfaceRow{read: read, value: value, keys: order.Keys(value)}
-			row.keys = append(row.keys, read.entity.info.Type)
+			row.keys = append(row.keys, read.entity.Info().Type)
 			rows = append(rows, row)
 		}
 	}
@@ -183,17 +184,17 @@ func (t *Tenant) interfaceRecordsFrom(store *recordStore, m platform.Member, dec
 	start := min(query.Offset, len(rows))
 	end := min(start+query.Limit, len(rows))
 	for _, row := range rows[start:end] {
-		value := reflect.ValueOf(records.Mask(row.read.entity.info, row.value, row.read.hidden))
-		if row.read.entity.info.HasReadSources() {
+		value := reflect.ValueOf(records.Mask(row.read.entity.Info(), row.value, row.read.hidden))
+		if row.read.entity.Info().HasReadSources() {
 			value, _ = t.narrowerIn(store, m, now, true).derive(row.read.entity, value)
 		}
 		rec := records.Header(row.value)
 		fields := map[string]any{"id": rec.ID, "revision": rec.Revision, "created": rec.Created, "changed": rec.Changed}
 		for _, common := range q.InterfaceShape.Fields {
-			f, _ := row.read.entity.info.Field(common.Name)
+			f, _ := row.read.entity.Info().Field(common.Name)
 			fields[f.Name] = value.FieldByIndex(f.Index).Interface()
 		}
-		out.Records = append(out.Records, InterfaceRecord{Type: row.read.entity.info.Type, ID: rec.ID, Record: fields})
+		out.Records = append(out.Records, InterfaceRecord{Type: row.read.entity.Info().Type, ID: rec.ID, Record: fields})
 		t.readPersonal(m, row.read.view, []string{rec.ID}, now)
 	}
 	return out, nil

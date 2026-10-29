@@ -12,7 +12,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	appowner "platformserver/engine/applications"
+
 	"platformserver/journal"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/acceptedformat"
@@ -62,7 +62,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if receipt == nil || len(d.events) == 0 || d.failure != nil {
 		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
 	}
-	if err := d.records.validateChangedLinkConstraints(); err != nil {
+	if err := d.records.ValidateChangedLinkConstraints(); err != nil {
 		return nil, err
 	}
 	result := acceptedformat.Batch{Version: 2, Kind: "record-batch", Tenant: d.tenant.ID,
@@ -137,24 +137,24 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 			Publication: d.publications[event.App+"/"+event.Record.GetChangeId()]})
 		if publication := result.Decisions[len(result.Decisions)-1].Publication; publication != nil {
 			copied := *publication
-			if et := d.records.types[event.Record.GetSubmission().GetTarget().GetType()]; et != nil {
-				copied.Format = et.info.RecordFormat
+			if et := d.records.Type(event.Record.GetSubmission().GetTarget().GetType()); et != nil {
+				copied.Format = et.Info().RecordFormat
 			}
 			result.Decisions[len(result.Decisions)-1].Publication = &copied
 		}
 		for _, ref := range event.Changed {
-			if !d.records.writes[ref] {
+			if !d.records.Written(ref) {
 				return nil, fmt.Errorf("batch event names an unwritten record")
 			}
 			seen[ref] = true
 		}
 	}
-	if len(seen) != len(d.records.writes) {
+	if len(seen) != d.records.WriteCount() {
 		result.DirectRows, err = d.savedCallbackRows(seen)
 		if err != nil {
 			return nil, err
 		}
-		if len(seen)+len(result.DirectRows) != len(d.records.writes) {
+		if len(seen)+len(result.DirectRows) != d.records.WriteCount() {
 			return nil, fmt.Errorf("batch event omits a written record")
 		}
 		result.Version = 4
@@ -175,28 +175,28 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		result.Version = 10
 	}
 	result.Unique = d.savedUniqueChanges()
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
-	d.records.parent.mu.Lock()
-	defer d.records.parent.mu.Unlock()
-	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
+	d.records.Lock()
+	defer d.records.Unlock()
+	d.records.Parent().Lock()
+	defer d.records.Parent().Unlock()
+	for _, ref := range slices.Sorted(d.records.Writes()) {
 		if !seen[ref] {
 			continue
 		}
 		typ, id, ok := strings.Cut(ref, "/")
-		et := d.records.types[typ]
-		if !ok || et == nil || et.rows.Get(id) == nil {
+		et := d.records.Type(typ)
+		if !ok || et == nil || et.Rows().Get(id) == nil {
 			return nil, fmt.Errorf("batch includes an undeclared record")
 		}
 		var prior *records.Row
-		if old := d.records.parent.types[typ]; old != nil {
-			prior = old.rows.Get(id)
+		if old := d.records.Parent().Type(typ); old != nil {
+			prior = old.Rows().Get(id)
 		}
-		image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
+		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
 		if err != nil {
 			return nil, err
 		}
-		row := acceptedformat.BatchRow{Image: image, App: et.info.App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
+		row := acceptedformat.BatchRow{Image: image, App: et.Info().App, Authorities: slices.Clone(d.writers[ref]), HistoryBase: image.HistoryRef.Base}
 		row.Before, err = records.Predecessor(typ, id, prior)
 		if err != nil {
 			return nil, err
@@ -221,7 +221,7 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 // A late invalid child cannot advance an earlier authoritative ledger.
 type preparedAcceptedBatch struct {
 	result  acceptedformat.Batch
-	records *recordStore
+	records *records.Store
 	ledgers map[string]*platform.Ledger
 	changes map[string]*pb.ChangeRecord
 	key     string
@@ -286,7 +286,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		}
 		changes[decision.Event.App+"/"+r.GetChangeId()] = r
 	}
-	draft := t.records.forkRecords()
+	draft := t.records.ForkRecords()
 	if err := t.validateAcceptedControl(result.Control); err != nil {
 		return nil, err
 	}
@@ -321,17 +321,17 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		if r == nil {
 			return nil, fmt.Errorf("publication has no receipt")
 		}
-		et := draft.types[r.GetSubmission().GetTarget().GetType()]
+		et := draft.Type(r.GetSubmission().GetTarget().GetType())
 		if et == nil {
 			return nil, fmt.Errorf("publication record type is unavailable")
 		}
-		decoded, err := records.DecodeFormattedImage(et.info, decision.Publication.Image, nil, draft.current.Release(), decision.Publication.Format)
+		decoded, err := records.DecodeFormattedImage(et.Info(), decision.Publication.Image, nil, draft.Current().Release(), decision.Publication.Format)
 		if err != nil {
 			return nil, err
 		}
 		copy := *decision.Publication
 		copy.Image = decoded
-		copy.Format = et.info.RecordFormat
+		copy.Format = et.Info().RecordFormat
 		result.Decisions[i].Publication = &copy
 		if err := publisher.ValidateAcceptedPublication(copy.Schema, copy.Image); err != nil {
 			return nil, err
@@ -350,7 +350,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 			}
 		}
 	}
-	if err := draft.validateChangedLinkConstraints(); err != nil {
+	if err := draft.ValidateChangedLinkConstraints(); err != nil {
 		return nil, err
 	}
 	if result.Version >= 8 {
@@ -383,7 +383,7 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 			return false, fmt.Errorf("record batch ledger application: %v (new=%t)", err, changed)
 		}
 	}
-	if err := t.records.promoteRecords(draft); err != nil {
+	if err := t.records.PromoteRecords(draft); err != nil {
 		return false, err
 	}
 	// Application entry availability is owned by its current Build record.
@@ -435,9 +435,9 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 
 // applyBatchRows writes the batch's row images into the forked records, each
 // under a ledger that declares its type, keeping the history it extends.
-func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedformat.Batch, ledgers map[string]*platform.Ledger, changes map[string]*pb.ChangeRecord) error {
-	draft.mu.Lock()
-	defer draft.mu.Unlock()
+func (t *Tenant) applyBatchRows(draft *records.Store, result acceptedformat.Batch, ledgers map[string]*platform.Ledger, changes map[string]*pb.ChangeRecord) error {
+	draft.Lock()
+	defer draft.Unlock()
 	for _, image := range result.Rows {
 		ledger := ledgers[image.App]
 		if ledger == nil {
@@ -450,11 +450,11 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedformat.Batch,
 		}) {
 			return fmt.Errorf("record batch has no authority for %s", image.Type)
 		}
-		et := draft.types[image.Type]
-		if et == nil || et.info.App != image.App {
+		et := draft.Type(image.Type)
+		if et == nil || et.Info().App != image.App {
 			return fmt.Errorf("record batch needs installed entity %s", image.Type)
 		}
-		prior := et.rows.Get(image.ID)
+		prior := et.Rows().Get(image.ID)
 		if prior != nil && !reflect.DeepEqual(prior.Extraction, image.Extraction) {
 			return fmt.Errorf("record extraction origin changed")
 		}
@@ -509,8 +509,8 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedformat.Batch,
 					image.Type, image.ID, before == image.Before, baseHistory, len(image.History), prefixEqual)
 			}
 		}
-		value := reflect.New(et.info.Go).Elem()
-		decode, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, draft.current.Release(), image.Format)
+		value := reflect.New(et.Info().Go).Elem()
+		decode, err := records.DecodeFormattedImage(et.Info(), image.Value, image.Projection, draft.Current().Release(), image.Format)
 		if err != nil {
 			return err
 		}
@@ -561,13 +561,13 @@ func (t *Tenant) applyBatchRows(draft *recordStore, result acceptedformat.Batch,
 			}
 		}
 		recovered.RetainOriginal(image.Value)
-		et.setRow(rec.ID, recovered)
-		draft.writes[image.Type+"/"+rec.ID] = true
+		et.SetRow(rec.ID, recovered)
+		draft.TrackWrite(image.Type + "/" + rec.ID)
 		for _, change := range image.History[baseHistory:] {
-			draft.recentChanges.Remember(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
+			draft.RememberChange(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
 		}
-		if et.knowledge {
-			draft.dirty.Set(image.Type+"/"+rec.ID, true)
+		if et.Knowledge() {
+			draft.MarkDirty(image.Type + "/" + rec.ID)
 		}
 	}
 	return nil
@@ -592,7 +592,7 @@ type callbackWrite struct {
 
 func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]acceptedformat.CallbackRow, error) {
 	var rows []acceptedformat.CallbackRow
-	for _, ref := range slices.Sorted(maps.Keys(d.records.writes)) {
+	for _, ref := range slices.Sorted(d.records.Writes()) {
 		if published[ref] {
 			continue
 		}
@@ -621,7 +621,7 @@ func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]accepte
 
 // Validate sources and direct rows in private views before any ledger or
 // business/control state in the containing result is promoted.
-func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedformat.CallbackRow, at time.Time) error {
+func (t *Tenant) prepareCallbackRows(target *records.Store, rows []acceptedformat.CallbackRow, at time.Time) error {
 	seen := map[string]bool{}
 	for _, callback := range rows {
 		row, source := callback.Row, callback.Source
@@ -652,16 +652,16 @@ func (t *Tenant) prepareCallbackRows(target *recordStore, rows []acceptedformat.
 			return err
 		}
 		typ, id, _ := strings.Cut(ref, "/")
-		private.mu.Lock()
-		image := private.types[typ].rows.Get(id)
-		private.mu.Unlock()
-		target.mu.Lock()
-		target.types[typ].setRow(id, image)
-		target.writes[ref] = true
-		if target.types[typ].knowledge {
-			target.dirty.Set(ref, true)
+		private.Lock()
+		image := private.Type(typ).Rows().Get(id)
+		private.Unlock()
+		target.Lock()
+		target.Type(typ).SetRow(id, image)
+		target.TrackWrite(ref)
+		if target.Type(typ).Knowledge() {
+			target.MarkDirty(ref)
 		}
-		target.mu.Unlock()
+		target.Unlock()
 	}
 	return nil
 }
@@ -729,10 +729,10 @@ func (t *Tenant) applyAcceptedDeliveries(deliveries []acceptedformat.ConnectorDe
 // a typed immutable image and its own predecessor, rather than restoring an
 // entire tenant over records or concurrent outside-lane bookkeeping.
 type controlWork struct {
-	Queues map[string][]string    `json:"queues"`
-	Failed []string               `json:"failed"`
-	Tasks  []automation.TaskState `json:"tasks"`
-	Jobs   []automation.Task      `json:"jobs"`
+	Queues map[string][]string           `json:"queues"`
+	Failed []string                      `json:"failed"`
+	Tasks  []platform.ScheduledTaskState `json:"tasks"`
+	Jobs   []automation.Task             `json:"jobs"`
 }
 type controlDecision struct {
 	host *Tenant
@@ -1218,7 +1218,7 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 		}
 		d.tenant.opsMu.Unlock()
 		if current.Endpoint == acceptedformat.OperationEndpoint {
-			if settled(current.State) {
+			if platform.EffectSettled(current.State) {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "")
 			}
 			return func(*pb.ChangeRecord) {
@@ -1287,7 +1287,7 @@ func (t *Tenant) validateAcceptedIntents(intents []platform.Effect) error {
 	defer t.opsMu.Unlock()
 	ids := map[string]bool{}
 	for _, x := range intents {
-		if err := appowner.CheckBindings(x.Applications); err != nil {
+		if err := platform.CheckApplicationBindings(x.Applications); err != nil {
 			return err
 		}
 		kind, ok := strings.CutPrefix(x.Event, x.App+"/")
@@ -1498,6 +1498,7 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 
 func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
+	fork.definitionPlans = nil
 	fork.businessFacts = slices.Clone(d.businessFacts)
 	for i := range fork.businessFacts {
 		fork.businessFacts[i] = acceptedformat.CloneBusinessFact(fork.businessFacts[i])
@@ -1546,9 +1547,8 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		}
 		fork.inputIssues[refusal] = issues
 	}
-	fork.records = d.records.forkRecords()
-	fork.records.parent, fork.records.baseGeneration = d.records.parent, d.records.baseGeneration
-	fork.records.writes = maps.Clone(d.records.writes)
+	fork.records = d.records.ForkRecords()
+	fork.records.InheritDecision(d.records)
 	fork.logs = map[*platform.Ledger]platform.ChangeLog{}
 	for ledger, log := range d.logs {
 		suspended := d.receiving[ledger]
@@ -1747,16 +1747,11 @@ func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
 	return plan, err
 }
 
-func (r acceptedWork) ChangePlan() acceptedformat.ChangePlan {
-	return acceptedformat.ChangePlan{At: r.At, Changes: r.Changes, States: r.States,
-		Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 3}
-}
-
 // This preparation changes no live owner. In particular a valid child cannot
 // advance its ledger before the outer result's remaining owners are checked.
 type preparedAcceptedChanges struct {
 	plan    acceptedformat.ChangePlan
-	records *recordStore
+	records *records.Store
 	child   *preparedAcceptedBatch
 }
 
@@ -1822,9 +1817,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 			// Flatten this private fork onto the child's original live parent.
 			// Keep its write set as well as the outer direct observations, so
 			// promotion applies both together and invalidates every changed row.
-			prepared.records.parent = base.parent
-			prepared.records.baseGeneration = base.baseGeneration
-			maps.Copy(prepared.records.writes, base.writes)
+			prepared.records.ExtendDecision(base)
 			prepared.child.records = prepared.records
 			prepared.records = nil
 		}
@@ -1835,7 +1828,7 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 			records = prepared.child.records
 		}
 		if records == nil {
-			records = t.records.forkRecords()
+			records = t.records.ForkRecords()
 		}
 		if err := validateUniqueReplacements(records, plan.Unique); err != nil {
 			return nil, err
@@ -1852,7 +1845,7 @@ func (p *preparedAcceptedChanges) apply(t *Tenant) error {
 
 	}
 	if p.records != nil {
-		if err := t.records.promoteRecords(p.records); err != nil {
+		if err := t.records.PromoteRecords(p.records); err != nil {
 			return err
 		}
 	}
@@ -1880,12 +1873,12 @@ func (p *preparedAcceptedChanges) publish(t *Tenant) {
 // Capture the same full record image and predecessor for connector inputs,
 // effect answers and callback observations, in the supplied stable order.
 func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]acceptedformat.InputRow, error) {
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
-	d.records.parent.mu.Lock()
-	defer d.records.parent.mu.Unlock()
+	d.records.Lock()
+	defer d.records.Unlock()
+	d.records.Parent().Lock()
+	defer d.records.Parent().Unlock()
 	if refs == nil {
-		refs = slices.Sorted(maps.Keys(d.records.writes))
+		refs = slices.Sorted(d.records.Writes())
 	}
 	var rows []acceptedformat.InputRow
 	for _, ref := range refs {
@@ -1893,15 +1886,15 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 			continue
 		}
 		typ, id, ok := strings.Cut(ref, "/")
-		et := d.records.types[typ]
-		if !ok || et == nil || et.info.App != owner || et.rows.Get(id) == nil {
+		et := d.records.Type(typ)
+		if !ok || et == nil || et.Info().App != owner || et.Rows().Get(id) == nil {
 			return nil, fmt.Errorf("%s writes a foreign or undeclared record", source)
 		}
 		var prior *records.Row
-		if old := d.records.parent.types[typ]; old != nil {
-			prior = old.rows.Get(id)
+		if old := d.records.Parent().Type(typ); old != nil {
+			prior = old.Rows().Get(id)
 		}
-		image, err := records.ChangeImage(typ, id, et.rows.Get(id), prior)
+		image, err := records.ChangeImage(typ, id, et.Rows().Get(id), prior)
 		if err != nil {
 			return nil, err
 		}
@@ -1919,20 +1912,20 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 // top-level input without a child ledger decision (connector facts or an
 // external effect's answer). The caller promotes only after all other owners
 // of the same result have passed their predecessor checks.
-func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*recordStore, error) {
+func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {
 	return t.prepareAcceptedDirectRowsOn(t.records, rows, member, at)
 }
 
-func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedformat.InputRow, member string, at time.Time) (*recordStore, error) {
-	draft := base.forkRecords()
-	draft.mu.Lock()
-	defer draft.mu.Unlock()
+func (t *Tenant) prepareAcceptedDirectRowsOn(base *records.Store, rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {
+	draft := base.ForkRecords()
+	draft.Lock()
+	defer draft.Unlock()
 	for _, image := range rows {
-		et := draft.types[image.Type]
-		if et == nil || et.info.App != image.App {
+		et := draft.Type(image.Type)
+		if et == nil || et.Info().App != image.App {
 			return nil, fmt.Errorf("direct result needs missing record type %s", image.Type)
 		}
-		prior := et.rows.Get(image.ID)
+		prior := et.Rows().Get(image.ID)
 		before, previousHistory, revision := "", 0, uint32(0)
 		if image.HistoryRef != nil {
 			if err := records.CheckHistoryPredecessor(image.Image, prior); err != nil {
@@ -1977,8 +1970,8 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedf
 				return nil, fmt.Errorf("direct record has a foreign change")
 			}
 		}
-		value := reflect.New(et.info.Go).Elem()
-		decode, err := records.DecodeFormattedImage(et.info, image.Value, image.Projection, draft.current.Release(), image.Format)
+		value := reflect.New(et.Info().Go).Elem()
+		decode, err := records.DecodeFormattedImage(et.Info(), image.Value, image.Projection, draft.Current().Release(), image.Format)
 		if err != nil {
 			return nil, err
 		}
@@ -2005,10 +1998,10 @@ func (t *Tenant) prepareAcceptedDirectRowsOn(base *recordStore, rows []acceptedf
 			}
 		}
 		recovered.RetainOriginal(image.Value)
-		et.setRow(image.ID, recovered)
-		draft.writes[image.Type+"/"+image.ID] = true
-		if et.knowledge {
-			draft.dirty.Set(image.Type+"/"+image.ID, true)
+		et.SetRow(image.ID, recovered)
+		draft.TrackWrite(image.Type + "/" + image.ID)
+		if et.Knowledge() {
+			draft.MarkDirty(image.Type + "/" + image.ID)
 		}
 	}
 	return draft, nil
@@ -2138,15 +2131,15 @@ func uniqueReplacements(changes map[string]map[string]string) []journal.StateUni
 }
 
 func (d *stagedDecision) savedUniqueChanges() []journal.StateUnique {
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
-	return uniqueReplacements(d.records.uniqueChanges())
+	d.records.Lock()
+	defer d.records.Unlock()
+	return uniqueReplacements(d.records.UniqueChanges())
 }
 
-func validateUniqueReplacements(store *recordStore, saved []journal.StateUnique) error {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	expected := store.uniqueChanges()
+func validateUniqueReplacements(store *records.Store, saved []journal.StateUnique) error {
+	store.Lock()
+	defer store.Unlock()
+	expected := store.UniqueChanges()
 	if len(saved) != len(expected) {
 		return fmt.Errorf("record unique-key replacements differ")
 	}

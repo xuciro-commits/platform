@@ -174,7 +174,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	tampered := slices.Clone(journal)
 	changed := false
 	for i, e := range tampered {
-		var result acceptedWork
+		var result acceptedformat.Work
 		if e.Kind == "accepted-result" && json.Unmarshal(e.Body, &result) == nil && result.Kind == "work-result" && result.Outcome == "ok" {
 			result.Outcome = "ERROR_CODE_CONFLICT"
 			tampered[i].Body, _ = json.Marshal(result)

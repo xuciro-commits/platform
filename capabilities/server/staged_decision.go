@@ -29,6 +29,7 @@ type stagedDecision struct {
 	businessFacts          []platform.BusinessRefusalFact
 	simulation             bool
 	definitions            map[string]*platform.DecisionDefinition
+	definitionPlans        map[definitionPlanKey]platform.DecisionDefinition
 	schemaVersion          *platform.SchemaVersion
 	authorizations         []acceptedformat.AuthorizationEvidence
 	iterations             []platform.TxnIteration
@@ -37,7 +38,7 @@ type stagedDecision struct {
 	callbackWrites         map[string]callbackWrite
 	control                *controlDecision
 	tenant                 *Tenant
-	records                *recordStore
+	records                *records.Store
 	logs                   map[*platform.Ledger]platform.ChangeLog
 	events                 []platform.Event
 	sequences              map[string]int // private counters, copied before any decision code
@@ -116,7 +117,7 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	connectors := t.services.Kernel.Connectors()
 	connectors.Restore(descriptors, marks)
 	before, _ := platform.CanonicalDigest(notices)
-	return &stagedDecision{simulation: t.simulation, tenant: t, records: t.records.forkRecords(),
+	return &stagedDecision{simulation: t.simulation, tenant: t, records: t.records.ForkRecords(),
 		logs: map[*platform.Ledger]platform.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
 		notices: notices, noticeBase: noticeSeq, noticeSeq: noticeSeq, noticeBefore: before,
@@ -153,7 +154,7 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 		d.at = at
 	}
 	c.Roles = maps.Clone(c.Roles)
-	definition, definitionErr := view.decisionDefinition(app, s, release, retained...)
+	definition, definitionErr := d.decisionDefinition(view, app, s, release, retained...)
 	if definitionErr != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The execution definition and dependencies are unavailable")
 	}
@@ -209,18 +210,18 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 	var info platform.EntityInfo
 	var ref string
 	func() {
-		d.records.mu.Lock()
-		defer d.records.mu.Unlock()
-		et := d.records.of(c, reflect.TypeOf(entity))
+		d.records.Lock()
+		defer d.records.Unlock()
+		et := d.records.Of(c, reflect.TypeOf(entity))
 		if et != nil {
-			info = et.info
-			id := records.Header(records.Copy(et.info.Go, entity)).ID
-			before, ref = et.rows.Get(id), et.info.Type+"/"+id
+			info = et.Info()
+			id := records.Header(records.Copy(et.Info().Go, entity)).ID
+			before, ref = et.Rows().Get(id), et.Info().Type+"/"+id
 		}
 	}()
 	prepared, err := d.prepareBusinessRecord(c, entity, d.at)
 	if err == nil {
-		err = d.records.put(c, r, prepared)
+		err = d.records.Put(c, r, prepared)
 	}
 	if err == nil {
 		if d.constraintWrites == nil {
@@ -229,7 +230,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 		if _, exists := d.constraintWrites[ref]; !exists {
 			d.constraintWrites[ref] = constraintWrite{caller: c, before: before}
 		}
-		err = d.checkRecordConstraints(c, info, d.records.types[info.Type].rows.Get(strings.TrimPrefix(ref, info.Type+"/")), before)
+		err = d.checkRecordConstraints(c, info, d.records.Type(info.Type).Rows().Get(strings.TrimPrefix(ref, info.Type+"/")), before)
 	}
 	if err != nil && d.failure == nil {
 		d.failure = err
@@ -237,11 +238,11 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 	if err == nil {
 		var history int
 		func() {
-			d.records.mu.Lock()
-			defer d.records.mu.Unlock()
-			et := d.records.of(c, reflect.TypeOf(entity))
-			id := records.Header(records.Copy(et.info.Go, entity)).ID
-			history = et.rows.Get(id).HistoryLength()
+			d.records.Lock()
+			defer d.records.Unlock()
+			et := d.records.Of(c, reflect.TypeOf(entity))
+			id := records.Header(records.Copy(et.Info().Go, entity)).ID
+			history = et.Rows().Get(id).HistoryLength()
 		}()
 		if origin := d.callbackOrigin; origin != nil && origin.App == c.App && c.ID == "app:"+origin.App &&
 			r.GetChangeId() == "" && r.GetSubmission().GetAuthority() == "" && r.GetSubmission().GetPrincipalId() == c.ID &&
@@ -262,7 +263,7 @@ func (d *stagedDecision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) 
 }
 
 func (d *stagedDecision) Get(c platform.Caller, typ reflect.Type, id string) (any, bool) {
-	return d.records.get(c, typ, id)
+	return d.records.Get(c, typ, id)
 }
 
 func (d *stagedDecision) Check(c platform.Caller, entity any) *kernel.Error {
@@ -270,7 +271,7 @@ func (d *stagedDecision) Check(c platform.Caller, entity any) *kernel.Error {
 	if at.IsZero() {
 		at = time.Now()
 	}
-	return d.records.check(c, entity, at)
+	return d.records.Check(c, entity, at)
 }
 
 func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
@@ -283,18 +284,18 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 		var raw []byte
 		var err error
 		func() {
-			d.records.mu.Lock()
-			defer d.records.mu.Unlock()
-			et := d.records.types[ref.GetType()]
-			if et != nil && et.rows.Get(ref.GetId()) != nil {
-				raw, err = json.Marshal(et.rows.Get(ref.GetId()).Value.Interface())
+			d.records.Lock()
+			defer d.records.Unlock()
+			et := d.records.Type(ref.GetType())
+			if et != nil && et.Rows().Get(ref.GetId()) != nil {
+				raw, err = json.Marshal(et.Rows().Get(ref.GetId()).Value.Interface())
 			}
 		}()
 		if len(raw) == 0 || err != nil || publisher.ValidateAcceptedPublication(schema, raw) != nil {
 			unsupportedStagedEffect()
 		}
 		if err := d.tenant.installPublicationLinkConstraint(d.records, schema, raw); err != nil {
-			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkCardinalityFailure)
+			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, records.LinkCardinalityFailure)
 			return
 		}
 		if d.publications == nil {
@@ -305,8 +306,8 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 }
 
 func (d *stagedDecision) Readable(c platform.Caller, ref string) bool {
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
+	d.records.Lock()
+	defer d.records.Unlock()
 	at := d.at
 	if at.IsZero() {
 		at = time.Now() // direct app-only tests have no routed input clock
@@ -444,17 +445,17 @@ func (d *stagedDecision) Deliver(c platform.Caller, dataClass, from, to string, 
 	return nil
 }
 func (d *stagedDecision) Find(c platform.Caller, typ reflect.Type, q platform.Query) ([]any, int, *kernel.Error) {
-	d.records.mu.Lock()
-	defer d.records.mu.Unlock()
-	et := d.records.of(c, typ)
+	d.records.Lock()
+	defer d.records.Unlock()
+	et := d.records.Of(c, typ)
 	if et == nil {
 		return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if len(q.Sort) == 0 {
 		q.Sort = []string{"id"}
 	}
-	q = businessQuery(et.info, q, c.Member, d.at)
-	page, total, err := d.records.find(et, q, nil)
+	q = businessQuery(et.Info(), q, c.Member, d.at)
+	page, total, err := d.records.Find(et, q, nil)
 	out := make([]any, len(page))
 	for i, v := range page {
 		out[i] = records.Copy(typ, v.Interface()).Interface()

@@ -9,10 +9,10 @@ import { assetKey, useHost } from "../index";
 export type OpenInPlace = "explorer" | "ontology" | "pages" | "lineage";
 
 export function OpenIn({ type, exclude = [] }: { type: string; exclude?: OpenInPlace[] }) {
-  const { definitions, role } = useHost();
+  const { definitions , holds} = useHost();
   const { open } = useWorkspace();
   const definition = definitions.find((d) => d.entity?.type === type);
-  const builder = role("build") === "builder";
+  const builder = holds("build", "builder");
   const commands: ContextCommand[] = [];
   if (!exclude.includes("explorer")) commands.push({ id: "explorer", label: t("Object Explorer"), run: () => open({ view: "explorer", params: { type } }) });
   if (!exclude.includes("ontology") && builder && definition?.ref.app === "build") {

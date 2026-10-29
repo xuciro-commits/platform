@@ -1,5 +1,9 @@
 package platformserver
 
+import records "platformserver/kernel/records"
+
+import runtimekernel "platformserver/kernel"
+
 import (
 	"context"
 	"encoding/json"
@@ -11,36 +15,15 @@ import (
 	"platformserver/journal"
 )
 
-func runtimeCheckpoint(raw []byte) (*runtimeSnapshot, error) {
-	var header struct {
-		Runtime *runtimeSnapshot `json:"runtime"`
-	}
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return nil, err
-	}
-	if header.Runtime != nil {
-		var shape struct {
-			Records map[string]json.RawMessage `json:"records"`
-		}
-		if err := json.Unmarshal(raw, &shape); err != nil {
-			return nil, err
-		}
-		if len(shape.Records) > 0 {
-			return nil, fmt.Errorf("SQL owner checkpoint contains portable record state")
-		}
-	}
-	return header.Runtime, nil
-}
-
 // restoreRuntimeSnapshot restores owner state against its original SQL record
 // archive. Accepted tail results see that prefix plus their own replacements;
 // the current SQL table is admitted only after the reconstructed tail agrees.
 func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state []byte, seq, current int64, started time.Time) error {
-	saved, err := runtimeCheckpoint(state)
+	saved, err := runtimekernel.ReadCheckpoint(state)
 	if err != nil {
 		return err
 	}
-	if saved == nil || saved.Format != runtimeSnapshotFormat || saved.Position != seq || seq > current {
+	if saved == nil || saved.Format != runtimekernel.SQLCheckpointFormat || saved.Position != seq || seq > current {
 		return fmt.Errorf("tenant %s: SQL checkpoint format or position differs", t.ID)
 	}
 	snapshots, ok := j.(journal.StateSnapshotStorage)
@@ -64,8 +47,8 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 		return fmt.Errorf("tenant %s: SQL checkpoint records differ", t.ID)
 	}
 	t.installRuntimeRecords(store, func() int64 { return seq })
-	t.records.current.Bind(view)
-	defer t.records.current.Bind(nil)
+	t.records.Current().Bind(view)
+	defer t.records.Current().Bind(nil)
 	t.installRuntimeHistory(view, func() int64 { return seq })
 	if err = t.recoverSnapshot(state, seq); err != nil {
 		return err
@@ -102,21 +85,6 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	return nil
 }
 
-func saveRuntimeSnapshot(ctx context.Context, j Journals, tenant string, seq int64, key string, state []byte) error {
-	runtime, err := runtimeCheckpoint(state)
-	if err != nil {
-		return err
-	}
-	if runtime != nil {
-		snapshots, ok := j.(journal.StateSnapshotStorage)
-		if !ok {
-			return fmt.Errorf("tenant %s: SQL checkpoint archive unavailable", tenant)
-		}
-		return snapshots.SaveStateSnapshot(ctx, tenant, seq, key, state, runtime.Records)
-	}
-	return j.SaveSnapshot(ctx, tenant, seq, key, state)
-}
-
 // verifyRuntimeSnapshotTail retains only records mentioned by the accepted
 // suffix. The archive supplies unchanged predecessors; SQL validates their
 // union with these same sealed deltas without replacing differing data.
@@ -129,7 +97,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 	changed := map[string]journal.StateRecord{}
 	owners := map[string]json.RawMessage{}
 	for _, entry := range entries {
-		delta, err := acceptedStorageDelta(entry.Body)
+		delta, err := runtimekernel.StorageDelta(entry.Body)
 		if err != nil {
 			return err
 		}
@@ -141,7 +109,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 			key := replacement.Type + "/" + replacement.ID
 			expected, exists := changed[key]
 			if !exists {
-				current, readErr := t.records.current.View().StateCurrent(ctx, t.ID, replacement.Type, replacement.ID)
+				current, readErr := t.records.Current().View().StateCurrent(ctx, t.ID, replacement.Type, replacement.ID)
 				if readErr != nil {
 					return readErr
 				}
@@ -164,7 +132,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 			}
 			prior, exists := owners[update.Key]
 			if !exists {
-				prior, err = t.records.current.View().StateValue(ctx, t.ID, update.Owner, update.Key, -1)
+				prior, err = t.records.Current().View().StateValue(ctx, t.ID, update.Owner, update.Key, -1)
 				if err != nil {
 					return err
 				}
@@ -176,11 +144,11 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 		}
 	}
 	for _, expected := range changed {
-		et := t.records.types[expected.Type]
+		et := t.records.Type(expected.Type)
 		if et == nil {
 			return fmt.Errorf("tenant %s: restored record type %s is absent", t.ID, expected.Type)
 		}
-		actual := et.rows.Get(expected.ID)
+		actual := et.Rows().Get(expected.ID)
 		if actual == nil {
 			return fmt.Errorf("tenant %s: restored record %s/%s is absent", t.ID, expected.Type, expected.ID)
 		}
@@ -188,11 +156,11 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 		if err != nil {
 			return err
 		}
-		var saved recordState
+		var saved records.StoredState
 		if err = json.Unmarshal(expected.Image, &saved); err != nil {
 			return err
 		}
-		if !sameStoredJSON(image, saved.Value) || actual.Format != saved.Format || !sameStoredJSON(jsonOf(actual.Projection), jsonOf(saved.Projection)) || !sameStoredJSON(jsonOf(actual.Extraction), jsonOf(saved.Extraction)) {
+		if !runtimekernel.StoredJSONEqual(image, saved.Value) || actual.Format != saved.Format || !runtimekernel.StoredJSONEqual(jsonOf(actual.Projection), jsonOf(saved.Projection)) || !runtimekernel.StoredJSONEqual(jsonOf(actual.Extraction), jsonOf(saved.Extraction)) {
 			return fmt.Errorf("tenant %s: restored record differs: %s/%s", t.ID, expected.Type, expected.ID)
 		}
 		count := len(expected.History)
@@ -226,7 +194,7 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 		if err != nil {
 			return err
 		}
-		if !sameStoredJSON(actual, expected) {
+		if !runtimekernel.StoredJSONEqual(actual, expected) {
 			return fmt.Errorf("tenant %s: restored owner differs: %s", t.ID, app)
 		}
 	}
@@ -244,7 +212,7 @@ func (t *Tenant) checkpointRuntime(ctx context.Context, j Journals, code string)
 	if err != nil {
 		return 0, err
 	}
-	if err = saveRuntimeSnapshot(ctx, j, t.ID, seq, key, state); err != nil {
+	if err = runtimekernel.SaveCheckpoint(ctx, j, t.ID, seq, key, state); err != nil {
 		return 0, err
 	}
 	return seq, nil

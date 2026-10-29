@@ -6,8 +6,8 @@ import type { Provider } from "./shared";
 
 const blank = (): Api.CredentialWrite => ({ id: "", title: "", kind: "api-key", source: "managed", bindings: [{ consumer: "ai/", origin: "" }], expectedVersion: 0 });
 export function CredentialEditor({ open, onClose, initial, onSaved }: { open: boolean; onClose: () => void; initial?: Api.CredentialWrite; onSaved?: (name: string) => void }) {
-  const { client, decide, role } = useHost();
-  const providers = useRead<Provider[]>("/v1/ai-providers", undefined, open && role("ai") === "admin").data;
+  const { client, decide , holds} = useHost();
+  const providers = useRead<Provider[]>("/v1/ai-providers", undefined, open && holds("ai", "admin")).data;
   const [draft, setDraft] = useState<Api.CredentialWrite>(blank);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
