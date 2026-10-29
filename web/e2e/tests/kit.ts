@@ -86,6 +86,16 @@ export type ObjectSpec = { name?: string; title: string; fields: unknown[]; stat
 
 /** The builder's hands: objects, records, pages, releases. */
 export class Builder extends Member {
+  /** Registers the deployment-approved runtime provider once per host and resolves its model. */
+  async runtimeModel(): Promise<string> {
+    const model = `${runtimeModelProvider}/probe`;
+    const providers = await this.read<{ id: string }[]>("ai-providers");
+    if (!providers.some(provider => provider.id === runtimeModelProvider)) {
+      await this.decide("ai.provider.add", { type: "ai.provider", id: runtimeModelProvider }, { kind: "local", baseUrl: `http://127.0.0.1:${runtimeModelPort}`, wire: "openai" }, "ai");
+      await this.decide("ai.model.enable", { type: "ai.model", id: model }, { access: "users" }, "ai");
+    }
+    return model;
+  }
   /** Configures a local test provider through the normal administrator actions. */
   async adviceModel(address: string, drafts: Api.PackageDraftResult): Promise<void> {
     await this.decide("ai.provider.add", {type:"ai.provider",id:"fixture"}, {kind:"local",baseUrl:address,wire:"openai"}, "ai");

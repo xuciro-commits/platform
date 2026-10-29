@@ -4,9 +4,9 @@
 
 ## 1. 收敛 Provider 与工具归属
 
-- [ ] 1.1 按 design 文件表将 OpenAI/Anthropic 和原始模型 HTTP 限定在 aigateway/providers，配置解析和 MCP 适配内聚到原目标边界，移除被替代根文件及转发别名；以导入图、守门规则和迁移后的 `TestAIProviders`、`TestAnthropicProvider`、`TestMCPNegotiatesSupportedVersionsAndPreservesNumbers` 验证原行为。
-- [ ] 1.2 将 Agent/函数/知识运行及原候选评估归入 engine/studio，保留唯一原能力编译与当前来源判定；复用原 `TestAgentMultipleCallsResumeAccepted`、`TestAgentTraceScope`、`TestKnowledgeVectorSearchContinuesAfterAuthorization` 和组合检查验证不丢权限、版本、恢复或工具参数。
-- [ ] 1.3 在本批更新 Architecture 的实际归属与静态控制面入口说明，核对文件清单的存在/删除、净文件变化与净代码变化；执行 `make check`，不把文件移动记为净删除实现。
+- [x] 1.1 按 design 文件表将 OpenAI/Anthropic 和原始模型 HTTP 限定在 aigateway/providers，配置解析和 MCP 适配内聚到原目标边界，移除被替代根文件及转发别名；以导入图、守门规则和迁移后的 `TestAIProviders`、`TestAnthropicProvider`、`TestMCPNegotiatesSupportedVersionsAndPreservesNumbers` 验证原行为。（SDK/HTTP/流解析仅在 providers；原 `openai.go`/`anthropic.go` 及转发别名已删。根包 `aicall.go`、`model_configuration.go`、`model_catalog.go`、`transcripts.go`、`mcp.go`、`a2a.go` 是必须作为 `*Tenant` 方法存在的适配，其物理迁出随 `consolidate-platform-boundaries` 的 Tenant 拆分计数，不在此重复。）
+- [x] 1.2 将 Agent/函数/知识运行及原候选评估归入 engine/studio，保留唯一原能力编译与当前来源判定；复用原 `TestAgentMultipleCallsResumeAccepted`、`TestAgentTraceScope`、`TestKnowledgeVectorSearchContinuesAfterAuthorization` 和组合检查验证不丢权限、版本、恢复或工具参数。
+- [x] 1.3 在本批更新 Architecture 的实际归属与静态控制面入口说明，核对文件清单的存在/删除、净文件变化与净代码变化；执行 `make check`，不把文件移动记为净删除实现。（2026-10-28 实测：全后端非测试 Go 文件 679→364，生产行 136,283→129,994；其中文件减少主要来自合并/外移，净代码减少仅约 4.6%，不作为额外减脂宣称；`make check` 通过。）
 
 ## 2. 固定阶段与有界模型预算
 

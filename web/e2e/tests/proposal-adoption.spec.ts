@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { expect, fresh, pageUIProfile, runtimeModelPort, runtimeModelProvider, shots, slug, test } from "./kit";
+import { expect, fresh, pageUIProfile, runtimeModelPort, shots, slug, test } from "./kit";
 
 test("a builder assembles proposal review and a person adopts through the original approval and transaction", async ({ page, builder, operator }, info) => {
   test.setTimeout(150_000);
@@ -28,9 +28,7 @@ test("a builder assembles proposal review and a person adopts through the origin
       roles: ["user", "builder"], inputs: [{ name: "verdict", title: "Verdict", type: "choice", choices: "pass,hold", required: true }],
       transaction: { subject: `build.${objectName}`, steps: [{ name: "classify", kind: "update", target: { type: `build.${objectName}`, id: "$subject" }, changes: [{ field: "verdict", from: "verdict" }] }] },
     }] });
-    const providerID = runtimeModelProvider, model = `${providerID}/probe`;
-    await builder.decide("ai.provider.add", { type: "ai.provider", id: providerID }, { kind: "local", baseUrl: `http://127.0.0.1:${address.port}`, wire: "openai" }, "ai");
-    await builder.decide("ai.model.enable", { type: "ai.model", id: model }, { access: "users" }, "ai");
+    const model = await builder.runtimeModel();
     await builder.decide("build.function.create", { type: "build.function", id: functionID }, {
       name: functionName, title: "Classify inspection", description: "A typed classification for review", object: object.type, fields: ["temperature"], instructions: "Classify the supplied temperature", model,
       output: [{ name: "verdict", type: "string", choices: ["pass", "hold"], required: true, description: "Proposed classification" }, { name: "confidence", type: "decimal", required: true, description: "Confidence" }],
@@ -146,7 +144,7 @@ test("a builder assembles proposal review and a person adopts through the origin
   }
 });
 
-test("an application agent needs a passing candidate evaluation before activation", async ({page,builder},info) => {
+test("an application agent candidate is marked unevaluated until its declared cases pass", async ({page,builder},info) => {
   let calls=0;
   const provider=createServer(async(request,response)=>{
     for await(const _chunk of request) { /* Consume this local fixture request. */ }
@@ -154,20 +152,21 @@ test("an application agent needs a passing candidate evaluation before activatio
     response.setHeader("Content-Type","application/json");
     response.end(JSON.stringify({choices:[{message:{content:"Ready"}}],usage:{prompt_tokens:3,completion_tokens:2,cost:0.01}}));
   });
-  provider.listen(0,"127.0.0.1");
+  // Runtime inference needs the deployment-approved provider and origin (playwright.config.ts).
+  provider.listen(runtimeModelPort,"127.0.0.1");
   await once(provider,"listening");
   try {
     const address=provider.address();
     if(!address||typeof address==="string")throw Error("model fixture did not listen");
-    const object=await builder.object({title:"Agent source",fields:[{name:"note",title:"Note",type:"text"}]}),name=slug("assistant"),id=fresh("AGENT"),providerID=slug("agentmodel"),model=`${providerID}/probe`;
-    await builder.decide("ai.provider.add",{type:"ai.provider",id:providerID},{kind:"local",baseUrl:`http://127.0.0.1:${address.port}`,wire:"openai"},"ai");
-    await builder.decide("ai.model.enable",{type:"ai.model",id:model},{access:"users"},"ai");
+    const object=await builder.object({title:"Agent source",fields:[{name:"note",title:"Note",type:"text"}]}),name=slug("assistant"),id=fresh("AGENT"),model=await builder.runtimeModel();
     await builder.decide("platform.setting.set",{type:"platform.setting",id:"agent/model"},{value:model},"platform");
     await builder.decide("build.agent.create",{type:"build.agent",id},{name,title:"Candidate assistant",description:"Review cases",instructions:"Report Ready",tools:[`${object.type}.edit`],cases:[{name:"result",goal:"Give a result",expect:"Ready"}]});
     const application=await builder.application({title:"Measured agents",resources:[{app:"build",kind:"agent",name}]}),candidate=await builder.candidate([{kind:"agent",id},{kind:"app",id:application.id}]);
     await builder.open(page,"/release-review");
     await page.getByRole("combobox",{name:"Saved candidate",exact:true}).selectOption(candidate);
-    await expect(page.getByRole("button",{name:"Activate release",exact:true})).toBeDisabled();
+    // Activation is not blocked by missing evaluations, but no quality result is claimed for them.
+    const unevaluated=page.getByRole("status").filter({hasText:"This candidate is not fully evaluated."});
+    await expect(unevaluated).toBeVisible();
     await page.getByRole("button",{name:"Run declared cases",exact:true}).click();
     await expect.poll(()=>calls,{timeout:20_000}).toBe(3);
     await expect.poll(async()=>{
@@ -176,6 +175,7 @@ test("an application agent needs a passing candidate evaluation before activatio
       return review.ai?.find((item:any)=>item.resource.ref.name===name)?.evaluations.some((report:any)=>report.state==="passed");
     },{timeout:20_000}).toBe(true);
     await page.getByRole("button",{name:"Refresh evaluation reports",exact:true}).click();
+    await expect(unevaluated).toHaveCount(0);
     await expect(page.getByRole("button",{name:"Activate release",exact:true})).toBeEnabled();
     await page.getByRole("button",{name:"Activate release",exact:true}).click();
     await expect(page.getByText("Release active for operators.",{exact:false})).toBeVisible();
