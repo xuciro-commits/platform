@@ -24,7 +24,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const baseline = useRef(process);
   const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [refused, setRefused] = useState<string>(); // why the host refused, kept on screen
+  const [refused, setRefused] = useState<string>();
   const reset = useRef(onReset); reset.current = onReset;
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     if (object) { baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
@@ -97,7 +97,7 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const publish = async () => {
     setRefused(undefined);
     if (issues.length) { setRefused(issues.join(" ")); return; }
-    if (dirty && !(await save())) return; // what is published is what was saved
+    if (dirty && !(await save())) return;
     if (await decide("build.object.publish", { type: "build.object", id }, {}, { onRefused: setRefused })) notify.success(t("The object is installed with its states and actions."));
   };
   const review = async () => {

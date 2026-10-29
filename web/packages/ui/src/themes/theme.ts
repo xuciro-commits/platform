@@ -16,13 +16,13 @@ const apply = (scheme: Scheme) => {
   const element = root();
   if (!element) return;
   if (scheme === "system") delete element.dataset.theme; else element.dataset.theme = scheme;
-  try { localStorage.setItem(storageKey, JSON.stringify({ scheme })); } catch { /* private mode: the choice lives for the session */ }
+  try { localStorage.setItem(storageKey, JSON.stringify({ scheme })); } catch {   }
   listeners.forEach((fn) => fn());
 };
 try {
   const stored = typeof localStorage === "undefined" ? null : localStorage.getItem(storageKey);
   if (stored) { const { scheme } = JSON.parse(stored) as { scheme?: Scheme }; const element = root(); if (element && scheme && scheme !== "system") element.dataset.theme = scheme; }
-} catch { /* ignore a corrupt preference */ }
+} catch {   }
 
 let cached = read();
 const snapshot = () => { const next = read(); if (next.scheme !== cached.scheme) cached = next; return cached; };

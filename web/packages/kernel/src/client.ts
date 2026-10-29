@@ -52,7 +52,7 @@ export class EdgeClient {
     const stops = new Map<number, () => void>();
     const update = () => {
       let total: number | undefined;
-      try { total = this.live.read<{ total: number }>(path(0))?.value.total; } catch { /* the query reports the original refusal */ }
+      try { total = this.live.read<{ total: number }>(path(0))?.value.total; } catch {   }
       const pages = total !== undefined && Number.isInteger(total) && total >= 0 && total <= limit ? Math.max(1, Math.ceil(total / 500)) : 1;
       for (const [offset, stop] of stops) if (offset >= pages * 500) { stop(); stops.delete(offset); }
       for (let page = 0; page < pages; page++) if (!stops.has(page * 500)) stops.set(page * 500, this.subscribeRead(path(page * 500), update));

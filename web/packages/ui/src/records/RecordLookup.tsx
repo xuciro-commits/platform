@@ -136,7 +136,7 @@ export function EnterpriseReference({source,value,onOpen}:{source:RecordSource;v
      try {
        const answer = await source.enterpriseResolve?.([value]);
        if (active && epoch === request) setResolved({source:identity,value,revision:source.revision,element:answer?.elements.find(element=>element.id===value)});
-     } catch { /* A retained reference still reads as its ID when unavailable. */ }
+     } catch {   }
    };
    void load();
    const stop = source.watchEnterprise?.(() => void load());

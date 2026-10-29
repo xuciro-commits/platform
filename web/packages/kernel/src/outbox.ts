@@ -39,10 +39,10 @@ export class Authorities {
 
   declare(d: AuthorityDeclarationJson): void {
     if (!d.tenantId || !d.dataClass || !d.authorityId || !d.kind || d.kind === "AUTHORITY_KIND_UNSPECIFIED") {
-      throw new KernelError("ERROR_CODE_INVALID_ARGUMENT"); // A1
+      throw new KernelError("ERROR_CODE_INVALID_ARGUMENT");
     }
     const key = `${d.tenantId}\u0000${d.dataClass}`;
-    if ((d.epoch ?? 0) !== (this.current.get(key)?.epoch ?? 0) + 1) throw new KernelError("ERROR_CODE_CONFLICT"); // A2
+    if ((d.epoch ?? 0) !== (this.current.get(key)?.epoch ?? 0) + 1) throw new KernelError("ERROR_CODE_CONFLICT");
     this.current.set(key, d);
   }
 
@@ -61,7 +61,7 @@ export class Authorities {
   }
 
   authorize(s: SubmissionJson): void {
-    if (this.declaration(s).authorityId !== s.authority) throw new KernelError("ERROR_CODE_NOT_AUTHORITY"); // A3
+    if (this.declaration(s).authorityId !== s.authority) throw new KernelError("ERROR_CODE_NOT_AUTHORITY");
   }
 
   private entry(tenant: string, key: string): Entry | undefined {
@@ -72,10 +72,10 @@ export class Authorities {
     const authority = this.declaration(s).authorityId;
     const existing = this.entry(s.tenantId ?? "", s.idempotencyKey ?? "");
     if (existing) {
-      if (canonical(existing.submission) !== canonical(s)) throw new KernelError("ERROR_CODE_IDEMPOTENCY_CONFLICT"); // A6
+      if (canonical(existing.submission) !== canonical(s)) throw new KernelError("ERROR_CODE_IDEMPOTENCY_CONFLICT");
       return existing.state;
     }
-    const state: State = authority === this.edge ? "SUBMISSION_STATE_CONFIRMED" : "SUBMISSION_STATE_PENDING"; // A4
+    const state: State = authority === this.edge ? "SUBMISSION_STATE_CONFIRMED" : "SUBMISSION_STATE_PENDING";
     this.outbox.push({ submission: s, state });
     return state;
   }
@@ -84,7 +84,7 @@ export class Authorities {
     const entry = this.entry(tenant, key);
     if (!entry) throw new KernelError("ERROR_CODE_NOT_FOUND");
     const next = transitions[event as Event]?.[entry.state];
-    if (!next) throw new KernelError("ERROR_CODE_INVALID_ARGUMENT"); // A5
+    if (!next) throw new KernelError("ERROR_CODE_INVALID_ARGUMENT");
     entry.state = next;
     return next;
   }

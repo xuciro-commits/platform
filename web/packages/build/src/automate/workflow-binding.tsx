@@ -34,7 +34,7 @@ export function BindingEditor({ label, value, onChange, steps, schema, optional 
     onDragOver={(event) => { if (event.dataTransfer.types.includes(bindingMime)) event.preventDefault(); }}
     onDrop={(event) => {
       const raw = event.dataTransfer.getData(bindingMime); if (!raw) return;
-      event.preventDefault(); event.stopPropagation(); try { const binding = JSON.parse(raw) as Binding; if (choices.includes(binding.source)) onChange(binding); } catch { /* unrelated or truncated drag payload */ }
+      event.preventDefault(); event.stopPropagation(); try { const binding = JSON.parse(raw) as Binding; if (choices.includes(binding.source)) onChange(binding); } catch {   }
     }}>
     <div className="flex items-center justify-between gap-2 text-xs font-medium"><span>{label}</span>{schema && <code className="text-[9px] font-normal text-muted">{schema.type}</code>}
       {optional && value && <Button variant="ghost" type="button" onClick={() => { input.clear(); onChange(undefined); }} aria-label={t("Remove binding")} className="ml-auto rounded p-0.5 text-muted hover:text-danger"><Trash2 className="size-3" /></Button>}</div>

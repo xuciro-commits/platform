@@ -14,7 +14,7 @@ function ObservationSurface({object,primary,config,title,signalVariable,threshol
  const current=useRef({scope,active:true,readCurrent});current.current={scope,active:current.current.active,readCurrent};useEffect(()=>{current.current.active=true;return()=>{current.current.active=false;};},[]);
  const reader=useMemo(()=>createObservationStatisticsReader(source,()=>current.current.active&&current.current.scope===scope&&current.current.readCurrent),[source,scope]);
  const signal=string(values[signalVariable??""]),threshold=string(values[thresholdVariable??""]),rows=string(values[rowsVariable??""]),validThreshold=typeof threshold==="string"&&/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(threshold)&&Number.isFinite(Number(threshold)),request=c?.kind==="statistics"&&window?.query&&signal&&validThreshold&&["1000","10000","100000"].includes(rows??"")?{object,query:window.query,window:{timeField:c.timeField,field:signal,rows:Number(rows),threshold:threshold!}}:undefined;
- let readScope:string|undefined;try{if(request)readScope=reader.scope(request);}catch{/* the original binding refusal is rendered below */}
+ let readScope:string|undefined;try{if(request)readScope=reader.scope(request);}catch{ }
  const [answer,setAnswer]=useState<{scope:string;statistics?:ObservationStatisticsValue;error?:string}>();
  useEffect(()=>{if(!request||!readScope||!readCurrent)return;let active=true;void reader.read(request).then(value=>{if(active&&value)setAnswer({scope:readScope,statistics:value.statistics});},()=>{if(active)setAnswer({scope:readScope,error:t("Original observation statistics could not be read.")});});return()=>{active=false;};},[reader,readScope,readCurrent]);
  if(!readCurrent)return <p role="status">{t("Loading original observations…")}</p>;

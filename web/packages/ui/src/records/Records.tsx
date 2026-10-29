@@ -224,7 +224,7 @@ const displayOf = (info: EntityInfo, r: EntityRecord) => String((info.display ==
 export function groupable(info: EntityInfo): { value: string; label: string }[] {
   const out: { value: string; label: string }[] = [];
   for (const f of info.fields) {
-    const repeats = ["choice", "reference", "boolean", "integer"].includes(f.type) || f.type === "text" && !f.search; // searched text is mostly names
+    const repeats = ["choice", "reference", "boolean", "integer"].includes(f.type) || f.type === "text" && !f.search;
     if (repeats) out.push({ value: f.name, label: f.title });
     if (f.type === "date" || f.type === "datetime") for (const u of ["month", "week", "day", "year"]) out.push({ value: `${f.name}:${u}`, label: `${f.title} (${u})` });
   }

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Create private local development configuration once; never reset existing state."""
 import argparse
 import base64
 import hashlib
@@ -144,7 +143,7 @@ rp_origin = '{public_url}'
     return validate(root)
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='Create private local configuration without resetting existing state.')
     parser.add_argument('--check', action='store_true', help='validate without creating configuration')
     args = parser.parse_args(argv)
     bootstrap(check=args.check)

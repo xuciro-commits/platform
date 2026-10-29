@@ -53,7 +53,7 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
   const createPage = useNewRecord("build.page", target => { if (pageApplication.current) void joinPage({ id: target.id, application: pageApplication.current }); });
   let importedPage: ReturnType<typeof pageDraftFromDefinition> | undefined;
   if (currentDefinition?.page) {
-    try { importedPage = pageDraftFromDefinition(currentDefinition.page); } catch { /* Unsupported bindings stay explicit code references. */ }
+    try { importedPage = pageDraftFromDefinition(currentDefinition.page); } catch {   }
   }
   const columns: ColumnDef<OwnedResource>[] = [
     { id: "title", header: t("Resource"), accessorFn: item => item.title },

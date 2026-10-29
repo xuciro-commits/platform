@@ -81,7 +81,7 @@ export function PipelineEditor({ id }: { id: string }) {
       return { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: key ?? "", every: every ?? "" };
     },
   });
-  const [picked, setPicked] = useState<string>(); // the step the inspector edits
+  const [picked, setPicked] = useState<string>();
   const [preview, setPreview] = useState<{ signature: string; result: Api.PipelinePreview }>();
   const signature = JSON.stringify(draft);
   const previewResult = preview?.signature === signature ? preview.result : undefined;

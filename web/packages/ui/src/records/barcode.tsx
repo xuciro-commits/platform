@@ -11,7 +11,7 @@ function code128(text: string): number[] | undefined {
 export function Barcode({ text, height = 48, className }: { text: string; height?: number; className?: string }) {
   const widths = code128(text);
   if (!widths) return null;
-  const total = widths.reduce((a, b) => a + b, 0) + 20; // quiet zones of 10 modules
+  const total = widths.reduce((a, b) => a + b, 0) + 20;
   let x = 10;
   const bars = widths.map((w, i) => { const bar = i % 2 === 0 ? <rect key={i} x={x} y={0} width={w} height={height} /> : null; x += w; return bar; });
   return <svg role="img" aria-label={text} className={className} viewBox={`0 0 ${total} ${height + 14}`} width={total * 2} height={(height + 14) * 2} shapeRendering="crispEdges" fill="currentColor">

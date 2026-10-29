@@ -9,7 +9,7 @@ export function TestPayload({ fields, payload, onChange }: { fields?: ActionDecl
   try {
     const parsed: unknown = JSON.parse(payload);
     if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) values = parsed as Record<string, unknown>;
-  } catch { /* Deliberately invalid and complex values remain editable. */ }
+  } catch {   }
   const simple = fields?.every((field) => ["string", "integer", "number", "boolean", "date", "datetime"].includes(field.type));
   const preservesShape = values && fields && Object.keys(values).every((name) => fields.some((field) => field.name === name)) &&
     fields.every((field) => {

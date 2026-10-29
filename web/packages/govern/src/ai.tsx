@@ -274,7 +274,7 @@ function AILimits() {
   const { decide } = useHost();
   const limits = useRead<Limit[]>("/v1/ai-limits");
   const [who, setWho] = useState(""), [daily, setDaily] = useState(""), [minute, setMinute] = useState("");
-  if (limits.isError) return null; // not an administrator of the ai app
+  if (limits.isError) return null;
   const columns: ColumnDef<Limit, any>[] = [
     { accessorKey: "member", header: t("Member"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "dailyTokens", header: t("Tokens a day"), meta: { width: 120, align: "right" }, cell: (c) => c.getValue() || t("default") },

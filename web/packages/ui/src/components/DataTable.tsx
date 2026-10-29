@@ -12,7 +12,6 @@ import { EmptyState } from "./EmptyState";
 import { t } from "../i18n";
 
 declare module "@tanstack/react-table" {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
     align?: "left" | "right";
     width?: number;
@@ -92,7 +91,7 @@ export function DataTable<T>({
     );
     if (!input) return;
     input.focus();
-    try { input.select(); } catch { /* non-text */ }
+    try { input.select(); } catch {   }
   }, []);
 
   const close = (save: boolean, refocus = false) => {

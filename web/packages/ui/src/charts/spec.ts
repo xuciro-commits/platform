@@ -72,7 +72,7 @@ const bucket = (value: unknown, unit: TimeUnit): string => {
   if (unit === "year") return iso.slice(0, 4);
   const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   const day = t.getUTCDay() || 7;
-  t.setUTCDate(t.getUTCDate() + 4 - day); // ISO week: the Thursday's year
+  t.setUTCDate(t.getUTCDate() + 4 - day);
   const week = Math.ceil(((t.getTime() - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86_400_000 + 1) / 7);
   return `${t.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 };

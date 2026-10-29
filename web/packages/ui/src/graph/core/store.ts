@@ -9,7 +9,7 @@ export function readCanvasPositions(key: string): Record<string, CanvasPosition>
     const parsed = raw ? JSON.parse(raw) as unknown : undefined;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
     return parsed as Record<string, CanvasPosition>;
-  } catch { return undefined; } // storage unavailable: this page only
+  } catch { return undefined; }
 }
 
 export function writeCanvasPositions(key: string, positions: Record<string, CanvasPosition>): void {
@@ -20,5 +20,5 @@ export function writeCanvasPositions(key: string, positions: Record<string, Canv
     const next = [key, ...(Array.isArray(index) ? index : []).filter((known) => known !== key)];
     for (const stale of next.slice(LIMIT)) localStorage.removeItem(`canvas:${stale}`);
     localStorage.setItem(INDEX, JSON.stringify(next.slice(0, LIMIT)));
-  } catch { /* storage unavailable: the page keeps the arrangement in memory */ }
+  } catch {   }
 }

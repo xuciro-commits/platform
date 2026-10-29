@@ -6,7 +6,7 @@ export type ResourceKind = "object" | "action" | "link-type" | "property-type" |
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
-  label: string; plural: string; /** the AssetRef kind the host uses for this record type */ ref?: string;
+  label: string; plural: string;   ref?: string;
 };
 
 export const resourceKinds: ResourceKindInfo[] = [

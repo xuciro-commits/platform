@@ -58,7 +58,7 @@ export async function resolveLayout(layout: SerializedDockview, resolve: (route:
     const original = panel.params?.route as Route | undefined;
     if (!original) return;
     let route = original;
-    try { route = await resolve(original); } catch { /* preserve an unavailable original route */ }
+    try { route = await resolve(original); } catch {   }
     if (exists(route.view)) routes.set(id, route);
   }));
   return rewriteLayout(layout, (_route, id) => routes.get(id), keyOf);

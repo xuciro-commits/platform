@@ -185,9 +185,6 @@
     cursor:pointer;
     font:inherit;
   }
-  /* Panel-mounted hardware key system
-     The dark rim is the installation gap between keycap and panel,
-     not a decorative black frame. */
   .plastic{
     --cap:#e5e7e9;
     --cap-down:#d3d7da;
@@ -207,10 +204,9 @@
 
     border:0;
     border-radius:5px;
-    background:#0b0c0d; /* only the narrow installation gap */
+    background:#0b0c0d;
     color:var(--ink);
 
-    /* cavity: very little external shadow; mostly recessed into the panel */
     box-shadow:
       inset 0 1px 2px rgba(0,0,0,.95),
       inset 0 -1px 0 rgba(255,255,255,.03),
@@ -242,12 +238,10 @@
       var(--cap);
     color:var(--ink);
 
-    /* subtle silk-screen / oil-print relief */
     text-shadow:
       0 .7px 0 rgba(255,255,255,.48),
       0 -.55px 0 rgba(0,0,0,.10);
 
-    /* raised keycap: top highlight + side wall + floating shadow */
     box-shadow:
       inset 1px 1px 1px var(--hi),
       inset -1px -1px 1px var(--lo),
@@ -266,7 +260,6 @@
 
   .plastic:hover > .retro-inner{ filter:brightness(1.025); }
 
-  /* momentary key: pressed while pointer/key is down, springs back on release */
   .plastic.pressed > .retro-inner{
     transform:translateY(var(--travel));
     background:var(--cap-down);
@@ -278,7 +271,6 @@
     filter:brightness(.97);
   }
 
-  /* tab / selector: once selected, stays physically sunk */
   .plastic.is-active > .retro-inner{
     transform:translateY(var(--travel));
     background:var(--cap-down);
@@ -289,7 +281,6 @@
     filter:brightness(.96);
   }
 
-  /* Material families */
   .plastic.orange{
     --cap:#f97316; --cap-down:#df5209; --hi:#fdba74; --lo:#b63c08; --ink:#fff;
   }
@@ -318,7 +309,6 @@
     --cap:#facc15; --cap-down:#d9a908; --hi:#fef08a; --lo:#986807; --ink:#2b2408;
   }
 
-  /* Compact panel-mounted keys: same mechanism, smaller cavity and travel */
   .plastic.small,
   .dots-btn,
   button.affix{
@@ -530,15 +520,12 @@
   }
 
 
-  /* ===== Industrial enclosure / mounted-panel material ===== */
   .panel{
     isolation:isolate;
     border-color:#858e94;
     background:
-      /* sparse powder-coat mottling */
       radial-gradient(circle at 12% 17%, rgba(255,255,255,.28) 0 1px, transparent 1.4px),
       radial-gradient(circle at 73% 63%, rgba(70,80,87,.055) 0 .8px, transparent 1.2px),
-      /* subtle vertical brushed-metal streaks */
       repeating-linear-gradient(
         90deg,
         rgba(255,255,255,.055) 0,
@@ -556,7 +543,6 @@
       inset -1px 0 0 rgba(61,70,77,.10);
   }
 
-  /* shallow stamped rim, like a metal faceplate */
   .panel .content{
     position:relative;
     z-index:1;
@@ -588,7 +574,6 @@
   .hardware-screw.bl{left:7px;bottom:7px}
   .hardware-screw.br{right:7px;bottom:7px}
 
-  /* remove old top-only pseudo screws; real four-corner screws are injected */
   .panel:before,.panel:after{display:none}
 
   .well{
@@ -602,7 +587,6 @@
       0 1px 0 rgba(255,255,255,.56);
   }
 
-  /* A physical sub-panel screwed into the faceplate */
   .hardware-bay{
     position:relative;
     margin-top:8px;
@@ -655,13 +639,12 @@
     margin-top:1px;
   }
 
-  /* Rotary control */
   .knob-wrap{
     position:relative;
     width:66px;height:66px;
     margin:0 auto;
     border-radius:50%;
-    background:#111416;                 /* mounting clearance */
+    background:#111416;
     box-shadow:
       inset 0 2px 4px rgba(0,0,0,.95),
       0 1px 0 rgba(255,255,255,.43);
@@ -709,7 +692,6 @@
     opacity:.65;
   }
 
-  /* Metal toggle lever */
   .toggle-base{
     position:relative;
     width:54px;height:64px;
@@ -760,7 +742,6 @@
     box-shadow:0 2px 3px rgba(0,0,0,.38);
   }
 
-  /* Breaker / pull-handle */
   .breaker{
     position:relative;
     width:62px;height:70px;
@@ -802,7 +783,6 @@
     text-align:center;
   }
 
-  /* Selector with physical detents */
   .selector-wrap{
     position:relative;
     width:68px;height:68px;margin:0 auto;
@@ -837,7 +817,7 @@
 <div class="app">
   <main class="board">
 
-    <!-- 01 状态语义 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">01</div><div class="panel-title">状态语义</div>
@@ -876,7 +856,7 @@
       </div>
     </section>
 
-    <!-- 02 按钮系统 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">02</div><div class="panel-title">按钮系统</div>
@@ -952,7 +932,7 @@
       </div>
     </section>
 
-    <!-- 03 输入搜索 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">03</div><div class="panel-title">输入搜索</div>
@@ -980,7 +960,7 @@
       </div>
     </section>
 
-    <!-- 04 下拉选择 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">04</div><div class="panel-title">下拉选择</div>
@@ -1002,7 +982,7 @@
       </div>
     </section>
 
-    <!-- 05 指标卡片 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">05</div><div class="panel-title">指标卡片</div>
@@ -1020,7 +1000,7 @@
       </div>
     </section>
 
-    <!-- 06 数据表格 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">06</div><div class="panel-title">数据表格</div>
@@ -1046,7 +1026,7 @@
       </div>
     </section>
 
-    <!-- 07 图表显示 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">07</div><div class="panel-title">图表显示</div>
@@ -1075,7 +1055,7 @@
       </div>
     </section>
 
-    <!-- 08 报警事件 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">08</div><div class="panel-title">报警事件</div>
@@ -1109,7 +1089,7 @@
       </div>
     </section>
 
-    <!-- 09 导航筛选 -->
+
     <section class="panel">
       <header class="panel-head">
         <div class="num">09</div><div class="panel-title">导航筛选</div>
@@ -1153,7 +1133,6 @@
 </div>
 
 <script>
-  // Wrap every physical button in a real keycap layer.
   const physicalButtons = [
     ...document.querySelectorAll('button.plastic'),
     ...document.querySelectorAll('button.dots-btn'),
@@ -1188,7 +1167,6 @@
     window.setTimeout(() => button.classList.remove('pressed'), delay);
   }
 
-  // True physical travel: down on pointerdown, spring back on release.
   physicalButtons.forEach(button => {
     button.dataset.behavior ||= 'momentary';
 
@@ -1215,7 +1193,6 @@
     });
   });
 
-  // Tabs / segmented controls: selected key remains sunk.
   document.querySelectorAll('[data-seg]').forEach(group => {
     const buttons = [...group.querySelectorAll('button.plastic')];
     buttons.forEach(button => {
@@ -1234,7 +1211,6 @@
     });
   });
 
-  // Pagination: number = latched, arrows = momentary.
   document.querySelectorAll('.pagination').forEach(group => {
     const buttons = [...group.querySelectorAll('button.plastic')];
 
@@ -1256,7 +1232,6 @@
     });
   });
 
-  // Left navigation behaves like a latched selector.
   document.querySelectorAll('#sideNav .nav-item').forEach(item => {
     item.addEventListener('click', () => {
       document.querySelectorAll('#sideNav .nav-item').forEach(x => x.classList.remove('active'));
@@ -1264,7 +1239,6 @@
     });
   });
 
-  // Table row selection.
   document.querySelectorAll('#deviceTable tbody tr').forEach(row => {
     row.addEventListener('click', e => {
       if (e.target.closest('button')) return;
@@ -1273,14 +1247,12 @@
     });
   });
 
-  // Search clear button keeps its physical momentary motion.
   const search = document.querySelector('#search');
   if (search) {
     const clearButton = search.parentElement?.querySelector('button.affix');
     if (clearButton) clearButton.addEventListener('click', () => search.value = '');
   }
 
-  // Physical fasteners: the UI is treated as hardware modules mounted to a faceplate.
   document.querySelectorAll('.panel').forEach(panel => {
     ['tl','tr','bl','br'].forEach(pos => {
       const screw = document.createElement('span');
@@ -1289,7 +1261,6 @@
     });
   });
 
-  // Continuous rotary knob: click/drag vertically or wheel to adjust.
   document.querySelectorAll('[data-knob]').forEach(knob => {
     let angle = -45;
     const apply = () => knob.style.setProperty('--angle', `${angle}deg`);
@@ -1308,7 +1279,6 @@
     });
   });
 
-  // Detented selector: 4 fixed positions.
   document.querySelectorAll('[data-selector]').forEach(selector => {
     const positions = [-70, -20, 30, 80];
     let index = 0;
@@ -1319,12 +1289,10 @@
     });
   });
 
-  // Toggle lever: mechanically flips and stays in position.
   document.querySelectorAll('[data-toggle]').forEach(toggle => {
     toggle.addEventListener('click', () => toggle.classList.toggle('on'));
   });
 
-  // Breaker / pull switch: latched up/down travel.
   document.querySelectorAll('[data-breaker]').forEach(breaker => {
     breaker.addEventListener('click', () => breaker.classList.toggle('on'));
   });

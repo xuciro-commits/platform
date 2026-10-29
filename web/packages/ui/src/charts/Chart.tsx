@@ -29,7 +29,7 @@ export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: Ag
   const [state, setState] = useState<{ key?:string; data?: AggregateData; error?: string }>({});
   const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + JSON.stringify(source?.scope);
   const visible = useViewVisible();
-  const from = useRef(source); // read when the spec changes, not whenever a caller builds a new source object
+  const from = useRef(source);
   from.current = source;
   useEffect(() => {
     if (!visible) return;
@@ -50,7 +50,7 @@ export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: Ag
     const load = () => source.aggregate(type, query).then((data) => live && setState({ key, data }), (e) => live && setState({ key, error: String(e) }));
     const stop = source.watchAggregate?.(type, query, load); void load();
     return () => { live = false; stop?.(); };
-  }, [key, source?.revision, visible]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, source?.revision, visible]);
   return state.key===key?state:{};
 }
 

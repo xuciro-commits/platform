@@ -87,7 +87,7 @@ const switches = defineStatuses({ working: { label: t("Working"), tone: "success
 function AgentsOverview() {
   const { decide, can } = useHost();
   const rows = useRead<Api.AgentOverview[]>("/v1/agent-overview");
-  if (rows.isError) return null; // an administrator's view
+  if (rows.isError) return null;
   const judged = (o: Api.AgentOverview, kind: string) => o.judged[kind] ?? 0;
   const columns: ColumnDef<Api.AgentOverview, any>[] = [
     { accessorKey: "member", header: t("Agent"), cell: ({ row: { original: o } }) => <span className="flex items-center gap-1.5"><span className="font-mono text-xs">{o.member}</span>{o.outside && <Tag label={t("outside")} />}</span> },

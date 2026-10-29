@@ -37,7 +37,7 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
     input.clear();setIssues([]);setMessage('');setMode(next);
   };
   let sourceValue:StructuredValue|undefined;
-  try { sourceValue=parseStructuredSource(input.text,format); } catch { /* Keep the incomplete source untouched. */ }
+  try { sourceValue=parseStructuredSource(input.text,format); } catch {   }
   const writeField=(field:Api.FieldInfo,next:unknown)=>{
     if(!sourceValue)return;
     const changed={...sourceValue,[field.name]:next};

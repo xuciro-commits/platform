@@ -21,7 +21,7 @@ export function timezones(): string[] {
   try {
     const all = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone");
     if (all?.length) return all;
-  } catch { /* older browsers */ }
+  } catch {   }
   return ["UTC", "Asia/Shanghai", "Asia/Tokyo", "Asia/Singapore", "Asia/Kolkata", "Europe/Berlin", "Europe/London", "America/New_York", "America/Chicago", "America/Los_Angeles", "Australia/Sydney"];
 }
 

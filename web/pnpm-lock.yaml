@@ -331,15 +331,9 @@ importers:
 
   packages/catalog:
     devDependencies:
-      '@types/node':
-        specifier: ^26.6.2
-        version: 26.6.2
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
-      typescript-syntax:
-        specifier: npm:typescript@5.4.5
-        version: typescript@5.4.5
 
   packages/govern:
     dependencies:

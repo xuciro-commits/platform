@@ -25,7 +25,7 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   const [saving, setSaving] = useState<ListState>();
   const page = definition.page;
   const allowed = page.actions.map((ref) => ref.name);
-  if (isComposed(page)) { // laid out from sections someone composed
+  if (isComposed(page)) {
     return <>
       <PageHeader title={page.title} description={page.description} />
       <ComposedPage page={page} definitionKey={`${definition.ref.app}/${definition.ref.name}@${definition.version}`} />
@@ -91,7 +91,7 @@ function previewSource(info: EntityInfo): RecordSource {
 
 export function PagePreview({ definition, definitions }: { definition: PageDefinition; definitions: Definition[] }) {
   const page = definition.page;
-  if (isComposed(page)) { // a composed page is previewed as it is composed: real records, nothing that writes
+  if (isComposed(page)) {
     return <>
       <PageHeader title={page.title} description={page.description} />
       <ComposedPage page={page} live={false}

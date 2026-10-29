@@ -108,7 +108,7 @@ export function CodeEditor({ id }: { id: string }) {
   if (id !== "new" && !draft.id) return <Workbench storageKey="code" title={t("Code function")}><WorkbenchMessage>{query.isError ? t("The code function could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const invalid = !!inputs?.invalid;
   let published: CodeDraft | undefined;
-  try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch { /* the owner rejects invalid publications */ }
+  try { published = draft.published ? JSON.parse(draft.published) as CodeDraft : undefined; } catch {   }
   return <Workbench storageKey="code" crumbs={[{ label: t("Functions"), onClick: () => open({ view: "code" }) }, { label: t("Code functions"), onClick: () => open({ view: "code" }) }]} title={draft.title || t("New code function")}
     status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>

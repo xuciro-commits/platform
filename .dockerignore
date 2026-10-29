@@ -3,6 +3,5 @@
 .git
 .build
 **/.build
-**/*.test
 web/**/dist
 !web/apps/workspace/dist

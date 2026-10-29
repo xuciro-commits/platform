@@ -121,7 +121,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
     for (const entry of answered) {
       const ok = entry.state === "SUBMISSION_STATE_CONFIRMED", own = entry.submission.tenantId === client.connection.tenant && entry.submission.idempotencyKey === key;
       const declared = actions?.find((a) => a.schema === entry.submission.schema?.name);
-      const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree
+      const done = declared?.needsApproval ? t("sent for approval") : t("done");
       const outcomeText = ok ? done : humanizeKernelError(entry.reason ?? entry.outcome);
       if (!ok && own) options.onRefused?.(outcomeText);
       if ((!ok && !(own && options.onRefused)) || (ok && !options.quiet)) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? entry.submission.schema?.name ?? schema, target: entry.submission.target?.id ?? target.id, outcome: outcomeText }));

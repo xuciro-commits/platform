@@ -1,10 +1,7 @@
 .build/
 **/.build/
-contract/lean/.lake/
 .DS_Store
 target/
-*.test
-capabilities/server/cmd/webhook-sink/webhook-sink
 node_modules/
 dist/
 
@@ -12,7 +9,6 @@ dist/
 
 __pycache__/
 
-tools/
 capabilities/server/vendor/
 
 web/public/rules/

@@ -13,7 +13,7 @@ export function groupDomain(group: string, value: unknown): unknown[] {
   if (!unit) return [[field, "=", value ?? ""]];
   const v = String(value ?? "");
   if (!v) return [[field, "=", ""]];
-  if (unit === "week") return []; // ISO weeks are not ranges the domain can name simply; drilling shows the whole filter
+  if (unit === "week") return [];
   const start = unit === "year" ? `${v}-01-01` : unit === "month" ? `${v}-01` : v;
   const d = new Date(`${start}T00:00:00Z`);
   if (unit === "year") d.setUTCFullYear(d.getUTCFullYear() + 1);
@@ -41,7 +41,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill,hea
       .then((data) => live && setState({key,data}), (e) => live && setState({key,error:String(e)}));
     const stop = from.current.watchAggregate?.(type, aggregateQuery, load); void load();
     return () => { live = false; stop?.(); };
-  }, [key, source.revision, visible]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, source.revision, visible]);
   const {data,error}=state.key===key?state:{};
   if (error) return <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>;
   if (!data) return <p className="text-sm text-muted">{t("Loading…")}</p>;
@@ -57,7 +57,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill,hea
   const total = (list: Record<string, unknown>[]) => list.reduce((n, r) => n + Number(r[measure] ?? 0), 0);
   const show = (list: Record<string, unknown>[]) => {
     if (!list.length) return measure==="count"?"0":"";
-    if (!additive && list.length > 1) return "…"; // averages and extremes do not add up across groups
+    if (!additive && list.length > 1) return "…";
     const byCurrency = new Map<string, Record<string, unknown>[]>();
     for (const r of list) {
       const c = currency ? String(r[currency] ?? "") : "";

@@ -47,7 +47,7 @@ function ExplainAccess({ entry }: { entry?: Entry }) {
  const {client,source,me}=useHost();
  const [asking,setAsking]=useState(false);
  const target=entry?.submission.target,submission=entry?.submission;
- const action=submission?.schema?.name||""; // the refused action itself, not the authority carrying it
+ const action=submission?.schema?.name||"";
  const explain=useQuery({queryKey:[client.connection.token,client.connection.tenant,source.scope,"authz-explain",submission?.principalId,me.tenantId,action,target?.type,target?.id],enabled:asking&&!!target?.type&&!!action,retry:false,queryFn:async()=>{
    const request=authzExplainRequest(submission as Entry["submission"],me.principalId,me.tenantId);
    const asked=await client.call<Api.Verdict & {error?:{detail?:string}}>("POST","/v1/authz/explain",request);

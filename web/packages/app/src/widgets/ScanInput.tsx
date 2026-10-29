@@ -16,7 +16,7 @@ export function ScanInput({value,onChange,disabled,label}:{value:string;onChange
   (async()=>{
    try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});if(stop||!video.current)return;video.current.srcObject=stream;await video.current.play();}
    catch{setFailure(t('The camera is not available.'));setCamera(false);return;}
-   const tick=async()=>{if(stop||!video.current||!detector)return;try{const found=await detector.detect(video.current);const code=found[0]?.rawValue;if(code){commit(code);setCamera(false);return;}}catch{/* keep looking */}timer=window.setTimeout(tick,250);};
+   const tick=async()=>{if(stop||!video.current||!detector)return;try{const found=await detector.detect(video.current);const code=found[0]?.rawValue;if(code){commit(code);setCamera(false);return;}}catch{ }timer=window.setTimeout(tick,250);};
    void tick();
   })();
   return()=>{stop=true;window.clearTimeout(timer);stream?.getTracks().forEach(track=>track.stop());};

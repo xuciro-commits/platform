@@ -74,7 +74,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
       if (result.isSuccess && record && record.revision >= confirmed.current.revision && (expected === undefined || record.revision === expected)) {
         load(record); markSaved(); setDirty(false); return true;
       }
-    } catch { /* The accepted revision stays saved if its read fails. */ }
+    } catch {   }
     setError(message); return false;
   };
   const showSaved = (target: string) => {

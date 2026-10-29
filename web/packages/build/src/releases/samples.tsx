@@ -28,7 +28,7 @@ function ApplicationSampleForm({ application, selected, samples: suppliedSamples
     return () => onInvalidChange?.(false);
   }, [inputs?.invalid, onInvalidChange]);
   const trial = useActionTrial(), declarationFields = host.source.entity("build.sample-set")?.fields ?? [];
-  let parsedSamples: unknown; try { parsedSamples = JSON.parse(suppliedSamples); } catch { /* The existing sample fields retain incomplete JSON. */ }
+  let parsedSamples: unknown; try { parsedSamples = JSON.parse(suppliedSamples); } catch {   }
   const record = inventory.data?.records.find(record => record.name === selected);
   const base = useRef(record), selection = useRef(selected), lock = useRef(false);
   const samples = useSavedValues && selected
@@ -142,7 +142,7 @@ function SyntheticRecords({ application, samples, onChange }: Pick<SampleProps, 
       && group.records.every(row => objectValue(row) && typeof row.id === "string" && (row.state === undefined || typeof row.state === "string")))
       && new Set(parsed.map(group => group.type)).size === parsed.length
       && parsed.every(group => new Set(group.records.map((row: Record<string, unknown>) => row.id)).size === group.records.length)) groups = parsed;
-  } catch { /* The full editor keeps incomplete and deliberately invalid input verbatim. */ }
+  } catch {   }
   const members = model.entities.filter(entity => application.resources?.some(ref => ref.kind === "object" && ref.app === entity.app && ref.name === entity.type));
   const write = (next: Api.SampleRecords[]) => onChange(JSON.stringify(next, null, 2));
   const dropInputs = (key: string) => inputs?.clear(`${inputs.scope}/record-${key}/`);

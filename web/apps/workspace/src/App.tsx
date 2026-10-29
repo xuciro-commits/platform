@@ -71,14 +71,14 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [declareAttempt, setDeclareAttempt] = useState(0);
   useEffect(() => {
     if (!me) return;
-    if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser
+    if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred);
     let live = true;
     setDeclared({ phase: "pending" });
     client.bindIdentity(me.tenantId, me.principalId);
     if(!signedIn)remember(IDENTITY_KEY,token);
     const application=new URLSearchParams(location.hash.split("?")[1]).get("application")??remembered(`workspace:selection:${me.tenantId}:${me.principalId}`);
     if(application)client.prepared?.activate(application);
-    setCurrency(me.currency); // the default of amounts people enter
+    setCurrency(me.currency);
     client.refreshDeclarations().then(
       () => { if (live) setDeclared({ phase: "ready" }); },
       () => { if (live) { setDeclared({ phase: "error" }); } });
@@ -125,7 +125,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [activeContributions, definitions, host, activeRoute?.params?.application, activeRoute?.params?.instance]);
   const entries = useRef(all);
   entries.current = all;
-  const registry = useRef(definitions); // tab titles read current definitions without replacing registered views
+  const registry = useRef(definitions);
   registry.current = definitions;
   const recordRoutes = useRef(host?.opens); recordRoutes.current = host?.opens;
   const searchRecords = useCallback(async (text: string) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
@@ -162,7 +162,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [selectionScope]);
   const { setScheme } = useTheme();
   const homeOpened = useRef<string | undefined>(undefined);
-  useEffect(() => { // the member's own appearance and start page follow them to any browser
+  useEffect(() => {
     if (!me || !ready) return;
     const theme = me.account?.theme;
     if (theme === "light" || theme === "dark" || theme === "system") setScheme(theme);
@@ -233,7 +233,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);
     if (!target) return;
-    chosen.current = { id, from: activeRoute && routeToHash(activeRoute) }; // the previous active route must not undo an explicit app choice during restoration
+    chosen.current = { id, from: activeRoute && routeToHash(activeRoute) };
     select(id);
   };
   const sessionOptions = [
@@ -255,7 +255,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   };
   const decide = host.decide;
   let preparedAt:string|undefined;
-  try{preparedAt=client.prepared?.current()?.at;}catch{/* The preparation dialog reports the original storage failure. */}
+  try{preparedAt=client.prepared?.current()?.at;}catch{ }
 
   return (
     <HostContext.Provider value={host}>

@@ -70,20 +70,20 @@ export function notationTitle(notation: FlowNotation): string {
 export const eventRing = (notation: FlowNotation): number => notation === "event-start" ? 1.5 : notation === "event-end" || notation === "event-terminate" ? 4 : 2.5;
 
 export type FlowNodeClass =
-  | "code"       // a typed code or script step
-  | "document"   // a document, dataset or knowledge item
-  | "function"   // a callable function or model
-  | "action"     // an action, API call or service task
-  | "query"      // a query
-  | "transform"  // a transform
-  | "ai"         // an AI step
-  | "human"      // a user task
-  | "trigger"    // a trigger, entry point or wait
-  | "control"    // branching, gateways, joins
-  | "flow"       // a flow or workflow step
-  | "lifecycle"  // lifecycle states and actions
-  | "end"        // a terminal
-  | "task"       // the plain default
+  | "code"
+  | "document"
+  | "function"
+  | "action"
+  | "query"
+  | "transform"
+  | "ai"
+  | "human"
+  | "trigger"
+  | "control"
+  | "flow"
+  | "lifecycle"
+  | "end"
+  | "task"
   | (string & {});
 
 export const flowNodeClasses: Record<string, { title: string; icon: ReactNode; notation?: FlowNotation }> = {

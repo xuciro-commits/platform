@@ -65,7 +65,7 @@ export function SystemHealth() {
   return <>
     <PageHeader title={t("Health")} help={t("The host's own runtime view: what started, what it is built from, and what it has been doing. Everything here is reported by the host itself.")} />
     <ReadResult query={health}>{(health) => <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
-        {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
+        { }
         <Tag label={health.status === "quarantined" ? t("Quarantined") : health.status === "ok" ? t("Healthy") : t("Needs attention")}
           tone={health.status === "quarantined" ? "danger" : health.status === "ok" ? "success" : "warning"} />
         <PropertyList columns={3} items={[
@@ -250,7 +250,7 @@ export function AppSettingsView() {
       <ReadResult query={settings}>{(rows) => <>
       {rows.filter((a) => a.app !== "platform").length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
       <div className="grid max-w-3xl gap-3">
-        {rows.filter((a) => a.app !== "platform").map((a) => ( // the tenant's own settings are the Organisation page's
+        {rows.filter((a) => a.app !== "platform").map((a) => (
           <Panel key={a.app} title={me.apps.find(app=>app.id===a.app)?.title??a.app}>
             <div className="grid gap-3">
               {a.settings.map((s) => {
@@ -288,7 +288,7 @@ export function AppSettingsView() {
 export function Audit() {
   const audit = useRead<AuditEntry[]>("/v1/audit");
   const { catalog, me } = useHost();
-  const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title])); // the member's catalog, in their language
+  const titles = new Map<string, string>(catalog.map((a) => [a.schema, a.title]));
   const appTitle = (id: string) => me.apps.find((a) => a.id === id)?.title ?? id;
   const personalQuery = useRead<Api.PersonalRead[]>("/v1/personal-reads");
   const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [

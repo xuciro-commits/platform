@@ -61,7 +61,7 @@ export function resolveLegacyRoute(route: Route, context: {
       return readableRecord(await context.read("flow.instance", id)) ? { ...route, view: "flow-instance" } : route;
     } catch (error) {
       if (!/HTTP (401|403|404)\b/.test(String(error))) throw error;
-      return route; // missing or unreadable records keep the original refusal
+      return route;
     }
   })();
 }

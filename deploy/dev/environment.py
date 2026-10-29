@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Run one Platform API and its single public workspace entry."""
 import importlib.util
 import json
 import os

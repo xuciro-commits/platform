@@ -86,7 +86,7 @@ export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = fa
   const reset = useRef(discard);
   reset.current = ()=>{inputs?.clear();discard();};
   useLayoutEffect(() => {
-    if (!panel || !unsaved) return; // local reference examples have no draft host
+    if (!panel || !unsaved) return;
     unsaved.register(panel, owner.current, dirty ? () => {
       unsaved.register(panel, owner.current);
       reset.current();
@@ -199,7 +199,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     try {
       const layout = routeScope.current ? rewriteLayout(api.toJSON(), (route) => routeScope.current!(route) === id ? route : undefined, keyOf) : api.toJSON();
       localStorage.setItem(layoutKey(id), JSON.stringify(layout));
-    } catch { /* storage unavailable */ }
+    } catch {   }
   }, [storageKey, keyOf]);
   const loadLayout = useCallback(async (api: DockviewApi, id: string | undefined) => {
     try {
@@ -211,7 +211,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         : restored;
       if (layout) api.fromJSON(layout); else api.clear();
     } catch {
-      api.clear(); // malformed layouts are not executable state
+      api.clear();
     }
     for (const panel of [...api.panels]) {
       const route = (panel.params as { route?: Route } | undefined)?.route;
@@ -261,7 +261,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const answer = searching && recordSearch?.source === search && recordSearch.text === typed && recordSearch.attempt === searchAttempt ? recordSearch : undefined;
   const found = answer?.hits ?? [];
   const searchPending = searching && answer?.hits === undefined && answer?.error === undefined;
-  useEffect(() => { // records for what is typed, a moment after typing stops
+  useEffect(() => {
     if (!searching || !search) { setRecordSearch(undefined); return; }
     let live = true;
     setRecordSearch(undefined);
@@ -273,18 +273,18 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   }, [search, typed, searching, searchAttempt]);
   const navKey = `${storageKey}:nav`;
   const [memory, setMemory] = useState<{ recent: RecentEntry[]; favorites: string[] }>(() => {
-    try { const saved = localStorage.getItem(navKey); if (saved) return { recent: [], favorites: [], ...JSON.parse(saved) }; } catch { /* storage unavailable */ }
+    try { const saved = localStorage.getItem(navKey); if (saved) return { recent: [], favorites: [], ...JSON.parse(saved) }; } catch {   }
     return { recent: [], favorites: [] };
   });
   const remember = useCallback((change: (m: { recent: RecentEntry[]; favorites: string[] }) => { recent: RecentEntry[]; favorites: string[] }) => setMemory((m) => {
     const next = change(m);
-    try { localStorage.setItem(navKey, JSON.stringify(next)); } catch { /* storage unavailable */ }
+    try { localStorage.setItem(navKey, JSON.stringify(next)); } catch {   }
     return next;
   }), [navKey]);
   const toggleFavorite = useCallback((app: string) => remember((m) => ({ ...m, favorites: m.favorites.includes(app) ? m.favorites.filter((id) => id !== app) : [...m.favorites, app] })), [remember]);
   const currentApp = useRef(applications?.current); currentApp.current = applications?.current;
   const visited = useCallback((route: Route, title: string) => {
-    if (rail && [routeKey(rail.home), routeKey(rail.applications)].includes(routeKey(route))) return; // the rail's own places are not "recent"
+    if (rail && [routeKey(rail.home), routeKey(rail.applications)].includes(routeKey(route))) return;
     const key = keyOf(route);
     remember((m) => ({ ...m, recent: [{ route, title, app: currentApp.current, at: Date.now() }, ...m.recent.filter((r) => keyOf(r.route) !== key)].slice(0, 20) }));
   }, [rail, remember, keyOf]);
@@ -338,7 +338,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const placeBeside = useCallback((id: string, reference: string, dockScope: string | undefined) => {
     const api = docks.current.get(dockScope), panel = api?.getPanel(id), source = api?.getPanel(reference)?.group;
     if (!api || !panel || !source || compact) return;
-    if (panel.group !== source && panel.group.api.location.type === "grid") return; // already beside the reference
+    if (panel.group !== source && panel.group.api.location.type === "grid") return;
     const other = api.groups.find((group) => group !== source && group.api.location.type === "grid");
     if (!other && (source.api.location.type !== "grid" || source.panels.length < 2)) return;
     panel.api.moveTo({ group: other ?? api.addGroup({ referenceGroup: source, direction: "right" }) });
@@ -346,7 +346,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   const show = useCallback((route: Route, options: OpenOptions, dockScope: string | undefined) => {
     const api = dockScope === scope.current ? dock.current : docks.current.get(dockScope), view = byId.get(route.view);
     if (!view) return;
-    if (!api) { // the scope's dock is not mounted yet: mount it, then open on ready
+    if (!api) {
       setCreated((prev) => prev.includes(dockScope) ? prev : [...prev, dockScope]);
       queuedOpen.current = { route, options, scope: dockScope };
       return;
@@ -437,7 +437,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const revision = incomingRevision.current;
     void Promise.resolve(resolveRoute(linked)).then(resolved => {
       if (revision === incomingRevision.current && routeToHash(linked) === location.hash && routeKey(resolved) !== routeKey(linked)) openResolved(resolved);
-    }).catch(() => { /* An explicit navigation reports resolution failures. */ });
+    }).catch(() => {   });
   }, [resolveRoute, openResolved]);
   const beside = useCallback((id: string, dockScope: string | undefined) => {
     placeBeside(id, id, dockScope);
@@ -462,7 +462,7 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     }
   }, [layoutScope]);
   useEffect(() => {
-    unloaded.current = false; // a StrictMode remount is a live workspace again
+    unloaded.current = false;
     booted.current = false;
     return () => { unloaded.current = true; };
   }, []);

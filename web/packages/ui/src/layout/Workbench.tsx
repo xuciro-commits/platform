@@ -46,7 +46,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
   const [focusedPane, setFocusedPane] = useState<"left" | "right">();
   useLayoutEffect(() => {
     const measure = () => {
-      if (!root.current?.clientWidth) return; // a hidden workspace tab retains its last useful layout
+      if (!root.current?.clientWidth) return;
       const width = root.current.clientWidth, height = main.current?.clientHeight ?? 0;
       setDimensions(old => old.width === width && (!height || old.height === height) ? old : { width, height: height || old.height });
     };
@@ -68,7 +68,7 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
     }
   }, [dock?.value, dock?.open]);
   useEffect(() => { if (dock?.open) setFocusedPane(undefined); }, [dock?.open]);
-  useEffect(() => { try { localStorage.setItem(`workbench:${storageKey}`, JSON.stringify(layout)); } catch { /* private mode */ } }, [layout, storageKey]);
+  useEffect(() => { try { localStorage.setItem(`workbench:${storageKey}`, JSON.stringify(layout)); } catch {   } }, [layout, storageKey]);
   const patch = (next: Partial<Layout>) => setLayout(old => ({ ...old, ...next }));
   const showLeft = !!left && (compact ? focusedPane === "left" : left.open ?? layout.leftOpen);
   const showRight = !!right && (compact ? focusedPane === "right" : right.open ?? layout.rightOpen);

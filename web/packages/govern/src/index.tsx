@@ -90,7 +90,7 @@ export const controlPanel = defineApp({
   surface: "tenant",
   category: "govern",
   description: t("Members, organisation, installed packages, settings and the audit trail."),
-  for: () => true, // every member has an account here; the rest of the panel follows their roles
+  for: () => true,
   title: t("Control Panel"),
   icon: <SlidersHorizontal />,
   home: { view: "control-panel" },

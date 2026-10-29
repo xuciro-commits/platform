@@ -317,7 +317,7 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
     const present=(body:ReactNode)=>node.presentation?<RegionPresentation key={`${id}/${overlay?session.overlayEpoch(overlay):"page"}`} title={node.title} presentation={node.presentation}>{body}</RegionPresentation>:body;
     if (node.kind === "widget") {
       const item = indexed.get(node.section);
-      if (!item) return null; // server filtered this widget for the reader
+      if (!item) return null;
       if (context && !([...pageVariableContract.loop.recordWidgets, ...pageVariableContract.loop.presentationWidgets] as readonly string[]).includes(item.section.widget)) return <Panel role="alert">{t("This widget is not supported in a loop.")}</Panel>;
       const next=new Set(ancestors);next.add(id);
       const slotViews=Object.fromEntries((node.children??[]).map(child=>[page.document!.nodes[child]?.slot??"",renderNode(child,next,context,overlay,"widget",bounded)]));

@@ -15,7 +15,7 @@ export function FilterRenderer({object: type,config: section,source,filters: set
     <div role="search" aria-label={section.title || t("Filter")} className="flex flex-wrap items-end gap-3">
       {(section.fields ?? []).map((name) => {
         const f = info?.fields.find((x) => x.name === name);
-        if (!f) return null; // not a field this member reads
+        if (!f) return null;
         const id = `${prefix}-${type}-${name}`;
         const value = set[name];
         return (

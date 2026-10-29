@@ -101,7 +101,7 @@ export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
     </div>
     {!compact && !collapsed && data.detail && <div className="platform-canvas-node-detail px-3" title={data.detail}>{data.detail}</div>}
     {ports}
-    {/* Events attached to the activity: what it may time out on, what it escapes through. */}
+    { }
     {!compact && !!data.boundary?.length && <div className="platform-flow-boundary" aria-label={t("Attached events")}>
       {data.boundary.map((event) => <span key={event.id} className="platform-flow-boundary-event"
         style={{ "--block-color": event.tone ? `var(--tone-${event.tone})` : color } as CSSProperties}

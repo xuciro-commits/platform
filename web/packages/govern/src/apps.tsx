@@ -32,7 +32,7 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
   if (!items.length) return null;
   const act = async (schema: string, id: string, payload: unknown) => {
     setBusy(id); setRefused((r) => ({ ...r, [id]: "" }));
-    await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) }); // the host's own reason stays on the card
+    await decide(schema, { type: "platform.package", id }, payload, { onRefused: (reason) => setRefused((r) => ({ ...r, [id]: reason })) });
     setBusy("");
   };
   const ids = [...new Set(items.map(item => item.descriptor.id || item.installed?.id || ""))];

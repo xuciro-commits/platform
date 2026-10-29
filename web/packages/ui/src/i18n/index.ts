@@ -12,7 +12,7 @@ const dictionaries: Record<string, Dictionary> = {};
 
 function chosen(): string {
   let stored: string | null = null;
-  try { stored = localStorage.getItem(key); } catch { /* storage unavailable */ }
+  try { stored = localStorage.getItem(key); } catch {   }
   const wanted = stored ?? (typeof navigator === "undefined" ? "en" : navigator.language);
   if (/^zh(-(cn|sg|hans.*))?$/i.test(wanted)) return "zh-CN";
   return languages.some((l) => l.id === wanted) ? wanted : "en";
@@ -28,10 +28,10 @@ export function language(): string {
 export function setLanguage(id: string): void {
   current = id;
   if (typeof document !== "undefined") document.documentElement.lang = current;
-  try { localStorage.setItem(key, id); } catch { /* storage unavailable: this page only */ }
+  try { localStorage.setItem(key, id); } catch {   }
   const inTest = typeof globalThis !== "undefined" && Boolean((globalThis as unknown as { process?: { env?: { VITEST?: string } } }).process?.env?.VITEST);
   if (typeof location !== "undefined" && !inTest) {
-    try { location.reload(); } catch { /* in environments where reload is unavailable */ }
+    try { location.reload(); } catch {   }
   }
 }
 

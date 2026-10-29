@@ -132,7 +132,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     try {
       const next = await relationLayout(kind, nodes.map((n) => { const m = flowNodes.find((f) => f.id === n.id)?.measured; return m?.width && m.height ? { ...n, size: { width: m.width, height: m.height } } : n; }), relations);
       if (version !== layoutVersion.current) return;
-      persist(next); // choosing a layout is the reader resetting their own arrangement
+      persist(next);
       setFlowNodes((current) => current.map((n) => ({ ...n, position: next[n.id] ?? n.position })));
       onPositionsChange?.(next);
       setTimeout(() => void fitView({ ...fitting, duration: 220 }), 30);

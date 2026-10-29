@@ -104,7 +104,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const filterName = applicationName ?? scopedApplication?.name;
   const scopeUnresolved = !!scope && !scopedApplication && !applicationName;
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20${filterName ? `&application=${encodeURIComponent(filterName)}` : ""}`, undefined, mayRelease && (!scope || !!scopedApplication || !!applicationName));
-  const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess; // the host console answers only host administrators
+  const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess;
   const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
   const promoted = (inventory.isError ? [] : inventory.data?.candidates ?? []).filter((candidate) => candidate.from && candidate.id !== activeID);
   const selected = kinds.find((item) => item.kind === kind)!;
@@ -212,7 +212,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   };
   const send = (request: ReleaseRequest) => perform(async () => {
     const current = pendingRef.current;
-    if (current && current !== request) return; // an unconfirmed request cannot be replaced
+    if (current && current !== request) return;
     if (new TextEncoder().encode(JSON.stringify(request.body)).length > releaseCommandBytes) { setError(t("The release selection exceeds the original 65536-byte request budget. No drafts were dropped.")); return; }
     rememberRequest(request);
     const path = request.kind === "save" ? "/v1/releases/candidates" : request.kind === "evaluate" ? "/v1/releases/evaluations" : "/v1/releases/active";

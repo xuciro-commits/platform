@@ -36,8 +36,8 @@ export function OverlayFrame({ open, onOpenChange, title, children, wide, return
     <D.Root modal={backdrop} open={open && !suspended} onOpenChange={(next) => { change(next); }}>
       <D.Portal>
         {backdrop&&<D.Overlay onClick={(event) => { if (event.target === event.currentTarget && event.button === 0 && !event.ctrlKey && closeOnBackdrop) change(false); }} className={sheet ? "fixed inset-0 z-40 bg-overlay" : "fixed inset-0 z-50 bg-overlay"} />}
-        {/* A dialog never grows past the screen: its title stays, its content
-            scrolls, and what it asks for is always reachable. */}
+        {
+}
         <D.Content data-frame={sheet ? "sheet" : "modal"} {...focus} {...policy} onEscapeKeyDown={event=>{focus.onEscapeKeyDown(event);policy.onEscapeKeyDown(event);}} onCloseAutoFocus={(event) => { if (suspended) event.preventDefault(); else focus.onCloseAutoFocus(event); }}
           style={sheet ? {width:`min(${width??420}px, 100vw)`,[side]:0} : width===undefined?undefined:{width:`min(${width}px, calc(100vw - 32px))`}}
           className={sheet ? `fixed inset-y-0 z-50 flex flex-col ${side==="left"?"border-r":"border-l"} border-border bg-surface shadow-2xl outline-none` : `fixed z-50 left-1/2 top-1/2 flex max-h-[calc(100dvh-32px)] flex-col ${wide ? "w-[min(880px,calc(100vw-32px))]" : "w-[min(480px,calc(100vw-32px))]"} -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-surface p-4 shadow-xl`}>

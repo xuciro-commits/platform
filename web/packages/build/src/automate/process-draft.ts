@@ -47,7 +47,7 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublish
       if (fresh.isSuccess && fresh.data?.record?.revision === accepted.revision) {
         acknowledge(accepted, fresh.data.record); return;
       }
-    } catch { /* Report a read failure without resubmitting the accepted edit. */ }
+    } catch {   }
     setError(message);
   };
   const invalidInputs = () => Object.values(session.inputProblems).some(Boolean);
