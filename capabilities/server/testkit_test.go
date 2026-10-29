@@ -1,7 +1,5 @@
 package platformserver
 
-import "platformserver/studio/build"
-
 import (
 	"context"
 	"encoding/json"
@@ -12,15 +10,15 @@ import (
 	"platformserver/engine/business"
 	"platformserver/engine/resources"
 	"platformserver/journal"
+	"platformserver/studio/build"
+
 	controlowner "platformserver/kernel/control"
-	"platformserver/kernel/records"
+	"platformserver/platform"
+	"platformserver/studio/authoring"
 	"platformserver/studio/packages"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"platformserver/platform"
-	"platformserver/studio/authoring"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
@@ -344,10 +342,4 @@ func rowCount(t *testing.T, tn *Tenant, typ string) int {
 	t.Helper()
 	defer readView(t, tn)()
 	return tn.records.types[typ].rows.Len()
-}
-
-func rowOf(t *testing.T, tn *Tenant, typ, id string) *records.Row {
-	t.Helper()
-	defer readView(t, tn)()
-	return tn.records.types[typ].rows.Get(id)
 }

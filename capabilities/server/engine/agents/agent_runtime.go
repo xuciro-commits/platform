@@ -6,10 +6,11 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+
+	"google.golang.org/protobuf/proto"
 
 	"platformserver/internal/agents"
 	"platformserver/platform"
@@ -476,6 +477,9 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			run.Draft, run.State, run.Task = nil, "running", ""
 			if run.ToolOnly {
 				run.State = "done"
+			} else if draft.Kind == "effect" && draft.Outcome == "accepted" {
+				// A confirmed send goes on with its receiver's answer, refusal or discard.
+				run.State, run.Task = "waiting", fmt.Sprintf("effect:%s/%s:agent:%s:%d:confirm", draft.Owner, draft.Action, run.ID, draft.Step+1)
 			}
 			return func(r *pb.ChangeRecord) {
 				run.Proposals[len(run.Proposals)-1].Evidence = platform.AgentApp + "/" + r.GetChangeId()
@@ -524,7 +528,9 @@ func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platf
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "effect" {
 		sender := platform.ActingCaller(c, c.Member, d.Owner, false)
+		endRun := h.ScopeAgentRun(run.ID) // the effect keeps the run it was proposed in
 		n, err := sender.Emit(d.Action, key, run.Ref, json.RawMessage(payload), now)
+		endRun()
 		if err != nil {
 			return "", err
 		}

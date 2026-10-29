@@ -373,11 +373,6 @@ func (t *Tenant) resolver(member platform.Member, object, producer string, now t
 	return build.NewResolver(rules[i], producer, records)
 }
 
-// loadDataset appends rows as the dataset's next version, one journaled input.
-func (t *Tenant) loadDataset(member platform.Member, dataset, producer, marking string, rows []map[string]any, now time.Time) *kernel.Error {
-	return t.loadDatasetKey(member, dataset, producer, marking, rows, "load:"+dataset+":"+producer+":"+now.UTC().Format(time.RFC3339Nano), now)
-}
-
 func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marking string, rows []map[string]any, key string, now time.Time) *kernel.Error {
 	if rows == nil {
 		rows = []map[string]any{}

@@ -940,26 +940,6 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
-// The narrow finite context profile keeps original complete object identity.
-// Code assets may use a type prefix that differs from their actual app owner.
-func frozenObjectOwnerMatches(asset ReleaseAsset, ref AssetRef) bool {
-	var descriptor struct {
-		Type   string      `json:"type"`
-		App    string      `json:"app"`
-		Entity *EntityInfo `json:"entity"`
-	}
-	if json.Unmarshal(asset.Body, &descriptor) != nil {
-		return false
-	}
-	owner, typ := descriptor.App, descriptor.Type
-	if descriptor.Entity != nil {
-		owner, typ = descriptor.Entity.App, descriptor.Entity.Type
-	} else if owner == "" {
-		owner, _, _ = strings.Cut(typ, ".")
-	}
-	return ref.Kind == AssetObject && typ == descriptor.Type && typ == ref.Name && owner == ref.App
-}
-
 // Use the original nested declaration while retaining legacy flat action bodies.
 func releaseActionDescriptor(body json.RawMessage) (Action, error) {
 	var flat Action

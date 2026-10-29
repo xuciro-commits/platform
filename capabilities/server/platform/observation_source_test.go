@@ -24,35 +24,6 @@ func observationWindowForTest() ObservationWindow {
 	return ObservationWindow{Since: since, Until: since.Add(120 * time.Second), Count: 10_000_000, FirstAt: since.Add(time.Second), LastAt: since.Add(101 * time.Second), First: "20.00000000000000000001", Last: "40.00000000000000000003", Min: "20", Max: "41", Sum: "300000000", Mean: "30", Unit: "C"}
 }
 
-func TestObservationCurrentPointPreservesQualityAndExactValue(t *testing.T) {
-	at := time.Now().UTC()
-	sample := ObservationSample{Device: "D1", Signal: "temperature", Unit: "C", Type: "decimal", Value: "23.50000000000000001", Quality: "good", At: at, ReceivedAt: at}
-	if err := CheckObservationLatest(sample, "D1", "temperature", "C"); err != nil {
-		t.Fatal(err)
-	}
-	for _, quality := range []string{"bad", "stale", "uncertain"} {
-		missing := sample
-		missing.Value, missing.Quality = nil, quality
-		if err := CheckObservationLatest(missing, "D1", "temperature", "C"); err != nil {
-			t.Fatalf("lost a missing %s reading: %v", quality, err)
-		}
-	}
-	for name, change := range map[string]func(*ObservationSample){
-		"other device": func(s *ObservationSample) { s.Device = "D2" },
-		"other unit":   func(s *ObservationSample) { s.Unit = "F" },
-		"rounded JSON": func(s *ObservationSample) { s.Value = 23.5 },
-		"not finite":   func(s *ObservationSample) { s.Value = "NaN" },
-		"missing good": func(s *ObservationSample) { s.Value = nil },
-		"bad value":    func(s *ObservationSample) { s.Quality = "bad" },
-	} {
-		invalid := sample
-		change(&invalid)
-		if CheckObservationLatest(invalid, "D1", "temperature", "C") == nil {
-			t.Fatal("accepted invalid current reading:", name)
-		}
-	}
-}
-
 func TestObservationThresholdTrendAndCompactExactInputs(t *testing.T) {
 	definition, entity := observationDefinitionForTest()
 	window := observationWindowForTest()

@@ -1,15 +1,14 @@
 package platformserver
 
-import agentowner "platformserver/engine/agents"
-
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	agentowner "platformserver/engine/agents"
+
 	controlowner "platformserver/kernel/control"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,9 +16,12 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
 	"platformserver/apps/work"
+
 	automation "platformserver/engine/automation"
 	"platformserver/platform"
 )
+
+func TestA2A(t *testing.T) { testA2A(t, "accepted") }
 
 // A published agent answers A2A 1.0 tasks for the members who
 // call it, acting within their grants; an agent asks an external agent through
@@ -143,16 +145,22 @@ func testA2A(t *testing.T, storage string) {
 	expect("card", fmt.Sprint(c.Name, " ", c.Interfaces), "Triage [{http://example.com/a2a/t-1/desk.triage JSONRPC 1.0}]")
 	expect("not a member", fmt.Sprint(rpc("nobody", "desk.triage", "GetTask", map[string]string{"id": "x"})), "map[]")
 
-	// A task for ana: the agent acts within her grants, no drafts.
+	// A task for ana: the agent only proposes; she confirms it and the answer is hers.
 	first := send("ana-token", "Answer ticket T1: wifi", "m-1", "")
 	id := strings.Fields(state(first))[0]
 	expect("submitted", state(first), id+" TASK_STATE_SUBMITTED")
 	expect("resent", state(send("ana-token", "Answer ticket T1: wifi", "m-1", "")), id+" TASK_STATE_SUBMITTED")
 	think(4)
+	proposed := rpc("ana-token", "desk.triage", "GetTask", map[string]string{"id": id})
+	expect("awaits confirmation", state(proposed), id+" TASK_STATE_INPUT_REQUIRED")
+	x, _ := platform.Get[Ticket](tn.automation("desk", false), "T1")
+	expect("nothing written before confirmation", x.Status, "open")
+	expect("confirmed", do("ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, id, map[string]any{}), "ok")
+	think(3)
 	done := rpc("ana-token", "desk.triage", "GetTask", map[string]string{"id": id})
 	expect("completed", state(done), id+" TASK_STATE_COMPLETED")
-	x, _ := platform.Get[Ticket](tn.automation("desk", false), "T1")
-	expect("acted as the agent", x.Status+" "+x.Changed.By, "answered agent:desk.triage")
+	x, _ = platform.Get[Ticket](tn.automation("desk", false), "T1")
+	expect("answered by the confirming person", x.Status+" "+x.Changed.By, "answered ana")
 	expect("only its caller", state(rpc("bo-token", "desk.triage", "GetTask", map[string]string{"id": id})), "error -32001")
 
 	// A question is input required; the caller's next message answers it.
@@ -177,29 +185,28 @@ func testA2A(t *testing.T, storage string) {
 		map[string]any{"kind": "a2a", "url": partner.URL, "secret": "partner", "effects": []string{"desk/lookup"}, "allowPrivate": true}), "ok")
 	do("ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "S1", map[string]any{"agent": "desk.scout", "goal": "scout the lead time"})
 	think(4)
+	if len(heard) != 0 {
+		t.Fatal("the partner heard a question before anyone confirmed it")
+	}
+	expect("send confirmed", do("ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "S1", map[string]any{}), "ok")
+	think(4)
 	run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "S1")
-	expect("scouted", run.State+" "+run.Result, `done after 1: sent desk/lookup to 1 receivers; waiting for the answer
+	expect("scouted", run.State+" "+run.Result, `done after 1: drafted for confirmation: lookup
+confirmed by ana: sent: lookup
 answered: {"product":"P-200","leadTimeDays":12}`)
-	expect("heard", fmt.Sprint(len(heard), strings.HasPrefix(heard[0], "1.0 Bearer partner-token "), strings.Contains(heard[0], `"messageId":"t-1:desk:lookup:S1:1:partner"`)), "1 true true")
+	expect("heard", fmt.Sprint(len(heard), strings.HasPrefix(heard[0], "1.0 Bearer partner-token "), strings.Contains(heard[0], `"messageId":"t-1:desk:lookup:agent:S1:1:confirm:partner"`)), "1 true true")
 
-	// An endpoint whose tasks cannot be recalled holds what an agent sends;
-	// discarded, the run goes on with that.
+	// What cannot be recalled is only sent once a person confirms it: a
+	// rejected proposal reaches no receiver and the run goes on with that.
 	expect("remove partner", do("ana", controlowner.PlatformApp, controlowner.SchemaEndpointRemove, controlowner.EndpointType, "partner", map[string]any{}), "ok")
 	expect("public partner", do("ana", controlowner.PlatformApp, controlowner.SchemaEndpointAdd, controlowner.EndpointType, "partner-2",
 		map[string]any{"kind": "a2a", "url": partner.URL, "effects": []string{"desk/lookup"}, "allowPrivate": true, "irreversible": true}), "ok")
 	expect("second scout", do("ana", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "S2", map[string]any{"agent": "desk.scout", "goal": "scout again"}), "ok")
 	think(2)
-	effects := tn.Effects(now)
-	held := slices.IndexFunc(effects, func(effect platform.Effect) bool { return effect.Run == "S2" })
-	if held < 0 {
-		run, _ := platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "S2")
-		t.Fatalf("the second run has no held inquiry: %s", platform.Raw(run))
-	}
-	expect("held", effects[held].State+" "+effects[held].Run, "held S2")
-	do("ana", controlowner.PlatformApp, controlowner.SchemaEffectDiscard, controlowner.EffectType, effects[held].ID, map[string]any{})
+	expect("rejected", do("ana", platform.AgentApp, platform.SchemaRunReject, platform.RunType, "S2", map[string]any{"reason": "not now"}), "ok")
 	think(2)
 	run, _ = platform.Get[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), "S2")
-	expect("discarded", fmt.Sprint(run.State, " ", strings.HasSuffix(run.Result, "discarded by ana"), " ", run.Signals[0].Kind, " ", len(heard)), "done true discarded 1")
+	expect("declined", fmt.Sprint(run.State, " ", strings.Contains(run.Result, "rejected by ana: not now"), " ", run.Signals[0].Kind, " ", len(heard)), "done true rejected 1")
 	if storage != "memory" {
 		CheckReplay(t, tn, journal, build)
 	} else {

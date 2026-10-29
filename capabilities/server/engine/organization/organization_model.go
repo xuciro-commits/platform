@@ -145,12 +145,6 @@ func (m *Model) ViewOf(id string) *View {
 	return nil
 }
 
-// RefType and RefID split a pinned record reference, "record:<type>/<id>".
-func RefType(ref string) string {
-	typ, _, _ := strings.Cut(strings.TrimPrefix(ref, "record:"), "/")
-	return typ
-}
-
 func RefID(ref string) string {
 	_, id, _ := strings.Cut(strings.TrimPrefix(ref, "record:"), "/")
 	return id

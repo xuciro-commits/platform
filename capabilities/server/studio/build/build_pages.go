@@ -296,15 +296,6 @@ func (b *Build) checkPage(p Page) error {
 	return nil
 }
 
-// names are an object's field names, to tell someone what they may choose.
-func names(info platform.EntityInfo) string {
-	var out []string
-	for _, f := range info.Fields {
-		out = append(out, f.Name)
-	}
-	return strings.Join(out, ", ")
-}
-
 // Canonicalize the author's original page in place. Only presentation bindings
 // migrate; action identities, saved publication bytes and layout stay intact.
 func (b *Build) normalizePageModel(p *Page, lookup func(string) (platform.EntityInfo, bool)) error {

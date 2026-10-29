@@ -1,22 +1,20 @@
 package platformserver
 
-import "platformserver/studio/build"
-
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"net/http"
-
+	"platformserver/studio/build"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/core"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -77,13 +75,6 @@ func txnState(tn *Tenant) string {
 	raw, _ := json.Marshal([]json.RawMessage{parts[0], parts[9], parts[11]})
 	return string(raw)
 }
-func txnUnchanged(t *testing.T, tn *Tenant, before string) {
-	t.Helper()
-	if txnState(tn) != before || len(tn.sequences.Clone()) != 0 {
-		t.Fatal("transaction left records or allocated a number")
-	}
-}
-
 func TestBusinessTxnConditionalSubjectAndDynamicTargets(t *testing.T) {
 	tn := txnTenant(t)
 	directory := t.TempDir()

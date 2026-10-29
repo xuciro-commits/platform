@@ -7,12 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"platformkernel/kernel"
+
+	"google.golang.org/protobuf/proto"
 
 	"platformserver/platform"
 	"reflect"
@@ -1025,15 +1026,6 @@ func (c *ViewCache) settle(gen uint64) bool {
 	}
 	c.gen, c.entry = gen, nil
 	return false
-}
-
-func (c *ViewCache) current(gen uint64, key string) *viewEntry {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.settle(gen) {
-		return nil
-	}
-	return c.entry[key]
 }
 
 // store applies value to the entry, creating it when it is missing. A stale

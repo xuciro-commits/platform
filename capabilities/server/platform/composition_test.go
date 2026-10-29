@@ -52,7 +52,7 @@ func TestCompositionSelectsProvidersAndRejectsInvalidDependencies(t *testing.T) 
 	}
 }
 
-func TestResourcesDrainPreservesOtherRegistrationsAndRetriesFailedInverse(t *testing.T) {
+func TestResourcesCloseRunsInversesInReverseAndRetriesFailures(t *testing.T) {
 	var resources Resources
 	registry := map[string]string{"other": "still active"}
 	registry["owned"] = "active"
@@ -70,20 +70,15 @@ func TestResourcesDrainPreservesOtherRegistrationsAndRetriesFailedInverse(t *tes
 	}); err != nil {
 		t.Fatal(err)
 	}
-	release, err := resources.Acquire()
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err = resources.Close(ctx); !errors.Is(err, context.Canceled) || registry["owned"] != "active" {
-		t.Fatalf("drain did not wait for actual users: %v, %+v", err, registry)
+	if err := resources.Close(ctx); !errors.Is(err, context.Canceled) || registry["owned"] != "active" {
+		t.Fatalf("canceled close ran an inverse: %v, %+v", err, registry)
 	}
-	if _, err = resources.Acquire(); err == nil {
-		t.Fatal("new work entered a draining scope")
+	if err := resources.Track("late", func(context.Context) error { return nil }); err == nil {
+		t.Fatal("a closing scope accepted a registration")
 	}
-	release()
-	release()
+	var err error
 	if err = resources.Close(context.Background()); err == nil || registry["owned"] != "active" {
 		t.Fatalf("failed dependent cleanup removed its provider: %v", err)
 	}
@@ -93,29 +88,5 @@ func TestResourcesDrainPreservesOtherRegistrationsAndRetriesFailedInverse(t *tes
 	}
 	if err = resources.Close(context.Background()); err != nil || len(order) != 2 {
 		t.Fatalf("completed inverse ran again: %+v, %v", order, err)
-	}
-}
-
-func TestDrainingAcquisitionCanStillRegisterItsInverse(t *testing.T) {
-	var resources Resources
-	lease, err := resources.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err = resources.Close(ctx); err == nil {
-		t.Fatal("close ignored active acquisition")
-	}
-	closed := false
-	if err = lease.Track("late handle", func(context.Context) error { closed = true; return nil }); err != nil {
-		t.Fatal(err)
-	}
-	lease.Release()
-	if err = resources.Close(context.Background()); err != nil || !closed {
-		t.Fatal("in-flight acquisition leaked", err)
-	}
-	if err = lease.Track("expired", func(context.Context) error { return nil }); err == nil {
-		t.Fatal("released lease acquired another effect")
 	}
 }

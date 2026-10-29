@@ -7,16 +7,19 @@ import (
 	"platformserver/studio/build"
 
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
+
+func TestTenantDefinedApproval(t *testing.T) { testTenantDefinedApproval(t, true) }
 
 // A tenant-authored step uses the work app's approval and inbox, including
 // rejection, rather than a second process runtime.
@@ -213,4 +216,16 @@ func testTenantDefinedApproval(t *testing.T, accepted bool) {
 			}
 		}
 	}
+}
+
+// merge is a with b's keys laid over it.
+func merge(a, b map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		out[k] = v
+	}
+	return out
 }

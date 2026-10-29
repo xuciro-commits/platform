@@ -134,21 +134,6 @@ func anyEnd(mm *DirectoryModel, ends []string, stereotype string) bool {
 	return false
 }
 
-// EndsFor are the pairs a contract admits between two stereotypes, for a caller
-// that shows a modeller what it may draw.
-func EndsFor(c Contract) []Pair {
-	if len(c.Client) > 0 || len(c.Supplier) > 0 {
-		var out []Pair
-		for _, s := range c.Client {
-			for _, t := range c.Supplier {
-				out = append(out, Pair{Source: s, Target: t})
-			}
-		}
-		return append(out, c.Extension...)
-	}
-	return c.Extension
-}
-
 // decideRelationship validates before exposing any change to the model.
 func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := func(msg string, args ...any) *kernel.Error {

@@ -665,37 +665,6 @@ type ObservationResult struct {
 	Intervals *ObservationIntervalResult `json:"intervals,omitempty"`
 }
 
-// A current reading carries its quality and time. It is never a window summary
-// and cannot enter the window decision evaluator.
-func CheckObservationLatest(sample ObservationSample, device, signal, unit string) error {
-	if sample.Device != device || sample.Signal != signal || sample.Unit != unit || sample.At.IsZero() || sample.ReceivedAt.IsZero() || !slices.Contains([]string{"good", "bad", "uncertain", "stale"}, sample.Quality) || !slices.Contains([]string{"integer", "decimal", "number"}, sample.Type) {
-		return fmt.Errorf("current observation differs from its declared numeric point, unit or quality")
-	}
-	if sample.Value == nil {
-		if sample.Quality == "good" {
-			return fmt.Errorf("a good current observation needs a value")
-		}
-		return nil
-	}
-	if sample.Quality == "bad" {
-		return fmt.Errorf("a bad current observation cannot carry a valid value")
-	}
-	value, ok := sample.Value.(string)
-	if !ok || len(value) > 256 {
-		return fmt.Errorf("current numeric observations preserve their exact text value")
-	}
-	kind := sample.Type
-	if kind == "number" {
-		kind = "decimal"
-	}
-	program, err := CompileExpr(ExprLiteralValue(kind, value), ExprSchema{})
-	if err != nil {
-		return err
-	}
-	_, err = program.Eval(ExprContext{})
-	return err
-}
-
 // CheckObservationCoverage validates the source's completeness claim without reconstructing limited points.
 func CheckObservationCoverage(coverage ObservationCoverage, window ObservationWindow) error {
 	if coverage.AvailableSince.IsZero() || coverage.CompleteUntil.IsZero() || coverage.AvailableSince.After(window.Since) || coverage.CompleteUntil.Before(window.Until) || coverage.Truncated {
@@ -1761,10 +1730,6 @@ const ExprMaxDepth = rules.MaxDepth
 const ExprMaxSet = rules.MaxSet
 const ExprMaxContextBytes = rules.MaxContextBytes
 
-func NewExprNumericAggregate(op, kind, currency string) (ExprNumericAggregate, error) {
-	return rules.NewNumericAggregate(op, kind, currency)
-}
-
 func CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error) {
 	return rules.Compile(expr, schema)
 }
@@ -1785,14 +1750,8 @@ func ExprPresent(kind string, value any) ExprValue { return rules.Present(kind, 
 
 func CheckObservationDecimal(value string) error { return rules.CheckWindowDecimal(value) }
 
-func CompareExprValues(a, b ExprValue) (int, error) { return rules.CompareValues(a, b) }
-
 func LowerPageExpr(raw json.RawMessage, kind string, schema ExprSchema) (Expr, error) {
 	return rules.LowerPage(raw, kind, schema)
-}
-
-func CompileFrozenFormula(expr Expr, schema ExprSchema) (ExprProgram, error) {
-	return rules.CompileFrozenFormula(expr, schema)
 }
 
 func ruleEngineOf(engines []RuleEngine) RuleEngine {

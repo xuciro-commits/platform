@@ -1116,12 +1116,6 @@ func (c Caller) FindOf(t reflect.Type, q Query) ([]any, int, *kernel.Error) {
 	return c.rt.Find(c, t, q)
 }
 
-// Records is every record of T, archived ones included, ordered by ID.
-func Records[T any](c Caller) []T {
-	out, _, _ := Find[T](c, Query{Archived: true})
-	return out
-}
-
 // PutAt stores entity as changed by an input that is not a decision (an
 // observation, an effect's answer): the change is stamped with the caller and
 // now, and named by cause in the record's history.

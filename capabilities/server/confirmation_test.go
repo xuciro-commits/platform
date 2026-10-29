@@ -1,20 +1,17 @@
 package platformserver
 
-import "platformserver/studio/build"
-
 import (
-	"fmt"
-	"slices"
-
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"platformserver/apps/work"
+	"platformserver/platform"
+	"platformserver/studio/build"
+	"slices"
 	"strings"
 	"testing"
 	"time"
-
-	"platformserver/apps/work"
-	"platformserver/platform"
 )
 
 func businessConfirmationSpec(partial, expiry string) *platform.Confirmation {
@@ -61,13 +58,4 @@ func prepareBusinessConfirmation(t *testing.T, tn *Tenant, at time.Time, spec *p
 
 func confirmationResponse(code int, body string) (*http.Response, error) {
 	return &http.Response{StatusCode: code, Status: fmt.Sprintf("%d answer", code), Body: io.NopCloser(strings.NewReader(body))}, nil
-}
-
-func currentConfirmation(t *testing.T, tn *Tenant) platform.ConfirmationRun {
-	t.Helper()
-	runs, _, err := platform.Find[platform.ConfirmationRun](tn.automation(build.ID, false), platform.Query{})
-	if err != nil || len(runs) != 1 {
-		t.Fatalf("confirmation count=%d: %v", len(runs), err)
-	}
-	return runs[0]
 }

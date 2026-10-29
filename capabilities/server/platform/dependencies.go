@@ -1105,27 +1105,9 @@ func NewReleaseDependencyGraph(assets []ReleaseAsset) (*DependencyGraph, error) 
 	return graph, nil
 }
 
-func (g *DependencyGraph) Descriptors() []Dependencies {
-	refs := make([]AssetRef, 0, len(g.nodes))
-	for ref := range g.nodes {
-		refs = append(refs, ref)
-	}
-	slices.SortFunc(refs, compareRef)
-	out := make([]Dependencies, 0, len(refs))
-	for _, ref := range refs {
-		description := g.nodes[ref]
-		description.Requires = slices.Clone(description.Requires)
-		description.Provides = slices.Clone(description.Provides)
-		out = append(out, description)
-	}
-	return out
-}
-
 func (g *DependencyGraph) Requires(ref AssetRef) []AssetRef {
 	return slices.Clone(g.nodes[ref].Requires)
 }
-func (g *DependencyGraph) UsedBy(ref AssetRef) []AssetRef { return slices.Clone(g.usedBy[ref]) }
-
 func (g *DependencyGraph) Closure(roots []AssetRef) ([]AssetRef, error) {
 	refs, err := g.walk(roots, false)
 	slices.SortFunc(refs, compareRef)

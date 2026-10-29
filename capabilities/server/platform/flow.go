@@ -348,13 +348,6 @@ func (r *Run) Set(v any) {
 	r.Data, _ = json.Marshal(v)
 }
 
-// DataOf reads an instance's data as T.
-func DataOf[T any](r *Run) T {
-	var v T
-	json.Unmarshal(r.Data, &v)
-	return v
-}
-
 // FlowHost is the runtime surface consumed by the original Flow owner.
 // Declarations, member reads and execution collaborators remain explicit;
 // an instance cannot access unrelated installation or host management APIs.

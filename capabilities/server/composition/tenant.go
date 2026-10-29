@@ -34,10 +34,6 @@ func NewTenantWithSource(id string, source *platform.SystemSource, seats ...plat
 	return NewTenantWithSourceAndCapabilities(id, source, platformserver.DefaultRuntimeCapabilities(), seats...)
 }
 
-func NewTenantWithCapabilities(id string, services platformserver.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
-	return NewTenantWithSourceAndCapabilities(id, nil, services, seats...)
-}
-
 func NewTenantWithSourceAndCapabilities(id string, source *platform.SystemSource, services platformserver.RuntimeCapabilities, seats ...platform.Seat) (*platformserver.Tenant, error) {
 	services.BindOwner = bindOwner
 	services.NewAgentEvaluator = authoring.NewAgentEvaluator

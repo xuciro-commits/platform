@@ -1046,10 +1046,6 @@ func (p Page) CheckComputeResource(c PageComputeResource, object EntityInfo, op 
 	return nil
 }
 
-func (d *PageDocument) checkComputeResource(v PageVariable) error {
-	return d.inputSchema().checkComputeResource(v)
-}
-
 type PageUnusedWidget struct {
 	Node   string `json:"node"`
 	Parent string `json:"parent"`
@@ -1822,14 +1818,6 @@ func (d PageInputSchema) CheckQuerySets() error {
 }
 
 func (d *PageDocument) CheckQuerySets() error { return d.inputSchema().CheckQuerySets() }
-
-func (d *PageDocument) sharedContextRecord(id string) bool {
-	if d == nil || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.ContextViews.SharedUIProfile) {
-		return false
-	}
-	v := d.Variables[id]
-	return v.Type == "record" && v.Scope == "application" && v.Mode == "shared" && v.Source != nil && v.Source.Kind == "application" && v.Source.Object != nil && v.Source.Object.Kind == AssetObject && v.Source.Object.Check() == nil
-}
 
 func (d PageInputSchema) sharedContextRecord(id string) bool {
 	v := d.Variables[id]

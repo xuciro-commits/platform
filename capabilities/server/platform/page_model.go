@@ -1446,34 +1446,6 @@ func (s Section) CheckTableEdit(info EntityInfo, action Action) error {
 	return nil
 }
 
-func sectionJSONValue(v reflect.Value, path []string) reflect.
-	Value {
-	if len(path) == 0 {
-		return v
-	}
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return reflect.Value{}
-		}
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return reflect.Value{}
-	}
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Type().Field(i)
-		if field.Anonymous {
-			if found := sectionJSONValue(v.Field(i), path); found.IsValid() {
-				return found
-			}
-		}
-		if strings.Split(field.Tag.Get("json"), ",")[0] == path[0] {
-			return sectionJSONValue(v.Field(i), path[1:])
-		}
-	}
-	return reflect.Value{}
-}
-
 //go:embed page_compat.json
 var pageWidgetJSON []byte
 

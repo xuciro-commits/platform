@@ -2,9 +2,9 @@ package platform
 
 import (
 	"encoding/json"
-	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // SimulationFactory is trusted composition capability. It creates a fresh
@@ -58,19 +58,6 @@ func (l *Ledger) Restore(raw json.RawMessage) error {
 	records, err := Unprotos[*pb.ChangeRecord](raw)
 	if err == nil {
 		l.changes.Restore(l.tenant, records)
-	}
-	return err
-}
-
-// SnapshotFacts and RestoreFacts save and restore a tenant's fact log.
-func SnapshotFacts(log *kernel.FactLog, tenant string) (json.RawMessage, error) {
-	return Protos(log.Records(tenant))
-}
-
-func RestoreFacts(log *kernel.FactLog, tenant string, raw json.RawMessage) error {
-	records, err := Unprotos[*pb.FactRecord](raw)
-	if err == nil {
-		log.Restore(tenant, records)
 	}
 	return err
 }
