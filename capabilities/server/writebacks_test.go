@@ -151,7 +151,7 @@ func testWritebackQueuesAndReplaysOnce(t *testing.T, durable bool, journal *jour
 		Target: &pb.EntityRef{Type: build.WritebackType, Id: "native"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err == nil || !strings.Contains(err.Message, "owner callback") {
 		t.Fatalf("published a writeback whose native owner cannot receive its answer: %v", err)
 	}
-	submit("unchecked-conn", build.ConnectionType+".create", build.ConnectionType, "unchecked", `{"name":"unchecked","title":"Unchecked","kind":"http","address":"https://unchecked.example.com/"}`)
+	submit("unchecked-conn", build.ConnectionType+".create", build.ConnectionType, "unchecked", `{"name":"unchecked","title":"Database","kind":"postgres","address":"postgres://reader@db.example.com/orders"}`)
 	if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: "invalid-active-writeback",
 		Target: &pb.EntityRef{Type: build.WritebackType, Id: "W1"}, Schema: &pb.SchemaRef{Name: build.WritebackType + ".edit", Version: 1}, Payload: []byte(`{"connection":"unchecked"}`)}, at); err == nil {
 		t.Fatal("edited a published writeback past its connection validation")

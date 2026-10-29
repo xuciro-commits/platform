@@ -162,8 +162,13 @@ func (p Page) CheckDataBinding(binding PageDataBinding, lookup func(string) (Ent
 		if !known {
 			return fmt.Errorf("page binding %s object is unavailable", binding.ID)
 		}
+		// A model field may name the record's own id and archived metadata.
+		metadata := func(typ string) (EntityInfo, bool) {
+			value, found := lookup(typ)
+			return ConstraintEntity(value), found
+		}
 		for _, field := range model.Fields {
-			if _, err := RecordPathField(info.Type, field.Segments(), lookup); err != nil {
+			if _, err := RecordPathField(info.Type, field.Segments(), metadata); err != nil {
 				return err
 			}
 		}
@@ -190,9 +195,18 @@ func (p Page) CheckDataBinding(binding PageDataBinding, lookup func(string) (Ent
 				return fmt.Errorf("original model rule is unavailable")
 			}
 			for name, typ := range declared.Reads.Inputs {
-				variable, ok := p.InputSchema.Variables[rule.Inputs[name]]
-				if !ok || !PageRuleInputFits(variable.Type, typ.Kind) {
+				id := rule.Inputs[name]
+				variable, ok := p.InputSchema.Variables[id]
+				if !ok || (typ.Kind == "reference" || typ.Object != "") && p.RecordVariableObject(id) != typ.Object || typ.Kind != "reference" && typ.Object == "" && !PageRuleInputFits(variable.Type, typ.Kind) {
 					return fmt.Errorf("model rule input does not match its declared type")
+				}
+			}
+			// An original rule may stop reading an input without forcing every
+			// referring page to be republished; each supplied variable must still
+			// belong to this page.
+			for _, id := range rule.Inputs {
+				if _, known := p.InputSchema.Variables[id]; !known {
+					return fmt.Errorf("model rule input is an unavailable page variable")
 				}
 			}
 		}

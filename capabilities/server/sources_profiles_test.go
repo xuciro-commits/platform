@@ -97,6 +97,7 @@ func TestPostgresTableProfilePullAndReplay(t *testing.T) {
 	}
 	submit(build.SourceType, "source", "create", map[string]any{"name": "tableprobe", "title": "Table probe", "connection": "db", "profile": "table", "entity": strings.Trim(table, "\""), "since": "seq", "dataset": "rows"})
 	submit(build.SourceType, "source", "publish", map[string]any{})
+	submit(build.SourceType, "source", "pull", map[string]any{})
 	tn.PullSources(at)
 	source, _ := platform.Get[build.Source](tn.automation(build.ID, false), "source")
 	if source.Cursor != "10" || source.Last == nil || source.Last.Applied != 3 {

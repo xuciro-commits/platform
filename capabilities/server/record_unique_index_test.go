@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/journal"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -332,7 +333,9 @@ func TestPostgresNonRecordResultsAdvanceOnlyAfterApplication(t *testing.T) {
 	}
 	defer forgetJournal(t, j, id)
 	worker := newResultWorker(id)
-	worker.idle = true
+	// An idle poll never reaches the journal; a refused attempt is the work
+	// result that changes only owned work state.
+	worker.reject = true
 	live := composeTenant(t, id, []platform.Seat{seatOf("writer", "invariants:operator", "a:writer")}, newConstraintOwner(id), newNotes(id, "a"), worker)
 	if _, err = j.Entries(ctx, id, 0); err != nil {
 		t.Fatal(err)
@@ -406,7 +409,7 @@ func TestPostgresNonRecordResultsAdvanceOnlyAfterApplication(t *testing.T) {
 	live.mu.Lock()
 	outcome := live.run(task, txnAt, false)
 	live.mu.Unlock()
-	if outcome != "ok" {
+	if outcome != pb.ErrorCode_ERROR_CODE_POLICY_DENIED.String() {
 		t.Fatal(outcome)
 	}
 	check("work-result", before)

@@ -120,7 +120,7 @@ func TestCanonicalTransactionKanbanDestinationsRemainInLiveAndFrozenDescriptions
 	}
 }
 func TestPageVariableSharedVectors(t *testing.T) {
-	raw, err := os.ReadFile("pageui/variables.vectors.json")
+	raw, err := os.ReadFile("testdata/page-variables.vectors.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,5 +458,45 @@ func TestRetainedOverlayAndUnusedWidgetKeepOriginalOwner(t *testing.T) {
 	}
 	if !bytes.Equal(before, Raw(original)) {
 		t.Fatal("scope projection rewrote retained input")
+	}
+}
+
+// A legacy list-detail page keeps its layout through the typed record so its
+// page actions still render as the shorthand's toolbar.
+func TestListDetailShorthandKeepsItsLayoutInThePresentation(t *testing.T) {
+	object := AssetRef{App: "build", Kind: AssetObject, Name: "build.sample"}
+	safe, err := Page{Name: "sample", Title: "Sample", Layout: "list-detail", Object: object, ListFields: []string{"name"}, DetailFields: []string{"name", "state"},
+		Actions: []AssetRef{{App: "build", Kind: AssetAction, Name: "build.sample.create"}}}.Safety()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		Layout string `json:"layout"`
+	}
+	if err := json.Unmarshal(safe.WidgetSpec.Body, &body); err != nil || body.Layout != "list-detail" {
+		t.Fatalf("layout %q: %v", body.Layout, err)
+	}
+	composed, err := Page{Name: "sample", Title: "Sample", Layout: "composed", Object: object}.Safety()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Layout = ""
+	if err := json.Unmarshal(composed.WidgetSpec.Body, &body); err != nil || body.Layout != "" {
+		t.Fatalf("a composed page named layout %q: %v", body.Layout, err)
+	}
+}
+
+// Defaults for the field-listing widgets come from the model; cards keep an
+// explicit choice, so an empty summary stays empty.
+func TestOnlyFieldListingWidgetsDeriveDefaultModelFields(t *testing.T) {
+	info := EntityInfo{Type: "build.sample", Fields: []FieldInfo{{Name: "name", Type: "text"}, {Name: "state", Type: "choice"}, {Name: "note", Type: "text", ReadOnly: true}}}
+	if got := defaultModelFields("table", info); len(got) != 3 {
+		t.Fatalf("table defaults %v", got)
+	}
+	if got := defaultModelFields("form", info); len(got) != 2 {
+		t.Fatalf("form defaults %v", got)
+	}
+	if got := defaultModelFields("kanban", info); len(got) != 0 {
+		t.Fatalf("a card board derived %v", got)
 	}
 }

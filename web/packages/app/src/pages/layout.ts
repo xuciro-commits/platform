@@ -13,7 +13,7 @@ export function pageLayoutDiagnostics(document:PageUI.PageDocument,sections:Pick
   if(!["rows","columns","tabs","flow","toolbar","loop","widget"].includes(node.kind))issues.push({node:id,code:"Choose a supported page layout container or widget."});
   if(new TextEncoder().encode(node.title??"").length>1024)issues.push({node:id,code:"The layout title exceeds its text limit."});
   if(node.kind==="widget"&&sections.length){if(!sectionIDs.has(node.section)||used.has(node.section??""))issues.push({node:id,code:"A widget leaf needs one original page section."});else used.add(node.section!);}
-  if(node.kind!=="widget"&&node.section||node.kind!=="widget"&&!node.children?.length&&!node.slot&&!(document.unusedWidgets??[]).some(unused=>unused.parent===id))issues.push({node:id,code:"A layout container needs children and cannot bind a section."});
+  if(node.kind!=="widget"&&node.section||node.kind!=="widget"&&!node.children?.length&&!node.slot&&!(id===document.root&&!sections.length)&&!(document.unusedWidgets??[]).some(unused=>unused.parent===id))issues.push({node:id,code:"A layout container needs children and cannot bind a section."});
   for(const child of node.children??[])walk(child,depth+1);
  };
  walk(document.root,0);

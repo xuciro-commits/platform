@@ -68,12 +68,12 @@ func TestAttachedJournalCommitFailureIsTenantLocal(t *testing.T) {
 				if receipt, err := bad.Submit(member, sub, at); receipt != nil || err == nil {
 					t.Fatalf("failed append answered success: %v %v", receipt, err)
 				}
-				if bad.quarantined() != committed || bad.records.types["stock.bin"].rows.Len() != 0 ||
+				if bad.quarantined() != committed || rowCount(t, bad, "stock.bin") != 0 ||
 					len(bad.app("stock").AcceptedLedger().RecordsFor(id)) != 0 || len(bad.outbound) != 0 {
 					t.Fatal("append failure exposed state/effects or used the wrong recovery state")
 				}
 				decide(t, good, "clerk", "stock", "stock.bin.create", "stock.bin", "B1", map[string]any{"code": "neighbor"}, at)
-				if good.quarantined() || good.records.types["stock.bin"].rows.Len() != 1 {
+				if good.quarantined() || rowCount(t, good, "stock.bin") != 1 {
 					t.Fatal("another tenant stopped after the append failure")
 				}
 				injected.failure = nil
@@ -91,7 +91,7 @@ func TestAttachedJournalCommitFailureIsTenantLocal(t *testing.T) {
 					bad = registry.current(id)
 				}
 				receipt, err := bad.Submit(member, sub, at.Add(time.Minute))
-				if err != nil || receipt == nil || store.Position(id) != 1 || bad.records.types["stock.bin"].rows.Len() != 1 {
+				if err != nil || receipt == nil || store.Position(id) != 1 || rowCount(t, bad, "stock.bin") != 1 {
 					t.Fatalf("original identity did not recover exactly one result: %v %v", receipt, err)
 				}
 				if duplicate, err := bad.Submit(member, sub, at.Add(2*time.Minute)); err != nil || duplicate.GetChangeId() != receipt.GetChangeId() || store.Position(id) != 1 {

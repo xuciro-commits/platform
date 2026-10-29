@@ -41,10 +41,10 @@ test("list and board editors retain independent card fields and the original mov
   await expect(summaries.getByRole("button", { name: "Detail", exact: true })).toHaveAttribute("aria-pressed", "true");
   await shots(page, page.locator("body"), "list-board-card-fields", info);
   await editor.save();
-  await expect.poll(async () => (await builder.record("build.page", id)).sections.find((section: any) => section.widget === "kanban")?.actions).toEqual([`${type}.move`]);
-  const saved = await builder.record("build.page", id);
+  await expect.poll(async () => (await builder.sections(id)).find((section: any) => section.widget === "kanban")?.actions?.map((action: any) => action.name)).toEqual([`${type}.move`]);
+  const saved = await builder.draft(id);
   expect(saved.sections.find((section: any) => section.widget === "record-list")).toMatchObject({ model: { type, fields: [{ name: "name", slot: "cardLabel" }, { name: "detail" }] }, recordList: { layout: "grid" } });
-  expect(saved.sections.find((section: any) => section.widget === "kanban")).toMatchObject({ model: { type, fields: [{ name: "detail", slot: "cardLabel" }, { name: "quantity" }] }, actions: [`${type}.move`] });
+  expect(saved.sections.find((section: any) => section.widget === "kanban")).toMatchObject({ model: { type, fields: [{ name: "detail", slot: "cardLabel" }, { name: "quantity" }] }, actions: [{ name: `${type}.move` }] });
 });
 
 // Notice text is literal (no markup, no templating), its title is optional,
@@ -120,7 +120,7 @@ test("notices freeze literal text and optional titles; page and overlay gates st
   await text.fill(oversized);
   await expect(editor.publish).toBeDisabled();
   await editor.save();
-  const refusedDraft = await builder.record("build.page", id);
+  const refusedDraft = await builder.draft(id);
   expect(refusedDraft.sections.some((s: any) => s.notice?.message === oversized)).toBe(false);
   await editor.select("Completion note");
   await page.getByRole("tablist", { name: "Page dock", exact: true }).getByRole("tab", { name: /^Problems\b/ }).click();
@@ -144,7 +144,7 @@ test("notices freeze literal text and optional titles; page and overlay gates st
   await expect(text).toHaveValue(retained);
   await page.unroute("**/v1/submissions");
   await editor.save();
-  await expect.poll(async () => (await builder.record("build.page", id)).sections
+  await expect.poll(async () => (await builder.sections(id))
     .find((section: any) => section.title === "Operator instructions")?.notice?.message).toBe(retained);
   await text.fill(literal);
   await editor.select("Completion note");
@@ -162,10 +162,11 @@ test("notices freeze literal text and optional titles; page and overlay gates st
 
   // Release; the draft then changes, which the release must not show.
   await editor.release(async () => {
-    main.notice = { tone: "danger", title: "Later title", message: "Later instructions" };
-    const wrapper = Object.values(saved.document.nodes).find((n: any) => n.title === "Conditional instructions") as any;
-    saved.document.variables[wrapper.visibleWhen].initial = false;
-    await builder.edit(id, { sections: saved.sections, document: saved.document });
+    const draft = await builder.editable(id);
+    draft.sections.find((s: any) => s.title === "Operator instructions").notice = { tone: "danger", title: "Later title", message: "Later instructions" };
+    const wrapper = Object.values(draft.document.nodes).find((n: any) => n.title === "Conditional instructions") as any;
+    draft.document.variables[wrapper.visibleWhen].initial = false;
+    await builder.edit(id, draft);
   });
 
   const tab = await runtime(page, operator, name);

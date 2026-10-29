@@ -40,7 +40,7 @@ func (l *AuditLog) Remember(e platform.AuditEntry) {
 func (l *AuditLog) All() []platform.AuditEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return slices.Clone(l.entries)
+	return append([]platform.AuditEntry{}, l.entries...)
 }
 
 func (l *AuditLog) Delivered(d platform.Delivery) {
@@ -66,7 +66,7 @@ func (l *AuditLog) ReadPersonal(r platform.PersonalRead) {
 func (l *AuditLog) PersonalReads() []platform.PersonalRead {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	out := slices.Clone(l.personal)
+	out := append([]platform.PersonalRead{}, l.personal...)
 	slices.Reverse(out)
 	return out
 }

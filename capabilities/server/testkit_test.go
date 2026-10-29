@@ -11,7 +11,9 @@ import (
 	"platformserver/engine/authorization"
 	"platformserver/engine/business"
 	"platformserver/engine/resources"
+	"platformserver/journal"
 	controlowner "platformserver/kernel/control"
+	"platformserver/kernel/records"
 	"platformserver/studio/packages"
 	"sync/atomic"
 	"testing"
@@ -313,4 +315,39 @@ func storedFiles(t *testing.T, files platform.FileInventory) []platform.StoredFi
 		}
 		cursor = page.Next
 	}
+}
+
+// readView binds a committed read view to a SQL backed tenant for direct row
+// inspection and returns the release. SQL rows are read only through a view; an
+// unbound store refuses to answer. Memory and file tenants need no view.
+func readView(t *testing.T, tn *Tenant) func() {
+	t.Helper()
+	if tn.records.current.View() != nil {
+		return func() {}
+	}
+	views, ok := tn.records.current.Backend().(journal.StateReadViews)
+	if !ok {
+		return func() {}
+	}
+	view, err := views.BeginStateRead(context.Background(), tn.ID, tn.records.current.Applied())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tn.records.current.Bind(view)
+	return func() {
+		tn.records.current.Bind(nil)
+		_ = view.Close()
+	}
+}
+
+func rowCount(t *testing.T, tn *Tenant, typ string) int {
+	t.Helper()
+	defer readView(t, tn)()
+	return tn.records.types[typ].rows.Len()
+}
+
+func rowOf(t *testing.T, tn *Tenant, typ, id string) *records.Row {
+	t.Helper()
+	defer readView(t, tn)()
+	return tn.records.types[typ].rows.Get(id)
 }

@@ -34,7 +34,7 @@ function stripBindings(section:ObjectValue):void{
 export function decodePage(page:Envelope|UI.Page):UI.Page{
  if(!("format"in page)||page.format!==3)return page as UI.Page;
  const declaration=page as Envelope,bindings=declaration.dataBindings??[],triggers=declaration.actionTriggers??[],inputs=declaration.inputSchema??{},scopes=declaration.scopeVisibility??{root:"",scopes:[],owners:{}};
- const raw=declaration.widgetSpec?.body as {sections?:unknown;document?:UI.PageDocument}|null;
+ const raw=declaration.widgetSpec?.body as {sections?:unknown;document?:UI.PageDocument;layout?:string}|null;
  if(declaration.widgetSpec?.format!=="platform.page.web.v1"||!raw||typeof raw!=="object"||!Array.isArray(raw.sections)||raw.sections.some(section=>!section||typeof section!=="object"||Array.isArray(section))||raw.document&&(!raw.document.nodes||typeof raw.document.nodes!=="object"))return {name:declaration.name,title:declaration.title,object:declaration.object,layout:"composed",listFields:[],detailFields:[],actions:[],sections:[],document:{formatVersion:0,uiProfile:declaration.widgetSpec?.format??"",root:"",nodes:{}}};
  const body=structuredClone(declaration.widgetSpec.body) as {sections?:ObjectValue[];document?:UI.PageDocument};
  const scopeIDs=new Set((scopes.scopes??[]).map(scope=>scope.id));
@@ -87,7 +87,13 @@ export function decodePage(page:Envelope|UI.Page):UI.Page{
   for(const [id,overlay]of Object.entries(overlays))if(!nodes[overlay.root])delete overlays[id];
  }
  const document: UI.PageDocument|undefined=visual&&!(projected&&!sections.length)?{...visual,root:scopes.root,nodes,overlays,unusedWidgets,variables:inputs.variables,queries:inputs.queries,interface:inputs.interface,events:triggers.flatMap(trigger=>trigger.events??[])}:undefined;
- return {name:declaration.name,title:declaration.title,description:declaration.description,object:declaration.object,layout:"composed",listFields:[],detailFields:[],actions:triggers.find(trigger=>trigger.binding==="page")?.actions??[],sections:sections as UI.Section[],document,selections:inputs.selections,presentationWords:declaration.presentationWords};
+ const actions=triggers.find(trigger=>trigger.binding==="page")?.actions??[];
+ if(raw.layout==="list-detail"){
+  // The shorthand keeps its list and detail fields; its sections are only the projection of those two.
+  const fieldsOf=(id:string)=>(sections.find(section=>section.id===id)?.fields as string[]|undefined)??[];
+  return {name:declaration.name,title:declaration.title,description:declaration.description,object:declaration.object,layout:"list-detail",listFields:fieldsOf("list"),detailFields:fieldsOf("detail"),actions,selections:inputs.selections,presentationWords:declaration.presentationWords} as UI.Page;
+ }
+ return {name:declaration.name,title:declaration.title,description:declaration.description,object:declaration.object,layout:"composed",listFields:[],detailFields:[],actions,sections:sections as UI.Section[],document,selections:inputs.selections,presentationWords:declaration.presentationWords};
 }
 function restoreResource(section:ObjectValue,resource:Api.PageResourceBinding):void{
  const merge=(key:string,fields:ObjectValue)=>{section[key]={...object(section[key]??{}),...fields};};
@@ -100,7 +106,7 @@ function restoreResource(section:ObjectValue,resource:Api.PageResourceBinding):v
   const links=(section.recordLinks??=[])as ObjectValue[],row=links.find(item=>!item.object)??{};if(!links.includes(row))links.push(row);Object.assign(row,{object:resource.object,field:resource.fields?.[0]&&fieldName(resource.fields[0])});break;
  }
 
- case "page":merge("embedding",{kind:resource.source,readOnly:resource.readOnly,page:resource.asset,contentVersion:resource.contentVersion,interfaceVersion:resource.interfaceVersion,inputs:resource.inputs,results:resource.outputs});break;
+ case "page":merge("embedding",{kind:resource.source,readOnly:resource.readOnly,page:resource.asset,contentVersion:resource.contentVersion,interfaceVersion:resource.interfaceVersion??0,inputs:resource.inputs,results:resource.outputs});break;
  case "external-document":merge("externalFrame",{url:resource.url,origin:resource.origin});break;
  case "image":merge("image",{url:resource.url});break;
  case "asset":append("assetDirectory","items",{id:resource.id,asset:resource.asset});break;

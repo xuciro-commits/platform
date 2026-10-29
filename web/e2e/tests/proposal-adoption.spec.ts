@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { expect, fresh, pageUIProfile, shots, slug, test } from "./kit";
+import { expect, fresh, pageUIProfile, runtimeModelPort, runtimeModelProvider, shots, slug, test } from "./kit";
 
 test("a builder assembles proposal review and a person adopts through the original approval and transaction", async ({ page, builder, operator }, info) => {
   test.setTimeout(150_000);
@@ -14,7 +14,8 @@ test("a builder assembles proposal review and a person adopts through the origin
     response.setHeader("Content-Type", "application/json");
     response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ verdict: "pass", confidence: 0.4 }) } }], usage: { prompt_tokens: 10, completion_tokens: 6, cost: 0.01 } }));
   });
-  provider.listen(0, "127.0.0.1");
+  // Runtime inference needs the deployment's approval of this exact provider and origin (playwright.config.ts).
+  provider.listen(runtimeModelPort, "127.0.0.1");
   await once(provider, "listening");
   try {
     const address = provider.address();
@@ -27,7 +28,7 @@ test("a builder assembles proposal review and a person adopts through the origin
       roles: ["user", "builder"], inputs: [{ name: "verdict", title: "Verdict", type: "choice", choices: "pass,hold", required: true }],
       transaction: { subject: `build.${objectName}`, steps: [{ name: "classify", kind: "update", target: { type: `build.${objectName}`, id: "$subject" }, changes: [{ field: "verdict", from: "verdict" }] }] },
     }] });
-    const providerID = slug("proposalmodel"), model = `${providerID}/probe`;
+    const providerID = runtimeModelProvider, model = `${providerID}/probe`;
     await builder.decide("ai.provider.add", { type: "ai.provider", id: providerID }, { kind: "local", baseUrl: `http://127.0.0.1:${address.port}`, wire: "openai" }, "ai");
     await builder.decide("ai.model.enable", { type: "ai.model", id: model }, { access: "users" }, "ai");
     await builder.decide("build.function.create", { type: "build.function", id: functionID }, {

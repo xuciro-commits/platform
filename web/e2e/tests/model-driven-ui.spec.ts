@@ -18,7 +18,7 @@ test('a retained query binding stays visible after a newer version is published'
   await expect(model.getByRole('status').filter({hasText:`build/${name}`})).toContainText('Retained query definition');
   await model.getByRole('combobox',{name:'Partial visibility',exact:true}).selectOption('mark');
   await editor.save();
-  await expect.poll(async()=>(await builder.record('build.page',draft.id)).sections[0].model.set).toEqual(set);
+  await expect.poll(async()=>(await builder.sections(draft.id))[0].model.set).toEqual(set);
 });
 
 test('a model selector and start action share one capability rule',async({page,builder,operator,editor},testInfo)=>{
@@ -106,11 +106,13 @@ test('legacy sections save as model bindings and a declared multi-hop field rend
   await model.getByRole('button',{name:'Use model field defaults',exact:true}).click();
   await expect(model.getByText('Inferred from model',{exact:true})).toBeVisible();
   await editor.save();
-  await expect.poll(async()=> (await builder.record('build.page',draft.id)).sections[0].model?.type).toBe(order.type);
+  await expect.poll(async()=> (await builder.sections(draft.id))[0].model?.type).toBe(order.type);
   const migrated=await builder.record('build.page',draft.id);
-  expect(migrated.sections[0].object).toBeUndefined();
-  expect(migrated.sections[0].fields).toBeUndefined();
-  expect(migrated.document.uiProfile).toBe(pageUIProfile);
+  const [presentation]=migrated.widgetSpec.body.sections;
+  expect(presentation.object).toBeUndefined();
+  expect(presentation.fields).toBeUndefined();
+  expect(migrated.dataBindings[0].model.type).toBe(order.type);
+  expect(migrated.widgetSpec.body.document.uiProfile).toBe(pageUIProfile);
   await editor.release();
   await tab.reload();
   await expect(tab.getByRole('cell',{name:'Order A',exact:true})).toBeVisible();
@@ -128,7 +130,7 @@ test('legacy sections save as model bindings and a declared multi-hop field rend
   await field.getByRole('combobox',{name:'Reference hop 2',exact:true}).selectOption('name');
   await expect(field.getByRole('combobox',{name:'Reference hop 2',exact:true})).toHaveValue('name');
   await editor.save();
-  await expect.poll(async()=> (await builder.record('build.page',draft.id)).sections[0].model.fields?.[0]?.path).toEqual(['supplier','country','name']);
+  await expect.poll(async()=> (await builder.sections(draft.id))[0].model.fields?.[0]?.path).toEqual(['supplier','country','name']);
   await editor.release();
   await tab.reload();
   await expect(tab.getByRole('cell',{name:'Canada',exact:true})).toBeVisible();
@@ -159,7 +161,7 @@ test('model permissions mark a partial collection and disable an unwritable cell
   await expect(inherit).toBeChecked();
   await inherit.uncheck();
   await editor.save();
-  await expect.poll(async()=>(await builder.record('build.page',draft.id)).sections[0].actions).toEqual([]);
+  await expect.poll(async()=>(await builder.sections(draft.id))[0].actions).toEqual([]);
   await page.reload();
   await editor.select('Scoped items');
   await editor.inspector.getByRole('tab',{name:'Data',exact:true}).click();
@@ -173,7 +175,7 @@ test('model permissions mark a partial collection and disable an unwritable cell
   await editor.inspector.getByRole('tab',{name:'Data',exact:true}).click();
   await inherit.check();
   await editor.save();
-  await expect.poll(async()=>(await builder.record('build.page',draft.id)).sections[0].actions).toBeUndefined();
+  await expect.poll(async()=>(await builder.sections(draft.id))[0].actions).toBeUndefined();
   await editor.release();
   await tab.reload();
   await expect(tab.getByText('Some records or fields are outside your permissions.',{exact:true})).toBeVisible();

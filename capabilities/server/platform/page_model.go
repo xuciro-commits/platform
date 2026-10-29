@@ -531,7 +531,11 @@ func (p Page) Safety() (Page, error) {
 		}
 		visualDocument = doc
 	}
-	raw, err := json.Marshal(map[string]any{"sections": visualSections, "document": visualDocument})
+	body := map[string]any{"sections": visualSections, "document": visualDocument}
+	if original.Layout == "list-detail" && len(original.Sections) == 0 {
+		body["layout"] = original.Layout
+	}
+	raw, err := json.Marshal(body)
 	if err != nil {
 		return Page{}, err
 	}
@@ -1852,6 +1856,23 @@ func legacyFieldRef(name string) FieldRef {
 	}
 	return FieldRef{Name: name}
 }
+
+// defaultModelFields are the columns a widget shows when its model names none:
+// only the field-listing widgets derive them; the others keep an explicit choice.
+func defaultModelFields(widget string, info EntityInfo) []FieldRef {
+	fields := []FieldRef{}
+	if !slices.Contains([]string{"table", "detail", "form", "filter"}, widget) {
+		return fields
+	}
+	for _, field := range info.Fields {
+		if field.Aside || widget == "form" && field.ReadOnly || widget == "filter" && !slices.Contains(Filterable, field.Type) {
+			continue
+		}
+		fields = append(fields, FieldRef{Name: field.Name})
+	}
+	return fields
+}
+
 func (p Page) ResolveBindings(lookup func(string) (EntityInfo, bool)) Page {
 	p.DataBindings = slices.Clone(p.DataBindings)
 	for i, binding := range p.DataBindings {
@@ -1873,7 +1894,7 @@ func (p Page) ResolveBindings(lookup func(string) (EntityInfo, bool)) Page {
 			if ok {
 				binding.Fields = binding.EffectiveFields(info)
 				if len(model.Fields) == 0 {
-					model.Fields = slices.Clone(binding.Fields)
+					model.Fields = defaultModelFields(binding.Ports["widget"], info)
 				}
 				if model.Relation == nil && (binding.Ports["relation"] != "" || binding.Ports["parentSelection"] != "") {
 					parentType := p.Object.Name

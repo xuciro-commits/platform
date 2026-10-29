@@ -609,8 +609,20 @@ func checkFrozenQueries(original Page, assets map[AssetRef]ReleaseAsset) error {
 			return nil, false
 		}
 		reads := RuleReadSpec{Object: action.Target, Inputs: map[string]ExprType{}}
+		mapped := map[string]bool{}
+		for _, binding := range page.DataBindings {
+			for _, model := range binding.ModelBindings() {
+				if model.Options != nil && model.Options.Rule != nil && model.Options.Rule.Action == ref {
+					for name := range model.Options.Rule.Inputs {
+						mapped[name] = true
+					}
+				}
+			}
+		}
 		for _, field := range action.Payload {
-			reads.Inputs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
+			if mapped[field.Name] {
+				reads.Inputs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
+			}
 		}
 		return &RuleCriteria{Reads: reads}, true
 	}

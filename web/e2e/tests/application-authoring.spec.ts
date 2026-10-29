@@ -93,7 +93,7 @@ test("an application authors related drafts and a template before its first rele
   const pages = await builder.read<{ records: { id: string; name: string }[] }>("records/build.page?limit=1000");
   const pageID = pages.records.find(record => record.name === pageName)!.id;
   await expect.poll(async () => (await builder.record("build.app", application.id)).pages).toContain(pageName);
-  expect((await builder.record("build.page", pageID)).actions).toContain(`${childType}.reviewed`);
+  expect((await builder.draft(pageID)).actions.map((action: any) => action.name)).toContain(`${childType}.reviewed`);
 
   const navigation = page.getByRole("navigation", { name: "Main", exact: true });
   const toggle = page.getByRole("button", { name: "Toggle navigation", exact: true });
@@ -128,7 +128,7 @@ test("an application authors related drafts and a template before its first rele
   await model.getByLabel("Declared model path", { exact: true }).last().getByRole("combobox", { name: "Model field", exact: true }).selectOption("followup");
   await expect(model.getByRole("status")).toHaveText("This binding includes saved model changes. Publish the model and page together before reading these fields in preview.");
   await editor.save();
-  await expect.poll(async () => (await builder.record("build.page", pageID)).sections.find((section: any) => section.widget === "table")?.model?.fields?.some((field: any) => field.name === "followup")).toBe(true);
+  await expect.poll(async () => (await builder.sections(pageID)).find((section: any) => section.widget === "table")?.model?.fields?.some((field: any) => field.name === "followup")).toBe(true);
   await editor.tree.getByRole("button", { name: "Page settings", exact: true }).click();
   await editor.inspector.getByRole("tab", { name: "Variables", exact: false }).click();
   await editor.inspector.getByRole("button", { name: "Add variable", exact: true }).click();
@@ -140,7 +140,7 @@ test("an application authors related drafts and a template before its first rele
   await editor.inspector.getByRole("combobox", { name: "Variable mode", exact: true }).selectOption("property");
   await editor.inspector.getByRole("combobox", { name: "Record property field", exact: true }).selectOption("followup");
   await editor.save();
-  await expect.poll(async () => Object.values((await builder.record("build.page", pageID)).document.variables ?? {})).toContainEqual(
+  await expect.poll(async () => Object.values((await builder.draft(pageID)).document.variables ?? {})).toContainEqual(
     expect.objectContaining({ title: "Follow-up text", type: "string", source: expect.objectContaining({ field: "followup" }) }),
   );
   const stillPublished = await operator.definitions<any>();

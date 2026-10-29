@@ -111,7 +111,7 @@ func TestIntegrationSourceResumesFrozenInputAfterRestart(t *testing.T) {
 			decide(t, live, "builder", build.ID, build.SourceType+".pull", build.SourceType, "SOURCE", map[string]any{}, at)
 			live.PullSources(at)
 			pending, _ := platform.Get[build.Source](live.automation(build.ID, false), "SOURCE")
-			if pending.Last == nil || pending.Last.Execution == nil || !pending.Last.Execution.Pending || pending.Cursor != "" || live.records.types[typ].rows.Len() != 1 {
+			if pending.Last == nil || pending.Last.Execution == nil || !pending.Last.Execution.Pending || pending.Cursor != "" || rowCount(t, live, typ) != 1 {
 				t.Fatalf("partial attempt did not retain its input: %+v", pending.Last)
 			}
 			execution := pending.Last.Execution.ID
@@ -128,6 +128,7 @@ func TestIntegrationSourceResumesFrozenInputAfterRestart(t *testing.T) {
 				return nil, errors.New("unexpected fetch")
 			}
 			restored.PullSources(at.Add(time.Hour))
+			defer readView(t, restored)()
 			done, _ := platform.Get[build.Source](restored.automation(build.ID, false), "SOURCE")
 			if done.Last.Execution.ID != execution || done.Last.Execution.Pending || done.Last.Applied != 2 || done.Cursor != "2" || fetches != 1 {
 				t.Fatalf("restart did not finish the original input: %+v", done.Last)

@@ -322,12 +322,12 @@ test("object, relationship, action, flow and page source return to the original 
   await shots(page, page.locator("body"), "dual-declaration-page-source-en", info);
   const pageDeclaration = JSON.parse(await source.inputValue());
   pageDeclaration.title = "Source-edited page";
-  pageDeclaration.sections[0].text = "Retained source content";
+  pageDeclaration.widgetSpec.body.sections[0].text = "Retained source content";
   await source.fill(JSON.stringify(pageDeclaration, null, 2));
   await page.getByRole("button", { name: "Apply source", exact: true }).click();
   await page.getByRole("group", { name: "Editing mode", exact: true }).getByRole("button", { name: "Visual", exact: true }).click();
   await editor.save();
-  await expect.poll(async () => (await builder.record("build.page", draft.id)).sections[0].text).toBe("Retained source content");
+  await expect.poll(async () => (await builder.sections(draft.id))[0].text).toBe("Retained source content");
   await shots(page, page.locator("body"), "dual-declaration-page-en", info, async () => {
     await expect(page.getByRole("region", { name: "Page", exact: true }).getByRole("button", { name: "Source editor", exact: true })).toBeEnabled();
   });

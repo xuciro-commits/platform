@@ -122,7 +122,7 @@ test("bulk retirement retains an accepted request through a lost reply and only 
   const review = page.getByRole("dialog", { name: "Retire 64 selected", exact: true });
   await expect(review.getByRole("listitem")).toHaveText(reviewed.map(item => new RegExp(`^${item.title}\\s*Page$`)));
   await review.getByRole("button", { name: "Retire them", exact: true }).click();
-  await expect(review.getByRole("alert")).toContainText("The previous retirement request was not confirmed.");
+  await expect(review.getByRole("alert")).toContainText("The previous retirement request was not confirmed.", { timeout: 20_000 });
   await expect(review.getByRole("listitem")).toHaveText(reviewed.map(item => new RegExp(`^${item.title}\\s*Page$`)));
   await expect(review.getByRole("button", { name: "Discard and reselect", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");

@@ -23,6 +23,8 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       PLATFORM_CREDENTIAL_KEY: "3737373737373737373737373737373737373737373737373737373737373737",
+      // The deployment's own review of the one local model fixture that may serve runtime inference.
+      PLATFORM_AI_INFERENCE_POLICY: JSON.stringify({ runtime: [{ provider: "runtimefixture", origin: "http://127.0.0.1:18590", location: "local" }] }),
     },
   }, {
     command: `go run ./cmd/platform-server -tenants ../../web/e2e/tenants-secondary.json -addr 127.0.0.1:18497 -web ../../web/apps/workspace/dist`,

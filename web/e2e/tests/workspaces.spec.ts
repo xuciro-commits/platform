@@ -188,7 +188,7 @@ test("platform apps expose their own primary functions and keep one menu owner",
   for (const category of ["Business applications", "Knowledge and data", "Build and intelligence", "Run and manage"]) {
     await expect(menu.getByText(category, { exact: true })).toBeVisible();
   }
-  for (const title of ["Builder", "Data Connection", "Agents", "Enterprise", "Master data", "My work"]) {
+  for (const title of ["Builder", "Data Connection", "Agents", "Organisation directory", "Master data", "My work"]) {
     await expect(menu.getByRole("menuitemradio", { name: title, exact: true })).toHaveCount(1);
   }
   await shots(page, menu, "platform-apps", testInfo, openSwitcher);
@@ -229,10 +229,9 @@ test("platform apps expose their own primary functions and keep one menu owner",
   await expect(page).toHaveURL(/#\/agent-memories$/);
   await choose("AI assistance");
   await entries(["Playground", "Usage", "Providers and models"]);
-  await choose("Enterprise");
-  await entries(["Enterprise", "Organisation management", "Business usage", "Tenant links"]);
-  await navigation.getByRole("button", { name: "Organisation management", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Element status", exact: true })).toBeVisible();
+  await choose("Organisation directory");
+  await entries(["Organisation directory"]);
+  await expect(page.getByLabel("Effective date", { exact: true })).toBeVisible();
   await choose("Master data");
   await entries(["Object Explorer", savedTitle]);
   await expect(page).toHaveURL(/#\/master-data$/);
@@ -241,7 +240,7 @@ test("platform apps expose their own primary functions and keep one menu owner",
   await expect(switcher).toContainText("Master data");
   await choose("Control Panel");
   await entries(["Members", "Roles and permissions", "Packages", "App settings", "Audit trail"]);
-  for (const label of ["Enterprise", "Providers and models", "Outbox"]) {
+  for (const label of ["Organisation directory", "Providers and models", "Outbox"]) {
     await expect(navigation.getByRole("button", { name: label, exact: true })).toHaveCount(0);
   }
 

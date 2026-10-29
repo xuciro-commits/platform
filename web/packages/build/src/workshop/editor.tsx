@@ -236,8 +236,8 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     const expectedRevision = baseRevision.current;
     try {
       const encoded=encodePage(asPage({...savedPage!,...submitted},submitted.sections.map(canonicalModelSection),{...submitted.document,uiProfile:pageEditingProfile(submitted)}),definitions);
-      const {object:ignoredObject,...payload}=encoded;
-      void ignoredObject;
+      // The authoring record keeps its object name; the wire envelope carries a typed reference.
+      const payload={...encoded,object:savedPage!.object};
       const ok = await decide("build.page.edit", { type: "build.page", id }, declarationChanges(payload, declarationValue(savedPage!, declarationFields)), { expectedRevision, onRefused: setRefused });
       if (ok) {
         const result = await query.refetch();

@@ -27,6 +27,7 @@ import {pagePresentationIssues} from "./contract";
 import {pageLayoutDiagnostics} from "../pages/layout";
 import {decodePage,encodePage} from "./wire";
 import type * as UI from "./types";
+import type {Api} from "@platform/kernel";
 const pageDocument=():UI.PageDocument=>({formatVersion:2,uiProfile:"platform.page.v2.111",root:"root",nodes:{root:{kind:"rows",children:["leaf"]},leaf:{kind:"widget",section:"one"}}});
 const heading=()=>({id:"one",widget:"heading",configVersion:1,text:"Instructions",headingLevel:"h2"});
 
@@ -82,6 +83,22 @@ test("opaque presentation cannot invent reads, actions, resource addresses or sc
  const shown=decodePage(wire),section=shown.sections![0]!;
  expect(section.object?.name).toBe("build.sample");expect(section.actions).toBeUndefined();expect(section.function).toBeUndefined();expect(section.recordVariable).toBeUndefined();expect(section.externalFrame?.url).toBeUndefined();
  expect(shown.document?.nodes.leaf?.visibleWhen).toBe("");expect(shown.document?.variables).toBeUndefined();
+});
+
+test("the list-detail shorthand keeps its fields and page actions through the typed record",()=>{
+ const object={app:"build",kind:"object",name:"build.sample"},create={app:"build",kind:"action",name:"build.sample.create"};
+ const binding=(id:string,widget:string,fields:string[])=>({id,owner:"binding:"+id,kind:"record",object,model:{type:"build.sample",fields:fields.map(name=>({name}))},fields:fields.map(name=>({name})),ports:{widget}});
+ const wire={format:3,name:"sample",title:"Sample",object,dataBindings:[binding("list","table",["name"]),binding("detail","detail",["name","state"])],actionTriggers:[{id:"page",binding:"page",actions:[create]}],inputSchema:{},
+  scopeVisibility:{root:"page",scopes:[{id:"page",kind:"page"},{id:"binding:list",parent:"page",kind:"page",binding:"list"},{id:"binding:detail",parent:"page",kind:"page",binding:"detail"}],owners:{list:"binding:list",detail:"binding:detail"}},
+  widgetSpec:{format:"platform.page.web.v1",body:{layout:"list-detail",document:null,sections:[{id:"list",binding:"list"},{id:"detail",binding:"detail"}]}}} as unknown as Api.Page;
+ const shown=decodePage(wire);
+ expect(shown.layout).toBe("list-detail");expect(shown.listFields).toEqual(["name"]);expect(shown.detailFields).toEqual(["name","state"]);expect(shown.actions).toEqual([create]);expect(shown.sections).toBeUndefined();
+});
+
+test("an empty page keeps one container root so its first widget can be added",()=>{
+ const empty:UI.PageDocument={formatVersion:2,uiProfile:pageDocument().uiProfile,root:"root",nodes:{root:{kind:"rows",children:[]}}};
+ expect(pageLayoutDiagnostics(empty,[])).toEqual([]);
+ expect(pageLayoutDiagnostics({...empty,nodes:{root:{kind:"rows",children:["inner"]},inner:{kind:"rows",children:[]}}},[heading()]).map(issue=>issue.node)).toContain("inner");
 });
 
 test("a detail cannot consume a table filter or produce its selection port",()=>{

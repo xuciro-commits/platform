@@ -8,7 +8,11 @@ import { expect, test as base, type APIRequestContext, type Page } from "@playwr
 import { createServer } from "node:http";
 import { once } from "node:events";
 import type * as Api from "../../packages/kernel/src/gen/host";
+import { decodePage } from "../../packages/app/src/pageui/wire";
 import { decide, fresh, open, pageUIProfile, retainActionCatalog, stableReadRevision } from "./host";
+
+/** The deployment-approved local model of the browser host: its provider id and port are fixed in playwright.config.ts. */
+export const runtimeModelProvider = "runtimefixture", runtimeModelPort = 18590;
 
 export { expect, fresh, pageUIProfile, retainActionCatalog, stableReadRevision };
 
@@ -161,6 +165,27 @@ export class Builder extends Member {
     await this.decide("build.app.create",{type:"build.app",id},{...spec,name,pages:spec.pages??[]});
     return {id,name};
   }
+  /** A page draft as the renderer sees it: the five-element record decoded back to widget sections and document. */
+  async draft(pageID: string): Promise<any> {
+    const record = await this.record("build.page", pageID);
+    return record.format === 3 ? { ...record, ...decodePage(record) } : record;
+  }
+  /** The draft shaped for build.page.edit: action names, and no binding the host derives itself (a model without chosen fields). */
+  async editable(pageID: string): Promise<{ sections: any[]; document: any }> {
+    const { sections = [], document } = await this.draft(pageID);
+    return {
+      document,
+      sections: sections.map((section: any) => {
+        const { binding, triggers, ...rest } = section;
+        if (Array.isArray(rest.actions)) rest.actions = rest.actions.map((a: any) => a?.name ?? a);
+        if (!rest.model?.fields?.length && !rest.query) { delete rest.object; delete rest.model; delete rest.fields; }
+        return rest;
+      }),
+    };
+  }
+  async sections(pageID: string): Promise<any[]> {
+    return (await this.draft(pageID)).sections ?? [];
+  }
   /** Rewrites a page draft's sections and document over the API (what a later edit would do). */
   edit(pageID: string, draft: { sections?: unknown; document?: unknown }) {
     return this.decide("build.page.edit", { type: "build.page", id: pageID }, draft);
@@ -246,7 +271,7 @@ export class Editor {
   async saveUntil(builder: Builder, pageID: string, widget: string, count: number): Promise<any> {
     await this.save();
     let saved: any;
-    await expect.poll(async () => { saved = await builder.record("build.page", pageID); return saved.sections?.filter((s: any) => s.widget === widget).length; }).toBe(count);
+    await expect.poll(async () => { saved = await builder.draft(pageID); return saved.sections?.filter((s: any) => s.widget === widget).length; }).toBe(count);
     return saved;
   }
   /** The release route: review, check, immutable candidate. `between` runs before activation. */
