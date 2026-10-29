@@ -1,6 +1,3 @@
-// Package system retains the platform's accepted source, release and activation
-// history. New self-hosting work is frozen; static maintenance may reconcile
-// outcomes already requested before the freeze.
 package system
 
 import (
@@ -53,10 +50,6 @@ const (
 	StateSuperseded = systemscope.StateSuperseded
 )
 
-// File is one system source file. Its bytes live in a Blob keyed by their
-// sha256, so two paths with the same content store it once; the file keeps its
-// own revision and tombstone. A write names the revision it expects, so two
-// writers racing on one file cannot silently overwrite each other.
 type File struct {
 	platform.Record
 	Path     string `json:"path" field:"required,search" source:"user-input" help:"Repository-relative path"`
@@ -67,8 +60,6 @@ type File struct {
 	By       string `json:"by,omitempty" field:"readonly" source:"user-input"`
 }
 
-// Blob is one content-addressed byte string. It is written once per digest and
-// never rewritten: a file revision points at it, a tombstone does not free it.
 type Blob struct {
 	platform.Record
 	Digest  string `json:"digest"`
@@ -76,8 +67,6 @@ type Blob struct {
 	Size    int    `json:"size"`
 }
 
-// FileView is a file with its bytes resolved from the blob it names, for the
-// editor and the builder. It is a read shape, not a record.
 type FileView struct {
 	Path     string `json:"path"`
 	Digest   string `json:"digest"`
@@ -89,13 +78,11 @@ type FileView struct {
 	Editable bool   `json:"editable"`
 }
 
-// SourceImage keeps a proposal's actual baseline for later review.
 type SourceImage struct {
 	Digest  string `json:"digest"`
 	Content string `json:"content"`
 }
 
-// ChangeFile is the frozen content of one path in a change.
 type ChangeFile struct {
 	Path     string       `json:"path"`
 	Content  string       `json:"content,omitempty"`
@@ -105,9 +92,6 @@ type ChangeFile struct {
 	Before   *SourceImage `json:"before,omitempty"`
 }
 
-// Change is one proposed iteration of the system: where it came from (a person
-// or a prompt), the base release, the frozen file set, who approved it, and
-// what the builder reported.
 type Change struct {
 	platform.Record
 	Title        string              `json:"title" field:"required,search" source:"user-input"`
@@ -129,8 +113,6 @@ type Change struct {
 	Release      int                 `json:"release,omitempty" field:"readonly"`
 }
 
-// Release is one immutable system version: what was built, with which
-// toolchain, and which release it replaces.
 type Release struct {
 	platform.Record
 	Version        int               `json:"version" field:"required,search"`
@@ -150,7 +132,6 @@ type Release struct {
 	Diagnostics    string            `json:"diagnostics,omitempty" field:"readonly" type:"longtext" source:"external-input"`
 }
 
-// Activation is the evidence of making a release live, or of rolling back.
 type Activation struct {
 	platform.Record
 	Release      int             `json:"release" field:"required"`
@@ -164,7 +145,6 @@ type Activation struct {
 	Installation json.RawMessage `json:"installation,omitempty" field:"readonly" type:"json" source:"record"`
 }
 
-// System retains the original system authority and its deployment history.
 type System struct {
 	mu             sync.Mutex
 	ledger         *platform.Ledger
@@ -172,8 +152,6 @@ type System struct {
 	definitionHost platform.SystemDefinitionHost
 }
 
-// New retains the original system declarations for accepted history. Only
-// reports about existing work remain writable through static maintenance.
 func New(tenant string, sources ...*platform.SystemSource) *System {
 	any := []string{Builder, Publisher}
 	publish := []string{Publisher}
@@ -221,8 +199,6 @@ func entity(typ, title string, model any, display string) platform.Entity {
 func (s *System) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "Platform", Version: "1", Actions: s.ledger.Catalog,
 		Entities: []platform.Entity{
-			// Blobs hold file bytes keyed by digest; they have no actions of
-			// their own and are written only as part of a file save.
 			entity(BlobType, "Blob", Blob{}, "digest"),
 			entity(FileType, "File", File{}, "path"), entity(ChangeType, "System change", Change{}, "title"),
 			entity(ReleaseType, "System release", Release{}, "version"), entity(ActivationType, "Activation", Activation{}, "result"),
@@ -248,8 +224,6 @@ func (s *System) SnapshotFormat() string                   { return "platform.le
 func (s *System) Snapshot() (json.RawMessage, error)       { return s.ledger.Snapshot() }
 func (s *System) Restore(raw json.RawMessage) error        { return s.ledger.Restore(raw) }
 
-// Read answers the system's own collections, newest first. They are empty in a
-// tenant that is not the system.
 func (s *System) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return s.ReadInput(c, name, nil)
 }
@@ -353,7 +327,6 @@ func (s *System) Submit(c platform.Caller, submission *pb.Submission, now time.T
 	})
 }
 
-// ForkDecision gives a private view the same ledger, as other platform apps do.
 func (s *System) ForkDecision() (platform.App, error) {
 	return &System{ledger: s.ledger, source: s.source, definitionHost: s.definitionHost}, nil
 }
@@ -505,5 +478,4 @@ func (s *System) finished(c platform.Caller, submission *pb.Submission, now time
 	}, nil
 }
 
-// blobID is one content's stable record identity.
 func blobID(digest string) string { return "b" + digest[:16] }

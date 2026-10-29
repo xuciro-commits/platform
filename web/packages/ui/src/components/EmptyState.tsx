@@ -2,8 +2,6 @@ import { Inbox } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 
-/** What an empty collection says: one calm line, an optional hint and the next
- *  action — never a silent blank. The caller owns the words and the action. */
 export function EmptyState({ title, hint, action, icon, className }: {
   title: ReactNode;
   hint?: ReactNode;

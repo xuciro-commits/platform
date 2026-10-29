@@ -1,7 +1,3 @@
-// The flow family's canvas: one process, drawn as activities joined through typed
-// ports. The owner says what a step means, which connections are allowed and what
-// a change writes; this canvas says how it looks and how a person drives it —
-// select, connect, insert on a line, arrange, collapse, copy, undo.
 import { ConnectionLineType, MarkerType, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, type Connection } from "@xyflow/react";
 import { AlignHorizontalJustifyStart, ArrowDown, ArrowRight, ChevronsDownUp, ChevronsUpDown, Copy, Maximize, Plus, Redo2, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -29,25 +25,17 @@ export type FlowCanvasProps = {
   onConnect?: (connection: Connection) => void; onDisconnect?: (edges: FlowEdge[]) => void;
   canConnect?: (connection: Connection) => boolean;
   onAdd?: (kind: string, context: FlowAddContext) => void;
-  /** The owner inserts and reconnects atomically; the canvas never guesses branch semantics. */
   onInsert?: (edge: FlowEdge, kind: string, context: FlowAddContext) => void;
   onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;
   onLayout?: (positions: Record<string, CanvasPosition>) => void;
   onDelete?: (nodes: FlowNode[], edges: FlowEdge[]) => void;
   onDuplicate?: (nodes: FlowNode[], edges: FlowEdge[]) => void;
-  /** BPMN lanes: the responsibilities this process is drawn across.
-   * The owner declares them and says which step sits in which; the canvas draws the
-   * bands, arranges inside them, and reports a step dropped into another one. */
   lanes?: FlowLane[];
   onLaneChange?: (id: string, lane: string) => void;
   history?: FlowHistory;
-  /** The reader's own arrangement is kept on this device for this drawing
-   *: nodes become draggable even in view mode, and the arrangement
-   * survives a reload until the reader tidies it up again. */
   storeKey?: string;
 };
 
-/** A step node, or the lane band behind it. */
 export type FlowCanvasNode = FlowShapeNode | FlowLaneShapeNode;
 
 const nodeTypes = { block: FlowNodeView, lane: FlowLaneView }, edgeTypes = { block: FlowEdgeView };
@@ -63,7 +51,6 @@ const center = (element: HTMLElement | null) => {
 const editableTarget = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input,textarea,select,[contenteditable=true]");
 
 function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onConnect, onDisconnect, onAdd, onInsert, onPositionsChange, onLayout, onDelete, onDuplicate, canConnect, lanes, onLaneChange, history, storeKey, label, height = 320, mode, direction: initialDirection = "right", children }: FlowCanvasProps) {
-  // The reader may re-flow the same graph the other way; the owner's direction is the starting point.
   const [direction, setDirection] = useState<CanvasDirection>(initialDirection);
   useEffect(() => { setDirection(initialDirection); }, [initialDirection]);
   const editable = mode === "edit" || mode !== "view" && !!(onConnect || onDisconnect || onAdd || onDelete || onPositionsChange);
@@ -71,8 +58,6 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const { screenToFlowPosition, fitView, getViewport, setCenter } = useReactFlow<FlowCanvasNode, FlowLineEdge>();
   const localPositions = useRef<Record<string, CanvasPosition>>({});
   const externalPositions = useRef<Record<string, CanvasPosition>>({});
-  // The reader's stored arrangement: read once per key, applied the first time
-  // each step is seen, and always yielded to a position the owner sends later.
   const storedKey = useRef<string | undefined>(undefined);
   const stored = useRef<Record<string, CanvasPosition> | undefined>(undefined);
   const externalSelection = useRef<string | undefined>(undefined);
@@ -92,16 +77,12 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   const layoutVersion = useRef(0);
   const dragStarted = useRef<Record<string, CanvasPosition>>({});
 
-  /** The box one node occupies on this canvas: a BPMN shape when compact, the block's ports otherwise. */
   const boxOf = (id: string): CanvasBox => {
     const node = nodes.find((item) => item.id === id);
     return node ? flowNodeBox({ ...node, collapsed: folded(node) }, catalog.find((kind) => kind.id === node.kind)) : { width: flowNodeWidth, height: 96 };
   };
 
-  /** Which lane a step belongs to; a step its owner left unlaned has none. */
   const laneOf = (id: string) => nodes.find((item) => item.id === id)?.lane;
-  // Declared lanes first, then any lane a step names that was never declared, so a
-  // step is never drawn outside a band its owner can see.
   const declared = lanes ?? [];
   const laneList: FlowLane[] = [...declared, ...[...new Set(nodes.map((node) => node.lane).filter((lane): lane is string => !!lane && !declared.some((item) => item.id === lane)))].map((id) => ({ id }))];
   const assignment = (): LaneAssignment | undefined => laneList.length ? { ids: laneList.map((lane) => lane.id), of: laneOf } : undefined;
@@ -113,8 +94,6 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   useEffect(() => () => { layoutVersion.current++; }, []);
 
 
-  /** Lane bands are scenery recomputed from where the steps actually sit, so they
-   * follow an owner-supplied drawing and an arranged one alike. */
   const withLanes = (steps: FlowCanvasNode[]): FlowCanvasNode[] => {
     const drawn = steps.filter((node) => node.type !== "lane");
     if (!laneList.length) return drawn;
@@ -140,8 +119,6 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
     for (const node of nodes) {
       const previous = externalPositions.current[node.id];
       if (previous && (previous.x !== node.position.x || previous.y !== node.position.y)) delete localPositions.current[node.id];
-      // The reader's stored arrangement applies to a step the first time it is
-      // seen; the moment the owner sends a position of their own, the owner wins.
       if (!previous && stored.current?.[node.id] && !localPositions.current[node.id]) localPositions.current[node.id] = stored.current[node.id]!;
       externalPositions.current[node.id] = node.position;
     }
@@ -172,7 +149,6 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
     })));
   }, [edges, editable, onInsert, setFlowEdges]);
 
-  // Bring the chosen step into view without moving the reader's zoom.
   useEffect(() => {
     if (!editable || !selected || !container.current) return;
     const node = flowNodes.find((item) => item.id === selected);
@@ -254,7 +230,6 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
     setPalette(undefined); container.current?.focus();
   };
   const valid = (connection: Connection) => !validateFlowConnection(connection, nodes, edges, catalog) && (!canConnect || canConnect(connection));
-  /** The lane a dropped step landed in, read off the band its centre falls inside. */
   const laneUnder = (id: string, at: CanvasPosition): string | undefined => {
     if (!laneList.length) return undefined;
     const size = flowNodes.find((node) => node.id === id)?.measured ?? boxOf(id);
@@ -401,7 +376,6 @@ function FlowCanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, 
   </CanvasFrame>;
 }
 
-/** One React Flow implementation for processes; the relation family shares its frame. */
 export function FlowCanvas(props: FlowCanvasProps) {
   return <ReactFlowProvider><FlowCanvasContent {...props} /></ReactFlowProvider>;
 }

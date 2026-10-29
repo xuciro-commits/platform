@@ -1,13 +1,8 @@
-// The object's shape (A2, A3): the interfaces it implements, so pages
-// and queries written against the interface work for its records too, and the
-// installed type it extends, one extension record per base record through the
-// `base` reference. The host checks both again when the object is published.
 import { useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { ContextHelp, Button, Checkbox, Select, t, type EntityInfo } from "@platform/ui";
 import { baseField, missingInterfaceFields, type Field, type ObjectRecord, type Process } from "./object-model";
 
-/** Every interface the tenant's apps declare, with the app declaring it. */
 export function useInterfaces() {
   const apps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   return (apps.data ?? []).flatMap((app) => (app.interfaces ?? []).map((shape) => ({ ...shape, app: app.id })));

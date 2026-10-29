@@ -41,7 +41,6 @@ func OpenAIMessages(ms []platform.Message) []map[string]any {
 	return out
 }
 
-// complete makes one call on the OpenAI Chat Completions wire.
 func (c Client) Complete(pv platform.AIProvider, model string, req platform.ChatRequest) (platform.ChatAnswer, platform.AIUsage, *platform.AIError) {
 	body := map[string]any{"model": model, "messages": OpenAIMessages(req.Messages)}
 	if len(req.Tools) > 0 {
@@ -85,7 +84,7 @@ func (c Client) Complete(pv platform.AIProvider, model string, req platform.Chat
 type completionUsage struct {
 	Prompt     *int     `json:"prompt_tokens"`
 	Completion *int     `json:"completion_tokens"`
-	Cost       *float64 `json:"cost"` // compatible providers may report it
+	Cost       *float64 `json:"cost"`
 	Details    *struct {
 		Cached *int `json:"cached_tokens"`
 		Write  *int `json:"cache_write_tokens"`
@@ -144,7 +143,6 @@ func streamTool(req platform.ChatRequest, call platform.ToolCallDelta) {
 	}
 }
 
-// completion reads a chat completion's answer on the OpenAI wire.
 func Completion(status int, answer []byte, model string) (platform.ChatAnswer, platform.AIUsage, *platform.AIError) {
 	var out struct {
 		Model   string `json:"model"`
@@ -202,9 +200,6 @@ func Completion(status int, answer []byte, model string) (platform.ChatAnswer, p
 	return reply, u, nil
 }
 
-// completeStream asks for the answer as server-sent events on the OpenAI
-// wire, hands each piece of content to delta, and reads the usage the last
-// event carries (stream_options.include_usage).
 func (c Client) completeStream(pv platform.AIProvider, model string, body map[string]any, req platform.ChatRequest) (platform.ChatAnswer, platform.AIUsage, *platform.AIError) {
 	body["stream"], body["stream_options"] = true, map[string]any{"include_usage": true}
 	raw, _ := json.Marshal(body)
@@ -215,7 +210,7 @@ func (c Client) completeStream(pv platform.AIProvider, model string, body map[st
 		return platform.ChatAnswer{}, platform.AIUsage{}, failure
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 300 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") { // a server that does not stream: the answer at once
+	if resp.StatusCode >= 300 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 		reply, u, failure := Completion(resp.StatusCode, answer, model)
 		if failure == nil {
@@ -304,8 +299,6 @@ func (c Client) completeStream(pv platform.AIProvider, model string, body map[st
 				complete = true
 			}
 			if len(calls) > 0 && choice.FinishReason == "length" {
-				// The usage event can follow the finish reason. Read it before
-				// rejecting the incomplete calls so the incurred usage is kept.
 				cutOff = true
 			}
 		}

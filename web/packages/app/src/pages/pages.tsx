@@ -1,7 +1,4 @@
 import {pageUIManifest} from "../pageui/manifest";
-// Bounded page composition. The descriptor comes from the
-// host's installed definition registry. Live operation and the local preview
-// use the same list/detail layout and the UI kit's record components.
 import {
   Button, Dialog, PageHeader, Panel, RecordPage, RecordWorkspace, type EntityInfo, type EntityRecord, type FieldInfo,
   type RecordPageData, type RecordSource, type RecordView, t,
@@ -17,12 +14,10 @@ import { RecordDetail, assetKey, useHost, useOpenRecord, type Definition } from 
 
 type PageDefinition = Definition & { page: NonNullable<Definition["page"]> };
 
-/** One read-only, permission-filtered descriptor returned by the host. */
 export function isPageDefinition(definition: Definition | undefined): definition is PageDefinition {
   return !!definition?.page && definition.ref.kind === "page" && (definition.page.layout === "list-detail" || definition.page.layout === "composed");
 }
 
-/** A code page operates through the current member's record/action contracts. */
 export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   const { source, opens, can, decide, catalog } = useHost();
   const openRecord = useOpenRecord();
@@ -37,8 +32,6 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
     </>;
   }
   const type = page.object.name, info = source.entity(type);
-  // The same standard patch the generic list stages: the member catalog's
-  // edit action within the page's declared set, over the listed fields.
   const edit = defaultTableEdit(info, catalog, allowed, page.listFields);
   const editFields = tableEditableFields(info, edit, page.listFields);
   const inlineEdit: RecordEditPort | undefined = edit && editFields.length > 0 && can(`${type}.edit`) ? {
@@ -76,8 +69,6 @@ const previewValue = (field: FieldInfo, index: number): unknown => {
   return `${field.title} ${index + 1}`;
 };
 
-// Entirely local data and reads. A preview cannot invoke the host's writes,
-// model endpoints, file uploads, effects or production record reads.
 function previewSource(info: EntityInfo): RecordSource {
   const records: EntityRecord[] = [0, 1, 2].map((index) => ({
     id: `SAMPLE-00${index + 1}`, revision: 1,
@@ -98,7 +89,6 @@ function previewSource(info: EntityInfo): RecordSource {
   };
 }
 
-/** Local, read-only builder preview of the exact installed page descriptor. */
 export function PagePreview({ definition, definitions }: { definition: PageDefinition; definitions: Definition[] }) {
   const page = definition.page;
   if (isComposed(page)) { // a composed page is previewed as it is composed: real records, nothing that writes

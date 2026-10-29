@@ -48,8 +48,6 @@ func (b *Build) checkPropertyFields(fields []Field) error {
 
 const SchemaPropertyType = PropertyTypeType + ".publish"
 
-// PropertyType owns one bounded declaration and its retained publications. Draft
-// edits never replace what callers use until the publication result commits.
 type PropertyType struct {
 	platform.Record
 	Name        string   `json:"name" field:"required,search"`
@@ -136,7 +134,6 @@ func propertyTypeReleaseAsset(f PropertyType, sourceVersion string) (platform.Re
 	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetPropertyType, Name: f.Name}, sourceVersion+".property-"+strconv.Itoa(f.Version), f.Definition())
 }
 
-// PropertyTypeReleaseAsset resolves only a retained version from this owner.
 func (b *Build) PropertyTypeReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
 	return retainedDefinitionAsset(b.Manifest().Version, "property", "property type", platform.AssetPropertyType, name, sourceVersion, b.PropertyTypeDefinition)
 }
@@ -147,9 +144,6 @@ func (b *Build) propertyTypeAssets() ([]platform.ReleaseAsset, error) {
 	})
 }
 
-// InstallPropertyTypeAsset installs one immutable candidate version into a fresh
-// test app. It does not invent a publication history or run a publish action.
-// The candidate constructor checks this declaration before snapshot restore.
 func (b *Build) InstallPropertyTypeAsset(asset platform.ReleaseAsset) error {
 	version := b.definitionAssetVersion(asset, platform.AssetPropertyType, "property")
 	var declaration platform.PropertyType
@@ -174,8 +168,6 @@ func (b *Build) propertyTypeDraftAssets(id string) (before, after []platform.Rel
 	})
 }
 
-// Freeze the immutable candidate beside the mutable editor row. Existing
-// ordinals must match retained bytes; only the next ordinal can publish.
 func (b *Build) preparePropertyTypeReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, b.propertyTypeInventory, platform.AssetPropertyType, "property", SchemaPropertyType, "property type", b.PropertyTypeReleaseAsset, func(record PropertyType, asset platform.ReleaseAsset, version int) (PropertyType, error) {
 		var q platform.PropertyType

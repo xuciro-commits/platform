@@ -7,7 +7,6 @@ export {validStaticImage,validStaticImageURL,type StaticImageConfig} from "./sta
 
 export type StaticImageProps={src?:string;alt:string;caption?:string;height?:number};
 
-/** Browser image loading is independent of authenticated attachment reads. */
 function ImageFrame({src,alt,height}:{src:string;alt:string;height:number}) {
  const [state,setState]=useState<"loading"|"loaded"|"error">("loading"),active=useRef(true);
  useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);

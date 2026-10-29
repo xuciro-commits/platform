@@ -4,9 +4,6 @@ import { routeKey, type Route } from "./route";
 type Node = SerializedDockview["grid"]["root"];
 type Group = Exclude<Node["data"], Node[]>;
 
-/** Rewrite route identities and their group references together. Used for
- * incoming aliases and for app-only persistence; never mutate Dockview's live
- * layout or keep a second editor/draft store. */
 export function rewriteLayout(layout: SerializedDockview, map: (route: Route, panel: string) => Route | undefined, keyOf: (route: Route) => string = routeKey): SerializedDockview {
   const panels: SerializedDockview["panels"] = Object.create(null);
   const keys = new Map<string, string>();
@@ -39,8 +36,6 @@ export function rewriteLayout(layout: SerializedDockview, map: (route: Route, pa
     return children.length ? { ...data, data: children } : undefined;
   };
   let root = node(layout.grid.root) ?? { type: "branch" as const, data: [] };
-  // Floating is retired. Keep its old tabs readable, but
-  // restore them as ordinary grid groups rather than resurrecting that UI.
   for (const entry of layout.floatingGroups ?? []) {
     const data = entry.data && group(entry.data);
     const restored = entry.grid ? node(entry.grid.root) : data ? { type: "leaf" as const, data } : undefined;
@@ -57,8 +52,6 @@ export function rewriteLayout(layout: SerializedDockview, map: (route: Route, pa
     activeGroup: layout.activeGroup && groups.has(layout.activeGroup) ? layout.activeGroup : undefined };
 }
 
-/** Resolve only saved/incoming routes, not the canonical routes apps produce.
- * A failed compatibility read leaves the old tab and its refusal intact. */
 export async function resolveLayout(layout: SerializedDockview, resolve: (route: Route) => Route | Promise<Route>, exists: (view: string) => boolean, keyOf: (route: Route) => string = routeKey): Promise<SerializedDockview> {
   const routes = new Map<string, Route>();
   await Promise.all(Object.entries(layout.panels).map(async ([id, panel]) => {

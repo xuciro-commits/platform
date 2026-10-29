@@ -6,7 +6,6 @@ export function compileChartSpec({object,title,group,measure="count",mark="bar",
  return {title:kpi?title:undefined,data:{entity:object,domain},mark:kpi?"kpi":mark==="arc"&&chartVariant?{type:"arc",donut:chartVariant==="donut",showValues:true}:mark as Mark,encoding:kpi?{y:value}:mark==="arc"?{theta:value,color:category}:{x:category,y:value}};
 }
 
-/** Shares require finite, nonnegative quantities in a single compatible unit. */
 export function checkPieData(spec:ChartSpec,data:AggregateData):boolean {
  const mark=typeof spec.mark==="string"?spec.mark:spec.mark.type;
  if(mark!=="arc")return true;

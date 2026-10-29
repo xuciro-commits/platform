@@ -1,20 +1,14 @@
-// Old entry points: routes written before the shell had an
-// Applications portal still open. They are decoded here, never produced.
 import type { Route } from "@platform/ui";
 import type { Projection } from "./registry";
 
-/** The views the shell owns; opening one keeps the current application. */
 export const shellViews = ["flow-instance", "home", "portal", "inbox", "requests", "notifications", "outbox", "search", "assistant", "saved", "explorer", "lineage", "observations"];
 
 type Params = Record<string, string>;
 const keep = (params: Params | undefined, ...names: string[]): Params => Object.fromEntries(names.flatMap((name) => params?.[name] ? [[name, params[name]!]] : []));
 
-/** Routes that no longer exist, redirected to their replacement. */
 const retired: Record<string, Route | ((params?: Params) => Route)> = {
   "tenant-overview": { view: "portal", params: { workspace: "admin" } },
   launcher: { view: "portal" },
-  // Builder views: the Application editor became the Workshop module, pages open inside it,
-  // the process editor is the object type, workflows are flows, candidate tests moved into the editors.
   applications: (params) => params?.surface === "studio" || !params?.surface ? { view: "projects", params: keep(params, "surface") } : { view: "portal" },
   application: (params) => ({ view: "project", params: keep(params, "id", "surface") }),
   studio: { view: "projects" },
@@ -38,15 +32,9 @@ export const legacyRoute = (route: Route): Route | undefined => {
   return typeof target === "function" ? target(route.params) : target;
 };
 
-/** Only incoming links carry the retired surface projection. */
 export const projectionOfSurface = (surface?: string): Projection | undefined =>
   surface === "studio" || surface === "developer" ? "build" : surface === "tenant" ? "admin" : surface === "work" ? "operations" : undefined;
 
-/** Decode old links and saved tabs before any view is mounted. The two old
- * `flow` views named different record types: never guess from an ID's format.
- * Exact builder records win; a readable runtime record keeps its old identity.
- * The legacy automation list uses its explicit surface / saved application,
- * or the operator-only package scope, because it has no entity to resolve. */
 export function resolveLegacyRoute(route: Route, context: {
   builder: boolean; application?: string; read: (type: string, id: string) => Promise<unknown>;
 }): Route | Promise<Route> {

@@ -1,7 +1,3 @@
-// Package knowledge is the platform's knowledge app, on the app API
-// and public consumer roles: documents people upload for agents and
-// members to find, and the tenant's glossary. The host searches them, with
-// the fields apps declare as knowledge (knowledge.go in the host).
 package knowledge
 
 import (
@@ -28,14 +24,12 @@ type Document = platform.KnowledgeDocument
 type Term = platform.KnowledgeTerm
 
 type Knowledge struct {
-	host   platform.KnowledgeHost // the tenant running it, once composed
+	host   platform.KnowledgeHost
 	ledger *platform.Ledger
 }
 
-// Attach is called by the host when a tenant is composed.
 func (k *Knowledge) AttachKnowledge(h platform.KnowledgeHost) { k.host = h }
 
-// New is a tenant's knowledge app.
 func New(tenant string) *Knowledge {
 	k := &Knowledge{}
 	es := knowledgeEntities()
@@ -71,7 +65,7 @@ func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 		var p struct{ RefersTo *string }
 		json.Unmarshal(s.GetPayload(), &p)
 		if p.RefersTo != nil && *p.RefersTo != "" && !k.host.Declares(*p.RefersTo) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // a term names what exists; it cannot make a declaration
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 	}
 	if record, err, ok := k.ledger.Generated(c, s, now, nil, knowledgeEntities()...); ok {
@@ -80,7 +74,6 @@ func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-// Terms are the glossary terms an app's members may read ("" for every term).
 func (k *Knowledge) Terms(app string) []Term {
 	all, _, _ := platform.Find[Term](k.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 500, Sort: []string{"term"}})
 	out := all[:0]
@@ -92,8 +85,6 @@ func (k *Knowledge) Terms(app string) []Term {
 	return out
 }
 
-// TermsFor are the words the glossary gives a declaration: each term that
-// refers to it, and its synonyms.
 func (k *Knowledge) TermsFor(declaration string) []string {
 	var out []string
 	for _, x := range k.Terms("") {

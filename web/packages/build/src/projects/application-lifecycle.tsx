@@ -1,7 +1,6 @@
 import { useHost, useRecordArchive } from "@platform/app";
 import { Button, t, useWorkspace } from "@platform/ui";
 
-/** Entry availability and draft archival keep their original owner actions. */
 export function ApplicationLifecycleControls({ project, disabled = false, before = action => action() }: { project: { id: string; revision: number; state: string; published?: string }; disabled?: boolean; before?: (action: () => void) => void }) {
   const archive = useRecordArchive("build.app"), { decide, can } = useHost(), { open, close } = useWorkspace();
   const published = !!project.published || project.state === "published" || project.state === "withdrawn";

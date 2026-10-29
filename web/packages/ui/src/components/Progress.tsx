@@ -1,6 +1,5 @@
 import {t} from "../i18n";
 
-/** Exact bounded decimal scalars in; only the display percentage is rounded. */
 export function progressRatio(value:string,total:string) {
  const parts=(text:string)=>{if(text.length>128||!/^(-?)(0|[1-9][0-9]*)(?:\.([0-9]+))?$/.test(text))return;const [whole,fraction=""]=text.split(".");return {coefficient:BigInt(whole+fraction),scale:fraction.length};};
  const a=parts(value),b=parts(total);if(!a||!b||a.coefficient<0n||b.coefficient<=0n)return;

@@ -20,8 +20,6 @@ import (
 	"platformserver/platform"
 )
 
-// stagedDecision owns the private record, ledger and intent views for supported
-// accepted-result transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
 	confirmationCompleting *confirmationCompletion
 	currentSubmission      *pb.Submission
@@ -41,12 +39,12 @@ type stagedDecision struct {
 	records                *records.Store
 	logs                   map[*platform.Ledger]platform.ChangeLog
 	events                 []platform.Event
-	sequences              map[string]int // private counters, copied before any decision code
-	allocated              map[string]int // counters actually consumed by this decision
+	sequences              map[string]int
+	allocated              map[string]int
 	sequenceBases          map[string]int
 	inputIssues            map[*kernel.Error][]platform.FieldIssue
 	failure                *kernel.Error
-	active                 map[string]bool // reject cycles before re-entering an app/ledger lock
+	active                 map[string]bool
 	at                     time.Time
 	probing                bool
 	notices                []platform.Notification
@@ -77,8 +75,6 @@ type stagedDecision struct {
 	observationInput       *platform.ObservationDecisionEvidence
 }
 
-// HoldChanges tracks the stack that owns a private ledger receive. Savepoints
-// must retain its captured log and receiver until that receive returns.
 func (d *stagedDecision) HoldChanges(ledger *platform.Ledger) (func(), *kernel.Error) {
 	if d.receiving[ledger] {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The decision cannot re-enter its held ledger")
@@ -158,8 +154,6 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 	if definitionErr != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The execution definition and dependencies are unavailable")
 	}
-	// Callers may reuse/edit their request object for a later nested action.
-	// Receipts and their staged idempotency entries must own the input bytes.
 	previous := d.currentSubmission
 	d.currentSubmission = proto.Clone(s).(*pb.Submission)
 	defer func() { d.currentSubmission = previous }()
@@ -183,8 +177,6 @@ func (d *stagedDecision) decideAppFrom(c platform.Caller, app platform.App, s *p
 	return r, nil
 }
 
-// DraftChanges is called under the ledger's lock. It keeps both the kernel
-// receipt and the host record image private until a durable result exists.
 func (d *stagedDecision) DraftChanges(l *platform.Ledger, fork func() platform.ChangeLog) platform.ChangeLog {
 	if d.logs[l] == nil {
 		d.logs[l] = fork()
@@ -310,15 +302,13 @@ func (d *stagedDecision) Readable(c platform.Caller, ref string) bool {
 	defer d.records.Unlock()
 	at := d.at
 	if at.IsZero() {
-		at = time.Now() // direct app-only tests have no routed input clock
+		at = time.Now()
 	}
 	return d.tenant.readableIn(d.records, c.Member, ref, at)
 }
 
 func (d *stagedDecision) Probing() bool { return d.probing }
 
-// Capabilities not represented by a saved result fail closed. Neither a nested
-// decision nor an owned-work attempt may silently acquire a live mutator.
 type stagedEffectPanic struct{}
 
 func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
@@ -334,8 +324,6 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 		d.intents = append(d.intents, d.routingTenant().planModelRequest(c, r, q, d.intents))
 		return
 	}
-	// Own both the payload and receipt. An application may reuse either after
-	// returning; requests run only once its decision/ledger locks are released.
 	q.Payload = slices.Clone(platform.Raw(q.Payload))
 	if d.requestCounts == nil {
 		d.requestCounts = map[string]int{}

@@ -2,7 +2,6 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// The offline Catalog uses the same view that the authenticated workspace hosts.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   publicDir: "../../public", // the shared, script-free Dockview popout host

@@ -1,7 +1,5 @@
 import type { CatalogEntry } from "@platform/catalog";
 
-// Meaning is maintained by the UI owner. Props remain the actual exported types;
-// this file never imports the preview bundle into application code.
 const asset = (id: string, name: string, summary: string, layer: CatalogEntry["layer"], source: string,
   exports: string[], example: string, extra: Partial<CatalogEntry> = {}): CatalogEntry => ({
   id, owner: "@platform/ui", name, summary, layer, source: `web/packages/ui/src/${source}`,
@@ -183,7 +181,6 @@ asset("ui/edit-lane","Edit lane rule","Choose the editing lane by form need: no 
         "Open this full-window preview separately; its shell owns routes and saved layout."] }),
 ];
 
-/** Public nonvisual API, classified explicitly rather than pretending to be UI. */
 export const api = ["ActionParameterOptions", "AnalysisStepOptions", "ButtonOptions", "DetailPresentationOptions", "EventToneOptions", "LayoutSizeOptions", "LeaderboardOptions", "MetricAnnotationOptions", "MetricPresentationOptions", "RecordCardOptions", "RecordEventsOptions", "RecordGanttOptions", "RecordLinkOptions", "RecordScatterOptions", "RegionPresentationOptions", "SceneConfigOptions", "SceneLayerOptions", "SceneMappingOptions", "StatusTrackerOptions", "TableColumnOptions", "TablePresentationOptions",
   "iconGlyphs", "iconGroups",
   "useTheme", "t", "language", "languages", "setLanguage", "register", "cn", "defineStatuses", "submissionStatuses", "parseInline",

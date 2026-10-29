@@ -1,7 +1,4 @@
 import { ContextHelp, StructuredEditor } from "@platform/ui";
-// Alert rules: when a record of an object comes to match a
-// condition, a role is told - once per record or every time. The operations
-// face's "situation": nobody has to keep a page open to see it.
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";

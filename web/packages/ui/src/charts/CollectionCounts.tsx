@@ -8,7 +8,6 @@ export function signedCounts(terms:TermCount[],steps:AnalysisStepOptions[]) {
  const rows=steps.map(step=>{const count=BigInt(terms.find(t=>t.value===step.value)?.count??0),delta=step.positive?count:-count;cumulative+=delta;return {...step,count,delta,cumulative,share:total?Number(count)/Number(total):0};});
  return {rows,total,unmapped:terms.filter(t=>!mapped.has(t.value??"")).reduce((n,t)=>n+BigInt(t.count),0n)};
 }
-/** Original group values/counts; geometry never changes the displayed count. */
 export function CollectionCounts({terms,steps,label}:{terms:TermCount[];steps?:AnalysisStepOptions[];label:string}) {
  if(!validTermCounts(terms))return <p role="alert">{t("Collection analysis counts are invalid or exceed their budget.")}</p>;
  const name=(v:string|null)=>v===null?t("No value (missing)"):v===""?t("Empty text"):v;

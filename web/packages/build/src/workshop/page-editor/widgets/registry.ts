@@ -74,8 +74,6 @@ const ButtonInspector=lazyInspector(()=>import("./ButtonInspector").then(module=
 
 const SchemaPropertyInspector=lazyInspector(()=>import("./SchemaPropertyInspector").then(module=>module.SchemaPropertyInspector));
 
-/** Only specialized behavior is registered here; identities, versions and ordinary
- * property editors are derived from the same manifest as runtime validation. */
 type WidgetID=typeof widgetContracts[number]['componentID'];
 type Inspectors={bindings?:ComponentType<WidgetBindingInspectorPorts>;events?:ComponentType<ButtonInspectorPorts>};
 const specialized:Partial<Record<WidgetID,Inspectors>>= {
@@ -153,13 +151,10 @@ export function widgetInspector(id:string,version:number) {
   }:undefined;
 }
 
-/** Bindings receive one owner context; the registry retains per-widget props
- * checking without asking JSX to intersect every specialized component. */
 export function widgetBindingInspector(id:string,version:number):ComponentType<WidgetBindingInspectorPorts>|undefined {
   return widgetInspector(id,version)?.bindings;
 }
 
-/** Unknown versions are distinct from the seven deliberately common editors. */
 export function widgetInspectorStatus(id:string,version:number){
  const inspector=widgetInspector(id,version);
  return !inspector?"unsupported":inspector.bindings||inspector.events?"specialized":"common";

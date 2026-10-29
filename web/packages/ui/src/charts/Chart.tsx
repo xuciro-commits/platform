@@ -1,6 +1,3 @@
-// A chart from the platform's visualization spec: the data comes from
-// the host's aggregates (records, within the member's scope) or inline values;
-// the renderer is ECharts 6, loaded only here.
 import type { ECharts } from "echarts/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useViewVisible } from "../shell/ViewVisibility";
@@ -8,10 +5,8 @@ import { toOption, formatter, type Theme } from "./echarts";
 import { aggregateQuery, aggregateValues, columnOf, markOf, type AggregateColumn, type AggregateData, type AggregateQuery, type ChartSpec } from "./spec";
 import { t } from "../i18n";
 
-/** Where aggregates come from: the host's `GET /v1/aggregates/<type>`, wired by the workspace. */
 export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number; scope?:string; watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void };
 
-// The kit's tokens as colours a canvas understands (they are oklch in CSS).
 function resolve(variable: string): string {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 1;
@@ -30,7 +25,6 @@ function theme(): Theme {
   };
 }
 
-/** Loads a spec's rows: the host aggregates records; inline values are aggregated here the same way. */
 export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: AggregateData; error?: string } {
   const [state, setState] = useState<{ key?:string; data?: AggregateData; error?: string }>({});
   const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + JSON.stringify(source?.scope);
@@ -83,7 +77,6 @@ function Kpi({ spec, data }: { spec: ChartSpec; data: AggregateData }) {
   const column = columnOf(e);
   const fmt = formatter(e, data.columns),display=spec.metric,tone=display?.tone??"neutral",color=({warning:"text-[var(--tone-warning)]",danger:"text-[var(--tone-danger)]",success:"text-[var(--tone-success)]",neutral:""} as Record<string,string>)[tone]??"";
   const format=(value:unknown,row:Record<string,unknown>)=>{if(display&&value==null)return `${display.prefix??""}\u2014${display.suffix??""}`;const numeric=typeof value==="number"&&Number.isFinite(value),short=display?.formatter==="short"&&!data.columns.find(c=>c.name===column)?.money&&numeric;return `${display?.prefix??""}${short?(Math.abs(value)>=1e6?`${(value/1e6).toFixed(1)}M`:Math.abs(value)>=1e3?`${(value/1e3).toFixed(1)}K`:fmt(value,row)):fmt(value,row)}${display?.suffix??""}`;};
-  // One value per currency when the measure is money.
   return (
     <div className="flex flex-wrap items-baseline gap-4">
       {(data.rows.length ? data.rows : [{}]).map((r, i) => (
@@ -97,8 +90,6 @@ function Kpi({ spec, data }: { spec: ChartSpec; data: AggregateData }) {
 function Canvas({ spec, data, height }: { spec: ChartSpec; data: AggregateData; height: number }) {
   const element = useRef<HTMLDivElement>(null);
   const chart = useRef<ECharts>(null);
-  // Parent renders and identical refresh answers must not reset the renderer
-  // and replay its animation. Rebuild options only when their content changes.
   const palette = theme();
   const optionKey = JSON.stringify([spec, data, palette]);
   const option = useMemo(() => toOption(spec, data.rows, data.columns, palette), [optionKey]);

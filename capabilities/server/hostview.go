@@ -17,8 +17,6 @@ import (
 	"platformserver/platform"
 )
 
-// hostView is the tenant as one of its own apps sees it; app is that app, for
-// what it declares at runtime.
 type hostView struct {
 	t        *Tenant
 	app      platform.App
@@ -47,7 +45,6 @@ func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *ke
 	return page.Records, nil
 }
 
-// Install declares an entity this app composed at runtime.
 func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -55,8 +52,6 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 	return h.t.Install(h.app, e, actions, pages...)
 }
 
-// Validation uses the same installation code against a private registry and
-// record store; a failed or refused publication cannot change live metadata.
 func (h hostView) installationDraft() *Tenant {
 	return h.installationView(h.t.records.ForkRecords())
 }
@@ -86,8 +81,6 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 	}
 	draft := h.installationDraft()
 	if current := draft.records.Type(e.Type); current != nil && current.Info().Go != reflect.TypeOf(e.Model) {
-		// Definition review cannot decode source rows as the unmigrated target.
-		// Admission of actual rows is checked by migration and activation.
 		current.SetRows(records.Index[*records.Row]{})
 	}
 	if err := draft.Install(h.app, e, actions, pages...); err != nil {
@@ -95,7 +88,7 @@ func (h hostView) ValidateInstallDependents(c platform.Caller, e platform.Entity
 	}
 	var engine platform.RuleEngine = h.t.services.Rules
 	if c.Replaying {
-		engine = platform.NativeRules{} // saved publication shape, without running the selected provider
+		engine = platform.NativeRules{}
 	}
 	for _, et := range draft.records.SortedTypes() {
 		if err := draft.checkRecordSetDeclarations(et.Info(), engine); err != nil {
@@ -260,8 +253,6 @@ func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 }
 
 func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	// Work uses Attempt after its approval has completed. Re-entering public
-	// Submit here would hold the very same approved submission again.
 	decide := func() (*pb.ChangeRecord, *kernel.Error) {
 		a := h.t.owner["action:"+s.GetSchema().GetName()]
 		if a == nil {
@@ -313,7 +304,6 @@ func (h hostView) Processes() platform.Processes {
 	return h.t.procs
 }
 
-// ActiveRelease is read inside a decision, which already holds the tenant lock.
 func (h hostView) ActiveRelease() string { return h.t.releases.Active() }
 
 func (h hostView) Runs() platform.Runs {
@@ -326,13 +316,10 @@ func (h hostView) Runs() platform.Runs {
 	return h.t.agents
 }
 
-// InstallPage offers a page composed in this tenant.
 func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
 	}
-	// Reinstall restores original descriptors as a group, then validates all
-	// navigation targets against that complete group before returning.
 	if c.Replaying {
 		return h.t.installPage(h.app, p, false)
 	}
@@ -342,7 +329,6 @@ func (h hostView) ValidateInstallPage(p platform.Page) error {
 	return h.installationDraft().InstallPage(h.app, p)
 }
 
-// InstallApplication offers an application handed over in this tenant.
 func (h hostView) InstallApplication(c platform.Caller, a platform.Application) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
@@ -353,7 +339,6 @@ func (h hostView) ValidateInstallApplication(a platform.Application) error {
 	return h.installationDraft().InstallApplication(h.app, a)
 }
 
-// Entity is an entity type's declaration.
 func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.entity(typ) }
 
 func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
@@ -367,7 +352,6 @@ func (h hostView) EntitySource(typ string) (platform.AssetBinding, bool) {
 
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
-// Interfaces are the shapes declared across the tenant's apps (A2).
 func (h hostView) Interfaces() []platform.Interface {
 	manifests := make([]platform.Manifest, len(h.t.apps))
 	for k, a := range h.t.apps {
@@ -420,7 +404,6 @@ func (h hostView) Holders(structure, unit, role string, day platform.Date) []str
 	return nil
 }
 
-// RuleQuery resolves the immutable query declaration used by rule publication.
 func (h hostView) RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool) {
 	owner := h.t.app(app)
 	if owner == nil {
@@ -454,15 +437,11 @@ func (h hostView) CheckPageModel(c platform.Caller, p platform.Page) error {
 	return pageowner.CheckModelQueries(p, h.t.definitions, h.t.entity)
 }
 
-// Rebinding uses the same composition factory for startup, trials, retained
-// releases and private decisions. The runtime knows no concrete owner.
 func (h hostView) ownerBindings() platform.OwnerBindings {
 	return platform.OwnerBindings{Training: h, System: h, Agent: h, Console: h, Build: h, Files: h, Knowledge: h, Relations: h, Flow: h, Work: h}
 }
 func (h hostView) bindOwner(app platform.App) { h.t.services.BindOwner(app, h.ownerBindings()) }
 
-// BuildProcessConsumptions reads installed declarations without creating a
-// private execution owner while its manifest is being assembled.
 func (h hostView) BuildProcessConsumptions() []platform.Consumption {
 	processes := h.t.procs
 	if h.decision != nil {

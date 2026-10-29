@@ -9,52 +9,21 @@ import (
 	"strings"
 )
 
-// The relationship contracts of the Enterprise Core Profile.
-//
-// UAF 1.3 states, for most of its relationship stereotypes, which ends are
-// allowed: "Value for the client metaproperty must be stereotyped
-// «ActualPerson»…". The metamodel reader takes those rules out of the XMI
-// (DirectoryType.Client/Supplier); this file turns them into the contracts the
-// host checks, states the profile's own rules for the constructs the standard
-// leaves open, and names — with the standard's own words — every place the
-// profile goes beyond it. Nothing else decides what may be joined: element
-// add, relationship add, a federated sync and a slice import all ask Allowed,
-// so a relationship the standard forbids cannot enter the model the back way.
-//
-// Three groups:
-//
-//   - the standard's own rule, checked as written (FillsPost, MapsToGoal,
-//     OwnsProcess, MilestoneDependency …): a pair the rule does not name is
-//     refused, and the refusal quotes the rule;
-//   - the standard's rule extended by the profile (ResponsibleFor: an
-//     organisation here also answers for its posts, places, systems and goals;
-//     IsCapableToPerform: UAF's conditional pairs relate performers to
-//     activities, not to capabilities, so the profile says so and offers
-//     «Exhibits», the standard's spelling of the same idea);
-//   - a construct the standard leaves open: «ActualResourceRelationship» is
-//     UAF's general resource association (its own rules constrain the
-//     informationSource and realizes properties, not the ends),
-//     «ActualOrganizationRole» is a slot rather than a relationship, and
-//     «typedBy» is the platform's own instance-to-type link.
-//
-// Pair is one end combination, by stereotype name; "*" is any element.
 type Pair struct {
 	Source string `json:"source"`
 	Target string `json:"target"`
 }
 
-// Contract is one relationship stereotype as this host checks it.
 type Contract struct {
 	Stereotype string   `json:"stereotype"`
-	Client     []string `json:"client,omitempty"`    // ends from the standard's rule
-	Supplier   []string `json:"supplier,omitempty"`  //
-	Basis      []string `json:"basis,omitempty"`     // the rule texts those ends come from
-	Extension  []Pair   `json:"extension,omitempty"` // ends this profile adds
-	Platform   bool     `json:"platform,omitempty"`  // the standard states no plain rule
-	Note       string   `json:"note,omitempty"`      // what the profile decides, in words
+	Client     []string `json:"client,omitempty"`
+	Supplier   []string `json:"supplier,omitempty"`
+	Basis      []string `json:"basis,omitempty"`
+	Extension  []Pair   `json:"extension,omitempty"`
+	Platform   bool     `json:"platform,omitempty"`
+	Note       string   `json:"note,omitempty"`
 }
 
-// Contracts are the profile's relationship contracts, by stereotype name.
 func Contracts(mm *DirectoryModel) []Contract {
 	return []Contract{
 		{Stereotype: Placement, Platform: true, Extension: []Pair{{Organization, Organization}}},
@@ -64,11 +33,6 @@ func Contracts(mm *DirectoryModel) []Contract {
 	}
 }
 
-// Allowed reports whether the profile accepts this relationship between the two
-// stereotypes; when it does not, the second answer is the sentence to show. It
-// names the ends the relationship does have, and cites the standard, so a
-// modeller learns the model instead of reading a refusal. The full rule text
-// stays in the contract's Basis, for a surface with room to show it.
 func Allowed(contracts []Contract, mm *DirectoryModel, stereotype, source, target string) (bool, string) {
 	var c Contract
 	found := false
@@ -102,7 +66,6 @@ func Allowed(contracts []Contract, mm *DirectoryModel, stereotype, source, targe
 	return false, fmt.Sprintf("«%s» relates no elements of this profile", stereotype)
 }
 
-// list joins end names for a refusal text.
 func list(ends []string) string {
 	if len(ends) == 0 {
 		return "any element"
@@ -110,7 +73,6 @@ func list(ends []string) string {
 	return strings.Join(ends, ", ")
 }
 
-// pairs joins a contract's own end pairs for a refusal text.
 func pairs(ps []Pair) string {
 	var out []string
 	for _, p := range ps {
@@ -119,9 +81,6 @@ func pairs(ps []Pair) string {
 	return strings.Join(out, ", ")
 }
 
-// anyEnd reports whether a stereotype is one of the named ends or a
-// specialisation of one; "*" is any element and an empty list constrains
-// nothing.
 func anyEnd(mm *DirectoryModel, ends []string, stereotype string) bool {
 	if len(ends) == 0 {
 		return true
@@ -134,7 +93,6 @@ func anyEnd(mm *DirectoryModel, ends []string, stereotype string) bool {
 	return false
 }
 
-// decideRelationship validates before exposing any change to the model.
 func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, strict, sourceImport bool) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := func(msg string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, msg, args...)
@@ -143,7 +101,7 @@ func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, stri
 	conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	st := mm.Stereotypes[p.Stereotype]
 	switch {
-	case st == nil || !mm.Relationship(p.Stereotype) && p.Stereotype != Typed && p.Stereotype != Membership: // a role is a slot in UAF, not a UML relationship; it still joins two elements here
+	case st == nil || !mm.Relationship(p.Stereotype) && p.Stereotype != Typed && p.Stereotype != Membership:
 		return nil, invalid("{stereotype} is not a UAF relationship stereotype", p.Stereotype)
 	case m.RelationshipOf(id) != nil:
 		return nil, conflict
@@ -172,12 +130,9 @@ func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, stri
 	if strict && source == nil && p.Source == "member:" {
 		return nil, invalid("Choose a member for the relationship")
 	}
-	// The ends the standard names, and the profile's own rules, in one
-	// place: a pair the contract refuses never enters the
-	// model, and the refusal names the rule it breaks.
 	sourceEnd := source
 	if sourceEnd == nil && strings.HasPrefix(p.Source, "member:") {
-		sourceEnd = &Element{Stereotype: Person} // an account stands where a person stands
+		sourceEnd = &Element{Stereotype: Person}
 	}
 	if sourceEnd != nil {
 		if ok, why := Allowed(Contracts(mm), mm, p.Stereotype, sourceEnd.Stereotype, target.Stereotype); !ok {
@@ -221,7 +176,7 @@ func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, stri
 				}
 			}
 		}
-		ends = func() { // a tree keeps one current parent
+		ends = func() {
 			for i, r := range m.Relationships {
 				if r.Stereotype == Placement && r.Kind == p.Kind && r.Source == p.Source && (!k.Matrix || r.Target == p.Target) && r.ActiveOn(p.From) {
 					if strict && sourceRelationship(r.ID) {
@@ -296,7 +251,6 @@ func checkSourceRelationships(m Model, mm *DirectoryModel, prefix string, today 
 			candidate := copyModel(m)
 			candidate.Relationships = slices.DeleteFunc(candidate.Relationships, func(other Relationship) bool { return other.ID == r.ID })
 			p := payload{Stereotype: r.Stereotype, Source: r.Source, Target: r.Target, Kind: r.Kind, Role: r.Role, Relation: r.Relation, Share: r.Share, Primary: r.Primary, From: from, Until: period.Until}
-			// Source ids remain reserved; the shared validator checks their semantic shape.
 			_, err := decideRelationship(&candidate, mm, "", p, true, true)
 			if err != nil {
 				return err
@@ -306,7 +260,6 @@ func checkSourceRelationships(m Model, mm *DirectoryModel, prefix string, today 
 	return nil
 }
 
-// ValidateImportedModel lets preview use the same relationship checks as the accepted import.
 func (e *Enterprise) ValidateImportedModel(model Model, sourceTenant string, today platform.Date) error {
 	if refusal := checkSourceRelationships(model, directory(), "fed:"+sourceTenant+":", today); refusal != nil {
 		return refusal

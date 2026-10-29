@@ -1,21 +1,10 @@
-// Lines between boxes that stay where the boxes are. Every line is
-// drawn from the drawing as it stands — a layout, a reader's drag, a saved view
-// all route the same way — so no line is ever left over from an arrangement the
-// boxes have since left. A line joins the middles of the two sides that face
-// each other with right angles; siblings share one bus a fixed distance from
-// their row; a leaf stacked on its parent's trunk is reached from the trunk; and
-// a line that would cross a box searches its way around the boxes instead.
 import type { CanvasPosition } from "./types";
 
 export type Rect = { x: number; y: number; width: number; height: number };
 type Side = "top" | "right" | "bottom" | "left";
 export type Route = { points: CanvasPosition[]; sourceSide: Side; targetSide: Side };
-/** A line of the drawing's hierarchy names its parent end. `trunk`: the child is a
- * stacked leaf, reached along the parent's trunk. `axis`: the way the parent's
- * children lie from it, so they share one bus even when one sits far to the side. */
 export type RouteRequest = { id: string; source: string; target: string; hierarchy?: { parent: "source" | "target"; trunk?: boolean; axis?: "vertical" | "horizontal" } };
 
-/** How far a bus runs from the row it serves. */
 const BUS = 20;
 const MARGIN = 8, STUB = 14, BEND = 28, PAD = 96, BUDGET = 120;
 
@@ -26,7 +15,6 @@ const sides: Side[] = ["top", "right", "bottom", "left"];
 
 function sideOf(from: CanvasPosition, to: CanvasPosition, end: "start" | "end"): Side {
   const dx = to.x - from.x, dy = to.y - from.y;
-  // The side a line leaves through points along its first segment; it enters against its last.
   const s: Side = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "bottom" : "top");
   return end === "start" ? s : ({ top: "bottom", bottom: "top", left: "right", right: "left" } as const)[s];
 }
@@ -43,8 +31,6 @@ function simplify(points: CanvasPosition[]): CanvasPosition[] {
   return out;
 }
 
-/** The facing-sides connector: out of the parent, along the bus that runs a fixed
- * distance from the child's row, into the child. */
 function direct(a: Rect, b: Rect, axis?: "vertical" | "horizontal"): CanvasPosition[] {
   const hgap = Math.max(b.x - a.x - a.width, a.x - b.x - b.width), vgap = Math.max(b.y - a.y - a.height, a.y - b.y - b.height);
   const vertical = vgap > 0 && (axis === "vertical" || (axis !== "horizontal" || hgap <= 0) && vgap >= hgap);
@@ -58,12 +44,10 @@ function direct(a: Rect, b: Rect, axis?: "vertical" | "horizontal"): CanvasPosit
     const x = hgap >= 2 * BUS ? q.x - (right ? BUS : -BUS) : (p.x + q.x) / 2;
     return simplify([p, { x, y: p.y }, { x, y: q.y }, q]);
   }
-  // Overlapping boxes: no side faces the other; join the nearest middles.
   const s = Math.abs(cx(b) - cx(a)) > Math.abs(cy(b) - cy(a)) ? (cx(b) > cx(a) ? "right" : "left") : (cy(b) > cy(a) ? "bottom" : "top");
   return [mid(a, s), mid(b, ({ top: "bottom", bottom: "top", left: "right", right: "left" } as const)[s])];
 }
 
-/** Down the parent's trunk to the leaf's middle, then across into its facing side. */
 function trunk(parent: Rect, leaf: Rect): CanvasPosition[] | undefined {
   const below = leaf.y >= parent.y + parent.height, above = leaf.y + leaf.height <= parent.y, x = cx(parent);
   if (!(below || above) || leaf.x >= parent.x + parent.width || leaf.x + leaf.width <= parent.x || (leaf.x < x && leaf.x + leaf.width > x)) return undefined;
@@ -84,8 +68,6 @@ function crosses(points: CanvasPosition[], obstacles: Rect[]): boolean {
 const grow = (r: Rect, m: number): Rect => ({ x: r.x - m, y: r.y - m, width: r.width + 2 * m, height: r.height + 2 * m });
 const meets = (a: Rect, b: Rect) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-/** Shortest right-angled path from a side of `a` to a side of `b` that enters no
- * box, paying for every bend: A* over the lines the boxes' edges draw. */
 function search(a: Rect, b: Rect, all: Rect[], region: Rect): CanvasPosition[] | undefined {
   const obstacles = [...all.filter((o) => meets(o, region)), a, b].map((o) => grow(o, MARGIN));
   const ports = (r: Rect) => sides.map((s) => { const p = mid(r, s), n = normal[s]; return { s, p, stub: { x: p.x + n.x * STUB, y: p.y + n.y * STUB } }; })
@@ -156,7 +138,6 @@ function search(a: Rect, b: Rect, all: Rect[], region: Rect): CanvasPosition[] |
 const cache = new Map<string, CanvasPosition[] | null>();
 const r1 = (r: Rect) => `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}`;
 
-/** One route per line, from the boxes as they are now. */
 export function routeEdges(boxes: Readonly<Record<string, Rect>>, edges: readonly RouteRequest[]): Record<string, Route> {
   const all = Object.entries(boxes);
   const out: Record<string, Route> = {};
@@ -165,7 +146,6 @@ export function routeEdges(boxes: Readonly<Record<string, Rect>>, edges: readonl
     const a = boxes[e.source], b = boxes[e.target];
     if (!a || !b || e.source === e.target) continue;
     const others = all.filter(([id]) => id !== e.source && id !== e.target).map(([, r]) => r);
-    // Route parent → child, then hand the line back in the owner's own direction.
     const flip = e.hierarchy?.parent === "target";
     const [p, c] = flip ? [b, a] : [a, b];
     let points: CanvasPosition[] | undefined;
@@ -194,8 +174,6 @@ export function routeEdges(boxes: Readonly<Record<string, Rect>>, edges: readonl
   return out;
 }
 
-/** The SVG path of a route, with its bends rounded, and the place its name sits:
- * the middle of its own last stretch, which no sibling shares. */
 export function routePath(points: readonly CanvasPosition[], radius = 8): { path: string; label: CanvasPosition } {
   let path = `M${points[0]!.x},${points[0]!.y}`;
   for (let i = 1; i < points.length; i++) {

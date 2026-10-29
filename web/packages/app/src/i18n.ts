@@ -1,4 +1,3 @@
-// Simplified Chinese for this package, keyed by the English source text.
 import { register } from "@platform/ui";
 
 register("zh-CN", {
@@ -1129,7 +1128,6 @@ register("zh-CN", {
   "Previous": "上一页",
 });
 
-// Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
   "Recorded application binding": "已记录的应用绑定",
  "Spacer configuration is unavailable or incompatible.": "空白配置不可用或不兼容。",

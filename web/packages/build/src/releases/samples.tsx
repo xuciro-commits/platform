@@ -17,7 +17,6 @@ type SampleProps = { application: Project; selected: string; samples: string; on
 const objectValue = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const failureMessage = (error: unknown) => apiErrorMessage(error) ?? (error instanceof Error ? error.message : t("The application sample could not be saved."));
 
-/** Sample inputs have their own buffers: saving a sample never saves a test plan. */
 export function ApplicationSamples(props: SampleProps) {
   return <InputDraftProvider isolated scope="application-samples"><ApplicationSampleForm {...props} /></InputDraftProvider>;
 }
@@ -85,7 +84,6 @@ function ApplicationSampleForm({ application, selected, samples: suppliedSamples
           expectedRevision: revision, quiet: true, onRefused: setError,
         })) return;
         current = { ...current, id, revision: revision + 1, name, title, samples: rows };
-        // Keep the accepted identity before the separate membership request.
         base.current = current; selection.current = name; setBaseline(samples); setEdited(false);
         inputs?.clear(); markSaved();
         if (!useSavedValues || selected !== name) onChange(name, samples);
@@ -150,7 +148,6 @@ function SyntheticRecords({ application, samples, onChange }: Pick<SampleProps, 
   const dropInputs = (key: string) => inputs?.clear(`${inputs.scope}/record-${key}/`);
   const recordFields = (type: string) => {
     const schema = `${type}.create`, capability = capabilities.data.find(item => item.kind === "action" && item.target === type && item.ref.name === schema);
-    // Saved object actions carry the original owner's payload, without a second scalar conversion.
     if (model.drafts.data?.records.some(draft => !draft.archived && `build.${draft.name}` === type)) return capability?.source === "draft" ? capability.parameters : undefined;
     return capability?.parameters ?? host.action(schema)?.payload;
   };

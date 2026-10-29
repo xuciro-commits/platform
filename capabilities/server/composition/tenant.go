@@ -1,5 +1,3 @@
-// Package composition assembles the platform capabilities shared by every host.
-// Business applications are tenant definitions installed through Build.
 package composition
 
 import (
@@ -24,12 +22,10 @@ import (
 	"platformserver/studio/packages"
 )
 
-// NewTenant is used for startup, tenant creation and isolated recovery.
 func NewTenant(id string, seats ...platform.Seat) (*platformserver.Tenant, error) {
 	return NewTenantWithSource(id, nil, seats...)
 }
 
-// NewTenantWithSource binds the running immutable source once, including recovery.
 func NewTenantWithSource(id string, source *platform.SystemSource, seats ...platform.Seat) (*platformserver.Tenant, error) {
 	return NewTenantWithSourceAndCapabilities(id, source, platform.DefaultRuntimeCapabilities(), seats...)
 }

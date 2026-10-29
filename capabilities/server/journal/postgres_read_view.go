@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// Both the legacy pool reads and fixed transaction reads use these queries.
 type stateQueries interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
@@ -39,7 +38,6 @@ func (j *Postgres) BeginStateRead(ctx context.Context, tenant string, expected i
 		_ = v.Close()
 		return nil, err
 	}
-	// pgx does not roll back automatically when its begin context is cancelled.
 	v.mu.Lock()
 	v.stop = context.AfterFunc(ctx, func() { _ = v.Close() })
 	v.mu.Unlock()
@@ -59,7 +57,6 @@ func (v *postgresStateRead) closeLocked() error {
 	if v.stop != nil {
 		v.stop()
 	}
-	// A cancelled read must still release its transaction and pool connection.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := v.tx.Rollback(ctx)

@@ -3,10 +3,6 @@ import { validApplicationHeader, sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
-// The Workshop module: a project's pages, navigation,
-// header and module-level variables, edited in one Workbench. With a page in
-// hand the main view is that page's canvas (PageEditor); without one it is the
-// module itself — header and navigation as people will see them.
 import { pageUIProfile, pageVariableValues, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import {ApplicationHeader, InputDraftProvider, Button, Dialog, Checkbox, IconPicker, Input, PanelSection, ProblemList, StructureRow, Textarea, Workbench, t, useUnsavedChanges, useWorkspace, type WorkbenchProblem} from "@platform/ui";
@@ -25,7 +21,6 @@ import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 type PageRecord = { id: string; name: string; title: string; state: string; object: string; archived?: boolean };
 type ModuleDraft = Partial<Api.Application> & Pick<Api.Application, "title">;
 
-/** What a page editor needs to know about the module it belongs to. */
 export type ModuleContext = {
   project: Project; pages: { name: string; title: string; id?: string; state?: string }[]; currentPage?: string;
   openPage: (id: string) => void; openModule: (focus?: ModuleFocus) => void; addPage: () => void; canEdit: boolean; busy?: boolean;
@@ -34,22 +29,18 @@ type ModuleFocus = "navigation" | "header" | "variables" | "queries" | "settings
 
 const hydrate = (project: Project, fields: Api.FieldInfo[] = []): ModuleDraft => ({ ...declarationValue(project, fields), pages: project.pages ?? [], groups: project.groups ?? [], title: project.title });
 
-// Omitted fields keep their saved value on edit; null explicitly removes the header.
 const moduleChanges = (draft: ModuleDraft) => ({ ...draft, header: draft.header ?? null, variables: draft.variables ?? null, queries: draft.queries ?? null });
 
-/** Entry for the `module` view: a project's module, optionally with one page in hand. */
 export function ModuleWorkbench({ id, page, focus }: { id?: string; page?: string; focus?: string }) {
   const { open } = useWorkspace();
   const pageQuery = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(page ?? "")}`, undefined, !!page && !id);
   const projects = useRecordInventory<Project>("build.app", 1000, !!page && !id);
-  // A page opened without its project: find the project that lists it.
   const owner = !id && page && pageQuery.data?.record ? projects.data?.records.find((project) => !project.archived && project.pages?.includes(pageQuery.data!.record!.name)) : undefined;
   const projectId = id ?? owner?.id;
   if (!projectId && !page) return <ModulesList />;
   if (!projectId) {
     if (projects.isError || pageQuery.isError) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{t("Module ownership could not be read. Open the page from its project after reloading.")}</WorkbenchMessage></Workbench>;
     if (projects.isLoading || pageQuery.isLoading) return <Workbench storageKey="module" title={t("Module")}><WorkbenchMessage>{t("Loading…")}</WorkbenchMessage></Workbench>;
-    // A page that belongs to no project is still editable on its own.
     return <PageEditor id={page!} />;
   }
   return <ProjectModule key={projectId} id={projectId} page={page} initialFocus={focus} openPage={(next) => open({ view: "module", params: { id: projectId, application: projectId, page: next } })} />;
@@ -99,8 +90,6 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }
     setCreatedPage(undefined); setError(undefined);
   }, saving || templateBusy);
-  // Only the captured document is acknowledged. A later edit or failed read
-  // never replaces it with a different revision or repeats an accepted write.
   const persist = async (submitted: ModuleDraft) => {
     const expected = baseRevision.current;
     if (!await decide("build.app.edit", { type: "build.app", id }, declarationChanges(moduleChanges(submitted), declarationValue(project!, declarationFields)), { expectedRevision: expected, quiet: true, onRefused: setError })) return false;
@@ -159,8 +148,6 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     ...pages.filter((item) => !item.id && pageRecords.data).map((item) => ({ id: `missing:${item.name}`, severity: "warning" as const, text: t("Page {name} is listed but has no saved draft.", { name: item.name }), locate: () => setFocus("navigation") })),
     ...(!pages.length ? [{ id: "empty", severity: "info" as const, text: t("Add at least one page before publishing the module.") }] : []),
     ...(draft.header && !draft.header.title.trim() ? [{ id: "header-title", severity: "warning" as const, text: t("The header has no title."), locate: () => setFocus("header") }] : []),
-    // The host refuses these at publication (CheckGroups); say so here, where
-    // the group is edited, rather than in the release review.
     ...groupProblems(draft.groups ?? [], draft.pages ?? [], () => setFocus("navigation")),
   ];
   const grouped = (draft.groups ?? []).flatMap((group) => group.pages);
@@ -257,7 +244,6 @@ function ModulePreviewBody({ context, ungrouped, groups, onHeader }: { context: 
   </div>;
 }
 
-/** The module's structure: header, navigation (groups and pages), module resources. Shared by the module view and the page canvas. */
 export function ModuleTree({ context, focus, onFocus, compact = false }: { context: ModuleContext; focus?: ModuleFocus; onFocus?: (focus: ModuleFocus) => void; compact?: boolean }) {
   const { project, pages, currentPage } = context;
   const groups = project.groups ?? [];
@@ -284,7 +270,6 @@ export function ModuleTree({ context, focus, onFocus, compact = false }: { conte
 const moduleFocuses = ["navigation", "header", "variables", "queries", "settings"] as const;
 const isModuleFocus = (value?: string): value is ModuleFocus => !!value && (moduleFocuses as readonly string[]).includes(value);
 
-/** What the host's CheckGroups would refuse, as problems the builder can go to. */
 function groupProblems(groups: Api.AppGroup[], pages: string[], locate: () => void): WorkbenchProblem[] {
   const problems: WorkbenchProblem[] = [];
   const under = new Map<string, string>();

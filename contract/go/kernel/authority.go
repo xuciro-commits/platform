@@ -8,12 +8,10 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// Authorities implements K5 (contract/spec/K5-authority.md): declarations, the
-// receiver's check, and the outbox of one edge.
 type Authorities struct {
 	edge    string
-	current map[[2]string]*pb.AuthorityDeclaration // (tenant, data class)
-	outbox  map[[2]string]*outboxEntry             // (tenant, idempotency key)
+	current map[[2]string]*pb.AuthorityDeclaration
+	outbox  map[[2]string]*outboxEntry
 }
 
 type outboxEntry struct {
@@ -21,7 +19,6 @@ type outboxEntry struct {
 	state      pb.SubmissionState
 }
 
-// transitions lists, per event, the allowed from → to states (A5).
 var transitions = map[string]map[pb.SubmissionState]pb.SubmissionState{
 	"send":        {pb.SubmissionState_SUBMISSION_STATE_PENDING: pb.SubmissionState_SUBMISSION_STATE_SENDING},
 	"confirm":     {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_CONFIRMED},
@@ -39,11 +36,11 @@ func NewAuthorities(edge string) *Authorities {
 func (a *Authorities) Declare(d *pb.AuthorityDeclaration) *Error {
 	if slices.Contains([]string{d.GetTenantId(), d.GetDataClass(), d.GetAuthorityId()}, "") ||
 		d.GetKind() == pb.AuthorityKind_AUTHORITY_KIND_UNSPECIFIED {
-		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // A1
+		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	key := [2]string{d.GetTenantId(), d.GetDataClass()}
 	if d.GetEpoch() != a.current[key].GetEpoch()+1 {
-		return errorf(pb.ErrorCode_ERROR_CODE_CONFLICT) // A2
+		return errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
 	}
 	a.current[key] = d
 	return nil
@@ -57,7 +54,6 @@ func (a *Authorities) declaration(s *pb.Submission) (*pb.AuthorityDeclaration, *
 	return d, nil
 }
 
-// Authorize is the receiver's check before K4 accepts a submission (A3).
 func (a *Authorities) Authorize(s *pb.Submission) *Error {
 	d, err := a.declaration(s)
 	if err == nil && s.GetAuthority() != d.GetAuthorityId() {
@@ -66,7 +62,6 @@ func (a *Authorities) Authorize(s *pb.Submission) *Error {
 	return err
 }
 
-// Enqueue puts a submission in this edge's outbox (A4, A6).
 func (a *Authorities) Enqueue(s *pb.Submission) (pb.SubmissionState, *Error) {
 	d, err := a.declaration(s)
 	if err != nil {
@@ -94,14 +89,12 @@ func (a *Authorities) Transition(tenant, idempotencyKey, event string) (pb.Submi
 	}
 	next, ok := transitions[event][entry.state]
 	if !ok {
-		return 0, errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // A5
+		return 0, errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	entry.state = next
 	return next, nil
 }
 
-// Answer applies the authority's answer to a sent submission (A8): no code
-// confirms, a conflict code conflicts, any other code rejects.
 func (a *Authorities) Answer(tenant, idempotencyKey string, code pb.ErrorCode) (pb.SubmissionState, *Error) {
 	event := "reject"
 	switch code {

@@ -8,7 +8,6 @@ type Props={id?:string;label:string;value:unknown;onChange:(value:unknown)=>void
 const kindOf=(value:unknown)=>value===undefined?'unset':value===null?'null':Array.isArray(value)?'array':typeof value==='object'?'object':typeof value;
 const initial=(kind:string):unknown=>({object:{},array:[],string:'',number:0,boolean:false,null:null} as Record<string,unknown>)[kind];
 
-/** One JSON field, edited as values. The owning declaration still validates its meaning. */
 export function StructuredValueInput({id,label,value,onChange,invalid,describedBy}:Props){
   const generated=useId();
   return <div id={id} role="group" aria-label={label} aria-invalid={invalid} aria-describedby={describedBy} className="grid min-w-0 gap-2">

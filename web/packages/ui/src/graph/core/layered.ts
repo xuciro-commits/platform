@@ -3,7 +3,6 @@ import { layoutGraph } from "./layout/adapter";
 export type GraphSize = { width: number; height: number; gapX: number; gapY: number };
 export type LaneAssignment = { ids: string[]; of: (id: string) => string | undefined };
 export type LaneBand = { id: string; position: CanvasPosition; box: CanvasBox };
-/** Compatibility vocabulary for owners; the engine is exclusively ELK. */
 export async function layeredLayout(nodes: { id: string }[], edges: { from: string; to: string; label?: string }[], direction: CanvasDirection = "right",
   size: GraphSize = { width: 216, height: 112, gapX: 72, gapY: 36 }, box?: (id: string) => CanvasBox, lanes?: LaneAssignment): Promise<Map<string, CanvasPosition>> {
   const result = await layoutGraph({ nodes: nodes.map((n) => ({ id: n.id, ...(box?.(n.id) ?? size), lane: lanes?.of(n.id) })),
@@ -12,9 +11,6 @@ export async function layeredLayout(nodes: { id: string }[], edges: { from: stri
   return new Map(Object.entries(result.positions));
 }
 
-/** The rectangle each lane's band occupies, read off where its steps actually sit,
- * so an owner-supplied drawing and an arranged one both get bands that fit. A lane
- * with nothing in it still reads as a lane: a nominal band below the drawn ones. */
 export function laneBands(lanes: { id: string }[], positions: ReadonlyMap<string, CanvasPosition>, direction: CanvasDirection,
   box: (id: string) => CanvasBox, lane: (id: string) => string | undefined, header = 26, pad = 12): LaneBand[] {
   const placed = [...positions].map(([id, at]) => ({ id, at, key: lane(id) }));

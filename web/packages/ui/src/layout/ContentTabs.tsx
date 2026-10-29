@@ -3,9 +3,6 @@ import { Button } from "../primitives/button";
 import { cn } from "../lib/cn";
 import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
 
-/** Controlled, lazy first mount; visited panels retain local input while
- * hidden. Stable item identities survive reorder. No application state here.
- */
 export function ContentTabs({ label, items, value, onChange, compact = false, wrap = !compact, open = true, actions, className }: {
   label: string; items: { id: string; title: ReactNode; content: ReactNode }[];
   value?: string; onChange: (id: string) => void;

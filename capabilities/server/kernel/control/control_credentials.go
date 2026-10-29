@@ -23,8 +23,6 @@ import (
 	"time"
 )
 
-// Credentials owns encrypted accepted values and outbound reads. The console's
-// original accepted ledger applies Prepare's result; Restore never decrypts.
 type Credentials struct {
 	mu     sync.RWMutex
 	tenant string
@@ -65,7 +63,6 @@ func CredentialActions() []platform.Action {
 	}
 }
 
-// credentialCipher is only needed for new writes and actual use, never saved-result recovery.
 func credentialCipher() (cipher.AEAD, error) {
 	key, err := hex.DecodeString(os.Getenv("PLATFORM_CREDENTIAL_KEY"))
 	if err != nil || len(key) != 32 {
@@ -224,7 +221,6 @@ func ResolveCredential(tenant string, owner platform.Credentials, secret func(st
 	return value, record.Kind, nil
 }
 
-// SealCredential is the static encryption boundary before ordinary submission.
 func SealCredential(tenant string, owner platform.Credentials, request platform.CredentialSealRequest) (platform.CredentialWrite, *kernel.Error) {
 	if request.Source != "managed" || request.Sealed != "" || len(request.Value) > 8192 || strings.ContainsAny(request.Value, "\r\n") || checkCredentialDefinition(request.CredentialWrite) != nil {
 		return platform.CredentialWrite{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A valid credential and nonempty single-line value are required")
@@ -248,8 +244,6 @@ func SealCredential(tenant string, owner platform.Credentials, request platform.
 	return request.CredentialWrite, nil
 }
 
-// Provider failures may echo a submitted token. Scrub transmitted auth values
-// before a remote error is exposed to a person or recorded as an outcome.
 func RedactCredentialFailure(response *http.Response, request *http.Request) *http.Response {
 	if response == nil || response.Body == nil || response.StatusCode < 400 {
 		return response

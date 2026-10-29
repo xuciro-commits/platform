@@ -1,5 +1,4 @@
 import { ApplicationSampleAsset } from "./releases/samples";
-// direct builder menus and application context share the original editors.
 import "./i18n";
 import { defineApp, useHost, type Host } from "@platform/app";
 import { ModuleWorkbench } from "./workshop/ModuleWorkbench";
@@ -39,7 +38,6 @@ import { kindIcon } from "./projects/resource-icons";
 import { FolderKanban, Hammer } from "lucide-react";
 
 const builder = (host: Host) => host.holds("build", "builder");
-// An integrator connects, maps and runs integrations without designing objects or pages.
 const integrator = (host: Host) => host.holds("build", "integrator");
 const editorViews: View[] = [
   { id: "projects", title: () => t("Applications"), render: () => <StudioHome /> },
@@ -91,8 +89,6 @@ function StudioHome() {
 const releaseViews = new Set(["changes", "release-review", "release-history"]);
 function AuthoringView({ route, children }: { route: Route; children: ReactNode }) {
   const host = useHost();
-  // Publisher surfaces enter sealed candidates and history. Draft changes are
-  // a builder view: the handoff to a publisher carries candidates, not drafts.
   const allowed = route.view === "projects" || builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || host.holds("build", "publisher") && route.view !== "changes" && releaseViews.has(route.view);
   return allowed ? <>{children}</> : <PageHeader title={t("Application Studio")} description={t("This authoring view is not available with your current access.")} />;
 }
@@ -101,7 +97,6 @@ const contextualViews = (views: View[]) => views.map(view => ({ ...view, render:
   return <AuthoringView route={route}>{referenceContext(route, view.render(params))}</AuthoringView>;
 } }));
 
-/** Authoring stays in one Shell layout. Runtime administration retains its original applications. */
 export default defineApp({
   id: "build", surface: "studio", category: "build", title: t("Builder"), referenceContext,
   description: t("Design applications: their object types, modules, automations and functions, and release them together."), icon: <Hammer />,

@@ -8,7 +8,6 @@ import type { DraftEdit } from "../session/draft-history";
 import type { WorkflowDraft } from "./workflow-model";
 import { workflowInputs } from "./workflow-session";
 
-/** Flow and cards edit the same process through the existing draft history and owner. */
 export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublished }: {
   id: string; view: "flow" | "automation"; empty: () => WorkflowDraft; failure: string;
   onDiscard?: () => void; onPublished?: () => Promise<unknown>;
@@ -42,7 +41,6 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublish
     session.saved(submitted, record); markSaved();
   };
   const refresh = async (submitted: WorkflowDraft, accepted: WorkflowDraft, message: string) => {
-    // The accepted revision remains known even when its subsequent read fails.
     acknowledge(submitted, accepted);
     try {
       const fresh = await query.refetch();
@@ -57,7 +55,6 @@ export function useProcessDraft({ id, view, empty, failure, onDiscard, onPublish
     if (invalidInputs()) return;
     const submitted = structuredClone(draft), target = submitted.id || createID;
     const revision = submitted.id ? confirmed.current.revision : 0;
-    // Card authoring has always allocated the machine name from its title.
     if (!submitted.name && view === "automation") submitted.name = allocatedName.current ??= (submitted.title.toLowerCase().replace(/[^a-z0-9]/g, "") || "automation") + createID.replace(/-/g, "").slice(0, 8);
     if (!await decide(`build.process.${submitted.id ? "edit" : "create"}`, { type: "build.process", id: target }, workflowInputs(submitted),
       { expectedRevision: submitted.id ? revision : undefined, quiet: true, onRefused: setError })) return;

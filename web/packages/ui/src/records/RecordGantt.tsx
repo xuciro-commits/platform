@@ -22,7 +22,6 @@ export function recordGanttRows(records:EntityRecord[],info:EntityInfo,fields:Re
  return {rows,range};
 }
 
-/** Original ordered window in; a fixed viewport out. No scheduling writes. */
 export function RecordGantt({records,info,fields,maxRows=20}:{records:EntityRecord[];info:EntityInfo;fields:RecordGanttOptions;maxRows?:number}) {
  const model=recordGanttRows(records,info,fields,maxRows);
  if(!model)return <p role="alert">{t("Gantt fields, range or tone mappings are unavailable or incompatible.")}</p>;

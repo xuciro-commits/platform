@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Update the selected runtime without replacing local identities, keys or data.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 if [[ -n $(git status --porcelain -- capabilities/server contract web deploy scripts Makefile) ]]; then

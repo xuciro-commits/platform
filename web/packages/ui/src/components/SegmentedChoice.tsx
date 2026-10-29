@@ -2,7 +2,6 @@ import type {ReactNode} from 'react';
 import {Button} from '../primitives/button';
 import {cn} from '../lib/cn';
 
-/** One controlled choice. Icon-only segments always have names and tooltips. */
 export function SegmentedChoice({label,value,options,compact=false,disabled,onChange}:{label:string;value:string;options:readonly {value:string;label:string;icon?:ReactNode;disabled?:boolean}[];compact?:boolean;disabled?:boolean;onChange?:(value:string)=>void}){
  const active=options.find(option=>option.value===value&&!option.disabled)??options.find(option=>!option.disabled);
  return <div role="group" aria-label={label} className={cn('flex min-w-0',compact?'overflow-hidden rounded-md border border-border bg-canvas p-0.5':'flex-wrap gap-1')} onKeyDown={event=>{

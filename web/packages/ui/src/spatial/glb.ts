@@ -2,7 +2,6 @@ import {rasterDimensions} from "../records/attachment-bytes";
 import {sceneLimits} from "./scene-model";
 type Obj=Record<string,any>;
 const object=(v:unknown):v is Obj=>!!v&&typeof v==="object"&&!Array.isArray(v),uint=(n:unknown):n is number=>typeof n==="number"&&Number.isSafeInteger(n)&&n>=0;
-/** Inspect the binary container and allocation bounds before Three can allocate or resolve any URI. */
 export function boundedGLB(bytes:ArrayBuffer){
  function invalid():never{throw Error("The model is not a bounded self-contained GLB.");}
  if(bytes.byteLength<20||bytes.byteLength>sceneLimits.maxBytes)invalid();const data=new DataView(bytes);
@@ -24,7 +23,6 @@ export function boundedGLB(bytes:ArrayBuffer){
  const visited=new Set<number>(),parents=new Set<number>();
  const walk=(id:number,path:Set<number>)=>{if(!uint(id)||!doc.nodes[id]||path.has(id)||parents.has(id))invalid();parents.add(id);const n=doc.nodes[id];if(n.name!==undefined&&(typeof n.name!=="string"||n.name.length>256))invalid();for(const [key,len]of [["translation",3],["rotation",4],["scale",3],["matrix",16]] as const){if(n[key]!==undefined&&(!Array.isArray(n[key])||n[key].length!==len||n[key].some((v:unknown)=>typeof v!=="number"||!Number.isFinite(v)||Math.abs(v)>1e9)))invalid();}if(n.mesh!==undefined&&(!uint(n.mesh)||!doc.meshes[n.mesh]))invalid();if(n.children!==undefined&&!Array.isArray(n.children))invalid();visited.add(id);const next=new Set(path);next.add(id);for(const child of n.children??[])walk(child,next);};
  for(const id of doc.scenes[doc.scene??0].nodes??[])walk(id,new Set());
- // GLTFLoader constructs every declared node, including unreachable ones.
  for(let i=0;i<doc.nodes.length;i++){if(!visited.has(i))walk(i,new Set());}
  for(const mesh of doc.meshes){if(!Array.isArray(mesh.primitives)||mesh.primitives.length>128)invalid();for(const p of mesh.primitives){if(!object(p.attributes)||!uint(p.attributes.POSITION)||!doc.accessors[p.attributes.POSITION]||p.mode!==undefined&&p.mode!==4)invalid();for(const index of Object.values(p.attributes)){if(!uint(index)||!doc.accessors[index])invalid();}if(p.indices!==undefined&&(!uint(p.indices)||!doc.accessors[p.indices]))invalid();if(p.material!==undefined&&(!uint(p.material)||!doc.materials?.[p.material]))invalid();const a=doc.accessors[p.attributes.POSITION],v=buffers[a.bufferView];if(a.type!=="VEC3"||a.componentType!==5126)invalid();const stride=v.byteStride??12,base=(v.byteOffset??0)+(a.byteOffset??0);for(let i=0;i<a.count;i++)for(let axis=0;axis<3;axis++){const n=packed.getFloat32(base+i*stride+axis*4,true);if(!Number.isFinite(n)||Math.abs(n)>1e9||a.min&&n<a.min[axis]||a.max&&n>a.max[axis])invalid();}}}
  return {doc,vertices,indices,nodes:doc.nodes.length};

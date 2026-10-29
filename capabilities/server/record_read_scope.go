@@ -17,7 +17,6 @@ import (
 	"platformserver/platform"
 )
 
-// beginRecordRead runs under the original lane before any coordinated read.
 func (t *Tenant) beginRecordRead(ctx context.Context) {
 	t.recordReadError = nil
 	t.openRecordRead(ctx)

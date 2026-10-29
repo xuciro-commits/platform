@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-// SortOrder contains validated field readers and the requested directions.
-// Header ID is the final stable key for all ordinary record queries.
 type SortOrder struct{ keys []sortKey }
 
 func CompileOrder(info platform.EntityInfo, names []string) (SortOrder, error) {
@@ -32,8 +30,6 @@ func CompileOrder(info platform.EntityInfo, names []string) (SortOrder, error) {
 	return order, nil
 }
 
-// Keys reads each key once, including the stable record ID. Interface queries
-// append the concrete object type to keep equal IDs in different objects distinct.
 func (order SortOrder) Keys(value reflect.Value) []any {
 	keys := make([]any, 0, len(order.keys)+1)
 	for _, key := range order.keys {
@@ -55,8 +51,6 @@ func (order SortOrder) Compare(a, b []any) int {
 	return 0
 }
 
-// SortedPage keeps only the requested prefix while counting all authorized
-// matches. Unlimited owner queries retain their explicitly requested result.
 type SortedPage struct {
 	order                      SortOrder
 	offset, limit, keep, total int
@@ -133,8 +127,6 @@ func (p *SortedPage) Result() ([]reflect.Value, int) {
 	return out, p.total
 }
 
-// One predicate evaluates all source sets against one authorized row. Every
-// branch is compiled using the member's field projection before any row runs.
 func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (func(reflect.Value) bool, error) {
 	domain, err := CompileDomain(info, p.Domain)
 	if err != nil {
@@ -155,7 +147,6 @@ func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (func(r
 	if p.Set == nil {
 		return base, nil
 	}
-	// CheckSet bounds the shape before this compiler is called.
 	left, err := CompileSet(info, *p.Set.Inputs[0])
 	if err != nil {
 		return nil, err
@@ -177,7 +168,7 @@ func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (func(r
 
 type sortKey struct {
 	field platform.FieldInfo
-	stamp string // id, created, changed: the record's own
+	stamp string
 	desc  bool
 }
 
@@ -193,8 +184,6 @@ func (k sortKey) Of(v reflect.Value) any {
 	return Comparable(v.FieldByIndex(k.field.Index).Interface())
 }
 
-// Comparable is a field value as it is compared and sorted: strings, numbers,
-// times; money by its amount.
 func Comparable(v any) any {
 	if v != nil {
 		rv := reflect.ValueOf(v)
@@ -269,9 +258,6 @@ func CompareValues(a, b any) int {
 	return strings.Compare(fmt.Sprint(a), fmt.Sprint(b))
 }
 
-// CompileDomain turns a domain in Odoo's prefix form into a predicate (D7):
-// [["field", "op", value], "|", [...], [...], "!", [...]]; terms not joined
-// by an operator are joined by "&". Operators: = != < <= > >= in "not in" like.
 func CompileDomain(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Value) bool, error) {
 	all := func(reflect.Value) bool { return true }
 	if len(raw) == 0 || string(raw) == "null" {
@@ -330,7 +316,7 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 	switch {
 	case name == "id":
 		f, read = platform.FieldInfo{Name: "id", Type: "text"}, func(v reflect.Value) any { return Header(v).ID }
-	case name == "created" || name == "changed": // the record's stamps, as datetimes
+	case name == "created" || name == "changed":
 		f, read = platform.FieldInfo{Name: name, Type: "datetime"}, func(v reflect.Value) any {
 			if name == "created" {
 				return Header(v).Created.At
@@ -351,11 +337,11 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 	if json.Unmarshal(term[2], &value) != nil {
 		return nil, fmt.Errorf("bad value")
 	}
-	if b, ok := value.(bool); ok { // compared as booleans are: 1 and 0
+	if b, ok := value.(bool); ok {
 		value = map[bool]float64{true: 1, false: 0}[b]
 	}
 	if f.Type == "datetime" {
-		if s, ok := value.(string); ok { // a time, or a day from its midnight (UTC)
+		if s, ok := value.(string); ok {
 			t, err := time.Parse(time.RFC3339, s)
 			if err != nil {
 				if t, err = time.Parse(time.DateOnly, s); err != nil {
@@ -395,7 +381,7 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 		return func(v reflect.Value) bool {
 			x := Comparable(read(v))
 			if x == nil || textual && reflect.ValueOf(x).IsZero() {
-				return false // an empty value is neither before nor after anything
+				return false
 			}
 			c := CompareValues(x, value)
 			return op == "<" && c < 0 || op == "<=" && c <= 0 || op == ">" && c > 0 || op == ">=" && c >= 0
@@ -421,15 +407,11 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 	return nil, fmt.Errorf("unknown operator %s", op)
 }
 
-// RowSource belongs to one consistent read view. Rows retain only accepted
-// private replacements; loading a committed row never installs a shared cache.
 type RowSource interface {
 	Get(string) *Row
 	IDs(after string, limit int) []string
 }
 
-// Rows is either the original immutable in-memory index or a source with an
-// immutable private overlay. Copying it gives nested decisions independent writes.
 type Rows struct {
 	index  Index[*Row]
 	source RowSource
@@ -540,12 +522,8 @@ func (r Rows) Len() int {
 	return n
 }
 
-// Overlay is the immutable set of replacements in this private decision.
 func (r Rows) Overlay() Index[*Row] { return r.index }
 
-// IDs enumerates the same visible IDs as All without loading record values.
-// It is used by retained-model projections, which transform a row only when
-// the caller actually reads it.
 func (r Rows) IDs(after string, limit int) []string {
 	if limit <= 0 {
 		return nil

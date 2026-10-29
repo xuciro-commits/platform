@@ -16,7 +16,6 @@ import (
 	"time"
 )
 
-// declare registers an app's entity types; references resolve within the app.
 func (s *Store) Declare(a platform.App) error {
 	m := a.Manifest()
 	own := map[reflect.Type]string{}
@@ -42,7 +41,7 @@ func (s *Store) Declare(a platform.App) error {
 		s.types[e.Type], s.byGo[info.Go] = et, et
 		s.generation++
 	}
-	for _, e := range m.Entities { // seeds after every type is known, so references resolve
+	for _, e := range m.Entities {
 		seeder := platform.NewCaller(nil, platform.Member{ID: "seed"}, m.ID, false, false)
 		seed := &pb.ChangeRecord{ChangeId: "seed", Submission: &pb.Submission{PrincipalId: "seed", Schema: &pb.SchemaRef{Name: "seed"}}}
 		for _, v := range e.Seed {
@@ -60,7 +59,6 @@ func (s *Store) Declare(a platform.App) error {
 	return nil
 }
 
-// of is c's app's entity type for a Go type; other apps' types are not reachable (D3).
 func (s *Store) Of(c platform.Caller, t reflect.Type) *Type {
 	et := s.byGo[t]
 	if et == nil || et.info.App != c.App {
@@ -150,7 +148,6 @@ func (s *Store) Check(c platform.Caller, entity any, now time.Time) *kernel.Erro
 	return s.CheckLinkWriteLocked(et, v)
 }
 
-// HasRecord is called only under the owning store's lock during field checks.
 func (s *Store) HasRecord(typ, id string) bool {
 	et := s.types[typ]
 	return et != nil && et.rows.Get(id) != nil
@@ -177,9 +174,6 @@ func (s *Store) ValidateUniqueLinkLocked(l platform.LinkType) error {
 	return nil
 }
 
-// The parent admitted its complete image and generation must still match at
-// promotion. Ordinary writes therefore need only their final relation keys;
-// new declarations and replaced type images still receive full admission.
 func (s *Store) ValidateChangedLinkConstraintsLocked() error {
 	changed := map[string][]string{}
 	for ref := range s.writes {
@@ -313,8 +307,6 @@ func (s *Store) InstallLinkConstraint(l platform.LinkType) error {
 	return nil
 }
 
-// This check is under the record lock, across the owner's full store. Member
-// read filters cannot hide a conflict; refusals expose no competing row data.
 func (s *Store) CheckLinkWriteLocked(et *Type, value reflect.Value) *kernel.Error {
 	id := value.Field(0).Interface().(platform.Record).ID
 	for _, l := range s.uniqueLinks {
@@ -378,7 +370,7 @@ func (s *Store) CheckArchiveWriteLocked(et *Type, value reflect.Value) *kernel.E
 			bucket := child.ReferenceBucket(f, rec.ID)
 			allowed := 0
 			if et.info.Type == child.info.Type && bucket.IDs.Get(rec.ID) {
-				allowed = 1 // prospective self is archived
+				allowed = 1
 			}
 			if bucket.Active > allowed {
 				return fail()
@@ -391,7 +383,7 @@ func (s *Store) CheckArchiveWriteLocked(et *Type, value reflect.Value) *kernel.E
 			}
 			if et.info.Type == l.Parent.Name && id == rec.ID {
 				continue
-			} // prospective self is active
+			}
 			target := parent.rows.Get(id)
 			if target == nil || target.Value.Field(0).Interface().(platform.Record).Archived {
 				return fail()
@@ -401,8 +393,6 @@ func (s *Store) CheckArchiveWriteLocked(et *Type, value reflect.Value) *kernel.E
 	return nil
 }
 
-// Unique checks the complete owner index; member read filters never hide a
-// competing row. The tenant writer keeps this check and acceptance indivisible.
 func (s *Store) UniqueConstraint(info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -420,8 +410,6 @@ func (s *Store) UniqueConstraint(info platform.EntityInfo, rule platform.Constra
 		if !et.fullImage {
 			ids, err := storage.StateUnique(context.Background(), s.current.Tenant(), info.Type, rule.Name, key, s.current.Applied())
 			if err != nil {
-				// As with candidate reads, a storage failure cannot become a
-				// durable business refusal or silently pass a constraint.
 				panic(fmt.Errorf("record unique keys: %w", err))
 			}
 			for _, id := range ids {

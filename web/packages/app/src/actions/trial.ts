@@ -2,7 +2,6 @@ import type { Api } from '@platform/kernel';
 import {t} from '@platform/ui';
 import { useHost } from '../index';
 
-/** A private decision uses the original action and does not enter the outbox. */
 export function useActionTrial() {
   const {client, catalog} = useHost();
   return (schema:string,target:{type:string;id:string},values:Record<string,unknown>,revision?:number):Promise<Api.Simulation> => {

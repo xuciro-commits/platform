@@ -6,7 +6,6 @@ import type {ChartSurfaceProps} from './ChartSurface';
 import type {RecordChartRenderer} from './RecordChart';
 const define=defineWidgetPlugin<WidgetBindingContext>();
 const domainOf=(values:Record<string,unknown>)=>Object.entries(values).filter(([,v])=>v!==undefined&&v!=='').map(([field,v])=>[field,'=',v]);
-/** Binding owns query composition; renderers receive the original aggregate port. */
 export function bindChart(c:WidgetBindingContext,kpi=false,pivot=false):ChartSurfaceProps{
  const {page,section,window,collection,info,master}=c,object=section.object?.name||page.object.name;
  let domain:unknown[];

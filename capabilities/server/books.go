@@ -13,14 +13,6 @@ import (
 	"platformserver/platform"
 )
 
-// The books: a builder action that declares a Journal makes the
-// host land one balanced entry in core after the decision is accepted. It is
-// an  effect on the "core:books" endpoint - in order, retried while
-// no period is open for it, delivered once per decision - so the general
-// ledger lags the business by a tick and never disagrees with it.
-
-// legacyJournalEffects retains the original intent identity for historical
-// raw-input recovery. Current transactions save their own frozen journal intent.
 func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
 	if e.App != build.ID || t.app(platform.BooksApp) == nil {
 		return nil
@@ -48,7 +40,7 @@ func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
 			at := e.Record.GetRecordedTime().AsTime()
 			today := at.UTC().Format(time.DateOnly)
 			if who, ok := t.member(s.GetPrincipalId()); ok {
-				today = who.Today(at) // the posting date is the decider's day
+				today = who.Today(at)
 			}
 			entry, err := journal.Entry(e.Record.GetChangeId(), record, inputs, s.GetPrincipalId(), at, today)
 			if err != nil {
@@ -61,9 +53,6 @@ func (t *Tenant) legacyJournalEffects(e platform.Event) []platform.Effect {
 	return nil
 }
 
-// sendBooks lands one entry. A period that is not open yet is a retry - the
-// accountant opens it and the queue drains in order; anything else about the
-// entry itself is rejected and stays visible in the effect log.
 func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 	out := platform.Outcome{Effect: x.ID}
 	app := t.app(platform.BooksApp)
@@ -105,10 +94,8 @@ func (t *Tenant) sendBooks(x platform.Effect, now time.Time) platform.Outcome {
 	return out
 }
 
-// booksEndpoint is the single ordered lane entries go through.
 func booksEndpoint() *Endpoint { return &Endpoint{ID: build.BooksEndpoint, Kind: "books"} }
 
-// submitBooks uses the same accepted-result boundary as other host-owned decisions.
 func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time) (platform.Outcome, *kernel.Error) {
 	checks, ok := app.(platform.BooksChecks)
 	if !ok {
@@ -130,8 +117,6 @@ func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time
 			}
 		}
 	} else {
-		// A committed reversal may be retried after losing the effect answer.
-		// Its original receipt owns idempotency; only a fresh reversal needs preflight.
 		original, exists := platform.Get[platform.Journal](caller, sub.GetTarget().GetId())
 		if !exists || original.State != "reversed" {
 			if outcome, err := checks.CheckReversal(caller, sub.GetTarget().GetId(), sub.GetPayload(), now); err != nil {
@@ -145,8 +130,6 @@ func (t *Tenant) submitBooks(app platform.App, sub *pb.Submission, now time.Time
 	return platform.Outcome{Result: "delivered"}, nil
 }
 
-// submitAutomated records sub as the platform's own decision, by caller (an
-// app's automation); t.mu is held.
 func (t *Tenant) submitAutomated(app platform.App, caller platform.Caller, sub *pb.Submission, now time.Time) *kernel.Error {
 	sub.PrincipalId = caller.ID
 	_, err := t.submitAccepted(app, caller.Member, sub, now, true)

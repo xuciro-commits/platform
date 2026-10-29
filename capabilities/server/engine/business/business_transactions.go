@@ -25,9 +25,6 @@ type txnRefusalResult struct {
 	inputs      map[string]any
 }
 
-// A refusal record uses the same generated create permission, validation and
-// constraint path as every other transaction row. Its audit fact is captured
-// separately so the actor, time, original values and reason cannot be omitted.
 func (b *Runtime) refusalRecord(c platform.Caller, receipt *pb.ChangeRecord, step platform.TxnStep, scope platform.RuleReadSpec, subject map[string]any, inputs map[string]any, now time.Time, ref string) *kernel.Error {
 	entity, ok := b.Entities[step.Target.Type]
 	if !ok || step.Kind != "create" {
@@ -80,8 +77,6 @@ func (b *Runtime) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn
 		if result != nil && result.fact.Level == "route" {
 			return receipt, failure
 		}
-		// Other refusals reach the original top-level owner, which discards
-		// business state while retaining that decision's field diagnostics.
 		return receipt, nil
 	})
 	if result == nil {
@@ -93,8 +88,6 @@ func (b *Runtime) transactDepth(c platform.Caller, receipt *pb.ChangeRecord, txn
 	if result.fact.Level == "block" {
 		return c.RefuseBusiness(result.fact)
 	}
-	// The refused branch's private rows, numbers and intents have been discarded
-	// by the original savepoint owner. Only the chosen branch can be accepted.
 	if result.declaration.Record != nil {
 		if failure := b.refusalRecord(c, receipt, *result.declaration.Record, result.scope, result.subject, result.inputs, now, result.fact.Record); failure != nil {
 			return failure
@@ -638,10 +631,6 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 	if err := run(txn.Steps, spec, values, "", framePrefix); err != nil {
 		return err
 	}
-	// The subject carries this accepted command's revision and history even
-	// when every business-field update to it was skipped. Use the original
-	// action's permissions and validation without inventing an assignment.
-	// Creation already saved that subject through its original create action.
 	if action != txn.Subject+".create" && !written[txn.Subject+"/"+subjectID] {
 		if err := b.Ledger.ApplyTxnRecord(c, receipt, b.Entities[txn.Subject], "edit", subjectID, platform.Raw(map[string]any{}), now); err != nil {
 			return err
@@ -1143,8 +1132,6 @@ func txnRowInputs(c platform.Caller, info platform.EntityInfo, raw json.RawMessa
 	return values, nil
 }
 
-// Runtime holds the fixed invocation context; authoritative state remains in
-// the original ledger and transport supplied by composition.
 type Runtime struct {
 	platform.BusinessRuntimeContext
 }

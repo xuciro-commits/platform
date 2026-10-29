@@ -26,21 +26,19 @@ type WorkLoop struct {
 	Attempt, Run func(*Task, time.Time, bool) string
 }
 
-// Task is one piece of owned work: an event for a subscriber, or a job.
 type Task struct {
 	platform.ScheduledTask
-	Since   int          `json:"-"` // attempts before the last manual retry: each retry gets a full schedule
+	Since   int          `json:"-"`
 	Event   *QueuedEvent `json:"-"`
 	Job     platform.Job `json:"-"`
-	NextRun time.Time    `json:"-"` // transient polling deadline; not part of the accepted predecessor
+	NextRun time.Time    `json:"-"`
 }
 
-// caused is an accepted decision with how many deliveries caused it.
 type QueuedEvent struct {
 	platform.Event
 	Hops int
-	Span trace.SpanContext           // the input that caused it, whose trace its delivery continues
-	Plan *platform.AcceptedEventPlan // durable work/effect intent; nil for legacy entries
+	Span trace.SpanContext
+	Plan *platform.AcceptedEventPlan
 }
 
 func StateOfTask(task *Task) (platform.ScheduledTaskState, error) {
@@ -56,12 +54,9 @@ func StateOfTask(task *Task) (platform.ScheduledTaskState, error) {
 	return s, nil
 }
 
-// Quota paces owned work: each app may make Tenant.Quota attempts per minute,
-// and the apps take turns being served first. Volatile; used
-// only by the runner under the tenant's main lock.
 type Quota struct {
-	used map[string]usedMinute // attempts per app in the current minute
-	turn int                   // the app the next round starts at
+	used map[string]usedMinute
+	turn int
 }
 
 type usedMinute struct {
@@ -69,7 +64,6 @@ type usedMinute struct {
 	n      int
 }
 
-// over reports whether app has used its limit attempts of the minute; 0: no limit.
 func (q *Quota) Over(app string, limit int, now time.Time) bool {
 	if limit <= 0 {
 		return false
@@ -90,15 +84,10 @@ func (q *Quota) Spend(app string, now time.Time) {
 	q.used[app] = u
 }
 
-// next advances the round-robin start over n apps.
 func (q *Quota) Next(n int) { q.turn = (q.turn + 1) % max(n, 1) }
 
-// WorkBoard holds the tenant's owned work: each subscriber's queue of event
-// deliveries (head first), the deliveries that gave up, and the apps' Jobs
-// (from the manifests; their runs from the journal). Protected by the
-// tenant's opsMu, which the runner and the reads share.
 type WorkBoard struct {
-	Queues map[string][]*Task // subscriber → its deliveries, head first
+	Queues map[string][]*Task
 	Failed []*Task
 	Jobs   []*Task
 }
@@ -128,7 +117,6 @@ func findTask(xs []*Task, id string) *Task {
 	return nil
 }
 
-// anyDelivery finds a queued delivery in any subscriber's queue.
 func (b *WorkBoard) AnyDelivery(id string) *Task {
 	for _, q := range b.Queues {
 		if t := findTask(q, id); t != nil {
@@ -138,7 +126,6 @@ func (b *WorkBoard) AnyDelivery(id string) *Task {
 	return nil
 }
 
-// settled takes a done or Failed delivery out of its queue; a Failed one waits for a retry.
 func (b *WorkBoard) Settled(task *Task) {
 	b.Queues[task.App] = slices.DeleteFunc(b.Queues[task.App], func(x *Task) bool { return x == task })
 	if task.State == "failed" {
@@ -146,7 +133,6 @@ func (b *WorkBoard) Settled(task *Task) {
 	}
 }
 
-// retry Queues a Failed delivery again at the head of its queue, or makes a job due.
 func (b *WorkBoard) Retry(id string, now time.Time) bool {
 	if i := slices.IndexFunc(b.Failed, func(x *Task) bool { return x.ID == id }); i >= 0 {
 		task := b.Failed[i]
@@ -163,7 +149,6 @@ func (b *WorkBoard) Retry(id string, now time.Time) bool {
 	return false
 }
 
-// all lists Jobs, then each app's queue in app order, then the Failed ones.
 func (b *WorkBoard) All(apps []platform.App) []Task {
 	out := []Task{}
 	for _, j := range b.Jobs {
@@ -231,7 +216,7 @@ func (b *WorkBoard) Restore(tenant string, s WorkState) error {
 	for _, id := range s.Failed {
 		b.Failed = append(b.Failed, tasks[id])
 	}
-	for _, saved := range s.Jobs { // the Jobs come from the manifests; their runs from the snapshot
+	for _, saved := range s.Jobs {
 		if j := findTask(b.Jobs, saved.ID); j != nil {
 			job := j.Job
 			*j = saved
@@ -241,8 +226,6 @@ func (b *WorkBoard) Restore(tenant string, s WorkState) error {
 	return nil
 }
 
-// ready is a subscriber's first due delivery that no earlier one holds back:
-// deliveries of one event target keep their order, others pass a failing one.
 func Ready(q []*Task, now time.Time) *Task {
 	held := map[string]bool{}
 	for _, x := range q {
@@ -294,7 +277,6 @@ func (s WorkLoop) Round(now time.Time, budget int) bool {
 	return s.Pending(now)
 }
 
-// pending reports whether an app not past its quota has a ready delivery or a due job.
 func (s WorkLoop) Pending(now time.Time) bool {
 	s.Lock()
 	defer s.Unlock()

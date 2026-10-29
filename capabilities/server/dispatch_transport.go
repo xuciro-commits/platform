@@ -120,7 +120,7 @@ func (h hostView) CheckDispatchRead(run platform.DispatchRun, at time.Time) *ker
 	}
 	read := run.Definition.Readback
 	if read.Record != "" {
-		return nil // Records applies the applicant's current row and field access.
+		return nil
 	}
 	var connection build.Connection
 	if json.Unmarshal(run.Connection, &connection) != nil || connection.ID == "" {

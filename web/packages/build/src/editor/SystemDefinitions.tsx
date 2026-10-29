@@ -8,7 +8,6 @@ const visibility = new Map<string, boolean>();
 const listeners = new Set<() => void>();
 const subscribe = (changed: () => void) => { listeners.add(changed); return () => { listeners.delete(changed); }; };
 
-/** A display choice for this signed-in member and tenant, shared by asset lists. */
 export function useSystemDefinitionsVisibility() {
   const { me } = useHost();
   const key = JSON.stringify([me.tenantId, me.principalId]);
@@ -30,7 +29,6 @@ export function SystemDefinitionReferences({ type, search, title, description }:
   </div>;
 }
 
-/** Original declarations and reference fields are inspectable without creating drafts. */
 export function SystemDefinitionsList({ definitions, relations = [], search = "", title = "System definitions", description }: { definitions: Definition[]; relations?: SemanticRelation[]; search?: string; title?: string; description?: string }) {
   const { me } = useHost(), { open } = useApplicationWorkspace();
   const items: ({ definition: Definition } | { relation: SemanticRelation })[] = [

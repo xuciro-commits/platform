@@ -5,13 +5,10 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "../lib/cn";
 import { Button, type ButtonProps } from "./button";
 
-/** A row of values a person switches on and off: the fields a widget shows, the
- *  actions it offers, the tags of a record. One owner for the pattern (AGENTS.md rule 4). */
 export function Toggles({ options, value = [], onChange, empty, className, disabled, isDisabled }: {
   options: { value: string; label: string }[];
   value?: string[];
   onChange: (value: string[]) => void;
-  /** What to say when there is nothing to choose from. */
   empty?: string;
   className?: string;
   disabled?:boolean;
@@ -34,7 +31,6 @@ export function Toggles({ options, value = [], onChange, empty, className, disab
   );
 }
 
-/** A checkbox with its label; the label is the click target. */
 export function Checkbox({ checked, onChange, children, className, disabled, ariaLabel }:
   { checked: boolean; onChange: (checked: boolean) => void; children?: ReactNode; className?: string; disabled?: boolean; ariaLabel?:string }) {
   return (
@@ -45,7 +41,6 @@ export function Checkbox({ checked, onChange, children, className, disabled, ari
   );
 }
 
-/** One caller-owned boolean, with native button keyboard activation. */
 export function Switch({checked,onChange,label,ariaLabel,disabled,className}:{
   checked:boolean;onChange:(checked:boolean)=>void;label:string;ariaLabel?:string;disabled?:boolean;className?:string;
 }) {
@@ -59,7 +54,6 @@ export function Switch({checked,onChange,label,ariaLabel,disabled,className}:{
   </button>;
 }
 
-/** A form that submits on Enter and on its submit button, without reloading the page. */
 export function Form({ onSubmit, ...props }: Omit<FormHTMLAttributes<HTMLFormElement>, "onSubmit"> & { onSubmit: () => void }) {
   return <InputDraftProvider isolated scope="form"><FormBody {...props} onSubmit={onSubmit}/></InputDraftProvider>;
 }
@@ -68,7 +62,6 @@ function FormBody({onSubmit,children,...props}:Omit<FormHTMLAttributes<HTMLFormE
  return <form {...props} onSubmit={async event=>{event.preventDefault();if(lock.current||inputs?.invalid)return;lock.current=true;setBusy(true);setFailure("");inputs?.reject();inputs?.pending(1);try{await onSubmit();}catch(error){setFailure(error instanceof Error?error.message:t("The request was not confirmed. Your input is retained."));}finally{lock.current=false;setBusy(false);inputs?.pending(-1);}}}><fieldset disabled={busy} className="contents">{children}</fieldset><InputProblems/>{failure&&<p role="alert" className="text-xs text-danger">{failure}</p>}</form>;
 }
 
-/** A row that opens to show more: a run's step, a citation's passage. */
 export function Disclosure({ summary, children, open, defaultOpen = false, onToggle, className }:
   { summary: ReactNode; children: ReactNode; open?: boolean; defaultOpen?: boolean; onToggle?: (open: boolean) => void; className?: string }) {
   const [own, setOwn] = useState(defaultOpen);
@@ -85,7 +78,6 @@ export function Disclosure({ summary, children, open, defaultOpen = false, onTog
   );
 }
 
-/** A button that picks a file. */
 export function FilePicker({ accept, onFile, children, ...button }:
   Omit<ButtonProps, "onClick"> & { accept?: string; onFile: (file: File) => void }) {
   const input = useRef<HTMLInputElement>(null);
@@ -101,7 +93,6 @@ export function FilePicker({ accept, onFile, children, ...button }:
   );
 }
 
-/** A tree whose rows are selected: organisation units, anything with parents. */
 export function Tree<T>({ roots, children, row, selected, onSelect, id }: {
   roots: T[]; children: (node: T) => T[]; row: (node: T) => ReactNode; id: (node: T) => string;
   selected?: string; onSelect: (node: T) => void;

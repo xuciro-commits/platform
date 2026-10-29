@@ -21,7 +21,6 @@ import (
 	"platformserver/platform"
 )
 
-// routesCore serves the submit pipeline, live changes, recovery, authz, sessions and named reads.
 func (h *Host) routesCore(rt *routes) {
 	mux := rt.mux
 	rt.handle(transport.Route{Pattern: "GET /v1/business-refusals", Summary: "Read the original record's durable refusal and correction evidence", Answer: platform.BusinessRefusalPage{}, Query: []transport.Param{{Name: "type", Description: "original record type"}, {Name: "id", Description: "original record ID"}, {Name: "key", Description: "optional original request key"}, {Name: "offset", Description: "first result"}, {Name: "limit", Description: "at most 200 results"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -169,7 +168,7 @@ func (h *Host) routesCore(rt *routes) {
 				}
 			}
 			if h.Mint != nil {
-				for i := range out.Identities { // the lightweight host signs what it serves
+				for i := range out.Identities {
 					out.Identities[i].Token = h.Mint(out.Identities[i].Token)
 				}
 			}
@@ -178,8 +177,6 @@ func (h *Host) routesCore(rt *routes) {
 	})
 }
 
-// namedReadInputs translates transport strings using the owner's declaration.
-// Undeclared query parameters never become input to a named read.
 func namedReadInputs(app platform.App, name string, query url.Values) (json.RawMessage, *kernel.Error) {
 	if app == nil {
 		return nil, nil

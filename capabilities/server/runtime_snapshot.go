@@ -15,9 +15,6 @@ import (
 	"platformserver/journal"
 )
 
-// restoreRuntimeSnapshot restores owner state against its original SQL record
-// archive. Accepted tail results see that prefix plus their own replacements;
-// the current SQL table is admitted only after the reconstructed tail agrees.
 func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state []byte, seq, current int64, started time.Time) error {
 	saved, err := runtimekernel.ReadCheckpoint(state)
 	if err != nil {
@@ -85,9 +82,6 @@ func (t *Tenant) restoreRuntimeSnapshot(ctx context.Context, j Journals, state [
 	return nil
 }
 
-// verifyRuntimeSnapshotTail retains only records mentioned by the accepted
-// suffix. The archive supplies unchanged predecessors; SQL validates their
-// union with these same sealed deltas without replacing differing data.
 func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snapshot, current int64, entries []Entry) error {
 	verifier, ok := j.(journal.StateSnapshotVerifier)
 	if !ok {
@@ -201,8 +195,6 @@ func (t *Tenant) verifyRuntimeSnapshotTail(ctx context.Context, j Journals, snap
 	return verifier.VerifyStateSnapshot(ctx, t.ID, snapshot, current, deltas)
 }
 
-// checkpointRuntime runs before serving a restored/migrated SQL tenant. A
-// failed capture never publishes an owner image without its matching archive.
 func (t *Tenant) checkpointRuntime(ctx context.Context, j Journals, code string) (int64, error) {
 	state, seq, err := t.snapshotRuntime(ctx, j)
 	if err != nil {

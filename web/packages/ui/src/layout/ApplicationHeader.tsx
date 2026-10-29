@@ -6,7 +6,6 @@ import {Select} from "../primitives/input";
 import {t} from "../i18n";
 import {cn} from "../lib/cn";
 
-/** Authorized pages and callbacks are supplied by the application owner. */
 export function ApplicationHeader({header,pages,currentPage,onPage,onRefresh,onTheme,children,collapsed:controlledCollapsed,onCollapsedChange}:{header:Api.ApplicationHeader;pages:{name:string;title:string}[];currentPage:string;onPage:(name:string)=>void;onRefresh?:()=>void;onTheme:()=>void;children:ReactNode;collapsed?:boolean;onCollapsedChange?:(collapsed:boolean)=>void}){
  const [localCollapsed,setCollapsed]=useState(header.collapsed??false),collapsed=controlledCollapsed??localCollapsed,vertical=header.variant==="vertical";
  const render=(item:Api.ApplicationHeaderItem,index:number)=>{

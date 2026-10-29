@@ -18,10 +18,6 @@ func (t *Tenant) attachJournal(ctx context.Context, journal Journals) {
 	}
 }
 
-// retryTenant reconstructs all authority from the journal, not from the
-// possibly half-applied in-memory tenant. A damaged snapshot can be bypassed
-// because the full journal is retained; a damaged journal cannot be bypassed.
-// No new generation is visible to HTTP, work or metrics until it is checked.
 func (d *Deployment) retryTenant(ctx context.Context, journal Journals, registry *controlowner.Registry[*Tenant], code, id string) (err error) {
 	old := registry.Current(id)
 	if old == nil || !old.quarantined() {

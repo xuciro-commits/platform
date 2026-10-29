@@ -11,7 +11,6 @@ class InspectorBoundary extends Component<{children:ReactNode},{failure?:"load"|
  }
 }
 
-/** The failure belongs to this selected instance, not the editor or its history. */
 export function InspectorFrame({id,widget,version,part,children}:{id:string;widget:string;version:number;part:"bindings"|"events";children?:ReactNode}){
  const status=widgetInspectorStatus(widget,version);
  if(status==="unsupported")return part==="events"?null:<Panel role="alert" className="text-xs text-danger">{t("Unsupported widget configuration: {widget}, version {version}. Your page draft is preserved.",{widget,version})}</Panel>;

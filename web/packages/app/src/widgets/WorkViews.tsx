@@ -6,13 +6,10 @@ import {useHost,useOpenRecord,useReadQuery} from "../index";
 import {approvalDecisionReason,approvalTasks,createWorkViews,originalNotifications} from "../work/service";
 
 const message=(error:unknown)=>error instanceof Error?error.message:String(error);
-/** Original member work, sharing the workspace's read cache and decision outbox. */
 export function WorkViewsRenderer({kind,label,live,enabled=true,readSource}:{kind:"approval-inbox"|"notification-feed";label:string;live:boolean;enabled?:boolean;readSource?:RecordSource}) {
  const host=useHost(),visible=useViewVisible(),open=useOpenRecord(),limits=pageUIManifest.runtime.workViews,identity=JSON.stringify([host.source.scope,kind,visible,live,enabled]),lifecycle=useRef({identity,epoch:0,mounted:true});
  if(lifecycle.current.identity!==identity)lifecycle.current={...lifecycle.current,identity,epoch:lifecycle.current.epoch+1};
  const originalEpoch=lifecycle.current.epoch,active=()=>lifecycle.current.mounted&&lifecycle.current.epoch===originalEpoch&&lifecycle.current.identity===identity&&visible&&(!readSource||readSource.scope===host.source.scope);
- // Work request confirmation follows each actual inbox refresh. Page record
- // caches cannot stand in for a current task/request after a feed refresh.
  const service=createWorkViews(host,active),inbox=useReadQuery<Api.InboxTask[]>("/v1/inbox",3000,visible&&kind==="approval-inbox"),notices=useReadQuery<Api.Notification[]>("/v1/notifications",3000,visible&&kind==="notification-feed");
  const [approvals,setApprovals]=useState<{key:string;rows:ApprovalInboxRow[];total:number;error?:string}>(),[busy,setBusy]=useState<string[]>([]),[errors,setErrors]=useState<Record<string,string>>({}),busyIDs=useRef(new Set<string>());
  useEffect(()=>{lifecycle.current.mounted=true;return()=>{lifecycle.current.mounted=false;lifecycle.current.epoch++;};},[]);

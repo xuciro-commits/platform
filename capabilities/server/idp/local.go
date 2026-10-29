@@ -1,7 +1,3 @@
-// Package idp is the host's identity provider: Authenticate and Attest are its
-// two answers, as server.go consumes them. Two implementations stand behind
-// them — locally signed tokens (the lightweight profile and the workspace's
-// signed role cards) and OIDC against the deployment's issuer.
 package idp
 
 import (
@@ -16,20 +12,10 @@ import (
 	"time"
 )
 
-// Authenticate turns a bearer credential into a subject ("user:<email>",
-// "client:<id>"); false rejects the request. See OIDC and the local provider.
 type Authenticate func(credential string) (subject string, ok bool)
 
-// Attest reports whether a credential was issued after a second factor: what a
-// tenant that requires one asks of the provider. A host without
-// one cannot attest, so such a tenant admits no sign-in.
 type Attest func(credential string) bool
 
-// Local is the lightweight profile's identity provider: one HMAC-SHA256 key
-// in the data directory, tokens the host signs and verifies itself, and the
-// same seat directory as ever. The delivery profile keeps an
-// external OpenID provider, and development tokens stay in the development
-// host; a lightweight host accepts neither.
 type Local struct {
 	key []byte
 }
@@ -37,12 +23,9 @@ type Local struct {
 const (
 	keyPrefix = "platform-idp-key-v1 "
 	issuer    = "platform-lightweight"
-	// idpMinKey is the shortest signing key accepted: a key that could be
-	// guessed is not a credential, so a short one fails at start-up.
 	idpMinKey = 32
 )
 
-// NewLocal takes the bytes of the signing key.
 func NewLocal(key []byte) (*Local, error) {
 	if len(key) < idpMinKey {
 		return nil, fmt.Errorf("idp: the signing key is %d bytes; at least %d are required", len(key), idpMinKey)
@@ -50,7 +33,6 @@ func NewLocal(key []byte) (*Local, error) {
 	return &Local{key: append([]byte{}, key...)}, nil
 }
 
-// NewKey makes a fresh signing key.
 func NewKey() ([]byte, error) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
@@ -59,13 +41,10 @@ func NewKey() ([]byte, error) {
 	return key, nil
 }
 
-// SaveKey writes a key where only the host's user can read it.
 func SaveKey(path string, key []byte) error {
 	return writeFileAtomic(path, []byte(keyPrefix+base64.StdEncoding.EncodeToString(key)+"\n"))
 }
 
-// LoadKey reads the key file. Its absence is told apart from its being
-// unreadable, so a first start says how to make one.
 func LoadKey(path string) ([]byte, error) {
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -82,15 +61,12 @@ func LoadKey(path string) ([]byte, error) {
 		}
 		return key, nil
 	}
-	if len(raw) >= idpMinKey && !strings.ContainsAny(text, " \n\t") { // raw bytes, as an operator may have made them
+	if len(raw) >= idpMinKey && !strings.ContainsAny(text, " \n\t") {
 		return raw, nil
 	}
 	return nil, fmt.Errorf("idp: %s is not a key file", path)
 }
 
-// Mint signs a token for a subject: the payload names the subject, when the
-// token was made and when it stops being accepted, and the signature is this
-// host's key (HS256, the algorithm a JWT header names).
 func (p *Local) Mint(subject string, ttl time.Duration, now time.Time) (string, error) {
 	if subject == "" {
 		return "", fmt.Errorf("idp: a token needs a subject")
@@ -105,9 +81,6 @@ func (p *Local) Mint(subject string, ttl time.Duration, now time.Time) (string, 
 	return signing + "." + p.b64(p.sign(signing)), nil
 }
 
-// Verify answers the subject of a token this host signed and has not expired.
-// The signature is compared in constant time, and a token with another
-// algorithm is refused rather than read (an unsigned one is not a credential).
 func (p *Local) Verify(token string) (string, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -142,14 +115,12 @@ func (p *Local) Verify(token string) (string, bool) {
 	if claims.ExpiresAt == 0 || now.Unix() >= claims.ExpiresAt {
 		return "", false
 	}
-	if claims.IssuedAt > now.Add(time.Minute).Unix() { // a token from the future is not one
+	if claims.IssuedAt > now.Add(time.Minute).Unix() {
 		return "", false
 	}
 	return claims.Subject, true
 }
 
-// Authenticate is how the host takes this provider's tokens: the subject, as
-// every authenticate function answers (K6).
 func (p *Local) Authenticate() Authenticate {
 	return func(credential string) (string, bool) { return p.Verify(credential) }
 }
@@ -162,7 +133,6 @@ func (p *Local) sign(signing string) []byte {
 
 func (p *Local) b64(raw []byte) string { return base64.RawURLEncoding.EncodeToString(raw) }
 
-// Key is the signing key, which the host also derives personal tokens from.
 func (p *Local) Key() []byte { return p.key }
 
 func writeFileAtomic(path string, data []byte) error {

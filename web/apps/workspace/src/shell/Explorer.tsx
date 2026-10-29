@@ -1,6 +1,3 @@
-// Object Explorer: every object type the member may
-// read, and its records with the host's search, sort and pages. One place to
-// browse the Ontology as data; the definition itself opens in the Ontology app.
 import { useHost, useOpenRecord, OpenIn } from "@platform/app";
 import { Button, Input, PageHeader, RecordList, Select, cn, t } from "@platform/ui";
 import { Compass } from "lucide-react";

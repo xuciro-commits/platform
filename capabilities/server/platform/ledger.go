@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-// KernelFactory creates isolated contract state. Implementations keep the
-// original v1 wire images; they do not own business rules or authorization.
 type KernelFactory interface {
 	Changes(SchemaRegistry) ChangeLog
 	Schemas([]*pb.SchemaRef) SchemaRegistry
@@ -79,8 +77,6 @@ func (c Caller) Kernel() KernelFactory {
 	return NativeKernel{}
 }
 
-// NativeKernel delegates to the sole reference algorithm, including receive
-// ordering. These adapters add no second implementation of contract semantics.
 type NativeKernel struct{}
 type nativeChanges struct{ *kernel.ChangeLog }
 
@@ -99,10 +95,6 @@ func (NativeKernel) Receive(log ChangeLog, authorities Authorities, policy kerne
 	return r.Receive(caller, s, at, domain)
 }
 
-// Ledger is one business package's decisions in one tenant: the kernel's change
-// log and authority for the package's data classes, received in the kernel's
-// order with the package's action catalog as the role check. The
-// package supplies attribute conditions and its rules; it never wires the kernel.
 type Ledger struct {
 	mu           sync.Mutex
 	tenant       string
@@ -113,14 +105,10 @@ type Ledger struct {
 	authorities  Authorities
 	kernel       KernelFactory
 	schemaRefs   []*pb.SchemaRef
-	// schemas is the change log's registry, kept so the package can teach it a
-	// schema that did not exist when it started (K7 S7).
-	schemas SchemaRegistry
-	Catalog *Catalog
+	schemas      SchemaRegistry
+	Catalog      *Catalog
 }
 
-// NewLedger declares authority as the tenant server for classes and accepts the
-// catalog's actions and their retained numeric families.
 func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *Ledger {
 	return NewLedgerWithKernel(NativeKernel{}, tenant, authority, catalog, classes...)
 }
@@ -143,8 +131,6 @@ func NewLedgerWithKernel(engine KernelFactory, tenant, authority string, catalog
 	return l
 }
 
-// BindKernel is startup-only. All historical schemas and authority declarations
-// are handed to the selected implementation before any accepted state exists.
 func (l *Ledger) BindKernel(engine KernelFactory) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -162,13 +148,6 @@ func (l *Ledger) BindKernel(engine KernelFactory) error {
 	return nil
 }
 
-// Extend declares data classes and actions after composition: what an object a
-// tenant defined and published needs of its app's ledger. The
-// kernel takes the new schemas and the authority over the new classes.
-// It is called from inside a decision of this ledger — the transition that
-// publishes the definition — so the ledger's own lock is already held and is
-// not taken again; the catalog it extends carries its own lock for the readers
-// outside.
 func (l *Ledger) Extend(classes []string, actions []Action) error {
 	var schemas []*pb.SchemaRef
 	for _, a := range actions {
@@ -184,7 +163,7 @@ func (l *Ledger) Extend(classes []string, actions []Action) error {
 			schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: family})
 		}
 	}
-	if err := l.schemas.Learn(schemas...); err != nil { // K7 S7
+	if err := l.schemas.Learn(schemas...); err != nil {
 		return err
 	}
 	l.schemaRefs = append(l.schemaRefs, schemas...)
@@ -207,8 +186,6 @@ func schemaFamily(action Action) uint32 {
 	return 1
 }
 
-// HistoricalSchemas retains retired schemas for journal and snapshot recovery.
-// It adds no catalog action, so ordinary Receive still refuses these schemas.
 func (l *Ledger) HistoricalSchemas(schemas ...*pb.SchemaRef) *kernel.Error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -219,13 +196,8 @@ func (l *Ledger) HistoricalSchemas(schemas ...*pb.SchemaRef) *kernel.Error {
 	return nil
 }
 
-// Declarations are the package's authority declarations, for edges (K5 A9).
 func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declarations }
 
-// ApplyAcceptedChange advances the kernel log from a durable result. It does
-// not run current catalog policy, rules or a generated action.
-// The boolean says whether this result was new to the log, so the host can
-// avoid applying its record images twice after a retry or partial recovery.
 func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -236,8 +208,6 @@ func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	return changed, err
 }
 
-// UseChangeArchive switches historical reads after a fixed-position copy has
-// been compared with this ledger. It changes storage, not acceptance rules.
 func (l *Ledger) UseChangeArchive(archive kernel.ChangeArchive) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -245,50 +215,36 @@ func (l *Ledger) UseChangeArchive(archive kernel.ChangeArchive) {
 	l.changes.Compact(archive)
 }
 
-// ForkAcceptedChanges validates a complete host batch without advancing the
-// authoritative log. The tenant commit lock still owns promotion.
 func (l *Ledger) ForkAcceptedChanges() ChangeLog {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.changes.ForkLog()
 }
 
-// RecordsFor returns a defensive copy of tenant's accepted records,
-// safe to call concurrently with Receive.
 func (l *Ledger) RecordsFor(tenant string) []*pb.ChangeRecord {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.changes.Records(tenant)
 }
 
-// LastAccepted reads only the latest receipt, including a compacted prefix.
 func (l *Ledger) LastAccepted(tenant string) *pb.ChangeRecord {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.changes.Last(tenant)
 }
 
-// SetFacts supplies the change log's tenant fact-check callback (K2, K4 C11).
 func (l *Ledger) SetFacts(facts func(tenant, factID string) bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.changes.SetFacts(facts)
 }
 
-// AcceptedFor returns a saved receipt for a key without running application
-// decision code. The host uses this before staging a generated action.
 func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.changes.Accepted(tenant, key)
 }
 
-// Receive accepts s from c or refuses it: an action outside the enabled catalog
-// is UNKNOWN_SCHEMA; c's role must be granted and allowed (attribute conditions,
-// may be nil) must hold, except in a replay; rules (may be nil)
-// returns how to apply the decision, which runs with the new record only when
-// it is accepted (an idempotent replay applies nothing); a new decision is then
-// published to the tenant's subscribers.
 func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
 	catalog := l.catalogFor(c)
@@ -309,11 +265,9 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	rules = l.checked(c, s, now, catalog, rules)
 	probing := c.rt != nil && c.rt.Probing()
-	refused := false // the kernel's policy step said no
+	refused := false
 	var decision AuthzDecision
 	changes := l.changes
-	// a host-owned decision view may use a private change log.
-	// Ordinary callers and replay retain the existing authoritative path.
 	if draft, ok := c.rt.(StagedRuntime); ok {
 		changes = draft.DraftChanges(l, l.changes.ForkLog)
 		if changes == nil || changes == l.changes {
@@ -321,8 +275,6 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		}
 	}
 	if probing {
-		// Probes validate kernel identity, key conflicts and expected revisions
-		// too. Only their private log advances; their apply callback never runs.
 		changes = changes.ForkLog()
 	}
 	policy := func(kernel.Caller, *pb.Submission) bool {
@@ -337,7 +289,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	var apply func(*pb.ChangeRecord)
 	decided := false
 	record, err := l.kernel.Receive(changes, l.authorities, policy, kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
-		decided = true // retries reuse a receipt without entering business rules
+		decided = true
 		if rules == nil {
 			return nil
 		}
@@ -354,7 +306,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	if probing {
 		if c.Staging() && err == nil && decided && apply != nil {
-			apply(record) // prospective private state; the probe discards it
+			apply(record)
 		}
 		return nil, err
 	}
@@ -362,8 +314,6 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		if apply != nil {
 			apply(record)
 		}
-		// Historical live replay retains its original nil-callback semantics;
-		// every private/new accepted receipt publishes even without mutations.
 		if c.rt != nil && (apply != nil || c.Staging() || !c.Replaying) {
 			c.rt.Publish(c, record)
 		}
@@ -380,9 +330,6 @@ func (l *Ledger) catalogFor(c Caller) *Catalog {
 	return l.Catalog
 }
 
-// checked puts before rules the check of the payload's declared choices and
-// references: after the policy, as the kernel's order has it
-// (K6 T2); a replay does not check again.
 func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Catalog, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
 	declared, _ := catalog.Action(s.GetSchema().GetName())
 	return func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -427,9 +374,6 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Cat
 	}
 }
 
-// Generated decides the actions entity declarations generate: standard
-// create, edit and archive and lifecycle transitions; ok is false for any other schema. allowed (may be nil) adds the app's
-// conditions to the catalog's role check.
 func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *kernel.Error, bool) {
 	schema := s.GetSchema().GetName()
 	for _, e := range entities {
@@ -456,8 +400,6 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 				if !c.Staging() || c.Replaying || tr.ApplyTxn == nil || tr.After != nil {
 					return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business transactions require a private accepted decision / 业务事务须经私有接受决策"), true
 				}
-				// A transaction always acts as its applicant. Service automation
-				// must not turn its initiation or individual steps into a bypass.
 				c.Automation = false
 				apply := tr.ApplyTxn
 				tr.ApplyTxn = func(c Caller, r *pb.ChangeRecord, at time.Time) *kernel.Error {
@@ -488,8 +430,6 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 	return nil, nil, false
 }
 
-// approvalMove is the move of a record whose transition t waits for approval
-// (F-38): into its pending state, or out of it on a rejection or a return.
 func approvalMove(t Transition, suffix string) Transition {
 	back := t.From[0]
 	switch suffix {
@@ -503,8 +443,6 @@ func approvalMove(t Transition, suffix string) Transition {
 	return Transition{Name: t.Name + suffix, From: []string{t.Approval.Pending}, To: []string{back}}
 }
 
-// transition moves a record along its lifecycle, through the transition's Do.
-// A transition that waits in a pending state also leaves it, once approved.
 func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	if c.rt == nil {
 		return nil, notFound()
@@ -520,12 +458,12 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	v.Elem().Set(reflect.ValueOf(existing))
 	status := v.Elem().FieldByIndex(f.Index)
 	from := status.String()
-	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.rt.Probing() // run by its approval, not asked again
+	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.rt.Probing()
 	id := s.GetTarget().GetId()
 	if v.Elem().Field(0).Interface().(Record).Archived {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
 	}
-	if !slices.Contains(t.From, from) && !pending { // not in a state the transition leaves
+	if !slices.Contains(t.From, from) && !pending {
 		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.From, ", "))
 	}
 	if t.Do != nil {
@@ -534,12 +472,10 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 		}
 	}
 	if to := status.String(); t.Txn != nil {
-		// The transaction owns its subject's state assignment. Approval-only
-		// moves retain their original transition path above.
 	} else if to == from && !slices.Contains(t.To, from) {
 		status.SetString(t.To[0])
 	} else if !slices.Contains(t.To, to) {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // Do chose a status the transition does not reach
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if err := c.PrepareBusinessVersions(v.Interface(), now); err != nil {
 		return nil, err
@@ -610,12 +546,9 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 		info, _ := Describe("", e, func(reflect.Type) string { return "?" })
 		for name := range given {
 			if f, ok := info.Field(name); !ok || f.ReadOnly || !c.Replaying && !c.Automation && !f.WritesAny(c.RolesHere()) {
-				return nil, invalid // unknown or read-only fields are never set by a generated action
+				return nil, invalid
 			}
 		}
-		// A provided field is a replacement, including a slice/map/struct.
-		// Decoding a patch into the old struct reuses slice elements and maps,
-		// retaining nested values the caller explicitly removed.
 		base, err := json.Marshal(v.Interface())
 		var merged map[string]json.RawMessage
 		if err != nil || json.Unmarshal(base, &merged) != nil {
@@ -680,10 +613,6 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission, now time.Time) 
 	}, nil
 }
 
-// inScope says whether the caller may act on a record: only one they may read.
-// A generated action on a record outside the member's scope is
-// refused as if it were not there, as a read is. Replay, the app's own
-// automation and an approval taking a held step act for the app, not a reader.
 func inScope(c Caller, typ, id string) bool {
 	return c.Replaying || c.Automation || c.rt.Probing() || c.rt.Readable(c, typ+"/"+id)
 }

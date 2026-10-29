@@ -11,9 +11,7 @@ const button = cva(
         primary: "border-primary bg-primary text-primary-foreground hover:opacity-90",
         ghost: "border-transparent hover:bg-row-hover",
         danger: "border-border bg-surface text-[var(--tone-danger)] hover:bg-row-hover",
-        /** Opens something (a record, a document) from running text. */
         link: "border-transparent font-normal underline hover:opacity-80",
-        /** One row of a list that opens what it names. */
         row: "w-full justify-start border-transparent font-normal hover:bg-row-hover",
       },
       size: { sm: "h-[var(--ctrl-h-xs)] px-[var(--ctrl-px-xs)]", md: "h-[var(--ctrl-h-sm)] px-[var(--ctrl-px-sm)]", icon: "size-[var(--ctrl-h-sm)]" },
@@ -26,6 +24,5 @@ const button = cva(
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>;
 
 export function Button({ className, variant, size, type = "button", ...props }: ButtonProps) {
-  // `data-ui`/`data-variant` are semantic hooks (handheld styles, component CSS); they carry no behaviour.
   return <button type={type} data-ui="button" data-variant={variant ?? "default"} className={cn(button({ variant, size }), className)} {...props} />;
 }

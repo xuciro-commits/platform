@@ -20,14 +20,11 @@ import (
 	"platformserver/platform"
 )
 
-// enterpriseApp is the tenant's enterprise modeling app, when one is mounted:
-// the typed query and resolve reads dispatch into it.
 func enterpriseApp(t *Tenant) platform.EnterpriseQueries {
 	d, _ := t.app(enterprisemodel.ID).(platform.EnterpriseQueries)
 	return d
 }
 
-// routesRecords serves records, files, links, aggregates, search, knowledge and transcripts.
 func (h *Host) routesRecords(rt *routes) {
 	rt.handle(transport.Route{Pattern: "POST /v1/page-model/read", Summary: "Read a published model binding or builder preview through the original record and rule owners", Body: PageModelRead{}, Answer: PageModelResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request *PageModelRead
@@ -44,8 +41,6 @@ func (h *Host) routesRecords(rt *routes) {
 			Reply(w, nil, err)
 			return
 		}
-		// Model fields are declarations; records, model bindings and permission
-		// evidence retain their original values, even for a field named title.
 		owner, _, _ := strings.Cut(value.Object, ".")
 		WriteJSON(w, http.StatusOK, struct {
 			PageModelResult
@@ -400,8 +395,6 @@ func (h *Host) routesRecords(rt *routes) {
 	})
 }
 
-// The HTTP record and shared live routes use the same authoring projection.
-// Internal record readers retain the accepted representation for execution.
 func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.Error) {
 	object, ok := record.(build.Object)
 	m = t.authorizationMember(m)
@@ -416,8 +409,6 @@ func (t *Tenant) objectDraftRecord(m platform.Member, record any) (any, *kernel.
 	if err != nil {
 		return record, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	// Conversion receives only visible fields, and cannot restore a hidden
-	// destination field when replacing an older expression.
 	t.records.Lock()
 	et := t.records.Type(build.ObjectType)
 	t.records.Unlock()

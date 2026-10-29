@@ -17,7 +17,6 @@ import (
 
 func (a *AI) AcceptedLedger() *platform.Ledger { return a.ledger }
 
-// Configuration, metered usage and unresolved calls share one accepted state.
 func (a *AI) ForkAcceptedState() (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -78,8 +77,6 @@ func (a *AI) ApplyAcceptedState(raw json.RawMessage) error {
 
 var _ platform.AcceptedStateApp = (*AI)(nil)
 
-// This private accepted input is called by the host after admission. It is not
-// declared in Manifest.Inputs, and a member/administrator cannot impersonate it.
 func (*AI) AcceptedInputs() []string { return []string{platform.AIReserveCall} }
 func (*AI) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
 	var r platform.AIReservation

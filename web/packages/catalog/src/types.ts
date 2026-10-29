@@ -1,4 +1,3 @@
-/** Discovery metadata only. Binding and execution remain with the original owner. */
 export type CatalogEntry = {
   id: string;
   owner: string;
@@ -53,7 +52,6 @@ export type CatalogIndex = {
   revision: string;
   entries: CatalogEntry[];
   translations: Record<string, Record<string, string>>;
-  /** Direct public imports only; dynamic and external consumers remain unknown. */
   consumers?: Record<string, string[]>;
   api?: Record<string, CatalogApi>;
 };

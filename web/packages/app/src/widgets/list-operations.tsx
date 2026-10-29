@@ -2,7 +2,6 @@ import { Button, Dialog, Form, Input, RecordImportDialog, useWorkspace, t, type 
 import { useState } from "react";
 import { useHost, newId } from "../index";
 
-/** Import a type's records from CSV: the shell's one import flow, mounted where the list is. */
 export function ImportControl({ source, type, importable }: { source: RecordSource; type: string; importable: boolean }) {
   const [open, setOpen] = useState(false);
   const { notify } = useWorkspace();
@@ -14,8 +13,6 @@ export function ImportControl({ source, type, importable }: { source: RecordSour
   </>;
 }
 
-/** Name and store where the member is: the same personal view the generic list
- * saves, so a saved view reopens with its filters, sort and presentation. */
 export function SaveViewDialog({ type, state, saved, onClose }: { type: string; state?: ListState; saved?: { id: string; title: string }; onClose: () => void }) {
   const { decide } = useHost(), { open } = useWorkspace();
   const [busy, setBusy] = useState(false);

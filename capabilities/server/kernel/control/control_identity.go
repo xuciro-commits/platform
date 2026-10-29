@@ -12,11 +12,9 @@ import (
 	"time"
 )
 
-// The member a caller sees: the stored seat projected through today's profile,
-// grants, teams and projects.
 func (d *Console) currentMember(m *platform.Member) platform.Member {
 	out := clone(m)
-	if p := d.profiles[m.ID]; p != nil { // language and timezone are the profile's; Member carries them for callers
+	if p := d.profiles[m.ID]; p != nil {
 		out.Language, out.Timezone = p.Language, p.Timezone
 	}
 	if out.Timezone == "" {
@@ -24,22 +22,20 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 	}
 	today := out.Today(time.Now())
 	if out.Status == platform.MemberInvited && !d.lastSeen[out.ID].IsZero() {
-		out.Status = "" // signing in accepts the invitation
+		out.Status = ""
 	}
-	if !out.Active() { // suspended or left: holds nothing
+	if !out.Active() {
 		out.Grants, out.Roles = nil, map[string]string{}
 		return out
 	}
 	d.migrateGrants(&out)
-	out.Grants = append(slices.Clone(out.Grants), d.ConsolePolicies.TeamGrants(out.ID)...) // teams' grants are held as long as one belongs
-	out.Grants = append(out.Grants, d.ConsolePolicies.ProjectGrants(out.ID, out.Agent)...) // a project's editors build within it (#141)
+	out.Grants = append(slices.Clone(out.Grants), d.ConsolePolicies.TeamGrants(out.ID)...)
+	out.Grants = append(out.Grants, d.ConsolePolicies.ProjectGrants(out.ID, out.Agent)...)
 	d.deriveRoles(&out, today)
 	out.Grants = slices.DeleteFunc(slices.Clone(out.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	return out
 }
 
-// migrateGrants turns a legacy member's Roles into grants:
-// before grants existed, Roles was what they held.
 func (d *Console) migrateGrants(m *platform.Member) {
 	if len(m.Grants) > 0 {
 		return
@@ -49,9 +45,6 @@ func (d *Console) migrateGrants(m *platform.Member) {
 	}
 }
 
-// deriveRoles preserves a still-held primary role when adding grants. Losing
-// that grant selects the app's first declared role still active today. The
-// full grant set continues to own authorization.
 func (d *Console) deriveRoles(m *platform.Member, today string) {
 	active := slices.DeleteFunc(slices.Clone(m.Grants), func(g platform.Grant) bool { return !g.Active(today) })
 	previous := m.Roles
@@ -67,7 +60,6 @@ func (d *Console) deriveRoles(m *platform.Member, today string) {
 	}
 }
 
-// primaryRole is the app's first declared role among grants, else the first granted.
 func (d *Console) primaryRole(app string, grants []platform.Grant) string {
 	held := func(role string) bool {
 		return slices.ContainsFunc(grants, func(g platform.Grant) bool { return g.App == app && g.Role == role })
@@ -87,9 +79,6 @@ func (d *Console) primaryRole(app string, grants []platform.Grant) string {
 	return ""
 }
 
-// MemberByID preserves durable directory lookup, including retained offboarded
-// members whose currentMember projection has no grants. Sign-in lookup below
-// deliberately rejects those retained entries.
 func (d *Console) MemberByID(id string) (platform.Member, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -100,8 +89,6 @@ func (d *Console) MemberByID(id string) (platform.Member, bool) {
 	return d.currentMember(member), true
 }
 
-// AgentMembers is the current directory view of outside agent principals.
-// It exposes neither authentication subjects nor token/session state.
 func (d *Console) AgentMembers() []platform.Member {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -115,8 +102,6 @@ func (d *Console) AgentMembers() []platform.Member {
 	return members
 }
 
-// Ready installs custom access only when the complete tenant is available.
-// Restore continues applying accepted directory access at its existing point.
 func (d *Console) Ready() error {
 	d.ConsolePolicies.ApplyAccess()
 	return nil
@@ -145,8 +130,6 @@ func (d *Console) NewSimulationIdentity(tenant string, members []platform.Member
 	return NewConsole(tenant, d.newOwners, seats...)
 }
 
-// UnitGrantUsage reads both current grants and their accepted history. Revoking
-// access must not make a previously used organisation identity deletable.
 func (d *Console) UnitGrantUsage(unit, until string) []platform.UnitGrantUsage {
 	uses := map[string]bool{}
 	d.mu.Lock()
@@ -199,12 +182,6 @@ func (d *Console) UnitGrantUsage(unit, until string) []platform.UnitGrantUsage {
 	return result
 }
 
-// A member's profile is how the platform addresses them and
-// how they want it to behave: name and contact, language, timezone and
-// formats, notification preferences, and where the workspace opens. Members
-// change their own; administrators change anyone's. What is empty inherits
-// the tenant's defaults (platform.tenant settings), so a profile only holds
-// what the member chose.
 const (
 	ProfileType         = "platform.profile"
 	SchemaProfileUpdate = "platform.profile.update"
@@ -231,8 +208,6 @@ func profileActions() []platform.Action {
 	}
 }
 
-// Tenant-wide defaults a profile inherits, as settings of the
-// platform app so they are decided, journaled and read like any setting.
 const (
 	SettingName         = "name"
 	SettingLegalName    = "legalName"
@@ -293,7 +268,6 @@ func (d *Console) TenantRecord() platform.TenantRecord {
 	return out
 }
 
-// tenantDefault is a tenant-wide setting, "" without a composed tenant.
 func (d *Console) tenantDefault(name string) string {
 	if d.host == nil {
 		return ""
@@ -301,7 +275,6 @@ func (d *Console) tenantDefault(name string) string {
 	return d.host.ConsoleSetting(name)
 }
 
-// defaults are the tenant-wide settings a profile inherits. Read without d.mu.
 type defaults map[string]string
 
 func (d *Console) defaults() defaults {
@@ -312,7 +285,6 @@ func (d *Console) defaults() defaults {
 	return out
 }
 
-// account is member's effective profile over the tenant's defaults. Call with d.mu held.
 func (d *Console) account(member string, def defaults) platform.Account {
 	out := platform.Account{Profile: platform.Profile{Member: member}}
 	if m := d.members[member]; m != nil {
@@ -350,7 +322,6 @@ func (d *Console) account(member string, def defaults) platform.Account {
 	return out
 }
 
-// Account is member's effective profile.
 func (d *Console) Account(member string) platform.Account {
 	def := d.defaults()
 	d.mu.Lock()
@@ -358,8 +329,6 @@ func (d *Console) Account(member string) platform.Account {
 	return d.account(member, def)
 }
 
-// Location is the timezone member works in: their own, else the
-// tenant's, else UTC.
 func (d *Console) Location(member string) *time.Location {
 	a := d.Account(member)
 	if loc, err := time.LoadLocation(a.Effective.Timezone); err == nil && a.Effective.Timezone != "" {
@@ -368,8 +337,6 @@ func (d *Console) Location(member string) *time.Location {
 	return time.UTC
 }
 
-// decideProfile applies a partial update: only the fields the payload names
-// change; an empty value clears the member's choice. Call with d.mu held.
 func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
@@ -458,8 +425,6 @@ func validClock(v string) bool {
 	return err == nil
 }
 
-// seen notes a member's activity, at most once a minute (not journaled: a
-// restart loses the last minute, nothing more).
 func (d *Console) SeenMember(member string, now time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -471,7 +436,6 @@ func (d *Console) SeenMember(member string, now time.Time) {
 	}
 }
 
-// Reach is member's notification preferences over the tenant's defaults.
 func (d *Console) Reach(member string) platform.Reach {
 	a := d.Account(member)
 	out := platform.Reach{InApp: true, Mail: true, Address: a.Effective.Email, Language: d.Language(member), Digest: a.Effective.Digest,
@@ -485,8 +449,6 @@ func (d *Console) Reach(member string) platform.Reach {
 	return out
 }
 
-// decideDelegate gives the target member the caller's roles in an app until a
-// day: a grant by the caller, bounded, revocable like any.
 func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct{ App, Until, Reason string }

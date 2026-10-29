@@ -13,7 +13,6 @@ import (
 	"platformserver/platform"
 )
 
-// routesIntegration serves connectors, protocols, typed capability calls, A2A, MCP and writebacks.
 func (h *Host) routesIntegration(rt *routes) {
 	h.routesObservations(rt)
 	rt.handle(transport.Route{Pattern: "POST /v1/protocols/{protocol}/{version}/{action}/{target}", Summary: "Call a protocol action with a record target and stable Idempotency-Key", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

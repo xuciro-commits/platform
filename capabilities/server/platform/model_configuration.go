@@ -8,30 +8,25 @@ import (
 	"time"
 )
 
-// ModelCapabilities is evidence selected by an administrator from a provider's
-// directory. Nil limits and capabilities mean unknown, never zero or false.
 type ModelCapabilities struct {
-	Source        string    `json:"source"`
-	ObservedAt    time.Time `json:"observedAt"`
-	Purposes      []string  `json:"purposes,omitempty"`
-	InputTokens   *int      `json:"inputTokens,omitempty"`
-	OutputTokens  *int      `json:"outputTokens,omitempty"`
-	ContextTokens *int      `json:"contextTokens,omitempty"`
-	Tools         *bool     `json:"tools,omitempty"`
-	Structured    *bool     `json:"structured,omitempty"`
-	ThinkingModes []string  `json:"thinkingModes,omitempty"`
-	EffortLevels  []string  `json:"effortLevels,omitempty"`
-	// Adapter identifies the implemented protocol, not a claim inferred from a model ID.
-	DeclaredThinkingModes []string `json:"declaredThinkingModes,omitempty"`
-	Parameters            []string `json:"parameters,omitempty"`
-	InputModalities       []string `json:"inputModalities,omitempty"`
-	OutputModalities      []string `json:"outputModalities,omitempty"`
+	Source                string    `json:"source"`
+	ObservedAt            time.Time `json:"observedAt"`
+	Purposes              []string  `json:"purposes,omitempty"`
+	InputTokens           *int      `json:"inputTokens,omitempty"`
+	OutputTokens          *int      `json:"outputTokens,omitempty"`
+	ContextTokens         *int      `json:"contextTokens,omitempty"`
+	Tools                 *bool     `json:"tools,omitempty"`
+	Structured            *bool     `json:"structured,omitempty"`
+	ThinkingModes         []string  `json:"thinkingModes,omitempty"`
+	EffortLevels          []string  `json:"effortLevels,omitempty"`
+	DeclaredThinkingModes []string  `json:"declaredThinkingModes,omitempty"`
+	Parameters            []string  `json:"parameters,omitempty"`
+	InputModalities       []string  `json:"inputModalities,omitempty"`
+	OutputModalities      []string  `json:"outputModalities,omitempty"`
 
 	Adapter string `json:"adapter,omitempty"`
 }
 
-// ModelOptions are executable defaults/overrides, separate from provider facts.
-// Zero budgets and empty choices inherit. They do not mean an unlimited window.
 type ModelOptions struct {
 	InputTokens int    `json:"inputTokens,omitempty"`
 	MaxTokens   int    `json:"maxTokens,omitempty"`
@@ -44,8 +39,6 @@ const (
 	AIStageRuntime = "runtime"
 )
 
-// AIInferenceSite is an operator-reviewed deployment binding. Provider kinds,
-// names and tenant-authored payloads do not create these permissions.
 type AIInferenceSite struct {
 	Provider string `json:"provider"`
 	Origin   string `json:"origin"`
@@ -85,8 +78,6 @@ func (o ModelOptions) Override(v ModelOptions) ModelOptions {
 	return o
 }
 
-// Resolve is the one option merger and constraint checker used by save, preview
-// and execution. Callers own purpose defaults and current access checks.
 func (m AIModel) Resolve(purpose string, override ModelOptions, ceiling int) (AIModelBinding, error) {
 	o := m.Defaults.Override(override)
 	b := AIModelBinding{Purpose: purpose, Model: m.Name(), Options: o, Revision: m.Revision, Capabilities: m.Capabilities}
@@ -151,8 +142,6 @@ func (m AIModel) Resolve(purpose string, override ModelOptions, ceiling int) (AI
 	return b, nil
 }
 
-// EstimateModelTokens is the original fallback meter when a provider reports
-// no usage. Reservation bounds include the complete encoded input separately.
 func EstimateModelTokens(text string) int {
 	if text == "" {
 		return 0
@@ -169,8 +158,6 @@ type CatalogModel struct {
 	Capabilities *ModelCapabilities `json:"capabilities,omitempty"`
 }
 
-// ModelToolHost exposes the original authorized catalog, reads and proposal
-// acceptance. Protocol adapters cannot submit an arbitrary business write.
 type ModelToolProposal struct {
 	ID      string
 	Key     string

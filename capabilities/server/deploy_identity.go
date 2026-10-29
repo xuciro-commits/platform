@@ -17,8 +17,6 @@ func identityUpstream(address string) (*url.URL, error) {
 	return target, nil
 }
 
-// The identity provider keeps its own protocol and authentication. Deployment
-// only gives its existing /auth endpoints the platform's public origin.
 func identityProxyHandler(address string, next http.Handler) (http.Handler, error) {
 	if address == "" {
 		return next, nil

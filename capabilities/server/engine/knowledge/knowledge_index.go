@@ -48,7 +48,7 @@ func (k *Index) Sync(load func(bool) ([]Source, map[string]bool)) {
 		}
 		record, _, isField := strings.Cut(key, "#")
 		if !walked || isField && changed[record] || changed[key] {
-			k.keep(key, nil) // its record is gone, archived, or no longer knowledge
+			k.keep(key, nil)
 			delete(k.docs, key)
 		}
 	}
@@ -108,8 +108,6 @@ func (k *Index) Nearest(ctx Context, model string, query []float32, reader *plat
 			}
 		}
 	}
-	// Widen after final record/field authorization, rather than treating a
-	// filtered global top-k as all the readable results that exist.
 	for count := max(32, limit*4); ; count *= 2 {
 		hits, err := store.NearestVectors(context.Background(), ctx.Tenant, model, query, apps, count)
 		if err != nil {
@@ -164,8 +162,6 @@ func (k *Index) Text(hash string, load func() (string, bool)) (string, bool) {
 	return text, true
 }
 
-// Embed gives passages without a vector theirs, as owned work outside the
-// tenant's lock; the host calls it apart from other work.
 func (k *Index) Embed(ctx Context, now time.Time) {
 	if ctx.Stopped() {
 		return
@@ -243,7 +239,7 @@ func (k *Index) Embed(ctx Context, now time.Time) {
 		vs, err := ctx.Embed(model, in, now)
 		if err != nil {
 			fail(err)
-			return // tried again on the next round
+			return
 		}
 		if err := ConsistentVectors(vs, expected); err != nil {
 			fail(err)

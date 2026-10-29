@@ -1,7 +1,6 @@
 import type { Api } from "@platform/kernel";
 import { useReadQuery } from "../index";
 
-/** These reads share the release owner's descriptor and current authorization. */
 export type ProvidedCapability = Api.ProvidedCapability;
 export type DependencyDescriptor = Api.Dependencies;
 export type DependencyRead = Api.DependencyView;

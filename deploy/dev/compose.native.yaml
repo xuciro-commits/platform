@@ -1,4 +1,3 @@
-# Only native Go needs host-loopback access to infrastructure.
 services:
   postgres:
     ports: ["127.0.0.1:${PG_PORT:-5433}:5432"]

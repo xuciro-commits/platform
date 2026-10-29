@@ -204,7 +204,6 @@ func FunctionConversation(request platform.FunctionRequest, f platform.AIFunctio
 	}{input, request.Question, history}, refs, nil
 }
 
-// FunctionAccess keeps current grants and records with their existing owners.
 type FunctionAccess struct {
 	Tenant      string
 	Member      func(string) (platform.Member, bool)

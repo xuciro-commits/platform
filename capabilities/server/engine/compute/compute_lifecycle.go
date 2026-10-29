@@ -5,9 +5,6 @@ import (
 	"sync"
 )
 
-// Cancels are the running operations' cancel handles, by effect id: volatile,
-// never ownership — cancelling is decided in the ledger (compute_cancel.go),
-// this only reaches the goroutine.
 type Cancels struct {
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
@@ -28,7 +25,6 @@ func (c *Cancels) Remove(id string) {
 	delete(c.running, id)
 }
 
-// cancel stops a running operation, if it is one.
 func (c *Cancels) Cancel(id string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

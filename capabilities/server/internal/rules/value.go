@@ -258,8 +258,6 @@ func LiteralOf(kind string, value any) Expr {
 }
 func RefOf(kind, name string) Expr { return Expr{Kind: kind, Ref: name} }
 
-// Preserve every terminating decimal within the numeric bit budget. Division
-// with a recurring fraction uses the language's fixed 18-place precision.
 func decimalPlaces(n *big.Rat) int {
 	d := new(big.Int).Set(n.Denom())
 	counts := []int{0, 0}

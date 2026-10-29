@@ -62,7 +62,6 @@ export function LayoutProperties({ document, id, sections=[],onChange, onPatch, 
   </div>;
 }
 
-/** Dimensions belong to the stable layout node, including widget leaves. */
 export function LayoutSizing({document,id,onPatch}:{document:PageUI.PageDocument;id:string;onPatch:(id:string,patch:Partial<PageUI.PageLayoutNode>)=>void}) {
  const inputs=useContext(DraftInputs),node=document.nodes[id];if(!node)return null;
  const limits=pageUIManifest.layout,update=(key:keyof PageUI.PageLayoutSize,value:number|string|undefined)=>{

@@ -5,7 +5,6 @@ const cache = new Map<string, Promise<LayoutResult>>();
 let algorithms: Promise<Set<string>> | undefined;
 const portId = (node: string, port: string) => JSON.stringify([node, port]);
 
-/** ELK owns all automatic placements and routed sections. Node ids, edge direction and ports remain the owner's facts. */
 export function layoutGraph(input: LayoutRequest): Promise<LayoutResult> {
   const key = JSON.stringify(input);
   const previous = cache.get(key); if (previous) return previous;
@@ -38,8 +37,6 @@ async function calculate(input: LayoutRequest): Promise<LayoutResult> {
     return { id: edge.id, sources: [edge.reverse ? target : source], targets: [edge.reverse ? source : target],
       labels: algorithm === "layered" && edge.label ? [{ text: edge.label, width: Math.min(240, [...edge.label].length * 8), height: 18 }] : undefined };
   });
-  // Lanes are compound groups, not ELK partitions (which run along the flow axis).
-  // INCLUDE_CHILDREN keeps cross-lane edges in the same routing calculation.
   const laneKeys = input.lanes?.length ? [...input.lanes, ...[...new Set(input.nodes.map((node) => node.lane ?? ""))].filter((id) => !input.lanes!.includes(id))] : [];
   const children = laneKeys.length ? laneKeys.map((lane, i): ElkNode => ({ id: `\u0000lane:${i}`, children: nodes.filter((node) => (input.nodes.find((n) => n.id === node.id)?.lane ?? "") === lane),
     layoutOptions: { ...options, "elk.padding": "[top=36,left=36,bottom=36,right=36]" } })) : nodes;
@@ -71,7 +68,6 @@ async function calculate(input: LayoutRequest): Promise<LayoutResult> {
     };
     route.sourceSide = side(edge.source, route.points[0]!); route.targetSide = side(edge.target, route.points.at(-1)!);
   }
-  // Algorithms without explicit port support still return sections; the renderer uses their actual endpoints.
   for (const node of input.nodes) if (!positions[node.id] || !Number.isFinite(positions[node.id]!.x + positions[node.id]!.y)) throw new Error(`ELK did not place ${node.id}`);
   return { positions, routes, boxes };
 }

@@ -4,13 +4,6 @@ import type { Api } from "@platform/kernel";
 import { useHost } from "../index";
 import { assetBindingKey, semanticModelView, semanticPropertyTypes, type PropertyRef, type SemanticPropertyType } from "./model";
 
-/** Typed semantic selection shared by model design and page binding. It uses
- * the member's registered descriptors, without a second ontology cache.
- *
- * `drafts` adds objects that are saved as drafts and not installed yet: the
- * delivery releases them together, so a binding to one is a
- * candidate input rather than a missing definition.
- */
 export function SemanticObjectSelect({ value, onChange, label, disabled, filter, drafts, enterprise = false }: {
   value?: string; onChange: (ref?: Api.AssetRef) => void; label: string; disabled?: boolean;
   filter?: (definition: WorkspaceDefinition) => boolean;

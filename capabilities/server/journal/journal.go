@@ -1,9 +1,3 @@
-// Package journal is the durable storage a tenant runs on: the ordered entry
-// log, the formal SQL state beside it, snapshots and checkpoints, and the fixed
-// read views. The two delivery shapes — PostgreSQL and one local file — keep the
-// same semantics, and the derived store (vectors and transcripts) lives wherever
-// the journal lives. What each shape actually promises, and what the deployment
-// refuses, is on Journals and Store.
 package journal
 
 import (
@@ -16,16 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Journals is a tenant journal a host runs on: PostgreSQL on the delivery path,
-// or one local file on the lightweight one. Both keep
-// the same semantics — entries in order per tenant, appends expect the read
-// position, an accepted result is committed once under its idempotency key,
-// snapshots carry an explicit restore-compatibility key (or a legacy code
-// digest) — and both carry the derived store
-// (vectors and transcripts), which lives wherever the journal lives.
-// Store keeps the derived state the journal owns besides entries: embedding
-// vectors and model calls' transcripts. The PostgreSQL
-// journal implements it; without one the host keeps both in memory.
 type Store interface {
 	Vectors(tenant, model string, hashes []string) map[string][]float32
 	SaveVectors(tenant, model string, vectors map[string][]float32)
@@ -34,26 +18,21 @@ type Store interface {
 	PurgeTranscripts(tenant string, before time.Time)
 }
 
-// Transcript is one model call kept for review.
 type Transcript struct {
 	Tenant  string          `json:"-"`
 	At      time.Time       `json:"at"`
 	Member  string          `json:"member"`
 	Model   string          `json:"model"`
-	Run     string          `json:"run,omitempty"` // the agent run or evaluation it was for
+	Run     string          `json:"run,omitempty"`
 	Request json.RawMessage `json:"request"`
 	Answer  json.RawMessage `json:"answer"`
 	Outcome string          `json:"outcome"`
 }
 
-// Identity is what an accepted result is indexed by: the idempotency key and
-// request hash under its tenant, app and scope. The host decodes it — the
-// journal only stores result bytes — so it is injected as Identify.
 type Identity struct {
 	Tenant, App, Scope, Key, Hash string
 }
 
-// Identify decodes an accepted result's identity from its stored bytes.
 type Identify func(raw []byte) (Identity, error)
 
 func EncodeVector(v []float32) []byte {
@@ -84,9 +63,6 @@ type Journals interface {
 	Close()
 }
 
-// pool is the PostgreSQL pool behind a journal, for the reads only the delivery
-// path has (the projection for outside tools). A local file
-// journal has none; the deployment refuses what needs one.
 func Pool(j Journals) (*pgxpool.Pool, bool) {
 	pg, ok := j.(interface{ Pool() *pgxpool.Pool })
 	if !ok {
@@ -95,6 +71,4 @@ func Pool(j Journals) (*pgxpool.Pool, bool) {
 	return pg.Pool(), true
 }
 
-// Pool is the connection pool the PostgreSQL journal runs on, for the host's
-// own tables and for tests that clean up after themselves.
 func (j *Postgres) Pool() *pgxpool.Pool { return j.pool }

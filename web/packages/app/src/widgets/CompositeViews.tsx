@@ -9,8 +9,6 @@ const role=(row:Row,name:string)=>row[`$view.${name}`];
 const title=(row:Row)=>text(role(row,'label')??row.id);
 const tone=(config:PageUI.PageComposite,value:unknown):Tone|undefined=>config.tones?.[String(value)] as Tone|undefined;
 
-/** Presentation only: inputs are the host's authorized expression results.
- * Columns retain typed identities; equal labels never merge distinct records. */
 export function ModelMatrixRenderer({data,config,enabled,onSelect,selected}:{data?:Api.PageCompositeResult;config?:PageUI.PageComposite;enabled?:boolean;onSelect:(row?:EntityRecord)=>void;selected?:EntityRecord}){
  const rows=data?.sources.rows?.records??[],columns=data?.sources.columns?.records??[];
  const cells=useMemo(()=>new Map(data?.cells?.map(c=>[JSON.stringify([c.row,c.column]),c])),[data]);

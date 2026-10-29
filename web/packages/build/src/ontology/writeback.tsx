@@ -8,8 +8,6 @@ import { useHost, useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
-// Writebacks retain the connection and request mapping. Explicit business
-// confirmations and dispatches decide when to send and whether to retry.
 type Field = { from: string; to: string; convert?: string };
 type Answer = { at: string; effect: string; target: string; result: string; detail?: string; answer?: string };
 type Draft = { id: string; revision: number; name: string; title: string; connection: string; object: string; on: string; method?: string; transport?: string; path?: string; mapping: Field[]; result: Field[]; state: string; sent?: number; rejected?: number; failed?: number; answers?: Answer[] };

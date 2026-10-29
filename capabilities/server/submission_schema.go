@@ -97,14 +97,12 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 	if content == "" {
 		key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
 		if _, bound := t.committed.SchemaVersion(key); !bound && app.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
-			return nil, nil // Retry an original unbound receipt without upgrading its bytes.
+			return nil, nil
 		}
 		if prior, exists := t.committed.Refusal(key); exists && prior.SchemaVersion == nil {
 			return nil, nil
 		}
 		if action.SchemaVersion == nil && current.Family == 1 && sub.GetSchema().GetVersion() == 1 {
-			// Existing native package clients retain their original v1 contract.
-			// Published builder objects always require their content declaration.
 			return nil, nil
 		}
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The submission needs its schema content version; refresh definitions")
@@ -136,9 +134,6 @@ func (t *Tenant) submissionSchemaVersion(app platform.App, sub *pb.Submission, c
 	return binding, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The schema version is unknown or belongs to another family; refresh definitions")
 }
 
-// The HTTP edge supplies the exact declaration it showed the client. Internal
-// Go callers use the current owner catalog through Submit; old Flow/approval
-// execution keeps the catalog bound to its retained release.
 func (t *Tenant) submitSchemaDiagnosed(member platform.Member, sub *pb.Submission, content string, at time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
 	record, refusal := t.submit(member, sub, at, func(_ *kernel.Error, found []platform.FieldIssue) {

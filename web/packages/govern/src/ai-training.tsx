@@ -3,8 +3,6 @@ import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Checkbox, DataTable, Disclosure, Form, Input, Panel, Select, Tag, Textarea, t, type ColumnDef } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 
-// Policies and candidates belong to the original AI owner. This screen only
-// edits those decisions and downloads the server's qualified fixed dataset.
 export function AITraining() {
  const query=useRead<Api.AITrainingReport>("/v1/ai-training");
  const {decide,client}=useHost();

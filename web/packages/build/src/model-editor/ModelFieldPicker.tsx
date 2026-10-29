@@ -1,7 +1,6 @@
 import {Button,Select,t,type EntityInfo} from '@platform/ui';
 import {modelBindingContract,modelField} from '@platform/app/model';
 
-/** Choose one declared segment at a time; cyclic models remain bounded. */
 export function ModelFieldPicker({type,value=[],lookup,onChange}:{type:string;value?:string[];lookup:(type:string)=>EntityInfo|undefined;onChange:(path:string[])=>void}){
  const levels:{type:string;index:number}[]=[];let current=type;
  for(let index=0;index<Math.max(1,value.length);index++){levels.push({type:current,index});const f=lookup(current)?.fields.find(f=>f.name===value[index]);if(index<value.length-1){if(f?.type!=='reference'||!f.ref)break;current=f.ref;}}

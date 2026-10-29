@@ -16,19 +16,16 @@ import (
 
 const RecordVersion = 5
 
-// Record is the bounded journal result for one generated create/edit/archive
-// or builder publication decision. Its version and size are checked before
-// persistence and recovery.
 type Record struct {
 	Unique         []journal.StateUnique        `json:"unique,omitempty"`
 	Definition     *platform.DecisionDefinition `json:"definition,omitempty"`
 	SchemaVersion  *platform.SchemaVersion      `json:"schemaVersion,omitempty"`
 	Authorizations []AuthorizationEvidence      `json:"authorizations,omitempty"`
 	Version        int                          `json:"version"`
-	Kind           string                       `json:"kind,omitempty"` // version 4: callback-free lifecycle transition
+	Kind           string                       `json:"kind,omitempty"`
 	Tenant         string                       `json:"tenant"`
 	App            string                       `json:"app"`
-	At             time.Time                    `json:"at,omitempty"` // the original input clock, not a retry's
+	At             time.Time                    `json:"at,omitempty"`
 	RequestHash    string                       `json:"requestHash"`
 	Digest         string                       `json:"digest,omitempty"`
 	Receipt        json.RawMessage              `json:"receipt"`

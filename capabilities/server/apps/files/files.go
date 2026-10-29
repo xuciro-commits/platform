@@ -1,8 +1,3 @@
-// Package files is the platform's files app, on the app API and
-// public consumer roles: a file is uploaded to the tenant's object
-// store, then attached to a record by a decision that names its sha256, so the
-// journal holds the hash and never the bytes. A file is readable exactly when
-// the record it is attached to is.
 package files
 
 import (
@@ -37,10 +32,8 @@ type Files struct {
 	ledger *platform.Ledger
 }
 
-// Attach is called by the host when a tenant is composed.
 func (f *Files) AttachFiles(h platform.FileHost) { f.host = h }
 
-// New is a tenant's files app.
 func New(tenant string) *Files {
 	any := []string{platform.AnyMember}
 	return &Files{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
@@ -95,7 +88,6 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if known {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			// What was checked when it was attached stands in a replay, which reads no bytes.
 			if !c.Replaying {
 				if !f.host.Readable(c.Member, p.Target, now) {
 					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -136,7 +128,6 @@ func (f *Files) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	})
 }
 
-// The file decisions use staged records and the private host's permission view.
 func (f *Files) ForkDecision() (platform.App, error) {
 	return &Files{host: f.host, ledger: f.ledger}, nil
 }

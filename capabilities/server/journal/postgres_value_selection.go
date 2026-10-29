@@ -6,8 +6,6 @@ import (
 	"fmt"
 )
 
-// StateValueSelection narrows saved envelopes by a top-level field. The owner
-// still decodes the original bytes and decides what the saved facts mean.
 type StateValueSelection interface {
 	StateValuesWithField(context.Context, string, string, string, int64) (map[string]json.RawMessage, error)
 }

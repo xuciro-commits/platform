@@ -8,26 +8,19 @@ import { useOverlayBody } from "./overlay-body";
 import { useOverlayFocus } from "./overlay-focus";
 import { t } from "../i18n";
 
-/** How deep inside an open overlay this frame renders. A call from inside an
- * overlay opens beside the caller (a sheet), never another stacked modal:
- * one modal at a time, per the M3 overlay rule. */
 const OverlayDepth = createContext(0);
 
 type OverlayProps = {
   open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode;
-  /** For forms with lines: room for a row of columns. */
   wide?: boolean;
-  /** Hide the global layer while retaining this logical opening's content. */
   suspended?: boolean;
   returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;
 } & OverlayPolicy & {width?:number;side?:"left"|"right"};
 
-/** Modal dialog on Radix: focus trap, Escape, outside click, labelled title. */
 export function Dialog(props: OverlayProps) {
   return <OverlayFrame {...props} />;
 }
 
-/** Dialogs and sheets retain one body and one focus/dismissal lifecycle. */
 export function OverlayFrame({ open, onOpenChange, title, children, wide, returnFocus, fallbackFocus, suspended = false,backdrop=true,closeOnBackdrop=true,closeOnEsc=true,width,side="right",sheet=false }: OverlayProps & {sheet?:boolean}) {
   const visible = useViewVisible();
   suspended = suspended || !visible;

@@ -1,5 +1,3 @@
-// Only the public workspace shell lives here. Tenant reads, form drafts and
-// requests stay in the original identity-bound EdgeClient; API calls never do.
 const cacheName="platform-workspace-shell-v1";
 const staticPath=path=>path.startsWith("/assets/")||path==="/rules/wasm_exec.js"||path==="/rules/engine.wasm";
 self.addEventListener("install",()=>self.skipWaiting());
@@ -34,9 +32,6 @@ self.addEventListener("fetch",event=>{
  const request=event.request,url=new URL(request.url);
  if(request.method!=="GET"||url.origin!==self.location.origin||!((request.mode==="navigate"&&(url.pathname==="/"||url.pathname==="/index.html"))||staticPath(url.pathname)))return;
  event.respondWith(fetch(request).catch(async()=>{
-  // These are language-independent public files. Match the same explicit URL
-  // key used by put(), rather than inheriting API middleware's Vary headers
-  // from a navigation/script request with different browser-only headers.
   const cached=await(await caches.open(cacheName)).match(request.mode==="navigate"?"/":url.pathname);
   if(cached)return cached;
   return new Response("This workspace task was not prepared. Connect to continue.",{status:503,headers:{"Content-Type":"text/plain; charset=utf-8"}});

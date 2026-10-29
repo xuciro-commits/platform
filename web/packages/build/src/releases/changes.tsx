@@ -1,5 +1,3 @@
-// Discovery and field differences come from the original Build declarations.
-// Selecting changes opens the existing release review, not another publisher.
 import { useReadQuery } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Checkbox, DataTable, Disclosure, PageHeader, Panel, Tag, t, useUnsavedChanges, type ColumnDef } from "@platform/ui";
@@ -31,9 +29,6 @@ export function Changes({ initialKind, initialID }: { initialKind?: string; init
   const original = detail.data?.changes.find(row => row.type === current?.type && row.id === current?.id);
   const { confirmDiscard } = useUnsavedChanges(false, () => {});
   const selected = rows.filter(row => checked.includes(changeKey(row)));
-  // The complete selection travels through the workspace's original view
-  // call; the route carries only the anchor draft. Legacy links keep the
-  // JSON-in-URL form, so the fallback below stays valid.
   const review = (selection: Api.DraftChange[]) => {
     const drafts: JointChoice[] = selection.map(change => ({ kind: draftChangeKind(change), id: change.id }));
     if (!drafts.length) return;

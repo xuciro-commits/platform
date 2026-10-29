@@ -14,8 +14,6 @@ import (
 	"strings"
 )
 
-// SavedDraftChanges compares saved declarations, not lifecycle badges or a
-// newly allocated publication version. It performs no publication or execution.
 func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string) ([]DraftChange, error) {
 	out := []DraftChange{}
 	held := map[platform.AssetRef]bool{}
@@ -63,8 +61,6 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 				ref.Kind = platform.AssetEvaluation
 			}
 			if application != "" && !(entity.Type == AppType && meta.ID == application) && !held[ref] {
-				// A renamed draft still belongs to the application that references
-				// its original published identity until membership is edited.
 				var original struct {
 					Name string
 					Ref  platform.AssetRef
@@ -124,8 +120,6 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 	return out, nil
 }
 
-// Ordinary publications retain the typed editor record. Portable integration,
-// scenario and migration publications retain the original owner's release body.
 func (b *Build) draftComparison(record any, published string, info platform.EntityInfo) (before, after map[string]json.RawMessage, portable bool, err error) {
 	current := platform.Raw(record)
 	previous := json.RawMessage(`{}`)
@@ -183,8 +177,6 @@ func (*Build) AcceptedPublicationSchemas() []string {
 	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
-// publicationImage reads and verifies the already committed record image
-// without rerunning builder action rules or publishing a second decision.
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
 	switch schema {
 	case SchemaEvaluationSetPublish:
@@ -354,8 +346,6 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 	return fmt.Errorf("unknown builder publication: %s", schema)
 }
 
-// Installation reconstructs the runtime registry from the saved published
-// image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	if schema == SchemaAlertPublish {
 		_, _, err := alertImage(image)
@@ -461,12 +451,7 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	return nil
 }
 
-// published is a definition as it was published: what is installed, kept on the
-// record so a restore installs that and not a draft written since.
 func published[T any](definition T) string {
-	// A published definition is one version, not a recursive copy of every
-	// preceding publication. Keeping the old Published string inside the new
-	// image would double its size at each edit and exhaust the bounded result.
 	switch value := any(definition).(type) {
 	case Object:
 		value.Published = ""
@@ -507,10 +492,6 @@ func published[T any](definition T) string {
 	return string(raw)
 }
 
-// Reinstall installs every published object and page again, objects first: the
-// host calls it when a tenant is restored from a snapshot, before the records
-// of the types they define. It installs what was published, so a
-// draft written since stays a draft.
 func (b *Build) Reinstall() error {
 	if err := restoreDefinitionPublications(b, b.propertyTypeInventory, SchemaPropertyType); err != nil {
 		return err
@@ -569,7 +550,7 @@ func (b *Build) Reinstall() error {
 			return err
 		}
 	}
-	for _, p := range pages { // after the objects they show
+	for _, p := range pages {
 		was, ok := ReadPublication[Page](p.Published)
 		if !ok || p.Archived {
 			continue
@@ -578,8 +559,6 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("page %s: %v", p.Name, err)
 		}
 	}
-	// Navigation may be reciprocal or refer to a later page ID. All original
-	// descriptors must exist before the same strict live target/interface check.
 	for _, p := range pages {
 		was, ok := ReadPublication[Page](p.Published)
 		if !ok || p.Archived {
@@ -595,7 +574,7 @@ func (b *Build) Reinstall() error {
 	if err := b.installTables(); err != nil {
 		return err
 	}
-	for _, a := range applications { // after the pages they hold
+	for _, a := range applications {
 		was, ok := ReadPublication[Application](a.Published)
 		if !ok || a.Archived {
 			continue
@@ -712,21 +691,17 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 			actions = append(actions, objectActions(object, entity)...)
 		}
 	}
-	// The retained owner still receives on its original kernel ledger. Only
-	// declaration selection changes; today's policy and grants remain in force.
 	return &releaseExecution{Build: bound, catalog: b.ledger.Catalog.WithActions(actions)}, nil
 }
 
 var _ platform.ReleaseExecutionOwner = (*Build)(nil)
 
-// Shared declarations have one authoring owner: the system tenant. A local
-// draft may use them, but cannot create, rename, publish or archive over them.
 func (b *Build) checkSystemDefinitionWrite(s *pb.Submission) *kernel.Error {
 	typ, id := s.GetTarget().GetType(), s.GetTarget().GetId()
 	_, err := draftAssetRef(typ, "")
 	if err != nil {
 		return nil
-	} // generated business actions are not authoring writes
+	}
 	var proposed struct{ Name string }
 	_ = json.Unmarshal(s.GetPayload(), &proposed)
 	names := []string{proposed.Name}
@@ -747,15 +722,10 @@ func (b *Build) checkSystemDefinitionWrite(s *pb.Submission) *kernel.Error {
 	return nil
 }
 
-// ApplicationDrafts follows the original release descriptors, substituting
-// every reachable saved draft, including changes to installed dependencies.
-// The application boundary is its declared resources, never all tenant drafts.
 func (b *Build) ApplicationDrafts(id string) ([]JointDraftRef, error) {
 	return b.applicationDrafts(id, nil)
 }
 
-// selectDrafts is nil for a full trial. A release supplies the original
-// changed-draft projection and reuses published edges for every other asset.
 func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool) ([]JointDraftRef, error) {
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
@@ -823,8 +793,6 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 	if root.Name == "" {
 		return nil, fmt.Errorf("Application draft not found")
 	}
-	// These original owner entities supply only identity. Their own draft
-	// compiler supplies dependencies when the traversal reaches that asset.
 	caller := b.host.Automation(platform.Caller{}, ID)
 	integrations := map[JointDraftRef]any{}
 	for _, entity := range b.Manifest().Entities {
@@ -881,7 +849,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 		draft, ok := index[ref]
 		if !ok {
 			continue
-		} // immutable native dependency
+		}
 		if selectDrafts != nil && !selectDrafts[draft] {
 			queue = append(queue, graph[ref]...)
 			continue
@@ -919,9 +887,6 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				p.State = "published"
 				assets, err = releaseAssets(nil, nil, nil, []Process{p}, b.Manifest().Version)
 			case platform.AssetAgent:
-				// Discover tools from the original descriptor before validating
-				// them against the completed joint candidate. Publication checks
-				// here would reject the query drafts we are still collecting.
 				agent, found := platform.Get[Agent](caller, draft.ID)
 				if !found || agent.Archived {
 					return nil, fmt.Errorf("saved agent draft is unavailable")
@@ -931,8 +896,6 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				assets, err = []platform.ReleaseAsset{asset}, problem
 			default:
 				if record, ok := integrations[draft]; ok {
-					// Discovery uses the same portable descriptor as publication,
-					// without requiring the target connection to be ready yet.
 					_, version, _, _ := integrationMetadata(record)
 					asset, problem := b.integrationAsset(draft.Kind, record, version+1)
 					assets, err = []platform.ReleaseAsset{asset}, problem
@@ -973,7 +936,6 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				return nil, err
 			}
 		}
-		// Generated actions/pages can lead back to the same object draft.
 		if deps, ok := graph[ref]; ok {
 			queue = append(queue, deps...)
 		} else if draft.Kind == platform.AssetObject {

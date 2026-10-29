@@ -24,15 +24,8 @@ import (
 	"platformserver/studio/build"
 )
 
-// Model calls: the host checks the caller's access, calls
-// the provider outside the tenant's lock, and journals the call's usage as an
-// entry of kind usage. Replay applies usage and never calls a model; prompts
-// and answers are the caller's and are not kept.
-
 const aiTimeout = 120 * time.Second
 
-// models is the AI app as the host calls models for members and agents: the
-// enabled models and their providers, and the usage of every call.
 type models interface {
 	platform.App
 	Snapshot() (json.RawMessage, error)
@@ -46,7 +39,6 @@ type models interface {
 	Quota(platform.Member, platform.AIDefaults, time.Time) platform.AIQuota
 }
 
-// limits are the defaults a member without its own takes.
 func (t *Tenant) limits() platform.AIDefaults {
 	number := func(app, name string) int {
 		n, _ := strconv.Atoi(t.setting(t.automation(app, false), name))
@@ -56,8 +48,6 @@ func (t *Tenant) limits() platform.AIDefaults {
 		PerMinute: number(platform.AIApp, platform.AISettingPerMinute)}
 }
 
-// reserveCall saves the original meter owner's liability before external I/O.
-// Call identities belong to a run turn/effect attempt, never to HTTP payloads.
 func (t *Tenant) reserveCall(m platform.Member, model platform.AIModel, req platform.ChatRequest, input, output int, now time.Time) *platform.AIError {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -99,22 +89,15 @@ func (t *Tenant) releaseCall(call string, now time.Time) *kernel.Error {
 	return refusal
 }
 
-// mostTokens is the platform generation ceiling. Zero leaves the reviewed
-// model limit in force; an unbounded call cannot acquire a reservation.
 func (t *Tenant) mostTokens() int {
 	n, _ := strconv.Atoi(t.setting(t.automation(platform.AIApp, false), platform.AISettingMaxTokens))
 	return n
 }
 
-// Chat calls a model for m. A refusal of access is a kernel error; a provider
-// failure is an AIError, and its usage is journaled as failed. delta, when
-// given, receives the answer as it comes.
 func (t *Tenant) Chat(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
 	return t.chatForStage(m, req, now, platform.AIStageRuntime, delta...)
 }
 
-// DesignChat is an explicit Studio operation. The accepting owner selects the
-// stage after checking the current builder role; request JSON cannot select it.
 func (t *Tenant) DesignChat(m platform.Member, req platform.ChatRequest, now time.Time, delta ...func(string)) (platform.ChatAnswer, *kernel.Error, *platform.AIError) {
 	return t.chatForStage(m, req, now, platform.AIStageDesign, delta...)
 }
@@ -185,7 +168,6 @@ func (t *Tenant) chatForStage(m platform.Member, req platform.ChatRequest, now t
 	return answer, nil, failure
 }
 
-// call executes one gateway attempt; only its original caller accepts usage.
 func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform.Member, req platform.ChatRequest, now time.Time) (platform.ChatAnswer, *platform.AIError) {
 	policy := platform.AIInferencePolicy{}
 	if t.services.AIInference != nil {
@@ -214,7 +196,6 @@ func (t *Tenant) call(pv platform.AIProvider, model platform.AIModel, m platform
 	return answer, failure
 }
 
-// meter journals a call's usage, then applies it.
 func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -224,10 +205,6 @@ func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *kernel.Error {
 	return t.acceptUsage(m, u)
 }
 
-// openAIMessages puts a conversation on the OpenAI wire: tool calls as
-// functions with their arguments as a string, tool results with their call.
-// Provider transport receives only the original controlled credential and
-// outbound capabilities; adapters never receive a Tenant or business writer.
 func (t *Tenant) modelProvider(pv platform.AIProvider, dispatch ...func()) providers.Client {
 	send := t.AIClient
 	if send == nil {
@@ -251,22 +228,13 @@ type doer func(*http.Request) (*http.Response, error)
 
 func (d doer) Do(r *http.Request) (*http.Response, error) { return d(r) }
 
-// Apps' model requests. An accepted decision's Request of a
-// model becomes owned work of the built-in model destination: kept in the
-// outbound queue with the effects, sent on the I/O lane through the door every
-// call passes (as the app, within its limits), retried when the provider is
-// unavailable, and answered to the app's Reply action as a journaled decision.
-// A replay rebuilds the request from the decision and takes the answer from
-// the journal: it asks no model.
-
-// modelAsk is a model request as the outbound queue keeps it.
 type modelAsk struct {
 	Model              string                      `json:"model"`
 	Binding            *platform.AIModelBinding    `json:"binding,omitempty"`
 	ConfigurationError string                      `json:"configurationError,omitempty"`
 	Prompt             platform.Prompt             `json:"prompt"`
 	Reply              string                      `json:"reply"`
-	Record             string                      `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
+	Record             string                      `json:"record"`
 	Call               string                      `json:"call"`
 	Function           *agentowner.FunctionBinding `json:"function,omitempty"`
 	Evaluation         bool                        `json:"evaluation,omitempty"`
@@ -282,8 +250,6 @@ func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Re
 	t.trimEffects()
 }
 
-// The live and staged paths share the exact model intent planner. Planning
-// allocates no work and never calls a provider.
 func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect) platform.Effect {
 	prompt, _ := q.Payload.(platform.Prompt)
 	options := platform.ModelOptions{MaxTokens: prompt.MaxTokens}
@@ -291,9 +257,6 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 		options = q.EvaluationFunction.ModelOptions.Override(options)
 	}
 	s := rec.GetSubmission()
-	// Resolve the administrator's default in the accepted decision. A queued
-	// request must not switch models when settings change before dispatch or
-	// retry. An empty binding stays empty and is refused without provider I/O.
 	model := cmp.Or(q.Model, t.setting(t.automation(platform.AIApp, false), platform.AISettingAppModel))
 	var binding *platform.AIModelBinding
 	failure := ""
@@ -335,8 +298,6 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 		Event: c.App + "/model", App: c.App, Key: key, Target: q.Target, At: rec.GetRecordedTime().AsTime(), State: "pending", Due: rec.GetRecordedTime().AsTime(), Body: string(body)}
 }
 
-// sendModel makes one attempt of a model request: delivered with the answer,
-// retried while the provider or a limit keeps it, rejected when it cannot be asked.
 func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	out := platform.Outcome{Effect: x.ID}
 	var ask modelAsk
@@ -370,8 +331,6 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 	if ask.Prompt.System != "" {
 		messages = append([]platform.Message{{Role: "system", Content: ask.Prompt.System}}, messages...)
 	}
-	// The administrators chose the model for apps, as they choose the agents':
-	// no member's access applies, the limits do.
 	m := platform.Member{ID: "app:" + x.App, Tenant: t.ID}
 	t.mu.Lock()
 	enabled, pv, err := t.ai.Model(model)

@@ -51,8 +51,6 @@ func (h flowExecution) ApprovalRelease(app, action, typ string) (string, *kernel
 	return h.rt.release, nil
 }
 
-// A tenant's latest activation may belong to another application. Select an
-// approval's original complete action from an actual installed candidate.
 func (t *Tenant) approvalClosure(release, app, action, typ string) (platform.ReleaseCandidate, *kernel.Error) {
 	if release == "" {
 		return platform.ReleaseCandidate{}, nil
@@ -83,8 +81,6 @@ func (h hostView) ApprovalExecution(c platform.Caller, a platform.ApprovalReques
 	root := platform.AssetRef{App: a.App, Kind: platform.AssetAction, Name: a.Action}
 	typ, _, _ := strings.Cut(a.Target, "/")
 	if !slices.ContainsFunc(sealed.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == root }) {
-		// Object assets already contain their complete action declarations.
-		// An application need not separately list each contained action.
 		root = platform.AssetRef{App: a.App, Kind: platform.AssetObject, Name: typ}
 	}
 	closed, err := sealed.Closure([]platform.AssetRef{root})

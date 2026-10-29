@@ -162,7 +162,6 @@ func (p Page) CheckDataBinding(binding PageDataBinding, lookup func(string) (Ent
 		if !known {
 			return fmt.Errorf("page binding %s object is unavailable", binding.ID)
 		}
-		// A model field may name the record's own id and archived metadata.
 		metadata := func(typ string) (EntityInfo, bool) {
 			value, found := lookup(typ)
 			return ConstraintEntity(value), found
@@ -201,9 +200,6 @@ func (p Page) CheckDataBinding(binding PageDataBinding, lookup func(string) (Ent
 					return fmt.Errorf("model rule input does not match its declared type")
 				}
 			}
-			// An original rule may stop reading an input without forcing every
-			// referring page to be republished; each supplied variable must still
-			// belong to this page.
 			for _, id := range rule.Inputs {
 				if _, known := p.InputSchema.Variables[id]; !known {
 					return fmt.Errorf("model rule input is an unavailable page variable")
@@ -305,8 +301,6 @@ func (p Page) CheckDataBinding(binding PageDataBinding, lookup func(string) (Ent
 	return nil
 }
 
-// compositeRole is the field a role reads when the binding names none: a
-// label falls back to the object's display field, a state to its lifecycle.
 func compositeRole(view ModelViewBinding, role string, info EntityInfo) *FieldRef {
 	if field, ok := view.Roles[role]; ok {
 		return &field
@@ -318,8 +312,6 @@ func compositeRole(view ModelViewBinding, role string, info EntityInfo) *FieldRe
 		if view.Model.Label != nil {
 			return nil
 		}
-		// Nodes and axes already fall back to their record identity. An
-		// unnamed relation should not fill the graph with opaque edge IDs.
 		if name := info.Display; name != "" && name != "id" {
 			return &FieldRef{Name: name}
 		}
@@ -331,13 +323,9 @@ func compositeRole(view ModelViewBinding, role string, info EntityInfo) *FieldRe
 	return nil
 }
 
-// checkComposite holds a composite binding's typed model ports to the roles
-// its retained contract declares: each role reads a field or one rule
-// expression of a compatible kind, and a reference role keeps its declared
-// target object. The shapes themselves stay with the presentation.
 func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) error {
 	widget := b.Ports["widget"]
-	if widget == "" { // a binding authored directly names its ports; they pick the contract
+	if widget == "" {
 		for _, candidate := range pageWidgets.Widgets {
 			fits := len(candidate.ModelPorts) > 0 && len(b.Models) > 0
 			for key := range b.Models {
@@ -398,8 +386,6 @@ func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo,
 			} else if err := CheckRuleExpression(expression, RuleReadSpec{Object: view.Model.Type}, lookup, engines...); err != nil {
 				return fmt.Errorf("binding %s role %s: %w", b.ID, role, err)
 			} else if target := declaration.Target; target != "" {
-				// Ask the original compiler to compare against the declared
-				// reference type. Matching ID text cannot change its owner.
 				schema, err := RuleSchema(expression, RuleReadSpec{Object: view.Model.Type}, lookup, engines...)
 				if err != nil {
 					return err
@@ -414,7 +400,6 @@ func (p Page) checkComposite(b PageDataBinding, lookup func(string) (EntityInfo,
 			}
 		}
 		for key := range view.Roles {
-			// Resolution fills a missing label and state from the object itself.
 			if _, ok := port.Roles[key]; !ok && key != "label" && key != "state" {
 				return fmt.Errorf("binding %s: undeclared role %s", b.ID, key)
 			}
@@ -1093,8 +1078,6 @@ func (p Page) inputSchema() PageInputSchema {
 	return p.Document.inputSchema()
 }
 
-// A variable kind exists only from the UI profile that introduced it, so an
-// original page never silently gains features its profile did not have.
 func (d PageInputSchema) checkProfile() error {
 	for id, v := range d.Variables {
 		if err := d.checkVariableProfile(id, v); err != nil {

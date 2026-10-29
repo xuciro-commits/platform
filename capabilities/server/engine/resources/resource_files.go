@@ -22,7 +22,6 @@ import (
 	"time"
 )
 
-// memoryFiles is the development store: bytes in the process.
 type MemoryFiles struct {
 	mu       sync.Mutex
 	m        map[string][]byte
@@ -68,20 +67,15 @@ func (s *MemoryFiles) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-// s3Files is an S3-compatible bucket: RustFS locally, any S3 in production.
 type s3Files struct {
 	client *minio.Client
 	bucket string
 }
 
-// NewS3Files connects to endpoint (http(s)://host:port/bucket) with the key
-// pair from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY, and makes the
-// bucket when it does not exist.
 func NewS3Files(ctx context.Context, endpoint string) (platform.FileStore, error) {
 	return openS3Files(ctx, endpoint, true)
 }
 
-// OpenS3Files opens an existing bucket without creating a missing store.
 func OpenS3Files(ctx context.Context, endpoint string) (platform.FileStore, error) {
 	return openS3Files(ctx, endpoint, false)
 }
@@ -139,15 +133,10 @@ func (s *s3Files) Delete(ctx context.Context, key string) error {
 	return s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 }
 
-// localFiles keeps file bytes in a directory on the host's own disk: the
-// lightweight profile's FileStore. Keys are the same content
-// addresses the S3 store takes ("<tenant>/<hash>"), the bytes are the same
-// bytes, and the journal still keeps only each file's hash.
 type localFiles struct {
 	dir string
 }
 
-// NewLocalFiles opens (or makes) a directory of file bytes.
 func NewLocalFiles(dir string) (platform.FileStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("files: %w", err)
@@ -155,8 +144,6 @@ func NewLocalFiles(dir string) (platform.FileStore, error) {
 	return &localFiles{dir: dir}, nil
 }
 
-// path is where a key's bytes live. A key names nested parts of the store and
-// nothing else: a key that would leave the directory is refused, not cleaned up.
 func (s *localFiles) path(key string) (string, error) {
 	if key == "" || strings.HasPrefix(key, "/") || strings.HasSuffix(key, "/") {
 		return "", fmt.Errorf("files: %q is not a key", key)
@@ -177,9 +164,6 @@ func (s *localFiles) Put(_ context.Context, key string, data []byte, _ string) e
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("files: %w", err)
 	}
-	// A reader sees the old bytes or the new ones, never half a file; the same
-	// bytes under the same key are the same file (content addressing), so
-	// rewriting one is not an error.
 	if _, err := os.Stat(path); err == nil {
 		current, err := os.ReadFile(path)
 		if err == nil && bytes.Equal(current, data) {
@@ -241,8 +225,6 @@ func checkFileInventory(prefix, after string, limit int) error {
 	return nil
 }
 
-// Keep only the smallest limit+1 keys while walking a memory or local store.
-// Reading a large prefix never allocates an unbounded second file index.
 type inventoryHeap []platform.StoredFile
 
 func (h inventoryHeap) Len() int           { return len(h) }
@@ -312,8 +294,6 @@ func (s *localFiles) Inventory(ctx context.Context, prefix, after string, limit 
 			return platform.FileInventoryPage{}, err
 		}
 	}
-	// WalkDir does not follow directory links. Verify the store and every
-	// prefix ancestor before walking so a skipped link never proves exhaustion.
 	info, err := os.Lstat(s.dir)
 	if err != nil {
 		return platform.FileInventoryPage{}, err
@@ -331,7 +311,7 @@ func (s *localFiles) Inventory(ctx context.Context, prefix, after string, limit 
 			current = filepath.Join(current, part)
 			info, err := os.Lstat(current)
 			if os.IsNotExist(err) {
-				return platform.FileInventoryPage{}, nil // the verified parent has no such prefix
+				return platform.FileInventoryPage{}, nil
 			}
 			if err != nil {
 				return platform.FileInventoryPage{}, err
@@ -406,8 +386,6 @@ func (s *s3Files) Inventory(ctx context.Context, prefix, after string, limit int
 	return page, nil
 }
 
-// FileStoreManifest verifies actual bytes, not object-store ETags or timestamps.
-// The deployment owner must stop all writers to these prefixes before calling.
 func FileStoreManifest(ctx context.Context, store platform.FileStore) (map[string]string, error) {
 	inventory, ok := store.(platform.FileInventory)
 	if !ok {
@@ -454,8 +432,6 @@ func FileStoreManifest(ctx context.Context, store platform.FileStore) (map[strin
 	}
 }
 
-// uploads are the file hashes uploaded and when, until a record attaches them
-// or the sweep removes them (volatile).
 type Uploads struct {
 	mu sync.Mutex
 	at map[string]time.Time
@@ -470,7 +446,6 @@ func (u *Uploads) Add(hash string, now time.Time) {
 	u.at[hash] = now
 }
 
-// olderThan are the hashes uploaded before now minus age.
 func (u *Uploads) OlderThan(now time.Time, age time.Duration) []string {
 	u.mu.Lock()
 	defer u.mu.Unlock()

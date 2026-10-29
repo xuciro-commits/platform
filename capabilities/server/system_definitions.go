@@ -31,8 +31,6 @@ func (h hostView) PrepareSystemDefinitions(c platform.Caller, raw json.RawMessag
 	if h.t.ID != systemscope.Tenant || c.Tenant != systemscope.Tenant || c.App != systemscope.App {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the system authority activates system definitions")
 	}
-	// A successful report may finish only its original pre-freeze activation.
-	// It cannot turn an old candidate into a new deployment request.
 	activationID, original := strings.CutPrefix(key, "system:")
 	activationValue, known := h.t.held(systemscope.ActivationType + "/" + activationID)
 	var activation struct {
@@ -116,8 +114,6 @@ func (h hostView) ApplySystemDefinitions(raw json.RawMessage) error {
 	return nil
 }
 
-// This is a derived immutable runtime view of the system authority's accepted
-// release, never another registry, journal, or set of owner metadata rows.
 type systemDefinitionProjection struct {
 	id            string
 	assets        []platform.ReleaseAsset
@@ -153,8 +149,6 @@ func (t *Tenant) systemDefinitionProjection(saved acceptedformat.Release) (*syst
 	return projection, nil
 }
 
-// Startup snapshots already retain the original release results. Reconstruct
-// the cache from their exact accepted images, without preparing a new release.
 func (t *Tenant) restoreSystemDefinitionProjection() error {
 	if t.ID != systemscope.Tenant || t.releases.Active() == "" {
 		return nil
@@ -224,8 +218,6 @@ func (t *Tenant) applySystemDefinitionProjection() error {
 	if err := t.records.PromoteRecords(view.records); err != nil {
 		return err
 	}
-	// Validation ran against private owners. The original owners install the
-	// same saved images to extend their original ledger declarations as well.
 	if err := t.installSystemDefinitionProjection(projection, false); err != nil {
 		return err
 	}
@@ -294,8 +286,6 @@ func (t *Tenant) installSystemDefinitionProjection(projection *systemDefinitionP
 	return nil
 }
 
-// A shared declaration is an immutable prerequisite of local releases. Its
-// exact accepted descriptor stays with the system owner, like native assets.
 func (t *Tenant) sharedSystemAssets(app string) []platform.ReleaseAsset {
 	projection := t.systemDefinitionState.published.Load()
 	if projection == nil {
@@ -319,8 +309,6 @@ func (h hostView) SystemDefinitionReadOnly(ref platform.AssetRef) bool {
 	return false
 }
 
-// Compatibility checks retain the existing tenant's own rows and grants.
-// They prepare only a private runtime and never append a business decision.
 func (t *Tenant) checkSystemDefinitionProjection(projection *systemDefinitionProjection) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

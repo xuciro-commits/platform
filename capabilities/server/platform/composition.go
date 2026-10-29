@@ -8,20 +8,18 @@ import (
 	"strings"
 )
 
-// CapabilityContract names behavior, independently of a provider's release.
 type CapabilityContract struct {
 	ID        string `json:"id"`
 	Version   string `json:"version"`
 	Semantics string `json:"semantics"`
 }
 
-// CapabilityModule describes one trusted implementation, not business state.
 type CapabilityModule struct {
 	ID          string               `json:"id"`
 	Version     string               `json:"version"`
 	Title       string               `json:"title"`
-	Scope       string               `json:"scope"`       // deployment, tenant, invocation
-	Replacement string               `json:"replacement"` // drain or restart
+	Scope       string               `json:"scope"`
+	Replacement string               `json:"replacement"`
 	StateFormat string               `json:"stateFormat,omitempty"`
 	Provides    []CapabilityContract `json:"provides"`
 	Requires    []CapabilityContract `json:"requires,omitempty"`
@@ -32,7 +30,6 @@ type CapabilityBinding struct {
 	Provider string `json:"provider"`
 }
 
-// CompositionPlan is a pure projection of selected manifests. It owns no state.
 type CompositionPlan struct {
 	Modules  []CapabilityModule  `json:"modules"`
 	Bindings []CapabilityBinding `json:"bindings"`
@@ -65,8 +62,6 @@ func (m CapabilityModule) Check() error {
 	return nil
 }
 
-// ResolveComposition selects one provider per contract and orders dependencies.
-// It never constructs providers, mutates manifests or interprets application assets.
 func ResolveComposition(modules []CapabilityModule, selected map[string]string) (CompositionPlan, error) {
 	plan := CompositionPlan{Modules: slices.Clone(modules), Bindings: []CapabilityBinding{}, Order: []string{}}
 	slices.SortFunc(plan.Modules, func(a, b CapabilityModule) int { return strings.Compare(a.ID, b.ID) })
@@ -170,8 +165,6 @@ func ResolveComposition(modules []CapabilityModule, selected map[string]string) 
 	return plan, nil
 }
 
-// OwnerBindings is the composition's bundle of independent consumer roles.
-// Each owner is attached only to its declared role; it cannot retain the bundle.
 type OwnerBindings struct {
 	Training  AITrainingHost
 	System    SystemDefinitionHost
@@ -185,8 +178,6 @@ type OwnerBindings struct {
 	Work      WorkHost
 }
 
-// RuntimeCapabilities binds trusted pure implementations for one tenant instance.
-// Rebuilding an instance carries this selection; callers never mutate it live.
 type RuntimeCapabilities struct {
 	NewTransactionExecutor func(BusinessRuntimeContext) TransactionExecutor
 	NewAgentEvaluator      func() AgentEvaluator
@@ -243,8 +234,6 @@ type KernelProvider struct {
 	Engine KernelFactory
 }
 
-// RuntimeProviders is the deployment's trusted, typed offer. Descriptors are
-// projections of these factories; importing JSON never adds executable providers.
 type RuntimeProviders struct {
 	Rules         []RuleProvider
 	Authorization []AuthorizationProvider
@@ -314,8 +303,6 @@ func (p RuntimeProviders) CheckSelection(selection map[string]string) error {
 	return err
 }
 
-// MemoryStorageModule describes the existing process-local development journal.
-// It does not claim durability or implement a delivery storage substitute.
 func MemoryStorageModule() CapabilityModule {
 	return CapabilityModule{ID: "platform.storage.memory", Title: "In-memory development storage", Version: "1", Scope: "deployment", Replacement: "restart", StateFormat: "platform.memory.v1", Provides: []CapabilityContract{{ID: "platform.storage", Version: "1", Semantics: "1"}}}
 }

@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// The original record owner supplies accepted evidence to an asynchronous AI
-// subscriber. This does not run a business rule or copy a model transcript.
 func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvidence {
 	out := platform.AITrainingEvidence{}
 	images := map[string]json.RawMessage{}
@@ -76,8 +74,6 @@ func (h hostView) TrainingEvidence(event platform.Event) platform.AITrainingEvid
 		if len(run.Signals) > 0 {
 			candidate.Critique = run.Signals[len(run.Signals)-1].Detail
 		}
-		// Only declared scalar fields may be selected by the policy. JSON blobs,
-		// files, credentials and protected AI-input fields are never copied.
 		owner := h.t.app(draft.Owner)
 		if owner != nil {
 			action, _ := owner.Manifest().Actions.Action(draft.Action)
@@ -188,8 +184,6 @@ func (h hostView) TrainingReadable(member platform.Member, candidate platform.AI
 
 var _ platform.AITrainingHost = hostView{}
 
-// Historical derivation reads the original immutable field changes, stopping at
-// this event's exact change. It never substitutes a later record's contents.
 func (h hostView) trainingRecordAt(ref, change string) (json.RawMessage, bool) {
 	typ, id, ok := strings.Cut(ref, "/")
 	if !ok {

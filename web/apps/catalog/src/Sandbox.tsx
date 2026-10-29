@@ -1,5 +1,3 @@
-// The code sandbox: one local prototype editor. Snippets are
-// browser data, never published components, business records or credentials.
 import { HostContext } from "@platform/app";
 import { Button, PanelSection, StructureRow, Textarea, Workbench, language, notify, t, useUnsavedChanges, useViewVisible } from "@platform/ui";
 import { Copy, FileCode, Maximize2, Minimize2, Monitor, Play, Plus, RotateCcw, Save, Smartphone, Tablet, Trash2, Braces, Eraser } from "lucide-react";
@@ -29,8 +27,6 @@ const bridge = `<script>(function(){var send=function(level,args){try{parent.pos
 window.addEventListener("error",function(e){send("error",[e.message+" ("+e.lineno+":"+e.colno+")"])});window.addEventListener("unhandledrejection",function(e){send("error",[String(e.reason)])})})()</script>`;
 type Line = ConsoleMessage & { at: string };
 
-/** Hidden workbench panes do not keep executing prototype scripts. Reopening
- * restarts the last run, while the editor and its unsaved code stay mounted. */
 function PreviewFrame({ document, width, frame }: { document: string; width: string; frame: RefObject<HTMLIFrameElement | null> }) {
   const visible = useViewVisible();
   return visible ? <iframe ref={frame} title={t("Sandbox preview")} srcDoc={document} sandbox="allow-scripts"
@@ -39,8 +35,6 @@ function PreviewFrame({ document, width, frame }: { document: string; width: str
 
 export function SandboxView() {
   const me = useContext(HostContext)?.me;
-  // Legacy browser-only prototypes remain in the offline library. They are
-  // not silently assigned to whichever tenant/member signs in first.
   const key = me ? `${OWN_KEY}:${JSON.stringify([me.tenantId, me.principalId])}` : OWN_KEY;
   return <SnippetWorkbench key={key} storageKey={key} />;
 }

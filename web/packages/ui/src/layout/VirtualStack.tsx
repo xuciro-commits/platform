@@ -1,8 +1,6 @@
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, useState, type ReactNode } from "react";
 
-/** Measured, identity-keyed rows. A focused row stays mounted while its
- * controls (including portals) own focus. Offscreen local input is disposable. */
 export function VirtualStack<T>({ items, itemKey, renderItem, label, height = 560 }: {
   items: readonly T[]; itemKey: (item: T) => string; renderItem: (item: T, index: number) => ReactNode; label: string; height?: number;
 }) {

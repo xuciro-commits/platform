@@ -12,7 +12,6 @@ export type WidgetImplementation<Context> = { contract: WidgetContract; Renderer
 export const widgetContract = (id: string): WidgetContract | undefined => widgetContracts.find((contract) => contract.componentID === id);
 
 export type WidgetDefinition={configVersion:number};
-/** Runtime and authoring registrations consume the same complete contract set. */
 export function createWidgetDefinitions<T extends Record<WidgetID,WidgetDefinition>>(definitions:T){
  for(const id of Object.keys(definitions))if(!widgetContract(id))throw new Error(`Undeclared widget implementation: ${id}`);
  for(const contract of widgetContracts){
@@ -30,10 +29,6 @@ export function createWidgetDefinitions<T extends Record<WidgetID,WidgetDefiniti
  return Object.freeze({entries,resolve:(id:string,version:number):T[WidgetID]|undefined=>{const contract=widgetContract(id);return contract?.configVersion===version?entries[contract.componentID]:undefined;}});
 }
 
-/** Controlled build-time registration. Implementations must cover the shared
- * contract exactly; adding a manifest alone does not make a widget runnable.
- * There is no tenant script loading or permission policy in this registry.
- */
 export class WidgetRegistry<Context> {
   private readonly implementations: Readonly<Record<WidgetID, WidgetImplementation<Context>>>;
   constructor(implementations: Record<WidgetID, ComponentType<Context>|WidgetImplementation<Context>>) {

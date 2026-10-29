@@ -8,9 +8,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// A command that cannot be safely repeated first accepts an unknown outcome.
-// A crash after that append cannot turn the original pending effect into a
-// second physical action. The live attempt may still record its actual answer.
 func (t *Tenant) beginDispatchAttempt(x platform.Effect, at time.Time) bool {
 	if x.App != build.ID || x.Event != build.ID+"/dispatch" {
 		return true

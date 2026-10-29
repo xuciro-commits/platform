@@ -36,8 +36,6 @@ function Port({ port, index, count, input, compact, collapsed, direction }: {
   </>;
 }
 
-/** The BPMN outline of a compact shape: a diamond for a gateway, a ring for an
- * event whose thickness says start, middle or end, a doubled foot for a sub-process. */
 function Shape({ shape, notation, color }: { shape: FlowShape; notation: FlowNotation; color: string }) {
   const square = shape === "gateway" ? 76 : 58;
   return <svg className="platform-flow-outline" width={square} height={square} viewBox="0 0 100 100" aria-hidden="true">
@@ -47,7 +45,6 @@ function Shape({ shape, notation, color }: { shape: FlowShape; notation: FlowNot
   </svg>;
 }
 
-/** One visual contract for a step, whether a person is authoring it or watching it run. */
 export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
   const { definition: kind, compact, collapsedView: collapsed, direction } = data;
   const { onCollapse } = useContext(FlowInteraction);
@@ -66,8 +63,6 @@ export function FlowNodeView({ id, data, selected }: NodeProps<FlowShapeNode>) {
     {kind.outputs.map((port, i) => <Port key={`output:${port.id}`} port={port} index={i} count={kind.outputs.length} input={false} compact={!!compact} collapsed={collapsed} direction={direction} />)}
   </>;
 
-  // A compact drawing is a BPMN diagram: gateways and events are their own shapes
-  // with the name underneath, activities keep the block a reader can read at a glance.
   const looping = data.loop ?? loops.has(kind.id);
   if (compact && (shape === "gateway" || shape === "event")) {
     const box = flowShapeBox(shape);

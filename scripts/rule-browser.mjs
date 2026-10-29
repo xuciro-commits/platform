@@ -1,4 +1,3 @@
-// Build the trusted browser evaluator from the identical Go rule source.
 import {execFileSync} from "node:child_process";
 import {copyFileSync,mkdirSync,renameSync,rmSync} from "node:fs";
 import {fileURLToPath} from "node:url";

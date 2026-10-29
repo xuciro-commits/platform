@@ -1,6 +1,5 @@
 import type { Binding, Predicate, WorkflowDraft, WorkflowStep } from "./workflow-model";
 
-/** Stable data sockets for both the graph and inspector-created bindings. */
 export function workflowBindings(step: WorkflowStep): { port: string; binding?: Binding }[] {
   const bindings: { port: string; binding?: Binding }[] = [
     ...Object.entries(step.inputs ?? {}).map(([name, binding]) => ({ port: `input:${name}`, binding })),
@@ -16,7 +15,6 @@ export function workflowBindings(step: WorkflowStep): { port: string; binding?: 
   return bindings;
 }
 
-/** A graph edit changes the same nested binding as its inspector, never a dotted top-level field. */
 export function withWorkflowBinding(step: WorkflowStep, port: string, binding: Binding | undefined): WorkflowStep {
   if (port.startsWith("input:")) {
     const inputs = { ...step.inputs }, name = port.slice(6);
@@ -47,14 +45,12 @@ export function replaceReferences(step: WorkflowStep, old: string, next: string)
   return { ...result, next: step.next === old ? next || undefined : step.next, error: step.error === old ? next || undefined : step.error, body: step.body === old ? next || undefined : step.body,
     branches: step.branches?.map((name) => name === old ? next : name).filter(Boolean), cases: Object.fromEntries(Object.entries(step.cases ?? {}).map(([key, name]) => [key, name === old ? next : name])) };
 }
-/** Rename the declaration, its graph and data references, and its canvas position together. */
 export function renameWorkflowStep(draft: WorkflowDraft, old: string, name: string): WorkflowDraft {
   if (old === name || !/^[a-z][a-z0-9]*$/.test(name) || draft.steps.some((step) => step.name === name)) return draft;
   return { ...draft, steps: draft.steps.map((step) => ({ ...replaceReferences(step, old, name), name: step.name === old ? name : step.name })),
     layout: Object.fromEntries(Object.entries(draft.layout ?? {}).map(([id, point]) => [id === old ? name : id, point])) };
 }
 
-/** Explicit deletion shares graph, data and layout cleanup in both process editors. */
 export function removeWorkflowSteps(draft: WorkflowDraft, names: string[]): WorkflowDraft {
   const removed = new Set(names);
   return { ...draft, steps: draft.steps.filter((step) => !removed.has(step.name)).map((step) => names.reduce((result, name) => replaceReferences(result, name, ""), step)),

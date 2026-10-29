@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-// Policies owns tenant role, policy, team and project declarations. Identity
-// supplies member identifiers at the original console decision boundary.
 type Policies struct {
 	mu       sync.Mutex
 	host     platform.AppCatalog
@@ -81,10 +79,6 @@ func (d *Policies) accepted(apply func(*pb.ChangeRecord)) func(*pb.ChangeRecord)
 	return func(r *pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); apply(r) }
 }
 
-// Access configuration a tenant adds over what the apps declare: custom roles, policies and teams, each a record the console
-// decides, kept in the directory's state, applied to the apps' catalogs.
-
-// decideAccess decides roles, policies and teams. The console's lock is held.
 func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
@@ -100,7 +94,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 		}
 		app := d.host.App(p.App)
 		if app == nil || !c.Replaying && slices.Contains(app.Manifest().Actions.Roles(), id) && !app.Manifest().Actions.Custom(id) {
-			return nil, invalid // not over a role the app itself declares
+			return nil, invalid
 		}
 		for _, schema := range p.Actions {
 			if _, own := app.Manifest().Actions.Action(schema); !own {
@@ -176,7 +170,6 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 	return nil, invalid
 }
 
-// teamGrants are the grants a member holds through teams.
 func (d *Policies) TeamGrants(member string) []platform.Grant {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -189,7 +182,6 @@ func (d *Policies) TeamGrants(member string) []platform.Grant {
 	return out
 }
 
-// activePolicies are the tenant's policies as the engine reads them, today.
 func (d *Policies) activePolicies() []authz.Policy {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -213,8 +205,6 @@ func (d *Policies) activePolicies() []authz.Policy {
 	return out
 }
 
-// applyAccess puts the custom roles on the apps' catalogs and the policies in
-// their hands, after composition or a restore.
 func (d *Policies) applyAccess() {
 	if d.host == nil {
 		return
@@ -229,7 +219,6 @@ func (d *Policies) applyAccess() {
 	}
 }
 
-// Access is the tenant's configuration, sorted.
 func (d *Policies) Access() platform.AccessConfig {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -246,12 +235,6 @@ func (d *Policies) Access() platform.AccessConfig {
 	return out
 }
 
-// Auditor reads the tenant's administration surface and decides nothing.
-
-// Asset edit delegation (build projects).
-
-// decideProject applies the directory's project decisions. It follows
-// decideMember: a change returns a closure the ledger runs against the record.
 func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []string) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
@@ -286,7 +269,7 @@ func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []
 	if d.host == nil {
 		return nil, invalid
 	}
-	for _, e := range p.Members { // only members of this tenant may be named
+	for _, e := range p.Members {
 		if !slices.Contains(members, e.Member) {
 			return nil, invalid
 		}
@@ -301,7 +284,6 @@ func (d *Policies) decideProject(c platform.Caller, s *pb.Submission, members []
 	}, nil
 }
 
-// ProjectViews is the tenant's projects as the console reads them.
 func (d *Policies) ProjectViews() []platform.BuildProject {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -312,8 +294,6 @@ func (d *Policies) ProjectViews() []platform.BuildProject {
 	return out
 }
 
-// edits reports whether the member is an editor of a project that covers the
-// asset. An archived project delegates nothing.
 func (d *Policies) EditsProjectAsset(member string, ref platform.ProjectAsset) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -339,11 +319,6 @@ func covers(p platform.BuildProject, ref platform.ProjectAsset) bool {
 	return false
 }
 
-// projectGrants are the builder grants a member holds through projects
-// (WorkQueue #141): editor of a live project → builder in the
-// build app, `By: project:<id>`. The grant is real for reading, loading the
-// Studio and the action catalogue; delegatedBound keeps its writes to the
-// assets the projects name. Call with d.mu held.
 func (d *Policies) ProjectGrants(member string, agent bool) []platform.Grant {
 	d.mu.Lock()
 	defer d.mu.Unlock()

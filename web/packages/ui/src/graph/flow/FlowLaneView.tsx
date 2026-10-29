@@ -1,6 +1,3 @@
-// A BPMN lane band: the responsibility a set of steps sits inside.
-// It is scenery — never selected, never dragged, never connected, always behind the
-// steps — and its title reads along the band's leading edge the way paper BPMN does.
 import type { Node, NodeProps } from "@xyflow/react";
 import type { CSSProperties } from "react";
 import { cn } from "../../lib/cn";

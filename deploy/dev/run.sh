@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# One native API. Vite exposes the platform and its identity proxy at 8495.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 python3 deploy/local/bootstrap.py

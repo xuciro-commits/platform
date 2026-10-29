@@ -1,6 +1,3 @@
-// Command check-boundaries checks source imports even when build tags exclude
-// a production file on the checking machine. Counts and unrelated deletions
-// cannot excuse a reverse dependency or an anonymous public runtime probe.
 package main
 
 import (
@@ -23,9 +20,6 @@ import (
 	"strings"
 )
 
-// Existing structural debt is frozen, not an exemption from the import and
-// authorization rules below. There is deliberately no baseline-update mode.
-//
 //go:embed baseline.json
 var baselineJSON []byte
 
@@ -193,7 +187,6 @@ func contains(values []string, value string) bool {
 	return false
 }
 
-// Baseline edits may remove debt, never grandfather new or changed debt.
 func checkRatchet(previous, next sourceInventory) []string {
 	var failures []string
 	for dir, limit := range next.Packages {
@@ -221,7 +214,7 @@ func checkRatchet(previous, next sourceInventory) []string {
 func committedBaselines(root string) ([]sourceInventory, error) {
 	if _, err := os.Stat(filepath.Join(root, ".git")); os.IsNotExist(err) {
 		return nil, nil
-	} // exported source has only the sealed baseline
+	}
 	const path = "capabilities/server/cmd/check-boundaries/baseline.json"
 	listed, err := exec.Command("git", "-C", root, "ls-tree", "--name-only", "HEAD", "--", path).Output()
 	if err != nil {
@@ -229,11 +222,9 @@ func committedBaselines(root string) ([]sourceInventory, error) {
 	}
 	if len(bytes.TrimSpace(listed)) == 0 {
 		return nil, nil
-	} // first installation of the guard
+	}
 	var previous []sourceInventory
 	for _, revision := range []string{"HEAD", "HEAD^"} {
-		// Also check the parent when available: committing a raised budget
-		// must not make that budget approve itself. Shallow exports may lack it.
 		if revision == "HEAD^" && exec.Command("git", "-C", root, "cat-file", "-e", revision+":"+path).Run() != nil {
 			continue
 		}
@@ -287,8 +278,6 @@ func visualDeclarations(path string, file *ast.File, set *token.FileSet) map[str
 		ast.Inspect(declaration, func(node ast.Node) bool {
 			switch n := node.(type) {
 			case *ast.SelectorExpr:
-				// Filesystem separators and observable metric gauges are not
-				// visual widgets. Do not freeze unrelated recovery/telemetry code.
 				if n.Sel.Name == "Separator" || n.Sel.Name == "PathSeparator" || strings.HasSuffix(n.Sel.Name, "ObservableGauge") {
 					return false
 				}
@@ -364,8 +353,6 @@ func checkFile(path string, file *ast.File, set *token.FileSet) []string {
 			switch n := node.(type) {
 			case *ast.BasicLit:
 				value, _ := strconv.Unquote(n.Value)
-				// HTTP route declarations ("POST /...") are inbound services,
-				// not outbound model clients.
 				rawAI = n.Kind == token.STRING && !strings.ContainsAny(value, " \t\r\n") && (strings.Contains(value, "/chat/completions") || strings.Contains(value, "/embeddings"))
 			case *ast.CallExpr:
 				if method, ok := n.Fun.(*ast.SelectorExpr); ok {
@@ -379,7 +366,7 @@ func checkFile(path string, file *ast.File, set *token.FileSet) []string {
 		})
 	}
 	if strings.Contains(path, "/cmd/") {
-		return failures // binaries and generators compose compiled implementations
+		return failures
 	}
 	root := strings.HasPrefix(path, "capabilities/server/") && !strings.Contains(strings.TrimPrefix(path, "capabilities/server/"), "/")
 	public := strings.HasPrefix(path, "capabilities/server/platform/")
@@ -499,7 +486,7 @@ func checkFile(path string, file *ast.File, set *token.FileSet) []string {
 			}
 			if strings.HasSuffix(path, "/knowledge.go") && function.Name.Name == "knowledgeSourceReadable" {
 				continue
-			} // source-grant fact resolver consumed by authorizeDepth
+			}
 			reads, guarded := false, false
 			ast.Inspect(function.Body, func(node ast.Node) bool {
 				var accessed ast.Expr
@@ -539,7 +526,7 @@ func memberProjection(function *ast.FuncDecl) bool {
 			}
 			if name, ok := typ.(*ast.Ident); ok && (name.Name == "recordStore" || name.Name == "runtime" || name.Name == "stagedDecision") {
 				return false
-			} // namespace-bound owner storage and private writes
+			}
 		}
 	}
 	if function.Type.Params != nil {

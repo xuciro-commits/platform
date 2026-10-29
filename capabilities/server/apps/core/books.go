@@ -14,42 +14,25 @@ import (
 	"platformserver/platform"
 )
 
-// The books (Ⅱ): the transaction skeleton SAP keeps in
-// code, as shared configuration every application posts into. A chart of
-// accounts, fiscal periods that open and close, and journal entries - the
-// double-entry record of what happened in money. Applications do not write
-// journals by hand: a builder action declares what it posts (apps/build
-// Journal), and the host lands one balanced entry per accepted decision,
-// idempotent by the decision's change id. Stock, receivables and payables
-// stay subledgers on the applications' own balances; the journal
-// is the general ledger they summarise into.
 const (
-	AccountType = "core.account"
-	PeriodType  = "core.period"
-	JournalType = "core.journal"
-	// Accountant keeps the chart and the periods, posts and reverses by hand; Steward may read.
-	Accountant = "accountant"
-	// ReferenceReader reads posting accounts and periods, without maintaining
-	// master data or accessing journals and their balances.
-	ReferenceReader = "reference-reader"
-	// ReadTrialBalance is the per-account debit and credit of a period.
+	AccountType      = "core.account"
+	PeriodType       = "core.period"
+	JournalType      = "core.journal"
+	Accountant       = "accountant"
+	ReferenceReader  = "reference-reader"
 	ReadTrialBalance = "core.trial-balance"
 )
 
-// Account is one line of the chart of accounts.
 type Account struct {
 	platform.Record
-	Code   string `json:"code" field:"required,search" help:"Unique, sorts the chart, e.g. 1403" source:"record"`
-	Name   string `json:"name" field:"required,search" source:"record"`
-	Kind   string `json:"kind" field:"required" choices:"asset,liability,equity,revenue,expense" source:"record"`
-	Parent string `json:"parent,omitempty" title:"Under" help:"The summary account's code"`
-	// Posting says whether entries hit it directly; summary accounts only total.
-	Posting bool `json:"posting" title:"Postable"`
-	Active  bool `json:"active" title:"Active"`
+	Code    string `json:"code" field:"required,search" help:"Unique, sorts the chart, e.g. 1403" source:"record"`
+	Name    string `json:"name" field:"required,search" source:"record"`
+	Kind    string `json:"kind" field:"required" choices:"asset,liability,equity,revenue,expense" source:"record"`
+	Parent  string `json:"parent,omitempty" title:"Under" help:"The summary account's code"`
+	Posting bool   `json:"posting" title:"Postable"`
+	Active  bool   `json:"active" title:"Active"`
 }
 
-// Period is a fiscal period. Entries dated inside it belong to it while it is
-// open; once closed, a late entry goes to the next open period and says so.
 type Period struct {
 	platform.Record
 	Code  string `json:"code" field:"required,search" help:"e.g. 2026-10" source:"record"`
@@ -157,8 +140,6 @@ func computeJournal(record any) {
 
 const waitingForFiscalPeriod = "Waiting for an open fiscal period"
 
-// CheckPosting classifies delivery while using the same rule as manual entry.
-// The original kernel refusal remains available to accountants unchanged.
 func (*Core) CheckPosting(c platform.Caller, j Journal) (platform.Outcome, *kernel.Error) {
 	computeJournal(&j)
 	return checkJournal(c, &j)
@@ -176,8 +157,6 @@ func (*Core) CheckReversal(c platform.Caller, id string, payload json.RawMessage
 	return outcome, err
 }
 
-// HistoricalPostingMessage adapts outcomes written before public delivery
-// messages existed. New delivery checks never classify an error's wording.
 func (*Core) HistoricalPostingMessage(detail string) string {
 	if strings.Contains(detail, "closed") || strings.Contains(detail, "fiscal period") {
 		return waitingForFiscalPeriod
@@ -185,8 +164,6 @@ func (*Core) HistoricalPostingMessage(detail string) string {
 	return ""
 }
 
-// validateJournal is the whole discipline of the books: balanced lines on
-// postable accounts, dated into an open period - or the next one, visibly.
 func validateJournal(c platform.Caller, record any) *kernel.Error {
 	_, err := checkJournal(c, record.(*Journal))
 	return err
@@ -223,7 +200,7 @@ func checkJournal(c platform.Caller, j *Journal) (platform.Outcome, *kernel.Erro
 		return outcome, refuse("The posting date is YYYY-MM-DD")
 	}
 	if j.Period != "" && j.Revision > 0 {
-		return platform.Outcome{Result: "delivered"}, nil // an existing entry keeps its period
+		return platform.Outcome{Result: "delivered"}, nil
 	}
 	periods, _, _ := platform.Find[Period](c, platform.Query{Limit: 500})
 	periods = slices.DeleteFunc(periods, func(p Period) bool { return p.Archived })
@@ -297,9 +274,6 @@ func firstNonEmpty(a, b string) string {
 	return b
 }
 
-// nextNumber numbers an entry within its period: <period>-<n>, gapless in
-// order of posting. The chart's own numbering ranges for documents live with
-// the applications (apps/build Numbering); the journal's is this one.
 func nextNumber(c platform.Caller, period string) string {
 	entries, _, _ := platform.Find[Journal](c, platform.Query{Domain: json.RawMessage(`[["period","=",` + strconv(period) + `]]`), Limit: 5000})
 	return fmt.Sprintf("%s-%04d", period, len(entries)+1)
@@ -307,7 +281,6 @@ func nextNumber(c platform.Caller, period string) string {
 
 func strconv(s string) string { b, _ := json.Marshal(s); return string(b) }
 
-// TrialBalance is the per-account total of a period.
 type TrialBalance struct {
 	Period   string             `json:"period" source:"user-input"`
 	Rows     []TrialBalanceLine `json:"rows"`
@@ -323,15 +296,13 @@ type TrialBalanceLine struct {
 	Kind          string   `json:"kind" source:"record" from:"AccountSource#kind"`
 	Debit         float64  `json:"debit" source:"generated" from:"Sources"`
 	Credit        float64  `json:"credit" source:"generated" from:"Sources"`
-	Balance       float64  `json:"balance" source:"generated" from:"Sources"` // debit minus credit
+	Balance       float64  `json:"balance" source:"generated" from:"Sources"`
 	Entries       int      `json:"entries" source:"generated" from:"Sources"`
 	AccountSource string   `json:"-"`
 	Sources       []string `json:"-"`
 }
 
 func trialBalance(c platform.Caller, period string) (TrialBalance, *kernel.Error) {
-	// A tenant total requires the whole journal scope. An empty filtered
-	// journal list does not prove that its balance is zero.
 	for _, entity := range bookEntities() {
 		if entity.Type == JournalType && !c.Automation && entity.Scope.LevelFor(c.RolesIn(ID)) != platform.ScopeTenant {
 			return TrialBalance{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The trial balance requires access to all journals")
@@ -375,8 +346,6 @@ func trialBalance(c platform.Caller, period string) (TrialBalance, *kernel.Error
 	return out, nil
 }
 
-// DefaultAccounts is a small chart a tenant can start from: enough for goods
-// receipts, invoices and payments; stewards extend it.
 func DefaultAccounts() []any {
 	mk := func(code, name, kind, parent string, posting bool) Account {
 		return Account{Record: platform.Record{ID: "acc-" + code}, Code: code, Name: name, Kind: kind, Parent: parent, Posting: posting, Active: true}
@@ -390,7 +359,6 @@ func DefaultAccounts() []any {
 	}
 }
 
-// DefaultPeriods are the twelve months of year.
 func DefaultPeriods(year int) []any {
 	var out []any
 	for m := time.January; m <= time.December; m++ {

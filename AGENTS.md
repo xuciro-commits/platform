@@ -18,6 +18,7 @@
 4. **允许替换旧设计。** 系统应该随理解加深而更合理，而不是更复杂。重复路径、兼容层和"以后可能用到"的抽象都算债务。
 5. **先读后改。** 改一块之前读它和它的调用方；沿用现有命名、结构与注释密度。
 6. **最小范围。** 不多做邻接功能，不顺手重构无关代码，不为假想的未来设计。
+7. **不写代码注释。** 源码、脚本与配置不留注释（`//go:` 等工具指令、`@ts-`、shebang 除外）；原因与约束写进 OpenSpec、Architecture 或提交信息，避免污染后续开发上下文。
 
 ## 判断标准
 
@@ -59,14 +60,14 @@
 | 文档、规则、注释 | 链接与引用一致、`git diff --check`；涉及 OpenSpec 时加 `make check-specs`，格式校验不等于业务测试 |
 | 内核规范 / 向量 / 实现 | `make verify`（含 `scripts/verify.sh contract`）；受影响的 Rust/TypeScript 边缘 |
 | Lean 模型 | `scripts/verify.sh formal` |
-| Go 宿主 | `make check` + `make test-go PKG=<改动包> RUN=<owner 测试>`；改应用 API 或组合时加 `scripts/verify.sh composition` |
+| Go 宿主 | `make check`；改应用 API 或组合时加 `scripts/verify.sh composition` |
 | 应用 / 协议 | 应用通过原包内验收计划维护；平台机制修改运行对应 owner 检查与适用的通用浏览器路线，另跑 `scripts/verify.sh composition` |
-| Web | `make check-web`（生成一致性、Catalog、全部包 tsc）；只在对应包运行受影响的单元测试，`make test` 是完整测试入口 |
-| 成组交付或发布节点 | 选一条浏览器路线 `make e2e SPEC=<name>`；完整浏览器任务用 `make e2e`，发布构建与契约检查用 `make verify` |
-| 结构整理（搬文件、拆函数） | 整块完成后按受影响语言运行构建、类型与原边界检查；有实际行为影响时再选对应测试，不默认跑整个宿主测试、不为搬迁新增测试 |
-| 部署、恢复、存储 | `make rehearse`；需要真实 PostgreSQL 的用例设 `PLATFORM_TEST_DATABASE`，未设置即跳过，**跳过的不能报为通过** |
+| Web | `make check-web`（生成一致性、Catalog、全部包 tsc） |
+| 成组交付或发布节点 | 发布构建与契约检查用 `make verify` |
+| 结构整理（搬文件、拆函数） | 整块完成后按受影响语言运行构建、类型与原边界检查 |
+| 部署、恢复、存储 | 本仓库已删除全部测试代码与演练脚本；没有运行或观察的行为不能报为通过，需要时明说未验证 |
 
-测试写法：浏览器 spec 用 `web/e2e/tests/kit.ts`（`builder`/`editor`/`runtime`/`shots`），一个 spec 一条路线；宿主测试用 `capabilities/server/testkit_test.go`（`composeTenant`/`builderTenant`/`seatOf`/`decide`/`refuse`/`publishObject`）。不手写登录、对象、页面、发布或 `pb.Submission`。不写像素断言、为每种设备复制的路线、或服务端已证明规则的浏览器重测。外观与手感靠截图和负责人走查。
+仓库不含测试代码与浏览器路线（`*_test.go`、`*.test.*`、`web/e2e` 均已删除），也不自动新增；契约向量 `contract/vectors` 与形式化证明保留。外观与手感靠截图和负责人走查。
 
 CI 只在 `v*` 标签上运行，不要依赖它发现问题。
 

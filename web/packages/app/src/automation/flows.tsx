@@ -3,7 +3,6 @@ import { ChainGraph, useHost, useOpenRecord, useReadQuery } from "../index";
 
 import { useRunControl } from "./use-run-control";
 
-/** One runtime record view for every member; original reads/actions authorize access. */
 export function FlowInstanceView({ id, application, project }: { id: string; application?: string; project?: string }) {
   const { open } = useWorkspace(), openRecord = useOpenRecord(), { can } = useHost();
   const actions = useRunControl("flow.instance", id);

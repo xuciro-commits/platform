@@ -29,8 +29,6 @@ import (
 	"time"
 )
 
-// WasmEngine is used only by the separate worker program. A shared compilation
-// cache contains immutable code, while every call owns its runtime/stdio/memory.
 type WasmEngine struct {
 	cache   wazero.CompilationCache
 	slots   chan struct{}
@@ -79,8 +77,6 @@ func (e *WasmEngine) Execute(ctx context.Context, q platform.WasmRequest) (platf
 	cache := e.cache
 	if !e.modules[q.Digest] {
 		if len(e.modules) >= 64 || e.bytes+len(q.Module) > 64<<20 {
-			// Cache admission is an optimisation, never an execution gate.
-			// Oversized working sets use a call-owned disposable cache.
 			cache = wazero.NewCompilationCache()
 			defer cache.Close(context.Background())
 		} else {
@@ -276,8 +272,6 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	return b.buf.Write(p)
 }
 
-// The worker listens only on an owner-only Unix socket, never a tenant HTTP
-// route. Its process receives no database/store credentials or application API.
 func ServeWasmWorker(ctx context.Context, socket string, concurrency int) error {
 	if socket == "" {
 		return fmt.Errorf("worker requires a Unix socket")
@@ -422,8 +416,6 @@ func (s socketCodeCompiler) Compile(ctx context.Context, q platform.CodeBuildReq
 	return answer.Result, answer.Module, nil
 }
 
-// The build driver owns only container creation. It never executes Wasm or
-// receives business/database credentials; compiler guests inherit no socket.
 func ServeCodeBuilder(ctx context.Context, socket string, compiler ContainerCompiler) error {
 	if socket == "" || !pinnedImage.MatchString(compiler.GoImage) || !pinnedImage.MatchString(compiler.TinyGoImage) {
 		return fmt.Errorf("code builder requires a Unix socket and both pinned toolchains")
@@ -508,8 +500,6 @@ func (c ContainerCompiler) Compile(ctx context.Context, q platform.CodeBuildRequ
 	if err != nil {
 		return result, nil, fmt.Errorf("source: %w", err)
 	}
-	// Fixed commands and an offline stdlib-only package. Build scripts, module
-	// downloads, mounts, credentials and the daemon socket never enter the guest.
 	command := "go build -trimpath -ldflags='-s -w' -o /tmp/module.wasm . >&2 && cat /tmp/module.wasm"
 	if q.Language == "tinygo" {
 		command = "tinygo build -target=wasip1 -o /tmp/module.wasm . >&2 && cat /tmp/module.wasm"
@@ -555,8 +545,6 @@ func (c ContainerCompiler) Compile(ctx context.Context, q platform.CodeBuildRequ
 	return result, module.buf.Bytes(), nil
 }
 
-// GenerateComputeSDK emits explicit typed decoding/encoding. TinyGo uses no
-// reflection-based encoding/json path. The owner's schema remains authoritative.
 func GenerateComputeSDK(input, output platform.ValueSchema, bindingABI ...string) ([]byte, error) {
 	abi := platform.WasmCommandABI
 	if len(bindingABI) > 0 && bindingABI[0] != "" {
@@ -710,8 +698,6 @@ func jsonFields(raw []byte)(map[string][]byte,error){raw=bytes.TrimSpace(raw);if
 func jsonItems(raw []byte)([][]byte,error){raw=bytes.TrimSpace(raw);if len(raw)<2||raw[0]!='['||raw[len(raw)-1]!=']'{return nil,errors.New("array expected")};raw=bytes.TrimSpace(raw[1:len(raw)-1]);out:=[][]byte{};for len(raw)>0{end:=valueEnd(raw);out=append(out,bytes.TrimSpace(raw[:end]));raw=bytes.TrimSpace(raw[end:]);if len(raw)>0{if raw[0]!=','{return nil,errors.New("separator expected")};raw=bytes.TrimSpace(raw[1:])}};return out,nil}
 `
 
-// A crashed stateless worker leaves a Unix socket in the shared runtime
-// directory. Remove only a verified dead socket, never a live peer or file.
 func listenComputeSocket(path string) (net.Listener, error) {
 	if info, err := os.Lstat(path); err == nil {
 		if info.Mode()&os.ModeSocket == 0 {

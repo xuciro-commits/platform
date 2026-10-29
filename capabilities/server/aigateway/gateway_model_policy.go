@@ -110,8 +110,6 @@ func CatalogModel(pv platform.AIProvider, raw json.RawMessage, at time.Time) (pl
 	if c.OutputTokens == nil {
 		c.OutputTokens = d.MaxTokens
 	}
-	// Purpose is inferred only from declared modalities or API methods. A bare
-	// model ID keeps its purpose unknown and can be explicitly tried by an admin.
 	if len(c.InputModalities) == 0 {
 		c.InputModalities = d.Architecture.Input
 	}
@@ -186,8 +184,6 @@ func PurposeSetting(purpose string) (string, string) {
 	}
 }
 
-// Model quality evidence uses the same effective configuration identity in
-// evaluation, publication gates and their read-only readiness projections.
 func ConfigurationDigest(model platform.AIModel, provider platform.AIProvider, binding *platform.AIModelBinding) (string, error) {
 	identity := []any{model, provider}
 	if binding != nil {

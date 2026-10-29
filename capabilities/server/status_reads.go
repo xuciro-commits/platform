@@ -11,8 +11,6 @@ import (
 
 const statusReadLimit = 64
 
-// statusReadSchedule is disposable polling coordination under Tenant.mu.
-// It never owns a confirmation/dispatch outcome or an automatic resend policy.
 type statusReadSchedule map[string]statusReadAttempt
 
 type statusReadAttempt struct {
@@ -51,9 +49,6 @@ func (s statusReadSchedule) finished(key string, next time.Time) {
 	s[key] = statusReadAttempt{Due: next}
 }
 
-// statusReadStamp freezes the reader identities and mutable access inputs while
-// the tenant lane is released. A later read recomputes it before accepting the
-// evidence. Credentials remain solely in this transient digest, never a result.
 func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, connectionRaw json.RawMessage, localRecords bool) (string, bool) {
 	member, found := t.Member(applicant)
 	if !found {
@@ -82,8 +77,6 @@ func (t *Tenant) statusReadStamp(revision uint32, applicant string, sourceRaw, c
 	return stamp, err == nil
 }
 
-// Published status reads use the declaration's accepted publisher, not the
-// actor of an unrelated explicit source pull.
 func (t *Tenant) sourcePublisher(source build.Source) (platform.Member, bool) {
 	member, known := t.Member(source.Publisher)
 	if known && source.PublisherScopes != "" && json.Unmarshal([]byte(source.PublisherScopes), &member.Scopes) != nil {

@@ -3,9 +3,6 @@ import { t, useUnsavedChanges, useViewVisible } from "@platform/ui";
 import { useHost } from "../index";
 import { createWorkViews } from "../work/service";
 
-/** Presentation state for original Work/Flow/Console runtime commands. The
- * existing work service gates duplicate decisions; durable unknown requests
- * remain solely in the kernel outbox, never in a second retry queue. */
 export function useRunControl(type: "flow.instance" | "agent.run" | "platform.effect" | "build.dispatch", id: string) {
   const host = useHost(), visible = useViewVisible();
   const scope = JSON.stringify([host.client.connection.token, host.client.connection.tenant, host.me.principalId, type, id]);

@@ -20,10 +20,8 @@ NATIVE_COMPOSE = [*COMPOSE, '-f', 'deploy/dev/compose.native.yaml']
 API_PORT = 18495
 COMPUTE = ROOT / '.build/dev/compute'
 
-
 def run(command):
     subprocess.run(command, cwd=ROOT, check=True)
-
 
 def configuration():
     spec = importlib.util.spec_from_file_location('local_bootstrap', ROOT / 'deploy/local/bootstrap.py')
@@ -31,14 +29,11 @@ def configuration():
     spec.loader.exec_module(module)
     return module.bootstrap(root=ROOT)
 
-
 def ports(state):
     return [('api', API_PORT), ('web', state.get('webPort', 8495))]
 
-
 def public_url(state):
     return state.get('url', 'http://localhost:8495').rstrip('/')
-
 
 def read_state():
     try:
@@ -46,33 +41,27 @@ def read_state():
     except (OSError, ValueError):
         return {}
 
-
 def write_state(state):
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(state))
 
-
 def selected_mode():
     state = read_state()
     return state.get('mode', 'docker')
-
 
 def stamp(pid):
     result = subprocess.run(['ps', '-p', str(pid), '-o', 'lstart='],
                             capture_output=True, text=True)
     return ' '.join(result.stdout.split()) if result.returncode == 0 else ''
 
-
 def _processes():
     result = subprocess.run(['ps', '-axo', 'pid=,ppid=,stat=,lstart='], capture_output=True, text=True, check=True)
     rows = [line.split() for line in result.stdout.splitlines()]
     return {int(row[0]): (int(row[1]), ' '.join(row[3:])) for row in rows if len(row) == 8 and not row[2].startswith('Z')}
 
-
 def _matches(process, table):
     current = table.get(process.get('pid'))
     return bool(current and process.get('stamp') and current[1] == process['stamp'])
-
 
 def _descends(pid, parent, table):
     while pid in table:
@@ -81,12 +70,10 @@ def _descends(pid, parent, table):
         pid = table[pid][0]
     return False
 
-
 def _owned(roots, table):
     parents = [root['pid'] for root in roots if _matches(root, table)]
     return {pid: {'pid': pid, 'stamp': row[1]} for pid, row in table.items()
             if any(_descends(pid, parent, table) for parent in parents)}
-
 
 def _listeners(port):
     result = subprocess.run(['lsof', '-nP', '-t', f'-iTCP:{port}', '-sTCP:LISTEN'], capture_output=True, text=True)
@@ -94,10 +81,8 @@ def _listeners(port):
         raise RuntimeError(f'无法核对本地端口 {port} 的进程归属。')
     return {int(pid) for pid in result.stdout.split()}
 
-
 def alive(state):
     return _matches(state, _processes())
-
 
 def native_listeners(state=None, table=None):
     state = read_state() if state is None else state
@@ -126,7 +111,6 @@ def native_listeners(state=None, table=None):
             waiting = True
     return None if waiting else bound
 
-
 def running_binary(pid, binary):
     binary = Path(binary).resolve()
     expected, inode = str(binary), None
@@ -139,7 +123,6 @@ def running_binary(pid, binary):
         elif line == 'n' + expected and inode == str(binary.stat().st_ino):
             return True
     return False
-
 
 def _healthy(state=None):
     base = public_url(read_state() if state is None else state)
@@ -157,13 +140,11 @@ def _healthy(state=None):
     except (OSError, ValueError):
         return False
 
-
 def ready(state=None):
     try:
         return bool(native_listeners(state)) and _healthy(state)
     except (OSError, RuntimeError):
         return False
-
 
 def _stop_native_processes(roots, known=None, grace=8, first_signal=signal.SIGINT):
     known, sent = dict(known or {}), set()
@@ -189,20 +170,16 @@ def _stop_native_processes(roots, known=None, grace=8, first_signal=signal.SIGIN
                     pass
                 sent.add(key)
         time.sleep(0.1)
-    # Air starts its host in a separate process group. Check its captured
-    # descendants, never kill an unrelated listener that acquired the port.
     table = _processes()
     for _, port in ports(read_state()):
         if any(_matches(known.get(pid, {}), table) for pid in _listeners(port)):
             raise RuntimeError(f'当前本地环境仍占用端口 {port}，未切换宿主。')
-
 
 def stop():
     state = read_state()
     mode = selected_mode()
     _stop_native_processes([state, *state.get('children', [])], grace=15, first_signal=signal.SIGTERM)
     write_state({'mode': mode, 'status': 'stopped'})
-
 
 def serve():
     config = configuration()
@@ -274,7 +251,6 @@ def serve():
             child.wait()
         write_state({'mode': 'native', 'status': 'stopped'})
 
-
 def local():
     config = configuration()
     if alive(read_state()) and ready() and public_url(read_state()) == config['PLATFORM_PUBLIC_URL'].rstrip('/'):
@@ -306,13 +282,11 @@ def local():
         stop()
         raise
 
-
 def prepare_docker():
     configuration()
     stop()
     write_state({'mode': 'docker', 'status': 'starting'})
     run(COMPOSE + ['up', '-d', '--wait', '--force-recreate', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
-
 
 def docker():
     configuration()
@@ -322,7 +296,6 @@ def docker():
     if dirty:
         raise RuntimeError('请先提交源码再切到 Docker，以便核对镜像版本；本地环境仍保留运行。')
     run(['env', 'PLATFORM_LOCAL_MODE=docker', 'deploy/local/update.sh'])
-
 
 if __name__ == '__main__':
     try:

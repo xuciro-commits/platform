@@ -1,12 +1,8 @@
-// Settings: flows, agents and their evaluations.
 import { Records, ModelPicker, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
 import { ContextHelp, Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t, Chart} from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 
-// Flows: the flows the tenant's apps declare, their instances, and
-// one instance drawn with the path it took and why; administrators retry,
-// skip, cancel or move stuck and running instances.
 export function Flows() {
   const flows = useRead<FlowDefinition[]>("/v1/flows").data ?? [];
   const [shown, setShown] = useState<string>();
@@ -32,9 +28,6 @@ export function Flows() {
   );
 }
 
-// Agents: the agents the apps declare with their tools and budgets,
-// every run with its trace, and evaluations of a candidate model against what
-// people confirmed or corrected.
 export function Agents() {
   const agents = useRead<AgentInfo[]>("/v1/agents").data ?? [];
   const columns: ColumnDef<AgentInfo, any>[] = [
@@ -91,8 +84,6 @@ export function Evaluations() {
 
 const switches = defineStatuses({ working: { label: t("Working"), tone: "success" }, suspended: { label: t("Suspended"), tone: "danger" } });
 
-// Every agent, declared and outside: what it did, what it
-// cost, what people made of its work, and the switch that stops it.
 function AgentsOverview() {
   const { decide, can } = useHost();
   const rows = useRead<Api.AgentOverview[]>("/v1/agent-overview");

@@ -1,9 +1,5 @@
 import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { sourceFieldInput } from "@platform/app";
-// One draft session over a `build.object` record, shared by the object type
-// workbench and the action type workbench: both edit the same
-// record through its own action, explicitly save it and publish it; the host checks
-// everything again at publication.
 import { useActionTrial, useHost, useReadQuery } from "@platform/app";
 import { notify, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
@@ -47,8 +43,6 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const issues = [...conversionError ? [conversionError] : [], ...(process.createTransaction ? transactionIssues(process.createTransaction).map(issue => `${t("Creation transaction")}: ${transactionIssueText(issue, t)}`) : []), ...process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`))];
   const change = (next: Process) => {
     if(lock.current || conversionError)return;
-    // Inspector rows have no serialized UI ids. Move their buffers with the
-    // original row when a sibling is removed or reordered; renames keep the slot.
     const indexOf=(before:unknown[],after:unknown[],at:number)=>{const found=after.indexOf(before[at]);return found>=0?found:before.length===after.length?at:-1;};
     const collections={field:"fields",state:"states",action:"actions",access:"access",constraint:"constraints",recordSet:"sets",protocol:"protocols"} as const;
     const parts={parameter:"inputs"} as const;

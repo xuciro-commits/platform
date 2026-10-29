@@ -1,14 +1,7 @@
-// Settings: documents and the glossary.
 import { Records, useDefinitions, useHost, useReadQuery, type Passage } from "@platform/app";
 import { Button, Card, Form, Input, Markdown, Panel, Tag, t } from "@platform/ui";
 import { useState } from "react";
 
-// Where a term is actually felt: the host validates RefersTo when
-// the term is saved (knowledge.go, host.Declares), Search proposes entity names
-// whose title, plural, synonyms or glossary terms contain the word
-// (languages.go, names()), and an agent's prompt carries the glossary of the app
-// it runs in (glossary(app)). This panel shows that reach term by term instead
-// of leaving the reader to take it on faith.
 function GlossaryReach() {
   const terms = useReadQuery<{ records?: { id: string; term: string; synonyms?: string; refersTo?: string; apps?: string[] }[] }>("/v1/records/knowledge.term?limit=200").data?.records ?? [];
   const { data } = useDefinitions();
@@ -39,7 +32,6 @@ function GlossaryReach() {
   </Panel>;
 }
 
-// The tenant's glossary: its own words, layered on the model.
 export function Glossary() {
   return (
     <>
@@ -49,8 +41,6 @@ export function Glossary() {
   );
 }
 
-// Knowledge: documents agents and members find by words and, with
-// an embedding model, by meaning; each is read by members of the apps it names.
 export function Knowledge() {
   const { client } = useHost();
   const [q, setQ] = useState("");

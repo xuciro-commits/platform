@@ -63,8 +63,6 @@ type ActiveVersion struct {
 	At        time.Time
 }
 
-// functionRun is a read projection of the function owner's already authorized
-// row. It does not compile, adopt or execute function declarations.
 type functionRun struct {
 	platform.Record
 	Applications                                                []platform.AssetBinding
@@ -75,10 +73,6 @@ type functionRun struct {
 	CostReported, Withheld                                      bool
 }
 
-// Applications lists every application the member may open. It reads the same
-// member-filtered definitions the workspace already discovers: an application
-// is offered when at least one of its pages is, and a page is offered when the
-// member may read what it shows.
 func Applications(definitions []platform.Definition) []platform.ApplicationView {
 	pages := map[string]*platform.Page{}
 	for i := range definitions {
@@ -114,10 +108,6 @@ func Applications(definitions []platform.Definition) []platform.ApplicationView 
 	return out
 }
 
-// platform.PageView resolves one page for the caller: application by name (an owner may
-// be named when two applications share a name), page by name. The page's object
-// comes back as the caller sees it, and only the page actions the caller's
-// catalog carries are offered.
 func PageView(definitions []platform.Definition, entities []platform.EntityInfo, catalog []platform.Action, app, owner, page string) (platform.PageView, *kernel.Error) {
 	var application *platform.Definition
 	for i := range definitions {
@@ -190,11 +180,8 @@ func PageView(definitions []platform.Definition, entities []platform.EntityInfo,
 	return view, nil
 }
 
-// pageKey is how an application finds its pages in the same owner's registry.
 func pageKey(app, name string) string { return app + "\x00" + name }
 
-// indexIn orders pages as the application declares them; a page the list does
-// not name comes after those it does.
 func indexIn(names []string, name string) int {
 	if i := slices.Index(names, name); i >= 0 {
 		return i
@@ -202,8 +189,6 @@ func indexIn(names []string, name string) int {
 	return len(names)
 }
 
-// bindApplications freezes memberships alongside the original run/intent.
-// Several artifacts may use the same resource; these bindings grant nothing.
 func (ctx Context) Bind(resource platform.AssetRef, release, dependencies string, jobOwner ...string) ([]platform.AssetBinding, error) {
 	available, err := ctx.Assets()
 	if err != nil {
@@ -299,8 +284,6 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Application is unavailable to this member")
 	}
 	out.Title = app.Application.Title
-	// Current and retained membership are indexed independently. Removing a
-	// resource today must not hide a run started with an earlier application.
 	current, graphs, graphErr := ctx.Graphs(ref)
 	if graphErr != nil {
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application runtime dependencies are unavailable")
@@ -426,8 +409,6 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 					}
 				}
 			}
-			// Compensation replaces the failed token. Its reason belongs to
-			// this outcome; retry/fault history does not describe a recovered run.
 			if !x.Withheld && run.Error == "" && (x.State == "compensating" || x.State == "compensated") {
 				for i := len(x.Trace) - 1; i >= 0; i-- {
 					line := x.Trace[i]
@@ -481,8 +462,6 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 			appendRun(run)
 		}
 	}
-	// Original operationResult rechecks the initiating member and every source;
-	// holding a console role alone does not grant another person's call output.
 	for _, computation := range ctx.Computations(m) {
 		effect, binding, result := computation.Effect, computation, computation.Result
 		resource := platform.AssetRef{App: effect.App, Kind: platform.AssetCompute, Name: binding.Ref.Name}
@@ -600,8 +579,6 @@ func (ctx Context) Runs(m platform.Member, ref platform.AssetRef, offset, limit 
 			owners[resource.App] = true
 		}
 		for _, task := range tasks {
-			// A scheduler job belongs to its original owner and may serve
-			// several application artifacts. It is labelled as shared work.
 			if task.Kind != "job" || !belongs(task.Applications) && !owners[task.App] {
 				continue
 			}
@@ -664,8 +641,6 @@ func RunGraph(root platform.AssetRef, assets map[platform.AssetRef]platform.Rele
 	return graph
 }
 
-// The canonical release owner supplies published flow/compute dependencies;
-// the runtime view does not reconstruct them from menu labels or draft data.
 func (ctx Context) Graphs(root platform.AssetRef) (map[platform.AssetRef]platform.ReleaseAsset, map[string]map[platform.AssetRef]bool, error) {
 	available, err := ctx.Assets()
 	if err != nil {
@@ -702,8 +677,6 @@ func operationStartupVersion(call platform.OperationCall) string {
 	return ""
 }
 
-// Original migration records and installed extension declarations remain the
-// authorities. A declared retention duration does not invent a deletion job.
 func (ctx Context) maintenance(artifact platform.ApplicationArtifact) platform.ApplicationMaintenance {
 	out := platform.ApplicationMaintenance{Extensions: []platform.ApplicationExtension{}, Retention: []platform.ApplicationRetention{}}
 	models := map[string]bool{}
@@ -735,8 +708,6 @@ func (ctx Context) maintenance(artifact platform.ApplicationArtifact) platform.A
 	return out
 }
 
-// ApplicationRuntimeOf projects the installed owners and original release
-// receipts. It stores no application copy, aggregate or health state.
 func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Time) (platform.ApplicationRuntime, *kernel.Error) {
 	out := platform.ApplicationRuntime{Scope: "authorized", State: "healthy", Versions: []platform.ApplicationVersion{}, Data: []platform.ApplicationData{}, Warnings: []platform.ApplicationWarning{}}
 	if ref.Kind != platform.AssetApp || ref.Check() != nil {
@@ -908,8 +879,6 @@ func (ctx Context) Runtime(m platform.Member, ref platform.AssetRef, now time.Ti
 	if len(out.Versions) == 0 {
 		out.Versions = append(out.Versions, platform.ApplicationVersion{Version: artifact.Version, Active: true})
 	}
-	// Member projection never exposes dependency identities unavailable through
-	// discovery, although the opaque complete content identity stays unchanged.
 	project := func(bindings []platform.AssetBinding) []platform.AssetBinding {
 		return slices.DeleteFunc(slices.Clone(bindings), func(binding platform.AssetBinding) bool { return !visible[binding.Ref] })
 	}

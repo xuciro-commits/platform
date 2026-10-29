@@ -20,31 +20,22 @@ import (
 	"platformserver/platform"
 )
 
-// Projection copies a tenant's records into PostgreSQL for tools outside the
-// host: one schema per tenant, one table per entity type with
-// columns from its declaration, and one table of its changes. It is only a
-// copy: existing tables and history are retained at startup, with columns
-// reconciled against the current declaration, then updated after commits.
-// Accepted runtime state remains separate. Record security does not reach outside tools: reading the schema is
-// an administrator's grant of its reader role.
 type Projection struct {
 	pool    *pgxpool.Pool
 	tenant  *Tenant
 	schema  string
 	mu      sync.Mutex
-	dirty   map[string]map[string]bool // type → ids changed since the last flush
-	history map[string]int             // type/id → history prefix already written successfully
-	shapes  map[string]reflect.Type    // installed Go shapes include column and field-read tags
+	dirty   map[string]map[string]bool
+	history map[string]int
+	shapes  map[string]reflect.Type
 }
 
 var unsafe = regexp.MustCompile(`[^a-z0-9_]+`)
 
-// ident is a lower-case SQL identifier made of letters, digits and underscores.
 func ident(parts ...string) string {
 	return unsafe.ReplaceAllString(strings.ToLower(strings.Join(parts, "_")), "_")
 }
 
-// ProjectionSchema and ReaderRole name a tenant's schema and the role that may read it.
 func ProjectionSchema(tenant string) string { return ident("tenant", tenant) }
 func ReaderRole(tenant string) string       { return ident("tenant", tenant, "reader") }
 
@@ -53,8 +44,6 @@ type column struct {
 	value         func(reflect.Value) any
 }
 
-// columns are a type's table columns: the record's own, then one per field
-// (money as amount and currency; lists as arrays; lines as JSON).
 func columns(info platform.EntityInfo) []column {
 	stamp := func(created bool) func(reflect.Value) platform.Stamp {
 		return func(v reflect.Value) platform.Stamp {
@@ -81,13 +70,11 @@ func columns(info platform.EntityInfo) []column {
 		{"changed_by", "text", func(v reflect.Value) any { return records.Header(v).Changed.By }},
 		{"archived", "boolean", func(v reflect.Value) any { return records.Header(v).Archived }},
 	}
-	// A declared JSON field shadows an embedded Record field in the public
-	// image. Project it once, under the same name and visibility rule.
 	out = slices.DeleteFunc(out, func(c column) bool {
 		return slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return ident(f.Name) == c.name })
 	})
 	for _, f := range info.Fields {
-		if len(f.Read) > 0 { // a field some roles may not read is not copied where no role applies
+		if len(f.Read) > 0 {
 			continue
 		}
 		read := func(project func(reflect.Value) any) func(reflect.Value) any {
@@ -135,7 +122,7 @@ func columns(info platform.EntityInfo) []column {
 			})})
 		case "lines":
 			out = append(out, column{name, "jsonb", read(func(v reflect.Value) any { raw, _ := json.Marshal(v.Interface()); return raw })})
-		default: // text, long text, choices, references: their text
+		default:
 			out = append(out, column{name, "text", read(func(v reflect.Value) any { return fmt.Sprint(v.Interface()) })})
 		}
 	}
@@ -144,11 +131,8 @@ func columns(info platform.EntityInfo) []column {
 
 func tableOf(typ string) string { return ident(typ) }
 
-// q quotes an identifier: fields may be named like SQL words ("from", "order").
 func q(parts ...string) string { return pgx.Identifier(parts).Sanitize() }
 
-// Project creates missing reader tables, updates current rows and appends only
-// missing history. A restart preserves the schema and its reader grants.
 func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, error) {
 	p := &Projection{pool: pool, tenant: t, schema: ProjectionSchema(t.ID), dirty: map[string]map[string]bool{}, history: map[string]int{}}
 	if err := p.refresh(ctx); err != nil {
@@ -160,7 +144,6 @@ func Project(ctx context.Context, pool *pgxpool.Pool, t *Tenant) (*Projection, e
 	return p, nil
 }
 
-// Startup and live declaration changes use the same table and history owner.
 func (p *Projection) refresh(ctx context.Context) error {
 	s := p.tenant.records
 	s.Lock()
@@ -200,8 +183,6 @@ func (p *Projection) refresh(ctx context.Context) error {
 				return err
 			}
 		}
-		// Reusing the projection must not retain a column whose declaration is
-		// now restricted or removed. The old full rebuild removed it too.
 		retained := map[string]bool{}
 		for _, c := range cols {
 			retained[c.name] = true
@@ -281,8 +262,6 @@ func (p *Projection) refresh(ctx context.Context) error {
 	return nil
 }
 
-// grant lets the tenant's reader role read the schema. Creating the role needs
-// a database user that may create roles; without it the projection still runs.
 func (p *Projection) grant(ctx context.Context) {
 	role := ReaderRole(p.tenant.ID)
 	if _, err := p.pool.Exec(ctx, fmt.Sprintf(`do $$ begin
@@ -292,7 +271,6 @@ func (p *Projection) grant(ctx context.Context) {
 	}
 }
 
-// touch marks a record for the next flush; the record store calls it on each put.
 func (p *Projection) touch(typ, id string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -302,8 +280,6 @@ func (p *Projection) touch(typ, id string) {
 	p.dirty[typ][id] = true
 }
 
-// rows reads exactly the changed IDs (or all records on rebuild), and only
-// history after the prefix confirmed by a successful database write.
 type projectionRows struct {
 	rows, changes [][]any
 	ends          map[string]int
@@ -352,7 +328,7 @@ func (p *Projection) readRows(typ string, ids map[string]bool) (rows [][]any, ch
 			row[i] = c.value(r.Value)
 		}
 		rows = append(rows, row)
-		for offset, h := range r.HistoryAfter(written[id]) { // one decision may change a record twice
+		for offset, h := range r.HistoryAfter(written[id]) {
 			seq := written[id] + offset
 			fields, _ := json.Marshal(h.Fields)
 			changes = append(changes, []any{id, seq, h.Change, h.Schema, h.By, h.At, fields})
@@ -382,8 +358,6 @@ func (p *Projection) recordHistory(ends map[string]int) {
 	}
 }
 
-// Flush writes the records changed since the last flush; the host calls it
-// every second, after the decisions that changed them are committed.
 func (p *Projection) Flush(ctx context.Context) (err error) {
 	s := p.tenant.records
 	s.Lock()

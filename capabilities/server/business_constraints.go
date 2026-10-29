@@ -20,8 +20,6 @@ type constraintWrite struct {
 	before *records.Row
 }
 
-// Refusal facts are durable, but their values are re-filtered at delivery.
-// Revoking a field/row grant must also narrow an idempotent refused answer.
 func (t *Tenant) readableFieldIssues(member platform.Member, issues []platform.FieldIssue, at time.Time) []platform.FieldIssue {
 	issues = slices.Clone(issues)
 	t.records.Lock()
@@ -245,9 +243,6 @@ func (d *stagedDecision) checkConstraint(c platform.Caller, info platform.Entity
 	return nil
 }
 
-// Every staged Put reaches this gate. Record rules see the prospective row and
-// earlier private writes. A refusal poisons the whole decision, even if an app
-// ignores Put's return value; nothing has yet reached the authoritative store.
 func (d *stagedDecision) checkRecordConstraints(c platform.Caller, info platform.EntityInfo, after, before *records.Row) *kernel.Error {
 	for _, rule := range info.Constraints {
 		if rule.Level == "txn" {
@@ -260,9 +255,6 @@ func (d *stagedDecision) checkRecordConstraints(c platform.Caller, info platform
 	return nil
 }
 
-// Final checks cover the actual affected closure, including unchanged parents
-// of new/edited children. Unrelated historical violations are not a data clean-
-// up obligation. A complete global set deliberately affects every owner row.
 func (d *stagedDecision) checkFinalConstraints() *kernel.Error {
 	if d.failure != nil {
 		return d.failure
@@ -367,7 +359,7 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 			}
 			q, _, ok := (hostView{t: d.tenant}).RuleQuery(set.App, set.Query, set.Version)
 			if !ok {
-				return true // missing evidence must refuse, never silently pass
+				return true
 			}
 			et := d.records.Type(typ)
 			if et == nil {
@@ -440,8 +432,6 @@ func (d *stagedDecision) constraintDepends(info platform.EntityInfo, rule platfo
 		if !ok || et == nil {
 			return true
 		}
-		// Reuse the original query's fixed domain. An unrelated source used
-		// only by excluded rows is not a historical clean-up obligation.
 		candidates, err := d.records.MatchingQuery(et, platform.Query{Domain: q.Domain}, nil)
 		if err != nil {
 			return true
@@ -471,7 +461,6 @@ type constraintReadPlan struct {
 	local, unknown bool
 }
 
-// Prepare declaration paths once per final check, not once per candidate row.
 func (d *stagedDecision) constraintReadPlan(info platform.EntityInfo, rule platform.Constraint) constraintReadPlan {
 	plan := constraintReadPlan{paths: map[string][][]string{}, local: rule.Reads == nil}
 	paths := plan.paths
@@ -545,9 +534,6 @@ func (d *stagedDecision) constraintReadPlan(info platform.EntityInfo, rule platf
 	return plan
 }
 
-// This is dependency discovery, not a second rule evaluation. It considers
-// both sides of a moved reference and archived edges before the original
-// caller's constraint is evaluated through the normal scoped reader.
 func (d *stagedDecision) declaredSetDepends(info platform.EntityInfo, root *records.Row, set platform.RecordSet, typ, id string, old *records.Row) bool {
 	if typ != set.Object && (set.Binding == nil || set.Binding.Ref.Kind != platform.AssetLinkType) {
 		return false

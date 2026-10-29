@@ -1,8 +1,4 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
-// Applications a tenant hands to its people. One of them is not a
-// code package: it is a name, an icon and pages from the host's definition
-// registry, which the workspace turns into an ordinary entry in the launcher
-// and the navigation — beside the apps that came as code, with the same shell.
 import type { AppUI } from "@platform/app";
 import { t, type NavSection, type Route } from "@platform/ui";
 import { BarChart3, LayoutDashboard } from "lucide-react";
@@ -11,11 +7,6 @@ import { IconGlyph } from "@platform/ui";
 type Definition = WorkspaceDefinition;
 export { pageApplication } from "./host/applications";
 
-/**
- * The applications this member may open, as the workspace's own app entries.
- * The host has already left out the pages they may not open and the
- * applications that would be empty; nothing here decides who sees what.
- */
 export function tenantApps(definitions: Definition[], context?: { application?: string; instance?: string }): AppUI[] {
   return definitions.flatMap((definition) => {
     const application = definition.application;
@@ -27,8 +18,6 @@ export function tenantApps(definitions: Definition[], context?: { application?: 
     const id = `${definition.ref.app}:${application.name}`;
     const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
     const item = (name: string) => ({ label: pages.get(name)?.title ?? name, route: route(name) });
-    // The original application groups become the shell's expandable menus.
-    // Unassigned pages retain their original order and direct entry.
     const groups = (application.groups ?? []).map((g) => ({ label: g.title, pages: g.pages.filter((name) => held.includes(name)) }))
       .filter((g) => g.pages.length > 0);
     const grouped = new Set(groups.flatMap((g) => g.pages));

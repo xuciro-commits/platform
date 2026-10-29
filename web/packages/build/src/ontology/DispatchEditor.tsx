@@ -9,8 +9,6 @@ const fieldClass = "grid min-w-0 gap-1 text-xs";
 const statusNames: Record<string, string> = { accepted: "Accepted by target", running: "In transit", completed: "Completed", stuck: "Stuck", failed: "Failed", unknown: "Outcome unknown" };
 const policyNames: Record<string, string> = { manual: "Human intervention", escalate: "Notify reviewers", compensate: "Send reverse command", retry: "Automatically resend" };
 
-/** Commands belong to the original object; each transaction selects one and
- * retains its own business key, target, readback and exception decisions. */
 export function DispatchEditor({ value, onChange, commands, onCommandsChange, object, fields, choices, roles }: {
   value?: Api.Dispatch; onChange: (value?: Api.Dispatch) => void;
   commands: Api.DispatchCommand[]; onCommandsChange: (commands: Api.DispatchCommand[], rename?: { before: string; after: string }) => void;

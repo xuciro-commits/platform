@@ -1,5 +1,3 @@
-// Package aistate owns the AI owner's persisted format and pure metering.
-// It has no live reservations, ledger, transport or submission entry point.
 package aistate
 
 import (
@@ -25,8 +23,6 @@ type State struct {
 	Reservations       map[string]platform.AIReservation       `json:"reservations,omitempty"`
 }
 
-// Decode validates the original saved format without accepting unknown fields
-// or trailing values. Both application state and SQL projections use it.
 func Decode(raw json.RawMessage) (State, error) {
 	var state State
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -81,8 +77,6 @@ func (s State) Validate() error {
 	return nil
 }
 
-// Meter applies the original usage reading and settles only its reservation.
-// SQL projection and the live AI owner apply this same pure transformation.
 func (s *State) Meter(u platform.AIUsage) {
 	if s.Daily == nil {
 		s.Daily = map[string]int{}
@@ -92,7 +86,7 @@ func (s *State) Meter(u platform.AIUsage) {
 		s.Usage = s.Usage[len(s.Usage)-UsageKept:]
 	}
 	day := u.At.UTC().Format(time.DateOnly)
-	if _, today := s.Daily[day+"|"+u.Member]; !today { // a new day: keep only it and the one before
+	if _, today := s.Daily[day+"|"+u.Member]; !today {
 		yesterday := u.At.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
 		for k := range s.Daily {
 			if !strings.HasPrefix(k, day) && !strings.HasPrefix(k, yesterday) {
@@ -116,8 +110,6 @@ func (s *State) Meter(u platform.AIUsage) {
 	}
 }
 
-// ApplyUsageState decodes into private values and applies the same meter used
-// by the AI owner. The input image and all original format names stay intact.
 func ApplyUsageState(raw json.RawMessage, u platform.AIUsage) (json.RawMessage, error) {
 	state, err := Decode(raw)
 	if err != nil {

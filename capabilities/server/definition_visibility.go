@@ -14,8 +14,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Member discovery delegates grants and current row readability to their
-// original permission owners before projecting pages and applications.
 func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []platform.Definition) []platform.Definition {
 	m = t.authorizationMember(m)
 	entities := map[string]platform.EntityInfo{}
@@ -259,13 +257,12 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			}
 			def = visible
 		case platform.AssetApp:
-			continue // after the pages, below: an application is offered with them
+			continue
 		}
 		out = append(out, def)
 	}
 	out = pageowner.FilterNavigation(out)
 
-	// An application is offered to whoever may open one of its pages.
 	opens := map[platform.AssetRef]bool{}
 	for _, def := range out {
 		if def.Ref.Kind == platform.AssetPage {
@@ -317,8 +314,6 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 	return out
 }
 
-// The mutable Build application owns entry availability. Retained definition
-// bytes, independent asset permissions and already accepted work stay intact.
 func (t *Tenant) applicationEntryWithdrawn(ref platform.AssetRef) bool {
 	if ref.App != build.ID || ref.Kind != platform.AssetApp {
 		return false

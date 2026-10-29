@@ -5,7 +5,6 @@ import type {EntityInfo,EntityRecord} from "./Records";
 
 export type RecordChartFields={mark:"bar"|"line";xField:string;yField:string};
 
-/** Compile only the caller's authorized window; no aggregation, reading or writing. */
 export function recordChartSpec(records:EntityRecord[],info:EntityInfo,fields:RecordChartFields,maxPoints:number):ChartSpec|undefined {
  const x=info.fields.find(f=>f.name===fields.xField),y=info.fields.find(f=>f.name===fields.yField);
  if(!["bar","line"].includes(fields.mark)||fields.xField!=="id"&&(!x||!["text","longtext","choice","reference","integer","decimal","boolean","date","datetime"].includes(x.type))||!y||!["integer","decimal"].includes(y.type)||!Number.isInteger(maxPoints)||maxPoints<1||maxPoints>40)return;

@@ -21,9 +21,6 @@ type ScopeDirectory interface {
 	Below(units []string, structure string, day platform.Date) []string
 }
 
-// FieldView is a type as m may see it: without the fields m's role
-// in the app may not read, so search, filters, sort, grouping and forms never
-// reach them; the rows are shared. hidden are those fields.
 func FieldView(m platform.Member, source platform.EntityInfo) (view platform.EntityInfo, hidden []platform.FieldInfo) {
 	roles := m.RolesIn(source.App)
 	readable := func(f platform.FieldInfo) bool {
@@ -92,10 +89,7 @@ func ScopeVisibility(info platform.EntityInfo, m platform.Member, directory Scop
 	return func(v reflect.Value) bool { return base(v) || participant(v) }, nil
 }
 
-// scoped is the widest scope m's roles give over a type's records (nil: all of them).
 func scoped(directory ScopeDirectory, m platform.Member, info platform.EntityInfo, roles []string, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	// Each role contributes its own predicate; a wider level in one unit must
-	// not discard a narrower role's independent unit.
 	if len(roles) > 1 {
 		var predicates []func(reflect.Value) bool
 		for _, role := range roles {
@@ -122,7 +116,7 @@ func scoped(directory ScopeDirectory, m platform.Member, info platform.EntityInf
 	case platform.ScopeNone:
 		return func(reflect.Value) bool { return false }, nil
 	case platform.ScopeOwn:
-		if scope.Owner == platform.OwnerCreated { // whoever's decision created it
+		if scope.Owner == platform.OwnerCreated {
 			return func(v reflect.Value) bool { return Header(v).Created.By == m.ID }, nil
 		}
 		owner := field(scope.Owner)
@@ -134,7 +128,6 @@ func scoped(directory ScopeDirectory, m platform.Member, info platform.EntityInf
 			if level == platform.ScopeUnit {
 				structure = ""
 			}
-			// Combine membership-based grants and explicit unit grants of this role.
 			held, unbound := false, false
 			for _, g := range m.Grants {
 				if g.App != info.App || !slices.Contains(roles, g.Role) {
@@ -164,17 +157,15 @@ func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v refl
 	rec := Header(v)
 	stamp := platform.Stamp{By: receipt.GetSubmission().GetPrincipalId(), At: receipt.GetRecordedTime().AsTime(), Change: receipt.GetChangeId()}
 	change := RecordChange{Change: receipt.GetChangeId(), Schema: receipt.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []FieldChange{}}
-	// The revision is the kernel's (K4 C12): the decisions naming the record as
-	// their target, which clients send back as the revision they saw.
 	rec.Changed, rec.Created, rec.Revision = stamp, stamp, 0
 	target := receipt.GetSubmission().GetTarget()
 	named := target.GetType() == info.Type && target.GetId() == rec.ID
-	if l := info.Lifecycle; prev == nil && l != nil { // a new record starts in the initial state
+	if l := info.Lifecycle; prev == nil && l != nil {
 		if f, _ := info.Field(l.Field); v.FieldByIndex(f.Index).String() == "" {
 			v.FieldByIndex(f.Index).SetString(l.Initial)
 		}
 	}
-	if owner := info.Scope.Owner; prev == nil && owner != "" && owner != platform.OwnerCreated { // a new record belongs to its creator unless the rules say who
+	if owner := info.Scope.Owner; prev == nil && owner != "" && owner != platform.OwnerCreated {
 		if f, _ := info.Field(owner); v.FieldByIndex(f.Index).String() == "" {
 			v.FieldByIndex(f.Index).SetString(stamp.By)
 		}
@@ -215,8 +206,6 @@ func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v refl
 	return next, nil
 }
 
-// CurrentScope is the original fixed SQL read view and decoding position.
-// Forked records share its current view, with independent private row overlays.
 type CurrentScope struct {
 	backend         journal.RuntimeState
 	view            journal.StateReadView
@@ -251,15 +240,10 @@ func (s *CurrentScope) Source(typ string, info *platform.EntityInfo) RowSource {
 	return &currentRows{store: s, typ: typ, info: info}
 }
 
-// currentRows resolves committed records through the coordinator's fixed SQL
-// view. The collection itself retains only private replacements, never fetched
-// values or a tenant-wide copy of the current table.
 type currentRows struct {
 	store *CurrentScope
 	typ   string
-	// A declaration replacement decodes persisted values against its target
-	// shape before publishing that shape in the store catalog.
-	info *platform.EntityInfo
+	info  *platform.EntityInfo
 }
 
 func (r *currentRows) view() journal.StateReadView {
@@ -347,8 +331,6 @@ func (s *CurrentScope) Reader() interface {
 	return s.backend
 }
 
-// VisitMatching reads the original fixed SQL view and this decision's private
-// overlay through the same compiled predicate and permission masks.
 func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visible, effective, match func(reflect.Value) bool, writes iter.Seq[string], accept func(reflect.Value)) {
 	current := image.Current()
 	visit := func(r *Row) {
@@ -367,13 +349,10 @@ func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visib
 		}
 	} else if current.Backend() != nil {
 		var filters []journal.StateFilter
-		// SQL retains the original image, while the owner may have renamed or
-		// transformed its fields. Filter the converted values below instead.
 		if !image.RetainedProjection && len(image.Info.RecordImages) == 0 {
 			filters = sqlRecordFilters(image.Info, q.Domain)
 		}
 		if image.RetainedProjection {
-			// Record identity is unchanged by aliases or historical field projections.
 			for _, filter := range sqlRecordFilters(image.Info, q.Domain) {
 				if len(filter.Path) == 2 && filter.Path[0] == "value" && filter.Path[1] == "id" {
 					filters = append(filters, filter)
@@ -381,9 +360,6 @@ func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visib
 			}
 		}
 		pending := map[string]bool{}
-		// During checkpoint recovery the fixed SQL archive predates accepted
-		// tail writes promoted into the root overlay. They must participate in
-		// owner inventories even when their IDs do not exist in that archive.
 		for id := range image.Rows.Overlay().All() {
 			pending[id] = true
 		}
@@ -406,8 +382,6 @@ func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visib
 			}
 			after = ids[len(ids)-1]
 		}
-		// Private writes may newly match a condition their committed predecessor
-		// did not. Include this decision's overlay before applying the same rules.
 		for id := range pending {
 			visit(image.Rows.Get(id))
 		}
@@ -419,9 +393,6 @@ func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visib
 
 }
 
-// CompileSet has already checked the complete expression. Only plain
-// conjunctions of physical text/reference equality are reduced here; the
-// original evaluator remains the authority for every supported expression.
 func sqlRecordFilters(info platform.EntityInfo, domain json.RawMessage) []journal.StateFilter {
 	var terms []json.RawMessage
 	if len(domain) == 0 || json.Unmarshal(domain, &terms) != nil {

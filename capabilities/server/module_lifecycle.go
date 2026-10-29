@@ -65,8 +65,6 @@ func (t *Tenant) checkOwnerRemoval(disabled []string) error {
 	return nil
 }
 
-// Recovery keeps the original owner codecs and ledgers. At the cold startup
-// boundary, live routes and role bindings are withdrawn without deleting data.
 func (t *Tenant) deactivateOwners(disabled []string) error {
 	if len(disabled) == 0 {
 		return nil

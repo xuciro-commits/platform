@@ -14,16 +14,12 @@ import (
 	"time"
 )
 
-// InvokeOperation is the public compute route. The console contributes only an
-// invocation receipt; the selected operation owner decides permission/schema.
 func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationRequest, now time.Time) (platform.OperationCall, *kernel.Error) {
 	if q.App == "" || q.Key == "" || len(q.Key) > 256 || q.Version < 0 || q.Target != "" || q.OnBehalf != "" || q.Release != nil {
 		return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A direct call requires an owner and stable key")
 	}
 	q.Sources = slices.Clone(q.Sources)
 	var prepared *preparedOperationInput
-	// Capture a retained definition and current grants under the submission
-	// lock; schema decoding and FileStore I/O belong to the preparation lane.
 	t.mu.Lock()
 	current, seated := t.Member(member.ID)
 	app := t.app(q.App)
@@ -56,7 +52,6 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 			t.mu.Unlock()
 			return platform.OperationCall{}, refusal
 		}
-		// Neither the caller nor a later definition edit can mutate this plan.
 		var frozen platform.Operation
 		_ = json.Unmarshal(platform.Raw(op), &frozen)
 		op = frozen
@@ -77,7 +72,6 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		if err != nil {
 			return platform.OperationCall{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 		}
-		// The receipt binds content, rather than a random preparation attempt.
 		q.Inputs = platform.Raw(map[string]any{"sealedInput": map[string]any{"digest": ref.Digest, "size": ref.Size, "inputHash": ref.InputHash, "definition": ref.Definition}})
 		requestHash, _ := platform.CanonicalDigest(q)
 		prepared = &preparedOperationInput{ref: ref, requestHash: requestHash}
@@ -112,7 +106,7 @@ func (t *Tenant) InvokeOperation(member platform.Member, q platform.OperationReq
 		}
 		_, refusedBefore := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key)
 		known := refusedBefore || len(t.committed.Answer(controlowner.PlatformApp+"/"+q.Key)) > 0 || owner.AcceptedLedger().AcceptedFor(t.ID, q.Key) != nil
-		retained = !known // an append error can have committed without its answer
+		retained = !known
 		if _, err := t.submitAccepted(owner, latest, s, now, false, prepared); err != nil {
 			if _, rejected := t.committed.Refusal(controlowner.PlatformApp + "/" + q.Key); rejected {
 				retained = false

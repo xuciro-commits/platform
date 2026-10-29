@@ -10,7 +10,6 @@ const kindName = (kind: string) => t(({ flow: "Workflow", agent: "Agent", comput
 const stateName = (state: string) => t(({ running: "Working", waiting: "Waiting", done: "Done", stopped: "Stopped", stuck: "Stuck", completed: "Completed", pending: "Pending", failed: "Failed", blocked: "Blocked", canceled: "Canceled", cancelled: "Canceled", ready: "Ready", rejected: "Rejected", delivered: "Delivered", retrying: "Retrying", held: "Held", discarded: "Discarded", scheduled: "Scheduled", accepted: "Accepted by target", unknown: "Outcome unknown", compensating: "Compensating", compensated: "Compensated" } as Record<string,string>)[state] ?? state);
 const placementName = (placement: string) => t(({assist:"Read-only assistance",propose:"Business proposal",act:"Authorized actions",autonomous:"Autonomous within granted scope"} as Record<string,string>)[placement] ?? placement);
 
-/** One application projection, preserving original run readers and controls. */
 export function ApplicationRuns({ owner, name, project }: { owner: string; name: string; project?: string }) {
  const { can , holds} = useHost(), { open } = useWorkspace(), openRecord = useOpenRecord();
  const [offset,setOffset]=useState(0),[chosen,setChosen]=useState<string>();
@@ -278,7 +277,6 @@ function RunBinding({run}:{run:Pick<Run,"release"|"version"|"dependencies"|"modu
 
 }
 
-/** The original compute read and effect retry action, including source checks. */
 export function OperationRunView({id,application,project,subject}:{id:string;application?:string;project?:string;subject?:string}) {
  const {can}=useHost(),{open}=useWorkspace();
  const control=useRunControl("platform.effect",id);

@@ -7,12 +7,8 @@ import (
 	"strings"
 )
 
-// Compile visits even short-circuited branches: no runtime branch can smuggle
-// an unknown operator, path or undeclared set past publication.
 func Compile(e Expr, s Schema) (*Program, error) { return compile(e, s, false) }
 
-// CompileFrozenFormula is reachable only by trusted owners reading old frozen
-// bytes. It shares the compiler; a JSON rule cannot request this mode.
 func CompileFrozenFormula(e Expr, s Schema) (*Program, error) { return compile(e, s, true) }
 func compile(e Expr, s Schema, frozen bool) (*Program, error) {
 	nodes := 0

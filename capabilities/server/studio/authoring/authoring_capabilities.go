@@ -166,8 +166,6 @@ func QueryCapabilitySchemas(q platform.NamedQuery, info platform.EntityInfo) (*p
 	return &input, &result
 }
 
-// CapabilityVersion is a retained declaration already selected and authorized
-// by its original owner. Presentation does not choose a version or grant access.
 type CapabilityVersion struct {
 	Ref          platform.AssetRef
 	AppVersion   string

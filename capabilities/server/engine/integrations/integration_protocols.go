@@ -6,19 +6,15 @@ import (
 	"time"
 )
 
-// Breakers per destination: an endpoint or an AI provider that
-// failed several times in a row opens its breaker; while it is open its work
-// waits instead of spending attempts; after a pause one attempt probes it, and
-// a success closes it. They are volatile: what was attempted is journaled.
 const (
-	BreakerAfter = 5                // failures in a row that open a breaker
-	BreakerPause = 30 * time.Second // the first pause; it doubles while probes fail
+	BreakerAfter = 5
+	BreakerPause = 30 * time.Second
 	BreakerMax   = 10 * time.Minute
 )
 
 type breaker struct {
 	failures int
-	until    time.Time // open until then; zero: closed
+	until    time.Time
 	probing  bool
 	pause    time.Duration
 }
@@ -28,8 +24,6 @@ type Breakers struct {
 	m  map[string]*breaker
 }
 
-// allow reports whether work for dest may go now: closed, or open and past its
-// pause. claim takes the one half-open probe; a readiness check does not.
 func (b *Breakers) Allow(dest string, now time.Time, claim bool) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -44,7 +38,6 @@ func (b *Breakers) Allow(dest string, now time.Time, claim bool) bool {
 	return true
 }
 
-// report records how an attempt for dest ended.
 func (b *Breakers) Report(dest string, ok bool, now time.Time) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -70,12 +63,8 @@ func (b *Breakers) Report(dest string, ok bool, now time.Time) {
 	}
 }
 
-// ioLane bounds the work waiting on the outside at once across the process:
-// effects, model calls and embeddings run on it, outside every tenant's lock,
-// so one slow destination holds one slot, not the process.
 var ioLane = make(chan struct{}, 16)
 
-// onLane runs each job on the lane and waits for all of them.
 func OnLane(jobs []func()) {
 	var wg sync.WaitGroup
 	for _, job := range jobs {
@@ -89,7 +78,6 @@ func OnLane(jobs []func()) {
 	wg.Wait()
 }
 
-// Breakers are the tenant's destinations that failed lately.
 func (b *Breakers) View(now time.Time) []platform.Breaker {
 	b.mu.Lock()
 	defer b.mu.Unlock()

@@ -1,6 +1,3 @@
-// The furniture every canvas shows around its drawing: the floating toolbar, the
-// help card, the bar of operations on the selected element, the empty state. Both
-// families drew their own copy of these; there is now one (§D2).
 import { CircleHelp } from "lucide-react";
 import type { ReactNode } from "react";
 import { t } from "../../i18n";
@@ -24,7 +21,6 @@ export function CanvasToolDivider() {
   return <span className="mx-0.5 h-4 w-px bg-border" />;
 }
 
-/** The `?` card: what a person can do here, one line per affordance the owner enabled. */
 export function CanvasHelp({ open, onClose, items }: { open: boolean; onClose: () => void; items: ReactNode[] }) {
   if (!open) return null;
   return <div role="dialog" aria-label={t("How to work on this canvas")} className="absolute right-3 top-14 z-20 w-72 rounded-md border border-border bg-surface p-3 text-xs shadow-lg">
@@ -38,8 +34,6 @@ export function CanvasHelpTool({ open, onToggle }: { open: boolean; onToggle: ()
   return <CanvasTool label={t("How to work on this canvas")} icon={<CircleHelp />} onClick={onToggle} expanded={open} />;
 }
 
-/** The operations of the selected element or connection, along the canvas foot.
- * Narrow panels scroll it sideways instead of stacking the words. */
 export function CanvasActionBar({ label, children }: { label: string; children: ReactNode }) {
   return <div className="nodrag nopan platform-canvas-actions" role="toolbar" aria-label={label}>{children}</div>;
 }

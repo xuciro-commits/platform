@@ -10,8 +10,6 @@ import {DraftInputs} from "../session/DraftSession";
 import { removeWorkflowSteps, renameWorkflowStep, replaceReferences, workflowBindings, withWorkflowBinding } from "./workflow-edit";
 import {workflowRunMatches} from "./workflow-session";
 import { useProcessDraft } from "./process-draft";
-// Logic Studio edits the one build.process definition. Its native Flow owner
-// compiles, executes and accepts outcomes; React Flow remains presentation.
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
 import { ActionMenu, Button, FLOW_NODE_DROP, FlowCanvas, Input, PageHeader, Panel, ProblemList, StructureRow, Workbench,
@@ -32,8 +30,6 @@ import { useAuthoringCapabilities, useAuthoringModel } from "../ontology/authori
 
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", manual: true, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
 type Edit = Partial<WorkflowDraft> | ((draft: WorkflowDraft) => WorkflowDraft);
-/** BPMN boundary events: the host already declares a step's timeout and
- * its error path, so the canvas draws them attached to the step instead of as a note. */
 const stepBoundary = (step: WorkflowStep): FlowBoundary[] => [
   ...(step.timeoutSeconds ? [{ id: "timeout", notation: "event-timer" as const, label: t("Timeout after {seconds} seconds", { seconds: step.timeoutSeconds }) }] : []),
   ...(step.error ? [{ id: "error", notation: "event-error" as const, label: t("Error path") }] : []),
@@ -96,8 +92,6 @@ function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capabi
     outputs.push({ id: dataPort([]), label: t("Result"), type: schema.type, channel: "data" });
     for (const [name, property] of Object.entries(commonSchemaProperties(schema)).slice(0, 6)) outputs.push({ id: dataPort([name]), label: name, type: property.type, channel: "data" });
   }
-  // Bindings made in the inspector still have a real socket, even when their
-  // field is deeper than the compact top-level preview shown by default.
   for (const item of draft.steps) for (const { binding: value } of workflowBindings(item)) {
     if (!value || value.source !== "step" || value.step !== step.name) continue;
     const path = value.path ?? [], id = dataPort(path);

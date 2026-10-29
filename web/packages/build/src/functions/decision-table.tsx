@@ -9,9 +9,6 @@ import type { Api } from "@platform/kernel";
 import { useHost } from "@platform/app";
 import { Button, DataTable, Input, PageHeader, Panel, Select, Textarea, t, type ColumnDef } from "@platform/ui";
 
-// Decision tables: condition columns → result columns, first match
-// wins. A saved draft joins the same release review as its application;
-// activation installs the native operation used by processes, pages and API callers.
 type Draft = Omit<Api.Table,"rows">&{rows:(Omit<Api.TableRow,"when">&{when:string[]})[]};
 const rowValues=(row:Draft["rows"][number],key:"when"|"then")=>key==="when"?row.when??row.expressions?.map(cellRuleText)??[]:row.then??[];
 const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", description: "", inputs: [{ name: "input", type: "text" }], outputs: [{ name: "result", type: "text" }], rows: [{ when: [""], then: [""] }], default: [], state: "draft" });
@@ -40,7 +37,6 @@ export function DecisionTableEditor({ id }: { id: string }) {
       description: description ?? "", inputs, outputs, default: fallback?.some(cell => cell.trim() !== "") ? fallback : [],
     }),
   });
-  // Column edits keep every row the same width.
   const setColumn = (side: "inputs" | "outputs", i: number, change: Partial<Api.TableColumn>) => patch({ ...(side==="inputs"?{rows:(draft.rows ?? []).map(r=>({...r,when:rowValues(r,"when"),expressions:undefined}))}:{}),[side]: (draft[side] ?? []).map((c, j) => j === i ? { ...c, ...change } : c) } as Partial<Draft>);
   const addColumn = (side: "inputs" | "outputs") => {
     const key = side === "inputs" ? "when" : "then";
@@ -54,7 +50,6 @@ export function DecisionTableEditor({ id }: { id: string }) {
   const setCell = (row: number, key: "when" | "then", i: number, value: string) => patch({ rows: (draft.rows ?? []).map((r, j) => j === row ? { ...r, ...(key==="when"?{expressions:undefined}:{}),[key]: rowValues(r,key).map((c, k) => k === i ? value : c) } : r) });
   const moveRow = (row: number, by: number) => { const to = row + by; if (to < 0 || to >= (draft.rows ?? []).length) return; const rows = [...(draft.rows ?? [])]; const a = rows[row]!, b = rows[to]!; rows[row] = b; rows[to] = a; patch({ rows }); };
   const defaults = draft.default?.length === (draft.outputs ?? []).length ? draft.default : (draft.outputs ?? []).map(() => "");
-  // Stable renderer functions keep the active input mounted while typing.
   const tableState = useRef({ draft, defaults, patch, setColumn, addColumn, removeColumn, setCell, moveRow });
   tableState.current = { draft, defaults, patch, setColumn, addColumn, removeColumn, setCell, moveRow };
   const columns = useMemo<ColumnDef<number, unknown>[]>(() => [

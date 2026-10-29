@@ -50,8 +50,6 @@ function schemaFor(expr: Api.Expr, choices: ExpressionChoice[], lookup?: (type: 
   return { refs, windows,sets };
 }
 
-/** Edits the  tree. Validation calls the original Go compiler in Wasm;
- * execution and record/collection authorization remain with original owners. */
 export function ExpressionEditor({ value, onChange, choices: suppliedChoices = [], lookup, windows, collections, kind = "boolean", draftKey = "expression" }: {
   value: Api.Expr;
   onChange: (expr: Api.Expr) => void;

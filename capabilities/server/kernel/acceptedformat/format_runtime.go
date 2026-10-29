@@ -19,8 +19,6 @@ import (
 	"time"
 )
 
-// An agent answer includes the tool decision, resulting run/evaluation record
-// and measured spend in one accepted result; recovery never invokes the tool.
 type RuntimeAgent struct {
 	Version     int                      `json:"version"`
 	Kind        string                   `json:"kind"`
@@ -124,9 +122,6 @@ func DecodeHostControl(raw []byte) (HostControl, error) {
 	return r, nil
 }
 
-// A job or delivery is a top-level input in its own right. Its immutable
-// result includes the K9 generation, scheduling outcome, business changes and
-// notices. No runner/listener executes when this result is recovered.
 type Work struct {
 	Unique         []journal.StateUnique       `json:"unique,omitempty"`
 	Authorizations []AuthorizationEvidence     `json:"authorizations,omitempty"`
@@ -228,8 +223,6 @@ func DecodeWork(raw []byte) (Work, error) {
 	return result, nil
 }
 
-// The async claim is an accepted-result of the existing K9 owner. The effect
-// remains the sole queue item; this payload only freezes its current generation.
 type OperationClaim struct {
 	Version     int             `json:"version"`
 	Kind        string          `json:"kind"`
@@ -250,7 +243,6 @@ func OperationClaimDigest(r OperationClaim) (string, error) {
 	return platform.CanonicalDigest(r)
 }
 
-// Decode before journal admission without applying the K9 transition.
 func DecodeOperationClaim(raw []byte) (OperationClaim, error) {
 	var saved OperationClaim
 	if _, err := platform.DecodeValue(raw, platform.AcceptedResultMaxBytes); err != nil {
@@ -275,8 +267,6 @@ func (r Work) ChangePlan() ChangePlan {
 		Control: r.Control, Intents: r.Intents, Notices: r.Notices, Unique: r.Unique, CheckUnique: r.Version >= 3}
 }
 
-// A publisher's accepted installation is the only embedded release in these
-// publication schemas. SQL and replay reuse its original release result.
 func SystemDefinitionInstallation(schema string, image json.RawMessage) (json.RawMessage, error) {
 	if schema != systemscope.SchemaActivate && schema != systemscope.SchemaFinished && schema != systemscope.SchemaRollback {
 		return nil, nil
@@ -290,7 +280,6 @@ func SystemDefinitionInstallation(schema string, image json.RawMessage) (json.Ra
 	return saved.Installation, nil
 }
 
-// Composite is the journaled identity of one composite command.
 type Composite struct {
 	Version     int                      `json:"version"`
 	Kind        string                   `json:"kind"`
@@ -336,9 +325,6 @@ func CompositeDigest(saved Composite) (string, error) {
 	return platform.CanonicalDigest(saved)
 }
 
-// PostgreSQL JSONB can reorder an edit's object keys while the sealed
-// protobuf payload keeps its original bytes. Compare the same canonical JSON
-// used by the enclosing request/result digest, without rounding numbers.
 func SameCompositePayload(a, b []byte) bool {
 	if len(a) == 0 || len(b) == 0 {
 		return len(a) == len(b)

@@ -1,17 +1,14 @@
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
 
-/** Semantic tones; domains map their own states onto them. */
 export type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "purple" | "pink" | "teal" | "orange";
 
 export type StatusRegistry = Record<string, { label: string; tone: Tone }>;
 
-/** A state machine's states as tags: `defineStatuses({ CONFIRMED: { label: "Confirmed", tone: "success" } })`. */
 export function defineStatuses<const R extends StatusRegistry>(registry: R): R {
   return registry;
 }
 
-/** The kernel's outbox states (K5), shared by every server-authority domain. */
 export const submissionStatuses = defineStatuses({
   SUBMISSION_STATE_PENDING: { label: t("Pending"), tone: "warning" },
   SUBMISSION_STATE_SENDING: { label: t("Sending"), tone: "info" },
@@ -21,7 +18,6 @@ export const submissionStatuses = defineStatuses({
   SUBMISSION_STATE_UNKNOWN: { label: t("Unknown"), tone: "warning" },
 });
 
-/** A coloured label: states, select options, categories. */
 export function Tag({ label, tone = "neutral", className }: { label: string; tone?: Tone; className?: string }) {
   return (
     <span
@@ -43,6 +39,5 @@ export function Tag({ label, tone = "neutral", className }: { label: string; ton
 
 export function StatusTag({ status, registry, className }: { status: string; registry: StatusRegistry; className?: string }) {
   const entry = registry[status] ?? { label: status, tone: "neutral" as const };
-  // Registries are often built at module load, before the reader's language is known: translate when drawn.
   return <Tag label={t(entry.label)} tone={entry.tone} className={className} />;
 }

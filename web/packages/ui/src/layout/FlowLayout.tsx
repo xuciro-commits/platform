@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 
-/** Wrapping presentation layout with keyboard movement within a toolbar. */
 export function FlowLayout({ children, toolbar = false, label, align = "start" }: {
   children: ReactNode; toolbar?: boolean; label?: string; align?: string;
 }) {

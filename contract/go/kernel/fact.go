@@ -11,7 +11,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// FactLog implements K2 and K3 (contract/spec/K2-K3-facts.md).
 type FactArchive interface {
 	Records(tenant string, through int) []*pb.FactRecord
 	Accepted(tenant, key string, through int) *pb.FactRecord
@@ -40,8 +39,6 @@ func (l *FactLog) Records(tenant string) []*pb.FactRecord {
 	return append(l.archive.Records(tenant, l.archived[tenant]), l.logs[tenant]...)
 }
 
-// Compact releases only a persisted immutable prefix. Facts remain available
-// for idempotency, derivation and current-claim selection through their owner.
 func (l *FactLog) Compact(archive FactArchive) {
 	if l.archived == nil {
 		l.archived = map[string]int{}
@@ -69,21 +66,21 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 	required := []string{f.GetTenantId(), f.GetSubject().GetType(), f.GetSubject().GetId(),
 		f.GetAttribute(), f.GetSchema().GetName(), f.GetIdempotencyKey()}
 	if slices.Contains(required, "") || f.GetKind() == pb.FactKind_FACT_KIND_UNSPECIFIED {
-		return nil, invalid // F1
+		return nil, invalid
 	}
 	p := f.GetProvenance()
 	if source(p) == "" || p.GetSourceTime() == nil {
-		return nil, invalid // P1
+		return nil, invalid
 	}
 	isClaim, isDerived := f.GetKind() == pb.FactKind_FACT_KIND_CLAIM, f.GetKind() == pb.FactKind_FACT_KIND_DERIVED
 	if c := p.GetConfidence(); isClaim && (c <= 0 || c > 1) || !isClaim && c != 0 {
-		return nil, invalid // P2
+		return nil, invalid
 	}
 	if isDerived != (len(f.GetDerivedFrom()) > 0) {
-		return nil, invalid // F6
+		return nil, invalid
 	}
 	if !l.schemas.Accepts(f.GetSchema()) {
-		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA) // F2
+		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 	}
 	existing := l.byKey[f.GetTenantId()][f.GetIdempotencyKey()]
 	if existing == nil && l.archive != nil {
@@ -91,14 +88,14 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 	}
 	if existing != nil {
 		if !proto.Equal(existing.GetFact(), f) {
-			return nil, errorf(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT) // F3
+			return nil, errorf(pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT)
 		}
 		return existing, nil
 	}
 	log := l.logs[f.GetTenantId()]
 	for _, input := range f.GetDerivedFrom() {
 		if !l.Contains(f.GetTenantId(), input) {
-			return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // F7
+			return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE)
 		}
 	}
 	recorded := now
@@ -106,11 +103,11 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 		recorded = l.last[f.GetTenantId()]
 	}
 	if n := len(log); n > 0 && log[n-1].GetRecordedTime().AsTime().After(now) {
-		recorded = log[n-1].GetRecordedTime().AsTime() // P3
+		recorded = log[n-1].GetRecordedTime().AsTime()
 	}
 	l.next++
 	record := &pb.FactRecord{FactId: fmt.Sprintf("fact-%d", l.next), Fact: f, RecordedTime: timestamppb.New(recorded)}
-	l.logs[f.GetTenantId()] = append(log, record) // F4
+	l.logs[f.GetTenantId()] = append(log, record)
 	if l.byKey[f.GetTenantId()] == nil {
 		l.byKey[f.GetTenantId()] = map[string]*pb.FactRecord{}
 	}
@@ -118,7 +115,6 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 	return record, nil
 }
 
-// CurrentClaims returns, per source, its latest claim about subject and attribute, in recorded order (F5).
 func (l *FactLog) CurrentClaims(tenant string, subject *pb.EntityRef, attribute string) []*pb.FactRecord {
 	current := map[string]*pb.FactRecord{}
 	records := l.Records(tenant)

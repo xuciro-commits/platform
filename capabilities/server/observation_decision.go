@@ -15,8 +15,6 @@ import (
 	"platformserver/platform"
 )
 
-// Only the compact window and declared source identity accompany a business
-// result. No raw point has a field in the accepted-result representation.
 type ObservationDecisionEvidence = platform.ObservationDecisionEvidence
 
 func (t *Tenant) visibleObservationEvidence(m platform.Member, evidence *platform.ObservationDecisionEvidence, now time.Time) *platform.ObservationDecisionEvidence {
@@ -64,8 +62,6 @@ func observationRequestIdentity(ref platform.AssetRef, q ObservationEvaluate) (s
 	return "observation:" + q.Key, "observation:" + hash, err
 }
 
-// Original accepted receipts are the idempotency owner. A retry must not
-// contact the external store or recompute against newer/late observations.
 func (t *Tenant) observationPrior(m platform.Member, key, identity string) (*pb.ChangeRecord, *kernel.Error, bool) {
 	for _, app := range t.apps {
 		var original *pb.Submission
@@ -139,8 +135,6 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 		t.mu.Unlock()
 		return answer, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
-	// Refuse an unavailable action before contacting the store. The original
-	// action owner repeats its full authorization when it accepts the result.
 	decision := plan.info.Definition.Decision
 	owner := t.app(decision.Action.App)
 	if owner == nil {

@@ -1,6 +1,4 @@
 import type {Definition as WorkspaceDefinition} from "@platform/app";
-// Original asset owners and editor routes.  organizes navigation
-// by application business concepts; asset kinds remain compilation identities.
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
@@ -38,7 +36,6 @@ export const resourceKinds: ResourceKindInfo[] = [
 
 export const kindOfType = (type: string) => resourceKinds.find((kind) => kind.type === type);
 
-/** The original installed declaration determines the category, never its name. */
 export function systemDefinitionsForType(definitions: readonly WorkspaceDefinition[], type: string) {
   const kind = type === "build.evaluation-set" || type === "build.testplan"
     ? resourceKinds.find(kind => kind.kind === (type === "build.testplan" ? "test-plan" : "evaluation-set")) : kindOfType(type);
@@ -48,16 +45,13 @@ export function systemDefinitionsForType(definitions: readonly WorkspaceDefiniti
     && (type !== "build.code" || !!definition.operation && !definition.operation.rules));
 }
 
-/** Published owner references without a local draft still have a normal read-only route. */
 export const publishedResourceKind: ResourceKindInfo = { kind: "definition", type: "", view: "definition", label: "Published resource", plural: "Published resources" };
 
-/** Object and Flow identities include their authority prefix; the other Build names are local to their owner. */
 export function resourceRef(kind: ResourceKindInfo, name: string): Api.AssetRef {
   return { app: "build", kind: kind.ref ?? kind.kind, name: ["object", "flow", "automation"].includes(kind.kind) ? `build.${name}` : name };
 }
 export const refKey = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
 
-/** The route that edits a resource record inside a project. */
 export function resourceRoute(kind: ResourceKindInfo, id: string, project?: string): Route {
   if (kind.kind === "page") return { view: "module", params: { ...(project ? { id: project, application: project } : {}), page: id } };
   if (kind.kind === "test-plan" && project) return { view: "project", params: { id: project, area: "release", plan: id } };
@@ -66,7 +60,6 @@ export function resourceRoute(kind: ResourceKindInfo, id: string, project?: stri
 
 export type ResourceRecord = { id: string; name: string; title: string; state?: string; version?: number; archived?: boolean; object?: string; kind?: string; actions?: { name: string; title?: string }[]; when?: string; manual?: boolean; evaluation?: unknown[]; roots?: Api.AssetRef[]; changed?: { at?: string; by?: string } | string };
 
-/** Ordinary plans and measured AI evaluations share their original record owner. */
 export const matchesResourceKind = (kind: ResourceKindInfo, record: { kind?: string; evaluation?: unknown[]; roots?: Api.AssetRef[] }) => {
   if (kind.kind === "automation") return record.kind === "automation";
   if (kind.kind === "flow") return record.kind !== "automation";

@@ -5,8 +5,6 @@ import { nameOf, type Process } from "./object-model";
 
 type Source = Pick<Api.RecordSet, "from" | "direction" | "object" | "binding"> & {title:string};
 
-// The object draft owns these declarations, buffers and publication. This
-// editor selects original declarations and never evaluates a business rule.
 export function RecordSetsEditor({process,parent,entities,onChange}:{process:Process;parent:string;entities:EntityInfo[];onChange:(next:Process)=>void}) {
   const {definitions}=useHost();
   const sets=process.sets??[];

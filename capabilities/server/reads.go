@@ -1,8 +1,5 @@
 package platformserver
 
-// Reads and connector inputs: the authorized read paths members call and the
-// app-level helpers they route to.
-
 import (
 	"context"
 	"encoding/json"
@@ -17,8 +14,6 @@ import (
 	"time"
 )
 
-// journal records an accepted submission as the member's, for the audit and the journal.
-// Input routes a connector input (push batch, poll page, heartbeat) to its app.
 func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
 	if t.businessStopped() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -57,8 +52,6 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	return out, err
 }
 
-// Read serves a named read of the app that declares it, to members holding a
-// role in that app or to everyone when the manifest says so; the app may refuse further.
 func (t *Tenant) Read(m platform.Member, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	if name == "health" && t.quarantined() {
 		t.mu.Lock()
@@ -71,8 +64,6 @@ func (t *Tenant) read(m platform.Member, name string, inputs ...json.RawMessage)
 	return t.readFrom(m, t.owner["read:"+name], name, inputs...)
 }
 
-// ReadFrom keeps a composed form's reads on the action's declared owner.
-// Authorization and result projection stay on Read's path.
 func (t *Tenant) ReadFrom(m platform.Member, app, name string, inputs ...json.RawMessage) (any, *kernel.Error) {
 	return coordinatedRecordRead(t, context.Background(), func() (any, *kernel.Error) { return t.readFromApp(m, app, name, inputs...) })
 }
@@ -107,9 +98,6 @@ func (t *Tenant) readFrom(m platform.Member, a platform.App, name string, inputs
 	if err != nil {
 		return nil, err
 	}
-	// An app chooses which records its read answers with; the host keeps what
-	// leaves no wider than the member's authority over the fields and sources
-	// behind them (#130), however the app collected them.
 	return t.narrowedSource(m, out, Now(), false, a.Manifest().ReadSources[name]), nil
 }
 

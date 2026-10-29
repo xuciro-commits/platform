@@ -7,21 +7,11 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-// OIDC verifies access tokens signed by an OpenID provider and
-// returns the caller's subject. The provider proves who is calling; the tenant's
-// directory says what that caller is there (K6). Subjects are
-// "user:<verified email>" for people and "client:<client id>" for machines
-// (client-credentials tokens carry no user). keys is the provider's JWKS URL,
-// given apart from the issuer so a server can reach the provider on an internal
-// address while tokens name the public one.
 func OIDC(issuer, keys string) Authenticate {
 	authenticate, _ := OIDCProvider(issuer, keys)
 	return authenticate
 }
 
-// OIDCProvider is OIDC with the provider's word on the second factor: the
-// verified amr asserts mfa or methods from two distinct factor categories
-// (RFC 8176). User presence and a single possession method are not MFA.
 func OIDCProvider(issuer, keys string) (Authenticate, Attest) {
 	verifier := oidc.NewVerifier(issuer, oidc.NewRemoteKeySet(context.Background(), keys),
 		&oidc.Config{SkipClientIDCheck: true, SupportedSigningAlgs: []string{oidc.EdDSA, oidc.RS256, oidc.ES256}})
@@ -38,7 +28,7 @@ func OIDCProvider(issuer, keys string) (Authenticate, Attest) {
 			return claims{}, false
 		}
 		var c claims
-		if token.Claims(&c) != nil || c.Type != "Bearer" { // an ID token is not a credential
+		if token.Claims(&c) != nil || c.Type != "Bearer" {
 			return claims{}, false
 		}
 		if token.Subject == "" && c.Party != "" {
@@ -61,8 +51,6 @@ func OIDCProvider(issuer, keys string) (Authenticate, Attest) {
 	return authenticate, attest
 }
 
-// RFC 8176 distinguishes knowledge, possession and biometric methods. Unknown
-// methods and user presence do not prove another factor.
 func multipleFactors(methods []string) bool {
 	if slices.Contains(methods, "mfa") {
 		return true

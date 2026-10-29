@@ -1,7 +1,3 @@
-// The HTTP surface of the host: authentication, the directory, routing by
-// action, read and input name, the per-caller catalog, one journal, and the one
-// place contract errors become HTTP. The package's component map, lock
-// obligations and pipeline entry points are in doc.go.
 package platformserver
 
 import transport "platformserver/kernel/transport"
@@ -26,63 +22,41 @@ import (
 	"platformserver/platform/authz"
 )
 
-// Authenticate and Attest are the identity provider's two answers (package idp).
 type (
 	Authenticate = idp.Authenticate
 	Attest       = idp.Attest
 )
 
-// Tokens authenticates with a fixed token → subject table (development and tests).
 func Tokens(table map[string]string) Authenticate {
 	return func(token string) (string, bool) { s, ok := table[token]; return s, ok }
 }
 
-// Now is the server clock at the journal's precision (PostgreSQL keeps
-// microseconds), so replayed records carry the times first recorded.
 func Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
-// Host serves tenants; each tenant's directory resolves its members.
 type Host struct {
-	Release       int
-	ReleaseDigest string
-	tenants       []*Tenant
-	tenantsFrom   func() []*Tenant // deployment generations; nil for an in-memory host
-	authenticate  Authenticate
-	Now           func() time.Time
-	Recover       func(context.Context, string) error // only configured with a durable journal and a tenant factory
-	// Web is the directory of the workspace's build, served at "/"
-	// from the API's origin; empty serves no pages.
-	Web string
-	// SignIn tells the workspace how to sign in (GET /v1/sign-in): the OpenID
-	// issuer and the workspace's client, or, with neither, the identities of
-	// the host's own seats — on a development host the token is the subject,
-	// on a lightweight one each served token is signed with the local key.
-	Issuer, Client string
-	Development    bool
-	// Mint, when set, signs the identity tokens /v1/sign-in serves: the
-	// lightweight host's key. Without it the tokens are the
-	// development ones, the subject itself.
-	Mint func(subject string) string
-	// HostAdmins are the subjects that may open the host console: an independent scope, not a tenant's administrators.
+	Release             int
+	ReleaseDigest       string
+	tenants             []*Tenant
+	tenantsFrom         func() []*Tenant
+	authenticate        Authenticate
+	Now                 func() time.Time
+	Recover             func(context.Context, string) error
+	Web                 string
+	Issuer, Client      string
+	Development         bool
+	Mint                func(subject string) string
 	HostAdmins          map[string]bool
 	RuntimeProviders    platform.RuntimeProviders
 	AuthorizationEngine authz.Engine
 	stats               *transport.Stats
 	limiter             *transport.Limiter
 	web                 *transport.WebFiles
-	// Templates and CreateTenant are how the host console adds a tenant;
-	// a host without a Rebuild leaves CreateTenant nil.
-	Templates    func() []platform.TenantTemplate
-	CreateTenant func(platform.CreateTenantRequest, string) (*Tenant, error)
-	routes       []transport.Route // as Handler registered them: the API contract's source (api.go)
-	SecondFactor Attest            // nil: the provider does not say
+	Templates           func() []platform.TenantTemplate
+	CreateTenant        func(platform.CreateTenantRequest, string) (*Tenant, error)
+	routes              []transport.Route
+	SecondFactor        Attest
 }
 
-// SignWith makes the host take the lightweight provider's tokens and sign the
-// seats it serves with them: the host's authenticate function is
-// replaced, so a development token — the subject itself — is not accepted
-// beside them. Both are set through one call so a host cannot end up signing
-// with a key it does not verify.
 func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 	h.authenticate = signer.Authenticate()
 	controlowner.UseTokenKey(signer.Key())
@@ -95,7 +69,6 @@ func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 	}
 }
 
-// NewHost serves tenants; a tenant's members come from its console (the platform app).
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
 	h := &Host{tenants: tenants, authenticate: authenticate, Now: Now, RuntimeProviders: platform.DefaultRuntimeProviders(), AuthorizationEngine: authz.Standard{}}
 	h.bindSystemDefinitions(tenants)
@@ -116,19 +89,15 @@ func consoleOf(t *Tenant) platform.IdentitySessions {
 	return d
 }
 
-// TenantHeader names the tenant a request is for, when the caller is a member
-// of several on this host; without it, the first that knows them.
 const TenantHeader = "Platform-Tenant"
 
-// chatMaxBytes bounds a chat request body: a conversation with its tool
-// declarations, well within what a person or a page sends (review AI-03).
 const chatMaxBytes = 1 << 20
 
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	want := r.Header.Get(TenantHeader)
 	now := h.Now()
-	if strings.HasPrefix(credential, controlowner.TokenPrefix) { // a personal token
+	if strings.HasPrefix(credential, controlowner.TokenPrefix) {
 		for _, t := range h.currentTenants() {
 			if d := consoleOf(t); d != nil && (want == "" || t.ID == want) {
 				if m, ok := d.MemberByToken(credential, now); ok && d.NoticeSession(m.ID, credential, r.UserAgent(), "token", now) {
@@ -147,16 +116,16 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 			continue
 		} else if m, ok := d.MemberBySubject(subject); ok {
 			if d.SecondFactorRequired() && (h.SecondFactor == nil || !h.SecondFactor(credential)) {
-				return platform.Member{}, nil, false // the tenant asks a second factor this credential does not show
+				return platform.Member{}, nil, false
 			}
 			if !d.NoticeSession(m.ID, credential, r.UserAgent(), "sign-in", now) {
-				return platform.Member{}, nil, false // a session the member ended, or whose hours are up
+				return platform.Member{}, nil, false
 			}
 			d.SeenMember(m.ID, now)
 			return m, t, true
 		}
 	}
-	for _, t := range h.currentTenants() { // nobody's member: a tenant's sign-in domain may seat them
+	for _, t := range h.currentTenants() {
 		if d := consoleOf(t); d != nil && (want == "" || t.ID == want) && (!d.SecondFactorRequired() || h.SecondFactor != nil && h.SecondFactor(credential)) && d.JoinsSubject(subject) && h.join(t, d, subject, now) {
 			return h.member(r)
 		}
@@ -164,8 +133,6 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	return platform.Member{}, nil, false
 }
 
-// join seats subject in t by its sign-in domain: the host records the
-// decision as the platform's automation; the newcomer holds nothing until granted.
 func (h *Host) join(t *Tenant, d platform.IdentitySessions, subject string, now time.Time) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -188,7 +155,6 @@ func (h *Host) join(t *Tenant, d platform.IdentitySessions, subject string, now 
 	return err == nil
 }
 
-// tenantsOf are the tenants on this host where the request's subject is a member.
 func (h *Host) tenantsOf(r *http.Request) []string {
 	subject, _ := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	out := []string{}
@@ -202,7 +168,6 @@ func (h *Host) tenantsOf(r *http.Request) []string {
 	return out
 }
 
-// Handler serves the host's HTTP surface, with CORS for browser clients.
 func (h *Host) Handler() http.Handler {
 	rt := &routes{h: h, mux: http.NewServeMux()}
 	mux := rt.mux
@@ -215,17 +180,13 @@ func (h *Host) Handler() http.Handler {
 	h.routesAI(rt)
 	h.routesCredentials(rt)
 	h.routesIntegration(rt)
-	h.routes = append(h.routes, namedReads...) // served by GET /v1/{read}
+	h.routes = append(h.routes, namedReads...)
 	rt.metadata(transport.Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
-	// The runtime's own profiles, when the operator asks for them.
 	transport.ProfileRoutes(mux)
-	// The host console: its own scope, its own administrators.
 	h.hostConsoleRoutes(mux)
 	h.environmentRoutes(mux)
-	// The process is alive and holds its tenants; a tenant's own
-	// health is the administrators' read /v1/health.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		quarantined := 0
 		tenants := h.currentTenants()
@@ -241,16 +202,12 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, map[string]any{"status": status, "tenants": len(tenants), "quarantined": quarantined, "release": h.Release, "releaseDigest": h.ReleaseDigest})
 	})
 	if h.Web != "" {
-		// The workspace is one page held in memory: a path that is not a file
-		// is its route, and a hashed asset is cached for a year.
 		if h.web == nil {
 			h.web = transport.LoadWeb(h.Web)
 		}
 		web := h.web
 		mux.Handle("GET /", web)
 	}
-	// What the process has served, in the exposition format Prometheus reads.
-	// The counts name route patterns, never tenants or members.
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
 		if !h.scrapeAllowed(r) {
 			w.Header().Set("Content-Type", "application/json")
@@ -263,8 +220,6 @@ func (h *Host) Handler() http.Handler {
 		h.stats.WritePrometheus(w)
 	})
 	if h.limiter == nil {
-		// A person never reaches this; a loop or a leaked token does.
-		// PLATFORM_RATE_LIMIT=0 turns it off.
 		rate, _ := strconv.ParseFloat(os.Getenv("PLATFORM_RATE_LIMIT"), 64)
 		if rate == 0 && os.Getenv("PLATFORM_RATE_LIMIT") == "" {
 			rate = 600
@@ -281,8 +236,6 @@ func (h *Host) Handler() http.Handler {
 	return transport.Edge(mux, h.stats, h.limiter, TenantHeader, SchemaVersionHeader)
 }
 
-// scrapeAllowed keeps the process counters off the open internet: a scrape
-// needs a credential this host accepts, or a loopback caller.
 func (h *Host) scrapeAllowed(r *http.Request) bool {
 	if r.Header.Get("Authorization") != "" {
 		if _, _, ok := h.member(r); ok {
@@ -305,8 +258,6 @@ var statuses = map[pb.ErrorCode]int{
 	pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE:    http.StatusUnprocessableEntity,
 }
 
-// Reply writes {"record": …}, {"ok": true} or {"error": {"code": …}}; clients map
-// the code to outbox events (K5 A8), never the HTTP status.
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error, issues ...platform.FieldIssue) {
 	switch {
 	case err != nil:

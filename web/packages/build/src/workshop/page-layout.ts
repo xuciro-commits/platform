@@ -49,7 +49,6 @@ function removeWidget(document: Document, section: string): Document {
 }
 
 function pruneEmpty(next: Document, parent: string) {
-  // Empty non-root containers are removed so a saved document remains valid.
   let current = parent;
   while (current !== next.root && !next.nodes[current]?.slot && next.nodes[current]?.children?.length === 0 && !next.unusedWidgets?.some(entry=>entry.parent===current)) {
     const above = parentOf(next, current);
@@ -105,7 +104,6 @@ export function repairTabs(document: Document): Document {
   return document;
 }
 
-/** An independent root; the editor must add content before saving. */
 export function addOverlay(document: Document, title: string): { document: Document; root: string } {
   const next = structuredClone(document), id = layoutID("overlay"), root = layoutID("overlayRoot"), variable = layoutID("open");
   next.uiProfile = pageUIProfile;
@@ -115,7 +113,6 @@ export function addOverlay(document: Document, title: string): { document: Docum
   return { document: next, root };
 }
 
-/** Remove this root and its triggers, preserving every other section identity. */
 export function removeOverlay(document: Document, id: string): { document: Document; sections: Set<string> } {
   const next = structuredClone(document), overlay = next.overlays?.[id], sections = new Set<string>();
   if (!overlay) return { document, sections };
@@ -167,7 +164,6 @@ export function synchronizeLoopBindings<T extends { id?: string; widget: string;
   }) };
 }
 
-/** Dormant edges retain original scopes; actual children remain render-only. */
 export function stashWidget(document:Document,section:string):Document {
  const leaf=leafOf(document,section),parent=leaf&&parentOf(document,leaf);
  if(!leaf||!parent||document.unusedWidgets?.some(entry=>entry.node===leaf))return document;

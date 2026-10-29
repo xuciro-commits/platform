@@ -1,5 +1,3 @@
-// Package trials owns bounded candidate test plans and synthetic evidence.
-// Actual decisions, reads, accepted results and recovery use the original host.
 package trials
 
 import (
@@ -15,9 +13,6 @@ import (
 	"time"
 )
 
-// Simulation is what a submission would change if it were taken now, decided
-// in a private staged decision that is then discarded: no
-// journal entry, no record, notice, effect or delivery leaves it.
 type Simulation struct {
 	Issues          []platform.FieldIssue    `json:"issues,omitempty"`
 	RefusalCode     string                   `json:"refusalCode,omitempty"`
@@ -38,7 +33,6 @@ type Simulation struct {
 	FunctionMatched *bool                    `json:"functionMatched,omitempty"`
 }
 
-// SimulatedFlow exposes native progress/trace, never its raw source Data.
 type SimulatedFlow struct {
 	ID           string                     `json:"id"`
 	Flow         string                     `json:"flow"`
@@ -51,7 +45,6 @@ type SimulatedFlow struct {
 	Outputs      map[string]json.RawMessage `json:"outputs,omitempty"`
 }
 
-// SimulatedChange is one record the decision would write, as it would read.
 type SimulatedChange struct {
 	Before json.RawMessage `json:"before,omitempty"`
 	Type   string          `json:"type"`
@@ -59,8 +52,6 @@ type SimulatedChange struct {
 	Record json.RawMessage `json:"record"`
 }
 
-// CandidateSimulationRequest fixes all business inputs of an isolated run.
-// Create actions establish its sample data; nothing is copied from live rows.
 type CandidateSimulationRequest struct {
 	Organization  *platform.OrgSeed   `json:"organization,omitempty"`
 	Roots         []platform.AssetRef `json:"roots,omitempty"`
@@ -79,21 +70,19 @@ type CandidateSimulationRequest struct {
 }
 
 type SimulationStep struct {
-	Read           bool            `json:"read,omitempty"`
-	Type           string          `json:"type"`
-	ID             string          `json:"id"`
-	Action         string          `json:"action"`
-	Payload        json.RawMessage `json:"payload"`
-	Expect         string          `json:"expect,omitempty"`
-	As             string          `json:"as,omitempty"`
-	AdvanceSeconds int             `json:"advanceSeconds,omitempty"`
-	// Answer identifies a candidate flow's native ask token, never an arbitrary
-	// production task. The ordinary work action still checks the chosen actor.
-	Flow     string                    `json:"flow,omitempty"`
-	Step     string                    `json:"step,omitempty"`
-	Answer   string                    `json:"answer,omitempty"`
-	Function *platform.FunctionFixture `json:"function,omitempty"`
-	Compute  *platform.ComputeFixture  `json:"compute,omitempty"`
+	Read           bool                      `json:"read,omitempty"`
+	Type           string                    `json:"type"`
+	ID             string                    `json:"id"`
+	Action         string                    `json:"action"`
+	Payload        json.RawMessage           `json:"payload"`
+	Expect         string                    `json:"expect,omitempty"`
+	As             string                    `json:"as,omitempty"`
+	AdvanceSeconds int                       `json:"advanceSeconds,omitempty"`
+	Flow           string                    `json:"flow,omitempty"`
+	Step           string                    `json:"step,omitempty"`
+	Answer         string                    `json:"answer,omitempty"`
+	Function       *platform.FunctionFixture `json:"function,omitempty"`
+	Compute        *platform.ComputeFixture  `json:"compute,omitempty"`
 }
 
 type SimulationActor struct {
@@ -115,8 +104,6 @@ type CandidateSimulation struct {
 	Passed      *bool             `json:"passed,omitempty"`
 }
 
-// SimulationSample is explicit synthetic data, never a request to copy a
-// production row. The source owner's published model/scope/query is retained.
 type SimulationSample struct {
 	Type    string            `json:"type"`
 	Records []json.RawMessage `json:"records"`
@@ -132,8 +119,6 @@ type Environment struct {
 	Samples             []SimulationSample
 }
 
-// sampleOwner exposes only selected immutable metadata and read scopes. It
-// cannot run production business callbacks or dispatch external effects.
 type sampleOwner struct {
 	manifest platform.Manifest
 	ledger   *platform.Ledger
@@ -234,7 +219,6 @@ func PrepareEnvironment(apps []platform.App, candidate platform.ReleaseCandidate
 	total := 0
 	seen := map[string]bool{}
 	for _, sample := range samples {
-		// The candidate's object references are the exact sample allow-list.
 		allowed := false
 		for ref := range selected {
 			allowed = allowed || ref.Kind == platform.AssetObject && ref.Name == sample.Type
@@ -264,8 +248,6 @@ func PrepareEnvironment(apps []platform.App, candidate platform.ReleaseCandidate
 	return environment, nil
 }
 
-// Trace bounds one test step's original decision evidence. Denied row probes
-// share one explanation without retaining private row IDs or row counts.
 type Trace struct {
 	Events      []platform.DecisionTrace
 	Truncated   bool
@@ -277,8 +259,6 @@ func (trace *Trace) Record(event platform.DecisionTrace) {
 	if trace.deniedReads == nil {
 		trace.deniedReads = map[string]bool{}
 	}
-	// Row filtering may ask about rows the actor cannot see. Explain the
-	// original denial once without revealing those rows' IDs or their count.
 	if event.Request != nil && event.Authorization != nil && event.Request.Kind == "read" && !event.Authorization.Allow {
 		question := *event.Request
 		question.Record = ""
@@ -310,8 +290,6 @@ func (trace *Trace) Record(event platform.DecisionTrace) {
 	trace.Events = append(trace.Events, event)
 }
 
-// Runtime exposes the original private execution and saved-state owner. A
-// trial never receives the host, production rows, transports or credentials.
 type Runtime interface {
 	Step(int, SimulationStep) (Simulation, *kernel.Error)
 	HasAI() bool
@@ -322,8 +300,6 @@ type Runtime interface {
 	Check() error
 }
 
-// RunCandidate executes the bounded plan and compares recovery using a fresh
-// instance of the same original runtime; it does not interpret business rules.
 func RunCandidate(request CandidateSimulationRequest, candidate platform.ReleaseCandidate, member platform.Member, members []platform.Member, functionName string, compose func() (Runtime, error)) (CandidateSimulation, *kernel.Error) {
 	var empty CandidateSimulation
 	sandbox, err := compose()

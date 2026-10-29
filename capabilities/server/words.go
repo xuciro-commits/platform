@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-// decideTranslation decides platform.translation.set: a language tag and a
-// text are required; the entry applies to every declaration served from then on.
 func (t *Tenant) decideTranslation(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	lang := strings.TrimSpace(s.GetTarget().GetId())
 	var p struct{ Text, Translation string }
@@ -29,26 +27,19 @@ func (t *Tenant) decideTranslation(_ platform.Caller, s *pb.Submission, _ time.T
 	}, nil
 }
 
-// A Word is a declaration text with what each language says for it, as the
-// Languages page edits them: `translations` is what the host serves (tenant
-// entry over shipped dictionary), `own` the tenant's entries only.
 type Word struct {
 	Text         string            `json:"text"`
 	Translations map[string]string `json:"translations"`
 	Own          map[string]string `json:"own"`
 }
 
-// WordsView answers GET /v1/words: the texts of one app with their
-// translations in every language the tenant has.
 type WordsView struct {
 	App       string   `json:"app"`
-	Apps      []string `json:"apps"`      // the apps whose texts may be listed
-	Languages []string `json:"languages"` // the languages any dictionary has
+	Apps      []string `json:"apps"`
+	Languages []string `json:"languages"`
 	Words     []Word   `json:"words"`
 }
 
-// Words lists an app's declaration texts ( Texts, plus the tenant's
-// installed definitions for Build) with what every language says for each.
 func (t *Tenant) Words(app string) WordsView {
 	view := WordsView{App: app, Apps: []string{}, Languages: t.i18n.Languages(), Words: []Word{}}
 	for _, a := range t.apps {

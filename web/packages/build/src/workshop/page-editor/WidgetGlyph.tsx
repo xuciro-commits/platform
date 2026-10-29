@@ -1,6 +1,5 @@
 import type {WidgetID} from '@platform/app';
 import {Table2,List,FileText,MousePointerClick,ChartNoAxesCombined,Hash,Filter,ClipboardList,History,ListTodo,Sparkles,Code,SquareMousePointer,TextCursorInput,TableProperties,ChartGantt,Columns3,PanelsTopLeft,Group,Link,Route,Heading,CaseSensitive,ChartLine,CalendarDays,CalendarRange,Activity,Gauge,ListOrdered,SlidersHorizontal,ToggleLeft,ListFilter,Calendar,Search,TriangleAlert,Info,Minus,Space,WholeWord,ChartColumn,ChartScatter,Grid2X2,LayoutGrid,TrendingUp,IdCard,Columns2,Tags,MessageSquare,Upload,Images,FileType,Inbox,Bell,ChevronRight,Users,Image,Library,FolderTree,Network,GitBranch,ChartBar,NotebookPen,Sheet,AppWindow,Globe,Bot,Map,Scan,Binoculars,Box,type LucideIcon} from 'lucide-react';
-/** Authoring appearance keyed by the existing contract, never a second widget registry. */
 const icons:Record<WidgetID,LucideIcon>={
  'layered-graph':Network,'model-matrix':Grid2X2,
  'inline-action':MousePointerClick,table:Table2,detail:TableProperties,actions:MousePointerClick,chart:ChartNoAxesCombined,metric:Hash,text:FileText,filter:Filter,form:ClipboardList,timeline:History,tasks:ListTodo,function:Sparkles,compute:Code,button:SquareMousePointer,input:TextCursorInput,pivot:TableProperties,

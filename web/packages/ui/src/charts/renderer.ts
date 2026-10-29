@@ -1,5 +1,3 @@
-// ECharts 6, loaded the first time a chart draws: the kit's other
-// pages never download it.
 import { BarChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { init, use } from "echarts/core";

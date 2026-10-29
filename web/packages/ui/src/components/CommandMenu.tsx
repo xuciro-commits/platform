@@ -10,7 +10,6 @@ const commandClass=(command:ContextCommand)=>`${item} ${command.danger?'text-[va
 function CommandLabel({command}:{command:ContextCommand}){
  return <>{command.icon&&<span className="mr-2 [&_svg]:size-3.5">{command.icon}</span>}<span className="flex-1">{command.label}</span>{command.shortcut&&<span className="ml-4 text-2xs text-muted">{command.shortcut}</span>}</>;
 }
-/** Pointer menus and an explicit keyboard/touch trigger share caller-owned commands. */
 export function CommandMenu({children,label,commands,focusKey,compact=false}:{children:ReactNode;label:string;commands:ContextCommand[];focusKey?:string;compact?:boolean}){
  const trigger=useId();
  const previous=useRef<HTMLElement|null>(null);

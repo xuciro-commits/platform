@@ -4,7 +4,6 @@ import {useState} from "react";
 import {t} from "../i18n";
 import type {EntityInfo,EntityRecord} from "./Records";
 
-/** Original window order and identity determine X. Missing values break the line; they never become zero. */
 export function recordSparklinePoints(records:EntityRecord[],info:EntityInfo,field:string,maxPoints:number=renderingLimits.runtime.sparkline.maxPoints) {
  const descriptor=info.fields.find(f=>f.name===field);
  if(!descriptor||!["integer","decimal"].includes(descriptor.type)||!Number.isInteger(maxPoints)||maxPoints<1||maxPoints>renderingLimits.runtime.sparkline.maxPoints||records.length>maxPoints||records.some(r=>typeof r.id!=="string"||!r.id||r.id.length>1024)||new Set(records.map(r=>r.id)).size!==records.length)return;
@@ -16,7 +15,6 @@ export function recordSparklinePoints(records:EntityRecord[],info:EntityInfo,fie
  return {points:coordinates,segments,missing:points.length-values.length,min,max,title:descriptor.title};
 }
 
-/** A caller-owned scalar with an independently authorized ordered record mini-line. */
 export function RecordSparkline({valueText,label,suffix="",records,info,field}:{valueText?:string;label:string;suffix?:string;records?:EntityRecord[];info?:EntityInfo;field?:string}) {
  const [focus,setFocus]=useState<string>(),model=records&&info&&field?recordSparklinePoints(records,info,field):undefined;
  if(records&&(!model||!info||!field))return <p role="alert">{t("Sparkline record fields, identities or values are unavailable or incompatible.")}</p>;

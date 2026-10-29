@@ -14,15 +14,10 @@ import { t } from "../i18n";
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
-    /** Numbers and codes align right with tabular figures. */
     align?: "left" | "right";
     width?: number;
-    /** Freeze the identity/key column while the rest scroll sideways. */
     pin?: "left";
-    /** Set by columnsFor: the column's field type, which also edits cells inline. */
     field?: FieldType<any, TData>;
-    /** Server-ordered column: the header hands the next direction to the
-     * query owner instead of reordering the current page locally. */
     querySort?: { direction?: "asc" | "desc"; onChange: (next: "asc" | "desc") => void };
   }
 }
@@ -31,7 +26,6 @@ export type DataTableProps<T> = {
   data: T[];
   columns: ColumnDef<T, any>[];
   getRowId: (row: T) => string;
-  /** Viewport height; rows outside it are not rendered, so 100k rows stay fast. */
   height?: number | string;
   rowHeight?: number;
   onRowClick?: (row:T,modifiers?:{shift:boolean;toggle:boolean})=>void;
@@ -40,18 +34,12 @@ export type DataTableProps<T> = {
   searchable?: boolean;
   toolbar?: ReactNode;
   empty?: ReactNode;
-  /** Shows a loading state when rows are being fetched. */
   loading?: boolean;
   loadingText?: ReactNode;
-  /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */
   onCellEdit?: (row: T, column: string, value: unknown) => void;
-	/** An original owner decision, consumed without a client permission rule. */
 	cellAccess?: (row:T,column:string)=>{allow:boolean;reason:string}|undefined;
-  /** Drag header edges to resize. Default on; set false to lock layout. */
   resizable?: boolean;
-  /** Virtualize flat leaf columns as well as rows; pinned metadata stays mounted. */
   virtualColumns?: boolean;
-  /** Right-click a data row (browser menu is suppressed when provided). */
   onRowContextMenu?: (row: T) => void;
 };
 
@@ -63,8 +51,6 @@ const focusSel = (root: HTMLElement | null, sel: string, n = 3) => {
   else if (n) requestAnimationFrame(() => focusSel(root, sel, n - 1));
 };
 
-/** A muted type glyph before the header title, Notion-style: the column's
- * field semantics at a glance without spending a cell on it. */
 const headerTypeIcons: Record<string, typeof Calendar> = {
   date: Calendar, datetime: CalendarClock, choice: CircleDot, boolean: CheckSquare,
   reference: Link2, references: Link2, tags: Tags, integer: Hash, decimal: Hash,
@@ -75,7 +61,6 @@ function headerTypeIcon(type?: string) {
   return Icon ? <Icon className="size-3 shrink-0 text-muted" aria-hidden /> : null;
 }
 
-/** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
   data, columns, getRowId, height = 480, rowHeight, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
   selectedIds,loading = false, loadingText, onCellEdit, cellAccess,resizable = true, virtualColumns = false, onRowContextMenu,
@@ -89,7 +74,6 @@ export function DataTable<T>({
   const scroller = useRef<HTMLDivElement>(null);
   const browse = typeof onRowClick === "function";
   const grid = !browse && typeof onCellEdit === "function";
-  // Default row height follows the density token; an explicit prop wins.
   const [tokenRowHeight,setTokenRowHeight]=useState(28);
   const explicitRowHeight=typeof rowHeight==="number"&&Number.isFinite(rowHeight)&&rowHeight>0;
   const rh = explicitRowHeight ? rowHeight : tokenRowHeight;
@@ -102,7 +86,6 @@ export function DataTable<T>({
     return ()=>observer.disconnect();
   },[explicitRowHeight]);
 
-  // Like a spreadsheet: opening an editor selects the value, so typing replaces it.
   const selectOnOpen = useCallback((el: HTMLDivElement | null) => {
     const input = el?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
       'input:not([type="checkbox"]):not([type="file"]):not([type="hidden"]), textarea',
@@ -148,7 +131,6 @@ export function DataTable<T>({
   useEffect(()=>{if(horizontal)columnVirtualizer.measure();},[horizontal,widthKey]);
   const mountedColumns=horizontal?new Set([...columnVirtualizer.getVirtualItems().map(i=>i.index),...leaf.flatMap((c,i)=>c.columnDef.meta?.pin==="left"?[i]:[])]):undefined;
   const template = widths.map((w) => (horizontal?`${w??120}px`:w ? `${w}px` : "minmax(120px, 1fr)")).join(" ");
-  // Wide entities scroll sideways instead of squeezing their columns.
   const minWidth = Math.max(320, widths.reduce<number>((n, w) => n + (w ?? 120), 0));
   let pinAcc = 0;
   const pins = leaf.map((c) => {

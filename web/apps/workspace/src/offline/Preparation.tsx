@@ -3,8 +3,6 @@ import {useHost} from "@platform/app";
 import {Button,Dialog,Disclosure,InspectorSection,Panel,Textarea,t} from "@platform/ui";
 import {prepareShell} from "./shell";
 
-/** Preparation uses the selected published app and original read endpoints.
- * The shell never manufactures rows or grants permission from cached roles. */
 export function OfflinePreparation({application,release,open,onOpenChange}:{application?:string;release?:string;open:boolean;onOpenChange:(open:boolean)=>void}){
  const host=useHost(),client=host.client;
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[saved,setSaved]=useState(""),[,setRevision]=useState(0);

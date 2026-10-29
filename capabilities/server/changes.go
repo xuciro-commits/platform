@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// changes wakes tenant followers (F-32). Data changes invalidate authorized
-// reads; queue-only progress invalidates operation monitors. Neither event
-// carries records, identities or private task details.
 type changes struct {
 	mu        sync.Mutex
 	seq       int64
@@ -24,8 +21,6 @@ func (t *Tenant) changed() {
 	t.markChanged(true, "")
 }
 
-// Queue progress without record, private state or notification changes wakes
-// operation monitors without invalidating every business read in the tenant.
 func (t *Tenant) operationsChanged(owner ...string) {
 	name := ""
 	if len(owner) > 0 {
@@ -66,8 +61,6 @@ func (t *Tenant) markChanged(data bool, owner string) {
 	wakeWork()
 }
 
-// Changes is how many inputs the tenant has taken since it started serving,
-// and a channel closed at the next one.
 func (t *Tenant) Changes() (int64, <-chan struct{}) {
 	seq, _, wake := t.changeState()
 	return seq, wake
@@ -83,8 +76,6 @@ func (t *Tenant) changeState() (int64, int64, <-chan struct{}) {
 	return c.seq, c.data, c.wake
 }
 
-// followChanges sends an initial changed event, then changed or operations per
-// burst. Comments every 25 seconds keep proxies from closing the stream.
 func followChanges(w http.ResponseWriter, r *http.Request, t *Tenant) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -109,7 +100,7 @@ func followChanges(w http.ResponseWriter, r *http.Request, t *Tenant) {
 				return
 			case <-wake:
 				waiting = false
-				time.Sleep(150 * time.Millisecond) // a burst of inputs is one event
+				time.Sleep(150 * time.Millisecond)
 			case <-time.After(25 * time.Second):
 				fmt.Fprint(w, ": keep-alive\n\n")
 				flusher.Flush()

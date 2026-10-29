@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Restores an offline Go toolchain for this sandbox (PyPI go-bin or accessible mirrors).
 set -e
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
@@ -12,7 +11,6 @@ if [ ! -x /home/user/.go-toolchain/go/bin/go ]; then
     pip download go-bin==$V --no-deps -d /tmp/gob -q && unzip -q -o /tmp/gob/*.whl -d /home/user/.go-toolchain
   fi
 fi
-# An isolated workspace lets the host and the kernel contract share dependencies without modifying go.mod or go.sum.
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
 import json

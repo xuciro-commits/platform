@@ -15,15 +15,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// The host API contract. The Go types are the source: each
-// route is declared once with its handler, the body it takes and the answer
-// it gives, and the host describes them as OpenAPI 3.1 at /v1/openapi.json.
-// The TypeScript types of the web edge are generated from the same document
-// (cmd/api-types), never written by hand. Per tenant, the document also
-// describes each entity type the member may read and each action's payload.
-
-// namedReads document the platform apps' reads, all served by GET /v1/{read}:
-// the contract names each with the Go type it answers with.
 var namedReads = []transport.Route{
 	{Pattern: "GET /v1/contributions", Summary: "This tenant's namespaced contributions: every app's views and installed packages' views", Answer: []platform.Contribution{}},
 	{Pattern: "GET /v1/packages", Summary: "Administrators read the package index; application builders discover installed blueprints", Answer: []platform.PackageView{}},
@@ -64,51 +55,42 @@ var namedReads = []transport.Route{
 	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []platform.RelationNote{}},
 }
 
-// InboxTask is a task as the inbox serves it: with its answers in the
-// reader's language, beside the values submitted.
 type InboxTask struct {
 	platform.WorkTask
 	AnswerTitles []string `json:"answerTitles,omitempty"`
 }
 
-// SubmissionAnswer is what a decision's route answers: the accepted change
-// record, or an error with the code the kernel's errors name (contract/spec/errors.md).
 type SubmissionAnswer struct {
 	Record *pb.ChangeRecord    `json:"record,omitempty"`
 	Error  *platform.ErrorBody `json:"error,omitempty"`
 }
 
-// ProtocolCall is the body of a call to a protocol's action.
 type ProtocolCall struct {
 	Target         string          `json:"target"`
 	IdempotencyKey string          `json:"idempotencyKey"`
 	Payload        json.RawMessage `json:"payload"`
 }
 
-// MeView is who the caller is on this host, and what they may open.
 type MeView struct {
 	TenantID    string                `json:"tenantId"`
 	PrincipalID string                `json:"principalId"`
 	Profile     platform.Member       `json:"profile"`
 	Apps        []AppEntry            `json:"apps"`
 	Tenants     []string              `json:"tenants"`
-	Language    string                `json:"language"`            // the language the host serves this member in; "" is English
-	Languages   []string              `json:"languages"`           // the languages the tenant has dictionaries for
-	Preferred   string                `json:"preferred,omitempty"` // the member's own choice
-	Currency    string                `json:"currency"`            // the tenant's, the default of amounts people enter
-	Account     platform.Account      `json:"account"`             // the member's profile over the tenant's defaults
-	Tenant      platform.TenantRecord `json:"tenant"`              // the tenant's record
+	Language    string                `json:"language"`
+	Languages   []string              `json:"languages"`
+	Preferred   string                `json:"preferred,omitempty"`
+	Currency    string                `json:"currency"`
+	Account     platform.Account      `json:"account"`
+	Tenant      platform.TenantRecord `json:"tenant"`
 }
 
-// SignIn tells the workspace how to sign in: an OpenID issuer and client, or
-// development identities.
 type SignIn struct {
 	Issuer     string                   `json:"issuer,omitempty"`
 	Client     string                   `json:"client,omitempty"`
 	Identities []platform.LoginIdentity `json:"identities,omitempty"`
 }
 
-// OpenAPI captures already-authorized declarations, then describes their HTTP contract.
 func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 	var entities []platform.EntityInfo
 	var actions []platform.Action

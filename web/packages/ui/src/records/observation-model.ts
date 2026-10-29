@@ -18,7 +18,6 @@ export function observationTableRecords(records:readonly EntityRecord[],info:Ent
  const integers=new Set(info.fields.filter(f=>f.type==="integer").map(f=>f.name));
  return records.every(r=>Object.values(metadata).every(field=>r[field]==null||field===metadata.time? r[field]==null||observationInstant(r[field])!==undefined:typeof r[field]==="string")&&signals.every(s=>r[s.field]==null||typeof r[s.field]==="number"&&Number.isFinite(r[s.field])&&(!integers.has(s.field)||Number.isSafeInteger(r[s.field]))));
 }
-/** UTC geometry retains nanosecond order, original offsets and literal timestamps. */
 function observationInstant(value:unknown):bigint|undefined {
  if(typeof value!=="string")return;
  return timestampNanoseconds(value);

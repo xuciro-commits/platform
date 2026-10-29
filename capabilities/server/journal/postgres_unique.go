@@ -20,8 +20,6 @@ var uniqueStateSchema = []string{
 	`create index if not exists runtime_unique_key on runtime_unique (tenant,type,rule,key_hash,id)`,
 }
 
-// writeUnique is part of the original accepted-result transaction. Keys are
-// already checked by their owner; this table is a lookup, not a second judge.
 func (j *Postgres) writeUnique(ctx context.Context, tx pgx.Tx, tenant string, position int64, replacements []StateUnique) error {
 	for _, row := range replacements {
 		if _, err := tx.Exec(ctx, `delete from runtime_unique where tenant=$1 and type=$2 and id=$3`, tenant, row.Type, row.ID); err != nil {
@@ -38,8 +36,6 @@ func (j *Postgres) writeUnique(ctx context.Context, tx pgx.Tx, tenant string, po
 	return nil
 }
 
-// Filtering out newer keys would lose an old occupant whose key was replaced.
-// Check the exact applied position in the same database view as the lookup.
 func (j *Postgres) StateUnique(ctx context.Context, tenant, typ, rule, key string, applied int64) ([]string, error) {
 	tx, err := j.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -90,9 +86,6 @@ func stateUnique(ctx context.Context, db stateQueries, tenant, typ, rule, key st
 	return ids, nil
 }
 
-// compareUnique runs only after the owner images, history and position have
-// already been verified by compareState. A missing format marks a first
-// derivation; an existing format must match and is never silently repaired.
 func (j *Postgres) compareUnique(ctx context.Context, tx pgx.Tx, tenant string, position int64, complete []StateUnique) error {
 	var version int
 	err := tx.QueryRow(ctx, `select version from runtime_unique_formats where tenant=$1 for update`, tenant).Scan(&version)

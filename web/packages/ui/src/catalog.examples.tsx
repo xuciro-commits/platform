@@ -52,7 +52,6 @@ export function Scene3DExample(){return <SpatialSceneExample/>;}
 
 const observationSignals:ObservationSignal[]=[{field:"pressure",unit:"bar",group:"Process"},{field:"temperature",unit:"°C",group:"Process"},{field:"availability",unit:"%",group:"Availability"},...Array.from({length:97},(_,i)=>({field:`signal${i+3}`,unit:"",group:`Group ${Math.floor(i/10)+1}`}))];
 const observationInfo:EntityInfo={app:"catalog",type:"catalog.observation",title:"Observation",plural:"Observations",display:"asset",standard:[],fields:[{name:"time",title:"Event time",type:"datetime"},{name:"plant",title:"Plant",type:"text"},{name:"device",title:"Device",type:"text"},{name:"asset",title:"Asset",type:"text"},{name:"status",title:"Status",type:"choice",choices:["ready","warning"]},...observationSignals.map(s=>({name:s.field,title:s.field,type:"decimal" as const}))]};
-// Fixed synthetic Catalog values prove presentation only; none come from a tenant host.
 const observationRows:EntityRecord[]=Array.from({length:60},(_,i)=>({id:`OBS-${String(i).padStart(3,"0")}`,revision:1,created:{by:"catalog",at:"2026-10-03T00:00:00Z"},changed:{by:"catalog",at:"2026-10-03T00:00:00Z"},time:new Date(Date.UTC(2026,9,3,0,i)).toISOString(),plant:"Plant A",device:`Device ${i%3+1}`,asset:`Asset ${i%4+1}`,status:i%5===0?"warning":"ready",...Object.fromEntries(observationSignals.map((s,j)=>[s.field,s.field==="pressure"&&i===20?null:s.field==="availability"?95+i/20:s.field==="temperature"?60+i*2:i+j]))}));
 function ObservationExample({kind}:{kind:"table"|"statistics"|"availability"|"series"}){
  const [epoch,setEpoch]=useState(0),[denied,setDenied]=useState(false),[old,setOld]=useState(false),[selected,setSelected]=useState<string>(),[exported,setExported]=useState<string>(),[params,setParams]=useState({signal:"pressure",threshold:11.5,windowRows:10000});
@@ -78,8 +77,6 @@ export function ButtonGroups(){
  return <div className="grid gap-2"><ButtonGroup label={t("Button group")} buttons={[{id:"open",title:t("Open"),variant:"primary",icon:"arrow"},{id:"close",title:t("Close"),variant:"default"}]} isBound={()=>true} onActivate={setSelected}/><output>{selected}</output></div>;
 }
 
-// Runnable owner examples use public APIs and synthetic values only. Nothing in
-// this bundle fetches a host or suggests that a fixture proves authorization.
 export function PreviewWorkspace({ children, onOpen }: { children: ReactNode; onOpen?: (route: Route) => void }) {
   const workspace = useMemo(() => ({ open: (route: Route) => onOpen?.(route), close: () => {}, closeAll: () => {}, confirmLeave: (run: () => void) => run(), notify, palette: () => {}, recent: [], favorites: [], toggleFavorite: () => {} }), [onOpen]);
   return <WorkspaceContext.Provider value={workspace}>{children}</WorkspaceContext.Provider>;
@@ -255,7 +252,6 @@ const chart: ChartSpec = { title: t("Quantity by group"), data: { values: [{ gro
 export function Charts() { return <Chart spec={chart} height={240} />; }
 const aggregateSource = { aggregate: async () => ({ columns: [{ name: "group", title: t("Group"), kind: "group" as const, type: "nominal" as const }, { name: "count", title: t("Count"), kind: "measure" as const, type: "quantitative" as const }], rows: [{ group: "Alpha", count: 12 }, { group: "Beta", count: 24 }] }) };
 export function Pivots() { return <Pivot source={aggregateSource} type="demo.record" query={{}} rows="group" measure="count" />; }
-/** A process read in BPMN: a start event, a user task, a gateway and an end event. */
 export function Steps() {
   return <FlowSteps height={230}
     nodes={[{ id: "a", label: "Sample start", notation: "event-start", tone: "success" },
@@ -294,8 +290,6 @@ export function MasterDetail() {
   const [selected, setSelected] = useState<string>();
   return <RecordWorkspace title={t("Records")} source={demoSource} type={demoInfo.type} selected={selected} onSelect={setSelected} detail={(id) => <RecordPage source={demoSource} type={demoInfo.type} id={id} />} />;
 }
-// The shell with every region the platform uses: rail, application
-// switcher, context pane, dock. Synthetic applications; nothing is authorized here.
 function ShellHome() {
   const { applications, recent, favorites, open } = useWorkspace();
   return <div className="grid max-w-3xl gap-4">

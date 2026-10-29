@@ -9,14 +9,12 @@ export const refusalCategoryName=(category:string)=>t(({business:"Business refus
 export const refusalLevelName=(level:string)=>t(({block:"Transaction blocked",flag:"Accepted with a flag",route:"Routed for correction"} as Record<string,string>)[level]??level);
 export const refusalFactMessage=(fact:Api.BusinessRefusalFact)=>fact.translations?.[language()]||fact.message;
 
-/** Compare the actual input values, independent of object property order. */
 export function actionInputSignature(value: unknown): string {
  if(Array.isArray(value))return `[${value.map(actionInputSignature).join(",")}]`;
  if(value&&typeof value==="object")return `{${Object.entries(value).filter(([,item])=>item!==undefined).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>`${JSON.stringify(key)}:${actionInputSignature(item)}`).join(",")}}`;
  return JSON.stringify(value)??"undefined";
 }
 
-/** Present the authority's result without turning a business refusal into a permission rule. */
 export function ActionRefusal({entry,message,original}:{entry?:Entry;message:string;original?:Record<string,unknown>}) {
  const {client,source}=useHost(),{open}=useWorkspace(),openRecord=useOpenRecord(),target=entry?.submission.target,key=entry?.submission.idempotencyKey;
  const waiting=entry&&["SUBMISSION_STATE_PENDING","SUBMISSION_STATE_UNKNOWN","SUBMISSION_STATE_SENDING"].includes(entry.state);
@@ -45,10 +43,6 @@ export function ActionRefusal({entry,message,original}:{entry?:Entry;message:str
  </div>;
 }
 
-/** The ordered authorization verdict behind an access refusal, for the
- * administrators and auditors allowed to ask the engine why. The request is
- * the generated AuthzRequest — the refused submission's own action schema, its
- * principal, and the record it targeted — under this member's read scope. */
 function ExplainAccess({ entry }: { entry?: Entry }) {
  const {client,source,me}=useHost();
  const [asking,setAsking]=useState(false);

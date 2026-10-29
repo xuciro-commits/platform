@@ -4,7 +4,6 @@ import { t } from "../i18n";
 import type { EditorProps } from "../fields/types";
 import { ContentTabs } from "../layout/ContentTabs";
 
-/** Renders standard Markdown text safely into React elements without dangerous HTML. */
 export function Markdown({ content = "", className }: { content?: string; className?: string }) {
   if (!content) return null;
 
@@ -30,7 +29,6 @@ export function Markdown({ content = "", className }: { content?: string; classN
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i]!;
 
-    // Code blocks
     if (rawLine.startsWith("```")) {
       if (inCodeBlock) {
         nodes.push(
@@ -59,7 +57,6 @@ export function Markdown({ content = "", className }: { content?: string; classN
       continue;
     }
 
-    // Headings
     if (trimmed.startsWith("### ")) {
       flushList();
       nodes.push(<h3 key={i} className="mb-1 mt-2.5 text-sm font-semibold">{parseInline(trimmed.slice(4))}</h3>);
@@ -76,7 +73,6 @@ export function Markdown({ content = "", className }: { content?: string; classN
       continue;
     }
 
-    // Blockquote
     if (trimmed.startsWith("> ")) {
       flushList();
       nodes.push(
@@ -87,7 +83,6 @@ export function Markdown({ content = "", className }: { content?: string; classN
       continue;
     }
 
-    // Unordered list (- or *)
     if (/^[-*]\s+/.test(trimmed)) {
       if (isOrderedList) flushList();
       isOrderedList = false;
@@ -95,7 +90,6 @@ export function Markdown({ content = "", className }: { content?: string; classN
       continue;
     }
 
-    // Ordered list (1. 2. etc.)
     if (/^\d+\.\s+/.test(trimmed)) {
       if (!isOrderedList && listItems.length > 0) flushList();
       isOrderedList = true;
@@ -103,7 +97,6 @@ export function Markdown({ content = "", className }: { content?: string; classN
       continue;
     }
 
-    // Regular paragraph
     flushList();
     nodes.push(<p key={i} className="my-1 text-sm leading-relaxed">{parseInline(rawLine)}</p>);
   }
@@ -120,7 +113,6 @@ export function Markdown({ content = "", className }: { content?: string; classN
   return <div className={cn("markdown-body text-sm", className)}>{nodes}</div>;
 }
 
-/** Parses inline markdown spans: `code`, **bold**, *italic*, [text](url). */
 export function parseInline(text: string): ReactNode {
   const regex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
   const parts = text.split(regex);
@@ -147,7 +139,6 @@ export function parseInline(text: string): ReactNode {
   });
 }
 
-/** Rich tabbed editor for Markdown content with Write and Preview views. */
 export function MarkdownEditor({
   id,
   value = "",

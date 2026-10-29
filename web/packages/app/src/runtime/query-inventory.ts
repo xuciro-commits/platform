@@ -1,6 +1,4 @@
 import type * as PageUI from "../pageui/types";
-/** Same conservative declaration graph as the application API. Unknown IDs have
- * no edge; matching literals retain a read rather than suppressing one. */
 export function activeQueryPlans(document:PageUI.PageDocument,sections:PageUI.Section[],inventoryProfile:string):Set<string>{
  const queries=document.queries??{};
  if(!document.root||!(Number((document.uiProfile??'').split('.').at(-1))>=Number(inventoryProfile.split('.').at(-1))))return new Set(Object.keys(queries));

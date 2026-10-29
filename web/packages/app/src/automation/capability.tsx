@@ -23,8 +23,6 @@ function unsafeInteger(schema: Api.ValueSchema | undefined, value: unknown): boo
   return false;
 }
 
-/** The page renders an exact owner contract and calls the shared invocation
- * route. Record bindings are resolved by the host with source permissions. */
 export function ComputeCall(props:Parameters<typeof ComputeCallForm>[0]) {
  return <InputDraftProvider isolated scope="calculation"><ComputeCallForm {...props}/></InputDraftProvider>;
 }

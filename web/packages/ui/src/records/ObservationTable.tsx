@@ -13,8 +13,6 @@ export function ObservationTable(props:ObservationTableProps){return <TableSurfa
 function TableSurface({scope,window,info,signals,metadata,selectedId,selectedAssetId,rowHeight=30,enabled=true,readCurrent=true,loading,error,onSelect,onExport}:ObservationTableProps){
  const [hidden,setHidden]=useState<Set<string>>(()=>new Set()),[search,setSearch]=useState(""),[pin,setPin]=useState(true),[height,setHeight]=useState(rowHeight);
  const descriptors=observationFields(info,signals,metadata);
- // Immutable caller snapshots keep column-menu edits from rescanning all cells
- // or rebuilding the table's row model; this memo is presentation, not a reader.
  const records=window?.records;
  const validRecords=useMemo(()=>!!records&&observationTableRecords(records,info,signals,metadata),[records,info,signals,metadata]);
  const data=useMemo(()=>records?[...records]:[],[records]);

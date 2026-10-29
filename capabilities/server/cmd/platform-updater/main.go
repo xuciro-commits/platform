@@ -1,6 +1,3 @@
-// Command platform-updater supervises retained platform releases and reconciles
-// unfinished results. Dynamic source builds and new activation requests are
-// frozen; maintenance keeps their original identities and sealed artifacts.
 package main
 
 import (
@@ -71,11 +68,9 @@ export verifies and copies a release's complete sealed source tree.
 
 type client struct {
 	host, token, tenant string
-	principal           string // the member this token is, as /v1/me answers
+	principal           string
 }
 
-// me reads who this token is, so a decision is submitted for that member and
-// not for an empty principal.
 func (c *client) me() (string, error) {
 	if c.principal != "" {
 		return c.principal, nil
@@ -93,8 +88,6 @@ func (c *client) me() (string, error) {
 	return c.principal, nil
 }
 
-// A structured owner refusal proves that this attempt was not accepted. A
-// connection failure or an unreadable proxy response leaves the result unknown.
 type decisionRefusal struct {
 	Code, Message string
 	Status        int
@@ -106,7 +99,6 @@ func refusedDecision(err error) bool {
 	return errors.As(err, &refusal) && refusal.Status >= 400 && refusal.Status < 500 && refusal.Status != http.StatusTooManyRequests
 }
 
-// call performs one authenticated host request.
 func (c client) call(method, path string, body any, out any) error {
 	var reader io.Reader
 	if body != nil {
@@ -169,7 +161,6 @@ func (c client) submitKey(schema, typ, id, authority, key string, payload map[st
 	return out, callErr
 }
 
-// Reconciliation is an explicit maintenance pass, not a subscription to new work.
 func reconcile(args []string) error {
 	flags := flag.NewFlagSet("reconcile", flag.ExitOnError)
 	root := flags.String("root", ".", "repository root holding retained results")
@@ -194,9 +185,6 @@ func reconcileRetained(c client, root string) error {
 				return fmt.Errorf("build %s: %w", change.ID, err)
 			}
 		case "published":
-			// The accepted build may precede a crash while arranging its
-			// versioned paths. Its final manifest marks completed installation;
-			// do not rehash every historical source tree on each maintenance pass.
 			if _, err := os.Stat(filepath.Join(root, ".build", "system", "releases", fmt.Sprintf("%04d.json", change.Release))); err == nil {
 				continue
 			} else if !os.IsNotExist(err) {
@@ -225,16 +213,11 @@ func reconcileRetained(c client, root string) error {
 		if activation.Result != "requested" || activation.ID == selected.Activation {
 			continue
 		}
-		// A missing selection is not proof that no host already switched.
-		// Keep the request intact until static maintenance verifies the actual
-		// process and submits an explicit outcome for this exact activation.
 		return fmt.Errorf("activation %s is requested but not selected; verify the actual running release before using finish or swap", activation.ID)
 	}
 	return nil
 }
 
-// Resume only a retained result under its original request identity. An old
-// approval without a retained result is terminated without running a compiler.
 func resumeBuild(c client, root string, change changeView) error {
 	result, err := retainedBuild(root, change)
 	if err != nil && !os.IsNotExist(err) {
@@ -247,9 +230,6 @@ func resumeBuild(c client, root string, change changeView) error {
 		"ok": result.OK, "binary": result.Binary, "web": result.Web, "toolchain": result.Toolchain, "diagnostics": result.Diagnostics,
 		"manifest": result.Manifest, "sourceDigest": result.SourceDigest,
 	}); err != nil {
-		// Preserve the actual saved result, even when the owner refuses it.
-		// Maintenance must resolve that disagreement, not replace success with
-		// a fabricated failure under another request identity.
 		return err
 	}
 	if !result.OK {
@@ -265,8 +245,6 @@ func resumeBuild(c client, root string, change changeView) error {
 	return keep(root, version, result)
 }
 
-// A build is retained before its accepted result is submitted. A lost reply or
-// process restart reuses these exact artifacts rather than rebuilding.
 type savedBuild struct {
 	Change   string                     `json:"change"`
 	Manifest string                     `json:"manifest"`
@@ -325,8 +303,6 @@ type releaseManifest struct {
 	Files        map[string]string `json:"files"`
 }
 
-// keep publishes versioned paths from already retained artifacts. Repeating it
-// completes interrupted copies; the manifest is written last.
 func keep(root string, version int, result platform.SystemBuildResult) error {
 	dir := filepath.Join(root, ".build", "system")
 	stamp := fmt.Sprintf("%04d", version)
@@ -373,9 +349,6 @@ func installArtifacts(root string, version int, binary, web string, manifest rel
 	return nil
 }
 
-// Definitions can be a logical predecessor without having built new code.
-// Bind its exact source identity to retained code artifacts, preserving the
-// global version rather than silently skipping that predecessor.
 func resolveRelease(c client, root string, version int) (releaseState, error) {
 	state, err := readRelease(root, version)
 	if err == nil {
@@ -421,8 +394,6 @@ func resolveRelease(c client, root string, version int) (releaseState, error) {
 		if err != nil {
 			return state, err
 		}
-		// The alias owns its physical paths, so normal retention needs no extra
-		// reference registry and pruning another ordinal cannot break rollback.
 		manifest.Work = ""
 		if err := installArtifacts(root, version, candidate.Binary, candidate.Web, manifest); err != nil {
 			return state, err
@@ -432,7 +403,6 @@ func resolveRelease(c client, root string, version int) (releaseState, error) {
 	return state, fmt.Errorf("release %d source %s has no retained code artifacts", version, digest)
 }
 
-// releaseOf finds the release a change published.
 func (c client) releaseOf(change string) (int, error) {
 	var releases []struct {
 		Version int    `json:"version"`
@@ -449,7 +419,6 @@ func (c client) releaseOf(change string) (int, error) {
 	return 0, fmt.Errorf("change %s published no release", change)
 }
 
-// export verifies and copies the complete sealed source, independent of build caches.
 func export(args []string) error {
 	flags := flag.NewFlagSet("export", flag.ExitOnError)
 	root := flags.String("root", ".", "repository root")
@@ -532,8 +501,6 @@ func finish(args []string) error {
 	return err
 }
 
-// swap stages an existing requested activation. The supervisor alone probes,
-// replaces, and reports it, using the activation's actual identity and window.
 func swap(args []string) error {
 	flags := flag.NewFlagSet("swap", flag.ExitOnError)
 	root := flags.String("root", ".", "repository root")

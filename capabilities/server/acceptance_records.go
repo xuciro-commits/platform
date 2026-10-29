@@ -39,8 +39,6 @@ func (d *stagedDecision) RequestApproval(c platform.Caller, app string, s *pb.Su
 }
 
 func (d *stagedDecision) requestApproval(a platform.App, m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	// Permission/attribute/rule checks occur privately. Even a rule that uses
-	// another app cannot leave anything in the actual request transaction.
 	c := platform.NewCaller(d, m, a.Manifest().ID, false, false)
 	if err := d.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {
 		_, err := platform.Decide(probe, a, s, now)
@@ -217,8 +215,6 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	return raw, nil
 }
 
-// Validate every row, counter and ledger on private forks before promotion.
-// A late invalid child cannot advance an earlier authoritative ledger.
 type preparedAcceptedBatch struct {
 	result  acceptedformat.Batch
 	records *records.Store
@@ -262,7 +258,7 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		if !proto.Equal(prior, receipt) {
 			return nil, fmt.Errorf("record batch key belongs to another result")
 		}
-		return nil, nil // later commits may already have changed rows/counters
+		return nil, nil
 	}
 	ledgers := map[string]*platform.Ledger{}
 	changes := map[string]*pb.ChangeRecord{}
@@ -386,9 +382,6 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	if err := t.records.PromoteRecords(draft); err != nil {
 		return false, err
 	}
-	// Application entry availability is owned by its current Build record.
-	// The cached discovery must move with that accepted record as well as with
-	// installed definition bytes, including withdrawal and restoration.
 	if slices.ContainsFunc(result.Rows, func(row acceptedformat.BatchRow) bool { return row.Type == build.AppType }) {
 		t.defGen.Add(1)
 	}
@@ -433,8 +426,6 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	return true, nil
 }
 
-// applyBatchRows writes the batch's row images into the forked records, each
-// under a ledger that declares its type, keeping the history it extends.
 func (t *Tenant) applyBatchRows(draft *records.Store, result acceptedformat.Batch, ledgers map[string]*platform.Ledger, changes map[string]*pb.ChangeRecord) error {
 	draft.Lock()
 	defer draft.Unlock()
@@ -501,9 +492,6 @@ func (t *Tenant) applyBatchRows(draft *records.Store, result acceptedformat.Batc
 				savedDigest, savedErr := platform.CanonicalDigest(image.History[:baseHistory])
 				prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
 			}
-			// PostgreSQL JSONB normalizes JSON field-change bytes (object key
-			// order/whitespace). The canonical predecessor hash is authoritative;
-			// bytewise DeepEqual would quarantine a sound recovered result.
 			if before != image.Before || len(image.History) <= baseHistory || !prefixEqual {
 				return fmt.Errorf("record batch predecessor differs for %s/%s (value=%t history=%d/%d prefix=%t)",
 					image.Type, image.ID, before == image.Before, baseHistory, len(image.History), prefixEqual)
@@ -576,15 +564,12 @@ func (t *Tenant) applyBatchRows(draft *records.Store, result acceptedformat.Batc
 func (t *Tenant) publishAcceptedBatch(result acceptedformat.Batch) {
 	for _, decision := range result.Decisions {
 		r := new(pb.ChangeRecord)
-		_ = protojson.Unmarshal(decision.Receipt, r) // already checked
+		_ = protojson.Unmarshal(decision.Receipt, r)
 		t.publishAccepted(platform.Event{App: decision.Event.App, Record: r, Changed: decision.Event.Changed},
 			decision.Event, 2)
 	}
 }
 
-// Callback observations have no new kernel change receipt. Their authority is
-// the host-delivered, already accepted effect and the exact owner callback,
-// with the same direct-row preimage/history checks as connector/effect results.
 type callbackWrite struct {
 	Source  platform.Effect
 	History int
@@ -619,8 +604,6 @@ func (d *stagedDecision) savedCallbackRows(published map[string]bool) ([]accepte
 	return rows, nil
 }
 
-// Validate sources and direct rows in private views before any ledger or
-// business/control state in the containing result is promoted.
 func (t *Tenant) prepareCallbackRows(target *records.Store, rows []acceptedformat.CallbackRow, at time.Time) error {
 	seen := map[string]bool{}
 	for _, callback := range rows {
@@ -665,10 +648,6 @@ func (t *Tenant) prepareCallbackRows(target *records.Store, rows []acceptedforma
 	}
 	return nil
 }
-
-// A connector's cursor and last-seen mark belong to the same durable result
-// as the decisions caused by its delivery. Before guards both fields, including
-// push deliveries (which have no cursor transition).
 
 func markFor(marks []kernel.ConnectorMark, tenant, connector string) kernel.ConnectorMark {
 	for _, mark := range marks {
@@ -725,9 +704,6 @@ func (t *Tenant) applyAcceptedDeliveries(deliveries []acceptedformat.ConnectorDe
 	return nil
 }
 
-// Control changes participate in the business result. Each owned component has
-// a typed immutable image and its own predecessor, rather than restoring an
-// entire tenant over records or concurrent outside-lane bookkeeping.
 type controlWork struct {
 	Queues map[string][]string           `json:"queues"`
 	Failed []string                      `json:"failed"`
@@ -985,8 +961,6 @@ func (d *stagedDecision) controlHost() *Tenant {
 	return d.control.host
 }
 
-// Both a first control change and a savepoint use the same private owners.
-// Their predecessor images remain selected by the calling operation.
 func (d *stagedDecision) newControlView(images map[string]json.RawMessage) *Tenant {
 	view, err := d.tenant.forkControl(images)
 	if err != nil {
@@ -1136,8 +1110,6 @@ func (t *Tenant) applyAcceptedControl(saved *acceptedformat.Control) error {
 		return nil
 	}
 	for _, change := range saved.Changes {
-		// Tenant.mu serializes the authoritative promotion. Only this component's
-		// owned bytes change; effects preserve outside-lane sending flags by ID.
 		image := change.Image
 		if change.Kind == "effects" {
 			var patches []acceptedformat.EffectState
@@ -1239,8 +1211,6 @@ func (d *stagedDecision) ControlDecision(c platform.Caller, s *pb.Submission, at
 		}
 	}
 	view := d.controlHost()
-	// Effect callbacks stay on the original staged Caller; only their control
-	// metadata is owned by this private host view.
 	return view.controlDecision(c, s, at)
 }
 
@@ -1316,11 +1286,6 @@ func (t *Tenant) installAcceptedIntents(intents []platform.Effect) {
 	t.trimEffects()
 }
 
-// Notification state and already-rendered mail intents belong to the decision,
-// not to enqueue. Replaying a result does not resolve recipients or translate it.
-
-// Reuse the tenant recipient resolver over private directory owners. This
-// read view has no runtime lane, storage hooks or mutable host components.
 func (d *stagedDecision) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
 	view := &Tenant{apps: slices.Clone(d.tenant.apps), appIndex: d.tenant.appIndex, directory: d.directoryView()}
 	for i, app := range view.apps {
@@ -1348,7 +1313,7 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		out = append(out, member)
 		console, _ := d.tenant.app(controlowner.PlatformApp).(platform.IdentityProfile)
 		if private, ok := d.states[controlowner.PlatformApp].(platform.IdentityProfile); ok {
-			console = private // invitation recipients exist in the accepted directory fork
+			console = private
 		}
 		if console != nil {
 			to := console.Reach(member)
@@ -1410,8 +1375,6 @@ func (t *Tenant) validateAcceptedNotices(n *acceptedformat.Notices) error {
 			}
 		}
 	}
-	// The only operations are appending stable numbered notices and marking
-	// existing ones read. Retention may drop a prefix, never an arbitrary row.
 	expected := current
 	for i, x := range expected {
 		if found := slices.IndexFunc(n.Notices, func(n platform.Notification) bool { return n.ID == x.ID }); found >= 0 {
@@ -1463,8 +1426,6 @@ func (t *Tenant) applyAcceptedNotices(n *acceptedformat.Notices) {
 	t.trimEffects()
 }
 
-// A caught child refusal is a savepoint, not a partial accepted transaction.
-// This copies only private record/ledger/intent owners, never the live tenant.
 func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)) (r *pb.ChangeRecord, err *kernel.Error) {
 	saved := *d
 	*d = *d.privateFork()
@@ -1473,10 +1434,6 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 		if p := recover(); p != nil {
 			*d = saved
 			d.attachPrivateHosts()
-			// An unsupported effect is not a business refusal from the child.
-			// It invalidates the entire top-level attempt; inventing a refused
-			// provider answer would turn a supported business operation into a
-			// durable, false rejection.
 			panic(p)
 		}
 	}()
@@ -1484,9 +1441,6 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 	if err == nil && r != nil && len(d.events) > len(saved.events) && slices.ContainsFunc(d.events[len(saved.events):], func(event platform.Event) bool {
 		return event.App == r.GetSubmission().GetAuthority() && event.Record.GetChangeId() == r.GetChangeId()
 	}) {
-		// A completed child decision must report its deferred business refusal
-		// before its caller chooses a success/error path. An in-progress parent
-		// transaction has no published receipt yet and keeps its final boundary.
 		err = d.checkFinalConstraints()
 	}
 	if err != nil {
@@ -1523,8 +1477,6 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		}
 		fork.operationAnswers[id] = answer
 	}
-	// Prepared artifacts are immutable, but consuming a queue belongs to this
-	// attempt. A refused child or probe must leave its parent's queue intact.
 	fork.operationInputs = maps.Clone(d.operationInputs)
 	for hash, pending := range fork.operationInputs {
 		fork.operationInputs[hash] = slices.Clone(pending)
@@ -1560,8 +1512,6 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 			}
 		}
 		if suspended {
-			// Receive appends its parent's receipt after deciding the nested
-			// child. The parent's live stack already holds this private log.
 			fork.logs[ledger] = log
 		} else {
 			fork.logs[ledger] = log.ForkLog()
@@ -1592,9 +1542,6 @@ func (d *stagedDecision) privateFork() *stagedDecision {
 		fork.stateBases[id] = slices.Clone(base)
 	}
 	for id, owner := range d.states {
-		// A suspended parent is still executing this receiver. Children cannot
-		// re-enter its owner (Decide guards active IDs), so keep that receiver
-		// instead of replacing it or taking its already-held decision lock.
 		if d.active[id] || d.receiving[owner.AcceptedLedger()] {
 			fork.states[id], fork.privateApps[id] = owner, owner
 			continue
@@ -1641,8 +1588,6 @@ func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.C
 	probe := d.privateFork()
 	err := probe.runProbe(c, decide)
 	if err != nil {
-		// Carry only the refused answer's diagnostics across a read-only probe.
-		// No private rows, intents, numbers or successful branch facts escape.
 		if fact, ok := probe.businessRefusals[err]; ok {
 			d.BusinessRefused(err, fact)
 		} else if issues := probe.inputIssues[err]; len(issues) > 0 {
@@ -1652,8 +1597,6 @@ func (d *stagedDecision) ProbeDecision(c platform.Caller, decide func(platform.C
 	return err
 }
 
-// runProbe owns its mode and all host-managed writes. No live tenant or
-// parent decision is switched into a different mode while rules run.
 func (d *stagedDecision) runProbe(c platform.Caller, decide func(platform.Caller) *kernel.Error) (err *kernel.Error) {
 	defer func() {
 		if failure := recover(); failure != nil {
@@ -1747,8 +1690,6 @@ func (d *stagedDecision) savedChangePlan() (acceptedformat.ChangePlan, error) {
 	return plan, err
 }
 
-// This preparation changes no live owner. In particular a valid child cannot
-// advance its ledger before the outer result's remaining owners are checked.
 type preparedAcceptedChanges struct {
 	plan    acceptedformat.ChangePlan
 	records *records.Store
@@ -1814,9 +1755,6 @@ func (t *Tenant) prepareAcceptedChanges(plan acceptedformat.ChangePlan) (*prepar
 			return nil, err
 		}
 		if prepared.child != nil {
-			// Flatten this private fork onto the child's original live parent.
-			// Keep its write set as well as the outer direct observations, so
-			// promotion applies both together and invalidates every changed row.
 			prepared.records.ExtendDecision(base)
 			prepared.child.records = prepared.records
 			prepared.records = nil
@@ -1870,8 +1808,6 @@ func (p *preparedAcceptedChanges) publish(t *Tenant) {
 	}
 }
 
-// Capture the same full record image and predecessor for connector inputs,
-// effect answers and callback observations, in the supplied stable order.
 func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude map[string]bool, source string) ([]acceptedformat.InputRow, error) {
 	d.records.Lock()
 	defer d.records.Unlock()
@@ -1908,10 +1844,6 @@ func captureDirectRows(d *stagedDecision, owner string, refs []string, exclude m
 	return rows, nil
 }
 
-// prepareAcceptedDirectRows verifies and forks record changes caused by a
-// top-level input without a child ledger decision (connector facts or an
-// external effect's answer). The caller promotes only after all other owners
-// of the same result have passed their predecessor checks.
 func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, member string, at time.Time) (*records.Store, error) {
 	return t.prepareAcceptedDirectRowsOn(t.records, rows, member, at)
 }
@@ -2054,8 +1986,6 @@ func (d *stagedDecision) attachPrivateHosts() {
 	}
 }
 
-// Version choices belong to the private Flow instance that actually decided.
-// They are saved with the result before the live registry is changed.
 func (d *stagedDecision) flowVersions() map[string]int {
 	if private, ok := d.privateApps[platform.FlowApp].(platform.Processes); ok {
 		return private.Versions()

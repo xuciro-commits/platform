@@ -1,6 +1,5 @@
 import type {WorkflowDraft} from "./workflow-model";
 
-/** The exact owner inputs; record stamps and published history are not edits. */
 export function workflowInputs(draft:WorkflowDraft){
  const {name,title,kind,object,when,manual,every,input,inputSchema,continuous,steps,lanes,layout}=draft;
  return {name,title,...(kind?{kind}:{}),object:object??"",when:when??"",manual:!!manual,every:every??"",input:input??{},inputSchema,continuous:continuous??null,steps,lanes:lanes??[],layout:layout??{}};
@@ -12,7 +11,6 @@ function canonical(value:unknown):unknown{
  return value;
 }
 
-/** Saving a changed draft does not turn it into the installed flow version. */
 export function workflowRunMatches(draft:WorkflowDraft,installed:WorkflowDraft|undefined,run:{flow:string;version:number;withheld?:boolean}|undefined,dirty:boolean){
  return !!installed&&!!run&&!dirty&&!run.withheld&&run.flow===`build.${installed.name}`&&run.version===installed.version&&JSON.stringify(canonical(workflowInputs(draft)))===JSON.stringify(canonical(workflowInputs(installed)));
 }

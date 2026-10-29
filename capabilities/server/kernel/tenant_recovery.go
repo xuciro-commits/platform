@@ -17,8 +17,6 @@ import (
 	"strings"
 )
 
-// The result owners already sealed these deltas. This adapter translates their
-// envelopes into storage addresses; SQL never interprets actions or decisions.
 func StorageDelta(raw []byte) (journal.StateDelta, error) {
 	b := storageDeltaBuilder{records: map[string]journal.StateRecord{}, changes: map[string]journal.StateChange{}, values: map[string]journal.StateValue{}, unique: map[string]journal.StateUnique{}}
 	if err := b.accepted(raw); err != nil {
@@ -43,7 +41,6 @@ type storageDeltaBuilder struct {
 }
 
 func (b *storageDeltaBuilder) value(owner, key string, image any) {
-	// A later complete owner image already includes preceding observations.
 	b.valueUpdates = slices.DeleteFunc(b.valueUpdates, func(update journal.StateValueUpdate) bool { return update.Owner == owner && update.Key == key })
 	raw, err := json.Marshal(image)
 	if err != nil {
@@ -99,9 +96,6 @@ func (b *storageDeltaBuilder) receipt(app string, raw json.RawMessage, definitio
 	return nil
 }
 
-// plan translates the same declared changes used by accepted application.
-// It never infers writes from application actions or reinterprets a family as
-// a loosely typed envelope with coincidentally matching field names.
 func (b *storageDeltaBuilder) plan(plan acceptedformat.ChangePlan) error {
 	for _, row := range plan.Rows {
 		if err := b.record(row.Image, -1); err != nil {
@@ -368,8 +362,6 @@ func (a ChangeArchive) Contains(tenant, id string, through int) bool {
 	return len(a.read(tenant, "", id, through)) > 0
 }
 
-// Only the historical SQL projection requires these original preimages. New
-// writes carry their installation replacement in the same sealed storage delta.
 func LegacyStatePreimages(ctx context.Context, j journal.Journals, tenant string, through int64) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
 	entries, err := j.Entries(ctx, tenant, 0)
 	if err != nil {

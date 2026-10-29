@@ -10,8 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// These are derived indexes, so old byte vectors can be converted in bounded
-// batches without changing any journal, accepted answer, or document history.
 var vectorSchema = []string{
 	`create extension if not exists vector`,
 	`alter table embeddings add column if not exists dimensions integer`,
@@ -63,8 +61,6 @@ func migrateVectors(ctx context.Context, pool *pgxpool.Pool) error {
 			}
 		}
 	}
-	// Existing byte-vector installations need the same indexes as newly
-	// embedded content; a conversion alone must not leave them on a full scan.
 	rows, err := pool.Query(ctx, `select distinct dimensions from embeddings where embedding is not null and dimensions<=2000 order by dimensions`)
 	if err != nil {
 		return err
@@ -142,8 +138,6 @@ func (j *Postgres) MissingVectors(ctx context.Context, tenant, model string, has
 	return missing, rows.Err()
 }
 
-// Each dimension has its own expression index. Larger vectors keep exact SQL
-// search rather than losing precision to a different vector representation.
 func vectorIndex(ctx context.Context, tx pgx.Tx, dimensions int) error {
 	if dimensions > 2000 {
 		return nil
@@ -174,8 +168,6 @@ func (j *Postgres) NearestVectors(ctx context.Context, tenant, model string, vec
 	if _, err := tx.Exec(ctx, `set local hnsw.iterative_scan = strict_order; set local hnsw.ef_search = 100`); err != nil {
 		return nil, err
 	}
-	// Limit is inside the filtered source join. It never takes a global top-k
-	// and only afterwards applies the tenant or application content grant.
 	query := fmt.Sprintf(`select s.source,s.chunk,s.hash,1-(e.embedding::vector(%d) <=> $3::vector(%d)) as score
 		from embeddings e join embedding_sources s on (s.tenant=e.tenant and s.model=e.model and s.hash=e.hash)
 		where e.tenant=$1 and e.model=$2 and e.dimensions=%d and (cardinality(s.apps)=0 or s.apps && $4::text[])
@@ -201,8 +193,6 @@ func (j *Postgres) NearestVectors(ctx context.Context, tenant, model string, vec
 		return nil, err
 	}
 	if len(hits) < limit {
-		// ANN can stop early under selective filters or its scan budget. Exact
-		// search supplies the remainder and makes exhaustion meaningful.
 		if _, err := tx.Exec(ctx, `set local enable_indexscan = off`); err != nil {
 			return nil, err
 		}

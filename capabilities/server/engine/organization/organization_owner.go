@@ -36,14 +36,12 @@ const (
 	ReadOrganization  = "organization"
 	ReadModel         = "enterprise"
 	ReadMetamodel     = "enterprise-metamodel"
-	ReadPublished     = "enterprise-published" // the slice this tenant shares with the tenants it federates with
+	ReadPublished     = "enterprise-published"
 	SchemaSliceImport = "enterprise.slice.import"
 
-	// Admin stewards the model (the org app's role, kept so seats carry over).
 	Admin = "admin"
 )
 
-// Enterprise is one tenant's enterprise model app.
 type Enterprise struct {
 	mu     sync.Mutex
 	tenant string
@@ -51,9 +49,6 @@ type Enterprise struct {
 	ledger *platform.Ledger
 }
 
-// declarations is the enterprise action catalog in full — the write contract
-// the host enforces and the generated SDK types: one source for
-// the ledger and for every consumer outside this package.
 func declarations() []platform.Action {
 	admin := []string{Admin}
 	f := func(name, typ, description string, required bool) platform.Field {
@@ -107,8 +102,6 @@ func declarations() []platform.Action {
 			Description: "Land what an external system holds about the enterprise - organisational units, posts, locations, equipment - as elements and relationships owned on its behalf. Repeated syncs diff: new ids start today, missing ids close today, history stays.",
 			Payload:     []platform.Field{f("source", "string", "The system's name, e.g. sap-hr", true), f("elements", "json", "Elements with ids stable across syncs", true), f("relationships", "json", "Relationships between them, or to the tenant's own elements", false)}},
 	}
-	// relationship.change is relationship.add that replaces atomically: the
-	// same payload plus the new id, declared last as the catalog always did.
 	change := platform.Action{}
 	for _, a := range actions {
 		if a.Schema == SchemaRelationshipAdd {
@@ -121,10 +114,6 @@ func declarations() []platform.Action {
 	return append(actions, change)
 }
 
-// New is a tenant's enterprise app, starting from a deployment seed
-// lifted into the model. Its
-// ledger is declared from declarations(), the single source of the write
-// contract the generated SDK also reads.
 func New(tenant string, seed platform.OrgSeed) *Enterprise {
 	catalog := platform.NewCatalog(declarations()...)
 	return &Enterprise{tenant: tenant, model: FromOrgSeed(seed), ledger: platform.NewLedger(tenant, ID, catalog, ElementType, RelationshipType, ViewType, ModelType, TenantLinkType)}
@@ -134,7 +123,6 @@ func (*Enterprise) NewSimulationOrganization(tenant string, seed platform.OrgSee
 	return New(tenant, seed)
 }
 
-// Snapshot and Restore: the model as decisions left it.
 func (e *Enterprise) SnapshotFormat() string { return "enterprise.model.v1" }
 
 func (e *Enterprise) Snapshot() (json.RawMessage, error) {
@@ -156,18 +144,12 @@ func (e *Enterprise) Manifest() platform.Manifest {
 		ReadSources: map[string]string{ReadOrganization: "record", ReadModel: "record", ReadMetamodel: "record", ReadPublished: "record"}}
 }
 
-// memberOffboard is the console's decision that a member left:
-// the model answers by ending their memberships that day, as its own
-// decisions, so the person's tenure reads Until and nothing is deleted.
 const memberOffboard = "platform.member.offboard"
 
-// Interested hears the console's offboarding (platform.Listener: a platform app
-// given another app's events as owned work).
 func (e *Enterprise) Interested(names []string, _ platform.Event) bool {
 	return slices.Contains(names, memberOffboard)
 }
 
-// Listen ends the memberships of a member who left.
 func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ time.Time) *kernel.Error {
 	sub := ev.Record.GetSubmission()
 	if sub.GetSchema().GetName() != memberOffboard {
@@ -195,7 +177,6 @@ func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ 
 
 func (e *Enterprise) Declarations() []*pb.AuthorityDeclaration { return e.ledger.Declarations() }
 
-// Model is a copy of the model, for seeds and tests.
 func (e *Enterprise) Model() Model {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -257,7 +238,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 		notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		var p payload
-		if s.GetSchema().GetName() == SchemaSliceSync { // its elements are objects, not the view's id list
+		if s.GetSchema().GetName() == SchemaSliceSync {
 			var head struct {
 				Source string `json:"source"`
 			}
@@ -510,25 +491,18 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 	})
 }
 
-// --- platform.Directory ---
-
-// Units are the organisations party belongs to on day and those below them
-// in kind ("" for the organisations themselves).
 func (e *Enterprise) Units(party, kind string, day platform.Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.model.UnitsIn(party, kind, day)
 }
 
-// Below expands units through active placements in one structure.
 func (e *Enterprise) Below(units []string, kind string, day platform.Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.model.Descendants(units, kind, day)
 }
 
-// Holders are the members holding a membership (with role, when given) in
-// unit or in an organisation above it in kind on day.
 func (e *Enterprise) Holders(kind, unit, role string, day platform.Date) []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -548,9 +522,6 @@ func (e *Enterprise) Holders(kind, unit, role string, day platform.Date) []strin
 	return out
 }
 
-// Calendar is the working calendar of party on day: that of its primary
-// organisation, else of any of its organisations, found up any kind; else the
-// tenant's first; else Monday to Friday.
 func (e *Enterprise) Calendar(party string, day platform.Date) platform.Calendar {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -596,11 +567,6 @@ func (e *Enterprise) Calendar(party string, day platform.Date) platform.Calendar
 	return platform.Calendar{}
 }
 
-// --- reads ---
-
-// Metamodel is what the client draws palettes from: the current release's
-// stereotypes in the Enterprise Core Profile, with the whole registry behind.
-// Element and Related serve platform.Directory for the apps.
 func (e *Enterprise) Element(id string, day platform.Date) (platform.ElementInfo, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -636,34 +602,21 @@ func (e *Enterprise) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
 
-// The Enterprise Core Profile: the UAF stereotypes a tenant
-// meets first, with the words people use for them and the description views
-// they are drawn in. Everything else in the metamodel stays loadable and
-// storable; it just has no palette entry until a profile opens it.
-
-// ProfileEntry is one stereotype as the palette offers it.
 type ProfileEntry struct {
 	Stereotype string   `json:"stereotype"`
 	Title      string   `json:"title"`
 	Plural     string   `json:"plural"`
-	Kinds      []string `json:"kinds,omitempty"` // suggested Element.Kind values
+	Kinds      []string `json:"kinds,omitempty"`
 	Icon       string   `json:"icon,omitempty"`
 }
 
-// Viewpoint is one ARIS description view: the whole model seen from
-// one question — who is where, what it holds, what it can do, what it offers,
-// how it is run. Views are projections of the one model, never stores of their
-// own: Elements declares the slice, Context names the stereotypes drawn only
-// beside a slice element (the organisation is a fact of every view, not all of
-// it in every drawing), and Relationships derive from the contracts just as a
-// grid cell's did.
 type Viewpoint struct {
-	ID            string   `json:"id"` // "organization"
+	ID            string   `json:"id"`
 	Title         string   `json:"title"`
-	Note          string   `json:"note"`              // the question the view answers
-	Elements      []string `json:"elements"`          // the stereotypes it draws as its own
-	Context       []string `json:"context,omitempty"` // drawn only beside an element of the slice
-	Relationships []string `json:"relationships"`     // derived: contracts among Elements+Context
+	Note          string   `json:"note"`
+	Elements      []string `json:"elements"`
+	Context       []string `json:"context,omitempty"`
+	Relationships []string `json:"relationships"`
 }
 
 func Profile() []ProfileEntry {
@@ -674,27 +627,16 @@ func Profile() []ProfileEntry {
 	}
 }
 
-// vocabulary are the relationships the Enterprise Core Profile draws: what a
-// modeller of an organisation, its places, resources, capabilities, goals,
-// processes and projects actually joins. Every other UAF relationship stays
-// available through the contracts, and a model may hold one; it is just not
-// offered by a view.
 var Vocabulary = map[string]bool{
 	Placement: true, Membership: true, FillsPost: true, Performs: true, Exhibits: true,
 	Owns: true, "OwnsProcess": true, "Enables": true, "MotivatedBy": true,
 	"MilestoneDependency": true, "ProjectSequence": true,
 }
 
-// Views are the five description views: one model, five questions.
-// Each declares the stereotypes it draws as its own and the ones it draws only
-// as context; the relationships are derived — a view offers a relation only
-// when the contracts admit some pair of its own slice.
 func Views(mm *DirectoryModel) []Viewpoint {
 	return []Viewpoint{{ID: "organization", Title: "Organisation", Note: "Units, posts and people", Elements: []string{Organization, Post, Person}, Relationships: []string{Placement, Membership, FillsPost, Owns}}}
 }
 
-// directoryActions exposes only supported new writes. The original ledger
-// retains retired schemas so their accepted receipts keep their identity.
 func directoryActions() []platform.Action {
 	actions := slices.DeleteFunc(declarations(), func(a platform.Action) bool {
 		return a.Schema == SchemaSliceImport || a.Schema == SchemaSliceSync || a.Schema == SchemaViewSave || a.Schema == SchemaViewDelete

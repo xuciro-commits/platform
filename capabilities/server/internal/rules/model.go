@@ -1,5 +1,3 @@
-// Package rules is the one pure rule compiler/evaluator. Host and
-// browser use this same implementation; it has no tenant scripts or I/O.
 package rules
 
 import (
@@ -56,7 +54,6 @@ type Schema struct {
 	Windows map[string]WindowType `json:"windows,omitempty"`
 }
 
-// Status distinguishes data that is absent, explicitly null, or withheld.
 type Value struct {
 	frozenNumber *float64
 	Kind         string          `json:"kind"`

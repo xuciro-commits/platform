@@ -14,8 +14,6 @@ import (
 
 var migratedSequenceNumber = regexp.MustCompile(`\{n(?::[1-9])?\}`)
 
-// The migration reads existing numbers once. It stages the waterline alongside
-// the next take, so a refused decision neither seeds nor consumes the range.
 func (d *stagedDecision) sequenceWaterline(app string, sequence platform.Sequence, year int) (int, *kernel.Error) {
 	d.records.Lock()
 	defer d.records.Unlock()

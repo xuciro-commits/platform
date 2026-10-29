@@ -14,8 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// Replay feeds recorded inputs through the apps that first accepted them, as the
-// members they came from; a refusal means the record and the code disagree.
 func (t *Tenant) Replay(entries []Entry) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -32,14 +30,14 @@ func (t *Tenant) Replay(entries []Entry) error {
 			return fmt.Errorf("entry %d: app %q not enabled or member unreadable", i+1, e.App)
 		}
 		var err *kernel.Error
-		if e.Kind == "effect" { // an outbound attempt's outcome: applied, never sent again
+		if e.Kind == "effect" {
 			var o platform.Outcome
 			if json.Unmarshal(e.Body, &o) != nil || !t.apply(o, e.At, true) {
 				return fmt.Errorf("entry %d: effect outcome for an effect the replay did not create", i+1)
 			}
 			continue
 		}
-		if e.Kind == "usage" && t.ai != nil { // a model call's usage: applied, the call never made again
+		if e.Kind == "usage" && t.ai != nil {
 			var u platform.AIUsage
 			if json.Unmarshal(e.Body, &u) != nil {
 				return fmt.Errorf("entry %d: bad usage", i+1)
@@ -47,7 +45,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 			t.ai.Meter(u)
 			continue
 		}
-		if e.Kind == "agent" && t.agents != nil { // a step an agent's model chose: applied, the model never called again
+		if e.Kind == "agent" && t.agents != nil {
 			var b platform.AgentResultStep
 			if json.Unmarshal(e.Body, &b) != nil {
 				return fmt.Errorf("entry %d: bad agent step", i+1)
@@ -90,8 +88,6 @@ func (t *Tenant) Replay(entries []Entry) error {
 	return nil
 }
 
-// replayAcceptedResult applies journal entry i, an accepted result of one of
-// the pipeline's kinds, exactly as it was first answered.
 func (t *Tenant) replayAcceptedResult(i int, e Entry, m platform.Member, a platform.App) error {
 	var envelope struct{ Kind string }
 	if err := json.Unmarshal(e.Body, &envelope); err != nil {

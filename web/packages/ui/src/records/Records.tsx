@@ -1,9 +1,5 @@
 import {renderingLimits} from "../gen/presentation-limits";
 import type {DetailPresentationOptions, RecordLinkOptions, StatusTrackerOptions, TablePresentationOptions} from "../presentation";
-// The application model's pages: an entity type described by the
-// host (`GET /v1/entities`) becomes a kit entity, a list page with server-side
-// search, sort and paging, a record page (fields, related records, history) and
-// generated forms. Components take a RecordSource, so the kit knows no client.
 import {DateTimeInput} from "../components/DateTimeInput";
 import { ChevronLeft, ChevronRight, History as HistoryIcon, Printer } from "lucide-react";
 import { Barcode } from "./barcode";
@@ -35,7 +31,6 @@ import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 import { t } from "../i18n";
 
-/** A stable low-saturation category tone per select value; danger stays semantic. */
 const categoryTones = ["info", "success", "warning", "purple", "teal", "pink", "orange", "neutral"] as const;
 export function choiceTone(value: string) {
   let hash = 0;
@@ -45,8 +40,6 @@ export function choiceTone(value: string) {
 import { humanizeKernelError } from "../lib/errors";
 import type { Api } from "@platform/kernel";
 
-// What the host describes is generated from its Go types; the kit
-// only refines what it holds in general: any entity's record.
 export type FieldInfo = Api.FieldInfo;
 export type State = Api.State;
 export type Lifecycle = Api.LifecycleInfo;
@@ -59,36 +52,27 @@ export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, "type" | "id">;
 export type InterfaceRecordData = Omit<Api.InterfaceRecord, "record"> & { record: EntityRecord };
 export type InterfaceRecordPageData = Omit<Api.InterfaceRecordPage, "records"> & { records: InterfaceRecordData[] };
 export type RecordChange = Api.RecordChange;
-/** A file attached to a record. */
 export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string; regions?:Api.ImageRegion[] };
 
-/** A comment on a record. */
 export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };
 
 export type RecordView = Omit<Api.RecordView, "record" | "related" | "linked" | "activity" | "processes" | "approvals" | "tasks" | "files" | "comments"> & {
-  /** Open tasks about the record the member may take (a flow's question, a correction to make). */
   tasks: Api.InboxTask[];
-  /** The approval requests to move the record, newest first (F-38). */
   approvals: Api.ApprovalRequest[];
   files: AttachedFile[];
   comments: RecordComment[];
   record: EntityRecord; related: RelatedRecords[];
-  /** Records of any app linked to it (the relations app), by type. */
   linked: RelatedRecords[];
-  /** What apps told about it through protocols, oldest first. */
   activity: Api.Note[];
-  /** The flow instances about the record. */
   processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];
 };
 type RelatedRecords = Omit<Api.Related, "records"> & { records: EntityRecord[] };
 export type Money = { amount: number; currency: string };
 
-/** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart. */
 export type RecordSource = {
 	enterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;
 	enterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;
   watchEnterprise?: (changed: () => void) => () => void;
-  /** Stable member/definition scope; changing it discards cached view data. */
   scope?: string;
   ruleIdentity?: {me:string;timezone:string};
   entity: (type: string) => EntityInfo | undefined;
@@ -101,18 +85,13 @@ export type RecordSource = {
   watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;
   namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;
   watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;
-  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */
   revision?: number;
   watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;
   watchRecord?: (type: string, id: string, changed: () => void) => () => void;
   watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;
 };
 
-// The tenant's currency: the default of amounts people enter; the workspace sets it from /v1/me.
 let tenantCurrency = "EUR";
-/** Local, per-instance row identity for structured sub-tables: assigned by
- * object identity, so it moves with the row without changing the record's
- * business shape. */
 const localRowKeys = new WeakMap<object, string>();
 const localRowKey = (row: object): string => {
   let key = localRowKeys.get(row);
@@ -139,7 +118,6 @@ const money = (o: { label: string; required?: boolean; readOnly?: boolean }): Fi
 
 export type Options = Record<string, { value: string; label: string }[]>;
 
-/** A kit entity from the host's description; `options` gives the choices of reference fields, a line's by "<lines>.<column>". */
 export function entityFrom(info: EntityInfo, options: Options = {}, source?: RecordSource, onOpen?: (type: string, id: string) => void): Entity<EntityRecord> {
   return defineEntity<EntityRecord>({ name: info.type, fields: fieldsOf(info, info.fields, options, source, onOpen), primary: info.display === "id" ? "id" : info.display });
 }
@@ -173,8 +151,6 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
           const values:string[]=value??[],stereotypes=[...(f.stereotype?[f.stereotype]:[]),...(f.stereotypes??[])];
           return <div id={id} role="group" aria-label={f.title} className="grid gap-2">{values.map((item,index)=><div key={index} className="flex gap-2"><span className="min-w-0 flex-1"><RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} value={item} ariaLabel={f.title} onChange={next=>onChange(next?values.map((old,at)=>at===index?next:old):values.filter((_,at)=>at!==index))}/></span><Button size="sm" onClick={()=>onChange(values.filter((_,at)=>at!==index))}>{t("Remove")}</Button></div>)}<RecordLookup source={source} type={f.ref!} stereotypes={stereotypes} ariaLabel={f.title} onChange={next=>{if(next&&!values.includes(next))onChange([...values,next]);}}/></div>;
         }}:multiSelect({ ...common, options: options[f.name] ?? [] });
-        // Tags with a list to choose from are that list; tags without one are
-        // words a person types (labels, field names).
         case "tags": return options[f.name]?.length ? multiSelect({ ...common, options: options[f.name]! }) : tags(common);
         case "lines": return f.fields?.length
           ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source, onOpen))
@@ -186,13 +162,10 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
   return fields;
 }
 
-// Lists show a record per row: its lines are for its page.
 const listed = (entity: Entity<EntityRecord>) => Object.keys(entity.fields).filter((k) => entity.fields[k]!.type !== "lines");
 
 type Line = Record<string, unknown>;
 
-// Child lines (Odoo's one2many): a table on record pages, and rows
-// to add, edit and remove in forms; the app's rules check them.
 const lines = (common: { label: string; help?: string; required?: boolean; readOnly?: boolean }, columns: Record<string, FieldType<any>>): FieldType<Line[]> => {
   const shown = Object.entries(columns);
   return {
@@ -213,8 +186,6 @@ const lines = (common: { label: string; help?: string; required?: boolean; readO
           <table className="w-full text-sm">
             <thead><tr>{shown.map(([k, c]) => <th key={k} className="px-1 text-left text-xs font-medium text-muted">{c.label}{c.required ? " *" : ""}</th>)}<th /></tr></thead>
             <tbody>{rows.map((line, i) => (
-              // A local row key travels with the row object: deleting or
-              // reordering moves this row's inputs, and never another row's.
               <tr key={localRowKey(line)}>
                 {shown.map(([k, c]) => <td key={k} className="min-w-28 px-1 py-0.5">{!c.readOnly&&c.editor?c.editor({ id: `${id ? `${id}:` : ""}line:${localRowKey(line)}:${k}`, value: line[k] as never, onChange: (v) => set(i, k, v) }):c.display(line[k] as never, line)}</td>)}
                 <td><Button size="sm" variant="ghost" aria-label={t("Remove line")} onClick={() => onChange(rows.filter((_, j) => j !== i))}>×</Button></td>
@@ -228,12 +199,10 @@ const lines = (common: { label: string; help?: string; required?: boolean; readO
   };
 };
 
-// A status field shows its state with the lifecycle's tones.
 const lifecycleField = (common: { label: string }, l: Lifecycle): FieldType<string> => ({
   ...singleSelect({ ...common, readOnly: true, options: l.states.map((s) => ({ value: s.name, label: s.title, tone: s.tone })) }),
 });
 
-/** The lifecycle's states, the current one marked, and the transitions the caller may take from it. */
 export function StatusBar({ lifecycle, state, can, onTransition, tracker=false }: {
   tracker?:boolean; lifecycle: Lifecycle; state: string; can?: (schema: string) => boolean; onTransition?: (schema: string, title: string) => void;
 }) {
@@ -252,8 +221,6 @@ export function StatusBar({ lifecycle, state, can, onTransition, tracker=false }
 
 const displayOf = (info: EntityInfo, r: EntityRecord) => String((info.display === "id" ? r.id : r[info.display]) ?? r.id);
 
-/** A list of one entity type: server-side search, sort and paging; a row opens the record. */
-/** The fields a list can group by: values that repeat, and dates by bucket. */
 export function groupable(info: EntityInfo): { value: string; label: string }[] {
   const out: { value: string; label: string }[] = [];
   for (const f of info.fields) {
@@ -265,20 +232,16 @@ export function groupable(info: EntityInfo): { value: string; label: string }[] 
   return out;
 }
 
-/** The measures a list can show: the count, and sums and averages of numbers and money. */
 export function measurable(info: EntityInfo): { value: string; label: string }[] {
   return [{ value: "count", label: t("Count") }, ...info.fields.filter((f) => ["integer", "decimal", "money"].includes(f.type))
     .flatMap((f) => [{ value: `sum:${f.name}`, label: `${f.title} (sum)` }, { value: `avg:${f.name}`, label: `${f.title} (average)` }])];
 }
 
 type ListView = "list" | "kanban" | "pivot" | "chart";
-/** What a list shows: kept by a member as a saved view. */
 export type ListState = {
   view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];
   group?: string; columns?: string; measure?: string; mark?: Mark;
-  /** Original predicates and read shape; personal filters never replace them. */
   baseQuery?: RecordQuery; searchLocked?:boolean; sortLocked?:boolean; filtersLocked?:boolean;
-  /** Chosen enum filters, by choice field; missing means the view predates them. */
   filters?: Record<string, string[]>;
 };
 
@@ -288,21 +251,14 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
-  /** Presentation subset. The source's permission-filtered entity is still authoritative. */
   fields?: string[];
-  /** A caller-owned authorized window. Controls emit view changes and never
-   * issue another list/aggregate read or override the owning plan's domain. */
   window?: { query:RecordQuery; baseQuery?:RecordQuery; facetQuery?:(field:string)=>RecordQuery|undefined; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number;
-    /** The window's current enum filters; a fixed-predicate window locks them and explains why. */
     filters?:Record<string,string[]>; filtersLocked?:boolean;
     onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void };
-  /** Always applied, like an app's own view of the type. */
   domain?: unknown[];
-  /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
   initial?: ListState; onSave?: (state: ListState) => void;
   kanban?: { lanes?: KanbanLane[]; stateField?: string; labelField?: string; properties?: (record: EntityRecord) => [string, ReactNode][] };
   onMove?: (record: EntityRecord, schema: string, destination?: string) => void;
-  /** Commands already offered by the application owner; absent or empty is read-only. */
   moves?: KanbanMove[];
 }) {
   const densityIdentity=JSON.stringify([source.scope,type,tablePresentation]),[densityChoice,setDensityChoice]=useState<{identity:string;density:string}>();
@@ -354,11 +310,6 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
   const view = window || !availableViews.includes(localView) ? "list" : localView;
   const fixedKey = JSON.stringify(fixed ?? []);
   useEffect(() => { setOffset(0); }, [fixedKey, type]);
-  // In-place facets: choice fields with live counts. A selection is part of
-  // the one effective query: locally it joins the list's own domain, on a
-  // caller window it goes to the owner through the same change protocol, so
-  // the list, its counts, sort and export always share one scope. Saved
-  // unavailable saved filters stop the read until explicitly cleared.
   const [facetPanel, setFacetPanel] = useState(false);
   const [localFilters, setLocalFilters] = useState(initial.filters);
   const facetSelection = window ? window.filters ?? {} : localFilters ?? {};
@@ -383,8 +334,6 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
   const pageKey = JSON.stringify([source.scope, type, infoKey, baseQuery,domain, search, localSort,sort, offset, archived, pageSize]);
   const from = useRef(source);
   from.current = source;
-  // Scoped sources may be wrapped anew during ordinary parent renders. Their
-  // scope, metadata, query and revision determine when a read is necessary.
   const sourceIdentity = source.scope ?? source;
   const taskIdentity=source.ruleIdentity?.me??sourceIdentity,editTask=useRef({identity:taskIdentity,generation:0});
   if(editTask.current.identity!==taskIdentity)editTask.current={identity:taskIdentity,generation:editTask.current.generation+1};
@@ -394,8 +343,6 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
   const sortField = sort.replace(/^-/, "");
   const knownSort = ["id", "created", "changed"].includes(sortField) || info?.fields.some((f) => f.name === sortField);
   const recordQuery: RecordQuery = window?.query ?? { ...baseQuery,domain, search, sort: knownSort ? localSort : ["id"], offset, limit: pageSize, archived };
-  // The query owner removes only its own user selection. Fixed predicates,
-  // set operands and traversal stay opaque to this presentation component.
   const facetQueries=facetFields.map(field=>[field.name,window?window.facetQuery?.(field.name):{...recordQuery,domain:[...JSON.parse(baseDomainKey),...JSON.parse(fixedKey),...(drilled??[]),...facetTerms.filter(term=>term[0]!==field.name)]}] as const);
   const facetKey=JSON.stringify([type,facetQueries]);
   type FacetCounts=Record<string,{value:string;count:number}[]|"unavailable">;
@@ -577,8 +524,6 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
 }
 
 export type RecordHistoryProps={info:EntityInfo;history?:readonly RecordChange[];heading?:boolean;label?:string;limit?:number;total?:number;loadedCount?:number;recordID?:string;recordRevision?:number};
-/** A record's original journal order: who changed what. Its
- *  page shows it, and so does a composed page's timeline. */
 export function RecordHistory({info,history=[],heading=true,label,limit,total,loadedCount=history.length,recordID,recordRevision}:RecordHistoryProps) {
   if(!Array.isArray(history)||limit!==undefined&&(!Number.isSafeInteger(limit)||limit<1||limit>renderingLimits.runtime.workViews.maxHistoryWindow)||!Number.isSafeInteger(loadedCount)||loadedCount<history.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount)||recordID!==undefined&&(typeof recordID!=="string"||!recordID)||recordRevision!==undefined&&(!Number.isSafeInteger(recordRevision)||recordRevision<0)||history.some((change:RecordChange)=>!change||typeof change.change!=="string"||!change.change||typeof change.schema!=="string"||!change.schema||typeof change.by!=="string"||typeof change.at!=="string"||!change.at||!Array.isArray(change.fields)||change.fields.some((field:Api.FieldChange)=>!field||typeof field.field!=="string"||!field.field)))return <p role="alert">{t("The original record history is unavailable or incompatible.")}</p>;
   const visible:readonly RecordChange[]=limit===undefined?history:history.slice(0,limit),range=limit!==undefined||total!==undefined||loadedCount!==history.length;
@@ -613,7 +558,6 @@ export function RecordHistory({info,history=[],heading=true,label,limit,total,lo
 
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
-/** Read and watch one record; callers choose whether to show its previous value while loading. */
 export function useRecordView(source: RecordSource, type: string, id?: string, reload = 0) {
   const identity = JSON.stringify([source.scope, type, id]);
   const key = JSON.stringify([identity, source.revision, reload]);
@@ -644,24 +588,16 @@ export function useRecordView(source: RecordSource, type: string, id?: string, r
   return { view: current?.view, error: current?.key === key ? current.error : undefined, loading: !!id && (current?.key !== key || current.loading), refresh };
 }
 
-/** One record: its fields, the records that refer to it, and its history from the journal. */
 export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {
   detailPresentation?:DetailPresentationOptions;recordTabs?:readonly string[];recordLinks?:readonly RecordLinkOptions[];linksOnly?:boolean;statusTracker?:StatusTrackerOptions;statusOnly?:boolean;
-  /** App API composes declared record-specific work without another read path. */
   work?: (view: RecordView) => ReactNode;
-  /** Answering the open tasks about the record from its page; without it they are listed only. */
   tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode };
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
-  /** Presentation subset. No field omitted by source.entity can be restored here. */
   fields?: string[];
-  /** A composed detail widget shows only this record's header and fields. */
   detailOnly?: boolean;
-  /** Uploading a file to the record and downloading one; without it the files are listed only. */
   files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
-  /** Commenting and following; without it comments are listed only. */
   comments?: { add: (text: string) => Promise<boolean>; follow: (on: boolean) => Promise<void> };
   onOpen?: (type: string, r: EntityRecord) => void; reload?: number;
-  /** The caller's catalog, and how to take a lifecycle transition (a decision on this record). */
   can?: (schema: string) => boolean; onTransition?: (schema: string, r: EntityRecord) => void;
 }) {
   const tabIdentity=JSON.stringify([source.scope,type,id,recordTabs]);
@@ -701,8 +637,6 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         {!detailOnly && <fieldset disabled={loading} className="ml-auto flex min-w-0 flex-wrap gap-1 border-0 p-0">{actions?.(r)}</fieldset>}
       </header>);
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
-  // Extension records (A3): a type that extends this one pairs one record per base record; its
-  // fields show as the base record's own, as far as the reader may read them (the host already filters).
   const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined);return [{rel,relInfo,relEntity,row}];});
   const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
         {barcode&&<div className="mb-3 flex justify-center overflow-hidden"><Barcode text={barcode}/></div>}
@@ -771,33 +705,24 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   );
 }
 
-/** Public delivery outcomes remain distinct from the accepted business action. */
 export function RecordDeliveries({deliveries,onOpen}:{deliveries?:Api.RecordDelivery[];onOpen?:(type:string,r:EntityRecord)=>void}){
  if(!deliveries?.length)return null;
  return <section className="grid gap-2" aria-label={t("Delivery results")}><h2 className="text-sm font-semibold">{t("Delivery results")}</h2><p className="text-xs text-muted">{t("Business acceptance and delivery are separate results.")}</p><ul className="grid gap-2">{deliveries.map(delivery=><li key={delivery.id} className="flex flex-wrap items-baseline gap-2 rounded-md border border-border p-2 text-sm"><span>{delivery.event}</span><Tag label={t(delivery.state)} tone={delivery.state==="delivered"?"success":["rejected","failed"].includes(delivery.state)?"danger":"info"}/><time className="text-xs text-muted" dateTime={delivery.at}>{new Date(delivery.at).toLocaleString()}</time>{delivery.message&&<p className="w-full">{t(delivery.message)}</p>}{delivery.receipt&&onOpen&&<Button size="sm" onClick={()=>{const [type,...id]=delivery.receipt!.split("/");onOpen(type!,{id:id.join("/")} as EntityRecord);}}>{t("Open receipt")}</Button>}</li>)}</ul></section>;
 }
 
-/** A standalone projection of the same authorized record view and related windows. */
 export function RecordLinks({source,type,id,groups,onOpen}:{source:RecordSource;type:string;id:string;groups:readonly RecordLinkOptions[];onOpen?:(type:string,r:EntityRecord)=>void}){
  return <RecordPage source={source} type={type} id={id} recordLinks={groups} onOpen={onOpen} linksOnly/>;
 }
 
-/** The caller declares lifecycle presentation; this component never emits transitions. */
 export function RecordStatus({source,type,id,config}:{source:RecordSource;type:string;id:string;config?:StatusTrackerOptions}){
  return <RecordPage source={source} type={type} id={id} statusTracker={config} statusOnly/>;
 }
 
 type Row = Record<string, unknown>;
 
-/** The cell of a line as people read it: money with its currency, the rest as shown elsewhere. */
 const cellOf = (f: FieldInfo, v: unknown) => f.type === "money" && v && typeof v === "object"
   ? `${((v as Money).amount / 100).toFixed(2)} ${(v as Money).currency}` : shown(v);
 
-/**
- * A changed lines field row by row (F-26, F-37): lines added, removed, and
- * changed in some cells. Lines are matched by the first column whose values
- * are unique on both sides (a booking, an account), else by position.
- */
 function LinesChange({ field, before, after }: { field: FieldInfo; before: unknown; after: unknown }) {
   const columns = field.fields ?? [];
   const was = Array.isArray(before) ? (before as Row[]) : [], is = Array.isArray(after) ? (after as Row[]) : [];
@@ -821,7 +746,6 @@ function LinesChange({ field, before, after }: { field: FieldInfo; before: unkno
 
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${Math.round(n / 1024)} KB` : `${(n / (1 << 20)).toFixed(1)} MB`);
 
-/** A record's files: download each, add one. */
 function Files({ attached, files }: { attached: AttachedFile[]; files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void } }) {
   const [file,setFile]=useState<File>(),[busy,setBusy]=useState(false),[error,setError]=useState<string>();const epoch=useRef(0),picked=useRef(file);picked.current=file;useEffect(()=>()=>{epoch.current++;},[]);
   const upload=async()=>{const submitted=picked.current,started=epoch.current;if(!submitted||!files||busy)return;setBusy(true);setError(undefined);try{await files.upload(submitted);if(epoch.current===started&&picked.current===submitted){picked.current=undefined;setFile(undefined);}}catch{if(epoch.current===started)setError(t("The attachment could not be confirmed. Your selected file is retained."));}finally{if(epoch.current===started)setBusy(false);}};
@@ -842,7 +766,6 @@ function Files({ attached, files }: { attached: AttachedFile[]; files?: { upload
   );
 }
 
-/** A record's comments, oldest first, and a box to add one; following tells of its changes. */
 function Comments({ list, following, comments }: { list: RecordComment[]; following: boolean; comments?: { add: (text: string) => Promise<boolean>; follow: (on: boolean) => Promise<void> } }) {
   const [text,setText]=useState(""),[busy,setBusy]=useState(false),[followBusy,setFollowBusy]=useState(false),[error,setError]=useState<string>();const epoch=useRef(0),draft=useRef(text);draft.current=text;useEffect(()=>()=>{epoch.current++;},[]);
   const add=async()=>{const submitted=draft.current,started=epoch.current;if(!comments||busy||!submitted.trim())return;setBusy(true);setError(undefined);try{const confirmed=await comments.add(submitted);if(epoch.current!==started)return;if(confirmed&&draft.current===submitted){draft.current="";setText("");}else if(!confirmed)setError(t("The comment could not be confirmed. Your draft is retained."));}catch{if(epoch.current===started)setError(t("The comment could not be confirmed. Your draft is retained."));}finally{if(epoch.current===started)setBusy(false);}};
@@ -855,7 +778,6 @@ const processTone = (state: string) =>
 
 const approvalTone = (state: string) => state === "approved" ? "success" : state === "pending" ? "warning" : state === "withdrawn" ? "neutral" : "danger";
 
-/** The approvals asked for a record: each request, its state, whom it waits for, and who rejected it and why. */
 function Approvals({ source, approvals, onOpen }: { source: RecordSource; approvals: Api.ApprovalRequest[]; onOpen?: (type: string, r: EntityRecord) => void }) {
   const state = source.entity("work.approval")?.fields.find((f) => f.name === "state");
   return (
@@ -882,7 +804,6 @@ function Approvals({ source, approvals, onOpen }: { source: RecordSource; approv
   );
 }
 
-/** The open tasks about a record: what is asked, by when, and its answers as buttons. */
 export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode } }) {
   const [busy, setBusy] = useState<string>();
   const answer = async (task: Api.InboxTask, a?: string) => { setBusy(task.id); try { await tasks?.answer(task, a); } finally { setBusy(undefined); } };
@@ -905,8 +826,6 @@ export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer
   );
 }
 
-/** An approval chain drawn as a process (#122): the requester, each level with its
- * approvers and who decided, and how it ended — in BPMN shapes. */
 function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   const nodes: FlowStepNode[] = [{ id: "requester", label: a.requester, detail: t("asked"), notation: "event-start", tone: "success" }];
   const edges: FlowStepEdge[] = [];
@@ -931,7 +850,6 @@ function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
   return <FlowSteps nodes={nodes} edges={edges} height={150} label={t("Approvals")} storeKey={`approvals:${a.id}`} />;
 }
 
-/** The processes about a record: each flow, its state, and the steps it stands at. */
 function Processes({ source, processes, onOpen }: { source: RecordSource; processes: RecordView["processes"]; onOpen?: (type: string, r: EntityRecord) => void }) {
   const state = source.entity("flow.instance")?.fields.find((f) => f.name === "state");
   return (
@@ -950,10 +868,8 @@ function Processes({ source, processes, onOpen }: { source: RecordSource; proces
   );
 }
 
-/** A task offered to a member; `answers` are what a flow's question offers, none: done. */
 export type InboxTask = Api.InboxTask;
 
-/** A member's open tasks, overdue first; each can open what it is about and offers the actions the app gives it. */
 export function Inbox({ tasks, onOpen, actions, empty = t("Nothing for you") }: {
   tasks: InboxTask[]; onOpen?: (task: InboxTask) => void; actions?: (task: InboxTask) => ReactNode; empty?: string;
 }) {

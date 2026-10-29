@@ -8,7 +8,6 @@ type Value=string|number|boolean|null;
 type Axis={key:string;value:Value};
 const identity=(value:Value)=>JSON.stringify([value===null?"missing":typeof value,value]);
 const label=(value:Value)=>value===null?t("No value (missing)"):value===""?t("Empty text"):String(value);
-/** Typed axis identities keep empty, missing, literal placeholders and separator-bearing values apart. */
 export function countMatrix(data:AggregateData,rows:string,columns:string,{maxAxis=limits.maxCells,maxCells=limits.maxCells,sortRows=false,stringAxes=false}:{stringAxes?:boolean;maxAxis?:number;maxCells?:number;sortRows?:boolean}={}) {
  if(!data||!Array.isArray(data.columns)||!Array.isArray(data.rows)||data.columns.some(c=>!c||typeof c!=="object")||!rows||!columns||rows===columns||rows==="count"||columns==="count"||!Number.isInteger(maxAxis)||maxAxis<1||maxAxis>limits.maxCells||!Number.isInteger(maxCells)||maxCells<1||maxCells>limits.maxCells||data.columns.length!==3||![rows,columns].every(name=>data.columns.filter(c=>c.kind==="group"&&c.name===name).length===1)||!data.columns.some(c=>c.kind==="measure"&&c.name==="count"&&!c.money)||data.rows.length>maxCells)return;
  const rowAxes=new Map<string,Axis>(),columnAxes=new Map<string,Axis>(),cells=new Map<string,Map<string,bigint>>(),rowTotals=new Map<string,bigint>(),columnTotals=new Map<string,bigint>();let total=0n,max=0n;
@@ -24,7 +23,6 @@ export function countMatrix(data:AggregateData,rows:string,columns:string,{maxAx
  const compare=(a:Axis,b:Axis)=>label(a.value)<label(b.value)?-1:label(a.value)>label(b.value)?1:a.key<b.key?-1:a.key>b.key?1:0,orderedRows=[...rowAxes.values()],orderedColumns=[...columnAxes.values()].sort(compare);if(sortRows)orderedRows.sort(compare);
  return {rows:orderedRows,columns:orderedColumns,cells,rowTotals,columnTotals,total,max,rowTitle:data.columns.find(c=>c.name===rows)!.title,columnTitle:data.columns.find(c=>c.name===columns)!.title};
 }
-/** Original complete counts have one model for plain pivots and heat intensity. */
 export function CountMatrix({data,rows,columns,heatmap=false,enabled=true,onSelect,onClear,filterAxes={row:true,column:true}}:{filterAxes?:{row:boolean;column:boolean};data:AggregateData;rows:string;columns:string;heatmap?:boolean;enabled?:boolean;onSelect?:(row:Value,column:Value)=>void;onClear?:()=>void}) {
  const model=countMatrix(data,rows,columns,{maxAxis:heatmap?limits.maxAxis:limits.maxCells,sortRows:heatmap,stringAxes:heatmap});
  if(!model)return <p role="alert">{t("Count matrix values are invalid or exceed the cell limit.")}</p>;

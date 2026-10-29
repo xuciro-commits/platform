@@ -74,8 +74,6 @@ func (d *stagedDecision) ReadRecordSet(c platform.Caller, object, id, name strin
 	return d.tenant.readRecordSetFrom(d.records, c, object, id, name, at)
 }
 
-// A proposed owner row supplies reference values to its own rules before Put.
-// The copied read view has no history, writes or authoritative side effects.
 func (d *stagedDecision) ReadRecordSetCandidate(c platform.Caller, object, id, name string, raw json.RawMessage, at time.Time) (platform.RecordSetResult, *kernel.Error) {
 	store := d.records.ForkRecords()
 	et := store.Type(object)
@@ -190,8 +188,6 @@ func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, obje
 		return result, refusal
 	}
 	view, hidden := viewOf(c.Member, et)
-	// Selection, filtering, ordering and paging use one captured private store.
-	// Read grants and derived-source checks still come from the original owner.
 	decisions := map[string]platform.AuthzDecision{}
 	var rows []any
 	if refusal := func() *kernel.Error {

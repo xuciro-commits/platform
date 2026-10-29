@@ -1,7 +1,3 @@
-// The Host every app reads through: the member's catalog of
-// actions, the entity types and definitions the host projects for them, the
-// record source, the decision path (K5 outbox, idempotent send) and the
-// `opens` map from record types to the view that shows them.
 import { memberRoles, decodeDefinitions, confirmedDecision, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { OfflineReadError, queryElements, resolveElements, type EnterpriseStereotype, type EdgeClient, type ActionDeclaration, type Entry, type Api } from "@platform/kernel";
 import { humanizeKernelError, notify, type AggregateData, type EntityInfo, type RecordPageData, type InterfaceRecordPageData, type RecordSource, type RecordView, t } from "@platform/ui";
@@ -15,21 +11,16 @@ type ProtocolInfo = Api.ProtocolInfo;
 const metadataPaths = ["/v1/actions", "/v1/entities", "/v1/definitions", "/v1/protocols", "/v1/views"];
 const offline = (error: unknown) => error instanceof OfflineReadError || /live connection unavailable/.test(String(error));
 
-// Remounts receive a new identity too, without reusing an older query key.
 let metadataRevision = 0;
 
-/** The original discovery reads behind the first route resolution: waiting,
- * the failure with its own retry, or offline preparation — never a bare flag. */
 export type WorkspaceDiscovery = { phase: "pending" | "ready" | "error" | "offline"; message?: string; retry: () => void };
 
 export type PlatformHost = {
   host?: Host;
-  /** Initial route resolution waits for this identity's original discovery reads. */
   discovery: WorkspaceDiscovery;
   release: UseQueryResult<Api.ReleaseActive>;
   unread: number;
   saved: SavedView[];
-  /** Whether this subject administers the host itself (GET /v1/host/me answers). */
   hostAdmin: boolean;
 };
 
@@ -46,12 +37,8 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   const actions = actionQuery.data;
   const entityQuery = read<EntityInfo[]>("/v1/entities");
   const entities = entityQuery.data ?? [];
-  // The installed assets, so an app's navigation can offer the pages it has —
-  // a code page, or one someone composed in this tenant.
   const definitionQuery = read<Api.Definition[]>("/v1/definitions");
   const definitions = useMemo(()=>decodeDefinitions(definitionQuery.data??[]),[definitionQuery.data]);
-  // Boot waits for the three discovery reads once per identity; once they have
-  // answered, later refreshes never bounce the shell back to a start screen.
   const discoveryLatch = useRef(false);
   const metadataScope = JSON.stringify([token, tenant, me?.principalId]);
   const discoveryScope = useRef(metadataScope);
@@ -74,13 +61,10 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
 
   const [outbox, setOutbox] = useState<Entry[]>([]);
   useEffect(() => setOutbox([...client.authorities.outbox]), [client, ready]);
-  // Moves with every change the host reports and every decision taken here: views that read through the source read again.
   const [revision, setRevision] = useState(0);
   useEffect(() => ready ? client.enableLiveReads() : undefined, [client, ready]);
   const refresh = useCallback(async () => { client.usingPrepared = false; client.refreshLiveReads(); setRevision((r) => r + 1); await queries.invalidateQueries(); }, [client, queries]);
 
-  // Restoring an unanswered request also restores its transport. Check once
-  // when this identity is ready and once per reconnect, using the K5 sender.
   useEffect(() => {
     if (!ready) return;
     let active = true;
@@ -101,8 +85,6 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   }, [client, ready, refresh]);
 
   const decide = useCallback<Host["decide"]>(async (schema, target, payload, options = {}) => {
-    // A type this client has no authority for is one the tenant declared while
-    // it was open — an object someone published. Learn it, then decide.
     if (!client.authorities.authorityOf(client.connection.tenant, target.type)) {
       await client.refreshDeclarations().catch(() => undefined);
     }
@@ -153,8 +135,6 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       }
     }
     setOutbox([...client.authorities.outbox]);
-    // The original receipt completes the decision. Reloading other mounted
-    // work must not hold its form open after the host has already accepted it.
     if (answered.some(entry => entry.state === "SUBMISSION_STATE_CONFIRMED" || entry.outcome === "ERROR_CODE_UNKNOWN_SCHEMA")) void refresh().catch(() => undefined);
     return confirmedDecision(client.authorities.outbox, client.connection.tenant, key);
   }, [actions, client, refresh]);
@@ -162,7 +142,6 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
   const previousMetadata = useRef<{ content: string; scope: string } | undefined>(undefined);
   const sourceScope = useMemo(() => {
     if (!me) return undefined;
-    // Reading/exporting records updates activity, not the member's read scope.
     const scopeMe = { ...me, account: { ...me.account, lastSeen: undefined } };
     const content = JSON.stringify([client.connection.tenant, client.connection.principal, scopeMe, entities, actions, definitions]);
     if (previousMetadata.current?.content !== content) previousMetadata.current = { content, scope: `metadata:${++metadataRevision}` };
@@ -195,8 +174,6 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
 
   const host = useMemo<Host | undefined>(() => {
     if (!me || !source) return undefined;
-    // A record opens in its app's view; a protocol's record (orders.confirm)
-    // in the view of the app the tenant binds as its provider (D5).
     const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow-instance"]]);
     const host: Host = {
       client, me, entities, definitions, source, opens, outbox, decide, refresh,

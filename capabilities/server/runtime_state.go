@@ -15,9 +15,6 @@ import (
 	"platformserver/platform"
 )
 
-// migrateRuntimeState is called before serving this tenant. Its mutex pauses
-// writes while the original in-memory state is copied and compared at one
-// journal position. Only then are SQL-backed reads installed and history freed.
 func (t *Tenant) migrateRuntimeState(ctx context.Context, j Journals) error {
 	return t.migrateRuntimeStateFrom(ctx, j, nil)
 }
@@ -65,17 +62,12 @@ func (t *Tenant) migrateRuntimeStateFrom(ctx context.Context, j Journals, prefix
 	} else if err := store.InitializeState(ctx, t.ID, j.Position(t.ID), d); err != nil {
 		return err
 	}
-	// The migration compared every original image and history at this position.
-	// Keep SQL as the current-record source instead of decoding a second copy.
 	t.installRuntimeRecords(store, func() int64 { return j.Position(t.ID) })
 	t.installRuntimeHistory(store, func() int64 { return j.Position(t.ID) })
 	t.enableCurrentReadScopes()
 	return nil
 }
 
-// The snapshot archive and the current SQL view share the original history
-// readers. During tail recovery the archive remains the fixed prefix while
-// accepted application adds its original, privately held replacements.
 func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, position func() int64) {
 	for _, a := range t.apps {
 		a.AcceptedLedger().UseChangeArchive(runtimekernel.NewChangeArchive(store, t.ID, a.Manifest().ID))
@@ -89,9 +81,6 @@ func (t *Tenant) installRuntimeHistory(store runtimekernel.AcceptedStateReader, 
 	t.committed.UseStorage(store, t.ID, position)
 }
 
-// installRuntimeRecords is called only after migration or recovery established
-// agreement with the durable SQL position. Fetched rows stay in the request's
-// private work set rather than a second tenant-wide current-state authority.
 func (t *Tenant) installRuntimeRecords(store journal.RuntimeState, position func() int64) {
 	t.records.Lock()
 	defer t.records.Unlock()
@@ -99,7 +88,6 @@ func (t *Tenant) installRuntimeRecords(store journal.RuntimeState, position func
 	t.records.UseCurrentRows()
 }
 
-// The tenant lock fixes definitions and all owner state at the same replay position.
 func (t *Tenant) runtimeStateDeltaLocked() (journal.StateDelta, error) {
 	d := journal.StateDelta{}
 	if err := func() error {

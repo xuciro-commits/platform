@@ -16,30 +16,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Candidate physical isolation, cross-environment promotion and real data
-// migration (ordered by the owner on 2026-10-05).
-//
-// Isolation: a saved release candidate is written once into the tenant's file
-// store as a sealed artifact, addressed by its content digest. What is sealed
-// cannot be changed behind the release machinery; activation, promotion and
-// support reads read the sealed bytes and verify the digest, so a candidate is
-// a thing with an address rather than an entry in a mutable map.
-//
-// Promotion: an environment is another tenant this host serves. Promotion moves
-// a sealed candidate from one tenant to another through the target's own
-// release result — the same decode, digest, installation and activation path a
-// local save uses — after checking that the target hosts every app
-// the candidate's assets belong to. Nothing is copied by hand and no second
-// deployment state exists.
-//
-// Migration: real records move with the platform's own import/export.
-// An export writes what a member of the source may read; the
-// import submits each row through the target's generated actions as a member of
-// the target, keyed by the file's hash and the row, so a migration run twice
-// repeats nothing. Types the target does not host refuse the whole run up front.
-
-// SealedArtifact is one candidate's sealed bytes.
-// PromotionResult says what one promotion did.
 type PromotionResult struct {
 	From      string `json:"from"`
 	To        string `json:"to"`
@@ -50,9 +26,6 @@ type PromotionResult struct {
 	Assets    int    `json:"assets"`
 }
 
-// SealCandidate writes a saved candidate's exact bytes into the file store as a
-// sealed artifact and remembers its digest. Sealing is idempotent: the same
-// candidate seals to the same key and digest.
 func (t *Tenant) SealCandidate(id string, now time.Time) (platform.SealedArtifact, error) {
 	t.mu.Lock()
 	raw := slices.Clone(t.releases.Raw(id))
@@ -82,7 +55,6 @@ func sealedKey(tenant, candidate string) string {
 	return "releases/" + tenant + "/" + strings.ReplaceAll(strings.TrimPrefix(candidate, "sha256-v1:"), ":", "-") + ".json"
 }
 
-// SealedArtifact reads back one sealed candidate's manifest.
 func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -94,8 +66,6 @@ func (t *Tenant) SealedArtifact(id string) (platform.SealedArtifact, bool) {
 	return platform.SealedArtifact{}, false
 }
 
-// sealedBytes reads a sealed artifact and checks its digest, so a promoted or
-// activated candidate is exactly what was sealed.
 func (t *Tenant) sealedBytes(id string) ([]byte, platform.SealedArtifact, error) {
 	artifact, ok := t.SealedArtifact(id)
 	if !ok {
@@ -120,10 +90,6 @@ func (t *Tenant) sealedBytes(id string) ([]byte, platform.SealedArtifact, error)
 	return buf.Bytes(), artifact, nil
 }
 
-// sealedOrSeal answers a saved candidate's sealed bytes, sealing it first when
-// no artifact is on record: the artifact is derived from the committed bytes
-// and sealing is idempotent, so a save that never sealed, or a sealed map not
-// carried by a journal-only recovery, is repaired here rather than refused.
 func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, platform.SealedArtifact, error) {
 	if _, ok := t.SealedArtifact(id); !ok {
 		if _, err := t.SealCandidate(id, now); err != nil {
@@ -133,11 +99,6 @@ func (t *Tenant) sealedOrSeal(id string, now time.Time) ([]byte, platform.Sealed
 	return t.sealedBytes(id)
 }
 
-// PromoteCandidate moves one sealed candidate from one tenant to another. The
-// source must have it saved (it is sealed on the way if it was not); the target must host every app the candidate's
-// assets belong to; the member must hold the target's builder or publisher
-// role. The bytes enter the target as its own release result, so its journal,
-// installations and activation behave exactly as for a local save.
 func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, member platform.Member, now time.Time) (PromotionResult, error) {
 	if from == nil || to == nil || from.ID == to.ID {
 		return PromotionResult{}, fmt.Errorf("promotion needs two different environments")
@@ -190,21 +151,12 @@ func PromoteCandidate(from, to *Tenant, candidateID, key string, activate bool, 
 	if saved.RequestHash, err = acceptedformat.ReleaseRequestHash(to.ID, member.ID, saved.Key, candidate.ID, activate); err != nil {
 		return result, err
 	}
-	// The target's audit of the promotion is written where the result is
-	// applied, so a replayed journal carries it; the source changes nothing
-	// and keeps the sealed artifact as its record.
 	if _, err := to.commitReleaseLocked(member, saved); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
-// MigrateRecords moves real records of the named types from one tenant to
-// another with the platform's import/export: the source export reads what the
-// member may read there, and every row enters the target through its generated
-// actions as the target's member. A type the target does not host refuses the
-// run before anything moves. The key is derived from the two tenants and the
-// types, so the same migration run twice imports nothing new.
 func MigrateRecords(from, to *Tenant, source, target platform.Member, types []string, now time.Time) (platform.MigrationResult, error) {
 	if from == nil || to == nil || from.ID == to.ID {
 		return platform.MigrationResult{}, fmt.Errorf("migration needs two different environments")
@@ -243,13 +195,9 @@ func MigrateRecords(from, to *Tenant, source, target platform.Member, types []st
 		}
 		result.Types = append(result.Types, part)
 	}
-	// Each row entered the target as an audited submission; the run itself is
-	// the console's migration manifest (rememberMigration), accepted separately
-	// after the row results so journal-only recovery retains the actual run.
 	return result, nil
 }
 
-// hostedTypes are the entity types this tenant's apps declare.
 func (t *Tenant) hostedTypes() map[string]bool {
 	out := map[string]bool{}
 	for _, et := range t.records.SortedTypes() {
@@ -258,7 +206,6 @@ func (t *Tenant) hostedTypes() map[string]bool {
 	return out
 }
 
-// rememberMigration keeps the console's own view of what moved.
 func (t *Tenant) rememberMigration(result platform.MigrationResult, member string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -270,10 +217,8 @@ func (t *Tenant) rememberMigration(result platform.MigrationResult, member strin
 	return err
 }
 
-// Migrations lists what the console moved in or out of this tenant.
 func (t *Tenant) Migrations() []platform.MigrationManifest { return t.console.Migrations() }
 
-// grantUsable resolves an open support session of this tenant.
 func (t *Tenant) grantUsable(id string, now time.Time) (platform.SupportGrant, error) {
 	return t.console.UsableSupport(t.ID, id, now)
 }

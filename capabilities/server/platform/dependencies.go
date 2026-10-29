@@ -10,9 +10,6 @@ import (
 	"strings"
 )
 
-// AgentReleaseDescriptor contains the original owner's declarative inputs.
-// Native guards/case checks remain in their pinned Go owner; builder cases
-// remain data compiled by Build.Agent.Definition, never another agent engine.
 type AgentReleaseDescriptor struct {
 	Name         string              `json:"name"`
 	Title        string              `json:"title"`
@@ -67,7 +64,7 @@ func (a AgentReleaseDescriptor) Dependencies(owner string) []AssetRef {
 		}
 		if strings.ContainsAny(tool, "#:") {
 			continue
-		} // native owner/version retains protocol/read/effect declarations
+		}
 		refs = append(refs, AssetRef{App: owner, Kind: AssetAction, Name: tool})
 	}
 	slices.SortFunc(refs, compareRef)
@@ -80,8 +77,6 @@ const (
 	CapabilityAuthoritative = "authoritative"
 )
 
-// Dependencies is the one owner-produced description used by release closure,
-// lineage, impact and callable discovery. It carries no permission grant.
 type Dependencies struct {
 	Ref      AssetRef     `json:"ref"`
 	Requires []AssetRef   `json:"requires"`
@@ -90,15 +85,13 @@ type Dependencies struct {
 }
 
 type Capability struct {
-	Kind    string      `json:"kind"`
-	Name    string      `json:"name"`
-	Inputs  ValueSchema `json:"inputs"`
-	Outputs ValueSchema `json:"outputs"`
-	Roles   []string    `json:"roles"`
-	Side    string      `json:"side"`
-	// Parameters preserves an owner's opaque JSON payload rather than
-	// inventing a structural schema for it. Empty schemas mean owner-defined.
-	Parameters []Field `json:"parameters,omitempty"`
+	Kind       string      `json:"kind"`
+	Name       string      `json:"name"`
+	Inputs     ValueSchema `json:"inputs"`
+	Outputs    ValueSchema `json:"outputs"`
+	Roles      []string    `json:"roles"`
+	Side       string      `json:"side"`
+	Parameters []Field     `json:"parameters,omitempty"`
 }
 
 func (c Capability) Check() error {
@@ -115,8 +108,6 @@ func (c Capability) Check() error {
 	return nil
 }
 
-// ProtocolReleaseDescriptor freezes the original protocol and its provider
-// bindings. Reads remain Probe/read calls; actions remain independent requests.
 type ProtocolReleaseDescriptor struct {
 	Name           string              `json:"name"`
 	Version        int                 `json:"version"`
@@ -127,8 +118,6 @@ type ProtocolReleaseDescriptor struct {
 	ReadBindings   map[string]AssetRef `json:"readBindings,omitempty"`
 }
 
-// MarshalJSON retains historical omission of Provides, while a newly produced
-// descriptor with no callable capabilities still seals an explicit empty list.
 func (a ReleaseAsset) MarshalJSON() ([]byte, error) {
 	type wire ReleaseAsset
 	var provides *[]Capability
@@ -150,8 +139,6 @@ func WithDependencies(asset ReleaseAsset) (ReleaseAsset, error) {
 	return asset, nil
 }
 
-// DescribeAsset derives edges and capabilities from complete owner bytes. A
-// caller-supplied Requires/Provides list is never used as semantic input.
 func DescribeAsset(asset ReleaseAsset) (Dependencies, error) {
 	return describeAsset(asset, false)
 }
@@ -802,8 +789,6 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 	return out, nil
 }
 
-// CapabilityFieldsSchema projects original payload fields. An empty Type
-// leaves opaque JSON with its owner instead of falsely advertising text.
 func CapabilityFieldsSchema(fields []Field) ValueSchema {
 	schema := ValueSchema{Type: "object", Properties: map[string]ValueSchema{}}
 	for _, field := range fields {
@@ -847,8 +832,6 @@ func CapabilityFieldSchema(kind, description string, choices []string) ValueSche
 	return value
 }
 
-// CapabilityEntitySchema describes an object's original fields. The host
-// applies its existing field permissions before using this projection.
 func CapabilityEntitySchema(info EntityInfo) ValueSchema {
 	schema := ValueSchema{Type: "object", Properties: map[string]ValueSchema{"id": {Type: "string"}, "revision": {Type: "integer"}, "archived": {Type: "boolean"}}, Required: []string{"id", "revision"}}
 	for _, field := range info.Fields {
@@ -948,8 +931,6 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	return nil
 }
 
-// CheckAssetDependencies validates the frozen owner description. Historical
-// assets keep the original subset rules; newly produced assets must be exact.
 func CheckAssetDependencies(asset ReleaseAsset) error { return checkAssetDescription(asset) }
 
 func checkAssetDescription(asset ReleaseAsset) error {
@@ -983,8 +964,6 @@ func checkAssetDescription(asset ReleaseAsset) error {
 	return nil
 }
 
-// DependencyGraph is an index of the same sealed descriptions. Forward and
-// reverse queries never reread mutable owner configuration.
 type DependencyGraph struct {
 	nodes       map[AssetRef]Dependencies
 	usedBy      map[AssetRef][]AssetRef
@@ -1038,8 +1017,6 @@ func NewDependencyGraph(descriptors []Dependencies) (*DependencyGraph, error) {
 	return graph, nil
 }
 
-// NewReleaseDependencyGraph preserves the original allowances for reciprocal
-// data references and page-only navigation. Execution cycles remain invalid.
 func NewReleaseDependencyGraph(assets []ReleaseAsset) (*DependencyGraph, error) {
 	descriptions := make([]Dependencies, 0, len(assets))
 	for _, asset := range assets {
@@ -1058,9 +1035,6 @@ func NewReleaseDependencyGraph(assets []ReleaseAsset) (*DependencyGraph, error) 
 		if asset.Ref.Kind == AssetObject {
 			for _, ref := range asset.Requires {
 				if ref.Kind == AssetFunction {
-					// A proposal's source model contains the action that adopts
-					// its result. This describes data and its explicit later
-					// submission; it cannot recursively invoke the model.
 					var object struct {
 						Actions []struct {
 							Adoption *ProposalAdoption `json:"adoption"`
@@ -1114,9 +1088,6 @@ func (g *DependencyGraph) Closure(roots []AssetRef) ([]AssetRef, error) {
 	return refs, err
 }
 
-// InstallationOrder orders the owner's part of a previously checked release.
-// Foreign prerequisites are installed by their owners; semantic data cycles
-// use the same allowances as the complete candidate.
 func (g *DependencyGraph) InstallationOrder() ([]AssetRef, error) {
 	roots := make([]AssetRef, 0, len(g.nodes))
 	for ref := range g.nodes {
@@ -1135,9 +1106,6 @@ func (g *DependencyGraph) walk(roots []AssetRef, installedPrerequisites bool) ([
 			return err
 		}
 		if visiting[ref] {
-			// Object collections and typed relationships describe a data model.
-			// A reciprocal model may include its own link type; no executable
-			// asset may participate in this allowance.
 			if start := slices.Index(path, ref); start >= 0 && slices.ContainsFunc(path[start:], func(node AssetRef) bool { return node.Kind == AssetLinkType }) && !slices.ContainsFunc(path[start:], func(node AssetRef) bool { return node.Kind != AssetObject && node.Kind != AssetLinkType }) {
 				return nil
 			}
@@ -1182,9 +1150,6 @@ func (g *DependencyGraph) walk(roots []AssetRef, installedPrerequisites bool) ([
 		visiting[ref] = true
 		path = append(path, ref)
 		for _, dependency := range node.Requires {
-			// Adoption retains a function in the closure, but its source model
-			// must exist before the function is installed. Installation visits
-			// every node as a root; closure traversal still follows this edge.
 			if installedPrerequisites && ref.Kind == AssetObject && dependency.Kind == AssetFunction && g.containment[[2]AssetRef{ref, dependency}] {
 				continue
 			}
@@ -1206,8 +1171,6 @@ func (g *DependencyGraph) walk(roots []AssetRef, installedPrerequisites bool) ([
 	return out, nil
 }
 
-// Reachable reads an already installed graph. Its cycles were checked by
-// publication with full owner bodies, which are intentionally absent here.
 func (g *DependencyGraph) Reachable(roots []AssetRef) ([]AssetRef, error) {
 	seen := map[AssetRef]bool{}
 	queue := slices.Clone(roots)
@@ -1235,11 +1198,9 @@ func (g *DependencyGraph) Reachable(roots []AssetRef) ([]AssetRef, error) {
 	return out, nil
 }
 
-// CheckExecutionBindings keeps foreign authoritative calls on the original
-// protocol boundary. Structural model and read edges do not invoke actions.
 func (g *DependencyGraph) CheckExecutionBindings(asset ReleaseAsset, assets map[AssetRef]ReleaseAsset) error {
 	if asset.Ref.Kind == AssetApp {
-		return nil // application membership references original owners; it invokes no action
+		return nil
 	}
 	for _, dependency := range asset.Requires {
 		if dependency.Kind != AssetAction || dependency.App == asset.Ref.App {
@@ -1247,7 +1208,7 @@ func (g *DependencyGraph) CheckExecutionBindings(asset ReleaseAsset, assets map[
 		}
 		if asset.Ref.Kind == AssetPage || asset.Ref.Kind == AssetObservation {
 			continue
-		} // explicit page/observation actions are independent authorized user submissions
+		}
 		bound := false
 		for _, protocolRef := range asset.Requires {
 			if protocolRef.Kind != AssetProtocol || protocolRef.App != dependency.App {
@@ -1270,8 +1231,6 @@ func (g *DependencyGraph) CheckExecutionBindings(asset ReleaseAsset, assets map[
 	return nil
 }
 
-// Impact is the reverse transitive closure, including the changed roots. It
-// also works when a removed dependency is no longer an installed node.
 func (g *DependencyGraph) Impact(changed []AssetRef) ([]AssetRef, error) {
 	seen := map[AssetRef]bool{}
 	queue := slices.Clone(changed)
@@ -1295,8 +1254,6 @@ func (g *DependencyGraph) Impact(changed []AssetRef) ([]AssetRef, error) {
 	return out, nil
 }
 
-// CheckReadBindings applies Side to page data resources. Explicit action event
-// effects and AI request widgets remain governed submissions, not read bindings.
 func (g *DependencyGraph) CheckReadBindings(asset ReleaseAsset) error {
 	if asset.Ref.Kind != AssetPage {
 		return nil
@@ -1343,7 +1300,6 @@ func (g *DependencyGraph) CheckReadBindings(asset ReleaseAsset) error {
 	return nil
 }
 
-// ValidDigest reports whether value is a sha256 hex digest, with or without prefix.
 func ValidDigest(value string) bool {
 	value = strings.TrimPrefix(value, "sha256:")
 	decoded, err := hex.DecodeString(value)

@@ -1,18 +1,3 @@
-// Package sink is the local webhook receiver, mail server, model server and
-// supplier's agent stand-in for local endpoints and rehearsals. It is the
-// former standalone webhook-sink binary: the same handlers, now embeddable as
-// an optional in-process capability of the host (declared by the deployment,
-// off unless an address is configured). It is a test fixture, never a
-// production receiver: secrets are local-only and nothing is durable.
-//
-//	POST /hook      a webhook; 204 when kept (or already kept), 401 on a bad signature
-//	GET  /received  {"calls": n, "kept": {"<webhook-id>": <body>}}
-//	POST /fail?on=true|false   answer 503 to every webhook until switched off
-//	GET  /mail      [{"messageId", "to", "from", "subject", "text"}], oldest first
-//	GET  /v1/models, POST /v1/chat/completions   a local model server on the
-//	                OpenAI wire (fixtures, not model quality)
-//	GET /messages, POST /observations   empty channel and fixed state-window samples
-//	POST /a2a       a supplier's agent over A2A 1.0 (card at /a2a/.well-known/agent-card.json)
 package sink
 
 import (
@@ -38,12 +23,10 @@ import (
 	"unicode"
 )
 
-// message is one mail as the sink keeps it.
 type message struct {
 	MessageID, To, From, Subject, Text string
 }
 
-// Sink keeps one copy per webhook id and one per Message-ID, in memory only.
 type Sink struct {
 	secret []byte
 
@@ -54,12 +37,10 @@ type Sink struct {
 	mails   []message
 }
 
-// New builds a sink that verifies Standard Webhooks signatures with secret.
 func New(secret []byte) *Sink {
 	return &Sink{secret: secret, kept: map[string]json.RawMessage{}}
 }
 
-// Handler serves the sink endpoints on its own multiplexer.
 func (s *Sink) Handler() http.Handler {
 	mux := http.NewServeMux()
 	verified := func(r *http.Request, body []byte) bool {
@@ -119,8 +100,6 @@ func (s *Sink) Handler() http.Handler {
 		json.NewEncoder(w).Encode(map[string]any{"intervals": map[string]any{"since": query.Since, "until": query.Until, "revision": "local-fixture-1",
 			"coverage": map[string]any{"availableSince": query.Since, "completeUntil": query.Until, "good": len(points)}, "points": points}})
 	})
-	// A supplier's agent over A2A 1.0: it answers every SendMessage
-	// with a completed task, the lead time of the product the message names.
 	mux.HandleFunc("GET /a2a/.well-known/agent-card.json", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"name": "Harbour Metals planner", "description": "Lead times of Harbour Metals' products.", "version": "1",
 			"supportedInterfaces": []map[string]string{{"url": "http://" + r.Host + "/a2a", "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}},
@@ -155,7 +134,7 @@ func (s *Sink) Handler() http.Handler {
 	}
 	mux.HandleFunc("POST /a2a", supplierReply)
 	mux.HandleFunc("POST /rpc", supplierReply)
-	mux.HandleFunc("POST /v1/embeddings", func(w http.ResponseWriter, r *http.Request) { // "embed": each word hashed into 64 dimensions
+	mux.HandleFunc("POST /v1/embeddings", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Input []string }
 		json.NewDecoder(r.Body).Decode(&req)
 		data, tokens := []map[string]any{}, 0
@@ -197,8 +176,6 @@ func (s *Sink) Handler() http.Handler {
 			return
 		}
 		last := req.Messages[len(req.Messages)-1].Content
-		// A deterministic fixture for the first typed function; it proves the
-		// real wire, validation and recovery path, not model reasoning quality.
 		if len(req.Tools) == 0 && len(req.Messages) == 2 && req.Messages[0].Role == "system" &&
 			strings.HasPrefix(req.Messages[0].Content, "Summarise only the provided record.") && json.Valid([]byte(last)) {
 			content, _ := json.Marshal(map[string]any{"summary": "Record: " + last, "category": "routine", "review": false})
@@ -206,14 +183,13 @@ func (s *Sink) Handler() http.Handler {
 				"usage": map[string]any{"prompt_tokens": len(strings.Fields(last)), "completion_tokens": 20, "cost": 0.01}})
 			return
 		}
-		if len(req.Tools) > 0 { // an agent: read first, then propose the first ID read that the goal does not name
+		if len(req.Tools) > 0 {
 			call := func(name string, args map[string]string) {
 				raw, _ := json.Marshal(args)
 				json.NewEncoder(w).Encode(map[string]any{"model": "echo", "usage": map[string]int{"prompt_tokens": 50, "completion_tokens": 10},
 					"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{
 						{"id": "c1", "type": "function", "function": map[string]string{"name": name, "arguments": string(raw)}}}}}}})
 			}
-			// The plant's planner: ask the supplier's agent, then answer with what it said.
 			if slices.ContainsFunc(req.Tools, func(t struct{ Function struct{ Name string } }) bool { return t.Function.Name == "emit_lead_time" }) {
 				if req.Messages[len(req.Messages)-1].Role != "tool" {
 					call("emit_lead_time", map[string]string{"message": req.Messages[1].Content, "rationale": "Only the supplier knows its lead time."})
@@ -232,7 +208,7 @@ func (s *Sink) Handler() http.Handler {
 				}
 			}
 			goal, found := req.Messages[1].Content, ""
-			var items []map[string]any // a list read: the first item whose product the goal names, and whose ID it does not
+			var items []map[string]any
 			json.Unmarshal([]byte(last), &items)
 			for _, item := range items {
 				id := regexp.MustCompile(`[A-Z]{2,}-\d+`).FindString(fmt.Sprint(item))
@@ -261,13 +237,11 @@ func (s *Sink) Handler() http.Handler {
 	return mux
 }
 
-// ListenAndServe serves the HTTP endpoints until the listener fails.
 func (s *Sink) ListenAndServe(addr string) error {
 	log.Printf("local sink on http://%s", addr)
 	return http.ListenAndServe(addr, s.Handler())
 }
 
-// KeepSMTP stores one mail per Message-ID, like the HTTP sink keeps webhooks.
 func (s *Sink) KeepSMTP(addr string) error {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {

@@ -17,8 +17,6 @@ import (
 	"time"
 )
 
-// formulaExpr mechanically lowers the old grammar. Integer destinations use
-// an explicit round node; saved Expr values never inherit legacy zero fallback.
 func formulaExpr(fields []Field, f Field) (platform.Expr, error) {
 	if f.FormulaExpr != nil {
 		if f.Formula != "" {
@@ -443,8 +441,6 @@ func (b *Build) normalizeObjectRules(o *Object) error {
 			return err
 		}
 	}
-	// Draft lowering changes representation only. Cross-object rule checking
-	// belongs to Check, with the complete publication candidate available.
 	return nil
 }
 func (b *Build) checkObjectRules(o Object, engines ...platform.RuleEngine) error {
@@ -547,13 +543,6 @@ func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, look
 	return nil
 }
 
-// Decision tables (block E): condition columns → result
-// columns, first matching row wins, a default row when none does. A published
-// table is a native operation of the builder - callable from a process's
-// compute step, a page's compute widget or the capability API like any other
-// operation - and it is the builder that evaluates it (OperationExecutor).
-// Its complete rule plan is the original compute release asset. Candidate
-// activation or development publication installs it; drafts never change it.
 const (
 	SchemaTablePublish = TableType + ".publish"
 	tableRows          = 500
@@ -625,7 +614,6 @@ func (b *Build) installTable(c platform.Caller, tb Table) error {
 	return nil
 }
 
-// installTables puts every published table back after a restart or snapshot.
 func (b *Build) installTables() error {
 	list, err := readDefinitionInventory[Table](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
@@ -656,7 +644,6 @@ func (b *Build) checkTable(tb Table, engines ...platform.RuleEngine) error {
 	return b.checkTableShape(tb, engines...)
 }
 
-// checkTableShape checks everything but the name's uniqueness.
 func (b *Build) checkTableShape(tb Table, engines ...platform.RuleEngine) error {
 	if strings.TrimSpace(tb.Title) == "" || len(tb.Inputs) == 0 || len(tb.Outputs) == 0 || len(tb.Inputs)+len(tb.Outputs) > tableCols || len(tb.Rows) == 0 || len(tb.Rows) > tableRows {
 		return fmt.Errorf("a table needs a title, 1 to %d columns and 1 to %d rows", tableCols, tableRows)
@@ -711,7 +698,6 @@ func (b *Build) checkTableShape(tb Table, engines ...platform.RuleEngine) error 
 	return nil
 }
 
-// Compute evaluates a published table: the builder's only native operations.
 func (b *Build) Compute(_ context.Context, name string, input json.RawMessage) (json.RawMessage, error) {
 	tb, ok := b.tables[name]
 	if !ok {
@@ -751,24 +737,20 @@ type Table struct {
 	Reads       *platform.RuleReadSpec `json:"reads,omitempty" type:"json" field:"aside"`
 	Inputs      []TableColumn          `json:"inputs" title:"Condition columns"`
 	Outputs     []TableColumn          `json:"outputs" title:"Result columns"`
-	// Rows hold one condition cell per input and one result cell per output.
-	Rows []TableRow `json:"rows"`
-	// Default is the result when no row matches; empty: the call is refused.
-	Default   []string `json:"default,omitempty" title:"Default result"`
-	State     string   `json:"state" field:"readonly"`
-	Version   int      `json:"version,omitempty" field:"readonly"`
-	Versions  []string `json:"versions,omitempty" field:"readonly" type:"json"`
-	Published string   `json:"published,omitempty" field:"readonly" type:"json"`
+	Rows        []TableRow             `json:"rows"`
+	Default     []string               `json:"default,omitempty" title:"Default result"`
+	State       string                 `json:"state" field:"readonly"`
+	Version     int                    `json:"version,omitempty" field:"readonly"`
+	Versions    []string               `json:"versions,omitempty" field:"readonly" type:"json"`
+	Published   string                 `json:"published,omitempty" field:"readonly" type:"json"`
 }
 
 type TableColumn struct {
 	Name  string `json:"name"`
 	Title string `json:"title,omitempty"`
-	Type  string `json:"type"` // text, number, boolean
+	Type  string `json:"type"`
 }
 
-// TableRow is one rule. A condition cell is empty or "*" for any value, or
-// "= v", "!= v", "< v", "<= v", "> v", ">= v", "a..b" (inclusive) or "a|b|c".
 type TableRow struct {
 	Expressions []platform.Expr `json:"expressions,omitempty" type:"json" field:"aside"`
 	When        []string        `json:"when,omitempty"`
@@ -785,7 +767,6 @@ func ValueColumnSchema(cols []TableColumn) platform.ValueSchema {
 	return s
 }
 
-// definition is the table as the native operation it installs as.
 func (tb Table) Definition() platform.Operation {
 	plan, _ := tb.RulePlan()
 	return platform.Operation{Rules: plan, Name: tb.Name, Title: tb.Title, Description: tb.Description, Input: ValueColumnSchema(tb.Inputs), Output: ValueColumnSchema(tb.Outputs), Roles: []string{Builder, User},
@@ -794,7 +775,7 @@ func (tb Table) Definition() platform.Operation {
 
 type ValueCondition struct {
 	expr *platform.Expr
-	op   string // "", =, !=, <, <=, >, >=, range, in
+	op   string
 	a, b any
 	set  []any
 }
@@ -846,7 +827,6 @@ func ValueParseCondition(cell, typ string) (ValueCondition, error) {
 	return ValueCondition{op: "=", a: v}, err
 }
 
-// Expr compiles familiar cell sugar to the common language.
 func (c ValueCondition) Expr(name, kind string) platform.Expr {
 	if c.expr != nil {
 		return *c.expr

@@ -31,8 +31,6 @@ func (t *Tenant) installationPredecessor(record string) (string, error) {
 	return platform.CanonicalDigest(image)
 }
 
-// The owner performs every kind-specific install into this isolated runtime.
-// Historical images and new plans share this machinery, never a second switch.
 func (t *Tenant) stageReleaseInstallationLocked(installations []platform.ReleaseInstallation, validate bool, upgrade ...bool) (*Tenant, error) {
 	draft, err := t.assetInstallationView(t.records)
 	if err != nil {
@@ -163,8 +161,6 @@ func (t *Tenant) releaseAssetShapes(available []platform.ReleaseAsset) (map[stri
 	return releaseowner.AssetShapes(t.apps, available)
 }
 
-// The plan is derived from immutable candidate bytes and current storage;
-// callers cannot supply migration instructions or replace its source binding.
 func (t *Tenant) releaseUpgradePlanLocked(candidate platform.ReleaseCandidate, members ...platform.Member) (*releaseowner.ReleaseUpgradePlan, error) {
 	var member platform.Member
 	if len(members) > 0 {

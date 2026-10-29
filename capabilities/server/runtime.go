@@ -9,8 +9,6 @@ import (
 	"platformserver/platform"
 )
 
-// runtime is what the tenant does for its apps' callers (platform.Runtime):
-// the only way from an app into the host.
 type runtime struct{ t *Tenant }
 
 var _ platform.Runtime = runtime{}
@@ -22,10 +20,6 @@ func (r runtime) CheckEnterpriseTenantConnection(c platform.Caller, id string, n
 	return r.t.checkTenantConnection(c, id, now)
 }
 
-// Decide and Attempt explicitly retain the legacy caller's direct semantics,
-// including historical input replay and entries not yet migrated to results.
-// They offer no savepoint or atomic-result guarantee. Accepted entry points
-// supply stagedDecision instead; nested calls never switch back to runtime.
 func (runtime) Decide(c platform.Caller, app platform.App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if !c.Replaying {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A new decision requires a private runtime")
@@ -56,7 +50,6 @@ func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Req
 	if q.Protocol == "" {
 		r.t.askModel(c, rec, q)
 	}
-	// Historical protocol answers are already separate journal entries.
 }
 
 func (r runtime) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
@@ -109,7 +102,6 @@ func (r runtime) Link(c platform.Caller, from, to *pb.EntityRef, key string, now
 	return r.t.linker.Link(c, from, to, key, now)
 }
 
-// Deliver accepts one batch from the calling connector (K8).
 func (r runtime) Deliver(c platform.Caller, dataClass, from, to string, now time.Time) *kernel.Error {
 	r.t.opsMu.Lock()
 	defer r.t.opsMu.Unlock()
@@ -133,8 +125,6 @@ func (r runtime) BoundProvider(c platform.Caller, protocol string) (string, *ker
 	return r.t.boundProvider(c, protocol)
 }
 
-// The live runtime serves historical replay and reads; new execution requests
-// require a private decision so their intents are accepted with its records.
 func (r runtime) Seen(c platform.Caller, keys ...string)          { r.t.notices.MarkKeysRead(c.App, keys) }
 func (runtime) InputRefused(*kernel.Error, []platform.FieldIssue) {}
 func (runtime) RequestApproval(platform.Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error) {

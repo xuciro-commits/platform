@@ -2,7 +2,6 @@ import type {Api} from "@platform/kernel";
 export type RuleInput={name:string;type:string;choices?:string;required?:boolean;ref?:string;stereotype?:string;stereotypes?:string[];minLength?:number};
 export type StateAction={from:string[];to?:string;toInput?:string;inputs?:RuleInput[];approval?:unknown;transaction?:Api.BusinessTxn};
 const ruleChoices=(value:string|undefined)=>[...new Set((value??'').split(',').map(v=>v.trim()).filter(Boolean))];
-/** Canvas edges are a view of the subject's original transaction assignment. */
 const stateAssignment=(action:StateAction)=>action.transaction?.steps.find(step=>step.kind==="update"&&step.target?.type===action.transaction?.subject&&step.target?.id==="$subject")?.changes?.find(change=>change.field==="state");
 export function actionStateInput(action:StateAction):string|undefined {
  const assignment=stateAssignment(action),ref=assignment?.expr?.ref??assignment?.from;

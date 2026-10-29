@@ -7,36 +7,24 @@ import { FlowCanvas } from "./FlowCanvas";
 import type { FlowCatalog, FlowEdge, FlowLane, FlowNode, FlowNodeKind } from "./model";
 import { flowNodeClassOf, type FlowNotation } from "./notation";
 
-/** A step of a process drawn for reading: what it is called, what it is doing and
- * whether the eye is on it. The owner supplies the meaning; there are no ports to
- * author here, so a reader's view never has to invent a catalog. */
 export type FlowStepNode = {
   id: string; label: string; detail?: string; tone?: Tone; current?: boolean;
-  /** Its BPMN reading; without it, the step's own kind name decides. */
   notation?: FlowNotation; kind?: string; loop?: boolean;
-  /** What the step is, from the one class vocabulary: declared, else
-   * derived from the BPMN reading, else the plain step. */
   class?: string;
-  /** The lane responsible for it, when the owner drew this process across lanes. */
   lane?: string;
 };
 export type FlowStepEdge = { id?: string; from: string; to: string; label?: string; dashed?: boolean; tone?: Tone; directed?: boolean };
 
 const stepEntry: FlowNodeKind = { id: "step", title: "Step", class: "flow", inputs: [{ id: "in", label: "", type: "flow" }], outputs: [{ id: "out", label: "", type: "flow" }] };
 
-/** The catalog entry a step draws under: its declared class or BPMN reading
- * decides the glyph; a step that declares nothing stays the plain step. */
 export function flowStepKind(node: Pick<FlowStepNode, "id" | "kind" | "notation" | "class">): string {
   if (node.class || node.notation) return `step:${flowNodeClassOf({ class: node.class, notation: node.notation, id: node.kind ?? node.id })}`;
   return node.kind ?? stepEntry.id;
 }
 
-/** Read-only process adapter: the BPMN shapes the steps ask for, the class
- * glyphs the vocabulary decides, one entry per class the drawing actually uses. */
 export function FlowSteps({ nodes, edges, lanes, direction = "right", height = 280, onOpen, label, children, positions, storeKey, selected, onActivate }: {
   nodes: FlowStepNode[]; edges: FlowStepEdge[]; lanes?: FlowLane[]; direction?: CanvasDirection; height?: number;
   selected?: string; onActivate?: (node: FlowStepNode) => void; onOpen?: (node: FlowStepNode) => void; label?: string; children?: ReactNode; positions?: Readonly<Record<string, CanvasPosition>>;
-  /** The reader's own arrangement of this drawing stays on the device. */
   storeKey?: string;
 }) {
   const catalog: FlowCatalog = useMemo(() => {

@@ -36,16 +36,12 @@ func (t *Tenant) acceptAgentStep(b platform.AgentResultStep, at time.Time) {
 	draft := t.newStagedDecision()
 	draft.at = at
 	agent := draft.stateApp(t.agents).(platform.AgentRuntime)
-	// Authorization and source fences have been rechecked by agentStep while
-	// holding the tenant lock, after the outside model call has completed.
 	run, _ := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), b.Run)
 	if b.Evaluation != nil {
 		run.Agent = b.Evaluation.Agent
 	}
 	member := agent.AgentPrincipal(run.Agent)
 	if b.Evaluation != nil && b.Evaluation.Candidate != "" {
-		// A candidate's agent need not be installed as a principal yet. Only
-		// its original owner records the dry report; it executes no AI tool.
 		member = platform.Member{ID: "app:" + platform.AgentApp, Tenant: t.ID}
 	}
 	c := platform.NewCaller(draft, member, platform.AgentApp, false, true)
@@ -138,8 +134,6 @@ func (t *Tenant) applyAcceptedAgent(raw []byte) (acceptedformat.RuntimeAgent, er
 	return r, nil
 }
 
-// applyAcceptedEffect checks every predecessor before promoting an effect
-// outcome. Neither the application callback nor the external send is run here.
 func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, error) {
 	result, err := acceptedformat.DecodeEffect(raw)
 	if err != nil {
@@ -200,8 +194,6 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 	current.Effect, current.since, current.sending = result.After.Effect, result.After.Since, false
 	t.opsMu.Unlock()
 	if works != nil {
-		// The child may have cancelled other computation generations. Promote
-		// only this work's frozen completion, never overwrite that child state.
 		finished, _ := works.Get(result.Before.ID)
 		t.installAcceptedWork(finished)
 	}
@@ -212,9 +204,6 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedformat.Effect, bool, e
 	return result, true, nil
 }
 
-// settleAccepted stages the observed outcome and its callbacks before one
-// append. A failed append releases the transient in-flight flag so the same
-// outbound ID can be retried; neither the outcome nor callback becomes visible.
 func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform.AIUsage, at time.Time) {
 	t.opsMu.Lock()
 	var pending *effect
@@ -234,7 +223,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		return
 	}
 	if platform.EffectSettled(before.State) && before.State != "discarded" {
-		return // A late transport answer cannot replace an accepted human/source resolution.
+		return
 	}
 	if usage != nil {
 		copy := *usage
@@ -256,8 +245,6 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 	if before.Endpoint == acceptedformat.ModelEndpoint && (out.Result == "rejected" || out.Result == "unknown") && (t.tasks == nil || len((hostView{t: t}).Holding(controlowner.PlatformApp, controlowner.Admin)) == 0) {
 		out.PublicMessage = "The model call stopped; no eligible reviewer is configured"
 	}
-	// New attempts always retain a safe public message when they retain an
-	// error. An empty message on an old effect remains an explicit legacy case.
 	if out.Detail != "" && out.PublicMessage == "" {
 		out.PublicMessage = "The last delivery attempt failed"
 	}
@@ -303,9 +290,6 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			if t.quarantined() {
 				return
 			}
-			// A business refusal is itself a durable callback outcome. Drop its
-			// private writes; an unsupported staging operation is not a
-			// business refusal and instead isolates this tenant.
 			result.CallbackError = err.Error()
 			result.Authorizations = slices.Clone(draft.authorizations)
 			draft = t.newStagedDecision()
@@ -313,8 +297,6 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 		}
 	}
 	if before.Endpoint == acceptedformat.ModelEndpoint && (after.State == "rejected" || after.State == "failed" || after.State == "unknown") {
-		// The original effect and receipt own one handoff. Model failures cannot
-		// manufacture a second workflow or borrow an AI administrator's data grant.
 		recipients := (hostView{t: t, app: t.app(before.App)}).Holding(controlowner.PlatformApp, controlowner.Admin)
 		if len(recipients) > 0 && t.tasks != nil {
 			change, _, _ := strings.Cut(before.Key, "#")
@@ -358,9 +340,6 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 			result.Member = "app:" + before.App
 		}
 		if err == nil && len(draft.events) > 0 {
-			// A direct observation and a child decision may write disjoint
-			// records in one callback. The child batch owns only its events;
-			// direct rows retain their own preimages in the outer result.
 			writes := draft.records.WriteSnapshot()
 			draft.records.UseWrites(eventRows)
 			last := draft.events[len(draft.events)-1]
@@ -424,8 +403,6 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *platform
 func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *platform.AIUsage, at time.Time) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			// An unsupported staged effect must never masquerade as a durable
-			// business refusal and silently discard a received answer.
 			t.quarantine(fmt.Errorf("effect callback cannot stage: %v", p))
 			err = fmt.Errorf("unsupported effect callback")
 		}
@@ -503,9 +480,6 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	return nil
 }
 
-// acceptHostControl holds Tenant.mu from private image capture through append
-// and application. The accepted clock is part of identity because these APIs
-// predate caller supplied keys; repeating that same request returns its receipt.
 func (t *Tenant) acceptHostControl(action, member string, request any, now time.Time, audit platform.AuditEntry, decide func(*platform.HostControlImage) (platform.SupportGrant, error), evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
 	r := acceptedformat.HostControl{Version: 1, Kind: "host-result", Tenant: t.ID, App: controlowner.PlatformApp, Member: member, Action: action, At: now.UTC(), Request: platform.Raw(request)}
 	r.Authorizations = slices.Clone(evidence)
@@ -604,8 +578,6 @@ func (t *Tenant) applyAcceptedHostControl(raw []byte) (acceptedformat.HostContro
 	return r, nil
 }
 
-// A saved image may only perform the one requested host-owned transition. This
-// checks frozen bytes and predecessors; it does not rerun current authorization.
 func validateHostTransition(current platform.HostControlImage, r acceptedformat.HostControl) error {
 	raw, err := json.Marshal(current)
 	var expected platform.HostControlImage
@@ -722,8 +694,6 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 		if err != nil {
 			return nil, err
 		}
-		// The child batch owns the entire staged state; do not apply its marks,
-		// notices or record images twice from the enclosing input.
 		result.Deliveries, result.Notices = nil, nil
 		result.Digest, err = acceptedformat.DigestInput(result)
 		if err != nil {
@@ -741,9 +711,6 @@ func (d *stagedDecision) inputResult(app, name string, m platform.Member, body [
 	if d.control != nil || len(d.intents) > 0 || len(d.observations) > 0 || len(d.allocated) > 0 || len(d.operationCancels) > 0 {
 		return nil, fmt.Errorf("connector input contains effects without a decision")
 	}
-	// A legacy input retry may read its saved receipt through a private log.
-	// Permit that read only when every receipt still equals the live ledger;
-	// a newly accepted decision without a published event cannot disappear.
 	for ledger, staged := range d.logs {
 		if !proto.Equal(ledger.LastAccepted(d.tenant.ID), staged.Last(d.tenant.ID)) {
 			return nil, fmt.Errorf("connector input contains an unpublished decision")
@@ -935,10 +902,6 @@ func (t *Tenant) applyAcceptedInput(raw []byte) (acceptedformat.Input, bool, err
 	return result, true, nil
 }
 
-// resultformat.Release commits immutable candidate bytes or an activation. Format 2
-// carries frozen owner publication images beside the pointer; neither is
-// reconstructed from a later mutable draft.
-
 func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error) {
 	saved, err := acceptedformat.DecodeRelease(raw)
 	if err != nil {
@@ -1037,17 +1000,10 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedformat.Release, error
 	return saved, nil
 }
 
-// SaveReleaseCandidate freezes a previously previewed saved draft. The
-// builder's private definitions are read under the tenant lock; a stale
-// preview cannot be persisted by submitting its ID alone. A retry of an
-// already-saved ID remains possible even after the editor changes the draft.
 func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind, draftID, candidateID, key string, now time.Time) (string, error) {
 	return t.SaveReleaseCandidates(m, []build.JointDraftRef{{Kind: kind, ID: draftID}}, candidateID, key, now)
 }
 
-// SaveReleaseCandidates persists one or several saved drafts as one immutable
-// candidate. The bytes are recomputed under the tenant lock, so a joint
-// selection cannot be frozen from a stale browser image.
 func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDraftRef, candidateID, key string, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
@@ -1082,7 +1038,6 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	saved := acceptedformat.Release{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
 		Member: m.ID, Key: "release:" + key, At: now.UTC(), CandidateID: candidateID,
 		Bytes: candidateBytes}
-	// The idempotency key has a separate namespace from builder submissions.
 	var err error
 	saved.RequestHash, err = acceptedformat.ReleaseRequestHash(t.ID, m.ID, saved.Key, candidateID, false)
 	if err != nil {
@@ -1091,9 +1046,6 @@ func (t *Tenant) SaveReleaseCandidates(m platform.Member, drafts []build.JointDr
 	return t.commitReleaseLocked(m, saved)
 }
 
-// ActivateRelease installs the supported saved closure and moves its pointer
-// in one committed result. Unsupported upgrades and changed code
-// dependencies are refused before either state is exposed.
 func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now time.Time) (string, error) {
 	return t.ActivateReleaseWithUpgrade(m, candidateID, key, "", now)
 }
@@ -1188,23 +1140,17 @@ func (t *Tenant) runningMatchesLocked(candidateID string, raw []byte) error {
 	return fmt.Errorf("release differs from the running definitions: changed %v, missing %v, extra %v", changed, removed, added)
 }
 
-// Read-side status and activation compare the same owner-resolved closure.
 func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
 	available, err := t.releaseAssetsLocked(nil, false)
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	// Rebuild the same closure from what runs now: equal content yields the
-	// same canonical ID; anything else is reported by asset path.
 	roots := make([]platform.AssetRef, 0, len(saved.Assets))
 	installed := make(map[platform.AssetRef]bool, len(available))
 	for _, asset := range available {
 		installed[asset.Ref] = true
 	}
 	for _, asset := range saved.Assets {
-		// A first release has no running counterpart for its new assets.
-		// Keep them absent from the comparison so CandidateDiff reports them
-		// as additions; missing dependencies of installed roots still refuse.
 		if installed[asset.Ref] {
 			roots = append(roots, asset.Ref)
 		}
@@ -1215,11 +1161,6 @@ func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform
 	return t.candidateWithBindings(roots, available, nil)
 }
 
-// Recovery checks the saved installation's controlled assets, not today's
-// native prerequisites. Native assets in a release are declarations, never
-// installation images: keep their original bytes for this comparison only.
-// New activation still requires runtimeAssetOwner.controlled's exact match;
-// old Flow execution keeps its separate code-dependency admission gate.
 func (t *Tenant) acceptedInstallationReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
 	available, err := t.releaseAssetsLocked(nil, false)
 	if err != nil {
@@ -1251,9 +1192,6 @@ func (t *Tenant) acceptedInstallationReleaseLocked(saved platform.ReleaseCandida
 	return t.candidateWithBindings(roots, available, nil)
 }
 
-// pendingWorkFitsLocked refuses an activation that would change the action a
-// pending approval holds: the approval must run under the release it opened
-// in. There is no migration; decide or withdraw it first.
 func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 	if t.app(platform.WorkApp) == nil {
 		return nil
@@ -1289,15 +1227,12 @@ func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
 	return nil
 }
 
-// ActiveRelease is the tenant's active release ID, empty before any activation.
 func (t *Tenant) ActiveRelease() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.releases.Active()
 }
 
-// commitReleaseLocked appends one release result and applies only what the
-// journal returned; the caller holds the tenant lock.
 func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedformat.Release) (string, error) {
 	candidateID := saved.CandidateID
 	raw, err := acceptedformat.EncodeRelease(saved)
@@ -1337,8 +1272,6 @@ func (t *Tenant) finishCommittedRelease(m platform.Member, saved acceptedformat.
 	applied, err := t.applyAcceptedRelease(committed)
 	if err != nil || applied.Key != saved.Key || applied.RequestHash != saved.RequestHash ||
 		applied.Member != m.ID || applied.CandidateID != candidateID {
-		// Once appended, an invalid result is a tenant recovery fault, not a
-		// transient error that may permit further writes over uncertain state.
 		t.quarantine(fmt.Errorf("committed release result differs: %v", err))
 		return "", fmt.Errorf("committed release result differs: %v", err)
 	}
@@ -1347,9 +1280,6 @@ func (t *Tenant) finishCommittedRelease(m platform.Member, saved acceptedformat.
 	return applied.CandidateID, nil
 }
 
-// Internal protocol requests and replies are child decisions of the input,
-// never separately confirmed journal writes. They run after application
-// locks are released and before the single result is planned/committed.
 func (d *stagedDecision) answerRequests(now time.Time) *kernel.Error {
 	for count := 0; len(d.requests) > 0; count++ {
 		if count >= acceptedformat.MaxHops {
@@ -1408,9 +1338,6 @@ func (d *stagedDecision) answerRequest(q request, now time.Time) (refusal *kerne
 	return d.failure
 }
 
-// A direct model call has no owned effect. Its immutable usage observation is
-// accepted before changing the meter, using the same predecessor as effects.
-
 func (t *Tenant) usagePredecessor() (string, error) {
 	if t.ai == nil {
 		return "", fmt.Errorf("usage needs an AI meter")
@@ -1436,8 +1363,6 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *kernel.Erro
 			return nil
 		}
 	}
-	// Usage observes a completed call. Its principal is the meter owner; a
-	// later revocation of the attributed caller cannot erase an incurred cost.
 	c := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + platform.AIApp, Tenant: m.Tenant}, platform.AIApp, false, true)
 	decision := t.authorizeNative(c, "usage:observe", "derive", nil, m.Tenant == t.ID && m.ID != "" && m.ID == u.Member && acceptedformat.ValidUsage(u))
 	if refusal := authorizationRefusal(decision); refusal != nil {
@@ -1503,7 +1428,6 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 			attribute.String("platform.app", task.App), attribute.String("platform.target", target(task.Event.Record.GetSubmission())))
 		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
 	}
-	// Everything below is under the top-level tenant commit lock.
 	defer func() {
 		if p := recover(); p != nil {
 			t.hops = 0
@@ -1540,8 +1464,6 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	result.Authorizations = slices.Clone(draft.authorizations)
 	if refusal != nil {
 		result.Outcome = refusal.Error()
-		// A failed attempt may advance its K9 retry state, never a half-applied
-		// business decision made by the listener before returning its refusal.
 		draft = t.newStagedDecision()
 		draft.at = now
 	}
@@ -1596,8 +1518,6 @@ func (t *Tenant) acceptWork(task *automation.Task, now time.Time) (outcome strin
 	result.Unique = draft.savedUniqueChanges()
 	if task.Kind == "job" && result.Outcome == "ok" && len(result.Changes) == 0 &&
 		result.Notices == nil && len(result.Intents) == 0 && len(result.States) == 0 && result.Control == nil && len(result.Unique) == 0 {
-		// Polling without a business result is not an accepted K9 generation.
-		// Leave the journaled predecessor intact for the next real result.
 		return result.Outcome
 	}
 	if task.Kind == "job" {
@@ -1730,7 +1650,6 @@ func (t *Tenant) applyAcceptedWork(raw []byte) (bool, error) {
 	if err != nil || hashErr != nil || hash != result.RequestHash {
 		return false, fmt.Errorf("work result predecessor differs")
 	}
-	// Kernel validation and notification validation precede every promotion.
 	works := t.forkWorkState()
 	generation, _, refusal := works.Start(task.ID, "host")
 	if refusal != nil || int(generation) != result.After.Attempts ||
@@ -1777,8 +1696,6 @@ func (t *Tenant) forkWorkState() platform.Works {
 	return draft
 }
 
-// Completing one accepted input must not restore its earlier full K9 fork:
-// its child decision may already have cancelled another running generation.
 func (t *Tenant) installAcceptedWork(finished *pb.Work) {
 	all := t.works.All()
 	found := false

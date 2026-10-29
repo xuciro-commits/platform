@@ -9,7 +9,6 @@ export const isCollaborationWidget=(widget:string)=>collaborationWidgets.some(va
 export const requiresOriginalRecord=(section:AuthoringSection)=>isCollaborationWidget(section.widget)||["breadcrumb","record-card","graph-explorer","vertex-graph"].includes(section.widget)||section.widget==="timeline"&&(section.historyLimit??0)>0;
 
 
-/** Mutable secondary inputs belong to the consumer even when its record is shared. */
 export function recordInputOwner(document:PageUI.PageDocument,section:AuthoringSection){
  const v=document.variables?.[section.recordVariable??''];
  if(v?.mode!=='shared')return {scope:v?.scope,owner:v?.owner};
@@ -18,7 +17,6 @@ export function recordInputOwner(document:PageUI.PageDocument,section:AuthoringS
  const owner=overlayOwner(document,leaf);return {scope:owner?'overlay':'page',owner};
 }
 
-/** The shared record resource remains attached to its actual compatible producer. */
 export function collaborationRecordSource(document:PageUI.PageDocument,sections:AuthoringSection[],variable:string,consumer:string,pageObject:string):{object:string;interface?:string;producer?:AuthoringSection}|undefined {
  const value=document.variables?.[variable],producer=sections.find(s=>s.id===value?.source?.section),leaf=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===consumer)?.[0],origin=Object.entries(document.nodes).find(([,n])=>n.kind==="widget"&&n.section===producer?.id)?.[0];
  const widget=sections.find(s=>s.id===consumer)?.widget;
@@ -34,7 +32,6 @@ export function collaborationRecordSource(document:PageUI.PageDocument,sections:
  return {object,producer};
 }
 
-/** An explicitly edited window must stay bounded; clearing it preserves legacy history. */
 export function historyViewProblem(document:PageUI.PageDocument,sections:AuthoringSection[],section:AuthoringSection,pageObject:string):boolean {
  if(section.historyLimit===undefined)return false;
  if(section.widget!=="timeline"||!Number.isSafeInteger(section.historyLimit)||section.historyLimit<1||section.historyLimit>100)return true;

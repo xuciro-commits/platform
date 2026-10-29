@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// WindowReference addresses a source-owned summary. It never carries points
-// or asks the evaluator to read or aggregate an external collection.
 type WindowReference struct {
 	Source    string `json:"source"`
 	Aggregate string `json:"aggregate,omitempty"`
@@ -31,7 +29,6 @@ type WindowSummary struct {
 	Unit    string    `json:"unit"`
 }
 
-// Check validates a constant-size external answer, regardless of sample count.
 func (w WindowSummary) Check() error {
 	if w.Since.IsZero() || w.Until.IsZero() || !w.Since.Before(w.Until) || w.Since.Year() < 1 || w.Until.Year() > 9999 || w.Until.Sub(w.Since) > 366*24*time.Hour || w.Count < 0 || w.Unit == "" || len(w.Unit) > 64 {
 		return fmt.Errorf("observation window needs ordered bounds, a nonnegative count and unit")

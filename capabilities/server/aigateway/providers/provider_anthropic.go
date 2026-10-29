@@ -13,11 +13,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// Anthropic's Messages API through its official Go SDK.
-// The SDK does not retry: one call is one metered attempt, and a rate limit
-// reaches the caller as it does for the OpenAI wire.
-
-const anthropicMaxTokens = 16000 // when the caller names no limit (a non-streaming call)
+const anthropicMaxTokens = 16000
 
 func (c Client) anthropicClient(pv platform.AIProvider) (anthropic.Client, *platform.AIError) {
 	key, err := c.Credential(pv)
@@ -52,12 +48,12 @@ func (c Client) CompleteAnthropic(pv platform.AIProvider, model string, req plat
 	if req.Options.Thinking == "adaptive" && req.Temperature != nil {
 		return platform.ChatAnswer{}, platform.AIUsage{}, &platform.AIError{Status: 400, Detail: "Temperature cannot be combined with adaptive thinking"}
 	}
-	for _, x := range req.Tools { // custom tools: an agent's catalog actions, reads and built-ins
+	for _, x := range req.Tools {
 		tool := anthropic.ToolParam{Name: x.Name, Description: anthropic.String(x.Description),
 			InputSchema: anthropic.ToolInputSchemaParam{Properties: x.Properties, Required: x.Required, ExtraFields: map[string]any{"additionalProperties": false}}}
 		params.Tools = append(params.Tools, anthropic.ToolUnionParam{OfTool: &tool})
 	}
-	var results []anthropic.ContentBlockParamUnion // tool results, sent together as one user turn
+	var results []anthropic.ContentBlockParamUnion
 	flush := func() {
 		if len(results) > 0 {
 			params.Messages = append(params.Messages, anthropic.NewUserMessage(results...))
@@ -92,8 +88,6 @@ func (c Client) CompleteAnthropic(pv platform.AIProvider, model string, req plat
 	}
 	flush()
 	if req.PromptCache {
-		// Cache the stable tool/system prefix, never silently choose a
-		// breakpoint inside the member's changing conversation.
 		marker := anthropic.CacheControlEphemeralParam{Type: "ephemeral"}
 		if n := len(params.System); n > 0 {
 			params.System[n-1].CacheControl = marker
@@ -129,8 +123,6 @@ func AnthropicAnswer(resp anthropic.Message, model string) (platform.ChatAnswer,
 	for _, block := range resp.Content {
 		switch block.Type {
 		case "thinking", "redacted_thinking":
-			// Keep signed blocks only in protected session state; text/stream
-			// projections never receive private reasoning.
 			var blocks []json.RawMessage
 			_ = json.Unmarshal(answer.Protocol, &blocks)
 			blocks = append(blocks, json.RawMessage(block.RawJSON()))
@@ -177,7 +169,7 @@ func completeAnthropicStream(ctx context.Context, client anthropic.Client, param
 	toolIndexes := map[int64]int{}
 	failed := func(failure *platform.AIError) (platform.ChatAnswer, platform.AIUsage, *platform.AIError) {
 		answer, usage, _ := AnthropicAnswer(message, model)
-		answer.ToolCalls = nil // previews and partial calls are never executable
+		answer.ToolCalls = nil
 		usage.TokensReported = usage.TokensReported && finalUsage
 		return answer, usage, failure
 	}
@@ -212,8 +204,6 @@ func completeAnthropicStream(ctx context.Context, client anthropic.Client, param
 				}
 			}
 		case "message_delta":
-			// Accumulate updates counts; retain the presence of fields reported
-			// only in the final event as well as those in message_start.
 			if event.Usage.JSON.InputTokens.Valid() {
 				message.Usage.JSON.InputTokens = event.Usage.JSON.InputTokens
 			}
@@ -259,7 +249,6 @@ func (c Client) anthropicModels(pv platform.AIProvider) ([]json.RawMessage, *pla
 	return models, nil
 }
 
-// anthropicFailure reads the API's status and message, or says no answer came.
 func anthropicFailure(err error) *platform.AIError {
 	var apiErr *anthropic.Error
 	if !errors.As(err, &apiErr) {

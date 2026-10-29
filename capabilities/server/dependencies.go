@@ -14,9 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// DependencyView is a member's view of the frozen declarations. Runtime
-// observations keep their original diagnostic endpoints and never add edges.
-// A focused view retains only the selected asset and its forward/reverse relations.
 type DependencyView struct {
 	Descriptors []platform.Dependencies `json:"descriptors"`
 	Requires    []platform.AssetRef     `json:"requires"`
@@ -29,9 +26,6 @@ type ProvidedCapability struct {
 	Capability platform.Capability `json:"capability"`
 }
 
-// definitionAsset adapts the original typed owner description to the same
-// release reader used when the owner freezes a candidate. It owns no parsing
-// of references, schemas or capability effects.
 func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset, error) {
 	var body any
 	switch {
@@ -84,9 +78,6 @@ func (t *Tenant) definitionAsset(def platform.Definition) (platform.ReleaseAsset
 }
 
 func (t *Tenant) describeOwnedAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
-	// A native owner's data-class names do not necessarily name records. Bind
-	// only the names actually present in this body; unrelated models cannot
-	// change the candidate's bytes.
 	if !slices.Contains([]platform.AssetKind{platform.AssetObject, platform.AssetAction, platform.AssetAgent, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute}, asset.Ref.Kind) {
 		return platform.WithDependencies(asset)
 	}
@@ -222,8 +213,6 @@ func (t *Tenant) describeDefinition(def platform.Definition) (platform.Definitio
 	return def, nil
 }
 
-// The original discovery owners decide which declarations and fields are
-// visible. Capability roles only narrow that answer; they never grant access.
 func (t *Tenant) visibleProvides(def platform.Definition, m platform.Member, entities map[string]platform.EntityInfo) []platform.Capability {
 	provided := def.Provides
 	if def.Action != nil || def.Query != nil || def.Function != nil || def.Operation != nil || def.Entity != nil || def.Protocol != nil || def.Observation != nil {

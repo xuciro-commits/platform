@@ -16,13 +16,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Pipeline runs. A run reads the input dataset's latest version,
-// executes the declared steps in memory, quarantines rows that fail the
-// expectations, and writes the rest: as the output dataset's next version, or
-// as the output object's own create/edit per row keyed by execution. Every write
-// and the run summary are ordinary journaled inputs; replay never recomputes.
-
-// RunPipelines runs every due pipeline of the tenant once, on the outside loop.
 func (t *Tenant) RunPipelines(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
@@ -92,7 +85,6 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 	} else if !ok {
 		run.Error = "The execution member is no longer available"
 	} else {
-		// Every input, including lookup/join datasets, is frozen under one read.
 		t.mu.Lock()
 		c := t.automation(build.ID, false)
 		inputs := map[string]int{}
@@ -190,8 +182,6 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 			} else {
 				run.Written = len(plan.Data)
 				t.mu.Lock()
-				// The load's immutable version keeps its original operation key,
-				// including after retention archives its data or later loads occur.
 				versions, _, err := platform.Find[build.DatasetVersion](t.automation(build.ID, false), platform.Query{
 					Domain: platform.Raw([][]any{{"dataset", "=", plan.Dataset}, {"requestKey", "=", key}}), Archived: true, Limit: 1,
 				})
@@ -218,7 +208,6 @@ func (t *Tenant) runPipeline(p build.Pipeline, now time.Time) {
 
 const pipelineQuarantineKept = 50
 
-// unguarded are the object's fields every role reads, when marking forbids pouring into them.
 func (t *Tenant) unguarded(object, marking string) []string {
 	if !build.Guarded(marking) {
 		return nil

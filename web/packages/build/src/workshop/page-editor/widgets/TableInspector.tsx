@@ -13,7 +13,6 @@ export function TableSelectionInspector(props:ButtonInspectorPorts){
 export type TableDraft = {pickerValueVariable?:string;tablePresentation?:PageUI.PageTablePresentation;tableColumns?:PageUI.PageTableColumn[];showSearch?:boolean;id?:string;selectionSetVariable?:string; inlineEdit?:{action:string;fields:string[]};collectionVariable?:string; selectionVariable?:string; fields?:string[]; selection?:string; object?:string; filterVariable?:string; query?:string; parentSelection?:string; relation?:string };
 export type TableInspectorPorts = { section:TableDraft; document:PageUI.PageDocument; object:string; info?:EntityInfo; overlay?:string; itemOwner?:string; onChange:(patch:Partial<TableDraft>)=>void };
 
-/** Only table-specific ports; common object/property controls stay shared. */
 export function TableInspector({section,document,object,info,overlay,itemOwner,onChange,widget="table",showFields=true}:TableInspectorPorts&{widget?:"collection-builder"|"record-map"|"action-table"|"collection-analysis"|"tag-counts"|"sparkline-kpi"|"treemap"|"record-scatter"|"histogram"|"term-counts"|"table"|"record-timeline"|"kanban"|"record-list"|"record-chart"|"record-events"|"record-calendar"|"record-gantt"|"summary-stats"|"record-leaderboard"|"record-picker";showFields?:boolean}) {
   const {catalog}=useHost(),edit=catalog.find(a=>a.schema===(section.object||object)+".edit"),editable=tableEditableFields(info,edit,section.fields??[]);
   const contract=widgetContract(widget)!;

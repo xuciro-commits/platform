@@ -30,8 +30,6 @@ type EnterpriseUsage struct {
 	Items              []EnterpriseUsageItem `json:"items"`
 }
 
-// Current-use rules are pure owner declarations over this record, evaluated by
-// the existing expression engine. No record-name or state-name inference lives here.
 func enterpriseRecordCurrent(info platform.EntityInfo, value reflect.Value, now time.Time, engines ...platform.RuleEngine) bool {
 	if records.Header(value).Archived {
 		return false

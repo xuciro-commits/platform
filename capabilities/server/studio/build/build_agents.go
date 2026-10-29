@@ -16,12 +16,6 @@ import (
 const AgentType = "build.agent"
 const SchemaAgentPublish = AgentType + ".publish"
 
-// Agent is an AI agent a builder declares over the ontology: what
-// it is for, its instructions, the published actions and queries it may use,
-// its budget, who takes over when it stops, and the cases it must pass. The
-// host runs it as any code-declared agent: every step journaled,
-// irreversible effects drafted for a person to confirm, evaluations archived
-// against its version.
 type Agent struct {
 	platform.Record
 	Name         string                `json:"name" field:"required,search" help:"Lower-case letters and digits; the agent is build.<name>"`
@@ -35,19 +29,15 @@ type Agent struct {
 	Tokens       int                   `json:"tokens,omitempty" title:"Tokens per run" help:"Default 40000"`
 	Actions      int                   `json:"actions,omitempty" title:"Actions per run" help:"Default 3"`
 	Cost         float64               `json:"cost,omitempty" title:"USD per run" help:"0: no cap"`
-	// Checkpoints are the tools whose use always waits for a person, even when
-	// the agent could act: the irreversible ones (post, ship, pay).
-	Checkpoints []string    `json:"checkpoints,omitempty" field:"aside" help:"Tools that always wait for a person to confirm"`
-	HandoffRole string      `json:"handoffRole,omitempty" title:"Hands over to" help:"The builder-app role that takes the goal when a run stops; empty: the builder"`
-	Cases       []AgentCase `json:"cases,omitempty" type:"json" title:"Evaluation cases"`
-	State       string      `json:"state" field:"readonly" choices:"draft,published"`
-	Version     int         `json:"version,omitempty" field:"readonly"`
-	Published   string      `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions    []string    `json:"versions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Checkpoints  []string              `json:"checkpoints,omitempty" field:"aside" help:"Tools that always wait for a person to confirm"`
+	HandoffRole  string                `json:"handoffRole,omitempty" title:"Hands over to" help:"The builder-app role that takes the goal when a run stops; empty: the builder"`
+	Cases        []AgentCase           `json:"cases,omitempty" type:"json" title:"Evaluation cases"`
+	State        string                `json:"state" field:"readonly" choices:"draft,published"`
+	Version      int                   `json:"version,omitempty" field:"readonly"`
+	Published    string                `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions     []string              `json:"versions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// AgentCase is one test of the agent, as data: a goal about a
-// record, and what a dry run must come to.
 type AgentCase struct {
 	Name   string   `json:"name"`
 	Goal   string   `json:"goal"`
@@ -73,8 +63,6 @@ func (b *Build) agentEntity() platform.Entity {
 			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this agent as its next version; a changed definition stops existing runs.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishAgent}}}}
 }
 
-// Only create/edit may refer to readable saved definitions. Publication and
-// candidate installation keep checking the original installed/selected tools.
 func (b *Build) agentDraftEntity() platform.Entity {
 	entity := b.agentEntity()
 	entity.Validate = func(c platform.Caller, record any) *kernel.Error {
@@ -199,7 +187,6 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 	return nil
 }
 
-// installedActionOf says which installed object type an action schema belongs to.
 func (b *Build) installedActionOf(schema string) string {
 	for typ := range b.installed {
 		if strings.HasPrefix(schema, typ+".") {
@@ -237,8 +224,6 @@ func (b *Build) agentInventory() ([]Agent, error) {
 	return readDefinitionInventory[Agent](b.host.Automation(platform.Caller{}, ID))
 }
 
-// AgentStamp changes whenever the set of installed agents or any of their
-// versions does; the host re-declares them when it sees a new stamp.
 func (b *Build) AgentStamp() string {
 	names := make([]string, 0, len(b.agents))
 	for name, a := range b.agents {
@@ -251,7 +236,6 @@ func (b *Build) AgentStamp() string {
 	return strings.Join(names, ",")
 }
 
-// agentDeclarations are the installed agents as the host runs them.
 func (b *Build) agentDeclarations() []platform.Agent {
 	return definitionDeclarations(b.agents)
 }

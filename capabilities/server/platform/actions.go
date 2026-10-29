@@ -16,11 +16,6 @@ import (
 	"unicode/utf16"
 )
 
-// ActionInputSchema describes the original action input for model and MCP
-// callers. Standard create/edit inputs use the same writable entity fields as
-// generated forms, including nested rows and fields with dedicated editors.
-// A nil roles slice describes a compiled agent's declared tool; member-facing
-// callers pass their original roles. This is a projection, not a validator.
 func ActionInputSchema(action Action, entity *EntityInfo, roles []string) map[string]any {
 	properties := map[string]any{}
 	required := []string{}
@@ -47,8 +42,6 @@ func ActionInputSchema(action Action, entity *EntityInfo, roles []string) map[st
 			input := Field{Name: field.Name, Type: field.Type, Description: field.Help, Required: create && field.Required && field.When == nil,
 				Choices: field.Choices, Ref: field.Ref, Stereotype: field.Stereotype, Stereotypes: field.Stereotypes, Constraints: field.Constraints}
 			if i := slices.IndexFunc(action.Payload, func(p Field) bool { return p.Name == field.Name }); i >= 0 {
-				// The action owns requiredness (for example fields filled by its
-				// create transaction); entity metadata supplies the full shape.
 				original := action.Payload[i]
 				input.Required, input.Description, input.Default = original.Required, original.Description, original.Default
 				input.From, input.Key, input.Label = original.From, original.Key, original.Label
@@ -98,7 +91,7 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 			items = map[string]any{"type": "object", "properties": row, "required": required, "additionalProperties": false}
 		}
 		schema["type"], schema["items"] = "array", items
-	case "json": // An opaque JSON value must not be advertised as text.
+	case "json":
 	default:
 		schema["type"] = "string"
 	}
@@ -154,73 +147,38 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 	return schema
 }
 
-// Action declares one business action a domain offers: the submission
-// schema that carries it, what it acts on, the capability it belongs to, and a
-// description that screens and automation callers (AI agents included) read.
-// Roles say who may call it; attribute conditions stay in the domain's policy.
 type Action struct {
-	// recordEdit is set only by EntityActions. Its unchanged enterprise values
-	// are retained references, not newly selected action parameters.
-	recordEdit    bool
-	Adoption      *ProposalAdoption `json:"adoption,omitempty"`
-	SchemaVersion *SchemaVersion    `json:"schemaVersion,omitempty"`
-	Schema        string            `json:"schema"`
-	Target        string            `json:"target"`
-	Capability    string            `json:"capability"`
-	Title         string            `json:"title"`
-	Description   string            `json:"description"`
-	Payload       []Field           `json:"payload"`
-	Roles         []string          `json:"-"`
-	// Uses names protocol actions this one invokes (ProtocolAction); a caller
-	// is offered it only when it may call the bound provider's.
-	Uses []string `json:"uses,omitempty"`
-	// Approval holds the action until its approvers agree.
-	Approval *Approval `json:"-"`
-	// NeedsApproval tells callers the action waits for approval (set by NewCatalog).
-	NeedsApproval bool `json:"needsApproval,omitempty"`
-	// New marks an action that makes a new record of Target, whose ID the
-	// caller gives: generated views offer it on the type's list; every other
-	// action on Target is offered on each record's page (F-33).
-	New bool `json:"new,omitempty"`
-	// IDPrefix is the suggested prefix for a new record's editable ID.
-	IDPrefix string `json:"idPrefix,omitempty"`
-	// Automation marks an action only the platform's own apps take, as
-	// automation: it has no roles and is in no member's catalog.
-	Automation bool `json:"automation,omitempty"`
-	// ConfirmationOnly hides a receipt transition from ordinary catalogs.
-	// It still runs as the initiating member with current permissions.
-	ConfirmationOnly bool `json:"confirmationOnly,omitempty"`
-	// DeferRequired lets a lifecycle owner return its own business-language
-	// message for missing required inputs after the generic type checks.
-	DeferRequired bool `json:"-"`
+	recordEdit       bool
+	Adoption         *ProposalAdoption `json:"adoption,omitempty"`
+	SchemaVersion    *SchemaVersion    `json:"schemaVersion,omitempty"`
+	Schema           string            `json:"schema"`
+	Target           string            `json:"target"`
+	Capability       string            `json:"capability"`
+	Title            string            `json:"title"`
+	Description      string            `json:"description"`
+	Payload          []Field           `json:"payload"`
+	Roles            []string          `json:"-"`
+	Uses             []string          `json:"uses,omitempty"`
+	Approval         *Approval         `json:"-"`
+	NeedsApproval    bool              `json:"needsApproval,omitempty"`
+	New              bool              `json:"new,omitempty"`
+	IDPrefix         string            `json:"idPrefix,omitempty"`
+	Automation       bool              `json:"automation,omitempty"`
+	ConfirmationOnly bool              `json:"confirmationOnly,omitempty"`
+	DeferRequired    bool              `json:"-"`
 }
 
-// Approval is the chain of approvers an action waits for (–D4):
-// levels in order; the last approval runs the held submission again, and its
-// rules decide at that time.
 type Approval struct {
-	Levels []ApprovalLevel
-	// Pending, on a lifecycle transition, is the state the record waits in
-	// while its approvers decide; Rejected is where a rejection leaves it
-	// (else where it was). A withdrawn request, or one its rules refuse when
-	// run, returns it to where it was (F-38).
+	Levels            []ApprovalLevel
 	Pending, Rejected string
 }
 
-// Suffixes of the actions a transition with a pending state generates for
-// the work app alone: the record held, rejected, or returned.
 const (
 	ApprovalHeld     = ".held"
 	ApprovalRejected = ".rejected"
 	ApprovalReturned = ".returned"
 )
 
-// ApprovalLevel names its approvers: holders of Role in the requester's units
-// or above them in Structure (a manager, a department head), holders of
-// AppRole in the action's app, or a named Member. All asks every approver;
-// otherwise any one decides. When, if set, says whether the level applies to
-// this submission (an amount, a number of days). Due is how long its task may
-// wait before it escalates.
 type ApprovalLevel struct {
 	Title           string
 	Structure, Role string
@@ -229,47 +187,29 @@ type ApprovalLevel struct {
 	All             bool
 	When            func(c Caller, s *pb.Submission) bool
 	Due             time.Duration
-	// WorkingDays, when set, is the due time in working days of the
-	// requester's calendar instead.
-	WorkingDays int
+	WorkingDays     int
 }
 
-// Field describes one payload field of an action.
 type Field struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Required    bool   `json:"required,omitempty"`
-	Description string `json:"description"`
-	// Choices are the values the field takes; Ref, the entity type whose
-	// record's ID it names. The host refuses others, and forms offer a list or
-	// a picker of the records the member may read (F-36).
-	Choices []string `json:"choices,omitempty"`
-	Ref     string   `json:"ref,omitempty"`
-	// Fields are the columns of a "lines" field: a child table the form edits
-	// row by row. Empty for every other type.
-	Fields []Field `json:"fields,omitempty"`
-	// Stereotype narrows a reference to the enterprise model (Ref
-	// "enterprise.element") to one UAF stereotype.
-	Stereotype string `json:"stereotype,omitempty"`
-	// Stereotypes accepts any of the named enterprise-model families.
-	Stereotypes []string `json:"stereotypes,omitempty"`
-	// Default initializes a newly opened form; it never overwrites its draft.
-	Default json.RawMessage `json:"default,omitempty"`
-	// From names a read of the declaring app whose items the field chooses
-	// from, when the values are not records here (an ERP's planned orders a
-	// plant reads through a protocol): Key is the item's value, Label what
-	// people read. Forms offer the list; the app checks the value (#129).
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Required    bool              `json:"required,omitempty"`
+	Description string            `json:"description"`
+	Choices     []string          `json:"choices,omitempty"`
+	Ref         string            `json:"ref,omitempty"`
+	Fields      []Field           `json:"fields,omitempty"`
+	Stereotype  string            `json:"stereotype,omitempty"`
+	Stereotypes []string          `json:"stereotypes,omitempty"`
+	Default     json.RawMessage   `json:"default,omitempty"`
 	From        string            `json:"from,omitempty"`
 	Key         string            `json:"key,omitempty"`
 	Label       string            `json:"label,omitempty"`
 	Constraints *InputConstraints `json:"constraints,omitempty"`
 	Range       *DateRange        `json:"range,omitempty"`
 	Group       string            `json:"group,omitempty"`
-	// Manual allows explicit unbound protocol sources, never read failures.
-	Manual bool `json:"manual,omitempty"`
+	Manual      bool              `json:"manual,omitempty"`
 }
 
-// InputConstraints are pure input checks, applied after authorization.
 type InputConstraints struct {
 	Min          *float64 `json:"min,omitempty"`
 	Max          *float64 `json:"max,omitempty"`
@@ -280,8 +220,7 @@ type InputConstraints struct {
 	Before       string   `json:"before,omitempty"`
 	After        string   `json:"after,omitempty"`
 	Inclusive    bool     `json:"inclusive,omitempty"`
-	// DateTime allows either a date or a local date-time in a date input.
-	DateTime bool `json:"dateTime,omitempty"`
+	DateTime     bool     `json:"dateTime,omitempty"`
 }
 
 type DateRange struct {
@@ -302,7 +241,6 @@ type FieldIssue struct {
 	RelatedPaths [][]string                 `json:"relatedPaths,omitempty"`
 }
 
-// InputOptions is a bounded app read; Manual is true only for an unbound source.
 type InputOptions struct {
 	Manual bool          `json:"manual,omitempty"`
 	Items  []InputOption `json:"items"`
@@ -314,21 +252,14 @@ type InputOption struct {
 	Source string `json:"-"`
 }
 
-// Catalog holds a domain's actions and which capabilities are deactivated for a
-// deployment (start-up configuration, not runtime installation).
 type Catalog struct {
-	// mu guards both: an app may declare an action after composition (the
-	// generated actions of an object a tenant published) while
-	// members read their catalog.
 	mu       sync.RWMutex
 	actions  []Action
 	disabled map[string]bool
-	custom   map[string][]string   // tenant-defined roles → the schemas they may call
-	policies func() []authz.Policy // the tenant's policies, asked at decision time
+	custom   map[string][]string
+	policies func() []authz.Policy
 }
 
-// DefineRole declares a tenant's custom role: a name and the enabled actions
-// it may call. Declaring it again replaces it; no schemas removes it.
 func (c *Catalog) DefineRole(role string, schemas []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -342,7 +273,6 @@ func (c *Catalog) DefineRole(role string, schemas []string) {
 	c.custom[role] = slices.Clone(schemas)
 }
 
-// UsePolicies gives the catalog the tenant's policies to decide with.
 func (c *Catalog) UsePolicies(policies func() []authz.Policy) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -374,8 +304,6 @@ func NewCatalog(actions ...Action) *Catalog {
 	return &Catalog{actions: actions, disabled: map[string]bool{}}
 }
 
-// WithActions selects immutable declarations while retaining today's tenant
-// controls. A retained execution cannot restore revoked roles or capabilities.
 func (c *Catalog) WithActions(actions []Action) *Catalog {
 	bound := NewCatalog(actions...)
 	c.mu.RLock()
@@ -389,7 +317,6 @@ func (c *Catalog) WithActions(actions []Action) *Catalog {
 	return bound
 }
 
-// Disable deactivates a capability; false if no action belongs to it.
 func (c *Catalog) Disable(capability string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -400,9 +327,6 @@ func (c *Catalog) Disable(capability string) bool {
 	return true
 }
 
-// Add declares actions after composition: the generated actions of an object a
-// tenant defined and published. An action already declared is
-// replaced, so publishing an object again keeps one declaration of each.
 func (c *Catalog) Add(actions ...Action) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -419,8 +343,6 @@ func (c *Catalog) Add(actions ...Action) {
 	}
 }
 
-// ReplaceTarget installs one owner's complete object action set. Retired
-// schemas stay in the ledger's historical registry, outside the live catalog.
 func (c *Catalog) ReplaceTarget(target string, actions []Action) {
 	for _, action := range actions {
 		if action.Target != target {
@@ -439,14 +361,12 @@ func (c *Catalog) ReplaceTarget(target string, actions []Action) {
 	}
 }
 
-// All are the declared actions, active or not.
 func (c *Catalog) All() []Action {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return slices.Clone(c.actions)
 }
 
-// Action is the declaration of schema, active or not.
 func (c *Catalog) Action(schema string) (Action, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -457,7 +377,6 @@ func (c *Catalog) Action(schema string) (Action, bool) {
 	return c.actions[i], true
 }
 
-// Enabled reports whether schema is a declared action of an active capability.
 func (c *Catalog) Enabled(schema string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -465,29 +384,20 @@ func (c *Catalog) Enabled(schema string) bool {
 	return i >= 0 && !c.disabled[c.actions[i].Capability]
 }
 
-// AnyMember in an action's Roles offers it to every member; the app's attribute
-// conditions then decide (the platform's links and timeline check the entities' apps).
 const AnyMember = "*"
 
-// Permits reports whether role may call the enabled action schema.
 func (c *Catalog) Permits(role, schema string) bool {
 	return slices.ContainsFunc(c.For(role), func(a Action) bool { return a.Schema == schema })
 }
 
-// PermitsAny reports whether any of roles may call schema (a member with several grants).
 func (c *Catalog) PermitsAny(roles []string, schema string) bool {
 	return slices.ContainsFunc(c.ForRoles(roles), func(a Action) bool { return a.Schema == schema })
 }
 
-// Decide asks the engine whether the caller's roles let them call schema;
-// a disabled capability is no action at all. Modern recovery
-// applies saved results, while owner automation still passes the engine.
 func (c *Catalog) Decide(caller Caller, schema string) authz.Verdict {
 	return c.DecideOn(caller, schema, "")
 }
 
-// DecideOn decides schema on a target ("<type>/<id>"), which policies may
-// read as attributes: member, app, agent, target type.
 func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
 	if _, ok := caller.rt.(AuthorizationRuntime); ok && !caller.Replaying {
 		typ, id, _ := strings.Cut(target, "/")
@@ -504,8 +414,6 @@ func (c *Catalog) DecideOn(caller Caller, schema, target string) authz.Verdict {
 	return authz.Decide(request, policies...)
 }
 
-// DecideSubmission includes the fields supplied to generated record writes.
-// Custom actions retain their declaration's operation contract.
 func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time) authz.Verdict {
 	if _, hosted := caller.rt.(AuthorizationRuntime); !hosted || caller.Replaying {
 		return c.DecideOn(caller, s.GetSchema().GetName(), s.GetTarget().GetType()+"/"+s.GetTarget().GetId())
@@ -531,7 +439,6 @@ func (c *Catalog) DecideSubmission(caller Caller, s *pb.Submission, at time.Time
 	return caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: kind, Type: typ, Record: s.GetTarget().GetId(), Fields: fields, Action: schema}, at)
 }
 
-// AuthorizationRequest resolves declaration facts without making a decision.
 func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (authz.Request, []authz.Policy, bool) {
 	a, ok := c.Action(schema)
 	if !ok || !c.Enabled(schema) {
@@ -563,17 +470,15 @@ func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (au
 	if policies != nil {
 		rules = policies()
 	}
-	if !caller.InScope(schema) { // a personal token reaches only what it was issued for
+	if !caller.InScope(schema) {
 		rules = append([]authz.Policy{{ID: "token-scope", Effect: "deny", Permission: schema}}, rules...)
 	}
 	return authz.Request{Subject: authz.Subject{ID: caller.ID, App: caller.App, Roles: caller.RolesHere(), Agent: caller.Agent, Automation: caller.Automation},
 		Permission: schema, Resource: target, Allowed: allowed, Attributes: attrs}, rules, true
 }
 
-// For is the catalog a caller with role receives: enabled actions it may call.
 func (c *Catalog) For(role string) []Action { return c.ForRoles([]string{role}) }
 
-// ForRoles is the catalog of a caller holding roles: the union of what each may call.
 func (c *Catalog) ForRoles(roles []string) []Action {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -591,7 +496,6 @@ func (c *Catalog) ForRoles(roles []string) []Action {
 	return out
 }
 
-// Roles are the roles an app defines: every role some action grants.
 func (c *Catalog) Roles() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -612,7 +516,6 @@ func (c *Catalog) Roles() []string {
 	return out
 }
 
-// Custom reports whether role is one the tenant defined.
 func (c *Catalog) Custom(role string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -620,7 +523,6 @@ func (c *Catalog) Custom(role string) bool {
 	return ok
 }
 
-// CapabilityInfo is one capability of an app: its actions and whether it is active.
 type CapabilityInfo struct {
 	Name    string   `json:"name"`
 	Enabled bool     `json:"enabled"`
@@ -640,9 +542,6 @@ func (c *Catalog) Capabilities() []CapabilityInfo {
 	return out
 }
 
-// StaticControlAction classifies the existing control-plane targets. Dynamic
-// pages and model tools may read owner projections but cannot bind these writes.
-// Ordinary generated business targets are not control-plane targets.
 func StaticControlAction(action Action) bool {
 	for _, prefix := range []string{"platform.", "system.", "ai.", "enterprise."} {
 		if strings.HasPrefix(action.Target, prefix) {
@@ -657,8 +556,6 @@ func StaticControlAction(action Action) bool {
 	return false
 }
 
-// DecisionTrace is an observation of the original executor in an isolated
-// builder run. It never participates in acceptance, grants or persistence.
 type DecisionTrace struct {
 	Kind          string          `json:"kind"`
 	Name          string          `json:"name,omitempty"`
@@ -689,8 +586,6 @@ func (c Caller) Trace(event DecisionTrace) {
 	}
 }
 
-// Only references reached by the real expression belong in its explanation.
-// The original RuleContext has already enforced record/field/derived reads.
 func ruleTraceContext(expr Expr, context ExprContext) ExprContext {
 	out := ExprContext{Refs: map[string]ExprValue{}, Sets: map[string]ExprCollection{}, Sources: context.Sources, Me: context.Me, Now: context.Now, Today: context.Today}
 	var visit func(Expr)
@@ -722,7 +617,6 @@ func ruleTraceContext(expr Expr, context ExprContext) ExprContext {
 
 var inputInstant = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,9})?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$`)
 
-// CheckInputs validates declarations without evaluating business rules.
 func CheckInputs(fields []Field) error {
 	byName := map[string]Field{}
 	for _, f := range fields {
@@ -810,8 +704,6 @@ func CheckInputs(fields []Field) error {
 	return nil
 }
 
-// InputIssues uses the exact submitted values. Empty optional edit fields are
-// allowed; relation checks wait for both endpoints. Replay bypasses this check.
 func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 	issues := []FieldIssue{}
 	dependencies := map[string]bool{}
@@ -841,7 +733,6 @@ func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 			continue
 		}
 		c := f.Constraints
-		// Unannotated inputs retain their original type and range checks.
 		if c == nil {
 			if !dependencies[f.Name] {
 				continue
@@ -945,8 +836,6 @@ func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 	return issues
 }
 
-// RefuseFields attaches diagnostics to this decision's private runtime; kernel
-// errors and the contract remain unchanged.
 func (c Caller) RefuseFields(issues []FieldIssue) *kernel.Error {
 	err := Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Correct the highlighted fields.")
 	if c.inputRefused != nil {
@@ -958,8 +847,6 @@ func (c Caller) RefuseFields(issues []FieldIssue) *kernel.Error {
 	return err
 }
 
-// Refusal is a business result, separate from authorization and invariants.
-// Record is an ordinary transaction step; Route names an existing transaction.
 type Refusal struct {
 	When         *Expr              `json:"when"`
 	Level        string             `json:"level"`
@@ -976,8 +863,6 @@ func (r *Refusal) UnmarshalJSON(raw []byte) error {
 	return strictTxn(raw, (*plain)(r))
 }
 
-// BusinessRefusalFact captures what the applicant asked and why the business
-// rule chose another result. Its values are re-filtered by the host on reads.
 type BusinessRefusalFact struct {
 	Level        string                     `json:"level"`
 	Code         string                     `json:"code"`
@@ -995,9 +880,6 @@ type BusinessRefusalFact struct {
 	Escalation   *RefusalEscalation         `json:"escalation,omitempty"`
 }
 
-// BusinessRefusalRuntime attaches facts to the existing accepted-result owner.
-// A refused decision saves its fact with the answer; successful flags/routes
-// save facts with the ordinary atomic batch. This never grants a direct write.
 type BusinessRefusalRuntime interface {
 	BusinessRefused(*kernel.Error, BusinessRefusalFact)
 	CaptureBusinessRefusal(Caller, *pb.ChangeRecord, BusinessRefusalFact) *kernel.Error
@@ -1025,8 +907,6 @@ type BusinessConditionRuntime interface {
 	RefuseBusinessCondition(Caller, string, string, any, map[string]any, time.Time) *kernel.Error
 }
 
-// A false business precondition is separate from access checks made while
-// reading the condition. It retains the same original evaluator and savepoint.
 func (c Caller) RefuseBusinessCondition(code, message string, record any, inputs map[string]any, at time.Time) *kernel.Error {
 	if owner, ok := c.rt.(BusinessConditionRuntime); ok && c.Staging() && !c.Replaying {
 		return owner.RefuseBusinessCondition(c, code, message, record, inputs, at)
@@ -1034,9 +914,6 @@ func (c Caller) RefuseBusinessCondition(code, message string, record any, inputs
 	return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{message}", message)
 }
 
-// RefusalEscalation asks the existing Work owner to open one review task when
-// distinct decisions reach Count in a window starting at its first refusal.
-// Repeating an idempotency key never contributes another refusal.
 type RefusalEscalation struct {
 	Count         int    `json:"count"`
 	WindowSeconds int    `json:"windowSeconds"`
@@ -1055,8 +932,6 @@ func (e RefusalEscalation) Check() error {
 	return nil
 }
 
-// RefusalEscalationRequest is an immutable business result projected into a
-// normal Work task. It contains no submitted inputs or original field values.
 type RefusalEscalationRequest struct {
 	Key        string    `json:"key"`
 	App        string    `json:"app"`
@@ -1124,14 +999,14 @@ type Delivery struct {
 	Action     string    `json:"action"`
 	Target     string    `json:"target"`
 	Subscriber string    `json:"subscriber"`
-	Outcome    string    `json:"outcome"` // "ok" or an error code
+	Outcome    string    `json:"outcome"`
 	Attempt    int       `json:"attempt,omitempty"`
 }
 type AuditEntry struct {
 	At     time.Time `json:"at"`
 	Member string    `json:"member"`
 	App    string    `json:"app"`
-	Action string    `json:"action"` // an action's schema, or "input:<name>"
+	Action string    `json:"action"`
 	Target string    `json:"target,omitempty"`
 }
 type PersonalRead struct {

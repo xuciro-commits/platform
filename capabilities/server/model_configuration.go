@@ -91,8 +91,6 @@ func (t *Tenant) ModelSelection(m platform.Member, purpose string) (ModelSelecti
 	})
 }
 
-// Purpose defaults remain settings of the original app. The model owner owns
-// facts/defaults; consumers retain the resolved binding in their accepted work.
 func (t *Tenant) resolveModel(purpose, name string, override platform.ModelOptions) (platform.AIModelBinding, platform.AIProvider, *kernel.Error) {
 	app, key := aigateway.PurposeSetting(purpose)
 	if name == "" {
@@ -179,7 +177,6 @@ func (t *Tenant) modelStage(binding platform.AIModelBinding, provider platform.A
 	return pinned, nil
 }
 
-// Inference approvals are static deployment input, never tenant model metadata.
 func bindAIInferencePolicy(services *platform.RuntimeCapabilities) error {
 	if services.AIInference == nil {
 		policy := platform.AIInferencePolicy{}
@@ -198,7 +195,6 @@ func bindAIInferencePolicy(services *platform.RuntimeCapabilities) error {
 	if err := aigateway.CheckPolicy(*services.AIInference); err != nil {
 		return err
 	}
-	// Own a private copy: callers cannot mutate an instance's deployment approval.
 	policy := *services.AIInference
 	policy.Runtime = append([]platform.AIInferenceSite{}, policy.Runtime...)
 	services.AIInference = &policy

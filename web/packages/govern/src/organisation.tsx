@@ -1,7 +1,3 @@
-// Organisation: the tenant's own record — identity,
-// localisation defaults every profile inherits, sign-in and governance — and
-// its standing on the host. Each value is a platform setting, decided with
-// platform.setting.set like any app setting, so it is journaled and audited.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { ContextHelp, Button, Input, PageHeader, Panel, Select, Tag, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";

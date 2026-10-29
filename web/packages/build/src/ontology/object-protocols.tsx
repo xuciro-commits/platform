@@ -4,7 +4,6 @@ import { Button, Input, InputDraftProvider, Notice, Select, t } from "@platform/
 import { useState } from "react";
 import { nameOf, type Process, type ProtocolBinding } from "./object-model";
 
-/** Protocol declarations remain part of the original object draft. */
 export function ObjectProtocolsEditor({ process, onChange }: { process: Process; onChange: (value: Process) => void }) {
   const query = useReadQuery<Api.ProtocolInfo[]>("/v1/protocols");
   const bindings = process.protocols ?? [];
@@ -51,7 +50,6 @@ export function ObjectProtocolsEditor({ process, onChange }: { process: Process;
   </div>;
 }
 
-/** Existing names are stable map keys; adding a name never overwrites a mapping. */
 function ProtocolMappings({ kind, value, actions, onChange }: {
   kind: "actions" | "events"; value: Record<string, string>; actions: { name: string; title: string }[]; onChange: (value: Record<string, string>) => void;
 }) {

@@ -10,8 +10,6 @@ import (
 	"platformserver/platform"
 )
 
-// Directory reads remain volatile. Only an explicit model enable/configure
-// decision adopts selected facts into the original AI owner's accepted state.
 func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool) ([]platform.CatalogModel, *kernel.Error, *platform.AIError) {
 	if t.ai == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
@@ -24,8 +22,6 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	if !ok {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
-	// Resolve current eligibility before consulting a cache. Disabled credentials
-	// must never produce a stale successful connection check.
 	secret, _, err := t.resolveCredential(pv.Secret, "ai/"+pv.ID, pv.BaseURL)
 	if err != nil && (pv.Kind != "local" || pv.Secret != "") {
 		return nil, nil, &platform.AIError{Status: 400, Detail: err.Error()}

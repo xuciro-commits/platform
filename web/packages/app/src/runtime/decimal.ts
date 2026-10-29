@@ -1,4 +1,3 @@
-/** Exact decimal text in a tagged scalar; never a binary floating value. */
 export type DecimalValue={kind:"decimal";value:string};
 export type StringSetValue={kind:"string-set";values:string[]};
 export function isStringSet(value:unknown):value is StringSetValue {return !!value&&typeof value==="object"&&!Array.isArray(value)&&Object.keys(value).length===2&&(value as StringSetValue).kind==="string-set"&&Array.isArray((value as StringSetValue).values)&&(value as StringSetValue).values.length<=64&&new Set((value as StringSetValue).values).size===(value as StringSetValue).values.length&&(value as StringSetValue).values.every(v=>typeof v==="string"&&new TextEncoder().encode(v).length<=4096);}

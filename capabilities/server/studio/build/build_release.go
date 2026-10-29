@@ -348,9 +348,6 @@ func (b *Build) integrationAsset(kind platform.AssetKind, record any, ordinal in
 	return platform.WithDependencies(asset)
 }
 
-// New candidates read a current description of an old accepted integration.
-// Stable bindings come only from that version's frozen edges, never today's
-// editable producer rows. Published and Versions continue to hold old bytes.
 func integrationCandidateAsset(asset platform.ReleaseAsset) (platform.ReleaseAsset, error) {
 	if asset.Provides != nil {
 		return asset, nil
@@ -479,8 +476,6 @@ func (b *Build) integrationAssets() ([]platform.ReleaseAsset, error) {
 			if version != 0 {
 				return nil, fmt.Errorf("integration publication is missing")
 			}
-			// Explicit legacy/development configurations have no immutable definition
-			// history. Only portable supported installed definitions are projected.
 			installed := false
 			switch r := record.(type) {
 			case Connection:
@@ -690,7 +685,7 @@ func (b *Build) acceptedIntegration(record any, kind platform.AssetKind) (any, e
 	if raw == "" {
 		if version == 0 {
 			return record, nil
-		} // explicit historical/direct-development owner
+		}
 		return nil, fmt.Errorf("accepted integration definition is missing")
 	}
 	var asset platform.ReleaseAsset
@@ -703,8 +698,6 @@ func (b *Build) acceptedIntegration(record any, kind platform.AssetKind) (any, e
 	return b.integrationConfiguration(asset)
 }
 
-// ExecutionSource overlays only source-local execution observations. Changing
-// a mutable editor draft cannot replace an accepted source configuration.
 func (b *Build) ExecutionSource(live Source) (Source, error) {
 	fixed, err := b.acceptedIntegration(live, platform.AssetSource)
 	if err != nil {
@@ -717,8 +710,6 @@ func (b *Build) ExecutionSource(live Source) (Source, error) {
 	return r, nil
 }
 
-// ConnectionConfiguration projects accepted declarations with local settings;
-// delivery and historical reconstruction do not require a live environment.
 func (b *Build) ConnectionConfiguration(live Connection) (Connection, error) {
 	fixed, err := b.acceptedIntegration(live, platform.AssetConnection)
 	if err != nil {
@@ -913,10 +904,6 @@ func equalIntegrationAsset(a, z platform.ReleaseAsset) bool {
 	return json.Unmarshal(a.Body, &left) == nil && json.Unmarshal(z.Body, &right) == nil && reflect.DeepEqual(left, right)
 }
 
-// retainedExecutionEquivalent checks the original issued definition against
-// the current accepted one. Titles are presentation; all execution fields and
-// dependency identities must remain identical. Mutable editor fields and the
-// current environment are never used to reinterpret an earlier result.
 func retainedExecutionEquivalent(record any, issuedVersion string) (bool, error) {
 	_, ordinal, accepted, history := integrationMetadata(record)
 	if accepted == "" {
@@ -969,8 +956,6 @@ func canonicalIntegrationExecution(asset platform.ReleaseAsset) ([]byte, error) 
 			return nil, err
 		}
 		definition.Title = ""
-		// Fixed Requires already compares the resolved object owner. Binding
-		// metadata added to new definitions does not change an issued operation.
 		definition.ObjectBindings = nil
 		return json.Marshal(definition)
 	case platform.AssetPipeline:
@@ -979,17 +964,12 @@ func canonicalIntegrationExecution(asset platform.ReleaseAsset) ([]byte, error) 
 			return nil, err
 		}
 		definition.Title = ""
-		// Fixed Requires already compares the resolved object owner. Binding
-		// metadata added to new definitions does not change an issued operation.
 		definition.ObjectBindings = nil
 		return json.Marshal(definition)
 	}
 	return nil, fmt.Errorf("unsupported execution definition")
 }
 
-// recordKind reports whether a draft is substituted in the shared definition
-// inventories (objects, pages, applications, flows) rather than in its own
-// owner's asset snapshot.
 func recordKind(kind platform.AssetKind) bool {
 	switch kind {
 	case platform.AssetObject, platform.AssetPage, platform.AssetApp, platform.AssetFlow:
@@ -998,8 +978,6 @@ func recordKind(kind platform.AssetKind) bool {
 	return false
 }
 
-// lookupEntity resolves an entity type with the joint candidate's draft objects
-// in view. Outside a joint build it is exactly the host's installed registry.
 func (b *Build) lookupEntity(typ string) (platform.EntityInfo, bool) {
 	if info, ok := b.jointEntities[typ]; ok {
 		return info, true
@@ -1019,8 +997,6 @@ func (b *Build) declaresRole(role string) bool {
 	return slices.Contains(b.Manifest().AllRoles(), role)
 }
 
-// jointObjectEntities declares what each selected draft object would be
-// installed as, using the same descriptor the publisher installs.
 func (b *Build) jointObjectEntities(objects []Object, drafts []JointDraftRef) map[string]platform.EntityInfo {
 	joint := map[string]platform.EntityInfo{}
 	for _, draft := range drafts {
@@ -1034,17 +1010,13 @@ func (b *Build) jointObjectEntities(objects []Object, drafts []JointDraftRef) ma
 		record := objects[i]
 		info, err := platform.Describe(ID, Entity(record), func(reflect.Type) string { return "" })
 		if err != nil {
-			continue // the draft's own check reports why it cannot be published
+			continue
 		}
 		joint[info.Type] = info
 	}
 	return joint
 }
 
-// DraftReleaseAssetsMulti substitutes every selected saved draft in one
-// candidate image. Simple kinds keep their owner's existing single-draft
-// checks; record kinds are substituted through one shared inventory so a page
-// or flow may reference an object that is itself only a draft here.
 func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.Member) (JointDraftAssets, error) {
 	var result JointDraftAssets
 	if len(drafts) == 0 {
@@ -1073,8 +1045,6 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	if err != nil {
 		return result, err
 	}
-	// The joint candidate's own object drafts answer entity lookups, so a page,
-	// flow or reference may name an object that is not installed yet.
 	restore, restoreMode, restoreDeclarations := b.jointEntities, b.jointMode, b.jointDeclarations
 	if len(drafts) > 1 {
 		b.jointMode = true
@@ -1089,9 +1059,6 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	inv := draftInventories{objects: objects, pages: pages, apps: apps, processes: processes}
 	overrides := map[platform.AssetRef]platform.ReleaseAsset{}
 	removed := map[platform.AssetRef]bool{}
-	// Agents consume selected queries; evaluation plans pin selected function
-	// versions. Produce those dependencies before their consumers, independent
-	// of the order in which the builder selected them.
 	declarations := slices.Clone(drafts)
 	priority := func(kind platform.AssetKind) int {
 		switch kind {
@@ -1107,7 +1074,6 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 	})
 	for _, draft := range declarations {
 		if !recordKind(draft.Kind) {
-			// The owner's own single-draft path validates and substitutes it.
 			_, after, prior, next, hadPrior, err := b.singleDraftAssets(draft.Kind, draft.ID)
 			if err != nil {
 				return result, err
@@ -1128,15 +1094,11 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 			continue
 		}
 	}
-	// Resolve the selected immutable integration declarations before checking
-	// objects that refer back to them. Nothing is installed or marked published.
 	for _, draft := range drafts {
 		if !recordKind(draft.Kind) {
 			continue
 		}
 		prior, next, hadPrior, err := b.applyRecordDraft(&inv, draft.Kind, draft.ID, member)
-		// A refused draft still names the asset it would have replaced: the
-		// review can say what is installed now beside why the draft failed.
 		if hadPrior {
 			result.Priors = append(result.Priors, prior)
 			if prior != next {
@@ -1161,9 +1123,6 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 		return result, err
 	}
 	after := recordAssets
-	// releaseAssets rebuilds records and their generated actions together; the
-	// installed snapshot contributes the owners' remaining assets, with the
-	// selected drafts substituted.
 	rebuilt := map[platform.AssetRef]bool{}
 	for _, asset := range recordAssets {
 		rebuilt[asset.Ref] = true
@@ -1185,7 +1144,7 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 				return result, fmt.Errorf("installed action %s has no valid target", asset.Ref)
 			}
 			if rebuilt[platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetObject, Name: action.Target}] {
-				continue // The rebuilt object owns its complete generated catalog.
+				continue
 			}
 		}
 		after = append(after, asset)
@@ -1205,8 +1164,6 @@ func findReleaseAsset(assets []platform.ReleaseAsset, ref platform.AssetRef) (pl
 	return assets[i], true
 }
 
-// draftInventories are the builder's four record families as one candidate
-// sees them: installed records with the selected drafts substituted in.
 type draftInventories struct {
 	objects   []Object
 	pages     []Page
@@ -1214,10 +1171,6 @@ type draftInventories struct {
 	processes []Process
 }
 
-// applyRecordDraft substitutes one saved record draft into the shared
-// inventories. Validation runs against the joint candidate's entities, and the
-// host's own install checks re-run when the candidate is installed; the
-// builder-level checks that need only the candidate's image run here.
 func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind, id string, member platform.Member) (prior, next platform.AssetRef, hadPrior bool, err error) {
 	joint := b.jointMode
 	switch kind {
@@ -1331,8 +1284,6 @@ func (b *Build) applyRecordDraft(inv *draftInventories, kind platform.AssetKind,
 	return prior, next, hadPrior, err
 }
 
-// singleDraftAssets is the owner's original one-draft comparison, unchanged for
-// simple kinds and routed through the shared record substitution otherwise.
 func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
 	if ValueIntegrationKind(kind) {
 		return b.integrationDraftAssets(kind, id)
@@ -1383,18 +1334,11 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	return assets.Before, assets.After, prior, next, hadPrior, nil
 }
 
-// ReferencedDrafts selects changed or unpublished application dependencies;
-// unchanged declarations retain their installed versions. For other record
-// roots it discovers unpublished objects, pages and workflows. Their non-record
-// dependencies remain with the original owner's publication check.
 func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDraftRef, error) {
 	if id == "" {
 		return nil, fmt.Errorf("a saved draft is required")
 	}
 	if kind == platform.AssetApp {
-		// Publication selects changed declarations, while trials intentionally
-		// substitute every reachable draft. Unchanged dependencies retain the
-		// installed versions already pinned by their consumers.
 		changes, err := b.SavedDraftChanges(b.host.Automation(platform.Caller{}, ID), "", "", "")
 		if err != nil {
 			return nil, err
@@ -1488,7 +1432,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 		}
 		for want, names := range dependencies {
 			if !recordKind(want) {
-				continue // the owner that owns that draft reports its own gap
+				continue
 			}
 			for _, name := range names {
 				ref, ok := find(want, name)
@@ -1507,9 +1451,6 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 	return result, nil
 }
 
-// ReleaseAssets returns the builder's installed, unfiltered definitions. The
-// member-facing Definitions projection must never be used to calculate a
-// release identity: it omits rules and fields the reader cannot see.
 func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
@@ -1540,8 +1481,6 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	return b.bindDispatchAssets(assets)
 }
 
-// FlowReleaseAsset reads a retained native version, not the current draft or
-// latest installed version. The host closes its bindings through all owners.
 func (b *Build) FlowReleaseAsset(name string, version int) (platform.ReleaseAsset, error) {
 	processes, err := b.processInventory()
 	if err != nil {
@@ -1585,8 +1524,6 @@ func (b *Build) releaseInventory() ([]Object, []Page, []Application, error) {
 	return objects, pages, apps, nil
 }
 
-// The host caps one read page at 500; the existing release bound is 1000.
-// Read the complete bounded inventory or fail, never silently omit assets.
 func readDefinitionInventory[T any](c platform.Caller) ([]T, error) {
 	rows, err := readDefinitionInventoryOf(c, reflect.TypeFor[T]())
 	if err != nil {
@@ -1619,19 +1556,10 @@ func readDefinitionInventoryOf(c platform.Caller, typ reflect.Type) ([]any, erro
 	}
 }
 
-// DraftReleaseAssets substitutes precisely one saved draft in the owner's
-// inventory. It does not install or publish it. Both snapshots are returned
-// so the host can compare identical code dependencies under one tenant lock.
-// Only the authenticated builder-facing host path may call this method.
-// DraftReleaseAssets substitutes precisely one saved draft: the owner's own
-// comparison for an asset kind, or one joint record substitution. The multi
-// path is DraftReleaseAssetsMulti.
 func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
 	return b.singleDraftAssets(kind, id)
 }
 
-// PublishedPage reports whether the generated page of an object was
-// intentionally replaced by an explicit installed page of the same name.
 func (b *Build) PublishedPage(name string) (bool, error) {
 	_, pages, _, err := b.releaseInventory()
 	if err != nil {
@@ -1705,13 +1633,11 @@ func (b *Build) validateObjectInstallation(c platform.Caller, record Object) err
 		return err
 	}
 	if b.jointMode {
-		return nil // The complete private installation checks replaced and retained dependents together.
+		return nil
 	}
 	return b.host.ValidateInstallDependents(c, entity, objectActions(record, entity), generated, pages...)
 }
 
-// An explicitly published page owns its name after it replaces an object's
-// generated page. Updating the object must not silently overwrite that page.
 func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string, error) {
 	explicit, err := b.PublishedPage(record.Name)
 	if err != nil {
@@ -1723,11 +1649,6 @@ func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string,
 	return []platform.Page{CompileObjectPage(record)}, record.Name, nil
 }
 
-// releaseAssets uses the saved publication, never a later mutable draft. The
-// object body retains every declarative field (including access, conditions
-// and approvals), excluding only record identity/stamps and editor state.
-// An action depends on that complete object, so changing a rule changes its
-// closed release even when the action's display metadata stays the same.
 func releaseAssets(objects []Object, pages []Page, apps []Application, processes []Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	index := map[platform.AssetRef]int{}
@@ -1956,10 +1877,6 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	return platform.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
-// ProcessFromAsset reconstructs the bounded owner definition, checking
-// that its compiled bindings are exactly the ones in the release envelope.
-// A sandbox assigns its own native version ordinal; that counter is not the
-// semantic content identity or a dependency version.
 func (b *Build) ProcessFromAsset(asset platform.ReleaseAsset) (Process, error) {
 	var envelope platform.FlowReleaseDescriptor
 	var p Process
@@ -2005,8 +1922,6 @@ func definitionBody(value Object, typ string) (json.RawMessage, error) {
 	return json.Marshal(body)
 }
 
-// Portable definitions are typed owner contracts. Local identities, addresses,
-// credentials and mutable data/execution observations never enter these shapes.
 type ConnectionDefinition struct {
 	Name       string `json:"name"`
 	Title      string `json:"title"`
@@ -2109,8 +2024,6 @@ func ValueIntegrationOrdinal(asset platform.ReleaseAsset) (int, error) {
 	return v, nil
 }
 
-// ExecutionVersion identifies the accepted definition itself, including
-// activating a previously retained version rather than the largest ordinal.
 func ValueIntegrationExecutionVersion(raw string) string {
 	var asset platform.ReleaseAsset
 	if json.Unmarshal([]byte(raw), &asset) != nil {
@@ -2175,8 +2088,6 @@ func ValueValidateIntegrationDependencies(asset platform.ReleaseAsset) error {
 		object(d.Object)
 		legacy := platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: d.Object + ".confirmation"}
 		if !slices.Contains([]string{"confirmation", "dispatch", "transaction"}, d.On) || d.On == "confirmation" && slices.Contains(asset.Requires, legacy) {
-			// Retain exact historical virtual edges when reading old images.
-			// Explicit confirmation/dispatch requests depend on their object/connection.
 			add(platform.AssetAction, d.Object+"."+d.On)
 		}
 	case platform.AssetMatching:
@@ -2282,13 +2193,11 @@ type JointDraftAssets struct {
 
 const JointDraftLimit = 128
 
-// JointDraftRef names one saved draft in a joint candidate.
 type JointDraftRef struct {
 	Kind platform.AssetKind `json:"kind"`
 	ID   string             `json:"id"`
 }
 
-// DraftChange reads an owner declaration, not additional publication state.
 type DraftChange struct {
 	Ref        platform.AssetRef  `json:"ref"`
 	Type       string             `json:"type"`
@@ -2301,23 +2210,18 @@ type DraftChange struct {
 	Diagnostic string             `json:"diagnostic,omitempty"`
 }
 
-// Lists carry names only; the selected draft's read includes field values.
 type DraftChangeField struct {
 	Name   string          `json:"name"`
 	Before json.RawMessage `json:"before,omitempty"`
 	After  json.RawMessage `json:"after,omitempty"`
 }
 
-// Adding an optional scalar cannot change the meaning of an existing process:
-// every old field, state, access rule and action remains exactly as declared.
-// New actions may consume the new field; host activation still needs a plan
-// when the object already stores rows.
 func CompatibleObjectExpansion(previous, next Object) bool {
 	if previous.Name != next.Name || len(next.Fields) <= len(previous.Fields) || len(previous.States) != len(next.States) || len(previous.Access) != len(next.Access) {
 		return false
 	}
 	if !reflect.DeepEqual(previous.Constraints, next.Constraints) {
-		return false // changing invariants is not an optional storage-only expansion
+		return false
 	}
 	for i, state := range previous.States {
 		if !reflect.DeepEqual(state, next.States[i]) {

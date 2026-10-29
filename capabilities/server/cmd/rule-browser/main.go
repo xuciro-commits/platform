@@ -1,6 +1,5 @@
 //go:build js && wasm
 
-// The browser executes the same trusted rule implementation as the host.
 package main
 
 import (

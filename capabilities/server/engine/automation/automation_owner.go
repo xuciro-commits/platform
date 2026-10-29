@@ -15,12 +15,6 @@ import (
 	"time"
 )
 
-// Package flow is the platform's flow app, on the app API and public consumer roles.
-// It runs the flows apps declare. An instance is a record
-// of it; every step it takes is one of its decisions, made inside the owned
-// work that caused it (a delivery of an event, or its timer job), so replay
-// takes it again. Acts are submitted as the declaring app's automation
-// principal; people are asked through that app's tasks.
 const (
 	ID                        = platform.FlowApp
 	InstanceType              = platform.FlowInstanceType
@@ -37,25 +31,17 @@ const (
 	SchemaFlowMove            = "flow.instance.move"
 	SchemaFlowArtifactCleanup = "flow.instance.artifact-cleanup"
 	stepAttempts              = 5
-	// Compensate as a next step undoes the completed acts, newest first.
-	Compensate = platform.Compensate
+	Compensate                = platform.Compensate
 )
 
-// FlowInstance is one run of a flow.
 type FlowInstance = platform.FlowInstance
 
-// Token is where a path of the instance stands (BPMN's token): a step it is at
-// or waits in. Parallel branches have one each.
 type Token = platform.FlowToken
 
-// LoopFrame belongs to the existing durable token, not a separate graph run.
-// Frozen items, assigned cursor and indexed results survive suspended bodies.
 type LoopFrame = platform.FlowLoopFrame
 
-// UndoEntry is a completed act's compensation, built when it completed.
 type UndoEntry = platform.FlowUndoEntry
 
-// TraceLine is why the instance moved.
 type TraceLine = platform.FlowTraceLine
 
 type flowDef struct {
@@ -64,14 +50,11 @@ type flowDef struct {
 	steps map[string]*platform.Step
 }
 
-// Flows is a tenant's flow app.
 type Flows struct {
-	mu     sync.Mutex
-	host   platform.FlowHost // the tenant running it, once composed
-	ledger *platform.Ledger
-	defs   map[string][]*flowDef // "<app>.<name>" → versions, ascending
-	// chosen are the versions new instances took during the input being
-	// handled, journaled with it; pins are those of the entry being replayed.
+	mu           sync.Mutex
+	host         platform.FlowHost
+	ledger       *platform.Ledger
+	defs         map[string][]*flowDef
 	chosen, pins map[string]int
 }
 
@@ -79,8 +62,6 @@ var _ platform.ContinuousFlowOwner = (*Flows)(nil)
 
 var _ platform.AttachedFlow = (*Flows)(nil)
 
-// version is the one a new instance of flow takes: the highest declared, or
-// in a replay the one the journal says it took.
 func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *kernel.Error) {
 	if c.Replaying {
 		if v, ok := f.pins[flow]; ok {
@@ -101,10 +82,8 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *kernel.Error
 	return d, nil
 }
 
-// Attach is called by the host when a tenant is composed.
 func (f *Flows) AttachFlow(h platform.FlowHost) { f.host = h }
 
-// New is a tenant's flow app.
 func New(tenant string) *Flows {
 	admin := []string{Admin}
 	var actions []platform.Action
@@ -166,7 +145,6 @@ func (f *Flows) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot()
 
 func (f *Flows) Restore(raw json.RawMessage) error { return f.ledger.Restore(raw) }
 
-// Declare registers the flows of the tenant's apps, checking each (NewTenant).
 func (f *Flows) Declare(a platform.App) error {
 	m := a.Manifest()
 	for _, fl := range m.Flows {
@@ -179,9 +157,6 @@ func (f *Flows) Declare(a platform.App) error {
 	return nil
 }
 
-// Install registers a flow an app composed at runtime — a process a tenant
-// defined (#132) — as its next version: running instances keep the
-// version they started on.
 func (f *Flows) Install(a platform.App, fl platform.Flow) error {
 	d, err := f.check(a.Manifest(), fl)
 	if err != nil {
@@ -192,18 +167,13 @@ func (f *Flows) Install(a platform.App, fl platform.Flow) error {
 	return nil
 }
 
-// HasPublishedFlow checks application membership through the original registry.
 func (f *Flows) HasPublishedFlow(id string) bool { _, ok := f.latest(id); return ok }
 
-// Validate checks a flow as Install would, registering nothing.
 func (f *Flows) Validate(a platform.App, fl platform.Flow) error {
 	_, err := f.check(a.Manifest(), fl)
 	return err
 }
 
-// InstallationDraft holds an isolated declaration registry for candidate
-// validation. It has no instances or host; installing a flow here cannot
-// publish it in the live runtime. Callers hold the tenant submission lock.
 func (f *Flows) InstallationDraft() platform.Processes {
 	draft := &Flows{defs: maps.Clone(f.defs)}
 	for id, versions := range draft.defs {
@@ -376,17 +346,12 @@ func (f *Flows) def(id string, version int) *flowDef {
 	return nil
 }
 
-// Check refuses a tenant whose running instances need a flow version its code
-// no longer declares: the host starts only when every running
-// instance can go on.
-// Versions are those new instances took during the input being handled, then forgotten.
 func (f *Flows) Versions() map[string]int {
 	v := f.chosen
 	f.chosen = nil
 	return v
 }
 
-// Pin gives a replay the versions the entry replayed took.
 func (f *Flows) Pin(versions map[string]int) { f.pins = versions }
 
 func (f *Flows) Check() error {
@@ -444,8 +409,6 @@ func (f *Flows) running(c platform.Caller) ([]FlowInstance, *kernel.Error) {
 	return out, nil
 }
 
-// HasRunningDependency checks every live instance, beyond a single read page.
-// Terminal instances retain their history but no longer block source edits.
 func (f *Flows) HasRunningDependency(typ string) (bool, error) {
 	return f.hasRunningDependency(typ, false)
 }
@@ -468,7 +431,6 @@ func (f *Flows) hasRunningDependency(typ string, unboundOnly bool) (bool, error)
 	return found, err
 }
 
-// Interested reports whether an event starts a flow or may end a wait.
 func (f *Flows) Interested(names []string, e platform.Event) bool {
 	for _, versions := range f.defs {
 		if d := versions[len(versions)-1]; slices.ContainsFunc(d.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
@@ -489,13 +451,11 @@ func (f *Flows) Interested(names []string, e platform.Event) bool {
 	return s.GetSchema().GetName() == "work.task.complete" && e.App == platform.WorkApp
 }
 
-// Listen takes an event delivered to the flow app: it starts flows and ends
-// waits. It runs as owned work, so a failure is retried and replay repeats it.
 func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *kernel.Error {
 	s := e.Record.GetSubmission()
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		latest, _ := f.latest(id)
-		if latest.Start.Type != "" { // a record's state: once per record, when a decision first brings it there
+		if latest.Start.Type != "" {
 			for _, ref := range e.Changed {
 				key, ok := strings.CutPrefix(ref, latest.Start.Type+"/")
 				if !ok {
@@ -592,7 +552,6 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 	return nil
 }
 
-// Run takes what is due: retries, timeouts, times and conditions.
 func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 	if err := f.tick(c, now); err != nil {
 		return err
@@ -613,7 +572,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			run.Frames = slices.Clone(tok.Frames)
 			step := d.steps[tok.Step]
 			if d.Continuous != nil && d.Continuous.Entry != "" && tok.Step == d.Continuous.Entry && tok.Waits == "retry" {
-				continue // the outside source lane reconstructs this step from its sealed window
+				continue
 			}
 			due := !tok.Due.IsZero() && !tok.Due.After(now)
 			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.host.Automation(c, d.app), run)
@@ -655,11 +614,9 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			if err != nil {
 				return err
 			}
-			break // one step per instance per run: the next run sees its new state
+			break
 		}
 	}
-	// Business timers and resumptions run before the single bounded archive
-	// batch, so a retention backlog cannot occupy every ordinary Flow pass.
 	_, retentionErr := f.retainExpiredDeadLetters(c, now)
 	return retentionErr
 }
@@ -668,8 +625,6 @@ func (f *Flows) run(x *FlowInstance) *platform.Run {
 	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Release: x.Release, Sequence: x.Seq, Sources: slices.Clone(x.Sources), Outputs: maps.Clone(x.Outputs), Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
 }
 
-// Read "flows": the declared flows, for the workspace to draw.
-// FlowDefinition is a declared flow as people see it: its steps and where each may go.
 type FlowDefinition = platform.FlowDefinition
 
 type FlowStep = platform.FlowStep
@@ -688,7 +643,7 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 func flowDefinitionOf(d *flowDef) FlowDefinition {
 	id := d.app + "." + d.Name
 	v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: append([]string{}, d.Start.On...), Steps: []FlowStep{}}
-	if d.Start.Type != "" { // started by a record's state, not an event
+	if d.Start.Type != "" {
 		v.Start = append(v.Start, "state of "+d.Start.Type)
 	}
 	if d.Start.Continuous {
@@ -748,8 +703,6 @@ func boolCount(values ...bool) int {
 	return n
 }
 
-// OperationEnded continues the same flow token in the host's accepted effect
-// settlement. The host provides the staged, already validated result here.
 func (f *Flows) OperationEnded(c platform.Caller, call string, now time.Time) *kernel.Error {
 	c = f.host.Automation(c, ID)
 	running, err := f.running(c)
@@ -825,8 +778,6 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 	}
 	return f.step(c, id, now, func(ss *session, in *FlowInstance) {
 		if failure != "" {
-			// A terminal host refusal is not a failed execution attempt. Worker
-			// failures are retryable under the retained step policy.
 			if !retryable {
 				ss.token(in, token).Attempts = stepAttempts
 			}
@@ -843,8 +794,6 @@ func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now ti
 	})
 }
 
-// StartManual is the one existing flow start decision, called from an
-// authorised owner action. It cannot create an instance of a non-manual flow.
 func (f *Flows) StartManual(c platform.Caller, app, name string, version int, key string, input json.RawMessage, now time.Time) *kernel.Error {
 	d := f.def(app+"."+name, version)
 	if d == nil || !d.Start.Manual || key == "" || len(key) > 256 || len(input) > 64<<10 || !json.Valid(input) {
@@ -853,15 +802,10 @@ func (f *Flows) StartManual(c platform.Caller, app, name string, version int, ke
 	return f.start(f.host.Automation(c, ID), d, key, input, c.ID, nil, "", now, true)
 }
 
-// HasDefinition is a registry lookup for snapshot reconstruction. A sandbox
-// already seeded with the same immutable version must not install it twice.
 func (f *Flows) HasDefinition(app, name string, version int) bool {
 	return f.def(app+"."+name, version) != nil
 }
 
-// Definitions are installed declarations containing callbacks. Decisions only
-// read them, while their chosen versions and replay pins belong to this private
-// execution context. Installation still belongs to accepted publication apply.
 func (f *Flows) ForkDecision() (platform.App, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -877,8 +821,6 @@ var _ platform.DecisionForkApp = (*Flows)(nil)
 
 func (a *Flows) NewSimulationApp(tenant string) platform.App { return New(tenant) }
 
-// Go callbacks execute only in the original compiled owner. The descriptor
-// freezes their presence, control edges and budgets, and pins that owner code.
 type nativeStepPolicy struct {
 	Name        string                `json:"name"`
 	Retry       *platform.RetryPolicy `json:"retry,omitempty"`
@@ -965,8 +907,6 @@ func (f *Flows) NativeFlowAsset(manifest platform.Manifest, name string, version
 	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetFlow, Name: descriptor.Name}, ContractVersion: 1, SourceVersion: manifest.Version + ".native-flow-" + strconv.Itoa(version), Body: raw})
 }
 
-// Consumptions are derived from the same installed versions that execute.
-// Retained versions keep their protocol grants while their runs may resume.
 func (f *Flows) Consumptions(app string) []platform.Consumption {
 	protocols := map[string]bool{}
 	for _, versions := range f.defs {

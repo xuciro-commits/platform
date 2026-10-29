@@ -5,7 +5,6 @@ import type { Api, ActionDeclaration } from "@platform/kernel";
 import { useHost } from "../index";
 import { DeclaredActionForm } from "../actions/actions";
 
-/** The original business action owns adoption, including its approval gate. */
 export function ProposalReview({call,live,active=()=>true,onChanged}:{call?:Api.FunctionRun;live:boolean;active?:()=>boolean;onChanged?:()=>void}){
  const host=useHost(),lease=useRef(true);
  useEffect(()=>{lease.current=true;return()=>{lease.current=false;};},[]);

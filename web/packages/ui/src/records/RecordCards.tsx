@@ -3,7 +3,6 @@ import {Button} from "../primitives/button";
 import {t} from "../i18n";
 import {entityFrom,type EntityInfo,type EntityRecord,type RecordSource} from "./Records";
 
-/** Presentation of the caller's permission-filtered window; no reader or writer. */
 export function RecordCards({records,info,fields=[],labelField,layout,selected,onSelect,onNavigate,label,source,onOpenReference}:{records:EntityRecord[];info:EntityInfo;fields?:string[];labelField:string;layout:"grid"|"list"|"tiles";selected?:string;onSelect?:(record:EntityRecord)=>void;onNavigate?:(record:EntityRecord)=>void;label?:string;source?:RecordSource;onOpenReference?:(type:string,id:string)=>void}){
  const entity=entityFrom(info,{},source,onOpenReference),status=info.lifecycle?.field;
  return <div role={label?"group":undefined} aria-label={label} className={layout==="tiles"?"grid grid-cols-2 gap-1 sm:grid-cols-4":layout==="grid"?"grid grid-cols-[repeat(auto-fit,minmax(min(100%,170px),1fr))] gap-2":"grid grid-cols-1 gap-2"}>{records.map(record=>{

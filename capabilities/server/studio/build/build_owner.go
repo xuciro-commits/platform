@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-// SavedObjectActions describes editable declarations, not executable grants or
-// installed versions. The same object owner produces candidate action inputs.
 func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error) {
 	objects, err := readDefinitionInventory[Object](c)
 	if err != nil {
@@ -30,38 +28,27 @@ func (b *Build) SavedObjectActions(c platform.Caller) ([]platform.Action, error)
 	return actions, nil
 }
 
-// Build is the builder app of one tenant.
 type Build struct {
-	installationCatalog *platform.Catalog // private installation declarations; never authoritative ledger state
+	installationCatalog *platform.Catalog
 	releaseDraftIDs     map[platform.AssetRef]string
 	host                platform.BuildHost
 	ledger              *platform.Ledger
-	// installed are the objects published in this tenant, by entity type: their
-	// declarations, so generated actions of a defined object reach the record store.
-	installed map[string]platform.Entity
-	// jointEntities are the object drafts of the candidate being built, so the
-	// same validation answers entity lookups as the candidate would install
-	// them. Empty outside a joint build.
-	jointEntities     map[string]platform.EntityInfo
-	jointAssets       map[platform.AssetRef]bool
-	jointDeclarations map[platform.AssetRef]platform.ReleaseAsset
-	// jointMode is set while a candidate holds more than one draft: the host's
-	// installed-state install checks then move to the candidate's own install
-	// dry run, because no single draft's image is installed yet.
-	jointMode     bool
-	linkTypes     map[string]LinkType
-	propertyTypes map[string]PropertyType
-	queries       map[string]Query
-	functions     map[string]Function
-	agents        map[string]Agent
-	codes         map[string]Code
-	tables        map[string]Table // published decision tables, by name
+	installed           map[string]platform.Entity
+	jointEntities       map[string]platform.EntityInfo
+	jointAssets         map[platform.AssetRef]bool
+	jointDeclarations   map[platform.AssetRef]platform.ReleaseAsset
+	jointMode           bool
+	linkTypes           map[string]LinkType
+	propertyTypes       map[string]PropertyType
+	queries             map[string]Query
+	functions           map[string]Function
+	agents              map[string]Agent
+	codes               map[string]Code
+	tables              map[string]Table
 }
 
-// Attach is called by the host when a tenant is composed.
 func (b *Build) AttachBuild(h platform.BuildHost) { b.host = h }
 
-// New is a tenant's builder app.
 func New(tenant string) *Build {
 	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, agents: map[string]Agent{}, codes: map[string]Code{}, tables: map[string]Table{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
@@ -101,8 +88,6 @@ func New(tenant string) *Build {
 	return b
 }
 
-// releaseProfile is declared, not hidden: an operator sets it through the
-// platform's settings surface.
 func (b *Build) settings() []platform.Setting {
 	return []platform.Setting{{Name: SettingReleaseProfile, Title: "Release profile", Type: "choice",
 		Choices: []string{ProfileProduction, ProfileDevelopment}, Default: ProfileDevelopment,
@@ -118,9 +103,6 @@ func (b *Build) Manifest() platform.Manifest {
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
-	// Every role an object names is a role of this app, which the Console
-	// grants — one that only reads grants no action. Builder and
-	// Publisher are the two roles releases need.
 	roles := []string{User, Builder, Publisher, Integrator}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
@@ -152,8 +134,6 @@ func (b *Build) Manifest() platform.Manifest {
 					{App: ID, Kind: platform.AssetAction, Name: PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaRelease}}}}}
 }
 
-// sortedTypes are the installed types, in a fixed order: a manifest and a
-// submission must not depend on a map's order.
 func sortedTypes(installed map[string]platform.Entity) []string {
 	out := make([]string, 0, len(installed))
 	for typ := range installed {
@@ -163,35 +143,20 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 	return out
 }
 
-// SettingReleaseProfile declares how definitions reach operators (
-// D5b): a tenant that declares "production" delivers only through a saved joint
-// candidate, and the direct install its authoring surfaces used to offer is
-// refused by the owner. Any other value — including the default below — is the
-// development/import/probe profile, where the same compile, install and
-// recovery implementation stays available, exactly as before.
 const SettingReleaseProfile = "releaseProfile"
 
-// ReadReleaseProfile serves the profile to this app's authoring surfaces.
 const ReadReleaseProfile = "release-profile"
 
 const (
-	// ProfileProduction delivers through saved release candidates only.
-	ProfileProduction = "production"
-	// ProfileDevelopment is authoring, import and probe: direct install stays.
+	ProfileProduction  = "production"
 	ProfileDevelopment = "development"
 )
 
-// directInstallSchemas are the builder's direct install entries: each installs a
-// definition for operators at once, without a saved candidate.
 var directInstallSchemas = []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess,
 	SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish,
 	SchemaTablePublish, SchemaAlertPublish, SchemaAgentPublish,
 	SourceType + ".publish", PipelineType + ".publish", WritebackType + ".publish", MatchType + ".publish"}
 
-// checkReleaseProfile refuses a direct install that a production tenant has
-// retired, naming the schema and the route that replaces it. Replay and
-// recovery never take this path, so a historical Published image, its versions
-// and a restore keep working in every profile.
 func (b *Build) checkReleaseProfile(c platform.Caller, schema string) *kernel.Error {
 	if c.Tenant == systemscope.Tenant && slices.Contains(directInstallSchemas, schema) {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "System definitions are published through an approved Platform change")
@@ -210,10 +175,6 @@ func (b *Build) SnapshotFormat() string                   { return "platform.led
 func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
 func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(raw) }
 
-// Read release-profile answers how this tenant delivers definitions, for the
-// authoring surfaces that must not offer an entry the owner would refuse.
-// Every role of this app may read it: it is a declaration of
-// the tenant's profile, not a record.
 func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name != ReadReleaseProfile {
 		return b.readProtocol(c, name)
@@ -225,13 +186,11 @@ func (b *Build) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return ReleaseProfile{Profile: profile, DirectInstall: profile != ProfileProduction}, nil
 }
 
-// ReleaseProfile is how a tenant delivers definitions to operators.
 type ReleaseProfile struct {
 	Profile       string `json:"profile"`
 	DirectInstall bool   `json:"directInstall"`
 }
 
-// Draft archival never retires installed definitions or retained runtime versions.
 func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kernel.Error {
 	if !c.Holds(c.App, Builder) && !(typ == ObservationType && c.Holds(c.App, Integrator)) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -296,8 +255,6 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained")
 }
 
-// Submit takes the builder's own actions and those generated for every object
-// it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if !c.Replaying {
 		if err := b.checkSystemDefinitionWrite(s); err != nil {
@@ -362,8 +319,6 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		}
 	}
 	if name := s.GetSchema().GetName(); (name == ObjectType+".create" || name == ObjectType+".edit") && !c.Replaying {
-		// What the payload carries is checked while it is still a draft, so the
-		// person is told at once; publishing checks the whole definition again.
 		var p struct {
 			Name   *string  `json:"name"`
 			Fields *[]Field `json:"fields"`
@@ -412,8 +367,6 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		}
 	}
 	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive {
-		// Discarding a Build draft does not compile or publish it. The original
-		// archive authorization and retained-publication guard ran above.
 		if _, err := draftAssetRef(typ, ""); err == nil {
 			for i := range entities {
 				if entities[i].Type == typ {
@@ -428,12 +381,6 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-// check refuses a definition the host could not install, with the reason, while
-// it is still a draft: a name that is not a name, a field the platform has no
-// type for, a choice without values, a reference to an object that is not there.
-// Published definitions are immutable values; installs replace registry
-// entries after acceptance. A private builder owns registry maps and its joint
-// validation context, while retaining declarations and the ledger identity.
 func (b *Build) ForkDecision() (platform.App, error) {
 	catalog := b.installationCatalog
 	if catalog != nil {
@@ -479,17 +426,12 @@ const (
 	ID                     = "build"
 	ValueDefinitionVersion = "1"
 	ObjectType             = "build.object"
-	// Builder defines and publishes objects; Publisher saves and activates
-	// release candidates without editing definitions; User works with what is
-	// published.
-	Builder       = "builder"
-	Publisher     = "publisher"
-	User          = "user"
-	SchemaPublish = ObjectType + ".publish"
+	Builder                = "builder"
+	Publisher              = "publisher"
+	User                   = "user"
+	SchemaPublish          = ObjectType + ".publish"
 )
 
-// Object is an object someone defines in this tenant: what it is called and
-// which fields it holds. Publishing it installs it.
 type Object struct {
 	platform.Record
 	Name              string                       `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
@@ -506,34 +448,20 @@ type Object struct {
 	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
 	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Pinned business versions"`
 	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Current enterprise use"`
-	// States and Actions make its records a small process: the
-	// object editor owns them, so generated forms do not ask for them.
-	States  []State  `json:"states,omitempty" field:"aside" title:"States"`
-	Actions []Action `json:"actions,omitempty" field:"aside" title:"Actions"`
-	// Access is who may do what with it; empty: builder and
-	// user do everything, as before.
-	Access []Access `json:"access,omitempty" field:"aside" title:"Access"`
-	// Scope says which fields place a record for the row scopes of Access:
-	// its owner (for "own"; empty: whoever created it) and its organisational
-	// unit within a structure (for "unit" and "below").
-	Scope *ObjectScope `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
-	// Implements names the interfaces this object carries the fields of; Extends
-	// names an installed object type this one adds fields to, one record per base
-	// record through its `base` reference (A2, A3).
-	Implements      []string                  `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
-	Extends         string                    `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
-	ExtensionSource *platform.ExtensionSource `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
-	SchemaVersions  []platform.SchemaVersion  `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
-	// Numbering gives every new record a document number in a text field: <prefix>[<year>-]<n>, gapless in order of creation.
-	Numbering *Numbering `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
-	State     string     `json:"state" field:"readonly" choices:"draft,published"`
-	Installed string     `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
-	// Published is the definition as it was last published, which is what is
-	// installed and what a restore installs again — not the draft beside it.
-	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	States            []State                      `json:"states,omitempty" field:"aside" title:"States"`
+	Actions           []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
+	Access            []Access                     `json:"access,omitempty" field:"aside" title:"Access"`
+	Scope             *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
+	Implements        []string                     `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
+	Extends           string                       `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
+	ExtensionSource   *platform.ExtensionSource    `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
+	SchemaVersions    []platform.SchemaVersion     `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
+	Numbering         *Numbering                   `json:"numbering,omitempty" field:"aside" type:"json" title:"Document numbering"`
+	State             string                       `json:"state" field:"readonly" choices:"draft,published"`
+	Installed         string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	Published         string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
 }
 
-// Field is one field of a defined object, as a person describes it.
 type Field struct {
 	AIInput     *bool                  `json:"aiInput,omitempty" title:"Allow AI context"`
 	SourceType  string                 `json:"sourceType,omitempty" choices:"record,user-input,external-input,generated" title:"Text source type"`
@@ -545,27 +473,18 @@ type Field struct {
 	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`
 	Stereotype  string                 `json:"stereotype,omitempty" title:"Enterprise element type"`
 	Stereotypes []string               `json:"stereotypes,omitempty" title:"Enterprise element types"`
-	// Inverse names the relation seen from the referenced record.
-	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
-	Required bool   `json:"required,omitempty"`
-	Search   bool   `json:"search,omitempty" title:"Searchable"`
-	ReadOnly bool   `json:"readOnly,omitempty" title:"Read only"`
-	AliasOf  string `json:"aliasOf,omitempty" title:"Read alias of" help:"The retained old name reads this field; it cannot be written directly"`
-	// When bounds the field to another field's value (WorkQueue #138/#132):
-	// "kind=refund,return" or "urgent=true". The field is asked for, and
-	// required if marked so, only while the condition holds; otherwise it
-	// stays empty. One level: the condition's field is unconditional.
-	When string `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
-	// Formula computes an integer or decimal field from the record's other
-	// number fields at every decision; such a field is read-only.
-	FormulaExpr *platform.Expr `json:"formulaExpr,omitempty" type:"json" field:"aside"`
-	Formula     string         `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
-	// Read and Write, when set, are the roles that read and set it.
-	Read  []string `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
-	Write []string `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
+	Inverse     string                 `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
+	Required    bool                   `json:"required,omitempty"`
+	Search      bool                   `json:"search,omitempty" title:"Searchable"`
+	ReadOnly    bool                   `json:"readOnly,omitempty" title:"Read only"`
+	AliasOf     string                 `json:"aliasOf,omitempty" title:"Read alias of" help:"The retained old name reads this field; it cannot be written directly"`
+	When        string                 `json:"when,omitempty" title:"Only when" help:"field=value,value — another choice or boolean field of this object and the values that make this field apply" example:"kind=refund,return"`
+	FormulaExpr *platform.Expr         `json:"formulaExpr,omitempty" type:"json" field:"aside"`
+	Formula     string                 `json:"formula,omitempty" help:"For a number: price * qty, (ordered - received), …" example:"price * qty"`
+	Read        []string               `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
+	Write       []string               `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
 }
 
-// Installed reports the entity type an object is installed as.
 func TypeOf(name string) string { return ID + "." + name }
 
 func ValueChoices(s string) []string {
@@ -578,9 +497,6 @@ func ValueChoices(s string) []string {
 	return out
 }
 
-// CheckManifest validates one application declaration. The host supplies only
-// whether the composed owner implements the original job role, never the owner
-// or a tenant callback.
 func CheckManifest(m platform.Manifest, runsJobs bool) error {
 	if m.ID == "" || m.Actions == nil {
 		return fmt.Errorf("manifest without ID or action catalog")
@@ -642,8 +558,6 @@ func CheckManifest(m platform.Manifest, runsJobs bool) error {
 	return nil
 }
 
-// CheckSubscriptions checks the original subscription declarations without
-// invoking subscriber code or resolving mutable tenant state.
 func CheckSubscriptions(m platform.Manifest, subscriber bool) error {
 	for _, action := range m.Subscribes {
 		if protocol, _, ok := strings.Cut(action, "#"); ok {
@@ -662,8 +576,6 @@ func CheckSubscriptions(m platform.Manifest, subscriber bool) error {
 	return nil
 }
 
-// Callback-free transitions retain the smaller version-4 result format.
-// Callback and approval transactions use the validated multi-decision batch.
 func CallbackFreeTransition(m platform.Manifest, schema string) bool {
 	for _, entity := range m.Entities {
 		verb, match := strings.CutPrefix(schema, entity.Type+".")
@@ -693,14 +605,10 @@ type ConstructionDrafts interface {
 	CheckPipeline(platform.Caller, Pipeline) *kernel.Error
 }
 
-// ConstructionDraftReader converts a copied, already authorized object draft
-// to the owner's current expression without changing retained publications.
 type ConstructionDraftReader interface {
 	CanonicalObject(Object) (Object, error)
 }
 
-// IntegrationDefinitions resolves accepted typed configuration. It owns no
-// transport or host lock; consumers capture values before outside I/O.
 type IntegrationDefinitions interface {
 	ConnectionConfiguration(Connection) (Connection, error)
 	ExecutionSource(Source) (Source, error)
@@ -731,6 +639,3 @@ type AlertDefinitions interface {
 type ObservationDefinitions interface {
 	ExecutionObservation(Observation) (platform.ObservationDefinition, error)
 }
-
-// AssetDefinitionReader projects the original controlled owner's accepted
-// metadata. The host retains member filtering and the publication identity.

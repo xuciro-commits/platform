@@ -7,7 +7,6 @@ import type {EntityInfo,EntityRecord} from "./Records";
 
 export type RecordColumnPresentation=TableColumnOptions;
 
-/** Decimal strings keep all digits; formatting never changes the editor value. */
 const numericText=(value:unknown)=>{
  if(typeof value==="number")return Number.isFinite(value)?value.toLocaleString(undefined,{maximumFractionDigits:20}):"—";
  if(typeof value!=="string"||!/^[-]?\d+(?:\.\d+)?$/.test(value))return "—";
@@ -15,7 +14,6 @@ const numericText=(value:unknown)=>{
  return whole!.replace(/\B(?=(\d{3})+(?!\d))/g,separator)+(fraction===undefined?"":(new Intl.NumberFormat().formatToParts(1.1).find(p=>p.type==="decimal")?.value??".")+fraction);
 };
 
-/** Override visible column presentation while retaining the original field metadata. */
 export function presentRecordColumns(columns:ColumnDef<EntityRecord,any>[],entity:Entity<EntityRecord>,info:EntityInfo,presentation:RecordColumnPresentation[]=[]){
  const limits=renderingLimits.runtime.tablePresentation;
  return columns.map(column=>{

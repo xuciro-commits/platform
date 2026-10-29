@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-// These endpoint identities are retained in saved effect results.
 const OperationEndpoint = "operation"
 const ModelEndpoint = "model"
 
@@ -23,9 +22,6 @@ type EffectState struct {
 	Since int `json:"since,omitempty"`
 }
 
-// An external attempt's answer is its own top-level input. The effect state,
-// application callback and any resulting decisions belong to the same
-// accepted journal row; applying one never resends the external request.
 type Effect struct {
 	Unique         []journal.StateUnique   `json:"unique,omitempty"`
 	Authorizations []AuthorizationEvidence `json:"authorizations,omitempty"`

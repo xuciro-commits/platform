@@ -17,7 +17,6 @@ export type SemanticModelView = {
 export type SemanticPropertyType = { binding: Api.AssetBinding; property: Api.PropertyType; definition: WorkspaceDefinition };
 export const assetBindingKey = (binding: Api.AssetBinding) => `${key(binding.ref)}@${binding.sourceVersion}`;
 
-/** Retained declarations only. A missing version never resolves to latest. */
 export function semanticPropertyTypes(definitions: WorkspaceDefinition[]): SemanticPropertyType[] {
   return definitions.filter(d => d.ref.kind === "property-type" && d.propertyType).flatMap(definition => {
     const versions = new Map(Object.entries(definition.propertyVersions ?? {}));
@@ -28,11 +27,6 @@ export function semanticPropertyTypes(definitions: WorkspaceDefinition[]): Seman
 
 const key = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
 
-/** A member-filtered view of the existing registry. Unknown/hidden reference
- * targets are omitted; this projection creates neither assets nor grants.
- * References remain field-backed relationships, with no inferred cardinality
- * or delete/uniqueness guarantees.
- */
 export function semanticModelView(definitions: WorkspaceDefinition[]): SemanticModelView {
   const objects = definitions.filter((definition) => definition.ref.kind === "object" && definition.entity);
   const byType = new Map(objects.map((definition) => [definition.ref.name, definition]));

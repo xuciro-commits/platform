@@ -10,8 +10,6 @@ function page(name:string,title:string,object:string,sections:PageUI.Section[]):
  return {name,title,object:{app:object.split('.')[0]!,kind:'object',name:object},layout:'composed',listFields:[],detailFields:[],actions:[],sections,document:{formatVersion:2,uiProfile:'platform.page.v2.111',root:'root',nodes:{root:{kind:'rows',children:sections.map(s=>s.id!)},...Object.fromEntries(sections.map(s=>[s.id!,{kind:'widget',section:s.id}]))},variables:{}}};
 }
 
-// These are portable application configuration assets, not component code.
-// Offline answers are explicit synthetic samples; live reads use the host.
 const routingConfiguration:Configuration={
  page:page('routing','Routing','factory.step',[{id:'graph',widget:'layered-graph',configVersion:1,title:'Routing',composite:{acyclic:true,tones:{active:'info',hold:'warning',done:'success',scrapped:'danger'},bindings:{nodes:view('factory.step',{layer:ref('center'),detail:{path:['center','name']},order:ref('number')}),layers:view('factory.center'),edges:view('factory.link',{from:ref('from'),to:ref('to'),dashed:ref('dashed'),state:ref('status')}),overlay:view('factory.position',{node:ref('step'),current:ref('current'),state:ref('status'),detail:ref('detail')})}}}]),
  sources:{

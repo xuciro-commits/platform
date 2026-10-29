@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// DefinitionProjection receives already authorized declarations. Retained
-// reads and the original query compiler remain captured by the host; this
-// owner cannot submit, query arbitrary records or reach a tenant.
 type DefinitionProjection struct {
 	Member      platform.Member
 	Entities    map[string]platform.EntityInfo
@@ -23,8 +20,6 @@ type DefinitionProjection struct {
 	CheckQuery  func(platform.NamedQuery, platform.EntityInfo) error
 }
 
-// page projects only the four typed safety declarations. Presentation bytes
-// retain their original identity and can never add a read, action or source.
 func (projection DefinitionProjection) Page(def platform.Definition) (platform.Definition, bool) {
 	m, entities, actions := projection.Member, projection.Entities, projection.Actions
 	if m.Roles[def.Ref.App] == "" || def.Page == nil {
@@ -151,7 +146,6 @@ func (projection DefinitionProjection) Page(def platform.Definition) (platform.D
 			continue
 		}
 		trigger.Actions = slices.DeleteFunc(slices.Clone(trigger.Actions), func(ref platform.AssetRef) bool { return !actionVisible(ref) })
-		// An explicit empty action set remains empty; omitted actions remain nil.
 		info := platform.EntityInfo{}
 		for _, binding := range visible.DataBindings {
 			if binding.ID == trigger.Binding {
@@ -276,7 +270,7 @@ func (b Bindings) CheckOperation(s platform.PageActionTrigger, page platform.Ent
 		return err
 	}
 	if len(s.Inputs) == 0 {
-		return nil // operator supplies the complete typed value
+		return nil
 	}
 	if op.Input.Type != "object" || len(s.Inputs) > 64 {
 		return fmt.Errorf("field bindings need an object input schema")
@@ -305,10 +299,6 @@ func (b Bindings) CheckOperation(s platform.PageActionTrigger, page platform.Ent
 
 var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
-// CheckSelections holds record selections, parent relations and create forms
-// to what the page's objects declare, from the safety contract alone: which
-// binding supplies a selection, which follows a parent, and what a create form
-// still has to ask for. The widgets' look never takes part.
 func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, bool), action func(string) (platform.Action, bool)) error {
 	safe, err := p.Safety()
 	if err != nil {
@@ -338,7 +328,7 @@ func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, 
 		ref := b.ObjectRef(safe)
 		info, ok := entity(ref.Name)
 		if !ok {
-			continue // the object's owner is checked with the binding itself
+			continue
 		}
 		info = platform.ModelFields(info, b.PrimaryModel(), entity)
 		where := fmt.Sprintf("page %s, binding %s", p.Name, b.ID)
@@ -411,9 +401,6 @@ func CheckSelections(p platform.Page, entity func(string) (platform.EntityInfo, 
 	return nil
 }
 
-// checkCreateForm: a form makes a new record through the object's own create
-// action, so it asks for everything that action needs, except a parent
-// reference supplied by its explicitly declared relation.
 func checkCreateForm(p platform.Page, b platform.PageDataBinding, info platform.EntityInfo, where, parentType, boundParent, relation string, entity func(string) (platform.EntityInfo, bool), action func(string) (platform.Action, bool)) error {
 	if create, ok := action(info.Type + ".create"); !ok || create.Target != info.Type {
 		return fmt.Errorf("%s: %s cannot be created here", where, info.Type)

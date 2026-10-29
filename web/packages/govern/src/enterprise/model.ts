@@ -1,4 +1,3 @@
-// The directory and retained enterprise history served by the original owner.
 import type { Api } from "@platform/kernel";
 
 export type ElementPeriod = Api.Period;
@@ -16,11 +15,8 @@ export const FILLS_POST = "FillsPost";
 export const ORGANIZATION = "ActualOrganization";
 export const POST = "ActualPost";
 export const PERSON = "ActualPerson";
-/** The organisation responsible for a post. */
 export const RESPONSIBLE_FOR = "ResponsibleFor";
 
-/** Is a stereotype the named one, or a specialisation of it? The metamodel's
- * own generalisation chain decides, so a validation and a proposal agree. */
 export function is(meta: Metamodel, stereotype: string, general: string): boolean {
   if (!general || general === "*" || stereotype === general) return true;
   const seen = new Set<string>();
@@ -36,9 +32,6 @@ export function is(meta: Metamodel, stereotype: string, general: string): boolea
 const anyEnd = (meta: Metamodel, ends: string[] | undefined, stereotype: string) =>
   !ends?.length || ends.some((e) => is(meta, stereotype, e));
 
-/** The relationships the profile admits between two elements:
- * the same contracts the host validates with, so the list here and the
- * refusal there are one rule. */
 export function allowedRelationships(meta: Metamodel, source: string, target: string): string[] {
   const out: string[] = [];
   for (const c of meta.contracts ?? []) {

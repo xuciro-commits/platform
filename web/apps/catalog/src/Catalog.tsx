@@ -1,8 +1,3 @@
-// The Asset Library: one IDE-shaped view over the public code
-// assets. Left: a searchable tree by layer. Main: the asset's documentation and
-// its live example. Right: how to use it (import, source, API, composition,
-// consumers, open in Builder). Dock: Health of the index and the runtime
-// capabilities of the signed-in host. Browsing never opens new tabs.
 import "./i18n";
 import { HostContext, useCapabilities } from "@platform/app";
 import { localizeEntry, type CatalogEntry, type CatalogIndex } from "@platform/catalog";
@@ -27,7 +22,6 @@ const authorities = { specification: "Specification", api: "Current API", recomm
 const maturities = { recommended: "Recommended", experimental: "Experimental", deprecated: "Deprecated" };
 const uses = { code: "Code reference", widget: "Page widget", block: "Flow block", template: "Studio template", reference: "Reference" };
 
-/** Where an asset is used in Builder: templates create, blocks open the flows, widgets open the modules. */
 function builderRoute(entry: CatalogEntry) {
   return entry.template ? { view: "studio-templates", params: { template: entry.template } }
     : { view: entry.uses.includes("block") ? "flow" : "module" };
@@ -168,7 +162,6 @@ function RuntimeCapabilities({ query }: { query: string }) {
     return () => { removeEventListener("online", connect); removeEventListener("offline", disconnect); };
   }, [capabilities.refetch]);
   const key = (c: NonNullable<typeof capabilities.data>[number]) => `${c.ref.app}/${c.ref.kind}/${c.ref.name}`;
-  // Do not retain a previous identity's discoverable inventory after a failed read.
   const rows = !online || capabilities.isError ? [] : (capabilities.data ?? []).filter((c) => `${c.title} ${c.description} ${key(c)}`.toLowerCase().includes(query.toLowerCase()));
   const selected = rows.find((c) => key(c) === picked);
   return <div className="space-y-2 text-xs">

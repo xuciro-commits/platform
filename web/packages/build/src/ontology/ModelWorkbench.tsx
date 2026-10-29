@@ -19,9 +19,6 @@ type Resource = { ref: Api.AssetRef; title: string; source: string; installed?: 
 type Selection = { kind: "property"; ref: PropertyRef } | { kind: "relation"; relation: SemanticRelation; inbound: boolean } | { kind: "action"; definition: Definition };
 type PageSeed = { object: Api.AssetRef; field?: string; relation?: SemanticRelation };
 
-/** The original member-scoped definitions are the ontology. Builder drafts are
- * linked authoring resources; browsing never mutates or republishes them.
- */
 export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
   const { holds} = useHost();
   return holds("build", "builder") ? <ModelInventory initialObject={initialObject} initialTab={initialTab} />
@@ -56,7 +53,6 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
     return [...all.values()].filter(item => !application || held?.includes(item.ref.name)).sort((a, b) => a.title.localeCompare(b.title));
   }, [model, inventory.data, installedApplication, application, project]);
   const listedResources = useMemo(() => resources.filter(item => includeSystem || item.source !== "code"), [resources, includeSystem]);
-  // A direct system-object link remains readable while the catalog hides it.
   const resource = resources.find((item) => item.ref.name === current);
   const visible = useMemo(() => listedResources.filter((item) => `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [listedResources, search]);
   const projects = useProjectIndex();
@@ -73,15 +69,11 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
     { id: "state", header: t("Status"), accessorFn: (item) => item.installed ? "published" : "draft", cell: ({ row }) => t(row.original.installed ? "Published" : "Draft") },
   ];
   const graph = useMemo(() => {
-    // The graph is a bounded view. Search and system visibility are reflected in
-    // both the node set and edges; hidden objects never get placeholder nodes.
     const shown = visible.slice(0, 80), ids = new Set(shown.map((item) => item.ref.name));
     const edges: RelationEdge[] = model.relations.filter((relation) => ids.has(relation.ref.object.name) && ids.has(relation.target.name)).map((relation) => ({
       id: relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`,
       source: relation.ref.object.name, target: relation.target.name, label: relation.title,
     }));
-    // An object type is a thing, not a step: the relationship canvas
-    // arranges it, and the class supplies the glyph while the identity is the detail.
     const nodes: RelationNode[] = shown.map((item) => ({ id: item.ref.name, label: item.title, detail: item.ref.name, class: "object" }));
     return { nodes, edges };
   }, [visible, model]);

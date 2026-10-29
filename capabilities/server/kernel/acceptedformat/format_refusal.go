@@ -12,10 +12,6 @@ import (
 	"time"
 )
 
-// A refused top-level decision has a durable, effect-free answer too. It
-// shares the accepted-result journal category and idempotency namespace, but
-// cannot be mistaken for a kernel change receipt or applied to the record
-// store. The bounded envelope carries the original submission and answer.
 type Refusal struct {
 	Business      *platform.BusinessRefusalFact `json:"business,omitempty"`
 	SchemaVersion *platform.SchemaVersion       `json:"schemaVersion,omitempty"`

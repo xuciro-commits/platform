@@ -1,5 +1,3 @@
-// Web-owned presentation. Query, rule and asset types remain host contracts.
-
 export type * from "@platform/kernel/host-contract";
 
 import type {AssetBinding, AssetRef, Binding, ModelBinding, ModelViewBinding, Expr, PageEventBinding, PageInterface, PageQuery, PageVariable} from "@platform/kernel/host-contract";
@@ -509,9 +507,6 @@ type Ports<C extends Contract> = C extends {inputPorts: infer I extends readonly
 type ConfigurationFields<C extends Contract> = C extends {configurationFields: readonly (infer K)[]}
   ? Pick<Section, Exclude<Extract<K, keyof Section>,keyof C["propsSchema"]["properties"]>> : {};
 
-/** The same manifest generates the source author's discriminated presentation
- * and port types. Business models and actions keep their original declarations;
- * the retained flat Section remains the installed/history wire representation. */
 export type PageWidgetConfiguration = {
   [C in Contract as C['componentID']]: {widget: C['componentID']; configVersion: C['configVersion']}
     & {id?: string} & SchemaValue<C['propsSchema']> & Ports<C> & ConfigurationFields<C>

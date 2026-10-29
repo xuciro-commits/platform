@@ -11,7 +11,6 @@ import (
 	"platformserver/platform"
 )
 
-// The application runtime: one call opens any application, code or model.
 func (h *Host) routesApplications(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/applications", Summary: "Every application this member may open, with the pages each offers", Answer: []platform.ApplicationView{}},
 		func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -35,8 +34,6 @@ func (h *Host) routesApplications(rt *routes) {
 		})
 }
 
-// PageRequest names the page to open: the application, the registry owner when
-// two applications share a name, and the page.
 type PageRequest struct {
 	App   string `json:"app"`
 	Owner string `json:"owner,omitempty"`

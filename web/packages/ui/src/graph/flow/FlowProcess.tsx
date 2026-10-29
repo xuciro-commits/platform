@@ -1,5 +1,3 @@
-// A flow instance: its definition drawn as BPMN steps, with the path the
-// instance took, where it stands now, and why it moved — the decision trace.
 import type { Api } from "@platform/kernel";
 import { StatusTag, defineStatuses } from "../../components/StatusTag";
 import { t } from "../../i18n";
@@ -22,7 +20,6 @@ export const flowStates = defineStatuses({
   stuck: { label: t("Stuck"), tone: "danger" },
 });
 
-/** A run's immutable startup binding, independent of today's active pointer. */
 export function FlowReleaseBinding({ dependencies, release }: Pick<FlowInstanceData, "dependencies" | "release">) {
   if (!dependencies && !release) return null;
   return <details className="min-w-0 text-xs text-muted">
@@ -38,8 +35,6 @@ export function FlowReleaseBinding({ dependencies, release }: Pick<FlowInstanceD
 const kinds: Record<string, string> = { act: t("Act"), wait: t("Wait"), ask: t("Ask"), call: t("Sub-flow"), all: t("All of"), any: t("Any of"), agent: t("Agent") };
 const waits: Record<string, string> = { ready: "ready", retry: "retrying", wait: "waiting", ask: "asking people", call: "in a sub-flow", join: "waiting for its branches", undo: "retrying an undo", stuck: "stuck" };
 
-/** A flow drawn in BPMN (#122): its steps from the start event to the
- * end event, each in the shape its kind asks for, and, for an instance, what it did. */
 export function FlowGraph({ definition, instance, height = 260 }: { definition: FlowDefinition; instance?: FlowInstanceData; height?: number }) {
   const trace = instance?.trace ?? [];
   const tokens = instance?.tokens ?? [];
@@ -57,8 +52,6 @@ export function FlowGraph({ definition, instance, height = 260 }: { definition: 
     for (const next of s.next) edges.push({ from: s.name, to: next, dashed: s.chooses, label: s.chooses ? t("as it decides") : undefined });
     if (!s.next.length || s.chooses) edges.push({ from: s.name, to: "@end", dashed: s.chooses });
   }
-  // A step that chooses its next step at run time names none; the steps nothing
-  // else leads to are the ones it may choose.
   const reached = new Set(edges.map((e) => e.to));
   const orphans = definition.steps.filter((s) => !reached.has(s.name)).map((s) => s.name);
   for (const s of definition.steps) {
@@ -68,7 +61,6 @@ export function FlowGraph({ definition, instance, height = 260 }: { definition: 
   return <FlowSteps nodes={nodes} edges={edges} height={height} label={t("Steps")} />;
 }
 
-/** A flow instance: its graph, where it waits and what can be done there, and why it moved. */
 export function FlowRun({ definition, instance, actions, onStepSelect }: {
   definition?: FlowDefinition; instance: FlowInstanceData; actions?: (token: FlowToken) => React.ReactNode;
   onStepSelect?: (step: string) => void;

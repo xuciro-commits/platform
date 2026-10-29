@@ -15,8 +15,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// ReleaseEvaluationRequest asks the original function or agent evaluator for
-// real model calls against one saved candidate and its declared cases.
 type ReleaseEvaluationRequest struct {
 	CandidateID string `json:"candidateId"`
 	PlanID      string `json:"planId,omitempty"`

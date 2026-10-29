@@ -4,7 +4,6 @@ import {validExternalFrame,type ExternalFrameConfig} from "./external-frame";
 
 export {validExternalFrame,type ExternalFrameConfig} from "./external-frame";
 export type ExternalFrameProps={config:ExternalFrameConfig;title:string;active?:boolean};
-/** All sandbox restrictions stay enabled; no platform message or token bridge. */
 export function ExternalFrame({config,title,active=true}:ExternalFrameProps) {
  if(!validExternalFrame(config)||typeof window!=="undefined"&&config.origin===window.location.origin)return <Panel role="alert">{t("The external document origin or URL is unavailable.")}</Panel>;
  if(!active)return null;

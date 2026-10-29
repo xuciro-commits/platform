@@ -14,5 +14,4 @@ import sansBoldItalic from "pdfjs-dist/standard_fonts/LiberationSans-BoldItalic.
 import sansItalic from "pdfjs-dist/standard_fonts/LiberationSans-Italic.ttf?url";
 import sans from "pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf?url";
 
-/** Fixed renderer assets from the installed package, never filenames or URLs supplied by PDF content. */
 export const pdfStandardFonts=new Map<string,string>([["FoxitDingbats.pfb",dingbats],["FoxitFixed.pfb",fixed],["FoxitFixedBold.pfb",fixedBold],["FoxitFixedBoldItalic.pfb",fixedBoldItalic],["FoxitFixedItalic.pfb",fixedItalic],["FoxitSerif.pfb",serif],["FoxitSerifBold.pfb",serifBold],["FoxitSerifBoldItalic.pfb",serifBoldItalic],["FoxitSerifItalic.pfb",serifItalic],["FoxitSymbol.pfb",symbol],["LiberationSans-Bold.ttf",sansBold],["LiberationSans-BoldItalic.ttf",sansBoldItalic],["LiberationSans-Italic.ttf",sansItalic],["LiberationSans-Regular.ttf",sans]]);

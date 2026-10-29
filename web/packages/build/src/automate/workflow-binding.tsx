@@ -7,7 +7,6 @@ import { commonSchemaProperties, type Binding, type Predicate, type ValueSchema,
 
 const bindingMime = "application/platform-binding";
 
-/** Buffer invalid edits visibly, and make the owning form's Save unavailable until corrected. */
 export function JSONEditor({ value, onChange, label, rows = 4, schema, draftKey = label }: { value: unknown; onChange: (value: unknown) => void; label: string; rows?: number; schema?: ValueSchema; draftKey?: string }) {
   const source = JSON.stringify(value ?? null, null, 2);
   const input = useDraftInput(draftKey, source), { text, problem } = input;
@@ -20,7 +19,6 @@ export function JSONEditor({ value, onChange, label, rows = 4, schema, draftKey 
   </label>;
 }
 
-/** Editing hints only; the owner revalidates the full JSON profile on publish and execution. */
 export const schemaDefault = (schema?: ValueSchema): unknown => {
   if (schema?.type === "variant") return schemaDefault(Object.values(schema.variants ?? {})[0]);
   if (schema?.type === "object") return Object.fromEntries((schema.required ?? []).map((name) => [name, schemaDefault(schema.properties?.[name])]));

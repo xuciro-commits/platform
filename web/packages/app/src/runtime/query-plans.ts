@@ -12,7 +12,6 @@ import type { ResourceValue, VariableResult } from "./variables";
 import type { QueryView } from "./Session";
 import {interfaceWindowSignature} from "./ontology-interface";
 
-/** Resolve only the explicitly selected retained query version. */
 export function boundQueryDefinition(definition: WorkspaceDefinition | undefined, binding: Api.AssetBinding | undefined): WorkspaceDefinition | undefined {
  if(!definition||!binding)return undefined;
  if(definition.version===binding.sourceVersion&&definition.query)return definition;
@@ -38,7 +37,6 @@ function variableUsesPlan(id:string,variables:Record<string,Api.PageVariable>,se
   return variable?.mode==="property"&&!!variable.source?.variable&&variableUsesPlan(variable.source.variable,variables,sections,seen)||variable?.source?.kind==="plan"||variable?.mode==="aggregate"||!!variable?.source?.section&&!!sections.find(s=>s.id===variable.source!.section)?.collectionVariable||!!variable?.expression?.args.some(arg=>!!arg.variable&&variableUsesPlan(arg.variable,variables,sections,seen));
 }
 
-/** Only an actual contextual view may consume an independent confirmed record producer. */
 function recordContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],graph:QueryGraph):boolean {
  const plan=graph.plans[graph.id],input=variables[variable];
  if(plan?.for?.variable!==variable||input?.type!=="record"||input.mode!=="resource"||input.source?.kind!=="record"||!(input.scope==="page"||input.scope==="overlay"&&input.owner===plan.owner&&!!plan.owner))return false;
@@ -48,7 +46,6 @@ function recordContextQueryInput(variable:string,variables:Record<string,Api.Pag
  if(!producer)return false;const port=input.source!.port;if(["graph-explorer","observation"].includes(producer.widget)&&!port)return false;if(port&&!((producer.widget==="graph-explorer"&&producer.graphExplorer?.outputs?.some(o=>o.id===port&&o.variable===variable))||(producer.widget==="observation"&&producer.observation?.kind==="table"&&(port==="row"&&producer.observation.rowOutput===variable||port==="asset"&&producer.observation.assetOutput===variable))))return false;return ["table","record-list","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter","record-map","resource-list"].includes(producer.widget)||producer.widget==="graph-explorer"&&!!port||producer.widget==="observation"&&!!port&&producer.observation?.kind==="table";
 }
 
-/** Follow original variables, producer inputs and set operands, rather than downloaded rows. */
 function variableDependsOnQuery(variable:string,target:string,variables:Record<string,Api.PageVariable>,sections:PageUI.Section[],plans:Record<string,Api.PageQuery>):boolean {
  const seenVariables=new Set<string>(),seenQueries=new Set<string>();
  const queryDepends=(id:string):boolean=>{
@@ -67,8 +64,6 @@ function variableDependsOnQuery(variable:string,target:string,variables:Record<s
  return variableDepends(variable);
 }
 
-/** The user's enum filters as domain terms: only choice fields of the entity,
- * with values the field declares; anything else is unavailable, not widened. */
 export function enumFilterTerms(filters: Record<string,string[]> | undefined, info?: EntityInfo): unknown[][] {
   const terms:unknown[][]=[];
   for(const [name,values] of Object.entries(filters??{})){
@@ -80,12 +75,9 @@ export function enumFilterTerms(filters: Record<string,string[]> | undefined, in
   return terms;
 }
 const contractMaxFilterValues=64;
-/** Whether the member asked for any enum filter at all, however malformed. */
 export function hasEnumFilters(filters: Record<string,string[]> | undefined):boolean {
   return Object.values(filters??{}).some(values=>Array.isArray(values)&&values.length>0);
 }
-/** Whether a window can carry enum filters at all: fixed domains belong to
- * their named query and interface shapes own their predicates. */
 export function windowFiltersLocked(named: WorkspaceDefinition | undefined, base?: {interface?:string}):boolean {
   return !!base?.interface||Array.isArray(named?.query?.domain)&&named.query.domain.length>0;
 }
@@ -127,8 +119,6 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
   return {...base,query,signature:JSON.stringify([base.object,query])};
 }
 
-/** Build the finite read shape from member-visible descriptors and explicit
- * values. It emits the original RecordQuery, never source text or SQL. */
 export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: WorkspaceDefinition | undefined, contract: Contract, sections:PageUI.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
   if(plan.interface){
     const selected=boundQueryDefinition(named,plan.query),declared=selected?.query,ordering=declared?.sort?.length?declared.sort:["id"];
@@ -222,8 +212,6 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
   return { status: "value", object: info.type, query, signature: JSON.stringify([info.type, query]) };
 }
 
-/** Compile source predicates, never their downloaded windows. Each root owns
- * one immutable request signature and the original read/session lifecycle. */
 export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>WorkspaceDefinition|undefined,contract:Contract,sections:PageUI.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined,builder?:(section:PageUI.Section,input:import("./collection-input").CollectionInput)=>Api.PageQueryCondition[]):ReadonlyArray<readonly [string,QueryPlanResult]> {
  const compile=(root:string):QueryPlanResult=>{
   let nodes=0;

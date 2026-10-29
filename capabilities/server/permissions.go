@@ -12,9 +12,6 @@ import (
 	"platformserver/platform/authz"
 )
 
-// Permission catalog: what each role in each app may do,
-// derived from the manifests — the same catalog decisions use, so the page
-// that shows it and the engine that enforces it cannot disagree.
 type RolePermissions struct {
 	Role    string             `json:"role"`
 	Holders int                `json:"holders"`
@@ -22,20 +19,19 @@ type RolePermissions struct {
 }
 
 type PermissionAction struct {
-	ID    string `json:"id"` // the permission id: the action's schema
+	ID    string `json:"id"`
 	Title string `json:"title"`
-	Scope string `json:"scope"` // entity type the action targets
+	Scope string `json:"scope"`
 }
 
 type AppPermissions struct {
 	App      string            `json:"app"`
 	Title    string            `json:"title"`
-	Reads    []string          `json:"reads"`    // reads administrators (and app roles) may use
-	Everyone []string          `json:"everyone"` // reads any member may use
+	Reads    []string          `json:"reads"`
+	Everyone []string          `json:"everyone"`
 	Roles    []RolePermissions `json:"roles"`
 }
 
-// Permissions is the tenant's catalog: every app it runs, every role, every action.
 func (t *Tenant) Permissions() []AppPermissions {
 	d, _ := t.app(controlowner.PlatformApp).(platform.IdentityDirectory)
 	out := []AppPermissions{}
@@ -57,7 +53,7 @@ func (t *Tenant) Permissions() []AppPermissions {
 		}
 		out = append(out, ap)
 	}
-	key := func(a AppPermissions) string { // the platform first
+	key := func(a AppPermissions) string {
 		if a.App == controlowner.PlatformApp {
 			return " "
 		}
@@ -67,19 +63,15 @@ func (t *Tenant) Permissions() []AppPermissions {
 	return out
 }
 
-// Explanation is the engine's answer to "may this member do this?", for the
-// explain endpoint: the permission, who holds what, and the verdict.
 type Explanation struct {
 	Member     string        `json:"member"`
 	Permission string        `json:"permission"`
 	App        string        `json:"app"`
-	Roles      []string      `json:"roles"`   // the member's roles in the app today
-	Allowed    []string      `json:"allowed"` // the roles the permission names
+	Roles      []string      `json:"roles"`
+	Allowed    []string      `json:"allowed"`
 	Verdict    authz.Verdict `json:"verdict"`
 }
 
-// ExplainOperation resolves row/field/source facts through the same runtime as
-// an actual operation; it never accepts roles or owner facts from the client.
 func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (platform.AuthzDecision, *kernel.Error) {
 	m, known := t.member(request.Principal)
 	if !known {
@@ -93,8 +85,6 @@ func (t *Tenant) ExplainOperation(request platform.AuthzRequest, at time.Time) (
 	return t.authorizeFrom(t.records, c, request, at, false), nil
 }
 
-// Explain decides permission for member and says why: an action's schema
-// ("<app>.<entity>.<verb>"), or a read ("<app>:read:<name>").
 func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error) {
 	m, ok := t.member(member)
 	if !ok {
@@ -130,8 +120,6 @@ func (t *Tenant) Explain(member, permission string) (Explanation, *kernel.Error)
 	return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No action {action}", permission)
 }
 
-// nonNil keeps the contract's arrays arrays: a member with no role in the app
-// and an action every member may do both answer [] (UX-08).
 func nonNil(list []string) []string {
 	if list == nil {
 		return []string{}

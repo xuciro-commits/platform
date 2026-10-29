@@ -48,9 +48,6 @@ func (b *Build) transactionSequences() []platform.Sequence {
 	return out
 }
 
-// Typed expressions already declare their result types. Only legacy row
-// sources need the collection schema while lowering a draft; publication
-// checks every typed collection against the complete selected candidate.
 func txnUsesLegacyRows(steps []platform.TxnStep) bool {
 	needed := false
 	platform.WalkTxnSteps(steps, func(step platform.TxnStep) {
@@ -164,9 +161,6 @@ func (b *Build) normalizeTransaction(object Object, action *Action, lookup func(
 				}
 				for i := range step.Changes {
 					assignment := &step.Changes[i]
-					// Typed draft assignments already carry their result type.
-					// Resolve target fields at publication against the whole
-					// candidate, which may add that field in another draft.
 					if assignment.Expr != nil && assignment.From == "" {
 						continue
 					}
@@ -394,9 +388,6 @@ func (b *Build) checkTransactions(object Object, engines ...platform.RuleEngine)
 				return fmt.Errorf("an earlier create cannot be written again")
 			}
 			for _, prior := range writes {
-				// Reject a duplicate already known here. Dynamic identities and
-				// conditional steps are resolved by the original private runner,
-				// which refuses the whole decision if actual writes collide.
 				if prior.typ == ref.Type && prior.key == key && prior.loop == loop && when == nil && prior.when == nil {
 					return fmt.Errorf("transaction writes %s more than once", ref.Type)
 				}
@@ -607,17 +598,11 @@ func (b *Build) checkTransactions(object Object, engines ...platform.RuleEngine)
 	return nil
 }
 
-// JournalPost is what a decision books: lines whose accounts and
-// amounts come from the action's inputs, the record (record.<field>) or
-// literals (=1403, =0). Debits and credits must balance when evaluated; the
-// host lands the entry through core, which puts it in the open period of its
-// date or the next one, and refuses nothing silently.
 type JournalPost struct {
-	ClosedPeriod string `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
-	// Date is where the posting date comes from; empty: the decision's time.
-	Date  string            `json:"date,omitempty" example:"record.receivedOn"`
-	Text  string            `json:"text,omitempty" help:"A literal or a source for the entry's text"`
-	Lines []JournalPostLine `json:"lines" title:"Lines"`
+	ClosedPeriod string            `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
+	Date         string            `json:"date,omitempty" example:"record.receivedOn"`
+	Text         string            `json:"text,omitempty" help:"A literal or a source for the entry's text"`
+	Lines        []JournalPostLine `json:"lines" title:"Lines"`
 }
 
 type JournalPostLine struct {
@@ -629,10 +614,8 @@ type JournalPostLine struct {
 	Partner string `json:"partner,omitempty" example:"record.supplier"`
 }
 
-// BooksEndpoint is the effect endpoint journal entries go to.
 const BooksEndpoint = "core:books"
 
-// Reversal is the posts and journal that undo those of the reversed action.
 func (a Action) Reversal(of Action) ([]Post, *JournalPost) {
 	posts := make([]Post, len(of.Posts))
 	for i, p := range of.Posts {
@@ -649,10 +632,6 @@ func (a Action) Reversal(of Action) ([]Post, *JournalPost) {
 	return posts, journal
 }
 
-// Entry evaluates the declaration against the decision: the record after the
-// action and the inputs given. The id is the decision's change id, so a
-// replay lands the same entry once.
-// today is the decider's local date.
 func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[string]any, me string, now time.Time, today string) (map[string]any, error) {
 	source := func(from string) any {
 		switch {
@@ -704,11 +683,8 @@ func (j JournalPost) Entry(changeID string, record map[string]any, inputs map[st
 	return entry, nil
 }
 
-// EntryBody serializes the frozen action payload; core owns the journal model.
 func EntryBody(entry map[string]any) string { raw, _ := json.Marshal(entry); return string(raw) }
 
-// EffectivePosts and EffectiveJournal are what the action really posts and
-// books: its own, or the reverse of the action it reverses.
 func (o Object) EffectivePosts(a Action) []Post {
 	if a.Reverses == "" {
 		return a.Posts
@@ -735,8 +711,6 @@ func (o Object) EffectiveJournal(a Action) *JournalPost {
 	return nil
 }
 
-// Numbering is a document number range: SAP's number range object, per object
-// type here, optionally restarting each year.
 type Numbering struct {
 	Field  string `json:"field" help:"The text field that takes the number" example:"number"`
 	Prefix string `json:"prefix,omitempty" example:"GR"`
@@ -759,7 +733,6 @@ func (n Numbering) Check(o Object) error {
 	return fmt.Errorf("the numbering field %q is not a field of the object", n.Field)
 }
 
-// Format is the number for sequence n in year.
 func (n Numbering) Format(seq, year int) string {
 	width := n.Width
 	if width <= 0 {
@@ -771,31 +744,15 @@ func (n Numbering) Format(seq, year int) string {
 	return fmt.Sprintf("%s%0*d", n.Prefix, width, seq)
 }
 
-// Postings (block E3): an action adds to or subtracts from
-// a running balance kept on another object of this builder - a stock balance
-// per item and location, a received quantity per order line, a spent amount
-// per budget. The balance record's identity is the posting's match fields, so
-// two actions that name the same item and location meet the same balance; it
-// is created on first posting and changed under the same decision as the
-// action (like Creates). A reversal is a posting of the other
-// sign; there is no delete.
 type Post struct {
-	Object string `json:"object" field:"required" help:"A defined object of this builder that keeps the balance" example:"build.stockbalance"`
-	// Match names the balance's identity: its fields and where each value
-	// comes from (an input, record.<field> of this record, $me, or =<literal>).
-	Match []Set `json:"match" title:"Balance identified by"`
-	// Field is the balance's integer, decimal or money field the amount goes to.
-	Field string `json:"field" field:"required" help:"The balance's integer, decimal or money field" example:"onhand"`
-	// Amount is an input's name, record.<field>, or =<number>.
-	Amount string `json:"amount" field:"required" example:"quantity"`
-	// Subtract posts the negative amount.
-	Subtract bool `json:"subtract,omitempty" title:"Subtract"`
-	// Floor, when set, refuses a posting that would take the balance below zero.
-	Floor bool `json:"floor,omitempty" title:"Never below zero"`
+	Object   string `json:"object" field:"required" help:"A defined object of this builder that keeps the balance" example:"build.stockbalance"`
+	Match    []Set  `json:"match" title:"Balance identified by"`
+	Field    string `json:"field" field:"required" help:"The balance's integer, decimal or money field" example:"onhand"`
+	Amount   string `json:"amount" field:"required" example:"quantity"`
+	Subtract bool   `json:"subtract,omitempty" title:"Subtract"`
+	Floor    bool   `json:"floor,omitempty" title:"Never below zero"`
 }
 
-// number reads an input or field value as the amount it posts: a number, a
-// numeric string, or money (its minor units).
 func ValueNumber(x any) (float64, error) {
 	switch n := x.(type) {
 	case float64:
@@ -1434,8 +1391,6 @@ func compileLegacyTransaction(object Object, action Action, lookup func(string) 
 	return txn, nil
 }
 
-// New saves replace the old parallel action fields. Historical publication
-// images are compiled in memory and retain their original immutable bytes.
 func (b *Build) migrateObjectTransactions(object *Object) error {
 	original := *object
 	original.Actions = slices.Clone(object.Actions)

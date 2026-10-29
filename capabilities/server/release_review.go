@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-// promotionsOf finds, across this host's tenants, where a candidate saved in
-// the source went by promotion and whether it is active there. Each target
-// records the origin where the result is applied (accepted_release.go);
-// the source keeps nothing, so the answer is read from the targets.
 func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTarget {
 	var out []releaseowner.PromotionTarget
 	for _, other := range h.currentTenants() {
@@ -30,7 +26,6 @@ func (h *Host) promotionsOf(source, candidate string) []releaseowner.PromotionTa
 	return out
 }
 
-// withPromotions annotates an inventory with where each candidate went.
 func (h *Host) withPromotions(source string, page releaseowner.ReleasePage) releaseowner.ReleasePage {
 	for i := range page.Candidates {
 		page.Candidates[i].PromotedTo = h.promotionsOf(source, page.Candidates[i].ID)

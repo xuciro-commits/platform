@@ -11,9 +11,6 @@ import (
 	"strings"
 )
 
-// A retained candidate predates dependency metadata only when Provides is
-// absent. Its original code contract still has to match this exact owner and
-// source version; the release is never rewritten with today's metadata.
 func ImmutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, error) {
 	if retained.Ref != current.Ref || retained.SourceVersion != current.SourceVersion || retained.ContractVersion != current.ContractVersion {
 		return false, nil
@@ -44,8 +41,6 @@ func ImmutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, e
 	if err := json.Unmarshal(current.Body, &selected); err != nil {
 		return false, err
 	}
-	// Only metadata newly added by the owner may be absent in old bytes.
-	// A binding already present in the retained body must match exactly.
 	for _, key := range []string{"objectBindings", "protocolBindings", "toolBindings"} {
 		if _, exists := original[key]; !exists {
 			delete(selected, key)
@@ -59,9 +54,6 @@ func ImmutableCodeAssetMatches(current, retained platform.ReleaseAsset) (bool, e
 		if err := json.Unmarshal(selected["resources"], &after); err != nil && len(selected["resources"]) != 0 {
 			return false, err
 		}
-		// Protocols and interfaces now have their own descriptor. Their new
-		// code resources, like the observation authoring records added later,
-		// add no execution semantics to the old application.
 		after = slices.DeleteFunc(after, func(ref platform.AssetRef) bool {
 			observation := ref.Kind == platform.AssetObservation || ref.App == "build" && (ref.Name == "build.observation" || strings.HasPrefix(ref.Name, "build.observation."))
 			return (ref.Kind == platform.AssetProtocol || ref.Kind == platform.AssetInterface || observation) && !slices.Contains(before, ref)
@@ -95,8 +87,6 @@ func UniqueRefs(refs []platform.AssetRef) []platform.AssetRef {
 	return out
 }
 
-// RetainedDefinitionVersions leaves the original history untouched; callers
-// publish the current version only after their installation checks succeed.
 func RetainedDefinitionVersions[T any](history map[string]T, previousVersion string, previous *T, version string, current T) (map[string]T, bool) {
 	versions := maps.Clone(history)
 	if versions == nil {

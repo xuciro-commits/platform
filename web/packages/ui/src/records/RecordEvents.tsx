@@ -13,7 +13,6 @@ export function recordEventRows(records:EntityRecord[],info:EntityInfo,fields:Re
  return rows;
 }
 
-/** The caller owns the authorized ordered window and business-time mapping. */
 export function RecordEvents({records,info,fields,maxEvents=30}:{records:EntityRecord[];info:EntityInfo;fields:RecordEventsOptions;maxEvents?:number}) {
  const rows=recordEventRows(records,info,fields,maxEvents);
  if(!rows)return <p role="alert" className="text-sm text-danger">{t("Event fields or tone mappings are unavailable or incompatible.")}</p>;

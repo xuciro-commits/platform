@@ -16,9 +16,6 @@ import (
 	"unicode"
 )
 
-// checkCreates refuses a related record an action could not make: an object of
-// another app (whose records change only through its own actions), one this
-// tenant has not installed, or a Via that is not its reference to this object.
 func (b *Build) checkCreates(o Object) error {
 	for _, a := range o.Actions {
 		for _, cr := range a.Creates {
@@ -59,11 +56,6 @@ func (b *Build) checkCreates(o Object) error {
 	return nil
 }
 
-// create builds one related record for the action being taken. The transition's Do builds and checks it, so a refusal refuses the
-// action; its After stores it under the same change, so the accepted result
-// holds both writes or neither. No second submission re-enters the ledger.
-// Only this builder's own objects are made: another app's records change
-// through its actions, protocols or flows.
 func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error) {
 	if b.host == nil || !strings.HasPrefix(cr.Object, ID+".") {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} is not an object of this builder", cr.Object)
@@ -79,7 +71,6 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 	if f, ok := info.Field(cr.Via); !ok || f.Type != "reference" || f.Ref != parentType {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{object} has no reference {field} to {parent}", cr.Object, cr.Via, parentType)
 	}
-	// The related object's own create roles decide, as its generated create would.
 	creators := related.Standard.CreateRoles
 	if creators == nil {
 		creators = related.Standard.Roles
@@ -115,7 +106,7 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{object} cannot set {field}: {why}", cr.Object, set.Field, err.Error())
 		}
 	}
-	if related.Lifecycle != nil { // a new record starts where its lifecycle does
+	if related.Lifecycle != nil {
 		v.FieldByName("State").SetString(related.Lifecycle.Initial)
 	}
 	value := v.Interface()
@@ -125,8 +116,6 @@ func (b *Build) create(c platform.Caller, cr Create, inputs map[string]any, pare
 	return value, nil
 }
 
-// relatedID is the n-th related record's ID for one taking of an action: the
-// same in the decision and in its After, and new at each revision.
 func relatedID(rec platform.Record, a Action, n int) string {
 	return fmt.Sprintf("%s-%s-%d-%d", rec.ID, a.Name, rec.Revision, n+1)
 }
@@ -149,8 +138,6 @@ func (b *Build) captureExtensionSource(object *Object) error {
 	if !exists {
 		return fmt.Errorf("extension base %s has no declared package version", object.Extends)
 	}
-	// Copy the declaration, including nested field descriptors, so authoring
-	// and installed registry slices cannot change publication provenance.
 	raw, err := json.Marshal(platform.ExtensionSource{Base: binding, Fields: base.Fields})
 	if err != nil {
 		return err
@@ -190,7 +177,7 @@ func (b *Build) checkExtensionDependents(object Object) error {
 		}
 		if next, selected := b.jointEntities[extension.Type]; selected {
 			extension = next
-			extension.ExtensionSource = nil // explicit joint publication captures its new base below
+			extension.ExtensionSource = nil
 		}
 		if err := platform.CheckExtension(extension, base); err != nil {
 			return err
@@ -244,7 +231,7 @@ func (b *Build) objectEntity() platform.Entity {
 					} else if err := b.install(c, *object); err != nil {
 						return err
 					}
-					object.Installed = TypeOf(object.Name) // what its records are kept as, for people to see
+					object.Installed = TypeOf(object.Name)
 					object.Published = published(*object)
 					return nil
 				}}}}}
@@ -309,11 +296,6 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	return checkAccess(o)
 }
 
-// BaseField is the reference an extension object carries to the record it extends.
-
-// checkShape refuses an interface the tenant's apps do not declare or whose
-// fields the object lacks, and an extension of a type that is not there, of
-// itself, with a lifecycle of its own, or whose base field is not the base.
 func (b *Build) checkShape(o Object) error {
 	if len(o.Implements) == 0 && o.Extends == "" {
 		return nil
@@ -325,7 +307,6 @@ func (b *Build) checkShape(o Object) error {
 	return CheckObjectShape(o, Entity(o), declared, b.fieldKnown, b.lookupEntity)
 }
 
-// checkName refuses a name that is not a name, or one already taken.
 func (b *Build) checkName(name, id string) error {
 	if !Named(name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", name)
@@ -340,10 +321,6 @@ func (b *Build) checkName(name, id string) error {
 	return nil
 }
 
-// fieldKnown answers whether a reference names an object this tenant can
-// compose against: an installed one, one selected as a draft in the candidate
-// being built, or another saved draft object. Delivery still
-// proves the object installs.
 func (b *Build) fieldKnown(ref string) bool {
 	if ref == "enterprise.element" {
 		return true
@@ -368,7 +345,6 @@ func (b *Build) fieldKnown(ref string) bool {
 	return slices.ContainsFunc(objects, func(o Object) bool { return !o.Archived && o.Name == name })
 }
 
-// taken says whether another object, or an app's own type, holds the name.
 func (b *Build) taken(name, id string) (string, bool, error) {
 	if b.host == nil {
 		return "", false, nil
@@ -388,25 +364,15 @@ func (b *Build) taken(name, id string) (string, bool, error) {
 	return "", false, nil
 }
 
-// install declares the object in the running host: the record store keeps its
-// records, the ledger takes its generated actions, and the asset registry
-// offers it and its page. Installed again, it takes its new
-// fields and its records come with it (D3).
 func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	if c.Staging() {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	// A restore installs definitions that were already accepted, in ID order;
-	// objects that refer to each other (a visit creating follow-ups that refer
-	// back) cannot each pass the draft checks before the other is installed.
 	if !c.Replaying {
 		if err := b.Check(o, o.ID, c.Rules()); err != nil {
 			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 		}
 	}
-	// Historical direct publication and pure recovery validate before extending
-	// the ledger. New decisions validate privately and install only their saved
-	// publication image after acceptance.
 	if err := b.validateObjectInstallation(c, o); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
@@ -427,12 +393,8 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	return nil
 }
 
-// Entity is the declaration a defined object amounts to: a Go type built now,
-// with the tags a developer would have written.
 func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
 
-// entity is the declaration as installed: its actions may create related
-// records through this builder's host.
 func (b *Build) entity(o Object) platform.Entity {
 	return entityWith(o, b, b.conditionLookup)
 }
@@ -483,7 +445,6 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	return entity
 }
 
-// BaseField is the required record reference of an extension object.
 const BaseField = "base"
 
 func CheckEnterpriseUse(o Object) error {
@@ -505,8 +466,6 @@ func CheckEnterpriseUse(o Object) error {
 	return err
 }
 
-// checkFields refuses a field the platform has no type for, a choice without
-// values, or a reference to an object this tenant has not.
 func CheckFields(fields []Field, known func(string) bool) error {
 	seen := map[string]bool{}
 	for _, f := range fields {
@@ -567,9 +526,6 @@ func CheckEnterpriseReference(kind, ref, stereotype string, stereotypes []string
 	return nil
 }
 
-// checkConditions reads every "Only when" as the kit will (field=value,value)
-// and refuses one that names no other unconditional choice or boolean field,
-// or a value it never takes.
 func CheckConditions(fields []Field) error {
 	for _, f := range fields {
 		if f.When == "" {
@@ -647,8 +603,6 @@ func CheckObjectShape(o Object, model platform.Entity, declared []platform.Inter
 			if err != nil {
 				return err
 			}
-			// An editable draft may explicitly rebind its base at publication.
-			// Installed declarations retain their source and are checked at upgrade.
 			info.ExtensionSource = nil
 			if err := platform.CheckExtension(info, base); err != nil {
 				return err
@@ -658,12 +612,7 @@ func CheckObjectShape(o Object, model platform.Entity, declared []platform.Inter
 	return nil
 }
 
-// CompileObjectShape builds the immutable Go model and its declarative record
-// metadata. Runtime rules and installation remain with the Build application.
 func CompileObjectShape(o Object) platform.Entity {
-	// StructOf interns identical shapes. The entity identity keeps two named
-	// objects distinct, just as two named Go record types are distinct; this
-	// tag adds no JSON field and stays stable across draft/publication/restore.
 	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[platform.Record](), Anonymous: true,
 		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, TypeOf(o.Name)))}}
 	for _, f := range o.Fields {
@@ -717,15 +666,13 @@ func CompileObjectShape(o Object) platform.Entity {
 		if f.When != "" {
 			tag += fmt.Sprintf(` when:"%s"`, f.When)
 		}
-		if len(f.Read) > 0 { // the builder always reads and sets what it builds
+		if len(f.Read) > 0 {
 			tag += fmt.Sprintf(` read:"%s"`, strings.Join(append([]string{Builder}, f.Read...), ","))
 		}
 		if len(f.Write) > 0 {
 			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{Builder}, f.Write...), ","))
 		}
 		fieldType := goType(f.Type)
-		// Optional scalar values need a nil state. Otherwise an omitted number
-		// or boolean is indistinguishable from an explicitly supplied zero.
 		if (!f.Required || f.FormulaExpr != nil) && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
 			fieldType = reflect.PointerTo(fieldType)
 		}
@@ -749,7 +696,7 @@ func CompileObjectShape(o Object) platform.Entity {
 		withheld = "rulewithheld"
 		fields = append(fields, reflect.StructField{Name: "RuleWithheld", Type: reflect.TypeFor[bool](), Tag: reflect.StructTag(`json:"rulewithheld,omitempty" field:"readonly,aside"`)})
 	}
-	if len(o.States) > 0 { // where a record stands, which only its actions move
+	if len(o.States) > 0 {
 		names := make([]string, 0, len(o.States))
 		for _, st := range o.States {
 			names = append(names, st.Name)
@@ -789,13 +736,10 @@ func goType(kind string) reflect.Type {
 	return reflect.TypeFor[string]()
 }
 
-// GoName is a field's exported Go name: the platform never shows it.
 func GoName(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-// CompileObjectPage is the list and detail page a defined object comes with: the same
-// descriptor a code page has.
 func CompileObjectPage(o Object) platform.Page {
 	names := []string{}
 	for _, f := range o.Fields {
@@ -805,7 +749,7 @@ func CompileObjectPage(o Object) platform.Page {
 	if len(list) > 4 {
 		list = list[:4]
 	}
-	if len(o.States) > 0 { // where each record stands, in the list and on its page
+	if len(o.States) > 0 {
 		list, names = append(list, "state"), append(names, "state")
 	}
 	typ := TypeOf(o.Name)
@@ -814,7 +758,7 @@ func CompileObjectPage(o Object) platform.Page {
 		actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: typ + "." + a.Name})
 	}
 	title := o.Plural
-	if title == "" { // a plural is optional; the page is never nameless (UX-10)
+	if title == "" {
 		title = o.Title
 	}
 	return platform.Page{Name: o.Name, Title: title, Description: o.Description, Layout: "list-detail",
@@ -863,8 +807,6 @@ func (b *Build) checkPosts(o Object) error {
 	return nil
 }
 
-// checkSource is where a posting's value comes from: an input of the action,
-// a field of this record, the member, or a literal.
 func checkSource(o Object, a Action, from string) error {
 	switch {
 	case from == "$me", strings.HasPrefix(from, "="):
@@ -886,8 +828,6 @@ func checkSource(o Object, a Action, from string) error {
 	return fmt.Errorf("%q is not an input of the action", from)
 }
 
-// post builds the balance record after this posting; take checks it, After
-// stores it (the same shape as create).
 func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error) {
 	if b.host == nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Postings need the host")
@@ -984,9 +924,6 @@ func (b *Build) post(c platform.Caller, p Post, inputs map[string]any, record an
 	return value, nil
 }
 
-// validateOf is the entity hook of an extension object (A3): one
-// extension record per base record, so the base type's pages can merge the
-// extension's fields as if they were its own.
 func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, bool)) func(c platform.Caller, record any) *kernel.Error {
 	if o.Extends == "" {
 		return nil
@@ -1015,7 +952,7 @@ func validateOf(o Object, model any, lookup func(string) (platform.EntityInfo, b
 		domain, _ := json.Marshal([][]any{{BaseField, "=", base.String()}})
 		found, _, err := c.FindOf(typ, platform.Query{Domain: domain})
 		if err != nil {
-			return nil // the base's records are not readable here; the store still checks the reference
+			return nil
 		}
 		for _, f := range found {
 			if other := reflect.ValueOf(f).Field(0).Interface().(platform.Record); other.ID != id && !other.Archived {

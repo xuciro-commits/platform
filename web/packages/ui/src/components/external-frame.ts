@@ -2,7 +2,6 @@ import {renderingLimits} from "../gen/presentation-limits";
 
 
 export type ExternalFrameConfig={url:string;origin:string;height?:number};
-/** Exact reviewed origin; never repair an ambiguous source URL. */
 export function validExternalFrame(value:unknown):value is ExternalFrameConfig {
  if(!value||typeof value!=="object"||Array.isArray(value))return false;
  const c=value as Record<string,unknown>;

@@ -26,7 +26,6 @@ import (
 
 const releaseCommandBytes = build.JointDraftLimit * 512
 
-// Release commands accept bounded metadata for the original application closure.
 func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 	if err := decodeBodyLimit(r, into, releaseCommandBytes); err != nil {
 		var large *http.MaxBytesError
@@ -40,7 +39,6 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 	return true
 }
 
-// routesBuild serves the builder: composites, code SDK, process checks, releases, queries and simulation.
 func (h *Host) routesBuild(rt *routes) {
 	h.routesConnectionKinds(rt)
 	h.routesPackageDrafts(rt)
@@ -236,7 +234,6 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, t.i18n.Translate(answer, t.Language(m, r)))
 	})
-	// One request carries either a single draft or a joint selection.
 	draftsOf := func(request releaseowner.ReleaseSaveRequest) []build.JointDraftRef {
 		if len(request.Drafts) > 0 {
 			return request.Drafts
@@ -259,10 +256,6 @@ func (h *Host) routesBuild(rt *routes) {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
 		}
-		// A saved candidate is sealed at once: its exact bytes become an
-		// addressable artifact in the file store, which promotion to another
-		// environment reads. The save stands if sealing fails;
-		// the next save or promotion seals the same bytes again.
 		if _, err := t.SealCandidate(id, h.Now()); err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": "saved, but not sealed: " + err.Error()})
 			return

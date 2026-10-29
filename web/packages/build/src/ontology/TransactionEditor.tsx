@@ -22,8 +22,6 @@ type EditorContext = {
   pure: Api.ProvidedCapability[]; writes: { id: string; name: string; title: string; object: string; on: string; state: string }[];
 };
 
-/** One editor for action and creation transactions. Each card edits the original
- * typed step; runtime checks and legacy conversion remain in the Build owner. */
 export function TransactionEditor({ value, onChange, process, inputs = [], roles }: { value: Api.BusinessTxn; onChange: (value: Api.BusinessTxn) => void; process: Process; inputs?: Input_[]; roles: string[] }) {
   const host = useHost(), capabilities = useProvidedCapabilities("query", "pure");
   const writes = useRecordInventory<EditorContext["writes"][number]>("build.writeback");

@@ -10,8 +10,6 @@ import (
 	"platformserver/platform"
 )
 
-// JournalProvider opens one deployment-wide store. Business owners still seal
-// the original accepted result; providers do not reinterpret their decisions.
 type JournalProvider struct {
 	Module             platform.CapabilityModule
 	Durable            bool

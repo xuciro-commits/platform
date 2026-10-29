@@ -5,15 +5,12 @@ import (
 	"sync"
 )
 
-// Lane is the original non-reentrant tenant writer lock. A coordinated
-// operation owns one fixed storage view until it leaves the lane.
 type Lane struct {
 	lock  sync.Mutex
 	enter func(context.Context)
 	leave func()
 }
 
-// BindReadScope connects the tenant's original storage view during composition.
 func (l *Lane) BindReadScope(enter func(context.Context), leave func()) {
 	l.enter, l.leave = enter, leave
 }

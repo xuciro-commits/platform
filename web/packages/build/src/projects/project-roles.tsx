@@ -5,10 +5,6 @@ import { useMemo } from "react";
 import type { Access, ObjectRecord } from "../ontology/object-model";
 import type { OwnedResource } from "./project";
 
-// Roles & scope designer (F): every role the project's
-// objects name, against every object — what each reads and may do. Edits go
-// straight to the object drafts through the original build.object.edit; the
-// object's own Permissions tab stays the place for field-level access.
 const levels = ["all", "below", "unit", "own", "none"] as const;
 
 export function ProjectRoles({ owned }: { owned: OwnedResource[] }) {

@@ -9,11 +9,6 @@ import (
 	"platformserver/platform"
 )
 
-// routes registers the tenant API on a mux and records each route for the
-// OpenAPI document. handle authenticates the caller and refuses quarantined
-// or suspended tenants; metadata additionally holds the tenant lock, because
-// discovery reads the installed declarations publication replaces under it;
-// public routes need no member.
 type routes struct {
 	h   *Host
 	mux *http.ServeMux
@@ -49,8 +44,6 @@ func (rt *routes) handle(route transport.Route, f func(w http.ResponseWriter, r 
 	})
 }
 
-// Restricted HTTP surfaces resolve declared owner grants through the same
-// engine as an operation, instead of maintaining another role predicate.
 func (rt *routes) authorized(route transport.Route, app string, roles []string, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
 	rt.handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		kind := "action"
@@ -82,8 +75,6 @@ func (rt *routes) authorized(route transport.Route, app string, roles []string, 
 
 func (rt *routes) recordRead(route transport.Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
 	rt.handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		// Health remains available while recovery has stopped ordinary data
-		// reads. Its original owner reports isolation without loading rows.
 		if t.quarantined() && r.Method == http.MethodGet && r.URL.Path == "/v1/health" {
 			t.mu.Lock()
 			defer t.mu.Unlock()

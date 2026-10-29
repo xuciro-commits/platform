@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// AlertRule is the portable notification configuration, independent of its
-// editable owner record and of notifications already delivered.
 type AlertRule struct {
 	Name     string   `json:"name"`
 	Title    string   `json:"title"`
@@ -32,23 +30,17 @@ func (a AlertRule) Check() error {
 	return nil
 }
 
-// Assignment asks people to do something about a record: a task in
-// their inbox, due by a time, escalated when it is late. To lists who may take
-// it; Key keeps one open task per app and key.
 type Assignment struct {
-	Close bool // close this owner's existing task identified by Key
-	Title string
-	Body  string
-	Ref   string // the record it is about, "<type>/<id>"
-	To    []Recipient
-	Due   time.Time
-	Key   string
-	// Answers are what the person may answer (a flow's Ask); none: "done".
+	Close   bool
+	Title   string
+	Body    string
+	Ref     string
+	To      []Recipient
+	Due     time.Time
+	Key     string
 	Answers []string
 }
 
-// Assign creates a task as part of the decision r (inside its input, so
-// replay creates it again).
 func (c Caller) Assign(r *pb.ChangeRecord, a Assignment) *kernel.Error {
 	if c.rt == nil {
 		return notFound()
@@ -56,7 +48,6 @@ func (c Caller) Assign(r *pb.ChangeRecord, a Assignment) *kernel.Error {
 	return c.rt.Assign(c, r, a)
 }
 
-// WorkHost provides the original approval/task owner's actual collaborators.
 type WorkHost interface {
 	Action(string) (string, Action, bool)
 	Member(string) (Member, bool)
@@ -82,11 +73,6 @@ type Tasks interface {
 	Close(c Caller, r *pb.ChangeRecord, id string)
 }
 
-// Observer sees each accepted input's events inside the input, before any
-// delivery, and again in replay: the platform's own views derived from events
-// (the timeline) show them in the same input. events are the protocol events
-// the decision is.
-
 const (
 	WorkApp                   = "work"
 	WorkTaskType              = "work.task"
@@ -95,15 +81,11 @@ const (
 	WorkApprovalRequestSchema = "work.approval.request"
 )
 
-// ApprovalOwner creates the original owner's held approval, inside the
-// caller's staged transaction after the host's private policy trial.
 type ApprovalOwner interface {
 	App
 	RequestApproval(Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
 }
 
-// ApprovalRetirementOwner handles the original pending request through Work's
-// own ledger. The host validates the exact private migration directive first.
 type ApprovalRetirementOwner interface {
 	App
 	RetireApproval(Caller, string, string, time.Time) *kernel.Error
@@ -125,35 +107,31 @@ func (c Caller) CheckApprovalRetirement(migration, approval string) (ApprovalRet
 
 type ApprovalRequest struct {
 	Record
-	Action     string         `json:"action" field:"readonly,search" source:"record"`
-	Title      string         `json:"title" field:"readonly,search" source:"record"`
-	App        string         `json:"app" field:"readonly" source:"record"`
-	Target     string         `json:"target" field:"readonly,search" source:"record"` // "<type>/<id>"
-	Requester  string         `json:"requester" field:"readonly" source:"record"`
-	Submission string         `json:"submission" field:"readonly" type:"longtext"` // the held submission, as protojson
-	Level      int            `json:"level" field:"readonly"`                      // the level deciding now
-	Levels     []ApprovalStep `json:"levels" field:"readonly"`
-	State      string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn,redirected"`
-	Outcome    string         `json:"outcome,omitempty" field:"readonly" source:"user-input"` // refusal or the approver's note
-	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by" source:"record"`
-	// Release is the tenant's active release when the request opened; a later
-	// activation may not change the held action under it.
-	Release         string `json:"release,omitempty" field:"readonly" source:"record"`
-	RedirectAction  string `json:"redirectAction,omitempty" field:"readonly" source:"record" title:"Redirect action"`
-	RedirectRelease string `json:"redirectRelease,omitempty" field:"readonly" source:"record" title:"Redirect release"`
-	RedirectTo      string `json:"redirectTo,omitempty" field:"readonly" source:"record" title:"Redirect to"`
-	RedirectedBy    string `json:"redirectedBy,omitempty" field:"readonly" source:"record" title:"Redirected by"`
+	Action          string         `json:"action" field:"readonly,search" source:"record"`
+	Title           string         `json:"title" field:"readonly,search" source:"record"`
+	App             string         `json:"app" field:"readonly" source:"record"`
+	Target          string         `json:"target" field:"readonly,search" source:"record"`
+	Requester       string         `json:"requester" field:"readonly" source:"record"`
+	Submission      string         `json:"submission" field:"readonly" type:"longtext"`
+	Level           int            `json:"level" field:"readonly"`
+	Levels          []ApprovalStep `json:"levels" field:"readonly"`
+	State           string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn,redirected"`
+	Outcome         string         `json:"outcome,omitempty" field:"readonly" source:"user-input"`
+	RejectedBy      string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by" source:"record"`
+	Release         string         `json:"release,omitempty" field:"readonly" source:"record"`
+	RedirectAction  string         `json:"redirectAction,omitempty" field:"readonly" source:"record" title:"Redirect action"`
+	RedirectRelease string         `json:"redirectRelease,omitempty" field:"readonly" source:"record" title:"Redirect release"`
+	RedirectTo      string         `json:"redirectTo,omitempty" field:"readonly" source:"record" title:"Redirect to"`
+	RedirectedBy    string         `json:"redirectedBy,omitempty" field:"readonly" source:"record" title:"Redirected by"`
 }
 
 type ApprovalStep struct {
-	Title     string    `json:"title" source:"record"`
-	Approvers []string  `json:"approvers"`
-	All       bool      `json:"all,omitempty"`
-	Count     int       `json:"count,omitempty"`
-	Approved  []string  `json:"approved"`
-	Due       time.Time `json:"due,omitzero"`
-	// Delegates may decide for an approver away on the request's day
-	// (delegate → approver); DecidedBy says who did (approver → delegate).
+	Title     string            `json:"title" source:"record"`
+	Approvers []string          `json:"approvers"`
+	All       bool              `json:"all,omitempty"`
+	Count     int               `json:"count,omitempty"`
+	Approved  []string          `json:"approved"`
+	Due       time.Time         `json:"due,omitzero"`
 	Delegates map[string]string `json:"delegates,omitempty"`
 	DecidedBy map[string]string `json:"decidedBy,omitempty"`
 }
@@ -178,7 +156,7 @@ type WorkTask struct {
 	Assignee   string    `json:"assignee,omitempty" field:"readonly" source:"record"`
 	Due        time.Time `json:"due,omitzero" field:"readonly"`
 	State      string    `json:"state" field:"readonly" choices:"open,done,canceled"`
-	Answers    []string  `json:"answers,omitempty" field:"readonly"` // what the person may answer (a flow's Ask)
+	Answers    []string  `json:"answers,omitempty" field:"readonly"`
 	Answer     string    `json:"answer,omitempty" field:"readonly"`
 }
 
@@ -201,14 +179,13 @@ type AcceptedEventPlan struct {
 	Stopped     []string `json:"stopped,omitempty"`
 }
 
-// ScheduledTask is the saved scheduling outcome; live callbacks stay in the scheduler.
 type ScheduledTask struct {
 	Applications []AssetBinding `json:"applications,omitempty"`
 	ID           string         `json:"id" source:"record"`
-	Kind         string         `json:"kind" source:"record"` // delivery, job
-	App          string         `json:"app" source:"record"`  // the subscriber, or the job's app
+	Kind         string         `json:"kind" source:"record"`
+	App          string         `json:"app" source:"record"`
 	Title        string         `json:"title" source:"record"`
-	State        string         `json:"state" source:"record"` // queued, retrying, failed, scheduled
+	State        string         `json:"state" source:"record"`
 	Attempts     int            `json:"attempts"`
 	Last         time.Time      `json:"last,omitzero"`
 	Due          time.Time      `json:"due,omitzero"`
@@ -219,9 +196,9 @@ type ScheduledTask struct {
 type ScheduledTaskState struct {
 	ScheduledTask
 	Since    int                `json:"since,omitempty"`
-	EventApp string             `json:"eventApp,omitempty"` // the event it delivers
+	EventApp string             `json:"eventApp,omitempty"`
 	Event    json.RawMessage    `json:"event,omitempty"`
 	Hops     int                `json:"hops,omitempty"`
-	Changed  []string           `json:"changed,omitempty"` // the records its decision put
-	Plan     *AcceptedEventPlan `json:"plan,omitempty"`    // accepted-result delivery routing
+	Changed  []string           `json:"changed,omitempty"`
+	Plan     *AcceptedEventPlan `json:"plan,omitempty"`
 }

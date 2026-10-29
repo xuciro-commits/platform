@@ -9,8 +9,6 @@ type AuthoringObject = Pick<ObjectRecord, "name" | "title" | "fields"> & Partial
 >> & { plural?: string; description?: string };
 export type AuthoringAction = { schema: string; title: string; target: string; draft?: boolean };
 
-/** Saved drafts describe authoring choices only. They never install definitions
- * or claim that the member can execute the described actions. */
 export function authoringObject(record: AuthoringObject, installed?: EntityInfo): EntityInfo {
   const type = `build.${record.name}`, fields = record.fields ?? [], states = record.states ?? [];
   return {
@@ -47,8 +45,6 @@ export function useAuthoringModel() {
   const host = useHost();
   const builder = host.holds("build", "builder");
   const query = useRecordInventory<ObjectRecord & { archived?: boolean }>("build.object", 1000, builder);
-  // A disabled query can still return cached builder data. Do not expose that
-  // answer to another role, including consumers of the returned draft inventory.
   const drafts = { ...query, data: builder ? query.data : undefined, isError: builder && query.isError };
   const entities = new Map(host.entities.map(entity => [entity.type, entity]));
   const actions = new Map<string, AuthoringAction>(host.catalog.map(action => [action.schema, action]));
@@ -69,8 +65,6 @@ export function useAuthoringModel() {
   return { entities: [...entities.values()], entity: (type: string) => entities.get(type) ?? host.source.entity(type), actions: [...actions.values()], drafts };
 }
 
-/** Draft actions replace their object's installed actions for editing only.
- * All other blocks retain their original published source and version. */
 export function useAuthoringCapabilities<T extends Api.CapabilityDescriptor = Api.CapabilityDescriptor>() {
   const builder = useHost().holds("build", "builder");
   const catalog = useReadQuery<T[]>("/v1/capabilities");

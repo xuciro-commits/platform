@@ -3,7 +3,6 @@ import {Button} from "../primitives/button";
 import {t} from "../i18n";
 import {validTermCounts,type TermCount} from "../components/TermCounts";
 
-/** Balanced binary splits partition the whole rectangle by original count weights, with no minimum-area inflation. */
 export function treemapRectangles(terms:TermCount[],width=1000,height=400) {
  if(!validTermCounts(terms)||!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return;
  const ordered=terms.map((term,index)=>({...term,index,key:JSON.stringify(term.value)})).sort((a,b)=>b.count-a.count||a.index-b.index),total=ordered.reduce((sum,term)=>sum+BigInt(term.count),0n),rectangles:{value:string|null;count:number;key:string;x:number;y:number;width:number;height:number;share:string}[]=[];

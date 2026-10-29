@@ -1,9 +1,3 @@
-// The platform package contributes the applications a tenant is governed and
-// operated with (M1): Control Panel (people, access,
-// packages, settings, audit), Runs (automation and workflow runs), Data
-// Connection (connectors and webhooks), Agents, AI assistance, Knowledge, and
-// the Host Console for host administrators. One package, several entries in the
-// portal; the host still decides which roles each member holds.
 import "./i18n";
 import { defineApp, Records, useHost, type AppUI, type Host } from "@platform/app";
 import { Button, Card, PageHeader, useWorkspace, navigationLinks, type NavSection, type View, t } from "@platform/ui";
@@ -30,7 +24,6 @@ import {SystemConsole} from "./system";
 const admin = (host: Host) => host.holds("platform", "admin");
 const auditor = (host: Host) => host.holds("platform", "auditor");
 
-// --- Control Panel: who may do what, which packages run, and the audit of it all.
 function controlPanelNavigation(host: Host): NavSection[] {
   const item = (label: string, icon: React.ReactNode, view: string) => ({ label, icon, route: { view } });
   const sections: NavSection[] = [
@@ -105,7 +98,6 @@ export const controlPanel = defineApp({
   nav: controlPanelNavigation,
 });
 
-// --- Runs: what the host is doing on the tenant's behalf.
 function RunsHome() {
   const host = useHost();
   return host.role("flow") ? <Flows /> : <Automation />;
@@ -133,13 +125,10 @@ export const runs = defineApp({
   ] }],
 });
 
-// --- Data Connection: how facts enter and leave the tenant.
 export const dataConnection = defineApp({
   id: "data-connection", serves: ["platform"], category: "ontology", title: t("Data Connection"), icon: <Database />,
   description: t("Connectors that bring facts in, webhooks that carry events out, and their health."),
   for: (host) => admin(host) || host.holds("build", "builder", "integrator"),
-  // The entry the current member may actually use: connectors for governance,
-  // the authorized observations of what enters and leaves for everyone else.
   home: (host) => admin(host) ? { view: "integrations" } : { view: "observations" },
   views: [
     { id: "integrations", title: () => t("Connectors"), render: () => <Integrations /> },
@@ -159,7 +148,6 @@ export const dataConnection = defineApp({
   ].filter(section => section.items.length > 0),
 });
 
-// --- Agents: AI agents, their runs and evaluations.
 export const agents = defineApp({
   id: "agents", serves: ["agent"], category: "build", title: t("Agents"), icon: <BrainCircuit />,
   description: t("AI agents, what they are allowed to do, their runs and evaluations."),
@@ -180,7 +168,6 @@ export const agents = defineApp({
   ] }],
 });
 
-// --- AI assistance: try models and functions; see usage.
 export const ai = defineApp({
   id: "ai", serves: ["ai"], surface: "work", category: "build", title: t("AI assistance"), icon: <MessageSquare />,
   description: t("Try models and functions, and see usage."),
@@ -199,7 +186,6 @@ export const ai = defineApp({
   ] }],
 });
 
-// --- Knowledge: content is business data, not a definition or a governance setting.
 export const knowledge = defineApp({
   id: "knowledge", serves: ["knowledge"], surface: "work", category: "ontology", title: t("Knowledge"), icon: <BookOpen />,
   description: t("Documents and the glossary of your organisation."),
@@ -215,8 +201,6 @@ export const knowledge = defineApp({
   ] }],
 });
 
-// --- Host Console: the host administrator's view over every tenant. The
-// workspace shows it only when `/v1/host/me` answers for this subject.
 export const hostConsole = defineApp({
   id: "host-console", serves: [], category: "govern", title: t("Host Console"), icon: <Server />,
   description: t("Every tenant on this host: health, lifecycle, support sessions, promotions and migrations."),

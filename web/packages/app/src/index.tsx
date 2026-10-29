@@ -21,10 +21,6 @@ export type {CollaborationTarget,CollaborationHost} from "./collaboration/servic
 export {confirmedDecision} from "./collaboration/decision";
 export {createWorkViews,type WorkViewsHost} from "./work/service";
 export {searchInputObjects} from "./widgets/search-input";
-// The app API of the workspace, the browser's counterpart of
-// platformserver/platform: an app's UI declares itself with defineApp and
-// reaches the host only through useHost, as a server-side app reaches it only
-// through its Caller. The workspace signs in once, for every app.
 import "./i18n";
 import {apiErrorMessage, OfflineReadError, type ActionDeclaration, type Api, type EdgeClient, type Entry} from "@platform/kernel";
 import {
@@ -50,29 +46,19 @@ export { ModelPicker, ModelOptionsEditor, modelOptionLabel, type ModelPurpose } 
 export { DependencyGraph } from "./semantic/DependencyGraph";
 export { useDependencies, useProvidedCapabilities, type DependencyDescriptor, type DependencyRead, type ProvidedCapability } from "./semantic/dependencies";
 
-/** An app the member may open: the tenant runs it and they hold a role in it. */
 export type AppEntry = Api.AppEntry;
 export type AssetRef = Api.AssetRef;
 export type Definition = Omit<Api.Definition,"page">&{page?:PageUI.Page};
-/** The signed-in member on this host, with their language. */
 export type Me = Api.MeView;
-/** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
 export type Decision = {
   evidence?: string[]; expectedRevision?: number; quiet?: boolean;
-  /** Definition opened by the form, retained across reconnects. */
   schemaVersion?: Api.SchemaVersion;
-  /** Repeat this exact saved intent, retaining its original idempotency key and answer. */
   originalKey?: string;
-  /** A changed intent names the refused request whose inputs it corrects. */
   correctionOf?: string;
-  /** Told why the host refused, for a screen that keeps the reason in front of
-   *  the person instead of letting a notice pass by. */
   onRefused?: (reason: string) => void;
-  /** This request's outbox state, including an unknown answer awaiting a same-key retry. */
   onOutcome?: (entry: Entry) => void;
 };
 
-/** Read-only navigation metadata from this member's loaded code UI contributions. */
 export type ApplicationUIInfo = {
   id: string;
   title: string;
@@ -83,36 +69,24 @@ export type ApplicationUIInfo = {
   opens: Record<string, string>;
 };
 
-/** What an app's UI may use of the host, for the signed-in member. */
 export {memberRoles} from "./semantic/member-roles";
 
 export type Host = {
   client: EdgeClient;
   me: Me;
-  /** The member's role in an app, or undefined. */
   role: (app: string) => string | undefined;
-  /** Tests membership across the primary role and every current grant. */
   holds: (app: string, ...roles: string[]) => boolean;
-  /** Whether the member's catalog offers the action: render from it, never re-check roles. */
   can: (schema: string) => boolean;
   action: (schema: string) => ActionDeclaration | undefined;
-  /** Every action the member's catalog offers. */
   catalog: ActionDeclaration[];
-  /** Submits one decision through the outbox and tells the member the answer; true when confirmed. */
   decide: (schema: string, target: { type: string; id: string }, payload: unknown, options?: Decision) => Promise<boolean>;
-  /** Decisions not yet answered by the host (K5). */
   outbox: Entry[];
-  /** Sends what waits in the outbox again. */
   resend: () => Promise<void>;
   entities: EntityInfo[];
-  /** The installed assets the member may discover, for navigation built from
-   *  pages — a code page or one composed in this tenant. */
   definitions: Definition[];
   applications?: ApplicationUIInfo[];
   source: RecordSource;
-  /** Refresh original reads without submitting business actions or replacing drafts. */
   refresh?:()=>Promise<void>;
-  /** Entity type → the view that shows one record of it, from every app's `opens`. */
   opens: Map<string, string>;
 };
 
@@ -124,17 +98,11 @@ export function useHost(): Host {
   return useMemo(()=>({...host,decide:async(schema,target,payload,options)=>{if(inputs?.invalid&&!options?.originalKey){const message=t("Correct the input drafts before submitting.");options?.onRefused?.(message);if(!options?.onRefused)notify.error(message);return false;}inputs?.reject();inputs?.pending(1);try{return await host.decide(schema,target,payload,inputs&&!options?.onRefused?{...options,onRefused:inputs.reject}:options);}finally{inputs?.pending(-1);}}}),[host,inputs?.invalid,inputs?.pending]);
 }
 
-/** A read of the host (`/v1/...`) for the signed-in member, refreshed while shown. */
 export function useReadQuery<T>(path: string, refetchInterval?: number, enabled = true): UseQueryResult<T> {
   const { client, source } = useHost();
   const visible = useViewVisible();
   const diagnostic = path === "/v1/health" || path === "/v1/connectors";
   const hostScope = path.startsWith("/v1/host/");
-  // The key carries the member's metadata scope (roles, entities, definitions):
-  // when that moves — a release activated, a role granted — the read is asked
-  // again under the new key. The previous answer stays on screen meanwhile;
-  // otherwise every workbench over such a read (the enterprise canvas, a
-  // dialog over it) unmounts for a moment and loses its local state.
   const key = [client.connection.token, client.connection.tenant, path, source.scope];
   const query = useQuery({ queryKey: key, queryFn: () => client.get<T>(path, diagnostic), refetchInterval: diagnostic && visible ? refetchInterval : false, enabled: enabled && visible, placeholderData: (previous, query) => readPlaceholder(key, previous, query?.queryKey), ...(hostScope ? { retry: false } : {}) });
   const refetch = useRef(query.refetch); refetch.current = query.refetch;
@@ -144,14 +112,10 @@ export function useReadQuery<T>(path: string, refetchInterval?: number, enabled 
 
 export function useRead<T>(path: string, refetchInterval?: number): T | undefined {
   const query=useReadQuery<T>(path, refetchInterval);
-  // Optional reads may render an empty state. Missing prepared context may
-  // not: the original view boundary reports why this task needs a connection.
   if(query.error instanceof OfflineReadError)throw new OfflineReadError(t(query.error.message));
   return query.data;
 }
 
-/** A bounded complete inventory, rather than a single record-list page. The
- * caller receives an error if the advertised inventory cannot be read whole. */
 export function useRecordInventory<T>(type: string, limit = 1000, enabled = true): UseQueryResult<{ records: T[] }> {
   const { client, source } = useHost();
   const path = `/v1/records/${encodeURIComponent(type)}`;
@@ -163,20 +127,16 @@ export function useRecordInventory<T>(type: string, limit = 1000, enabled = true
   return { ...query, data: query.isError ? undefined : query.data } as UseQueryResult<{ records: T[] }>;
 }
 
-/** The member's installed semantic assets, through the host's one registry. */
 export function useDefinitions(): UseQueryResult<Definition[]> {
   const result=useReadQuery<Api.Definition[]>("/v1/definitions");
   const data=useMemo(()=>result.data&&decodeDefinitions(result.data),[result.data]);
   return {...result,data} as UseQueryResult<Definition[]>;
 }
 
-/** Block metadata is derived by the owners from this member's definitions. */
 export function useCapabilities(): UseQueryResult<Api.CapabilityDescriptor[]> {
   return useReadQuery<Api.CapabilityDescriptor[]>("/v1/capabilities");
 }
 
-/** Page, editor and tool callers use the same owner route. Keep the request key
- * when retrying a submission whose response was lost. */
 export function useInvokeCapability(automatic = false): (request: Api.CapabilityInvocation) => Promise<Api.CapabilityResult> {
   const {client}=useHost(),inputs=useInputDrafts(),pending=useRef<Api.CapabilityInvocation|undefined>(undefined);
   return async request => {
@@ -190,8 +150,6 @@ export function useInvokeCapability(automatic = false): (request: Api.Capability
       if(answer.body.state!=="completed"&&!answer.body.call&&!answer.body.result)throw new Error(t("The capability result is still awaiting confirmation. Retry the original request."));
       pending.current=undefined;return answer.body;
     };
-    // Page computations already own concurrent invocation identities in their
-    // original resource ledger; interactive callers retain one pending request.
     if(automatic)return send(request);
     if(inputs?.invalid)throw new Error(t("Correct the input drafts before submitting."),{cause:"rejected"});
     if(pending.current&&JSON.stringify({...pending.current,key:undefined})!==JSON.stringify({...request,key:undefined}))throw new Error(t("Retry the original request before changing its inputs."));
@@ -207,7 +165,6 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
   return definitions.find((d) => assetKey(d.ref) === key);
 }
 
-/** Display metadata comes from the original typed declaration, never its record name. */
 export function definitionPresentation(definition: Definition): { title: string; description?: string } {
   const body = definition.entity ?? definition.action ?? definition.page ?? definition.application ?? definition.query ?? definition.flow
     ?? definition.function ?? definition.operation ?? definition.agent ?? definition.propertyType ?? definition.linkType ?? definition.interface
@@ -216,11 +173,6 @@ export function definitionPresentation(definition: Definition): { title: string;
     description: body && "description" in body && typeof body.description === "string" ? body.description : undefined };
 }
 
-/**
- * Opens a record by reference — `"core.partner/P-1"` or `{ type, id }` —
- * in a read-only detail sheet. Work requests and runtime tasks open their
- * owning view for handling; explicit inspect/tab/beside/popout requests remain available.
- */
 export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "beside" | "popout" | "inspect" }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
@@ -237,50 +189,29 @@ export function useOpenRecord(): (ref: string | { type: string; id: string }, op
   };
 }
 
-/** A dashboard an app ships: charts in the platform's visualization spec, for the members `for` admits. */
 export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };
 
-/** A task surface is presentation context; it never grants owner permissions. */
 export type WorkspaceSurface = "work" | "studio" | "tenant" | "developer";
 
-/**
- * Where an application sits in the Applications portal. A
- * category is display grouping only; it never grants owner permissions.
- * `business` is every application a tenant hands to its people; the others
- * are the platform's own tools.
- */
 export type PlatformAppCategory = "business" | "ontology" | "build" | "operate" | "govern" | "developer";
 
-/** The portal category an app lands in when it declares none: by its surface, for the packages that still declare one. */
 export const categoryOf = (app: Pick<AppUI, "category" | "surface">): PlatformAppCategory =>
   app.category ?? ({ studio: "build", tenant: "govern", developer: "developer" } as Record<string, PlatformAppCategory>)[app.surface ?? "work"] ?? "business";
 
-/** An app's contribution to the workspace, in typed code (AGENTS.md rule 5). */
 export type AppUI = {
-  /** Stable UI contribution identity; existing native app ids are retained. */
   id: string;
   surface?: WorkspaceSurface;
-  /** Portal category; defaults from `surface`, then `business`. */
   category?: PlatformAppCategory;
-  /** One line under the title in the portal and on Home. */
   description?: string;
-  /** Explicit owner bindings, independent of the contribution's display name. */
   serves?: string[];
-  /** Navigation projection only; every read/action still checks its owner. */
   for?: (host: Host) => boolean;
   title: string;
   icon: ReactNode;
-  /** View ids are unique across the workspace. */
   views: View[];
   nav: (host: Host, route?: Route) => NavSection[];
-  /** An application's contextual resource tree, inside the original shell navigation. */
   navigation?: (route?: Route) => ReactNode;
-  /** Original editor context around a shared asset reference view. */
   referenceContext?: (route: Route, children: ReactNode) => ReactNode;
-  /** The entry the current member may actually use, from the same projection
-   * as `for` and `nav` — never a landing the host would refuse. */
   home: Route | ((host: Host) => Route);
-  /** Entity type → the id of the view that shows one record, given `{ id }`. */
   opens?: Record<string, string>;
   commands?: (host: Host) => ShellCommand[];
   dashboards?: Dashboard[];
@@ -297,9 +228,6 @@ function AppInputBody({children}:{children:ReactNode}) {
 }
 export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(view=>({...view,render:params=><AppInputView scope={`${app.id}/${view.id}/${params.id??""}/${params.page??""}`}>{view.render(params)}</AppInputView>}))});
 
-// Generated pages, for any app's entity types.
-
-/** A form generated from an entity's declaration; submits only editable fields. */
 export function GeneratedForm({ type, record, initial, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema, onTrial, context }: {
   initial?: Record<string, unknown>;
   onTrial?: (values:Record<string,unknown>)=>Promise<Api.Simulation>; context?:ReactNode;
@@ -307,7 +235,6 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   onValuesChange?: (values: Record<string, unknown>) => void;
   submitDisabled?: boolean;
   actionSchema?: string;
-  /** Presentation subset, in this order: a composed page's form asks for these. */
   fields?: string[];
 }) {
   const { source, catalog,me } = useHost();
@@ -321,8 +248,6 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   const action = catalog.find((action) => action.schema === (actionSchema??`${type}.${record ? "edit" : "create"}`));
   if (!info || !action) return null;
   const inputs = new Set(action.payload.map((field) => field.name));
-  // `aside` delegates a field to a specialized editor; it does not make the
-  // original writable declaration unavailable in a general action form.
   const writable = info.fields.filter(f=>!f.readOnly&&(inputs.has(f.name)||f.aside)&&(!fields||fields.includes(f.name))).map(f=>{
     const input=action.payload.find(i=>i.name===f.name);
     return {...f,required:input?.required??false,constraints:input?.constraints??f.constraints,range:input?.range??f.range,group:input?.group??f.group,choices:input?.choices??f.choices,ref:input?.ref??f.ref,stereotype:input?.stereotype??f.stereotype,stereotypes:input?.stereotypes??f.stereotypes};
@@ -336,25 +261,12 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
     onSubmit={values => onSubmit(editableValues(values))} />;
 }
 
-/** A member's saved view of a list (the work app's `views` read). */
 export type SavedView = Api.SavedView;
 
-/**
- * The list page of an entity type: the host's search, sort and pages, within
- * the member's scope, grouped, pivoted or charted; a member saves
- * where they are as a view of their own.
- */
-/**
- * A type's generated list. It offers every action that makes a new record of
- * the type (F-33); an app that offers one itself names it in `covers`.
- */
 export function Records({ type, description, help, actions, covers, saved, kanban }: { type: string; description?: string; help?:ReactNode; actions?: ReactNode; covers?: string[]; saved?: SavedView; kanban?: Parameters<typeof RecordList>[0]["kanban"] }) {
   const { source, decide, can, catalog } = useHost();
   const openRecord = useOpenRecord();
   const info = source.entity(type);
-  // Cell editing on the generic list: staged in the grid, each row submitted
-  // through the type's original edit action at its opened revision. Fields the
-  // entity marks read-only, plus lines and attachments, never stage.
   const edit = defaultTableEdit(info, catalog, catalog.map(action => action.schema));
   const cellFields = tableEditableFields(info, edit, (info?.fields ?? []).map(field => field.name));
   const inlineEdit = edit ? {
@@ -397,7 +309,6 @@ export function Records({ type, description, help, actions, covers, saved, kanba
   );
 }
 
-/** An app's dashboard: its charts, each over the host's aggregates within the member's scope. */
 export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
@@ -412,7 +323,6 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
   );
 }
 
-/** A record page with its lifecycle's transitions and the generated edit and archive where the catalog grants them. */
 export function RecordDetail({ type, id, fields, allowed, advice }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] } }) {
   const { source, can, decide, client, me, catalog, resend,refresh } = useHost();
   const openRecord = useOpenRecord();
@@ -420,8 +330,6 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const [editing, setEditing] = useState<EntityRecord>();
   const archive = useRecordArchive(type);
   const transition = useTransition(type);
-  // Files: upload the bytes, then attach them to this record by a decision.
-  // Comments and following.
   const original=useRef({type,id,scope:source.scope});original.current={type,id,scope:source.scope};
   const mounted=useRef(true);useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const scope=source.scope,active=()=>mounted.current&&original.current.type===type&&original.current.id===id&&original.current.scope===scope;
@@ -488,7 +396,6 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   );
 }
 
-// Typed field/action bindings come from the owning app; the host remains the read authority.
 function RecordAdvice({ type, record, action, fields }: { type: string; record: EntityRecord; action: string; fields: string[] }) {
   const { source, can } = useHost();
   const info = source.entity(type);

@@ -26,8 +26,6 @@ const evaluationRuns = 20
 const outcomeLimit = 4000
 const suiteRuns = 3
 
-// decision is a run's outcome as the evaluation compares it: the actions it
-// took or drafted, else its result.
 func decision(d *platform.CompiledAgent, steps []platform.RunStep, result string, value func(i int) string) (actions []string, bad []string, out string) {
 	for i, s := range steps {
 		tool, ok := d.Toolset[s.Tool]
@@ -59,7 +57,6 @@ func decision(d *platform.CompiledAgent, steps []platform.RunStep, result string
 	return actions, bad, out
 }
 
-// normal is JSON with sorted keys, or the trimmed text.
 func normal(s string) string {
 	s = strings.TrimSpace(s)
 	if i, j := strings.Index(s, "{"), strings.LastIndex(s, "}"); i >= 0 && j > i {
@@ -72,16 +69,11 @@ func normal(s string) string {
 	return s
 }
 
-// evalBudget is what a whole evaluation of planned runs may spend: the
-// definition's budget once per run, so a suite cannot run past what its runs
-// were each allowed.
 func evalBudget(b platform.Budget, planned int) platform.Budget {
 	b.Steps, b.Tokens, b.Cost = b.Steps*planned, b.Tokens*planned, b.Cost*float64(planned)
 	return b
 }
 
-// budgetLeft is what remains of ceiling after spent. A zero cost ceiling means
-// no cost cap, as it does for a run.
 func budgetLeft(ceiling, spent platform.Budget) platform.Budget {
 	left := platform.Budget{Steps: ceiling.Steps - spent.Steps, Tokens: ceiling.Tokens - spent.Tokens}
 	if ceiling.Cost > 0 {
@@ -90,7 +82,6 @@ func budgetLeft(ceiling, spent platform.Budget) platform.Budget {
 	return left
 }
 
-// minBudget is the tighter of two budgets: a run may spend what both allow.
 func minBudget(a, b platform.Budget) platform.Budget {
 	out := platform.Budget{Steps: min(a.Steps, b.Steps), Tokens: min(a.Tokens, b.Tokens)}
 	if a.Cost > 0 && b.Cost > 0 {
@@ -101,8 +92,6 @@ func minBudget(a, b platform.Budget) platform.Budget {
 
 func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platform.Evaluation, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
 	a.context = ctx
-	// An append error is not a new evaluation attempt. Retry the exact item
-	// before any further model call, even if another queued ID now sorts first.
 	a.mu.Lock()
 	pending := a.pendingEvaluation
 	a.mu.Unlock()
@@ -165,8 +154,6 @@ func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platfo
 		}
 	}
 	who, _ := h.Member(ev.Created.By)
-	// Select historical inputs once. Later runs and new human signals cannot
-	// silently change the remaining comparison after a restart.
 	initialize := ev.DefinitionDigest == "" || ev.ModelConfig == ""
 	if !ev.Suite && ev.Inputs == nil {
 		domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
@@ -223,8 +210,6 @@ func (a *AgentEvaluator) Evaluate(ctx platform.AgentEvaluationRuntime, ev platfo
 	return ev
 }
 
-// Rebuild the small report from its accepted items, including spend from an
-// unfinished suite case. A resumed evaluation uses the same total budget.
 func evaluationScore(ev *platform.Evaluation) {
 	ev.Agrees, ev.Differs, ev.Repeats, ev.Avoids, ev.Asks, ev.Fails = 0, 0, 0, 0, 0, 0
 	ev.Tokens, ev.Cost, ev.Score = 0, 0, 0
@@ -260,7 +245,6 @@ func evaluationScore(ev *platform.Evaluation) {
 	}
 }
 
-// rerun runs one past run's goal dry with the candidate and judges it.
 func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) platform.EvalCase {
 	last := run.Signals[len(run.Signals)-1]
 	x := platform.EvalCase{Run: run.ID, Signal: last.Kind}
@@ -316,9 +300,6 @@ func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run
 	return x
 }
 
-// suite runs each of the agent's declared cases three times, dry, and counts
-// the runs that pass: a case passes when every run does, varies
-// when some do, and fails when none does. The score is the runs that pass.
 func (a *AgentEvaluator) suite(ev platform.Evaluation, d *platform.CompiledAgent, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
 	ceiling, spent := evalBudget(d.Budget, len(d.Cases)*suiteRuns), platform.Budget{}
 	for _, x := range ev.Cases {
@@ -382,9 +363,6 @@ func (a *AgentEvaluator) suite(ev platform.Evaluation, d *platform.CompiledAgent
 	return ev
 }
 
-// dryRun runs a goal with the candidate, dry: reads the run made answer as
-// then, other reads read now, actions are probed and never taken. failed says
-// why the model could not go on; an asked run's question is its Result.
 func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, room platform.Budget) (platform.AgentRunRecord, string) {
 	h := a.context.Host
 	dry := platform.AgentRunRecord{Protocol: map[int]json.RawMessage{}, Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []platform.RunStep{}}
@@ -404,9 +382,6 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, ru
 			return dry, problem.Error()
 		}
 		req.Binding = &binding
-		// A completed, metered trial without an accepted checkpoint may be
-		// retried as another attempt. A lost, unmetered attempt retains the same
-		// identity and remains blocked by its original reservation after restart.
 		attempt := 0
 		for _, usage := range h.AgentUsage() {
 			if usage.Run == req.Run {
@@ -474,8 +449,6 @@ func (a *AgentEvaluator) dryRun(evaluation string, d *platform.CompiledAgent, ru
 	return dry, ""
 }
 
-// dryUse answers a tool the candidate called: a read the run made gets the
-// answer it got then; another read reads now; an action is probed, not taken.
 func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, now time.Time) string {
 	strip := func(s string) string {
 		var m map[string]json.RawMessage
@@ -491,13 +464,13 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 			}
 		}
 	}
-	if tool.Kind == "knowledge" { // a new question: searched now, outside the lock
+	if tool.Kind == "knowledge" {
 		return string(a.context.ObserveKnowledge(dry, raw, now))
 	}
 	h := a.context.Host
 	endRead := h.BeginAgentRead()
 	defer endRead()
-	c := a.context.Automation(platform.AgentApp, true) // replaying: no decision is made
+	c := a.context.Automation(platform.AgentApp, true)
 	if tool.Kind == "read" || tool.Kind == "query" || tool.Kind == "context" || tool.Kind == "search" {
 		out, _ := a.context.Use(c, d, &dry, tool, args, raw, &platform.RunStep{}, now)
 		return out
@@ -527,7 +500,7 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 				_, err := platform.Decide(probe, app, s, now)
 				return err
 			})
-			if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED { // the records may have moved on since; what it may do has not
+			if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
 				return "refused: " + who.ID + " may not (" + err.Error() + ")"
 			}
 		}

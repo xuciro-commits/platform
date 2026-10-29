@@ -17,15 +17,8 @@ import (
 	"platformserver/studio/build"
 )
 
-// The OData and table profiles and connection checks. Both run on
-// the outside loop like fetches: no lock held while a system is reached, and
-// every outcome enters the journal as an ordinary input.
+const odataPages = 20
 
-const odataPages = 20 // pages walked per pull; the row cap bounds the rest
-
-// readOData walks an entity set: $filter past the cursor, ordered by the
-// incremental property, following nextLink in v4 (@odata.nextLink, value) and
-// v2 (d.__next, d.results) shapes.
 func (t *Tenant) readOData(s build.Source, c build.Connection) ([]map[string]any, error) {
 	q := url.Values{}
 	q.Set("$format", "json")
@@ -59,7 +52,7 @@ func (t *Tenant) readOData(s build.Source, c build.Connection) ([]map[string]any
 		if err := json.Unmarshal(body, &answer); err != nil {
 			return nil, fmt.Errorf("the service did not answer JSON")
 		}
-		if len(answer.D) > 0 { // OData v2
+		if len(answer.D) > 0 {
 			var d struct {
 				Results []map[string]any `json:"results"`
 				Next    string           `json:"__next"`
@@ -94,7 +87,6 @@ func (t *Tenant) readOData(s build.Source, c build.Connection) ([]map[string]any
 	return rows, nil
 }
 
-// odataLiteral quotes a cursor unless it is a number or an ISO date-time.
 func odataLiteral(v string) string {
 	if _, err := time.Parse(time.RFC3339, v); err == nil {
 		return v
@@ -105,7 +97,6 @@ func odataLiteral(v string) string {
 	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
 }
 
-// readTable selects a database table past the cursor, read-only, bounded.
 func (t *Tenant) latestTableCursor(s build.Source, c build.Connection) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -210,7 +201,6 @@ func (t *Tenant) readTable(s build.Source, c build.Connection, columns ...string
 	return out, nil
 }
 
-// plain preserves database timestamps and full-width integer row identities.
 func plain(v any) any {
 	switch x := v.(type) {
 	case time.Time:
@@ -256,8 +246,6 @@ func (t *Tenant) openPostgres(ctx context.Context, c build.Connection) (*pgx.Con
 	return conn, nil
 }
 
-// CheckConnections reaches every connection whose check was asked for, once,
-// and keeps the outcome on it. It runs beside PullSources.
 func (t *Tenant) CheckConnections(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return

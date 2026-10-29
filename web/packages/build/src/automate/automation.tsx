@@ -2,11 +2,6 @@ import { sourceFieldInput } from "@platform/app";
 import { ContextHelp, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
-// Automations: a rule reads as one sentence - when a record of
-// an object type reaches a state, [if a condition holds,] run these effects.
-// An automation is a build.process authored as `kind: "automation"`: the host
-// holds it to that linear shape (checkAutomation), the Automate app shows it as
-// cards and compiles the cards to steps. Anything richer is a flow on the map.
 import { useHost, useReadQuery } from "@platform/app";
 import { ActionMenu, Button, Input, PageHeader, ProblemList, Select, Tag, Workbench, cn, t, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, Brain, Clock, MoreHorizontal, Plus, Trash2, Workflow, Zap } from "lucide-react";
@@ -33,7 +28,6 @@ const effectKinds = (steps: WorkflowStep[]) => {
 const sentence = (titleOf: (type: string) => string, stateOf: (type: string, name: string) => string, row: WorkflowDraft) =>
   row.every ? periodLabel(row.every) : t("a {object} reaches {state}", { object: titleOf(row.object), state: stateOf(row.object, row.when) });
 
-/** Automations as cards: trigger on the left, effects on the right, state as a tag. */
 export function Automations() {
   const { entities , holds} = useHost(), { open } = useApplicationWorkspace();
   const query = useReadQuery<{ records?: Row[] }>("/v1/records/build.process?limit=200");
@@ -71,7 +65,6 @@ export function Automations() {
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", kind: "automation", object: "", when: "", manual: false, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
 type Chosen = "trigger" | "condition" | string;
 
-/** One automation as a sentence of cards: trigger → condition → effects, each effect's parameters in the inspector. */
 export function AutomationEditor({ id }: { id: string }) {
   const { holds} = useHost(), { open } = useApplicationWorkspace();
   const model = useAuthoringModel();

@@ -6,8 +6,6 @@ import (
 	"platformserver/platform"
 )
 
-// ReplaceStateRecordValue preserves the opaque record envelope and checks the
-// exact predecessor sealed by its owner. It never changes or invents history.
 func ReplaceStateRecordValue(image json.RawMessage, replacement StateReplacement) (json.RawMessage, error) {
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(image, &envelope); err != nil {

@@ -1531,8 +1531,6 @@ func (p Page) NavigationTargets() []AssetRef {
 	return refs
 }
 
-// These widgets show the record their original producer holds, so the page
-// object they declare must be that producer's exact object identity.
 var recordProducerWidgets = []string{"record-card", "breadcrumb", "graph-explorer", "vertex-graph", "record-comments", "record-uploader", "media-preview", "pdf-viewer", "image-annotation", "scene-3d"}
 
 func (p Page) CheckRecordPorts() error {

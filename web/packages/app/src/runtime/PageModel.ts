@@ -11,8 +11,6 @@ import {recordResourceSlot,selectionSlot} from './resources';
 import type {VariableResult} from './variables';
 
 type State={identity:string;data?:Api.PageModelResult;error?:string};
-/** This adapter calls original host reads and materializes widget ports. It
- * never evaluates a business predicate or treats a supplied record as fact. */
 export function usePageModel(bound:WidgetBindingContext,source:RecordSource|undefined){
  const {client,definitions}=useHost(),model=bound.section.model,session=bound.session;
  const [view,setView]=useState<{base:string;query:RecordQuery}>({base:'',query:{}}),[round,refresh]=useState(0),[state,setState]=useState<State>();
@@ -43,8 +41,6 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
    if(!valid())return;
    const paths=(model.fields??[]).filter(f=>(f.path?.length??0)>1&&data.fields.some(visible=>visible.name===modelFieldKey(f)));
    if(paths.length&&!data.hidden){
-    // Share related reads only within this window and identity. Independent
-    // field paths can resolve together; every hop still uses the original source.
     const reads=new Map<string,ReturnType<RecordSource['get']>>(),related={entity:source!.entity,get:(type:string,id:string)=>{const key=JSON.stringify([type,id]);let read=reads.get(key);if(!read){read=source!.get(type,id);reads.set(key,read);}return read;}};
     data={...data,records:await Promise.all(data.records.map(async raw=>{const record={...raw} as EntityRecord,values=await Promise.all(paths.map(field=>readModelPath(related,model.type,record,field.path!,valid)));for(const [i,field]of paths.entries())record[modelFieldKey(field)]=values[i];return record;}))};
    }
@@ -61,8 +57,6 @@ export function usePageModel(bound:WidgetBindingContext,source:RecordSource|unde
  let recordSource=source,section=bound.section;
  if(model&&source){
   section=materializeModelSection(section,source.entity);
-  // Interface plans keep their original source and permission scope, even
-  // when their window search changes. Only active object-model reads adapt it.
   if(active){
    if(data?.labelField){if(section.widget==='record-picker')section={...section,recordPicker:{...section.recordPicker!,labelField:data.labelField}};if(section.widget==='record-list')section={...section,cardLabel:data.labelField};if(section.widget==='record-card')section={...section,recordCard:{...section.recordCard!,labelField:data.labelField}};}
    const info=modelEntity(source.entity(model.type),model,source.entity),fields=[...info?.fields??[]];for(const field of data?.fields??[]){const i=fields.findIndex(f=>f.name===field.name);if(i<0)fields.push(field);else fields[i]=field;}

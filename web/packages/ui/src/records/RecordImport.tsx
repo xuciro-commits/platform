@@ -1,6 +1,3 @@
-// One import flow for every list: a CSV is checked against the type first,
-// then each clean row is applied as the member. Refused rows stay listed;
-// the mount point owns permission and refresh.
 import { useState } from "react";
 import { Button } from "../primitives/button";
 import { Dialog } from "../primitives/dialog";
@@ -10,7 +7,6 @@ import { t } from "../i18n";
 import type { Api } from "@platform/kernel";
 import type { RecordSource } from "./Records";
 
-/** Import a type's records from CSV after a preview of what each row would do. */
 export function RecordImportDialog({ source, type, open, onOpenChange, onImported }: {
   source: RecordSource; type: string; open: boolean; onOpenChange: (open: boolean) => void;
   onImported?: (applied: number, refused: number) => void;

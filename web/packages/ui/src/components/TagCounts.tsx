@@ -2,7 +2,6 @@ import {Button} from "../primitives/button";
 import {t} from "../i18n";
 import {validTermCounts,type TermCount} from "./TermCounts";
 
-/** Complete original scalar counts as fixed-size tags with caller-owned optional filter writes. */
 export function TagCounts({terms,label,selected=[],enabled=true,onSelect}:{terms:TermCount[];label:string;selected?:readonly string[];enabled?:boolean;onSelect?:(value?:string)=>void}) {
  if(!validTermCounts(terms))return <p role="alert">{t("Term counts are invalid or exceed their budget.")}</p>;
  if(!terms.length)return <p role="status">{t("No terms in the matching records.")}</p>;

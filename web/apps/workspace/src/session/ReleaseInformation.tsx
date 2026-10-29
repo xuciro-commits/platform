@@ -2,7 +2,6 @@ import type { Api } from "@platform/kernel";
 import { Button, Dialog, t } from "@platform/ui";
 import type { UseQueryResult } from "@tanstack/react-query";
 
-/** Public activation identity; candidate descriptors remain builder-only. */
 export function ReleaseInformation({ query, open, onOpenChange }: { query: UseQueryResult<Api.ReleaseActive>; open: boolean; onOpenChange: (open: boolean) => void }) {
   return <Dialog open={open} onOpenChange={onOpenChange} title={t("Last activated release")}>
     <div className="grid gap-3 text-sm">

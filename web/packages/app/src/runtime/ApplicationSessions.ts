@@ -4,8 +4,6 @@ import type { RecordSource } from "@platform/ui";
 import { PageSessionStore, type RecordReference } from "./Session";
 export type ApplicationReads = {source:RecordSource;queries:Record<string,Api.PageQuery>};
 
-/** Ephemeral application-instance state, owned by one workspace. Values never
- * appear in routes, persisted layout or the module's global scope. */
 export class ApplicationSession {
   readonly readScope = crypto.randomUUID();
   private state: Record<string, ScalarValue> = {};
@@ -40,8 +38,6 @@ export class ApplicationSession {
     if(reference)this.recordOwners.set(id,owner);else this.recordOwners.delete(id);
     this.reads.selectReference(id,reference);
   }
-  /** Reserve the user's latest choice while its producer confirms window membership.
-   * Another producer, a clear or teardown invalidates this completion. */
   beginSelection(id:string,owner:symbol):((reference:RecordReference|undefined)=>void)|undefined {
     const variable=this.variables[id];
     if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="record"||variable.source?.kind!=="record"||!this.reads)return;

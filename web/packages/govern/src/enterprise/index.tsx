@@ -1,5 +1,3 @@
-// The directory edits only organisational facts. Earlier enterprise models,
-// standard properties and drawings remain readable history.
 import { useState } from "react";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, DataTable, Dialog, Disclosure, Form, Input, Notice, PageHeader, Panel, PropertyList, Select, Tag, t, type ColumnDef } from "@platform/ui";

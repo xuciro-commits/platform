@@ -14,7 +14,6 @@ import { applies, checkbox, date, datetime, longText, markdown, number, singleSe
 import { t } from "../i18n";
 import { useUnsavedChanges } from "../shell/Workspace";
 
-/** A field of an ad hoc form; `kind` picks a platform field type for its editor. */
 export type Field<T> = {
   name: Path<T>;
   label: string;
@@ -54,12 +53,10 @@ type Props<S extends z.ZodType<FieldValues, FieldValues>> = {
   onCancel?: () => void;
 };
 
-/** A form whose editors come from field types; the schema validates the whole record. */
 export function EntityForm<S extends z.ZodType<FieldValues, FieldValues>>({ schema, fields, ...rest }: Props<S>) {
   return <InputDraftProvider isolated scope="entity-form"><FieldForm schema={schema} fields={fields.map((f) => ({ name: f.name as string, type: typeOf(f) }))} {...rest} /></InputDraftProvider>;
 }
 
-/** A form for an entity's editable fields, validated by their field types. */
 export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, onTrial, context, sourceFields, fieldInput }: {
   fieldInput?: (field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode;
   issues?:Api.FieldIssue[]; onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>; context?: React.ReactNode; sourceFields?:Api.FieldInfo[]; entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
@@ -70,7 +67,6 @@ export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLab
   submitLabel?: string; onCancel?: () => void;
 }) {
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
-  // A conditional field (#138) that does not apply is kept in the form's state but not sent.
   return <InputDraftProvider isolated scope="record-form"><FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
     sourceFields={sourceFields} fieldInput={fieldInput} onTrial={onTrial} context={context} defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} onValuesChange={onValuesChange ? v => onValuesChange(activeValues(entity, v) as Partial<R>) : undefined} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
 }
@@ -102,7 +98,6 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
     }
     return t("Enter a valid value.");
   } });
-  // Controller falls back to defaultValues for undefined; keep cleared editors as null until validation.
   const { control, handleSubmit, getValues, setValue, setError, trigger, reset, formState: { errors, isSubmitting, isDirty } } =
     useForm<Record<string, unknown>>({ mode: "onTouched", resolver: (values, context, options) =>
       resolve(Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value === null ? undefined : value])), context, options), defaultValues: Object.fromEntries(Object.entries(defaultValues ?? {}).filter(([key]) => (sourceFields ?? fields).some(field => field.name === key))) as never });
@@ -110,12 +105,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
     reset(defaultValues as never); setFailure(""); inputs?.reject();
   }, isSubmitting);
   useEffect(()=>{for(const issue of issues??[])if(issue.path.length===1&&fields.some(f=>f.name===issue.path[0]))setError(issue.path[0]!,{type:"owner",message:issue.message});},[issues,setError]);
-  // Conditional fields (#138) follow the values they depend on; what was typed into a hidden field stays until the form closes.
   const current = useWatch({control}) as Record<string, unknown>;
-  // A cleared structured field is omitted, so "Not set" stays a different value from an
-  // explicit null. A cleared scalar field keeps its null: the host keeps every left-out
-  // field ("Change fields of ...; fields left out keep their value."), and a scalar has
-  // no other way to say "clear me".
   const structuredFields=new Set(fields.filter(field=>["json","lines"].includes(field.type.type)).map(field=>field.name));
   const semanticValues=(values:Record<string,unknown>)=>Object.fromEntries(Object.entries(values).map(([key,value])=>[key,visualCleared.current.has(key)&&value===null&&structuredFields.has(key)?undefined:value]));
   const sourceValidate = (values:Record<string,unknown>):Api.FieldIssue[] => {
@@ -177,7 +167,6 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
         const confirmed = await onSubmit(submitted, event);
         if (confirmed === false) setFailure(t("The request was not confirmed. Your input is retained."));
         else if (confirmed === true) { reset(submitted); visualCleared.current.clear(); inputs?.clear(); markSaved(); }
-        // A void callback owns its own outcome; it is not proof of acceptance.
       }
       catch (error) { setFailure(error instanceof Error ? error.message : t("The request was not confirmed. Your input is retained.")); }
       finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }

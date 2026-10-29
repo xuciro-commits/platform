@@ -1,7 +1,6 @@
 import { language, t } from "../i18n";
 import { validCivilDate } from "../components/date";
 
-/** Localized civil date: `2026-10-24` → `10月24日` (same year) or `2026年10月24日`. */
 export function formatDate(value: string | undefined): string {
   if (!value || !validCivilDate(value)) return value ?? "";
   const [y, m, d] = value.split("-").map(Number) as [number, number, number];
@@ -9,7 +8,6 @@ export function formatDate(value: string | undefined): string {
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(language(), { year: y === new Date().getFullYear() ? undefined : "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-/** Display the actual instant in the member's timezone; civil dates stay dates. */
 export function formatDateTime(value: string | undefined): string {
   if (!value) return value ?? "";
   if (validCivilDate(value)) return formatDate(value);
@@ -20,7 +18,6 @@ export function formatDateTime(value: string | undefined): string {
   });
 }
 
-/** Near timestamps read as relative days; the raw value stays in the caller's title. */
 export function formatRelative(value: string | undefined): string | undefined {
   if (!value?.includes("T")) return undefined;
   const at = new Date(value);
@@ -36,14 +33,12 @@ export function formatRelative(value: string | undefined): string | undefined {
   return undefined;
 }
 
-/** Relative context supplements the local time instead of replacing it. */
 export function formatDateTimeSmart(value: string | undefined): string {
   if (!value) return value ?? "";
   const relative = formatRelative(value), formatted = formatDateTime(value);
   return relative ? `${formatted} · ${relative}` : formatted;
 }
 
-/** A full timestamp as the member reads it: audit trails, run logs, receipts. */
 export function formatStamp(value: string | undefined): string {
   if (!value) return "—";
   const at = new Date(value);

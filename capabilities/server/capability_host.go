@@ -11,8 +11,6 @@ import (
 	"strconv"
 )
 
-// Capabilities uses the original fixed read and current authorization. The
-// authoring owner only projects these visible declarations into the palette.
 func (t *Tenant) Capabilities(m platform.Member) []platform.CapabilityDescriptor {
 	answer, _ := recordRead(t, context.Background(), func() ([]platform.CapabilityDescriptor, *kernel.Error) { return t.capabilities(m), nil })
 	return answer
@@ -122,8 +120,6 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 	return authoring.DescribeRetainedCapability(selected)
 }
 
-// Resolve only member-filtered owner bytes. A hidden latest declaration does
-// not hide a separately authorized retained version, and never substitutes it.
 func (t *Tenant) memberQueryVersion(m platform.Member, ref platform.AssetRef, version int) (platform.NamedQuery, string, bool) {
 	app := t.app(ref.App)
 	if app == nil || ref.Kind != platform.AssetQuery || version < 0 || version > 64 {

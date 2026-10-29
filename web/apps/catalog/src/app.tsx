@@ -1,6 +1,3 @@
-// The Asset Library: public reference content for builders and
-// developers — the assets with their live examples, and a sandbox for
-// prototypes. Runtime access still uses the signed-in host.
 import { defineApp } from "@platform/app";
 import { BookOpen, Boxes, Terminal } from "lucide-react";
 import { t, type NavSection } from "@platform/ui";

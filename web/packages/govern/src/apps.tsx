@@ -1,4 +1,3 @@
-// Settings: the apps a tenant runs, their capability matrix and protocols.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { type Api } from "@platform/kernel";
 import { PropertyList, ContextHelp, Button, Disclosure, Input, PageHeader, Panel, Select, Tag, t, useWorkspace } from "@platform/ui";
@@ -23,7 +22,6 @@ export function Apps() {
 
 const stateTone = (state?: string): "neutral" | "success" | "warning" => state === "active" ? "success" : state === "draining" ? "warning" : "neutral";
 
-/** The library selects one package; decisions stay on its original owner. */
 function PackageList({ items }: { items: Api.PackageView[] }) {
   const { can, decide } = useHost(), { open } = useWorkspace();
   const [refused, setRefused] = useState<Record<string, string>>({});
@@ -133,9 +131,6 @@ function PackageList({ items }: { items: Api.PackageView[] }) {
   );
 }
 
-// Capability names are tags apps put on their actions (platform/actions.go
-// Capabilities()); they have no title of their own, so the workspace names
-// them. An unknown tag reads as written, capitalised.
 const capabilityTitles: Record<string, string> = {
   account: "Account", applications: "Applications", approvals: "Approvals", apps: "Apps and protocols", automation: "Automation",
   comments: "Comments", compute: "Compute", delegation: "Delegation", documents: "Documents", elements: "Enterprise elements",
@@ -148,7 +143,6 @@ const capabilityTitles: Record<string, string> = {
 };
 const capabilityTitle = (name: string) => t(capabilityTitles[name] ?? (name.charAt(0).toUpperCase() + name.slice(1)));
 
-/** A list of short facts; nothing in it has a fixed height, so long lists wrap and never overlap. */
 function Facts({ items }: { items: [label: string, value: React.ReactNode][] }) {
   const shown = items.filter(([, v]) => v !== null && v !== undefined && v !== false);
   if (!shown.length) return <p className="text-xs text-muted">{t("Nothing")}</p>;
@@ -157,7 +151,6 @@ function Facts({ items }: { items: [label: string, value: React.ReactNode][] }) 
 const Mono = ({ items }: { items: string[] }) => items.length ? <span className="font-mono text-xs leading-5">{items.join(", ")}</span> : null;
 const Chips = ({ items }: { items: string[] }) => items.length ? <span className="flex flex-wrap gap-1">{items.map((x) => <Tag key={x} label={x} />)}</span> : null;
 
-/** One module of the matrix: what it provides on the left, what it uses on the right. */
 function ModuleCard({ app: a }: { app: AppInfo }) {
   return <Panel title={<span className="flex flex-wrap items-baseline gap-2">{a.title || a.id}<span className="font-mono text-xs font-normal text-muted">{a.id} · v{a.version}</span></span>}>
     <div className="grid gap-4 md:grid-cols-2">
@@ -212,7 +205,6 @@ function RuntimeContracts() {
  </Disclosure>;
 }
 
-// Protocols: apps meet through them, not through each other.
 export function Protocols() {
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const { decide } = useHost();

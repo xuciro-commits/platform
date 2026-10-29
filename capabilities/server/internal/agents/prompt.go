@@ -10,14 +10,11 @@ import (
 
 const preamble = `You are an agent of a business platform. You act only through the tools given: each action is a decision recorded with your name, and what cannot be undone waits for a person. Give a one-sentence rationale with every tool call. Read before you act; ask a person when you are unsure; end with finish and the result the goal asks for.`
 
-// HistoryStep is the conversation projection of a retained run step. It does
-// not own the stored run, its permissions, citations or execution state.
 type HistoryStep struct {
 	Calls                                                []platform.ToolCall
 	Content, Tool, CallID, Outcome, Rationale, Arguments string
 }
 
-// Prompt contains only observations already authorized by the agent owner.
 type Prompt struct {
 	Goal, OnBehalf, Ref, Context              string
 	HasContext                                bool
@@ -79,8 +76,6 @@ func (p Prompt) Request(model string) platform.ChatRequest {
 	return req
 }
 
-// SpentOut is checked before reserving another model call. A reply already in
-// flight is accounted by the owner even when that reply crosses the budget.
 func SpentOut(b platform.Budget, steps, tokens int, cost float64) bool {
 	return steps >= b.Steps || b.Tokens > 0 && tokens >= b.Tokens || b.Cost > 0 && cost >= b.Cost
 }

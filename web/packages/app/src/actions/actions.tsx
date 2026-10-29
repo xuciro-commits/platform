@@ -2,11 +2,6 @@ import type * as PageUI from "../pageui/types";
 import {useActionTrial} from "./trial";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
 import {OfflineReadError,type Api} from "@platform/kernel";
-// Every declared action has an entry in the generated views (F-33): an action
-// that makes a new record of a type is offered on the type's list; every other
-// action on the type, and a lifecycle transition that takes input (F-27), on
-// each record's page, with a form generated from its declared payload. A
-// hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
 import { Button, ContextHelp, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
@@ -33,7 +28,6 @@ export function payloadSchema(fields: Field[]) {
   })) });
 }
 
-/** Inputs for an action's declared payload fields. */
 export function PayloadFields({ fields, values, onChange, app, preview = false, submitted = false, issues = [] }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; app?:string; preview?: boolean; submitted?: boolean; issues?:Api.FieldIssue[] }) {
   const prefix = useId(), [touched, setTouched] = useState<Record<string, boolean>>({}),[units,setUnits]=useState<Record<string,string>>({});
   const knownUnit=Object.values(units).find(Boolean),hourly=knownUnit?knownUnit==="hour":fields.some(f=>f.constraints?.dateTime&&String(values[f.name]??"").includes("T"));
@@ -72,7 +66,6 @@ export function PayloadFields({ fields, values, onChange, app, preview = false, 
   })}</>;
 }
 
-/** A list of the items of an app's read, for a payload field whose values are not records here (#129). */
 function ReadPicker({ id, field, app, value, onChange, onUnit }: { id: string; field: Field; app?:string; value: string; onChange: (key: string) => void; onUnit?:(unit:string)=>void }) {
  const {client,source}=useHost();
  const path=app?`/v1/apps/${encodeURIComponent(app)}/reads/${encodeURIComponent(field.from!)}`:`/v1/${field.from}`;
@@ -85,21 +78,16 @@ function ReadPicker({ id, field, app, value, onChange, onUnit }: { id: string; f
  return <><Select id={id} value={value} onChange={e=>{onChange(e.target.value);onUnit?.(String(items.find(item=>key(item)===e.target.value)?.unit??""));}}><option value="">—</option>{items.map(item=><option key={key(item)} value={key(item)}>{field.label?`${String(item[field.label]??"")} · ${key(item)}`:key(item)}</option>)}{value&&!items.some(item=>key(item)===value)&&<option value={value}>{t("{value} · unavailable",{value})}</option>}</Select>{!items.length&&<p role="status">{t("No options are available.")}</p>}</>;
 }
 
-/** The live elements of the enterprise model, narrowed to a UAF stereotype, for a payload
- * field tagged ref:"enterprise.element" — read through the typed query and
- * resolve contracts, never the whole graph. The model is every member's to read. */
 function ElementPicker({id,stereotype,stereotypes,value,onChange}:{id:string;stereotype?:string;stereotypes?:string[];value:string;onChange:(id:string)=>void}) {
  const {source}=useHost();
  return <RecordLookup id={id} source={source} type="enterprise.element" value={value} stereotypes={[...(stereotype?[stereotype]:[]),...(stereotypes??[])]} onChange={id=>onChange(id??"")} />;
 }
 
-/** A list of the records of a type the member may read, for a payload field that names one. */
 function RecordPicker({ id, type, value, onChange }: { id: string; type: string; value: string; onChange: (id: string) => void }) {
   const { source } = useHost();
   return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} />;
 }
 
-/** Source mode inserts the same authorized values as the visual form, never sample record IDs. */
 export function SourceFieldInput({field,value,onChange,app,input,preview=false}:{field:Api.FieldInfo;value:unknown;onChange:(value:unknown)=>void;app?:string;input?:Field;preview?:boolean}) {
  const {source}=useHost(),id=useId();
  if(preview||field.readOnly)return null;
@@ -115,10 +103,8 @@ export function SourceFieldInput({field,value,onChange,app,input,preview=false}:
 }
 export const sourceFieldInput=(field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=><SourceFieldInput field={field} value={value} onChange={onChange}/>;
 
-/** A short ID prefix from a type's name, never its translated title: "build.customer" → CUS, "build.request" → REQ. */
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
-/** One submission state for generated record forms, declared payloads and inline hosts. */
 export function DeclaredActionForm(props:Parameters<typeof DeclaredActionFormBody>[0]) {
  return <InputDraftProvider isolated scope={props.declared.schema+":"+props.target.id}><DeclaredActionFormBody {...props}/></InputDraftProvider>;
 }
@@ -157,8 +143,6 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  useEffect(()=>{
   if(!submitting&&entry?.state==="SUBMISSION_STATE_CONFIRMED"&&entry.submission.target?.type&&entry.submission.target.id)complete({type:entry.submission.target.type,id:entry.submission.target.id});
  },[entry?.state,entry?.submission.idempotencyKey,submitting]);
- // Generated forms expose writable model fields in both editing modes;
- // fixed bindings remain part of the same original owner submission.
  const generatedInputs=(next:Record<string,unknown>)=>{
   const inputs={...next,...fixed},model=source.entity(target.type)?.fields??[];
   const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&(field.aside||Object.hasOwn(startingValues,field.name))).map(field=>field.name)]);
@@ -184,8 +168,6 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  const change=(next:Record<string,unknown>)=>setValues({...next,...fixed});
  const refusalMessage=pending?t("Waiting for the server response. Retry sends the same request."):refused?humanizeKernelError(entry?.reason??entry?.outcome):refusal;
  const refusalView=entry?.state!=="SUBMISSION_STATE_CONFIRMED"&&refusalMessage&&<ActionRefusal entry={entry} message={refusalMessage} original={attempt?.values}/>;
- // Checking a saved receipt never validates or edits a new form. The original
- // request can be partial or belong to an older declaration.
  if(pending&&attempt)return <div className="grid gap-3">{refusalView}<div className="flex justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{t("Close")}</Button><Button variant="primary" disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{submitting?t("Executing…"):t("Retry confirmation")}</Button></div></div>;
  const retry=attempt&&refused&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
  const label=submitting?t("Executing…"):schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
@@ -204,9 +186,8 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  </Form>;
 }
 
-/** One action taken through the existing modal entry point. */
 function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, prefix, frame }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; prefix?:string;
- /** "drawer" keeps the page in view while the form is out (record context); the default is the centered modal. */ frame?: "modal"|"drawer" }) {
+ frame?: "modal"|"drawer" }) {
  const host=useHost(),{source}=host,info=source.entity(type);
  const [baseline]=useState(record);
  const [local]=useState(()=>{try{return {drafts:actionDrafts(host,declared,type,record?.id)};}catch(problem){return {drafts:[],error:problem instanceof Error?problem.message:String(problem)};}});
@@ -226,8 +207,6 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
 }
 export {ActionDialog as DeclaredActionDialog};
 
-/** One explicit record action. Ordinary revisions retain the opened form's
- * baseline; identity, declaration and caller scope replace it completely. */
 export function InlineActionForm({type,schema,record,live=true,scope,defaults=[],ready=true}:{type:string;schema:string;record?:EntityRecord;live?:boolean;scope?:string;defaults?:PageUI.PageActionParameter[];ready?:boolean}) {
  const {catalog,source}=useHost(),declared=catalog.find(a=>a.schema===schema&&a.target===type&&!a.new);
  if(!declared||!validActionDefaults(source.entity(type),declared,defaults))return <Panel role="alert">{t("The inline action is unavailable.")}</Panel>;
@@ -247,7 +226,6 @@ function InlineActionRound({type,record,declared,info,live,reset,defaults,ready}
  return <DeclaredActionForm declared={declared} target={{type,id:baseline?.id??""}} revision={baseline?.revision??0} preview={!live} initial={initial} enabled={ready} onCancel={reset} onCompleted={()=>setSubmitted(true)}/>;
 }
 
-/** The type's actions that make a new record, except those a hand-written view already offers (`covers`). */
 export function NewActions({ type, covers = [], allowed, disabled = false, onCreated }: { type: string; covers?: string[]; allowed?: string[]; disabled?: boolean; onCreated?: (target: { type: string; id: string }) => void }) {
   const create = useNewRecord(type, onCreated);
   const offered = create.offered.filter((a) => !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
@@ -257,9 +235,6 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
   </>;
 }
 
-/** Create a record of `type` from a menu or command palette: the caller
- * renders the trigger, this hook offers the declared create actions and the
- * dialog that takes the chosen one. */
 export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void, prefix?: string) {
   const { catalog } = useHost();
   const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown> }>();
@@ -271,10 +246,8 @@ export function useNewRecord(type: string, onCreated?: (target: { type: string; 
   }, dialog };
 }
 
-/** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
 export function RecordActions({ type, record, allowed, steps: withSteps = false }: {
   type: string; record: EntityRecord; allowed?: string[];
-  /** Also the lifecycle's steps from where the record stands — where no status bar shows them (a composed page's actions). */
   steps?: boolean;
 }) {
   const { catalog, source } = useHost();
@@ -293,7 +266,6 @@ export function RecordActions({ type, record, allowed, steps: withSteps = false 
   </>;
 }
 
-/** A lifecycle transition taken from a record's page: at once, or through a form when it takes input (F-27). */
 export function useTransition(type: string) {
   const { action, decide } = useHost();
   const [taking, setTaking] = useState<{ declared: ActionDeclaration; record: EntityRecord; initial?:Record<string,unknown>;originalOutcome?:Entry }>();
@@ -307,9 +279,6 @@ export function useTransition(type: string) {
   return { take, dialog };
 }
 
-/** An action taken as one effect of a page event chain: at once
- * when it takes no input, through its form otherwise. Resolves true when the
- * host accepted it, false when the person cancelled, so the chain can stop. */
 export function useActionEffect(enabled: boolean) {
   const { action, decide, source } = useHost();
   const current = useRef({ enabled, scope: source.scope });
@@ -338,7 +307,6 @@ export function useActionEffect(enabled: boolean) {
   return { take, dialog };
 }
 
-/** Uses the original declared archive action, with confirmation and revision checking. */
 export function useRecordArchive(type: string) {
   const { action } = useHost();
   const declared = action(`${type}.archive`);

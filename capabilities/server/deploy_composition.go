@@ -41,8 +41,6 @@ func (d *Deployment) composeRuntime(id string, selection map[string]string) (*Te
 	return tenant, nil
 }
 
-// Provider changes activate at process startup, after all old writers and
-// resources have stopped. The original journal stays the only state authority.
 func (d *Deployment) restoreRuntimeSelections(ctx context.Context, journal Journals, code string, tenants []*Tenant) error {
 	for index, old := range tenants {
 		if old.quarantined() {

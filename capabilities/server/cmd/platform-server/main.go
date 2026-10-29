@@ -1,4 +1,3 @@
-// Command platform-server serves tenant applications on the common platform.
 package main
 
 import (
@@ -44,8 +43,6 @@ func main() {
 			build.ID:                 build.Builder, core.ID: core.Steward, ai.ID: ai.Admin,
 			work.ID: work.Admin, platform.AgentApp: platform.AgentAdmin,
 		}
-		// The development seat of the system tenant is its publisher: without
-		// it nobody could approve a change in a local run.
 		if *tenant == systemscope.Tenant {
 			roles[system.ID] = system.Publisher
 		}
@@ -58,8 +55,6 @@ func main() {
 	}
 }
 
-// Development discovers its repository once. Deployed releases name their
-// sealed snapshot explicitly; neither path reads a changing tree per proposal.
 func runningSource(root string, version int) (*platform.SystemSource, error) {
 	if root == "" {
 		current, err := os.Getwd()

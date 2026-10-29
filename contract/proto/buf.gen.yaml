@@ -1,4 +1,3 @@
-# Generated code is an implementation detail of each runtime; the .proto files stay language-neutral.
 version: v2
 managed:
   enabled: true

@@ -1,11 +1,8 @@
-// K5 Authority and sync for a browser edge (contract/spec/K5-authority.md):
-// declarations, the authority check and the outbox. Runs the contract's K5 vectors.
 import type { AuthorityDeclarationJson, SubmissionStateJson } from "./gen/platform/kernel/v1alpha1/authority_pb";
 import type { ErrorCodeJson } from "./gen/platform/kernel/v1alpha1/error_pb";
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
 
 export type State = Exclude<SubmissionStateJson, "SUBMISSION_STATE_UNSPECIFIED">;
-/** `reason` is a refusal's message for people (F-23), never contract: the state and the code are. */
 import type {FieldIssue,SchemaVersion} from "./gen/host";
 
 export type Entry = { submission: SubmissionJson; schemaVersion?: SchemaVersion; correctionOf?: string; state: State; outcome?: string; reason?: string; issues?: FieldIssue[] };
@@ -25,7 +22,6 @@ const transitions: Record<Event, Partial<Record<State, State>>> = {
   retry: { SUBMISSION_STATE_UNKNOWN: "SUBMISSION_STATE_SENDING" },
 };
 
-/** Stable JSON: identical submissions compare equal whatever their key order. */
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") {
@@ -50,7 +46,6 @@ export class Authorities {
     this.current.set(key, d);
   }
 
-  /** Replaces the declarations with the authority's current ones (A9). */
   refresh(declarations: AuthorityDeclarationJson[]): void {
     this.current = new Map(declarations.map((d) => [`${d.tenantId}\u0000${d.dataClass}`, d]));
   }
@@ -94,7 +89,6 @@ export class Authorities {
     return next;
   }
 
-  /** The authority's answer (A8): no code confirms, a conflict code conflicts, any other code rejects. */
   answer(tenant: string, key: string, code?: string): State {
     const event = !code ? "confirm" : code === "ERROR_CODE_CONFLICT" || code === "ERROR_CODE_IDEMPOTENCY_CONFLICT" ? "conflict" : "reject";
     return this.transition(tenant, key, event);

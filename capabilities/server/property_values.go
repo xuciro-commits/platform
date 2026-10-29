@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-// Projection runs after the original record mask and uses the member's field
-// descriptions. Numeric tokens are retained before the browser parses JSON.
 func propertyValues(info platform.EntityInfo, record any) (map[string]any, map[string]string) {
 	values, errors := map[string]any{}, map[string]string{}
 	row := reflect.ValueOf(record)

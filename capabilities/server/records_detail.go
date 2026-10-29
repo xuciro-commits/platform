@@ -13,9 +13,6 @@ import (
 	"time"
 )
 
-// RecordView is one record with its history, newest first, the records of
-// the app's other types that refer to it, and the processes about it the
-// member may read.
 type RecordView struct {
 	Effective   *bool                  `json:"effective,omitempty"`
 	Values      map[string]any         `json:"values,omitempty"`
@@ -24,18 +21,16 @@ type RecordView struct {
 	History     []records.RecordChange `json:"history"`
 	Related     []Related              `json:"related"`
 	Processes   []any                  `json:"processes"`
-	Approvals   []any                  `json:"approvals"` // requests to move it, newest first (F-38)
-	Tasks       []any                  `json:"tasks"`     // open tasks about it the member may take, to answer from its page
-	Files       []any                  `json:"files"`     // attached to it
-	Comments    []any                  `json:"comments"`  // on it, oldest first
-	Following   bool                   `json:"following"` // the member follows it
-	Linked      []Related              `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
-	Activity    []any                  `json:"activity"`  // what apps told about it through protocols (platform.RelationNote), oldest first
+	Approvals   []any                  `json:"approvals"`
+	Tasks       []any                  `json:"tasks"`
+	Files       []any                  `json:"files"`
+	Comments    []any                  `json:"comments"`
+	Following   bool                   `json:"following"`
+	Linked      []Related              `json:"linked"`
+	Activity    []any                  `json:"activity"`
 	Deliveries  []RecordDelivery       `json:"deliveries,omitempty"`
 }
 
-// RecordDelivery exposes only the owner's public outcome, never a request,
-// answer, endpoint or diagnostic. A financial receipt keeps its own read gate.
 type RecordDelivery struct {
 	ID      string    `json:"id"`
 	Event   string    `json:"event"`
@@ -46,9 +41,8 @@ type RecordDelivery struct {
 }
 
 type Related struct {
-	Type  string `json:"type"`
-	Field string `json:"field"`
-	// Relation is the reference field's declared inverse name, when it has one.
+	Type     string `json:"type"`
+	Field    string `json:"field"`
 	Relation string `json:"relation,omitempty"`
 	Title    string `json:"title"`
 	Records  []any  `json:"records"`
@@ -140,9 +134,6 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	s.Lock()
 	var referring []*records.Type
 	for _, other := range s.Types() {
-		// The same app's referring types, and any type whose reference names an
-		// inverse relation: those are declared to be seen from here (21b). The
-		// member's own read of each type still decides what is listed.
 		named := slices.ContainsFunc(other.Info().Fields, func(f platform.FieldInfo) bool { return f.Ref == typ && f.Inverse != "" })
 		if other.Info().App == et.Info().App || named {
 			referring = append(referring, other)
@@ -158,10 +149,10 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (Rec
 			domain, _ := json.Marshal([]any{[]any{f.Name, "=", id}})
 			page, err := t.recordsRead(m, other.Info().Type, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20}, now)
 			if err != nil {
-				continue // the member may not read that type
+				continue
 			}
 			if other.Info().App != et.Info().App && f.Inverse == "" {
-				continue // another app's reference without a declared relation stays private to it
+				continue
 			}
 			view.Related = append(view.Related, Related{Type: other.Info().Type, Field: f.Name, Relation: f.Inverse,
 				Title: other.Info().Plural, Records: page.Records, Total: page.Total})
@@ -196,10 +187,6 @@ func (t *Tenant) recordDeliveries(m platform.Member, target string, now time.Tim
 	return out
 }
 
-// linked are the records linked to entity that m may read, grouped by type in
-// the order they were linked, and the protocol events told about it: what a
-// record page shows of other apps without the app composing it (#129). A link
-// to what is not a record of this tenant is left out.
 func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now time.Time) ([]Related, []any) {
 	c := t.caller(m, rel, false)
 	out, activity := []Related{}, []any{}
@@ -231,10 +218,6 @@ func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now 
 	return out, activity
 }
 
-// PersonalRead is one read of personal data: who read which
-// records' personal fields, and when. Kept outside the journal, like transcripts.
-
-// readPersonal notes that m read the personal fields view shows of records ids.
 func (t *Tenant) readPersonal(m platform.Member, view *records.Type, ids []string, now time.Time) {
 	var fields []string
 	for _, f := range view.Info().Fields {
@@ -248,5 +231,4 @@ func (t *Tenant) readPersonal(m platform.Member, view *records.Type, ids []strin
 	t.audit.ReadPersonal(platform.PersonalRead{At: now, Member: m.ID, Type: view.Info().Type, IDs: ids, Fields: fields})
 }
 
-// PersonalReads are the latest reads of personal data, newest first.
 func (t *Tenant) PersonalReads() []platform.PersonalRead { return t.audit.PersonalReads() }

@@ -134,8 +134,6 @@ type ownedRelationViolation struct {
 	id, parent, child, reason string
 }
 
-// Count the final membership first so conflicts do not depend on map order.
-// Publication and the transaction gate use the same cardinality semantics.
 func ownedRelationViolations(s *records.Store, link platform.LinkType) ([]ownedRelationViolation, error) {
 	et := s.Type(platform.OwnedRelationType(link.Child.App))
 	if et == nil || !ownedRelationSchema(et.Info()) {

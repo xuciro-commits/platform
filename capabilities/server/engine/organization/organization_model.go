@@ -10,14 +10,7 @@ import (
 	"time"
 )
 
-// The tenant's enterprise model: elements and relationships
-// typed by UAF stereotypes, in valid time, plus the views drawn over them.
-// What  called units, structures, edges and memberships are the
-// Personnel-domain corner of it: «ActualOrganization» elements, relationship
-// kinds, «ActualResourceRelationship» and «ActualOrganizationRole».
-
 const (
-	// Stereotypes the platform itself relies on (all UAF 1.3).
 	Organization = "ActualOrganization"
 	Person       = "ActualPerson"
 	Post         = "ActualPost"
@@ -26,19 +19,16 @@ const (
 	Project      = "ActualProject"
 	Capability   = "Capability"
 	Goal         = "EnterpriseGoal"
-	// Relationship stereotypes.
-	Placement  = "ActualResourceRelationship" // unit under parent, in a kind
-	Membership = "ActualOrganizationRole"     // party (member:<id> or element id) in an organisation, with a role
-	FillsPost  = "FillsPost"                  // person holds post
-	Performs   = "IsCapableToPerform"         // the older pair for "has a capability"; UAF's own spelling is Exhibits
-	Exhibits   = "Exhibits"                   // organisation/resource exhibits a Capability (UAF 1.3)
-	System     = "System"                     // a system the organisation runs (ERP, MES, WMS, PLM, CRM)
-	Owns       = "ResponsibleFor"             // organisation answers for resource/location/project
-	Typed      = "typedBy"                    // instance → its type element (platform, not UAF)
+	Placement    = "ActualResourceRelationship"
+	Membership   = "ActualOrganizationRole"
+	FillsPost    = "FillsPost"
+	Performs     = "IsCapableToPerform"
+	Exhibits     = "Exhibits"
+	System       = "System"
+	Owns         = "ResponsibleFor"
+	Typed        = "typedBy"
 )
 
-// Kind is a way organisations relate ('s Structure): legal,
-// management, finance, site, project, governance, community, custom.
 type Kind struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -47,36 +37,33 @@ type Kind struct {
 	Owner  string `json:"owner,omitempty"`
 }
 
-// Element is one thing in the enterprise, typed by a UAF stereotype.
 type Element struct {
 	ID         string            `json:"id"`
 	Stereotype string            `json:"stereotype"`
 	Name       string            `json:"name"`
 	ShortName  string            `json:"shortName,omitempty"`
-	Kind       string            `json:"kind,omitempty"` // open vocabulary within the stereotype: factory, line, team; plant, bin; machine
+	Kind       string            `json:"kind,omitempty"`
 	Legal      bool              `json:"legal,omitempty"`
 	External   bool              `json:"external,omitempty"`
 	From       platform.Date     `json:"from,omitempty"`
 	Until      platform.Date     `json:"until,omitempty"`
 	Closed     string            `json:"closed,omitempty"`
 	Calendar   string            `json:"calendar,omitempty"`
-	Owner      string            `json:"owner,omitempty"`     // "tenant:<id>" when federated in from another tenant (read-only here)
-	Published  bool              `json:"published,omitempty"` // shared with the tenants this one federates with
+	Owner      string            `json:"owner,omitempty"`
+	Published  bool              `json:"published,omitempty"`
 	Properties map[string]any    `json:"properties,omitempty"`
 	Periods    []platform.Period `json:"periods,omitempty"`
 	Deleted    bool              `json:"deleted,omitempty"`
 }
 
-// Relationship joins two things; Source and Target are element ids, or for a
-// Membership the source may be a party "member:<id>".
 type Relationship struct {
 	ID         string            `json:"id"`
 	Stereotype string            `json:"stereotype"`
-	Kind       string            `json:"kind,omitempty"` // for a Placement: the Kind.ID it sits in
+	Kind       string            `json:"kind,omitempty"`
 	Source     string            `json:"source"`
 	Target     string            `json:"target"`
-	Role       string            `json:"role,omitempty"`     // for a Membership: employee, chair, volunteer …
-	Relation   string            `json:"relation,omitempty"` // for a Placement: part of, owned by, reports to …
+	Role       string            `json:"role,omitempty"`
+	Relation   string            `json:"relation,omitempty"`
 	Share      float64           `json:"share,omitempty"`
 	Primary    bool              `json:"primary,omitempty"`
 	From       platform.Date     `json:"from,omitempty"`
@@ -94,11 +81,10 @@ type TenantLink struct {
 	Content      string `json:"content,omitempty"`
 }
 
-// View is a drawing over the model: which elements, where, from which viewpoint.
 type View struct {
 	ID        string                `json:"id"`
 	Name      string                `json:"name"`
-	Viewpoint string                `json:"viewpoint"` // "organization", "data", "function", "output", "control"
+	Viewpoint string                `json:"viewpoint"`
 	Kind      string                `json:"kind,omitempty"`
 	Elements  []string              `json:"elements"`
 	Layout    map[string][2]float64 `json:"layout,omitempty"`
@@ -107,19 +93,13 @@ type View struct {
 	AsOf      platform.Date         `json:"asOf,omitempty"`
 }
 
-// Pin is a record drawn on a view beside the element it names:
-// the picture then holds the modules that work with the model, not only the
-// model. The ref is "record:<entity type>/<id>"; the anchor is the element it
-// points at. A pin is a mark on a drawing, not a fact about the model: nothing
-// else reads it, and a record it names may be deleted without touching the view.
 type Pin struct {
 	Ref    string     `json:"ref"`
-	Label  string     `json:"label,omitempty"` // how the record was named when it was pinned
+	Label  string     `json:"label,omitempty"`
 	Anchor string     `json:"anchor"`
 	At     [2]float64 `json:"at"`
 }
 
-// Model is the whole of it.
 type Model struct {
 	UAF           string              `json:"uaf"`
 	Scale         string              `json:"scale,omitempty"`
@@ -164,13 +144,11 @@ func (m *Model) RelationshipOf(id string) *Relationship {
 	return nil
 }
 
-// live says the element exists on day: open, or not yet closed.
 func (m Model) LiveOn(id string, day platform.Date) bool {
 	e := m.ElementOf(id)
 	return e != nil && e.ActiveOn(day)
 }
 
-// below reports whether unit sits (transitively) under ancestor in kind on day.
 func (m Model) BelowIn(kind, ancestor, unit string, day platform.Date) bool {
 	if !m.LiveOn(unit, day) || !m.LiveOn(ancestor, day) {
 		return false
@@ -195,8 +173,6 @@ func (m Model) BelowIn(kind, ancestor, unit string, day platform.Date) bool {
 	return false
 }
 
-// units are the organisations party belongs to on day, directly or through a
-// member organisation, and every one below them in kind ("" for none below).
 func (m Model) UnitsIn(party, kind string, day platform.Date) []string {
 	var out []string
 	add := func(u string) bool {
@@ -219,7 +195,6 @@ func (m Model) UnitsIn(party, kind string, day platform.Date) []string {
 	return m.Descendants(out, kind, day)
 }
 
-// descendants expands only active elements and placements of the named structure.
 func (m Model) Descendants(units []string, kind string, day platform.Date) []string {
 	var out []string
 	add := func(id string) {
@@ -243,8 +218,6 @@ func (m Model) Descendants(units []string, kind string, day platform.Date) []str
 	return out
 }
 
-// Of are the elements one relationship away from id: targets of stereotype
-// going out (out=true) or sources coming in, live on day.
 func (m Model) Of(id, stereotype string, out bool, day platform.Date) []string {
 	var found []string
 	for _, r := range m.Relationships {
@@ -263,9 +236,6 @@ func (m Model) Of(id, stereotype string, out bool, day platform.Date) []string {
 	return found
 }
 
-// --- The  projection, kept as the seed format and the "organization" read. ---
-
-// FromOrgSeed lifts units, structures, edges and memberships into the model.
 func FromOrgSeed(seed platform.OrgSeed) Model {
 	m := Model{UAF: "1.3", Kinds: []Kind{}, Elements: []Element{}, Relationships: []Relationship{}, Views: []View{}, Calendars: slices.Clone(seed.Calendars)}
 	for _, s := range seed.Structures {
@@ -287,7 +257,6 @@ func FromOrgSeed(seed platform.OrgSeed) Model {
 	return m
 }
 
-// OrgSeed projects the Personnel corner back into 's shape.
 func (m Model) OrgSeed() platform.OrgSeed {
 	out := platform.OrgSeed{Calendars: slices.Clone(m.Calendars), Structures: []platform.Structure{}, Units: []platform.Unit{}, Edges: []platform.Edge{}, Memberships: []platform.Membership{}}
 	for _, k := range m.Kinds {
@@ -327,10 +296,6 @@ func CutPrefix(s, p string) (string, bool) {
 	return s, false
 }
 
-// Slice is what one tenant publishes to another: the elements
-// it marked published, with the relationships among them. The receiving
-// tenant imports it read-only, owned by "tenant:<id>", and may relate its own
-// elements to them (a subsidiary under the group, a shared capability).
 type Slice struct {
 	Tenant        string         `json:"tenant"`
 	UAF           string         `json:"uaf"`
@@ -339,7 +304,6 @@ type Slice struct {
 	Kinds         []Kind         `json:"kinds,omitempty"`
 }
 
-// Published is the slice this model offers.
 func (m Model) Published(tenant string) Slice {
 	out := Slice{Tenant: tenant, UAF: m.UAF, Elements: []Element{}, Relationships: []Relationship{}}
 	in := map[string]bool{}
@@ -364,9 +328,6 @@ func (m Model) Published(tenant string) Slice {
 	return out
 }
 
-// Import replaces what this model mirrors from a tenant with the slice:
-// elements and relationships owned there; the tenant's own relationships to
-// mirrored elements are kept while their ends still exist.
 func (m *Model) Import(s Slice) { m.ImportOn(s, "") }
 
 func (m *Model) ImportOn(s Slice, today platform.Date) {
@@ -459,13 +420,6 @@ func (m *Model) ImportOn(s Slice, today platform.Date) {
 	m.Relationships = append(rels, s.Relationships...)
 }
 
-// Sync lands what an external system holds about the enterprise -
-// SAP HR/OM organisational units, AD departments, MES equipment - as a slice
-// this model owns on the system's behalf (Owner "source:<name>"). Unlike
-// Import it diffs instead of replacing: a new id is added from today, a known
-// id is updated in place, an id the system no longer sends is closed today
-// (its history stays), and a closed id that returns reopens. Relationships
-// come and go the same way, by their ids.
 type SyncResult struct {
 	Added, Changed, Closed, Reopened, Related, Ended int
 }
@@ -474,7 +428,6 @@ func (m *Model) Sync(source string, elements []Element, relationships []Relation
 	return m.sync(source, elements, relationships, today, false)
 }
 
-// ReplaySync preserves already accepted single-window source semantics.
 func (m *Model) ReplaySync(source string, elements []Element, relationships []Relationship, today platform.Date) SyncResult {
 	return m.sync(source, elements, relationships, today, true)
 }
@@ -706,7 +659,6 @@ func fingerprint(value any) string {
 func (m Model) Fingerprint() string { return fingerprint(m) }
 func (s Slice) Fingerprint() string { return fingerprint(s) }
 
-// InternalUsage includes historical declarations; deleting must not erase a named identity.
 func (m Model) InternalUsage(id string) string {
 	for _, r := range m.Relationships {
 		if r.Source == id || r.Target == id {
@@ -742,8 +694,6 @@ func (m Model) InternalUsage(id string) string {
 	return ""
 }
 
-// ElementPropertyUses follows the metamodel's element-typed tagged values, never free text.
-// Empty day includes every retained period; otherwise only use on or after day counts.
 func (m Model) ElementPropertyUses(id string, day platform.Date) []string {
 	out := []string{}
 	for _, element := range m.Elements {
@@ -778,7 +728,6 @@ func (m Model) ElementPropertyUses(id string, day platform.Date) []string {
 }
 func ImportedElementID(tenant, id string) string { return "tenant:" + tenant + ":" + id }
 
-// PreviewImport is the same pure model update used by preview and accepted import.
 func (m Model) PreviewImport(s Slice, linkID, content, base string, today platform.Date) (Model, error) {
 	if base != m.Fingerprint() {
 		return Model{}, fmt.Errorf("The enterprise model changed; preview the import again")
@@ -826,8 +775,6 @@ func closeSourceElement(e *Element, day platform.Date, reason string) {
 type Date = platform.Date
 type Period = platform.Period
 
-// DirectoryModel describes only the fixed types used by organisation scopes.
-// Stored historical elements retain their original strings and properties.
 type DirectoryModel struct {
 	Version      string                           `json:"version"`
 	URI          string                           `json:"uri"`
@@ -873,8 +820,6 @@ func directory() *DirectoryModel {
 func (m *DirectoryModel) Is(name, parent string) bool   { return name == parent }
 func (m *DirectoryModel) Relationship(name string) bool { return directoryRelationship(name) }
 
-// Historical property references preserve the old reference projection without
-// loading its editable standard schema. Ordinary text never becomes a reference.
 var historicalReferences = map[string][]DirectoryProperty{
 	"Achiever":                       {{Name: "conformsTo", Type: "Standard", Many: true}},
 	"Achieves":                       {{Name: "measurementSet", Type: "MeasurementSet", Many: true}, {Name: "actualMeasurementSet", Type: "ActualMeasurementSet", Many: true}, {Name: "conformsTo", Type: "Standard", Many: true}},

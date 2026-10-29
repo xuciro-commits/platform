@@ -23,7 +23,6 @@ export function AssetDirectoryRenderer({config,definitions,onOpen,canOpen,enable
 }
 
 type Props={kind:"graph-explorer"|"vertex-graph";config?:PageUI.PageGraphExplorer;vertex?:PageUI.PageVertexGraph;root?:EntityRecord;rootObject:Api.AssetRef;status?:Status;source:RecordSource;definitions:readonly WorkspaceDefinition[];identity:string;isActive:()=>boolean;onOutput?:(object:string,record:EntityRecord)=>Promise<boolean>;selected?:{object:string;id:string};enabled?:boolean;label:string;readCurrent?:boolean};
-/** The widget owns only a bounded path; records, relations and output confirmation retain their original owners. */
 export function ExplorationRenderer(props:Props) {
  const {kind,config,vertex,root,rootObject,status,source,definitions,identity,isActive,onOutput,selected,enabled,label,readCurrent=true}=props;
  const rootKey=JSON.stringify([identity,source.scope,source.revision,root?.id,root?.revision,config,vertex]),life=useRef({active:true,rootKey,frame:""});life.current.rootKey=rootKey;

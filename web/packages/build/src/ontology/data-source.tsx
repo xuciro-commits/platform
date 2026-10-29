@@ -9,9 +9,6 @@ import { useHost, useReadQuery } from "@platform/app";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 
-// Data sources: an external JSON endpoint whose rows become records
-// of one object. The editor is the whole wizard - endpoint, rows, mapping,
-// period - and the last pull shows what happened.
 type Draft = Omit<Api.Source, "mapping" | "object" | "key"> & { dataset?: string; object: string; key: string; mapping: Api.SourceField[] };
 type ConnectionRow = Api.Connection;
 type DatasetRow = { id: string; title: string };

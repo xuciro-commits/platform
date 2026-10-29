@@ -8,7 +8,6 @@ import { refKey } from "./resources";
 import { useProjectResources, type OwnedResource } from "./resource-inventory";
 import { assetRoute, resourceInArea, studioActionGroups, studioApplicationID, studioAreaForRoute, studioAreaKinds, studioAreas, studioContext, studioResourceGroups, studioRoute } from "./studio-model";
 
-/** The resource tree is contributed by Build, inside the existing Shell. */
 export function StudioNavigation({ route }: { route?: Route }) {
   const host = useHost(), { open } = useWorkspace();
   const id = studioApplicationID(route);
@@ -26,7 +25,6 @@ export function StudioNavigation({ route }: { route?: Route }) {
   const search = filter.trim().toLocaleLowerCase();
   const matches = (item: OwnedResource) => [item.title, item.ref.name, t(item.kind.label)].join(" ").toLocaleLowerCase().includes(search);
   const matching = candidates.filter(matches);
-  // Keep an action's object visible when only the action matches the search.
   const targets = new Set(matching.filter(item => item.ref.kind === "action").map(item => {
     const definition = host.definitions.find(definition => refKey(definition.ref) === refKey(item.ref));
     return item.ref.app + "/" + definition?.action?.target;

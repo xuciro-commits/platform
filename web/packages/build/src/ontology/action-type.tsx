@@ -4,12 +4,6 @@ import { TransactionEditor } from "./TransactionEditor";
 import {ConfirmationEditor} from "./ConfirmationEditor";
 import { DispatchEditor } from "./DispatchEditor";
 import {RefusalEditor} from "./RefusalEditor";
-// The action type workbench (built under): an action is a
-// first-class resource with its own sections — Overview, Parameters, Form,
-// Transaction, Approval, Permissions. Left: the
-// object's actions and this action's sections. Main: the section as a table or
-// preview. Right: the row in hand. Dock: this action's problems. The action
-// still lives in its object's record: the object draft session is shared.
 import { PayloadFields, SemanticObjectSelect, assetKey, useHost, useRecordInventory, type Definition } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { projectGroup, useProjectIndex } from "../projects/membership";
@@ -39,11 +33,8 @@ const sections: { id: Section; title: () => string; icon: ReactNode }[] = [
 type ObjectDraft = { id: string; name: string; title: string; state: string; archived?: boolean; actions?: Action[]; states?: { name: string; title: string }[] };
 type ActionRow = { key: string; object: ObjectDraft; action: Action };
 
-/** Every action type of every object type this tenant drafts (Ontology Manager's Action types list): one row per action, opening its workbench. */
 type BuiltInRow = { key: string; definition: Definition; object?: Definition };
 
-/** Editable tenant actions and read-only published declarations share one list.
- * Code-owned declarations appear only when explicitly requested. */
 export function ActionTypes() {
   const { definitions, me , holds} = useHost(), { open } = useApplicationWorkspace();
   const inventory = useRecordInventory<ObjectDraft>("build.object");
@@ -198,7 +189,6 @@ function ParameterEditor({ input, inputs, entities, onChange }: { input: Input_;
   </>;
 }
 
-/** A small list of rows to add to, change and remove, for the nested lists (approver levels, mapped fields). */
 function Rows<T>({ title, add, items, make, onChange, row }: { title: string; add: string; items: T[]; make: () => T; onChange: (next: T[]) => void; row: (item: T, set: (patch: Partial<T>) => void) => ReactNode }) {
   return <fieldset className="grid gap-1 border-t border-border pt-2 text-xs"><legend className="mb-1 font-semibold text-muted">{title}</legend>
     {items.map((item, i) => <div key={i} className="grid gap-1 rounded-md border border-border p-2">

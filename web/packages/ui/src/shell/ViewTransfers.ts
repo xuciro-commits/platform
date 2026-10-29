@@ -1,4 +1,3 @@
-/** Workspace-local, ephemeral calls. Payloads never enter saved routes. */
 export class ViewTransfers {
   private calls = new Map<string, { from: string; to: string; input: unknown; result: (value: unknown) => void }>();
   start(from: string, input: unknown, result: (value: unknown) => void) {

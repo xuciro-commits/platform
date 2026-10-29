@@ -19,9 +19,6 @@ type observationWindowAttempt struct {
 	Busy bool
 }
 
-// EvaluateObservations shares the existing outside source loop. One completed
-// source window produces at most an ordinary business decision. Unmatched
-// windows, source points and this disposable scheduling memory are not logged.
 func (t *Tenant) EvaluateObservations(at time.Time) {
 	if t.businessStopped() || !t.ownerActive(controlowner.BuildApp) {
 		return

@@ -85,7 +85,6 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 	return nil
 }
 
-// Shared normalization keeps list and aggregate traversal on the original reader.
 func (t *Tenant) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {
 	if selected := pageowner.QuerySourceDefinition(t.Definitions(m), &binding); selected != nil {
 		return selected.LinkType

@@ -16,7 +16,6 @@ export interface AssetInspectorProps {
 type AssetNav = Pick<AssetInspectorProps, "index" | "onSelect">;
 type LinkKind = "composition" | "declared";
 
-/** One local row style for both directions of the asset relationship. */
 function AssetLink({ id, kind, index, onSelect }: AssetNav & { id: string; kind: LinkKind }) {
   const asset = index.entries.find((item) => item.id === id);
   const Icon = kind === "composition" ? Box : Layers;
@@ -42,7 +41,6 @@ function AssetLinks({ ids, kind, index, onSelect, empty }: AssetNav & {
     <AssetLink key={id} id={id} kind={kind} index={index} onSelect={onSelect} />)}</div>;
 }
 
-/** 1. Static structure: slots, directly rendered public components, declared dependencies. */
 export function StructureTab({ entry, index, onSelect }: Pick<AssetInspectorProps, "entry" | "index" | "onSelect">) {
   const slots = entry.slots ?? [];
   return <div className="grid content-start text-xs">
@@ -78,7 +76,6 @@ export function StructureTab({ entry, index, onSelect }: Pick<AssetInspectorProp
   </div>;
 }
 
-/** 2. API for the selected asset; package-wide exports are supplementary only. */
 export function ApiTab({ entry, index }: Pick<AssetInspectorProps, "entry" | "index">) {
   const [filter, setFilter] = useState("");
   const [expandedType, setExpandedType] = useState<string>();
@@ -141,7 +138,6 @@ export function ApiTab({ entry, index }: Pick<AssetInspectorProps, "entry" | "in
   </div>;
 }
 
-/** 3. Upstream users and downstream dependencies are different directed edges. */
 export function RelationsTab({ entry, index, onSelect }: Pick<AssetInspectorProps, "entry" | "index" | "onSelect">) {
   const composing = index.entries.filter((asset) => asset.composed?.includes(entry.id)).map((asset) => asset.id);
   const referring = index.entries.filter((asset) => asset.dependencies?.includes(entry.id)).map((asset) => asset.id);
@@ -186,7 +182,6 @@ export function RelationsTab({ entry, index, onSelect }: Pick<AssetInspectorProp
   </div>;
 }
 
-/** 4. Reuse the existing import and Builder flow; no new runtime or permissions. */
 export function UsageTab({ entry, shown, canBuild, builderOnly, onOpenBuilder }:
   Pick<AssetInspectorProps, "entry" | "shown" | "canBuild" | "builderOnly" | "onOpenBuilder">) {
   const [copied, setCopied] = useState("");

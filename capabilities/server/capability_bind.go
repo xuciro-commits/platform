@@ -11,8 +11,6 @@ import (
 	"platformserver/platform"
 )
 
-// Bind page inputs from the same scoped record read used by Flow. Source
-// labels are supplied by the host, never stripped by a compute guest.
 func (t *Tenant) bindCapabilityInputs(m platform.Member, q platform.CapabilityInvocation, now time.Time) (json.RawMessage, []string, *kernel.Error) {
 	refuse := func(message string) (json.RawMessage, []string, *kernel.Error) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)

@@ -3,7 +3,6 @@ import type { Api } from "@platform/kernel";
 export type TransactionIssue = { path: number[]; step: string; ref: string; reason: "missing" | "forward" | "unavailable" | "name" };
 const producesResult = (step: Api.TxnStep) => step.kind === "create" || step.kind === "post" || step.kind === "sequence" || !!step.call;
 
-/** Visit typed reference slots only. Literal JSON, prose and capability names are data. */
 function references(step: Api.TxnStep, change: (ref: string) => string) {
   const expression = (value?: Api.Expr) => {
     if (!value) return;
@@ -36,8 +35,6 @@ export function renameTransactionStep(value: Api.BusinessTxn, path: number[], af
   const before = selected.name, names: string[] = [];
   const gather = (items: Api.TxnStep[]) => items.forEach(step => { names.push(step.name); if (step.forEach) gather(step.forEach.steps); });
   gather(result.steps);
-  // An already duplicated producer is ambiguous: keep its references visible
-  // until the user resolves the duplicate, rather than guessing their owner.
   const unique = names.filter(name => name === before).length === 1;
   selected.name = after;
   const change = (ref: string) => unique && ref === `step.${before}` ? `step.${after}` : ref;
@@ -45,13 +42,10 @@ export function renameTransactionStep(value: Api.BusinessTxn, path: number[], af
     references(step, change); if (step.forEach) walk(step.forEach.steps);
   });
   walk(result.steps);
-  // Entry guards/refusals cannot consume a result; retain and rename malformed
-  // references too so the same diagnostic points to the renamed producer.
   references({ name: "", kind: "", when: result.guard, refusals: result.refusals, effect: result.dispatch ? { writeback: "", payload: result.dispatch.payload } : undefined }, change);
   return result;
 }
 
-/** Preserve invalid references after move/delete, and explain their original scope. */
 export function transactionIssues(value: Api.BusinessTxn): TransactionIssue[] {
   const issues: TransactionIssue[] = [], names = new Map<string, Api.TxnStep>(), duplicate = new Set<string>();
   const gather = (steps: Api.TxnStep[]) => steps.forEach(step => { if (names.has(step.name)) duplicate.add(step.name); names.set(step.name, step); if (step.forEach) gather(step.forEach.steps); });
@@ -68,7 +62,6 @@ export function transactionIssues(value: Api.BusinessTxn): TransactionIssue[] {
     steps.forEach((step, at) => {
       const path = [...parent, at];
       if (!/^\p{Ll}[\p{Ll}\p{Nd}]*$/u.test(step.name) || duplicate.has(step.name)) issues.push({ path, step: step.name, ref: step.name, reason: "name" });
-      // Inspect a copy: this check must not edit the caller's draft.
       inspect(structuredClone(step), path, available);
       if (step.forEach) walk(step.forEach.steps, path, available);
       else if (producesResult(step)) available.add(step.name);

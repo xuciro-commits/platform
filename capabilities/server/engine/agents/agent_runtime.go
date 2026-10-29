@@ -30,16 +30,14 @@ const (
 	modelFailures = 3
 )
 
-// Agents is a tenant's agent app.
 type Agents struct {
-	host   platform.AgentHost
-	mu     sync.Mutex
-	tenant string
-	ledger *platform.Ledger
-	defs   map[string]*platform.CompiledAgent // "<app>.<name>"
-	// buildStamp is the builder's agent stamp the defs were last read at.
+	host       platform.AgentHost
+	mu         sync.Mutex
+	tenant     string
+	ledger     *platform.Ledger
+	defs       map[string]*platform.CompiledAgent
 	buildStamp string
-	busy       map[string]bool // runs whose model is being called
+	busy       map[string]bool
 }
 
 func (a *Agents) AttachAgent(h platform.AgentHost) { a.host = h }
@@ -82,11 +80,7 @@ func (a *Agents) NewSimulationApp(tenant string) platform.App { return New(tenan
 
 func agentEntities() []platform.Entity {
 	return []platform.Entity{{Type: platform.RunType, Title: "Agent run", Model: platform.AgentRunRecord{}, Display: "title",
-		// What the agent saw, read, cited, drafted and concluded came from other
-		// records, so each reader reads it only while they may read those.
 		Derived: []platform.Derivation{
-			// Even a public document's association with this business task is
-			// derived from its record; reading the document is not that grant.
 			{From: "ref", Fields: []string{"seen", "citations"}},
 			{From: "steps.sources", Fields: []string{"arguments", "outcome", "calls", "content"}},
 			{From: "citations.document", Element: true},
@@ -134,17 +128,13 @@ func rationale() map[string]any {
 	return map[string]any{"type": "string", "description": "Why you take this step, in one sentence"}
 }
 
-// def is an agent by ID. Builder-declared agents come and go with
-// publications, so the builder's are re-read whenever its stamp changes.
 func (a *Agents) def(id string) *platform.CompiledAgent {
 	a.refresh()
 	return a.defs[id]
 }
 
-// idle forgets that run's model is being called.
 func (a *Agents) IdleAgentTurn(run string) { delete(a.busy, run) }
 
-// each visits the declared agents, by ID.
 func (a *Agents) each(fn func(id string, d *platform.CompiledAgent)) {
 	for id, d := range a.defs {
 		fn(id, d)
@@ -184,7 +174,6 @@ func (a *Agents) automation(app string, replaying bool) platform.Caller {
 
 func (a *Agents) authorityOf(typ string) string { app, _ := a.host.OwnerOf(typ); return app }
 
-// declare registers an app's agents and their tools (NewTenant).
 func (a *Agents) DeclareAgentApp(app platform.App) error {
 	m := app.Manifest()
 	for _, ag := range m.Agents {
@@ -291,7 +280,6 @@ func (a *Agents) DeclareAgentApp(app platform.App) error {
 	return nil
 }
 
-// agentMember is the principal an agent signs as.
 func (a *Agents) AgentPrincipal(agent string) platform.Member {
 	return platform.Member{ID: "agent:" + agent, Tenant: a.tenant, Roles: map[string]string{}, Agent: true}
 }
@@ -313,14 +301,13 @@ func (a *Agents) runs(c platform.Caller, state ...string) []platform.AgentRunRec
 	return out
 }
 
-// Submit takes members' requests, their answers to drafts and stops; steps are the host's.
 func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if s.GetSchema().GetName() == platform.SchemaRunStep {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	if record, err, ok := a.ledger.Generated(c, s, now, nil, agentEntities()...); ok { // keeping and forgetting memories
+	if record, err, ok := a.ledger.Generated(c, s, now, nil, agentEntities()...); ok {
 		return record, err
 	}
 	var p struct {
@@ -338,13 +325,13 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		case platform.SchemaToolPropose:
 			return true
 		case platform.SchemaRunStart:
-			return d != nil && c.Roles[d.App] != "" // an agent of an app the member works in
+			return d != nil && c.Roles[d.App] != ""
 		case platform.SchemaRunCancel:
 			return c.Roles[platform.AgentApp] == platform.AgentAdmin || known && run.OnBehalf == c.ID
 		case platform.SchemaEvalStart, platform.SchemaSuspend, platform.SchemaResume:
-			return true // the catalog's role
+			return true
 		}
-		return known && !c.Agent && !c.Automation && (run.OnBehalf == c.ID || slices.Contains(run.Reviewers, c.ID)) // drafts are answered by whom the run is for
+		return known && !c.Agent && !c.Automation && (run.OnBehalf == c.ID || slices.Contains(run.Reviewers, c.ID))
 	}
 	return a.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		switch s.GetSchema().GetName() {
@@ -423,7 +410,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 				}
 				done, err := a.confirm(c, run, draft, payload, now)
 				if err != nil {
-					return nil, err // the draft stays; the person may change it or reject it
+					return nil, err
 				}
 				step.Outcome += "\n" + kind + " by " + c.ID + ": " + done
 				signal := platform.Signal{At: now, Kind: kind, By: c.ID}
@@ -478,7 +465,6 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if run.ToolOnly {
 				run.State = "done"
 			} else if draft.Kind == "effect" && draft.Outcome == "accepted" {
-				// A confirmed send goes on with its receiver's answer, refusal or discard.
 				run.State, run.Task = "waiting", fmt.Sprintf("effect:%s/%s:agent:%s:%d:confirm", draft.Owner, draft.Action, run.ID, draft.Step+1)
 			}
 			return func(r *pb.ChangeRecord) {
@@ -496,7 +482,6 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	})
 }
 
-// confirm does a drafted action as the person who confirmed it, correlated to the run.
 func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platform.Draft, payload string, now time.Time) (string, *kernel.Error) {
 	if !run.ToolOnly && a.changedDefinition(run, a.def(run.Agent)) {
 		return "", platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The agent definition changed; start a new run")
@@ -528,7 +513,7 @@ func (a *Agents) confirm(c platform.Caller, run platform.AgentRunRecord, d platf
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "effect" {
 		sender := platform.ActingCaller(c, c.Member, d.Owner, false)
-		endRun := h.ScopeAgentRun(run.ID) // the effect keeps the run it was proposed in
+		endRun := h.ScopeAgentRun(run.ID)
 		n, err := sender.Emit(d.Action, key, run.Ref, json.RawMessage(payload), now)
 		endRun()
 		if err != nil {
@@ -565,7 +550,6 @@ func sameJSON(x, y []byte) bool {
 	return aerr == nil && berr == nil && bytes.Equal(a, b)
 }
 
-// signal records what a person made of a run's work, in another app's decision.
 func (a *Agents) RecordAgentSignal(c platform.Caller, r *pb.ChangeRecord, id string, sig platform.Signal, now time.Time) {
 	c = a.host.Automation(c, platform.AgentApp)
 	if run, ok := platform.Get[platform.AgentRunRecord](c, id); ok {
@@ -632,10 +616,8 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 	return run, nil
 }
 
-// Read "agents": the declared agents, their tools and budgets; "runs": the
-// runs on the caller's behalf.
 func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
-	if name == "memories" { // what agents remember about the caller
+	if name == "memories" {
 		about, _ := json.Marshal([]any{[]any{"for", "=", c.ID}, []any{"state", "!=", "forgotten"}})
 		out, _, _ := platform.Find[platform.Memory](a.host.Automation(c, platform.AgentApp), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
 		return out, nil
@@ -682,9 +664,6 @@ func (a *Agents) definitionVersion(d *platform.CompiledAgent) string {
 	if len(d.Checkpoints) > 0 {
 		parts = append(parts, d.Checkpoints)
 	}
-	// A query's predicate is part of the agent's effective tool definition.
-	// Refreshing that definition stops an existing run through the same
-	// handover path as a changed agent; it must not silently change its reads.
 	for _, name := range d.Agent.Tools {
 		if query, ok := d.Toolset[agentToolName(name)]; ok && query.Kind == "query" {
 			parts = append(parts, query.Query)
@@ -702,9 +681,6 @@ func (a *Agents) changedDefinition(run platform.AgentRunRecord, d *platform.Comp
 	return dynamic && run.DefinitionVersion != "" && run.DefinitionVersion != a.definitionVersion(d)
 }
 
-// Agent definitions contain callbacks and remain immutable after declaration.
-// Refresh replaces map entries; a private run owns that map and its execution
-// bookkeeping without replacing live model reservations when it commits.
 func (a *Agents) ForkDecision() (platform.App, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -714,7 +690,6 @@ func (a *Agents) ForkDecision() (platform.App, error) {
 
 var _ platform.DecisionForkApp = (*Agents)(nil)
 
-// AllowsAgentRun rechecks the current principal against its declared app.
 func (a *Agents) AllowsAgentRun(run platform.AgentRunRecord) bool {
 	d := a.def(run.Agent)
 	if d == nil {
@@ -735,12 +710,8 @@ func (a *Agents) AgentDeclaration(id string) (platform.AgentCardDeclaration, boo
 	return platform.AgentCardDeclaration{App: d.App, Title: d.Title, Description: d.Description}, true
 }
 
-// toolDraft is shared by managed runs and the MCP proposal input. It probes
-// the original action with the human grants and retains only typed evidence.
 func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft platform.Draft, now time.Time) (platform.Draft, *kernel.Error) {
 	h := a.host
-	// The proposal is bound to who it was drafted for: the person the run acts
-	// for, or the agent's own principal, never whoever later confirms it.
 	member := a.AgentPrincipal(run.Agent)
 	if run.OnBehalf != "" {
 		var ok bool
@@ -860,8 +831,6 @@ func (a *Agents) evaluationDefinition(candidate, agent string) (*platform.Compil
 	if err != nil {
 		return nil, "", err
 	}
-	// Reuse the original tool compiler and dry evaluator; no installed
-	// declaration, business record or live run is changed by this selection.
 	compiler := New(a.tenant)
 	compiler.host = a.host
 	if err := compiler.DeclareAgentApp(app); err != nil {
@@ -885,7 +854,6 @@ func switchActions() []platform.Action {
 	}
 }
 
-// switchDecision suspends or resumes an agent.
 func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ Reason string }) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	if id == "" {
@@ -901,7 +869,6 @@ func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ R
 	return func(r *pb.ChangeRecord) { app.Put(r, sw) }, nil
 }
 
-// AgentsOverview is every agent, declared and outside, for the agent app's administrators.
 func (a *Agents) AgentOverview() []platform.AgentOverview {
 	c := a.automation(platform.AgentApp, false)
 	rows := map[string]*platform.AgentOverview{}
@@ -950,7 +917,6 @@ func (a *Agents) AgentOverview() []platform.AgentOverview {
 	return out
 }
 
-// due collects the running runs' next turns, under the tenant's lock.
 func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
 	h := a.host
 	endRead := h.BeginAgentRead()
@@ -981,16 +947,13 @@ func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
 		case name == "" && len(run.Pending) == 0:
 			x.Stop = "no model is set for agents"
 		case len(run.Pending) == 0 && agents.SpentOut(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost):
-			// A run at its budget is not given another model call: the reply
-			// that crossed the budget already happened, and one more would
-			// only spend more.
 			x.Stop = agents.BudgetReason(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost)
-		case h.AgentSuspended("agent:" + run.Agent): // the off switch
+		case h.AgentSuspended("agent:" + run.Agent):
 			sw, _ := h.Record(platform.SwitchType + "/agent:" + run.Agent)
 			x.Stop = "suspended by " + sw.(platform.Switch).By
 		default:
 			if len(run.Pending) > 0 {
-				break // accepted tool calls do not reserve another model call or spend a model turn
+				break
 			}
 			model, pv, err := h.AgentModel(name)
 			if err != nil {
@@ -1017,7 +980,6 @@ func (a *Agents) DueAgentTurns(now time.Time) []platform.AgentTurn {
 	return out
 }
 
-// apply takes one journaled step as a decision of the agent app.
 func (a *Agents) ApplyAgentStep(b platform.AgentResultStep, now time.Time, replaying bool) *kernel.Error {
 	return a.ApplyAgentStepCaller(a.automation(platform.AgentApp, replaying), b, now)
 }
@@ -1054,7 +1016,6 @@ func (a *Agents) ApplyAgentStepCaller(c platform.Caller, b platform.AgentResultS
 	return err
 }
 
-// take runs the step's tool and returns how the run changes.
 func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform.AgentResultStep, now time.Time) func(*pb.ChangeRecord) {
 	continuing := b.CallID != ""
 	if len(b.Calls) > 0 {
@@ -1063,13 +1024,10 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform
 		run.Pending = slices.Clone(b.Calls[1:])
 	} else if continuing {
 		if len(run.Pending) == 0 || run.Pending[0].ID != b.CallID {
-			return func(*pb.ChangeRecord) {} // historical duplicate; no tool is run twice
+			return func(*pb.ChangeRecord) {}
 		}
 		run.Pending = slices.Clone(run.Pending[1:])
 	}
-	// PostgreSQL JSONB may reorder nested object keys differently from Go's
-	// encoder. Normalize on both live application and replay, not only before
-	// journaling, because these raw bytes become strings in the run history.
 	if len(b.Arguments) > 0 {
 		if normalized, err := agents.NormalizeStepJSON(b.Arguments); err == nil {
 			b.Arguments = normalized
@@ -1096,7 +1054,7 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform
 		run.StepsUsed++
 	}
 	run.TokensUsed += step.Tokens
-	if b.Usage.CostReported { // a cost nobody reported is not 0, it is unknown
+	if b.Usage.CostReported {
 		run.Cost += b.Usage.Cost
 	}
 	run.Model = cmp.Or(b.Usage.Model, run.Model)
@@ -1128,11 +1086,9 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform
 		step.Outcome = "the agent definition changed; start a new run"
 		stop(step.Outcome)
 	case run.StepsUsed > d.Budget.Steps || run.TokensUsed > d.Budget.Tokens || d.Budget.Cost > 0 && run.Cost > d.Budget.Cost:
-		// The reply that crossed the budget: what it cost is kept, and no
-		// further call is made for this run.
 		step.Outcome = "over budget"
 		stop(agents.BudgetReason(d.Budget, run.StepsUsed, run.TokensUsed, run.Cost))
-	case b.Tool == "": // a text answer ends the run with it
+	case b.Tool == "":
 		step.Outcome = "finished"
 		run.Result, run.State = b.Content, "done"
 	default:
@@ -1141,7 +1097,7 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform
 			step.Outcome = "no tool " + b.Tool
 			break
 		}
-		if tool.Kind == "knowledge" { // found outside the lock, journaled with the step
+		if tool.Kind == "knowledge" {
 			var found []platform.Passage
 			json.Unmarshal(b.Observation, &found)
 			for _, p := range found {
@@ -1155,7 +1111,7 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform
 		}
 		step.Outcome, then = a.use(c, d, &run, tool, args, b.Arguments, &step, now)
 	}
-	if step.CallID == "" { // the retained single-call journal format keeps its original result bytes
+	if step.CallID == "" {
 		step.Outcome = agents.LegacyOutcome(step.Outcome, outcomeLimit)
 	} else {
 		step.Outcome = agents.Observation(step.Outcome, outcomeLimit)
@@ -1171,15 +1127,13 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform
 		if len(run.Proposals) > 0 && run.Proposals[len(run.Proposals)-1].Evidence == "" {
 			run.Proposals[len(run.Proposals)-1].Evidence = platform.AgentApp + "/" + r.GetChangeId()
 		}
-		c.Put(r, run) // before its flow goes on, which may keep a signal on it
+		c.Put(r, run)
 		if run.State == "done" {
 			a.ended(c, r, run, now)
 		}
 	}
 }
 
-// Every accepted model call retains a result, including calls deliberately
-// skipped because an earlier call finished or a person stopped the run.
 func finishPendingCalls(run *platform.AgentRunRecord, now time.Time) {
 	sources := run.SourceRefs()
 	for _, call := range run.Pending {
@@ -1189,7 +1143,6 @@ func finishPendingCalls(run *platform.AgentRunRecord, now time.Time) {
 	run.Pending = nil
 }
 
-// use runs one tool; it may return what the decision does besides storing the run.
 func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
 	h := a.host
 	str := func(k string) string { s, _ := args[k].(string); return s }
@@ -1219,7 +1172,7 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 			return "refused: " + err.Error(), nil
 		}
 		if step.CallID == "" {
-			step.Sources = nil // retained legacy steps recorded only this observation's sources
+			step.Sources = nil
 		}
 		step.Sources = append(step.Sources, str("type")+"/"+str("id"))
 		step.Sources = append(step.Sources, view.Sources...)
@@ -1277,7 +1230,6 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 	if c.Replaying {
 		return a.replayLegacyAction(c, d, run, tool, args, raw, step, now)
 	}
-	// An action: the declared tool, the person's own grants when it runs for one, the guard, the budget.
 	if run.ActionsUsed >= d.Budget.Actions {
 		return fmt.Sprintf("refused: its budget of %d actions is spent", d.Budget.Actions), nil
 	}
@@ -1308,8 +1260,6 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 
 }
 
-// reviewers is the caller a run's recipients resolve under: AppRole entries an
-// agent declares name roles of the app that declared it, not of the agent app.
 func (a *Agents) reviewers(c platform.Caller, run platform.AgentRunRecord) platform.Caller {
 	if d := a.def(run.Agent); d != nil && run.OnBehalf == "" && d.App != "" {
 		return platform.RouteCaller(c, d.App)
@@ -1327,8 +1277,6 @@ func (a *Agents) recipients(c platform.Caller, d *platform.CompiledAgent, run pl
 	return nil
 }
 
-// stop ends a run that cannot go on: a flow's run goes back to its flow; any
-// other goes to a person as a task.
 func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *platform.AgentRunRecord, why string, now time.Time) {
 	run.State, run.Stopped, run.Draft = "stopped", why, nil
 	finishPendingCalls(run, now)
@@ -1364,7 +1312,6 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *platform.Agent
 
 }
 
-// ended hands a flow's run back to its flow.
 func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run platform.AgentRunRecord, now time.Time) {
 	processes := a.host.AgentFlows()
 	if run.Flow != "" && processes != nil {
@@ -1372,7 +1319,6 @@ func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run platform.Agent
 	}
 }
 
-// Start, Signal and Finished serve flows' agent steps (internal/platform.Runs).
 func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s platform.RunStart, now time.Time) {
 	run, err := a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now, !c.Replaying && c.Staging())
 	if err != nil {
@@ -1400,20 +1346,17 @@ func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
 	return out
 }
 
-// Interested and Listen take the events agents wait on (internal/platform.Listener).
 func (a *Agents) Interested(_ []string, e platform.Event) bool { return a.interested(e) }
 
 func (a *Agents) Listen(c platform.Caller, e platform.Event, _ []string, now time.Time) *kernel.Error {
 	return a.handle(c, e, now)
 }
 
-// interested: an answer to a run's question.
 func (a *Agents) interested(e platform.Event) bool {
 	s := e.Record.GetSubmission()
 	return e.App == platform.WorkApp && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), platform.AgentApp+":")
 }
 
-// handle resumes the run a person answered.
 func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *kernel.Error {
 	id := e.Record.GetSubmission().GetTarget().GetId()
 	for _, run := range a.runs(c, "waiting") {
@@ -1434,9 +1377,6 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 	return nil
 }
 
-// effectEnded resumes the run that sent an effect, with what came of it: the
-// receiver's answer, its refusal, or a person discarding it. r is the decision
-// it happens in, or nil for one of its own.
 func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.Effect, o platform.Outcome, now time.Time) {
 	task := "effect:" + x.Event + ":" + x.Key
 	for _, run := range a.runs(a.host.Automation(c, platform.AgentApp), "waiting") {
@@ -1467,16 +1407,13 @@ func (a *Agents) AgentEffectEnded(c platform.Caller, r *pb.ChangeRecord, x platf
 	}
 }
 
-// replayLegacyAction interprets only pre-result journals using their original
-// tool decision semantics. It cannot be reached by a new model/tool request.
 func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent, run *platform.AgentRunRecord, tool platform.CompiledAgentTool, args map[string]any, raw json.RawMessage, step *platform.RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
 	h := a.host
 	str := func(name string) string { value, _ := args[name].(string); return value }
-	// An action: the declared tool, the person's own grants when it runs for one, the guard, the budget.
 	if run.ActionsUsed >= d.Budget.Actions {
 		return fmt.Sprintf("refused: its budget of %d actions is spent", d.Budget.Actions), nil
 	}
-	if tool.Kind == "effect" { // sent to the endpoints bound to it, an external agent's answer awaited
+	if tool.Kind == "effect" {
 		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
 		sender := platform.ActingCaller(c, a.AgentPrincipal(run.Agent), d.App, true)
 		endRun := h.ScopeAgentRun(run.ID)
@@ -1502,8 +1439,6 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 			step.Sources = append(step.Sources, ref)
 		}
 	}
-	// Some owners accept a logical target rather than a stored row ID. Only
-	// real rows are record dependencies, before or after the nested decision.
 	trackTarget()
 	body := agents.ActionPayload(raw, step.CallID != "")
 	if d.Guard != nil {
@@ -1523,7 +1458,6 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 	if mustConfirm && person == nil {
 		return "refused: this checkpoint waits for a person", nil
 	}
-	// For a person, it drafts and the person confirms (D6); a flow's agent acts itself.
 	draft := func(typ string) (string, func(*pb.ChangeRecord)) {
 		run.Draft = []platform.Draft{{Kind: tool.Kind, Action: tool.Schema, Target: target, Type: typ, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}}
 		run.State = "waiting"
@@ -1544,7 +1478,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 				return draft("")
 			}
 		}
-		endRun := h.ScopeAgentRun(run.ID) // effects retain their originating run
+		endRun := h.ScopeAgentRun(run.ID)
 		_, err := platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
 			_, record, err := h.InvokeDecision(agent, protocol, schema, target, body, key, run.ID, now)
 			return record, err
@@ -1560,7 +1494,7 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 	app := h.App(d.App)
 	s := &pb.Submission{TenantId: a.tenant, PrincipalId: agent.ID, Authority: a.authorityOf(tool.Target), IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: tool.Target, Id: target}, Schema: &pb.SchemaRef{Name: tool.Schema, Version: 1}, Payload: body, CorrelationId: run.ID}
-	if person != nil { // D2: never more than the person it runs for
+	if person != nil {
 		request := proto.Clone(s).(*pb.Submission)
 		request.PrincipalId = person.ID
 		asked := platform.ActingCaller(c, *person, app.Manifest().ID, false)
@@ -1589,17 +1523,15 @@ func (a *Agents) replayLegacyAction(c platform.Caller, d *platform.CompiledAgent
 }
 
 const (
-	evaluationRuns = 20 // the latest runs people answered
+	evaluationRuns = 20
 )
 
 const (
-	memoryDays   = 90 // what an agent remembers, unless kept
-	proposalDays = 14 // a proposal nobody kept
-	memoriesUsed = 8  // in a prompt
+	memoryDays   = 90
+	proposalDays = 14
+	memoriesUsed = 8
 )
 
-// evaluationVersion includes the declared inputs as well as the original
-// owner's version. Check functions stay owned by that version, never serialized.
 func (a *Agents) evaluationVersion(d *platform.CompiledAgent) string {
 	cases := make([][]string, len(d.Cases))
 	for i, c := range d.Cases {
@@ -1609,7 +1541,6 @@ func (a *Agents) evaluationVersion(d *platform.CompiledAgent) string {
 	return digest
 }
 
-// startEvaluation queues a candidate's evaluation (an administrator's decision).
 func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 	Agent, Model, Candidate string
 	Suite                   bool

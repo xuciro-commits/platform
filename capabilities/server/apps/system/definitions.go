@@ -16,7 +16,6 @@ func (s *System) prepareDefinitionActivation(c platform.Caller, activation *Acti
 	if len(release.Candidate) == 0 {
 		return nil
 	}
-	// Code changes install only when the updater reports a successful swap.
 	if release.Kind != "definitions" && activation.Result != StateActive {
 		return nil
 	}

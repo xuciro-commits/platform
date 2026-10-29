@@ -1,4 +1,3 @@
-/** Logical CSS pixels: guides stay invariant when the editor is zoomed. */
 export type ResizeGuide={position:number;kind:'edge'|'grid'};
 export function snapDimension(value:number,min:number,max:number,step=8,candidates:number[]=[],tolerance=6):{value:number;guide?:ResizeGuide} {
  if(!Number.isFinite(value)||!Number.isFinite(min)||!Number.isFinite(max)||min>max||!Number.isFinite(step)||step<=0)throw new Error('Invalid canvas size bounds');

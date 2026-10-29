@@ -15,26 +15,14 @@ import (
 	"time"
 )
 
-// States and actions a tenant gives its own objects (–D3). An action
-// is typed data compiled into the platform's own lifecycle transition: the
-// ledger routes it, replay runs it again, and every surface that offers a coded
-// transition offers it. Nothing here is code the tenant supplies.
-
-// creator makes one related record, or one balance after a posting, inside
-// the decision being taken; nil where no host is attached (descriptors,
-// validation), which refuses a Create or a Post.
 type creator interface {
 	create(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
 	post(c platform.Caller, p Post, inputs map[string]any, record any, now time.Time) (any, *kernel.Error)
 	businessRuntime() platform.TransactionExecutor
 }
 
-// Operators are the comparisons a condition may make.
 var Operators = []string{"=", "!=", "<", "<=", ">", ">=", "empty", "not empty"}
 
-// checkProcess refuses states and actions people could not take: names that are
-// not names, an action from or to a state the object has not, an input or a
-// field it does not have, a condition that compares nothing.
 func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) error {
 	if len(o.States) == 0 && len(o.Actions) > 0 {
 		return fmt.Errorf("an object needs states before it has actions")
@@ -253,8 +241,6 @@ func checkActionCondition(o Object, a Action, cond Condition, lookup func(string
 	return nil
 }
 
-// conditionField resolves a typed operand against this draft and installed
-// related objects. It never infers a field from an arbitrary JSON expression.
 func conditionField(o Object, a Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.FieldInfo, error) {
 	if input, ok := strings.CutPrefix(name, "input."); ok {
 		for _, in := range a.Inputs {
@@ -300,9 +286,6 @@ func checkConditionFields(left, right platform.FieldInfo, op string) error {
 	return nil
 }
 
-// inputFits is the publication-time contract for assigning an action input to
-// an object field. In particular a string is not silently accepted as a date,
-// number or reference merely because both travel through JSON.
 func inputFits(input, field string) bool {
 	switch field {
 	case "text", "longtext":
@@ -316,8 +299,6 @@ func inputFits(input, field string) bool {
 	}
 }
 
-// checkCondition prevents a published rule from silently changing meaning
-// through lexical comparison (for example an integer compared with "abc").
 func checkCondition(kind string, options []string, c Condition) error {
 	if c.Operator == "empty" || c.Operator == "not empty" {
 		return nil
@@ -343,9 +324,6 @@ func checkCondition(kind string, options []string, c Condition) error {
 	return nil
 }
 
-// lifecycle is the object's states and actions as the platform's own lifecycle
-// each action a transition whose Do checks its conditions and
-// sets its fields, inside the decision and again in replay.
 func lifecycle(o Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
 	if len(o.States) == 0 {
 		return nil
@@ -357,7 +335,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 	for _, a := range o.Actions {
 		to := a.To
 		if to == "" {
-			to = a.From[0] // it stays where it was: Do keeps the status, and it must be among To
+			to = a.From[0]
 		}
 		reach := []string{to}
 		if a.To == "" {
@@ -376,7 +354,7 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 		}
 		action := a
 		takers := slices.Clone(roles)
-		if len(a.Roles) > 0 { // the builder always tries what it builds
+		if len(a.Roles) > 0 {
 			takers = append([]string{Builder}, a.Roles...)
 		}
 		var approval *platform.Approval
@@ -427,8 +405,6 @@ func lifecycle(o Object, roles []string, creates creator, lookup func(string) (p
 	return l
 }
 
-// stored puts an action's related records under the change that took it, as
-// Do built and checked them from the same inputs.
 func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
 	if len(a.Creates) == 0 && len(a.Posts) == 0 || creates == nil {
 		return nil
@@ -454,8 +430,6 @@ func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.Chang
 	}
 }
 
-// take is one action on a record: its required inputs, its conditions, then
-// the fields it sets. A refusal says what the builder wrote.
 func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator, lookup func(string) (platform.EntityInfo, bool)) *kernel.Error {
 	if !c.Replaying {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Legacy action execution is reserved for historical inputs")
@@ -506,9 +480,6 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} cannot set {field}: {why}", a.Title, set.Field, err.Error())
 		}
 	}
-	// Related records last: conditions and sets have already held. Each is
-	// built and checked now (its required fields and create roles apply); the
-	// transition's After stores it under the same change.
 	rec := v.Field(0).Interface().(platform.Record)
 	for i, cr := range a.Creates {
 		if creates == nil {
@@ -529,7 +500,6 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 	return nil
 }
 
-// assign sets a record's field from a value decoded from JSON or built above.
 func assign(f reflect.Value, x any) error {
 	if !f.IsValid() {
 		return fmt.Errorf("no such field")
@@ -548,8 +518,6 @@ func assign(f reflect.Value, x any) error {
 
 var readLevels = map[string]string{"all": platform.ScopeTenant, "below": platform.ScopeBelow, "unit": platform.ScopeUnit, "own": platform.ScopeOwn, "none": platform.ScopeNone}
 
-// checkScope: the scope fields exist and suit their use, and every read level
-// that needs one has it.
 func checkScope(o Object) error {
 	field := func(name string) *Field {
 		if i := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == name }); i >= 0 {
@@ -579,9 +547,6 @@ func checkScope(o Object) error {
 	return nil
 }
 
-// checkAccess refuses access people could not be given: a role that is not a
-// name, one listed twice, one that writes what it may not read, and actions or
-// fields naming roles the object does not declare.
 func checkAccess(o Object) error {
 	roles := map[string]bool{Builder: true}
 	for _, a := range o.Access {
@@ -624,9 +589,6 @@ func checkAccess(o Object) error {
 	return nil
 }
 
-// access is the object's access as the platform's own declarations: its
-// generated actions' roles per verb, and its scope. With no
-// access declared an object keeps the rule of 15a: builder and user do everything.
 func access(o Object) (platform.Standard, platform.Scope, []string) {
 	std := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, User}, Capability: o.Name}
 	if len(o.Access) == 0 {
@@ -659,7 +621,6 @@ func access(o Object) (platform.Standard, platform.Scope, []string) {
 	return std, scope, roles
 }
 
-// State is one state a defined object's records are in.
 type State struct {
 	Name        string `json:"name" field:"required" help:"Lower-case letters and digits" example:"found"`
 	Title       string `json:"title" field:"required" title:"What people call it" example:"Found"`
@@ -667,10 +628,6 @@ type State struct {
 	Description string `json:"description,omitempty" help:"What a record in this state means"`
 }
 
-// Action is a step people take on one of its records.
-// Sets/Creates/Posts/Journal/Reverses are frozen legacy expressions.
-// New multi-record capabilities use Transaction exclusively; historical
-// definitions retain their original bytes and execution during migration.
 type Action struct {
 	ConfirmationOnly bool                       `json:"confirmationOnly,omitempty" title:"Require original confirmation receipt"`
 	Adoption         *platform.ProposalAdoption `json:"adoption,omitempty" type:"json" field:"aside"`
@@ -685,46 +642,32 @@ type Action struct {
 	Reads            *platform.RuleReadSpec     `json:"reads,omitempty" type:"json" field:"aside"`
 	Sets             []Set                      `json:"sets,omitempty" title:"What it sets"`
 	Conditions       []Condition                `json:"conditions,omitempty" title:"What it needs"`
-	// Roles are who may take it; empty: every role of the object.
-	Roles    []string        `json:"roles,omitempty" title:"Taken by"`
-	Approval *ActionApproval `json:"approval,omitempty" title:"Approval"`
-	// Creates are related records it makes in the same decision: all of them and the record's change commit together, or none does.
-	Creates []Create `json:"creates,omitempty" title:"What it creates"`
-	// Posts add to or subtract from balances kept on other objects, under the
-	// same decision.
-	Posts []Post `json:"posts,omitempty" title:"What it posts"`
-	// Journal is the balanced accounting entry the decision causes in the
-	// books (core.journal): landed by the host after acceptance,
-	// once per decision, into the open period of its date.
-	Journal *JournalPost `json:"journal,omitempty" title:"What it books"`
-	// Reverses names another action of this object whose postings and journal
-	// this one undoes with the opposite sign: a reversal, not a delete.
-	Reverses string `json:"reverses,omitempty" title:"Reverses action"`
+	Roles            []string                   `json:"roles,omitempty" title:"Taken by"`
+	Approval         *ActionApproval            `json:"approval,omitempty" title:"Approval"`
+	Creates          []Create                   `json:"creates,omitempty" title:"What it creates"`
+	Posts            []Post                     `json:"posts,omitempty" title:"What it posts"`
+	Journal          *JournalPost               `json:"journal,omitempty" title:"What it books"`
+	Reverses         string                     `json:"reverses,omitempty" title:"Reverses action"`
 }
 
-// Create is a record of another defined object made when an action is taken:
-// Via is that object's reference field back to this record.
 type Create struct {
 	Object string `json:"object" field:"required" help:"A defined object of this builder whose reference points at this one" example:"build.followup"`
 	Via    string `json:"via" field:"required" help:"That object's reference field to this record" example:"visit"`
 	Sets   []Set  `json:"sets,omitempty" title:"What it sets"`
 }
 
-// ActionApproval uses the work app's approval chain for a tenant action.
 type ActionApproval struct {
 	Pending  string          `json:"pending" title:"While it waits"`
 	Rejected string          `json:"rejected,omitempty" title:"If rejected"`
 	Levels   []ApproverLevel `json:"levels" title:"Approver levels"`
 }
 
-// ApproverLevel is a role of the builder app, resolved when the request opens.
 type ApproverLevel struct {
 	Title string `json:"title" title:"What this level is called"`
 	Role  string `json:"role" title:"Approver role"`
 	All   bool   `json:"all,omitempty" title:"Everyone in the role must approve"`
 }
 
-// Input is one value a person gives when taking an action.
 type Input struct {
 	Constraints *platform.InputConstraints `json:"constraints,omitempty"`
 	Range       *platform.DateRange        `json:"range,omitempty"`
@@ -751,12 +694,8 @@ func (in Input) Field() platform.Field {
 	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, Stereotype: in.Stereotype, Stereotypes: in.Stereotypes, Required: in.Required, Description: in.Title, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
 }
 
-// Set is a field of the record an action sets, from an input, a fixed value,
-// the person taking it ($me) or the moment it is taken ($now).
 type Set = platform.TxnSet
 
-// Condition is what must hold for the action to be taken, and what a person
-// reads when it does not (Foundry's submission criteria, as data).
 type Condition struct {
 	Expr       *platform.Expr `json:"expr,omitempty" type:"json" field:"aside"`
 	When       *Condition     `json:"when,omitempty" title:"Only when"`
@@ -769,10 +708,6 @@ type Condition struct {
 
 var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string"}
 
-// Access is what one role of the builder app may do with a defined object
-// which records it reads, and which of create, edit and
-// archive it takes. The roles an object names become roles of `build`, which
-// the Console assigns. Actions and fields name their own roles.
 type Access struct {
 	Role    string `json:"role" field:"required" help:"A role of the builder app, lower-case letters and digits" example:"desk"`
 	Read    string `json:"read" field:"required" choices:"all,below,unit,own,none" help:"all: every record; below: those of the member's units and the units under them; unit: those of the member's own units; own: their own; none: not the object at all"`
@@ -781,7 +716,6 @@ type Access struct {
 	Archive bool   `json:"archive,omitempty"`
 }
 
-// ObjectScope names the fields that place a record for row scopes.
 type ObjectScope struct {
 	Owner     string `json:"owner,omitempty" help:"The field holding the member a record belongs to; empty: whoever created it"`
 	Unit      string `json:"unit,omitempty" help:"The field holding the record's organisation (a reference to enterprise.element, or its id)"`
@@ -841,8 +775,6 @@ func (b *Build) checkJournal(o Object) error {
 	return nil
 }
 
-// numberingOf gives a new record the next number: the count of records so far
-// (this year, when yearly) plus one, which is gapless because nothing is deleted.
 func numberingOf(o Object, model any) func(c platform.Caller, record any, now time.Time) *kernel.Error {
 	if o.Numbering == nil {
 		return nil

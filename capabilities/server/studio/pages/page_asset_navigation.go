@@ -7,8 +7,6 @@ import (
 	"slices"
 )
 
-// Discovery uses the same member-filtered assets. Hidden input sources and
-// target pages remove their dependent buttons without exposing placeholders.
 func FilterNavigation(definitions []platform.Definition) []platform.Definition {
 	visible := map[platform.AssetRef]bool{}
 	for _, d := range definitions {

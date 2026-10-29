@@ -7,7 +7,6 @@ import {pdfStandardFonts} from "./pdf-fonts";
 export type PdfDocument={pages:number;render:(page:number,canvas:HTMLCanvasElement,signal:AbortSignal)=>Promise<void>;destroy:()=>Promise<void>};
 const abort=()=>new DOMException("PDF preview ended","AbortError");
 
-/** Only the display API and our bundled same-version worker receive original authorized bytes. */
 export async function loadPdfDocument(blob:Blob,signal:AbortSignal):Promise<PdfDocument> {
  const limits=renderingLimits.runtime.collaboration;
  if(typeof Worker!=="function"||typeof (Promise as unknown as {withResolvers?:unknown}).withResolvers!=="function"||typeof (Map.prototype as unknown as {getOrInsertComputed?:unknown}).getOrInsertComputed!=="function"||typeof (Math as unknown as {sumPrecise?:unknown}).sumPrecise!=="function"||typeof (Uint8Array as unknown as {fromBase64?:unknown}).fromBase64!=="function")throw Error("This browser does not support the required PDF rendering APIs.");

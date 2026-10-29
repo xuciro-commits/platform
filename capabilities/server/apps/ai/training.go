@@ -77,8 +77,6 @@ func (a *AI) trainingDecision(c platform.Caller, s *pb.Submission, now time.Time
 	return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "Unknown training action")
 }
 
-// The original event queue owns retries and recovery. Derivation only saves
-// bounded, policy-filtered observations; the accepted business result stands.
 func (*AI) Interested(_ []string, event platform.Event) bool {
 	return event.Record.GetSubmission().GetTarget().GetType() == "agent.run" || slices.ContainsFunc(event.Changed, func(ref string) bool { return strings.HasPrefix(ref, "build.function-call/") })
 }
@@ -93,8 +91,6 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 		if _, known := a.trainingCandidates[candidate.ID]; known {
 			continue
 		}
-		// No history backfill: every source is derived only from its new accepted
-		// event. A policy must already be effective when that event happened.
 		originalChosen, originalRejected := candidate.Chosen, candidate.Rejected
 		candidate.Chosen, candidate.Rejected = nil, nil
 		candidate.Critique = ""
@@ -117,7 +113,6 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 					candidate.Rejected[field] = slices.Clone(value)
 				}
 			}
-			// A public fixed critique avoids copying unrestricted free text into data.
 			if len(candidate.Rejected) > 0 {
 				candidate.Critique = "The reviewer rejected or corrected the proposed fields"
 			}
@@ -140,8 +135,6 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 				candidate.Critique = "The reviewer rejected the earlier proposal under the same source and definition"
 			}
 		}
-		// Keep metadata only without an opt-in policy. Old transcript bytes and
-		// protected provider continuation never enter this state.
 		a.trainingCandidates[candidate.ID] = candidate
 	}
 	for id, candidate := range a.trainingCandidates {
@@ -151,8 +144,6 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 			a.trainingCandidates[id] = candidate
 		}
 	}
-	// This is a bounded derivative, not the original evidence ledger. Prefer
-	// the newest facts, with an explicit order even for equal timestamps.
 	candidates := slices.Collect(maps.Values(a.trainingCandidates))
 	slices.SortFunc(candidates, func(left, right platform.AITrainingCandidate) int {
 		if order := right.At.Compare(left.At); order != 0 {
@@ -161,7 +152,7 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 		return strings.Compare(right.ID, left.ID)
 	})
 	retained := make(map[string]platform.AITrainingCandidate, min(len(candidates), trainingCandidatesKept))
-	bytes := 2 // JSON object braces; keys and separators count toward capacity.
+	bytes := 2
 	for _, candidate := range candidates {
 		if len(retained) == trainingCandidatesKept {
 			break
@@ -175,7 +166,7 @@ func (a *AI) Listen(c platform.Caller, event platform.Event, _ []string, now tim
 			raw, _ = json.Marshal(candidate)
 			entryBytes = len(key) + 1 + len(raw)
 			if entryBytes+2 > trainingCandidatesBytes {
-				continue // The original accepted event still owns this evidence.
+				continue
 			}
 		}
 		if len(retained) > 0 {

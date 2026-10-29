@@ -5,7 +5,6 @@ import {useState} from "react";
 import {ExpressionEditor,type ExpressionChoice} from "../editor/ExpressionEditor";
 import {nameOf} from "./object-model";
 
-/** Business exits belong to the original transaction, including its step scopes. */
 export function RefusalEditor({value,onChange,choices,actions,entities,roles}:{value:Api.BusinessTxn;onChange:(value:Api.BusinessTxn)=>void;choices:ExpressionChoice[];actions:string[];entities:EntityInfo[];roles:string[]}) {
  const {source}=useHost(),[scope,setScope]=useState("");
  const at=value.steps.findIndex(step=>step.name===scope),items=(at>=0?value.steps[at]?.refusals:value.refusals)??[];

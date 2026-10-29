@@ -5,11 +5,6 @@ import {actionDestinations,actionResultEdges,actionStateInput,setActionDestinati
 import { actionInputFields, fieldTypes, nameOf, tones, type Access, type Action, type Chosen, type Field, type ObjectRecord, type ObjectScope, type Process, type State } from "./object-model";
 import { ShapeEditor } from "./shape";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
-// The object's process editor: its states and the actions people
-// take on its records. The main tables and map own selection; the Inspector
-// edits that selection, without a second copy in a structure sidebar.
-// It writes the object's own record through its own action; the host checks
-// everything again when the object is published.
 import { PayloadFields, RoleSelect, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost, useReadQuery } from "@platform/app";
 import {
   Button, Card, Checkbox, ContentTabs, DataTable, Disclosure, Input, FlowCanvas, Panel, ProblemList, Select, StatusBar, Textarea, Workbench, useFlowArrangement, cn, notify, t, useViewCall, type WorkbenchProblem,
@@ -28,7 +23,6 @@ import { BusinessVersionEditor } from "./business-version";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
 
-/** The objects of this organisation: open one to give it states and actions. */
 const objectGroups = [
   { id: "structure", title: "Object structure", sections: [{ id: "overview", title: "Overview" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "sets", title: "Record sets" }] },
   { id: "behavior", title: "Behavior", sections: [{ id: "lifecycle", title: "Lifecycle" }, { id: "actions", title: "Actions" }] },
@@ -189,7 +183,6 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   </Workbench>;
 }
 
-/** Enterprise types come from the original metamodel read, not a copied model. */
 export function EnterpriseReferenceTypes({ value, onChange }: { value: { stereotype?: string; stereotypes?: string[] }; onChange: (patch: { stereotype?: string; stereotypes?: string[] }) => void }) {
   const metadata = useReadQuery<{ profile: { stereotype: string }[] }>("/v1/enterprise-metamodel");
   const supported = ["ActualOrganization", "ActualPerson", "ActualPost", "ActualLocation"];
@@ -203,7 +196,6 @@ export function EnterpriseReferenceTypes({ value, onChange }: { value: { stereot
   </fieldset>;
 }
 
-/** The lifecycle is the semantic source. Canvas edges only edit its From/To declarations. */
 function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddState, onAddAction }: {
   objectId: string;
   process: Process; chosen: Chosen; onChoose: (c: Chosen) => void; onChange: (p: Process) => void;
@@ -222,8 +214,6 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
     ...actionResultEdges(a).map(to=>({id:`to:${a.name}:${to}`,source:`action:${a.name}`,sourcePort:"to",target:`state:${to}`,targetPort:"result",dashed:!!actionStateInput(a),label:actionStateInput(a)})),
   ]);
-  // One layout brain decides where a state or an action sits: the
-  // same arrangement the canvas's own tidy-up would choose, sizes included.
   const places = useFlowArrangement([
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, position: { x: 0, y: 0 } })),
     ...process.actions.map((a) => ({ id: `action:${a.name}`, kind: actionStateInput(a) ? "action-input" : "action", label: a.title || a.name, position: { x: 0, y: 0 } })),
@@ -276,7 +266,6 @@ function FieldProperties({ field, others, reads, states, onChange, onRemove }: {
   const objects = (drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => ({ name: `build.${draft.name}`, title: draft.title }));
   const expressionType = field.type === "longtext" ? "text" : field.type;
   const computedChoices: ExpressionChoice[] = [{ value: "id", label: t("Record ID"), type: "text" }, { value: "caller.id", label: t("The person taking it"), type: "text" }, ...others.map(other => ({ value: other.name, label: other.title, type: other.type === "longtext" ? "text" : other.type, ref: other.ref })), ...(states.length ? [{value:"state",label:t("State"),type:"choice"}] : [])];
-  // "Only when" (#138): another unconditional choice or boolean field, and the values that make this one apply.
   const conditions = others.filter((f) => (f.type === "choice" || f.type === "boolean") && !f.when && f.name);
   const [whenField, whenValues] = (field.when ?? "").split("=") as [string, string | undefined];
   const on = conditions.find((f) => f.name === whenField);
@@ -319,9 +308,6 @@ function FieldProperties({ field, others, reads, states, onChange, onRemove }: {
   </Card>;
 }
 
-/** The left pane: the states in order (a new record starts in the first), then the actions. */
-
-/** The middle pane: the status bar a record will show, and the chosen action's form, as people meet them. */
 function Preview({ object, process, action }: { object: ObjectRecord; process: Process; action?: Action }) {
   const [values, setValues] = useState<Record<string, unknown>>({});
   if (process.states.length === 0) return <Panel role="status" className="text-sm text-muted">{t("Add a state to see what people will see.")}</Panel>;
@@ -374,7 +360,6 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
 const reads = { all: () => t("Every record"), below: () => t("Those of their units and the units below"), unit: () => t("Those of their own units"), own: () => t("Only their own"), none: () => t("Not at all") };
 const readLevels = ["all", "below", "unit", "own", "none"] as const;
 
-/** Which fields place a record for the row scopes above: owner for "own", unit + structure for "unit" and "below". */
 function ScopeFields({ process, onChange }: { process: Process; onChange: (scope: ObjectScope) => void }) {
   const scope = process.scope ?? {};
   const candidates = process.fields.filter((f) => f.type === "text" || f.type === "reference");
@@ -393,9 +378,6 @@ function ScopeFields({ process, onChange }: { process: Process; onChange: (scope
   </Card>;
 }
 
-/** The left pane's third part: the roles of the builder app this object names, and what each may do. */
-
-/** The right pane for a role: which records it reads, what it may do, and the fields only it reads or sets. */
 function AccessProperties({ access, fields, onChange, onFields }: {
   access: Access; fields: Field[]; onChange: (patch: Partial<Access>) => void; onFields: (fields: Field[]) => void;
 }) {
@@ -442,7 +424,6 @@ function AccessProperties({ access, fields, onChange, onFields }: {
   );
 }
 
-/** The object inspector's view of an action: what it is and where it goes; everything else is edited in its own workbench. */
 function ActionSummary({ action, states, issues, onOpen, onRemove }: { action: Action; states: State[]; issues: number; onOpen: () => void; onRemove: () => void }) {
   const named = (name?: string) => states.find((s) => s.name === name)?.title ?? name;
   return <Card className="grid content-start gap-2 p-3 text-sm">

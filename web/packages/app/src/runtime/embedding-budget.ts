@@ -7,7 +7,6 @@ export function pageEmbeddingCost(page:PageUI.Page):PageCost {
  const active=d?activeQueryPlans(d,page.sections??[],"platform.page.v2.97"):new Set<string>();
  return {instances:1+(page.sections??[]).filter(s=>!!s.externalFrame).length,queries:active.size,records:Object.entries(d?.queries??{}).reduce((total,[id,q])=>total+(active.has(id)?q.limit*factor(q.itemOwner):0),0),sections:page.sections?.length??0};
 }
-/** Reservations belong to mounted page instances, including repeated copies. */
 export class PageEmbeddingBudget {
  private slots=new Map<object,PageCost>();
  private readonly limits:PageCost;

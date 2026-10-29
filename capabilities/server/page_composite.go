@@ -26,8 +26,6 @@ type PageCompositeResult struct {
 	Cells   []PageMatrixCell               `json:"cells,omitempty"`
 }
 
-// All sources and cells are read within the route's existing tenant lock. A
-// client supplies typed identities only; cell inputs are confirmed here.
 func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, section platform.PageDataBinding, request PageModelRead, at time.Time) (PageModelResult, *kernel.Error) {
 	result := PageModelResult{Object: section.PrimaryModel().Type, Records: []map[string]any{}, Fields: []platform.FieldInfo{}, Access: map[string]map[string]platform.AuthzDecision{}, Composite: &PageCompositeResult{Sources: map[string]PageCompositeSource{}}}
 	c := section
@@ -53,7 +51,6 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 		}
 		read := request
 		read.Offset, read.Limit, read.Search, read.Sort, read.Query = 0, recordLimit, "", nil, nil
-		// The active node selection is not a filter on all composite sources.
 		read.Records = map[string]PageModelRecord{}
 		for name, record := range request.Records {
 			if name != "$record" && name != "$parent" {
@@ -73,8 +70,6 @@ func (t *Tenant) readPageComposite(member platform.Member, page platform.Page, s
 		rows := []map[string]any{}
 		for _, row := range value.Records {
 			id := fmt.Sprint(row["id"])
-			// Evaluate against the original initialized typed value, after the
-			// ordinary record owner has admitted it (including false and zero).
 			ruleRecord := t.pageModelRuleRecord(model.Type, id, row)
 			for _, role := range roles {
 				field := binding.Roles[role]

@@ -8,9 +8,6 @@ import { useHost, useReadQuery } from "@platform/app";
 import { MarkingField } from "./marking";
 import { Button, Checkbox, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";
 
-// Connections: the external systems a tenant reads through - a kind,
-// an address and the name of a secret the host holds. Check reaches the system
-// once from the host; sources then read through a ready connection.
 type Draft = Api.Connection;
 const empty = (): Draft => ({ id: "", revision: 0, created: { at: "" } as Api.Stamp, changed: { at: "" } as Api.Stamp, name: "", title: "", kind: "http", address: "", state: "draft" });
 const fieldClass = "grid min-w-0 gap-1 text-xs";

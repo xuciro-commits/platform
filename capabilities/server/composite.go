@@ -17,22 +17,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Composite edits (ordered by the owner on 2026-10-05): one
-// command that edits several of an application's assets as a unit.
-//
-// Every edit is staged on a private fork of the tenant's records and
-// definitions and probed with the same rules, permissions and attribute checks
-// an ordinary submission meets — including a project's asset edit delegation.
-// Only when every edit is accepted is the composite itself committed as one
-// accepted result: the fork is promoted in the same commit, so a refused edit
-// refuses the whole command and nothing half-applied becomes visible. The
-// committed result carries sealed record/state images; recovery applies those
-// images without deciding the edits again. Version 3 also binds a package
-// batch to its complete draft plan; versions 1 and 2 keep their original hashes.
-
-// Composite stages, commits and answers one composite command. Edits are
-// builder actions; a member with a project's edit delegation may edit exactly
-// the assets the project names, and the delegation is resolved per edit.
 func (t *Tenant) Composite(m platform.Member, key string, edits []platform.CompositeEdit, now time.Time) (platform.CompositeAnswer, error) {
 	if err := t.admits(m); err != nil {
 		return platform.CompositeAnswer{}, err
@@ -121,8 +105,6 @@ func (t *Tenant) Composite(m platform.Member, key string, edits []platform.Compo
 }
 
 func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedformat.Composite, committed []byte) (answer platform.CompositeAnswer, err error) {
-	// The bytes are durable: a faulty pure participant must isolate this tenant
-	// before another command can observe or extend a partially applied image.
 	defer func() {
 		if failure := recover(); failure != nil {
 			err = fmt.Errorf("apply committed composite: %v", failure)
@@ -140,8 +122,6 @@ func (t *Tenant) finishCommittedComposite(m platform.Member, saved acceptedforma
 	return compositeAnswer(applied)
 }
 
-// Only a saved terminal refusal lets the client correct an intent with a new
-// key. Append/application failures may already be durable and remain unknown.
 type compositeRefusal string
 
 func (r compositeRefusal) Error() string { return string(r) }
@@ -153,9 +133,6 @@ func compositeAnswer(saved acceptedformat.Composite) (platform.CompositeAnswer, 
 	return platform.CompositeAnswer{Key: strings.TrimPrefix(saved.Key, "composite:"), Applied: len(saved.Edits), Digest: saved.Digest}, nil
 }
 
-// stageCompositeLocked probes every edit on a private fork. The draft shares
-// the apps (their ledgers are the apps' own business) but owns its records and
-// definitions, so a refusal cannot change what the tenant sees.
 func (t *Tenant) stageCompositeLocked(m platform.Member, edits []platform.CompositeEdit, key string, now time.Time) (*Tenant, error) {
 	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
@@ -180,9 +157,6 @@ func (t *Tenant) stageCompositeLocked(m platform.Member, edits []platform.Compos
 	return draft, nil
 }
 
-// applyAcceptedComposite applies a committed composite result: it re-stages the
-// edits on the current state and promotes the fork, so applying is the same
-// work the submission did and replay reproduces the committed records.
 func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, error) {
 	saved, err := acceptedformat.DecodeComposite(raw)
 	if err != nil {
@@ -224,8 +198,6 @@ func (t *Tenant) applyAcceptedComposite(raw []byte) (acceptedformat.Composite, e
 	return saved, nil
 }
 
-// rolesOf restores a member's roles from the console for replay, where only the
-// member ID is journaled.
 func (t *Tenant) rolesOf(member string) map[string]string {
 	if m, ok := t.Member(member); ok {
 		return m.Roles

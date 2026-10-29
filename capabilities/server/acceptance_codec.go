@@ -103,9 +103,6 @@ func acceptedIdentity(raw []byte) (resultIdentity, error) {
 	return identity, err
 }
 
-// sealResult preserves the complete decision. The compact record format is
-// only an encoding optimisation; its writer must account for every effect.
-// The batch format also handles history that no longer fits a compact result.
 func (d *stagedDecision) sealResult(app string, request *pb.Submission, receipt *pb.ChangeRecord, at time.Time) ([]byte, error) {
 	if err := d.checkFinalConstraints(); err != nil {
 		return nil, err
@@ -212,13 +209,6 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 	return encoded, nil
 }
 
-// JSONB can reorder object keys; normalize even raw record and receipt JSON
-// before computing the corruption-detection digest. This is not an
-// authentication tag against an actor who can rewrite the database.
-
-// applyAcceptedResult reconstructs one record and its kernel receipt without
-// calling application decision code. A version-three publication additionally
-// installs the committed definition. The tenant lock must be held.
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
 	result, receipt, err := acceptedformat.DecodeRecord(raw)
 	if err != nil {
@@ -332,8 +322,6 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 			return false, err
 		}
 	}
-	// An invalid receipt cannot expose the staged row. With the tenant lock
-	// held, promote cannot race another supported write after this check.
 	changed, err := l.ApplyAcceptedChange(receipt)
 	if err != nil {
 		return false, err
@@ -354,11 +342,6 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	return changed, nil
 }
 
-// acceptResult is the storage boundary for every new authoritative result.
-// Callers stage first and apply only the returned bytes. Record is the legacy
-// local recording callback; production journals use AcceptResult to report
-// failures. The durable journal resolves ambiguous commits under the original
-// identity; an unresolved commit stops only this tenant's generation.
 func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 	if t.quarantined() {
 		return nil, fmt.Errorf("tenant %s is stopped", t.ID)
@@ -395,10 +378,6 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 
 func (t *Tenant) recordsAcceptedResults() bool { return t.AcceptResult != nil || t.Record != nil }
 
-// acceptedResultApplied advances the record read view only after the complete
-// top-level durable result has been applied. Nested batches and partial owner
-// application must keep the prior position until their enclosing result ends.
-// The tenant writer lock covers acceptance, application and this transition.
 func (t *Tenant) acceptedResultApplied() {
 	t.records.Lock()
 	if t.records.Current().Position() != nil {

@@ -24,8 +24,6 @@ type PageModelRule struct {
 	Criteria platform.RuleCriteria `json:"criteria"`
 }
 
-// A production read names an installed page. A builder preview supplies only
-// definition bytes; original model validation and member reads still apply.
 type PageModelRead struct {
 	Page           platform.AssetRef          `json:"page"`
 	ContentVersion string                     `json:"contentVersion,omitempty"`
@@ -178,8 +176,6 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 	}
 	for name, reference := range request.Records {
 		typ := page.RecordVariableObject(name)
-		// The active record and an explicit legacy parent keep their original
-		// typed selection slots; all other references are declared variables.
 		if name == "$record" {
 			typ = model.Type
 		}
@@ -291,8 +287,6 @@ func (t *Tenant) readPageModelSource(member platform.Member, page platform.Page,
 	selected := []map[string]any{}
 	for _, row := range rows {
 		id := fmt.Sprint(row["id"])
-		// Read the original typed value only after its owner admitted this row.
-		// This preserves initialized false/zero fields omitted by JSON transport.
 		ruleRecord := t.pageModelRuleRecord(model.Type, id, row)
 		if criteria != nil {
 			matched, _, refusal := criteria.Evaluate(caller, ruleRecord, inputs, at, t.entity)

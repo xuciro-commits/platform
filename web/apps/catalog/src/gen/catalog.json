@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:7b6f88f05040cff2",
+  "revision": "sha256:273ca76d8b7feb17",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2308,7 +2308,7 @@
         {
           "name": "View",
           "kind": "type",
-          "signature": "export type View = {\n  id: string;\n  /** Tab title for a route of this view, e.g. the entity's code. */\n  title: (params: Record<string, string>) => string;\n  icon?: ReactNode;\n  render: (params: Record<string, string>) => ReactNode;\n  /** Navigation within one document can change without opening another tab. */\n  documentKey?: (params: Record<string, string>) => string;\n};"
+          "signature": "export type View = {\n  id: string;\n  title: (params: Record<string, string>) => string;\n  icon?: ReactNode;\n  render: (params: Record<string, string>) => ReactNode;\n  documentKey?: (params: Record<string, string>) => string;\n};"
         },
         {
           "name": "Menu",
@@ -2323,7 +2323,7 @@
         {
           "name": "Session",
           "kind": "type",
-          "signature": "export type Session = {\n  tenant: string; principal: string; detail?: string;\n  /** The member's display name, shown over the principal when set. */\n  name?: string;\n  options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;\n  /** Opens the member's own account page, when the host has one. */\n  onAccount?: () => void;\n};"
+          "signature": "export type Session = {\n  tenant: string; principal: string; detail?: string;\n  name?: string;\n  options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;\n  onAccount?: () => void;\n};"
         },
         {
           "name": "Applications",
@@ -4301,7 +4301,7 @@
         {
           "name": "DataTableProps",
           "kind": "type",
-          "signature": "export type DataTableProps<T> = {\n  data: T[];\n  columns: ColumnDef<T, any>[];\n  getRowId: (row: T) => string;\n  /** Viewport height; rows outside it are not rendered, so 100k rows stay fast. */\n  height?: number | string;\n  rowHeight?: number;\n  onRowClick?: (row:T,modifiers?:{shift:boolean;toggle:boolean})=>void;\n  selectedIds?:readonly string[];\n  selectedId?: string;\n  searchable?: boolean;\n  toolbar?: ReactNode;\n  empty?: ReactNode;\n  /** Shows a loading state when rows are being fetched. */\n  loading?: boolean;\n  loadingText?: ReactNode;\n  /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */\n  onCellEdit?: (row: T, column: string, value: unknown) => void;\n\t/** An original owner decision, consumed without a client permission rule. */\n\tcellAccess?: (row:T,column:string)=>{allow:boolean;reason:string}|undefined;\n  /** Drag header edges to resize. Default on; set false to lock layout. */\n  resizable?: boolean;\n  /** Virtualize flat leaf columns as well as rows; pinned metadata stays mounted. */\n  virtualColumns?: boolean;\n  /** Right-click a data row (browser menu is suppressed when provided). */\n  onRowContextMenu?: (row: T) => void;\n};"
+          "signature": "export type DataTableProps<T> = {\n  data: T[];\n  columns: ColumnDef<T, any>[];\n  getRowId: (row: T) => string;\n  height?: number | string;\n  rowHeight?: number;\n  onRowClick?: (row:T,modifiers?:{shift:boolean;toggle:boolean})=>void;\n  selectedIds?:readonly string[];\n  selectedId?: string;\n  searchable?: boolean;\n  toolbar?: ReactNode;\n  empty?: ReactNode;\n  loading?: boolean;\n  loadingText?: ReactNode;\n  onCellEdit?: (row: T, column: string, value: unknown) => void;\n\tcellAccess?: (row:T,column:string)=>{allow:boolean;reason:string}|undefined;\n  resizable?: boolean;\n  virtualColumns?: boolean;\n  onRowContextMenu?: (row: T) => void;\n};"
         }
       ]
     },
@@ -4623,7 +4623,7 @@
         {
           "name": "OverlayProps",
           "kind": "type",
-          "signature": "type OverlayProps = {\n  open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode;\n  /** For forms with lines: room for a row of columns. */\n  wide?: boolean;\n  /** Hide the global layer while retaining this logical opening's content. */\n  suspended?: boolean;\n  returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;\n} & OverlayPolicy & {width?:number;side?:\"left\"|\"right\"};"
+          "signature": "type OverlayProps = {\n  open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode;\n  wide?: boolean;\n  suspended?: boolean;\n  returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null;\n} & OverlayPolicy & {width?:number;side?:\"left\"|\"right\"};"
         }
       ]
     },
@@ -5345,7 +5345,7 @@
         {
           "name": "FieldType",
           "kind": "type",
-          "signature": "export type FieldType<V = any, R = any> = {\n input?: Api.Field;\n  type: string;\n  label: string;\n  /** What the field holds, from its declaration: shown under the label of forms. */\n  help?: string;\n  required?: boolean;\n  readOnly?: boolean;\n  /** The field applies only while another field holds one of these values (#138): forms hide it otherwise and send nothing for it. */\n  when?: FieldCondition;\n  align?: \"left\" | \"right\";\n  width?: number;\n  /** Computed fields (formula, created time) read their value from the row. */\n  compute?: (row: R) => V | undefined;\n  display: (value: V | undefined, row: R) => ReactNode;\n  editor?: (props: EditorProps<V>) => ReactNode;\n  /** Validates a present value; `required` decides whether it may be absent. */\n  schema: z.ZodType<V>;\n  compare: (a: V, b: V) => number;\n  operators: Operator<V>[];\n  text: (value: V | undefined) => string;\n};"
+          "signature": "export type FieldType<V = any, R = any> = {\n input?: Api.Field;\n  type: string;\n  label: string;\n  help?: string;\n  required?: boolean;\n  readOnly?: boolean;\n  when?: FieldCondition;\n  align?: \"left\" | \"right\";\n  width?: number;\n  compute?: (row: R) => V | undefined;\n  display: (value: V | undefined, row: R) => ReactNode;\n  editor?: (props: EditorProps<V>) => ReactNode;\n  schema: z.ZodType<V>;\n  compare: (a: V, b: V) => number;\n  operators: Operator<V>[];\n  text: (value: V | undefined) => string;\n};"
         }
       ]
     },
@@ -5743,7 +5743,7 @@
         {
           "name": "FlowCanvasProps",
           "kind": "type",
-          "signature": "export type FlowCanvasProps = {\n  catalog: FlowCatalog; nodes: FlowNode[]; edges: FlowEdge[]; selected?: string;\n  label?: string; height?: number | string; mode?: \"edit\" | \"view\"; direction?: CanvasDirection; children?: ReactNode;\n  onSelect?: (id: string) => void; onOpen?: (id: string) => void;\n  onConnect?: (connection: Connection) => void; onDisconnect?: (edges: FlowEdge[]) => void;\n  canConnect?: (connection: Connection) => boolean;\n  onAdd?: (kind: string, context: FlowAddContext) => void;\n  /** The owner inserts and reconnects atomically; the canvas never guesses branch semantics. */\n  onInsert?: (edge: FlowEdge, kind: string, context: FlowAddContext) => void;\n  onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;\n  onLayout?: (positions: Record<string, CanvasPosition>) => void;\n  onDelete?: (nodes: FlowNode[], edges: FlowEdge[]) => void;\n  onDuplicate?: (nodes: FlowNode[], edges: FlowEdge[]) => void;\n  /** BPMN lanes: the responsibilities this process is drawn across.\n   * The owner declares them and says which step sits in which; the canvas draws the\n   * bands, arranges inside them, and reports a step dropped into another one. */\n  lanes?: FlowLane[];\n  onLaneChange?: (id: string, lane: string) => void;\n  history?: FlowHistory;\n  /** The reader's own arrangement is kept on this device for this drawing\n   *: nodes become draggable even in view mode, and the arrangement\n   * survives a reload until the reader tidies it up again. */\n  storeKey?: string;\n};"
+          "signature": "export type FlowCanvasProps = {\n  catalog: FlowCatalog; nodes: FlowNode[]; edges: FlowEdge[]; selected?: string;\n  label?: string; height?: number | string; mode?: \"edit\" | \"view\"; direction?: CanvasDirection; children?: ReactNode;\n  onSelect?: (id: string) => void; onOpen?: (id: string) => void;\n  onConnect?: (connection: Connection) => void; onDisconnect?: (edges: FlowEdge[]) => void;\n  canConnect?: (connection: Connection) => boolean;\n  onAdd?: (kind: string, context: FlowAddContext) => void;\n  onInsert?: (edge: FlowEdge, kind: string, context: FlowAddContext) => void;\n  onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;\n  onLayout?: (positions: Record<string, CanvasPosition>) => void;\n  onDelete?: (nodes: FlowNode[], edges: FlowEdge[]) => void;\n  onDuplicate?: (nodes: FlowNode[], edges: FlowEdge[]) => void;\n  lanes?: FlowLane[];\n  onLaneChange?: (id: string, lane: string) => void;\n  history?: FlowHistory;\n  storeKey?: string;\n};"
         }
       ]
     },
@@ -5943,7 +5943,7 @@
         {
           "name": "FlowStepNode",
           "kind": "type",
-          "signature": "export type FlowStepNode = {\n  id: string; label: string; detail?: string; tone?: Tone; current?: boolean;\n  /** Its BPMN reading; without it, the step's own kind name decides. */\n  notation?: FlowNotation; kind?: string; loop?: boolean;\n  /** What the step is, from the one class vocabulary: declared, else\n   * derived from the BPMN reading, else the plain step. */\n  class?: string;\n  /** The lane responsible for it, when the owner drew this process across lanes. */\n  lane?: string;\n};"
+          "signature": "export type FlowStepNode = {\n  id: string; label: string; detail?: string; tone?: Tone; current?: boolean;\n  notation?: FlowNotation; kind?: string; loop?: boolean;\n  class?: string;\n  lane?: string;\n};"
         },
         {
           "name": "FlowStepEdge",
@@ -9584,7 +9584,7 @@
         },
         {
           "name": "window",
-          "type": "{ query:RecordQuery; baseQuery?:RecordQuery; facetQuery?:(field:string)=>RecordQuery|undefined; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; /** The window's current enum filters; a fixed-predicate window locks them and explains why. */ filters?:Record<string,string[]>; filtersLocked?:boolean; onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void }",
+          "type": "{ query:RecordQuery; baseQuery?:RecordQuery; facetQuery?:(field:string)=>RecordQuery|undefined; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; filters?:Record<string,string[]>; filtersLocked?:boolean; onChange:(change:{search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>})=>void }",
           "optional": true,
           "isCallback": false,
           "isSlot": false
@@ -9664,7 +9664,7 @@
         {
           "name": "RecordSource",
           "kind": "type",
-          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
         },
         {
           "name": "RecordQuery",
@@ -9679,7 +9679,7 @@
         {
           "name": "ListState",
           "kind": "type",
-          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n  /** Original predicates and read shape; personal filters never replace them. */\n  baseQuery?: RecordQuery; searchLocked?:boolean; sortLocked?:boolean; filtersLocked?:boolean;\n  /** Chosen enum filters, by choice field; missing means the view predates them. */\n  filters?: Record<string, string[]>;\n};"
+          "signature": "export type ListState = {\n  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];\n  group?: string; columns?: string; measure?: string; mark?: Mark;\n  baseQuery?: RecordQuery; searchLocked?:boolean; sortLocked?:boolean; filtersLocked?:boolean;\n  filters?: Record<string, string[]>;\n};"
         }
       ]
     },
@@ -10188,12 +10188,12 @@
         {
           "name": "RecordView",
           "kind": "type",
-          "signature": "export type RecordView = Omit<Api.RecordView, \"record\" | \"related\" | \"linked\" | \"activity\" | \"processes\" | \"approvals\" | \"tasks\" | \"files\" | \"comments\"> & {\n  /** Open tasks about the record the member may take (a flow's question, a correction to make). */\n  tasks: Api.InboxTask[];\n  /** The approval requests to move the record, newest first (F-38). */\n  approvals: Api.ApprovalRequest[];\n  files: AttachedFile[];\n  comments: RecordComment[];\n  record: EntityRecord; related: RelatedRecords[];\n  /** Records of any app linked to it (the relations app), by type. */\n  linked: RelatedRecords[];\n  /** What apps told about it through protocols, oldest first. */\n  activity: Api.Note[];\n  /** The flow instances about the record. */\n  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];\n};"
+          "signature": "export type RecordView = Omit<Api.RecordView, \"record\" | \"related\" | \"linked\" | \"activity\" | \"processes\" | \"approvals\" | \"tasks\" | \"files\" | \"comments\"> & {\n  tasks: Api.InboxTask[];\n  approvals: Api.ApprovalRequest[];\n  files: AttachedFile[];\n  comments: RecordComment[];\n  record: EntityRecord; related: RelatedRecords[];\n  linked: RelatedRecords[];\n  activity: Api.Note[];\n  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];\n};"
         },
         {
           "name": "RecordSource",
           "kind": "type",
-          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  /** Stable member/definition scope; changing it discards cached view data. */\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
+          "signature": "export type RecordSource = {\n\tenterpriseQuery?: (stereotypes: string[], search: string) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n\tenterpriseResolve?: (ids: string[]) => Promise<{ elements: Api.EnterpriseQueryElement[] }>;\n  watchEnterprise?: (changed: () => void) => () => void;\n  scope?: string;\n  ruleIdentity?: {me:string;timezone:string};\n  entity: (type: string) => EntityInfo | undefined;\n  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;\n  exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;\n  importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;\n  get: (type: string, id: string) => Promise<RecordView>;\n  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;\n  interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;\n  namedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery) => Promise<InterfaceRecordPageData>;\n  watchNamedInterfaceList?: (binding: Api.AssetBinding, query: RecordQuery, changed: () => void) => () => void;\n  revision?: number;\n  watchList?: (type: string, query: RecordQuery, changed: () => void) => () => void;\n  watchRecord?: (type: string, id: string, changed: () => void) => () => void;\n  watchAggregate?: (type: string, query: AggregateQuery, changed: () => void) => () => void;\n};"
         },
         {
           "name": "EntityRecord",
@@ -11038,7 +11038,7 @@
         {
           "name": "RelationCanvasProps",
           "kind": "type",
-          "signature": "export type RelationCanvasProps = {\n  nodes: RelationNode[]; edges: RelationEdge[];\n  /** Where each element sits. A reader's view may leave this out and let the canvas\n   * arrange what it is given; an owner that persists a drawing supplies it. */\n  positions?: Readonly<Record<string, CanvasPosition>>;\n  selected?: string; editable?: boolean; linking?: boolean; label?: string; height?: number | string; layout?: RelationLayout;\n  /** The dataTransfer type the owner's palette sets; its payload arrives in onDrop with the drop point. */\n  dropType?: string; children?: ReactNode; viewportKey?: string;\n  onSelect?: (id?: string) => void; onOpen?: (id: string) => void;\n  /** The selected element's operations, shown on the canvas beside it. */\n  nodeActions?: (id: string) => CanvasAction[];\n  /** A relationship can be chosen, and chosen relationships have operations. */\n  edgeActions?: (id: string) => CanvasAction[];\n  onReconnect?: (id: string, source: string, target: string) => void;\n  onLayoutReady?: (positions: Record<string, CanvasPosition>) => void;\n  /** The completed initial fit, including a change in the canvas size. */\n  onViewportReady?: (ready: boolean) => void;\n  onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;\n  onLink?: (source: string, target: string) => void;\n  onDrop?: (payload: string, at: CanvasPosition) => void;\n  /** The reader's own arrangement is kept on this device for this drawing\n   *: even a read-only view may be dragged, and the arrangement\n   * survives a reload until the reader chooses a layout again. */\n  storeKey?: string;\n};"
+          "signature": "export type RelationCanvasProps = {\n  nodes: RelationNode[]; edges: RelationEdge[];\n  positions?: Readonly<Record<string, CanvasPosition>>;\n  selected?: string; editable?: boolean; linking?: boolean; label?: string; height?: number | string; layout?: RelationLayout;\n  dropType?: string; children?: ReactNode; viewportKey?: string;\n  onSelect?: (id?: string) => void; onOpen?: (id: string) => void;\n  nodeActions?: (id: string) => CanvasAction[];\n  edgeActions?: (id: string) => CanvasAction[];\n  onReconnect?: (id: string, source: string, target: string) => void;\n  onLayoutReady?: (positions: Record<string, CanvasPosition>) => void;\n  onViewportReady?: (ready: boolean) => void;\n  onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;\n  onLink?: (source: string, target: string) => void;\n  onDrop?: (payload: string, at: CanvasPosition) => void;\n  storeKey?: string;\n};"
         }
       ]
     },

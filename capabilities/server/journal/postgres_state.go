@@ -33,9 +33,6 @@ func init() {
 	stateSchema = append(stateSchema, `alter table runtime_tenants add column if not exists format integer not null default 1`)
 }
 
-// InitializeState runs before this tenant accepts writes. The SQL position and
-// every image/history entry are compared at the same retained journal position;
-// the tenant marker becomes visible only when the complete copy matches.
 func (j *Postgres) InitializeState(ctx context.Context, tenant string, position int64, delta StateDelta) error {
 	tx, err := j.pool.Begin(ctx)
 	if err != nil {
@@ -55,7 +52,6 @@ func (j *Postgres) InitializeState(ctx context.Context, tenant string, position 
 	var saved int64
 	err = tx.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1 for update`, tenant).Scan(&saved)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Insert only for the first switch. A normal restart never rebuilds tables.
 		if err = j.writeState(ctx, tx, tenant, position, delta); err != nil {
 			return err
 		}
@@ -80,8 +76,6 @@ func (j *Postgres) InitializeState(ctx context.Context, tenant string, position 
 	return tx.Commit(ctx)
 }
 
-// StatePosition identifies the prefix that must be independently reconstructed
-// and compared before a legacy writer's retained suffix can be imported.
 func (j *Postgres) StatePosition(ctx context.Context, tenant string) (int64, bool, error) {
 	var position int64
 	err := j.pool.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1`, tenant).Scan(&position)
@@ -91,8 +85,6 @@ func (j *Postgres) StatePosition(ctx context.Context, tenant string) (int64, boo
 	return position, err == nil, err
 }
 
-// RestoreState imports only sealed results already retained in the journal.
-// Comparing the old prefix first prevents a newer image from hiding SQL damage.
 func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int64, prefix StateCheckpoint, full StateDelta) error {
 	tx, err := j.pool.Begin(ctx)
 	if err != nil {
@@ -185,7 +177,6 @@ func (j *Postgres) RestoreState(ctx context.Context, tenant string, position int
 	if err = j.compareStateImage(ctx, tx, tenant, position, full, legacyKeys); err != nil {
 		return fmt.Errorf("SQL recovered state: %w", err)
 	}
-	// Recheck the fixed journal head before publishing the repaired position.
 	if err = tx.QueryRow(ctx, `select coalesce(max(seq),0) from journal where tenant=$1`, tenant).Scan(&latest); err != nil {
 		return err
 	}
@@ -324,8 +315,6 @@ func (j *Postgres) writeState(ctx context.Context, tx pgx.Tx, tenant string, pos
 			head = platform.EmptyRecordHistory
 		}
 		if head == "" {
-			// Only historical writes need this bootstrap. New writers require startup
-			// to have verified and installed the derived prefix head.
 			if r.HistoryPrior != "" {
 				return fmt.Errorf("record history head was not initialized")
 			}
@@ -520,9 +509,6 @@ func stateValues(ctx context.Context, db stateQueries, tenant, owner string, thr
 	return out, rows.Err()
 }
 
-// Read candidate IDs in bounded pages. A result committed beyond the working
-// set's applied position stays a candidate regardless of its future value;
-// the owner reads its immutable applied image and filters that image instead.
 func (j *Postgres) StateCandidates(ctx context.Context, tenant, typ string, filters []StateFilter, after string, limit int, applied int64) ([]string, error) {
 	return stateCandidates(ctx, j.pool, tenant, typ, filters, after, limit, applied)
 }
@@ -563,8 +549,6 @@ func stateCandidates(ctx context.Context, db stateQueries, tenant, typ string, f
 	if len(conditions) > 0 {
 		where = strings.Join(conditions, " and ")
 	}
-	// A negative applied position denotes a fixed transaction snapshot. Its
-	// candidates use that snapshot's values, with projection rows kept broad.
 	rows, err := db.Query(ctx, `select id from runtime_records where tenant=$1 and type=$2 and id>$3 and (`+where+` or ($5::bigint >= 0 and seq>$5) or query ? 'projection') order by id limit $4`, args...)
 	if err != nil {
 		return nil, err

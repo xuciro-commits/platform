@@ -8,11 +8,6 @@ import { useViewTitle } from "../shell/Workspace";
 import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
 import { ContentTabs } from "./ContentTabs";
 
-/** The one editor container. Document state, commands and
- * selection belong to the caller. Closing a pane hides, rather than destroys,
- * its editing context. Below a useful three-pane width, focus one pane at a
- * time; desktop preferences remain intact when returning from a split/mobile view.
- */
 export type WorkbenchCrumb = { label: ReactNode; onClick?: () => void };
 export type WorkbenchTab = { id: string; title: ReactNode; badge?: number | string; content: ReactNode };
 export type WorkbenchPanel = { label: string; heading?: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void; scope?: string; locate?: (path?: string) => void; tabs?: WorkbenchTab[]; value?: string; onChange?: (id: string) => void; content?: ReactNode; min?: number; max?: number };
@@ -134,7 +129,6 @@ export function Workbench({ storageKey, crumbs = [], title, status, saving, hist
   const limits = (side: Side) => ({ min: panel(side)?.min ?? (side === "dock" ? 120 : 200), max: panel(side)?.max ?? (side === "dock" ? 520 : 560) });
   const baseSize = (side: Side) => Math.max(limits(side).min, Math.min(limits(side).max, layout[side]));
   const sizes = { left: baseSize("left"), right: baseSize("right"), dock: baseSize("dock") };
-  // Retain a useful canvas even with a previously saved wide inspector.
   const paneSpace = dimensions.width - 320 - (showLeft ? 6 : 0) - (showRight ? 6 : 0);
   const minimum = (showLeft ? limits("left").min : 0) + (showRight ? limits("right").min : 0);
   const wanted = (showLeft ? sizes.left - limits("left").min : 0) + (showRight ? sizes.right - limits("right").min : 0);
@@ -250,7 +244,6 @@ function PanelBody({ panel }: { panel: WorkbenchPanel }) {
     items={tabItems(panel.tabs.map(tab => ({ ...tab, content: <InputDraftProvider scope={tab.id} reveal={path => { choose(tab.id); panel.locate?.(path); }}>{tab.content}</InputDraftProvider> })))} />;
 }
 
-/** A diagnostics list for the dock: each row can locate its subject. */
 export type WorkbenchProblem = { id: string; severity?: "error" | "warning" | "info"; text: ReactNode; subject?: string; locate?: () => void };
 export function ProblemList({ problems, empty }: { problems: WorkbenchProblem[]; empty?: ReactNode }) {
   if (!problems.length) return <p className="p-3 text-xs text-muted">{empty ?? t("No problems.")}</p>;
@@ -265,7 +258,6 @@ export function ProblemList({ problems, empty }: { problems: WorkbenchProblem[];
   </ul>;
 }
 
-/** A row of resource structure: icon, label, trailing meta, selectable. */
 export function StructureRow({ icon, label, meta, selected, depth = 0, onClick, actions, className }: {
   icon?: ReactNode; label: ReactNode; meta?: ReactNode; selected?: boolean; depth?: number; onClick?: () => void; actions?: ReactNode; className?: string;
 }) {
@@ -279,7 +271,6 @@ export function StructureRow({ icon, label, meta, selected, depth = 0, onClick, 
   </div>;
 }
 
-/** Section heading inside a structure or inspector panel. */
 export function PanelSection({ title, actions, children, className }: { title: ReactNode; actions?: ReactNode; children?: ReactNode; className?: string }) {
   return <section className={cn("grid min-w-0 gap-1 px-2 py-2", className)}>
     <div className="flex items-center gap-1 px-1"><h3 className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>{actions}</div>

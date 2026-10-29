@@ -1,7 +1,5 @@
 import { Select, Tag, t } from "@platform/ui";
 
-// Markings: a bounded classification that travels with data from
-// connection to dataset to pipeline. Unmarked, internal, confidential, restricted.
 const MARKINGS = ["", "internal", "confidential", "restricted"] as const;
 const tones: Record<string, "warning" | "danger" | undefined> = { confidential: "warning", restricted: "danger" };
 
@@ -16,5 +14,4 @@ export function MarkingField({ value, onChange, help }: { value: string; onChang
   </label>;
 }
 
-// integrates says whether a build role may work on integrations: builders and integrators.
 export const integrates = (role: string | undefined) => role === "builder" || role === "integrator";

@@ -14,7 +14,7 @@ func Transform(engine platform.RuleEngine, steps []platform.TransformStep, expec
 	if len(rowLimit) > 0 && rowLimit[0] > 0 && len(input) > rowLimit[0] {
 		return nil, nil, fmt.Errorf("pipeline input exceeds the %d row limit", rowLimit[0])
 	}
-	rows := make([]map[string]any, len(input)) // steps edit rows in place; the input stays as it came
+	rows := make([]map[string]any, len(input))
 	for i, r := range input {
 		rows[i] = make(map[string]any, len(r))
 		for k, v := range r {

@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-// Input saves the independent connector answer, record images and K8 marks.
-// It is not a submission manufactured to fit an application callback to a ledger.
 type Input struct {
 	Unique         []journal.StateUnique   `json:"unique,omitempty"`
 	Authorizations []AuthorizationEvidence `json:"authorizations,omitempty"`

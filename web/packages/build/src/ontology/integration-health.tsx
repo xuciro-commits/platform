@@ -4,9 +4,6 @@ import type { Api } from "@platform/kernel";
 import { Button, DataTable, PageHeader, Panel, Tag, t, type ColumnDef } from "@platform/ui";
 import { useIntegrationEvidence } from "./lineage";
 
-// Integration health (/  Ⅰ-F): one page over every
-// connection, source, pipeline and writeback with its last outcome, read from
-// the definitions and the outbox - nothing is stored for it.
 type Row = { id: string; title: string; view: string; state: string; when?: string; summary: string; tone: "success" | "warning" | "danger" | undefined };
 
 export function IntegrationHealth() {

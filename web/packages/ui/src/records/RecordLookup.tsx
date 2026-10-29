@@ -8,7 +8,6 @@ import type { EntityRecord, InterfaceRecordData, InterfaceRecordIdentity, Record
 
 const pageSize = 25;
 
-/** Searchable, paged reference selection over the caller's scoped record read. */
 type LookupWindow<T> = Omit<NonNullable<Parameters<typeof RecordList>[0]["window"]>, "page"> & { page?: { records: T[]; total: number } };
 function Lookup<T>({ id, scope, target, revision, read, watch, value, valueLabel, initialSearch, onChange, window, label, keyOf, selectedRecord, ariaLabel, disabled }: {
   id?: string; scope: unknown; target: string; revision?: number; read: (search: string, offset: number) => Promise<{ records: T[]; total: number }>;
@@ -83,8 +82,6 @@ export function RecordLookup({ id, source, type, value, onChange, window, labelF
     window={window} selectedRecord={selectedRecord} ariaLabel={ariaLabel} disabled={disabled}/>;
 }
 
-/** Interface selection preserves the original type/id pair; opening or
- * acting on it goes through that type's ordinary authorized record path. */
 export function InterfaceRecordLookup({id,source,name,value,onChange,ariaLabel,disabled,window,labelField}: {
   id?:string;source:RecordSource;name:string;value?:InterfaceRecordIdentity;onChange:(reference?:InterfaceRecordIdentity)=>void;ariaLabel?:string;disabled?:boolean;window?:LookupWindow<InterfaceRecordData>;labelField?:string;
 }) {
@@ -99,7 +96,6 @@ export function InterfaceRecordLookup({id,source,name,value,onChange,ariaLabel,d
     }} window={window} ariaLabel={ariaLabel} disabled={disabled}/>;
 }
 
-/** The model owns validity and labels; record editing never treats it as a record table. */
 export function EnterpriseElementLookup({id,source,value,onChange,stereotypes=[],ariaLabel,disabled}:{id?:string;source:RecordSource;value?:string;onChange:(id?:string)=>void;stereotypes?:string[];ariaLabel?:string;disabled?:boolean}) {
  const scope=source.scope??source,revision=source.revision,families=stereotypes.join(","),visible=useViewVisible();
  const [resolved,setResolved]=useState<{scope:typeof scope;revision?:number;families:string;value?:string;items:Api.EnterpriseQueryElement[];kept?:Api.EnterpriseQueryElement;error?:boolean}>();

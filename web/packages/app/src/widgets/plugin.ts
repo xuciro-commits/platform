@@ -1,7 +1,6 @@
 import {createElement,lazy,type ComponentType} from 'react';
 import {widgetContract,type WidgetID} from './registry';
 
-/** The binding adapter sees owner context; the lazy renderer sees only its ports. */
 export function defineWidgetPlugin<Context>(){
  return function<Props extends object>(id:WidgetID,configVersion:number,bind:(context:Context)=>Props,load:()=>Promise<ComponentType<Props>>,key?:(context:Context)=>string){
   const contract=widgetContract(id);

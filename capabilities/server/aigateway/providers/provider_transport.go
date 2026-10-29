@@ -19,8 +19,6 @@ type Client struct {
 	Credential func(platform.AIProvider) ([]byte, error)
 }
 
-// aiRequest sends one request to a provider with its key, through the dialer
-// that refuses private addresses unless the provider is local.
 func (c Client) Request(pv platform.AIProvider, method, path string, body []byte, timeout time.Duration) (int, []byte, *platform.AIError) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -33,7 +31,6 @@ func (c Client) Request(pv platform.AIProvider, method, path string, body []byte
 	return resp.StatusCode, answer, nil
 }
 
-// aiSend sends a request to a provider with its key; the caller reads and closes the answer.
 func (c Client) Send(ctx context.Context, pv platform.AIProvider, method, path string, body []byte) (*http.Response, *platform.AIError) {
 	req, _ := http.NewRequestWithContext(ctx, method, pv.BaseURL+path, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -45,7 +42,7 @@ func (c Client) Send(ctx context.Context, pv platform.AIProvider, method, path s
 		req.Header.Set("Authorization", "Bearer "+string(key))
 	}
 	if pv.Vendor == "openrouter" {
-		req.Header.Set("X-Title", "Platform") // OpenRouter's app attribution
+		req.Header.Set("X-Title", "Platform")
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
@@ -54,8 +51,6 @@ func (c Client) Send(ctx context.Context, pv platform.AIProvider, method, path s
 	return resp, nil
 }
 
-// Models returns provider wire entries; reviewed capability adoption belongs to
-// the original configuration owner, not the transport adapter.
 func (c Client) Models(pv platform.AIProvider) ([]json.RawMessage, *platform.AIError) {
 	if pv.Wire == "anthropic" {
 		return c.anthropicModels(pv)

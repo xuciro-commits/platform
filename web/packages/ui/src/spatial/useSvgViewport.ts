@@ -6,7 +6,6 @@ function clampSvgView(v:SvgView,width:number,height:number,maxZoom=40):SvgView {
 function revealSvgPoint(view:SvgView,point:{x:number;y:number},width:number,height:number,inset=40,minZoom=4):SvgView {
  const x=point.x*view.k+view.x,y=point.y*view.k+view.y;if(x>=inset&&x<=width-inset&&y>=inset&&y<=height-inset)return view;const k=Math.max(view.k,minZoom);return clampSvgView({k,x:width/2-point.x*k,y:height/2-point.y*k},width,height);
 }
-/** Local camera state is shared by maps and annotation; it never changes data coordinates. */
 export function useSvgViewport(width:number,height:number,pan=true,maxZoom=40){
  const ref=useRef<SVGSVGElement>(null),[view,setView]=useState<SvgView>({k:1,x:0,y:0}),current=useRef(view),drag=useRef<{x:number;y:number;view:SvgView;moved:boolean}|undefined>(undefined),moved=useRef(false);current.current=view;
  const set=(next:SvgView)=>setView(clampSvgView(next,width,height,maxZoom));

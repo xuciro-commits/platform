@@ -1,8 +1,3 @@
-// My account: a member's own profile — how the platform
-// addresses them, their language, timezone and formats, notifications and
-// where the workspace opens. Every value is a decision (platform.profile.update);
-// an empty value returns to the tenant's default. Administrators see the same
-// form on a member's page (people.tsx).
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import {useUnsavedChanges, Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t, formatStamp} from "@platform/ui";
@@ -22,7 +17,6 @@ const DIGESTS = ["instant", "hourly", "daily"];
 const THEMES = ["system", "light", "dark"];
 const DENSITIES = ["comfortable", "compact"];
 
-/** The browser's list of IANA zones, when it has one; the common ones otherwise. */
 export function timezones(): string[] {
   try {
     const all = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone");
@@ -31,7 +25,6 @@ export function timezones(): string[] {
   return ["UTC", "Asia/Shanghai", "Asia/Tokyo", "Asia/Singapore", "Asia/Kolkata", "Europe/Berlin", "Europe/London", "America/New_York", "America/Chicago", "America/Los_Angeles", "Australia/Sydney"];
 }
 
-/** Now, as the member sees it, for a preview next to the timezone choice. */
 function clock(zone: string, dateFormat: string) {
   try {
     const parts = new Intl.DateTimeFormat("en-GB", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
@@ -43,14 +36,10 @@ function clock(zone: string, dateFormat: string) {
 
 type Draft = Partial<Record<keyof Profile, string | boolean>>;
 
-/** The profile form for one member: their own, or anyone's for an administrator. */
 export function ProfileForm({ member, account, languages, tenant, self }: { member: string; account: Account; languages: string[]; tenant?: TenantRecord; self: boolean }) {
   const { decide, me } = useHost();
   const { setScheme } = useTheme();
   const [draft, setDraft] = useState<Draft>({});
-  // The apps this member may open: mine from /v1/me; another member's from the
-  // roles the member list shows (administrators only, who are the ones
-  // editing others), titled by the apps I know.
   const members = useRead<Member[]>("/v1/members", undefined, !self).data ?? [];
   const openable = useMemo(() => {
     if (self) return me.apps.map((a) => ({ id: a.id, title: a.title }));
@@ -75,9 +64,6 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
       setDraft({});
     }
   };
-  // Fields in a two-column grid: a cell with a hint is taller than its
-  // neighbour; content-start keeps every control on the same line as the
-  // control beside it instead of letting the grid spread the rows.
   const text = (k: keyof Profile, label: string, hint?: string, type = "text") => (
     <label className="grid content-start gap-1 text-sm">
       <span className="text-xs text-muted">{label}</span>
@@ -177,7 +163,6 @@ export function MyAccount() {
   );
 }
 
-// Hand what I hold in an app to someone else until a day.
 function Delegate() {
   const { me, decide, can } = useHost();
   const apps = Object.keys(me.profile.roles ?? {});
@@ -205,9 +190,6 @@ function Delegate() {
   );
 }
 
-// Personal tokens: a credential for scripts that acts as me,
-// within the permissions I name. The secret is collected once, right after
-// the decision; the host never shows it again.
 function Tokens() {
   const { client, decide, can } = useHost();
   const tokens = useRead<TokenView[]>("/v1/tokens");
@@ -258,7 +240,6 @@ function Tokens() {
   );
 }
 
-// Sessions: the credentials this host has seen act as me.
 function Sessions() {
   const { client } = useHost();
   const sessions = useRead<Session[]>("/v1/sessions");

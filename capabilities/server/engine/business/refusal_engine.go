@@ -80,7 +80,7 @@ func RefusalEscalations(events []RefusalEvent, at time.Time, exists func(string)
 		g := group{app: app, subject: fact.Subject, action: fact.Action, code: fact.Code, policy: *fact.Escalation}
 		identity := app + "/" + key + "/" + fact.Subject + "/" + fact.Action + "/" + fact.Code
 		if seen[identity] {
-			return // one submitted intent, even when a foreach flags many rows
+			return
 		}
 		seen[identity] = true
 		groups[g] = append(groups[g], RefusalEvent{Key: key, Fact: fact})

@@ -71,18 +71,13 @@ func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 var _ platform.BlueprintCatalog = (*Owner)(nil)
 
 const (
-	// PackageType is the decision target: a package's installed state.
-	SchemaPackageInstall = "platform.package.install"
-	SchemaPackageUpgrade = "platform.package.upgrade"
-	SchemaPackageDrain   = "platform.package.drain"
-	SchemaPackageRetire  = "platform.package.retire"
-	// platformCompatibility is the API version packages must accept.
+	SchemaPackageInstall  = "platform.package.install"
+	SchemaPackageUpgrade  = "platform.package.upgrade"
+	SchemaPackageDrain    = "platform.package.drain"
+	SchemaPackageRetire   = "platform.package.retire"
 	platformCompatibility = "1"
 )
 
-// Actions are the console's controlled install, upgrade, drain and
-// retire decisions: the index is precheck-only, so a refused package changes
-// nothing.
 func Actions() []platform.Action {
 	admin := []string{"admin"}
 	fields := []platform.Field{{Name: "id", Type: "string", Required: true, Description: "The package's ID"},
@@ -103,9 +98,6 @@ func Actions() []platform.Action {
 	}
 }
 
-// LoadPackageIndex reads every *.json descriptor of a directory, or one JSON
-// document with an array of descriptors when the path is a URL's file name.
-// The online case uses the same reader: a mirror is a directory of JSON files.
 func LoadPackageIndex(dir string) (*platform.PackageIndex, error) {
 	index := &platform.PackageIndex{Directory: dir}
 	if dir == "" {
@@ -165,7 +157,6 @@ func BlueprintCandidate(b platform.PackageBlueprint, owner build.ConstructionDra
 	return platform.Candidate(b.Roots, append(assets, code...))
 }
 
-// sealedPackageDescriptor reads back the exact descriptor bytes a tenant sealed.
 func (d *Owner) sealedPackageDescriptor(id, version, artifact string) (platform.PackageDescriptor, error) {
 	raw, err := d.host.GetPackageArtifact(ArtifactKey(d.tenant, id, version))
 	if err != nil {
@@ -204,7 +195,6 @@ func (d *Owner) BlueprintViews() []platform.PackageView {
 	return out
 }
 
-// packagesOf is the tenant's installed map, when the console runs it.
 func (d *Owner) packagesOf() map[string]*platform.InstalledPackage {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -214,8 +204,6 @@ func (d *Owner) packagesOf() map[string]*platform.InstalledPackage {
 	return d.packages
 }
 
-// A fresh index belongs to this call. The shared deployment index is never
-// replaced by a reader; in-memory indexes keep their original behavior.
 func (d *Owner) packageIndex() (*platform.PackageIndex, error) {
 	d.mu.Lock()
 	bound := d.index
@@ -295,7 +283,6 @@ func (d *Owner) precheck(p platform.PackageDescriptor, index *platform.PackageIn
 	return out
 }
 
-// contributionKeys maps every live namespaced contribution key to its owner.
 func (d *Owner) contributionKeys() map[string]string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -311,13 +298,10 @@ func (d *Owner) contributionKeys() map[string]string {
 	return out
 }
 
-// ArtifactKey is where one package version's sealed bytes live.
 func ArtifactKey(tenant, id, version string) string {
 	return "packages/" + tenant + "/" + id + "/" + version + ".json"
 }
 
-// Installation state can change; an accepted version's contents cannot.
-// Check the current and retained versions alike, including packages without a runtime.
 func (d *Owner) verifyPackageVersion(descriptor platform.PackageDescriptor, prior *platform.InstalledPackage) error {
 	if prior == nil {
 		return nil
@@ -345,11 +329,6 @@ func (d *Owner) verifyPackageVersion(descriptor platform.PackageDescriptor, prio
 	return err
 }
 
-// sealPackageBytes writes a descriptor into the tenant's artifact store and
-// returns the digest of the sealed bytes. Sealing is idempotent: the same
-// descriptor seals to the same key and digest, so a retried install writes the
-// same bytes. The sealed artifact is what an upgrade verifies before it
-// replaces the version, and what a retained version keeps.
 func (d *Owner) sealPackageBytes(descriptor platform.PackageDescriptor, directory string) (string, error) {
 	if d.host == nil {
 		return "", fmt.Errorf("the console is not composed with a tenant")
@@ -366,13 +345,9 @@ func (d *Owner) sealPackageBytes(descriptor platform.PackageDescriptor, director
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
-// verifySealedPackage reads an installed version's sealed bytes back and checks
-// them against the digest it was installed with. A changed or missing artifact
-// refuses the upgrade, so the running version is kept rather than replaced on
-// bytes nobody can prove.
 func (d *Owner) verifySealedPackage(held platform.InstalledPackage) error {
 	if held.Artifact == "" {
-		return nil // installed before sealing existed: nothing to verify
+		return nil
 	}
 	key := ArtifactKey(d.tenant, held.ID, held.Version)
 	raw, err := d.host.GetPackageArtifact(key)
@@ -386,8 +361,6 @@ func (d *Owner) verifySealedPackage(held platform.InstalledPackage) error {
 	return nil
 }
 
-// decide applies the console's package decisions. It returns the closure
-// shape the console's other decisions use.
 func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	if s.GetSchema().GetName() == SchemaPackageImport || s.GetSchema().GetName() == SchemaPackageRemoveSource {
 		return d.decidePackageSource(c, s)
@@ -460,8 +433,6 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package {package} cannot be sealed: {reason}", p.ID, err.Error())
 	}
-	// The apply closure runs under the console's lock (Console.Submit), so it
-	// reads the map directly: packagesOf would lock it again.
 	return func(*pb.ChangeRecord) {
 		now := time.Now().UTC()
 		if d.packages == nil {
@@ -488,7 +459,6 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	}, nil
 }
 
-// PackageViews lists the index beside what the tenant holds.
 func (d *Owner) PackageViews() []platform.PackageView {
 	out := []platform.PackageView{}
 	index, indexErr := d.packageIndex()
@@ -542,8 +512,6 @@ func (d *Owner) PackageViews() []platform.PackageView {
 	return out
 }
 
-// Contributions lists this tenant's namespaced contributions: every app's
-// declared views and every active package's.
 func (d *Owner) Contributions() []platform.Contribution {
 	out := []platform.Contribution{}
 	if d.host != nil {
@@ -578,8 +546,6 @@ func (d *Owner) Contributions() []platform.Contribution {
 	return out
 }
 
-// DecodeContent reads the reviewed JSON of a platform package: one
-// installable descriptor, without embedded native bytes.
 func DecodeContent(raw []byte) (platform.PackageDescriptor, error) {
 	var descriptor platform.PackageDescriptor
 	if err := platform.DecodeJSON(raw, &descriptor, "platform package"); err != nil {
@@ -808,7 +774,6 @@ func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *
 
 type Catalog interface{ BindPackageIndex(*platform.PackageIndex) }
 
-// Precheck tells whether this tenant may install a descriptor now.
 func (d *Owner) Precheck(p platform.PackageDescriptor) platform.Precheck {
 	index, err := d.packageIndex()
 	if err != nil {
@@ -842,8 +807,6 @@ func (d *Owner) Offer(digest string) (platform.Offer, error) {
 	return offer, nil
 }
 
-// Preparation is a read projection of sealed package content and its original
-// owner records. It is not an installation, execution plan or second registry.
 type PackagePreparation struct {
 	Package           string                   `json:"package"`
 	Version           string                   `json:"version"`
@@ -899,7 +862,6 @@ type DraftState struct {
 	Pages                                                 []string
 }
 
-// Preparation reads captured owner declarations and member-filtered drafts.
 func Preparation(id, version string, blueprint platform.PackageBlueprint, installed *platform.InstalledPackage, candidate platform.ReleaseCandidate, m platform.Member, source PreparationSource) (PackagePreparation, error) {
 	out := PackagePreparation{Package: id, Version: version, Applications: []PackageApplication{}, Connections: []PackageConnection{}, AI: []PackageAIRequirement{}, Roles: []PackageRoleRequirement{}, Setup: blueprint.Setup}
 	if installed != nil {

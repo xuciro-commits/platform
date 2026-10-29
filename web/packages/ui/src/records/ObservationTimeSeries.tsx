@@ -4,7 +4,6 @@ import type {EntityInfo} from "./Records";
 import {observationTimeSeries,observationWindowCurrent,type ObservationSignal,type ObservationWindow} from "./observation-model";
 
 export type ObservationTimeSeriesProps={scope:string;window?:ObservationWindow;info:EntityInfo;timeField:string;signals:ObservationSignal[];label:string;loading?:boolean;error?:string;readCurrent?:boolean;reference?:number};
-/** Pure ordered business observations; no sampling, clock, generated samples or reader. */
 export function ObservationTimeSeries(props:ObservationTimeSeriesProps){return <TimeSeriesSurface key={props.scope} {...props}/>;}
 function TimeSeriesSurface({scope,window,info,timeField,signals,label,loading,error,readCurrent=true,reference}:ObservationTimeSeriesProps){
  const [focus,setFocus]=useState<string>();

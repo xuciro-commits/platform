@@ -6,7 +6,6 @@ import { t } from '../i18n';
 
 export type SourceFormat = 'json' | 'yaml';
 export type StructuredValue = Record<string, unknown>;
-/** Illustrative values never initialize or overwrite the real operation input. */
 export function structuredExample(fields: Api.FieldInfo[]): StructuredValue {
   return Object.fromEntries(fields.filter(field=>!field.readOnly).map(field=>{
     let value: unknown;
@@ -36,7 +35,6 @@ const decimal = (raw: string) => {
   return (digits === '0' ? '' : match[1] === '-' ? '-' : '') + digits + 'e' + (digits === '0' ? 0 : exponent);
 };
 
-/** Source syntax is a view of the original JSON-compatible value model. */
 export function parseStructuredSource(raw: string, format: SourceFormat): StructuredValue {
   if (format === 'json') JSON.parse(raw);
   const documents = parseAllDocuments(raw, { version: '1.2', uniqueKeys: true, intAsBigInt: true, prettyErrors: true });
@@ -75,7 +73,6 @@ export function formatStructuredSource(value: StructuredValue, format: SourceFor
   return format === 'json' ? JSON.stringify(value, null, 2) : stringify(JSON.parse(JSON.stringify(value)), { aliasDuplicateObjects: false, lineWidth: 0 });
 }
 
-/** Original host constraints apply to both modes; opaque JSON remains owner checked. */
 export function structuredIssues(value: StructuredValue, fields: Api.FieldInfo[]): Api.FieldIssue[] {
   const issues: Api.FieldIssue[] = [];
   const add = (path: string[], code: string, message: string) => issues.push({path, code, message});

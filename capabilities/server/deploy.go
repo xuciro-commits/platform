@@ -31,58 +31,36 @@ import (
 	"time"
 )
 
-// Deployment is how a host binary runs: in memory with
-// development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
 	Addr, Database, Issuer, Keys, Web string
-	IdentityProxy                     string // explicit upstream for the public /auth path
-	HostAdmins                        string // explicit authenticated subjects; tenant roles do not imply host authority
-	// TenantsFile lists the host's tenants with their seats and starting
-	// settings; the console appends to it. Empty: the
-	// binary's development tenant. TemplatesDir holds tenant templates.
-	TenantsFile, TemplatesDir string
-	system                    platform.TenantSpec
-	Release                   int
-	ReleaseDigest             string
-	specs                     *controlowner.Specs
-	Files                     string // http(s)://host:port/bucket of an S3-compatible store; empty: memory
-	Project                   bool
-	SnapshotEvery             int64
-	// Profile is which infrastructure the host runs on:
-	// "delivery" keeps the PostgreSQL journal, the S3 file bytes and an
-	// external OpenID provider; "lightweight" keeps everything in one data
-	// directory — a local journal file, local file bytes and the host's own
-	// signing key. The profile is declared, never inferred: a host missing a
-	// dependency of its profile stops instead of falling back to another.
-	Profile string
-	// Data is the lightweight profile's directory.
-	Data string
-	// IDPKey is the lightweight profile's signing key file (default
-	// <data>/idp.key). Mint, with a subject, prints a token for that subject
-	// and stops; TokenTTL is how long such a token lasts.
-	IDPKey   string
-	Mint     string
-	NewKey   bool
-	TokenTTL time.Duration
-	// Packages is a directory of package descriptors: the
-	// index the console lists and prechecks. Empty: no packages offered.
-	Packages     string
-	packageIndex *platform.PackageIndex
-	// Rebuild composes a fresh, unstarted tenant with the same durable app and
-	// connector declarations. Required for an in-process recovery retry.
-	Rebuild                 func(id string) (*Tenant, error)
-	RebuildWithCapabilities func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
-	RuntimeProviders        *platform.RuntimeProviders
-	HostAuthorization       authz.Engine
-	Storage                 *JournalProvider
-	runtimeContext          context.Context
-	background              *sync.WaitGroup
-	// Seed gives a tenant whose journal is empty its first data, through
-	// ordinary decisions journaled like any other (in memory: every start).
-	Seed func(t *Tenant, now time.Time) error
+	IdentityProxy                     string
+	HostAdmins                        string
+	TenantsFile, TemplatesDir         string
+	system                            platform.TenantSpec
+	Release                           int
+	ReleaseDigest                     string
+	specs                             *controlowner.Specs
+	Files                             string
+	Project                           bool
+	SnapshotEvery                     int64
+	Profile                           string
+	Data                              string
+	IDPKey                            string
+	Mint                              string
+	NewKey                            bool
+	TokenTTL                          time.Duration
+	Packages                          string
+	packageIndex                      *platform.PackageIndex
+	Rebuild                           func(id string) (*Tenant, error)
+	RebuildWithCapabilities           func(id string, services platform.RuntimeCapabilities) (*Tenant, error)
+	RuntimeProviders                  *platform.RuntimeProviders
+	HostAuthorization                 authz.Engine
+	Storage                           *JournalProvider
+	runtimeContext                    context.Context
+	background                        *sync.WaitGroup
+	Seed                              func(t *Tenant, now time.Time) error
 }
 
-// Flags registers the deployment flags on the default flag set.
 func Flags(addr string) *Deployment {
 	d := &Deployment{}
 	flag.StringVar(&d.Addr, "addr", addr, "listen address")
@@ -109,7 +87,6 @@ func Flags(addr string) *Deployment {
 	return d
 }
 
-// idpKeyPath is where the lightweight profile's signing key lives.
 func (d *Deployment) idpKeyPath() string {
 	if d.IDPKey != "" {
 		return d.IDPKey
@@ -117,9 +94,6 @@ func (d *Deployment) idpKeyPath() string {
 	return filepath.Join(d.Data, "idp.key")
 }
 
-// validate settles the profile before anything is opened: the profile is
-// explicit, its dependencies are required, and flags of the other profile are
-// refused rather than ignored.
 func (d *Deployment) validate() error {
 	if d.IdentityProxy != "" {
 		if d.Issuer == "" {
@@ -151,9 +125,6 @@ func (d *Deployment) validate() error {
 	return fmt.Errorf("unknown -profile %q: delivery, lightweight", d.Profile)
 }
 
-// idp, on a lightweight host, is the provider it signs and verifies tokens
-// with. The seats served on /v1/sign-in are signed too, so no token of an
-// unsigned form is ever accepted.
 func (d *Deployment) lightweightIdP() (*idp.Local, error) {
 	key, err := idp.LoadKey(d.idpKeyPath())
 	if err != nil {
@@ -162,8 +133,6 @@ func (d *Deployment) lightweightIdP() (*idp.Local, error) {
 	return idp.NewLocal(key)
 }
 
-// makeKey writes a fresh signing key, refusing to replace one that exists: a
-// replaced key would sign out every token already minted.
 func (d *Deployment) makeKey() error {
 	if _, err := os.Stat(d.idpKeyPath()); err == nil {
 		return fmt.Errorf("idp: %s already exists; it is not replaced", d.idpKeyPath())
@@ -178,8 +147,6 @@ func (d *Deployment) makeKey() error {
 	return idp.SaveKey(d.idpKeyPath(), key)
 }
 
-// lightweightState opens what a lightweight host runs on: its journal, its
-// file bytes and its signing key, all inside -data.
 func (d *Deployment) lightweightState() (Journals, platform.FileStore, *idp.Local, error) {
 	journal, err := d.openJournals(context.Background())
 	if err != nil {
@@ -198,11 +165,6 @@ func (d *Deployment) lightweightState() (Journals, platform.FileStore, *idp.Loca
 	return journal, files, signer, nil
 }
 
-// restoreTenants brings every tenant to the journal's state before the host
-// serves: the newest compatible snapshot when there is one, then the entries
-// after it. Both profiles run this same path: the lightweight
-// profile's journal is a file, not a second set of semantics, so a restart
-// replays and a damaged journal quarantines exactly as it does on PostgreSQL.
 func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string, tenants []*Tenant, restored map[string]int64, fresh map[string]bool) error {
 	ordered := slices.Clone(tenants)
 	slices.SortStableFunc(ordered, func(a, b *Tenant) int {
@@ -270,9 +232,6 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 					continue
 				}
 				if runtime != nil {
-					// A retained older writer may have appended accepted results
-					// after SQL stopped advancing. Reconstruct that legacy prefix
-					// independently below; never apply latest SQL as its past.
 					if _, err := j.Entries(ctx, t.ID, seq); err != nil {
 						if !errors.Is(err, errTenantJournal) {
 							return fmt.Errorf("read journal %s: %w", t.ID, err)
@@ -314,7 +273,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 				continue
 			}
-			return fmt.Errorf("read journal %s: %w", t.ID, err) // a database error is not tenant-local
+			return fmt.Errorf("read journal %s: %w", t.ID, err)
 		}
 		var prefix *journal.StateCheckpoint
 		if stateActive && statePosition >= after && statePosition < j.Position(t.ID) {
@@ -354,7 +313,7 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		}
 		fresh[t.ID] = after == 0 && len(entries) == 0
 		if t.procs != nil {
-			if err := t.procs.Check(); err != nil { // running instances need their flow's version
+			if err := t.procs.Check(); err != nil {
 				t.quarantine(fmt.Errorf("process recovery: %w", err))
 				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 				continue
@@ -366,17 +325,12 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 		} else {
 			log.Printf("replayed %d entries for %s", len(entries), t.ID)
 		}
-		// An input the journal did not take is never answered; the client's
-		// outbox resends it after the restart has replayed the rest.
 		if err := t.migrateRuntimeStateFrom(ctx, j, prefix); err != nil {
 			t.quarantine(fmt.Errorf("runtime state: %w", err))
 			log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
 			continue
 		}
 		t.attachJournal(ctx, j)
-		// Upgrade the original full-row checkpoint once before serving. An
-		// unchanged tenant at the prior saved position must not load every row
-		// again merely because its periodic snapshotter has no new entries.
 		if _, ok := j.(journal.StateSnapshotStorage); ok && d.SnapshotEvery > 0 {
 			seq, err := t.checkpointRuntime(ctx, j, code)
 			if err != nil {
@@ -390,17 +344,10 @@ func (d *Deployment) restoreTenants(ctx context.Context, j Journals, code string
 	return nil
 }
 
-// Serve replays each tenant's journal, from its newest snapshot of this code
-// when there is one, then records into it (fail-stop), seeds a tenant whose
-// journal was empty, runs the tenants' owned
-// work every second, saves snapshots as the journal grows and at
-// shutdown, and serves until SIGINT or SIGTERM.
 func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var journal Journals
-	// Work and observers finish before their shared store closes, including
-	// initialization and listener failures that bypass normal HTTP shutdown.
 	defer func() {
 		if journal != nil {
 			journal.Close()
@@ -463,9 +410,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	if err := d.preparePackageIndex(tenants); err != nil {
 		return err
 	}
-	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set
+	flush := exportTelemetry(ctx, filepath.Base(os.Args[0]))
 	defer flush(context.Background())
-	var lightweightFiles platform.FileStore // the lightweight profile's bytes open with its journal, all in -data
+	var lightweightFiles platform.FileStore
 	var files platform.FileStore
 	switch {
 	case d.Files != "":
@@ -480,8 +427,8 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		log.Printf("files in %s", d.Files)
 	}
 	code := CodeOf(tenants...)
-	restored := map[string]int64{} // each tenant's snapshot position at start-up, 0 without one
-	fresh := map[string]bool{}     // tenants whose journal was empty
+	restored := map[string]int64{}
+	fresh := map[string]bool{}
 	switch {
 	case d.Profile == "lightweight":
 		var err error
@@ -509,8 +456,6 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		}
 	}
 	registry := newTenantRegistry(tenants)
-	// The development host still uses the accepted-result boundary. Its
-	// memory journal, like all of its records, ends with this process.
 	memoryJournal := func(tenant *Tenant) {
 		var mu sync.Mutex
 		var entries []Entry
@@ -557,7 +502,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 				continue
 			}
 			p, err := Project(ctx, pgPool, t)
-			if err != nil { // a copy for outside tools: the host serves without it
+			if err != nil {
 				log.Printf("projection %s: %v", t.ID, err)
 				continue
 			}
@@ -574,7 +519,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 			return
 		}
 		snapshots.mu.Lock()
-		snapshots.saved[original.ID] = restored[original.ID] // what was replayed since is worth saving too
+		snapshots.saved[original.ID] = restored[original.ID]
 		snapshots.mu.Unlock()
 		background.Add(1)
 		go func() {
@@ -606,7 +551,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	host.HostAdmins = d.hostAdministrators()
 	host.tenantsFrom = registry.List
 	host.Templates = d.Templates
-	if d.Rebuild != nil { // the host console creates tenants
+	if d.Rebuild != nil {
 		var createMu sync.Mutex
 		host.CreateTenant = func(req platform.CreateTenantRequest, by string) (*Tenant, error) {
 			createMu.Lock()
@@ -645,8 +590,6 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.Issuer == ""
 	host.Release, host.ReleaseDigest = d.Release, d.ReleaseDigest
 	if signer != nil {
-		// The host serves its seats as signed tokens, and takes only those: the
-		// delivery path's development tokens are not accepted here.
 		host.SignWith(signer, d.TokenTTL)
 	}
 	return d.listen(ctx, host, func(shutdown context.Context) error {
@@ -663,8 +606,6 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	})
 }
 
-// listen serves host until the process is told to stop or the listener fails;
-// requests in flight finish, then atExit runs (the final snapshots).
 func (d *Deployment) listen(ctx context.Context, host *Host, atExit func(context.Context) error) error {
 	handler, err := identityProxyHandler(d.IdentityProxy, host.Handler())
 	if err != nil {
@@ -689,8 +630,6 @@ func (d *Deployment) listen(ctx context.Context, host *Host, atExit func(context
 	return atExit(shutdown)
 }
 
-// createTenant records a new tenant's spec, builds it, opens its journal and
-// files, seeds it and applies the template's first decisions.
 func (d *Deployment) createTenant(req platform.CreateTenantRequest, by string, files platform.FileStore, open, seed func(*Tenant) error) (*Tenant, error) {
 	now := Now()
 	spec, tpl, err := d.spec(req, by, now)
@@ -721,12 +660,8 @@ func (d *Deployment) createTenant(req platform.CreateTenantRequest, by string, f
 	return t, nil
 }
 
-// roundSize is the items a tenant takes in one round before the next tenant's turn.
 const roundSize = 10
 
-// Schedule runs the tenants' due work in rounds, each tenant up to size items
-// in turn, until none has ready work or the time is up: a tenant
-// with a burst of work waits for the others' turns, and none starves.
 func Schedule(tenants []*Tenant, now time.Time, size int, within time.Duration) {
 	started := time.Now()
 	for more := true; more && time.Since(started) < within; {
@@ -739,9 +674,6 @@ func Schedule(tenants []*Tenant, now time.Time, size int, within time.Duration) 
 	}
 }
 
-// snapshotter saves after the configured growth and a tenth of the previous
-// position, and at shutdown when anything changed. SQL snapshots capture owner
-// state and archive records inside PostgreSQL rather than collecting Go rows.
 type snapshotter struct {
 	journal Journals
 	code    string
@@ -780,9 +712,6 @@ func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
 	log.Printf("saved a snapshot of %s at %d (%d kB) in %v", t.ID, seq, len(state)/1024, time.Since(started).Round(time.Millisecond))
 }
 
-// CodeOf identifies the binary and its app versions. It is diagnostic metadata
-// for versioned checkpoints and the eligibility key for legacy snapshots or
-// owners that have not declared their snapshot restore format.
 func CodeOf(tenants ...*Tenant) string {
 	h := sha256.New()
 	if exe, err := os.Executable(); err == nil {
@@ -799,8 +728,6 @@ func CodeOf(tenants ...*Tenant) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// Work notifications coalesce; the timer still finds delayed or missed work.
-// Both use the same scheduler and outside lane, not a second execution path.
 var workReady = make(chan struct{}, 1)
 
 func wakeWork() {
@@ -810,8 +737,6 @@ func wakeWork() {
 	}
 }
 
-// RunWork runs the tenants' owned work and sends their outbound
-// effects when changed and at least every second.
 func RunWork(tenants ...*Tenant) func(context.Context) error {
 	return runWorkFrom(func() []*Tenant { return tenants })
 }
@@ -836,9 +761,6 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 			}
 			tenants := current()
 			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
-			// Work on the outside — effects and agents' model calls
-			// — goes to the I/O lane of every tenant at once, outside
-			// their locks; the next tick does not wait for it.
 			var outside []func()
 			for _, t := range tenants {
 				outside = append(append(outside, t.dispatches(Now())...), t.turns(Now())...)
@@ -848,7 +770,7 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 			go func() { defer outsideRuns.Done(); integrations.OnLane(outside) }()
 		}
 	}()
-	go func() { // evaluations, embeddings and old transcripts: many calls, apart from runs
+	go func() {
 		defer loops.Done()
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -885,7 +807,6 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 	}
 }
 
-// Host authority is a deployment choice, independent of tenant membership.
 func (d *Deployment) hostAdministrators() map[string]bool {
 	out := map[string]bool{}
 	for _, subject := range strings.Split(d.HostAdmins, ",") {
@@ -896,8 +817,6 @@ func (d *Deployment) hostAdministrators() map[string]bool {
 	return out
 }
 
-// OIDC verifies identities with a public key; personal tokens need a separate,
-// durable private secret. An external issuer must never use the development key.
 func (d *Deployment) configurePersonalTokens() error {
 	if d.Issuer == "" {
 		return nil
@@ -910,8 +829,6 @@ func (d *Deployment) configurePersonalTokens() error {
 	return nil
 }
 
-// preparePackageIndex gives every tenant the offered deployment catalogue;
-// installed package state remains in each tenant's accepted Console state.
 func (d *Deployment) preparePackageIndex(tenants []*Tenant) error {
 	index, err := packages.LoadPackageIndex(d.Packages)
 	if err != nil {
@@ -930,7 +847,6 @@ func (d *Deployment) bindPackageIndex(tenant *Tenant) {
 	}
 }
 
-// Recovery and host-created tenants receive the same offered catalogue.
 func (d *Deployment) rebuildTenant(id string) (*Tenant, error) {
 	return d.composeRuntime(id, platform.DefaultRuntimeCapabilities().Selection())
 }

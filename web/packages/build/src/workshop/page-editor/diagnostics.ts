@@ -25,8 +25,6 @@ export type PageDiagnostic = {
 };
 type Context = { object: string; entity: (type: string) => EntityInfo | undefined; catalog: ActionDeclaration[]; definitions: Definition[] };
 
-/** One result owns the editor's explanations, locations and save eligibility.
- * Existing runtime and widget diagnostics retain their original semantics. */
 export function pageDraftDiagnostics(draft: PageDraft, { object, entity: authoringEntity, catalog, definitions }: Context): PageDiagnostic[] {
   const { document, sections, selections } = draft;
   const issues: PageDiagnostic[] = [];

@@ -8,7 +8,6 @@ import { Select } from "../primitives/input";
 import { applies, type FieldType, type Operator } from "./types";
 import { t } from "../i18n";
 
-/** An entity's fields in display order, keyed by the record's property names. */
 export type Entity<R> = { name: string; fields: { [K in keyof R]?: FieldType<any, R> } & Record<string, FieldType<any, R>>; primary: keyof R & string };
 
 export function defineEntity<R>(entity: Entity<R>): Entity<R> {
@@ -25,7 +24,6 @@ function FieldCell<R>(context:CellContext<R,unknown>) {
   return field.display(context.getValue(),context.row.original);
 }
 
-/** Table columns from field types: display, alignment, width and sorting. */
 export function columnsFor<R>(entity: Entity<R>, keys: string[] = Object.keys(entity.fields)): ColumnDef<R, any>[] {
   return keys.map((key) => {
     const field = entity.fields[key]!;
@@ -41,7 +39,6 @@ export function columnsFor<R>(entity: Entity<R>, keys: string[] = Object.keys(en
   });
 }
 
-/** Pure projection of the host's finite input declaration. */
 export function inputIssues(fields:Api.Field[],values:Record<string,unknown>):Api.FieldIssue[]{
  const issues:Api.FieldIssue[]=[],valid=new Set<string>(),dependencies=new Set(fields.flatMap(f=>[f.constraints?.before,f.constraints?.after]).filter(Boolean));
  const add=(f:Api.Field,code:string,message:string,related?:string)=>{if(issues.length<64)issues.push({code,message,path:[f.name],relatedPaths:related?[[related]]:undefined});};
@@ -59,13 +56,11 @@ export function inputIssues(fields:Api.Field[],values:Record<string,unknown>):Ap
  return issues;
 }
 
-/** Validation for a whole record: each editable field's schema, optional unless required. */
 export function recordSchema<R>(entity: Entity<R>, keys: string[] = Object.keys(entity.fields)) {
   const shown = keys.filter((k) => !entity.fields[k]!.readOnly);
   const blank = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
   const object = z.object(Object.fromEntries(shown.map((k) => {
     const f = entity.fields[k]!;
-    // A conditional field is required only while it applies: the object-level check below decides.
     const required = f.required && !f.when;
     const checked = f.input ? f.schema.superRefine((value,ctx)=>{for(const issue of inputIssues([{...f.input!,required}],{[k]:value}))ctx.addIssue({code:"custom",message:issue.message});}) : f.schema;
     const schema = required ? checked.refine((v) => v !== "" && !(Array.isArray(v) && v.length === 0), t("Required")) : checked.optional();
@@ -81,7 +76,6 @@ export function recordSchema<R>(entity: Entity<R>, keys: string[] = Object.keys(
   });
 }
 
-/** The values of a form with its inactive conditional fields left out (#138): the host refuses a value a condition does not allow. */
 export function activeValues<R>(entity: Entity<R>, values: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(values).filter(([k]) => applies(entity.fields[k] ?? {}, values)));
 }
@@ -96,7 +90,6 @@ export function applyFilters<R>(entity: Entity<R>, rows: R[], filters: Filter[])
   return active.length ? rows.filter((row) => active.every(({ key, op, arg }) => op.test(valueOf(entity, key, row), arg))) : rows;
 }
 
-/** Filters built from field types: each type offers its own operators and argument editor. */
 export function FilterBar<R>({ entity, filters, onChange, maxFilters }: { entity: {fields:Record<string,Pick<FieldType<any,R>,"label"|"editor">&{operators:Pick<Operator<unknown>,"id"|"label"|"needsArg">[]}>}; filters: Filter[]; onChange: (filters: Filter[]) => void; maxFilters?:number }) {
   const keys = Object.keys(entity.fields).filter(key=>entity.fields[key]?.operators.length);
   const update = (i: number, next: Partial<Filter>) => onChange(filters.map((f, j) => (j === i ? { ...f, ...next } : f)));

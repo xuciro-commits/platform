@@ -9,8 +9,6 @@ import {compileQueryPlans,queryView,boundQueryDefinition,planKey,windowFiltersLo
 import type {VariableResult} from "./variables";
 import type {QueryView} from "./Session";
 
-/** Application and page owners use the same compiler and read cache. The
- * application session determines sharing and lifetime, never another reader. */
 export function useApplicationQueries(session:ApplicationSession|undefined, values:Record<string,VariableResult>) {
  const {source,definitions}=useHost(),plans=session?.queries??{},variables=session?.variables??{},reads=session?.reads,snapshot=reads?.snapshot();
  const named=(plan:Api.PageQuery)=>plan.query?findDefinition(definitions,plan.query.ref):undefined;

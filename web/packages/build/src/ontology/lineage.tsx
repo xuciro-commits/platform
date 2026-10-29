@@ -2,8 +2,6 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { assetKey, DependencyGraph, useDependencies, useReadQuery } from "@platform/app";
 import { Button, DataTable, Panel, t, type Route } from "@platform/ui";
 
-// Runtime outcomes remain with integration owners. Declared relationships use
-// the shared release descriptor graph.
 type Conn = { id: string; name: string; title: string; kind: string; state: string };
 type Src = { id: string; title: string; name: string; connection?: string; profile?: string; url?: string; entity?: string; object?: string; dataset?: string; key?: string; mapping?: { from: string; to: string }[]; state: string };
 type Ds = { id: string; title: string; name: string; producer?: string; version?: number; schema?: { name: string }[] };
@@ -15,7 +13,6 @@ export function useIntegrationEvidence() {
   return { connections: q<Conn>("build.connection"), sources: q<Src>("build.source"), datasets: q<Ds>("build.dataset"), pipelines: q<Pipe>("build.pipeline"), writebacks: q<Wb>("build.writeback") };
 }
 
-/** Titles and editor routes stay with the original integration records. */
 function integrationPresentation(evidence: ReturnType<typeof useIntegrationEvidence>) {
   const entries = [
     ...evidence.connections.map(record => ({ kind: "connection", view: "connection", record })),
@@ -33,7 +30,6 @@ function integrationPresentation(evidence: ReturnType<typeof useIntegrationEvide
   };
 }
 
-/** Which step of a pipeline produces a column, if any renames or computes it. */
 function producedBy(p: Pipe, column: string): string {
   for (const s of [...(p.steps ?? [])].reverse()) {
     if ((s.kind === "rename" || s.kind === "compute") && s.to === column) return s.kind === "rename" ? `← ${s.from}` : `= ${t("formula")}`;

@@ -8,12 +8,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// Saving and restoring what the Go logs hold, for a host's snapshot at a
-// journal position. This adds no semantics: a restored log
-// answers exactly as the log it was saved from, and the host checks that a
-// snapshot plus the entries after it equals a full replay.
-
-// Restore loads a tenant's records into an empty log, as they were recorded.
 func (l *ChangeLog) Restore(tenant string, records []*pb.ChangeRecord) {
 	l.logs[tenant] = slices.Clone(records)
 	l.byKey[tenant] = map[string]*pb.ChangeRecord{}
@@ -22,10 +16,9 @@ func (l *ChangeLog) Restore(tenant string, records []*pb.ChangeRecord) {
 		l.index(r)
 		l.revs[[3]string{tenant, r.GetSubmission().GetTarget().GetType(), r.GetSubmission().GetTarget().GetId()}]++
 	}
-	l.next += len(records) // change IDs continue after the restored ones
+	l.next += len(records)
 }
 
-// Restore loads a tenant's facts into an empty log, as they were recorded.
 func (l *FactLog) Restore(tenant string, records []*pb.FactRecord) {
 	l.archive, l.archived, l.last = nil, nil, nil
 	l.logs[tenant] = slices.Clone(records)
@@ -36,7 +29,6 @@ func (l *FactLog) Restore(tenant string, records []*pb.FactRecord) {
 	l.next += len(records)
 }
 
-// IdentityState is what an Identity knows: its entities and their redirects.
 type IdentityState struct {
 	Entities  []Ref           `json:"entities"`
 	Redirects []RedirectState `json:"redirects"`
@@ -72,7 +64,6 @@ func (id *Identity) Restore(s IdentityState) {
 	}
 }
 
-// All are the works, by ID.
 func (w *Works) All() []*pb.Work {
 	out := make([]*pb.Work, 0, len(w.items))
 	for _, x := range w.items {
@@ -89,7 +80,6 @@ func (w *Works) Restore(items []*pb.Work) {
 	}
 }
 
-// ConnectorMark is where a connector is: its cursor and when it was last seen.
 type ConnectorMark struct {
 	Tenant    string    `json:"tenant"`
 	Connector string    `json:"connector"`
@@ -97,7 +87,6 @@ type ConnectorMark struct {
 	LastSeen  time.Time `json:"lastSeen,omitzero"`
 }
 
-// State is every registered connector's descriptor and mark.
 func (c *Connectors) State() ([]*pb.ConnectorDescriptor, []ConnectorMark) {
 	var descriptors []*pb.ConnectorDescriptor
 	var marks []ConnectorMark

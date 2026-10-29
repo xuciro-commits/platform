@@ -4,7 +4,6 @@ import {recordResourceSlot,sectionOverlay} from "../runtime/resources";
 
 export const currentContextRead=(hostScope:string|undefined,readScope:string|undefined)=>hostScope===readScope;
 
-/** Resolve the actual original selection producer, never a resource copy or guessed ID. */
 export function originalContextSlot(page:PageUI.Page,section:PageUI.Section,variable:string|undefined):string|undefined {
  const v=page.document?.variables?.[variable??""];
  if(variable&&section.widget==="breadcrumb"&&Number(page.document?.uiProfile?.split(".").at(-1))>=98&&v?.type==="record"&&v.scope==="application"&&v.mode==="shared"&&v.source?.kind==="application"&&v.source.object?.kind==="object")return recordResourceSlot(page,variable);

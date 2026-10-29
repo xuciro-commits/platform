@@ -1,5 +1,3 @@
-// Frozen system records remain readable through their original owner. Only
-// original unanswered requests can be checked; this console creates no work.
 import {useCallback,useEffect,useRef,useState,type ReactNode} from "react";
 import type {Api,Entry,EdgeClient} from "@platform/kernel";
 import {useQuery} from "@tanstack/react-query";

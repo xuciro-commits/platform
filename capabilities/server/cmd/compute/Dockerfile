@@ -17,7 +17,5 @@ ENTRYPOINT ["wasm-worker"]
 FROM alpine:3.22 AS builder
 RUN apk add --no-cache docker-cli && mkdir -p /run/platform-compute && chown 65534:65534 /run/platform-compute && chmod 0770 /run/platform-compute
 COPY --from=build /code-builder /usr/local/bin/code-builder
-# Only this fixed-command driver may create isolated offline compiler guests.
-# Business hosts and the Wasm execution worker receive no daemon socket.
 USER 0:65534
 ENTRYPOINT ["code-builder"]

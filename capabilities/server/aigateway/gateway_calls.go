@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-// Calls owns protocol preparation and one provider attempt. Configuration,
-// accepted reservations, breakers and transcripts keep their original owners.
 type Calls struct {
 	Inference  platform.AIInferencePolicy
 	MostTokens func() int
@@ -65,8 +63,6 @@ func (g Calls) Call(pv platform.AIProvider, model platform.AIModel, m platform.M
 	}
 	req.MaxTokens, req.Options = binding.Options.MaxTokens, binding.Options
 	req.Binding = &binding
-	// The token counter is conservative and includes instructions, tools and
-	// protected continuation. Never silently truncate a tool/result pair.
 	input, _ := json.Marshal(struct {
 		Messages []map[string]any
 		Tools    []platform.Tool
@@ -104,8 +100,6 @@ func (g Calls) Call(pv platform.AIProvider, model platform.AIModel, m platform.M
 	if failure := g.Reserve(m, model, req, inputBound, req.MaxTokens, now); failure != nil {
 		return platform.ChatAnswer{}, failure
 	}
-	// Readiness does not consume the half-open probe. Claim it only after
-	// the reservation has been accepted; a competing probe releases this call.
 	if !g.Available(pv.ID, now, true) {
 		if refusal := g.Release(req.Call, now); refusal != nil {
 			return platform.ChatAnswer{}, &platform.AIError{Status: 503, Detail: refusal.Error()}
@@ -129,10 +123,6 @@ func (g Calls) Call(pv platform.AIProvider, model platform.AIModel, m platform.M
 		return answer, failure
 	}
 	if !u.TokensReported {
-		// A provider that says nothing about usage must not be booked as
-		// spending nothing: the platform books a conservative estimate of the
-		// request and the answer, marked as one, so daily caps and run budgets
-		// still bite.
 		request, _ := json.Marshal(req)
 		said := answer.Content
 		for _, c := range answer.ToolCalls {

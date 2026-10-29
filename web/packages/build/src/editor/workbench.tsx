@@ -1,6 +1,3 @@
-// What every builder editor shares on top of the Workbench chrome
-//drafts save themselves, the title bar shows one
-// status, and "Publish" is one menu with the same entries everywhere.
 import {useInputDrafts} from "@platform/ui";
 import { useRecordArchive } from "@platform/app";
 import { ActionMenu, Button, StatusTag, defineStatuses, t, useWorkspace, type ContextCommand, type Route, type WorkbenchSaving } from "@platform/ui";
@@ -11,7 +8,6 @@ import { useApplicationScope } from "../projects/application-scope";
 
 const draftStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" }, archived: { label: t("Archived"), tone: "neutral" } });
 
-/** Save a dirty, valid draft after a pause; the caller's `save` owns locking and refetch. */
 export function useAutoSave({ enabled = true, dirty, invalid = false, busy = false, save, delay = 900, generation }: {
   enabled?: boolean; dirty: boolean; invalid?: boolean; busy?: boolean; save: () => Promise<unknown>; delay?: number; generation?:unknown;
 }) {
@@ -26,7 +22,6 @@ export function useAutoSave({ enabled = true, dirty, invalid = false, busy = fal
 
 export const savingState = (dirty: boolean, saving: boolean, error?: string): WorkbenchSaving => error ? "error" : saving ? "saving" : dirty ? "dirty" : "saved";
 
-/** The draft/published badge plus "n problems" when the draft cannot be published. */
 export function DraftStatus({ state, problems = 0, archived }: { state?: string; problems?: number; archived?: boolean }) {
   return <>
     {state && <StatusTag status={archived ? "archived" : state} registry={draftStates} />}
@@ -34,7 +29,6 @@ export function DraftStatus({ state, problems = 0, archived }: { state?: string;
   </>;
 }
 
-/** One resource lifecycle: cancel, optional release review, and original archive confirmation. */
 export function ResourceControls({ type, record, dirty = false, busy = false, invalid = false, empty = false, onReview, onInstall, onSave, onCancel, route, extra = [] }: {
   type: string; record?: { id?: string; revision?: number; archived?: boolean; state?: string }; dirty?: boolean; busy?: boolean; invalid?: boolean; empty?: boolean;
   onReview?: () => void; onInstall?: () => void; onSave?: () => void; onCancel?: () => void; route?: Route; extra?: ContextCommand[];
@@ -65,7 +59,6 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
   </>;
 }
 
-/** The main area of a Workbench while its record loads or is missing. */
 export function WorkbenchMessage({ children }: { children: ReactNode }) {
   return <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted">{children}</div>;
 }

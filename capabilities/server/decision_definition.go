@@ -9,9 +9,6 @@ import (
 	"platformserver/platform"
 )
 
-// DecisionDefinition belongs to the original accepted decision. It records
-// its execution contract and resource memberships, never an inferred time
-// interval or a second application/decision state.
 type DecisionDefinition = platform.DecisionDefinition
 
 func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, release string, retained ...[]platform.ReleaseAsset) (*platform.DecisionDefinition, error) {
@@ -37,9 +34,6 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 	} else {
 		available, err = t.releaseAssetsLocked(nil, false)
 		if err != nil {
-			// Diagnostics must not block business work or repairing an unready
-			// connection. Execution still uses the installed owner and its own
-			// dependency checks; an unavailable closure is recorded as such.
 			return out, nil
 		}
 	}
@@ -47,9 +41,6 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 		out.Definition.SourceVersion = available[i].SourceVersion
 		closed, err := t.candidateWithBindings([]platform.AssetRef{root}, available, []platform.AssetRef{root})
 		if err != nil {
-			// Some native code declarations have execution dependencies outside
-			// the portable release profile. Record this limit without adding a
-			// new admission condition to their original decision path.
 			return out, nil
 		}
 		out.Closure = closed.ID
@@ -83,8 +74,6 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 		}
 		candidate, err := t.candidateWithBindings([]platform.AssetRef{asset.Ref}, membershipAssets, []platform.AssetRef{asset.Ref})
 		if err != nil {
-			// An unrelated application's stale declaration does not change the
-			// execution contract. Only complete memberships are recorded.
 			continue
 		}
 		execution, err := t.candidateWithBindings([]platform.AssetRef{root}, candidate.Assets, []platform.AssetRef{root})
@@ -95,8 +84,6 @@ func (t *Tenant) decisionDefinition(owner platform.App, request *pb.Submission, 
 	return out, nil
 }
 
-// One private input can decide many edits against the same installed contract.
-// Reuse only the closed, pure metadata; each edit still decides and authorizes.
 type definitionPlanKey struct {
 	view                 *Tenant
 	generation           uint64
@@ -110,7 +97,6 @@ func (d *stagedDecision) decisionDefinition(view *Tenant, owner platform.App, re
 	}
 	key := definitionPlanKey{view: view, generation: view.definitionsFingerprint(), app: owner.Manifest().ID, action: request.GetSchema().GetName(), family: request.GetSchema().GetVersion(), release: release}
 	if saved, ok := d.definitionPlans[key]; ok {
-		// Receipt-specific schema and observation fields must never alter the plan.
 		definition := saved
 		return &definition, nil
 	}

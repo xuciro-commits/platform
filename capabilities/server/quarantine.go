@@ -2,9 +2,6 @@ package platformserver
 
 import "fmt"
 
-// tenantFault records the first unrecoverable tenant-local failure. A restart
-// after repairing the log or a checked replacement tenant clears it; the
-// partially applied in-memory tenant is never resumed.
 type tenantFault struct {
 	Reason string
 }

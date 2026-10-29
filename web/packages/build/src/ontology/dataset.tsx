@@ -9,9 +9,6 @@ import { MarkingField } from "./marking";
 import { Button, DataTable, Input, PageHeader, Panel, Select, Tag, t, type ColumnDef } from "@platform/ui";
 import { DatasetLineage } from "./lineage";
 
-// Datasets: rows as they came from a source or a pipeline, kept as
-// versions with an inferred schema. A builder names one; sources and pipelines
-// load it; this page shows the schema, the versions kept and the rows of one.
 type Field = { name: string; type: string };
 type Load = { at: string; version: number; rows: number; bytes: number; drift?: string[] };
 type Draft = { id: string; revision: number; name: string; title: string; keep?: number; marking?: string; producer?: string; schema?: Field[]; version?: number; last?: Load };
@@ -45,9 +42,6 @@ export function DatasetEditor({ id }: { id: string }) {
   const draftedObject = useRef<{ id: string; name: string } | undefined>(undefined);
   const version = shown || draft.version || 0;
   const versionQuery = useReadQuery<{ record?: Version }>(`/v1/records/build.datasetversion/${encodeURIComponent(`${draft.id}@${version}`)}`, 15000, version > 0);
-  // Builder Assist without a model: the dataset's inferred schema
-  // becomes an object draft - one property per column, typed - that the
-  // builder then names, shapes and publishes as any other.
   const draftObject = async () => {
     if (inputs?.invalid || dirty) return;
     const name = (draft.name || "imported").replace(/[^a-z0-9]/g, "").slice(0, 24) || "imported";

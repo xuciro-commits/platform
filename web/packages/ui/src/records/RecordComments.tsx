@@ -4,7 +4,6 @@ import type {RecordComment} from "./Records";
 
 export type RecordCommentsProps={list:readonly RecordComment[];total?:number;loadedCount?:number;label?:string;text:string;onText?:(text:string)=>void;onAdd?:()=>void|Promise<void>;busy?:boolean;error?:string;following?:boolean;onFollow?:(on:boolean)=>void|Promise<void>;followBusy?:boolean};
 
-/** Original persisted comments and a caller-owned draft. The caller confirms writes and clears the draft. */
 export function RecordComments({list,total,loadedCount=list.length,label,text,onText,onAdd,busy=false,error,following,onFollow,followBusy=false}:RecordCommentsProps) {
  if(!Array.isArray(list)||new Set(list.map(comment=>comment?.id)).size!==list.length||list.some(comment=>!comment||typeof comment.id!=="string"||!comment.id||typeof comment.text!=="string"||typeof comment.by!=="string"||comment.archived)||!Number.isSafeInteger(loadedCount)||loadedCount<list.length||total!==undefined&&(!Number.isSafeInteger(total)||total<loadedCount))return <p role="alert">{t("The comment window is unavailable or incompatible.")}</p>;
  const writable=!!onText&&!!onAdd;

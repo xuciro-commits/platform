@@ -4,11 +4,8 @@ import { useMemo } from "react";
 import { kindOfType, matchesResourceKind, publishedResourceKind, refKey, resourceKinds, resourceRef, type ResourceKindInfo, type ResourceRecord } from "./resources";
 
 export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; installed: boolean; missing: boolean };
-// Several editor categories share one record owner; subscribe once per type.
 const inventoryTypes = [...new Set(resourceKinds.map(kind => kind.type))];
 
-/** Inventories of every resource type, keyed by kind, resolved to the records a project names — and to
- * what the host has installed, so a published resource without a tenant draft is never called missing. */
 export function useProjectResources(project?: Pick<import("@platform/kernel").Api.Application, "pages" | "resources" | "concepts">, owner = "build", editable = true, options: { enabledKinds?: readonly string[] } = {}) {
   const { holds} = useHost();
   const enabledKinds = options.enabledKinds;
@@ -46,12 +43,10 @@ export function useProjectResources(project?: Pick<import("@platform/kernel").Ap
     }
     return items;
   }, [project, owner, readDrafts, definitions, definitionQuery.isSuccess, records, ...inventoryTypes.map(type => byType[type]?.isSuccess)]);
-  /** Records of every kind that exist but are not in the project yet: what "Add existing" offers. */
   const available = useMemo(() => {
     const held = new Set(owned.map((item) => refKey(item.ref)));
     return records.filter(draft => !held.has(refKey(draft.ref)));
   }, [owned, records]);
-  /** Published non-navigation resources keep the same owner when an application references them. */
   const shared = useMemo(() => {
     const held = new Set(owned.map((item) => refKey(item.ref)));
     const drafts = new Set(available.map(draft => refKey(draft.ref)));

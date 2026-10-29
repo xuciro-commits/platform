@@ -1,4 +1,3 @@
-// Settings: owned work, integrations, app settings and the audit trail.
 import type { Api } from "@platform/kernel";
 import { DeclaredActionForm, useHost, useReadQuery as useRead } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Input, PageHeader, Panel, PropertyList, Select, Tag, type ColumnDef, t, formatStamp, EmptyState, humanizeKernelError, useWorkspace } from "@platform/ui";
@@ -7,8 +6,6 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
 
-/** A read's own phases at the point of display: the original wait, refusal or
- * failure with its nearby retry — only a successful read may say "none". */
 export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; children: (data: T) => ReactNode }) {
   if (query.isPending) return <p role="status" className="text-sm text-muted">{t("Loading…")}</p>;
   if (query.isError && query.data === undefined) return <div role="alert" className="grid justify-items-start gap-1 text-sm">
@@ -18,8 +15,6 @@ export function ReadResult<T>({ query, children }: { query: UseQueryResult<T>; c
   return <>{children(query.data as T)}{query.isError && <p role="status" className="text-xs text-muted">{t("Showing the last known answer; refreshing failed.")}</p>}</>;
 }
 
-// Automation: which app reacts to which decisions, the work the host owns
-// (queued and failed deliveries, scheduled jobs), and every delivery attempt.
 export function Automation() {
   const appsQuery = useRead<Api.AppInfo[]>("/v1/apps");
   const { decide } = useHost();
@@ -96,7 +91,6 @@ export function SystemHealth() {
   </>;
 }
 
-// Integrations: the tenant's connectors (K8) with health, cursor and the last refused input.
 export function Integrations() {
   const connectors = useRead<Connector[]>("/v1/connectors", 5000);
   const { decide, role } = useHost();
@@ -129,8 +123,6 @@ export function Integrations() {
 
 }
 
-// Webhook endpoints and their effects: events go out signed, at least
-// once with a stable key; outcomes are journaled, a replay never sends.
 export function Endpoints() {
   const endpoints = useRead<EndpointView[]>("/v1/endpoints");
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
@@ -245,7 +237,6 @@ export function OutboundEffects() {
   </>;
 }
 
-// App settings: typed values each app declares; a change is a platform decision.
 export function AppSettingsView() {
   const settings = useRead<AppSettings[]>("/v1/settings");
   const { decide,me } = useHost();

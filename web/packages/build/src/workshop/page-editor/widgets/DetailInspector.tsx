@@ -2,7 +2,6 @@ import { ContextHelp,Checkbox,Select,t} from "@platform/ui";
 import {pageVariableContract,useHost} from "@platform/app";
 import type {AuthoringSection} from "../draft";
 
-/** Presentation settings share the original detail record and field ports. */
 export function DetailInspector({section,onChange}:{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void}){
  const value=section.detailPresentation??{columns:1,hideNull:false};
  const codes=(useHost().entities.find(e=>e.type===section.object)?.fields??[]).filter(f=>f.type==="text").map(f=>f.name);

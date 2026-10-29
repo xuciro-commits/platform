@@ -1,6 +1,3 @@
-// Field types (Airtable/Directus-style): one object decides how a value is shown,
-// edited, validated, sorted, filtered and searched. Domains declare entities with
-// them in typed code (entity.tsx); tables, forms, filters and cards follow.
 import type {Api} from "@platform/kernel";
 import { Check, Copy, ExternalLink, Paperclip, Star, X } from "lucide-react";
 import { useContext, type ReactNode } from "react";
@@ -23,19 +20,15 @@ export type FieldType<V = any, R = any> = {
  input?: Api.Field;
   type: string;
   label: string;
-  /** What the field holds, from its declaration: shown under the label of forms. */
   help?: string;
   required?: boolean;
   readOnly?: boolean;
-  /** The field applies only while another field holds one of these values (#138): forms hide it otherwise and send nothing for it. */
   when?: FieldCondition;
   align?: "left" | "right";
   width?: number;
-  /** Computed fields (formula, created time) read their value from the row. */
   compute?: (row: R) => V | undefined;
   display: (value: V | undefined, row: R) => ReactNode;
   editor?: (props: EditorProps<V>) => ReactNode;
-  /** Validates a present value; `required` decides whether it may be absent. */
   schema: z.ZodType<V>;
   compare: (a: V, b: V) => number;
   operators: Operator<V>[];
@@ -43,7 +36,6 @@ export type FieldType<V = any, R = any> = {
 };
 
 export type FieldCondition = { field: string; in: string[] };
-/** Whether a conditional field applies to a record's current values ("true"/"false" for booleans). */
 export const applies = (f: { when?: FieldCondition }, values: Record<string, unknown>) =>
   !f.when || f.when.in.includes(values[f.when.field] === true ? "true" : values[f.when.field] === false ? "false" : String(values[f.when.field] ?? ""));
 type Common = { label: string; help?: string; required?: boolean; readOnly?: boolean; when?: FieldCondition; width?: number };
@@ -77,7 +69,6 @@ export const text = (o: Common & { placeholder?: string; maxLength?: number }): 
   editor: input("text", (s) => s, String, { placeholder: o.placeholder }), compare: byString, operators: textOps, text: (v) => v ?? "",
 });
 
-/** JSON is editable as a value tree; only the original declaration makes it read-only. */
 export const json = (o: Common): FieldType<unknown> => {
   const format = (value: unknown) => value === undefined ? "" : JSON.stringify(value) ?? "";
   return {
@@ -149,14 +140,12 @@ export const date = (o: Common): FieldType<string> => ({
   display: (v) => (v ? <span className="tabular-nums" title={v}>{formatDate(v)}</span> : muted), editor: input("date", (s) => s),
 });
 
-/** Stored as `YYYY-MM-DDTHH:MM` local time, the value of a datetime-local input. */
 export const datetime = (o: Common): FieldType<string> => ({
   ...date(o), type: "datetime", width: 150, schema: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, "Date and time"),
   display: (v) => (v ? <span className="tabular-nums" title={v}>{formatDateTimeSmart(v)}</span> : muted),
   editor: input("datetime-local", (s) => s, (v) => v.slice(0, 16)),
 });
 
-/** Minutes, shown as `1h 30m`. */
 export const duration = (o: Common): FieldType<number> => ({
   ...number({ ...o, min: 0 }), type: "duration",
   display: (v) => (v === undefined || v === null ? muted : <span className="tabular-nums">{Math.floor(v / 60) ? `${Math.floor(v / 60)}h ` : ""}{v % 60}m</span>),
@@ -191,8 +180,6 @@ export const multiSelect = (o: Common & { options: Option[] }): FieldType<string
   };
 };
 
-/** Words a person types, each kept as its own value: labels, field names, tags
- *  with no list to choose from. Enter or a comma adds one; each chip removes. */
 export const tags = (o: Common & { placeholder?: string }): FieldType<string[]> => ({
   type: "tags", width: 200, ...o, schema: z.array(z.string().min(1)),
   compare: (a, b) => a.length - b.length, text: (v) => (v ?? []).join(" "),
@@ -247,7 +234,6 @@ export const phone = (o: Common): FieldType<string> => ({
   editor: input("tel", (s) => s),
 });
 
-/** Codes read by scanners (EAN, Code 128, QR payloads); scanners type into the editor like a keyboard. */
 export const barcode = (o: Common & { pattern?: RegExp }): FieldType<string> => ({
   ...text(o), type: "barcode", width: 160, schema: o.pattern ? z.string().regex(o.pattern, "Barcode format") : z.string(),
   display: (v) => (v ? (
@@ -272,7 +258,6 @@ export const rating = (o: Common & { max?: number }): FieldType<number> => {
 
 export type Attachment = { name: string; url: string; size?: number };
 
-/** Files attached to a record; storing them is a capability of the app (object storage). */
 export const attachment = (o: Common & { accept?: string; upload?: (file: File) => Promise<Attachment> }): FieldType<Attachment[]> => ({
   type: "attachment", width: 180, ...o, schema: z.array(z.object({ name: z.string(), url: z.string(), size: z.number().optional() })),
   compare: (a, b) => a.length - b.length, operators: [isEmpty, notEmpty], text: (v) => (v ?? []).map((a) => a.name).join(" "),
@@ -297,7 +282,6 @@ export const attachment = (o: Common & { accept?: string; upload?: (file: File) 
   ),
 });
 
-/** A reference to another entity; shown as a link that opens its route in the workspace. */
 export const link = (o: Common & { to: (id: string) => Route; title?: (id: string) => string }): FieldType<string> => ({
   ...text(o), type: "link",
   display: (v) => (v ? <LinkChip id={v} route={o.to(v)} title={o.title?.(v) ?? v} /> : muted),
@@ -311,11 +295,9 @@ function LinkChip({ id, route, title }: { id: string; route: Route; title: strin
   );
 }
 
-/** Read-only value computed from the row, shown with another field type's display. */
 export const formula = <V, R>(o: { label: string; compute: (row: R) => V | undefined; as: FieldType<V> }): FieldType<V, R> => ({
   ...o.as, type: "formula", label: o.label, readOnly: true, required: false, compute: o.compute, editor: undefined,
 });
 
-/** When the record was created or last changed (K4 recorded time). */
 export const timestamp = <R,>(o: { label: string; of: (row: R) => string | undefined }): FieldType<string, R> =>
   formula({ label: o.label, compute: o.of, as: datetime({ label: o.label }) });

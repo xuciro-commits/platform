@@ -12,8 +12,6 @@ function fits(kind: FlowNodeKind, context: FlowAddContext, nodes: FlowNode[], ca
   return (!source || !!output && kind.inputs.some((port) => flowPortFits(output, port))) && (!target || !!input && kind.outputs.some((port) => flowPortFits(port, input)));
 }
 
-/** Context-sensitive discovery: an output opens only the blocks that can receive
- * it, and each entry says which BPMN shape it will be drawn as. */
 export function FlowPalette({ catalog, nodes, context, onChoose, onClose }: {
   catalog: FlowCatalog; nodes: FlowNode[]; context: FlowAddContext; onChoose: (kind: string) => void; onClose: () => void;
 }) {

@@ -17,8 +17,6 @@ import (
 	"platformserver/platform"
 )
 
-// Missing drafts are real owner create decisions, but remain private until
-// their enclosing release and definition images have all been accepted.
 func (t *Tenant) releaseBootstrapLocked(candidate platform.ReleaseCandidate, context platform.AssetReleaseContext, definitionOnly ...bool) (*stagedDecision, json.RawMessage, error) {
 	return t.bootstrapOwnerDraftsLocked(candidate, context, len(definitionOnly) > 0 && definitionOnly[0], nil)
 }
@@ -67,8 +65,6 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 	for key, app := range view.owner {
 		view.owner[key] = view.app(app.Manifest().ID)
 	}
-	// The validation owner and create decisions share one private host. Owner
-	// declarations are visible here without publishing or changing live rows.
 	registry, err = view.assetRegistryLocked()
 	if err != nil {
 		return nil, nil, err
@@ -181,8 +177,6 @@ func (t *Tenant) bootstrapOwnerDraftsLocked(candidate platform.ReleaseCandidate,
 		if err := declare(assets[draft.Ref]); err != nil {
 			return nil, nil, err
 		}
-		// The decision fork reads these same installed declarations on its next
-		// create; the accepted owner ledger remains untouched.
 		decision.attachPrivateHosts()
 	}
 	if !context.DraftsOnly {
@@ -250,8 +244,6 @@ func (r releaseInstallationRuntime) Pending(id string, raw []byte) error {
 	return r.t.pendingWorkFitsLocked(id, raw)
 }
 
-// Integration identity discovery contains no executable body or environment
-// parameters. Permission filtering remains the member-facing projection.
 func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
 	definition, indexed, err := t.ownedAssetDefinition(plan)
 	if err != nil || !indexed {
@@ -267,9 +259,6 @@ func (t *Tenant) registerInstalledAsset(plan platform.AssetInstallation) error {
 	return nil
 }
 
-// A release may prepare owner creates and definitions on successive private
-// views. Collapse only that proven descendant chain; the normal store gate
-// still requires the exact live predecessor and unchanged generation.
 func (t *Tenant) anchorReleaseRecords(draft *records.Store) error {
 	if draft == nil {
 		return fmt.Errorf("release has no prepared record view")
@@ -277,8 +266,6 @@ func (t *Tenant) anchorReleaseRecords(draft *records.Store) error {
 	return draft.Anchor(t.records)
 }
 
-// Rebuild only the existing owners' publication index from their own stored
-// images. No portable body or environment configuration becomes discovery data.
 func (t *Tenant) registerOwnedAssetMetadata() error {
 	definitions, err := t.ownedAssetDefinitions(t.definitions)
 	if err == nil {

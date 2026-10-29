@@ -1,8 +1,3 @@
-// A list of resources in groups: every group is a heading with
-// its count that folds; a search filters rows across groups and opens the
-// groups that match; a "group by" switch changes what the groups mean. The
-// alternative to a flat grid of cards or a long table for builders'
-// inventories: object types by project, actions by object, functions by kind.
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
@@ -13,12 +8,10 @@ export type GroupBy<T> = { id: string; label: string; of: (item: T) => { id: str
 
 export function GroupedList<T>({ items, groupings, grouping, onGrouping, id, row, text, selected, onSelect, toolbar, empty, className, dense }: {
   items: T[];
-  /** The ways the list may be grouped; the first is the default. */
   groupings: GroupBy<T>[];
   grouping?: string; onGrouping?: (id: string) => void;
   id: (item: T) => string;
   row: (item: T) => ReactNode;
-  /** What the search box matches, lower-cased by the list. */
   text: (item: T) => string;
   selected?: string; onSelect?: (item: T) => void;
   toolbar?: ReactNode; empty?: ReactNode; className?: string; dense?: boolean;

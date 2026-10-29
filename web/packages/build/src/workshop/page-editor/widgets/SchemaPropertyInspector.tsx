@@ -7,8 +7,6 @@ type PropertySchema=Api.ValueSchema&{title?:string;presenceTitle?:string;editor?
 const initial=(schema:PropertySchema):unknown=>schema.type==='object'?Object.fromEntries((schema.required??[]).map(key=>[key,initial(schema.properties![key]!)])):
   schema.type==='boolean'?false:schema.type==='number'||schema.type==='integer'?0:schema.enum?.[0]??'';
 
-/** Ordinary properties, labels, bounds and choices come from the runtime's
- * declaration. Specialized inspectors only own business bindings and gestures. */
 export function SchemaPropertyInspector({section,onChange}:{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void}){
  const contract=widgetContract(section.widget);
  const schema=contract?.propsSchema as PropertySchema|undefined;

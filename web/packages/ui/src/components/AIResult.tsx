@@ -5,7 +5,6 @@ import {t} from "../i18n";
 
 export type AIResultTurn={id:string;question?:string;state:string;fields?:{name:string;value:string}[];reason?:string};
 export type AIResultProps={kind:string;turns:AIResultTurn[];question:string;suggestions:string[];disabled:boolean;busy:boolean;error?:string;onQuestion:(value:string)=>void;onRun:(question?:string)=>void;onReset:()=>void;onRetry?:()=>void};
-/** Only the caller supplies authorized retained results; this UI never infers. */
 export function AIResult({kind,turns,question,suggestions,disabled,busy,error,onQuestion,onRun,onReset,onRetry}:AIResultProps){
  return <div className="grid min-w-0 gap-2">
   <p className="text-xs text-muted">{t("AI suggestions use the original authorized source. Review results before applying a business action.")}</p>

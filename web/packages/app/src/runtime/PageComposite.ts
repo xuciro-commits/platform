@@ -10,8 +10,6 @@ import {canonicalModelSection,sectionModels,modelWindowKey,primaryModel} from '.
 import {inputSlot} from './PageNavigation';
 import {recordResourceSlot} from './resources';
 
-/** Composite sources use the original page model route and page-session
- * context. Retired scope answers never reappear after a new selection. */
 export function usePageComposite(bound:WidgetBindingContext,source:RecordSource|undefined){
  const {client,definitions}=useHost(),session=bound.session,config=bound.section.composite;
  const [round,refresh]=useState(0),[state,setState]=useState<{identity:string;data?:Api.PageModelResult;error?:string}>();

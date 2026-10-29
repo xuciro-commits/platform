@@ -1,8 +1,6 @@
 export type Snippet = { id: string; title: string; code: string; own?: boolean };
 export type ConsoleMessage = { level: "log" | "info" | "warn" | "error"; text: string; truncated: boolean };
 
-/** A corrupt library is not an empty library. Never overwrite unrecognized
- * saved data or silently discard duplicate identities during the next save. */
 export function decodeSnippets(text: string | null): Snippet[] {
   const value: unknown = JSON.parse(text ?? "[]");
   if (!Array.isArray(value)) throw new Error("Invalid snippet library");
@@ -16,8 +14,6 @@ export function decodeSnippets(text: string | null): Snippet[] {
   });
 }
 
-/** Preview messages are untrusted structured-clone data. The caller also
- * checks the exact iframe Window; an opaque origin is not an identity. */
 export function consoleMessage(value: unknown): ConsoleMessage | undefined {
   if (!value || typeof value !== "object") return undefined;
   const item = value as Record<string, unknown>;
@@ -25,7 +21,6 @@ export function consoleMessage(value: unknown): ConsoleMessage | undefined {
   return { level: item.level as ConsoleMessage["level"], text: item.text.slice(0, 65536), truncated: item.text.length > 65536 };
 }
 
-/** Serialize source as string literals, not interpolated template code. */
 export function asComponent(code: string): string {
   const body = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(code)?.[1]?.trim() ?? code.trim();
   const style = [...code.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((match) => (match[1] ?? "").trim()).join("\n");
@@ -38,8 +33,6 @@ export function Snippet() {
 `;
 }
 
-/** Preserve the prototype's standards mode while installing the console
- * bridge before its scripts. The editor's original source never changes. */
 export function previewDocument(code: string, bridge: string): string {
   if (/<head(?:\s[^>]*)?>/i.test(code)) return code.replace(/<head(?:\s[^>]*)?>/i, (head) => head + bridge);
   const doctype = /^\s*<!doctype[^>]*>/i.exec(code)?.[0];

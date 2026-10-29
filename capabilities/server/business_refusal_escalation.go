@@ -15,8 +15,6 @@ import (
 	"platformserver/platform"
 )
 
-// Escalation consumes durable business facts in a later Work decision. Nothing
-// from the rejected transaction's private records or effects is promoted.
 func (d *stagedDecision) PendingRefusalEscalations(c platform.Caller, at time.Time) ([]platform.RefusalEscalationRequest, *kernel.Error) {
 	if !c.Staging() || !c.Automation || c.App != platform.WorkApp || c.ID != "app:"+platform.WorkApp || c.Replaying || c.Tenant != d.tenant.ID {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Business refusal escalation requires the private Work owner")

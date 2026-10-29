@@ -12,12 +12,6 @@ import (
 	"time"
 )
 
-// An application someone hands to the people it was built for: a
-// name, an icon and the pages it holds. It grants nothing — each page is
-// offered to whoever may read what it shows — and the workspace turns it into
-// an entry in the launcher beside the apps that came as code.
-
-// Application is an application this organisation hands to its people.
 type Application struct {
 	platform.Record
 	Languages    platform.Languages                    `json:"languages,omitempty" field:"aside" type:"json" title:"Application translations"`
@@ -34,15 +28,11 @@ type Application struct {
 	Description  string                                `json:"description,omitempty" type:"longtext" help:"What people do in it"`
 	Icon         string                                `json:"icon,omitempty" help:"How it is drawn in the launcher"`
 	Pages        []string                              `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
-	// Groups are the headings of its navigation (17b); a page in none of them
-	// sits under the application's own name.
-	Resources []platform.AssetRef   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
-	Concepts  []platform.AppConcept `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
-	Groups    []Group               `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
-	State     string                `json:"state" field:"readonly" choices:"draft,published,withdrawn"`
-	// Published is the application as it was last handed over: what people open,
-	// and what a restore puts back.
-	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Resources    []platform.AssetRef                   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
+	Concepts     []platform.AppConcept                 `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`
+	Groups       []Group                               `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
+	State        string                                `json:"state" field:"readonly" choices:"draft,published,withdrawn"`
+	Published    string                                `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
 }
 
 func (b *Build) applicationEntity() platform.Entity {
@@ -105,8 +95,6 @@ func (b *Build) applicationEntity() platform.Entity {
 					}}}}}
 }
 
-// hand installs the application: the host checks that every page it names is
-// there, and offers it to whoever may open one of them.
 func (b *Build) hand(c platform.Caller, a Application) *kernel.Error {
 	if err := b.checkApplication(a); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
@@ -117,7 +105,6 @@ func (b *Build) hand(c platform.Caller, a Application) *kernel.Error {
 	return nil
 }
 
-// application is the descriptor the registry holds.
 func applicationDescriptor(a Application) platform.Application {
 	groups := make([]platform.AppGroup, 0, len(a.Groups))
 	for _, g := range a.Groups {
@@ -126,8 +113,6 @@ func applicationDescriptor(a Application) platform.Application {
 	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
 }
 
-// checkApplication refuses an application people could not open: a name that is
-// not a name, no pages, an icon name that is not one.
 func (b *Build) checkApplication(a Application) error {
 	if err := b.checkName(a.Name, a.ID); err != nil {
 		return err
@@ -163,15 +148,11 @@ const (
 	ValuePagesHelp = "The pages it holds, by their name, in the order people see them"
 )
 
-// Group is one heading in an application's navigation.
 type Group struct {
 	Title string   `json:"title" field:"required" title:"Heading"`
 	Pages []string `json:"pages" title:"Pages" help:"Pages of the application, by their name, in their order"`
 }
 
-// ApplicationProjection receives only the declarations already offered by
-// their permission owners. PublishedFlows is a frozen read of the original
-// Flow owner; this projection cannot discover or execute a flow by itself.
 type ApplicationProjection struct {
 	Member         platform.Member
 	Definitions    []platform.Definition
@@ -181,8 +162,6 @@ type ApplicationProjection struct {
 	PublishedFlows map[platform.AssetRef]bool
 }
 
-// ProjectApplication removes pages, resource bindings and dependent variables
-// the member cannot use, without changing the registered application image.
 func ProjectApplication(registered platform.Definition, projection ApplicationProjection) (platform.Definition, bool) {
 	m, visible, entities := projection.Member, projection.Definitions, projection.Entities
 	opens, visibleResources := projection.Pages, projection.Resources
@@ -197,7 +176,6 @@ func ProjectApplication(registered platform.Definition, projection ApplicationPr
 	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
 		return platform.Definition{}, false
 	}
-	// A heading over none of this member's pages is not in their navigation.
 	groups := make([]platform.AppGroup, 0, len(application.Groups))
 	for _, g := range application.Groups {
 		if g.Pages = slices.DeleteFunc(slices.Clone(g.Pages), closed); len(g.Pages) > 0 {

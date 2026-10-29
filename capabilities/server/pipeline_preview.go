@@ -16,12 +16,10 @@ import (
 const pipelinePreviewSample = 100
 const pipelinePreviewRows = 1000
 
-// PipelinePreviewRequest carries the editor's draft, including unsaved steps.
 type PipelinePreviewRequest struct {
 	Pipeline build.Pipeline `json:"pipeline"`
 }
 
-// PipelinePreview is a sample of transformations, never an output write result.
 type PipelinePreview struct {
 	InputVersion int                       `json:"inputVersion"`
 	InputRows    int                       `json:"inputRows"`
@@ -32,9 +30,6 @@ type PipelinePreview struct {
 	Marking      string                    `json:"marking,omitempty"`
 }
 
-// PreviewPipeline captures authorized dataset versions under the original
-// record owner, then invokes the same pure transformation used by real runs.
-// No staged business decision is needed: neither branch submits an output.
 func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreviewRequest, at time.Time) (PipelinePreview, *kernel.Error) {
 	out := PipelinePreview{Rows: []map[string]any{}, Quarantine: []platform.QuarantinedRow{}}
 	if problem := t.admits(member); problem != nil {
@@ -51,15 +46,13 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 		return out, problem
 	}
 	p := request.Pipeline
-	// The caller's draft is separate from the saved publication and must use
-	// strict formula semantics even if the editor started from an old version.
 	raw, err := json.Marshal(p)
 	if err != nil || len(raw) > 1<<20 || len(p.Steps) > 64 || len(p.Expectations) > 64 {
 		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Pipeline trial accepts at most 64 steps, 64 expectations and 1 MiB of definition")
 	}
 	p = build.Pipeline{}
-	_ = json.Unmarshal(raw, &p) // detach slices and formula pointers from direct Go callers too
+	_ = json.Unmarshal(raw, &p)
 	if err := p.NormalizeFormulaRules(); err != nil {
 		t.mu.Unlock()
 		return out, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
@@ -127,8 +120,6 @@ func (t *Tenant) PreviewPipeline(member platform.Member, request PipelinePreview
 	if raw, err := json.Marshal(out); err != nil || len(raw) > 1<<20 {
 		return PipelinePreview{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Pipeline trial output exceeds 1 MiB")
 	}
-	// Returning sample data is still a derived read: revocation during the
-	// outside-lock computation must not leave a copy of the old permissions.
 	t.mu.Lock()
 	problem = authorizationRefusal(t.authorizeCapability(caller, build.ID, "build.pipeline.preview", []string{build.Builder, build.Integrator}, true, authorizationDetails{At: at, Sources: sources}))
 	t.mu.Unlock()

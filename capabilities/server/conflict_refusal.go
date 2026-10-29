@@ -6,8 +6,6 @@ import (
 	"platformserver/platform"
 )
 
-// conflictRefusal reports err as a conflict refusal, passing an existing
-// refusal through and nil as nil.
 func conflictRefusal(err error) *kernel.Error {
 	if err == nil {
 		return nil

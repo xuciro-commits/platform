@@ -4,8 +4,6 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { CandidateTest } from "../releases/simulate";
-// This editor writes build.function's native declaration. The three stages
-// visualize that declaration; execution belongs to the host model effect path.
 import { useHost, ModelPicker, ModelOptionsEditor, useRecordInventory, useReadQuery } from "@platform/app";
 import { type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Input, FlowCanvas, PageHeader, Panel, Select, Textarea, Workbench, t,
@@ -54,7 +52,6 @@ export function FunctionEditor({ id }: { id: string }) {
   const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)&&field.aiInput!==false) ?? [];
   const roles = [...new Set(["builder", ...(source?.access?.length ? source.access.filter((access) => access.read !== "none").map((access) => access.role) : ["user"])])];
   const updateOutput = (index: number, patch: Partial<Api.Field>) => change({ output: (draft.output ?? []).map((field, i) => i === index ? { ...field, ...patch } : field) });
-  // Hints never replace the owner's authoritative publication validation.
   const issues: string[] = [];
   if (!/^[a-z][a-z0-9]*$/.test(draft.name) || !(draft.title ?? "").trim() || !(draft.description ?? "").trim()) issues.push(t("Give the function a lower-case name, title and description."));
   if (!source || !(draft.fields ?? []).length || (draft.fields ?? []).some((name) => !fields.some((field) => field.name === name))) issues.push(t("Choose direct scalar fields from a saved object."));

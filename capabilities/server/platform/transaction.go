@@ -27,40 +27,34 @@ const (
 	JournalType = "core.journal"
 )
 
-// Journal is one balanced entry: lines whose debits equal their credits.
 type Journal struct {
 	Record
-	Number       string `json:"number,omitempty" field:"readonly,search" title:"Document number"`
-	Date         string `json:"date" field:"required" title:"Posting date" help:"YYYY-MM-DD"`
-	Period       string `json:"period,omitempty" field:"readonly" title:"Period"`
-	ClosedPeriod string `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
-	// Shifted tells that the date's period was closed and the entry went to Period instead.
-	Shifted  bool          `json:"shifted,omitempty" field:"readonly" title:"Posted to a later period"`
-	Text     string        `json:"text,omitempty" field:"search"`
-	Currency string        `json:"currency,omitempty" help:"ISO 4217; default the tenant's first currency"`
-	Lines    []JournalLine `json:"lines" field:"required" type:"json" title:"Lines"`
-	Total    float64       `json:"total,omitempty" field:"readonly" title:"Total debit"`
-	// Source is the decision that caused it - "<app>/<change id>" - or empty when posted by hand.
-	Source   string `json:"source,omitempty" field:"search" help:"The decision that posted it, set by the platform"`
-	Reverses string `json:"reverses,omitempty" field:"readonly" title:"Reverses"`
-	Reversed string `json:"reversed,omitempty" field:"readonly" title:"Reversed by"`
-	State    string `json:"state" field:"readonly"`
+	Number       string        `json:"number,omitempty" field:"readonly,search" title:"Document number"`
+	Date         string        `json:"date" field:"required" title:"Posting date" help:"YYYY-MM-DD"`
+	Period       string        `json:"period,omitempty" field:"readonly" title:"Period"`
+	ClosedPeriod string        `json:"closedPeriod,omitempty" choices:"reject,next-open" title:"Closed period policy"`
+	Shifted      bool          `json:"shifted,omitempty" field:"readonly" title:"Posted to a later period"`
+	Text         string        `json:"text,omitempty" field:"search"`
+	Currency     string        `json:"currency,omitempty" help:"ISO 4217; default the tenant's first currency"`
+	Lines        []JournalLine `json:"lines" field:"required" type:"json" title:"Lines"`
+	Total        float64       `json:"total,omitempty" field:"readonly" title:"Total debit"`
+	Source       string        `json:"source,omitempty" field:"search" help:"The decision that posted it, set by the platform"`
+	Reverses     string        `json:"reverses,omitempty" field:"readonly" title:"Reverses"`
+	Reversed     string        `json:"reversed,omitempty" field:"readonly" title:"Reversed by"`
+	State        string        `json:"state" field:"readonly"`
 }
 
 type JournalLine struct {
-	Account string  `json:"account"` // the account's code
+	Account string  `json:"account"`
 	Debit   float64 `json:"debit,omitempty"`
 	Credit  float64 `json:"credit,omitempty"`
 	Text    string  `json:"text,omitempty"`
-	// Object and Partner tie the line to what it is about: a material, a site, a business partner.
-	Object  string `json:"object,omitempty"`
-	Partner string `json:"partner,omitempty"`
+	Object  string  `json:"object,omitempty"`
+	Partner string  `json:"partner,omitempty"`
 }
 
 func OwnedRelationType(app string) string { return app + ".__relation" }
 
-// RelationEntity belongs to the application's own ledger. Hidden rows can only
-// be read through typed traversal, which checks both endpoint grants.
 func RelationEntity(app string) Entity {
 	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[Record](), Anonymous: true, Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, OwnedRelationType(app)))}}
 	for _, field := range []string{"binding", "version", "parent", "child"} {
@@ -143,8 +137,6 @@ func (c Caller) LegacyRelationWritable(from, to string) bool {
 	return true
 }
 
-// RecordSetPredicate describes complete matching records of the outer query's
-// object. It has no window, sort, archive flag or independently chosen object.
 type RecordSetPredicate struct {
 	Domain json.RawMessage `json:"domain,omitempty"`
 	Search string          `json:"search,omitempty"`
@@ -164,8 +156,6 @@ const (
 	QuerySetMaxBytes       = 64 * 1024
 )
 
-// CheckSet bounds the whole tree before execution, including branches that a
-// particular row would short-circuit. Ordinary queries keep their old limits.
 func (q Query) CheckSet() error {
 	if q.Set == nil {
 		return nil
@@ -212,26 +202,16 @@ func (q Query) CheckSet() error {
 	return nil
 }
 
-// Sequence numbers an app's documents without gaps, as SAP's
-// number ranges and Odoo's journal sequences do: a number is taken only by a
-// decision that is accepted, so a refused one leaves no hole, and replay takes
-// the same numbers again.
 type Sequence struct {
-	Name string // unique in the app: "entry.general"
-	// Pattern writes a number: {n} is the counter, {n:5} padded to five digits,
-	// {year} the year of the document's date. Default "{n}".
-	Pattern string
-	Yearly  bool // the counter starts again at 1 in each year of the document's date
-	// SeedRecord and SeedField retain the old document-number waterline only
-	// when migrating a record-count range to this named sequence. The original
-	// sequence owner reads it once, before the counter's first accepted take.
+	Name       string
+	Pattern    string
+	Yearly     bool
 	SeedRecord string `json:",omitempty"`
 	SeedField  string `json:",omitempty"`
 }
 
 var sequencePattern = regexp.MustCompile(`\{(n|n:[1-9][0-9]*|year)\}`)
 
-// Check tells whether the sequence is well declared.
 func (s Sequence) Check() error {
 	rest := sequencePattern.ReplaceAllString(s.Pattern, "")
 	if s.Name == "" || strings.ContainsAny(rest, "{}") || s.Pattern != "" && !strings.Contains(s.Pattern, "{n") || (s.SeedRecord == "") != (s.SeedField == "") || s.SeedRecord != "" && strings.Count(s.Pattern, "{n") != 1 {
@@ -247,7 +227,6 @@ func (s Sequence) Check() error {
 	return nil
 }
 
-// Format writes the n-th number of year.
 func (s Sequence) Format(year, n int) string {
 	pattern := s.Pattern
 	if pattern == "" {
@@ -265,9 +244,6 @@ func (s Sequence) Format(year, n int) string {
 	})
 }
 
-// Next takes the next number of the app's sequence for the accepted decision
-// r, dated date (its year counts for a yearly sequence). Call it only in the
-// function a decision applies, never in its rules.
 func (c Caller) Next(r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
 	if c.rt == nil {
 		return "", notFound()
@@ -279,8 +255,6 @@ const TxnMaxSteps = 256
 const TxnMaxIterations = 1000
 const TxnMaxExecutionSteps = TxnMaxSteps * TxnMaxIterations
 
-// BusinessTxn is a bounded, single-authority decision. Guards, assignments and
-// iteration predicates all use the original  evaluator.
 type BusinessTxn struct {
 	Subject      string        `json:"subject"`
 	Steps        []TxnStep     `json:"steps"`
@@ -310,8 +284,6 @@ type TxnStep struct {
 	Refusals  []Refusal     `json:"refusals,omitempty"`
 }
 
-// TxnIntervals projects the accepted, typed observation context into an
-// ordinary declared object. Its original collection and relation own history.
 type TxnIntervals struct {
 	Source       string            `json:"source"`
 	Set          string            `json:"set"`
@@ -346,11 +318,8 @@ type TxnPost struct {
 	Floor    bool     `json:"floor,omitempty"`
 }
 
-// Journal records the intent inside Build's accepted result. Core keeps its
-// independent authority and decides whether the balanced entry can be posted.
 type TxnJournal struct {
-	Reverses string `json:"reverses,omitempty"`
-	// Set applies the line templates to the subject's complete, ordered collection.
+	Reverses     string           `json:"reverses,omitempty"`
 	Set          string           `json:"set,omitempty"`
 	ClosedPeriod string           `json:"closedPeriod,omitempty" enum:"reject,next-open"`
 	Date         *Expr            `json:"date,omitempty"`
@@ -360,7 +329,6 @@ type TxnJournal struct {
 }
 
 type TxnJournalLine struct {
-	// When selects a line using the same typed rule context as its amounts.
 	When    *Expr `json:"when,omitempty"`
 	Account Expr  `json:"account"`
 	Debit   *Expr `json:"debit,omitempty"`
@@ -388,8 +356,6 @@ type TxnWork struct {
 	Close     bool     `json:"close,omitempty"`
 }
 
-// Call selects the existing synchronous pure query owner. Snapshot reads the
-// transaction's initial private record view; current sees preceding steps.
 type TxnCall struct {
 	Ref        AssetRef `json:"ref"`
 	Version    int      `json:"version"`
@@ -421,14 +387,12 @@ func (c Caller) TxnTransport() TxnTransport {
 }
 
 type TxnForEach struct {
-	Of    string    `json:"of,omitempty"` // declared reference path from the transaction subject
+	Of    string    `json:"of,omitempty"`
 	Set   string    `json:"set,omitempty"`
 	Range *TxnRange `json:"range,omitempty"`
 	Steps []TxnStep `json:"steps"`
 }
 
-// TxnRange supplies bounded integer or temporal [start, end) values to the original iterator.
-// Generated values expose row.start, row.end and row.index, never a record ID.
 type TxnRange struct {
 	From  Expr   `json:"from"`
 	Until Expr   `json:"until"`
@@ -437,10 +401,8 @@ type TxnRange struct {
 	Limit int    `json:"limit"`
 }
 
-// TxnIteration is a captured ordered read, saved with the decision's rows.
-// Recovery validates this witness without re-reading or re-running the set.
 type TxnIteration struct {
-	Decision   string   `json:"decision,omitempty"` // authority/change ID of the captured child receipt
+	Decision   string   `json:"decision,omitempty"`
 	Step       string   `json:"step"`
 	Set        string   `json:"set"`
 	Object     string   `json:"object"`
@@ -461,18 +423,12 @@ func (c Caller) CaptureTxnIteration(receipt *pb.ChangeRecord, iteration TxnItera
 }
 
 type TxnRef struct {
-	Type string `json:"type"`
-	// Action names an existing transaction only in a refusal's route.
+	Type   string `json:"type"`
 	Action string `json:"action,omitempty"`
-	// ID is a fixed ID, $subject, $item, input.<name> or an earlier step.<name>.
-	// A create leaves it empty for a stable ID generated by the platform.
-	ID string `json:"id,omitempty"`
-	// Via resolves a declared reference path from the subject for an update.
-	Via string `json:"via,omitempty"`
+	ID     string `json:"id,omitempty"`
+	Via    string `json:"via,omitempty"`
 }
 
-// TxnSet retains the existing typed assignment sources. A transaction also
-// accepts step.<name>, referring only to an earlier create ID or sequence.
 type TxnSet struct {
 	Field string `json:"field" field:"required" help:"A field of the object"`
 	Expr  *Expr  `json:"expr,omitempty" type:"json" field:"aside"`
@@ -511,10 +467,6 @@ func (t *TxnLink) UnmarshalJSON(raw []byte) error {
 	return strictTxn(raw, (*plain)(t))
 }
 
-// ApplyTxnRecord uses the original generated action's catalog, row scope,
-// field permissions, compute and validation, without another kernel decision.
-// All rows carry the parent receipt and remain private until the host accepts
-// its complete result. This is not an authoritative write entry point.
 func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id string, payload json.RawMessage, now time.Time) (refusal *kernel.Error) {
 	if c.TraceEnabled() {
 		before, _ := c.ReadRecord(e.Type, id, now)
@@ -563,8 +515,6 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 		}
 		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Authorization denied at {layer}: {reason}", layer, decision.Reason)
 	}
-	// The ordinary reference validator checks existence. Transaction assignment
-	// also requires the referenced row to be readable in this private view.
 	info, _ := Describe(c.App, e, func(_ reflect.Type) string { return "" })
 	var given map[string]json.RawMessage
 	if json.Unmarshal(payload, &given) != nil {
@@ -605,9 +555,6 @@ func (l *Ledger) ApplyTxnRecord(c Caller, r *pb.ChangeRecord, e Entity, verb, id
 	return nil
 }
 
-// ApplyTxnRoute checks the target's original action, state, inputs and row scope
-// without re-entering its held ledger or creating a second kernel decision.
-// The target's writes retain the original decision identity and atomic boundary.
 func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target TxnRef, now time.Time, run func(Caller, *pb.ChangeRecord, *BusinessTxn, time.Time) *kernel.Error) *kernel.Error {
 	if !c.Staging() || c.Replaying || c.App != l.authority || target.Type != e.Type || target.Action == "" || target.ID == "" || e.Lifecycle == nil || run == nil {
 		return Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Refusal route requires its original transaction owner / 拒绝改路须经原事务归属方")
@@ -644,8 +591,6 @@ func (l *Ledger) ApplyTxnRoute(c Caller, r *pb.ChangeRecord, e Entity, target Tx
 	return failure
 }
 
-// BooksChecks validates accepted-effect preparations through the actual books
-// owner; the host neither inspects its private chart nor recreates its policy.
 type BooksChecks interface {
 	CheckPosting(Caller, Journal) (Outcome, *kernel.Error)
 	CheckReversal(Caller, string, json.RawMessage, time.Time) (Outcome, *kernel.Error)
@@ -656,18 +601,6 @@ type TransactionHost interface {
 	CheckTxnCall(TxnCall) error
 }
 
-// TransformStep is one transformation. The fields used depend on Kind:
-//
-//	select     Columns
-//	rename     From → To
-//	cast       Column, Type (string, number, boolean, date)
-//	filter     Column, Op (=, !=, <, <=, >, >=, contains, empty, notempty), Value
-//	compute    To, Formula (the  arithmetic over number columns)
-//	lookup     Dataset, Column (here) = Match (there), take Columns (prefixed with As)
-//	join       Dataset, Column = Match, inner unless Outer; the other side's columns prefixed with As
-//	dedupe     Columns (the key; first row wins after Sort)
-//	aggregate  Columns (group by), Measures (sum/min/max/count/avg of a column into To)
-//	sort       Column, Desc
 type TransformStep struct {
 	Kind        string             `json:"kind"`
 	Columns     []string           `json:"columns,omitempty"`
@@ -688,13 +621,11 @@ type TransformStep struct {
 }
 
 type TransformMeasure struct {
-	Fn     string `json:"fn"` // sum, min, max, count, avg
+	Fn     string `json:"fn"`
 	Column string `json:"column,omitempty"`
 	To     string `json:"to"`
 }
 
-// TransformExpectation is a rule a final row must meet: notnull, unique, in (Value is
-// a comma list), matches (Value is a regexp), range (Value "min..max").
 type TransformExpectation struct {
 	Column string `json:"column"`
 	Rule   string `json:"rule"`
@@ -706,7 +637,6 @@ type QuarantinedRow struct {
 	Row    map[string]any `json:"row"`
 }
 
-// literal is a fixed value a builder wrote, as the field's type holds it.
 func Literal(kind, s string) (any, error) {
 	switch kind {
 	case "integer":
@@ -805,8 +735,6 @@ func DispatchParameter(set TxnSet, scope RuleReadSpec) (Expr, error) {
 	return AssignmentExpr(kind, set, scope)
 }
 
-// BalanceID is the balance record for one set of match values: stable, so the
-// same identity always meets the same record.
 func BalanceID(object string, values []string) string {
 	sum := sha256.Sum256([]byte(object + "\x00" + strings.Join(values, "\x00")))
 	return "bal-" + hex.EncodeToString(sum[:12])
@@ -833,7 +761,6 @@ func CastCell(cell, typ string) (any, error) {
 	return text, nil
 }
 
-// castValue reads a call's input value as a column's type.
 func CastValue(value any, typ string) (any, error) {
 	switch x := value.(type) {
 	case string:
@@ -854,8 +781,6 @@ func CastValue(value any, typ string) (any, error) {
 	return nil, fmt.Errorf("no value")
 }
 
-// TableInput projects the already declared input types. RuleTablePlan remains
-// the sole table evaluator; legacy cell coercion keeps historical semantics.
 func TableInput(reads RuleReadSpec, legacy bool, values map[string]any) ExprContext {
 	facts := ExprContext{Refs: map[string]ExprValue{}}
 	for name, col := range reads.Inputs {
@@ -885,7 +810,6 @@ func ConditionValue(kind, raw string) (any, error) {
 		if day, err := time.Parse(time.DateOnly, raw); err == nil {
 			return day, nil
 		}
-		// Record fields are decoded as times; authored literals are dates.
 		instant, err := time.Parse(time.RFC3339, raw)
 		if err != nil {
 			return time.Time{}, err
@@ -900,8 +824,6 @@ func ConditionValue(kind, raw string) (any, error) {
 	}
 }
 
-// holds compares typed values. An unset or malformed value fails closed; it
-// never falls back to lexical order when a numeric or temporal parse fails.
 func Holds(got any, kind, op, want string) bool {
 	kind = RuleFieldKind(kind)
 	v := got
@@ -936,7 +858,6 @@ func Holds(got any, kind, op, want string) bool {
 	return err == nil && string(r.Value.Data) == "true"
 }
 
-// textOf is a value as a condition reads it: money by its amount, a time by its day.
 func TextOf(v any) string {
 	if v != nil {
 		rv := reflect.ValueOf(v)
@@ -973,8 +894,6 @@ func TextOf(v any) string {
 	return fmt.Sprint(v)
 }
 
-// Runtime executes the installed declaration through the original ledger and
-// transaction transport. It does not keep independent business state.
 type BusinessRuntimeContext struct {
 	App      string
 	Entities map[string]Entity
@@ -1199,7 +1118,6 @@ func IntegrationNormalize(v, how string) string {
 	return v
 }
 
-// csvRows reads a header row and the rows beneath it.
 func IntegrationCSVRows(body []byte) ([]map[string]any, error) {
 	r := csv.NewReader(bytes.NewReader(body))
 	r.FieldsPerRecord = -1
@@ -1225,7 +1143,6 @@ func IntegrationCSVRows(body []byte) ([]map[string]any, error) {
 	return rows, nil
 }
 
-// rowsAt is the array of objects at the dotted path inside a JSON answer.
 func IntegrationRowsAt(body []byte, path string) ([]map[string]any, error) {
 	var node any
 	if err := json.Unmarshal(body, &node); err != nil {
@@ -1255,7 +1172,6 @@ func IntegrationRowsAt(body []byte, path string) ([]map[string]any, error) {
 	return rows, nil
 }
 
-// scalar is a row value as the string a record id or a text field takes.
 func IntegrationScalar(v any) string {
 	switch x := v.(type) {
 	case nil:
@@ -1272,7 +1188,6 @@ func IntegrationScalar(v any) string {
 	}
 }
 
-// convert applies one declared conversion; an absent value stays absent.
 func IntegrationConvert(v any, to string) (any, error) {
 	if v == nil {
 		return nil, nil

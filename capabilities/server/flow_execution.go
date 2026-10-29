@@ -25,12 +25,10 @@ type flowExecution struct {
 
 type flowExecutionRuntime struct {
 	*stagedDecision
-	view    *Tenant
-	release string
-	shapes  map[string]platform.EntityInfo
-	assets  []platform.ReleaseAsset
-	// Retain only source and definition identities. Row conversion is lazy,
-	// and every protected read still checks current membership and field grants.
+	view        *Tenant
+	release     string
+	shapes      map[string]platform.EntityInfo
+	assets      []platform.ReleaseAsset
 	readStore   *records.Store
 	readSource  *records.Store
 	readOrigins map[string]retainedReadOrigin
@@ -215,8 +213,6 @@ func (r *flowExecutionRuntime) Decide(c platform.Caller, app platform.App, s *pb
 	return r.stagedDecision.decideAppFrom(c, r.stateApp(app), s, at, r.view, r.release, r.assets)
 }
 
-// Rows stay current; the selected metadata decodes retained fields. A renamed
-// field follows its explicit alias, while a retyped field needs its saved image.
 func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info platform.EntityInfo, value *records.Row) (*records.Row, *kernel.Error) {
 	raw, err := value.Image()
 	if err != nil {
@@ -250,9 +246,6 @@ func (r *flowExecutionRuntime) retainedRow(current platform.EntityInfo, info pla
 	return &records.Row{Value: decoded.Elem(), Format: value.Format, HistoryHead: value.HistoryHead, HistoryParent: value.HistoryParent, History: value.History, LoadHistory: value.LoadHistory, HistoryCount: value.HistoryCount}, nil
 }
 
-// A retained shape reads the same immutable current collection. Only rows
-// actually requested by its original owner are converted; errors remain
-// migration refusals rather than being mistaken for missing records.
 type retainedRows struct {
 	runtime       *flowExecutionRuntime
 	current, info platform.EntityInfo
@@ -274,8 +267,6 @@ func (s *retainedRows) Get(id string) *records.Row {
 
 type retainedReadRefusal struct{ refusal *kernel.Error }
 
-// RowSource has no error result. Catch only its typed owner refusal at the
-// retained runtime API; storage failures keep their original failure path.
 func (r *flowExecutionRuntime) recoverRetainedRead(refusal **kernel.Error) {
 	if failure := recover(); failure != nil {
 		saved, ok := failure.(retainedReadRefusal)
@@ -382,8 +373,6 @@ func (r *flowExecutionRuntime) ReadRecord(c platform.Caller, typ, id string, at 
 	if refusal != nil {
 		return nil, refusal
 	}
-	// Old field names must not reveal a target whose current field grant was
-	// revoked. Current membership and policy still govern every retained read.
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &fields)
 	if current := r.records.Type(typ); current != nil {
@@ -406,7 +395,6 @@ func (r *flowExecutionRuntime) ReadRecordPath(c platform.Caller, typ, id string,
 	if err != nil {
 		return nil, nil, err
 	}
-	// The shared traversal calls the same scoped ReadRecord implementation.
 	return automation.ReadRecordPath(c, typ, id, path, at, view.entity, func(typ, id string, at time.Time) (json.RawMessage, *kernel.Error) {
 		return r.ReadRecord(c, typ, id, at)
 	})
@@ -509,8 +497,6 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 		}
 		lifecycle := current.Info().Lifecycle != nil && current.Info().Lifecycle.Field == target.Name
 		original, declared := old.Info().Field(name)
-		// The original owner still computes its declared readonly metadata.
-		// Turning a formerly writable field readonly retires that old write.
 		if target.ReadOnly && !lifecycle && (!declared || !original.ReadOnly) {
 			return conflictRefusal(fmt.Errorf("retained action writes a retired field %s", target.Name))
 		}
@@ -538,7 +524,6 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	if refusal := r.stagedDecision.Put(c, receipt, decoded.Elem().Interface()); refusal != nil {
 		return refusal
 	}
-	// Keep the newly accepted source values for another old-version step.
 	updated := *current.Rows().Get(id)
 	updated.Projection = records.CloneProjection(updated.Projection)
 	if source := records.ProjectionFor(updated.Projection, r.release); source != nil {
@@ -551,9 +536,6 @@ func (r *flowExecutionRuntime) Put(c platform.Caller, receipt *pb.ChangeRecord, 
 	return nil
 }
 
-// mapRetainedWrite folds a write aimed at a retained declaration shape into
-// the current stored values: aliases stay on their target, and every other
-// changed field must still match the retained declaration's type.
 func (r *flowExecutionRuntime) mapRetainedWrite(typ string, before, after map[string]json.RawMessage) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
 	before, after = maps.Clone(before), maps.Clone(after)
 	declared := r.shapes

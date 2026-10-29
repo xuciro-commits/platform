@@ -7,7 +7,6 @@ import {t} from "../i18n";
 export type AssetDirectoryItem={id:string;label:string;asset:Api.AssetBinding;title?:string};
 export type AssetDirectoryProps={items:readonly AssetDirectoryItem[];onOpen?:(item:AssetDirectoryItem)=>void;canOpen?:(item:AssetDirectoryItem)=>boolean;enabled?:boolean;label?:string};
 
-/** Literal directory labels accompany actual retained assets; no URI or resource is invented. */
 export function AssetDirectory({items,onOpen,canOpen,enabled=true,label}:AssetDirectoryProps) {
  const kinds=["object","link-type","property-type","action","page","app","query","flow","function","compute"];
  if(!Array.isArray(items)||items.length>renderingLimits.runtime.exploration.maxDirectoryItems||new Set(items.map(item=>item?.id)).size!==items.length||items.some(item=>!item||typeof item.id!=="string"||!item.id||typeof item.label!=="string"||item.title!==undefined&&typeof item.title!=="string"||!item.asset||typeof item.asset.ref?.app!=="string"||!item.asset.ref.app||typeof item.asset.ref.name!=="string"||!item.asset.ref.name||!kinds.includes(item.asset.ref.kind)||typeof item.asset.sourceVersion!=="string"||!item.asset.sourceVersion))return <p role="alert">{t("The original asset directory is unavailable or incompatible.")}</p>;

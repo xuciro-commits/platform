@@ -46,9 +46,6 @@ func (t *Tenant) flowReleaseAsset(app, name string, version int) (platform.Relea
 	return t.nativeFlowAsset(owner, name, version)
 }
 
-// raiseAlerts tells people about a record that came to match an alert rule.
-// It runs after every accepted decision on a builder object;
-// notices are keyed, so a replay or a second look tells nobody twice.
 func (t *Tenant) raiseAlerts(e platform.Event, now time.Time) {
 	s := e.Record.GetSubmission()
 	typ := s.GetTarget().GetType()

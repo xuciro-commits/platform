@@ -3,9 +3,6 @@ import { pageUIProfile, widgetContract } from "../widgets/registry";
 
 type Document = PageUI.PageDocument;
 
-/** Lift an older flat composed page into a stable layout tree for editing.
- * Existing published V1 pages keep their original renderer until saved as V2.
- */
 export function pageDocumentFromSections<T extends Pick<PageUI.Section, "id" | "widget" | "width" | "configVersion">>(source: T[]): { sections: (T & { id: string; configVersion?: number })[]; document: Document } {
   const used = new Set(source.flatMap((section) => section.id ? [section.id] : []));
   const sections = source.map((section, i) => {

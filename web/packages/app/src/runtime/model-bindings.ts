@@ -55,8 +55,6 @@ export function canonicalModelSection<T extends ModelSection>(section:T):T {
  return copy;
 }
 
-/** Original widget inspectors edit a temporary projection. Only changed ports
- * become overrides; unchanged inferred defaults stay model defaults. */
 export function foldModelPorts<T extends ModelSection>(section:T,lookup:Lookup):T {
  if(!section.model)return section;
  const canonical=canonicalModelSection(section),expected=materializeModelSection(canonical,lookup,typeof section.object==='string'),model=structuredClone(section.model);
@@ -68,8 +66,6 @@ export function foldModelPorts<T extends ModelSection>(section:T,lookup:Lookup):
 export const modelWindowKey=(section:Pick<PageUI.Section,'id'>)=>`model/${section.id??''}`;
 export const modelWindowWidget=(section:Pick<PageUI.Section,'model'|'widget'|'composite'>)=>(!!section.composite&&['layered-graph','model-matrix'].includes(section.widget))||!!section.model&&['table','detail','record-picker','record-card','record-list','record-chart','record-events','record-calendar','record-gantt','record-leaderboard','record-scatter','record-timeline','kanban','record-map','histogram','term-counts','tag-counts','sparkline-kpi'].includes(section.widget);
 
-/** Follows only declared single-record references. Every hop is an original
- * source.get(), so row and field authorization remain with the host. */
 export async function readModelPath(source:Pick<import('@platform/ui').RecordSource,'get'|'entity'>,type:string,record:import('@platform/ui').EntityRecord,path:string[],active:()=>boolean):Promise<unknown>{
  if(!modelField(type,path,source.entity))throw Error('Declared relationship field is unavailable.');
  let current=record;

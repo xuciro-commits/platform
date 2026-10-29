@@ -5,8 +5,6 @@ import (
 	"fmt"
 )
 
-// LowerPage compiles the old page operator graph. It never evaluates values.
-// Resource presence uses the resource owner's status projection as a reference.
 func LowerPage(raw json.RawMessage, kind string, schema Schema) (Expr, error) {
 	var old struct {
 		Op   string `json:"op"`

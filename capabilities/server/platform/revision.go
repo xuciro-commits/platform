@@ -13,9 +13,6 @@ import (
 	"strings"
 )
 
-// ReleaseAsset is a candidate input, not a public discovery Definition. Body
-// must be the complete owner-produced descriptor (including permissions and
-// other execution semantics), never a member-filtered API projection.
 type ReleaseAsset struct {
 	Ref             AssetRef        `json:"ref"`
 	ContractVersion int             `json:"contractVersion"`
@@ -25,9 +22,6 @@ type ReleaseAsset struct {
 	Body            json.RawMessage `json:"body"`
 }
 
-// FlowReleaseDescriptor keeps the owner's complete definition and the
-// bindings extracted from its compiled native flow. It is a release format,
-// not an interpreter; the flow and definition owners still validate/run it.
 type FlowReleaseDescriptor struct {
 	Native       bool            `json:"native,omitempty"`
 	Name         string          `json:"name"`
@@ -40,14 +34,11 @@ type FlowReleaseDescriptor struct {
 	Dependencies []AssetRef      `json:"dependencies,omitempty"`
 }
 
-// AssetBinding fixes the owner's exact source version at a dependency edge.
 type AssetBinding struct {
 	Ref           AssetRef `json:"ref"`
 	SourceVersion string   `json:"sourceVersion"`
 }
 
-// PageReleaseAsset is the single descriptor path for a code page and a page
-// assembled by the builder. Its bindings become closure dependencies.
 func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error) {
 	if err := page.CheckSafety(); err != nil {
 		return ReleaseAsset{}, err
@@ -60,8 +51,6 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
-// ApplicationReleaseAsset binds ordered navigation and explicit resources.
-// Frozen closure dependencies retain their original owner and exact bytes.
 func ApplicationReleaseAsset(app, sourceVersion string, application Application) (ReleaseAsset, error) {
 	if err := application.CheckVariables(); err != nil {
 		return ReleaseAsset{}, err
@@ -77,16 +66,12 @@ func ApplicationReleaseAsset(app, sourceVersion string, application Application)
 		ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
 }
 
-// ReleaseCandidate is a read-only closure of exact format-1 bytes. Publishing,
-// storing and activating it require the separate accepted-result boundary.
 type ReleaseCandidate struct {
 	ID     string
 	Bytes  []byte
 	Assets []ReleaseAsset
 }
 
-// Closure selects original sealed bytes. Reading an accepted release must
-// not turn its historical descriptions into today's publication format.
 func (c ReleaseCandidate) Closure(roots []AssetRef) (ReleaseCandidate, error) {
 	checked, err := ReadCandidate(c.ID, c.Bytes)
 	if err != nil {
@@ -100,11 +85,6 @@ type releaseBytes struct {
 	Assets []ReleaseAsset `json:"assets"`
 }
 
-// Candidate closes roots over pinned assets. Reciprocal object references are
-// one semantic graph; structural cycles, missing or duplicate references,
-// malformed descriptors and ambiguous JSON object keys are rejected.
-// The same logical input has the same bytes regardless of map key, declaration
-// or dependency order; semantic changes produce a new content ID.
 func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, error) {
 	return candidate(roots, available, false)
 }
@@ -391,8 +371,6 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 	return ReleaseCandidate{ID: "sha256-v1:" + hex.EncodeToString(hash[:]), Bytes: raw, Assets: closed}, nil
 }
 
-// ReadCandidate verifies both the digest and the exact canonical bytes before
-// a saved candidate can be used. It does not publish or activate that version.
 func ReadCandidate(id string, raw []byte) (ReleaseCandidate, error) {
 	var wire releaseBytes
 	if len(raw) == 0 || len(raw) > 16<<20 {
@@ -436,7 +414,7 @@ func canonicalBody(raw []byte) ([]byte, error) {
 	if _, ok := value.(map[string]any); !ok {
 		return nil, fmt.Errorf("descriptor must be a JSON object")
 	}
-	return json.Marshal(value) // encoding/json sorts object keys recursively.
+	return json.Marshal(value)
 }
 
 func readJSONValue(d *json.Decoder) (any, error) {
@@ -482,8 +460,6 @@ func readJSONValue(d *json.Decoder) (any, error) {
 	}
 }
 
-// JSON number spelling is not semantic: 1, 1.00 and 1e0 name one value.
-// Retain arbitrary integer precision instead of passing through float64.
 func canonicalNumber(number json.Number) (json.Number, error) {
 	text := string(number)
 	if len(text) > 4096 {
@@ -548,8 +524,6 @@ func compareString(a, b string) int {
 	}
 }
 
-// CandidateDiff reports exact assets added, removed or changed. It verifies
-// both inputs rather than trusting mutable in-memory copies of their assets.
 func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []AssetRef, err error) {
 	before, err = ReadCandidate(before.ID, before.Bytes)
 	if err != nil {
@@ -853,8 +827,6 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 				raw["choices"], _ = json.Marshal(options)
 			}
 		}
-		// The builder's "only when" is the tag form field=a,b; the field
-		// descriptor carries the parsed condition (UX-01).
 		if whenRaw, ok := raw["when"]; ok {
 			var source string
 			if json.Unmarshal(whenRaw, &source) == nil {
@@ -937,12 +909,9 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		shape.Lifecycle = &l
 	}
-	// Declarative objects always generate these three standard actions; native
-	// objects return their original EntityInfo above. Keep the retained body intact.
 	return EntityInfo{App: owner, Type: shape.Type, Standard: []string{shape.Type + ".create", shape.Type + ".edit", shape.Type + ".archive"}, Fields: fields, Lifecycle: shape.Lifecycle, Implements: shape.Implements, Extends: shape.Extends, ExtensionSource: shape.ExtensionSource}, nil
 }
 
-// Use the original nested declaration while retaining legacy flat action bodies.
 func releaseActionDescriptor(body json.RawMessage) (Action, error) {
 	var flat Action
 	if err := json.Unmarshal(body, &flat); err != nil {

@@ -10,15 +10,6 @@ import (
 	"time"
 )
 
-// CheckReplay is the platform's replay conformance (、,
-// ), for the tests of every composition: build makes a fresh tenant of
-// the same apps, the journal is replayed into it with every outbound call
-// failing the test, and what the host shows must equal the live tenant's —
-// audit, deliveries, owned work, effects and endpoints, notifications, connector
-// cursors and switches, settings, protocol bindings, and every read of every app
-// as a member holding a role in each. Volatile state is left out, as it is not
-// journaled by design: heartbeats, the last refused input, endpoint health (the
-// secret store), and a job's run count and next run (runs that did nothing).
 func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tenant) {
 	t.Helper()
 	observe := func(tenant *Tenant) string {
@@ -29,7 +20,7 @@ func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tena
 		}
 		return image
 	}
-	stored := make([]Entry, len(journal)) // as the PostgreSQL journal keeps them
+	stored := make([]Entry, len(journal))
 	for i, e := range journal {
 		raw, _ := json.Marshal(e)
 		json.Unmarshal(raw, &stored[i])
@@ -46,9 +37,6 @@ func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tena
 	if got := observe(again); got != want {
 		t.Fatalf("replayed tenant differs from the live one:\nlive:   %s\nreplay: %s", want, got)
 	}
-	// A snapshot is a shortcut, never a different outcome: taken
-	// after any prefix of the journal, restored into a new tenant, and given
-	// the rest, it reaches the live state; saved again, it saves the same.
 	for _, k := range slices.Compact([]int{0, len(stored) / 3, len(stored) / 2, len(stored)}) {
 		before := build()
 		if err := before.Replay(stored[:k]); err != nil {
@@ -91,7 +79,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 			return "", err
 		}
 	}
-	at := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC) // effect bodies are kept: nothing is 30 days old
+	at := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 	connectors := []any{}
 	for _, c := range t.Connectors(at) {
 		connectors = append(connectors, []any{c.ID, c.Cursor, c.Disabled})
@@ -105,7 +93,7 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	reads := map[string]any{}
 	for _, a := range t.apps {
 		if a.Manifest().ID == controlowner.PlatformApp {
-			continue // its reads are the host views above
+			continue
 		}
 		for _, name := range a.Manifest().Reads {
 			out, err := platform.CallRead(a, t.caller(everyone, a, false), name)
@@ -114,14 +102,14 @@ func checkedSnapshot(t *Tenant) (string, error) {
 	}
 	tasks := []any{}
 	for _, x := range t.Tasks() {
-		if x.Kind == "job" { // runs that did nothing are not journaled: a job's count and next run are volatile
+		if x.Kind == "job" {
 			tasks = append(tasks, []string{x.ID, x.State})
 			continue
 		}
 		tasks = append(tasks, x)
 	}
 	endpoints := []any{}
-	for _, e := range t.Endpoints() { // health depends on the secret store, not the journal
+	for _, e := range t.Endpoints() {
 		endpoints = append(endpoints, []any{e.Endpoint, e.Pending, e.Delivers})
 	}
 	notices, _ := t.notices.State()
@@ -141,8 +129,6 @@ func checkedSnapshot(t *Tenant) (string, error) {
 			recordView[typ] = rows
 		}
 	}()
-	// Include the installed catalog: matching record bytes alone do not prove
-	// that a recovered publication offers the same pages and actions.
 	definitions, err := t.ownedAssetDefinitions(t.definitions)
 	if err != nil {
 		return "", err

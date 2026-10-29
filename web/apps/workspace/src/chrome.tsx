@@ -1,7 +1,3 @@
-// The workspace's own views, shared by every app: the
-// launcher, the inbox and requests (the work app), notifications
-//, the outbox (K5), every record the member may read,
-// and the assistant, agent runs and global search.
 import "./i18n";
 import { Observations, RecordObservations, ApplicationPage, ApplicationRuns, OperationRunView, Assistant, DashboardView, DependencyGraph, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, defineApp, definitionPresentation, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
@@ -130,8 +126,6 @@ function AllRecords() {
   );
 }
 
-// Installed definitions share the records/actions' host contracts. Code page
-// descriptors can be inspected, operated and previewed from this one path.
 function DefinitionsCatalog() {
   const { data, isPending, error } = useDefinitions();
   const { open } = useWorkspace();
@@ -232,9 +226,6 @@ function ApplicationOverview({ owner, name }: { owner: string; name: string }) {
   </>;
 }
 
-// A page this member may not open, reached by a link, a remembered place or an
-// application that was withdrawn. The registry never says which
-// page it was or why: whether it exists is not theirs to learn either.
 function ClosedPage() {
   const { open } = useWorkspace();
   return (
@@ -246,7 +237,6 @@ function ClosedPage() {
   );
 }
 
-// A member's saved view, opened from the navigation.
 function Saved({ id }: { id: string }) {
   const views = useRead<SavedView[]>("/v1/views");
   const view = views?.find((v) => v.id === id);
@@ -272,8 +262,6 @@ export const personalWork = defineApp({
   ] }],
 });
 
-// Members without a core role can still explore their own authorized records.
-// The core contribution supplies its existing master-data menu to stewards.
 export const explorerApplication = defineApp({
   id: "core", serves: [], category: "ontology", title: t("Master data"), icon: <BookOpen />,
   for: host => host.entities.length > 0,

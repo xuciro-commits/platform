@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-// AssetKind identifies the existing executor behind a code-defined asset.
-// More kinds can be added as their canonical platform owner is built.
 type AssetKind string
 
 const (
@@ -23,45 +21,33 @@ const (
 	AssetPropertyType AssetKind = "property-type"
 	AssetAction       AssetKind = "action"
 	AssetPage         AssetKind = "page"
-	// AssetApp is an application a tenant hands to its people: a name, an icon
-	// and the pages it holds.
-	AssetApp AssetKind = "app"
-	// AssetQuery is a named, pure query an app declares once:
-	// pages and agent tools run the same declaration.
-	AssetQuery AssetKind = "query"
-	// AssetFlow is a versioned definition executed by the existing flow app.
-	AssetFlow       AssetKind = "flow"
-	AssetFunction   AssetKind = "function"
-	AssetAgent      AssetKind = "agent"
-	AssetEvaluation AssetKind = "evaluation-set"
-	AssetTestPlan   AssetKind = "test-plan"
-	AssetCompute    AssetKind = "compute"
-	// Integration assets describe existing owner configuration. They never
-	// include target credentials, cursors, data or running-work state.
-	AssetConnection  AssetKind = "connection"
-	AssetSource      AssetKind = "source"
-	AssetDataset     AssetKind = "dataset"
-	AssetPipeline    AssetKind = "pipeline"
-	AssetWriteback   AssetKind = "writeback"
-	AssetMatching    AssetKind = "matching"
-	AssetSampleSet   AssetKind = "sample-set"
-	AssetProtocol    AssetKind = "protocol"
-	AssetInterface   AssetKind = "interface"
-	AssetObservation AssetKind = "observation"
-	AssetAlert       AssetKind = "alert"
+	AssetApp          AssetKind = "app"
+	AssetQuery        AssetKind = "query"
+	AssetFlow         AssetKind = "flow"
+	AssetFunction     AssetKind = "function"
+	AssetAgent        AssetKind = "agent"
+	AssetEvaluation   AssetKind = "evaluation-set"
+	AssetTestPlan     AssetKind = "test-plan"
+	AssetCompute      AssetKind = "compute"
+	AssetConnection   AssetKind = "connection"
+	AssetSource       AssetKind = "source"
+	AssetDataset      AssetKind = "dataset"
+	AssetPipeline     AssetKind = "pipeline"
+	AssetWriteback    AssetKind = "writeback"
+	AssetMatching     AssetKind = "matching"
+	AssetSampleSet    AssetKind = "sample-set"
+	AssetProtocol     AssetKind = "protocol"
+	AssetInterface    AssetKind = "interface"
+	AssetObservation  AssetKind = "observation"
+	AssetAlert        AssetKind = "alert"
 )
 
-// NamedQuery reads records of one object: fixed conditions, and optionally
-// the record it is run for through a reference field (By). It runs through
-// the reader's own read of Object, so it never widens what anyone sees.
 type NamedQuery struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Object      string `json:"object"`
-	Interface   string `json:"interface,omitempty"`
-	// InterfaceShape and Implementations are frozen at publication. They are
-	// query metadata, never a fabricated entity or a grant to read its members.
+	Name            string          `json:"name"`
+	Title           string          `json:"title"`
+	Description     string          `json:"description"`
+	Object          string          `json:"object"`
+	Interface       string          `json:"interface,omitempty"`
 	InterfaceShape  *Interface      `json:"interfaceShape,omitempty"`
 	Implementations []string        `json:"implementations,omitempty"`
 	By              string          `json:"by,omitempty"`
@@ -70,9 +56,6 @@ type NamedQuery struct {
 	Limit           int             `json:"limit,omitempty"`
 }
 
-// AssetRef is the stable identity shared by code and construction surfaces.
-// Its three parts avoid collisions between apps and between kinds. A published
-// revision will bind this identity to an immutable definition in a later batch.
 type AssetRef struct {
 	App  string    `json:"app"`
 	Kind AssetKind `json:"kind"`
@@ -89,15 +72,8 @@ func (r AssetRef) Check() error {
 	return nil
 }
 
-// Widgets are the widget kinds a composed page may hold.
-// A filter outputs the page's second variable — the records it narrows to —
-// which the table, chart and metric over the same object read (16b).
-// Filterable are the field types a filter widget offers: values that repeat.
 var Filterable = []string{"choice", "boolean", "reference"}
 
-// Application is what someone in this tenant hands to its people: a
-// name, an icon from the platform's set, and the pages it holds in order. It
-// grants nothing; each page is offered to whoever may read what it shows.
 type Application struct {
 	Languages    Languages                    `json:"languages,omitempty"`
 	Profile      *ApplicationProfile          `json:"profile,omitempty"`
@@ -111,22 +87,13 @@ type Application struct {
 	Name         string                       `json:"name"`
 	Title        string                       `json:"title"`
 	Description  string                       `json:"description,omitempty"`
-	// Icon is one of Icons: the workspace draws it in the launcher and the navigation.
-	Icon  string   `json:"icon,omitempty"`
-	Pages []string `json:"pages"` // page names, in the order people see them
-	// Groups are headings in its navigation, each over some of
-	// Pages in its own order; a page in no group sits under the application's name.
-	Groups []AppGroup `json:"groups,omitempty"`
-	// Resources are shared owner references included in the release closure.
-	// Pages remain the sole navigation list; membership grants no permissions.
-	Resources []AssetRef `json:"resources,omitempty"`
-	// Concepts organize the studio tree only. They never add dependencies,
-	// change asset ownership, or grant access to a grouped asset.
-	Concepts []AppConcept `json:"concepts,omitempty"`
+	Icon         string                       `json:"icon,omitempty"`
+	Pages        []string                     `json:"pages"`
+	Groups       []AppGroup                   `json:"groups,omitempty"`
+	Resources    []AssetRef                   `json:"resources,omitempty"`
+	Concepts     []AppConcept                 `json:"concepts,omitempty"`
 }
 
-// CheckResources checks explicit non-navigation resource membership. Assets
-// keep their existing owner and may be shared by several applications.
 func (a Application) CheckResources() error {
 	if err := a.CheckLanguages(); err != nil {
 		return err
@@ -158,8 +125,6 @@ func (a Application) CheckResources() error {
 	return a.CheckConcepts()
 }
 
-// Dependencies is the single application closure path for discovery and
-// releases. Page order affects navigation; dependency order is canonical.
 func (a Application) Dependencies(owner string) []AssetRef {
 	refs := append(slices.Clone(a.Resources), a.QueryPage().QueryReferences()...)
 	if a.Extends != nil {
@@ -172,8 +137,6 @@ func (a Application) Dependencies(owner string) []AssetRef {
 	return slices.Compact(refs)
 }
 
-// ApplicationPageReplacement routes an original code view to a page belonging
-// to this application. It neither copies nor changes the original page.
 type ApplicationPageReplacement struct {
 	View string `json:"view"`
 	Page string `json:"page"`
@@ -208,14 +171,11 @@ func (a Application) CheckExtension() error {
 	return nil
 }
 
-// AppGroup is one heading in an application's navigation and the pages under it.
 type AppGroup struct {
 	Title string   `json:"title"`
 	Pages []string `json:"pages"`
 }
 
-// CheckGroups refuses groups people could not read: a heading with no title or
-// no page, a page the application does not hold, a page under two headings.
 func (a Application) CheckGroups() error {
 	grouped := map[string]string{}
 	for _, g := range a.Groups {
@@ -238,11 +198,6 @@ func (a Application) CheckGroups() error {
 	return nil
 }
 
-// IconName reports whether a name is one the kit may draw.
-// The vocabulary belongs to the kit, which owns the glyphs and
-// their words; the host only keeps names shaped like names, so the set can grow
-// without every host having to learn it first. A client that does not know a
-// name yet draws its default glyph.
 func IconName(s string) bool {
 	if s == "" || len(s) > 32 || s[0] == '-' || s[len(s)-1] == '-' {
 		return false
@@ -255,45 +210,38 @@ func IconName(s string) bool {
 	return !strings.Contains(s, "--")
 }
 
-// Definition is one installed code asset as the reader may discover it.
-// Entity and Action reuse the same descriptions as the existing record/action
-// APIs; this registry is an index over those owners, not another executor.
 type Definition struct {
-	Alert       *AlertRule                 `json:"alert,omitempty"`
-	Observation *ObservationDefinition     `json:"observation,omitempty"`
-	SampleSet   *SampleSet                 `json:"sampleSet,omitempty"`
-	Interface   *Interface                 `json:"interface,omitempty"`
-	Protocol    *ProtocolReleaseDescriptor `json:"protocol,omitempty"`
-	// OwnerRecord is the internal metadata read boundary for assets whose
-	// descriptor is not itself a record type. It never enters discovery JSON.
-	OwnerRecord      string                   `json:"-"`
-	ContentVersion   string                   `json:"contentVersion,omitempty"`
-	PropertyType     *PropertyType            `json:"propertyType,omitempty"`
-	PropertyVersions map[string]PropertyType  `json:"propertyVersions,omitempty"`
-	LinkType         *LinkType                `json:"linkType,omitempty"`
-	LinkVersions     map[string]LinkType      `json:"linkVersions,omitempty"`
-	Ref              AssetRef                 `json:"ref"`
-	Source           string                   `json:"source"`  // code, until published definitions exist
-	Version          string                   `json:"version"` // installed app manifest version, not a published revision
-	ContractVersion  int                      `json:"contractVersion"`
-	Requires         []AssetRef               `json:"requires"`
-	Provides         []Capability             `json:"provides"`
-	Entity           *EntityInfo              `json:"entity,omitempty"`
-	Action           *Action                  `json:"action,omitempty"`
-	Page             *Page                    `json:"page,omitempty"`
-	Application      *Application             `json:"application,omitempty"`
-	Query            *NamedQuery              `json:"query,omitempty"`
-	QueryVersions    map[string]NamedQuery    `json:"queryVersions,omitempty"`
-	Flow             *FlowDefinition          `json:"flow,omitempty"`
-	Function         *AIFunction              `json:"function,omitempty"`
-	Evaluation       *EvaluationSetDescriptor `json:"evaluation,omitempty"`
-	TestPlan         *TestPlanDescriptor      `json:"testPlan,omitempty"`
-	Agent            *AgentReleaseDescriptor  `json:"agent,omitempty"`
-	Operation        *Operation               `json:"operation,omitempty"`
+	Alert            *AlertRule                 `json:"alert,omitempty"`
+	Observation      *ObservationDefinition     `json:"observation,omitempty"`
+	SampleSet        *SampleSet                 `json:"sampleSet,omitempty"`
+	Interface        *Interface                 `json:"interface,omitempty"`
+	Protocol         *ProtocolReleaseDescriptor `json:"protocol,omitempty"`
+	OwnerRecord      string                     `json:"-"`
+	ContentVersion   string                     `json:"contentVersion,omitempty"`
+	PropertyType     *PropertyType              `json:"propertyType,omitempty"`
+	PropertyVersions map[string]PropertyType    `json:"propertyVersions,omitempty"`
+	LinkType         *LinkType                  `json:"linkType,omitempty"`
+	LinkVersions     map[string]LinkType        `json:"linkVersions,omitempty"`
+	Ref              AssetRef                   `json:"ref"`
+	Source           string                     `json:"source"`
+	Version          string                     `json:"version"`
+	ContractVersion  int                        `json:"contractVersion"`
+	Requires         []AssetRef                 `json:"requires"`
+	Provides         []Capability               `json:"provides"`
+	Entity           *EntityInfo                `json:"entity,omitempty"`
+	Action           *Action                    `json:"action,omitempty"`
+	Page             *Page                      `json:"page,omitempty"`
+	Application      *Application               `json:"application,omitempty"`
+	Query            *NamedQuery                `json:"query,omitempty"`
+	QueryVersions    map[string]NamedQuery      `json:"queryVersions,omitempty"`
+	Flow             *FlowDefinition            `json:"flow,omitempty"`
+	Function         *AIFunction                `json:"function,omitempty"`
+	Evaluation       *EvaluationSetDescriptor   `json:"evaluation,omitempty"`
+	TestPlan         *TestPlanDescriptor        `json:"testPlan,omitempty"`
+	Agent            *AgentReleaseDescriptor    `json:"agent,omitempty"`
+	Operation        *Operation                 `json:"operation,omitempty"`
 }
 
-// ApplicationVisibility is the original member-facing metadata projection.
-// Binding labels do not confer permission to open another application.
 type ApplicationVisibility interface{ VisibleApplications(Caller) []AssetRef }
 
 func (c Caller) VisibleApplications() []AssetRef {
@@ -344,9 +292,6 @@ type BuildHost interface {
 type RecordSetHost interface {
 	ValidateRecordSet(EntityInfo, RecordSet) error
 }
-
-// ModelPageHost checks a publisher's model reads through the original member
-// projection. It adds no installation or business-decision authority.
 
 type ModelPageHost interface {
 	CheckPageModel(Caller, Page) error
@@ -484,8 +429,6 @@ type ApplicationDiagnostic struct {
 	Runs        []ApplicationRun           `json:"runs"`
 }
 
-// ApplicationAI is a projection of the original function, action, evaluation
-// and usage owners. It carries no prompts, grants, quotas or second AI state.
 type ApplicationAI struct {
 	Resource    AssetBinding              `json:"resource"`
 	Placement   string                    `json:"placement"`
@@ -502,8 +445,6 @@ type ApplicationAI struct {
 	CostUnknown int                       `json:"costUnknown"`
 }
 
-// ApplicationRun is a projection of original authorized runtime reads. Its
-// relationship describes resource use, never exclusive ownership by an app.
 type ApplicationRun struct {
 	Applications []AssetBinding `json:"applications,omitempty"`
 	Subject      string         `json:"subject,omitempty"`
@@ -527,7 +468,6 @@ type ApplicationRun struct {
 	CostReported bool           `json:"costReported,omitempty"`
 }
 
-// ApplicationPage is one page of an application, as its navigation lists it.
 type ApplicationPage struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
@@ -535,21 +475,16 @@ type ApplicationPage struct {
 	Object      string `json:"object,omitempty"`
 }
 
-// ApplicationView is one application the caller may open: its identity, how it
-// came to the tenant, and the pages it offers them.
 type ApplicationView struct {
-	App         string            `json:"app"`  // the owner whose registry holds it
-	Name        string            `json:"name"` // the application's own name
+	App         string            `json:"app"`
+	Name        string            `json:"name"`
 	Title       string            `json:"title"`
 	Description string            `json:"description,omitempty"`
 	Icon        string            `json:"icon,omitempty"`
-	Source      string            `json:"source"` // code | tenant
+	Source      string            `json:"source"`
 	Pages       []ApplicationPage `json:"pages"`
 }
 
-// PageView is one page of an application resolved for the caller: the
-// declaration, the object it runs on with the caller's own field projection,
-// and the actions of that page the caller may take.
 type PageView struct {
 	Application ApplicationView `json:"application"`
 	Page        Page            `json:"page"`
@@ -557,8 +492,6 @@ type PageView struct {
 	Actions     []Action        `json:"actions"`
 }
 
-// ApplicationProfile is a declared operating envelope, not a performance or
-// recovery guarantee. Original owners retain and recover their own data.
 type ApplicationProfile struct {
 	ExpectedRecords map[string]int64  `json:"expectedRecords,omitempty"`
 	ExpectedRuns    int64             `json:"expectedRuns,omitempty"`
@@ -610,9 +543,6 @@ func (p ApplicationProfile) Check() error {
 	return nil
 }
 
-// ApplicationArtifact is the original release owner's closed candidate rooted
-// at one application. Bindings carry immutable owner versions; no second
-// publication, asset registry or runtime state is kept here.
 type ApplicationArtifact struct {
 	Samples      []AssetBinding       `json:"samples"`
 	Ref          AssetRef             `json:"ref"`
@@ -630,7 +560,6 @@ type ApplicationArtifact struct {
 	Environment  []ApplicationBinding `json:"environment"`
 }
 
-// Roles project the frozen owners' declarations; they never create grants.
 type ApplicationRole struct {
 	Resource    AssetBinding `json:"resource"`
 	Role        string       `json:"role"`
@@ -639,8 +568,6 @@ type ApplicationRole struct {
 	WriteFields []string     `json:"writeFields,omitempty"`
 }
 
-// A connection's local address, credentials and readiness stay outside the
-// artifact; it declares only the owner identity and required connection kind.
 type ApplicationBinding struct {
 	Ref        AssetRef `json:"ref"`
 	Kind       string   `json:"kind"`
@@ -845,17 +772,12 @@ func checkApplicationProfileClosure(root AssetRef, assets []ReleaseAsset) error 
 	return nil
 }
 
-// AppConcept is a builder-named business concept in the application studio.
-// Its stable ID survives renames; its assets retain their original identity.
 type AppConcept struct {
 	ID     string     `json:"id"`
 	Title  string     `json:"title"`
 	Assets []AssetRef `json:"assets"`
 }
 
-// CheckConcepts validates navigation metadata, independently of compilation.
-// A historical group can still name a removed member: only current application
-// members are drawn, so removing membership never requires rewriting old groups.
 func (a Application) CheckConcepts() error {
 	if len(a.Concepts) > 100 {
 		return fmt.Errorf("application concepts exceed 100 groups")
@@ -887,8 +809,6 @@ func (a Application) CheckConcepts() error {
 	return nil
 }
 
-// CheckFilterSchema reads the original field descriptors, including the member
-// projection used by discovery. It introduces no alternative query language.
 func CheckFilterSchema(source PageResourceSource, object EntityInfo) error {
 	if source.Object == nil || source.Object.Name != object.Type || source.Object.App != object.App {
 		return fmt.Errorf("filter object is unavailable")
@@ -917,8 +837,6 @@ type ApplicationHeaderItem struct {
 	Action string   `json:"action,omitempty"`
 }
 
-// CheckHeader checks source bounds and declared navigation references. Layout
-// and appearance belong to the shared Web authoring/runtime validator.
 func (a Application) CheckHeader() error {
 	h := a.Header
 	if h == nil {
@@ -1003,8 +921,6 @@ func (a Application) CheckVariables() error {
 	return d.CheckVariables()
 }
 
-// Shared bindings are typed requirements on the application which holds the
-// page. They introduce no reverse membership edge or permission grant.
 func (a Application) CheckPageVariables(p Page) error {
 	safe, err := p.Safety()
 	if err != nil {
@@ -1043,8 +959,6 @@ func (a Application) CheckPageVariables(p Page) error {
 	return nil
 }
 
-// QueryPage adapts application declarations to the shared schema checker; no
-// page state, navigation or layout is created for execution.
 func (a Application) QueryPage() Page {
 	return Page{Format: 3, InputSchema: PageInputSchema{profile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}}
 }
@@ -1057,8 +971,6 @@ func (a Application) hasResources() bool {
 	return false
 }
 
-// Binding is a typed data reference, never executable source text. Control
-// edges determine scheduling; bindings only read values already in scope.
 type Binding struct {
 	Source string          `json:"source" enum:"literal,input,subject,step,item,index,answer"`
 	Step   string          `json:"step,omitempty"`
@@ -1096,8 +1008,6 @@ func (b Binding) Check() error {
 	return nil
 }
 
-// Resolve reads the current token's durable frame. The definition owner must
-// supply a permission-filtered subject projection, not a private record.
 func (b Binding) Resolve(r *Run, subject json.RawMessage) (json.RawMessage, error) {
 	if err := b.Check(); err != nil {
 		return nil, err
@@ -1140,8 +1050,6 @@ func (b Binding) Resolve(r *Run, subject json.RawMessage) (json.RawMessage, erro
 	return slices.Clone(raw), nil
 }
 
-// Predicate keeps conditional meaning in structured definitions. Numeric
-// comparison uses exact JSON decimals and never JavaScript coercion.
 type Predicate struct {
 	Op    string      `json:"op" enum:"eq,neq,gt,gte,lt,lte,contains,exists,all,any,not"`
 	Left  *Binding    `json:"left,omitempty"`
@@ -1298,8 +1206,6 @@ func jsonEqual(a, b any) bool {
 	return bytes.Equal(x, y)
 }
 
-// Exact decimal comparison has an explicit arithmetic budget. In particular,
-// a short JSON string such as 1e99999999 must not allocate an enormous Rat.
 func boundedPredicateValue(v any) error {
 	switch value := v.(type) {
 	case json.Number:
@@ -1333,8 +1239,6 @@ func boundedPredicateValue(v any) error {
 	return nil
 }
 
-// CapabilityDescriptor is a projection of an existing owner declaration for
-// Logic Studio and tools, never a second registry or an execution definition.
 type CapabilityDescriptor struct {
 	Ref         AssetRef     `json:"ref"`
 	Kind        string       `json:"kind"`
@@ -1351,11 +1255,9 @@ type CapabilityDescriptor struct {
 	Input       *ValueSchema `json:"input,omitempty"`
 	Output      *ValueSchema `json:"output,omitempty"`
 	Config      *ValueSchema `json:"config,omitempty"`
-	// Parameters retains the owner's original fields when an opaque JSON
-	// payload has no structural schema. It must not be advertised as text.
-	Parameters []Field     `json:"parameters,omitempty"`
-	Effects    []string    `json:"effects"`
-	Ports      []BlockPort `json:"ports"`
+	Parameters  []Field      `json:"parameters,omitempty"`
+	Effects     []string     `json:"effects"`
+	Ports       []BlockPort  `json:"ports"`
 }
 
 type BlockPort struct {
@@ -1366,8 +1268,6 @@ type BlockPort struct {
 	Type      string `json:"type"`
 }
 
-// ControlBlocks describes the built-in Flow grammar to authoring clients. The
-// flow compiler remains the owner of each kind's config and execution rules.
 func ControlBlocks() []CapabilityDescriptor {
 	kinds := []struct{ name, title, description, group, icon, tone string }{
 		{"payload", "Input", "Start with the workflow's typed input.", "Flow", "log-in", "neutral"},
@@ -1406,8 +1306,6 @@ func ControlBlocks() []CapabilityDescriptor {
 	return out
 }
 
-// ProposalPolicy places a typed function's answer in the original review path.
-// A nil policy remains read-only advice. It never grants a business action.
 type ProposalPolicy struct {
 	HandoffRole         string  `json:"handoffRole,omitempty"`
 	ConfidenceField     string  `json:"confidenceField,omitempty"`
@@ -1431,8 +1329,6 @@ func (p ProposalPolicy) Check(output []Field) error {
 	return nil
 }
 
-// ProposalAdoption consumes a retained call record. This is not a function
-// invocation: the immutable contract and version travel with that record.
 type ProposalAdoption struct {
 	Function FunctionRef     `json:"function"`
 	Input    string          `json:"input"`
@@ -1457,7 +1353,6 @@ func (p ProposalAdoption) Check() error {
 	return nil
 }
 
-// A trial may produce proposals, but cannot execute their adoption.
 type SimulationRuntime interface{ Simulating() bool }
 
 func (c Caller) Simulating() bool { r, ok := c.rt.(SimulationRuntime); return ok && r.Simulating() }

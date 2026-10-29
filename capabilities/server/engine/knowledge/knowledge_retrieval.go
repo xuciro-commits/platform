@@ -39,40 +39,30 @@ type Context struct {
 
 type chunk struct {
 	doc, title, text, hash string
-	scope                  string // owning record; empty for a knowledge document
+	scope                  string
 	n                      int
 	apps                   []string
 	terms                  map[string]int
 	length                 int
-	gone                   bool // cut again or removed: the postings still hold it
+	gone                   bool
 }
 
-// index is the passages cut from the tenant's documents and knowledge fields.
 type Index struct {
 	mu             sync.Mutex
-	vectorMu       sync.Mutex // serialize derived source updates across search and embedding work
+	vectorMu       sync.Mutex
 	vectorModel    string
 	embeddingError string
 	vectorDirty    map[string]bool
-	docs           map[string]string   // source key → the revision indexed
-	chunks         map[string][]*chunk // by source key
-	texts          map[string]string   // attached text files by content hash
-	// walked says the tenant was read once in full; after that the index
-	// follows the records the store marks dirty (#130), so a
-	// search costs nothing when nothing changed.
-	walked bool
-	// postings are the chunks each word appears in, with the corpus totals BM25
-	// needs: a search scores the passages holding a word of the question, not
-	// every passage of the tenant. stale counts the chunks left
-	// in the postings after being cut again; the postings are rebuilt when they
-	// are half of them.
-	postings map[string][]*chunk
-	total    int
-	length   int
-	stale    int
+	docs           map[string]string
+	chunks         map[string][]*chunk
+	texts          map[string]string
+	walked         bool
+	postings       map[string][]*chunk
+	total          int
+	length         int
+	stale          int
 }
 
-// keep puts a source's chunks in the postings, and forgets what was there.
 func (k *Index) keep(key string, cs []*chunk) {
 	if k.vectorDirty == nil {
 		k.vectorDirty = map[string]bool{}
@@ -101,7 +91,6 @@ func (k *Index) keep(key string, cs []*chunk) {
 	}
 }
 
-// rebuild drops the chunks cut again from the postings.
 func (k *Index) rebuild() {
 	k.postings, k.stale = map[string][]*chunk{}, 0
 	for _, cs := range k.chunks {
@@ -113,18 +102,12 @@ func (k *Index) rebuild() {
 	}
 }
 
-// source is one text to index: a document, or an app's knowledge field.
-// revision fingerprints the text, so a change the record's revision does not
-// count — an app's automation writing a record — is still re-cut (#130).
 type Source struct {
 	Key, Title, Text, Revision string
 	Scope                      string
 	Apps                       []string
 }
 
-// recordSources are the knowledge fields of one record. A restricted field is
-// not indexed; the record itself is the passage's scope, so the
-// reader's authority over it is checked again at every search (#130).
 func RecordSources(info platform.EntityInfo, v reflect.Value) []Source {
 	var out []Source
 	rec := v.FieldByName("Record").Interface().(platform.Record)
@@ -141,19 +124,15 @@ func RecordSources(info platform.EntityInfo, v reflect.Value) []Source {
 	return out
 }
 
-// fingerprint is what a source's text and title amount to: the index cuts it
-// again when this changes.
 func fingerprint(title, text string) string {
 	sum := sha256.Sum256([]byte(title + "\x00" + text))
 	return hex.EncodeToString(sum[:12])
 }
 
-// documentSource is a knowledge document as one source.
 func DocumentSource(d platform.KnowledgeDocument) Source {
 	return Source{Key: platform.KnowledgeDocumentType + "/" + d.ID, Title: d.Title, Text: d.Text, Revision: fingerprint(d.Title, d.Text) + "/" + strings.Join(d.Apps, ","), Apps: d.Apps}
 }
 
-// cut is a source's passages as chunks, with the words each one holds.
 func cut(s Source) []*chunk {
 	var out []*chunk
 	for i, text := range passages(s.Text) {
@@ -168,9 +147,6 @@ func cut(s Source) []*chunk {
 	return out
 }
 
-// passages cuts a text at its headings, then into pieces of about 800 tokens
-// on paragraph boundaries; each piece after the first repeats the paragraph
-// before it, and carries its section's heading.
 func passages(text string) []string {
 	var out []string
 	var sections [][]string
@@ -215,7 +191,6 @@ func passages(text string) []string {
 	return out
 }
 
-// readable says whether reader (or, for none, the agent's app) may read a passage.
 func readable(c *chunk, reader *platform.Member, app string) bool {
 	return AppsReadable(c.apps, reader, app)
 }
@@ -258,10 +233,6 @@ func cosine(a, b []float32) float64 {
 	return dot / math.Sqrt(na*nb)
 }
 
-// Knowledge finds the passages reader may read (for no reader: those of app,
-// an agent's app) that answer q: by words (BM25) and, with an embedding model,
-// by meaning, the two fused by rank. It calls the embedding model for q, so it
-// runs outside the tenant's lock.
 func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limit int, now time.Time) []platform.Passage {
 	out := []platform.Passage{}
 	if strings.TrimSpace(q) == "" || reader != nil && reader.Tenant != ctx.Tenant {
@@ -274,9 +245,6 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 		model = ""
 	}
 	k.mu.Lock()
-	// The passages holding a word of the question, and the corpus totals BM25
-	// needs; with an embedding model every passage is a candidate, because
-	// meaning does not need a shared word.
 	df, total, avg := map[string]int{}, k.total, 1.0
 	if k.total > 0 {
 		avg = float64(k.length) / float64(k.total)
@@ -355,10 +323,9 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 			return strings.Compare(a.doc+fmt.Sprint(a.n), b.doc+fmt.Sprint(b.n))
 		})
 		for i, c := range list {
-			ranks[c] += 1 / float64(60+i+1) // reciprocal rank fusion
+			ranks[c] += 1 / float64(60+i+1)
 		}
 	}
-	// BM25 over the candidates, with the whole index's document frequencies.
 	bm := map[*chunk]float64{}
 	for _, w := range asked {
 		if df[w] == 0 {
@@ -377,8 +344,6 @@ func (k *Index) Search(ctx Context, reader *platform.Member, app, q string, limi
 		if databaseSearch {
 			cos = k.Nearest(ctx, ctx.Space(model), query, reader, app, limit, now)
 		} else {
-			// The lightweight file/memory profile retains its bounded local
-			// store; PostgreSQL search never enters this corpus-vector path.
 			hashes := make([]string, len(all))
 			for i, c := range all {
 				hashes[i] = c.hash

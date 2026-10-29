@@ -14,21 +14,8 @@ import (
 	"sync"
 )
 
-// The per-call result channel (plan A; ordered 2026-10-05).
-//
-// An operation's inline profile is bounded (48 KiB today). Plan A adds a
-// call-specific channel for results above that bound: the host allocates a
-// sealed artifact for one call, writes the bytes itself, checks size, schema
-// and digest, and the accepted result references the handle rather than
-// carrying the bytes. A worker never receives a write handle, cannot enumerate
-// the store and cannot pick a path — it hands its bytes back through the same
-// call, and the host seals them. A staged result that is never accepted is
-// reclaimed by the host's own artifact owner.
-
-// MaxInlineOutputBytes is the inline result budget operations keep by default.
 const MaxInlineOutputBytes = 48 << 10
 
-// MaxStagedOutputBytes bounds one call's channel.
 const MaxStagedOutputBytes = 16 << 20
 
 const MaxOperationInputBytes = 64 << 20
@@ -87,8 +74,6 @@ func (c *Channel) DiscardInput(ref platform.OperationInputArtifact) {
 	}
 }
 
-// stagedKey is the call-scoped key: the tenant, the call and the schema name it
-// claims, so two calls can never address each other's bytes.
 func stagedKey(tenant, call, schema string) string {
 	safe := func(s string) string {
 		return strings.Map(func(r rune) rune {
@@ -102,9 +87,6 @@ func stagedKey(tenant, call, schema string) string {
 	return "calls/" + safe(tenant) + "/" + safe(call) + "/" + safe(schema) + ".json"
 }
 
-// Channel is the component that owns the channel: the sealed handles by
-// call, under its own lock, in the tenant's file store. It needs nothing else
-// of the tenant than its id and its files.
 type Channel struct {
 	tenant  string
 	files   func() platform.FileStore
@@ -112,7 +94,6 @@ type Channel struct {
 	handles map[string]platform.StagedResult
 }
 
-// snapshot and restore are what the tenant snapshot carries for the channel.
 func (c *Channel) Snapshot() map[string]platform.StagedResult {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -125,9 +106,6 @@ func (c *Channel) Restore(handles map[string]platform.StagedResult) {
 	c.handles = handles
 }
 
-// Stage writes one call's result bytes into the channel and answers the
-// handle the accepted result references. Size and schema are checked before
-// anything is sealed; the digest proves the bytes afterwards.
 func (c *Channel) Stage(callID, schema string, raw []byte, budget int) (platform.StagedResult, error) {
 	handle := platform.StagedResult{Tenant: c.tenant, Call: callID, Schema: schema, Key: stagedKey(c.tenant, callID, schema), Size: len(raw)}
 	if callID == "" || schema == "" || len(raw) == 0 {
@@ -159,8 +137,6 @@ func (c *Channel) Stage(callID, schema string, raw []byte, budget int) (platform
 	return handle, nil
 }
 
-// Read reads a handle back and verifies its digest, so a result is exactly
-// what the call sealed.
 func (c *Channel) Read(handle platform.StagedResult) ([]byte, error) {
 	if handle.Tenant != c.tenant || handle.Call == "" || handle.Schema == "" || handle.Key != stagedKey(c.tenant, handle.Call, handle.Schema) || handle.Size < 1 || handle.Size > MaxStagedOutputBytes {
 		return nil, fmt.Errorf("staged result does not belong to this call channel")
@@ -187,10 +163,6 @@ func (c *Channel) Read(handle platform.StagedResult) ([]byte, error) {
 	return raw, nil
 }
 
-// output accepts an operation's result under the operation's declared
-// budgets: inline while it fits, staged through the call channel when the
-// operation declares one, and refused — never trimmed — otherwise. The answer
-// carries a small reference when the bytes were staged.
 func (c *Channel) Output(op platform.Operation, callID string, raw []byte) (json.RawMessage, *platform.StagedResult, error) {
 	if len(raw) <= op.Limits.MaxOutputBytes && len(raw) <= MaxInlineOutputBytes {
 		if err := op.Output.Validate(raw, op.Limits.MaxOutputBytes); err != nil {

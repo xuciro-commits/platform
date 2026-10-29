@@ -22,7 +22,6 @@ function inMainPage(document:PageUI.PageDocument,id:string,wholeLoop=false):bool
  return false;
 }
 
-/** Capture original draft bytes, never runtime records or an alternate page format. */
 export function copyLayoutIssue<S extends Section>(draft:Draft<S>,root:string):ClipboardIssue|undefined {
  const document=draft.document,seen=new Set<string>();
  const walk=(id:string):boolean=>{
@@ -32,7 +31,6 @@ export function copyLayoutIssue<S extends Section>(draft:Draft<S>,root:string):C
  if(!document.nodes[root]||!layoutKinds.includes(document.nodes[root]!.kind)&&document.nodes[root]!.kind!=="widget")return "unsupported";
  if(document.nodes[root]!.slot)return "scope";
  if(!walk(root))return "unsupported";
- // A complete Loop brings its owner. Fragments cannot lift item state to page.
  const overlay=Object.entries(document.overlays??{}).find(([,o])=>o.root===root)?.[0];
  if(!overlay&&!inMainPage(document,root,true))return "scope";
  const ownedSections=new Set<string>();
@@ -44,8 +42,6 @@ export function copyLayout<S extends Section>(draft:Draft<S>,root:string,object:
  return {value:{draft:structuredClone(draft),root,object,overlay}};
 }
 
-/** One atomic edit: copy the owned graph, preserve explicit external bindings,
- * and reject stale external declarations before changing the current draft. */
 export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipboard<S>,target:string,object:string,limits:Limits,options?:{entry:S;title:string}):Result<{draft:Draft<S>;root:string;shared:string[]}> {
  if(object!==clip.object)return {issue:"scope"};
  if(!layoutKinds.includes(current.document.nodes[target]?.kind??"")||!inMainPage(current.document,target))return {issue:"scope"};
@@ -65,7 +61,6 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.source?.compute)addVariable(v.source.compute.recordVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count","aggregate","statistics"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
  for(const id of nodes)for(const key of nodeFields){const value=original.nodes[id]?.[key];if(value)addVariable(value);}
  for(const id of loops){const loop=original.nodes[id]!.loop!;addVariable(loop.collection);addVariable(loop.itemVariable);}
- // Owned declarations remain owned even if their consumer is dormant.
  const ownedScope=(v:Api.PageVariable)=>v.scope==="loop-item"&&loops.has(v.owner??"")||!!overlay&&v.scope==="overlay"&&v.owner===clip.overlay;
  for(const [id,v] of Object.entries(original.variables??{}))if(ownedScope(v))addVariable(id);
  for(const [id,q] of Object.entries(original.queries??{}))if(loops.has(q.itemOwner??"")||overlay&&q.owner===clip.overlay)addQuery(id);
@@ -80,8 +75,6 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  if(missing.value)return {issue:"invalid"};
  const externalPorts=new Set([...Object.values(original.interface?.inputs??{}),...Object.values(original.interface?.outputs??{})].map(p=>p.variable));
  const overlayOpen=new Set(Object.values(original.overlays??{}).map(o=>o.openVariable));
- // Tab values name layout nodes. A selector exposed outside this subtree
- // cannot keep naming the old identities while selecting the new children.
  const tabSelectors=new Map<string,Set<string>>();
  for(const id of nodes){const node=original.nodes[id]!;if(node.kind!=="tabs")continue;
   const variable=node.activeVariable,v=original.variables?.[variable??""];
@@ -112,7 +105,6 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const shared:string[]=[];
  for(const id of variables)if(!clonedVariables.has(id)){if(!same(original.variables?.[id],document.variables?.[id]))return {issue:"dependencies"};shared.push(id);}
  for(const id of queries)if(!clonedQueries.has(id)&&!same(original.queries?.[id],document.queries?.[id]))return {issue:"dependencies"};
- // Resource outputs supplied by widgets outside the subtree keep those producers.
  for(const id of variables){const producer=original.variables![id]!.source?.section;if(producer&&!sectionIDs.has(producer)&&!same(clip.draft.sections.find(s=>s.id===producer),current.sections.find(s=>s.id===producer)))return {issue:"dependencies"};}
  const used=new Set([...Object.keys(document.nodes),...Object.keys(document.overlays??{}),...current.sections.map(s=>s.id!),...Object.keys(document.variables??{}),...Object.keys(document.queries??{}),...current.selections.map(s=>s.name)]);
  const newID=(prefix:string)=>{let id:string;do{id=prefix+crypto.randomUUID();}while(used.has(id));used.add(id);return id;};

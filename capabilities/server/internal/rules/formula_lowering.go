@@ -9,7 +9,7 @@ import (
 )
 
 type formulaNode struct {
-	op          byte // 'n' number, 'f' field, or + - * / ~ (negate)
+	op          byte
 	value       string
 	field       string
 	left, right *formulaNode
@@ -141,7 +141,6 @@ func (n *formulaNode) Fields(into map[string]bool) {
 	n.right.Fields(into)
 }
 
-// Expr lowers the old arithmetic grammar; there is no second evaluator.
 func (n *formulaNode) Expr(fields map[string]string) (Expr, error) {
 	switch n.op {
 	case 'n':
@@ -171,8 +170,6 @@ func (n *formulaNode) Expr(fields map[string]string) (Expr, error) {
 	return Expr{Op: op, Kind: "decimal", Args: args}, nil
 }
 
-// LowerFormula lowers retained arithmetic syntax to the same typed Expr used
-// by the host and browser. It does not capture facts or evaluate live state.
 func LowerFormula(text string, fields map[string]string) (Expr, error) {
 	node, err := parseFormula(text)
 	if err != nil {
@@ -181,7 +178,6 @@ func LowerFormula(text string, fields map[string]string) (Expr, error) {
 	return node.Expr(fields)
 }
 
-// FormulaFields returns the declared operands without assigning them values.
 func FormulaFields(text string) (map[string]bool, error) {
 	node, err := parseFormula(text)
 	if err != nil {

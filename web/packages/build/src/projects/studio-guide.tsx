@@ -6,8 +6,6 @@ import type { OwnedResource } from "./resource-inventory";
 import { refKey, resourceKinds, resourceRoute, type ResourceKindInfo } from "./resources";
 import { studioRoute } from "./studio-model";
 
-/** Optional guidance opens the original forms, editor drafts and release gate.
- * It has no generated definition format, progress store or publication path. */
 export function StudioGuide({ project, owned, disabled, intent, onIntent, onCreated }: {
   project: Project; owned: OwnedResource[]; disabled: boolean; intent: string;
   onIntent: (value: string) => void;

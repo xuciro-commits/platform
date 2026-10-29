@@ -22,17 +22,11 @@ const idOf = (d: WorkspaceDefinition) => `${d.ref.app}:${d.ref.name}`;
 
 export function ApplicationSessionsProvider({ children }: { children: ReactNode }) {
   const { me } = useHost();
-  // The hub belongs to the member, not to the definition set: publishing an
-  // unrelated application must not destroy live application sessions.
   const hub = useMemo(() => new ApplicationSessionHub(), [me?.tenantId, me?.principalId]);
   useEffect(()=>()=>hub.clear(),[hub]);
   return <Hub.Provider value={hub}>{children}</Hub.Provider>;
 }
 
-/** Application identity is explicit for reused pages. The shell retains only
- * the opaque instance ID; this provider owns attachment and teardown. */
-/** True inside an authoring preview route: pages render and read, but the
- * route itself is the write boundary - no holder lookup participates. */
 export const AuthoringPreview = createContext(false);
 
 export function ApplicationPage({ pageRef, route, applicationRef, preview: requestedPreview = false, children }: { pageRef: Api.AssetRef; route: Route; applicationRef?: Api.AssetRef; preview?: boolean; children: ReactNode }) {
@@ -41,16 +35,12 @@ export function ApplicationPage({ pageRef, route, applicationRef, preview: reque
   const appearance=useTheme();
   const [localPreview] = useState(() => `preview:${crypto.randomUUID()}`);
   const holders = definitions.filter((d) => d.application && d.ref.app === pageRef.app && d.application.pages.includes(pageRef.name));
-  // Studio's application parameter identifies its construction record. An
-  // embedded preview names the delivered application explicitly instead.
   const requested = preview ? route.params?.previewApplication ?? (applicationRef ? `${applicationRef.app}:${applicationRef.name}` : route.params?.application) : route.params?.application;
   const id = requested ?? (holders.length === 1 ? idOf(holders[0]!) : "");
   const definition = holders.find((d) => idOf(d) === id);
   const instance = preview ? route.params?.previewInstance ?? (applicationRef ? undefined : route.params?.instance) ?? localPreview : route.params?.instance ?? "main";
   const sessionParams = (application: string, instance: string): Record<string, string> => preview ? { ...(route.params?.application ? { application: route.params.application } : {}), previewApplication: application, previewInstance: instance } : { application, instance };
   const identity = JSON.stringify([source.scope, definition?.ref, definition?.version, definition?.application, instance, preview]);
-  // The hub keeps live identities stable and replaces retired handles, even
-  // when the same route reopens before this provider has unmounted.
   const session = definition && hub && /^[A-Za-z0-9._:-]{1,80}$/.test(instance) ? hub.get(identity, definition.application?.variables ?? {},{source,queries:definition.application?.queries??{}}) : undefined;
   const [owner] = useState(() => Symbol());
   const routeKey = JSON.stringify(route);

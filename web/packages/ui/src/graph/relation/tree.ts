@@ -1,9 +1,3 @@
-// The hierarchy a relation drawing is arranged by, and the tidy tree that
-// arranges it. An organisation chart, a site breakdown or a lineage is a tree
-// far more often than a general graph, and a tree drawn as one — parents
-// centred over their children, siblings packed against each other's contours,
-// leaves stacked along a trunk — reads at a glance where a layered graph engine
-// spreads it into a wall of columns.
 import type { CanvasBox, CanvasPosition } from "../core/types";
 
 export type TreeDirection = "down" | "up" | "right" | "left";
@@ -13,15 +7,10 @@ export type Hierarchy = {
   parent: Map<string, string>;
   children: Map<string, string[]>;
   roots: string[];
-  /** The links the tree is made of, by index in the list given. */
   links: Set<number>;
-  /** The drawing is a tree: the owner declared a hierarchy, or every node has one parent at most. */
   tree: boolean;
 };
 
-/** When the owner declares a hierarchy, only its links count and each says
- * which end is the parent; otherwise every link reads source → target. A node
- * keeps its first parent, and a link that would close a cycle is left out. */
 export function relationHierarchy(ids: readonly string[], links: readonly HierarchyLink[]): Hierarchy {
   const order = new Map(ids.map((id, i) => [id, i]));
   const declared = links.some((l) => l.parent);
@@ -44,9 +33,6 @@ export function relationHierarchy(ids: readonly string[], links: readonly Hierar
   return { parent, children, roots: ids.filter((id) => !parent.has(id)), links: used, tree: declared || tree };
 }
 
-/** A leaf that shares its parent with others hangs off the parent's trunk
- * rather than taking a column of its own — only in a vertical drawing, where
- * columns are what make a tree wide. */
 export function stackedLeaf(h: Hierarchy, id: string): boolean {
   const p = h.parent.get(id);
   return p !== undefined && !h.children.has(id) && (h.children.get(p)?.length ?? 0) > 1;
@@ -56,11 +42,8 @@ export type TreeSpacing = { sibling: number; layer: number; trunk: number; stack
 const verticalSpacing: TreeSpacing = { sibling: 24, layer: 56, trunk: 40, stackTop: 20, stack: 12, forest: 64 };
 const horizontalSpacing: TreeSpacing = { sibling: 16, layer: 72, trunk: 24, stackTop: 0, stack: 0, forest: 40 };
 
-// Canonical frame: breadth along x, depth along y, root at the top. Each
-// direction is this frame turned; the tree itself is computed once.
 type Box = { id: string; x: number; y: number; w: number; h: number };
 
-/** How far `next` must move right to clear every box of `placed` it shares a band of depth with. */
 function clearance(placed: readonly Box[], next: readonly Box[], gap: number): number {
   let shift = -Infinity;
   for (const a of placed) for (const b of next)
@@ -74,7 +57,6 @@ export function tidyTree(h: Hierarchy, box: (id: string) => CanvasBox, direction
   const size = (id: string) => { const b = box(id); return vertical ? { w: b.width, h: b.height } : { w: b.height, h: b.width }; };
   const kids = (id: string) => h.children.get(id) ?? [];
 
-  // Every subtree is drawn with its root centred on x = 0.
   const place = (id: string, y: number): Box[] => {
     const { w, h: height } = size(id);
     const out: Box[] = [{ id, x: -w / 2, y, w, h: height }];
@@ -93,7 +75,6 @@ export function tidyTree(h: Hierarchy, box: (id: string) => CanvasBox, direction
     const subs = rest.map((c) => place(c, 0));
     const extent = (boxes: readonly Box[]) => ({ w: Math.max(...boxes.map((b) => b.x + b.w)) - Math.min(...boxes.map((b) => b.x)), h: Math.max(...boxes.map((b) => b.y + b.h)) - Math.min(...boxes.map((b) => b.y)) });
     const shifted = (sub: readonly Box[], dx: number, dy: number) => sub.map((b) => ({ ...b, x: b.x + dx, y: b.y + dy }));
-    // One row, the parent centred over it: the classic chart.
     const single = (): Box[] => {
       const row: Box[] = [], centres: number[] = [];
       for (const raw of subs) {
@@ -106,8 +87,6 @@ export function tidyTree(h: Hierarchy, box: (id: string) => CanvasBox, direction
       const mid = (centres[0]! + centres.at(-1)!) / 2;
       return row.map((b) => ({ ...b, x: b.x - mid }));
     };
-    // Rows of k either side of the parent's trunk, which runs down between them,
-    // so a wide family folds into a block instead of a strip.
     const wrapped = (k: number): Box[] => {
       const all: Box[] = [];
       let top = bottom + spacing.layer;
@@ -131,7 +110,6 @@ export function tidyTree(h: Hierarchy, box: (id: string) => CanvasBox, direction
       }
       return all;
     };
-    // The arrangement whose block comes nearest the screen's proportions wins.
     const target = vertical ? 1.6 : 1 / 1.6;
     const score = (boxes: readonly Box[]) => { const e = extent([...out, ...boxes]); const r = e.w / Math.max(1, e.h); return Math.max(r / target, target / r); };
     let best = single(), bestScore = score(best);
@@ -150,7 +128,6 @@ export function tidyTree(h: Hierarchy, box: (id: string) => CanvasBox, direction
     const shift = forest.length ? Math.max(...forest.map((b) => b.x + b.w)) + spacing.forest - Math.min(...sub.map((b) => b.x)) : 0;
     for (const b of sub) forest.push({ ...b, x: b.x + shift });
   }
-  // Things that belong to nothing in this drawing gather in a block of their own beside the trees.
   if (singles.length) {
     const cols = Math.max(1, Math.ceil(Math.sqrt(singles.length)));
     const cellW = Math.max(...singles.map((s) => size(s).w)) + spacing.sibling, cellH = Math.max(...singles.map((s) => size(s).h)) + Math.max(spacing.sibling, spacing.stack + 12);

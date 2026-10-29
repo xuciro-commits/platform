@@ -13,16 +13,11 @@ import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
 import { useAuthoringModel } from "./authoring-model";
 
-// Pipelines: a dataset in, declared steps in order, expectations on
-// the result, and a dataset or an object out. The host runs a published
-// pipeline when its input gains a version, on a period, or on request; rows
-// that fail an expectation are quarantined on the run, never written.
 type Measure = { fn: string; column?: string; to: string };
 type Step = { kind: string; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
 type Expectation = { column: string; rule: string; value?: string };
 type Run = { merged?: number; at: string; inputVersion: number; rows: number; written: number; quarantined: number; failed: number; error?: string; outputVersion?: number;
   quarantine?: { reason: string; row: Record<string, unknown> }[]; failures?: { id: string; outcome: string }[] };
-// rows land in the enterprise model as elements owned on the source system's behalf.
 type EnterpriseTarget = { source: string; stereotype: string; id: string; name: string; shortName?: string; kind?: string; parent?: string; root?: string; in?: string; relation?: string; at?: string; atKind?: string; from?: string; until?: string; properties?: string[] };
 const STEREOTYPES = ["ActualOrganization", "ActualPost", "ActualPerson", "ActualLocation", "ActualResource", "ActualProject"];
 const AT_KINDS = ["ResponsibleFor", "FillsPost", "ActualOrganizationRole", "IsCapableToPerform"];
@@ -36,9 +31,6 @@ const TYPES = ["string", "number", "boolean", "date"];
 const FNS = ["sum", "min", "max", "count", "avg"];
 const RULES = ["notnull", "unique", "in", "matches", "range"];
 const fieldClass = "grid min-w-0 gap-1 text-xs";
-/** The pipeline's rows, as one typed data port: a step takes exactly one input and
- * feeds exactly one next step, so the canvas itself refuses a fork the runner could
- * never execute. */
 const rows = (label: string, limit = 1) => ({ id: "rows", label, type: "rows", limit, channel: "data" as const });
 const stepCatalog = (): FlowCatalog => [
   ...KINDS.map((kind) => ({ id: kind, title: t(kind), description: kindHelp(kind), class: "transform" as const,
@@ -47,8 +39,6 @@ const stepCatalog = (): FlowCatalog => [
   { id: "output", title: t("Output"), class: "document" as const, addable: false, notation: "event-end", inputs: [rows(t("Rows in"))], outputs: [] },
 ];
 
-/** What a step does, in the one line the canvas has for it; its fields stay in the
- * inspector. */
 function stepDetail(s: Step, datasets: DatasetRow[]): string {
   const other = datasets.find((d) => d.id === s.dataset)?.title ?? s.dataset ?? "";
   switch (s.kind) {
@@ -82,8 +72,6 @@ export function PipelineEditor({ id }: { id: string }) {
   const { client , holds} = useHost(), { open } = useApplicationWorkspace();
   const { entities, drafts: objects } = useAuthoringModel();
   const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
-  // The enterprise model's own kinds and elements, so a pipeline writing into
-  // it chooses them rather than spelling their ids.
   const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
   const { draft, structured, query, dirty, busy, error, inputs, patch, perform, save, review, discardChanges, transition } = useDefinitionDraft<Draft>({
     id, type: "build.pipeline", kind: "pipeline", view: "pipeline", empty, normalize: record => ({ ...record, steps: record.steps ?? [], expectations: record.expectations ?? [] }),
@@ -117,8 +105,6 @@ export function PipelineEditor({ id }: { id: string }) {
   const column = (label: string, field: "id" | "name" | "shortName" | "kind" | "parent" | "at" | "from" | "until", placeholder: string, help?: string) =>
     <label className={fieldClass}>{label}<Input value={ent[field] ?? ""} placeholder={placeholder} list="pipeline-columns" onChange={(e) => patchEnterprise({ [field]: e.target.value })} />{help && <span className="text-xs text-muted">{help}</span>}</label>;
   const target = entities.find((entity) => entity.type === draft.outputObject);
-  // The sequence is the truth and the canvas reads it: positions follow the order,
-  // so nothing about a drawing has to be stored beside the steps.
   const others = datasets.filter((d) => d.id !== draft.input);
   const stepNodes: FlowNode[] = [
     { id: "in", kind: "dataset", label: input?.title || draft.input || t("Input dataset"), detail: t("The dataset this pipeline reads"), position: { x: 0, y: 0 } },

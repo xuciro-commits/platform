@@ -1,6 +1,5 @@
 import type {Api} from "@platform/kernel";
 
-// Presentation of existing sugar; evaluation belongs to @platform/app/rules.
 export function formulaText(e:Api.Expr):string{
  if(e.ref)return e.ref;
  if(e.lit)return String(e.lit.value);

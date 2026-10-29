@@ -8,10 +8,6 @@ import (
 	"platformserver/platform"
 )
 
-// noticeBoard is the component that owns the tenant's notifications: numbered
-// in order ("n-<seq>"), the latest NoticesKept kept, read marks per member.
-// Its own lock: reads run inside other apps' submissions and the host console
-// marks keys read from outside any decision.
 const NoticesKept = 2000
 
 type NoticeBoard struct {
@@ -20,8 +16,6 @@ type NoticeBoard struct {
 	seq int
 }
 
-// state is the board as it stands, for snapshots, staged decisions and the
-// accepted-notices predecessor check.
 func (b *NoticeBoard) State() ([]platform.Notification, int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -34,8 +28,6 @@ func (b *NoticeBoard) Restore(all []platform.Notification, seq int) {
 	b.all, b.seq = all, seq
 }
 
-// post numbers and keeps one notice for member unless one with the same key
-// from the same app is already there; it answers the kept notice.
 func (b *NoticeBoard) Post(n platform.Notification, member string) (platform.Notification, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -51,7 +43,6 @@ func (b *NoticeBoard) Post(n platform.Notification, member string) (platform.Not
 	return n, true
 }
 
-// forMember is member's notices, newest first.
 func (b *NoticeBoard) ForMember(member string) []platform.Notification {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -64,7 +55,6 @@ func (b *NoticeBoard) ForMember(member string) []platform.Notification {
 	return out
 }
 
-// owner is who a notice belongs to; "" when there is no such notice.
 func (b *NoticeBoard) Owner(id string) (string, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -75,7 +65,6 @@ func (b *NoticeBoard) Owner(id string) (string, bool) {
 	return b.all[i].Member, true
 }
 
-// markRead marks the notice id read, if it is still kept.
 func (b *NoticeBoard) MarkRead(id string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -84,7 +73,6 @@ func (b *NoticeBoard) MarkRead(id string) {
 	}
 }
 
-// markKeysRead marks an app's keyed notices read (the app settled what they announced).
 func (b *NoticeBoard) MarkKeysRead(app string, keys []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

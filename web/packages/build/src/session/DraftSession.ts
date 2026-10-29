@@ -4,7 +4,6 @@ import {useInputBuffers,useInputDrafts} from "@platform/ui";
 export {DraftInputs,useDraftInput} from "@platform/ui";
 import {reduceDraft,type DraftEdit} from "./draft-history";
 
-/** Per-editor document history; UI selection and runtime records stay outside. */
 export function useDraftSession<T, C = never>(initial: T, scope?: string) {
   const inherited=useInputDrafts(),own=useInputBuffers(),buffers=inherited??own;
   const [state,dispatch]=useReducer(reduceDraft<T,typeof buffers.values>,{draft:initial,saved:JSON.stringify(initial),past:[],future:[]});

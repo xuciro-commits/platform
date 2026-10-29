@@ -14,7 +14,6 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 FORMAT = 'platform.local.v1'
 
-
 def read_env(path):
     values = {}
     for line in Path(path).read_text().splitlines():
@@ -27,17 +26,14 @@ def read_env(path):
         values[key] = tokens[0]
     return values
 
-
 def private_write(path, data):
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
     with path.open('x', encoding='utf-8') as output:
         os.chmod(path, 0o600)
         output.write(data)
 
-
 def json_text(value):
     return json.dumps(value, ensure_ascii=False, indent=2) + '\n'
-
 
 def validate(root):
     local = root / '.build/local'
@@ -63,7 +59,6 @@ def validate(root):
     if not tenants.is_file() or stat.S_IMODE(tenants.stat().st_mode) != 0o600 or not isinstance(json.loads(tenants.read_text()), list):
         raise RuntimeError('The original local tenant configuration is unavailable.')
     return config
-
 
 def bootstrap(root=None, check=False):
     root = Path(root or ROOT).resolve()
@@ -101,7 +96,6 @@ def bootstrap(root=None, check=False):
               'access_token_alg': 'EdDSA', 'id_token_alg': 'EdDSA', 'auth_code_lifetime': 60, 'access_token_lifetime': 900,
               'scopes': ['openid', 'email', 'profile'], 'default_scopes': ['openid', 'email', 'profile'],
               'force_mfa': False, 'flows_enabled': ['authorization_code', 'refresh_token'], 'challenges': ['S256']}
-    # Rauthy creates its bootstrap administrator before importing users.
     users = [{'email': a['email'], 'given_name': a['member'].removeprefix('dev-').capitalize(), 'password': {'Plain': a['password']},
               'roles': [], 'enabled': True, 'email_verified': True} for a in accounts[1:]]
     rauthy = f'''[bootstrap]
@@ -149,14 +143,12 @@ rp_origin = '{public_url}'
     private_write(local / 'manifest.json', json_text(manifest))
     return validate(root)
 
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='validate without creating configuration')
     args = parser.parse_args(argv)
     bootstrap(check=args.check)
     print('Private local configuration ready. Accounts: .build/local/credentials.md')
-
 
 if __name__ == '__main__':
     try:

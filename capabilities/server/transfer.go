@@ -20,14 +20,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Import and export of records as CSV. A row is a decision:
-// the type's generated create for a new ID, its generated edit for one the
-// member may read, submitted as the member and keyed by the file's hash and
-// the row, so a file sent twice repeats nothing. A preview probes each row
-// and applies none. An export writes what a list shows the member.
-
-// Import runs, or previews, a CSV of records of typ: a header of field names
-// with an id column, then one record per row.
 func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]platform.ImportRow, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if err := t.admits(m); err != nil {
@@ -66,15 +58,10 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 				r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
 				break
 			}
-			// An export writes read-only columns (state, computed values) for
-			// the reader; they are not inputs, so a file that comes back
-			// round-trips instead of failing on its own header.
 			if f.ReadOnly {
 				continue
 			}
 			if value == "" {
-				// A blank cell clears that field. Omitting it from an edit would
-				// silently preserve an old value and bypass a required invariant.
 				if f.Type == "text" || f.Type == "longtext" || f.Type == "reference" || f.Type == "choice" || f.Type == "date" {
 					payload[name] = ""
 				} else {
@@ -93,9 +80,6 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 			r.Outcome = "ERROR_CODE_INVALID_ARGUMENT"
 		}
 		if r.Outcome == "" {
-			// Preserve the original file receipt before inspecting today's
-			// record. A fresh partial edit must not run a create's required
-			// input checks just to discover that its record already exists.
 			raw, _ := json.Marshal(payload)
 			try := func(verb, key string) *kernel.Error {
 				r.Error = nil
@@ -162,7 +146,6 @@ func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Ti
 	return err, draft.inputIssues[err]
 }
 
-// fromCSV reads one cell as the field's type.
 func fromCSV(f platform.FieldInfo, value, currency string) (any, error) {
 	switch f.Type {
 	case "integer":
@@ -193,8 +176,6 @@ func sign(x float64) float64 {
 	return 1
 }
 
-// Export writes the records of typ m's query finds as CSV: the ID and every
-// field m may read, lines aside.
 func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
 	m = t.authorizationMember(m)
 	if err := t.admits(m); err != nil {
@@ -244,7 +225,6 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 	return buf.Bytes(), nil
 }
 
-// toCSV writes one value as a cell import reads back.
 func toCSV(v any) string {
 	switch x := v.(type) {
 	case platform.Money:
@@ -271,8 +251,6 @@ func toCSV(v any) string {
 	return fmt.Sprint(v)
 }
 
-// restricted says whether typ holds restricted data: a dataset or
-// version marked so, or an object a restricted pipeline writes.
 func (t *Tenant) restricted(typ string) bool {
 	c := t.automation(build.ID, false)
 	switch typ {

@@ -5,8 +5,6 @@ import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview, releaseDraftsValue } from "../releases/release";
 import { releaseSelectionProblem } from "../releases/selection";
-// one application, five workspaces and builder-named concepts.
-// Membership, edits, candidates and runtime keep their original owners.
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
@@ -32,20 +30,14 @@ import { InstalledApplicationHome } from "./InstalledApplicationHome";
 import { ExtensionSettings } from "./ExtensionSettings";
 import { ApplicationLifecycleControls } from "./application-lifecycle";
 
-/** Every project the builder may open, with what each holds. */
 export function ProjectsList() {
   const { me, definitions , holds} = useHost();
   const { open } = useWorkspace();
   const projects = useRecordInventory<Project>("build.app", 1000, holds("build", "builder"));
   const installedApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
-  // A builder role held only through projects (#141): the Studio opens, edits stay within the assets they name.
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
-  // An application template is an installed declarative package: its models,
-  // rules, pages and flows become editable drafts through the original
-  // package review, precheck and draft generation. Page-layout templates stay
-  // in the application's Interface area. No second wizard and no seeded app.
   const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));
   const builder = holds("build", "builder");
   const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
@@ -77,7 +69,6 @@ export function ProjectsList() {
 
 const editorCreatedKinds = new Set(["table", "alert", "function", "agent", "evaluation-set", "sample-set", "test-plan", "connection", "source", "dataset", "pipeline", "writeback", "matching"]);
 
-/** Dedicated editors own their creation; only remaining forms keep a dialog session. */
 function NewResourceMenu({ application, onCreated, children, disabled, area }: { application: string; area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { catalog , holds} = useHost();
   const { open } = useWorkspace();
@@ -96,7 +87,6 @@ function NewResourceMenu({ application, onCreated, children, disabled, area }: {
   </>;
 }
 
-/** The project home: resource tree, what changed, settings. */
 export function ProjectHome({ id, area, initialSelected, initialSection, initialPlan, initialTemplate }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string; initialTemplate?: string }) {
   return installedStudioRef(id) ? <InstalledApplicationHome id={id} area={area} selected={initialSelected} />
     : <BuildProjectHome id={id} area={area} initialSelected={initialSelected} initialSection={initialSection} initialPlan={initialPlan} initialTemplate={initialTemplate} />;
@@ -112,8 +102,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const savedChanges = useSavedDraftChanges(id, undefined, builder);
 
   const [filter, setFilter] = useState("");
-  // Bulk retirement: a composite retires several assets as one transaction —
-  // every step is probed first, and either all retire or none does.
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [retireBusy, setRetireBusy] = useState(false);
   const [retireIntent, setRetireIntent] = useState<(ReturnType<typeof retirementIntent<OwnedResource>> & { client: typeof client; attempted?: boolean; refusal?: string })>();
@@ -127,7 +115,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const initialTab = initialSection === "runs" ? "runs" : initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "release" ? "release" : "resources";
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
-  // Add existing is global: changing workspace only filters the displayed tree.
   const { inventories, owned, available, shared, loading } = useProjectResources(project, "build", builder);
   const resourcesUnavailable = owned.some(resource => !resource.installed && inventories[resource.kind.kind]?.isError);
   const visibleView = useViewVisible();
@@ -145,11 +132,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const [pendingPatch, setPendingPatch] = useState<{ changes: Partial<Api.Application>; revision?: number; settings: boolean }>();
   const pendingRef = useRef(pendingPatch); pendingRef.current = pendingPatch;
   const latestProject = useRef(project); latestProject.current = project;
-  // Settings follow the record until this editor types into them (`edited`);
-  // only typed changes are saved, and only the fields that differ. Comparing
-  // a stale local copy against a record that another editor moved on would
-  // otherwise "save" the old values back and the two would overwrite each
-  // other once a second.
   const [edited, setEdited] = useState(false);
   const lock = useRef(false);
   const baseline = useRef<{ values: NonNullable<typeof settings>; revision: number } | undefined>(undefined);
@@ -197,8 +179,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     }
     if (!confirmed) { lock.current = false; setSaving(false); return false; }
     pendingRef.current = undefined; setPendingPatch(undefined);
-    // The write stands even if its projection cannot refresh. Never offer a
-    // second write just because the subsequent read failed.
     try { const current = await query.refetch(); if (!current.isSuccess) setError(t("The application was saved, but its current record could not be reloaded.")); }
     catch { setError(t("The application was saved, but its current record could not be reloaded.")); }
     finally { lock.current = false; setSaving(false); }
@@ -207,8 +187,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   };
   const editSettings = (next: NonNullable<typeof settings>) => {
     if (lock.current || pendingRef.current || !project) return;
-    // Diff against the snapshot actually displayed, not a newer read that
-    // arrived before this event. The owner's revision gate decides conflicts.
     if (!baseline.current) baseline.current = { values: settings ?? fromRecord(project), revision: project.revision };
     setSourceApplied(false); setEdited(true); setSettings(next);
   };
@@ -238,9 +216,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (!original || !await patch(original.changes, original.revision, original.settings)) return;
     if (createdResource) { const resource = createdResource; setCreatedResource(undefined); open(resourceRoute(resource.kind, resource.target.id, id), { ifCurrent: { view: "project", params: { id } } }); }
   };
-  // One retirement intent is frozen when the review opens: the reviewed list,
-  // the composite key and the edits are the same object on submit and on any
-  // retry. An unclear answer keeps the original intent and cannot be discarded.
   const beginRetire = () => {
     if (lock.current || pendingRetirement.current || dirty || pendingPatch || createdResource) return;
     const items = retirementBatch(owned, picked, item => refKey(item.ref));
@@ -263,7 +238,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       setPicked(new Set()); rememberRetirement(undefined);
     } catch (problem) {
       if (problem instanceof CompositeRefusalError) rememberRetirement({ ...intent, attempted: true, refusal: problem.message });
-      // All other failures leave the original request available for retry.
       notify(humanizeKernelError(problem instanceof Error ? problem.message : String(problem)));
     } finally { retireLock.current = false; setRetireBusy(false); }
   };
@@ -277,8 +251,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   };
   const unpublished = savedChanges.data?.changes ?? [];
   const releaseSelection = [...new Map(unpublished.map(change => ({ kind: draftChangeKind(change), id: change.id })).map(choice => [JSON.stringify([choice.kind, choice.id]), choice])).values()];
-  // Prepare Verify once from the same saved changes as Publish. Later reads
-  // must not replace an in-progress or unconfirmed release selection.
   const verificationSelection = useRef<typeof releaseSelection | undefined>(undefined);
   if (!verificationSelection.current && visited.includes("release") && savedChanges.isSuccess && !savedChanges.isFetching) verificationSelection.current = releaseSelection;
   const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.", { title: item.title }), subject: t(item.kind.label), locate: () => { setSelected(refKey(item.ref)); setTab("resources"); } }));
@@ -328,9 +300,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         {builder && <Button size="sm" variant="primary" disabled={locked || resourcesUnavailable || savedChanges.isPending || savedChanges.isError || (!project.pages?.length && !project.resources?.length)} onClick={() => {
             const problem = releaseSelectionProblem(releaseSelection);
             if (problem) { setError(t(problem)); return; }
-            // The complete joint selection travels through the original view
-            // call; only the anchor identity is in the route. Legacy JSON
-            // links keep working through the decoder's URL fallback.
             const route = { view: "release-review" as const, params: { kind: "app", id: project.id, application: project.id, applicationName: project.name } };
             if (transfer) transfer("", route, { drafts: releaseSelection }, () => {});
             else open({ ...route, params: { ...route.params, drafts: releaseDraftsValue(releaseSelection) } });

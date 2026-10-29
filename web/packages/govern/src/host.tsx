@@ -1,9 +1,4 @@
 import {useInputDrafts} from "@platform/ui";
-// Host Console: the host administrator's view over
-// every tenant this host runs — health, lifecycle, support sessions, trusted
-// artifacts, and promotions and migrations between tenants (environments).
-// Everything here calls the host console's own routes (`/v1/host/*`); who may
-// call them is decided by the host (`HostAdmins`), not by this file.
 import {apiErrorMessage,type Api} from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Form, Input, PageHeader, Panel, PropertyList, Select, Tag, Textarea, notify, useUnsavedChanges, useWorkspace, type ColumnDef, t } from "@platform/ui";
@@ -17,7 +12,6 @@ type Artifact = Api.HostArtifactView;
 type Grant = Api.SupportGrant;
 type Manifest = Api.MigrationManifest;
 
-/** One call to the console; errors come back as the host wrote them. */
 function useConsole() {
   const { client } = useHost(), inputs = useInputDrafts();
   const queries = useQueryClient();
@@ -32,7 +26,6 @@ function useConsole() {
       accepted = result.body;
     } catch { failure(t("The host is unreachable.")); return undefined; }
     finally { inputs?.pending(-1); }
-    // A failed projection refresh cannot undo a confirmed console command.
     try { await queries.invalidateQueries(); }
     catch { notify.error(t("The host accepted the request, but the console could not refresh.")); }
     return accepted;
@@ -211,7 +204,6 @@ function RuntimeComposition({ tenant, changed }: { tenant: string; changed: () =
   </Panel>;
 }
 
-/** A new tenant from a template: its first administrator holds admin in every app; settings are decided and journaled. */
 function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const call = useConsole();
   const templates = useReadQuery<Api.TenantTemplate[]>("/v1/host/templates").data ?? [];
@@ -262,7 +254,6 @@ function SupportDialog({ tenant, open, onOpenChange }: { tenant: string; open: b
   </Dialog>;
 }
 
-/** Tenants as environments: a sealed candidate moves from one into another. */
 export function HostPromotions({ tenant, from: initialFrom, candidate: initialCandidate }: { tenant?: string; from?: string; candidate?: string }) {
   const overview = useReadQuery<Api.HostOverview>("/v1/host/overview");
   const call = useConsole();
@@ -340,7 +331,6 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
   </>;
 }
 
-/** Real records move between environments through the target's generated actions. */
 export function HostMigrations({ tenant }: { tenant?: string }) {
   const overview = useReadQuery<Api.HostOverview>("/v1/host/overview");
   const call = useConsole();

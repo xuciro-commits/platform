@@ -4,7 +4,6 @@ import {EntityCard} from "../components/EntityCard";
 import {entityFrom,type EntityInfo,type EntityRecord,type RecordSource} from "./Records";
 import {t} from "../i18n";
 
-/** One already-confirmed original record. Field formatting belongs to the existing entity projection. */
 export function RecordCard({record,info,fields,config,source,onOpenReference}:{record:EntityRecord;info:EntityInfo;fields:string[];config:RecordCardOptions;source?:RecordSource;onOpenReference?:(type:string,id:string)=>void}) {
  const label=info.fields.find(f=>f.name===config.labelField),limits=renderingLimits.runtime.recordCard;
  if(typeof record.id!=="string"||!record.id||config.labelField!=="id"&&(!label||!["text","longtext","choice","reference"].includes(label.type))||fields.length>limits.maxFields||new Set(fields).size!==fields.length||!limits.tones.includes(config.tone as typeof limits.tones[number])||fields.some(name=>{const f=info.fields.find(f=>f.name===name);return !f||!["text","longtext","choice","reference","integer","decimal","money","date","datetime","boolean"].includes(f.type);}))return <p role="alert">{t("Record card fields, title or identity are unavailable or incompatible.")}</p>;

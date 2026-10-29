@@ -1,9 +1,5 @@
 import { useSyncExternalStore } from "react";
 
-/** Appearance = the colour scheme: "light or dark", pure CSS on the document element
- * (themes/tokens.css) — switching costs one attribute write, nothing re-mounts. Appearance
- * belongs to the shared UI token owner; application definitions never carry CSS, storage
- * keys or changes to the document element. */
 export type Scheme = "system" | "light" | "dark";
 
 const storageKey = "platform.appearance";
@@ -23,7 +19,6 @@ const apply = (scheme: Scheme) => {
   try { localStorage.setItem(storageKey, JSON.stringify({ scheme })); } catch { /* private mode: the choice lives for the session */ }
   listeners.forEach((fn) => fn());
 };
-// Restore the reader's choice before the first paint of anything that reads it.
 try {
   const stored = typeof localStorage === "undefined" ? null : localStorage.getItem(storageKey);
   if (stored) { const { scheme } = JSON.parse(stored) as { scheme?: Scheme }; const element = root(); if (element && scheme && scheme !== "system") element.dataset.theme = scheme; }
@@ -38,10 +33,8 @@ export function useTheme() {
   const { scheme } = useSyncExternalStore(subscribe, snapshot, () => cached);
   const theme = useSyncExternalStore(subscribe, () => resolved(scheme), () => "light" as const);
   return {
-    /** The resolved colour scheme, for libraries that need to be told (dockview). */
     theme, scheme,
     setScheme: (next: Scheme) => apply(next),
-    /** Light ↔ dark, for a single header button. */
     toggle: () => apply(theme === "light" ? "dark" : "light"),
   };
 }

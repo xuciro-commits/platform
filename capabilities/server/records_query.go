@@ -11,21 +11,16 @@ import (
 	"time"
 )
 
-// RecordPage is a page of records and how many match in all.
 type RecordPage struct {
 	Records []any `json:"records"`
 	Total   int   `json:"total"`
 	Partial bool  `json:"partial,omitempty"`
 }
 
-// Records serves a member's query over a type, within the member's scope.
 func (t *Tenant) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	return t.recordsFrom(t.records, m, typ, q, now)
 }
 
-// recordsFrom is the same member projection over a staged or installed store.
-// Flow queries must see prior accepted-decision writes without acquiring a
-// second live runtime or widening the member's record/field scope.
 func (t *Tenant) recordsFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	if q.Limit < 1 || q.Limit > 500 {
 		q.Limit = 500
@@ -33,9 +28,6 @@ func (t *Tenant) recordsFrom(s *records.Store, m platform.Member, typ string, q 
 	return t.recordSelectionFrom(s, m, typ, q, now)
 }
 
-// Internal aggregations select an owner's authorized inventory once. They
-// reuse the same masks and source checks without repeatedly sorting each page.
-// Public record reads still enter through the bounded recordsFrom above.
 func (t *Tenant) recordSelectionFrom(s *records.Store, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	return t.recordSelectionForCallerFrom(s, platform.NewCaller(runtime{t}, m, "", false, false), typ, q, now)
 }
@@ -76,7 +68,6 @@ func (t *Tenant) recordSelectionForCallerFrom(s *records.Store, c platform.Calle
 		return RecordPage{}, err
 	}
 	out := RecordPage{Records: make([]any, len(page)), Total: total}
-	// The owner exposes a scope marker, never the hidden count or identities.
 	probe := q
 	probe.Offset, probe.Limit = 0, 1
 	if _, unscoped, probeErr := s.Find(et, probe, nil); probeErr == nil {
@@ -86,7 +77,7 @@ func (t *Tenant) recordSelectionForCallerFrom(s *records.Store, c platform.Calle
 	w := t.narrowerIn(s, m, now, true)
 	for i, v := range page {
 		out.Records[i] = records.Mask(et.Info(), v, hidden)
-		if et.Info().HasReadSources() || len(et.Info().VersionPins) > 0 { // checked against its sources again
+		if et.Info().HasReadSources() || len(et.Info().VersionPins) > 0 {
 			narrowed, _ := w.derive(et, reflect.ValueOf(out.Records[i]))
 			out.Records[i] = narrowed.Interface()
 		}

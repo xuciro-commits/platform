@@ -15,8 +15,6 @@ export function Input(props:ComponentProps<"input">&{draftKey?:string;optional?:
 function NumericInput({className,draftKey,optional,...props}:ComponentProps<"input">&{draftKey?:string;optional?:boolean}){
  const instanceID=useId(),errorID=useId(),captionSet=useRef(false);
  const [label,setLabel]=useState(props.name??props["aria-label"]??props.id??"number");
- // The draft path is an identity, never a caption: an unnamed field gets one
- // stable per-instance path, so two same-caption fields never share a buffer.
  const input=useDraftInput(`number:${draftKey??props.name??props.id??instanceID}`,String(props.value??props.defaultValue??"")),[touched,setTouched]=useState(false);
  const empty=useRef(optional??(props.value===undefined||props.value===""));
  const publish=(event:ChangeEvent<HTMLInputElement>)=>{
@@ -32,12 +30,10 @@ function NumericInput({className,draftKey,optional,...props}:ComponentProps<"inp
   onChange={publish} onKeyDown={event=>{props.onKeyDown?.(event);if(!event.defaultPrevented&&!props.disabled&&!props.readOnly&&["ArrowUp","ArrowDown"].includes(event.key)){event.preventDefault();const parsed=Number(input.text),next=(Number.isFinite(parsed)?parsed:Number(props.value)||0)+(event.key==="ArrowUp"?1:-1)*(Number(props.step)||1);event.currentTarget.value=String(Math.max(Number(props.min??-Infinity),Math.min(Number(props.max??Infinity),next)));publish(event as unknown as ChangeEvent<HTMLInputElement>);}}} onBlur={event=>{setTouched(true);if(!input.problem)input.clear();props.onBlur?.(event);}}/>{touched&&input.problem&&<span id={errorID} role="alert" className="text-xs text-danger">{input.problem}</span>}</span>;
 }
 
-/** Native select: accessible, fast with long option lists, styled like Input. */
 export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select data-ui="field" className={cn(field, "pr-6", className)} {...props} />;
 }
 
-/** Several lines of text, styled like Input. */
 export function Textarea(props:TextareaHTMLAttributes<HTMLTextAreaElement>&{parse?:"json";draftKey?:string}){
  if(props.parse==="json")return <JSONTextarea {...props}/>;
  const {className,parse,draftKey,...input}=props;
@@ -46,8 +42,6 @@ export function Textarea(props:TextareaHTMLAttributes<HTMLTextAreaElement>&{pars
 function JSONTextarea({className,parse,draftKey,defaultValue,...props}:TextareaHTMLAttributes<HTMLTextAreaElement>&{parse?:"json";draftKey?:string}){
  const instanceID=useId(),captionSet=useRef(false);
  const [label,setLabel]=useState(props.name??props["aria-label"]??props.id??"json");
- // Same rule as NumericInput: identity from explicit props or the component
- // instance; the rendered caption never becomes a buffer key.
  const input=useDraftInput(`json:${draftKey??props.name??props.id??instanceID}`,String(props.value??defaultValue??""));
  return <span className="grid min-w-0 gap-1"><textarea {...props} aria-label={props["aria-label"]??(label!=="json"&&!props.name&&!props.id?label:undefined)} data-ui="field" data-draft-key={input.path} className={cn(field,"h-auto min-h-16 py-1",className)} value={input.text}
   ref={node=>{if(node&&!captionSet.current&&!props.name&&!props["aria-label"]&&!props.id){captionSet.current=true;const clone=node.closest("label")?.cloneNode(true) as HTMLElement|undefined;clone?.querySelectorAll("textarea,[role=alert]").forEach(node=>node.remove());const caption=clone?.textContent?.trim();if(caption&&caption!==label)setLabel(caption);}}}

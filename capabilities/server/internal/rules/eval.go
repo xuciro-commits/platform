@@ -12,8 +12,6 @@ import (
 	"unicode/utf8"
 )
 
-// EvalFrozenFormula preserves the numeric semantics of already frozen formula
-// bytes. Owners select it only from a legacy immutable publication.
 func (p *Program) EvalFrozenFormula(c Context) (Result, error) {
 	var check func(Expr) error
 	check = func(e Expr) error {
@@ -572,8 +570,6 @@ func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Val
 	return fold.Result()
 }
 
-// EvalJSON is the identical boundary used by the host and the compiled browser
-// module. No browser-specific implementation of rule semantics exists.
 func EvalJSON(raw []byte) ([]byte, error) {
 	if len(raw) > MaxContextBytes+2*MaxBytes {
 		return nil, fail("budget", "$", "evaluation request budget exceeded")

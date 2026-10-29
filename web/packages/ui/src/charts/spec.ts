@@ -1,46 +1,32 @@
 import type {MetricPresentationOptions} from "../presentation";
 import type {Api} from "@platform/kernel";
-// The platform's visualization spec: what a chart shows, never how a
-// library draws it. After the Grammar of Graphics and Vega-Lite: data, a mark,
-// and encodings that map fields onto visual channels, each with a measurement
-// type and, when the data is records, an aggregate. Apps, dashboards and saved
-// views keep specs; the kit compiles them for its renderer (ECharts 6 today),
-// which can change without touching them.
 
-/** Measurement types, as in Vega-Lite. */
 export type MeasureType = "nominal" | "ordinal" | "temporal" | "quantitative";
 export type AggregateOp = "count" | "sum" | "avg" | "min" | "max";
 export type TimeUnit = "day" | "week" | "month" | "year";
 export type Mark = "bar" | "line" | "area" | "point" | "arc" | "kpi";
 
 export type Encoding = {
-  /** A field of the data; none with `aggregate: "count"`. */
   field?: string;
   type: MeasureType;
   aggregate?: AggregateOp;
-  /** Buckets a date field (temporal). */
   timeUnit?: TimeUnit;
   title?: string;
 };
 
 export type Channels = {
-  /** Categories or time along the horizontal axis (or the vertical one for a horizontal bar). */
   x?: Encoding;
   y?: Encoding;
-  /** Splits series by a nominal field. */
   color?: Encoding;
-  /** The angle of an arc (pie, donut). */
   theta?: Encoding;
   size?: Encoding;
 };
 
-/** Where the rows come from: an entity type's records, aggregated by the host with the member's scope, or inline values. */
 export type ChartData =
   | { entity: string; domain?: unknown[]; search?: string; archived?: boolean; set?:Api.QuerySet;traversal?:Api.LinkTraversal }
   | { values: Record<string, unknown>[] };
 
 export type ChartSpec = {
-  /** Unaggregated inline rows retain identity and order, including repeated labels. */
   rowIdentity?: string;
   metric?:MetricPresentationOptions;
   title?: string;
@@ -50,7 +36,6 @@ export type ChartSpec = {
   encoding: Channels;
 };
 
-/** A host aggregate's answer (`GET /v1/aggregates/<type>`). */
 export type AggregateColumn = { name: string; title: string; kind: "group" | "measure"; type: MeasureType; field?: string; money?: boolean };
 export type AggregateData = { window?:Api.AggregateWindowResult; histogram?:Api.HistogramResult; columns: AggregateColumn[]; rows: Record<string, unknown>[] };
 export type AggregateQuery = Omit<Api.AggregateQuery,"domain"> & {domain?:unknown[]};
@@ -59,13 +44,11 @@ export const markOf = (spec: ChartSpec) => (typeof spec.mark === "string" ? { ty
 
 const channelNames = ["x", "y", "color", "theta", "size"] as const;
 
-/** The column an encoding reads once the data is aggregated: "stage", "checkIn:month", "count", "sum:amount". */
 export function columnOf(e: Encoding): string {
   if (e.aggregate) return e.aggregate === "count" ? "count" : `${e.aggregate}:${e.field ?? ""}`;
   return e.timeUnit ? `${e.field ?? ""}:${e.timeUnit}` : e.field ?? "";
 }
 
-/** The host aggregate a spec over records needs: every unaggregated channel groups, every aggregated one measures. */
 export function aggregateQuery(spec: ChartSpec): AggregateQuery | undefined {
   if (!("entity" in spec.data)) return undefined;
   const groups: string[] = [], measures: string[] = [];
@@ -94,7 +77,6 @@ const bucket = (value: unknown, unit: TimeUnit): string => {
   return `${t.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 };
 
-/** Aggregates inline values the way the host aggregates records, so both kinds of data read the same columns. */
 export function aggregateValues(spec: ChartSpec, values: Record<string, unknown>[]): Record<string, unknown>[] {
   const encodings = channelNames.map((n) => spec.encoding[n]).filter((e): e is Encoding => !!e);
   if (!encodings.some((e) => e.aggregate || e.timeUnit)) return values;

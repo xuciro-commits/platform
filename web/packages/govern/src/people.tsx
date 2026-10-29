@@ -1,4 +1,3 @@
-// Settings: members and the organisation.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { ContextHelp, Button, Form, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, useWorkspace, type ColumnDef, t, formatStamp} from "@platform/ui";
 import { useState } from "react";
@@ -51,7 +50,6 @@ export function Members() {
   );
 }
 
-/** A member's standing: active, invited, suspended or left. */
 function Standing({ status }: { status?: string }) {
   const s = status || "active";
   return <Tag label={t(s)} tone={s === "active" ? "success" : s === "invited" ? "info" : s === "suspended" ? "warning" : "neutral"} />;
@@ -128,7 +126,6 @@ export function MemberDetail({ id }: { id: string }) {
   );
 }
 
-// Grant one role: app, role, optionally bounded to a unit and a time.
 function GrantForm({ apps, onSubmit, onCancel }: { apps: { id: string; roles: string[] }[]; onSubmit: (g: Grant) => Promise<void>; onCancel: () => void }) {
   const chart = useRead<Chart>("/v1/organization").data;
   const [app, setApp] = useState(apps[0]?.id ?? "");
@@ -153,7 +150,6 @@ function GrantForm({ apps, onSubmit, onCancel }: { apps: { id: string; roles: st
   );
 }
 
-// A member's units in every structure, as of today (a person often belongs to several).
 function MemberUnits({ member }: { member: string }) {
   const chart = useRead<Chart>("/v1/organization").data;
   const { open } = useWorkspace();

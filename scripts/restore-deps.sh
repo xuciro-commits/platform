@@ -1,21 +1,9 @@
 #!/usr/bin/env bash
-# Restores Go dependencies from GitHub when the Go module proxy is unreachable
-# (sandbox / offline environments). For every module in go.mod it fetches the
-# upstream repository tarball at the pinned version, rebuilds a module cache
-# entry from it, and lets `go mod vendor` verify the tree against go.sum —
-# so integrity still rests on the same hashes as a proxy download.
-#
-# Usage:
-#   bash scripts/restore-deps.sh              # Go modules + web packages
-#   bash scripts/restore-deps.sh go web
-#
-# After it succeeds, run the exports printed by scripts/sandbox-go.sh and
-# build normally; vendor/ and the module cache live outside Git.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TARGETS=${1:-go web}
 
-fetch() { # fetch <url> <outfile>
+fetch() {
   curl -fsSL --retry 2 --connect-timeout 20 -o "$2" "$1"
 }
 
@@ -29,7 +17,6 @@ root = Path(sys.argv[1])
 gomod = (root / "capabilities/server/go.mod").read_text()
 cache = Path(os.environ.get("GOPATH", Path.home() / ".gopath")) / "pkg" / "mod" / "cache" / "download"
 
-# Non-github module families: (github repo, tag prefixes used inside that repo).
 REPOS = {
     "google.golang.org/protobuf": ("protocolbuffers/protobuf-go", []),
     "google.golang.org/grpc": ("grpc/grpc-go", []),
@@ -48,7 +35,7 @@ REPOS = {
 }
 
 def repo_for(path):
-    if path.startswith("go.opentelemetry.io/otel"):  # the monorepo and everything under it
+    if path.startswith("go.opentelemetry.io/otel"):
         return "open-telemetry/opentelemetry-go", path.removeprefix("go.opentelemetry.io/otel").removeprefix("/")
     if path in REPOS:
         return REPOS[path]
@@ -169,7 +156,7 @@ def build(src, top, root):
                 break
             p = d.rstrip("/")
         if insub:
-            continue  # a nested module owns this subtree
+            continue
         if vendored(rel):
             continue
         entries[rel] = data
@@ -177,10 +164,6 @@ def build(src, top, root):
         entries["LICENSE"] = src[top + "LICENSE"]
     return entries
 
-
-# Worklist: go.mod's own requirements plus every module recorded in go.sum
-# (the module graph reaches past go.mod — a cold cache must cover go.sum too
-# or `go mod download all` cannot verify offline).
 worklist = set()
 for line in gomod.splitlines():
     m = re.match(r"^\t(\S+) (\S+)", line)
@@ -196,7 +179,7 @@ for path, version in sorted(worklist):
         continue
     repo, sub = repo_for(path)
     if pm := pseudo.match(version):
-        refs = [pm.group(2)]  # the commit is part of the pseudo version
+        refs = [pm.group(2)]
     else:
         prefixes = [sub] if sub and path not in REPOS else REPOS.get(path, ("", []))[1]
         refs = [f"{pfx}/{version}" for pfx in prefixes] + [version]
@@ -212,8 +195,7 @@ for path, version in sorted(worklist):
         continue
     with tarfile.open(fileobj=io.BytesIO(tar), mode="r:gz") as tf:
         src = {m.name: tf.extractfile(m).read() for m in tf.getmembers() if m.isfile()}
-    top = src and min(src).split("/")[0] + "/"  # the "<repo>-<ref>/" entry prefix
-    # Locate the module root by its `module` line; monorepos nest their modules.
+    top = src and min(src).split("/")[0] + "/"
     rootmod = None
     for name, data in src.items():
         if name.endswith("go.mod"):
@@ -225,7 +207,6 @@ for path, version in sorted(worklist):
         if any(name.endswith("go.mod") for name in src):
             fails.append(f"{path} {version}: no ref in {repo} ({' , '.join(refs)}) declares module {path}")
             continue
-        # Pre-module tag: cmd/go synthesizes "module <path>\n" as the .mod file.
         root, go_mod = "", f"module {path}\n".encode()
     else:
         root, go_mod = rootmod
@@ -245,7 +226,7 @@ for path, version in sorted(worklist):
         entries["go.mod"] = go_mod
         entries = {f"{path}@{version}/{k}": v for k, v in entries.items()}
     want_mod = expected.get((path, version + "/go.mod"))
-    if want_mod:  # go sums /go.mod as Hash1 over a single entry named "go.mod"
+    if want_mod:
         mh = hashlib.sha256()
         mh.update(f"{hashlib.sha256(go_mod).hexdigest()}  go.mod\n".encode())
         calc = "h1:" + base64.b64encode(mh.digest()).decode()
@@ -267,9 +248,6 @@ if fails:
 shutil.rmtree(tempfile.gettempdir() + "/restore-deps", ignore_errors=True)
 PY
   export GOPROXY=off GOSUMDB=off
-  # `download` (not `download all`): the build/test set is what an offline
-  # restore must verify — the full theoretical graph (`all`) reaches hosts
-  # this script's premise says are unreachable (codeberg, vanity domains).
   (cd capabilities/server && go mod download && go mod vendor)
   echo "vendor/ restored and verified against go.sum."
 }

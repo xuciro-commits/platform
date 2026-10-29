@@ -7,7 +7,6 @@ const format=(coefficient:bigint,scale:number)=>{
  const negative=coefficient<0n,digits=(negative?-coefficient:coefficient).toString().padStart(scale+1,"0"),text=scale?`${digits.slice(0,-scale)}.${digits.slice(-scale)}`.replace(/0+$/,"").replace(/\.$/,""):digits;
  return `${negative&&coefficient!==0n?"-":""}${text}`;
 };
-/** Sliders use bounded integer indices; emitted drafts stay exact decimals. */
 export function rangeGrid(min:string,max:string,step:string){
  const values=[min,max,step].map(decimal);
  if(values.some(v=>!v))return;
@@ -15,8 +14,6 @@ export function rangeGrid(min:string,max:string,step:string){
  const lo=aligned[0]!,hi=aligned[1]!,increment=aligned[2]!;
  if(values.some((v,i)=>format(v!.coefficient,v!.scale)!==[min,max,step][i])||lo>=hi||increment<=0n||(hi-lo)%increment!==0n||(hi-lo)/increment>10000n)return;
  const ticks=Number((hi-lo)/increment);
- // Endpoints alone do not bound the intermediate decimal text: a long
- // integer bound plus a fractional step may exceed the original input limit.
  for(let i=1;i<ticks;i++)if(format(lo+BigInt(i)*increment,scale).length>128)return;
  return {ticks,text:(index:number)=>format(lo+BigInt(index)*increment,scale),index:(text:string)=>{
   const value=decimal(text);if(!value)return;

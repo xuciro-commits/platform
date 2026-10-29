@@ -7,8 +7,6 @@ export const ownerPackage = (owner) => owner.startsWith("@") ? owner : `@platfor
 export const ownerDirectory = (owner) => `web/packages/${owner}`;
 export const dictionaryFile = (owner) => `${ownerDirectory(owner)}/src/${owner === "ui" ? "i18n/zh-CN.ts" : "i18n.ts"}`;
 
-/** configuration belongs to applications; domain pages cannot enter
- * the generic presentation owner by changing their import path. */
 export function professionalViewGate({source, owner="@platform/app", configurations=[]}) {
   const errors=[];
   const domain=source.match(/\b(?:RoutingFlow|mes|sfc|workCenter|operation|equipment|warehouse|bed|ncCodes)\b/i);
@@ -27,7 +25,6 @@ export function syntax(file, text) {
 
 const exported = (node) => node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
 
-/** Read public exports without resolving types or executing component code. */
 export async function publicExports(file, read = (file) => readFile(file, "utf8"), prefix = "", cache = new Map()) {
   if (cache.has(file)) return cache.get(file);
   const result = new Set();
@@ -69,7 +66,6 @@ export function publicTypes(file, text) {
   return names;
 }
 
-/** Owner dictionaries are the only source of localized catalog copy. */
 export function readDictionary(file, text) {
   const dictionary = {};
   function visit(node) {
@@ -137,7 +133,6 @@ export async function sourceFiles(directory) {
 
 const withoutExtension = (file) => file.replace(/\.[cm]?[jt]sx?$/, "");
 
-/** Conservative import references, not an exhaustive runtime call graph. */
 export function inspectImports(file, text, packages, entries) {
   const errors = [], consumers = new Set();
   const source = syntax(file, text);
@@ -169,10 +164,6 @@ export function inspectImports(file, text, packages, entries) {
   return { errors, consumers: [...consumers] };
 }
 
-/**
- * Bounded, syntax-only evidence for one catalog asset. No type guesses or JSX
- * traversal outside the exported component. Full semantic typing stays with TS.
- */
 export function extractComponentApi(entry, text, allEntries = []) {
   const source = syntax(entry.source, text);
   const declarations = new Map(source.statements.filter((node) =>
@@ -198,8 +189,6 @@ export function extractComponentApi(entry, text, allEntries = []) {
     }
   }
 
-  // The first visual export is the owner-designated primary component. Other
-  // public exports stay listed separately; don't combine their Props into one.
   const component = entry.exports?.find((name) => functions.has(name.split(".")[0]))?.split(".")[0];
   const target = component && functions.get(component);
   const param = target?.parameters?.[0];
@@ -249,12 +238,10 @@ export function extractComponentApi(entry, text, allEntries = []) {
       usedTypes.add(node.typeName.text);
       visitType(declarations.get(node.typeName.text));
     }
-    // Imported/generic/utility types cannot be resolved with syntax alone.
   };
 
   if (param?.type) visitType(param.type);
 
-  // A CVA variable is relevant only if the target's declared Props refer to it.
   const signature = param?.type?.getText(source) ?? "";
   const referencedTypes = [...seenTypes].map((node) => node.getText(source)).join(" ");
   for (const [name, call] of cva) {
@@ -272,8 +259,6 @@ export function extractComponentApi(entry, text, allEntries = []) {
     }
   }
 
-  // An explicit default proves a binding can be omitted, but does not prove its type.
-  // Inherited HTML Props and rest bindings stay unresolved rather than guessed.
   if (param && ts.isObjectBindingPattern(param.name)) for (const item of param.name.elements) {
     if (!item.dotDotDotToken && ts.isIdentifier(item.name) && item.initializer && !props.has(item.name.text)) {
       const name = item.name.text;

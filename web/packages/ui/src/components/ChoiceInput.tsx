@@ -5,7 +5,6 @@ import {t} from "../i18n";
 import {validChoiceInput} from "./choice";
 import {StepSelector,TabSelector} from "./IndexedChoices";
 
-/** Choice presentations consume one caller-owned string, without defaulting it. */
 export function ChoiceInput({value,options,optionLabels,variant,label,title,disabled,onChange}:{value:string;options:readonly string[];optionLabels?:readonly string[];variant:string;label?:string;title:string;disabled?:boolean;onChange?:(value:string)=>void}){
  const id=useId(),caption=label??"",name=caption.trim()?caption:title;
  if(variant==="multiple"||!validChoiceInput({options,optionLabels,variant,label}))return <p role="alert">{t("Choice configuration is unsupported.")}</p>;

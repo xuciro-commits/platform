@@ -20,11 +20,9 @@ export type { NavSection } from "./Navigation";
 
 export type View = {
   id: string;
-  /** Tab title for a route of this view, e.g. the entity's code. */
   title: (params: Record<string, string>) => string;
   icon?: ReactNode;
   render: (params: Record<string, string>) => ReactNode;
-  /** Navigation within one document can change without opening another tab. */
   documentKey?: (params: Record<string, string>) => string;
 };
 export type MenuItem = { label: string; shortcut?: string; onSelect: () => void; disabled?: boolean };
@@ -34,48 +32,32 @@ type SearchHit = { id: string; label: string; detail?: string; open: () => void 
 type RecordSearch = (text: string) => Promise<SearchHit[]>;
 export type Session = {
   tenant: string; principal: string; detail?: string;
-  /** The member's display name, shown over the principal when set. */
   name?: string;
   options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;
-  /** Opens the member's own account page, when the host has one. */
   onAccount?: () => void;
 };
 
-/** A platform application in the Applications portal: a stable id, a category and a home route. */
 export type PlatformApplication = { id: string; title: string; icon?: ReactNode; description?: string; category: string; home: Route };
-/** The portal: every application this member may open, its categories in display order, and the one in front. */
 export type Applications = { apps: PlatformApplication[]; categories: { id: string; label: string }[]; current?: string; onSelect: (id: string) => void };
-/** The constant left rail: where Home, the portal, notifications and the assistant live. */
 export type Rail = { home: Route; applications: Route; notifications?: { route: Route; unread?: number }; assist?: Route };
-/** A route the member opened, remembered by the shell for the Recent list and Home. */
 export type RecentEntry = { route: Route; title: string; app?: string; at: number };
 
-/** Inspect keeps the current task; tab, beside and popout open working documents. */
 type OpenOptions = { window?: "tab" | "beside" | "popout" | "inspect"; ifCurrent?: Route; from?: string; replace?: boolean };
 type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void, busy?: boolean) => void;
   ask: (panels: string[], run: () => void, owner?: symbol) => void;
 };
 type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route, from?: string) => void; closeAll: (from?: string) => void; notify: typeof toast; unsaved?: Unsaved;
-  /** Confirms other open drafts before an operation stops their providers. */
   confirmLeave: (run: () => void, exceptPanel?: string) => void;
-  /** Names a panel's tab after what it shows ("Object type · Visit") once the view knows it; the view's static title stays the category. */
   retitle?: (panel: string, title: string) => void;
   transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void;
-  /** Opens the search and command palette (⌘K). */
   palette: () => void;
-  /** Routes opened recently in this shell, newest first (per `storageKey`). */
   recent: RecentEntry[];
-  /** Platform application ids the member starred, and the switch. */
   favorites: string[]; toggleFavorite: (app: string) => void;
-  /** The portal and rail this shell was given, for views that list applications (Home). */
   applications?: Applications; rail?: Rail; };
 const PanelContext = createContext<string | undefined>(undefined);
 const DockScope = createContext<string | undefined>(undefined);
 const taskKey = (scope: string | undefined, panel: string) => JSON.stringify([scope ?? null, panel]);
-/** False for every panel of a dock whose application scope is not the front
- * one: hidden scopes keep their instances but stop measuring, subscribing and
- * publishing as if they were visible. */
 const FrontDock = createContext(true);
 const ViewCallContext = createContext<{ input?: unknown; expired?: boolean; returnValue?: (value: unknown) => void } | undefined>(undefined);
 export const useViewCall = () => useContext(ViewCallContext);
@@ -83,7 +65,6 @@ export const useViewCall = () => useContext(ViewCallContext);
 export const WorkspaceContext = createContext<WorkspaceApi | null>(null);
 const ViewRegistryContext = createContext<ReadonlyMap<string, View>>(new Map());
 
-/** Opens routes as tabs, beside the current group or in a separate window. */
 export function useWorkspace(): WorkspaceApi {
   const api = useContext(WorkspaceContext);
   const panel = useContext(PanelContext);
@@ -91,15 +72,12 @@ export function useWorkspace(): WorkspaceApi {
   return { ...api, open: (route, options) => api.open(route, { ...options, from: panel }), close: route => api.close(route, panel), closeAll: () => api.closeAll(panel), confirmLeave: (run: () => void) => api.confirmLeave(run, panel), transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
 }
 
-/** The tab of the current view shows "<category> · <name>" once the name is known (UX-03);
- * several objects, modules or projects open at once stay distinguishable. */
 export function useViewTitle(name?: string) {
   const api = useContext(WorkspaceContext);
   const panel = useContext(PanelContext);
   useEffect(() => { if (api?.retitle && panel && name) api.retitle(panel, name); }, [api, panel, name]);
 }
 
-/** Editors own their draft; the shell owns close/reload confirmation. */
 export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = false) {
   const inputs=useInputDrafts();dirty ||=!!inputs?.dirty;busy ||=!!inputs?.busy;
   const unsaved = useContext(WorkspaceContext)?.unsaved;
@@ -119,14 +97,12 @@ export function useUnsavedChanges(dirty: boolean, discard: () => void, busy = fa
     markSaved: () => { if(inputs?.dirty)return;if (panel) unsaved?.register(panel, owner.current); },
     discardChanges: () => { if (panel) unsaved?.register(panel, owner.current); reset.current(); },
     confirmDiscard: (run: () => void) => panel && unsaved ? unsaved.ask([panel], run) : run(),
-    /** Cancel one local editor without discarding sibling documents in its tab. */
     confirmOwnDiscard: (run: () => void) => panel && unsaved ? unsaved.ask([panel], run, owner.current) : run(),
   };
 }
 
 export const notify = toast;
 
-/** Keeps a view's failure inside its tab: the rest of the workspace goes on, and the tab can be closed or tried again. */
 class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void }, { error?: Error }> {
   state: { error?: Error } = {};
   static getDerivedStateFromError(error: Error) { return { error }; }
@@ -146,37 +122,19 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
   }
 }
 
-/**
- * The platform shell: a constant rail (Home, search, notifications,
- * applications, recent, favorites, assistant, account), a header
- * with the current application and its menus, a context pane with that
- * application's navigation, and a docking workspace whose tabs are routes
- * (one per entity) with a command palette (⌘K).
- * Tabs are grouped by application: each `layoutScope` has its own
- * remembered layout, swapped in when the scope changes; the recent/favorites memory is per `storageKey`; the active tab is in the URL.
- */
 export function Workspace({ product, productIcon, storageKey, layoutScope, scopeOf, resolveRoute, views, nav, navigation, home, menus = [], commands = [], session, status, applications: appEntries, rail, onActiveRoute, onEmpty, onLanguage, search }: {
   product: string; productIcon?: ReactNode; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   navigation?: ReactNode;
-  /** The application whose tabs are shown; its layout is remembered apart from the others'. */
   layoutScope?: string;
-  /** The scope a route belongs to (undefined for the shell's own views, which open in any scope). */
   scopeOf?: (route: Route) => string | undefined;
-  /** Decode incoming hashes and saved tabs before mounting a view. Apps produce canonical routes. */
   resolveRoute?: (route: Route, layout?: string) => Route | Promise<Route>;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
   applications?: Applications; rail?: Rail; onActiveRoute?: (route: Route) => void;
-  /** Reports an empty workspace without passing undefined to existing route listeners. */
   onEmpty?: () => void;
-  /** Records matching what is typed in the palette (⌘K), opened on choice: the palette searches data, not only commands. */
   search?: (text: string) => Promise<{ id: string; label: string; detail?: string; open: () => void }[]>;
-  /** Keeps a chosen language beyond this browser, e.g. as the member's preference; the page reloads in it after. */
   onLanguage?: (id: string) => unknown;
 }) {
   const appearance=useTheme();
-  // Every visited application scope keeps its own dock and its own live view
-  // instances. Switching scopes hides one dock and fronts another; it never
-  // closes panels, clears the model or asks for permission.
   const dock = useRef<DockviewApi>(null);
   const docks = useRef(new Map<string | undefined, DockviewApi>());
   const syncs = useRef(new Map<string | undefined, () => void>());
@@ -234,8 +192,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   }), [unsaved, allTasks]);
   const applications = useMemo<Applications | undefined>(() => appEntries && ({ ...appEntries, onSelect: (id) => {
     if (id === appEntries.current || !appEntries.apps.some((app) => app.id === id)) return;
-    // Switching preserves every scope's live work; the activation effect only
-    // changes which dock is in front. Closing stays a separate decision.
     appEntries.onSelect(id);
   } }), [appEntries]);
   const layoutKey = (id: string | undefined) => `${storageKey}:${id ?? "shell"}`;
@@ -269,8 +225,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const api = docks.current.get(dockScope), panel = api?.getPanel(id), address = taskKey(dockScope, id);
     if (!api || !panel || panel.api.location.type === "popout" || popping.current.has(address)) return;
     popping.current.add(address);
-    // Dockview rehomes the same panel and returns it when the child closes.
-    // Moving it is not a destructive close, and must not discard its draft.
     void api.addPopoutGroup(panel, { onDidOpen: ({ window: child }) => {
       child.addEventListener("load", () => {
         const root = document.documentElement, target = child.document.documentElement;
@@ -317,7 +271,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     }, 200);
     return () => { live = false; clearTimeout(wait); };
   }, [search, typed, searching, searchAttempt]);
-  // What the member comes back to: recent routes and starred applications, per shell.
   const navKey = `${storageKey}:nav`;
   const [memory, setMemory] = useState<{ recent: RecentEntry[]; favorites: string[] }>(() => {
     try { const saved = localStorage.getItem(navKey); if (saved) return { recent: [], favorites: [], ...JSON.parse(saved) }; } catch { /* storage unavailable */ }
@@ -355,7 +308,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     media.addEventListener("change", changed);
     return () => media.removeEventListener("change", changed);
   }, []);
-  // Keep desktop splits intact while showing one full-width group on a phone.
   useEffect(() => {
     const api = dock.current, panel = api?.activePanel;
     if (compact && panel?.group.api.location.type === "grid") {
@@ -388,8 +340,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     if (!api || !panel || !source || compact) return;
     if (panel.group !== source && panel.group.api.location.type === "grid") return; // already beside the reference
     const other = api.groups.find((group) => group !== source && group.api.location.type === "grid");
-    // Moving the only tab to a new group just collapses its old group. There
-    // must be a remaining view, or a real existing group, to be beside.
     if (!other && (source.api.location.type !== "grid" || source.panels.length < 2)) return;
     panel.api.moveTo({ group: other ?? api.addGroup({ referenceGroup: source, direction: "right" }) });
   }, [compact]);
@@ -417,8 +367,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     panel.api.setActive();
     syncs.current.get(dockScope)?.();
     if (options.window === "popout") popout(panel.id, dockScope);
-    // A saved document replaces its original task only after the destination
-    // opened. Failed resolution and late replies never close the draft.
     if (options.replace && options.from && options.from !== taskKey(dockScope, panel.id)) closePanel(options.from);
   }, [byId, compact, popout, placeBeside, keyOf, closePanel]);
   const openResolved = useCallback((route: Route, options: OpenOptions = {}, hint?: string | undefined) => {
@@ -429,16 +377,9 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const call = route.params?.call ? transfers.current.read(route.params.call, taskKey(target, keyOf(route))) : undefined;
     const origin = call ? taskOwner(call.from).panel : undefined;
     const originRoute = (origin?.params as { route?: Route } | undefined)?.route;
-    // A called editor is part of its caller's task: it opens in the caller's
-    // dock and never switches the front application. Every other open lands
-    // in the dock that owns its route.
     const scopeApi = target === scope.current ? dock.current : docks.current.get(target);
-    // A completed save may replace its own new-record tab, but must not
-    // take focus back after the member has already chosen another document.
     if (options.ifCurrent && (source?.api ?? scopeApi)?.activePanel?.id !== keyOf(options.ifCurrent)) return;
     if (source && source.scope !== scope.current) {
-      // A hidden task may finish its own navigation, but it cannot replace a
-      // foreground task, inspection or pending application switch.
       if (target === source.scope && options.window !== "inspect") show(route, { ...options, window: "tab" }, target);
       return;
     }
@@ -449,9 +390,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     setInspection(undefined);
     if (switching.current) { queuedOpen.current = { route, options, scope: target }; return; }
     if (target !== scope.current) {
-      // An explicit open of another scope shows that scope: the app layer
-      // follows the route and the activation effect fronts its dock, which
-      // already holds the panel. Switching hides work; it never closes it.
       show(route, options, target);
       followed.current?.(originRoute ?? route);
       return;
@@ -483,8 +421,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       if (revision !== incomingRevision.current) return;
       if (viewRegistry.current.has(resolved.view)) openResolved(resolved);
       else {
-        // A deep link outside the member's access is refused where it landed;
-        // the home it falls back to is the way back, not a silent success.
         toast.error(t("This address points to a task your current access does not include."));
         if (!dock.current?.panels.length) open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home);
       }
@@ -499,8 +435,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const linked = routeFromHash(location.hash);
     if (!resolveRoute || !linked || !dock.current) return;
     const revision = incomingRevision.current;
-    // A release can arrive after the original link opened. Follow its new
-    // route without closing the original tab or taking focus from a later link.
     void Promise.resolve(resolveRoute(linked)).then(resolved => {
       if (revision === incomingRevision.current && routeToHash(linked) === location.hash && routeKey(resolved) !== routeKey(linked)) openResolved(resolved);
     }).catch(() => { /* An explicit navigation reports resolution failures. */ });
@@ -516,9 +450,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     const index = group.panels.findIndex((p) => p.id === id);
     closePanels(group.panels.slice(index + 1).map((p) => taskKey(dockScope, p.id)));
   }, [closePanels]);
-  // Activation is a visibility change: the visited scope's dock comes to the
-  // front (lazily mounted on first visit) and the previous one keeps every
-  // live instance hidden behind it. No model swap, no reload, no prompt.
   useEffect(() => {
     if (scope.current === layoutScope && dock.current && docks.current.has(layoutScope)) return;
     scope.current = layoutScope;
@@ -529,7 +460,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       switching.current = false;
       syncs.current.get(layoutScope)?.();
     }
-    // A dock mounted by this effect completes activation in its own onReady.
   }, [layoutScope]);
   useEffect(() => {
     unloaded.current = false; // a StrictMode remount is a live workspace again
@@ -625,8 +555,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
         return panels.length ? { ...request, panels } : undefined;
       });
     });
-    // A dock's own sync persists its scope's layout always, but only the
-    // front dock publishes the URL, recents and the active-route callback.
     const sync = () => {
       const front = dockScope === scope.current && dock.current === api;
       if (front) {
@@ -648,14 +576,10 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
     syncs.current.set(dockScope, sync);
     api.onDidLayoutChange(sync);
     api.onDidActivePanelChange(sync);
-    // Capture the incoming link before any restored tab may rewrite it; only
-    // the first dock consumes it.
     const linked = !booted.current ? routeFromHash(location.hash) : undefined;
     const linkRevision = incomingRevision.current;
     switching.current = true;
     void loadLayout(api, dockScope).then((loaded) => {
-      // A StrictMode remount or a replaced dock makes this api stale; only
-      // the dock that still owns its slot may complete activation.
       if (!loaded || unloaded.current || docks.current.get(dockScope) !== api) return;
       const queued = queuedOpen.current?.scope === dockScope ? queuedOpen.current : undefined;
       if (queued) queuedOpen.current = undefined;
@@ -691,7 +615,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
       { label: t("Reset layout"), onSelect: () => leaveViews(() => { dock.current?.clear(); open(applicationEntries.current?.apps.find((app) => app.id === scope.current)?.home ?? home); }) },
     ] },
     { label: t("Appearance"), items: [
-      // A checkmark is the "shortcut" slot: the menu stays one shape.
       ...([["system", t("Follow system")], ["light", t("Light")], ["dark", t("Dark")]] as const).map(([scheme, label]) => ({ label, shortcut: appearance.scheme === scheme ? "✓" : undefined, onSelect: () => appearance.setScheme(scheme) })),
     ] },
     { label: t("Window"), items: [
@@ -923,7 +846,6 @@ export function Workspace({ product, productIcon, storageKey, layoutScope, scope
   );
 }
 
-/** The application switcher in the header: the portal's applications by category, the current one marked. */
 function AppMenu({ applications, product, icon }: { applications: Applications; product: string; icon?: ReactNode }) {
   const current = applications.apps.find((a) => a.id === applications.current);
   const groups = applications.categories.map(category => ({ ...category, apps: applications.apps.filter(app => app.category === category.id) })).filter(group => group.apps.length);
@@ -952,7 +874,6 @@ function AppMenu({ applications, product, icon }: { applications: Applications; 
   );
 }
 
-/** A rail entry that opens a list: Recent, Favorites. */
 function RailList({ label, icon, items, empty }: { label: string; icon: ReactNode; empty: string; items: { id: string; label: string; detail?: string; icon?: ReactNode; run: () => void }[] }) {
   return (
     <DropdownMenu.Root>

@@ -24,16 +24,10 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 const MCPProtocolVersion = "2025-06-18"
 
-// Both versions support the stateless HTTP tools surface served here.
 func supportedMCPVersion(version string) bool {
 	return version == MCPProtocolVersion || version == "2025-03-26"
 }
 
-// MCP serves a member's catalog as Model Context Protocol tools: each
-// action it may call is a tool, and each read it may use is a "read_<name>" tool.
-// External agents (Claude Code, other MCP clients) discover and act with the
-// member's own grants through the same submission path as every other caller.
-// JSON-RPC over HTTP POST; answers are plain JSON (no streaming needed).
 func (g Tools) Serve(w http.ResponseWriter, r *http.Request, m platform.Member) {
 	if version := r.Header.Get("MCP-Protocol-Version"); version != "" && !supportedMCPVersion(version) {
 		writeJSON(w, http.StatusBadRequest, rpcError(nil, -32600, "unsupported MCP protocol version"))
@@ -54,7 +48,7 @@ func (g Tools) Serve(w http.ResponseWriter, r *http.Request, m platform.Member) 
 		writeJSON(w, http.StatusBadRequest, rpcError(nil, -32700, "parse error"))
 		return
 	}
-	if req.ID == nil { // a notification (notifications/initialized)
+	if req.ID == nil {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
@@ -63,8 +57,6 @@ func (g Tools) Serve(w http.ResponseWriter, r *http.Request, m platform.Member) 
 	}
 	switch req.Method {
 	case "initialize":
-		// A client may ask for another version; advertise only the version this
-		// endpoint actually implements, so the client can accept it or disconnect.
 		version := req.Params.ProtocolVersion
 		if !supportedMCPVersion(version) {
 			version = MCPProtocolVersion

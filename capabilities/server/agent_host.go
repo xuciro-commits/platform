@@ -138,8 +138,6 @@ func (h hostView) CallAgentModel(provider platform.AIProvider, model platform.AI
 		return platform.ChatAnswer{}, &platform.AIError{Status: 403, Detail: refusal.Message}
 	}
 	answer, failure := h.t.call(provider, model, member, request, now)
-	// Only the original agent owner supplies these bindings; an HTTP chat
-	// request's arbitrary run label never becomes application attribution.
 	_, _ = recordRead(h.t, context.Background(), func() (struct{}, *kernel.Error) {
 		if value, ok := h.Record(platform.RunType + "/" + request.Run); ok {
 			if run, ok := value.(platform.AgentRunRecord); ok {
@@ -265,27 +263,19 @@ func (t *Tenant) evaluateReleaseAgentLocked(m platform.Member, request ReleaseEv
 	sub := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: platform.AgentApp,
 		IdempotencyKey: "evaluation:" + identity, Target: &pb.EntityRef{Type: platform.EvaluationType, Id: id},
 		Schema: &pb.SchemaRef{Name: platform.SchemaEvalStart, Version: 1}, Payload: platform.Raw(map[string]any{"agent": request.Agent, "model": model, "suite": true, "candidate": request.CandidateID})}
-	// This builder-only endpoint queues the original evaluator as the actual
-	// builder, so its authorized reads/probes retain that person's identity.
 	if _, refusal := t.submitAccepted(t.agents, m, sub, now, true); refusal != nil {
 		return "", fmt.Errorf("agent evaluation was refused: %s", refusal.Message)
 	}
 	return id, nil
 }
 
-// suspended says whether member is an agent an administrator switched off.
 func (t *Tenant) suspended(member string) bool {
 	v, ok := t.held(platform.SwitchType + "/" + member)
 	return ok && v.(platform.Switch).Suspended
 }
 
-// Think gives each running agent its next model turn. The host
-// wakes it with owned work, with a periodic fallback: model calls are slow and
-// happen outside the tenant's lock; each answer is then journaled and applied.
 func (t *Tenant) Think(now time.Time) { integrations.OnLane(t.turns(now)) }
 
-// turns are the agents' due turns, to run on the I/O lane: each
-// calls its model outside the tenant's lock.
 func (t *Tenant) turns(now time.Time) []func() {
 	if t.agents == nil || t.businessStopped() {
 		return nil
@@ -301,11 +291,6 @@ func (t *Tenant) turns(now time.Time) []func() {
 	return out
 }
 
-// stillRunning reports whether this run is still the running turn that was
-// snapshotted before its model call: a cancel, or a stop from any other cause,
-// ends the run and the late answer must not become a step. It
-// also clears the turn's busy mark, so a run stopped in flight is no longer
-// held out of the scheduler.
 func (t *Tenant) stillRunning(id string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -317,7 +302,6 @@ func (t *Tenant) stillRunning(id string) bool {
 	return true
 }
 
-// take takes one run's turn: its model's answer becomes the run's next step.
 func (t *Tenant) take(x platform.AgentTurn, now time.Time) {
 	{
 		if x.Stop != "" {
@@ -337,13 +321,8 @@ func (t *Tenant) take(x platform.AgentTurn, now time.Time) {
 		answer, failure := t.call(x.Provider, x.Model, t.agents.AgentPrincipal(x.Run.Agent), x.Request, now)
 		answer.Usage = agentRunUsage(answer.Usage, x.Run)
 		if t.quarantined() {
-			return // do not apply a late model answer to a tenant under recovery
+			return
 		}
-		// The call above is the one place a run waits on the outside, and the
-		// tenant's lock is not held while it does: the run may have been
-		// cancelled, stopped or suspended in the meantime. A late answer must
-		// not run its tool then. What it cost is
-		// still journaled and metered, so spend stays accounted for.
 		if !t.stillRunning(x.Run.ID) {
 			if answer.Usage.Model != "" {
 				t.meter(t.agents.AgentPrincipal(x.Run.Agent), answer.Usage)
@@ -370,9 +349,6 @@ func (t *Tenant) take(x platform.AgentTurn, now time.Time) {
 	}
 }
 
-// Consecutive knowledge reads can wait on providers together. Their observed
-// values are still accepted in call order, one result at a time. Writes and
-// human checkpoints never join a parallel group.
 func (t *Tenant) continueAgentCalls(run platform.AgentRunRecord, now time.Time) {
 	defer func() {
 		t.mu.Lock()
@@ -411,7 +387,6 @@ func (t *Tenant) continueAgentCalls(run platform.AgentRunRecord, now time.Time) 
 	}
 }
 
-// agentStep journals a step, then applies it.
 func (t *Tenant) agentStep(b platform.AgentResultStep, now time.Time) {
 	t.applyAgentStep(b, now, true)
 }
@@ -422,9 +397,6 @@ func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time, relea
 	if t.quarantined() {
 		return false
 	}
-	// The step's journal clock is a PostgreSQL timestamptz. Make the live
-	// decision use its durable precision too; otherwise a full-journal retry
-	// recreates a different run history from the same saved model step.
 	if t.recordsAcceptedResults() {
 		now = now.Truncate(time.Microsecond)
 	}
@@ -433,21 +405,16 @@ func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time, relea
 	}
 	run, known := platform.Get[platform.AgentRunRecord](t.automation(platform.AgentApp, false), b.Run)
 	if b.Evaluation != nil {
-		// A report is applied only while its evaluation still waits for one;
-		// an evaluation already reported must not be written twice.
 		ev, waited := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), b.Evaluation.ID)
 		if !waited || ev.State != "queued" || ev.Revision != b.Evaluation.Revision {
 			return false
 		}
 		run.Agent = b.Evaluation.Agent
 	} else if !known || run.State != "running" {
-		// The fence at the end of the outside call, and here in the step's own
-		// decision: a model answer that arrives after the run was cancelled or
-		// stopped never runs its tool.
 		return false
 	}
 	if b.CallID != "" && (len(run.Pending) == 0 || run.Pending[0].ID != b.CallID) {
-		return false // a completed call's durable result is reused after restart or a late response
+		return false
 	}
 	if b.Stop == "" && run.OnBehalf != "" {
 		if !t.agents.AllowsAgentRun(run) {
@@ -459,8 +426,6 @@ func (t *Tenant) applyAgentStep(b platform.AgentResultStep, now time.Time, relea
 	return !t.quarantined()
 }
 
-// Evaluate works through queued evaluations, one at a time, outside the
-// tenant's lock but for each tool it probes; the host calls it apart from Think.
 func (t *Tenant) Evaluate(now time.Time) {
 	if t.agents == nil || t.ai == nil {
 		return
@@ -489,14 +454,14 @@ func (t *Tenant) Evaluate(now time.Time) {
 			return true
 		})
 		if report.State != "done" {
-			return // a checkpoint was not accepted; do no further model work
+			return
 		}
 		t.agentStep(platform.AgentResultStep{Run: report.ID, Evaluation: &report}, now)
 		t.mu.Lock()
 		current, known := platform.Get[platform.Evaluation](t.automation(platform.AgentApp, false), report.ID)
 		t.mu.Unlock()
 		if !known || current.State == "queued" {
-			return // retry on the next work cycle after an append failure
+			return
 		}
 	}
 }

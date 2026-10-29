@@ -46,7 +46,6 @@ function explorationRelations(source:RecordSource,definitions:readonly Workspace
  return result;
 }
 
-/** A bounded facade over the original authorized record/traversal readers, with no business joins. */
 export function createRecordExploration(reader:RecordExplorationReader) {
  const scope=reader.source.scope,requireActive=()=>{if(!reader.active()||reader.source.scope!==scope)throw Error("The original exploration scope has ended.");};
  const windows=new Map<string,Promise<RecordPageData>>();let revision=reader.source.revision;
@@ -73,7 +72,6 @@ export function createRecordExploration(reader:RecordExplorationReader) {
  };
 }
 
-/** Resolve fixed metadata only; discovery never implies execution or navigation authority. */
 export function originalDirectoryItems(config:PageUI.PageAssetDirectory,definitions:readonly WorkspaceDefinition[]) {
  return config.items.flatMap(item=>{const d=definitions.find(d=>same(d.ref,item.asset.ref));if(!d)return [];
   const retained=item.asset.ref.kind==="query"?d.queryVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="link-type"?d.linkVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="property-type"?d.propertyVersions?.[item.asset.sourceVersion]:undefined;

@@ -10,7 +10,6 @@ export function modelOptionLabel(value:string):string {
   return labels[value]?t(labels[value]):value;
 }
 
-/** Purpose compatibility and effective options come from the original owner. */
 export function ModelPicker({ value, onChange, purpose, inherit = true, label = t("Model") }: {
   value: string; onChange: (value: string) => void; purpose: ModelPurpose; inherit?: boolean; label?: string;
 }) {

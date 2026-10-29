@@ -1,8 +1,5 @@
 package platformserver
 
-// The tenant's read-only facade: what a member may call, the authority's
-// declarations, the app list and the member directory.
-
 import (
 	"cmp"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -11,8 +8,6 @@ import (
 	"slices"
 )
 
-// Catalog is what m may call: each app's actions for m's role there, and an
-// action that uses protocol actions only when m may call the bound provider's.
 func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 	gen, key := t.definitionsFingerprint(), transport.Rights(m)
 	if out, ok := t.views.Catalog(gen, key); ok {
@@ -31,8 +26,6 @@ func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
 	return out
 }
 
-// Apps describes the enabled apps from their manifests: discovery,
-// the protocol graph and the capability matrix read this.
 func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
 	gen := t.definitionsFingerprint()
@@ -60,15 +53,12 @@ func (t *Tenant) Apps() []AppInfo {
 	return out
 }
 
-// AppEntry is an app a member may open in the workspace: the
-// tenant runs it and the member holds a role in it.
 type AppEntry struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Role  string `json:"role"`
 }
 
-// AppsOf are the apps the member holds a role in, in the order the tenant runs them.
 func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
 	out := []AppEntry{}
 	gen := t.definitionsFingerprint()
@@ -83,7 +73,7 @@ func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
 
 type AppInfo struct {
 	ID           string                    `json:"id"`
-	Title        string                    `json:"title"` // the manifest's, in the caller's language
+	Title        string                    `json:"title"`
 	Version      string                    `json:"version"`
 	Reads        []string                  `json:"reads"`
 	Roles        []string                  `json:"roles"`
@@ -94,11 +84,9 @@ type AppInfo struct {
 	Provides     []string                  `json:"provides"`
 	Consumes     []string                  `json:"consumes"`
 	Emits        []platform.EffectKind     `json:"emits"`
-	Interfaces   []platform.Interface      `json:"interfaces"` // the shapes this app declares (A2)
+	Interfaces   []platform.Interface      `json:"interfaces"`
 }
 
-// Member is a member of the tenant's directory, as the console holds it now:
-// for tests and tools that act as a member.
 func (t *Tenant) Member(id string) (platform.Member, bool) {
 	if t.identity == nil {
 		return platform.Member{}, false
@@ -126,8 +114,6 @@ func (t *Tenant) buildCatalog(m platform.Member) []platform.Action {
 				if version, err := t.actionSchemaVersion(a, action); err == nil {
 					action.SchemaVersion = &version
 				}
-				// Generated create/edit forms use this member's writable fields.
-				// Custom actions keep their own declared inputs and policy.
 				if info, ok := entities[action.Target]; ok && info.App == a.Manifest().ID &&
 					slices.Contains(info.Standard, action.Schema) && (action.Schema == info.Type+".create" || action.Schema == info.Type+".edit") {
 					action.Payload = slices.DeleteFunc(slices.Clone(action.Payload), func(input platform.Field) bool {

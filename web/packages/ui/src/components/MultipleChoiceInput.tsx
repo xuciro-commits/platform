@@ -5,7 +5,6 @@ import {Toggles} from "../primitives/controls";
 import {t} from "../i18n";
 import {validChoiceInput} from "./choice";
 
-/** Change one declared option in the original set; keep unmatched selections. */
 export function MultipleChoiceInput({value,options,label,title,disabled,onChange,clearable}:{value:string[];options:readonly string[];label?:string;clearable?:boolean;title:string;disabled?:boolean;onChange:(value:string[])=>void}){
  const limits=renderingLimits.runtime.choiceInput,caption=label??"",unknown=value.filter(item=>!options.includes(item));
  if(!validChoiceInput({variant:"multiple",options,label,clearable})||value.length>limits.maxSelected||new Set(value).size!==value.length)return <p role="alert">{t("Multiple choice configuration is unsupported.")}</p>;

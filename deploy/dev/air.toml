@@ -1,4 +1,3 @@
-# Rebuild and restart the single native Platform API.
 root = "."
 tmp_dir = ".build/dev"
 

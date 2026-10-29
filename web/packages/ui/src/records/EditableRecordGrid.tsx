@@ -10,7 +10,6 @@ import type {Entity} from "../fields/entity";
 import {t} from "../i18n";
 import type {EntityRecord} from "./Records";
 
-/** The caller supplies authorized fields and the original submission route. */
 export type RecordSelectionPort={selectedIDs:string[];records:EntityRecord[];status:"empty"|"pending"|"value"|"error";maxRecords:number;onChange:(ids:string[])=>void};
 export type RecordEditPort={access?:Record<string,Record<string,{allow:boolean;reason:string}>>;schema:string;fields:string[];scope:string;maxRows:number;preview?:boolean;alwaysEditing?:boolean;confirmation?:{title:string;description:string};enabled?:boolean;submit:(baseline:EntityRecord,patch:Record<string,unknown>)=>Promise<{accepted:boolean;error?:string}>};
 const emptyRows=()=>Object.create(null) as Record<string,PendingRow>;
@@ -20,11 +19,6 @@ export function EditableRecordGrid({data,columns,entity,height,rowHeight,showToo
  const [review,setReview]=useState(false),reviewedRows=useRef<Record<string,PendingRow>|undefined>(undefined);
  const alive=useRef(true),lock=useRef(false),currentPort=useRef(port);currentPort.current=port;
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
- // Staged rows are a real task: the original dirty/busy owner protects them
- // against closing and leaving, and they survive searches, pagination and
- // refreshes. Only explicit discard, an accepted submission or a stopped
- // submission clears them; an authorization change stops later submissions
- // (checked per row) instead of silently dropping work.
  const {confirmDiscard}=useUnsavedChanges(Object.keys(rows).length>0,()=>{setRows(emptyRows());setNotice("");setEditing(!!port?.alwaysEditing);},busy);
  const stage=(record:EntityRecord,field:string,value:unknown)=>{
   if(busy||review||port?.enabled===false||record.archived||!port?.fields.includes(field)||port.access?.[record.id]?.[field]?.allow===false)return;

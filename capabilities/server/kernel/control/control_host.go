@@ -14,13 +14,6 @@ import (
 	"time"
 )
 
-// The platform app is the tenant's console: its directory of
-// members and their role in each app, and every administrator's decision about
-// the host's operations — connectors, app settings, owned work, protocol
-// bindings, notifications, endpoints and effects. Every change is one of its
-// decisions, so it has history, survives restarts through the journal, and
-// takes effect on the next request. Each area decides its own target type,
-// next to the state it changes (operations.go, effects.go).
 const (
 	PlatformApp     = "platform"
 	MemberType      = "platform.member"
@@ -32,7 +25,6 @@ const (
 	Admin           = "admin"
 )
 
-// Memberships are the seats' starting memberships, for the org app's seed.
 func Memberships(seats []platform.Seat) []platform.Membership {
 	var out []platform.Membership
 	for _, s := range seats {
@@ -56,17 +48,17 @@ type Console struct {
 	*Credentials
 	tenant   string
 	members  map[string]*platform.Member
-	subjects map[string]string            // subject → member ID
-	then     func()                       // what the decision being applied says once the lock is released
-	profiles map[string]*platform.Profile // member ID → profile
-	tokens   map[string]*Token            // hashed personal tokens
-	minted   map[string]bool              // token secrets already handed out
-	lastSeen map[string]time.Time         // the host's memory, not decided state
+	subjects map[string]string
+	then     func()
+	profiles map[string]*platform.Profile
+	tokens   map[string]*Token
+	minted   map[string]bool
+	lastSeen map[string]time.Time
 	sessions sessionTable
 	platform.ConsolePolicies
 	platform.ConsolePackages
 	ledger *platform.Ledger
-	host   platform.ConsoleHost // only governance capabilities, attached at composition
+	host   platform.ConsoleHost
 }
 
 func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
@@ -101,7 +93,6 @@ func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
 	return platform.NewCatalog(actions...)
 }
 
-// NewConsole seeds a tenant's directory of members; changes recorded later replay on top.
 func NewConsole(tenant string, newOwners func(string) Owners, seats ...platform.Seat) *Console {
 	owners := newOwners(tenant)
 	d := &Console{tenant: tenant, newOwners: newOwners, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*platform.Profile{},
@@ -124,8 +115,6 @@ func NewConsole(tenant string, newOwners func(string) Owners, seats ...platform.
 	return d
 }
 
-// Identities are the tenant's subjects with the members they sign in as, for
-// a host on development tokens (the token is the subject).
 func (d *Console) Identities() []platform.LoginIdentity {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -139,7 +128,6 @@ func (d *Console) Identities() []platform.LoginIdentity {
 	return out
 }
 
-// Snapshot and Restore: the members, how they sign in, and the decisions.
 type consoleState struct {
 	PackageSources map[string]platform.PackageSource     `json:"packageSources,omitempty"`
 	Credentials    map[string]platform.CredentialState   `json:"credentials,omitempty"`
@@ -154,7 +142,6 @@ type consoleState struct {
 	Tokens         map[string]*Token                     `json:"tokens,omitempty"`
 }
 
-// state is the directory as snapshots and accepted-state digests see it.
 func (d *Console) state() consoleState {
 	policies, packages := d.ConsolePolicies.SnapshotState(), d.ConsolePackages.SnapshotState()
 	return consoleState{Credentials: d.Credentials.SnapshotState(), Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: policies.Projects, Packages: packages.Packages, PackageSources: packages.Sources, Roles: policies.Roles, Policies: policies.Policies, Teams: policies.Teams, Tokens: d.tokens}
@@ -183,7 +170,6 @@ func (d *Console) Restore(raw json.RawMessage) error {
 	return nil
 }
 
-// restoreAccess takes the access configuration and tokens of a decided state.
 func (d *Console) restoreAccess(s consoleState) {
 	d.ConsolePackages.Restore(platform.PackageState{Packages: s.Packages, Sources: s.PackageSources})
 	d.Credentials.Restore(s.Credentials)
@@ -194,7 +180,6 @@ func (d *Console) restoreAccess(s consoleState) {
 	}
 }
 
-// Member is the member a subject signs in as, with its current roles.
 func (d *Console) MemberBySubject(subject string) (platform.Member, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -205,7 +190,6 @@ func (d *Console) MemberBySubject(subject string) (platform.Member, bool) {
 	return d.currentMember(m), true
 }
 
-// holding are the members with role in app, sorted.
 func (d *Console) Holding(app, role string) []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -219,7 +203,6 @@ func (d *Console) Holding(app, role string) []string {
 	return out
 }
 
-// addressLocked is the email a member signs in with ("" for services and agents). Call with d.mu held.
 func (d *Console) addressLocked(member string) string {
 	if m := d.members[member]; m != nil && m.Status == platform.MemberLeft {
 		return ""
@@ -255,8 +238,6 @@ func (d *Console) Manifest() platform.Manifest {
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 
-// The Console owns member and governance state. Host controls participate
-// through the caller's private control component, not this directory image.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 
 func (d *Console) ForkAcceptedState() (platform.App, error) {
@@ -271,7 +252,6 @@ func (d *Console) ForkAcceptedState() (platform.App, error) {
 	if err := json.Unmarshal(raw, &state); err != nil {
 		return nil, err
 	}
-	// Every mutable slice, pointer and map belongs to this private decision.
 	fork := NewConsole(d.tenant, d.newOwners)
 	fork.ledger, fork.host = d.ledger, d.host
 	fork.ConsolePackages.Attach(d.host)
@@ -335,7 +315,6 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	// Session revocations are exposed only after the standing/token decision commits.
 	now := time.Now()
 	for id, member := range state.Members {
 		if old := d.members[id]; old != nil && old.Status != member.Status && !member.Active() {
@@ -355,9 +334,6 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	return nil
 }
 
-// Submit decides the console's actions under the tenant's lock, as every
-// decision; its own lock guards only the directory, so a tenant's operations
-// (effects, endpoints, settings) may notify members by role as they apply.
 func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		declared, _ := d.ledger.Catalog.Action(s.GetSchema().GetName())
@@ -392,7 +368,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				then := d.then
 				d.then = nil
 				d.mu.Unlock()
-				if then != nil { // what the decision tells others, outside the console's lock
+				if then != nil {
 					then()
 				}
 			}, err
@@ -429,14 +405,13 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply(r)
 			}, err
 		}
-		if d.host == nil { // not composed: a tenant's operations need one
+		if d.host == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		return platform.ControlDecision(c, s, now)
 	})
 }
 
-// decideMember decides the directory's actions: add a member, grant or revoke a role.
 func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
@@ -477,7 +452,6 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 			d.deriveRoles(m, today(m))
 		}, nil
 	}
-	// SchemaGrant: only a role the app defines, in an app the tenant runs.
 	if d.host == nil {
 		return nil, invalid
 	}
@@ -503,8 +477,6 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 	}, nil
 }
 
-// Read "notifications": the caller's own. Every other read is for the tenant's
-// administrators only.
 func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	h := d.host
 	if h != nil && name == "notifications" {
@@ -559,8 +531,6 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-// Input "heartbeat": a connector reports it is alive (not journaled; health
-// reads stale after a restart until the next one).
 func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
 	if name != "heartbeat" || d.host == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
@@ -568,8 +538,6 @@ func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time)
 	return nil, d.host.ConnectorHeartbeat(c, now)
 }
 
-// language is the language a member reads: their own choice,
-// else the tenant's default; "" is English, or what the browser asks for.
 func (d *Console) Language(member string) string {
 	d.mu.Lock()
 	preferred := ""
@@ -601,7 +569,6 @@ func (d *Console) decideOperation(c platform.Caller, s *pb.Submission, _ time.Ti
 	return func(r *pb.ChangeRecord) { _, _ = c.RequestOperation(r, q) }, nil
 }
 
-// The console's operations actions: connectors, settings, work, protocol bindings, notifications.
 const (
 	ConnectorType          = "platform.connector"
 	SettingType            = "platform.setting"
@@ -636,15 +603,8 @@ func operationsActions() []platform.Action {
 	}
 }
 
-// Tenant words: the tenant's own dictionary, one more layer on
-// the platform's and the apps'. An administrator says what a
-// declaration text — above all one the tenant defined in Build: an object
-// type, a field, a state, an action, an application — reads as in each
-// language; the host then serves it like any shipped translation. Names are
-// written once in one language and said in the others: never "EN/中文" in one
-// title.
 const (
-	BuildApp             = "build" // the app whose definitions the tenant writes
+	BuildApp             = "build"
 	TranslationType      = "platform.translation"
 	SchemaTranslationSet = "platform.translation.set"
 )
@@ -660,7 +620,6 @@ func wordsActions() []platform.Action {
 	}
 }
 
-// The console's actions about endpoints and effects.
 const (
 	EndpointType         = "platform.endpoint"
 	EffectType           = "platform.effect"
@@ -700,11 +659,6 @@ func effectActions() []platform.Action {
 	}
 }
 
-// hostControl is what the host console holds over a tenant:
-// its lifecycle ("" or "open" runs, "suspend" and "decommission" block
-// ordinary requests), the support sessions it authorized, and the migrations
-// it moved in or out. The lifecycle is read without any lock (health, the
-// tenant record); the rest has its own.
 type HostState struct {
 	lifecycle        atomic.Pointer[string]
 	mu               sync.Mutex
@@ -724,13 +678,11 @@ func (h *HostState) State() string {
 
 func (h *HostState) setState(v string) { h.lifecycle.Store(&v) }
 
-// suspended reports whether the console stopped the tenant.
 func (h *HostState) Suspended() bool {
 	l := h.State()
 	return l != "" && l != "open"
 }
 
-// supportGrants are the sessions, newest first.
 func (h *HostState) SupportGrants() []platform.SupportGrant {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -739,7 +691,6 @@ func (h *HostState) SupportGrants() []platform.SupportGrant {
 	return out
 }
 
-// usableSupport resolves an open session without using it.
 func (h *HostState) UsableSupport(tenant, id string, now time.Time) (platform.SupportGrant, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -759,7 +710,6 @@ func (h *HostState) Migrations() []platform.MigrationManifest {
 	return slices.Clone(h.migrations)
 }
 
-// SnapshotState retains the original portable snapshot shape.
 func (h *HostState) SnapshotState() platform.HostControlImage {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -787,7 +737,6 @@ func (h *HostState) DisabledOwners() []string {
 func (h *HostState) Image() (platform.HostControlImage, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	// Encode the complete owned shape to isolate nested migration row diagnostics.
 	raw, err := json.Marshal(platform.HostControlImage{Lifecycle: h.State(), Support: h.support, Migrations: h.migrations, Requests: h.requests, RuntimeSelection: h.runtimeSelection, DisabledOwners: h.disabledOwners})
 	var image platform.HostControlImage
 	if err == nil {

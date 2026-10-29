@@ -11,8 +11,6 @@ const terminalStates = ["completed", "cancelled", "compensated"];
 const stateName = (state: string) => t(names[state] ?? state);
 const elapsed = (start: string) => Math.max(0, Math.floor((Date.now() - Date.parse(start)) / 1000));
 
-/** Dispatch status stays with its business record and the original work task.
- * The same card is used from record details and application run inspection. */
 export function DispatchProgress({ type, id }: { type: string; id: string }) {
   const domain = [[type === "build.dispatch" ? "id" : "subject", "=", type === "build.dispatch" ? id : `${type}/${id}`]];
   const query = useReadQuery<{ records: Api.DispatchRun[] }>(`/v1/records/build.dispatch?domain=${encodeURIComponent(JSON.stringify(domain))}&sort=-startedAt,id&limit=50`);

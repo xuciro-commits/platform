@@ -1,4 +1,3 @@
-// Command storage-files verifies a stopped deployment's entire file store.
 package main
 
 import (

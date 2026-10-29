@@ -18,7 +18,6 @@ export function recordResourceSlot(page:PageUI.Page,variable:string|undefined):s
  return ["graph-explorer","observation"].includes(producer.widget)?undefined:selectionSlot(page,producer);
 }
 
-/** Presentation ownership comes from the one layout document. */
 export function sectionOverlay(page:PageUI.Page,section:string):string|undefined {
  const document=page.document;if(!document)return undefined;
  const find=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const node=document.nodes[id];return node?.section===section||[...(node?.children??[]),...(document.unusedWidgets??[]).filter(entry=>entry.parent===id).map(entry=>entry.node)].some(child=>find(child,seen));};
@@ -29,7 +28,6 @@ export function selectionSlot(page:PageUI.Page,section:PageUI.Section,parent=fal
  const name=parent?section.parentSelection:section.selection,owner=sectionOverlay(page,section.id??"");
  if(!parent&&interfaceQueryForSection(page,section))return `${owner?`overlay:${owner}/`:""}interface-record/${section.id??""}`;
  const profile=Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1]);
- // Application producers share the output, not each other's query-confirmation lease.
  if(!parent&&profile>=95&&section.selectionVariable&&section.id)return `record-producer/${section.id}/${object}`;
  const scoped=profile>=11;
  const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban","record-list","resource-list","record-calendar","record-picker","record-leaderboard","record-scatter","record-map","layered-graph","model-matrix"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
@@ -68,9 +66,6 @@ export function overlaySessionScopes(page:PageUI.Page) {
  }));
 }
 
-/** Resource outputs refer to the original section binding. No second query
- * definition, policy or mutable record object is stored in the document.
- */
 export function resourceVariables(page: PageUI.Page, snapshot: PageSessionSnapshot): Record<string, VariableResult> {
   return Object.fromEntries(Object.entries(page.document?.variables ?? {}).flatMap(([id, variable]) => {
     const source = variable.source;

@@ -6,8 +6,6 @@ import (
 	"slices"
 )
 
-// The caller supplies either its complete registry or member-filtered definitions.
-// Exact query and relationship bindings never fall back to the current version.
 func QuerySourceDefinition(definitions []platform.Definition, binding *platform.AssetBinding) *platform.Definition {
 	if binding != nil {
 		for i := range definitions {
@@ -124,7 +122,6 @@ func (b Bindings) CheckQueries(p platform.Page) error {
 	return p.CheckQuerySetConditions(namedSources)
 }
 
-// Bindings are the original installed registry and compilers captured by the host.
 type Bindings struct {
 	Entity      func(string) (platform.EntityInfo, bool)
 	Criteria    func(platform.AssetRef) (*platform.RuleCriteria, bool)

@@ -1,6 +1,3 @@
-// Roles & permissions: the catalog every decision is checked
-// against — per app, per role, the actions it may call — read from the host,
-// never written here. Holders counts who has each role today.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import { PropertyList, ContextHelp, Button, Form, Checkbox, DataTable, type ColumnDef, Dialog, Input, PageHeader, Panel, Select, Tag, Textarea, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
@@ -44,7 +41,6 @@ function AppMatrix({ app }: { app: AppPermissions }) {
   );
 }
 
-// Ask the engine why: a member, a permission, the verdict with its rule.
 function Explain({ catalog }: { catalog: AppPermissions[] }) {
 	const { client, source } = useHost();
   const members = useRead<Member[]>("/v1/members").data ?? [];
@@ -56,8 +52,6 @@ function Explain({ catalog }: { catalog: AppPermissions[] }) {
   const [fields, setFields] = useState("");
   const [kind, setKind] = useState<Api.AuthzRequest["kind"]>("read");
   const [asked, setAsked] = useState<string | null>(null);
-  // Record explanations are explicit POST diagnostics, not live query leases.
-  // A metadata change still obtains a fresh answer under current permissions.
   const answer = useQuery({ queryKey: [client.connection.token, client.connection.tenant, source.scope, "authorization-explanation", asked],
     queryFn: () => client.get<Explanation | Api.Verdict>(asked!, true), enabled: asked !== null });
   const explanation = answer.data && "verdict" in answer.data ? answer.data : undefined;
@@ -98,7 +92,6 @@ function Explain({ catalog }: { catalog: AppPermissions[] }) {
   );
 }
 
-// The tenant's own configuration (D): custom roles, policies, teams.
 function Access({ catalog }: { catalog: AppPermissions[] }) {
   const { can } = useHost();
   const access = useRead<AccessConfig>("/v1/access").data;
@@ -219,7 +212,6 @@ function TeamForm({ members, catalog, onSubmit, onCancel }: { members: Member[];
   );
 }
 
-/** The asset kinds a project may name: the build app's draftable asset types. */
 const assetKinds = ["object", "linktype", "propertytype", "page", "app", "process", "function", "query", "code", "agent", "alertrule", "pipeline", "dataset", "source", "connection", "writeback", "match", "table", "testplan", "evaluation"];
 
 function ProjectForm({ members, project, onSubmit, onCancel }: { members: Member[]; project?: Api.BuildProject; onSubmit: (id: string, p: unknown) => Promise<void>; onCancel: () => void }) {

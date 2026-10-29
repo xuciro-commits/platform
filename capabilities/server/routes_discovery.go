@@ -18,7 +18,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// routesDiscovery serves what the caller may see: catalog, apps, entities, definitions, pages, capabilities.
 func (h *Host) routesDiscovery(rt *routes) {
 	rt.metadata(transport.Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
@@ -203,7 +202,6 @@ func (t *Tenant) DispatchTargets(member platform.Member, id string, at time.Time
 	}
 }
 
-// WriteView captures the original member projection only on a cache miss.
 func (t *Tenant) WriteView(kind string, m platform.Member, lang string, w http.ResponseWriter, r *http.Request) {
 	t.views.WriteView(t.definitionsFingerprint(), transport.Rights(m), kind, lang, w, r, func() any {
 		switch kind {

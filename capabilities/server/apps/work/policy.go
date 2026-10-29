@@ -9,26 +9,12 @@ import (
 	"platformserver/platform"
 )
 
-// Multi-approval policies (ordered by the owner on 2026-10-05).
-//
-// An approval level already says who may approve and whether one or all of them
-// must. A policy adds the tenant's own rule on top: for a named action, how
-// many *distinct* members must approve before the level closes, even when the
-// action's own declaration asks for a single approval. The count is resolved
-// when the request opens, like the approvers themselves, so a later policy
-// change cannot move a decision already in front of people; the record keeps
-// the count it opened with.
-//
-// Policies are the work app's own records, so they have history and replay, and
-// only the app's administrators may write them.
-
 const (
 	PolicyType         = "work.approval.policy"
 	SchemaPolicySave   = PolicyType + ".save"
 	SchemaPolicyRemove = PolicyType + ".remove"
 )
 
-// ApprovalPolicy is one tenant rule: this many distinct approvals for an action.
 type ApprovalPolicy struct {
 	platform.Record
 	Title     string `json:"title,omitempty" field:"search" title:"Why" help:"What the rule is for, for the people who read audits"`
@@ -42,7 +28,6 @@ func policyEntity() platform.Entity {
 		Description: "How many distinct approvals an action needs in this tenant, on top of the action's own levels."}
 }
 
-// PolicyActions are the decisions an administrator makes about the rules.
 func (w *Work) policyActions() []platform.Action {
 	return []platform.Action{
 		{Schema: SchemaPolicySave, Target: PolicyType, New: true, Capability: "approvals", Title: "Require approvals",
@@ -58,8 +43,6 @@ func (w *Work) policyActions() []platform.Action {
 	}
 }
 
-// PolicyCount is the strongest rule that covers the action, resolved with the
-// caller the read runs as (the request's own).
 func (w *Work) PolicyCount(c platform.Caller, app, schema string) int {
 	policies, _, err := platform.Find[ApprovalPolicy](c, platform.Query{})
 	if err != nil {
@@ -77,9 +60,6 @@ func (w *Work) PolicyCount(c platform.Caller, app, schema string) int {
 	return count
 }
 
-// CountFor is the number of distinct approvals a level closes at: one by
-// default, all when the level says so, otherwise the policy's count, never more
-// than there are approvers.
 func CountFor(step ApprovalStep, all bool, policy int, approvers int) int {
 	if all {
 		return len(step.Approvers)
@@ -93,7 +73,6 @@ func CountFor(step ApprovalStep, all bool, policy int, approvers int) int {
 	return policy
 }
 
-// input saves or removes a policy through the same lifecycle as every record.
 func (w *Work) inputPolicy(_ platform.Caller, payload json.RawMessage, _ time.Time) *kernel.Error {
 	var p struct {
 		App, Schema, Title string
@@ -105,8 +84,6 @@ func (w *Work) inputPolicy(_ platform.Caller, payload json.RawMessage, _ time.Ti
 	return nil
 }
 
-// policy records an administrator's rule, or drops one. Saved rules are read
-// through PolicyCount, so the record's own shape is the whole contract.
 func (w *Work) policy(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	if err := w.inputPolicy(c, s.GetPayload(), time.Now()); err != nil {
 		return nil, err

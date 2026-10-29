@@ -13,9 +13,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// InvokeCapability is a projection onto the original owner entry points.
-// Discovery is checked here; the selected owner still checks current authority,
-// source visibility, input schema, versions and the canonical idempotency key.
 func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvocation, now time.Time) (platform.CapabilityResult, *kernel.Error) {
 	answer := platform.CapabilityResult{Ref: q.Ref}
 	if refusal := t.admits(m); refusal != nil {
@@ -50,7 +47,7 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 				return bad("Bound action inputs need an object payload")
 			}
 			for name, value := range values {
-				inputs[name] = value // fresh scoped values replace client previews
+				inputs[name] = value
 			}
 			payload, _ = json.Marshal(inputs)
 		}
@@ -68,7 +65,6 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 				answer.State = "pending"
 			}
 		} else {
-			// An approval request deliberately has no accepted business change.
 			answer.State = "pending"
 		}
 		return answer, nil
@@ -100,9 +96,6 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 	}
 }
 
-// Selection and source bindings share one definition/record view. The owner
-// entry point runs after that read ends, retaining its own current checks and
-// lock-free input preparation or external work.
 type capabilityPreparation struct {
 	descriptor platform.CapabilityDescriptor
 	inputs     json.RawMessage

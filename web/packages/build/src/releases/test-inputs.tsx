@@ -3,8 +3,6 @@ import { PayloadFields } from "@platform/app";
 import type { ActionDeclaration } from "@platform/kernel";
 import { ContextHelp, Button, Textarea, t } from "@platform/ui";
 
-/** One fixed payload serves both fields and the explicit advanced editor.
- * Preview fields never look up production records for synthetic references. */
 export function TestPayload({ fields, payload, onChange }: { fields?: ActionDeclaration["payload"]; payload: string; onChange: (payload: string) => void }) {
   const [advanced, setAdvanced] = useState(false);
   let values: Record<string, unknown> | undefined;

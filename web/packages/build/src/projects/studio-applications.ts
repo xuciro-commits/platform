@@ -6,7 +6,6 @@ import type { Project } from "./project";
 import type { AuthoringSection } from "../workshop/page-editor/draft";
 import { refKey } from "./resources";
 
-/** Installed identity is separate from the optional Build draft record ID. */
 export const installedStudioID = (ref: Api.AssetRef) => `installed/${encodeURIComponent(ref.app)}/${encodeURIComponent(ref.name)}`;
 export function installedStudioRef(id?: string): Api.AssetRef | undefined {
   const parts = id?.split("/");
@@ -19,7 +18,6 @@ export type StudioApplication = {
   project?: Project; definition?: WorkspaceDefinition;
 };
 
-/** Original navigation remains a replaceable slot after its renderer retires. */
 export function applicationViewOptions(entry?: ApplicationUIInfo): { id: string; title: string }[] {
   if (!entry) return [];
   const views = new Map<string, { id: string; title: string }>();
@@ -56,7 +54,6 @@ export function studioApplications(apps: readonly Api.AppInfo[], definitions: re
   return [...entries.values()].sort((a, b) => a.title.localeCompare(b.title) || refKey(a.ref).localeCompare(refKey(b.ref)));
 }
 
-/** Reverse only bindings the Build page format can represent without loss. */
 export function pageDraftFromDefinition(page: PageUI.Page) {
   const schema = (ref: Api.AssetRef) => {
     if (ref.app !== ref.name.split(".")[0]) throw Error("page-binding-owner");
@@ -64,7 +61,6 @@ export function pageDraftFromDefinition(page: PageUI.Page) {
   };
   const sections: AuthoringSection[] = (page.sections ?? []).map(section => {
     const { object, query, actions, function: fn, inlineEdit, ...configuration } = section;
-    // A FunctionRef stores an ordinal only; it cannot retain this exact owner version.
     if (fn) throw Error("page-function-binding");
     return { ...configuration,
       object: object?.name ? schema(object) : undefined,

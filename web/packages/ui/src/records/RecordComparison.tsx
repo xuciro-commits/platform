@@ -7,7 +7,6 @@ import {t} from "../i18n";
 const titleTypes=["text","longtext","choice","reference"];
 const fieldTypes=[...titleTypes,"integer","decimal","money","date","datetime","boolean"];
 
-/** Missing values share one identity; incompatible original values have none. */
 function originalValue(type:string,value:unknown):string|number|boolean|bigint|null|undefined {
  if(value===null||value===undefined)return null;
  if(titleTypes.includes(type))return typeof value==="string"?value:undefined;
@@ -23,7 +22,6 @@ function originalValue(type:string,value:unknown):string|number|boolean|bigint|n
  return undefined;
 }
 
-/** Compare complete, caller-confirmed original records using permission-filtered field metadata. */
 export function RecordComparison({records,info,fields,labelField,source,onOpenReference}:{records:EntityRecord[];info:EntityInfo;fields:string[];labelField:string;source?:RecordSource;onOpenReference?:(type:string,id:string)=>void}) {
  const label=info.fields.find(f=>f.name===labelField),definitions=fields.map(name=>info.fields.find(f=>f.name===name)),limits=renderingLimits.runtime.recordComparison;
  if(labelField!=="id"&&(!label||!titleTypes.includes(label.type))||fields.length<limits.minFields||fields.length>limits.maxFields||new Set(fields).size!==fields.length||definitions.some(f=>!f||!fieldTypes.includes(f.type)))return <p role="alert">{t("Record comparison fields or title are unavailable or incompatible.")}</p>;

@@ -1,5 +1,3 @@
-// The two full-page states before a workspace can open: a quarantined tenant
-// that an administrator may try to recover, and an identity the host rejects.
 import type { EdgeClient, Api } from "@platform/kernel";
 import { Button, Card, t } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,5 +56,4 @@ export function SignInProblem({ problem, email, signingOut, error, onSignOut }: 
   </main>;
 }
 
-/** Public activation identity; candidate descriptors remain builder-only. */
 export { ReleaseInformation } from "./ReleaseInformation";

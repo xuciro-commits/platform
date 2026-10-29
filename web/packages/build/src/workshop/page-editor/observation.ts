@@ -6,7 +6,6 @@ import type {EntityInfo} from "@platform/ui";
 import {loopOwner,overlayOwner} from "../page-layout";
 import type {AuthoringSection} from "./draft";
 
-/** Authoring diagnostics mirror finite bindings; the host remains authoritative. */
 export function observationProblem(document:PageUI.PageDocument,sections:AuthoringSection[],s:AuthoringSection,pageObject:string,entity:(name:string)=>EntityInfo|undefined,definitions:WorkspaceDefinition[]):boolean {
  const bindings=[s.observationHistoryVariable,s.observationContextVariable,s.observationSignalVariable,s.observationThresholdVariable,s.observationRowsVariable,s.observationCountVariable,s.observationMeanVariable];
  if(s.widget!=="observation")return !!s.observation||bindings.some(Boolean);

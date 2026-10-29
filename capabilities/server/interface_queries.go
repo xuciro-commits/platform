@@ -12,8 +12,6 @@ import (
 	"platformserver/platform"
 )
 
-// An interface is a read contract, not a record type. Every result retains
-// its actual target so duplicate IDs never collapse or route an action wrong.
 type InterfaceRecord struct {
 	Type   string         `json:"type"`
 	ID     string         `json:"id"`
@@ -79,8 +77,6 @@ func (t *Tenant) bindInterfaceQuery(q platform.NamedQuery, drafts ...platform.En
 }
 
 func checkInterfaceQueryFields(q platform.NamedQuery) error {
-	// Schema validation only; these fields are never registered as an entity
-	// or used to execute a predicate. Execution compiles each original type.
 	info := platform.EntityInfo{}
 	for _, f := range q.InterfaceShape.Fields {
 		info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type})
@@ -88,8 +84,6 @@ func checkInterfaceQueryFields(q platform.NamedQuery) error {
 	return checkQueryFields(q, info)
 }
 
-// InterfaceRecords uses current implementers; published named queries use
-// their frozen list through the same reader below.
 func (t *Tenant) interfaceRecordsRead(m platform.Member, name string, query platform.Query, now time.Time) (InterfaceRecordPage, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return InterfaceRecordPage{}, err

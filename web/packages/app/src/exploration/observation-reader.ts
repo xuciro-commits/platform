@@ -22,7 +22,6 @@ function validateAnswer(data:AggregateData,request:Api.AggregateWindowQuery):Api
  if(first<last||first===last&&w.first!.id>w.last!.id||w.count===1&&(w.first!.id!==w.last!.id||first!==last||w.first!.revision!==w.last!.revision)||w.count>1&&w.first!.id===w.last!.id)throw bad();
  return w;
 }
-/** One leased view over the original aggregate owner, without a second business cache or read fallback. */
 export function createObservationStatisticsReader(source:Source,active:()=>boolean){
  let sequence=0;
  const scope=(input:ObservationStatisticsRequest)=>{const request=structuredClone(input);validRequest(source,request);const {domain,search,set,archived,traversal}=request.query;return JSON.stringify([source.scope,source.revision,active(),request.object,{domain,search,set,archived,traversal,window:request.window}]);};
@@ -30,8 +29,6 @@ export function createObservationStatisticsReader(source:Source,active:()=>boole
   const attempt=++sequence;if(!active())return;
   const request=structuredClone(input),info=validRequest(source,request),memberScope=source.scope,revision=source.revision;
   const current=()=>attempt===sequence&&active()&&source.scope===memberScope&&source.revision===revision&&source.entity(request.object)?.type===request.object&&source.entity(request.object)?.fields.find(f=>f.name===request.window.timeField)?.type==="datetime"&&source.entity(request.object)?.fields.find(f=>f.name===request.window.field)?.type===info.fields.find(f=>f.name===request.window.field)?.type;
-  // Record-page presentation never silently limits aggregate membership. The
-  // explicit window alone defines the event-time ordering and recent N rows.
   const {domain,search,set,archived,traversal}=request.query,query={domain,search,set,archived,traversal,window:request.window},scope=JSON.stringify([memberScope,revision,true,request.object,query]);
   try{const data=await source.aggregate!(request.object,query);if(!current())return;const window=validateAnswer(data,request.window);return {scope,window,statistics:{scope,signal:window.field,threshold:Number(window.threshold),windowRows:window.requestedRows,count:window.count,valid:window.valid,above:window.above,min:window.min,mean:window.mean,max:window.max}};}catch(error){if(!current())return;throw error;}
  };

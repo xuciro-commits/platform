@@ -6,7 +6,6 @@ import {t} from "../i18n";
 export type BreadcrumbTrailItem={id:string;label:string;detail?:string};
 export type BreadcrumbTrailProps={items:readonly BreadcrumbTrailItem[];currentID:string;onActivate?:(item:BreadcrumbTrailItem)=>void;onCurrentActivate?:()=>void;enabled?:boolean;label?:string};
 
-/** Stable original navigation identities; the caller owns navigation and selection clearing. */
 export function BreadcrumbTrail({items,currentID,onActivate,onCurrentActivate,enabled=true,label}:BreadcrumbTrailProps) {
  const budget=renderingLimits.runtime.contextViews.maxLabelBytes,bytes=(value:string)=>new TextEncoder().encode(value).length;
  if(!Array.isArray(items)||items.length===0||new Set(items.map(item=>item?.id)).size!==items.length||!items.some(item=>item?.id===currentID)||items.some(item=>!item||typeof item.id!=="string"||!item.id||typeof item.label!=="string"||bytes(item.label)>budget||item.detail!==undefined&&(typeof item.detail!=="string"||bytes(item.detail)>budget)))return <p role="alert">{t("The original breadcrumb trail is unavailable or incompatible.")}</p>;

@@ -1,18 +1,8 @@
-// BPMN notation for the flow family: one vocabulary of shapes and
-// markers, so a process reads the same way in every view that draws it. A notation
-// says which shape an activity is drawn as and which marker sits inside it; the
-// owner's own icon still says what the activity does.
-//
-// Node classes sit one level above: what a node *is*. A class is a
-// declaration, not a drawing — it hands a node its glyph, its palette group and
-// its default notation, so a new scenario picks a class instead of commissioning
-// a renderer.
 import { ArrowRightLeft, Blocks, Brain, Braces, Circle, CircleSlash, Clock, Code2, Database, FileText, Flag, GitBranch, Mail, Play, Plus, User, Workflow, X, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { t } from "../../i18n";
 import type { Tone } from "../../components/StatusTag";
 
-/** The outline a notation is drawn as. */
 export type FlowShape = "task" | "gateway" | "event" | "subprocess";
 
 export type FlowNotation =
@@ -20,8 +10,6 @@ export type FlowNotation =
   | "gateway-exclusive" | "gateway-parallel" | "gateway-inclusive" | "gateway-event"
   | "event-start" | "event-intermediate" | "event-end" | "event-timer" | "event-message" | "event-error" | "event-terminate";
 
-/** An event attached to an activity's border: the timeout it may hit, the error it
- * may escape through. It is a marker on the shape, not a step of its own. */
 export type FlowBoundary = { id: string; notation: "event-timer" | "event-error" | "event-message"; label?: string; tone?: Tone };
 
 export function flowShape(notation?: FlowNotation, kind?: string): FlowShape {
@@ -32,8 +20,6 @@ export function flowShape(notation?: FlowNotation, kind?: string): FlowShape {
   return "task";
 }
 
-/** The step kinds the host's Process and Flow declarations answer with, read as
- * BPMN. An owner may name a notation instead; this is only what a kind says by itself. */
 export function notationOf(kind: string): FlowNotation {
   switch (kind) {
     case "payload": return "event-start";
@@ -50,10 +36,8 @@ export function notationOf(kind: string): FlowNotation {
   }
 }
 
-/** A step kind that repeats carries BPMN's loop marker. */
 export const loops = new Set(["foreach", "while"]);
 
-/** The marker drawn inside a shape. A task keeps its owner's icon instead. */
 export function notationGlyph(notation: FlowNotation): ReactNode | undefined {
   switch (notation) {
     case "user-task": return <User />;
@@ -71,7 +55,6 @@ export function notationGlyph(notation: FlowNotation): ReactNode | undefined {
   }
 }
 
-/** What the shape is called, for its tooltip and accessible name. */
 export function notationTitle(notation: FlowNotation): string {
   return t(({
     task: "Task", "service-task": "Service task", "user-task": "User task", "script-task": "Script task",
@@ -84,17 +67,8 @@ export function notationTitle(notation: FlowNotation): string {
   } as Record<FlowNotation, string>)[notation]);
 }
 
-/** How thick the outline of an event is: thin to start, double in the middle, thick to end. */
 export const eventRing = (notation: FlowNotation): number => notation === "event-start" ? 1.5 : notation === "event-end" || notation === "event-terminate" ? 4 : 2.5;
 
-/* -------------------------------------------------------------------------- */
-/* Node classes: what a node is, decided by declaration.            */
-/* -------------------------------------------------------------------------- */
-
-/** What a node is, for drawing and grouping. The standing scenarios are named
- * here; an owner may still name their own class id, which draws as a plain task
- * under its own group. Whatever the id, there is one table to look it up in and
- * one place to add to. */
 export type FlowNodeClass =
   | "code"       // a typed code or script step
   | "document"   // a document, dataset or knowledge item
@@ -112,9 +86,6 @@ export type FlowNodeClass =
   | "task"       // the plain default
   | (string & {});
 
-/** The class table: the only place a class's glyph, palette group and default
- * BPMN notation are written down. Titles are English source text; the palette
- * translates them when it groups by class. */
 export const flowNodeClasses: Record<string, { title: string; icon: ReactNode; notation?: FlowNotation }> = {
   code: { title: "Code", icon: <Code2 />, notation: "script-task" },
   document: { title: "Document", icon: <FileText />, notation: "data-object" },
@@ -132,8 +103,6 @@ export const flowNodeClasses: Record<string, { title: string; icon: ReactNode; n
   task: { title: "Task", icon: <Blocks /> },
 };
 
-/** The class a BPMN notation stands for, when the owner named no class. This is
- * the fallback, not the source: an owner who knows what its node is says so. */
 function classFromNotation(notation: FlowNotation): FlowNodeClass {
   if (notation.startsWith("gateway")) return "control";
   if (notation.startsWith("event")) return "trigger";
@@ -145,20 +114,14 @@ function classFromNotation(notation: FlowNotation): FlowNodeClass {
   return "task";
 }
 
-/** The class a node draws under: the class it declares, else the class its BPMN
- * reading stands for. Accepts a catalog kind or a canvas node. */
 export function flowNodeClassOf(node: { class?: string; notation?: FlowNotation; id?: string }): FlowNodeClass {
   return node.class ?? classFromNotation(node.notation ?? notationOf(node.id ?? ""));
 }
 
-/** The glyph a node carries when its owner gives it none — the one lookup every
- * view shares, so the palette, the block and the structure tree agree. */
 export function flowNodeIcon(node: { icon?: ReactNode; class?: string; notation?: FlowNotation; id?: string }): ReactNode {
   return node.icon ?? flowNodeClasses[flowNodeClassOf(node)]?.icon ?? <Blocks />;
 }
 
-/** The palette group a node lands in: the group it names, else its class title,
- * translated. A class id the table does not know still groups under itself. */
 export function flowNodeGroup(node: { group?: string; class?: string; notation?: FlowNotation; id?: string }): string {
   return node.group ?? t(flowNodeClasses[flowNodeClassOf(node)]?.title ?? node.class ?? "Task");
 }

@@ -18,20 +18,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Telemetry: traces and metrics through OpenTelemetry. A trace
-// follows an input — a submission, a connector input — through its requests,
-// the deliveries it causes and the flow steps they take, to the
-// effects they send; model calls carry the GenAI attributes. Without an OTLP
-// endpoint (OTEL_EXPORTER_OTLP_ENDPOINT) the providers are OpenTelemetry's
-// no-ops. Replay makes no spans: it happened before.
-
 var tracer = otel.Tracer("platformserver")
 
-// begin starts a span for work the tenant does under its lock and makes it the
-// current one, so what the work causes is its child; the returned function
-// ends it with the outcome ("ok" or why not) and restores the previous one.
-// With a valid parent — the span of the input that queued the work — the span
-// continues that trace.
 func (t *Tenant) begin(name string, parent trace.SpanContext, attrs ...attribute.KeyValue) func(outcome string) {
 	ctx := t.ctx
 	if ctx == nil || parent.IsValid() {
@@ -46,7 +34,6 @@ func (t *Tenant) begin(name string, parent trace.SpanContext, attrs ...attribute
 	}
 }
 
-// current is the span of the work the tenant is doing, if any.
 func (t *Tenant) current() trace.SpanContext {
 	if t.ctx == nil {
 		return trace.SpanContext{}
@@ -54,8 +41,6 @@ func (t *Tenant) current() trace.SpanContext {
 	return trace.SpanContextFromContext(t.ctx)
 }
 
-// outside starts a span for work outside the tenant's lock (an effect's attempt,
-// a model call), as a child of the span that caused it when there is one.
 func outside(parent trace.SpanContext, name string, attrs ...attribute.KeyValue) trace.Span {
 	_, span := tracer.Start(trace.ContextWithSpanContext(context.Background(), parent), name, trace.WithAttributes(attrs...))
 	return span
@@ -69,7 +54,6 @@ func end(span trace.Span, outcome string) {
 	span.End()
 }
 
-// meters are the host's instruments; with no provider set they cost nothing.
 var meters = struct {
 	attempts, failures metric.Int64Counter
 }{}
@@ -80,7 +64,6 @@ func init() {
 	meters.failures, _ = m.Int64Counter("platform.work.failures", metric.WithDescription("Attempts of owned work that did not succeed"))
 }
 
-// counted records an attempt of kind in app and whether it failed.
 func counted(t *Tenant, kind, app, outcome string) {
 	attrs := metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.app", app), attribute.String("platform.kind", kind))
 	meters.attempts.Add(context.Background(), 1, attrs)
@@ -116,9 +99,6 @@ func observeFrom(current func() []*Tenant) func() error {
 	return registration.Unregister
 }
 
-// exportTelemetry sends traces and metrics to the OTLP endpoint the standard
-// environment names, and returns how to flush them at shutdown; without one
-// it does nothing.
 func exportTelemetry(ctx context.Context, service string) func(context.Context) {
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" && os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") == "" {
 		return func(context.Context) {}

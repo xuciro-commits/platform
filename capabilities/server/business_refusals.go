@@ -35,8 +35,6 @@ func (t *Tenant) checkBusinessCorrection(m platform.Member, sub *pb.Submission, 
 	return nil
 }
 
-// The accepted-result journal remains the truth. This is a caller-filtered
-// projection of its already restored envelopes, not another refusal store.
 func (t *Tenant) BusinessRefusals(m platform.Member, typ, id string, offset, limit int, at time.Time, keys ...string) (platform.BusinessRefusalPage, *kernel.Error) {
 	out := platform.BusinessRefusalPage{Records: []platform.BusinessRefusalEntry{}}
 	if err := t.admits(m); err != nil {
@@ -184,8 +182,6 @@ func (t *Tenant) readableBusinessFact(m platform.Member, f platform.BusinessRefu
 		return f
 	}
 	info := et.Info()
-	// Re-run the existing derived-source projection on the historical value itself,
-	// not on today's record, whose source references may have changed.
 	historical := reflect.New(info.Go).Elem()
 	if json.Unmarshal(f.Original, historical.Addr().Interface()) != nil {
 		f.Original = nil

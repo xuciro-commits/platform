@@ -15,8 +15,6 @@ import (
 	"platformserver/platform"
 )
 
-// Reconciliation uses the original bounded source readers on their outside
-// lane, then revalidates the captured progress and the applicant's access.
 func (t *Tenant) ReconcileConfirmations(at time.Time) {
 	if t.quarantined() || t.app(build.ID) == nil {
 		return
@@ -38,7 +36,6 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 		}
 	}
 	t.confirmationReads.retain(active)
-	// Poll the oldest due evidence first, including runs beyond the first page.
 	due := func(r platform.ConfirmationRun) time.Time {
 		var earliest time.Time
 		found := false
@@ -173,7 +170,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 				last := prior[len(prior)-1]
 				if last.Matched == diff.Matched && last.Error == diff.Error && bytes.Equal(last.Observed, diff.Observed) {
 					t.mu.Unlock()
-					continue // Keep the first evidence; polling time is not a new result.
+					continue
 				}
 			}
 			payload := map[string]any{"party": p.Name, "revision": run.Revision, "outcome": outcome, "reason": "Source reconciliation", "difference": diff, "answer": diff.Observed}
@@ -182,7 +179,7 @@ func (t *Tenant) ReconcileConfirmations(at time.Time) {
 			_, refusal := t.submitAccepted(t.app(build.ID), caller, submission, at, true)
 			t.mu.Unlock()
 			if refusal != nil {
-				continue // A stale read or revoked access is not an accepted difference.
+				continue
 			}
 		}
 	}

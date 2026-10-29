@@ -1,5 +1,3 @@
-// Builder release workbench: saved candidates come from committed bytes.
-// Evaluation and activation retain the host's existing gates.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, PropertyList, Select, StatusTag, t, useUnsavedChanges, useViewCall, notify} from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
@@ -8,8 +6,6 @@ import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../proj
 import { diagnose } from "./diagnostics";
 import { useEffect, useRef, useState } from "react";
 
-// One selected saved draft in a joint candidate. The selection is
-// what the builder checked; the server recomputes the candidate from it.
 export { releaseCommandBytes, releaseDraftsSelection, releaseDraftsValue } from "./selection";
 export type { JointChoice, ReleaseKind } from "./selection";
 import { applicationDraftSelection, jointKey, merged, ownerDraft, releaseCommandBytes, releaseSelectionProblem, type JointChoice, type ReleaseKind } from "./selection";
@@ -88,17 +84,12 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const rememberRequest = (request?: ReleaseRequest) => { pendingRef.current = request; setPending(request); };
   const { confirmDiscard } = useUnsavedChanges(!!pending, () => rememberRequest(), busy);
   const locked = busy || !!pending;
-  // One existing task view owns the captured HTTP request. No new outbox or
-  // release authority: a retry sends exactly its original key and payload.
   const perform = async (job: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError("");
     try { await job(); }
     finally { lock.current = false; setBusy(false); }
   };
-  // A complete selection arrives through the original view call; the URL is
-  // only a fallback for legacy links. The transferred batch is received as
-  // reviewed - not merged with whatever the route still carries.
   const call = useViewCall();
   const invalidSelection = !!selectionError || !!call?.expired;
   const transferred = (call?.input as { drafts?: JointChoice[] } | undefined)?.drafts;
@@ -110,16 +101,11 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const applications = useRecordInventory<Record & Api.Application>("build.app", 1000, builder);
   const scopedApplication = scope ? applications.data?.records.find(item => item.id === scope) : undefined;
   const held = new Set([...(scopedApplication?.resources ?? []).map(refKey), ...(scopedApplication?.pages ?? []).map(name => refKey({ app: "build", kind: "page", name }))]);
-  // Candidates filter by the formal application name. A builder scope still
-  // resolves through the readable build.app draft; a publisher handoff names
-  // the application explicitly and never depends on that draft.
   const filterName = applicationName ?? scopedApplication?.name;
   const scopeUnresolved = !!scope && !scopedApplication && !applicationName;
   const inventory = useReadQuery<Api.ReleasePage>(`/v1/releases/candidates?offset=${offset}&limit=20${filterName ? `&application=${encodeURIComponent(filterName)}` : ""}`, undefined, mayRelease && (!scope || !!scopedApplication || !!applicationName));
   const hostAdmin = useReadQuery<{ subject: string; tenants: string[] }>("/v1/host/me", undefined, mayRelease).isSuccess; // the host console answers only host administrators
   const activeID = inventory.isError ? "" : inventory.data?.activeId ?? "";
-  // What another environment promoted here and nobody activated yet: the
-  // release holder's inbox, ahead of the full saved inventory.
   const promoted = (inventory.isError ? [] : inventory.data?.candidates ?? []).filter((candidate) => candidate.from && candidate.id !== activeID);
   const selected = kinds.find((item) => item.kind === kind)!;
   const query = useRecordInventory<Record>(selected.type, 1000, builder);
@@ -137,8 +123,6 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const localPlans = (plans.isError || functions.isError ? [] : plans.data?.records ?? []).filter((plan) => plan.evaluation?.length && functions.data?.records.some((fn) => fn.id === plan.function && functionNames.includes(fn.name)));
   const eligiblePlans = [...localPlans, ...assets.filter(asset => asset.ref.app === "build" && asset.ref.kind === "evaluation-set" && !localPlans.some(plan => plan.name === asset.ref.name)).map(asset => ({id:asset.ref.name,title:asset.ref.name}))];
   const report = reports.isError ? undefined : reports.data?.records.find((item) => item.id === reportID);
-  // The application a release review was opened from is the natural root of a
-  // joint selection: its pages come before its own draft.
   const candidateQuery=useReadQuery<Api.SavedReleaseReview>(`/v1/releases/candidates/${encodeURIComponent(savedID)}`,undefined,!!savedID&&mayRelease);
   const candidateAI=candidateQuery.isError?[]:candidateQuery.data?.ai??savedCandidateAI;
   const passedFunctions=candidateAI.filter(item=>item.resource.ref.kind==="function"&&item.evaluations.some(report=>report.candidate===savedID&&report.state==="passed")).map(item=>item.resource.ref.name);
@@ -179,8 +163,6 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     if (!candidateID || pendingRef.current) return;
     return perform(() => readSaved(candidateID));
   };
-  // An explicit candidate handoff loads the sealed candidate on first mount
-  // and after a refresh; it is not re-fetched on every render.
   const openedCandidate = useRef("");
   useEffect(() => {
     if (!mayRelease || locked || !candidateID || openedCandidate.current === candidateID) return;
@@ -214,8 +196,6 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
       } catch (error) { setError(error instanceof Error ? error.message : t("Release review could not be loaded.")); }
     });
   };
-  // The original server owner computes dependencies. The view never invents
-  // a closure from cached browser inventories or truncates it to fit a budget.
   const addReferenced = (from: JointChoice) => {
     if (!builder || invalidSelection || !from.id || pendingRef.current) return;
     return perform(async () => {
@@ -241,8 +221,6 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     catch { setError(t("The release request was not confirmed. Retry the original request.")); return; }
     if (!answer.ok || typeof answer.body?.id !== "string" || !answer.body.id
       || request.kind !== "evaluate" && answer.body.id !== request.body.candidateId) {
-      // Candidate saving can stand even if sealing reports 409. Any unclear
-      // answer retains the original request; a new key is not a safe retry.
       const message = apiErrorMessage(answer.body) ?? t("The release request was not confirmed. Retry the original request.");
       if (request.kind === "activate") await readSaved(request.body.candidateId);
       setError(message); return;

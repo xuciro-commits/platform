@@ -14,7 +14,6 @@ function viewLinks(items: NavSection["items"]): { label: string; route: Route }[
   return items.flatMap(item => "route" in item ? [item] : viewLinks(item.items));
 }
 
-/** The installed declaration and its extensions share the original Studio. */
 export function InstalledApplicationHome({ id, area, selected }: { id: string; area?: string; selected?: string }) {
   const host = useHost(), { open } = useWorkspace();
   const ref = installedStudioRef(id)!;

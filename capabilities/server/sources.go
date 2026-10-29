@@ -21,15 +21,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Data source pulls. A pull is an import whose
-// file comes from an endpoint: the host fetches the answer on the I/O lane,
-// outside every lock and decision, then submits each mapped row as the
-// publisher - the target's own generated create or edit, keyed by the source,
-// a frozen execution and row position - and finally the pull's summary on the source. Each
-// of those is an ordinary journaled input; a replay never fetches.
-
-// PullSources pulls every due source of the tenant once; it runs on the
-// five-second outside loop beside evaluations and embeddings.
 func (t *Tenant) PullSources(now time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) {
 		return
@@ -65,8 +56,6 @@ func (t *Tenant) PullSources(now time.Time) {
 	t.EvaluateObservations(now)
 }
 
-// integrationPreparation is immutable input and resolved output, held by the
-// existing file owner rather than copied into every accepted result.
 type integrationPreparation struct {
 	Type       string                  `json:"type"`
 	ID         string                  `json:"id"`
@@ -95,9 +84,6 @@ func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now
 	return &build.IntegrationExecution{ID: fmt.Sprintf("%x", identity), Member: member.ID, Scopes: slices.Clone(member.Scopes), Pending: true, Snapshot: digest}, nil
 }
 
-// integrationPending reads the already accepted execution, without journaling
-// another artificial resume operation. A paused/replaced source cannot start
-// more work, and the definition/actor of an accepted input stays fixed.
 func (t *Tenant) integrationPending(typ, id string, execution *build.IntegrationExecution) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -252,7 +238,6 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 	_ = t.sourceResult(member, s, pull, "finished", nil, now)
 }
 
-// prepareRows fixes matching and create/edit selection before accepting the input.
 func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time) (int, *kernel.Error) {
 	return recordRead(t, context.Background(), func() (int, *kernel.Error) {
 		merged := 0
@@ -281,8 +266,6 @@ func (t *Tenant) prepareRows(member platform.Member, object, producer string, ro
 	})
 }
 
-// integrationRefused distinguishes a saved business refusal from an append
-// failure. Only saved answers can finish a row; an uncommitted row stays pending.
 func (t *Tenant) integrationRefused(authority, key string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -321,7 +304,6 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 	return true
 }
 
-// connectionMarking is what a connection classifies everything read through it as.
 func (t *Tenant) connectionMarking(connection string) string {
 	if connection == "" {
 		return ""
@@ -334,8 +316,6 @@ func (t *Tenant) connectionMarking(connection string) string {
 	return fixed.Marking
 }
 
-// resolver is the object's published matching rule over its
-// records as they are now, or nil when rows land as they come.
 func (t *Tenant) resolver(member platform.Member, object, producer string, now time.Time) *build.Resolver {
 	rules, _, _ := platform.Find[build.Match](t.automation(build.ID, false), platform.Query{Limit: 500})
 	owner := t.app(build.ID).(build.IntegrationDefinitions)
@@ -383,8 +363,6 @@ func (t *Tenant) loadDatasetKey(member platform.Member, dataset, producer, marki
 	return err
 }
 
-// readSource reads the source's rows by its profile: json and csv
-// fetch one body, odata walks an entity set's pages, table queries a database.
 func (t *Tenant) readSource(s build.Source) ([]map[string]any, error) {
 	var conn *build.Connection
 	if s.Connection != "" {
@@ -437,7 +415,6 @@ func (t *Tenant) readSourceWithConnection(s build.Source, conn *build.Connection
 	return s.Decode(body)
 }
 
-// authorization is the Authorization header a connection's secret gives, or none.
 func (t *Tenant) authorization(c build.Connection, target ...string) string {
 	address := c.Address
 	if len(target) > 0 {
@@ -452,8 +429,6 @@ func (t *Tenant) authorization(c build.Connection, target ...string) string {
 	return ""
 }
 
-// fetchSource reads an answer with the guarded outbound sender: private
-// addresses only when allowed, one bounded body.
 func (t *Tenant) fetchSource(url, header string, allowPrivate bool, accept string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {

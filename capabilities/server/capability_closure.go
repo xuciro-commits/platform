@@ -11,8 +11,6 @@ import (
 	"platformserver/platform"
 )
 
-// Typed compute and AI invocation close over the same immutable owner assets.
-// They do not introduce a second release pointer or publication registry.
 func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, sourceVersion string, retained *string) (platform.ReleaseCandidate, string, error) {
 	available, err := t.releaseAssetsLocked(nil, false)
 	if err != nil {
@@ -53,9 +51,6 @@ func (t *Tenant) capabilityClosure(ref platform.AssetRef, body json.RawMessage, 
 	}
 	active, err := saved.Closure([]platform.AssetRef{ref})
 	if err != nil || !sameRetainedCapability(candidate, active) {
-		// A published version retained by its owner may be used by an old page
-		// after a later compute-only activation. Resolve only an exact saved
-		// closure, never a caller-selected release or an arbitrary descriptor.
 		if retained == nil && sourceVersion != "" {
 			ids := t.releases.Ids()
 			for _, id := range ids {

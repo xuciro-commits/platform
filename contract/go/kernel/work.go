@@ -4,7 +4,6 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// Works implements K9 (contract/spec/K9-work-ownership.md).
 type Works struct{ items map[string]*pb.Work }
 
 func NewWorks() *Works { return &Works{items: map[string]*pb.Work{}} }
@@ -12,15 +11,14 @@ func NewWorks() *Works { return &Works{items: map[string]*pb.Work{}} }
 func (w *Works) running(id string, generation uint32) (*pb.Work, *Error) {
 	work := w.items[id]
 	if work == nil {
-		return nil, errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND) // W6
+		return nil, errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 	}
 	if work.GetState() != pb.WorkState_WORK_STATE_RUNNING || work.GetGeneration() != generation {
-		return nil, errorf(pb.ErrorCode_ERROR_CODE_CONFLICT) // W2: stale or finished
+		return nil, errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
 	}
 	return work, nil
 }
 
-// Start begins the next generation and returns the checkpoint to resume from (W1).
 func (w *Works) Start(id, owner string) (uint32, string, *Error) {
 	if id == "" || owner == "" {
 		return 0, "", errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
@@ -36,7 +34,6 @@ func (w *Works) Start(id, owner string) (uint32, string, *Error) {
 	return work.GetGeneration(), work.GetCheckpoint(), nil
 }
 
-// Checkpoint records progress; an empty checkpoint keeps the previous one (W2, W3).
 func (w *Works) Checkpoint(id string, generation, progress uint32, checkpoint string) *Error {
 	work, err := w.running(id, generation)
 	if err != nil {
@@ -52,7 +49,6 @@ func (w *Works) Checkpoint(id string, generation, progress uint32, checkpoint st
 	return nil
 }
 
-// Finish completes or fails the current generation (W2).
 func (w *Works) Finish(id string, generation uint32, failed bool) *Error {
 	work, err := w.running(id, generation)
 	if err != nil {
@@ -68,13 +64,12 @@ func (w *Works) Finish(id string, generation uint32, failed bool) *Error {
 func (w *Works) Cancel(id string) *Error {
 	work, err := w.running(id, w.items[id].GetGeneration())
 	if err != nil {
-		return err // W4, W6
+		return err
 	}
 	work.State = pb.WorkState_WORK_STATE_CANCELLED
 	return nil
 }
 
-// CloseOwner cancels the owner's running work; finished work stays (W5).
 func (w *Works) CloseOwner(owner string) {
 	for _, work := range w.items {
 		if work.GetOwnerId() == owner && work.GetState() == pb.WorkState_WORK_STATE_RUNNING {

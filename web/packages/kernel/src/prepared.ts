@@ -17,8 +17,6 @@ const binding=(value:unknown):value is AssetBinding=>object(value)&&object(value
 const sameBinding=(a:AssetBinding,b:AssetBinding)=>a.ref.app===b.ref.app&&a.ref.kind===b.ref.kind&&a.ref.name===b.ref.name&&a.sourceVersion===b.sourceVersion;
 const time=(value:unknown)=>typeof value==="string"&&Number.isFinite(Date.parse(value));
 
-/** Prepared reads and editable inputs belong to the original client's actual
- * identity. They are local context, never an authorization or business store. */
 export class PreparedWorkspace {
  readonly scope:Scope;
  private active?:string;
@@ -59,8 +57,6 @@ export class PreparedWorkspace {
  private save(next:State){
   const raw=JSON.stringify(next);
   if(new TextEncoder().encode(raw).length>maxBytes)throw Error("Prepared content exceeds 2 MiB. Remove a preparation or saved draft first.");
-  // Validate the same envelope on both sides of a restart. Commit memory only
-  // after durable storage has succeeded; failed writes preserve the old scope.
   const state=this.decode(raw);
   localStorage.setItem(keyOf(this.scope),raw);this.raw=raw;this.parsed=state;
  }
@@ -96,8 +92,6 @@ export class PreparedWorkspace {
  removeForm(key:string){const state=this.load();this.save({...state,forms:state.forms.filter(form=>form.key!==key)});}
 }
 
-// Only existing read endpoints and bounded record-query bodies can be saved.
-// No sign-in answers, credentials, external requests or write results enter it.
 export function readPath(path:string):boolean{
  if(metadata.has(path))return true;
  const [url,body,...extra]=path.split("\n");
@@ -118,8 +112,6 @@ function identityIndex(raw:string,server:string):IdentityIndex{
   return index as IdentityIndex;
  }catch{throw Error("Prepared identity could not be opened. Local storage was not replaced.");}
 }
-/** The bootstrap index records scope names only, keyed by a token fingerprint.
- * It cannot sign anyone in and contains no token or copied credential. */
 export async function rememberPreparedIdentity(connection:Connection){
  const scope=scopeOf(connection),key=await identityKey(connection),raw=localStorage.getItem(key);
  const index=raw===null?{active:scope.tenant,tenants:{}}:identityIndex(raw,scope.server);

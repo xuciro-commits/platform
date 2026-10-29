@@ -1,9 +1,5 @@
 package platformserver
 
-// The submit pipeline: one submission becomes one accepted result or one
-// durable refusal. Tenant.Submit is the door; submitAccepted applies what the
-// app's decision accepted; explained names refusals that arrive bare.
-
 import (
 	"encoding/json"
 	"errors"
@@ -22,12 +18,10 @@ import (
 
 func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
-// Submit routes a submission to the app declaring its action and records it when accepted.
 func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return t.submit(m, s, now, nil)
 }
 
-// submitDiagnosed captures one invocation, including its original durable refusal.
 func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
 	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) {
@@ -47,11 +41,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	// Signal dead-letter replay prepares its retained batch (outside I/O)
-	// before the decision path; business-action replay continues inside the
-	// Flow app's own submission handling.
-	// flow.SchemaFlowReplay, named literally so the runtime never imports the
-	// concrete Flow app (the boundary check): the constant lives in engine/automation/automation_owner.go.
 	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
 		record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, contentVersion...)
 		if handled {
@@ -69,7 +58,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	a := t.owner["action:"+s.GetSchema().GetName()]
 	retired := a == nil
 	if a == nil {
-		// Retirement removes an exposed action, not its original receipts.
 		a = t.app(s.GetAuthority())
 		if a == nil {
 			return nil, unknown()
@@ -82,8 +70,6 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 		}
 	}
-	// A builder role held only through projects is bounded to their assets,
-	// from this submission's target under the tenant lock, before any app decides it.
 	if err = t.delegatedBound(m, s); err != nil {
 		return nil, err
 	}
@@ -131,9 +117,6 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 	if t.businessStopped() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
 	}
-	// A malformed transport identity cannot reserve a durable key for another
-	// tenant, authority or member. The kernel still supplies its ordinary
-	// refusal, but no result under this tenant can represent that submission.
 	if s.GetTenantId() != t.ID || s.GetPrincipalId() != m.ID {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
@@ -173,7 +156,6 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		answer := prior.Error
 		return nil, &answer
 	}
-	// Reject plaintext or invalid envelopes before a durable refusal captures input.
 	if s.GetSchema().GetName() == controlowner.SchemaCredentialSave {
 		if _, failure := controlowner.DecodeCredentialWrite(t.ID, s.GetPayload()); failure != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid credential configuration or encrypted value")
@@ -250,9 +232,6 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 }
 
 func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *kernel.Error) {
-	// Once committed, even an unexpected application panic is tenant-local:
-	// never answer from a possibly half-applied memory image or take down the
-	// other tenants. A repaired journal requires a fresh tenant generation.
 	defer func() {
 		if failure := recover(); failure != nil {
 			t.quarantine(fmt.Errorf("apply committed result: %v", failure))
@@ -330,8 +309,6 @@ func (t *Tenant) finishCommittedResult(a platform.App, m platform.Member, hash s
 	return receipt, nil
 }
 
-// Only decision evaluation may turn an unsupported-effect panic into a
-// refusal. A panic after the journal commit must escape so the tenant stops.
 func decideAccepted(a platform.App, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	return decideAcceptedAs(a, draft, m, s, now, false)
 }
@@ -364,11 +341,6 @@ func decideAcceptedAs(a platform.App, draft *stagedDecision, m platform.Member, 
 	return record, refusal
 }
 
-// explained gives a refusal an app returned without saying why the reason its
-// code implies, naming the action and its target, so that every refusal a
-// person, an agent or another app reads says something.
-// An app's own reason, through platform.Refuse, is always better; the known
-// apps that still refuse bare are counted in scripts/escapes.sh (#129).
 func explained(err *kernel.Error, a platform.App, schema, target string) *kernel.Error {
 	if err == nil || err.Message != "" {
 		return err

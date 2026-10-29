@@ -17,9 +17,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Candidate tests never inherit live transports or bindings. A fixture replaces
-// only the provider response; authorization, parsing, metering and replies use
-// the same model effect path as a live call.
 func configureFunctionFixtureModel(t *Tenant, model string, at time.Time) error {
 	t.AIClient = func(*http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("candidate model call has no fixed answer")
@@ -89,8 +86,6 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture platform.Fu
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(response))}, nil
 	}
 	outcome, usage := t.sendModel(effect, now)
-	// Fixed fixtures replay the same logical input; wall-clock transport time
-	// from this in-process stand-in must not change their deterministic result.
 	if usage != nil {
 		usage.Millis = 0
 	}

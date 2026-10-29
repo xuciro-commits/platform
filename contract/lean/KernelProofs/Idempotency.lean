@@ -1,6 +1,3 @@
-/- K4 C4/C5/C9/C10, after C1/C2 validation. / C1/C2 校验后的 K4 幂等分支。
-   `body` abstracts every remaining immutable submission field, not just payload.
-   body 抽象其余所有不可变提交字段，而非仅 payload。 See README.md for assumptions. -/
 namespace KernelProofs
 
 structure Submission where
@@ -38,8 +35,6 @@ structure Result where
   checked : Bool
   deriving DecidableEq
 
--- The check result is abstract; `checked` records whether the branch invokes it.
--- 检查结果为抽象输入；checked 明确记录该分支是否调用业务检查。
 def submit (st : State) (s : Submission) (now : Nat) (allowed : Bool) : Result :=
   match lookup s.tenant s.key st.receipts with
   | some prior => if prior.submission = s then

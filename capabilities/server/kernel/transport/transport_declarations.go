@@ -27,21 +27,17 @@ import (
 	"unicode"
 )
 
-// Route is one route of the host's HTTP API.
 type Route struct {
-	Pattern string // "GET /v1/records/{type}"
+	Pattern string
 	Summary string
 	Query   []Param
-	Body    any  // the request body's Go type as a zero value; nil: none
-	Answer  any  // the answer's Go type as a zero value; nil: any JSON
-	Public  bool // no bearer token
+	Body    any
+	Answer  any
+	Public  bool
 }
 
-// Param is a query parameter.
 type Param struct{ Name, Description string }
 
-// OpenAPI describes the host's routes; with a tenant and a member, it also
-// describes the entity types and action payloads that member sees.
 func OpenAPI(routes []Route, retained []reflect.Type, refusal reflect.Type, entities []platform.EntityInfo, actions []platform.Action) map[string]any {
 	s := newSchemas()
 	for _, typ := range retained {
@@ -113,7 +109,6 @@ func operationID(method, path string) string {
 	return id
 }
 
-// schemas turns Go types into JSON Schema, naming each struct once.
 type schemas struct {
 	defs  map[string]any
 	names map[reflect.Type]string
@@ -126,7 +121,6 @@ var (
 	messageType = reflect.TypeFor[proto.Message]()
 )
 
-// of is the schema of a Go type: a reference to a named struct, or inline.
 func (s *schemas) of(t reflect.Type) map[string]any {
 	switch {
 	case t == rawType:
@@ -161,10 +155,9 @@ func (s *schemas) of(t reflect.Type) map[string]any {
 		}
 		return s.ref(t)
 	}
-	return map[string]any{} // interfaces: any JSON
+	return map[string]any{}
 }
 
-// message is a kernel message, in its Protobuf JSON form: the contract's, not the host's.
 func (s *schemas) message(t reflect.Type) map[string]any {
 	name := t.Name()
 	s.defs[name] = map[string]any{"type": "object", "additionalProperties": true, "x-protobuf": "platform.kernel.v1alpha1." + name,
@@ -176,8 +169,6 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 	name, ok := s.names[t]
 	if !ok {
 		name = t.Name()
-		// Public schema names are part of the host API. Moving an owner value
-		// into its canonical contract package must not rename client types.
 		switch t.PkgPath() {
 		case "platformserver/platform":
 			if public := map[string]string{
@@ -197,18 +188,17 @@ func (s *schemas) ref(t reflect.Type) map[string]any {
 		if name == "" || strings.Contains(name, "[") {
 			return s.object(t)
 		}
-		if _, taken := s.defs[name]; taken { // two packages name a type alike: the package's name tells them apart
+		if _, taken := s.defs[name]; taken {
 			pkg := t.PkgPath()[strings.LastIndex(t.PkgPath(), "/")+1:]
 			name = strings.ToUpper(pkg[:1]) + pkg[1:] + name
 		}
 		s.names[t] = name
-		s.defs[name] = nil // reserved while its fields refer back to it
+		s.defs[name] = nil
 		s.defs[name] = s.object(t)
 	}
 	return map[string]any{"$ref": "#/components/schemas/" + name}
 }
 
-// object is a struct's schema: its JSON fields, embedded structs merged.
 func (s *schemas) object(t reflect.Type) map[string]any {
 	props, required, order := map[string]any{}, []string{}, []string{}
 	var add func(t reflect.Type)
@@ -256,7 +246,6 @@ func (s *schemas) object(t reflect.Type) map[string]any {
 	return out
 }
 
-// entitySchema is a tenant's entity type as JSON Schema: its record's fields.
 func entitySchema(e platform.EntityInfo) map[string]any {
 	props := map[string]any{"id": map[string]any{"type": "string"}, "revision": map[string]any{"type": "integer"}}
 	order := []string{"id", "revision"}
@@ -308,7 +297,6 @@ func entitySchema(e platform.EntityInfo) map[string]any {
 	return out
 }
 
-// payloadSchema is an action's payload as JSON Schema.
 func payloadSchema(a platform.Action) map[string]any {
 	props, order, required := map[string]any{}, []string{}, []string{}
 	for _, f := range a.Payload {
@@ -345,15 +333,11 @@ func payloadSchema(a platform.Action) map[string]any {
 	return out
 }
 
-// TypeScript is the TypeScript of an OpenAPI document's named schemas, for
-// the web edge: one exported type per Go struct the host answers with. Kernel
-// messages are the contract's own generated types (their *Json form),
-// imported from the modules that export them.
 func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 	defs := doc["components"].(map[string]any)["schemas"].(map[string]any)
 	var names []string
 	for name := range defs {
-		if !strings.Contains(name, ":") { // per-tenant schemas are not part of the static contract
+		if !strings.Contains(name, ":") {
 			names = append(names, name)
 		}
 	}
@@ -450,9 +434,6 @@ func tsKey(name string) string {
 	return fmt.Sprintf("%q", name)
 }
 
-// KernelModules finds, in a directory of the contract's generated TypeScript,
-// the module that exports each kernel message's JSON type (<Name>Json), as an
-// import path relative to that directory.
 func KernelModules(dir string) map[string]string {
 	out := map[string]string{}
 	exported := regexp.MustCompile(`(?m)^export type (\w+)Json =`)
@@ -470,9 +451,6 @@ func KernelModules(dir string) map[string]string {
 	return out
 }
 
-// translator derives immutable dictionaries and patterns from installed
-// declarations. Application snapshots arrive from the definition owner, so
-// translation never reaches back into the tenant's decision lock.
 type Translator struct {
 	base         platform.Languages
 	apps         func() []platform.App
@@ -497,8 +475,6 @@ func (x *Translator) appManifest(a platform.App) platform.Manifest {
 	return a.Manifest()
 }
 
-// installApplications projects only published application declarations. A
-// conflicting text has no winner, irrespective of application order.
 func (x *Translator) InstallApplications(definitions []platform.Definition) {
 	applications := map[string]platform.Languages{}
 	conflicts := map[string]platform.Languages{}
@@ -534,24 +510,18 @@ func (x *Translator) InstallApplications(definitions []platform.Definition) {
 	x.applications, x.dictionaries = applications, nil
 }
 
-// A pattern is a dictionary key with {placeholders}, such as "Downtime on
-// {resource}": it matches the English an app wrote with fmt ("Downtime on
-// R-7") and says it in the dictionary's language with the same values.
 type pattern struct {
 	re    *regexp.Regexp
 	names []string
-	parts []string // the text around the placeholders: len(names)+1
+	parts []string
 	out   string
-	fixed int // characters outside placeholders: the more, the more specific
+	fixed int
 }
 
 var placeholder = regexp.MustCompile(`\{(\w+)\}`)
 
-// maxSay bounds how deep patterns nest: a list of choices is said one item a
-// level ("{a}, {b}"), so eight lets a field name up to six of them.
 const maxSay = 8
 
-// languages are the languages any dictionary of the tenant has, sorted.
 func (x *Translator) Languages() []string {
 	out := []string{}
 	add := func(l platform.Languages) {
@@ -577,8 +547,6 @@ func (x *Translator) Languages() []string {
 	return out
 }
 
-// Dictionary is the shared dictionary. App-scoped reads additionally prefer
-// their owner's declarations; tenant wording always has the last word.
 func (x *Translator) Dictionary(lang string) map[string]string {
 	return x.dictionary("", lang).words
 }
@@ -625,7 +593,6 @@ func (x *Translator) dictionary(app, lang string) *translationDictionary {
 	return d
 }
 
-// reset forgets derived dictionaries after the tenant's words change.
 func (x *Translator) Reset() {
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -636,8 +603,6 @@ func (x *Translator) SayInApp(app, lang, s string) string {
 	return x.say(app, lang, s, 0)
 }
 
-// Translate returns v, as JSON, with every declaration text said in a
-// language: exactly, or by a pattern (a generated action's "Create {thing}").
 func (x *Translator) Translate(v any, lang string) any {
 	return x.TranslateInApp(v, "", lang)
 }
@@ -654,8 +619,6 @@ func (x *Translator) TranslateInApp(v any, app, lang string) any {
 	if json.Unmarshal(raw, &tree) != nil {
 		return v
 	}
-	// This is a response-only view of the same resolved dictionary used for
-	// typed declaration metadata. No page/asset/record bytes are changed.
 	var presentation func(any, string)
 	presentation = func(value any, owner string) {
 		switch node := value.(type) {
@@ -697,14 +660,11 @@ func (x *Translator) TranslateInApp(v any, app, lang string) any {
 			s, _ := c.(string)
 			titles[i] = x.SayInApp(app, lang, s)
 		}
-		m["choiceTitles"] = titles // the values stay what records hold
+		m["choiceTitles"] = titles
 	})
 	return tree
 }
 
-// lookup is a text's entry in a language's dictionary; a text in lower case,
-// as generated sentences hold a title ("Create purchase request"), finds its
-// title's entry too.
 func (x *Translator) lookup(app, lang, s string) (string, bool) {
 	dict := x.dictionary(app, lang).words
 	if tr, ok := dict[s]; ok && tr != "" {
@@ -718,8 +678,6 @@ func (x *Translator) lookup(app, lang, s string) (string, bool) {
 	return "", false
 }
 
-// says tells whether a language can say a text: by its entry, or by a
-// pattern whose values it can say in turn (numbers and names need none).
 func (x *Translator) says(lang, s string, depth int) bool {
 	return x.saysInApp("", lang, s, depth)
 }
@@ -736,7 +694,6 @@ func (x *Translator) saysInApp(app, lang, s string, depth int) bool {
 	return false
 }
 
-// split is the first way s fills p whose every value the language can say.
 func (x *Translator) split(app, lang string, p pattern, s string, depth int) ([]string, bool) {
 	if !p.re.MatchString(s) {
 		return nil, false
@@ -749,7 +706,6 @@ func (x *Translator) split(app, lang string, p pattern, s string, depth int) ([]
 	return nil, false
 }
 
-// patterns are the dictionary's keys with placeholders, the most specific first.
 func (x *Translator) patterns(app, lang string) []pattern {
 	d := x.dictionary(app, lang)
 	d.once.Do(func() {
@@ -778,7 +734,6 @@ func (x *Translator) patterns(app, lang string) []pattern {
 	return d.patterns
 }
 
-// said is a refusal with its message in a language (F-23); the code stays.
 func (x *Translator) Said(err *kernel.Error, lang string) *kernel.Error {
 	if err == nil || err.Message == "" {
 		return err
@@ -786,10 +741,6 @@ func (x *Translator) Said(err *kernel.Error, lang string) *kernel.Error {
 	return &kernel.Error{Code: err.Code, Message: x.Say(lang, err.Message)}
 }
 
-// Say is a text an app wrote for people, in a language: its translation, or
-// the translation of the first pattern it matches, with the matched values
-// said in turn (a state, an action's title, a nested text). What nothing
-// matches stays as written.
 func (x *Translator) Say(lang, s string) string { return x.say("", lang, s, 0) }
 
 func (x *Translator) say(app, lang, s string, depth int) string {
@@ -799,8 +750,6 @@ func (x *Translator) say(app, lang, s string, depth int) string {
 	if tr, ok := x.lookup(app, lang, s); ok {
 		return tr
 	}
-	// The most specific pattern with a split the language can say wholly; else
-	// the first that matches at all, with what it cannot say left as written.
 	var p pattern
 	var filled []string
 	for _, q := range x.patterns(app, lang) {
@@ -827,8 +776,6 @@ func (x *Translator) say(app, lang, s string, depth int) string {
 	return s
 }
 
-// TranslateMessages returns v, as JSON, with the titles and bodies apps wrote
-// said in a language.
 func (tr *Translator) TranslateMessages(v any, lang string) any {
 	if lang == "" {
 		return v
@@ -845,7 +792,7 @@ func (tr *Translator) TranslateMessages(v any, lang string) any {
 	walk = func(v any) {
 		switch x := v.(type) {
 		case map[string]any:
-			if answers, ok := x["answers"].([]any); ok { // a question's answers stay the values submitted
+			if answers, ok := x["answers"].([]any); ok {
 				titles := make([]any, len(answers))
 				for i, a := range answers {
 					s, _ := a.(string)
@@ -875,7 +822,6 @@ func NewTranslator(apps func() []platform.App, manifest func(platform.App) platf
 }
 func (x *Translator) CanSay(lang, text string) bool { return x.says(lang, text, 0) }
 
-// WalkChoices calls f for each object of a JSON tree that lists choices.
 func WalkChoices(v any, f func(map[string]any, []any)) {
 	walkChoicesWithApp(v, "", func(_ string, m map[string]any, c []any) { f(m, c) })
 }
@@ -917,7 +863,6 @@ func walkChoicesWithApp(v any, currentApp string, f func(string, map[string]any,
 	}
 }
 
-// WalkTexts replaces each declaration text in a JSON tree.
 func WalkTexts(v any, f func(string) string) {
 	walkTextsWithApp(v, "", func(_ string, s string) string { return f(s) })
 }
@@ -960,8 +905,6 @@ func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
 	}
 }
 
-// splits are the ways s fills the pattern's placeholders, at most limit of
-// them: "Kind: Where it goes: out" fills "{field}: {help}" twice (F-25).
 func (p pattern) splits(s string, limit int) [][]string {
 	var out [][]string
 	var fill func(rest string, i int, values []string)
@@ -970,7 +913,7 @@ func (p pattern) splits(s string, limit int) [][]string {
 			return
 		}
 		lit := p.parts[i+1]
-		if i == len(p.names)-1 { // the last placeholder takes all but the closing text
+		if i == len(p.names)-1 {
 			if v, ok := strings.CutSuffix(rest, lit); ok && v != "" {
 				out = append(out, append(slices.Clone(values), v))
 			}
@@ -990,36 +933,19 @@ func (p pattern) splits(s string, limit int) [][]string {
 
 var translated = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "synonyms": true}
 
-// A member-derived read depends on two things only: the rights the member
-// holds and the definitions the tenant has installed. Both are cheap to
-// describe and expensive to apply — the catalog hashes every action's schema,
-// the definition list re-describes every asset — so a tenant keeps the answers
-// per rights signature and drops all of them when its definitions move.
-//
-// The values are shared, never mutated: the JSON encoder and the translator
-// both read them as they are.
 type ViewCache struct {
 	mu    sync.Mutex
 	gen   uint64
 	entry map[string]*viewEntry
 }
 
-// maxViewEntries bounds what a tenant holds. A tenant has a handful of role
-// combinations; a flood of distinct ones is a bug or an attack, and the cache
-// then starts over rather than grow without limit.
 const maxViewEntries = 8
 
-// rights is the member's answer to "what may I be shown": the same roles,
-// grants and AI context produce the same catalog, entities and definitions.
 func Rights(m platform.Member) string {
-	// Authorization implementations may use any caller attribute. Sharing by
-	// roles alone leaks scoped metadata across principals and personal tokens.
 	raw, _ := json.Marshal(m)
 	return strconv.FormatBool(m.AIContext) + string(raw)
 }
 
-// generation resets the cache when the definitions moved and answers whether
-// the entry for this generation and rights signature is kept.
 func (c *ViewCache) settle(gen uint64) bool {
 	if c.gen == gen {
 		return true
@@ -1028,8 +954,6 @@ func (c *ViewCache) settle(gen uint64) bool {
 	return false
 }
 
-// store applies value to the entry, creating it when it is missing. A stale
-// generation stores nothing: the caller still returns what it computed.
 func (c *ViewCache) store(gen uint64, key string, value func(*viewEntry)) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1100,7 +1024,6 @@ func (c *ViewCache) StoreDefinitions(gen uint64, key string, value []platform.De
 	c.store(gen, key, func(e *viewEntry) { e.definitions = value })
 }
 
-// body returns the encoded answer kept for a kind and language.
 func (c *ViewCache) body(gen uint64, key, bodyKey string) (*viewBody, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1124,12 +1047,7 @@ func (c *ViewCache) putBody(gen uint64, key, bodyKey string, body *viewBody) {
 	})
 }
 
-// manifestCache memoizes an app's manifest per definition generation. Building
-// one assembles every declared entity, action, protocol and page; the answer
-// changes only when the tenant installs something, which moves the generation.
-// The key is the app itself, so a draft's fork (a different value) builds its
-// own manifest instead of inheriting a stale one.
-var manifestCache sync.Map // platform.App -> manifestEntry
+var manifestCache sync.Map
 
 type manifestEntry struct {
 	gen      uint64
@@ -1139,9 +1057,6 @@ type manifestEntry struct {
 var manifestCacheSize atomic.Int64
 
 func ManifestOf(a platform.App, gen uint64) platform.Manifest {
-	// The cache is keyed by the app value itself; an app whose value type is
-	// uncomparable (a struct carrying manifest slices or maps) can never be a
-	// map key, so it skips memoization instead of panicking.
 	if key := reflect.ValueOf(a); !key.IsValid() || !key.Type().Comparable() {
 		return a.Manifest()
 	}
@@ -1151,7 +1066,7 @@ func ManifestOf(a platform.App, gen uint64) platform.Manifest {
 		}
 	}
 	manifest := a.Manifest()
-	if manifestCacheSize.Add(1) > 512 { // forks and reinstalls; start over rather than grow
+	if manifestCacheSize.Add(1) > 512 {
 		manifestCache.Range(func(key, _ any) bool { manifestCache.Delete(key); return true })
 		manifestCacheSize.Store(1)
 	}
@@ -1159,12 +1074,6 @@ func ManifestOf(a platform.App, gen uint64) platform.Manifest {
 	return manifest
 }
 
-// The three reads every page opens — the catalog, the entity types and the
-// definitions — are answered from memory: encoded once per rights signature and
-// language, compressed once, and revalidated with an ETag. A page load costs a
-// map lookup and a write; a reload costs a 304.
-
-// viewBody is one encoded answer, with the compressed form made on demand.
 type viewBody struct {
 	plain []byte
 	etag  string
@@ -1183,12 +1092,11 @@ func (b *viewBody) compressed() []byte {
 	return b.gz
 }
 
-// viewEntry holds what one rights signature is shown, encoded.
 type viewEntry struct {
 	entities    []platform.EntityInfo
 	catalog     []platform.Action
 	definitions []platform.Definition
-	bodies      map[string]*viewBody // "kind:lang" → encoded answer
+	bodies      map[string]*viewBody
 }
 
 func (c *ViewCache) cachedView(gen uint64, key, kind, lang string, source func() any, translate func(any, string) any) *viewBody {
@@ -1210,9 +1118,6 @@ func (c *ViewCache) cachedView(gen uint64, key, kind, lang string, source func()
 	return body
 }
 
-// WriteView answers a cached read: 304 when the client already holds it, the
-// compressed form when it asks for one, the plain form otherwise. The body is
-// already encoded, so the edge must not encode it again.
 func (c *ViewCache) WriteView(gen uint64, key, kind, lang string, w http.ResponseWriter, r *http.Request, source func() any, translate func(any, string) any) {
 	body := c.cachedView(gen, key, kind, lang, source, translate)
 	w.Header().Set("Content-Type", "application/json")

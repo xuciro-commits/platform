@@ -14,8 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// Aggregate serves a member's aggregate over a type, within the member's
-// scope: it never counts a record the member could not list.
 func (t *Tenant) aggregateRead(m platform.Member, typ string, q records.AggregateQuery, now time.Time) (records.Aggregate, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return records.Aggregate{}, err

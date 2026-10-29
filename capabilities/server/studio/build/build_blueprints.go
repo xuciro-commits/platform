@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-// CompleteBlueprintAssets uses exactly the ordinary object publisher's
-// generated actions/pages. Explicit owner-produced pages retain precedence.
 func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
 	var objects []Object
 	for _, asset := range input {
@@ -50,8 +48,6 @@ func (b *Build) CompleteBlueprintAssets(input []platform.ReleaseAsset) ([]platfo
 	return out, nil
 }
 
-// RootDrafts resolves portable logical roots to the same saved drafts the
-// existing joint review and simulation already use.
 func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 	objects, _, _, err := b.releaseInventory()
 	if err != nil {
@@ -117,8 +113,6 @@ func portableConnectionDraft(asset platform.ReleaseAsset) (Connection, error) {
 	if err := ValueDecodeIntegration(asset.Body, &definition); err != nil {
 		return Connection{}, err
 	}
-	// Site addresses, credentials and concrete protocol settings are filled in
-	// this environment before use, never copied from a package.
 	return Connection{Name: definition.Name, Title: definition.Title, Kind: definition.Kind, Marking: definition.Marking, State: "draft"}, nil
 }
 
@@ -285,8 +279,6 @@ func (b *Build) finishProposal(c platform.Caller, r *pb.ChangeRecord, p *proposa
 	return c.Put(r, run)
 }
 
-// Read provenance uses the original entity compute and derivation paths.
-// It is accepted with each business write, before its original validation.
 func proposalEntity(e platform.Entity, info platform.EntityInfo, changed map[string]any, p *proposalConsumption, extra []string) (platform.Entity, map[string]any) {
 	if p == nil {
 		return e, changed
@@ -422,9 +414,6 @@ func checkAdoptionSources(o Object, a Action, lookup func(string) (platform.Enti
 	return problem
 }
 
-// CodeDeclarations checks references between installed declarations. Every
-// input is a value supplied by its existing owner; this checker cannot read
-// tenant state, install definitions, execute callbacks or grant permissions.
 type CodeDeclarations struct {
 	Manifests       []platform.Manifest
 	Entities        []platform.EntityInfo
@@ -449,8 +438,6 @@ func (c CodeDeclarations) Check() error {
 			if field.Type != "reference" && field.Type != "references" {
 				return fmt.Errorf("asset %s field %s has reference %s with incompatible type %s", objects[info.Type], field.Name, field.Ref, field.Type)
 			}
-			// Enterprise identities belong to the directory. An optional reference
-			// remains declarable before that owner is mounted.
 			if field.Ref == "enterprise.element" {
 				continue
 			}
@@ -577,7 +564,7 @@ func (c CodeDeclarations) Check() error {
 		for _, q := range m.Queries {
 			if q.Interface != "" {
 				continue
-			} // its original owner binds retained implementers
+			}
 			ref := platform.AssetRef{App: m.ID, Kind: platform.AssetQuery, Name: q.Name}
 			if _, ok := objects[q.Object]; !ok {
 				return fmt.Errorf("asset %s reads missing object %s", ref, q.Object)
@@ -636,8 +623,6 @@ func (c CodeDeclarations) Check() error {
 	return nil
 }
 
-// AgentDescriptor seals declaration data without invoking a guard, test or
-// handoff callback. The original agent owner remains responsible for running it.
 func AgentDescriptor(agent platform.Agent) (platform.AgentReleaseDescriptor, error) {
 	cases := []map[string]any{}
 	for _, test := range agent.Cases {
@@ -651,8 +636,6 @@ func AgentDescriptor(agent platform.Agent) (platform.AgentReleaseDescriptor, err
 	return descriptor, descriptor.Check()
 }
 
-// ProtocolDescriptor binds the protocol's public actions to their original
-// provider declarations. No protocol execution or cross-owner call occurs here.
 func ProtocolDescriptor(manifest platform.Manifest, provision platform.Provision) (platform.ProtocolReleaseDescriptor, error) {
 	protocol := platform.ProtocolReleaseDescriptor{Name: provision.Protocol.Name, Version: provision.Protocol.Version, Actions: slices.Clone(provision.Protocol.Actions), Reads: slices.Clone(provision.Protocol.Reads), ActionBindings: map[string]platform.AssetRef{}, ActionRoles: map[string][]string{}}
 	for i, action := range protocol.Actions {

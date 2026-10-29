@@ -32,8 +32,6 @@ export function PackageRequirements({ id, version }: { id: string; version: stri
 export function PackagePreparation({ id, version }: { id: string; version: string }) {
   const host = useHost(), { client, decide, can } = host, { open } = useWorkspace();
   const systemScope = host.me.tenantId === "system";
-  // The original read authorizes all held grants; a displayed primary role
-  // cannot decide whether a multi-role member may continue this task.
   const query = useReadQuery<Api.PackagePreparation>(`/v1/packages/${encodeURIComponent(id)}/preparation?version=${encodeURIComponent(version)}`, undefined, !!version);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [reviewedSetup, setReviewedSetup] = useState(false);

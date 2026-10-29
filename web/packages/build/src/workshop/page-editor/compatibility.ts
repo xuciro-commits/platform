@@ -6,8 +6,6 @@ import type {PageDraft} from "./draft";
 type CompatibilityIssue={section:string;widget:string;version?:number;code:"unknown-widget"|"unsupported-config"};
 export type ProfileUpgrade={baseline:string;from:string;to:string};
 
-/** Model bindings need a minimum profile; they never lower a newer author's
- * declared profile. Unknown profiles remain errors for the original checker. */
 export function pageEditingProfile(draft:PageDraft):string{
  const current=draft.document.uiProfile;
  const required=draft.sections.some(section=>section.composite)?pageVariableContract.composite.requiredUIProfile:
@@ -16,7 +14,6 @@ export function pageEditingProfile(draft:PageDraft):string{
  return Number(current.split('.').at(-1))>=Number(required.split('.').at(-1))?current:required;
 }
 
-/** Compatibility discovery cannot grant a renderer or migrate an unknown version. */
 export function pageCompatibility(draft:PageDraft){
  const issues:CompatibilityIssue[]=[];
  for(const section of draft.sections){
@@ -34,8 +31,6 @@ export function pageCompatibility(draft:PageDraft){
 
 function budget(draft:PageDraft){return queryInventoryBudget(draft.document,draft.sections as unknown as PageUI.Section[],pageVariableContract.query);}
 
-/** Apply only the reviewed profile change to an unchanged local draft. The host
- * still validates bindings and permissions when saving and freezing a candidate. */
 export function applyProfileUpgrade(draft:PageDraft,review:ProfileUpgrade):PageDraft|undefined{
  if(review.baseline!==JSON.stringify(draft)||review.from!==draft.document.uiProfile||review.to!==pageUIProfile)return;
  if(!pageCompatibility(draft).upgrade)return;

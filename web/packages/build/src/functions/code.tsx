@@ -71,8 +71,6 @@ export function CodeEditor({ id }: { id: string }) {
       { expectedRevision: submitted.id ? expected : undefined, quiet: true, onRefused: setError })) return;
     const revision = expected + 1;
     baseRevision.current = revision; loaded.current = `${target}:${revision}`;
-    // A code edit must be recompiled; the old module is not evidence that the
-    // current draft can be delivered. The retained publication remains separate.
     const accepted = { ...submitted, id: target, revision, state: "draft", module: undefined, builtSource: undefined, buildHash: undefined };
     confirmedDraft.current = structuredClone(accepted); setDraft(accepted); markSaved(); setDirty(false);
     if (!submitted.id) { open({ view: "code", params: { id: target } }, { ifCurrent: { view: "code", params: { id } }, replace: true }); return revision; }

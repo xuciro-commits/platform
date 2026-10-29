@@ -8,8 +8,6 @@ const object=(value:unknown)=>value as ObjectValue;
 const fieldName=(field:Api.FieldRef)=>field.path?.length?field.path.join("."):field.name??"";
 const arrayFields=new Set<string>(pageSafetyContract.arrayFieldPaths);
 
-/** These paths come from the same frozen compatibility table as the host.
- * Clearing a path does not discard neighbouring presentation properties. */
 function clearPath(value:unknown,path:string[]):void{
  if(!value||typeof value!=="object")return;
  if(Array.isArray(value)){for(const item of value)clearPath(item,path);return;}
@@ -29,8 +27,6 @@ function stripBindings(section:ObjectValue):void{
  for(const path of paths)clearPath(section,path.split("."));
 }
 
-/** The renderer receives no capability from opaque JSON. Only the typed
- * declaration may restore object, field, action, variable and resource ports. */
 export function decodePage(page:Envelope|UI.Page):UI.Page{
  if(!("format"in page)||page.format!==3)return page as UI.Page;
  const declaration=page as Envelope,bindings=declaration.dataBindings??[],triggers=declaration.actionTriggers??[],inputs=declaration.inputSchema??{},scopes=declaration.scopeVisibility??{root:"",scopes:[],owners:{}};
@@ -75,8 +71,6 @@ export function decodePage(page:Envelope|UI.Page):UI.Page{
  }
  const unusedWidgets=visual?.unusedWidgets?.filter(unused=>scopeIDs.has(unused.node)&&scopeIDs.has(unused.parent)&&(scopes.scopes??[]).some(scope=>scope.id===unused.node&&scope.inactive));
  if(projected){
-  // Authorization can remove every child of a formerly valid container. Drop
-  // only those empty branches, keeping the other authorized content in place.
   for(let changed=true;changed;){
    changed=false;
    for(const [id,node]of Object.entries(nodes))if(id!==scopes.root&&node.kind!=="widget"&&!(node.children??[]).some(child=>nodes[child])&&!unusedWidgets?.some(unused=>unused.parent===id)){
@@ -89,7 +83,6 @@ export function decodePage(page:Envelope|UI.Page):UI.Page{
  const document: UI.PageDocument|undefined=visual&&!(projected&&!sections.length)?{...visual,root:scopes.root,nodes,overlays,unusedWidgets,variables:inputs.variables,queries:inputs.queries,interface:inputs.interface,events:triggers.flatMap(trigger=>trigger.events??[])}:undefined;
  const actions=triggers.find(trigger=>trigger.binding==="page")?.actions??[];
  if(raw.layout==="list-detail"){
-  // The shorthand keeps its list and detail fields; its sections are only the projection of those two.
   const fieldsOf=(id:string)=>(sections.find(section=>section.id===id)?.fields as string[]|undefined)??[];
   return {name:declaration.name,title:declaration.title,description:declaration.description,object:declaration.object,layout:"list-detail",listFields:fieldsOf("list"),detailFields:fieldsOf("detail"),actions,selections:inputs.selections,presentationWords:declaration.presentationWords} as UI.Page;
  }
@@ -132,8 +125,6 @@ function readPath(value:unknown,path:string[]):unknown[]{
  return readPath(object(value)[path[0]!.replace(/\[\]$/,"")],path.slice(1));
 }
 
-/** New writes serialize typed declarations and renderer-owned JSON once.
- * Legacy shorthand is accepted only at this Web authoring boundary. */
 export function encodePage(page:UI.Page,definitions:readonly {ref:Api.AssetRef;version:string}[]=[]):Envelope{
  const visualSections:ObjectValue[]=[],dataBindings:Api.PageDataBinding[]=[],actionTriggers:Api.PageActionTrigger[]=[{id:"page",binding:"page",actions:page.actions}],owners:Record<string,string>={};
  const document=page.document,scopes:Api.PageScope[]=[],parents:Record<string,string>={};

@@ -3,7 +3,6 @@ import type {EntityRecord} from '@platform/ui';
 import type {PageSessionStore,RecordReference} from '../runtime/Session';
 import {recordOutputSlot} from '../runtime/resources';
 
-/** The row and referenced asset each need original authorization before publication. */
 export async function confirmObservationRow(page:PageUI.Page,section:PageUI.Section,record:EntityRecord,session:PageSessionStore,query:string,active:()=>boolean,begin?:()=>((reference:RecordReference|undefined)=>void)|undefined):Promise<boolean>{
  const c=section.observation;if(c?.kind!=='table'||!c.rowOutput||!active())return false;
  const complete=begin?.(),rowSlot=recordOutputSlot(page,section,'row'),assetSlot=recordOutputSlot(page,section,'asset');

@@ -53,7 +53,6 @@ export function InputProblems() {
   </div>;
 }
 
-/** Unparsed text belongs to its document, even while its inspector is unmounted. */
 export function useDraftInput(key: string, source: string, retainOnRefresh = false, maxLength = 65536) {
   const owner = useContext(DraftInputs), path = `${owner?.scope ?? ""}/${key}`;
   const [local, setLocal] = useState<InputDraft>();

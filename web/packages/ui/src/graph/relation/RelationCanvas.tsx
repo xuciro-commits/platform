@@ -1,8 +1,3 @@
-// The relation family's canvas: things and what holds them together — enterprise
-// models, object graphs, lineage, execution chains, a record's neighbourhood. The
-// owner supplies nodes with icons and edges with meaning; the canvas owns zoom, pan,
-// fit, minimap, layouts, dragging, linking and dropping, so no view draws its own
-// boxes again.
 import { ConnectionMode, MarkerType, MiniMap, Position, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow } from "@xyflow/react";
 import { ArrowDownFromLine, ArrowLeftFromLine, ArrowRightFromLine, ArrowUpFromLine, ChevronDown, ChevronUp, Grid3x3, Maximize, Orbit, Waves } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -21,27 +16,18 @@ import { relationEdgeTypes, relationNodeTypes, type RelationLineEdge, type Relat
 
 export type RelationCanvasProps = {
   nodes: RelationNode[]; edges: RelationEdge[];
-  /** Where each element sits. A reader's view may leave this out and let the canvas
-   * arrange what it is given; an owner that persists a drawing supplies it. */
   positions?: Readonly<Record<string, CanvasPosition>>;
   selected?: string; editable?: boolean; linking?: boolean; label?: string; height?: number | string; layout?: RelationLayout;
-  /** The dataTransfer type the owner's palette sets; its payload arrives in onDrop with the drop point. */
   dropType?: string; children?: ReactNode; viewportKey?: string;
   onSelect?: (id?: string) => void; onOpen?: (id: string) => void;
-  /** The selected element's operations, shown on the canvas beside it. */
   nodeActions?: (id: string) => CanvasAction[];
-  /** A relationship can be chosen, and chosen relationships have operations. */
   edgeActions?: (id: string) => CanvasAction[];
   onReconnect?: (id: string, source: string, target: string) => void;
   onLayoutReady?: (positions: Record<string, CanvasPosition>) => void;
-  /** The completed initial fit, including a change in the canvas size. */
   onViewportReady?: (ready: boolean) => void;
   onPositionsChange?: (positions: Record<string, CanvasPosition>) => void;
   onLink?: (source: string, target: string) => void;
   onDrop?: (payload: string, at: CanvasPosition) => void;
-  /** The reader's own arrangement is kept on this device for this drawing
-   *: even a read-only view may be dragged, and the arrangement
-   * survives a reload until the reader chooses a layout again. */
   storeKey?: string;
 };
 
@@ -67,8 +53,6 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const relations = useMemo(() => edges.map((e) => ({ id: e.id, from: e.source, to: e.target, parent: e.parent })), [edges]);
   const hierarchy = useMemo(() => relationHierarchy(nodes.map((n) => n.id), relations), [nodes, relations]);
 
-  // The reader's stored arrangement joins whatever the owner gives and wins over
-  // it until the reader chooses a layout again.
   const [stored, setStored] = useState<Record<string, CanvasPosition>>(() => (storeKey ? readCanvasPositions(storeKey) : undefined) ?? {});
   useEffect(() => { setStored((storeKey ? readCanvasPositions(storeKey) : undefined) ?? {}); }, [storeKey]);
   const known = useMemo(() => (storeKey ? { ...positions, ...stored } : { ...positions }), [positions, stored, storeKey]);
@@ -78,9 +62,6 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     writeCanvasPositions(storeKey, next);
   };
 
-  // Only what has no place yet is arranged: everything, when nothing is placed;
-  // otherwise just the newcomers, as their own arrangement below the drawing,
-  // so a placed element never moves because another arrived.
   const missing = nodes.filter((n) => !known[n.id]);
   const knownRef = useRef(known); knownRef.current = known;
   const layoutJob = useCanvasLayout(async () => {
@@ -106,12 +87,9 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     }));
   }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey]);
 
-  // Every line is routed from the boxes as they stand, on every move: a drag, a
-  // layout and a saved view all draw the same lines.
   const flowEdges = useMemo<RelationLineEdge[]>(() => {
     const boxes: Record<string, Rect> = {};
     for (const n of flowNodes) { const size = n.measured?.width && n.measured.height ? n.measured as { width: number; height: number } : sizeOf(n.data); boxes[n.id] = { x: n.position.x, y: n.position.y, width: size.width, height: size.height }; }
-    // A parent's children share one bus: the way most of them lie from it decides which.
     const axis = new Map<string, "vertical" | "horizontal">();
     for (const [p, kids] of hierarchy.children) {
       const a = boxes[p]; if (!a) continue;
@@ -135,7 +113,6 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     });
   }, [edges, relations, hierarchy, flowNodes, editable, onReconnect, pickedEdge, selected]);
 
-  // A new drawing is fitted to the window; working on the one already open is not.
   const drawing = useMemo(() => `${nodes.map((n) => n.id).join("|")}#${edges.map((e) => e.id).join("|")}`, [nodes, edges]);
   const fitKey = viewportKey ?? drawing;
   const synchronized = !layoutJob.pending && flowNodes.length > 0 && flowNodes.length === nodes.length && flowNodes.every((node) => {

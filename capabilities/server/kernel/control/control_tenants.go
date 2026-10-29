@@ -21,13 +21,6 @@ import (
 	"time"
 )
 
-// Member lifecycle, personal tokens and sessions (–5). A member's
-// standing is a decision of the directory: invited when added before they
-// sign in, suspended (nothing is held until resumed), left (offboarded: the
-// subjects go, the grants go, the record stays for history). A personal token
-// is a credential the host issues for scripts and integrations, derived from a private key,
-// bounded in time and scope; a session is the host's memory of a credential
-// it saw, which a member may end.
 const (
 	SchemaInvite        = "platform.member.invite"
 	SchemaJoin          = "platform.member.join"
@@ -40,31 +33,24 @@ const (
 	TokenPrefix         = "pat_"
 )
 
-// Token is a personal API token as the directory keeps it. The secret is
-// derived, when the issuing decision applies, from the host's signing key and
-// the decision's change id (HMAC), so replay on the same host yields the
-// same secret and the journal holds neither it nor its hash; a host with a
-// new key retires every token.
 type Token struct {
 	ID     string    `json:"id"`
 	Member string    `json:"member"`
 	Label  string    `json:"label"`
-	Change string    `json:"change"` // the issuing decision
+	Change string    `json:"change"`
 	Scopes []string  `json:"scopes,omitempty"`
 	Until  string    `json:"until,omitempty"`
 	Issued time.Time `json:"issued"`
 }
 
-// endedSessionsShown is how long an ended session stays in the list.
 const endedSessionsShown = 24 * time.Hour
 
 type sessionTable struct {
 	mu      sync.Mutex
-	seen    map[string]map[string]*platform.Session // member → session id → session
-	revoked map[string]bool                         // session ids a member ended
+	seen    map[string]map[string]*platform.Session
+	revoked map[string]bool
 }
 
-// end marks a session ended now; the host refuses its credential from here.
 func (st *sessionTable) end(member, id string, now time.Time) {
 	st.revoked[id] = true
 	if s := st.seen[member][id]; s != nil && s.Ended.IsZero() {
@@ -99,7 +85,6 @@ func lifecycleActions() []platform.Action {
 	}
 }
 
-// decideLifecycle decides a member's standing. The console's lock is held.
 func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
@@ -132,7 +117,7 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 		return func(r *pb.ChangeRecord) {
 			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}, Agent: p.Agent, Status: platform.MemberInvited}
 			d.subjects[p.Subject] = id
-			d.then = func() { // the invitation, mailed where the tenant mails; nothing when it does not
+			d.then = func() {
 				org := cmp.Or(d.tenantDefault(SettingName), d.tenant)
 				c.Notify(platform.Notification{Title: "You are invited to " + org, Key: "invite",
 					Body: "Sign in with " + strings.TrimPrefix(p.Subject, "user:") + " to take your seat at " + org + "."},
@@ -165,12 +150,11 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 		return func(r *pb.ChangeRecord) {
 			m.Status = platform.MemberLeft
 			m.Grants, m.Roles = nil, map[string]string{}
-			if !c.Staging() { // legacy input replay retains its original subject-removal semantics
+			if !c.Staging() {
 				maps.DeleteFunc(d.subjects, func(_, member string) bool { return member == id })
-			} // accepted results retain a denial binding; only explicit add/invite may replace it
+			}
 			maps.DeleteFunc(d.tokens, func(_ string, t *Token) bool { return t.Member == id })
 			d.endSessions(id, "", r.GetRecordedTime().AsTime())
-			// What they held through others' delegation ends; what others held through theirs passes on.
 			for _, other := range d.members {
 				if other.ID == id {
 					continue
@@ -189,8 +173,6 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 	return nil, invalid
 }
 
-// decideToken issues or revokes a personal token. The directory
-// keeps its issuing change, never the secret; Minted derives it for collection.
 func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	id := s.GetTarget().GetId()
@@ -221,7 +203,7 @@ func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.Cha
 	if _, err := time.Parse(time.DateOnly, p.Until); p.Until != "" && err != nil {
 		return nil, invalid
 	}
-	if c.Scopes != nil && !c.Replaying { // a token does not mint tokens
+	if c.Scopes != nil && !c.Replaying {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return func(r *pb.ChangeRecord) {
@@ -231,11 +213,9 @@ func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.Cha
 
 var (
 	tokenKeyMu sync.RWMutex
-	tokenKey   = []byte("development-only") // SignWith replaces it with the host's key
+	tokenKey   = []byte("development-only")
 )
 
-// UseTokenKey makes personal tokens derive from key: the lightweight host's
-// signing key, or whatever a deployment keeps secret.
 func UseTokenKey(key []byte) {
 	tokenKeyMu.Lock()
 	defer tokenKeyMu.Unlock()
@@ -255,11 +235,8 @@ func tokenHash(secret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// mintWindow is how long after issue a token's secret may be collected.
 const mintWindow = 10 * time.Minute
 
-// A recovered token remains usable, but its one-time delivery window belongs
-// to the issuing process. Restarting must not reopen a collected secret.
 func (d *Console) CloseTokenSecretWindows() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -268,8 +245,6 @@ func (d *Console) CloseTokenSecretWindows() {
 	}
 }
 
-// Minted hands out a token's secret once, to the member who issued it,
-// within mintWindow of the issue.
 func (d *Console) Minted(id, member string, now time.Time) (string, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -281,9 +256,6 @@ func (d *Console) Minted(id, member string, now time.Time) (string, bool) {
 	return tokenSecret(d.tenant, id, t.Change), true
 }
 
-// MemberByToken is the member a personal token signs in as, bounded to its
-// scopes; false for an unknown, expired or revoked token, or a member who
-// cannot act.
 func (d *Console) MemberByToken(secret string, now time.Time) (platform.Member, bool) {
 	if !strings.HasPrefix(secret, TokenPrefix) {
 		return platform.Member{}, false
@@ -299,7 +271,7 @@ func (d *Console) MemberByToken(secret string, now time.Time) (platform.Member, 
 			return platform.Member{}, false
 		}
 		if now.Sub(d.lastSeen["token:"+t.ID]) >= time.Minute {
-			d.lastSeen["token:"+t.ID] = now // host memory, like a member's last sign-in
+			d.lastSeen["token:"+t.ID] = now
 		}
 		out := d.currentMember(m)
 		out.Scopes = t.Scopes
@@ -311,7 +283,6 @@ func (d *Console) MemberByToken(secret string, now time.Time) (platform.Member, 
 	return platform.Member{}, false
 }
 
-// Tokens are a member's tokens, as the owner sees them.
 func (d *Console) Tokens(member string, now time.Time) []platform.TokenView {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -333,8 +304,6 @@ func (d *Console) Tokens(member string, now time.Time) []platform.TokenView {
 
 func sessionID(credential string) string { return tokenHash(credential)[:16] }
 
-// noticed records that a credential acted as member now; false when the
-// member ended that session, which the host then refuses.
 func (d *Console) NoticeSession(member, credential, agent string, kind string, now time.Time) bool {
 	id := sessionID(credential)
 	hours := 0
@@ -362,7 +331,7 @@ func (d *Console) NoticeSession(member, credential, agent string, kind string, n
 	}
 	s := d.sessions.seen[member][id]
 	if s != nil && kind == "sign-in" && hours > 0 && now.Sub(s.First) >= time.Duration(hours)*time.Hour {
-		d.sessions.end(member, id, now) // only a newly authenticated credential may start another session
+		d.sessions.end(member, id, now)
 		return false
 	}
 	if s == nil {
@@ -373,8 +342,6 @@ func (d *Console) NoticeSession(member, credential, agent string, kind string, n
 	return true
 }
 
-// endSessions forgets a member's sessions and refuses their credentials: all
-// of them, or those of one token.
 func (d *Console) endSessions(member, token string, now time.Time) {
 	d.sessions.mu.Lock()
 	defer d.sessions.mu.Unlock()
@@ -385,7 +352,6 @@ func (d *Console) endSessions(member, token string, now time.Time) {
 	}
 }
 
-// EndOtherSessions keeps only the session asking.
 func (d *Console) EndOtherSessions(member, credential string, now time.Time) int {
 	keep := sessionID(credential)
 	d.sessions.mu.Lock()
@@ -400,8 +366,6 @@ func (d *Console) EndOtherSessions(member, credential string, now time.Time) int
 	return n
 }
 
-// Sessions are a member's, newest last seen first, the current one marked;
-// sessions ended within the last day stay listed, marked ended, then go.
 func (d *Console) Sessions(member, credential string, now time.Time) []platform.Session {
 	cur := sessionID(credential)
 	d.sessions.mu.Lock()
@@ -428,7 +392,6 @@ func (d *Console) Sessions(member, credential string, now time.Time) []platform.
 	return out
 }
 
-// summarize keeps of a user agent what a person recognises.
 func summarize(ua string) string {
 	for _, name := range []string{"Edg/", "OPR/", "Firefox/", "Chrome/", "Safari/", "curl/", "Go-http-client/"} {
 		if i := strings.Index(ua, name); i >= 0 {
@@ -445,8 +408,6 @@ func summarize(ua string) string {
 	return ua
 }
 
-// joins reports whether subject may take a seat by its mail domain alone: a
-// person of one of the tenant's sign-in domains.
 func (d *Console) JoinsSubject(subject string) bool {
 	if d.host == nil {
 		return false
@@ -464,14 +425,10 @@ func (d *Console) JoinsSubject(subject string) bool {
 	return false
 }
 
-// SecondFactorRequired reports whether every sign-in to this tenant must be
-// attested with a second factor by the identity provider.
 func (d *Console) SecondFactorRequired() bool {
 	return d.host != nil && d.tenantDefault(SettingMFA) == "true"
 }
 
-// JoinID is the member id a self-joining subject takes: the local part of the
-// address, made a slug, with a number when taken.
 func (d *Console) JoinID(subject string) string {
 	local, _, _ := strings.Cut(strings.TrimPrefix(subject, "user:"), "@")
 	base := strings.Map(func(r rune) rune {
@@ -496,10 +453,6 @@ func (d *Console) JoinID(subject string) string {
 	return id
 }
 
-// handOver, after a member left, tells the successor what they take over.
-// The enterprise model ends the member's tenure itself (it subscribes to the
-// offboarding); the apps' open items move by their own reassignment actions,
-// which the notice points at.
 func (d *Console) handOver(c platform.Caller, left, successor, reason string, now time.Time) {
 	if successor == "" {
 		return
@@ -509,15 +462,12 @@ func (d *Console) handOver(c platform.Caller, left, successor, reason string, no
 		now, platform.Recipient{Member: successor})
 }
 
-// joinable excludes existing identities, including denial bindings to members
-// who left. It is checked again under the tenant lock before recording a join.
 func (d *Console) JoinableSubject(subject string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.subjects[subject] == ""
 }
 
-// specs are the host's tenant specs, from the -tenants file or the binary's development default.
 type Specs struct {
 	mu   sync.Mutex
 	file string
@@ -566,7 +516,6 @@ func (s *Specs) All() []platform.TenantSpec {
 	return slices.Clone(s.list)
 }
 
-// add appends a spec and writes the file back, so the tenant exists on the next start too.
 func (s *Specs) Add(spec platform.TenantSpec) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -589,8 +538,6 @@ var tenantID = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 func ValidTenantID(id string) bool { return tenantID.MatchString(id) }
 func NewSpecs(file string) *Specs  { return &Specs{file: file} }
 
-// tenantRegistry keeps the host, work runner, telemetry and snapshotter on the
-// same tenant generation. Rebuilding never reuses a partially restored Tenant.
 type Registry[T comparable] struct {
 	id          func(T) string
 	unavailable func(T) bool
@@ -608,7 +555,6 @@ func (r *Registry[T]) List() []T {
 	return append([]T(nil), r.tenants...)
 }
 
-// add hosts a new tenant; ids are unique.
 func (r *Registry[T]) Add(t T) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

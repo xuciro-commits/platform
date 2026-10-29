@@ -3,9 +3,6 @@ import {Panel,PropertyList,t,type EntityInfo} from "@platform/ui";
 import {initializeRules} from "./rule-engine";
 import {formRuleValues} from "./form-rules";
 
-/** A preview uses only the caller's projected record and unsubmitted form
- * values. Missing collections/references remain unavailable; no read or write
- * port is available to this component. */
 export function FormRulePreview({info,values,clock}:{info:EntityInfo;values:Record<string,unknown>;clock:{me:string;tenant:string;now:string;today:string}}){
  const [runtime,setRuntime]=useState<{ready:boolean;error?:string}>({ready:false});
  useEffect(()=>{if(Object.keys(info.localRules??{}).length)void initializeRules().then(()=>setRuntime({ready:true}),error=>setRuntime({ready:false,error:error instanceof Error?error.message:String(error)}));},[info.localRules]);

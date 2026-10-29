@@ -30,7 +30,6 @@ export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuar
   const objects = model.entities.filter((entity) => entity.fields.length > 0);
   const object = objects.find((entity) => entity.type === objectType);
   const offered = model.actions.filter((action) => action.target === objectType);
-  // Child objects: those with a reference back to the chosen object; the relation is that reference's inverse.
   const children = objects.flatMap((entity) => entity.fields.filter((field) => field.type === "reference" && field.ref === objectType).map((field) => ({ entity, relation: field.inverse })));
   const child = children.find((c) => c.entity.type === childType);
   const chooseObject = (type: string) => {
@@ -43,7 +42,6 @@ export function StudioTemplates({ initial, onCreated, onBusy, onClose, closeGuar
   const create = async () => {
     if (lock.current || created || !host.can("build.page.create") || (!request.current && (!object || !valid))) return;
     if (!request.current && object) {
-      // Provenance is descriptive, not an execution/version authority.
       const description = `${t(template.summary)}
 ${t("Created from template {template} (revision {revision}).", { template: template.id, revision: template.revision })}`;
       request.current = templateDraft(template.id, { object, name, title: title.trim(), fields: [...fields], actions: [...actions], description, child: child?.entity, relation: child?.relation });

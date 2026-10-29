@@ -4,7 +4,6 @@ import {useEffect,useState} from "react";
 import type {AttachedFile} from "./Records";
 import {attachmentBytesError,attachmentIdentity,mediaType,rasterDimensions,previewFailure} from "./attachment-bytes";
 
-/** One bounded decoder and Blob lease for media preview and annotation. */
 export function useRasterAttachment(attachment:AttachedFile,blob:Blob,scope?:string){
  const identity=attachmentIdentity(attachment,scope),type=mediaType(attachment.contentType),metadataError=attachmentBytesError(attachment,blob),supported=["image/png","image/jpeg","image/gif","image/webp"].includes(type);
  const [loaded,setLoaded]=useState<{identity:string;blob:Blob;url?:string;width?:number;height?:number;error?:string}>(),current=loaded?.identity===identity&&loaded.blob===blob?loaded:undefined;

@@ -22,14 +22,6 @@ import (
 	"platformserver/platform"
 )
 
-// A host's tenants are configured, not compiled in: the
-// -tenants file lists every tenant with its seats and the settings it starts
-// with, and the host console adds one at run time from a template. The host
-// binary still decides which apps a tenant runs (its Rebuild); the file and
-// the console decide who the tenants are.
-
-// Tenants are the tenant specs a host starts with: the -tenants file, or the
-// binary's development tenant. Call it before Rebuild; SeatsFor answers from it.
 func (d *Deployment) Tenants(development platform.TenantSpec) []platform.TenantSpec {
 	d.specs = &controlowner.Specs{}
 	if err := d.specs.Load(d.TenantsFile, development); err != nil {
@@ -43,9 +35,6 @@ func (d *Deployment) Tenants(development platform.TenantSpec) []platform.TenantS
 	return append(list, d.system)
 }
 
-// systemSpec is the host-level tenant that owns the system itself. It is not
-// created, renamed or deleted through the console: the host always serves it,
-// with the host administrators as the people who may change the system.
 func (d *Deployment) systemSpec(development platform.TenantSpec) platform.TenantSpec {
 	roles := map[string]string{
 		"platform": controlowner.Admin, "system": "publisher", "build": "builder",
@@ -78,7 +67,6 @@ func (d *Deployment) systemSpec(development platform.TenantSpec) platform.Tenant
 	return platform.TenantSpec{ID: systemscope.Tenant, Name: "Platform", Seats: seats}
 }
 
-// SeatsFor are the configured seats of a tenant, for the binary's Rebuild.
 func (d *Deployment) SeatsFor(id string) []platform.Seat {
 	if d.specs == nil {
 		return nil
@@ -90,7 +78,6 @@ func (d *Deployment) SeatsFor(id string) []platform.Seat {
 	return spec.Seats
 }
 
-// Templates are the tenant templates of -templates, sorted by name.
 func (d *Deployment) Templates() []platform.TenantTemplate {
 	out := []platform.TenantTemplate{}
 	if d.TemplatesDir == "" {
@@ -120,8 +107,6 @@ func (d *Deployment) Templates() []platform.TenantTemplate {
 	return out
 }
 
-// spec turns a console request into a tenant spec: the template's settings
-// under the request's, and the first administrator's seat.
 func (d *Deployment) spec(req platform.CreateTenantRequest, by string, now time.Time) (platform.TenantSpec, platform.TenantTemplate, error) {
 	var tpl platform.TenantTemplate
 	if !controlowner.ValidTenantID(req.ID) {
@@ -157,9 +142,6 @@ func (d *Deployment) spec(req platform.CreateTenantRequest, by string, now time.
 	return platform.TenantSpec{ID: req.ID, Name: req.Name, Template: req.Template, Seats: []platform.Seat{seat}, Settings: settings, Created: now.UTC(), By: by}, tpl, nil
 }
 
-// firstDecisions gives a new tenant its configured settings and its first
-// administrator's roles through ordinary decisions, so they are journaled and
-// audited like any later change.
 func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemplate, now time.Time) error {
 	if len(spec.Seats) == 0 {
 		return nil
@@ -215,7 +197,6 @@ func firstDecisions(t *Tenant, spec platform.TenantSpec, tpl platform.TenantTemp
 	return nil
 }
 
-// tenantRoutes are the host console's tenant creation: templates and POST /v1/host/tenants.
 func (h *Host) tenantRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []platform.TenantTemplate{}},
 		func(w http.ResponseWriter, _ *http.Request, _ string, _ *Tenant) {
@@ -249,8 +230,6 @@ func (h *Host) tenantRoutes(mux *http.ServeMux) {
 		})
 }
 
-// Run is a host binary's whole main after its flags and Rebuild: compose
-// every configured tenant (the -tenants file, or development) and serve.
 func (d *Deployment) Run(development platform.TenantSpec) error {
 	if d.Rebuild == nil && d.RebuildWithCapabilities == nil {
 		return fmt.Errorf("run: no tenant factory")

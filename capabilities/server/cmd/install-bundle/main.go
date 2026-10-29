@@ -1,10 +1,3 @@
-// install-bundle installs an application bundle: the objects, pages and
-// application one tenant defined, written as data. It makes the same
-// decisions a person makes in the workspace — create, then publish — so what
-// it installs is exactly what the builder installs, with no second path.
-//
-//	go run ./cmd/install-bundle -host http://127.0.0.1:8495 -tenant hvac \
-//	  -token-file /tmp/tok ../deploy/heating/application.json
 package main
 
 import (
@@ -19,7 +12,6 @@ import (
 	"strings"
 )
 
-// Bundle is what a tenant hands over: the declarations of one application.
 type Bundle struct {
 	Tenant      string            `json:"tenant"`
 	Application json.RawMessage   `json:"application"`
@@ -75,8 +67,6 @@ func (in *installer) do(method, path string, body any) ([]byte, error) {
 	return answer, nil
 }
 
-// decide sends one decision with its schema's own content version, the way the
-// workspace does, and returns the change it was accepted as.
 func (in *installer) decide(schema, target, id string, payload any) error {
 	if _, ok := in.versions[schema]; !ok {
 		return fmt.Errorf("%s is not an action here", schema)

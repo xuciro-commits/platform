@@ -11,24 +11,18 @@ import (
 	"time"
 )
 
-// EnterpriseReference is a record that names an enterprise element through a
-// declared reference, at whatever depth the reference sits: a top-level field
-// or a line of a line. The path is the record's own, so a reader
-// can go and look.
 type EnterpriseReference struct {
 	Type       string `json:"type"`
-	Field      string `json:"field"` // dotted path: "plant", "lines.machine"
+	Field      string `json:"field"`
 	FieldTitle string `json:"fieldTitle"`
-	Stereotype string `json:"stereotype,omitempty"` // the element stereotype the field declares, when it names one
+	Stereotype string `json:"stereotype,omitempty"`
 	ID         string `json:"id"`
-	Name       string `json:"name"` // the record's label, so a list is readable without a second call
+	Name       string `json:"name"`
 }
 
-// EnterpriseReferenceGroup is the references of one entity type, one column of
-// them: how many were found and one page.
 type EnterpriseReferenceGroup struct {
 	Type       string                `json:"type"`
-	Title      string                `json:"title"` // the type's plural
+	Title      string                `json:"title"`
 	Field      string                `json:"field"`
 	FieldTitle string                `json:"fieldTitle"`
 	Stereotype string                `json:"stereotype,omitempty"`
@@ -36,11 +30,6 @@ type EnterpriseReferenceGroup struct {
 	Records    []EnterpriseReference `json:"records"`
 }
 
-// EnterpriseReferences are the records that name an enterprise element, across
-// every entity type the member may read, at any nesting depth, paged by column.
-// The modeler's "Used by" asks this instead of querying one field at a time
-// a reference inside a line is found, a page says how many it
-// left out, and a type the member may not read is not mentioned.
 func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, offset, limit int, now time.Time) ([]EnterpriseReferenceGroup, *kernel.Error) {
 	if element == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A reference read names the element")
@@ -69,7 +58,7 @@ func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, off
 		}
 		visible, err := t.visibleIn(s, m, et, now)
 		if err != nil {
-			continue // the member may not read this type
+			continue
 		}
 		_, hidden := viewOf(m, et)
 		var rows []reflect.Value
@@ -78,7 +67,7 @@ func (t *Tenant) enterpriseReferencesRead(m platform.Member, element string, off
 			defer s.Unlock()
 			rows = make([]reflect.Value, 0, et.Rows().Len())
 			for _, r := range et.Rows().All() {
-				if visible == nil || visible(r.Value) { // nil: the member's roles read the whole type
+				if visible == nil || visible(r.Value) {
 					rows = append(rows, r.Value)
 				}
 			}

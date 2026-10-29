@@ -1,4 +1,3 @@
-// Simplified Chinese for this package, keyed by the English source text.
 import { register } from "@platform/ui";
 
 register("zh-CN", {
@@ -3006,7 +3005,6 @@ register("zh-CN", {
   "Open self-hosting": "打开系统自举",
 });
 
-// Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
  "Card accent tone": "卡片强调色调",
  "Use an original confirmed record resource and at most four formatted properties. Private titles hide the card; private properties are removed.": "使用原已确认记录资源及最多四个格式化属性；私有标题使整张卡片隐藏，私有属性会被移除。",

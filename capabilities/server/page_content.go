@@ -8,9 +8,6 @@ import (
 	"slices"
 )
 
-// PageContentDefinition reuses the one discovery projection over an original
-// owner snapshot. A digest never grants access or exposes an unpublished draft.
-// Like Definitions, it is called under the tenant lock at the HTTP boundary.
 func (t *Tenant) PageContentDefinition(m platform.Member, ref platform.AssetRef, version string) (platform.Definition, *kernel.Error) {
 	if refusal := t.admits(m); refusal != nil {
 		return platform.Definition{}, refusal

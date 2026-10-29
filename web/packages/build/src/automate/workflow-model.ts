@@ -7,12 +7,10 @@ export type Binding = Api.Binding;
 export type Predicate = Api.Predicate;
 export type WorkflowStep = Api.ProcessStep;
 type WorkflowKind = WorkflowStep["kind"];
-/** A local draft can precede the owner-assigned record stamps and lifecycle. */
 export type WorkflowDraft = Partial<Api.Process> & Pick<Api.Process, "id" | "revision" | "name" | "title" | "steps"> & { object: string; when: string };
 export type WorkflowObject = { id: string; name: string; title: string; published?: string; states?: { name: string; title: string }[];
   actions?: { name: string; title: string; inputs?: { required?: boolean }[]; approval?: unknown }[]; access?: { role: string; read: string }[] };
 export type Capability = Omit<Api.CapabilityDescriptor, "kind" | "tone" | "ports"> & { kind: WorkflowKind; tone: Tone; ports: (Api.BlockPort & { direction: "input" | "output"; channel: "control" | "data" })[] };
-/** Editor hints from the owner's payload metadata; unknown JSON retains its real open shape. */
 export function parameterSchema(field: Api.Field): ValueSchema | undefined {
   const description = field.description;
   if (["json", "lines"].includes(field.type)) return undefined;
@@ -28,10 +26,6 @@ export function commonSchemaProperties(schema?: ValueSchema): Record<string, Val
 }
 export const workflowKindTitle = (kind: string) => t(({ payload: "Input", query: "Query", action: "Action", act: "Action", transform: "Transform", branch: "Branch", switch: "Switch", foreach: "For each", while: "While", fork: "Parallel paths", all: "Parallel paths", any: "Parallel paths", join: "Join", ask: "Human task", wait: "Wait", subflow: "Run workflow", call: "Run workflow", ai: "AI function", compute: "Code function", end: "Return", break: "Break", continue: "Continue iteration", fail: "Fail" } as Record<string, string>)[kind] ?? kind);
 
-/** What each native step kind *is*, for the canvas's node classes. A
- * capability's kind is the same vocabulary, so a host capability and a native
- * block of the same kind draw with one glyph and one default notation — the
- * class table decides, nothing else names a drawing. */
 export const workflowStepClass = (kind: string): FlowNodeClass => (({
   payload: "trigger", query: "query", action: "action", act: "action", transform: "transform",
   branch: "control", switch: "control", foreach: "control", while: "control", fork: "control",
@@ -39,7 +33,6 @@ export const workflowStepClass = (kind: string): FlowNodeClass => (({
   subflow: "flow", call: "flow", ai: "ai", compute: "code", end: "end", break: "control", continue: "control", fail: "end",
 } as Record<string, FlowNodeClass>)[kind] ?? "task");
 
-/** Source pickers use the installed definition while its draft changes. */
 export function installedObjects<T extends WorkflowObject>(records: T[]): T[] {
   return records.flatMap((record) => {
     if (!record.published) return [];
@@ -145,6 +138,5 @@ export function workflowDiagnostics(draft: WorkflowDraft, validation?: { issues:
   return issues;
 }
 
-/** Schedule periods a process may repeat at (E1); the owner accepts any Go duration of a minute or more. */
 export const PERIODS = ["15m", "1h", "24h", "168h"] as const;
 export const periodLabel = (every: string) => ({ "15m": t("every 15 minutes"), "1h": t("every hour"), "24h": t("every day"), "168h": t("every week") })[every] ?? t("every {period}", { period: every });

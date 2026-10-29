@@ -4,8 +4,6 @@ import (
 	"time"
 )
 
-// CredentialBinding grants use by an original consumer at a specific network origin.
-// It does not grant anyone permission to read the value.
 type CredentialBinding struct {
 	Consumer string `json:"consumer"`
 	Origin   string `json:"origin"`

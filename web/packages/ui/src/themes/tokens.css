@@ -1,26 +1,6 @@
-/*
- * Platform design tokens — the single visual authority (@platform/ui).
- *
- * Three layers, one direction of reference:
- *   1. primitives  — raw OKLCH values (ramps). Never used by components.
- *   2. semantic    — the vocabulary (surface, border, tone-*, control sizes,
- *                    motion). The only layer components may read.
- *   3. component   — named variables for shared component CSS in styles.css.
- *
- * Two orthogonal switches on the document element (or any subtree):
- *   data-theme="light" | "dark"     — absent means follow the OS.
- *   data-density="compact" | "comfortable" — compact is the default
- *   (workshop & governance); comfortable is for business operator surfaces.
- *
- * Quality bar: Linear's precision (1px borders, restrained shadows, 120–180ms
- * motion, exact focus rings) at Foundry's density. No skeuomorphic skin — the
- * former industrial skin was retired with this file; there is one system.
- */
 
-/* ---------------------------------------------------------------- primitives */
 :root {
-  /* Neutral ramp, slightly cool. */
-  --gray-0: oklch(0.99 0.002 260);
+    --gray-0: oklch(0.99 0.002 260);
   --gray-25: oklch(0.982 0.002 260);
   --gray-50: oklch(0.968 0.003 260);
   --gray-100: oklch(0.952 0.004 260);
@@ -38,15 +18,13 @@
   --gray-925: oklch(0.17 0.01 260);
   --gray-950: oklch(0.145 0.009 260);
 
-  /* Accent ramp — the brand hue; a published app may retint the semantic layer only. */
-  --accent-300: oklch(0.78 0.1 258);
+    --accent-300: oklch(0.78 0.1 258);
   --accent-400: oklch(0.68 0.14 258);
   --accent-500: oklch(0.6 0.16 258);
   --accent-600: oklch(0.54 0.17 258);
   --accent-700: oklch(0.47 0.15 258);
 
-  /* Tone ramps. */
-  --blue-400: oklch(0.7 0.13 250);
+    --blue-400: oklch(0.7 0.13 250);
   --blue-500: oklch(0.6 0.15 255);
   --blue-600: oklch(0.53 0.16 255);
   --green-400: oklch(0.72 0.15 152);
@@ -59,37 +37,31 @@
   --red-500: oklch(0.6 0.2 26);
   --red-600: oklch(0.53 0.19 27);
 
-  /* Chart series beyond the four tones. */
-  --violet-500: oklch(0.6 0.15 300);
+    --violet-500: oklch(0.6 0.15 300);
   --teal-500: oklch(0.66 0.1 195);
   --purple-500: oklch(0.54 0.14 305);
   --pink-500: oklch(0.6 0.17 355);
   --orange-500: oklch(0.64 0.15 55);
 }
 
-/* ------------------------------------------------------------------ semantic */
 :root {
   color-scheme: light;
 
-  /* Surfaces and words. */
-  --background: var(--gray-25);
+    --background: var(--gray-25);
   --surface: oklch(1 0 0);
   --foreground: oklch(0.24 0.015 260);
   --muted: var(--gray-500);
   --border: var(--gray-200);
   --border-strong: var(--gray-300);
 
-  /* Brand and interaction. */
-  --primary: var(--accent-600);
+    --primary: var(--accent-600);
   --primary-foreground: oklch(0.99 0 0);
   --ring: var(--accent-500);
 
-  /* Lists. */
-  --row-hover: var(--gray-100);
+    --row-hover: var(--gray-100);
   --row-selected: oklch(0.945 0.025 258);
 
-  /* Status vocabulary. */
-  --tone-neutral: var(--gray-500);
+    --tone-neutral: var(--gray-500);
   --tone-info: var(--blue-500);
   --tone-success: var(--green-500);
   --tone-warning: var(--amber-500);
@@ -99,20 +71,16 @@
   --tone-teal: var(--teal-500);
   --tone-orange: var(--orange-500);
 
-  /* Charts. */
-  --chart-5: var(--violet-500);
+    --chart-5: var(--violet-500);
   --chart-6: var(--teal-500);
 
-  /* Depth — restrained, precise; barely-there in light. */
-  --shadow-xs: 0 1px 1px oklch(0 0 0 / 0.04);
+    --shadow-xs: 0 1px 1px oklch(0 0 0 / 0.04);
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.05), 0 0 0 1px oklch(0 0 0 / 0.02);
   --shadow-md: 0 2px 4px -1px oklch(0 0 0 / 0.06), 0 6px 16px -4px oklch(0 0 0 / 0.08);
   --shadow-lg: 0 4px 12px -2px oklch(0 0 0 / 0.1), 0 16px 40px -8px oklch(0 0 0 / 0.16);
   --overlay: oklch(0 0 0 / 0.32);
-  --letterbox: oklch(0 0 0); /* camera/scaffold backdrop stays ink in both themes */
-
-  /* Typography. */
-  --stack-sans: "Inter", ui-sans-serif, system-ui, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --letterbox: oklch(0 0 0);
+    --stack-sans: "Inter", ui-sans-serif, system-ui, "PingFang SC", "Noto Sans CJK SC", sans-serif;
   --stack-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --type-2xs: 10px;
   --type-xs: 11px;
@@ -120,20 +88,17 @@
   --type-base: 13px;
   --type-lg: 15px;
 
-  /* Shape. */
-  --r-sm: 4px;
+    --r-sm: 4px;
   --r-md: 6px;
   --r-lg: 9px;
 
-  /* Motion — quick, damped, never bouncy. */
-  --dur-fast: 120ms;
+    --dur-fast: 120ms;
   --dur-base: 160ms;
   --dur-slow: 240ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
-  /* Controls and cells — compact by default (workshop & governance density). */
-  --ctrl-h-xs: 24px;
+    --ctrl-h-xs: 24px;
   --ctrl-h-sm: 28px;
   --ctrl-h-md: 32px;
   --ctrl-h-lg: 36px;
@@ -144,15 +109,12 @@
   --cell-px: 10px;
   --field-gap: 8px;
   --touch-target: 32px;
-  /* Virtualized tables need a number; both scopes restate it. */
-  --table-row-h: 28px;
+    --table-row-h: 28px;
 
-  /* Chrome. */
-  --scrollbar-thumb: var(--gray-300);
+    --scrollbar-thumb: var(--gray-300);
   --scrollbar-thumb-hover: var(--gray-400);
 }
 
-/* Operating system preference, until the reader fixes a theme. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
@@ -188,7 +150,6 @@
   }
 }
 
-/* Fixed dark theme wins over the OS setting. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --background: oklch(0.16 0.008 260);
@@ -222,9 +183,6 @@
   --scrollbar-thumb-hover: var(--gray-400);
 }
 
-/* ------------------------------------------------------------------ density */
-/* Comfortable is the operator surface: same vocabulary, more air. Subtree
-   scopes may mix densities (a comfortable record view inside a compact shell). */
 [data-density="comfortable"] {
   --ctrl-h-xs: 28px;
   --ctrl-h-sm: 32px;
@@ -241,21 +199,16 @@
   --type-base: 14px;
 }
 
-/* ---------------------------------------------------------------- component */
 :root {
-  /* Focus is always visible and never ambiguous. */
-  --focus-ring-width: 2px;
+    --focus-ring-width: 2px;
   --focus-ring-offset: 1px;
 }
 
-/* One focus rule for everything; components may restate width or color,
-   never remove visibility. */
 :where(:focus-visible) {
   outline: var(--focus-ring-width) solid var(--ring);
   outline-offset: var(--focus-ring-offset);
 }
 
-/* Thin, theme-aware scrollbars everywhere. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;

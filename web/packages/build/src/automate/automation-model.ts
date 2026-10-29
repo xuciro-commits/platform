@@ -1,7 +1,6 @@
 import type { WorkflowDraft, WorkflowStep } from "./workflow-model";
 import { removeWorkflowSteps } from "./workflow-edit";
 
-/** Recognize the owner's linear automation without relying on reserved step names. */
 export function automationParts(draft: WorkflowDraft) {
   const ends = draft.steps.filter((step) => step.kind === "end");
   const chain = draft.steps.filter((step) => step.kind !== "end");
@@ -18,12 +17,10 @@ export function automationParts(draft: WorkflowDraft) {
   return { condition, effects, ends, editable };
 }
 
-/** Only rewrite the linear links. Preserve end results, names and every other step setting. */
 export function relinkAutomation(steps: WorkflowStep[], condition: WorkflowStep | undefined, effects: WorkflowStep[]): WorkflowStep[] {
   const chain = effects.map((step, index) => ({ ...step, next: effects[index + 1]?.name ?? "" }));
   const linkedCondition = condition ? { ...condition, cases: { ...condition.cases, true: chain[0]?.name ?? "" } } : undefined;
   let ends = steps.filter((step) => step.kind === "end");
-  // Explicit removal can leave a former false/error return disconnected.
   const names = new Set([...(condition ? [condition.name] : []), ...effects.map((step) => step.name)]);
   if (steps.some((step) => step.kind !== "end" && !names.has(step.name))) {
     const nodes = [...(linkedCondition ? [linkedCondition] : []), ...chain, ...ends], reached = new Set<string>();

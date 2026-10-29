@@ -7,7 +7,6 @@ export type NavLink = { label: string; icon?: ReactNode; route: Route; badge?: R
 export type NavItem = NavLink | { label: string; icon?: ReactNode; items: NavItem[] };
 export type NavSection = { label: string; items: NavItem[] };
 
-/** Search and menus read the same original routes, including grouped items. */
 export function navigationLinks(items: readonly NavItem[]): NavLink[] {
   return items.flatMap(item => "route" in item ? [item] : navigationLinks(item.items));
 }

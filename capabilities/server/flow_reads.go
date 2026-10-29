@@ -125,9 +125,6 @@ func (t *Tenant) readRecordFrom(store *records.Store, c platform.Caller, typ, id
 			if len(field.Index) == 0 || field.Index[0] == 0 || field.Aside {
 				continue
 			}
-			// omitempty is a transport choice. Owner rules and flows still
-			// read initialized scalar zero/false, while nil optional values
-			// and fields withheld by their actual sources remain absent.
 			original := value.FieldByIndex(field.Index)
 			switch original.Kind() {
 			case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,

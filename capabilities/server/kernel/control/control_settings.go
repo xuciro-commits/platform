@@ -6,12 +6,8 @@ import (
 	"sync/atomic"
 )
 
-// Settings are the apps' settings as set in this tenant, "<app>/<name>" →
-// value (declared defaults apply where none is set). Reads are lock-free: a
-// request asks for a dozen settings, and settings change once in a while, so a
-// write replaces the whole map instead of blocking the readers.
 type Settings struct {
-	mu     sync.Mutex // serializes writers
+	mu     sync.Mutex
 	values atomic.Pointer[map[string]string]
 }
 
@@ -50,8 +46,6 @@ func (s *Settings) Restore(values map[string]string) {
 	s.values.Store(&values)
 }
 
-// tenantWords are the entries, language → text → translation, under their own
-// lock as settings are: read by the translator, set by one console action.
 type Words struct {
 	mu    sync.Mutex
 	words map[string]map[string]string
@@ -76,7 +70,6 @@ func (w *Words) Set(lang, text, translation string) {
 	w.words[lang][text] = translation
 }
 
-// clone is a copy of every language's entries: what the translator layers.
 func (w *Words) Clone() map[string]map[string]string {
 	w.mu.Lock()
 	defer w.mu.Unlock()

@@ -10,7 +10,6 @@ import (
 	"platformserver/platform"
 )
 
-// Next is the next number of c's app's sequence for the accepted decision r.
 func (r runtime) Next(c platform.Caller, rec *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error) {
 	t := r.t
 	if rec.GetChangeId() == "" {

@@ -12,7 +12,6 @@ export function calendarRecords(records:EntityRecord[],fields:CalendarFields) {
  return {rows,invalid:records.length-rows.length};
 }
 
-/** Caller-owned authorized window in; original records out. No date writes. */
 export function RecordCalendar({records,fields,scope="calendar",selected,onSelect,maxRecords=100}:{records:EntityRecord[];fields:CalendarFields;scope?:string;selected?:string;onSelect:(record?:EntityRecord)=>void;maxRecords?:number}) {
  const identity=JSON.stringify([scope,fields]),[state,setState]=useState<{identity:string;month:string;day?:string}>(),month=state?.identity===identity?state.month:fields.initialMonth,day=state?.identity===identity?state.day:undefined;
  if(!validCalendarMonth(month)||records.length>maxRecords)return <p role="alert">{t("Calendar month or record window is unavailable or out of bounds.")}</p>;

@@ -15,7 +15,6 @@ import (
 	"time"
 )
 
-// LiveQueryResult is the original authorized GET result, never a fabricated row delta.
 type LiveQueryResult struct {
 	Path   string          `json:"path"`
 	Status int             `json:"status"`
@@ -47,10 +46,6 @@ func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") || strings.HasPrefix(p, "/v1/chain/") {
 		return true
 	}
-	// One segment under /v1/ is a platform read or an app's own read (served
-	// by GET /v1/{read}, e.g. an MES page's /v1/master); the mux check below
-	// still requires a GET route to exist. The stream itself, sign-in and the
-	// API description are not watched.
 	if rest, ok := strings.CutPrefix(p, "/v1/"); ok && rest != "" && !strings.Contains(rest, "/") {
 		return !slices.Contains([]string{"changes", "sign-in", "openapi.json"}, rest)
 	}
@@ -141,8 +136,6 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 			}
 			versions[query] = version
 			capture := &liveCapture{header: make(http.Header)}
-			// ServeMux dispatches the original route, including authentication,
-			// member resolution, field privacy, query limits and version binding.
 			read := request.Clone(r.Context())
 			if _, body, post := strings.Cut(query, "\n"); post {
 				read.Body = io.NopCloser(strings.NewReader(body))
@@ -185,9 +178,6 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 	}
 }
 
-// liveVersion includes query membership and authorization dependencies, not
-// only the rows currently returned. Unknown detail/Through dependencies are
-// conservatively tied to the store generation; simple lists/aggregates are typed.
 func (t *Tenant) liveVersion(query string) string {
 	target, body, _ := strings.Cut(query, "\n")
 	u, _ := url.Parse(target)
@@ -251,7 +241,6 @@ func (t *Tenant) liveVersion(query string) string {
 		return fmt.Sprintf("%d/%d/%d/%d/%d", global, meta, a, b, operationVersion)
 	}
 	if liveOperationRead(p) || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
-		// A chain spans original Flow/Agent records and their effect progress.
 		return fmt.Sprint(seq)
 	}
 	for _, prefix := range []string{"/v1/records/", "/v1/aggregates/"} {
@@ -266,8 +255,6 @@ func (t *Tenant) liveVersion(query string) string {
 			return fmt.Sprintf("%d/%d/%d", global, meta, version)
 		}
 	}
-	// Reverse references and pin labels also depend on business records, not
-	// only decisions whose owner is enterprise.
 	if p == "/v1/enterprise" || p == "/v1/enterprise-references" || p == "/v1/enterprise-usage" {
 		t.records.Lock()
 		generation := t.records.Generation()
@@ -275,7 +262,6 @@ func (t *Tenant) liveVersion(query string) string {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["enterprise"], generation)
 	}
 	owner := "platform"
-	// Named reads follow the app that declares them, including installed apps.
 	if name, ok := strings.CutPrefix(p, "/v1/"); ok && !strings.Contains(name, "/") {
 		t.mu.Lock()
 		if app := t.owner["read:"+name]; app != nil {

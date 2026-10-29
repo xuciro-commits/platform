@@ -16,11 +16,6 @@ import (
 	"platformserver/platform"
 )
 
-// Files: bytes are uploaded to the tenant's store and answered with
-// their SHA-256; a decision of the files app attaches them to a record. Bytes
-// no decision attached within a day are removed.
-
-// Upload is what an upload answers: the hash to attach.
 type Upload struct {
 	Hash        string `json:"hash"`
 	Size        int    `json:"size"`
@@ -28,7 +23,6 @@ type Upload struct {
 	Name        string `json:"name"`
 }
 
-// Upload keeps the bytes the member sent, when the tenant runs the files app.
 func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Reader, now time.Time) (Upload, int, error) {
 	if t.app(platform.FileApp) == nil {
 		return Upload{}, http.StatusNotFound, fmt.Errorf("the tenant runs no files app")
@@ -53,7 +47,6 @@ func (t *Tenant) Upload(m platform.Member, name, contentType string, body io.Rea
 	return Upload{Hash: hash, Size: len(data), ContentType: contentType, Name: name}, http.StatusOK, nil
 }
 
-// SweepUploads removes bytes uploaded more than a day ago that no file attaches.
 func (t *Tenant) SweepUploads(now time.Time) {
 	old := t.uploads.OlderThan(now, 24*time.Hour)
 	if len(old) == 0 {
@@ -69,7 +62,6 @@ func (t *Tenant) SweepUploads(now time.Time) {
 	}
 }
 
-// Download writes a file m may read, as an attachment the browser never renders in place.
 func (t *Tenant) Download(w http.ResponseWriter, m platform.Member, id string, now time.Time) {
 	v, err := t.RecordOf(m, platform.FileType, id, now)
 	if err != nil {

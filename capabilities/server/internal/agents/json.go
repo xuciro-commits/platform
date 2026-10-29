@@ -1,5 +1,3 @@
-// Package agents owns deterministic model conversations and response shaping.
-// It has no access to readers, model providers, tenant state or tool execution.
 package agents
 
 import (
@@ -24,8 +22,6 @@ func Clip(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// clipObservation cuts values, never JSON syntax. The envelope tells the model
-// that a bounded observation is incomplete and how to request more information.
 func Observation(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -103,9 +99,6 @@ func boundedJSON(value any, budget int) json.RawMessage {
 	return json.RawMessage(`null`)
 }
 
-// completeToolCalls preserves the provider IDs and checks complete JSON before
-// any call is executed. Missing IDs get a stable per-turn ID; duplicate IDs
-// cannot safely be paired with their results and are reported as a model error.
 func CompleteToolCalls(calls []platform.ToolCall, run string, turn int) ([]platform.ToolCall, error) {
 	out := slices.Clone(calls)
 	seen := map[string]bool{}
@@ -148,9 +141,6 @@ func LegacyOutcome(s string, limit int) string {
 	return s[:limit] + "…"
 }
 
-// ActionPayload unwraps the action input separately from agent metadata.
-// Retained flat single-call entries use
-// their original float decoding; accepted multi-call entries retain numbers.
 func ActionPayload(raw json.RawMessage, completeCall bool) json.RawMessage {
 	var payload map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(raw))

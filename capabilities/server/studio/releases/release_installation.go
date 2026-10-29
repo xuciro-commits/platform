@@ -45,8 +45,6 @@ func SameStoredFields(a, b platform.EntityInfo) bool {
 	return true
 }
 
-// The first storage upgrade profile adds exactly one optional scalar per
-// existing object. It has no defaults, transformations, removals or renames.
 type ReleaseFieldAddition struct {
 	Type        string `json:"type"`
 	Field       string `json:"field"`
@@ -171,9 +169,6 @@ func UpgradePlan(candidate, active string, shapes []StoredShape) (*ReleaseUpgrad
 	return plan, err
 }
 
-// All installed extensions participate in upgrade admission, including those
-// outside the selected application closure. Nothing republishes or replaces an
-// extension merely because its base package changed.
 func CheckExtensions(entities []platform.EntityInfo, lookup func(string) (platform.EntityInfo, bool)) error {
 	for _, info := range entities {
 		if info.Extends == "" {
@@ -237,8 +232,6 @@ func ExtensionReview(candidate platform.ReleaseCandidate, entities []platform.En
 	return result, nil
 }
 
-// releaseAssetShapes describes the object entities a set of release assets
-// declares, per owning app.
 func AssetShapes(apps []platform.App, available []platform.ReleaseAsset) (map[string]platform.EntityInfo, error) {
 	shapes := map[string]platform.EntityInfo{}
 	for _, owner := range apps {
@@ -325,8 +318,6 @@ func PrepareInstallation(runtime InstallationRuntime, candidate platform.Release
 	return installations, bootstrap, nil
 }
 
-// InstallationRuntime keeps private rows and accepted create decisions in their
-// original runtime. Studio owns ordering and retained installation planning.
 type InstallationRuntime interface {
 	HasAgentRuntime() bool
 	Registry() (*platform.AssetRegistry, error)
@@ -417,8 +408,6 @@ func ValidateSet(context ValidationContext, engines ...platform.RuleEngine) erro
 	return nil
 }
 
-// ValidationContext captures one private installation's existing declaration
-// compilers; queries and authorization remain their original host entries.
 type ValidationContext struct {
 	Entities    []platform.EntityInfo
 	Definitions []platform.Definition

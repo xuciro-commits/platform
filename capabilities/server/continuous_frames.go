@@ -22,8 +22,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// Frozen Flow state belongs to the original file owner. Handles are accepted
-// with native Flow records; no second cursor, job store or artifact index exists.
 const maxFlowFrameBytes = 64 << 20
 
 type flowFrameStore struct {
@@ -105,8 +103,6 @@ func (t *Tenant) continuousSnapshotLocked(m platform.Member, id string, now time
 		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
 	}
 	current, ok := t.Member(m.ID)
-	// Token scope is part of the original caller, not directory state. Refresh
-	// current grants without widening the read/preparation/acceptance scope.
 	current.Scopes = slices.Clone(m.Scopes)
 	if !ok || t.admits(current) != nil {
 		return nil, platform.FlowInstance{}, m, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The Flow member is unavailable")
@@ -145,9 +141,6 @@ func (t *Tenant) cleanupFlowArtifactsFor(m platform.Member, id string, now time.
 	return t.retireContinuousArtifacts(plan, now)
 }
 
-// ConsumeFlowBatch is the native source's outside-lane ingress. It prepares
-// immutable bytes without the tenant lock, then commits through the existing
-// accepted-result pipeline. HTTP submissions cannot construct the opaque plan.
 func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.FlowBatch, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
@@ -163,8 +156,6 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 	}
 	batchDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(digest))
 	key := platform.FlowBatchKey(id, before.Version, batch.ID)
-	// Native retries can arrive after later batches. The original accepted
-	// ledger, not a second deduplication map, owns their stable identity.
 	if prior := f.AcceptedLedger().AcceptedFor(t.ID, key); prior != nil {
 		var saved struct{ Batch, Digest string }
 		if json.Unmarshal(prior.GetSubmission().GetPayload(), &saved) != nil || saved.Batch != batch.ID || saved.Digest != batchDigest {
@@ -229,8 +220,6 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 		}
 	}
 	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
-		// An append error may have committed despite losing its response.
-		// Retain its bytes until the original journal resolves that outcome.
 		retained, inputRetained = true, true
 		return platform.FlowBatchOutcome{}, refusal
 	}
@@ -241,8 +230,6 @@ func (t *Tenant) ConsumeFlowBatch(m platform.Member, id string, batch platform.F
 	return platform.FlowBatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected, StateSize: x.Batch.StateBytes}, nil
 }
 
-// prepareContinuousDeadLetterReplay recognizes only signal replay. Business
-// action replay stays inside the original Flow decision without outside I/O.
 func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time, contentVersion ...string) (*pb.ChangeRecord, *kernel.Error, bool) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
@@ -349,8 +336,6 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	}
 	record, err := t.submitAcceptedVersion(prepared.Decision(), current, sub, now, false, binding, nil, nil, preparedInput)
 	_, refused := t.committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey())
-	// A durable refusal names no prepared bytes. An uncertain append must
-	// retain them until the original accepted journal resolves its outcome.
 	retained = err == nil || !refused
 	inputRetained = preparedInput != nil && retained
 	if err == nil {
@@ -359,10 +344,6 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	return record, err, true
 }
 
-// retireContinuousArtifacts deletes only refs named by an already-accepted
-// cleanup intent. The intent is acknowledged through the ordinary Flow result
-// ledger after every delete succeeds, so process restarts safely retry partial
-// object-store failures without a second queue or cursor.
 func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPreparation, now time.Time) *kernel.Error {
 	if plan == nil || plan.Instance() == "" || now.IsZero() {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Flow artifact cleanup is unavailable")
@@ -388,8 +369,6 @@ func (t *Tenant) retireContinuousArtifacts(plan platform.FlowArtifactCleanupPrep
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The Flow artifact cleanup owner is unavailable")
 	}
 	if !plan.Matches(latest) {
-		// Another host pass may have acknowledged the same intent while these
-		// idempotent deletes ran. The artifact bytes are already safe to discard.
 		return nil
 	}
 	if _, refusal := t.submitAccepted(plan.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, plan.Submission(t.ID), now, true); refusal != nil {
@@ -429,8 +408,6 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 		return
 	}
 	if _, refusal = t.submitAccepted(prepared.Decision(), platform.Member{ID: "app:" + platform.FlowApp, Tenant: t.ID}, prepared.Submission(t.ID), now, true, preparedInput); refusal != nil {
-		// Preserve a possibly committed call input until the accepted journal
-		// resolves whether the retry decision was durable.
 		inputRetained = true
 		log.Printf("continuous Compute retry %s refused: %s", instance, refusal.Code)
 		return
@@ -439,10 +416,6 @@ func (t *Tenant) retryContinuousCompute(member platform.Member, plan platform.Fl
 	inputRetained = preparedInput != nil
 }
 
-// prepareContinuousOperationInput seals an entry's window projection in the
-// existing per-call compute channel when its retained operation declares the
-// v2 data input ABI. Only an opaque, call/member/definition-bound reference is
-// handed into the accepted decision; the full projection stays off Flow.Data.
 func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instance string, request platform.OperationRequest) (*preparedOperationInput, *kernel.Error) {
 	refuse := func(code pb.ErrorCode, message string) (*preparedOperationInput, *kernel.Error) {
 		return nil, platform.Refuse(code, message)
@@ -492,8 +465,6 @@ func (t *Tenant) prepareContinuousOperationInput(member platform.Member, instanc
 	return &preparedOperationInput{ref: ref, requestHash: requestHash}, nil
 }
 
-// ReadFlowFrame resolves only a currently readable original instance. A role
-// change during artifact I/O cannot disclose its previously captured contents.
 func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*platform.FlowBatchFrame, *kernel.Error) {
 	owner, before, current, refusal := t.continuousSnapshot(m, id, now)
 	if refusal != nil {
@@ -513,8 +484,6 @@ func (t *Tenant) ReadFlowFrame(m platform.Member, id string, now time.Time) (*pl
 	return frame, nil
 }
 
-// streamSource captures only controlled source/connection definitions. Their
-// mutable pull summaries and record clocks are not the stream's configuration.
 func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *platform.StreamIntake, now time.Time) (build.Source, build.Connection, string, *kernel.Error) {
 	refuse := func(message string) (build.Source, build.Connection, string, *kernel.Error) {
 		return build.Source{}, build.Connection{}, "", platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, message)
@@ -566,9 +535,6 @@ func (t *Tenant) streamSourceLocked(m platform.Member, name string, intake *plat
 	return source, connection, hash, nil
 }
 
-// ConsumeFlowSource reads an incremental registered Source on the I/O lane.
-// Its consumer offset is accepted with the original window frame. No raw
-// source rows enter an import record or a second cursor/queue database.
 func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) (platform.FlowBatchOutcome, *kernel.Error) {
 	if refusal := t.cleanupFlowArtifactsFor(m, id, now); refusal != nil {
 		return platform.FlowBatchOutcome{}, refusal
@@ -610,7 +576,6 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 		if left == right {
 			return platform.FlowBatchOutcome{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source cursor group exceeds the Flow batch budget")
 		}
-		// The remaining rows stay behind the accepted incremental position.
 		rows = rows[:budget]
 	}
 	if len(rows) == 0 {
@@ -686,9 +651,6 @@ func (t *Tenant) ConsumeFlowSource(m platform.Member, id string, now time.Time) 
 	return t.ConsumeFlowBatch(current, id, batch, now)
 }
 
-// Source retries retain the original instance, definition and source cursor.
-// Backoff and database I/O run outside the writer lock; each attempt refreshes
-// the original member and proves the same retained automation is still allowed.
 func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowInstance, name string, intake *platform.StreamIntake, source build.Source, connection build.Connection, hash string, latestBootstrap bool, columns []string, now time.Time) ([]map[string]any, string, *kernel.Error) {
 	retry := intake.Retry
 	if err := retry.Check(); err != nil {
@@ -722,8 +684,6 @@ func (t *Tenant) readContinuousSource(m platform.Member, before platform.FlowIns
 		if refusal := checkOriginal(); refusal != nil {
 			return nil, "", refusal
 		}
-		// Once latest resolves, retry reads from that exact initial position.
-		// A later latest query would silently skip rows arriving during backoff.
 		if !initialized {
 			cursor, readErr = t.latestTableCursor(source, connection)
 			if readErr != nil {
@@ -771,7 +731,7 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBa
 		if intake.Offset != "latest" || !checkpoint.Initialized || x.Batch != nil && x.Batch.Source != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source checkpoint must advance its accepted position")
 		}
-		return nil // an empty source was initialized at its latest offset
+		return nil
 	}
 	if source.Advance([]map[string]any{{source.Since: checkpoint.Cursor}}) != checkpoint.Cursor || source.Cursor == checkpoint.Cursor {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The source checkpoint must advance its accepted position")
@@ -779,17 +739,12 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan platform.FlowBa
 	return nil
 }
 
-// PullContinuousSources uses the host's existing outside loop. The Flow
-// ledger remains the only consumer cursor owner; an overlapping pass backs
-// off instead of creating duplicate concurrent reads of one predecessor.
 func (t *Tenant) PullContinuousSources(now time.Time) {
 	for _, pull := range t.continuousSources(now) {
 		pull()
 	}
 }
 
-// Reserve before entering the shared I/O lane, so a slow database does not
-// accumulate one waiting goroutine per timer tick for the same tenant.
 func (t *Tenant) continuousSources(now time.Time) []func() {
 	if t.businessStopped() || !t.ownerActive(platform.FlowApp) || !t.streamMu.TryLock() {
 		return nil
@@ -833,8 +788,6 @@ func (t *Tenant) pullContinuousSources(now time.Time) {
 				} else {
 					cleanups = append(cleanups, cleanup{plan: plan, instance: instance.ID})
 				}
-				// Cleanup is independent host work. Do not prepare a source batch
-				// against an instance whose prior retirement intent is unresolved.
 				continue
 			}
 			if instance.State != "waiting" {

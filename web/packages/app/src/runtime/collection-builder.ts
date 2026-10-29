@@ -6,7 +6,6 @@ import {parseDecimal} from './decimal';
 
 export const builderOperators=(type:string)=>['integer','decimal'].includes(type)?['is','isNot','gte','lte']:['is','isNot',...type==='text'?['contains']:[]];
 const operators:Record<string,string>={is:'=',isNot:'!=',gte:'>=',lte:'<=',contains:'like'};
-/** Explicit literal clauses are bounded and checked against current original fields. */
 export function builderConditions(filters:Filter[],fields:string[],info:EntityInfo):Api.PageQueryCondition[]|undefined {
  if(filters.length>16)return;
  const result:Api.PageQueryCondition[]=[];

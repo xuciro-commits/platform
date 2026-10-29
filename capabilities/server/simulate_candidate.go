@@ -24,9 +24,6 @@ import (
 	"platformserver/platform"
 )
 
-// SimulateCandidate installs a saved object, process or function draft in a fresh, bounded tenant.
-// Only this builder's objects are supported. All action decisions and result
-// reads use the ordinary runtime, with no live records or external bindings.
 func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
 	var empty trialowner.CandidateSimulation
 	if err := t.admits(builder); err != nil {
@@ -235,8 +232,6 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.C
 }
 
 func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candidate platform.ReleaseCandidate, environment simulationEnvironment, m platform.Member, members []platform.Member, functionName string) (trialowner.CandidateSimulation, *kernel.Error) {
-	// Every trial and recovery comparison composes fresh original owners from
-	// the same captured bytes. No callback carries production rows or bindings.
 	compose := func() (trialowner.Runtime, error) {
 		sandbox, err := candidateTestTenantWithEnvironment(candidate, m, environment, slices.DeleteFunc(slices.Clone(members), func(actor platform.Member) bool { return actor.ID == m.ID })...)
 		if err != nil {
@@ -252,7 +247,6 @@ func runCandidateSimulation(request trialowner.CandidateSimulationRequest, candi
 	return trialowner.RunCandidate(request, candidate, m, members, functionName, compose)
 }
 
-// candidateRun adapts one private sandbox and its fixed clock to the trial owner.
 type candidateRun struct {
 	request   trialowner.CandidateSimulationRequest
 	candidate platform.ReleaseCandidate
@@ -261,7 +255,6 @@ type candidateRun struct {
 	now       time.Time
 }
 
-// Step uses the sandbox's original read, submit, work and fixture boundaries.
 func (r *candidateRun) Step(i int, step trialowner.SimulationStep) (trialowner.Simulation, *kernel.Error) {
 	actor := r.m
 	if step.As != "" {
@@ -433,7 +426,6 @@ func (r *candidateRun) Step(i int, step trialowner.SimulationStep) (trialowner.S
 	return result, nil
 }
 
-// visibleChanges is a role-filtered projection of this run's synthetic rows.
 func (r *candidateRun) visibleChanges(actor platform.Member) []trialowner.SimulatedChange {
 	trace := r.sandbox.simulationTrace
 	r.sandbox.simulationTrace = nil
@@ -598,8 +590,6 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	}
 	defer endBootstrap()
 	sandbox.installingSet = true
-	// Trials execute these exact frozen definitions. Passive integrations have
-	// no live connections to reconstruct their release descriptors from.
 	if err := sandbox.releases.Put(candidate.ID, candidate.Bytes); err != nil {
 		return nil, err
 	}
@@ -623,9 +613,6 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if asset.Ref.App != build.ID {
 			continue
 		}
-		// Native Build records (for example a proposal's original function
-		// call) are already provided by this fresh Build. They are fixed code
-		// prerequisites, never tenant object drafts to reconstruct.
 		if asset.Ref.Kind == platform.AssetObject && slices.ContainsFunc(b.Manifest().Entities, func(e platform.Entity) bool { return e.Type == asset.Ref.Name }) {
 			continue
 		}
@@ -643,7 +630,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || b.DefinitionMetadataKind(asset.Ref.Kind) {
-			continue // compiled after its source objects below
+			continue
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
 			return nil, fmt.Errorf("unsupported test dependency or compiler version %s", asset.Ref)
@@ -720,7 +707,6 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			}
 		}
 	}
-	// Functions must exist before process validation resolves their pinned versions.
 	if len(processes) != 0 {
 		if _, err := sandbox.restoreRecords(processes); err != nil {
 			return nil, err
@@ -729,8 +715,6 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			return nil, err
 		}
 	}
-	// Restore the same dependent page/application descriptors the release
-	// review includes. Actions are compiled solely from their owning objects.
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetPage {
 			var page platform.Page
@@ -742,8 +726,6 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			}
 		}
 	}
-	// Passive owner declarations stay in the application closure. Their live
-	// connections, credentials, datasets and migration runs are never imported.
 	for _, asset := range candidate.Assets {
 		if b.DefinitionMetadataKind(asset.Ref.Kind) {
 			definition, err := b.DefinitionDescriptor(asset)

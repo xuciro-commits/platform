@@ -24,7 +24,6 @@ export function CatalogPreview({ id, standalone = false }: { id: string; standal
   const Example = useMemo(() => loader ? lazy(loader) : undefined, [loader, attempt]);
   const retry = () => { setAsyncFailure(false); setAttempt((n) => n + 1); };
   useEffect(() => {
-    // Browser event/promise failures do not pass through React error boundaries.
     const rejected = () => setAsyncFailure(true);
     const failed = (event: ErrorEvent) => { if (event.error) setAsyncFailure(true); };
     addEventListener("unhandledrejection", rejected);

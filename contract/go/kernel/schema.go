@@ -4,10 +4,9 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// SchemaRegistry implements K7 (contract/spec/K7-schema-evolution.md) for one receiver.
 type SchemaRegistry struct {
-	known    map[string]bool // "name@version"
-	upgrades map[string]bool // "name@from"
+	known    map[string]bool
+	upgrades map[string]bool
 }
 
 func NewSchemaRegistry(known []*pb.SchemaRef, upgrades []*pb.UpgradeStep) *SchemaRegistry {
@@ -21,7 +20,6 @@ func NewSchemaRegistry(known []*pb.SchemaRef, upgrades []*pb.UpgradeStep) *Schem
 	return r
 }
 
-// Accepts reports whether v is known or upgrades to a known version (S1).
 func (r *SchemaRegistry) Accepts(s *pb.SchemaRef) bool {
 	for v := s.GetVersion(); ; v++ {
 		if r.known[stepKey(s.GetName(), v)] {
@@ -33,13 +31,10 @@ func (r *SchemaRegistry) Accepts(s *pb.SchemaRef) bool {
 	}
 }
 
-// Learn makes (name, version) known (S7): a schema this receiver did not have
-// when it started — a package installed while it runs, or a definition someone
-// authored in a tenant. Learning a known version changes nothing.
 func (r *SchemaRegistry) Learn(refs ...*pb.SchemaRef) *Error {
 	for _, s := range refs {
 		if s.GetName() == "" || s.GetVersion() < 1 {
-			return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // S7, and S6: nothing is added
+			return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		}
 	}
 	for _, s := range refs {
@@ -51,7 +46,7 @@ func (r *SchemaRegistry) Learn(refs ...*pb.SchemaRef) *Error {
 func (r *SchemaRegistry) AddUpgrade(u *pb.UpgradeStep) *Error {
 	switch {
 	case u.GetName() == "" || u.GetFromVersion() < 1:
-		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // S2
+		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	case !r.known[stepKey(u.GetName(), u.GetFromVersion()+1)]:
 		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE)
 	case r.upgrades[stepKey(u.GetName(), u.GetFromVersion())]:
@@ -61,7 +56,6 @@ func (r *SchemaRegistry) AddUpgrade(u *pb.UpgradeStep) *Error {
 	return nil
 }
 
-// Path returns the versions a payload passes through when read at version to (S3).
 func (r *SchemaRegistry) Path(from *pb.SchemaRef, to uint32) ([]uint32, *Error) {
 	if !r.known[stepKey(from.GetName(), to)] {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
@@ -79,7 +73,6 @@ func (r *SchemaRegistry) Path(from *pb.SchemaRef, to uint32) ([]uint32, *Error) 
 	return path, nil
 }
 
-// Negotiate picks the highest offered version the receiver accepts (S4).
 func (r *SchemaRegistry) Negotiate(name string, offered []uint32) (uint32, *Error) {
 	var best uint32
 	for _, v := range offered {
@@ -93,7 +86,6 @@ func (r *SchemaRegistry) Negotiate(name string, offered []uint32) (uint32, *Erro
 	return best, nil
 }
 
-// Retire drops a known version unless a stored payload would become unacceptable (S5).
 func (r *SchemaRegistry) Retire(s *pb.SchemaRef, stored []*pb.SchemaRef) *Error {
 	if !r.known[schemaKey(s)] {
 		return errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
@@ -101,7 +93,7 @@ func (r *SchemaRegistry) Retire(s *pb.SchemaRef, stored []*pb.SchemaRef) *Error 
 	delete(r.known, schemaKey(s))
 	for _, p := range stored {
 		if !r.Accepts(p) {
-			r.known[schemaKey(s)] = true // S6
+			r.known[schemaKey(s)] = true
 			return errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
 	}

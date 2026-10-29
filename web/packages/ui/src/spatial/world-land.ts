@@ -1,6 +1,5 @@
 type Point={x:number;y:number};
 const W=1000,H=500;
-/** Unwrap and clip at the antimeridian instead of drawing a border across the ocean. */
 export function landRingPath(ring:number[][]){
  if(!ring.length)return "";const points:Point[]=[];
  for(const [longitude,latitude]of ring){let x=(longitude!+180)/360*W;const previous=points.at(-1)?.x;if(previous!==undefined){while(x-previous>W/2)x-=W;while(x-previous < -W/2)x+=W;}points.push({x,y:(90-latitude!)/180*H});}

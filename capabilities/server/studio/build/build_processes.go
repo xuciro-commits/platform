@@ -124,8 +124,6 @@ func (b *Build) checkFlow(p Process, entity platform.Entity, objects ...platform
 	return b.checkFlowOn(p, entity, objects...)
 }
 
-// CheckProcess exposes the exact publication compiler to edit/test feedback.
-// It returns node-qualified errors instead of trusting frontend edge rules.
 func (b *Build) CheckProcess(c platform.Caller, p Process) *kernel.Error {
 	objects, err := readDefinitionInventory[Object](c)
 	if err != nil {
@@ -154,8 +152,6 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 		if b.jointMode {
 			lookup.ValidateQuery = func(query platform.NamedQuery) error {
 				if _, selected := b.jointEntities[query.Object]; selected {
-					// The same private candidate installation validates fields
-					// once its complete object set exists, as checkQuery does.
 					return query.Check()
 				}
 				return b.host.ValidateInstallQuery(query)
@@ -165,8 +161,6 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity, objects ...platfo
 	return CheckProcess(p, entity, lookup, objects...)
 }
 
-// installProcesses installs every published version of every process, oldest
-// first, after the objects they run on (a restore).
 func (b *Build) installProcesses() error {
 	procs := b.host.BuildProcesses()
 	list, err := b.processInventory()
@@ -201,8 +195,6 @@ func (b *Build) processInventory() ([]Process, error) {
 	return readDefinitionInventory[Process](b.host.Automation(platform.Caller{}, ID))
 }
 
-// flowOf binds the original host's authorized reads to a pure native-flow
-// compilation. The compiler cannot resolve members, records or queries itself.
 func (b *Build) flowOf(p Process) platform.Flow {
 	execution := ProcessExecution{
 		StateField: "state",
@@ -261,43 +253,28 @@ const (
 	SchemaProcessRun = ProcessType + ".run"
 )
 
-// Process is the single declarative definition compiled to native Flow/Step.
-// Canvas positions are presentation; step IDs and typed references are logic.
-//
-// Kind says how the builder authored it: a "flow" is the free
-// node graph; an "automation" is the linear sentence "when a record of Object
-// reaches When, [if Condition,] run these effects" - the same steps, in a shape
-// the host checks (checkAutomation) so the card editor and the map agree.
 type Process struct {
 	platform.Record
-	Name   string `json:"name" field:"required,search"`
-	Title  string `json:"title" field:"required,search"`
-	Kind   string `json:"kind,omitempty" enum:"flow,automation" title:"Authoring shape"`
-	Object string `json:"object,omitempty" title:"Source object"`
-	When   string `json:"when,omitempty" title:"Record start state"`
-	Manual bool   `json:"manual,omitempty" title:"Manual start"`
-	// Every schedules the process instead of a record state or a hand: a Go
-	// duration such as 15m, 1h or 24h, at least 1m (E1). A scheduled
-	// process has no source record; its steps act as the member who published it.
-	Every string `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
-	// Scheduler is the member who published the schedule: scheduled runs act as them.
-	Scheduler   string                `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
-	Input       json.RawMessage       `json:"input,omitempty" type:"json" title:"Default input"`
-	InputSchema *platform.ValueSchema `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
-	Continuous  *platform.Continuous  `json:"continuous,omitempty" type:"json" title:"Continuous source intake"`
-	Steps       []ProcessStep         `json:"steps" field:"aside"`
-	// Lanes are the responsibilities the process is drawn across: a
-	// step names the lane that does it. A lane carries no execution semantics, so
-	// the compiler ignores it and the canvas draws it as a band behind its steps.
-	Lanes     []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`
-	Layout    map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
-	State     string                  `json:"state" field:"readonly" choices:"draft,published"`
-	Version   int                     `json:"version,omitempty" field:"readonly"`
-	Published string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
-	Versions  []string                `json:"versions,omitempty" field:"readonly"`
+	Name        string                  `json:"name" field:"required,search"`
+	Title       string                  `json:"title" field:"required,search"`
+	Kind        string                  `json:"kind,omitempty" enum:"flow,automation" title:"Authoring shape"`
+	Object      string                  `json:"object,omitempty" title:"Source object"`
+	When        string                  `json:"when,omitempty" title:"Record start state"`
+	Manual      bool                    `json:"manual,omitempty" title:"Manual start"`
+	Every       string                  `json:"every,omitempty" title:"Repeat every" help:"A period such as 15m, 1h or 24h; empty: not scheduled"`
+	Scheduler   string                  `json:"scheduler,omitempty" field:"readonly" title:"Runs as"`
+	Input       json.RawMessage         `json:"input,omitempty" type:"json" title:"Default input"`
+	InputSchema *platform.ValueSchema   `json:"inputSchema,omitempty" type:"json" title:"Input schema"`
+	Continuous  *platform.Continuous    `json:"continuous,omitempty" type:"json" title:"Continuous source intake"`
+	Steps       []ProcessStep           `json:"steps" field:"aside"`
+	Lanes       []ProcessLane           `json:"lanes,omitempty" field:"aside" title:"Lanes"`
+	Layout      map[string]NodePosition `json:"layout,omitempty" type:"json" title:"Canvas layout"`
+	State       string                  `json:"state" field:"readonly" choices:"draft,published"`
+	Version     int                     `json:"version,omitempty" field:"readonly"`
+	Published   string                  `json:"published,omitempty" field:"readonly" type:"longtext"`
+	Versions    []string                `json:"versions,omitempty" field:"readonly"`
 }
 
-// ProcessLane is one BPMN lane: a named responsibility, titled for the reader.
 type ProcessLane struct {
 	Name  string `json:"name"`
 	Title string `json:"title,omitempty"`
@@ -314,8 +291,6 @@ type OperationRef struct {
 	Version int    `json:"version"`
 }
 
-// ProcessStep has one explicit kind and one binding/predicate grammar. There
-// is no old ask/action branch compiler beside this representation.
 type ProcessStep struct {
 	Name           string                      `json:"name"`
 	Title          string                      `json:"title,omitempty"`
@@ -352,8 +327,6 @@ type ProcessStep struct {
 	FlowVersion    int                         `json:"flowVersion,omitempty"`
 }
 
-// ProcessLookup resolves declarations used by authoring checks. It has no
-// submission, installation, tenant state, network or scheduling authority.
 type ProcessLookup struct {
 	Entity        func(string) (platform.EntityInfo, bool)
 	Action        func(string) (string, platform.Action, bool)
@@ -701,8 +674,6 @@ func CheckProcess(p Process, entity platform.Entity, lookup ProcessLookup, objec
 			}
 		}
 	}
-	// Cycles are rejected even if they would wait: iteration is an explicit
-	// loop scope with its cursor, not a Choose callback jumping backwards.
 	seen, active := map[string]bool{}, map[string]bool{}
 	var visit func(string) error
 	visit = func(name string) error {
@@ -745,8 +716,6 @@ func processPaths(s ProcessStep) []string {
 	return paths
 }
 
-// processImage checks the already saved version family, independently of
-// draft rules. Old versions are flat images, not copies of their own history.
 func ReadProcessImage(image []byte) (Process, error) {
 	var record Process
 	if err := json.Unmarshal(image, &record); err != nil {
@@ -766,11 +735,6 @@ func ReadProcessImage(image []byte) (Process, error) {
 	return latest, nil
 }
 
-// checkAutomation holds an automation to its sentence: it starts
-// from a record reaching a state, never by hand; at most one condition, first,
-// whose false path ends the run; then effects - actions, AI and compute steps -
-// one after another, each leading to the next, the last to nothing. Anything
-// richer is a flow and is edited on the map.
 func CheckAutomation(p Process) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
@@ -816,9 +780,6 @@ func CheckAutomation(p Process) *kernel.Error {
 	return nil
 }
 
-// ProcessExecution supplies the original authorized read callbacks captured by
-// a compiled flow. CompileProcess only constructs the native definition; it
-// does not call these functions or own an execution/scheduling path.
 type ProcessExecution struct {
 	StateField        string
 	ContinuousEnabled func(platform.Caller) bool
@@ -827,15 +788,12 @@ type ProcessExecution struct {
 	Query             func(platform.Caller, *platform.Run, string, string, int, json.RawMessage) (json.RawMessage, *kernel.Error)
 }
 
-// CompileProcess lowers every declarative block to the existing native owner.
 func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 	fl := platform.Flow{Name: p.Name, Title: p.Title, Version: p.Version, Subject: p.Object, Owners: []string{Builder}, Start: platform.Start{Manual: p.Manual}, Continuous: p.Continuous}
 	if p.Every != "" {
 		fl.Start.Every, _ = time.ParseDuration(p.Every)
 		fl.Start.OnBehalf = p.Scheduler
 	} else if p.Continuous != nil && p.Continuous.Intake != nil && !p.Manual {
-		// Retained manual versions keep their original start semantics. New
-		// continuous publishes reject Manual and record their publishing member.
 		fl.Start.Manual, fl.Start.Continuous, fl.Start.OnBehalf = false, true, p.Scheduler
 		fl.Start.Enabled = execution.ContinuousEnabled
 	} else if !p.Manual {
@@ -863,8 +821,6 @@ func CompileProcess(p Process, execution ProcessExecution) platform.Flow {
 			return execution.Subject(c, r)
 		}
 		resolve := func(c platform.Caller, r *platform.Run, binding platform.Binding) (json.RawMessage, *kernel.Error) {
-			// Identity belongs to the already authorized record, not its
-			// declared business fields. Other paths retain field checks.
 			if binding.Source == "subject" && len(binding.Path) > 0 && binding.Path[0] != "id" {
 				value, sources, err := execution.SubjectPath(c, r, binding.Path)
 				r.Sources = append(r.Sources, sources...)
@@ -1133,9 +1089,6 @@ func predicateSubject(p platform.Predicate) bool {
 	return false
 }
 
-// UnmarshalJSON decodes a step strictly: every step names its kind and binds
-// its inputs with typed bindings. There is no older representation beside
-// this one; a record that cannot be read this way is refused where it is read.
 func (s *ProcessStep) UnmarshalJSON(raw []byte) error {
 	type current ProcessStep
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -1148,8 +1101,6 @@ func (s *ProcessStep) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// checkProcessScopes checks one graph, one binding grammar and explicit scope
-// boundaries. Layout/React Flow edge JSON is never an execution definition.
 func CheckProcessScopes(p Process) error {
 	nodes := map[string]ProcessStep{}
 	for _, node := range p.Steps {
@@ -1197,8 +1148,6 @@ func CheckProcessScopes(p Process) error {
 	if err := assign(p.Steps[0].Name, ""); err != nil {
 		return err
 	}
-	// Dominators are based on control reachability, not visual position or
-	// declaration order. Only values produced on every incoming route exist.
 	predecessors := map[string][]string{}
 	for _, node := range p.Steps {
 		for _, to := range processPaths(node) {

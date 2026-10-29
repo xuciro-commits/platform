@@ -22,42 +22,29 @@ type Store struct {
 
 	mu sync.Mutex
 
-	liveVersions map[string]uint64
-	uniqueLinks  map[string]platform.LinkType
-	archiveLinks map[string]platform.LinkType
-	types        map[string]*Type
-	byGo         map[reflect.Type]*Type
-	// A private 19a decision view has no projection callback. It may replace
-	// its parent only if no direct write reached that parent in the meantime.
+	liveVersions   map[string]uint64
+	uniqueLinks    map[string]platform.LinkType
+	archiveLinks   map[string]platform.LinkType
+	types          map[string]*Type
+	byGo           map[reflect.Type]*Type
 	parent         *Store
 	generation     uint64
 	baseGeneration uint64
 	writes         map[string]bool
 	sealed         bool
-	// touched, when set, hears of each record put, under mu (the PostgreSQL projection).
-	touched func(typ, id string)
-	// dirty are the records of knowledge-bearing types put since the index last
-	// read it, under mu: knowledge is cut again for those records alone, not by
-	// walking the tenant at every search (#130).
-	dirty Index[bool]
-	// changed are the records each recent decision put ("<app>/<change>" →
-	// "<type>/<id>"), for flows started by a record's state.
-	recentChanges RecentChanges
+	touched        func(typ, id string)
+	dirty          Index[bool]
+	recentChanges  RecentChanges
 }
 
 type Type struct {
-	store   *Store
-	indexes DerivedIndexes
-	info    platform.EntityInfo
-	rows    Rows
-	// Derived indexes share the same immutable rows. Writes update only built
-	// reference buckets; schema replacement discards them with its type image.
-	fullImage bool // private schema/bulk replacement needs full admission once
-	// knowledge says a record of this type may become knowledge: it declares a
-	// knowledge field, it is a knowledge document, or it is a file that may be
-	// attached to one.
+	store              *Store
+	indexes            DerivedIndexes
+	info               platform.EntityInfo
+	rows               Rows
+	fullImage          bool
 	knowledge          bool
-	retainedProjection bool // query fields are interpreted through an older owner shape
+	retainedProjection bool
 }
 
 func NewStore() *Store {
@@ -66,10 +53,6 @@ func NewStore() *Store {
 	return s
 }
 
-// forkRecords snapshots immutable row, dirty and change indexes without
-// visiting record values/history. Only type metadata and the bounded recent
-// change order are copied; writes replace their own index paths and rows.
-// The accepted-result path appends before promoting this isolated view.
 func (s *Store) ForkRecords() *Store {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -93,9 +76,6 @@ func (s *Store) ForkRecordsLocked() *Store {
 	return draft
 }
 
-// promoteRecords makes a staged view visible after its result is durable.
-// The tenant lock must cover the decision and promotion. The projection is
-// notified only for the rows the decision changed, never while staging.
 func (s *Store) PromoteRecords(draft *Store) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -149,7 +129,6 @@ func (s *Store) PromoteRecords(draft *Store) error {
 	return nil
 }
 
-// sortedTypes are the declared entity types, by name.
 func (s *Store) SortedTypes() []*Type {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -161,7 +140,6 @@ func (s *Store) SortedTypes() []*Type {
 	return out
 }
 
-// liveTouched is ephemeral query invalidation metadata, protected by mu.
 func (s *Store) LiveTouched(typ string) {
 	if s.liveVersions == nil {
 		s.liveVersions = map[string]uint64{}
@@ -169,14 +147,10 @@ func (s *Store) LiveTouched(typ string) {
 	s.liveVersions[typ]++
 }
 
-// All replacements, including pure accepted-result application, use this
-// type owner. No decision rules run here; only derived lookup buckets change.
 func (et *Type) SetRows(rows Index[*Row]) {
 	et.rows, et.fullImage = MemoryRows(rows), true
 	et.indexes.Reset()
 	if et.store != nil {
-		// A schema/full-image replacement may change every referenced scope.
-		// Bulk recovery may rebuild; ordinary setRow keeps its existing roots.
 		for _, other := range et.store.types {
 			other.indexes.ResetUnique()
 		}
@@ -221,9 +195,6 @@ func (s *Store) RefreshUniqueIndexes(changedType, changedID string) {
 	}
 }
 
-// uniqueKeys is the owner-derived SQL representation of one current row. A
-// missing/incomplete historical scope occupies no key, just as the in-memory
-// index. Storage persists these values without evaluating business rules.
 func (s *Store) UniqueKeys(typ, id string) map[string]string {
 	keys := map[string]string{}
 	et := s.types[typ]
@@ -246,10 +217,6 @@ func (s *Store) UniqueKeys(typ, id string) map[string]string {
 	return keys
 }
 
-// uniqueChanges contains complete per-row replacement key sets for a private
-// decision, including unchanged children whose parent scope was edited. A
-// caller applies an empty key set by deleting that row's former derived keys.
-// The store lock belongs to the caller, as with accepted record collection.
 func (s *Store) UniqueChanges() map[string]map[string]string {
 	var affected Index[bool]
 	for ref := range s.writes {
@@ -282,8 +249,6 @@ func (s *Store) UniqueChanges() map[string]map[string]string {
 	return changes
 }
 
-// Retain roots on the authoritative image before copying a private view. A
-// refusal must not make the next decision rebuild all the unique keys.
 func (s *Store) PrepareUniqueIndexes() {
 	if s.current.Backend() != nil {
 		return
@@ -297,9 +262,6 @@ func (s *Store) PrepareUniqueIndexes() {
 	}
 }
 
-// useCurrentRows is called only after the existing images have been checked
-// against SQL, or after the complete accepted changes have been applied there.
-// A private decision keeps its immutable overlay until its parent accepts it.
 func (s *Store) UseCurrentRows() {
 	for typ, et := range s.types {
 		et.rows = SourceRows(s.current.Source(typ, nil))
@@ -308,8 +270,6 @@ func (s *Store) UseCurrentRows() {
 	}
 }
 
-// A row retains only its immutable historical position. Fetches do not install
-// a second history cache, so even a long-lived record need not retain its past.
 func (s *Store) AttachHistory(et *Type, id string, r *Row, store journal.RuntimeState, tenant string) {
 	count := r.HistoryLength()
 	copy := *r
@@ -333,10 +293,6 @@ func (s *Store) AttachHistory(et *Type, id string, r *Row, store journal.Runtime
 	et.SetRow(id, &copy)
 }
 
-// decodeRowImage reads one saved row into the current declaration. A type
-// declared again may name fewer fields than the row carries: the ones it
-// dropped are left out and the rest keep their value, so a re-declared type
-// never refuses the rows it already holds.
 func DecodeRowImage(info platform.EntityInfo, raw json.RawMessage, projection *Projection, release, format string) (json.RawMessage, error) {
 	decode, err := DecodeFormattedImage(info, raw, projection, release, format)
 	if err == nil {
@@ -349,9 +305,6 @@ func DecodeRowImage(info platform.EntityInfo, raw json.RawMessage, projection *P
 	return DecodeFormattedImage(info, pruned, projection, release, format)
 }
 
-// install declares a type, or declares it again: the rows are carried into the
-// new Go type through their JSON, so a record keeps the value of every field
-// that is still there.
 func (s *Store) Install(info platform.EntityInfo) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -368,9 +321,6 @@ func (s *Store) Install(info platform.EntityInfo) error {
 		}
 		rows := before.rows
 		if rows.Sourced() && s.current.Backend() != nil && !before.retainedProjection {
-			// Migrated SQL bytes may already have the target shape while this
-			// private installation still catalogs the source declaration. Read
-			// them using the target, then perform the same strict conversion.
 			rows = rows.Rebind(s.current.Source(info.Type, &info))
 		}
 		entries := make([]Entry[*Row], 0, rows.Len())
@@ -400,8 +350,6 @@ func (s *Store) Install(info platform.EntityInfo) error {
 		et.SetRows(index)
 		delete(s.byGo, before.info.Go)
 	} else if s.current.Backend() != nil && s.current.View() != nil {
-		// An owner-only SQL checkpoint restores dynamic declarations after native
-		// types. Their accepted rows already belong to the same fixed read view.
 		et.rows = SourceRows(s.current.Source(info.Type, nil))
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et
@@ -409,8 +357,6 @@ func (s *Store) Install(info platform.EntityInfo) error {
 	return nil
 }
 
-// Metadata reads return the installed immutable type image; callers never own
-// the registry maps or mutate a record by changing a returned row collection.
 func (s *Store) Lock()                              { s.mu.Lock() }
 func (s *Store) Unlock()                            { s.mu.Unlock() }
 func (s *Store) Current() *CurrentScope             { return s.current }
@@ -448,8 +394,6 @@ func NewTypeView(info platform.EntityInfo, rows Rows, retained bool) *Type {
 	return &Type{info: info, rows: rows, retainedProjection: retained}
 }
 
-// ReplaceReadType binds an already-selected schema to its original immutable rows.
-// It is used by retained execution views; declaration validation remains in Install.
 func (s *Store) ReplaceReadType(info platform.EntityInfo, rows Rows, retained bool) *Type {
 	knowledge := KnowledgeBearing(info)
 	if old := s.types[info.Type]; old != nil {

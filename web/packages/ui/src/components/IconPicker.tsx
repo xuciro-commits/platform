@@ -1,9 +1,3 @@
-// One icon vocabulary for the whole platform. The kit owns the
-// names, the glyphs and their words; the host only checks that a name looks
-// like a name, so the set can grow here without a host change. Anything that
-// lets a person choose an icon — a module, an application, an enterprise
-// stereotype — draws this picker, and every view that shows a stored name draws
-// IconGlyph, so an unknown name is a default glyph rather than a blank.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity, AlertTriangle, Award, BadgeCheck, BarChart3, Bell, BookOpen, Bookmark, Boxes, Braces, Briefcase, Building, Building2, CalendarDays, ClipboardList, Clock, Cog,
@@ -16,7 +10,6 @@ import { t } from "../i18n";
 
 export type IconName = string;
 
-/** name → glyph. The single place a stored icon name becomes a picture. */
 export const iconGlyphs: Record<IconName, ReactNode> = {
   "building-2": <Building2 />, building: <Building />, factory: <Factory />, warehouse: <Warehouse />, store: <Store />, hotel: <Hotel />, home: <Home />,
   "map-pin": <MapPin />, truck: <Truck />, globe: <Globe2 />, grid: <LayoutGrid />, layers: <Layers />,
@@ -30,16 +23,11 @@ export const iconGlyphs: Record<IconName, ReactNode> = {
   "file-text": <FileText />, folder: <Folder />, "folder-tree": <FolderTree />, bookmark: <Bookmark />, "book-open": <BookOpen />, mail: <Mail />,
   "message-square": <MessageSquare />, bell: <Bell />, milestone: <Award />,
   braces: <Braces />, zap: <Zap />,
-  // UAF's organization picture needs these: the profile's book
-  // and user, plus the kinds' landmark, crown, door and scale.
   landmark: <Landmark />, crown: <Crown />, door: <DoorOpen />, scale: <Scale />, book: <BookOpen />, user: <UserRound />,
-  // Names the kit used before the vocabulary grew: stored
-  // applications keep their glyph, the picker offers the current set.
   clipboard: <ClipboardList />, people: <Users />, calendar: <CalendarDays />, map: <MapPin />,
   "shield-alert": <ShieldAlert />, alert: <AlertTriangle />,
 };
 
-/** The groups the picker offers, in the order a person looks for things. */
 export const iconGroups: { id: string; title: string; names: IconName[] }[] = [
   { id: "structure", title: "Structure and places", names: ["building-2", "building", "factory", "warehouse", "store", "hotel", "home", "map-pin", "truck", "globe", "grid", "layers", "landmark", "door", "scale"] },
   { id: "people", title: "People and posts", names: ["users", "user-round", "user-check", "id-card", "badge", "briefcase", "handshake", "award", "user", "crown"] },
@@ -52,12 +40,10 @@ export const iconGroups: { id: string; title: string; names: IconName[] }[] = [
   { id: "govern", title: "Risk and control", names: ["shield-alert", "alert"] },
 ];
 
-/** The glyph for a stored name; an unknown name is the kit's default, never blank. */
 export function IconGlyph({ name, className }: { name?: string; className?: string }) {
   return <span className={cn("[&_svg]:size-4 [&_svg]:shrink-0", className)} aria-hidden="true">{iconGlyphs[name ?? ""] ?? <Boxes />}</span>;
 }
 
-/** A field that chooses an icon: one button, a searchable grid, a way to clear it. */
 export function IconPicker({ value, onChange, disabled, label, id }: {
   value?: string; onChange: (name: string) => void; disabled?: boolean; label?: string; id?: string;
 }) {

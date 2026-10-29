@@ -26,7 +26,6 @@ import (
 
 const embeddingActiveSpace = "knowledge/embedding-active-space"
 
-// sources are the tenant's documents and the fields apps declare as knowledge.
 func (t *Tenant) sources() []knowledgeindex.Source {
 	var out []knowledgeindex.Source
 	docs, _, _ := platform.Find[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), platform.Query{Limit: 100000})
@@ -60,8 +59,6 @@ func (t *Tenant) sources() []knowledgeindex.Source {
 	return out
 }
 
-// sourcesOf are the sources of the records that changed since the last sync:
-// what one search has to cut again, instead of the whole tenant.
 func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
 	var out []knowledgeindex.Source
 	for ref := range changed {
@@ -71,7 +68,7 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
 			if d, known := platform.Get[platform.KnowledgeDocument](t.automation(platform.KnowledgeApp, false), id); known && !d.Archived {
 				out = append(out, knowledgeindex.DocumentSource(d))
 			}
-			about, _ := json.Marshal([]any{[]any{"target", "=", ref}}) // its attached files carry its grant
+			about, _ := json.Marshal([]any{[]any{"target", "=", ref}})
 			attached, _, _ := platform.Find[platform.File](t.automation(platform.FileApp, false), platform.Query{Domain: about, Limit: 200})
 			for _, f := range attached {
 				if s, ok := t.fileSource(f); ok {
@@ -104,9 +101,6 @@ func (t *Tenant) sourcesOf(changed map[string]bool) []knowledgeindex.Source {
 	return out
 }
 
-// dirtyRecords takes the records put since the last sync from the store, and
-// forgets them there: the index owns them from here on. Before the first walk
-// they are irrelevant, so they are only cleared.
 func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
 	s := t.records
 	s.Lock()
@@ -122,9 +116,6 @@ func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
 	return changed
 }
 
-// knowledgeSourceReadable checks the content grant used by knowledge search,
-// not the editor's permission to inspect document metadata. The record lock
-// is held by the derived-source reader; no index or cached grant is consulted.
 func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member, id, field string) bool {
 	if m.Tenant != t.ID || field != "" && field != "title" && field != "text" {
 		return false
@@ -137,7 +128,6 @@ func (t *Tenant) knowledgeSourceReadable(store *records.Store, m platform.Member
 	return ok && !d.Archived && knowledgeindex.AppsReadable(d.Apps, &m, "")
 }
 
-// embed calls an embedding model on the OpenAI wire and meters the call to the knowledge app.
 func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32, error) {
 	t.mu.Lock()
 	model, pv, err := t.ai.Model(name)
@@ -193,8 +183,6 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 			Index     int       `json:"index"`
 		} `json:"data"`
 		Usage struct {
-			// Reported distinguishes a provider that says zero from one that
-			// says nothing: the accounting must not read "unknown" as "free".
 			Prompt *int `json:"prompt_tokens"`
 		} `json:"usage"`
 	}
@@ -234,10 +222,6 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	return vs, nil
 }
 
-// encodeVector and decodeVector keep a vector as little-endian float32s.
-// fileSources are the text files attached to knowledge documents, and to
-// records of types whose files are knowledge, read from the
-// store once per content.
 func (t *Tenant) fileSources() []knowledgeindex.Source {
 	if t.app(platform.FileApp) == nil {
 		return nil
@@ -252,9 +236,6 @@ func (t *Tenant) fileSources() []knowledgeindex.Source {
 	return out
 }
 
-// fileSource is one attached text file as a source, if it is one: text within a
-// megabyte, attached to a knowledge document or to a record of a type whose
-// files are knowledge. Its text is read from the store once per content.
 func (t *Tenant) fileSource(f platform.File) (knowledgeindex.Source, bool) {
 	if t.app(platform.FileApp) == nil || f.Archived || !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
 		return knowledgeindex.Source{}, false
@@ -291,7 +272,7 @@ func (t *Tenant) fileSource(f platform.File) (knowledgeindex.Source, bool) {
 			return knowledgeindex.Source{}, false
 		}
 		scope := f.Target
-		if typ == platform.KnowledgeDocumentType { // the document's Apps grant also covers its attached files
+		if typ == platform.KnowledgeDocumentType {
 			scope = ""
 		}
 		return knowledgeindex.Source{Key: platform.FileType + "/" + f.ID, Title: f.Name, Text: text,
@@ -304,8 +285,6 @@ func (t *Tenant) embeddingNeedsRebuild(name string) bool {
 	return name != "" && exists && space != "" && space != t.vectorSpace(name)
 }
 
-// Derived vectors stay in the original vector store. Model configuration
-// revisions separate spaces; neither a rebuild nor a query mixes their bytes.
 func (t *Tenant) vectorSpace(name string) string {
 	if t.ai == nil {
 		return name
@@ -313,7 +292,7 @@ func (t *Tenant) vectorSpace(name string) string {
 	m, pv, err := t.ai.Model(name)
 	if err != nil || m.Revision == 0 {
 		return name
-	} // retained pre-configuration vectors
+	}
 	digest, _ := platform.CanonicalDigest([]any{name, pv.BaseURL, pv.Wire, m.Revision, m.Capabilities})
 	return name + "@" + digest
 }
@@ -357,7 +336,6 @@ func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []s
 		t.records.Lock()
 		defer t.records.Unlock()
 		if !isDocument {
-			// Attached text uses its current document's content grant too.
 			fileID, fileSource := strings.CutPrefix(document, platform.FileType+"/")
 			files := t.records.Type(platform.FileType)
 			if !fileSource || files == nil {
@@ -394,8 +372,6 @@ func (t *Tenant) knowledgePassageReadableInLane(document, scope string, apps []s
 	return t.readable(m, scope, now)
 }
 
-// The host supplies current source reads and controlled provider/storage doors;
-// the index owns cutting, ranking, vector fusion and rebuild bookkeeping.
 func (t *Tenant) knowledgeContext() knowledgeindex.Context {
 	return knowledgeindex.Context{Tenant: t.ID, Store: t.store(), Sync: t.sync,
 		Read: func(read func()) {

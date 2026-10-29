@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-/** Async layout never overwrites a newer graph, and never unmounts a drawing while recomputing. */
 export function useCanvasLayout<T>(compute: () => Promise<T>, signature: string) {
   const current = useRef(compute); current.current = compute;
   const [state, setState] = useState<{ data?: T; error?: string; pending: boolean }>({ pending: true });

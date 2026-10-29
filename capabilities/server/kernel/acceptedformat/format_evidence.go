@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-// ChangePlan projects immutable result data onto the one typed host application path.
-// It does not own persistence, tenant locking or owner validation.
 type ChangePlan struct {
 	Rows          []InputRow
 	Member        string
@@ -55,7 +53,6 @@ type State struct {
 	Image  json.RawMessage `json:"image"`
 }
 
-// Notices freezes rendered notifications and mail intents before enqueue.
 type Notices struct {
 	Base    int                     `json:"base"`
 	Seq     int                     `json:"seq"`
@@ -64,8 +61,6 @@ type Notices struct {
 	Effects []platform.Effect       `json:"effects,omitempty"`
 }
 
-// Control carries each owner's immutable image and predecessor separately.
-// Runtime tasks and control application remain with their original owners.
 type Control struct {
 	Changes []ControlChange `json:"changes"`
 }
@@ -76,7 +71,6 @@ type ControlChange struct {
 	Image  json.RawMessage `json:"image"`
 }
 
-// ConnectorDelivery guards the connector cursor and last-seen mark together.
 type ConnectorDelivery struct {
 	Connector string    `json:"connector"`
 	DataClass string    `json:"dataClass"`
@@ -115,8 +109,8 @@ type BatchRow struct {
 	records.Image
 	App         string   `json:"app"`
 	Before      string   `json:"before,omitempty"`
-	Authorities []string `json:"authorities,omitempty"` // receipt authority for each new history entry
-	HistoryBase int      `json:"historyBase,omitempty"` // format 2: retained prefix length; History carries only this input's suffix
+	Authorities []string `json:"authorities,omitempty"`
+	HistoryBase int      `json:"historyBase,omitempty"`
 }
 
 type InputRow struct {
@@ -136,8 +130,6 @@ type AuthorizationEvidence struct {
 	Roles    []string               `json:"roles"`
 }
 
-// ValidateAuthorizationEvidence checks only the saved shape during recovery,
-// never current grants or policies. Results predating evidence remain valid.
 func ValidateAuthorizationEvidence(tenant string, evidence []AuthorizationEvidence) error {
 	order := []string{"tenant", "principal", "deny", "verb", "row", "fields", "derived", "markings", "allow"}
 	for _, item := range evidence {
@@ -215,8 +207,6 @@ func ValidateBusinessFact(app string, f platform.BusinessRefusalFact) error {
 	return nil
 }
 
-// An explicit app reads the historical single-authority witness. New batches
-// bind each witness to its own accepted child; DecodeBatch verifies that receipt.
 func ValidateTxnIterations(app string, iterations []platform.TxnIteration) error {
 	total, steps := 0, map[string]bool{}
 	for _, iteration := range iterations {

@@ -1,6 +1,3 @@
-// The updater supervises exactly one host. current.json is both the selected
-// release and its unfinished activation outcome, so a restart resumes the same
-// activation instead of inventing another request.
 package main
 
 import (
@@ -42,8 +39,6 @@ type releaseState struct {
 	PendingRollback *rollbackIntent `json:"pendingRollback,omitempty"`
 }
 
-// A completed release that fails on restart needs a new rollback decision.
-// Keep that one request in current.json until its exact activation is known.
 type rollbackIntent struct {
 	Release     int    `json:"release"`
 	Authority   int    `json:"authority,omitempty"`
@@ -65,8 +60,6 @@ func (a activationView) ready(now time.Time) bool {
 	return !now.Before(a.At.Add(time.Duration(a.Window) * time.Second))
 }
 
-// Maintenance commands and the supervisor touch this file. Each replacement is
-// atomic; the lock prevents a successful report clearing a newer selection.
 var currentMu sync.Mutex
 
 func writeJSON(path string, value any) error {
@@ -144,8 +137,6 @@ func validateRelease(state releaseState) error {
 		return fmt.Errorf("release %04d has no binary", state.Release)
 	}
 	if state.Digest != "" && got != state.Digest {
-		// Historical builds hashed a one-entry tree instead of the file bytes.
-		// Accepted history stays readable; all sealed-source releases use raw SHA256.
 		legacy := systemscope.Digest([]byte(got + "  .\n"))
 		if state.SourceDigest != "" || legacy != state.Digest {
 			return fmt.Errorf("release %04d binary digest mismatch", state.Release)
@@ -228,9 +219,6 @@ func stageActivation(c client, root string, activation activationView) error {
 	return writeJSON(current, next)
 }
 
-// An unmanaged initial host can have already published hot definitions. It is
-// still the first supervised code release only when every predecessor is a
-// definition over that initial frozen source, ending at version zero.
 func verifyFirstActivation(c client, root string, a activationView) error {
 	var health struct {
 		Release int `json:"release"`
@@ -296,7 +284,6 @@ func verifyFirstActivation(c client, root string, a activationView) error {
 	return nil
 }
 
-// The saved outcome and stable key are reused verbatim after a lost response.
 func reportPending(c client, path string) error {
 	currentMu.Lock()
 	state, err := readState(path)
@@ -365,7 +352,7 @@ func serve(args []string) error {
 type supervisor struct {
 	mu                 sync.Mutex
 	root               string
-	state              releaseState // the actual running selection, never an unproven candidate
+	state              releaseState
 	running            *exec.Cmd
 	current            string
 	args               []string
@@ -415,9 +402,6 @@ func (s *supervisor) run() error {
 	}
 }
 
-// Resume the last proven process first when an unfinished activation was
-// staged. A failure of an already completed version is a new rollback request,
-// never a revision of its original terminal outcome.
 func (s *supervisor) startInitial(desired releaseState) error {
 	initial := desired
 	if desired.Activation != "" && desired.Result == "" && desired.Previous != nil {
@@ -460,9 +444,6 @@ func (s *supervisor) activation(id string) (activationView, error) {
 	return activationView{}, fmt.Errorf("activation %s no longer exists", id)
 }
 
-// A mixed code/definition activation can be refused by its owner after the
-// binary became healthy. Unknown responses retain the exact original request;
-// a confirmed refusal restores the prior process before reporting failure.
 func (s *supervisor) flushOutcome() error {
 	err := reportPending(s.c, s.current)
 	if !refusedDecision(err) {
@@ -480,7 +461,6 @@ func (s *supervisor) flushOutcome() error {
 		return readErr
 	}
 	if activation.Result == "active" || activation.Result == "superseded" {
-		// An earlier attempt was accepted and only its response was lost.
 		currentMu.Lock()
 		defer currentMu.Unlock()
 		latest, readErr := readState(s.current)
@@ -494,9 +474,6 @@ func (s *supervisor) flushOutcome() error {
 		return writeJSON(s.current, latest)
 	}
 	if state.PendingRollback != nil {
-		// Restart recovery has already restored the process. The original active
-		// report was rejected, so finish that request as failed instead of asking
-		// to roll back a release that never became active in the authority.
 		state.Result, state.Evidence = "rolled-back", state.PendingRollback.Evidence+"; activation rejected: "+err.Error()
 		state.PendingRollback = nil
 		if activation.Result != "requested" {
@@ -553,8 +530,6 @@ func (s *supervisor) resumeRollback() error {
 			return err
 		}
 		failed, err := readRelease(s.root, intent.Release)
-		// Historical current files may have no ordinal manifest. Their code
-		// identity is still in the saved selection's binary, never a live tree.
 		if err != nil && !os.IsNotExist(err) {
 			return err
 		}
@@ -580,8 +555,6 @@ func (s *supervisor) resumeRollback() error {
 	}
 	if _, err := s.c.submitKey("system.release.rollback", systemscope.ReleaseType, fmt.Sprintf("%04d", intent.Authority), systemscope.App, intent.Key, map[string]any{"window": 0, "targetVersion": state.Release}); err != nil {
 		if refusedDecision(err) {
-			// The original rollback was definitively not accepted. Keep its
-			// identity and the proven running predecessor for static repair.
 			intent.Maintenance = true
 			currentMu.Lock()
 			saveErr := writeJSON(s.current, state)
@@ -673,8 +646,6 @@ func (s *supervisor) replace(previous, next releaseState) error {
 	if err := s.probe(next); err != nil {
 		return s.completeSelection(previous, next, "aborted", fmt.Sprintf("candidate probe failed: %v", err))
 	}
-	// Cancellation can happen while the candidate is being probed. Check the
-	// owner immediately before disturbing the running process.
 	requested, err = s.requested(next.Activation)
 	if err != nil {
 		return err

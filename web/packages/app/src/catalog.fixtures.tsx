@@ -1,4 +1,3 @@
-// Owner-local Catalog data. Every read resolves here; mutations are refused.
 import { EdgeClient, type ActionDeclaration, type Api } from "@platform/kernel";
 import { Panel, t, type EntityInfo, type EntityRecord, type RecordSource, type RecordView } from "@platform/ui";
 import { PreviewWorkspace } from "@platform/ui/catalog/examples";
@@ -78,7 +77,6 @@ export class FixtureClient extends EdgeClient {
   override async download(): Promise<never> { throw new Error("Catalog fixtures contain no downloadable files."); }
 }
 
-/** Trusted local fixtures for owner demos, never a tenant or runtime host. */
 const noReads: Record<string, unknown> = {};
 const readerRole = { catalog: "reader" };
 export function CatalogFixture({ children, reads = noReads, roles = readerRole, definitions = sampleDefinitions, client, decide }: { children: ReactNode; reads?: Record<string, unknown>; roles?: Record<string, string>; definitions?: Definition[]; client?: EdgeClient; decide?: Host["decide"] }) {

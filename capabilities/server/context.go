@@ -12,19 +12,11 @@ import (
 	"platformserver/platform"
 )
 
-// The context graph: one read that grounds a person or an agent
-// in a record — its fields and history, the records it references and that
-// reference it, its links across apps, the flows and the tasks about it.
-// Within the reader's scope: a person reads with their own grants, an app's
-// automation reads its own app. There is no host fallback — a
-// read without a reader answers nothing, so a flow's agent can never quietly
-// read as the host did before the review (AI-01).
-
 type ContextView struct {
 	Type       string                 `json:"type"`
 	Record     any                    `json:"record"`
 	History    []records.RecordChange `json:"history"`
-	References []string               `json:"references"` // "<field>: <type>/<id>"
+	References []string               `json:"references"`
 	Related    []Related              `json:"related"`
 	Links      []string               `json:"links"`
 	Flows      []FlowSummary          `json:"flows"`
@@ -35,7 +27,7 @@ type FlowSummary struct {
 	ID    string                   `json:"id"`
 	Flow  string                   `json:"flow"`
 	State string                   `json:"state"`
-	Trace []platform.FlowTraceLine `json:"trace"` // the last lines: why it moved
+	Trace []platform.FlowTraceLine `json:"trace"`
 }
 
 type TaskSummary struct {
@@ -45,9 +37,6 @@ type TaskSummary struct {
 	Answer string `json:"answer,omitempty"`
 }
 
-// host reads everything: every app's roles, tenant scope. It is the host's own
-// view for indexing and maintenance, not a reader: reads taken for a person or
-// an agent are taken as that person or as the agent's own app.
 func (t *Tenant) host() platform.Member {
 	m := platform.Member{ID: "host:maintenance", Tenant: t.ID, Roles: map[string]string{}}
 	for _, a := range t.apps {
@@ -56,10 +45,6 @@ func (t *Tenant) host() platform.Member {
 	return m
 }
 
-// appReader is the member an app's automation reads as: exactly that app's
-// records, and none of any other app's. It is a strict subset of host(): the
-// same roles for the app's own types, no role in any other app. An agent a
-// flow runs reads as its app.
 func (t *Tenant) appReader(app string) *platform.Member {
 	return &platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{app: platform.AnyMember}}
 }
@@ -86,7 +71,7 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 			continue
 		}
 		x := v.FieldByIndex(f.Index)
-		if x.Kind() != reflect.Slice { // a reference, or references
+		if x.Kind() != reflect.Slice {
 			x = reflect.Append(reflect.MakeSlice(reflect.SliceOf(x.Type()), 0, 1), x)
 		}
 		for i := range x.Len() {
@@ -129,16 +114,12 @@ func (t *Tenant) contextRead(reader *platform.Member, typ, id string, now time.T
 	return out, nil
 }
 
-// Hit is a record a search found.
 type Hit struct {
 	Type  string `json:"type"`
 	ID    string `json:"id"`
 	Title string `json:"title"`
 }
 
-// Search finds records of every type the reader may read by text: the global
-// search of the workspace and an agent's search tool. Without a reader it
-// finds nothing.
 func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []Hit {
 	if reader == nil || reader.Tenant != t.ID {
 		return nil
@@ -149,11 +130,11 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 		return out
 	}
 	for _, info := range t.Entities(m) {
-		if info.Type == platform.FollowType { // who follows what is no answer to a search
+		if info.Type == platform.FollowType {
 			continue
 		}
 		query := platform.Query{Search: q, Limit: 5}
-		if rest, named := t.names(info, q); named { // "open opportunities" searches opportunities for "open"
+		if rest, named := t.names(info, q); named {
 			query.Search = rest
 		}
 		page, err := t.recordsRead(m, info.Type, query, now)
@@ -172,7 +153,6 @@ func (t *Tenant) searchRead(reader *platform.Member, q string, now time.Time) []
 	return out
 }
 
-// protocolActions are the actions a protocol declares, from any app providing it.
 func (t *Tenant) protocolActions(protocol string) []platform.Action {
 	for _, a := range t.liveApps() {
 		for _, p := range a.Manifest().Provides {

@@ -44,9 +44,6 @@ export function usePageInputs(page: PageUI.Page, session: PageSessionStore, snap
   return { inputs, error: inputError ?? (recordError ? "A page record input is unavailable." : undefined) };
 }
 
-/** Runs a page event's effect chain in order: state writes at
- * once, actions through the host (waiting for their form), and navigation or
- * return as the terminal effect. A refused or cancelled action stops the chain. */
 export function usePageEffects(page: PageUI.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void, provided?: PageCall) {
   const { definitions, source } = useHost(), workspace = useWorkspace(), inherited = useViewCall(), call = provided ?? inherited;
   const application = useApplicationContext();

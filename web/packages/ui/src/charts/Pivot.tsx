@@ -1,5 +1,3 @@
-// A pivot over an entity type: row and column groups, one measure,
-// totals, and drilling into the records behind a cell, like Odoo's pivot view.
 import {CountMatrix} from "./CountMatrix";
 import { useEffect, useRef, useState } from "react";
 import { formatter } from "./echarts";
@@ -10,7 +8,6 @@ import { t } from "../i18n";
 
 const text = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : String(v));
 
-/** The domain that selects a group's records: a value, or a date bucket as a range. */
 export function groupDomain(group: string, value: unknown): unknown[] {
   const [field, unit] = group.split(":") as [string, string | undefined];
   if (!unit) return [[field, "=", value ?? ""]];

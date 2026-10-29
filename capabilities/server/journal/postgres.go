@@ -21,58 +21,38 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-// Entry is one durable tenant input or accepted result. Legacy entries replay
-// the application code; accepted-result entries apply saved record and intent
-// bytes without rerunning the original business decision.
 type Entry struct {
 	App       string          `json:"app"`
 	Kind      string          `json:"kind"`
 	Principal json.RawMessage `json:"principal"`
 	Body      json.RawMessage `json:"body"`
 	At        time.Time       `json:"at"`
-	// Versions are the flow versions instances started with while the entry was
-	// handled: replay starts them on the same ones, whatever the
-	// code declares since.
-	Versions map[string]int `json:"versions,omitempty"`
+	Versions  map[string]int  `json:"versions,omitempty"`
 }
 
-// appendHistogram times journal appends; with no provider set it costs nothing.
 var appendHistogram, _ = otel.Meter("platformserver").Float64Histogram("platform.journal.append",
 	metric.WithUnit("ms"), metric.WithDescription("Time to append a journal entry"))
 
-// PostgreSQL timestamptz stores microseconds while the JSONB result envelope
-// retains Go's nanoseconds. Compare the durable precision, not the transient
-// sub-microsecond fraction, when replaying a saved result from a real journal.
 func SameTime(result, entry time.Time) bool {
 	return result.Equal(entry) || result.Truncate(time.Microsecond).Equal(entry)
 }
 
-// Journal keeps entries in PostgreSQL. Each tenant's entries are numbered; an
-// append names the number it expects, so a second writer that has not replayed
-// the other's entries fails instead of interleaving (one authority per tenant, K5).
 type Postgres struct {
 	Delta    func([]byte) (StateDelta, error)
 	identify Identify
 	mu       sync.Mutex
 	pool     *pgxpool.Pool
-	// Fixed read transactions must not occupy the connections acceptance
-	// needs while the same operation still owns its read view.
 	readPool *pgxpool.Pool
 	next     map[string]int64
-	locks    map[string]*sync.Mutex // one per tenant: appends of a tenant are in order
+	locks    map[string]*sync.Mutex
 }
 
 var ErrAcceptedConflict = errors.New("accepted result idempotency key reused for another request")
 var ErrTenantJournal = errors.New("tenant journal is damaged")
 var ErrTenantSnapshot = errors.New("tenant snapshot is damaged")
 
-// ErrCommitUnknown means the append may have committed but its stored result
-// could not be read. The caller must recover before making another decision.
 var ErrCommitUnknown = errors.New("journal commit outcome is unknown")
 
-// The current index and lookup share the same scope expression. Historical
-// schema statements remain unchanged; the final migration replaces the older
-// index so existing journals gain the new result scopes without rewriting rows.
 const acceptedScopeSQL = `(case when body ->> 'kind' = 'work-result' then 'work'
  when body ->> 'kind' = 'input-result' then 'input'
  when body ->> 'kind' = 'effect-result' then 'effect'
@@ -88,7 +68,6 @@ const legacyScopedIndexSQL = `create unique index if not exists journal_result_s
 		 (coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}', body #>> '{receipt,submission,idempotencyKey}')))
 		where kind = 'accepted-result'`
 
-// schema is forward-only: new statements are appended, never edited.
 var schema = []string{
 	`create table if not exists journal (
 		tenant text not null, seq bigint not null, kind text not null,
@@ -140,9 +119,6 @@ func OpenPostgres(ctx context.Context, url string, identify Identify) (*Postgres
 	return &Postgres{identify: identify, pool: pool, readPool: readPool, next: map[string]int64{}, locks: map[string]*sync.Mutex{}}, nil
 }
 
-// Hosts sharing a database may start together. PostgreSQL's IF NOT EXISTS
-// does not serialize concurrent catalog changes, so the migration uses one
-// transaction-scoped database lock, released on commit or failed startup.
 func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -187,8 +163,6 @@ func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	var currentIndex string
 	for _, stmt := range append(append(schema, stateSchema...), vectorSchema...) {
-		// The scoped key evolved through several historical definitions. Install
-		// only the current one, after the journal table/columns exist.
 		if strings.Contains(stmt, "journal_result_scoped_key") {
 			if strings.HasPrefix(stmt, "create unique index journal_result_scoped_key") {
 				currentIndex = stmt
@@ -205,8 +179,6 @@ func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 			return err
 		}
 	}
-	// Existing databases predate the migration ledger. A correct current index
-	// is adopted from the catalog; it is never rebuilt merely on host restart.
 	var definition string
 	err = tx.QueryRow(ctx, `select coalesce(pg_get_indexdef(to_regclass('journal_result_scoped_key')),'')`).Scan(&definition)
 	if err != nil {
@@ -232,8 +204,6 @@ func initializeJournal(ctx context.Context, pool *pgxpool.Pool) error {
 	return tx.Commit(ctx)
 }
 
-// Entries reads a tenant's entries after position after (0: all) in order;
-// appends continue after the last.
 func (j *Postgres) Entries(ctx context.Context, tenant string, after int64) ([]Entry, error) {
 	rows, err := j.pool.Query(ctx, `select seq, app, kind, principal, body, at, versions from journal where tenant = $1 and seq > $2 order by seq`, tenant, after)
 	if err != nil {
@@ -252,11 +222,11 @@ func (j *Postgres) Entries(ctx context.Context, tenant string, after int64) ([]E
 			return nil, fmt.Errorf("%w: tenant %s expected entry %d, found %d", ErrTenantJournal, tenant, last+1, seq)
 		}
 		last = seq
-		e.At = e.At.UTC() // jsonb replay must reproduce the original audit bytes
+		e.At = e.At.UTC()
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err // a database/transport failure affects more than this tenant
+		return nil, err
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -264,15 +234,12 @@ func (j *Postgres) Entries(ctx context.Context, tenant string, after int64) ([]E
 	return out, nil
 }
 
-// Position is the number of the tenant's last entry.
 func (j *Postgres) Position(tenant string) int64 {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	return j.next[tenant] - 1
 }
 
-// SaveSnapshot keeps a tenant's state at a position, compressed, under its
-// compatibility key; legacy callers use a code digest. The two newest are kept.
 func (j *Postgres) SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -298,9 +265,6 @@ func packSnapshot(state []byte) ([]byte, error) {
 	return packed.Bytes(), nil
 }
 
-// RepairSnapshot replaces only this tenant's derived checkpoints, after the
-// entire durable journal has been validated and a fresh state captured. A
-// corrupt checkpoint at the same sequence must not survive the next restart.
 func (j *Postgres) RepairSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -321,7 +285,6 @@ func (j *Postgres) RepairSnapshot(ctx context.Context, tenant string, seq int64,
 	return tx.Commit(ctx)
 }
 
-// Snapshot is the tenant's newest checkpoint matching the compatibility key.
 func (j *Postgres) Snapshot(ctx context.Context, tenant, code string) (int64, []byte, bool, error) {
 	var seq int64
 	var packed []byte
@@ -346,8 +309,6 @@ func (j *Postgres) Snapshot(ctx context.Context, tenant, code string) (int64, []
 	return seq, state, true, nil
 }
 
-// Append adds an entry to a tenant's journal. The order is per tenant, so
-// tenants append side by side, each under its own lock (F-34).
 func (j *Postgres) Append(ctx context.Context, tenant string, e Entry) error {
 	j.mu.Lock()
 	lock := j.locks[tenant]
@@ -376,9 +337,6 @@ func (j *Postgres) Append(ctx context.Context, tenant string, e Entry) error {
 	return nil
 }
 
-// AppendAccepted commits a complete decision as one journal row. The partial
-// unique index makes retries after an unknown commit outcome return the prior
-// result; a competing writer with a stale sequence cannot advance this tenant.
 func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
 	identity, err := j.identify(e.Body)
 	if err != nil || e.Kind != "accepted-result" || identity.Tenant != tenant || identity.App != e.App ||
@@ -502,8 +460,6 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		}
 	}
 	if err = tx.Commit(ctx); err != nil {
-		// A lost commit answer is resolved under the original identity. No owner
-		// callback or business decision runs again.
 		if prior, lookupErr := read(); lookupErr == nil && prior != nil {
 			j.mu.Lock()
 			j.next[tenant] = seq + 1
@@ -519,10 +475,6 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	j.mu.Lock()
 	j.next[tenant] = seq + 1
 	j.mu.Unlock()
-	// PostgreSQL stores the envelope as jsonb. It normalizes key order even
-	// inside raw record history values; applying the caller's pre-insert bytes
-	// would leave live history different from a restart's recovered history.
-	// Always apply the exact representation the committed journal returns.
 	committed, err := read()
 	if err != nil {
 		return nil, fmt.Errorf("%w: read committed result: %v", ErrCommitUnknown, err)
@@ -534,10 +486,6 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 }
 
 func (j *Postgres) Close() { j.readPool.Close(); j.pool.Close() }
-
-// The journal's database also keeps what is derived outside the journal
-//passages' vectors and model calls' transcripts. Losing either
-// loses no truth, so failures are logged, not fatal.
 
 func (j *Postgres) Vectors(tenant, model string, hashes []string) map[string][]float32 {
 	out := map[string][]float32{}

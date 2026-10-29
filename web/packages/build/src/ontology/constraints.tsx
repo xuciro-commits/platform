@@ -8,8 +8,6 @@ import { RuleCollectionsEditor } from "./RuleCollectionsEditor";
 const kinds = ["required", "unique", "range", "pattern", "expression", "cardinality", "immutable", "temporal"] as const;
 const expressionKinds = new Set<string>(["range", "pattern", "expression", "cardinality", "temporal"]);
 
-// The existing object draft, input buffers, undo/redo and publication own this
-// editor. Its rule is data for the shared evaluator; no browser invariant runs.
 export function ConstraintsEditor({ process, parent, onChange }: { process: Process; parent: string; onChange: (process: Process) => void }) {
   const model = useAuthoringModel();
   const subject = authoringObject({ ...process, name: parent.slice("build.".length), title: model.entity(parent)?.title ?? parent });

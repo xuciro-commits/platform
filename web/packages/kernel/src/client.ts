@@ -1,21 +1,15 @@
-// A browser edge of a server-authoritative domain: a persisted K5 outbox and an
-// HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
 import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, CompositeAnswer, Definition, SchemaVersion, ImportRow } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
 import { PreparedWorkspace, preparedIdentity, rememberPreparedIdentity, preparedMetadataPaths, readPath, type PreparedApplication } from "./prepared";
 
-/** One action a server offers to this caller: render from it, never re-check roles. Generated from the host. */
 export type ActionDeclaration = Action;
 
 export type Connection = { readonly server: string; token: string; readonly tenant: string; readonly principal: string };
 export class OfflineReadError extends Error { readonly name="OfflineReadError"; }
-/** The host saved a terminal refusal for this exact composite key. */
 export class CompositeRefusalError extends Error { readonly name="CompositeRefusalError"; }
 
-/** The HTTP edge accepts both the host's structured refusal and a plain
- * diagnostic. Callers render only text, never the error object itself. */
 export function apiErrorMessage(body: unknown): string | undefined {
   if (body instanceof Error) return body.message.trim() ? body.message : undefined;
   if (!body || typeof body !== "object" || !("error" in body)) return undefined;
@@ -96,8 +90,6 @@ export class EdgeClient {
     if (q.archived) p.set("archived", "true");
     return p;
   }
-  /** The original owner content identity is retained while fields and actions
-   * are projected for this member. Never fall back to another page version. */
   async pageContent(ref:AssetRef,contentVersion:string):Promise<Definition>{
     if(ref.kind!=="page"||!ref.app||!ref.name||!/^[A-Za-z0-9._:-]+$/.test(ref.app)||ref.app.length>256||ref.name.length>256||ref.name.includes("/")||!/^page\.sha256\.[0-9a-f]{64}$/.test(contentVersion))throw Error("Invalid page content identity");
     const path=`/v1/pages/${encodeURIComponent(ref.app)}/${encodeURIComponent(ref.name)}/${encodeURIComponent(contentVersion)}`;
@@ -120,8 +112,6 @@ export class EdgeClient {
     if (connection.tenant && connection.principal) this.bindIdentity(connection.tenant, connection.principal);
   }
 
-  /** Discovery may start without a tenant or member. Persistence begins only
-   * after the authority has named both; an old scope never joins the new one. */
   bindIdentity(tenant: string, principal: string): void {
     if (!tenant || !principal) throw Error("The workspace identity is not ready.");
     const server = this.connection.server || globalThis.location?.origin;
@@ -153,8 +143,6 @@ export class EdgeClient {
     }
   }
 
-  /** Cancel the previous identity's transport. Its persisted in-flight request
-   * will reopen as unknown and retain the exact original key and payload. */
   close(): void {
     this.closed = true;
     this.generation++;
@@ -164,12 +152,10 @@ export class EdgeClient {
     this.live.dispose();
   }
 
-  /** Why a read failed, for a status line: a host on its production path refuses development tokens. */
   static problem(error: unknown): string {
     return /HTTP 401/.test(String(error)) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
   }
 
-  /** The bearer token, the tenant once known (a person may be a member of several on one host), and the page's language, in which the host serves declarations. */
   private headers(json = false, connection = this.connection): Record<string, string> {
     const lang = typeof document === "undefined" ? "" : document.documentElement.lang;
     return { Authorization: `Bearer ${connection.token}`, ...(connection.tenant ? { "Platform-Tenant": connection.tenant } : {}),
@@ -204,8 +190,6 @@ export class EdgeClient {
       if(generation!==this.generation)throw Error("The workspace identity changed.");
       return fresh ? value : this.live.read<T>(key)?.value ?? value;
     };
-    // Reference chips, record panes and lookups share only the in-flight read
-    // under this exact identity and read revision. LiveReads owns snapshots.
     if(fresh||!readPath(key))return read();
     const scope=JSON.stringify([key,this.connection.tenant,this.connection.principal,headers,this.readRevision]);
     const pending=this.inFlightReads.get(scope);if(pending)return pending as Promise<T>;
@@ -213,8 +197,6 @@ export class EdgeClient {
     try{return await request;}finally{if(this.inFlightReads.get(scope)===request)this.inFlightReads.delete(scope);}
   }
 
-  /** Read all pages of a bounded record inventory. Never silently return the
-   * first 500 rows or a partial read after a failed page. */
   async inventory<T>(type: string, limit = 1000): Promise<{ records: T[] }> {
     const path = `/v1/records/${encodeURIComponent(type)}`;
     const records: T[] = [];
@@ -229,12 +211,6 @@ export class EdgeClient {
     return { records };
   }
 
-  /**
-   * Follows the tenant's changes (`GET /v1/changes`, server-sent events): calls
-   * `onChange` for data changes or queue-only progress, until `signal` aborts; reconnects
-   * after a dropped stream, waiting longer each time up to 30 s (F-32). Read
-   * with fetch, as EventSource sends no Authorization header.
-   */
   async follow(onChange: (kind: "changed" | "operations") => void, signal: AbortSignal): Promise<void> {
     for (let wait = 1000; !signal.aborted; wait = Math.min(wait * 2, 30000)) {
       try {
@@ -259,8 +235,6 @@ export class EdgeClient {
     }
   }
 
-  /** Calls a host service that is not a submission, such as a model call: the answer's JSON comes back whatever its status. */
-  /** Uploads a file's bytes; answers the hash to attach. */
   async upload(file: Blob, name: string, options:{signal?:AbortSignal}={}): Promise<{ hash: string; size: number; contentType: string; name: string }> {
     const response = await fetch(`${this.connection.server}/v1/files?name=${encodeURIComponent(name)}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": file.type || "application/octet-stream" }, body: file, signal:options.signal,
@@ -269,7 +243,6 @@ export class EdgeClient {
     return response.json();
   }
 
-  /** Imports records of a type from CSV, or previews what each row would do. */
   async importCSV(type: string, file: Blob, preview: boolean): Promise<ImportRow[]> {
     const response = await fetch(`${this.connection.server}/v1/import/${encodeURIComponent(type)}?preview=${preview}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": "text/csv" }, body: file,
@@ -281,8 +254,6 @@ export class EdgeClient {
     return response.json();
   }
 
-  /** Apply several builder actions as one transaction: every edit is probed
-   * against the same rules, and either all apply or none does. */
   async composite(key: string, edits: { schema: string; target: { type: string; id: string }; payload?: unknown }[]): Promise<CompositeAnswer> {
     const answer = await this.call<CompositeAnswer & { error?: string | { detail?: string; message?: string }; outcome?: "refused" }>("POST", "/v1/composites", { key, edits });
     if (!answer.ok) {
@@ -293,7 +264,6 @@ export class EdgeClient {
     return answer.body;
   }
 
-  /** The records a list shows the member, as CSV. */
   async exportCSV(type: string, query: Omit<Query, "domain"> & {domain?:unknown[]}): Promise<Blob> {
     const response = await fetch(`${this.connection.server}/v1/export/${encodeURIComponent(type)}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": "application/json" }, body: JSON.stringify(query),
@@ -308,7 +278,6 @@ export class EdgeClient {
   }
 
 
-  /** A file's bytes, as the member may read them. */
   async download(id: string, options:{signal?:AbortSignal;maxBytes?:number}={}): Promise<Blob> {
     const limit=options.maxBytes;
     if(limit!==undefined&&(!Number.isSafeInteger(limit)||limit<0))throw new Error("Invalid download byte budget");
@@ -331,10 +300,6 @@ export class EdgeClient {
     return { ok: response.ok, status: response.status, body: (await response.json().catch(() => ({}))) as T };
   }
 
-  /**
-   * A POST answered as server-sent events: each event's name and
-   * data as it comes; an answer that is not a stream (a refusal) is returned whole.
-   */
   async stream<T>(path: string, body: unknown, onEvent: (event: string, data: unknown) => void): Promise<{ ok: boolean; status: number; body?: T }> {
     const response = await fetch(this.connection.server + path, { method: "POST", headers: this.headers(true), body: JSON.stringify(body) });
     if (!response.headers.get("Content-Type")?.startsWith("text/event-stream") || !response.body) {
@@ -358,12 +323,10 @@ export class EdgeClient {
     return { ok: true, status: response.status };
   }
 
-  /** Records of an entity type: a domain, a search, sort fields and a page. */
   async records<T = unknown>(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
     return this.get<T>(this.recordsPath(type, q));
   }
 
-  /** Follow an exact relationship version; the server applies its typed reference and member scope. */
   async traverseLink<T=unknown>(binding:AssetBinding,direction:"forward"|"reverse",id:string,query:Omit<Query,"domain">&{domain?:unknown[]}={}):Promise<T>{
     if(binding.ref.kind!=="link-type"||!binding.sourceVersion||!id)throw new Error("Link traversal needs an exact version and start record");
     const path=`/v1/link-types/${[binding.ref.app,binding.ref.name,binding.sourceVersion,direction,id].map(encodeURIComponent).join("/")}`;
@@ -371,17 +334,14 @@ export class EdgeClient {
     if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;
   }
 
-  /** Groups and measures of an entity type's records within the caller's scope: `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */
   async aggregate<T = unknown>(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
     return this.get<T>(this.aggregatePath(type, q));
   }
 
-  /** One record with its history and related records. */
   record<T = unknown>(type: string, id: string): Promise<T> {
     return this.get<T>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
   }
 
-  /** Takes the tenant's declarations from its authority (A9). */
   async refreshDeclarations(): Promise<void> {
     this.authorities.refresh(await this.get("/v1/declarations"));
   }
@@ -394,8 +354,6 @@ export class EdgeClient {
     catch { throw Error("Local request storage is unavailable. Retry after storage is restored."); }
   }
 
-  /** Builds and queues a decision about `target`; returns its idempotency key. `expectedRevision`
-   *  is the target's revision the user saw (K4 C12): a stale screen is refused, not applied. */
   draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = [], expectedRevision?: number, schemaVersion?: SchemaVersion, correctionOf?: string, requestKey?: string): string {
     if (this.storageLoadError) throw this.storageLoadError;
     if (!this.storageKey) throw Error("The workspace identity is not ready.");
@@ -431,7 +389,6 @@ export class EdgeClient {
     return response.ok && body.record?.changeId || body.error?.code ? body : undefined;
   }
 
-  /** Re-read a terminal answer with the exact original submission. K5's saved terminal state stays terminal. */
   async repeat(key: string, timeoutMs = 5000): Promise<Entry> {
     this.save();
     const generation = this.generation;
@@ -448,9 +405,6 @@ export class EdgeClient {
     return entry;
   }
 
-  /** Sends one original request, or resumes the outbox when no key is given.
-   * Each request joins the same sender; a foreground save need not wait for
-   * every remaining offline request to finish. */
   async send(key?: string, timeoutMs = 5000): Promise<Entry[]> {
     this.save();
     const generation = this.generation, answered: Entry[] = [];
@@ -492,7 +446,6 @@ export class EdgeClient {
         }
       } catch {
         if (generation !== this.generation) return;
-        // A browser cannot tell whether a failed request reached the server: unknown, retried with the same key.
         this.authorities.transition(tenantId, idempotencyKey, "timeout");
       }
       this.save();

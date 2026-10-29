@@ -27,113 +27,88 @@ import (
 	"time"
 )
 
-// Delivery is one event handed to one subscriber.
-
-// Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
-// between apps only through the protocols they provide and consume.
 type Tenant struct {
 	agentEvaluator        platform.AgentEvaluator
 	services              platform.RuntimeCapabilities
 	disabledOwners        map[string]bool
 	systemDefinitions     atomic.Pointer[systemDefinitionProjection]
 	systemDefinitionState systemDefinitionState
-	installingSet         bool // private owner images validate cross-references as one complete set
+	installingSet         bool
 	currentReadScopes     bool
 	recordReadError       error
 	startupSnapshot       *snapshotCompatibility
 	runtimePosition       func() int64
-	snapshotPosition      int64                        // last captured/restored checkpoint; zero-position diagnostics preserve it
-	simulation            bool                         // isolated builder execution, never authoritative state
-	simulationTrace       func(platform.DecisionTrace) // private trial observation; never snapshotted or installed live
+	snapshotPosition      int64
+	simulation            bool
+	simulationTrace       func(platform.DecisionTrace)
 	observationWindows    map[string]observationWindowAttempt
 	confirmationReads     statusReadSchedule
 	dispatchReads         statusReadSchedule
-	// Private control views route callbacks back into their owning decision.
-	controlAnswer func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
-	identity      platform.IdentityDirectory
-	ID            string
-	// Record is the legacy local recording callback. Durable deployments use
-	// AcceptResult so storage failures can be returned before applying state.
-	Record func(Entry)
-	// AcceptResult persists a supported top-level decision or owned-work
-	// attempt before any authoritative changes or intents are visible.
-	AcceptResult func(Entry, string, string) ([]byte, error)
-	// Store keeps what is derived outside the journal: vectors and transcripts;
-	// without one they stay in memory.
-	Store         Store
-	memStore      journal.Memory       // the Store without one
-	knowledge     platform.Glossary    // the knowledge app: documents are searched, terms read
-	index         knowledgeindex.Index // passages cut from documents and knowledge fields
-	i18n          transport.Translator // says declarations and messages in a language
-	agentRun      string               // the run whose agent is submitting, under mu: its effects name it
-	mu            runtimekernel.Lane
-	views         transport.ViewCache         // catalog, entities and definitions per rights signature
-	defGen        atomic.Uint64               // moves when the installed definitions do
-	streamMu      sync.Mutex                  // one outside-lane source intake pass per tenant
-	fault         atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
-	apps          []platform.App
-	appIndex      map[string]int          // immutable composition identity; private views replace owners in the same positions
-	committed     runtimekernel.Committed // answers by idempotency key (kernel/tenant_state.go)
-	releases      releases.Store          // studio/releases/release_retention.go
-	console       controlowner.HostState  // the host console's lifecycle, support sessions, migrations (host_control.go)
-	staged        computeowner.Channel    // the per-call result channel (compute_channel.go)
-	definitions   []platform.Definition   // installed code assets; member views are derived on read
-	owner         map[string]platform.App // "action:", "read:" and "input:" names → app
-	flowArtifacts flowArtifactGC
-	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
-	// own lock, because reads run inside other apps' submissions.
-	audit     runtimekernel.AuditLog   // recent inputs, deliveries, personal reads (kernel/tenant_diagnostics.go)
-	events    []automation.QueuedEvent // published during the current input, queued after it
-	bindings  map[string]binding
-	observers []platform.Observer // the platform's views derived from events, inside the input
-	change    changes             // what clients follow to refetch (F-32)
-	linker    platform.Linker     // serves Caller.Link and Caller.Links
-	directory platform.Directory  // the organisation, when composed
-	hops      int                 // of the event being handled, for the events it causes
-	acted     int                 // decisions published and notifications given, ever
-	works     platform.Works
-	// opsMu guards what reads and the runner share: queues, connectors,
-	// notifications and settings (operations.go). It is never held while t.mu is taken.
-	opsMu sync.Mutex
-	work  automation.WorkBoard // queues, failed deliveries and jobs (work_board.go)
-	// Quota is the attempts of owned work each app may make in a minute; 0: no limit.
-	Quota      int
-	quota      automation.Quota          // attempts per app per minute and the round-robin turn (quota.go)
-	breakers   integrations.Breakers     // per endpoint and AI provider (volatile)
-	connectors connectorRoster           // registry, descriptor index, last refusals (connector_roster.go)
-	notices    runtimekernel.NoticeBoard // notifications (kernel/tenant_notifications.go)
-	settings   controlowner.Settings     // "<app>/<name>" → value (settings.go)
-	words      controlowner.Words        // the tenant's own translations (words.go)
-	sequences  runtimekernel.Sequences   // number counters
-	endpoints  []*Endpoint
-	outbound   []*effect
-	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
-	// PLATFORM_SECRET_<NAME>); Outbound sends an effect's request (default: a
-	// client refusing private addresses). Tests replace both.
-	Secrets  func(name string) ([]byte, bool)
-	Outbound func(req *http.Request, allowPrivate bool) (*http.Response, error)
-	// AIClient sends model calls (default: a client refusing private addresses
-	// unless the provider is local); tests replace it.
-	AIClient  func(req *http.Request) (*http.Response, error)
-	ai        models                // the AI app: the models the host calls
-	records   *records.Store        // the apps' entity records
-	tasks     platform.Tasks        // serves Caller.Assign: the work app
-	procs     platform.Processes    // the flow app
-	listeners []string              // platform apps given other apps' events as owned work (platform.Listener)
-	agents    platform.AgentRuntime // AI agents
-	ctx       context.Context       // the span of the work being done under mu (telemetry.go)
-	// Files keeps file bytes; nil: memory, for development and tests.
-	Files         platform.FileStore
-	ComputeWorker platform.WasmWorker
-	Compiler      platform.CodeCompiler
-	cancels       computeowner.Cancels // running operations' cancel handles
-	memFiles      resources.MemoryFiles
-	uploads       resources.Uploads // hashes uploaded and not yet attached (uploads.go)
+	controlAnswer         func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
+	identity              platform.IdentityDirectory
+	ID                    string
+	Record                func(Entry)
+	AcceptResult          func(Entry, string, string) ([]byte, error)
+	Store                 Store
+	memStore              journal.Memory
+	knowledge             platform.Glossary
+	index                 knowledgeindex.Index
+	i18n                  transport.Translator
+	agentRun              string
+	mu                    runtimekernel.Lane
+	views                 transport.ViewCache
+	defGen                atomic.Uint64
+	streamMu              sync.Mutex
+	fault                 atomic.Pointer[tenantFault]
+	apps                  []platform.App
+	appIndex              map[string]int
+	committed             runtimekernel.Committed
+	releases              releases.Store
+	console               controlowner.HostState
+	staged                computeowner.Channel
+	definitions           []platform.Definition
+	owner                 map[string]platform.App
+	flowArtifacts         flowArtifactGC
+	audit                 runtimekernel.AuditLog
+	events                []automation.QueuedEvent
+	bindings              map[string]binding
+	observers             []platform.Observer
+	change                changes
+	linker                platform.Linker
+	directory             platform.Directory
+	hops                  int
+	acted                 int
+	works                 platform.Works
+	opsMu                 sync.Mutex
+	work                  automation.WorkBoard
+	Quota                 int
+	quota                 automation.Quota
+	breakers              integrations.Breakers
+	connectors            connectorRoster
+	notices               runtimekernel.NoticeBoard
+	settings              controlowner.Settings
+	words                 controlowner.Words
+	sequences             runtimekernel.Sequences
+	endpoints             []*Endpoint
+	outbound              []*effect
+	Secrets               func(name string) ([]byte, bool)
+	Outbound              func(req *http.Request, allowPrivate bool) (*http.Response, error)
+	AIClient              func(req *http.Request) (*http.Response, error)
+	ai                    models
+	records               *records.Store
+	tasks                 platform.Tasks
+	procs                 platform.Processes
+	listeners             []string
+	agents                platform.AgentRuntime
+	ctx                   context.Context
+	Files                 platform.FileStore
+	ComputeWorker         platform.WasmWorker
+	Compiler              platform.CodeCompiler
+	cancels               computeowner.Cancels
+	memFiles              resources.MemoryFiles
+	uploads               resources.Uploads
 }
 
-// AuditEntry is one accepted input: who, when, through which app, what.
-
-// Audit is the tenant's recent accepted inputs, oldest first.
 func (t *Tenant) Audit() []platform.AuditEntry { return t.audit.All() }
 
 func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities, apps ...platform.App) (*Tenant, error) {
@@ -187,7 +162,6 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		if err := t.bind(i, a); err != nil {
 			return nil, err
 		}
-		// Roles the host's own apps take, by the interfaces they implement.
 		(hostView{t: t, app: a}).bindOwner(a)
 		if x, ok := a.(platform.Observer); ok {
 			t.observers = append(t.observers, x)
@@ -273,7 +247,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			}
 		}
 	}
-	for _, a := range apps { // agents, once every app is composed; flows may give them steps
+	for _, a := range apps {
 		if len(a.Manifest().Agents) == 0 {
 			continue
 		}
@@ -284,7 +258,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
-	for _, a := range apps { // flows, once every app is composed
+	for _, a := range apps {
 		if len(a.Manifest().Flows) == 0 {
 			continue
 		}
@@ -295,7 +269,7 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
-	{ // interfaces, once every entity is described (A2)
+	{
 		manifests := make([]platform.Manifest, len(apps))
 		infos := map[string]platform.EntityInfo{}
 		for k, a := range apps {

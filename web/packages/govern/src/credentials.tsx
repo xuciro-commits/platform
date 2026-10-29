@@ -23,8 +23,6 @@ export function CredentialEditor({ open, onClose, initial, onSaved }: { open: bo
       if (!write) {
         write = { ...draft, reference: draft.source === "deployment" ? draft.reference : undefined };
         if (write.source === "managed") {
-          // This online call bypasses the durable outbox. Only the resulting
-          // authenticated ciphertext becomes an ordinary decision.
           const secret = value; setValue("");
           const result = await client.call<Api.CredentialWrite & {error?:{message?:string}}>("POST", "/v1/credentials/seal", { ...write, value: secret });
           if (!result.ok) { setError(result.body?.error?.message ?? t("Credential encryption failed.")); return; }

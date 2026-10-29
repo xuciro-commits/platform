@@ -8,7 +8,6 @@ import { installedStudioRef } from "./studio-applications";
 type StudioLink = { title: string; view: string; params?: Record<string, string> };
 type StudioGroup = { id: string; title: string; kinds: readonly string[]; links?: readonly StudioLink[]; contextKinds?: readonly string[] };
 
-/** One authoring classification drives menus, inventories, creation and route context. */
 const domains = [
   { id: "model", title: "Model", description: "Objects, fields, relationships and reusable queries", groups: [
     { id: "business-model", title: "Business model", kinds: ["object"] },
@@ -36,7 +35,6 @@ export type StudioArea = typeof domains[number]["id"];
 export const studioAreas = domains.map(area => ({ ...area, groups: area.groups as readonly StudioGroup[], kinds: [...new Set((area.groups as readonly StudioGroup[]).flatMap(group => [...group.kinds]))] as readonly string[], contextKinds: [...new Set((area.groups as readonly StudioGroup[]).flatMap(group => [...group.contextKinds ?? []]))] as readonly string[] }));
 const areaForKind = (kind?: string): StudioArea => kind === "action" ? "logic" : studioAreas.find(area => area.kinds.includes(kind ?? ""))?.id ?? "integration";
 
-/** Retired domain names are accepted only on incoming links. */
 export function studioArea(value?: string, kind?: string): StudioArea {
   if (value === "behavior") return "logic";
   if (value === "connections") return "integration";
@@ -62,7 +60,6 @@ export function studioAreaForRoute(route?: Route): StudioArea {
   if (["definition", "observations"].includes(route?.view ?? "")) return areaForKind(route?.view === "observations" ? "observation" : params?.kind);
   return "model";
 }
-/** Global and contextual navigation read the same groups; asset identities stay with resources.ts. */
 export function studioNavigation(area: StudioArea) {
   const domain = studioAreas.find(item => item.id === area)!;
   return domain.groups.flatMap(group => [
@@ -73,7 +70,6 @@ export function studioNavigation(area: StudioArea) {
 export const studioApplicationID = (route?: Route) => route?.view === "project" || route?.view === "module" && route.params?.id ? route.params?.id : route?.params?.application;
 export const studioRoute = (id: string, area: StudioArea, asset?: string): Route => ({ view: "project", params: { id, area, ...(asset ? { asset } : {}) } });
 
-/** The tree and the editor's return bar describe the same original asset. */
 export function studioContext(route: Route | undefined, resources: readonly OwnedResource[], definitions: readonly WorkspaceDefinition[]) {
   const params = route?.params;
   const definitionKind = route?.view === "observations" ? "observation" : params?.kind;
@@ -104,7 +100,6 @@ export function resourceInArea(item: OwnedResource, area: StudioArea): boolean {
   return resourceArea(item) === area || (studioAreas.find(domain => domain.id === area)?.contextKinds ?? []).includes(item.ref.kind);
 }
 
-/** Default groups use the asset's business namespace, never its platform kind. */
 export function conceptTree(application: Pick<Api.Application, "title" | "name" | "concepts">, resources: readonly OwnedResource[]) {
   const groups: { id: string; title: string; items: OwnedResource[] }[] = (application.concepts ?? []).map(group => ({ id: `concept:${group.id}`, title: group.title, items: [] }));
   for (const item of resources) {
@@ -120,7 +115,6 @@ export function conceptTree(application: Pick<Api.Application, "title" | "name" 
 }
 
 export type StudioResourceGroup = { id: string; title: string; items: OwnedResource[] };
-/** A short business-facing tree for the active workspace. */
 export function studioResourceGroups(application: Pick<Api.Application, "title" | "name" | "concepts">, area: StudioArea, resources: readonly OwnedResource[]): StudioResourceGroup[] {
   const groups = studioAreas.find(domain => domain.id === area)!.groups.map(group => ({ ...group, items: [] as OwnedResource[] }));
   const custom = (application.concepts ?? []).map(group => ({ id: `concept:${group.id}`, title: group.title, items: [] as OwnedResource[] }));
@@ -140,7 +134,6 @@ export function studioResourceGroups(application: Pick<Api.Application, "title" 
   return [...custom, ...groups].filter(group => group.items.length).map(group => ({ id: group.id, title: group.title, items: [...group.items].sort((a, b) => a.title.localeCompare(b.title) || refKey(a.ref).localeCompare(refKey(b.ref))) }));
 }
 
-/** Actions retain their original identity beside the object they affect. */
 export function studioActionGroups(resources: readonly OwnedResource[], definitions: readonly WorkspaceDefinition[]) {
   const objects = resources.filter(item => item.ref.kind === "object");
   const actions = resources.filter(item => item.ref.kind === "action");
@@ -154,7 +147,6 @@ export function studioActionGroups(resources: readonly OwnedResource[], definiti
   return { groups, other: resources.filter(item => item.ref.kind !== "object" && !assigned.has(refKey(item.ref))) };
 }
 
-/** Only application metadata changes. The original references and definitions stay intact. */
 export function moveConceptAsset(concepts: readonly Api.AppConcept[], ref: Api.AssetRef, id: string) {
   return concepts.map(group => ({ ...group, assets: [
     ...group.assets.filter(asset => refKey(asset) !== refKey(ref)), ...(group.id === id ? [ref] : []),

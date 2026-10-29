@@ -16,17 +16,9 @@ import (
 	"platformserver/platform"
 )
 
-// Agent-to-agent, A2A 1.0 over JSON-RPC. A declared agent an
-// administrator publishes (the agent app's setting "published") has an agent
-// card at /a2a/<tenant>/<agent>/.well-known/agent-card.json and answers at
-// /a2a/<tenant>/<agent>. Callers sign in as members through the host's
-// issuer; SendMessage starts a run for the caller that acts within their
-// grants (no one is there to confirm drafts), and D6 holds what cannot be
-// recalled. A question the agent asks is TASK_STATE_INPUT_REQUIRED; the
-// caller answers with a message on the task.
 const (
 	A2AVersion = "1.0"
-	a2aWait    = 60 * time.Second // SendMessage waits this long for a run to finish, unless returnImmediately
+	a2aWait    = 60 * time.Second
 )
 
 type a2aPart struct {
@@ -58,7 +50,6 @@ type a2aTask struct {
 	} `json:"artifacts,omitempty"`
 }
 
-// text is a message's text parts, and its data parts as JSON.
 func (m a2aMessage) text() string {
 	var out []string
 	for _, p := range m.Parts {
@@ -71,7 +62,6 @@ func (m a2aMessage) text() string {
 	return strings.Join(out, "\n")
 }
 
-// published says whether an administrator published the agent over A2A.
 func (t *Tenant) published(agent string) bool {
 	if t.agents == nil {
 		return false
@@ -83,7 +73,6 @@ func (t *Tenant) published(agent string) bool {
 	return slices.ContainsFunc(list, func(s string) bool { return strings.TrimSpace(s) == agent })
 }
 
-// agentCard is the agent's A2A card.
 func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]any {
 	d, _ := t.agents.AgentDeclaration(agent)
 	scheme := "http"
@@ -115,7 +104,6 @@ func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]an
 	}
 }
 
-// taskOf is a run as an A2A task.
 func taskOf(run platform.AgentRunRecord, question string) a2aTask {
 	var x a2aTask
 	x.ID, x.ContextID, x.Status.Timestamp = run.ID, run.ID, run.Changed.At
@@ -150,7 +138,6 @@ func taskOf(run platform.AgentRunRecord, question string) a2aTask {
 	return x
 }
 
-// serveA2A answers the JSON-RPC binding for one published agent.
 func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	tenant, agent := r.PathValue("tenant"), r.PathValue("agent")
 	var req struct {
@@ -225,7 +212,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id := p.Message.TaskID
-		if id != "" { // an answer to the task's question
+		if id != "" {
 			x, _, ok := run(id)
 			if !ok {
 				reply(nil, -32001, "task not found")
@@ -243,7 +230,7 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 			sum := sha256.Sum256([]byte(m.ID + "\x00" + p.Message.MessageID))
 			id = "A2A-" + strings.ToUpper(hex.EncodeToString(sum[:6]))
 			if err := decide(platform.SchemaRunStart, platform.RunType, id, "a2a:"+p.Message.MessageID, map[string]any{"agent": agent, "goal": p.Message.text(), "act": true}); err != nil &&
-				!strings.Contains(err.Error(), "CONFLICT") { // a resent message: the same task
+				!strings.Contains(err.Error(), "CONFLICT") {
 				reply(nil, -32603, err.Error())
 				return
 			}
@@ -287,9 +274,6 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// sendA2A sends an effect to an external agent: a SendMessage whose message ID
-// is the effect's, so a resend is the same message; the task it answers with
-// is the effect's answer, journaled with the outcome.
 func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect, authorizationHeader bool) platform.Outcome {
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
@@ -380,9 +364,6 @@ func (t *Tenant) sendA2A(ep Endpoint, x platform.Effect, authorizationHeader boo
 	}
 	return out
 }
-
-// answerOf is what an external agent answered, as an agent's tool reads it:
-// the artifacts' text and data, or the message's.
 
 func answerOf(o platform.Outcome) string {
 	var task a2aTask

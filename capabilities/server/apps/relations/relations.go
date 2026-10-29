@@ -1,5 +1,3 @@
-// Package relations is the platform's links and timeline, a
-// platform app on the app API and public consumer roles.
 package relations
 
 import (
@@ -17,18 +15,11 @@ import (
 	"platformserver/platform"
 )
 
-// Relations is the platform's links and timeline: relations between
-// any two entities of any apps, and the activity about an entity, so no app —
-// and no bridge — has to own them. A member may link entities of apps it holds
-// a role in, and sees only those. Protocol events are told on the timeline of
-// the entity they concern and of every entity linked to it; what people write
-// about a record is a comment (one owner, #129). A record page shows both.
 const (
-	ID           = "relations"
-	LinkType     = "platform.link"
-	SchemaLink   = "platform.link"
-	SchemaUnlink = "platform.unlink"
-	// Comments and followers on any record.
+	ID             = "relations"
+	LinkType       = "platform.link"
+	SchemaLink     = "platform.link"
+	SchemaUnlink   = "platform.unlink"
 	CommentType    = "platform.comment"
 	FollowType     = "platform.follow"
 	SchemaComment  = "platform.comment.add"
@@ -54,7 +45,7 @@ type Link = platform.RelationLink
 type Note = platform.RelationNote
 
 type Relations struct {
-	host   platform.RelationsHost // the tenant running it, once composed
+	host   platform.RelationsHost
 	mu     sync.Mutex
 	links  []Link
 	notes  []Note
@@ -81,7 +72,6 @@ func New(tenant string) *Relations {
 	), LinkType, CommentType, FollowType)}
 }
 
-// Snapshot and Restore: links and notes.
 type relationsState struct {
 	Links []Link `json:"links"`
 	Notes []Note `json:"notes"`
@@ -106,8 +96,6 @@ func (r *Relations) Restore(raw json.RawMessage) error {
 	return nil
 }
 
-// Historical owner-state remains byte-preserving evidence for the endpoint
-// owner's explicit migration; it is never rewritten by that migration.
 func (r *Relations) LegacyRelations() []platform.RelationLink {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -122,9 +110,6 @@ func (r *Relations) Manifest() platform.Manifest {
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
 func (r *Relations) AcceptedLedger() *platform.Ledger         { return r.ledger }
 
-// Only the link graph is private decision state. Timeline notes are projected
-// from saved observations, not recomputed by an action or copied with this
-// fork. The ledger stays the same identity and is staged by the host Runtime.
 func (r *Relations) ForkAcceptedState() (platform.App, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -162,7 +147,6 @@ func (r *Relations) ApplyAcceptedState(raw json.RawMessage) error {
 	return nil
 }
 
-// sees reports whether c holds a role in the app owning entity "<type>/<id>".
 func (r *Relations) sees(c platform.Caller, entity string) bool {
 	class, _, ok := strings.Cut(entity, "/")
 	if !ok || r.host == nil {
@@ -172,7 +156,6 @@ func (r *Relations) sees(c platform.Caller, entity string) bool {
 	return ok && c.Roles[app] != ""
 }
 
-// Attach is the host handing itself to the app (host.Attached).
 func (r *Relations) AttachRelations(h platform.RelationsHost) { r.host = h }
 
 func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -215,7 +198,6 @@ func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 	})
 }
 
-// Read "links" or "timeline" (newest last), limited to entities the caller sees.
 func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -237,10 +219,6 @@ func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-// Observe tells a record's followers of each member's decision on it, and
-// protocol events on the timeline of their entity and of the entities linked
-// to it (platform.Observer). It runs inside the input, so replay
-// tells them again.
 func (r *Relations) Observe(e platform.Event, events []string) {
 	raw, err := r.PlanObserved(r.host.Automation(platform.Caller{}, ID), e, events)
 	if err == nil {
@@ -252,7 +230,6 @@ func (r *Relations) PlanObserved(c platform.Caller, e platform.Event, events []s
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
 	if t := s.GetTarget().GetType(); t != CommentType && t != FollowType && t != LinkType && !strings.HasPrefix(s.GetPrincipalId(), "app:") {
-		// A member's decision on a record tells its followers.
 		r.tell(c, entity, entity+" changed: "+s.GetSchema().GetName(), "by "+s.GetPrincipalId(),
 			"change:"+e.App+"/"+e.Record.GetChangeId(), []string{s.GetPrincipalId()}, e.Record.GetRecordedTime().AsTime())
 	}
@@ -303,7 +280,6 @@ func (r *Relations) ApplyObserved(raw json.RawMessage) error {
 	return nil
 }
 
-// Links are the entities linked to entity that c sees (Caller.Links, platform.Linker).
 func (r *Relations) Links(c platform.Caller, entity string) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -322,8 +298,6 @@ func (r *Relations) Links(c platform.Caller, entity string) []string {
 	return out
 }
 
-// Link relates two entities for c (Caller.Link, platform.Linker), as a decision of
-// this app taken for c.
 func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
 	payload, _ := json.Marshal(map[string]string{"from": from.GetType() + "/" + from.GetId(), "to": to.GetType() + "/" + to.GetId()})
 	_, err := r.Submit(r.host.As(c, ID), &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID,
@@ -331,8 +305,6 @@ func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, 
 	return err
 }
 
-// collaborate decides comments and follows: on a record the
-// member may read, which a replay does not ask again.
 func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	var p struct{ Target, Text string }
 	json.Unmarshal(s.GetPayload(), &p)
@@ -389,7 +361,6 @@ func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Ti
 	})
 }
 
-// tell notifies a record's followers, except those in skip.
 func (r *Relations) tell(c platform.Caller, target, title, body, key string, skip []string, now time.Time) {
 	domain, _ := json.Marshal([]any{[]any{"target", "=", target}})
 	follows, _, _ := platform.Find[Follow](r.host.Automation(c, ID), platform.Query{Domain: domain, Limit: 1000})

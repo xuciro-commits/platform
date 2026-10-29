@@ -1,7 +1,6 @@
 import {pageUIManifest} from "../pageui/manifest";
 import type * as PageUI from "../pageui/types";
 
-/** Application API diagnostics; the host remains the save/publish authority. */
 export function pageLayoutDiagnostics(document:PageUI.PageDocument,sections:Pick<PageUI.Section,"id"|"widget"|"configVersion">[]=[]):{node:string;code:string}[] {
  const limits=pageUIManifest.layout,issues:{node:string;code:string}[]=[];
  const nodes=Object.keys(document.nodes),sectionIDs=new Set(sections.map(section=>section.id)),used=new Set<string>(),seen=new Set<string>();

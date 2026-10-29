@@ -17,8 +17,6 @@ import (
 	"time"
 )
 
-// DecimalValue carries exact presentation numbers without a binary floating
-// conversion. The canonical text is also usable by the original read boundary.
 type DecimalValue struct {
 	Kind  string `json:"kind"`
 	Value string `json:"value"`
@@ -58,8 +56,6 @@ func DecimalLiteral(raw json.RawMessage) (DecimalValue, bool) {
 }
 func (v DecimalValue) Rat() *big.Rat { value, _ := new(big.Rat).SetString(v.Value); return value }
 
-// Condition is the exact comparison of a numeric field against this value,
-// evaluated on a record read by read.
 func (value DecimalValue) Condition(field FieldInfo, op string, read func(reflect.Value) any) (func(reflect.Value) bool, error) {
 	if field.Type != "integer" && field.Type != "decimal" {
 		return nil, fmt.Errorf("decimal condition needs a numeric field")
@@ -96,8 +92,6 @@ func (value DecimalValue) Condition(field FieldInfo, op string, read func(reflec
 	}, nil
 }
 
-// NumberValue preserves the original host's finite binary-number semantics.
-// It cannot be substituted for an exact DecimalValue.
 type NumberValue struct {
 	Kind  string  `json:"kind"`
 	Value float64 `json:"value"`
@@ -136,8 +130,6 @@ func (d *PageDocument) CheckAggregateScalar(v PageVariable, info EntityInfo) err
 	return d.inputSchema().CheckAggregateScalar(v, info)
 }
 
-// ObservationContext is supplied only by the original private acceptance view.
-// JSON inputs and callers cannot manufacture these rule facts.
 type ObservationContext struct {
 	Definition AssetBinding
 	Record     string
@@ -171,7 +163,6 @@ func (c Caller) observationRuleFacts() map[string]ExprValue {
 	return out
 }
 
-// ObservationSampleSource identifies which connection revision produced a sample.
 type ObservationSampleSource struct {
 	Connection string `json:"connection"`
 	Revision   string `json:"revision"`
@@ -180,7 +171,6 @@ type ObservationSampleSource struct {
 	Clock      string `json:"clock,omitempty"`
 }
 
-// ObservationSample is one current reading with its quality and time.
 type ObservationSample struct {
 	Device     string                  `json:"device"`
 	Signal     string                  `json:"signal"`
@@ -194,7 +184,6 @@ type ObservationSample struct {
 	Source     ObservationSampleSource `json:"source"`
 }
 
-// ObservationCoverage is the source's completeness claim for a window.
 type ObservationCoverage struct {
 	AvailableSince time.Time `json:"availableSince"`
 	CompleteUntil  time.Time `json:"completeUntil"`
@@ -208,8 +197,6 @@ type ObservationCoverage struct {
 const ObservationIntervalVersion = "platform.interval.v1"
 const ObservationMaxIntervals = 256
 
-// ObservationIntervals evaluates the original rule language over a finite
-// source window. A value expires at MaxGapSeconds; missing time is unknown.
 type ObservationIntervals struct {
 	ValueKind       string `json:"valueKind" enum:"decimal,choice,boolean"`
 	When            Expr   `json:"when"`
@@ -226,8 +213,6 @@ type ObservationStatePoint struct {
 	Value      string    `json:"value,omitempty"`
 }
 
-// This is an external read, not a durable state format. Only its compact
-// analysis may accompany an accepted business result.
 type ObservationIntervalInput struct {
 	Since    time.Time               `json:"since"`
 	Until    time.Time               `json:"until"`
@@ -301,8 +286,6 @@ func intervalPointValue(kind, value string, engines ...RuleEngine) (ExprValue, e
 	return result.Value, err
 }
 
-// AnalyzeObservationIntervals retains no source points. It refuses malformed
-// reads, and preserves uncertain segments rather than closing an event there.
 func AnalyzeObservationIntervals(policy ObservationIntervals, input ObservationIntervalInput, now time.Time, engines ...RuleEngine) (ObservationIntervalResult, error) {
 	out := ObservationIntervalResult{Version: ObservationIntervalVersion, Revision: input.Revision, Since: input.Since, Until: input.Until, Count: len(input.Points), Intervals: []ObservationInterval{}, Unknown: []ObservationUnknown{}}
 	if input.Since.IsZero() || !input.Since.Before(input.Until) || input.Until.Sub(input.Since) > time.Duration(ObservationMaxWindowSeconds)*time.Second || input.Revision == "" || len(input.Revision) > 256 || len(input.Points) > ObservationMaxPoints {
@@ -405,8 +388,6 @@ func AnalyzeObservationIntervals(policy ObservationIntervals, input ObservationI
 	return out, nil
 }
 
-// Check validates compact evidence eligible for business acceptance. Read-only
-// partial analyses remain displayable but cannot authorize a complete result.
 func (r ObservationIntervalResult) Check() error {
 	if r.Version != ObservationIntervalVersion || r.Revision == "" || len(r.Revision) > 256 || r.Since.IsZero() || !r.Since.Before(r.Until) || r.Until.Sub(r.Since) > time.Duration(ObservationMaxWindowSeconds)*time.Second || !r.Ready || r.Count < 1 || r.Count > ObservationMaxPoints || r.Intervals == nil || r.Unknown == nil || len(r.Unknown) != 0 || len(r.Intervals) > ObservationMaxIntervals || len(r.Intervals) > r.Count {
 		return fmt.Errorf("accepted state intervals need complete bounded evidence and their processing version")
@@ -425,8 +406,6 @@ func (r ObservationIntervalResult) Clone() ObservationIntervalResult {
 	return r
 }
 
-// IntervalIdentity is a current projection row. Retired rows are excluded by
-// the original declared collection and can never enter the matching pool.
 type IntervalIdentity struct {
 	ID       string
 	Interval ObservationInterval
@@ -449,9 +428,6 @@ func intervalOverlap(a, b ObservationInterval) bool {
 	return a.Since.Before(b.Until) && b.Since.Before(a.Until) || a.OpenEnd && b.OpenStart && a.Until.Equal(b.Since) || b.OpenEnd && a.OpenStart && b.Until.Equal(a.Since)
 }
 
-// ReconcileObservationIntervals matches only confirmed ranges. K1 validates
-// fresh identities and redirects; the caller writes rows/links in its original
-// private transaction. Human fields are deliberately absent from this plan.
 func ReconcileObservationIntervals(object string, previous []IntervalIdentity, result ObservationIntervalResult, newID func(int) string, engines ...KernelFactory) (IntervalReconciliation, error) {
 	out := IntervalReconciliation{Events: []IntervalChange{}, Retired: []string{}, Redirects: []*pb.Redirect{}}
 	if err := result.Check(); err != nil {
@@ -511,8 +487,6 @@ func ReconcileObservationIntervals(object string, previous []IntervalIdentity, r
 				candidates[left].interval.Since = event.Since
 				candidates[left].interval.OpenStart = event.OpenStart
 			} else {
-				// A contradictory correction inside an older range cannot prove where
-				// its out-of-window prefix ended. Keep that boundary explicitly open.
 				candidates = append(candidates, candidate{interval: ObservationInterval{Since: event.Since, Until: result.Since, OpenStart: event.OpenStart, OpenEnd: !touchesLeft}, review: !touchesLeft})
 			}
 		}
@@ -613,8 +587,6 @@ func ReconcileObservationIntervals(object string, previous []IntervalIdentity, r
 const ObservationMaxWindowSeconds = 366 * 24 * 60 * 60
 const ObservationMaxPoints = 5000
 
-// ObservationDefinition declares only the logical source and a bounded read.
-// Addresses, credentials, retention and original points stay with the source.
 type ObservationDefinition struct {
 	Name                       string                `json:"name"`
 	Title                      string                `json:"title"`
@@ -665,7 +637,6 @@ type ObservationResult struct {
 	Intervals *ObservationIntervalResult `json:"intervals,omitempty"`
 }
 
-// CheckObservationCoverage validates the source's completeness claim without reconstructing limited points.
 func CheckObservationCoverage(coverage ObservationCoverage, window ObservationWindow) error {
 	if coverage.AvailableSince.IsZero() || coverage.CompleteUntil.IsZero() || coverage.AvailableSince.After(window.Since) || coverage.CompleteUntil.Before(window.Until) || coverage.Truncated {
 		return fmt.Errorf("observation window is not complete or is outside available storage")
@@ -778,8 +749,6 @@ func ObservationRuleSchema(def ObservationDefinition, entity EntityInfo) (ExprSc
 	return schema, nil
 }
 
-// ObservationRuleContext copies only declared record scalars and one summary.
-// There is no field through which raw observation points can enter the rule.
 func ObservationRuleContext(def ObservationDefinition, record json.RawMessage, window ObservationWindow) (ExprContext, error) {
 	context := ExprContext{Refs: map[string]ExprValue{}, Windows: map[string]ExprWindowSummary{"observation": window}}
 	if err := window.Check(); err != nil {
@@ -925,7 +894,6 @@ func CheckObservationPoints(points []ObservationPoint, window ObservationWindow,
 	return nil
 }
 
-// CheckObservationAction preserves the original action and its typed payload.
 func CheckObservationAction(def ObservationDefinition, action Action) error {
 	if def.Decision == nil {
 		return nil
@@ -964,8 +932,6 @@ type RuleCriterion struct {
 	Message string `json:"message"`
 }
 
-// RuleCriteria is the original action's pure precondition plan. It is exposed
-// to model reads by the owner and runs before mutation through the same helper.
 type RuleCriteria struct {
 	Reads      RuleReadSpec    `json:"reads"`
 	Conditions []RuleCriterion `json:"conditions"`
@@ -992,7 +958,7 @@ func EvaluateRule(expr Expr, reads RuleReadSpec, caller Caller, record any, inpu
 			if value.Ref != "" && !strings.Contains(value.Ref, ".") && subject.ID != "" {
 				fields := []string{value.Ref}
 				if value.Ref == "id" {
-					fields = nil // identity belongs to the authorized record header
+					fields = nil
 				}
 				decision := caller.Authorize(AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: "read", Type: reads.Object, Record: subject.ID, Fields: fields}, at)
 				if !decision.Allow || len(decision.Withheld) > 0 {
@@ -1069,8 +1035,6 @@ func (plan RuleCriteria) Evaluate(c Caller, record any, inputs map[string]any, a
 	return true, "", nil
 }
 
-// RuleReadSpec binds rules to existing object/query declarations. It confers no
-// read grant and never accepts a caller-supplied query or record image as fact.
 type RuleReadSpec struct {
 	Object      string                    `json:"object,omitempty"`
 	Inputs      map[string]ExprType       `json:"inputs,omitempty"`
@@ -1083,11 +1047,9 @@ type RuleCollection struct {
 	Version int    `json:"version"`
 	Object  string `json:"object"`
 	Of      string `json:"of,omitempty"`
-	Policy  string `json:"policy"` // visible: declared scoped set; complete: reject withheld fields
+	Policy  string `json:"policy"`
 }
 
-// $subject.field is an explicit query key from the current typed record.
-// Plain names keep their original input-binding interpretation.
 func RuleCollectionSubjectField(object, of string, lookup func(string) (EntityInfo, bool)) (FieldInfo, bool, error) {
 	name, selected := strings.CutPrefix(of, "$subject.")
 	if !selected {
@@ -1115,9 +1077,6 @@ func RuleFieldKind(kind string) string {
 	}
 }
 
-// RuleSchema checks every reference path against the original object owner.
-// Only paths actually named in the immutable expression are expanded, so
-// cyclic object references do not create an unbounded schema tree.
 func RuleSchema(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) (ExprSchema, error) {
 	schema := ExprSchema{Refs: map[string]ExprType{"caller.id": {Kind: "text"}, "caller.tenant": {Kind: "text"}, "observation.ready": {Kind: "boolean"}, "observation.source": {Kind: "text"}, "observation.object": {Kind: "text"}, "observation.subject": {Kind: "text"}}, Sets: map[string]ExprSetType{}}
 	for key, typ := range spec.Inputs {
@@ -1261,8 +1220,6 @@ func mergeRuleTypes(dst, src ExprType) ExprType {
 	return dst
 }
 
-// RuleContext captures caller-filtered, immutable read values inside the
-// existing private view. The evaluator itself neither reads nor writes state.
 func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (EntityInfo, bool), record any, inputs map[string]any, now time.Time) (ExprContext, error) {
 	ctx := ExprContext{Refs: map[string]ExprValue{"caller.id": ExprPresent("text", c.ID), "caller.tenant": ExprPresent("text", c.Tenant)}, Sets: map[string]ExprCollection{}, Me: c.ID, Now: now.UTC(), Today: c.Today(now)}
 	for name, fact := range c.observationRuleFacts() {
@@ -1300,8 +1257,6 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 	if spec.Object != "" && !known {
 		return ctx, fmt.Errorf("rule record object is undeclared")
 	}
-	// omitempty is only transport: zero/false on initialized scalar fields is
-	// a real value. Optional pointers retain their missing/null distinction.
 	rv := reflect.ValueOf(record)
 	if rv.IsValid() && rv.Kind() == reflect.Pointer && !rv.IsNil() {
 		rv = rv.Elem()
@@ -1563,9 +1518,6 @@ func (c Caller) RuleContext(expr Expr, spec RuleReadSpec, lookup func(string) (E
 	return ctx, nil
 }
 
-// RuleSchema has already checked every typed path. The record reader uses
-// invalid argument for an unset value or empty intermediate reference after
-// checking field access. Denied or hidden records remain withheld.
 func rulePathStatus(err *kernel.Error) string {
 	if err.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 		return "missing"
@@ -1573,8 +1525,6 @@ func rulePathStatus(err *kernel.Error) string {
 	return "withheld"
 }
 
-// ExprGoValue converts one evaluated scalar for the existing record assignment
-// owner. It is transport conversion, not another expression implementation.
 func ExprGoValue(v ExprValue) (any, error) {
 	if v.Status != "value" {
 		return nil, fmt.Errorf("rule value is %s", v.Status)
@@ -1616,8 +1566,6 @@ func (c Caller) readRuleQuery(set RuleCollection, inputs json.RawMessage, now ti
 	return reader.ReadRuleQuery(c, set, inputs, now)
 }
 
-// RuleTablePlan is immutable operation data. The executor receives captured
-// facts, never a Caller or a live record/query reader.
 type RuleTablePlan struct {
 	Reads   RuleReadSpec    `json:"reads"`
 	Rows    []RuleTableRow  `json:"rows"`
@@ -1667,8 +1615,6 @@ func (plan RuleTablePlan) DecideSchemas(facts ExprContext, schemas []ExprSchema,
 	return nil, fmt.Errorf("no decision table row matches the captured input")
 }
 
-// Expr is the one versioned, side-effect-free business rule tree.
-// Application owners reach the compiler only through the platform API.
 type Expr = rules.Expr
 type ExprLiteral = rules.Literal
 type ExprAggregate = rules.Aggregate
@@ -1693,7 +1639,6 @@ type ExprNumericAggregate interface {
 	Result() (ExprValue, error)
 }
 
-// RuleEngine consumes captured facts, with no live state or external I/O.
 type RuleEngine interface {
 	CompileExpr(Expr, ExprSchema) (ExprProgram, error)
 	CompileFrozenFormula(Expr, ExprSchema) (ExprProgram, error)
@@ -1709,7 +1654,7 @@ func (c Caller) Rules() RuleEngine {
 	if runtime, ok := c.rt.(RuleRuntime); ok {
 		return runtime.Rules()
 	}
-	return NativeRules{} // standalone reference execution, without a host
+	return NativeRules{}
 }
 
 func (NativeRules) CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error) {
@@ -1734,7 +1679,6 @@ func CompileExpr(expr Expr, schema ExprSchema) (ExprProgram, error) {
 	return rules.Compile(expr, schema)
 }
 
-// LowerFormula preserves old arithmetic syntax using the original pure engine.
 func LowerFormula(text string, fields map[string]string) (Expr, error) {
 	kinds := make(map[string]string, len(fields))
 	for name, kind := range fields {

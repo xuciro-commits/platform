@@ -1,5 +1,3 @@
-// Package aigateway owns admission to model inference, separate from business
-// execution and the original AI owner's metering authority.
 package aigateway
 
 import (
@@ -36,8 +34,6 @@ func CheckPolicy(policy platform.AIInferencePolicy) error {
 	return nil
 }
 
-// Bind is called by a trusted accepting owner, never from a model or HTTP stage
-// field. The complete policy revision is pinned alongside the original model.
 func Bind(policy platform.AIInferencePolicy, provider platform.AIProvider, binding platform.AIModelBinding, stage string) (platform.AIModelBinding, error) {
 	if err := CheckPolicy(policy); err != nil {
 		return binding, err

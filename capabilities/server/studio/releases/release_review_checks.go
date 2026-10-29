@@ -9,22 +9,15 @@ import (
 	"time"
 )
 
-// Saved candidates are read from committed bytes, independently of today's drafts.
 type ReleaseSummary struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Assets int    `json:"assets"`
-	// From and PromotedAt are set when the candidate arrived from another
-	// environment: the release holder here sees what was promoted in and
-	// still waits for review, not an anonymous saved candidate.
-	From       string    `json:"from,omitempty"`
-	PromotedAt time.Time `json:"promotedAt,omitzero"`
-	// PromotedTo lists the environments of this host that received the
-	// candidate from here, so the source sees where its release went.
+	ID         string            `json:"id"`
+	Title      string            `json:"title"`
+	Assets     int               `json:"assets"`
+	From       string            `json:"from,omitempty"`
+	PromotedAt time.Time         `json:"promotedAt,omitzero"`
 	PromotedTo []PromotionTarget `json:"promotedTo,omitempty"`
 }
 
-// PromotionTarget is one environment a candidate was promoted into.
 type PromotionTarget struct {
 	Tenant string    `json:"tenant"`
 	Member string    `json:"member"`
@@ -38,7 +31,6 @@ type ReleasePage struct {
 	ActiveID   string           `json:"activeId"`
 }
 
-// ReleaseCandidateSaved is the candidate a tenant just froze.
 type ReleaseCandidateSaved struct {
 	ID string `json:"id"`
 }
@@ -92,7 +84,6 @@ func (s *Store) Page(offset, limit int, application *platform.AssetRef) (Release
 		if err != nil {
 			return ReleasePage{}, err
 		}
-		// Use an application or business object label rather than a generated page name.
 		title := id
 		for _, kind := range []platform.AssetKind{platform.AssetApp, platform.AssetObject, platform.AssetFlow, platform.AssetFunction, platform.AssetPage} {
 			found := false
@@ -188,7 +179,6 @@ func (s *Store) Review(id string, context ReviewContext) (SavedReleaseReview, er
 	return reply, nil
 }
 
-// These ports retain current authorization and private installation in the host.
 type ReviewContext struct {
 	AI                   func([]platform.ReleaseAsset, map[platform.AssetRef]bool) ([]platform.ApplicationAI, error)
 	Extensions           func(platform.ReleaseCandidate) ([]ReleaseExtensionReview, error)

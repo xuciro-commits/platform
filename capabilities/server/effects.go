@@ -30,32 +30,24 @@ import (
 	"time"
 )
 
-// Endpoint is a destination the tenant's administrator configured. A webhook
-// receives the events it subscribes to (no app code) and the effects apps emit
-// of the kinds bound to it ("<app>/<kind>", e.g. "build/writeback"). An
-// email endpoint is an SMTP server that mails members the notifications of the
-// apps it names (mail.go).
 type Endpoint struct {
 	ID            string   `json:"id"`
-	Kind          string   `json:"kind"`             // webhook, email, a2a
-	URL           string   `json:"url"`              // https://… or smtp://[user@]host[:port]
-	Secret        string   `json:"secret,omitempty"` // a secret's name in the store, never the secret
-	Events        []string `json:"events,omitempty"` // action schemas or "<protocol id>#<event>"
+	Kind          string   `json:"kind"`
+	URL           string   `json:"url"`
+	Secret        string   `json:"secret,omitempty"`
+	Events        []string `json:"events,omitempty"`
 	Effects       []string `json:"effects,omitempty"`
-	From          string   `json:"from,omitempty"`          // email: the sender
-	Notifications []string `json:"notifications,omitempty"` // email: apps whose notifications it mails
+	From          string   `json:"from,omitempty"`
+	Notifications []string `json:"notifications,omitempty"`
 	AllowPrivate  bool     `json:"allowPrivate,omitempty"`
-	// Irreversible: what is sent here cannot be recalled (an external agent
-	// that acts), so an agent's effects wait for a person whatever their kind.
-	Irreversible bool `json:"irreversible,omitempty"`
+	Irreversible  bool     `json:"irreversible,omitempty"`
 }
 
-// effect is an Effect with the dispatcher's bookkeeping.
 type effect struct {
 	platform.Effect
-	since   int // attempts before the last manual retry: each retry gets a full schedule
+	since   int
 	sending bool
-	span    trace.SpanContext // the work that caused it: its attempts continue that trace
+	span    trace.SpanContext
 }
 
 const (
@@ -64,8 +56,6 @@ const (
 	effectTimeout = 10 * time.Second
 )
 
-// emit reconstructs effects for a historical input without a saved event plan.
-// New decisions save their transaction intents and subscription plan privately.
 func (t *Tenant) emit(e platform.Event, names []string) {
 	planned, _ := t.eventEffects(e, names, false)
 	planned = append(planned, t.legacyJournalEffects(e)...)
@@ -77,8 +67,6 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 	t.trimEffects()
 }
 
-// eventEffects computes the immutable outbound intents without enqueuing
-// them. A staged result saves these bytes before the journal commit.
 func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) ([]platform.Effect, *kernel.Error) {
 	s := e.Record.GetSubmission()
 	planned, refusal := t.writebackEffects(e, preparing)
@@ -116,7 +104,6 @@ func (t *Tenant) trimEffects() {
 	}
 }
 
-// emitFor makes c's app's effect of kind for every endpoint bound to it (Caller.Emit).
 func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
 	planned, err := t.planAppEffects(c, kind, key, entity, data, now, nil)
 	if err != nil {
@@ -127,8 +114,6 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 	return len(planned), nil
 }
 
-// The same planner serves live and staged Runtime callers; it never dispatches
-// an effect, mutates a queue or resolves an administrator after a commit.
 func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
 	a := t.app(c.App)
 	if a == nil || key == "" {
@@ -189,7 +174,6 @@ func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned 
 	}
 }
 
-// Effects lists the tenant's effects, newest first; bodies older than 30 days are dropped.
 func (t *Tenant) Effects(now time.Time) []platform.Effect {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
@@ -204,12 +188,11 @@ func (t *Tenant) Effects(now time.Time) []platform.Effect {
 	return out
 }
 
-// EndpointView is an endpoint with how its effects stand.
 type EndpointView struct {
 	Endpoint
 	Pending  int    `json:"pending"`
-	Failing  int    `json:"failing"` // consecutive failed attempts of its head
-	Health   string `json:"health"`  // ok, failing, secret missing
+	Failing  int    `json:"failing"`
+	Health   string `json:"health"`
 	Delivers int    `json:"delivered"`
 }
 
@@ -239,8 +222,6 @@ func (t *Tenant) Endpoints() []EndpointView {
 	return out
 }
 
-// secret looks a secret up by name (D5): a file in $PLATFORM_SECRETS_DIR, or
-// the variable PLATFORM_SECRET_<NAME>. Tests set Tenant.Secrets instead.
 func (t *Tenant) secret(name string) ([]byte, bool) {
 	if t.Secrets != nil {
 		return t.Secrets(name)
@@ -254,14 +235,8 @@ func (t *Tenant) secret(name string) ([]byte, bool) {
 	return []byte(v), ok && v != ""
 }
 
-// Dispatch makes the attempts that are due at now: the head of each endpoint's
-// effects (ordered per endpoint, D2). It sends outside every lock and journals
-// each outcome. The host calls it every second; it is never called in replay.
 func (t *Tenant) Dispatch(now time.Time) { integrations.OnLane(t.dispatches(now)) }
 
-// dispatches are the attempts due at now, to run on the I/O lane: endpoints
-// side by side, each in its order; an endpoint whose breaker is open waits,
-// spending no attempts.
 func (t *Tenant) dispatches(now time.Time) []func() {
 	if t.businessStopped() {
 		return nil
@@ -278,13 +253,10 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		return nil
 	}
 	t.opsMu.Lock()
-	// Apps' model requests go to the built-in model destination;
-	// the model door keeps each provider's own breaker.
 	for _, ep := range append(append(slices.Clone(t.endpoints), t.connectionEndpoints()...), booksEndpoint(), &Endpoint{ID: acceptedformat.ModelEndpoint, Kind: acceptedformat.ModelEndpoint}) {
 		if ep.Kind != acceptedformat.ModelEndpoint && !t.breakers.Allow("endpoint:"+ep.ID, now, true) {
 			continue
 		}
-		// A held effect waits for its approval outside the endpoint's order.
 		i := slices.IndexFunc(t.outbound, func(x *effect) bool {
 			return x.Endpoint == ep.ID && !platform.EffectSettled(x.State) && x.State != "held"
 		})
@@ -314,7 +286,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			outcome, usage := t.sendWithUsage(j.endpoint, j.effect, now)
 			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
 			if t.quarantined() {
-				return // an already in-flight call may have escaped; do not record its answer in damaged state
+				return
 			}
 			counted(t, "effect", j.effect.App, outcome.Result)
 			if j.endpoint.Kind != acceptedformat.ModelEndpoint {
@@ -333,8 +305,6 @@ func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (p
 	return t.send(ep, x, now), nil
 }
 
-// send makes one attempt, signed as Standard Webhooks, with the effect's ID as
-// both webhook-id and Idempotency-Key.
 func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
 	if ep.Kind == acceptedformat.ModelEndpoint {
 		out, _ := t.sendModel(x, now)
@@ -404,14 +374,10 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 
 var errPrivate = fmt.Errorf("private address refused")
 
-// guarded sends with a dialer that refuses private, loopback and link-local
-// addresses at connect time (after DNS, so a rebinding name cannot slip through).
 func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 	dialer := guardedDialer(allowPrivate)
 	client := &http.Client{Timeout: effectTimeout, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	// Client.Timeout covers reading the body too. Cancelling a derived context
-	// here would close a streamed response before its caller can read it.
 	response, err := client.Do(req)
 	return controlowner.RedactCredentialFailure(response, req), err
 }
@@ -427,7 +393,6 @@ func guardedDialer(allowPrivate bool) *net.Dialer {
 	}}
 }
 
-// settle journals an attempt's outcome, then applies it.
 func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 	t.settleWithUsage(effect, o, nil, now)
 }
@@ -458,8 +423,6 @@ func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platf
 	t.settleAccepted(effect, o, usage, now)
 }
 
-// apply records an outcome on its effect and, once the effect is settled, tells
-// the app that emitted it; replay calls it with the journaled outcome.
 func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	x, ok := t.mark(o, at)
 	if !ok {
@@ -469,8 +432,6 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
 	}
 	if x.Endpoint == acceptedformat.ModelEndpoint {
-		// Legacy journals contain the separate model reply submission. Recovery
-		// updates only the effect here and reads that saved reply later.
 		return true
 	}
 	if x.App != "" && platform.EffectSettled(x.State) && x.State != "discarded" {
@@ -478,7 +439,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 			a.Answer(t.automation(x.App, replaying), x, o, at)
 			t.enqueue(at)
 		}
-		if t.agents != nil { // an agent that sent it waits for the answer
+		if t.agents != nil {
 			t.agents.AgentEffectEnded(t.automation(platform.AgentApp, replaying), nil, x, o, at)
 			t.enqueue(at)
 		}
@@ -486,14 +447,12 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	return true
 }
 
-// told tells the app that emitted an effect that it was discarded, inside the
-// decision that discarded it, so a replay tells it again (F-24).
 func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
 	if t.controlAnswer != nil {
 		t.controlAnswer(x, o, now)
 		return
 	}
-	if x.Endpoint == acceptedformat.ModelEndpoint { // a model request answers its app's reply action, refused
+	if x.Endpoint == acceptedformat.ModelEndpoint {
 		return
 	}
 	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
@@ -518,7 +477,6 @@ func markEffect(x *effect, o platform.Outcome, at time.Time) {
 	acceptedformat.MarkEffect(&x.Effect, x.since, o, at)
 }
 
-// decideEndpoint decides adding and removing an endpoint.
 func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -581,7 +539,7 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 	default:
 		return nil, invalid
 	}
-	for _, event := range ep.Events { // an administrator's endpoint may receive any event the tenant declares (G5)
+	for _, event := range ep.Events {
 		if _, declared := t.protocolEvent(event); t.owner["action:"+event] == nil && !declared {
 			return nil, invalid
 		}
@@ -599,7 +557,6 @@ func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Ti
 	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.endpoints = append(t.endpoints, &ep); t.opsMu.Unlock() }, nil
 }
 
-// decideEffect decides retrying, discarding and approving an effect.
 func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -616,7 +573,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 		if x == nil || x.State != "held" {
 			return nil, notFound
 		}
-		if c.Agent { // D6: a person approves what an agent caused
+		if c.Agent {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return func(r *pb.ChangeRecord) {
@@ -640,7 +597,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			held := x.State == "held"
 			x.State = "discarded"
 			t.opsMu.Unlock()
-			if held && x.Run != "" && t.agents != nil { // a person refused what the agent caused
+			if held && x.Run != "" && t.agents != nil {
 				t.agents.RecordAgentSignal(c, r, x.Run, platform.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
 			}
 			if t.agents != nil {

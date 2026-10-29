@@ -16,8 +16,6 @@ type EnterpriseElements interface {
 	Element(id string, now time.Time) (platform.ElementInfo, bool)
 }
 
-// Enterprise references resolve through the model rather than the record store.
-// Lines carry the same declaration and must not bypass its validity/type check.
 func CheckEnterpriseReferences(elements EnterpriseElements, replaying bool, fields []platform.FieldInfo, value, previous reflect.Value, now time.Time) *kernel.Error {
 	if replaying {
 		return nil
@@ -67,8 +65,6 @@ func PreviousLine(record reflect.Value, field platform.FieldInfo, current reflec
 	if !lines.IsValid() || (lines.Kind() != reflect.Slice && lines.Kind() != reflect.Array) {
 		return reflect.Value{}
 	}
-	// A line has no separate identity. Match its reference fields once, allowing
-	// reorder or edits to other columns without allowing another retired use.
 	for i := 0; i < lines.Len(); i++ {
 		if used[i] {
 			continue
@@ -88,15 +84,12 @@ func PreviousLine(record reflect.Value, field platform.FieldInfo, current reflec
 	return reflect.Value{}
 }
 
-// RefPath is one declared enterprise reference and where it sits.
 type RefPath struct {
 	Path       string
 	Title      string
 	Stereotype string
 }
 
-// DeclaresEnterpriseRef reports whether a type names enterprise elements, at
-// any depth.
 func DeclaresEnterpriseRef(fields []platform.FieldInfo) bool {
 	for _, f := range fields {
 		if len(f.Fields) > 0 && DeclaresEnterpriseRef(f.Fields) {
@@ -109,8 +102,6 @@ func DeclaresEnterpriseRef(fields []platform.FieldInfo) bool {
 	return false
 }
 
-// MatchingRefs are the declared references through which the record names the
-// element; a "lines" field is descended into, and its path is dotted.
 func MatchingRefs(fields []platform.FieldInfo, prefix string, v reflect.Value, element string, roles []string) []RefPath {
 	return MatchingRefsWithAccess(fields, prefix, v, element, roles, false)
 }
@@ -145,7 +136,6 @@ func MatchingRefsWithAccess(fields []platform.FieldInfo, prefix string, v reflec
 	return out
 }
 
-// FieldValue reads a field, dereferencing the pointers on the way.
 func FieldValue(v reflect.Value, index []int) reflect.Value {
 	for _, at := range index {
 		for v.Kind() == reflect.Pointer {
@@ -168,8 +158,6 @@ func FieldValue(v reflect.Value, index []int) reflect.Value {
 	return v
 }
 
-// ReferenceValue is a reference field's id: a plain string, or a reference
-// type that names its target.
 func ReferenceValue(v reflect.Value) (string, bool) {
 	if !v.IsValid() {
 		return "", false
@@ -183,8 +171,6 @@ func ReferenceValue(v reflect.Value) (string, bool) {
 	return "", false
 }
 
-// RecordLabel is the words a person recognises a record by: its first
-// searchable text, else its id.
 func RecordLabel(info platform.EntityInfo, value any, id string) string {
 	v := reflect.ValueOf(value)
 	for v.IsValid() && v.Kind() == reflect.Pointer {
@@ -208,9 +194,6 @@ func RecordLabel(info platform.EntityInfo, value any, id string) string {
 	return id
 }
 
-// KnowledgeBearing says a record of this type may become a knowledge passage:
-// a knowledge field of its own, the knowledge app's document, or a file that
-// may be attached to either. The index re-cuts only these.
 func KnowledgeBearing(info platform.EntityInfo) bool {
 	return info.Type == platform.KnowledgeDocumentType || info.Type == platform.FileType || info.KnowledgeFiles ||
 		slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge })
@@ -218,8 +201,6 @@ func KnowledgeBearing(info platform.EntityInfo) bool {
 
 type RecordLookup interface{ HasRecord(typ, id string) bool }
 
-// Request schemas check presence. A stored zero or false remains a provided
-// scalar value; nil pointers and empty text still have their ordinary meaning.
 func requiredEmpty(value reflect.Value) bool {
 	switch value.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -232,7 +213,6 @@ func requiredEmpty(value reflect.Value) bool {
 
 func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup) ([]platform.FieldIssue, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	// A conditional field (FieldInfo.When) follows its condition's value.
 	stringOf := func(name string) string {
 		i := slices.IndexFunc(info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
 		if i < 0 {
@@ -250,8 +230,6 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 		}
 		return cv.String()
 	}
-	// Check the resulting record too: a partial edit must not bypass a
-	// declared relationship by omitting its unchanged endpoint.
 	if !replaying && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Constraints != nil }) {
 		raw, marshalErr := json.Marshal(entity)
 		if marshalErr != nil {
@@ -266,7 +244,6 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			if f.When != nil && !f.Active(stringOf) {
 				continue
 			}
-			// omitempty is a transport detail; a stored zero or false is a value.
 			if _, present := values[f.Name]; !present {
 				raw, err := json.Marshal(v.FieldByIndex(f.Index).Interface())
 				if err != nil {
@@ -316,7 +293,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			}
 		}
 		if l := info.Lifecycle; l != nil && f.Name == l.Field && !fv.IsZero() && !slices.ContainsFunc(l.States, func(st platform.State) bool { return st.Name == fv.String() }) {
-			return nil, invalid // not a state of the lifecycle
+			return nil, invalid
 		}
 		switch f.Type {
 		case "":
@@ -342,7 +319,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			}
 		case "reference", "references":
 			if f.Ref == "enterprise.element" {
-				continue // checked through the directory, including nested lines
+				continue
 			}
 			ids := []string{fv.String()}
 			if f.Type == "references" {
@@ -361,7 +338,6 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 	return nil, nil
 }
 
-// Copy is a deep copy of an entity struct, through its JSON.
 func Copy(t reflect.Type, v any) reflect.Value {
 	raw, _ := json.Marshal(v)
 	out := reflect.New(t).Elem()
@@ -369,17 +345,11 @@ func Copy(t reflect.Type, v any) reflect.Value {
 	return out
 }
 
-// EmptyLists makes every nil list of a record an empty one, nested ones too,
-// so a record never reads null where its type says a list: a page reading
-// levels[level] or start.join got null from a Go nil slice (the owner's
-// testing, 2026-09-27). Optional lists keep their declared omission semantics.
 func EmptyLists(v reflect.Value) {
 	switch v.Kind() {
 	case reflect.Struct:
 		switch v.Interface().(type) {
 		case time.Time, platform.ReleaseAsset:
-			// Owner-produced immutable descriptors keep their exact contents.
-			// A record's display defaults must not change a frozen contract.
 			return
 		}
 		for i := range v.NumField() {
@@ -401,7 +371,6 @@ func EmptyLists(v reflect.Value) {
 	}
 }
 
-// Mask is a record with the hidden fields at their zero value.
 func Mask(info platform.EntityInfo, v reflect.Value, hidden []platform.FieldInfo) any {
 	c := Copy(info.Go, v.Interface())
 	for _, f := range hidden {
@@ -410,7 +379,6 @@ func Mask(info platform.EntityInfo, v reflect.Value, hidden []platform.FieldInfo
 	return c.Interface()
 }
 
-// MaskHistory drops the hidden fields from a record's changes.
 func MaskHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange {
 	if len(hidden) == 0 {
 		return h

@@ -1,13 +1,9 @@
-// The Applications portal, after Foundry's: every application
-// this member may open, by category, searchable, starrable. It reads the apps
-// the shell was given, so an application handed over while it is open shows up.
 import { useHost } from "@platform/app";
 import { Button, Input, PageHeader, useWorkspace, t, type PlatformApplication } from "@platform/ui";
 import { Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { categories, projections, type Projection } from "./registry";
 
-/** One application tile: icon, title, description, the member's role in it, and a star. */
 export function ApplicationTile({ app, role, compact = false }: { app: PlatformApplication; role?: string; compact?: boolean }) {
   const { applications, favorites, toggleFavorite } = useWorkspace();
   const starred = favorites.includes(app.id);

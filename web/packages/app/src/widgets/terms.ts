@@ -1,7 +1,6 @@
 import {pageUIManifest} from "../pageui/manifest";
 
 import type {AggregateData,TermCount} from "@platform/ui";
-/** Refuse malformed or duplicate groups; ties retain original host group order. */
 export function termCounts(data:AggregateData,field:string,preserveOrder=false):TermCount[]|undefined {
  if(field==="count"||!data||data.columns?.length!==2||data.columns[0]?.name!==field||data.columns[0]?.kind!=="group"||data.columns[0]?.type!=="nominal"||data.columns[1]?.name!=="count"||data.columns[1]?.kind!=="measure"||data.columns[1]?.type!=="quantitative"||data.columns.some(c=>c.money)||!Array.isArray(data.rows)||data.rows.length>pageUIManifest.runtime.terms.maxGroups)return;
  const seen=new Set<string>(),terms:TermCount[]=[];

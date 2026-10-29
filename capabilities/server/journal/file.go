@@ -17,18 +17,6 @@ import (
 	"time"
 )
 
-// File is a host's journals in one local directory, with no database
-// journal.jsonl holds every tenant's entries, one line each;
-// snapshots/ holds each tenant's checkpoints; derived/ holds what is kept
-// outside the journal, the passage vectors and the model-call transcripts.
-//
-// The semantics are the PostgreSQL journal's: entries are numbered per tenant
-// and read in order, an append expects the position it read, an accepted result
-// is committed once under its idempotency key, and a second writer that has not
-// read the entries fails instead of interleaving. An append is one fsynced line
-// before it is reported, so a crash loses no accepted decision; a lone box has a
-// single writer, and the whole file is read at start-up (a lightweight host's
-// journal is its state, not a data warehouse).
 type File struct {
 	dir      string
 	identify Identify
@@ -36,15 +24,14 @@ type File struct {
 
 	mu          sync.Mutex
 	locks       map[string]*sync.Mutex
-	entries     map[string][]Entry           // tenant → entries in order
-	next        map[string]int64             // tenant → the sequence the next append takes
-	results     map[string]map[string]string // tenant → "app|scope|key" → request hash
-	writeFault  error                        // an incomplete/unsynced shared append requires reopening
+	entries     map[string][]Entry
+	next        map[string]int64
+	results     map[string]map[string]string
+	writeFault  error
 	vectors     map[string]map[string][]float32
 	transcripts []Transcript
 }
 
-// fileLine is one journal entry on disk, with the tenant it belongs to.
 type fileLine struct {
 	Tenant string `json:"tenant"`
 	Seq    int64  `json:"seq"`
@@ -55,7 +42,7 @@ type vectorLine struct {
 	Tenant string `json:"tenant"`
 	Model  string `json:"model"`
 	Hash   string `json:"hash"`
-	Vector []byte `json:"vector,omitempty"` // float32 bytes, as PostgreSQL keeps them
+	Vector []byte `json:"vector,omitempty"`
 }
 
 type transcriptLine struct {
@@ -63,9 +50,6 @@ type transcriptLine struct {
 	Transcript
 }
 
-// OpenFileJournal reads the directory's journal, or starts an empty one. The
-// journal file must be readable and monotonic per tenant; anything else is an
-// error, and the host does not start on state it could not load (fail-stop).
 func OpenFile(dir string, identify Identify) (*File, error) {
 	for _, sub := range []string{"", "snapshots", "derived"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o700); err != nil {
@@ -93,8 +77,6 @@ func OpenFile(dir string, identify Identify) (*File, error) {
 
 func (j *File) entriesPath() string { return filepath.Join(j.dir, "journal.jsonl") }
 
-// loadEntries reads the whole journal: one line per entry, in append order,
-// with each tenant's sequence checked as it goes.
 func (j *File) loadEntries() error {
 	file, err := os.Open(j.entriesPath())
 	if os.IsNotExist(err) {
@@ -105,7 +87,7 @@ func (j *File) loadEntries() error {
 	}
 	defer file.Close()
 	lines := bufio.NewScanner(file)
-	lines.Buffer(make([]byte, 0, 1<<20), 64<<20) // a longtext record is a big line, not a broken one
+	lines.Buffer(make([]byte, 0, 1<<20), 64<<20)
 	number := 0
 	for lines.Scan() {
 		number++
@@ -137,7 +119,6 @@ func (j *File) loadEntries() error {
 	return nil
 }
 
-// index remembers an accepted result's identity, so its key commits once.
 func (j *File) index(tenant, app, scope, key, hash string) {
 	if j.results[tenant] == nil {
 		j.results[tenant] = map[string]string{}
@@ -199,8 +180,6 @@ func (j *File) lock(tenant string) *sync.Mutex {
 	return lock
 }
 
-// Entries reads a tenant's entries after position after (0: all), as the
-// PostgreSQL journal does, and sets where its next append goes.
 func (j *File) Entries(_ context.Context, tenant string, after int64) ([]Entry, error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -213,15 +192,12 @@ func (j *File) Entries(_ context.Context, tenant string, after int64) ([]Entry, 
 	return out, nil
 }
 
-// Position is the number of the tenant's last entry.
 func (j *File) Position(tenant string) int64 {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	return j.next[tenant] - 1
 }
 
-// Append adds one entry to a tenant's journal, as a line that is on disk before
-// it is reported: a decision the host told someone it took survives a crash.
 func (j *File) Append(_ context.Context, tenant string, e Entry) error {
 	lock := j.lock(tenant)
 	lock.Lock()
@@ -229,8 +205,6 @@ func (j *File) Append(_ context.Context, tenant string, e Entry) error {
 	return j.appendLocked(tenant, e)
 }
 
-// appendLocked writes one line and brings the in-memory journal forward; the
-// tenant's lock is held by the caller.
 func (j *File) appendLocked(tenant string, e Entry) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -257,10 +231,6 @@ func (j *File) appendLocked(tenant string, e Entry) error {
 		j.writeFault = fmt.Errorf("%w: sync journal append: %v", ErrCommitUnknown, err)
 		return j.writeFault
 	}
-	// What a later read returns is what the line holds: the bytes the encoder
-	// wrote, read back the way a restart reads them, so live and replayed state
-	// are the same (the PostgreSQL journal returns its stored bytes for the
-	// same reason).
 	var stored fileLine
 	if err := json.Unmarshal(raw, &stored); err != nil {
 		return fmt.Errorf("%w: decode committed entry: %v", ErrCommitUnknown, err)
@@ -276,10 +246,6 @@ func (j *File) appendLocked(tenant string, e Entry) error {
 	return nil
 }
 
-// AppendAccepted commits one accepted result under its idempotency key: the
-// same key and request returns the committed result; the same key with another
-// request is a conflict. The check and the append hold the tenant's lock, so
-// two writers cannot both commit.
 func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
 	identity, err := j.identify(e.Body)
 	if err != nil || e.Kind != "accepted-result" || identity.Tenant != tenant || identity.App != e.App || identity.Key != key {
@@ -309,7 +275,6 @@ func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, ha
 	return j.findAccepted(tenant, identity.App, identity.Scope, key), nil
 }
 
-// findAccepted is the committed body of a key, as the journal holds it.
 func (j *File) findAccepted(tenant, app, scope, key string) []byte {
 	for i := len(j.entries[tenant]) - 1; i >= 0; i-- {
 		e := j.entries[tenant][i]
@@ -324,8 +289,6 @@ func (j *File) findAccepted(tenant, app, scope, key string) []byte {
 	return nil
 }
 
-// SaveSnapshot keeps a tenant's state at a position, compressed, under its
-// compatibility key; legacy callers use a code digest. The two newest are kept.
 func (j *File) SaveSnapshot(_ context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -338,8 +301,6 @@ func (j *File) SaveSnapshot(_ context.Context, tenant string, seq int64, code st
 	return j.keepTwoSnapshots(tenant)
 }
 
-// RepairSnapshot replaces this tenant's checkpoints with one, after the whole
-// journal was validated and a fresh state captured.
 func (j *File) RepairSnapshot(_ context.Context, tenant string, seq int64, code string, state []byte) error {
 	packed, err := packSnapshot(state)
 	if err != nil {
@@ -353,7 +314,6 @@ func (j *File) RepairSnapshot(_ context.Context, tenant string, seq int64, code 
 	return WriteFileAtomic(filepath.Join(j.dir, "snapshots", snapshotName(tenant, seq, code)), packed)
 }
 
-// Snapshot is the tenant's newest checkpoint matching the compatibility key.
 func (j *File) Snapshot(_ context.Context, tenant, code string) (int64, []byte, bool, error) {
 	names := j.snapshotsOf(tenant)
 	for i := len(names) - 1; i >= 0; i-- {
@@ -400,8 +360,6 @@ func (j *File) keepTwoSnapshots(tenant string) error {
 	return nil
 }
 
-// saveName keeps a tenant's name usable as a file name: a tenant id never
-// leaves the directory, and a name that would is refused.
 func saveName(tenant string) string {
 	name := strings.Map(func(r rune) rune {
 		switch {
@@ -436,8 +394,6 @@ func snapshotOrder(name string) int64 {
 	return seq
 }
 
-// WriteFileAtomic writes bytes where a reader sees either the old file or the
-// new one, never half of either.
 func WriteFileAtomic(path string, data []byte) error {
 	tmp := path + ".tmp"
 	file, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
@@ -473,9 +429,6 @@ func (j *File) Close() {
 		j.file.Close()
 	}
 }
-
-// The derived data: passage vectors and model-call transcripts, kept beside the
-// journal. Losing either loses no truth, so a failure is logged.
 
 func (j *File) putVector(tenant, model, hash string, vector []float32) {
 	key := tenant + "|" + model
@@ -565,8 +518,6 @@ func (j *File) PurgeTranscripts(tenant string, before time.Time) {
 		kept = append(kept, x)
 	}
 	j.transcripts = kept
-	// The file is rewritten from what is kept; losing a transcript loses no
-	// truth, so the journal itself is untouched.
 	var out []byte
 	for _, x := range kept {
 		raw, err := json.Marshal(transcriptLine{Tenant: x.Tenant, Transcript: x})

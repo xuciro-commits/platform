@@ -1,6 +1,3 @@
-// The application a studio editor was opened from (M2): the
-// editor keeps the application in scope, so the way back and the asset's
-// membership stay visible without rebuilding the asset or its route.
 import { createContext, useContext, type ReactNode } from "react";
 import { Button, Select, t, useWorkspace, type Route } from "@platform/ui";
 import { useDependencies, useHost } from "@platform/app";
@@ -12,7 +9,6 @@ import { assetRoute, studioAreaForRoute, studioAreaKinds, studioContext, studioR
 const Scope = createContext<string | undefined>(undefined);
 const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "agent", "code", "link-type", "property-type", "decision-table", "alert", "connection", "data-source", "dataset", "pipeline", "writeback", "match", "integration-health", "observation-source", "observations", "studio-templates", "evaluation-set", "test-plan", "sample-set", "release-review", "changes", "release-history", "application-runs", "application-overview"]);
 
-/** Everything a view renders inside carries the application it belongs to. */
 export function ApplicationScope({ application, route, children }: { application?: string; route?: Route; children: ReactNode }) {
   if (!application) return <>{children}</>;
   return <Scope.Provider value={application}>{route && route.view !== "project" && <ApplicationContextBar application={application} route={route} />}{children}</Scope.Provider>;
@@ -37,13 +33,10 @@ function ApplicationContextBar({ application, route }: { application: string; ro
   </div>;
 }
 
-/** The application id in scope, when the editor was opened from one. */
 export function useApplicationScope(): string | undefined {
   return useContext(Scope);
 }
 
-/** Studio task transitions retain the construction context; business routes
- * continue to use the delivered Application identity and original renderer. */
 export function useApplicationWorkspace() {
   const workspace = useWorkspace();
   const application = useApplicationScope();

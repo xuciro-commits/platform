@@ -13,7 +13,6 @@ import (
 	"platformserver/platform"
 )
 
-// routesAI serves model calls and the AI catalog.
 func (h *Host) routesAI(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/ai/training/export", Summary: "Export a fixed currently qualified SFT or DPO dataset without external calls", Answer: platform.AITrainingExport{}, Query: []transport.Param{{Name: "format", Description: "sft or dpo"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		answer, refusal := recordRead(t, context.Background(), func() (platform.AITrainingExport, *kernel.Error) {
@@ -65,13 +64,11 @@ func (h *Host) routesAI(rt *routes) {
 				chat = t.DesignChat
 			}
 			var req platform.ChatRequest
-			// A chat body carries a conversation and its tool declarations; the
-			// platform bounds it like every other request body (review AI-03).
 			if json.NewDecoder(http.MaxBytesReader(w, r.Body, chatMaxBytes)).Decode(&req) != nil {
 				Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 				return
 			}
-			if req.Stream { // server-sent events: delta, then done or error
+			if req.Stream {
 				flusher, _ := w.(http.Flusher)
 				started := false
 				event := func(name string, v any) {

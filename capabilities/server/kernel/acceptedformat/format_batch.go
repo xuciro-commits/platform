@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-// Batch preserves one top-level input and all its nested decisions.
-// Before validates predecessor images/history before authoritative application.
 type Batch struct {
 	Unique         []journal.StateUnique          `json:"unique,omitempty"`
 	Business       []platform.BusinessRefusalFact `json:"business,omitempty"`
@@ -28,8 +26,8 @@ type Batch struct {
 	At             time.Time                      `json:"at"`
 	RequestHash    string                         `json:"requestHash"`
 	Digest         string                         `json:"digest"`
-	Receipt        json.RawMessage                `json:"receipt"`              // top-level answer/key
-	Submission     json.RawMessage                `json:"submission,omitempty"` // original input, when answer is an approval receipt
+	Receipt        json.RawMessage                `json:"receipt"`
+	Submission     json.RawMessage                `json:"submission,omitempty"`
 	Rows           []BatchRow                     `json:"rows"`
 	Decisions      []Decision                     `json:"decisions"`
 	Sequences      map[string]int                 `json:"sequences,omitempty"`
@@ -264,8 +262,6 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	return result, receipt, nil
 }
 
-// HasSavedAnswer distinguishes a reply to an original request from an ordinary
-// batch whose receipt already carries that request in its owner's ledger.
 func (result Batch) HasSavedAnswer(submission *pb.Submission) bool {
 	return len(result.Submission) > 0 || len(result.Business) > 0 || strings.HasPrefix(submission.GetCorrelationId(), "correction:")
 }

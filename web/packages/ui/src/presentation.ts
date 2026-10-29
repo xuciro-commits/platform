@@ -1,4 +1,3 @@
-// Primitive presentation props. The caller owns data bindings and execution.
 export type ActionParameterOptions = {
   parameter: string;
   field: string;

@@ -1,4 +1,3 @@
-// Settings: AI providers, the playground and usage.
 import { useHost, ModelPicker, ModelOptionsEditor, MemberSelect, useReadQuery as useRead } from "@platform/app";
 import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Panel, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6,10 +5,6 @@ import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { CredentialEditor } from "./credentials";
 import { modelReferenceTitle, when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
-
-// AI providers: providers and models are decisions of the ai app;
-// catalogs are read live from each provider; calls go through the host, which
-// meters them. Keys stay in the secret store; only their names appear here.
 
 
 
@@ -155,7 +150,6 @@ export function AIProviders() {
   );
 }
 
-// The playground calls an enabled model as the signed-in member, through the host.
 export function AIPlayground({initialModel=""}:{initialModel?:string}) {
   const models = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const { client } = useHost();
@@ -171,7 +165,6 @@ export function AIPlayground({initialModel=""}:{initialModel?:string}) {
   const send = async () => {
     setBusy(true);
     const messages = [...(system ? [{ role: "system", content: system }] : []), { role: "user", content: prompt }];
-    // The answer streams in as it comes; a refusal (access, a limit) comes whole.
     const turn: { prompt: string; answer?: string; error?: string; usage?: Usage } = { prompt, answer: "" };
     const show = () => setTurns([{ ...turn }, ...turns]);
     show();
@@ -277,8 +270,6 @@ export function AIUsage() {
 
 type Limit = { member: string; dailyTokens?: number; perMinute?: number };
 
-// A member's, agent's or app's own limits, for the ai app's
-// administrators: in place of the defaults in App settings → AI.
 function AILimits() {
   const { decide } = useHost();
   const limits = useRead<Limit[]>("/v1/ai-limits");

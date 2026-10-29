@@ -9,8 +9,6 @@ import (
 	"slices"
 )
 
-// Reinstall retained sources before their pin consumers. Ordinary recursive
-// data references retain their existing installation semantics.
 func businessVersionInstallOrder(objects []Object) ([]Object, error) {
 	byType := map[string]Object{}
 	for _, record := range objects {
@@ -77,9 +75,6 @@ func (b *Build) checkVersioning(o Object) error {
 	return nil
 }
 
-// The object owner declares compatibility before publication. No historical
-// definition is rewritten; old publications without this metadata contribute
-// their original version-1 identity when their next version is published.
 func (b *Build) captureObjectSchema(object *Object) error {
 	portable, err := b.dispatchSchemaObject(*object)
 	if err != nil {
@@ -167,7 +162,6 @@ func checkObjectSchemas(object Object) error {
 }
 
 func compatibleObjectSchema(previous, next Object) bool {
-	// Display and publication provenance do not alter a submission contract.
 	normalize := func(object Object) Object {
 		object.Record = platform.Record{}
 		object.Title, object.Plural, object.Description = "", "", ""
@@ -220,7 +214,6 @@ func objectActions(object Object, entity platform.Entity) []platform.Action {
 	if len(object.SchemaVersions) > 0 {
 		binding = object.SchemaVersions[len(object.SchemaVersions)-1]
 	} else if body, err := objectSchemaBody(object); err == nil {
-		// Existing publications keep their bytes and original family.
 		binding.Version, _ = platform.SchemaContentVersion(body)
 		binding.Family = 1
 	}

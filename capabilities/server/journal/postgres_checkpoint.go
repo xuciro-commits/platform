@@ -16,10 +16,6 @@ func (v *postgresStateRead) Checkpoint(ctx context.Context, tenant string) (Stat
 	})
 }
 
-// stateCheckpoint streams fixed SQL snapshot components in a specified order.
-// Length framing preserves exact stored bytes without retaining the record set.
-// The optional position selects the original checkpoint archive, never filters
-// newer current rows to pretend they form an older state.
 func stateCheckpoint(ctx context.Context, db stateQueries, tenant string, snapshot *int64) (StateDigest, error) {
 	suffix, args := "", []any{tenant}
 	tables := [3]string{"runtime_records", "runtime_unique", "runtime_values"}

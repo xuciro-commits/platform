@@ -14,22 +14,17 @@ import (
 	"time"
 )
 
-// A Row and its nested values are immutable once stored. Writers replace it;
-// readers that expose editable values copy them at the API boundary.
 type Row struct {
-	Value         reflect.Value // the entity struct, a private copy
+	Value         reflect.Value
 	HistoryParent *Row
 	HistoryHead   string
 	Format        string
 	History       []RecordChange
 	LoadHistory   func(int) []RecordChange
 	HistoryCount  int
-	// Recovery bytes preserve an accepted predecessor's identity when typed
-	// decoding normalises its definition. The next mutation writes only the
-	// current format; these bytes have no writable or executable API.
-	Original   json.RawMessage
-	Projection *Projection
-	Extraction *Extraction
+	Original      json.RawMessage
+	Projection    *Projection
+	Extraction    *Extraction
 }
 
 type Extraction struct {
@@ -38,8 +33,6 @@ type Extraction struct {
 	Step      int    `json:"step"`
 }
 
-// A migration retains the source release's read image while its target facts
-// are accepted in batches. Only that exact shape can select this projection.
 type Projection struct {
 	Format string          `json:"format,omitempty"`
 	From   string          `json:"from"`
@@ -74,8 +67,6 @@ func ProjectionFor(p *Projection, release string) *Projection {
 	return nil
 }
 
-// Source values remain facts of their release. Only the common record header
-// follows subsequent accepted writes, so every image names the same record.
 func RefreshProjection(p *Projection, value any) error {
 	if p == nil {
 		return nil
@@ -157,7 +148,6 @@ func (r *Row) RetainOriginal(raw json.RawMessage) {
 	}
 }
 
-// RecordChange is one decision's change to a record: the fields it set.
 type RecordChange struct {
 	Change string        `json:"change"`
 	Schema string        `json:"schema"`
@@ -231,8 +221,6 @@ func (r *Row) HistoryAfter(start int) []RecordChange {
 	if start >= base {
 		return r.History[start-base:]
 	}
-	// Walk immutable suffix segments once. Recursively concatenating prefixes
-	// would copy a long in-memory history again at every retained revision.
 	out := make([]RecordChange, 0, r.HistoryLength()-start)
 	var suffixes [][]RecordChange
 	for r.HistoryParent != nil && start < r.HistoryParent.HistoryLength() {
@@ -252,8 +240,6 @@ func (r *Row) HistoryAfter(start int) []RecordChange {
 	return out
 }
 
-// HistoryRef names an immutable prefix and this result's appended head.
-// Format 1 hashes canonical JSON with an explicit domain and position.
 type HistoryRef struct {
 	Version int    `json:"version"`
 	Base    int    `json:"base"`
@@ -403,9 +389,6 @@ func ImageAlreadyApplied(prior *Row, image Image) bool {
 	return err == nil && err2 == nil && a == b
 }
 
-// DecodeFormattedImage keeps publication projections and owner record formats
-// separate. Selecting an older release selects that projection's saved format;
-// the model owner alone describes how that format becomes its current model.
 func DecodeFormattedImage(info platform.EntityInfo, value json.RawMessage, projection *Projection, release, format string) (json.RawMessage, error) {
 	decoded, err := DecodeImage(info, value, projection, release)
 	if err != nil {
@@ -423,9 +406,6 @@ func DecodeFormattedImage(info platform.EntityInfo, value json.RawMessage, proje
 	return platform.DecodeRecordImage(info, format, decoded)
 }
 
-// PruneImage keeps the fields a declaration still has. A type declared again
-// may have fewer fields than the rows it carries: the removed ones are left
-// out of the current value, and the record identity is kept as it was.
 func PruneImage(info platform.EntityInfo, raw json.RawMessage) (json.RawMessage, error) {
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil {
@@ -445,10 +425,6 @@ func PruneImage(info platform.EntityInfo, raw json.RawMessage) (json.RawMessage,
 
 func rowJSON(value any) json.RawMessage { raw, _ := json.Marshal(value); return raw }
 
-// Index is an immutable AVL index. Copying it creates
-// a snapshot; a write replaces only the search path. It has no parent/delta
-// chain to lengthen reads as decisions accumulate, and is never persisted.
-// Values are immutable once published in the index.
 type Index[V any] struct{ root *indexNode[V] }
 
 type Entry[V any] struct {
@@ -456,9 +432,6 @@ type Entry[V any] struct {
 	Value V
 }
 
-// Complete images own this temporary slice. Sorting by record ID also accepts
-// historical snapshots whose JSON image order differs from their ID order.
-// Each node is allocated once, without retaining intermediate insertion roots.
 func From[V any](entries []Entry[V]) (Index[V], error) {
 	slices.SortFunc(entries, func(a, b Entry[V]) int { return strings.Compare(a.Key, b.Key) })
 	for i, entry := range entries {
@@ -606,7 +579,6 @@ func (s Index[V]) All() iter.Seq2[string, V] {
 	}
 }
 
-// after skips entire index branches preceding an ID page.
 func (s Index[V]) after(key string) iter.Seq2[string, V] {
 	return func(yield func(string, V) bool) {
 		var walk func(*indexNode[V]) bool
@@ -647,8 +619,6 @@ func (r *RecentChanges) Remember(change, ref string) {
 	}
 }
 
-// Reference is one source record's derived reference and archive status.
-// Field extraction and the meaning of the reference remain with the owner.
 type Reference struct {
 	ID, Target string
 	Active     bool
@@ -659,12 +629,8 @@ type Bucket struct {
 	Active int
 }
 
-// References keeps immutable target buckets. Copying it retains an independent
-// snapshot; replacement copies only the affected buckets and index paths.
 type References struct{ targets Index[Bucket] }
 
-// ReferencesFrom builds a complete image without retaining insertion roots.
-// The caller owns the temporary input, just as with From.
 func ReferencesFrom(entries []Reference) (References, error) {
 	groups := map[string]*struct {
 		ids    []Entry[bool]
@@ -703,8 +669,6 @@ func (r References) Get(target string) Bucket { return r.targets.Get(target) }
 
 func (r References) All() iter.Seq2[string, Bucket] { return r.targets.All() }
 
-// Replace receives the owner's previous and new targets. Buckets already own
-// the old active status, so no second source-to-target index is maintained.
 func (r *References) Replace(id, before, after string, active bool) {
 	if before == after && (before == "" || r.targets.Get(before).IDs.Get(id) == active) {
 		return
@@ -731,9 +695,6 @@ func (r *References) Replace(id, before, after string, active bool) {
 	}
 }
 
-// A rule index uses the same persistent AVL tree as records and references.
-// Buckets retain every occupant, including old duplicate/archived rows; a
-// derived index must not silently repair historical business data.
 type UniqueIndex struct {
 	Rule platform.Constraint
 	Keys Index[Index[bool]]
@@ -763,15 +724,11 @@ func (index *UniqueIndex) Replace(id, key string) {
 	}
 }
 
-// DerivedIndexes owns the disposable indexes over one immutable type image.
-// Forks share immutable roots and replace only the paths changed by a write.
 type DerivedIndexes struct {
 	references map[string]References
 	unique     map[string]UniqueIndex
 }
 
-// IndexImage supplies the installed type and its original fixed read scope.
-// Index lookup never grants access to the tenant or to another write path.
 type IndexImage struct {
 	Info               platform.EntityInfo
 	Rows               Rows
@@ -789,8 +746,6 @@ func (i *DerivedIndexes) ResetUnique()                        { i.unique = nil }
 func (i DerivedIndexes) Counts() (references, unique int)     { return len(i.references), len(i.unique) }
 func (i DerivedIndexes) CachedUnique(name string) UniqueIndex { return i.unique[name] }
 
-// The schema owner extracts primitive references; the records component owns
-// their immutable buckets, archive counts and incremental replacement rules.
 func (i *DerivedIndexes) References(image IndexImage, field platform.FieldInfo) References {
 	if index, exists := i.references[field.Name]; exists {
 		return index
@@ -804,7 +759,7 @@ func (i *DerivedIndexes) References(image IndexImage, field platform.FieldInfo) 
 	}
 	index, err := ReferencesFrom(entries)
 	if err != nil {
-		panic(err) // The installed record index already guarantees unique IDs.
+		panic(err)
 	}
 	if !image.Rows.Sourced() && i.references == nil {
 		i.references = map[string]References{}
@@ -815,8 +770,6 @@ func (i *DerivedIndexes) References(image IndexImage, field platform.FieldInfo) 
 	return index
 }
 
-// referenceBucket loads only actual matches in SQL mode. The immutable memory
-// mode keeps its incremental buckets; SQL mode keeps no second resident index.
 func (i *DerivedIndexes) ReferenceBucket(image IndexImage, field platform.FieldInfo, target string) Bucket {
 	if !image.Rows.Sourced() || image.RetainedProjection {
 		return i.References(image, field).Get(target)
@@ -903,8 +856,6 @@ func IndexedCandidates(image IndexImage, lookup ImageLookup, q platform.Query) (
 		if !ok || info.Type != "reference" || info.Ref == "" || info.Inverse == "" || target == "" {
 			continue
 		}
-		// Permission masking can make a temporary type view. The original source
-		// owns its cache; the field above must still be readable in that view.
 		source, ok := lookup(image.Info.Type)
 		if !ok {
 			continue
@@ -989,8 +940,6 @@ func (i *DerivedIndexes) Unique(image IndexImage, lookup ImageLookup, rule platf
 	return index
 }
 
-// Construct reference roots alongside the initial unique-key image, rather
-// than discovering a complete child table during the first parent edit.
 func prepareUniqueScopeReferences(lookup ImageLookup, info platform.EntityInfo, rule platform.Constraint) {
 	if rule.Scope == "" || rule.Scope == "tenant" {
 		return
@@ -1013,9 +962,6 @@ func prepareUniqueScopeReferences(lookup ImageLookup, info platform.EntityInfo, 
 	}
 }
 
-// scopeDependents traverses only reference buckets whose declaration is part
-// of this rule's scope. A change to an intermediate parent never scans the
-// child table, including when multiple scope segments use the same type.
 func ScopeDependents(lookup ImageLookup, info platform.EntityInfo, rule platform.Constraint, changedType, changedID string) Index[bool] {
 	var out Index[bool]
 	if rule.Scope == "" || rule.Scope == "tenant" {
@@ -1040,8 +986,6 @@ func ScopeDependents(lookup ImageLookup, info platform.EntityInfo, rule platform
 			break
 		}
 		edges = append(edges, edge{current, field})
-		// The final reference contributes its identity, not its contents. Editing
-		// its target therefore cannot change this scope's derived key.
 		if i < len(path)-1 && field.Ref == changedType {
 			var ids Index[bool]
 			ids.Set(changedID, true)
@@ -1083,10 +1027,9 @@ func ConstraintEmpty(value any) bool {
 	if v.Type() == reflect.TypeFor[time.Time]() {
 		return v.Interface().(time.Time).IsZero()
 	}
-	return false // a stored zero number or false is present
+	return false
 }
 
-// ReplaceReferences updates only reference buckets already built for this image.
 func (i *DerivedIndexes) ReplaceReferences(info platform.EntityInfo, rows Rows, id string, value *Row) {
 	previous := rows.Get(id)
 	for name, index := range i.references {

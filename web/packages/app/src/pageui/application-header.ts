@@ -1,8 +1,6 @@
 import type {Api} from "@platform/kernel";
 import {validStaticImageURL} from "@platform/ui";
 
-// Header appearance is checked where it is edited and rendered. Its page
-// references still pass the host's application and current-access checks.
 export function validApplicationHeader(header: Api.ApplicationHeader | undefined, pages: readonly string[]): boolean {
   if (!header) return true;
   if (!["horizontal", "vertical"].includes(header.variant) || header.title.length > 1024 || !header.items.length || header.items.length > 24 || header.collapsed && header.variant !== "vertical" || header.logo && !validStaticImageURL(header.logo)) return false;

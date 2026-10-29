@@ -16,9 +16,6 @@ func (t *Tenant) ownedMetadataKind(ref platform.AssetRef) bool {
 	return ok && owner.DefinitionMetadataKind(ref.Kind)
 }
 
-// ownedAssetDefinition indexes only an owner's accepted descriptor identity.
-// The original image remains the authority; no descriptor body is copied into
-// discovery, and its metadata record is retained solely for read filtering.
 func (t *Tenant) ownedAssetDefinition(plan platform.AssetInstallation) (platform.Definition, bool, error) {
 	if !t.ownedMetadataKind(plan.Ref) {
 		return platform.Definition{}, false, nil
@@ -42,9 +39,6 @@ func (t *Tenant) ownedAssetDefinition(plan platform.AssetInstallation) (platform
 	return definition, true, nil
 }
 
-// ownedAssetDefinitions is a temporary read projection over stored owner
-// publication images. Direct publication and recovery use the same index;
-// reading it never installs definitions or changes the live registry.
 func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.Definition, error) {
 	base = slices.Clone(base)
 	base = slices.DeleteFunc(base, func(definition platform.Definition) bool {
@@ -123,7 +117,7 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 			published, hasPublished := et.Info().Go.FieldByName("Published")
 			version, hasVersion := et.Info().Go.FieldByName("DefinitionVersion")
 			if !hasPublished || !hasVersion || published.Type.Kind() != reflect.String || version.Type.Kind() != reflect.Int {
-				continue // other metadata retains its original installed index
+				continue
 			}
 			if _, ok := t.app(et.Info().App).(platform.AssetLifecycleOwner); !ok {
 				continue
@@ -135,16 +129,13 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 				ordinal := row.Value.FieldByIndex(version.Index).Int()
 				raw := row.Value.FieldByIndex(published.Index).String()
 				if ordinal == 0 && raw == "" {
-					// A dataset is usable from its original create/load path, without
-					// a publish action. Project only the descriptor its owner already
-					// offers; runtime rows and other unsealed drafts stay out.
 					if typ == et.Info().App+".dataset" {
 						ref := platform.AssetRef{App: et.Info().App, Kind: platform.AssetDataset, Name: records.BusinessField(et.Info(), row.Value, "name")}
 						if asset, exists := datasets[ref]; exists {
 							datasetDefinitions = append(datasetDefinitions, platform.Definition{Ref: asset.Ref, Source: "builder", Version: asset.SourceVersion, ContractVersion: asset.ContractVersion, Requires: slices.Clone(asset.Requires), Provides: slices.Clone(asset.Provides), OwnerRecord: typ + "/" + id})
 						}
 					}
-					continue // an unpublished legacy/development configuration
+					continue
 				}
 				if ordinal < 1 || raw == "" {
 					return fmt.Errorf("owned metadata %s/%s has no valid publication", typ, id)
@@ -166,9 +157,6 @@ func (t *Tenant) ownedAssetDefinitions(base []platform.Definition) ([]platform.D
 		slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 		return out, nil
 	}
-	// Decoding accepted metadata needs only its original lifecycle owners.
-	// Building code release assets here would serialize the entire native
-	// catalogue on every discovery read, even for a single publication.
 	var owners []platform.AssetLifecycleOwner
 	for _, app := range t.liveApps() {
 		if owner, ok := app.(platform.AssetLifecycleOwner); ok {

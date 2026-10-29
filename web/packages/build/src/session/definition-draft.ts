@@ -11,7 +11,6 @@ import { declarationValue, replaceDeclaration } from "../editor/declaration";
 type DefinitionDraft = { id: string; revision: number; name: string };
 type Saved = { id: string; revision: number; reloaded?: boolean };
 
-/** One saved declaration and revision; fields and publication rules stay in their editors. */
 export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, view, empty, normalize, payload, failure, joinApplication = true, onDiscard }: {
   id: string; type: string; kind: string; view: string; empty: () => T;
   normalize?: (record: T) => T; payload: (draft: T) => unknown; failure: string;

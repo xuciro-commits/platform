@@ -4,7 +4,6 @@ import {useState} from "react";
 import {useHost,useOpenRecord,useReadQuery} from "../index";
 import {refusalCategoryName,refusalFactMessage,refusalLevelName} from "./refusal";
 
-/** Read-only projection of the existing accepted-result journal, including refused intents. */
 export function RefusalHistory({type,id}:{type:string;id:string}) {
  const [offset,setOffset]=useState(0),{source}=useHost(),open=useOpenRecord();
  const query=useReadQuery<Api.BusinessRefusalPage>(`/v1/business-refusals?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}&offset=${offset}&limit=50`);

@@ -16,7 +16,6 @@ const (
 	SettingFileMax     = "max-size-mb"
 )
 
-// File is a file attached to a record.
 type File struct {
 	Record
 	Name        string        `json:"name" field:"required,search" help:"The file's name as it was uploaded"`
@@ -34,7 +33,6 @@ const (
 	MaxImageRegionIDBytes    = 128
 )
 
-// A rectangle refers to immutable original raster bytes, in normalized image coordinates.
 type ImageRegion struct {
 	ID     string  `json:"id"`
 	Label  string  `json:"label"`
@@ -48,7 +46,6 @@ type ImageRegionsRequest struct {
 	Regions []ImageRegion `json:"regions"`
 }
 
-// Max is the largest file the tenant accepts, in bytes.
 func MaxFileSize(c Caller) int {
 	mb, err := strconv.Atoi(c.Setting(SettingFileMax))
 	if err != nil || mb <= 0 {
@@ -64,9 +61,6 @@ type FileHost interface {
 
 type AttachedFiles interface{ AttachFiles(FileHost) }
 
-// FileStore keeps file bytes outside the journal: an
-// S3-compatible object store in a deployment, memory in development. Keys are
-// "<tenant>/<sha256>", so the same bytes are kept once and a key never changes.
 type FileStore interface {
 	Put(ctx context.Context, key string, data []byte, contentType string) error
 	Get(ctx context.Context, key string) (io.ReadCloser, int64, error)
@@ -74,10 +68,6 @@ type FileStore interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// FileInventory is an optional file-owner capability. Each page is ordered by
-// key, strictly after the previous page's last key. Empty Next proves that this
-// prefix has no further objects; an unavailable inventory returns an error.
-// Inventory does not prove whether a file is referenced by accepted state.
 type FileInventory interface {
 	Inventory(context.Context, string, string, int) (FileInventoryPage, error)
 }

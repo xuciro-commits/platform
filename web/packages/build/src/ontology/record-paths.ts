@@ -1,6 +1,5 @@
 import type { EntityInfo } from "@platform/ui";
 
-/** Bounded authoring choices from declared single-record references. */
 export function recordPaths(type: string, entity: (type: string) => EntityInfo | undefined) {
   const found: { path: string[]; label: string; field: EntityInfo["fields"][number] }[] = [];
   const visit = (type: string, path: string[], labels: string[], seen: Set<string>) => {

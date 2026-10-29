@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Check the pinned kernel proofs. / 检查固定工具链下的内核证明。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 version=4.34.1
@@ -29,8 +28,6 @@ if [[ ! -f $root/$name/.verified-archive ]]; then
 fi
 [[ $(cat "$root/$name/.verified-archive") == "$digest" ]]
 export PATH="$root/$name/bin:$PATH"
-# This is an accidental-gap guard, not a sandbox for adversarial proof sources.
-# 防止意外占位或扩大可信前提；不构成对恶意证明源码的沙箱。
 if rg -n '\b(sorry|sorryAx|admit|axiom|native_decide|unsafe|implemented_by)\b' contract/lean --glob '*.lean'; then
   echo 'Unfinished proof or extra trust primitive / 未完成证明或额外可信原语' >&2
   exit 1
@@ -38,8 +35,6 @@ fi
 cd contract/lean
 lean --version
 lake build
-# Always re-elaborate the audit, including on an incremental cached build.
-# 即使增量构建命中缓存，也重新检查证明并输出其公理。
 lake env lean -DwarningAsError=true KernelProofs/Idempotency.lean | tee "$root/proof-axioms.log"
 python3 - "$root/proof-axioms.log" <<'PY'
 import pathlib, re, sys

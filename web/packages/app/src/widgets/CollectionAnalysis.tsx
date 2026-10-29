@@ -6,7 +6,6 @@ import type {VariableResult} from "../runtime/variables";
 
 type Props={config?:PageUI.PageCollectionAnalysis;object:string;info?:EntityInfo;window?:QueryWindow;source?:ChartSource;label:string;values:Record<string,VariableResult>;xVariable?:string;yVariable?:string;countVariable?:string;meanVariable?:string;onAxis?:(id:string,value:string)=>void;enabled?:boolean};
 const scalar=(v?:VariableResult)=>v?.status==="value"&&typeof v.value==="string"?v.value:undefined;
-/** Original complete statistics and authorized windows share the canonical owners. */
 export function CollectionAnalysisRenderer({config,object,info,window,source,label,values,xVariable,yVariable,countVariable,meanVariable,onAxis,enabled=true}:Props) {
  if(!config||!info)return <Panel role="alert">{t("Collection analysis fields or configuration are unavailable.")}</Panel>;
  if(config.kind==="status-bars"||config.kind==="signed-counts")return <TermCountsRenderer object={object} window={window} field={config.groupField??""} info={info} source={source} label={label} bars={config.kind==="status-bars"} steps={config.kind==="signed-counts"?config.steps:undefined}/>;

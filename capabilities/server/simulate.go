@@ -13,10 +13,6 @@ import (
 	"time"
 )
 
-// Simulate lets a member try their own action, or a builder try another member's action,
-// against the tenant's current records, without any of it being kept. Only
-// actions that take the accepted-result path can be staged; others are refused
-// rather than run for real.
 func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
 	if err := t.admits(member); err != nil {
 		return trialowner.Simulation{}, err
@@ -70,9 +66,6 @@ func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, n
 		return out, nil
 	}
 	out.Accepted = true
-	// Use the member-facing read contract on the private records, so scope,
-	// field masks and source-derived restrictions all apply to the requester.
-	// Privacy read auditing is private to this view and is discarded too.
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, identity: t.identity, apps: t.apps, appIndex: t.appIndex, owner: t.owner, records: draft.records, directory: t.directory}
 	for _, ref := range slices.Sorted(func(yield func(string) bool) {
 		for k := range draft.records.Writes() {

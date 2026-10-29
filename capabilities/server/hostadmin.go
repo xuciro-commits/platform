@@ -22,53 +22,33 @@ import (
 	"platformserver/platform/authz"
 )
 
-// The host console is the host's own management scope: it is
-// independent of every tenant's administration and never inherits a customer
-// administrator's rights. Its operators are subjects the deployment names as
-// host administrators; a route under /v1/host answers their bearer token and
-// nothing else. Four areas live here:
-//
-//	overview       host and tenants: health, quarantine, isolation, resources
-//	lifecycle      open, suspend, resume and decommission a tenant
-//	artifacts      trusted releases, candidates and their compatibility
-//	support        authorized support records, each use written to the tenant's audit
-//
-// A tenant's ordinary data stays behind its administrators: the console reads
-// the same health the tenant sees and counts, never record contents. Support
-// reads run as a member the operator is authorized for, and every use is
-// recorded in that tenant's audit.
-
-// HostTenantView is one tenant as the host console shows it.
 type HostTenantView struct {
 	ID            string    `json:"id"`
 	Quarantined   bool      `json:"quarantined,omitempty"`
 	Fault         string    `json:"fault,omitempty"`
-	Lifecycle     string    `json:"lifecycle,omitempty"` // "", "suspend" or "decommission"
+	Lifecycle     string    `json:"lifecycle,omitempty"`
 	Apps          []string  `json:"apps"`
 	Members       int       `json:"members"`
 	Audit         int       `json:"audit"`
 	ActiveRelease string    `json:"activeRelease,omitempty"`
 	Candidates    int       `json:"candidates"`
-	Support       int       `json:"support"` // open support grants
+	Support       int       `json:"support"`
 	FailedWork    int       `json:"failedWork"`
 	Connectors    int       `json:"connectors"`
 	Started       time.Time `json:"started,omitempty"`
 }
 
-// HostOverview is the console's first read.
 type HostOverview struct {
 	Now     time.Time        `json:"now"`
 	Tenants []HostTenantView `json:"tenants"`
 	Admins  int              `json:"admins"`
 }
 
-// LifecycleRequest asks the console to move one tenant's lifecycle.
 type LifecycleRequest struct {
-	Action string `json:"action"` // "suspend", "resume" or "decommission"
+	Action string `json:"action"`
 	Reason string `json:"reason,omitempty"`
 }
 
-// SupportRead is one diagnosis the console performed under a grant.
 type SupportRead struct {
 	Tenant  string                `json:"tenant"`
 	Grant   string                `json:"grant"`
@@ -78,15 +58,12 @@ type SupportRead struct {
 	Answers []SupportAnswer       `json:"answers,omitempty"`
 }
 
-// SupportAnswer is one record the support read could reach as the granted member.
 type SupportAnswer struct {
 	Read   string `json:"read"`
 	Answer any    `json:"answer,omitempty"`
 	Error  string `json:"error,omitempty"`
 }
 
-// hostAdmin authenticates the bearer token as a subject the deployment names a
-// host administrator. A tenant member is not one by being a member.
 type hostAuthorizationKey struct{}
 
 func (h *Host) hostAuthorization(subject string, authenticated bool, permission, tenant string) platform.AuthzDecision {
@@ -104,12 +81,10 @@ func hostRequestAuthorization(r *http.Request, tenant string) []acceptedformat.A
 	if !found {
 		return nil
 	}
-	evidence.Request.Tenant = tenant // target selected by the registered management route
+	evidence.Request.Tenant = tenant
 	return []acceptedformat.AuthorizationEvidence{evidence}
 }
 
-// hostRoute registers a console route: the API contract lists it, and the
-// handler runs only for a host administrator.
 func (h *Host) hostRoute(mux *http.ServeMux, route transport.Route, f func(http.ResponseWriter, *http.Request, string, *Tenant)) {
 	h.routes = append(h.routes, route)
 	mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +114,6 @@ func (h *Host) hostRoute(mux *http.ServeMux, route transport.Route, f func(http.
 	})
 }
 
-// hostConsoleRoutes registers the console's four areas.
 func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 	h.hostCompositionRoutes(mux)
 	h.tenantRoutes(mux)
@@ -225,8 +199,6 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 		})
 }
 
-// tenantView summarizes one tenant without reading its records: the same counts
-// its own console shows, plus the host lifecycle.
 func (h *Host) tenantView(t *Tenant) HostTenantView {
 	now := h.Now()
 	t.mu.Lock()
@@ -255,11 +227,6 @@ func (h *Host) tenantView(t *Tenant) HostTenantView {
 	return view
 }
 
-// promoteRoute and migrateRoute are the console's environment operations: a
-// sealed candidate moves to another tenant, or real records do. Each names the
-// support sessions that authorize reading the source and writing the target, so
-// the console acts as a member the operator was authorized for — never as a
-// customer administrator it invented.
 func (h *Host) environmentRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/promotions", Summary: "Promote a sealed release candidate from another tenant into this one, optionally activating it (host administrators)", Answer: PromotionResult{}},
 		func(w http.ResponseWriter, r *http.Request, subject string, to *Tenant) {
@@ -350,7 +317,6 @@ func (h *Host) environmentRoutes(mux *http.ServeMux) {
 		})
 }
 
-// tenantByID finds one tenant of this host.
 func (h *Host) tenantByID(id string) *Tenant {
 	for _, t := range h.currentTenants() {
 		if t.ID == id {
@@ -360,13 +326,10 @@ func (h *Host) tenantByID(id string) *Tenant {
 	return nil
 }
 
-// decodeBody reads one JSON request body of the console's own size.
 func decodeBody(r *http.Request, into any) error {
 	return decodeBodyLimit(r, into, 1<<20)
 }
 
-// Decode one complete bounded management request. LimitReader must not make
-// an oversized body or a second JSON value look like an accepted EOF.
 func decodeBodyLimit(r *http.Request, into any, limit int64) error {
 	raw, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
 	if err != nil {
@@ -386,8 +349,6 @@ func decodeBodyLimit(r *http.Request, into any, limit int64) error {
 	return nil
 }
 
-// HostArtifactView is one tenant's release inventory for the console: the
-// active release and every saved candidate with its digest, never its bytes.
 type HostArtifactView struct {
 	Candidate string `json:"candidate"`
 	Active    bool   `json:"active,omitempty"`
@@ -398,7 +359,6 @@ type HostArtifactView struct {
 	Note      string `json:"note,omitempty"`
 }
 
-// hostArtifacts lists what the tenant could be running, newest first.
 func (t *Tenant) hostArtifacts() []HostArtifactView {
 	t.mu.Lock()
 	ids := t.releases.Ids()
@@ -426,17 +386,12 @@ func (t *Tenant) hostArtifacts() []HostArtifactView {
 	return out
 }
 
-// errUnknownGrant says the grant belongs to another tenant.
 var errUnknownGrant = errSupport("unknown support grant")
 
 type errSupport string
 
 func (e errSupport) Error() string { return string(e) }
 
-// setHostLifecycle moves a tenant's host lifecycle. Suspending keeps every
-// record and blocks ordinary requests; decommissioning does the same and is
-// terminal until the console opens the tenant again. Both are recorded in the
-// tenant's audit next to the reason, so support work leaves a trace.
 func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) error {
 	if now.IsZero() {
 		now = Now()
@@ -464,8 +419,6 @@ func (t *Tenant) setHostLifecycle(action, reason, subject string, now time.Time,
 	return err
 }
 
-// openSupport authorizes a support session for a real member. Its accepted
-// receipt fixes the original grant; a same-clock retry does not append another.
 func (t *Tenant) openSupport(member, reason, subject string, minutes int, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (platform.SupportGrant, error) {
 	if member == "" || reason == "" || subject == "" || now.IsZero() || minutes < 1 || minutes > 24*60 {
 		return platform.SupportGrant{}, errSupport("a support session needs a member, a reason and 1 to 1440 minutes")
@@ -492,15 +445,11 @@ func (t *Tenant) openSupport(member, reason, subject string, minutes int, now ti
 		}, evidence...)
 }
 
-// supportGrants lists the tenant's sessions, newest first.
 func (t *Tenant) supportGrants(now time.Time) []platform.SupportGrant {
 	_ = now
 	return t.console.SupportGrants()
 }
 
-// useSupport performs one authorized read of the tenant: health, the audit tail
-// and the reads the granted member may make. The use is recorded in the audit
-// with the operator and the grant, and the grant's count moves.
 func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...acceptedformat.AuthorizationEvidence) (SupportRead, error) {
 	t.mu.Lock()
 	_, err := t.acceptHostControl("support.use", "host:"+subject, struct{ ID string }{id}, now,
@@ -520,7 +469,6 @@ func (t *Tenant) useSupport(id, subject string, now time.Time, evidence ...accep
 		return SupportRead{}, err
 	}
 	audit := tailAudit(t.Audit(), 20)
-	// Health takes its own locks and is read after the accepted use commits.
 	return SupportRead{Tenant: t.ID, Grant: id, At: now.UTC(), Health: t.Health(now), Audit: audit}, nil
 }
 

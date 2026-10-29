@@ -14,7 +14,6 @@ type State={payload:CanvasPayload;x:number;y:number;target?:Target};
 type Gesture={start:(payload:CanvasPayload,event:ReactPointerEvent)=>void;select:(id:string)=>void;selected?:string;disabled?:boolean};
 const Context=createContext<Gesture|undefined>(undefined);
 export function useCanvasGesture(){return useContext(Context);}
-/** Editor chrome only. Layout ownership, permissions and accepted edits remain with the caller. */
 export function CanvasRegion({id,children}: {id:string;children:ReactNode}){
  const canvas=useCanvasGesture();
  return <div data-canvas-node={id} className="relative flex min-h-0 min-w-0 flex-1 flex-col" onClick={event=>{
@@ -53,8 +52,6 @@ export function CanvasEditor({
   let frame=0;
   const measure=()=>{frame=0;const el=region(selected),next=el?rect(el):undefined,scroller=root.current?.querySelector('[data-canvas-scroll]'),clip=scroller?visibleRect(scroller):undefined;setSelectionBox(old=>same(old,next)?old:next);setViewport(old=>same(old,clip)?old:clip);};
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(measure);};
-  // Layout, scrolling and draft edits move the selection chrome. A stationary
-  // selection needs no animation loop or repeated DOM searches.
   const sizes=new ResizeObserver(schedule);
   const observe=()=>{sizes.disconnect();for(let el:Element|null=root.current;el;el=el.parentElement)sizes.observe(el);root.current?.querySelectorAll('[data-canvas-node],.platform-layout-region').forEach(el=>sizes.observe(el));};
   const changes=new MutationObserver(records=>{if(records.some(record=>record.type==='childList'))observe();schedule();});

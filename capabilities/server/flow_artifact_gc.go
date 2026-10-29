@@ -15,9 +15,6 @@ import (
 	"platformserver/platform"
 )
 
-// This is process exclusion and a recovery watermark, never a second artifact
-// ledger or retry queue. In-flight/ambiguous bytes born in this process cannot
-// be declared orphaned from a record view that may not have applied their commit.
 type flowArtifactGC struct {
 	gate            sync.RWMutex
 	recoveredBefore time.Time
@@ -27,14 +24,11 @@ const flowOrphanRetention = 24 * time.Hour
 const maxFlowInventoryFiles = 65536
 const maxFlowReferenceBytes = 256 << 20
 
-// A lease spans preparation through commit/discard, before taking Tenant.mu.
 func (t *Tenant) beginFlowArtifactPreparation() func() {
 	t.flowArtifacts.gate.RLock()
 	return t.flowArtifacts.gate.RUnlock
 }
 
-// The deployment calls this only after full restore/replay and process Check,
-// with the clock captured BEFORE recovery. NewTenant never assumes recovery.
 func (t *Tenant) flowArtifactRecoveryComplete(started time.Time) {
 	if started.IsZero() || t.quarantined() {
 		return
@@ -44,8 +38,6 @@ func (t *Tenant) flowArtifactRecoveryComplete(started time.Time) {
 	t.flowArtifacts.recoveredBefore = started.UTC()
 }
 
-// flowArtifactReferences reads the complete original record owner's view.
-// Historical before/after values remain roots even after the live frame moves.
 func flowArtifactReferences(s *records.Store, store flowFrameStore) (map[string]bool, error) {
 	s.Lock()
 	defer s.Unlock()
@@ -65,8 +57,6 @@ func flowArtifactReferences(s *records.Store, store flowFrameStore) (map[string]
 		}
 		remaining -= len(raw)
 		var value any
-		// Versions participate in the immutable object key. Preserve their
-		// original integers while walking untyped historical JSON images.
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.UseNumber()
 		if !json.Valid(raw) {
@@ -145,7 +135,6 @@ func flowArtifactReferences(s *records.Store, store flowFrameStore) (map[string]
 		if err := visit(image, 0); err != nil {
 			return nil, err
 		}
-		// Original recovery bytes may differ from the current typed image.
 		current, err := json.Marshal(row.Value.Interface())
 		if err != nil {
 			return nil, err
@@ -185,10 +174,6 @@ func flowInventoryKey(key, prefix string) bool {
 	return true
 }
 
-// The existing continuous-source poll calls this; a failed delete leaves the
-// original file to retry next poll. An incomplete inventory/reference read never
-// authorizes a partial sweep. Superseded accepted frames use their original
-// accepted cleanup intent instead; this collector only handles orphan bytes.
 func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Time) error {
 	if !t.flowArtifacts.gate.TryLock() {
 		return nil
@@ -203,7 +188,6 @@ func (t *Tenant) collectUnacceptedFlowArtifacts(ctx context.Context, now time.Ti
 		return fmt.Errorf("Flow artifact file inventory is unavailable")
 	}
 	cutoff := now.Add(-flowOrphanRetention)
-	// Object-store modification clocks can be rounded down to whole seconds.
 	if recoveryCutoff := started.Add(-time.Second); recoveryCutoff.Before(cutoff) {
 		cutoff = recoveryCutoff
 	}

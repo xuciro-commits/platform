@@ -11,21 +11,17 @@ import (
 )
 
 type Release struct {
-	Version     int       `json:"version"`
-	Kind        string    `json:"kind"`
-	Tenant      string    `json:"tenant"`
-	App         string    `json:"app"`
-	Member      string    `json:"member"`
-	Key         string    `json:"key"`
-	At          time.Time `json:"at"`
-	CandidateID string    `json:"candidateId"`
-	Bytes       []byte    `json:"bytes"`
-	// Active marks an activation: the tenant's single release pointer moves to
-	// this saved candidate. A save leaves the pointer alone.
-	Active    bool   `json:"active,omitempty"`
-	UpgradeID string `json:"upgradeId,omitempty"`
-	// From names the environment a promoted candidate's sealed bytes came
-	// from; the target's audit of the promotion is rebuilt from it on replay.
+	Version       int                            `json:"version"`
+	Kind          string                         `json:"kind"`
+	Tenant        string                         `json:"tenant"`
+	App           string                         `json:"app"`
+	Member        string                         `json:"member"`
+	Key           string                         `json:"key"`
+	At            time.Time                      `json:"at"`
+	CandidateID   string                         `json:"candidateId"`
+	Bytes         []byte                         `json:"bytes"`
+	Active        bool                           `json:"active,omitempty"`
+	UpgradeID     string                         `json:"upgradeId,omitempty"`
 	From          string                         `json:"from,omitempty"`
 	Installations []platform.ReleaseInstallation `json:"installations,omitempty"`
 	Bootstrap     json.RawMessage                `json:"bootstrap,omitempty"`
@@ -152,9 +148,6 @@ func DecodeRelease(raw []byte) (Release, error) {
 	return saved, nil
 }
 
-// InstallationRecord reads the address omitted by the original format-2/3
-// Build writer. Those formats used the publication type plus the image's ID;
-// the owner still decodes and validates the complete installation on recovery.
 func (saved Release) InstallationRecord(installation platform.ReleaseInstallation) (string, error) {
 	if installation.Record != "" {
 		return installation.Record, nil

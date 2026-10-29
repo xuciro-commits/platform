@@ -2,9 +2,6 @@ package platformserver
 
 import automation "platformserver/engine/automation"
 
-// Accepted decisions reach their subscribers as planned events: the plan is
-// frozen while the decision is private, then published and delivered.
-
 import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -14,16 +11,12 @@ import (
 	"time"
 )
 
-// publish queues an accepted decision for its subscribers (Ledger, through Runtime).
 func (t *Tenant) publish(e platform.Event) {
 	e.Changed = t.Changed(e)
 	t.events = append(t.events, automation.QueuedEvent{Event: e, Hops: t.hops, Span: t.current()})
 	t.acted++
 }
 
-// planAcceptedEvent freezes the subscribers and outbound intents while the
-// decision is private. Recovery does not rediscover them from a newer
-// manifest or changed endpoint subscriptions.
 func (t *Tenant) planAcceptedEvent(e platform.Event) (platform.AcceptedEventPlan, *kernel.Error) {
 	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
 	effects, refusal := t.eventEffects(e, names, true)
@@ -56,7 +49,6 @@ func (t *Tenant) publishAccepted(e platform.Event, plan platform.AcceptedEventPl
 	t.events = append(t.events, c)
 }
 
-// Deliveries is the tenant's recent event deliveries, oldest first.
 func (t *Tenant) Deliveries() []platform.Delivery { return t.audit.RecentDeliveries() }
 
 func submitted(member string, a platform.App, s *pb.Submission, at time.Time) platform.AuditEntry {

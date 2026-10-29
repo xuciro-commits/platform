@@ -26,7 +26,6 @@ export function validCollectionInput(value:unknown):value is CollectionInput {
  try{return bytes(JSON.stringify(value))<=65536;}catch{return false;}
 }
 
-/** Recheck inherited fields against the receiving member's current schema. */
 export function collectionFieldsVisible(input:Api.PageCollectionInput,info:EntityInfo|undefined):boolean{
  if(!info||info.type!==input.object.name)return false;
  const field=(name:string)=>["id","created","changed"].includes(name)||info.fields.some(f=>f.name===name);
@@ -38,7 +37,6 @@ export function collectionInput(object:Api.AssetRef,query:RecordQuery,bindings:A
  return {kind:"object-set-input",object,predicate:{domain:query.domain??[],...query.search?{search:query.search}:{},...query.set?{set:query.set}:{}},sort:query.sort??["id"],sortLocked,...query.traversal?{traversal:query.traversal}:{},bindings};
 }
 
-/** The child owns its window. All inherited membership constraints remain. */
 export function collectionQuery(input:Api.PageCollectionInput,local:RecordQuery,explicitSort?:string[]):RecordQuery|undefined{
  if(input.sortLocked&&explicitSort?.length&&JSON.stringify(explicitSort)!==JSON.stringify(input.sort))return;
  const query:RecordQuery={...local,...input.traversal?{traversal:input.traversal}:{},sort:explicitSort?.length?explicitSort:input.sort};

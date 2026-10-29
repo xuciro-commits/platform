@@ -1,4 +1,3 @@
-// Simplified Chinese for the UI kit, keyed by the English source text.
 export default {
  "Refreshing record…":"正在刷新记录…",
  "Authorized delivery results":"受权交付结果",
@@ -1458,7 +1457,6 @@ export default {
   "people": "人员",
   "calendar": "日历",
   "map": "地点",
-  // BPMN notation for the flow canvas: the shapes and their names.
   "Timeout": "超时",
   "Service task": "服务任务",
   "User task": "用户任务",
@@ -1481,10 +1479,8 @@ export default {
   "Repeats": "循环执行",
   "A gateway is a diamond, an event a circle, and a repeated step carries a loop mark.": "网关画成菱形，事件画成圆形，重复的步骤带循环标记。",
   "Follow the relationships": "按关系方向排布",
-  // BPMN lanes: the responsibility a set of steps sits inside.
   "Lane: {name}": "泳道：{name}",
   "A lane is who does the step; drag a step into another lane to hand it over.": "泳道说明这一步由谁负责；把步骤拖进另一条泳道就是交接。",
-  // Node classes: what a node is, which decides its glyph and group.
   "Code": "代码",
   "Document": "文档",
   "AI": "AI",
@@ -1493,8 +1489,6 @@ export default {
   "Branch": "分支",
   "Flow": "流程",
   "Lifecycle": "生命周期",
-  // Relation class titles: the caption word the kit's table holds,
-  // rendered through t() wherever a node names the class and nothing else.
   "Connection": "连接",
   "Source": "数据源",
   "Dataset": "数据集",
@@ -1503,7 +1497,6 @@ export default {
   "Page": "页面",
   "Agent run": "智能体运行",
   "Effect": "副作用",
-  // The force layout's word in the arrange menu.
   "Balance by distance": "按距离平衡",
   "Retry the original request before changing its inputs.": "更改输入之前，请先重试原请求。",
   "The capability result is still awaiting confirmation. Retry the original request.": "能力调用结果仍待确认，请重试原请求。",

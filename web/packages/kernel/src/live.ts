@@ -3,8 +3,6 @@ import type { LiveQueryFrame, LiveQueryResult } from "./gen/host";
 const metadataPaths = new Set(["/v1/me", "/v1/actions", "/v1/entities", "/v1/definitions", "/v1/protocols", "/v1/views", "/v1/apps"]);
 type LiveConnection = { paths: string[]; controller: AbortController };
 
-/** Shared bounded connections, with leases owned by visible readers. No durable
- * state or permission decisions live here: snapshots are original host reads. */
 export class LiveReads {
   private readers = new Map<string, Set<() => void>>();
   private snapshots = new Map<string, LiveQueryResult>();
@@ -56,8 +54,6 @@ export class LiveReads {
     if (!this.running || !this.readers.size) { this.stop(); return; }
     this.timer = setTimeout(() => {
       const paths = [...this.readers.keys()];
-      // Keep metadata independent of record leases added by mounted editors.
-      // Identical batches retain their connection; removed queries leave it.
       const batches = [...this.batches(paths.filter(path => metadataPaths.has(path))), ...this.batches(paths.filter(path => !metadataPaths.has(path)))];
       const pending = new Map(batches.map(batch => [JSON.stringify(batch), batch]));
       for (const connection of this.connections) {
@@ -83,7 +79,6 @@ export class LiveReads {
         if (signal.aborted) return;
         if (!response.ok || !response.body) {
           status = response.status;
-          // A rejected registration needs a changed lease/identity, not retries.
           if ([400, 401, 403, 413].includes(status)) { this.failure(paths, status); return; }
           throw Error("Live connection unavailable");
         }
@@ -98,8 +93,6 @@ export class LiveReads {
           for (const event of events) {
             if (!event.startsWith("event: snapshot\n")) continue;
             const frame = JSON.parse(event.slice(event.indexOf("data: ") + 6)) as LiveQueryFrame;
-            // Install the whole frame before notifying inventory/multi-read users.
-            // Unchanged answers must not retire the table selection that opened it.
             const changed = new Set<string>();
             for (const result of frame.results ?? []) if (!signal.aborted && paths.includes(result.path) && this.readers.has(result.path)) {
               const previous = this.snapshots.get(result.path);

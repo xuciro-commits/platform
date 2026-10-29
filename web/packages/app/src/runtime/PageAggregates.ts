@@ -8,7 +8,6 @@ import {planKey} from "./query-plans";
 import {aggregateQuery,aggregateBudget} from "./aggregates";
 import type {VariableResult} from "./variables";
 
-/** Same read owner and lifecycle as windows, with complete-set scalar output. */
 export function usePageAggregates(variables:Record<string,Api.PageVariable>,compiled:ReadonlyArray<readonly [string,QueryPlanResult]>,session?:PageSessionStore,document?:Pick<PageUI.PageDocument,"nodes"|"queries">) {
  const aggregates=Object.entries(variables).filter(([,v])=>v.mode==="aggregate"&&["count","aggregate","statistics"].includes(v.source?.kind??"")&&compiled.some(([id])=>id===v.source?.query));
  const requests=aggregates.map(([id,v])=>[id,v.source!.query!,compiled.find(([id])=>id===v.source!.query!)![1],v.source!.kind==="statistics"?["count",...(["min","avg","max","sum"] as const).map(op=>`${op}:${v.source!.measure}`)]:v.source!.kind==="aggregate"?v.source!.measure!:"count"] as const),reader=session?.readSource();

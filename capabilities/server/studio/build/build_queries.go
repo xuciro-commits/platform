@@ -15,8 +15,6 @@ import (
 
 const SchemaQuery = QueryType + ".publish"
 
-// Query owns one bounded declaration and its retained publications. Draft
-// edits never replace what callers use until the publication result commits.
 type Query struct {
 	platform.Record
 	Name            string              `json:"name" field:"required,search"`
@@ -36,8 +34,6 @@ type Query struct {
 	Versions        []string            `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 
-// definition projects the stored fields into the shared runtime declaration;
-// field validation and execution remain owned by the original record reader.
 func (f Query) Definition() platform.NamedQuery {
 	return platform.NamedQuery{Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object, Interface: f.Interface, InterfaceShape: f.InterfaceShape, Implementations: f.Implementations, By: f.By, Domain: f.Domain, Sort: f.Sort, Limit: f.Limit}
 }
@@ -62,8 +58,6 @@ func (b *Build) checkQuery(f Query) error {
 	}
 	var validation error
 	if f.Interface == "" && selected {
-		// The original private installation checks fields against the exact
-		// selected model, not a different live version during compilation.
 		validation = f.Definition().Check()
 	} else if f.Interface != "" && b.jointMode {
 		_, validation = b.host.BindInterfaceQuery(f.Definition(), b.queryDraftObjects()...)
@@ -162,7 +156,6 @@ func queryReleaseAsset(f Query, sourceVersion string) (platform.ReleaseAsset, er
 	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: f.Name}, sourceVersion+".query-"+strconv.Itoa(f.Version), f.Definition())
 }
 
-// QueryReleaseAsset resolves only a retained version from this owner.
 func (b *Build) QueryReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
 	return retainedDefinitionAsset(b.Manifest().Version, "query", "query", platform.AssetQuery, name, sourceVersion, b.QueryDefinition)
 }
@@ -185,9 +178,6 @@ func (b *Build) queryAsset(asset platform.ReleaseAsset) (Query, error) {
 	return f, nil
 }
 
-// InstallQueryAsset installs one immutable candidate version into a fresh
-// test app. It does not invent a publication history or run a publish action.
-// The candidate constructor checks this declaration before snapshot restore.
 func (b *Build) InstallQueryAsset(asset platform.ReleaseAsset) error {
 	f, err := b.queryAsset(asset)
 	if err != nil {
@@ -208,8 +198,6 @@ func (b *Build) queryDraftAssets(id string) (before, after []platform.ReleaseAss
 	})
 }
 
-// Freeze the immutable candidate beside the mutable editor row. Existing
-// ordinals must match retained bytes; only the next ordinal can publish.
 func (b *Build) prepareQueryReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, b.queryInventory, platform.AssetQuery, "query", SchemaQuery, "query", b.QueryReleaseAsset, func(record Query, asset platform.ReleaseAsset, version int) (Query, error) {
 		var q platform.NamedQuery

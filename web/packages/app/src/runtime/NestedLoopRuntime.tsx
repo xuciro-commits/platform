@@ -4,8 +4,6 @@ import {Panel,t} from "@platform/ui";
 import {LoopRuntime,type LoopContext} from "./LoopRuntime";
 import {planKey} from "./query-plans";
 
-/** The parent session owns this child's lifetime and state. Rendering a new
- * instance never creates a separate query interpreter or business data copy. */
 export function NestedLoopRuntime({page,node,owner,parent,overlay,children}:{page:PageUI.Page;node:PageUI.PageLayoutNode;owner:string;parent:LoopContext;overlay?:string;children:(context:LoopContext)=>ReactNode}) {
  const session=parent.querySession,queries=parent.queries;
  const loop=node.loop,variable=page.document?.variables?.[loop?.collection??""],id=variable?.source?.query;

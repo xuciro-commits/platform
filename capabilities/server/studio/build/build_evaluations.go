@@ -448,9 +448,6 @@ const (
 	EvaluationRepeats      = 3
 )
 
-// Evaluation is one retained observation of an immutable release candidate.
-// Its samples are synthetic and builder-only; a new plan or configuration
-// requires a new report rather than mutating this one.
 type Evaluation struct {
 	platform.Record
 	Set              *platform.AssetBinding      `json:"evaluationSet,omitempty" field:"readonly" type:"json"`
@@ -491,9 +488,6 @@ type EvaluationAttempt struct {
 	ServedModel    string  `json:"servedModel,omitempty"`
 }
 
-// EvaluationStart is formed by the host after it has checked the saved
-// candidate, current plan revision and model configuration. Only the host's
-// Build automation identity may submit it.
 type EvaluationStart struct {
 	Set              *platform.AssetBinding    `json:"evaluationSet,omitempty"`
 	Candidate        string                    `json:"candidate"`

@@ -1,12 +1,3 @@
-// Package core is the platform's shared master data (A1): the few
-// things every business application names and none should define again —
-// people, business partners, sites and the locations inside them, materials,
-// units of measure and currencies. It is a platform app on the app API like
-// org, files and knowledge: standard create/edit/archive actions, a steward
-// role that maintains them, every member reads them. Applications reference
-// these types (`core.material`) and extend them through their own objects;
-// they do not copy them. The organisation itself (units, structures,
-// memberships, calendars) stays in org.
 package core
 
 import (
@@ -35,13 +26,9 @@ const (
 	MaterialType = "core.material"
 	UoMType      = "core.uom"
 	CurrencyType = "core.currency"
-	// Steward maintains master data; any member reads it.
-	Steward = "steward"
+	Steward      = "steward"
 )
 
-// Person is a human the organisation works with: an employee, a contractor,
-// a contact at a partner. The platform member they sign in as, when they do,
-// is Member; their place in the organisation is org's business.
 type Person struct {
 	platform.Record
 	Element string                `json:"element,omitempty" ref:"enterprise.element" stereo:"ActualPerson" title:"Person in the model"`
@@ -57,8 +44,6 @@ type Person struct {
 	Note    string                `json:"note,omitempty" type:"longtext"`
 }
 
-// Partner is an organisation or person we trade with, in one or more roles
-// (SAP's business partner): a customer, a supplier, a carrier.
 type Partner struct {
 	platform.Record
 	Name     string                 `json:"name" field:"required,search"`
@@ -74,8 +59,6 @@ type Partner struct {
 	Note     string                 `json:"note,omitempty" type:"longtext"`
 }
 
-// Site is a physical place the organisation operates: a plant, a warehouse,
-// an office, a yard. Its organisational owner is a unit of org.
 type Site struct {
 	platform.Record
 	Name     string `json:"name" field:"required,search"`
@@ -88,8 +71,6 @@ type Site struct {
 	Active   bool   `json:"active" title:"Active"`
 }
 
-// Location is a place inside a site, as fine as the work needs: a zone, an
-// aisle, a bin, a line, a work centre, a dock. Locations nest.
 type Location struct {
 	platform.Record
 	Place  string                 `json:"place,omitempty" ref:"enterprise.element" stereos:"ActualOrganization,ActualLocation" title:"Place in the model"`
@@ -101,8 +82,6 @@ type Location struct {
 	Active bool                   `json:"active" title:"Active"`
 }
 
-// Material is anything counted, stored, bought, made or sold: raw material,
-// component, finished good, consumable, service.
 type Material struct {
 	platform.Record
 	Name        string            `json:"name" field:"required,search"`
@@ -119,7 +98,6 @@ type Material struct {
 	Active      bool              `json:"active" title:"Active"`
 }
 
-// UoM is a unit of measure.
 type UoM struct {
 	platform.Record
 	Code      string `json:"code" field:"required,search" help:"UN/ECE code when one exists, e.g. PCE, KGM, MTR"`
@@ -128,7 +106,6 @@ type UoM struct {
 	Decimals  int    `json:"decimals,omitempty" help:"How many decimals a quantity in it has"`
 }
 
-// Currency is a currency amounts are kept in.
 type Currency struct {
 	platform.Record
 	Code     string `json:"code" field:"required,search" help:"ISO 4217, e.g. CNY"`
@@ -137,26 +114,19 @@ type Currency struct {
 	Symbol   string `json:"symbol,omitempty"`
 }
 
-// Coded is the interface of anything people find by a short code and a name:
-// partners, sites, locations, materials, units, currencies — and any
-// application's own types that choose to implement it, so one picker, one
-// search and one label format serve them all.
 const Coded = "core.coded"
 
-// Interfaces are the shapes core declares for every app to implement.
 func Interfaces() []platform.Interface {
 	return []platform.Interface{{Name: Coded, Title: "Coded", Description: "Anything found by a short unique code and a name.",
 		Fields: []platform.InterfaceField{{Name: "code", Type: "text", Title: "Code"}, {Name: "name", Type: "text", Title: "Name"}}}}
 }
 
-// Core is a tenant's shared master data.
 type Core struct{ ledger *platform.Ledger }
 
 func standard() platform.Standard {
 	return platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Steward}}
 }
 
-// Entities are the shared master data types.
 func Entities() []platform.Entity {
 	active := platform.ExprReference("boolean", "active")
 	out := []platform.Entity{
@@ -181,8 +151,6 @@ func Entities() []platform.Entity {
 			entities[i].Seed = DefaultAccounts()
 		}
 		if entities[i].Type == PeriodType {
-			// A seed is a replay baseline, so its year cannot follow the wall clock.
-			// Later fiscal periods are created by an accountant's journaled decisions.
 			entities[i].Seed = DefaultPeriods(2026)
 		}
 	}
@@ -194,8 +162,6 @@ func Entities() []platform.Entity {
 	return entities
 }
 
-// New is a tenant's core app; it starts with the common units and currencies
-// (Entity.Seed), which decisions change afterwards.
 func New(tenant string) *Core {
 	entities := Entities()
 	var actions []platform.Action
@@ -234,7 +200,6 @@ func (c *Core) Submit(caller platform.Caller, s *pb.Submission, now time.Time) (
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-// DefaultUnits are the units of measure most deployments start with.
 func DefaultUnits() []any {
 	return []any{
 		UoM{Record: platform.Record{ID: "uom-pce"}, Code: "PCE", Name: "Piece", Dimension: "count"},
@@ -248,7 +213,6 @@ func DefaultUnits() []any {
 	}
 }
 
-// DefaultCurrencies are the currencies most deployments start with.
 func DefaultCurrencies() []any {
 	return []any{
 		Currency{Record: platform.Record{ID: "cur-cny"}, Code: "CNY", Name: "Renminbi", Decimals: 2, Symbol: "¥"},

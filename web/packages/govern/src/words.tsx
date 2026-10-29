@@ -1,8 +1,3 @@
-// Control Panel: the tenant's words. Everything the tenant
-// defined in Build — object types, fields, states, actions, applications,
-// pages — is written once in one language; here an administrator says what it
-// reads as in each other language, and the host serves it translated like any
-// shipped text. Shipped translations may be overridden the same way.
 import { useHost, useReadQuery as useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import {useDraftInput,useInputDrafts,useUnsavedChanges, Button, Checkbox, Form, Input, PageHeader, Panel, Select, Tag, t } from "@platform/ui";

@@ -16,10 +16,6 @@ import (
 	"time"
 )
 
-// validateArtifactCleanup protects live frame/checkpoint references from a
-// stale or malformed cleanup intent. A successful successor can retire at
-// most its former sealed frame and, on checkpoint rollover, its former
-// checkpoint.
 func validateArtifactCleanup(x FlowInstance) error {
 	if x.CleanupPending != (len(x.ArtifactCleanup) > 0) || len(x.ArtifactCleanup) > 2 {
 		return fmt.Errorf("the Flow artifact cleanup marker is inconsistent")
@@ -60,9 +56,6 @@ func cloneArtifacts(refs []platform.FlowStateArtifact) []platform.FlowStateArtif
 	return slices.Clone(refs)
 }
 
-// ArtifactCleanupPreparation snapshots the original Flow owner before deleting
-// bytes outside the tenant lock. Its acknowledgement then uses the same accepted
-// Flow ledger/result path as every other durable instance change.
 type ArtifactCleanupPreparation struct {
 	owner  *Flows
 	before FlowInstance
@@ -160,7 +153,7 @@ func (f *Flows) PlanDeadLetterReplay(x FlowInstance, c platform.Caller, asset pl
 	}
 	batch := plan.(*BatchPreparation)
 	window := *batch.rule.Window
-	window.LateEvents = "accept" // explicit replay reopens the retained window; ordinary intake keeps its policy
+	window.LateEvents = "accept"
 	batch.rule.Window = &window
 	return &deadLetterReplayPreparation{batch: batch, asset: asset}, nil
 }
@@ -184,8 +177,6 @@ func (p *deadLetterReplayPreparation) Prepare(sub *pb.Submission, at time.Time, 
 	return result, nil
 }
 
-// A rejected business action is retained in the original Flow ledger. The
-// captured key is its logical request, independent of retry or replay attempts.
 func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.Step, target string, payload json.RawMessage, reason string) {
 	d := ss.def(x)
 	if d == nil || d.Continuous == nil || step.Act == nil {
@@ -208,9 +199,6 @@ func (ss *session) deadLetterAct(x *FlowInstance, token *Token, step *platform.S
 		Letter: platform.FlowDeadLetter{Batch: batch, Node: step.Name, Key: target, RecordedAt: ss.now, Reason: reason, Value: string(payload)},
 		Action: step.Act.Action, Protocol: step.Act.Protocol, Target: target, Payload: slices.Clone(payload), Key: key, AsMember: step.Act.AsMember}
 	ss.assets = append(ss.assets, asset)
-	// The rejected request owns this logical key just as an accepted act does.
-	// Reserve its sequence before the path continues; otherwise the next alert
-	// would reuse the same key with different content, including after replay.
 	x.Seq++
 }
 
@@ -247,8 +235,6 @@ func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time
 		}
 		asset.Replayed = true
 		ss.assets = append(ss.assets, asset)
-		// Historical dead letters could retain the instance's next sequence.
-		// Keep their exact replay key, then reserve it for future native acts.
 		if asset.Key == fmt.Sprintf("flow:%s:%s:%d", x.ID, asset.Letter.Node, x.Seq) {
 			x.Seq++
 		}
@@ -260,9 +246,6 @@ func (f *Flows) replayDeadLetter(c platform.Caller, sub *pb.Submission, now time
 	})
 }
 
-// PreparedBatch is an opaque, host-prepared update. There is no JSON input
-// which can construct one: a native source prepares outside the tenant lock,
-// then the original accepted-decision pipeline validates its predecessor.
 type PreparedBatch struct {
 	owner            *Flows
 	before           FlowInstance
@@ -282,8 +265,6 @@ type PreparedBatch struct {
 	replaySubmission *pb.Submission
 }
 
-// ExpandFrame reads a frozen original frame on the I/O lane. Its summary,
-// owner and native version must agree with the accepted instance projection.
 func (f *Flows) ExpandFrame(x FlowInstance, store platform.FlowFrameStore) (*BatchFrame, error) {
 	if x.Batch == nil {
 		return &BatchFrame{State: map[string]json.RawMessage{}}, nil
@@ -346,8 +327,6 @@ type BatchPreparation struct {
 	caller    platform.Caller
 }
 
-// PlanBatch captures the retained definition and binding under the tenant
-// lock. The later I/O lane never reads the mutable definition registry.
 func (f *Flows) PlanBatch(x FlowInstance, c platform.Caller) (platform.FlowBatchPreparation, *kernel.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil || ended(x.State) {
@@ -406,8 +385,6 @@ func (plan *BatchPreparation) Intake() (string, *platform.StreamIntake, int) {
 	return plan.rule.Source, &intake, plan.rule.Batch
 }
 
-// WindowTick creates an idempotent timer batch when the event-time grace has
-// closed a new slide. Its source checkpoint is byte-for-byte unchanged.
 func (plan *BatchPreparation) WindowTick(now time.Time, store platform.FlowFrameStore) (Batch, bool, *kernel.Error) {
 	if plan == nil || plan.rule.Intake == nil || plan.rule.Window == nil || plan.before.Batch == nil || plan.before.Batch.Source == nil || now.IsZero() {
 		return Batch{}, false, nil
@@ -456,8 +433,6 @@ type ComputeRetryPreparation struct {
 	caller    platform.Caller
 }
 
-// PlanComputeRetry captures only a due entry retry. Its original rows are
-// rebuilt from the accepted sealed frame on the outside I/O lane.
 func (f *Flows) PlanComputeRetry(x FlowInstance, c platform.Caller, now time.Time) (platform.FlowComputeRetryPreparation, *kernel.Error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil || d.Continuous == nil || d.Continuous.Entry == "" || d.Continuous.Window == nil || ended(x.State) {
@@ -500,8 +475,6 @@ func (f *Flows) PlanComputeRetry(x FlowInstance, c platform.Caller, now time.Tim
 
 func (plan *ComputeRetryPreparation) Instance() string { return plan.before.ID }
 
-// Prepare recomputes only the retained operation request from the immutable
-// accepted frame; it does not reread the source or advance the batch cursor.
 func (plan *ComputeRetryPreparation) Prepare(now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedComputeRetry, *kernel.Error) {
 	x := plan.before
 	frame, err := plan.owner.ExpandFrame(x, store)
@@ -624,8 +597,6 @@ func (d preparedComputeRetryDecision) Submit(c platform.Caller, sub *pb.Submissi
 	})
 }
 
-// Prepare uses the original folding rule outside the tenant lock. No file
-// I/O or mutable registry read occurs in the accepted ledger callback.
 func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform.FlowFrameStore) (platform.FlowPreparedBatch, *kernel.Error) {
 	var retry *platform.StreamPreparationRetry
 	if plan.rule.Window != nil {
@@ -649,8 +620,6 @@ func (plan *BatchPreparation) Prepare(batch Batch, now time.Time, store platform
 	return nil, refusal
 }
 
-// Only failed outside I/O can benefit from repeating the same frozen plan.
-// Budget, malformed history and kernel refusals retain their first answer.
 type preparationFrameStore struct {
 	platform.FlowFrameStore
 	failed bool
@@ -669,8 +638,6 @@ func (s *preparationFrameStore) Seal(instance string, version int, raw []byte, b
 	ref, err := s.FlowFrameStore.Seal(instance, version, raw, budget)
 	if err != nil {
 		s.failed = true
-		// A failed Put may have persisted its newly generated ticket. These
-		// bytes cannot have been accepted and must not accumulate per retry.
 		_ = s.FlowFrameStore.Discard(ref)
 	}
 	return ref, err
@@ -698,8 +665,6 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 		outputs = map[string]json.RawMessage{}
 	}
 	for node, raw := range frame.State {
-		// All prepared state outputs identify immutable original bytes, even
-		// when one window happens to fit inline on its first iteration.
 		outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: x.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), Size: len(raw)})
 	}
 	outputs["batch"] = platform.Raw(map[string]any{"cursor": frame.Cursor, "consumed": frame.Consumed, "rejected": frame.Rejected})
@@ -707,9 +672,6 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 	if len(platform.Raw(outputs)) > 60<<10 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch outputs exceed the Flow output budget")
 	}
-	// Batch-local operator outputs are empty between slide boundaries, not a
-	// new completed window. Decode once for both publication and continuation;
-	// an intake-only batch must retain the last application output unchanged.
 	var state WindowState
 	if !batch.Bootstrap && (plan.entry != "" || plan.rule.Output != nil) {
 		if plan.rule.Window == nil {
@@ -851,11 +813,6 @@ func (plan *BatchPreparation) prepare(batch Batch, now time.Time, store platform
 		entry: plan.entry, windowInput: windowInput, resumeInput: resumeInput, operation: operationRequest, assets: assets}, nil
 }
 
-// projectOperatorOutputs keeps small historical projections inline. A wide
-// native graph still keeps every original output in its sealed frame, but does
-// not copy aggregate/alerts/variable values into each token's bounded output
-// map. The reference is inspectable via the same authorized frame read; native
-// actions consume the actual prepared items, never these reference markers.
 func projectOperatorOutputs(outputs map[string]json.RawMessage, instance string, frame *BatchFrame) {
 	wide := false
 	for node, raw := range frame.OperatorOutputs {
@@ -870,8 +827,6 @@ func projectOperatorOutputs(outputs map[string]json.RawMessage, instance string,
 	}
 }
 
-// Decision wraps the original app only for this native delivery. It has no
-// ledger, record store or executor of its own and is never registered as an app.
 func (p *PreparedBatch) Decision() platform.App {
 	return preparedDecision{Flows: p.owner, prepared: p}
 }
@@ -893,14 +848,10 @@ func (p *PreparedBatch) Matches(x FlowInstance) bool {
 
 func (p *PreparedBatch) Artifact() platform.FlowStateArtifact { return *p.frame.Sealed }
 
-// Artifacts lists every outside-lane file prepared for this decision so the
-// original host can discard all of them if its existing acceptance refuses.
 func (p *PreparedBatch) Artifacts() []platform.FlowStateArtifact {
 	return slices.Clone(p.artifacts)
 }
 
-// OperationRequest is present only when this accepted batch closes a ready
-// event-time slide. Its bounded projection is transient and never instance data.
 func (p *PreparedBatch) OperationRequest() (platform.OperationRequest, bool) {
 	if p.operation == nil {
 		return platform.OperationRequest{}, false
@@ -990,9 +941,6 @@ func (d preparedDecision) Submit(c platform.Caller, sub *pb.Submission, now time
 	})
 }
 
-// Archived rows keep their original content and history. A retention decision
-// writes at most 64 KiB of additional images; subsequent timer passes continue
-// any backlog through the same original Flow ledger.
 const deadLetterArchiveBytes = 64 << 10
 
 const deadLetterArchivePage = 64
@@ -1071,8 +1019,6 @@ func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.T
 		}
 		overflow := max(0, total+fresh-rule.DeadLetterMaxRecords)
 		candidates = append(candidates, rows[:min(overflow, len(rows))]...)
-		// A single action loop may create more new failures than its whole
-		// retained bound. Archive those extra pending rows in this same result.
 		extra := max(0, fresh-rule.DeadLetterMaxRecords)
 		slices.SortFunc(pending, func(a, b platform.FlowDeadLetterAsset) int { return cmp.Compare(a.ID, b.ID) })
 		for i := range pending {
@@ -1097,8 +1043,6 @@ func (f *Flows) deadLetterArchives(c platform.Caller, x FlowInstance, now time.T
 		if used+size > deadLetterArchiveBytes && len(archived) > 0 {
 			break
 		}
-		// The first historical image may exceed the paging target. The original
-		// accepted-result bound decides whether that record can commit.
 		used += size
 		archived = append(archived, asset)
 	}
@@ -1172,8 +1116,6 @@ func (f *Flows) retainExpiredDeadLetters(c platform.Caller, now time.Time) (bool
 			if _, err := f.decide(c, SchemaFlowStep, x.ID, fmt.Sprintf("%s:%d", x.ID, x.Revision+1), now, func(ss *session) *kernel.Error { ss.load(x.ID); return nil }); err != nil {
 				return false, err
 			}
-			// The timer itself is one accepted host result. Do not accumulate
-			// one archive budget per instance in that enclosing result.
 			return true, nil
 		}
 		offset += len(rows)

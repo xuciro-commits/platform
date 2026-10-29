@@ -16,8 +16,6 @@ import (
 	"platformserver/platform/authz"
 )
 
-// Sealing retains each distinct authorization basis and outcome in first-use
-// order. Repeated reads still evaluate current permissions at every call.
 func (d *stagedDecision) savedAuthorizations() ([]acceptedformat.AuthorizationEvidence, error) {
 	var saved []acceptedformat.AuthorizationEvidence
 	seen := map[string]bool{}
@@ -68,8 +66,6 @@ func (d *stagedDecision) RecordAuthorization(c platform.Caller, q platform.Authz
 	}
 }
 
-// Native entry facts are host declarations, not an authorization bypass.
-// They retain the same deny precedence and nine layers as record operations.
 type authorizationDetails struct {
 	Store      *records.Store
 	At         time.Time
@@ -136,7 +132,7 @@ func (t *Tenant) authorizeNative(c platform.Caller, permission, kind string, all
 
 func (t *Tenant) authorizeCapability(c platform.Caller, owner, permission string, allowed []string, declared bool, detail authorizationDetails) platform.AuthzDecision {
 	c = platform.RouteCaller(c, owner)
-	c.Automation = false // a saved applicant's roles authorize this computation
+	c.Automation = false
 	decision := t.authorizeNative(c, permission, "action", allowed, declared, detail)
 	if draft := c.AuthorizationRecorder(); draft != nil {
 		draft.RecordAuthorization(c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "action", Action: permission}, decision)
@@ -191,8 +187,6 @@ func (t *Tenant) authorizeEntry(m platform.Member, app, permission, kind string,
 	return t.services.Authorization.Decide(authz.Request{Kind: kind, Subject: authz.Subject{ID: m.ID, App: app, Roles: m.RolesIn(app), Agent: m.Agent}, Permission: permission, Allowed: allowed, Attributes: map[string]string{"member": m.ID, "app": app}, Context: context}, policies...)
 }
 
-// Retain caller/token narrowing while dropping roles revoked in the directory.
-// Service and application-agent principals are declared by their own owners.
 func (t *Tenant) authorizationMember(m platform.Member) platform.Member {
 	current, known := t.member(m.ID)
 	if !known {
@@ -219,9 +213,6 @@ func (t *Tenant) authorizationMember(m platform.Member) platform.Member {
 	return m
 }
 
-// authorizeFrom is the host's one fact resolver. Scope implementations remain
-// with the record owner, but every result passes the engine's fixed order.
-// held belongs to read projections and avoids reacquiring the record lock.
 func (t *Tenant) authorizeFrom(store *records.Store, c platform.Caller, q platform.AuthzRequest, at time.Time, held bool) (decision platform.AuthzDecision) {
 	if t.simulationTrace != nil {
 		defer func() {
@@ -342,14 +333,12 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 		for _, name := range q.Fields {
 			field, known := et.Info().Field(name)
 			if q.Action != "" && (q.Kind == "write" || q.Kind == "create") && !slices.Contains(et.Info().Standard, q.Action) {
-				// A typed owner action may intentionally accept a blind input.
-				// read/write tags define the generated form contract, not its payload.
 				context.Fields.Reason = "The typed owner action declares its accepted input fields"
 				continue
 			}
 			if !known && q.Action != "" {
 				continue
-			} // payload validation owns unknown keys
+			}
 			allowed := known && field.ReadsAny(c.RolesIn(et.Info().App)) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
 			if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
 				allowed = t.knowledgeSourceReadable(store, c.Member, q.Record, name)
@@ -357,7 +346,7 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 			if q.Kind == "write" || q.Kind == "create" {
 				if field.ReadOnly {
 					continue
-				} // immutable shape is an input validation failure
+				}
 				allowed = known && field.WritesAny(c.RolesIn(et.Info().App))
 				if c.Automation && c.App == et.Info().App {
 					allowed = true
@@ -420,8 +409,6 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 	return decision
 }
 
-// sourceWithheld resolves declared provenance before a value is projected.
-// A list is reported by its public field name, never by a hidden source ID.
 func (t *Tenant) sourceWithheld(store *records.Store, c platform.Caller, et *records.Type, value reflect.Value, fields []string, at time.Time, depth int, walk *authorizationWalk) []string {
 	w := narrower{store: store, m: c.Member, held: true}
 	all := []string{}
@@ -462,8 +449,6 @@ func (t *Tenant) sourceWithheld(store *records.Store, c platform.Caller, et *rec
 			return known && field.SourceType == "generated" && !value.FieldByIndex(field.Index).IsZero()
 		})
 		for _, ref := range refs {
-			// Collection/formula witnesses retain their own owner identity.
-			// Its row scope was already checked; it is not a copied source field.
 			if ref == et.Info().Type+"/"+records.Header(value).ID {
 				continue
 			}
@@ -491,7 +476,6 @@ func (t *Tenant) sourceWithheld(store *records.Store, c platform.Caller, et *rec
 	return withheld
 }
 
-// visibleIn supplies the original query engine with a per-record decision.
 func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t}, m, et.Info().App, false, false), et, at)
 }

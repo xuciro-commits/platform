@@ -40,8 +40,6 @@ make help
 make openspec ARGS='list --specs'
 make check-specs
 make check
-make test-go PKG=./platform RUN=TestName
-make e2e SPEC=page-notice
 ~~~
 
-命令定义归 [Makefile](Makefile)，检查选择与分支交付规则归 [AGENTS](AGENTS.md)。发布、应用构建入口、演练和备份见 [本地环境指南](deploy/local/README.md)；浏览器任务位于 [web/e2e/tests](web/e2e/tests/)，宿主组件地图见 [doc.go](capabilities/server/doc.go)。
+命令定义归 [Makefile](Makefile)，检查选择与分支交付规则归 [AGENTS](AGENTS.md)。发布、应用构建入口、演练和备份见 [本地环境指南](deploy/local/README.md)，宿主组件地图见 [doc.go](capabilities/server/doc.go)。

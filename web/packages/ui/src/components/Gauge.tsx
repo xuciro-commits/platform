@@ -4,7 +4,6 @@ export function gaugeModel(value:number,max:number,warnAt?:number) {
  const fraction=Math.max(0,Math.min(1,value/max)),angle=Math.PI*(1-fraction);
  return {fraction,x:60+Math.cos(angle)*46,y:60-Math.sin(angle)*46,danger:warnAt!==undefined&&value>=warnAt,outside:value<0||value>max};
 }
-/** Original finite host number in; a bounded display arc out. */
 export function Gauge({value,max,warnAt,label,suffix=""}:{value:number;max:number;warnAt?:number;label:string;suffix?:string}) {
  const model=gaugeModel(value,max,warnAt);
  if(!model)return <p role="alert">{t("Gauge needs a finite value and positive maximum.")}</p>;

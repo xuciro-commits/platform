@@ -12,8 +12,6 @@ type FlowEdgeData = Record<string, unknown> & { definition: FlowEdge; editable: 
 export type FlowLineEdge = Edge<FlowEdgeData>;
 export const FlowEdgeInteraction = createContext<{ onInsert: (edge: FlowEdge, position: CanvasPosition) => void }>({ onInsert: () => {} });
 
-/** A control line is the order things happen in and steps around blocks; a data
- * line is a typed value travelling and is drawn dashed and curved instead. */
 export function FlowEdgeView(props: EdgeProps<FlowLineEdge>) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd, selected } = props;
   const { onInsert } = useContext(FlowEdgeInteraction);

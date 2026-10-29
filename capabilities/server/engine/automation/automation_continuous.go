@@ -17,35 +17,20 @@ import (
 	"time"
 )
 
-// BatchFrame is the continuous instance's own bookkeeping:
-// what has been consumed, the watermark, per-node state and what could not be
-// accepted. It is committed with the accepted result and replayed with it.
 type BatchFrame = platform.FlowBatchFrame
 
-// SourceCheckpoint is the instance's own incremental position; it is accepted
-// with its window state, rather than written onto the import source's cursor.
 type SourceCheckpoint = platform.FlowSourceCheckpoint
 
-// DeadLetter keeps one signal that could not be folded, with its cause, so it
-// can be inspected and replayed under the original authorization.
 type DeadLetter = platform.FlowDeadLetter
 
-// Batch is one accepted batch of a real source: its identity, its predecessor,
-// and the signals it carries with their event times.
 type Batch = platform.FlowBatch
 
-// Signal is one arriving measurement.
 type Signal = platform.FlowSignal
 
-// BatchOutcome is what the flow did with a batch.
 type BatchOutcome = platform.FlowBatchOutcome
 
-// ContinuousWindowInput is the token-local projection passed to the retained
-// Compute entry for one ready window. The full frame remains in its original
-// sealed artifact; only operation inputs may temporarily hold these bytes.
 type ContinuousWindowInput = platform.FlowWindowInput
 
-// ConsumeBatch folds one batch into a continuous instance as one decision.
 func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time.Time) (BatchOutcome, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if batch.ID == "" {
@@ -77,7 +62,6 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 		return BatchOutcome{}, err
 	}
 	if x.Batch != nil && batch.ID == x.Batch.Cursor {
-		// The same batch delivered twice: answer with the frame as it stands.
 		return BatchOutcome{Cursor: x.Batch.Cursor, Watermark: x.Batch.Watermark, Consumed: x.Batch.Consumed, Rejected: x.Batch.Rejected,
 			StateSize: stateSize(x.Batch.State)}, nil
 	}
@@ -93,8 +77,6 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 		if refusal != nil {
 			return refusal
 		}
-		// The frame's state and the outputs it produced are the accepted
-		// result's data channel: both are committed with this decision.
 		in.Outputs = maps.Clone(in.Outputs)
 		if in.Outputs == nil {
 			in.Outputs = map[string]json.RawMessage{}
@@ -103,9 +85,6 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 			if len(state) <= 48<<10 {
 				in.Outputs["state:"+node] = slices.Clone(state)
 			} else {
-				// The durable frame owns these bytes. A compact, verifiable
-				// reference keeps token output limits instead of copying a large
-				// window into every ordinary output value.
 				in.Outputs["state:"+node] = platform.Raw(BatchStateReference{Instance: in.ID, Node: node, Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(state)), Size: len(state)})
 			}
 		}
@@ -130,13 +109,8 @@ func (f *Flows) ConsumeBatch(c platform.Caller, id string, batch Batch, now time
 	return out, nil
 }
 
-// BatchStateReference names original instance state, not an arbitrary file or
-// URL. A consumer must read that instance as its member and verify the digest.
 type BatchStateReference = platform.FlowBatchStateReference
 
-// admitBatch is the batch's admission rule, apart from any tenant state: a batch
-// over the declared budget, or one whose predecessor is not the frame's cursor,
-// is refused so the source can retry; the same batch twice is idempotent.
 func admitBatch(frame *BatchFrame, declared platform.Continuous, batch Batch) *kernel.Error {
 	if declared.Intake != nil && batch.Source == nil || declared.Intake == nil && batch.Source != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A source checkpoint must match the declared intake")
@@ -190,8 +164,6 @@ func sameSourceCheckpoint(a, b *SourceCheckpoint) bool {
 		a.Offset == b.Offset && a.Initialized == b.Initialized && slices.Equal(a.Sources, b.Sources)
 }
 
-// foldBatch folds every signal of a batch into the frame's state, keeping late
-// and timeless signals as dead letters instead of dropping them silently.
 func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acceptedAt ...time.Time) (folded, rejected int, refusal *kernel.Error) {
 	if err := admitBatch(frame, declared, batch); err != nil {
 		return 0, 0, err
@@ -205,8 +177,6 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	if frame.CheckpointEvery != 0 && frame.CheckpointEvery != declared.CheckpointEvery {
 		return 0, 0, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The retained checkpoint interval differs from this Flow version")
 	}
-	// No cursor, watermark, counter or dead letter is committed before the
-	// whole successor fits its declaration. Original state bytes stay intact.
 	next := *frame
 	next.CheckpointEvery = declared.CheckpointEvery
 	next.State = maps.Clone(frame.State)
@@ -308,8 +278,6 @@ func foldBatch(frame *BatchFrame, declared platform.Continuous, batch Batch, acc
 	return folded, rejected, nil
 }
 
-// pruneDeadLetters applies explicit retention only as part of an accepted
-// successor frame. Cumulative rejection counters remain even when details age out.
 func pruneDeadLetters(frame *BatchFrame, declared platform.Continuous, now time.Time) {
 	if declared.DeadLetterTTLMs > 0 && !now.IsZero() {
 		cutoff := now.Add(-time.Duration(declared.DeadLetterTTLMs) * time.Millisecond)
@@ -334,8 +302,6 @@ func pruneDeadLetters(frame *BatchFrame, declared platform.Continuous, now time.
 	}
 }
 
-// fold preserves the historical scalar count/sum/last profile. It is not the
-// default graph's event-time window, aggregate or threshold implementation.
 func fold(frame *BatchFrame, declared platform.Continuous, signal Signal) *kernel.Error {
 	state := map[string]any{}
 	if raw := frame.State["window"]; len(raw) > 0 {
@@ -384,9 +350,6 @@ func stateSize(state map[string]json.RawMessage) int {
 	return total
 }
 
-// windowF32Stats preserves the fixed kernel's packed f32 input/output contract:
-// round readings and threshold to f32, sum in order in f64, then round outputs.
-// It runs on the outside preparation lane and shares its worker cancellation.
 func windowF32Stats(values []float64, threshold float64, cancelled func() bool) (map[string]float64, error) {
 	if len(values) > 1_000_000 || math.IsNaN(threshold) || math.IsInf(threshold, 0) {
 		return nil, fmt.Errorf("invalid telemetry kernel input bound")
@@ -445,8 +408,6 @@ func windowF32Stats(values []float64, threshold float64, cancelled func() bool) 
 	return result, nil
 }
 
-// AggregateRecord is one group's fixed measures over the retained window. Its
-// field names are exactly the declared measure names.
 type AggregateRecord struct {
 	Group    string                     `json:"group"`
 	From     time.Time                  `json:"from,omitzero"`
@@ -456,25 +417,19 @@ type AggregateRecord struct {
 	Metadata map[string]json.RawMessage `json:"metadata,omitempty"`
 }
 
-// AggregateState is the aggregate node's frame state: the last record per
-// group. Records for groups the current slide no longer carries are dropped
-// once they are clear, so state stays bounded by the window, not by history.
 type AggregateState struct {
 	Groups map[string]AggregateRecord `json:"groups"`
 }
 
-// thresholdRaise is one group's hysteresis episode.
 type thresholdRaise struct {
 	Since   time.Time `json:"since"`
 	Alerted bool      `json:"alerted"`
 }
 
-// ThresholdState is the threshold node's frame state.
 type ThresholdState struct {
 	Raised map[string]thresholdRaise `json:"raised,omitempty"`
 }
 
-// Alert is one emitted hysteresis event for the accepted result's outputs.
 type Alert struct {
 	Node     string                     `json:"node"`
 	Group    string                     `json:"group"`
@@ -483,7 +438,7 @@ type Alert struct {
 	High     float64                    `json:"high"`
 	Low      float64                    `json:"low"`
 	Severity string                     `json:"severity,omitempty"`
-	State    string                     `json:"state"` // triggered or cleared
+	State    string                     `json:"state"`
 	At       time.Time                  `json:"at"`
 	Batch    string                     `json:"batch"`
 	Metadata map[string]json.RawMessage `json:"metadata,omitempty"`
@@ -508,9 +463,6 @@ func streamOutputName(name string) bool {
 	return true
 }
 
-// checkOperators validates the declared aggregate and threshold apart from any
-// tenant state. It runs before folding, so a graph that cannot be wired is
-// refused instead of silently never firing.
 func checkOperators(declared platform.Continuous) error {
 	a, t := declared.Aggregate, declared.Threshold
 	if declared.Intake != nil {
@@ -523,9 +475,6 @@ func checkOperators(declared platform.Continuous) error {
 			return err
 		}
 	}
-	// The declared partition workers are part of the same whole-declaration
-	// check: the fold runs at most 8 of them, and more than one needs the
-	// event-time window whose partitions they fold.
 	if declared.Concurrency < 0 || declared.Concurrency > 8 {
 		return fmt.Errorf("a stream fold runs with 1 to 8 partition workers")
 	}
@@ -576,16 +525,7 @@ func checkOperators(declared platform.Continuous) error {
 	return nil
 }
 
-// foldOperators advances the declared operators by one accepted batch: the
-// ready window's rows become aggregate records, and those records move the
-// hysteresis state and produce this batch's alerts. Rows that cannot be
-// aggregated are dead-lettered once and leave the window, so they are not
-// re-reported on every slide.
 func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batchID string, now time.Time) (stats []AggregateRecord, alerts []Alert, refusal *kernel.Error) {
-	// Empty, never nil: a batch that produced no records says so, and the
-	// accepted result replaces the previous batch's operator outputs instead
-	// of leaving stale ones in place. Application output assets, in contrast,
-	// are replaced only by an emitted window, not an intake-only batch.
 	stats, alerts = []AggregateRecord{}, []Alert{}
 	frame.Workers = 0
 	if err := checkOperators(declared); err != nil {
@@ -608,14 +548,6 @@ func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batc
 	if a == nil {
 		return stats, alerts, nil
 	}
-	// Group the retained rows under the declared measure contract. A row whose
-	// value or group fields do not fit becomes a dead letter and leaves the
-	// window; the batch itself still succeeds, as the graph's error policy says.
-	//
-	// Reading every retained row's value is the fold's heaviest per-row work,
-	// so a declaration of concurrency classifies per source partition with
-	// real workers. The merge below then walks the rows in their own order, so
-	// sums, records, letters and hysteresis stay exactly the sequential ones.
 	classes, peak, refusal := classifyAggregateRows(a, windowSignals(window, *w), declared)
 	if refusal != nil {
 		return stats, alerts, refusal
@@ -732,8 +664,6 @@ func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batc
 			}
 		}
 	}
-	// A group the slide no longer carries keeps only a live episode: its
-	// hysteresis must survive, its last record need not.
 	for group := range state.Groups {
 		if _, present := byGroup[group]; !present {
 			if _, raised := thresholds.Raised[group]; !raised {
@@ -764,27 +694,16 @@ func foldDeclaredOperators(frame *BatchFrame, declared platform.Continuous, batc
 			return stats, alerts, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The batch frame exceeds its declared budget")
 		}
 	}
-	// The record's state size must cover the operators' own state: a sealed
-	// frame is expanded against the accepted summary, and a stale size would
-	// make every later read of the artifact disagree with its record.
 	frame.StateBytes = stateSize(frame.State)
 	return stats, alerts, nil
 }
 
-// rowClass is one retained row's classification: the group and numeric value
-// the aggregate takes from it, or why it cannot be aggregated.
 type rowClass struct {
 	group string
 	value float64
 	why   string
 }
 
-// classifyAggregateRows reads every retained row under the declared measure
-// contract. A declaration of concurrency classifies per source partition with
-// real workers — each worker owns its partition's rows alone — and the
-// returned peak is the number of workers that really overlapped. Reading a
-// row's value is where the fold spends its time, so the workers do the fold's
-// real work, not a bookkeeping pass over it.
 func classifyAggregateRows(a *platform.StreamAggregate, rows []Signal, declared platform.Continuous) ([]rowClass, int, *kernel.Error) {
 	classes := make([]rowClass, len(rows))
 	if declared.Concurrency <= 1 {
@@ -805,7 +724,7 @@ func classifyAggregateRows(a *platform.StreamAggregate, rows []Signal, declared 
 	peak, refusal := (foldPool{limit: declared.Concurrency}).run(len(partitions), func(g int, cancelled func() bool) *kernel.Error {
 		for _, i := range byPartition[partitions[g]] {
 			if cancelled() {
-				return nil // a sibling refused the batch; its merge never runs
+				return nil
 			}
 			group, value, why := aggregateRow(*a, rows[i])
 			classes[i] = rowClass{group: group, value: value, why: why}
@@ -818,8 +737,6 @@ func classifyAggregateRows(a *platform.StreamAggregate, rows []Signal, declared 
 	return classes, peak, nil
 }
 
-// aggregateRow takes one retained row's group and numeric value, or says why it
-// cannot be aggregated.
 func aggregateRow(a platform.StreamAggregate, row Signal) (group string, value float64, why string) {
 	if len(a.Group) == 0 {
 		if row.Key == "" {
@@ -861,8 +778,6 @@ func aggregateRow(a platform.StreamAggregate, row Signal) (group string, value f
 	return group, n, ""
 }
 
-// advanceThreshold runs one hysteresis step. A cleared episode returns a nil
-// next state; a triggered alert is emitted once per episode.
 func advanceThreshold(t platform.StreamThreshold, prior thresholdRaise, record AggregateRecord, at time.Time, batchID string) (alert *Alert, next *thresholdRaise, ok bool) {
 	value, ok := record.Values[t.Field]
 	if !ok {
@@ -873,7 +788,7 @@ func advanceThreshold(t platform.StreamThreshold, prior thresholdRaise, record A
 	}
 	if prior.Since.IsZero() {
 		if value < t.High {
-			return nil, nil, true // never raised, still below the high mark
+			return nil, nil, true
 		}
 		raise := thresholdRaise{Since: at}
 		if t.DebounceMS == 0 {
@@ -889,7 +804,7 @@ func advanceThreshold(t platform.StreamThreshold, prior thresholdRaise, record A
 		return nil, nil, true
 	}
 	if value < t.High || prior.Alerted {
-		return nil, &prior, true // inside the band, or already alarmed for this episode
+		return nil, &prior, true
 	}
 	if at.Sub(prior.Since) < time.Duration(t.DebounceMS)*time.Millisecond {
 		return nil, &prior, true
@@ -898,8 +813,6 @@ func advanceThreshold(t platform.StreamThreshold, prior thresholdRaise, record A
 	return emit("triggered"), &prior, true
 }
 
-// Output projection starts with explicitly captured metadata and then fixes
-// semantic fields. Metadata cannot replace an accepted aggregate or alert.
 func aggregateOutput(records []AggregateRecord) []map[string]json.RawMessage {
 	out := make([]map[string]json.RawMessage, 0, len(records))
 	for _, record := range records {
@@ -932,8 +845,6 @@ func alertOutput(alerts []Alert) []map[string]json.RawMessage {
 	return out
 }
 
-// WindowState is part of the original accepted frame, never a browser cache.
-// The next aggregate consumes its retained rows after the source cursor commits.
 type WindowState struct {
 	Rows      []Signal  `json:"rows"`
 	EmittedAt time.Time `json:"emittedAt,omitzero"`
@@ -972,7 +883,6 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 		}
 	}
 	oldest := retentionBoundary.Add(-time.Duration(w.WindowMS) * time.Millisecond)
-	// Identity is (source partition, event key), not device or arrival order.
 	seen := map[signalIdentity]Signal{}
 	for _, row := range state.Rows {
 		seen[windowSignalKey(row)] = row
@@ -1006,8 +916,6 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 				appendDead(signal, "late: outside the event-time window and watermark grace")
 				continue
 			case "accept":
-				// Explicit accept re-emits the retained window with the late
-				// value; sideOutput/reject never reopen an emitted slide.
 				lateAccepted = true
 			}
 		}
@@ -1016,8 +924,6 @@ func foldWindow(frame *BatchFrame, declared platform.Continuous, batch Batch, no
 		added[key] = true
 		folded++
 	}
-	// Event order determines retention and grouping; physical delivery order
-	// cannot make an older valid row late or collapse different partitions.
 	slices.SortFunc(state.Rows, func(a, b Signal) int {
 		if n := a.At.Compare(b.At); n != 0 {
 			return n
@@ -1068,8 +974,6 @@ func windowBoundary(w platform.StreamWindow, watermark, now time.Time) time.Time
 	return high.Add(-grace).UTC().Truncate(time.Duration(w.SlideMS) * time.Millisecond)
 }
 
-// windowSignals gives a retained Compute exactly the event-time interval for
-// its emitted slide. Explicit "accept" keeps older late rows visible by design.
 func windowSignals(state WindowState, w platform.StreamWindow) []Signal {
 	if state.EmittedAt.IsZero() {
 		return nil
@@ -1097,20 +1001,8 @@ func maxTime(a, b time.Time) time.Time {
 	return a
 }
 
-// Partition workers for one continuous batch: a declaration
-// of concurrency 8 means real partition work, not a number in a declaration.
-// One partition is one job, so its state is read and folded by exactly one
-// worker at a time; the caller merges the workers' results in the batch's own
-// order and still commits one accepted frame. The frame records how many
-// workers really overlapped, so occupancy is visible rather than claimed.
 type foldPool struct{ limit int }
 
-// run calls job for every index in [0, jobs) with at most the declared number
-// of workers at once and returns how many jobs really overlapped. The first
-// refusal cancels the run: no worker starts another job, so a batch that
-// cannot be folded stops spending work instead of finishing a fold that the
-// decision will discard. Everything a worker writes stays in its own slot;
-// the merge that follows is single-threaded.
 func (p foldPool) run(jobs int, job func(i int, cancelled func() bool) *kernel.Error) (int, *kernel.Error) {
 	if jobs == 0 {
 		return 0, nil
@@ -1148,7 +1040,7 @@ func (p foldPool) run(jobs int, job func(i int, cancelled func() bool) *kernel.E
 			defer wg.Done()
 			for i := range next {
 				if stopped() {
-					continue // the run is cancelled: take the slot, do no work
+					continue
 				}
 				n := active.Add(1)
 				for {

@@ -1,4 +1,3 @@
-// Package ai is the platform's AI app, on the app API.
 package ai
 
 import (
@@ -24,10 +23,6 @@ var languageFiles embed.FS
 
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
-// AI is the platform's AI capability: the providers a tenant uses,
-// the models it enables and who may call them, and the usage of every call.
-// Providers and models are its decisions; calls are made by the host
-// (aicall.go) and each call's usage is journaled; prompts and answers are not.
 const (
 	ID                   = platform.AIApp
 	ProviderType         = platform.AIProviderType
@@ -40,34 +35,24 @@ const (
 	LimitType            = platform.AILimitType
 	SchemaLimitSet       = platform.AISchemaLimitSet
 	SchemaLimitRemove    = platform.AISchemaLimitRemove
-	// Settings of the defaults a limit overrides.
-	SettingDailyTokens = platform.AISettingDailyTokens // tokens per person per day; 0: none
-	SettingPerMinute   = platform.AISettingPerMinute   // calls per person or agent per minute; 0: none
-	SettingAppModel    = platform.AISettingAppModel    // the model apps ask when they name none
-	SettingMaxTokens   = platform.AISettingMaxTokens   // generation ceiling; 0: require a reviewed model limit
-	Admin              = platform.AIAdmin
-	User               = platform.AIUser // may call models open to users
+	SettingDailyTokens   = platform.AISettingDailyTokens
+	SettingPerMinute     = platform.AISettingPerMinute
+	SettingAppModel      = platform.AISettingAppModel
+	SettingMaxTokens     = platform.AISettingMaxTokens
+	Admin                = platform.AIAdmin
+	User                 = platform.AIUser
 )
 
-// Vendor is a provider with a fixed base URL and wire.
 type Vendor = platform.AIVendor
 
-// Vendors are the fixed providers. Anthropic speaks its own Messages API
-// through its official SDK (anthropic.go); the others speak the OpenAI wire.
 var Vendors = platform.AIVendors
 
-// Provider is a source of models the tenant uses.
 type Provider = platform.AIProvider
 
-// Model is an enabled model and who may call it.
 type Model = platform.AIModel
 
-// Limit overrides the defaults for one member, agent or app; 0 keeps the default.
 type Limit = platform.AILimit
 
-// Name is how callers name the model: "<provider>/<model>".
-
-// Usage is one call's meter reading.
 type Usage = platform.AIUsage
 
 type AI struct {
@@ -79,15 +64,12 @@ type AI struct {
 	models             []Model
 	limits             map[string]Limit
 	usage              []Usage
-	// Tokens per day ("<day>|<member>", "<day>|model:<name>") and each
-	// caller's calls of the last minute, derived from usage as it is metered.
-	daily        map[string]int
-	recent       map[string][]time.Time
-	reservations map[string]platform.AIReservation
-	ledger       *platform.Ledger
+	daily              map[string]int
+	recent             map[string][]time.Time
+	reservations       map[string]platform.AIReservation
+	ledger             *platform.Ledger
 }
 
-// New is a tenant's AI app.
 func New(tenant string) *AI {
 	admin := []string{Admin}
 	f := func(name, typ, description string, required bool) platform.Field {
@@ -118,8 +100,6 @@ func New(tenant string) *AI {
 			Description: "Return a member, agent or app to the default limits.", Payload: []platform.Field{}},
 	}...)...), ProviderType, ModelType, LimitType, trainingPolicyType, trainingCandidateType)}
 }
-
-// Snapshot and Restore: providers, models and usage.
 
 func (a *AI) SnapshotFormat() string { return "ai.state.v1" }
 
@@ -164,7 +144,7 @@ func (a *AI) Restore(raw json.RawMessage) error {
 func (a *AI) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits", "ai-training"},
 		ReadSources: map[string]string{"ai-providers": "record", "ai-models": "record", "ai-usage": "record", "ai-limits": "record", "ai-training": "record"},
-		Everyone:    []string{"ai-models", "ai-usage"}, Roles: []string{User}, // the user role opens models with access "users"
+		Everyone:    []string{"ai-models", "ai-usage"}, Roles: []string{User},
 		Settings: []platform.Setting{
 			{Name: SettingDailyTokens, Title: "Tokens per person per day", Type: "integer", Default: "0",
 				Description: "What each person may spend on models a day, unless an AI limit says otherwise; 0: no limit. Agents have their own, in the Agents settings."},
@@ -179,7 +159,6 @@ func (a *AI) Manifest() platform.Manifest {
 
 func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 
-// Provider is a provider the tenant added, by ID.
 func (a *AI) Provider(id string) (Provider, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -326,7 +305,6 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 	})
 }
 
-// Callable is the enabled model name and its provider, when m may call it.
 func (a *AI) Callable(m platform.Member, name string) (Model, Provider, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -345,7 +323,6 @@ func (a *AI) allows(m platform.Member, x Model) bool {
 	return x.Access == "everyone" || m.Roles[ID] != ""
 }
 
-// Meter records a call's usage (a journal entry of kind usage, live or replayed).
 func (a *AI) Meter(u Usage) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -356,19 +333,14 @@ func (a *AI) Meter(u Usage) {
 
 }
 
-// Usage is the usage kept, oldest first.
 func (a *AI) Usage() []Usage {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return slices.Clone(a.usage)
 }
 
-// Defaults are the limits a member without its own takes:
-// tokens a day for people and for agents, and calls a minute; 0: none.
 type Defaults = platform.AIDefaults
 
-// allowLocked includes every unresolved liability, even after a day boundary.
-// A clock tick is not evidence that an external request incurred no cost.
 func (a *AI) allowLocked(m platform.Member, model Model, d Defaults, r platform.AIReservation, now time.Time) string {
 	day := now.UTC().Format(time.DateOnly)
 	memberReserved, modelReserved := 0, 0
@@ -442,7 +414,6 @@ func (a *AI) callsLocked(member string, now time.Time) int {
 	return n
 }
 
-// Reservation returns the original immutable identity or unresolved liability.
 func (a *AI) Reservation(call string) (platform.AIReservation, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -457,12 +428,8 @@ func (a *AI) Reservation(call string) (platform.AIReservation, bool) {
 	return r, ok
 }
 
-// Total is usage summed per day, member and model.
 type Total = platform.AITotal
 
-// Read "ai-providers" (administrators), "ai-models" (what the caller may call;
-// administrators see every enabled model), "ai-usage" (the caller's own;
-// administrators see everyone's): recent calls, newest first, and totals.
 func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	visibleApps := c.VisibleApplications()
 	a.mu.Lock()
@@ -570,11 +537,8 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return AIUsage{Calls: calls, Totals: totals, Applications: byApplication, Reservations: reservations}, nil
 }
 
-// AIUsage is model calls metered from the journal, and their totals per day, member and model.
 type AIUsage = platform.AIUsageReport
 
-// Model is an enabled model by name, whatever the caller's access: agents call
-// the model the tenant set for them.
 func (a *AI) Model(name string) (Model, Provider, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -586,7 +550,6 @@ func (a *AI) Model(name string) (Model, Provider, *kernel.Error) {
 	return a.models[i], pv, nil
 }
 
-// Spent is the tokens a member used on now's day (UTC).
 func (a *AI) Spent(member string, now time.Time) int {
 	a.mu.Lock()
 	defer a.mu.Unlock()

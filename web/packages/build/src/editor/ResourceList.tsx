@@ -1,8 +1,3 @@
-// A builder inventory: the records of one Build type as a tree —
-// grouped by the project that holds them, by the object they act on, or by
-// status — or, on demand, as the plain table (RecordList) with its sorting and
-// paging. The signature is RecordList's, so an inventory page swaps one for
-// the other and nothing else changes.
 import { useHost, useRecordInventory } from "@platform/app";
 import { Button, GroupedList, RecordList, Tag, Panel, t, type EntityRecord, type RecordSource } from "@platform/ui";
 import { ListTree, Table2 } from "lucide-react";

@@ -5,8 +5,6 @@ import (
 	"slices"
 )
 
-// NumericAggregate is the one bounded numeric fold used by Expr and host
-// grouping. Selection, permissions and ordering remain with their owners.
 type NumericAggregate struct {
 	op, kind, currency string
 	count              int64

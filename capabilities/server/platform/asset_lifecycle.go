@@ -19,17 +19,12 @@ import (
 	"unicode/utf8"
 )
 
-// AssetEnvironmentRequirement is declared by the trusted descriptor owner.
-// Profile and Credential describe runtime configuration needs; they do not
-// require a configured external service when installing the declaration.
 type AssetEnvironmentRequirement struct {
 	Ref        AssetRef `json:"ref"`
 	Profile    string   `json:"profile,omitempty"`
 	Credential bool     `json:"credential,omitempty"`
 }
 
-// AssetReleaseContext carries transient declaration preparation context.
-// Actual execution selects and authorizes its runtime identity separately.
 type AssetReleaseContext struct {
 	DraftsOnly bool
 	DraftIDs   map[AssetRef]string
@@ -38,22 +33,12 @@ type AssetReleaseContext struct {
 	Upgrade    bool
 }
 
-// AssetApplyContext separates private compatibility trials from pure recovery.
-// Validate never means authorization to install live state: callers prepare
-// the entire set in a private owner/runtime and promote it only after acceptance.
 type AssetApplyContext struct {
-	// Private prevents owner-ledger/executor publication while the complete
-	// installation is being validated in a private host view. The accepted
-	// image is later registered live with Private=false, without new policies.
 	Private  bool
 	Validate bool
 	Upgrade  bool
 }
 
-// AssetInstallation is an owner's immutable metadata image. Ref remains the
-// original portable asset identity; Record is its target owner record type/ID.
-// Schema/Image retain the original publication representation for historical
-// release decoding. The owner, not the coordinator, interprets the image.
 type AssetInstallation struct {
 	Ref    AssetRef        `json:"ref"`
 	Schema string          `json:"schema"`
@@ -61,9 +46,6 @@ type AssetInstallation struct {
 	Image  json.RawMessage `json:"image"`
 }
 
-// AssetDraft bootstraps a missing target-owner draft through its original
-// create action, under the target member's permissions. It is private work in
-// the enclosing release result, not an independently accepted submission.
 type AssetDraft struct {
 	Ref    AssetRef        `json:"ref"`
 	Type   string          `json:"type"`
@@ -72,31 +54,17 @@ type AssetDraft struct {
 	Image  json.RawMessage `json:"image"`
 }
 
-// AssetLifecycleOwner is trusted compiled owner code, registered at host
-// composition. Tenant descriptors cannot register methods or execute hooks.
-// The same role is attached to a private installation runtime for trials and
-// pure recovery; preparation must not change its live owner or perform I/O.
-// Code-only declarations may validate their exact descriptor set and produce
-// no mutable installation; generated actions belong to their object's plan.
 type AssetLifecycleOwner interface {
 	App
 	AssetKinds() []AssetKind
 	ReleaseAssets() ([]ReleaseAsset, error)
 	ResolvePinned(ref AssetRef, sourceVersion string, contentVersion ...string) (ReleaseAsset, error)
 	AssetEnvironmentRequirements(ReleaseAsset) ([]AssetEnvironmentRequirement, error)
-	// BeginAssetBootstrap exposes the complete immutable shape set only in a
-	// private owner while its original create actions construct missing drafts.
-	// The returned release restores transient lookups; no definition is installed.
 	BeginAssetBootstrap([]ReleaseAsset) (func(), error)
 	ReleaseDrafts([]ReleaseAsset, AssetReleaseContext) ([]AssetDraft, error)
 	PrepareReleaseAssets([]ReleaseAsset, AssetReleaseContext) ([]AssetInstallation, error)
-	// Decode is a pure structural read, including for historical images. It
-	// must not inspect current grants or require installed dependencies.
 	DecodeAssetInstallation(schema string, image json.RawMessage) (AssetInstallation, error)
-	// Validate runs against the private host after preceding dependency plans.
 	ValidateAssetInstallation(AssetInstallation) error
-	// The registry performs Validate when requested before calling Apply;
-	// pure recovery applies the saved image without re-running policy.
 	ApplyAssetInstallation(AssetInstallation, AssetApplyContext) error
 }
 
@@ -105,9 +73,6 @@ type assetOwnerKey struct {
 	kind AssetKind
 }
 
-// AssetRegistry dispatches only to registered trusted owners. It has no asset
-// bytes or execution engine of its own, and does not replace Candidate's
-// canonical identities, closure checks or the accepted-result store.
 type AssetRegistry struct {
 	owners map[string]AssetLifecycleOwner
 	kinds  map[assetOwnerKey]AssetLifecycleOwner
@@ -361,7 +326,7 @@ func (r *AssetRegistry) PrepareReleaseAssets(assets []ReleaseAsset, context Asse
 			out = append(out, plan)
 		}
 	}
-	return out, nil // owners retain their dependency installation order
+	return out, nil
 }
 
 func (r *AssetRegistry) ReleaseDrafts(assets []ReleaseAsset, context AssetReleaseContext) ([]AssetDraft, error) {
@@ -398,8 +363,6 @@ func (r *AssetRegistry) ReleaseDrafts(assets []ReleaseAsset, context AssetReleas
 	return out, nil
 }
 
-// BeginBootstrap scopes each private owner's immutable dependency lookups.
-// Failed preparation and successful completion both release in reverse order.
 func (r *AssetRegistry) BeginBootstrap(assets []ReleaseAsset) (func(), error) {
 	grouped, err := r.groupedAssets(assets)
 	if err != nil {
@@ -489,7 +452,6 @@ func (r *AssetRegistry) ApplyInstallation(plan AssetInstallation, context AssetA
 	return owner.ApplyAssetInstallation(plan, context)
 }
 
-// licensed definition set. Consumers cannot change installation or grants.
 type BlueprintCatalog interface {
 	InstalledBlueprint(id, version string) ([]AssetRef, []ReleaseAsset, error)
 }
@@ -502,8 +464,6 @@ type FlowReleaseOwner interface {
 	FlowReleaseAsset(string, int) (ReleaseAsset, error)
 }
 
-// ReleaseExecutionOwner compiles retained bytes with the original owner and
-// ledger. It neither installs them live nor creates a second decision engine.
 type ReleaseExecutionOwner interface {
 	ForkReleaseExecution([]ReleaseAsset) (App, error)
 }
@@ -519,21 +479,15 @@ type OperationCompletion interface {
 	OperationEnded(Caller, string, time.Time) *kernel.Error
 }
 
-// NativeFlowAssets projects the original compiled Flow owner; code callbacks
-// remain in their immutable composition and never become tenant scripts.
 type NativeFlowAssets interface {
 	NativeFlowAsset(Manifest, string, int, []AssetRef) (ReleaseAsset, error)
 }
 
-// ObservationDefinitions retains only the source declaration. External points
-// and summaries are read transiently by the host transport.
 type AssetDefinitionReader interface {
 	DefinitionMetadataKind(AssetKind) bool
 	DefinitionDescriptor(ReleaseAsset) (Definition, error)
 }
 
-// EvaluationPolicy is the original AI owner’s measured synthetic-case gate.
-// Reports and model execution stay with that owner; releases freeze this data.
 type EvaluationPolicy struct {
 	CompareFields    []string         `json:"compareFields,omitempty"`
 	MinQuality       float64          `json:"minQuality"`
@@ -570,8 +524,6 @@ func (p EvaluationPolicy) Check() error {
 	return nil
 }
 
-// CheckEvaluationPolicy resolves the criterion against the same typed output
-// declaration. It does not relax input or complete output validation.
 func (f AIFunction) CheckEvaluationPolicy(p EvaluationPolicy) error {
 	if err := p.Check(); err != nil {
 		return err
@@ -584,8 +536,6 @@ func (f AIFunction) CheckEvaluationPolicy(p EvaluationPolicy) error {
 	return nil
 }
 
-// Matches measures only the declared criterion after the original evaluator
-// checks the complete output schema. Empty keeps the historical full match.
 func (p EvaluationPolicy) Matches(actual, expected []byte) bool {
 	var left, right any
 	if json.Unmarshal(actual, &left) != nil || json.Unmarshal(expected, &right) != nil {
@@ -609,8 +559,6 @@ func (p EvaluationPolicy) Matches(actual, expected []byte) bool {
 	return true
 }
 
-// EvaluationSetDescriptor is portable policy data; it contains no local
-// draft record IDs, operator grants, production records or provider secrets.
 type EvaluationSetDescriptor struct {
 	Name     string           `json:"name"`
 	Title    string           `json:"title"`
@@ -638,8 +586,6 @@ func ReadEvaluationSet(raw []byte) (EvaluationSetDescriptor, error) {
 	return e, e.Check()
 }
 
-// Synthetic evaluation uses the same prompt shape as an ordinary accepted call.
-// History contains bounded synthetic typed answers, never production call IDs.
 func (f AIFunction) EvaluationInput(raw []byte) bool {
 	if len(raw) > f.MaxInputBytes || !utf8.Valid(raw) {
 		return false
@@ -693,8 +639,6 @@ type LinkTraversal struct {
 	ID        string       `json:"id"`
 }
 
-// LinkType names a typed relationship stored in a scalar reference or in the
-// endpoint owner's ledger. A declaration confers no endpoint read grants.
 type LinkType struct {
 	Roles        []string `json:"roles,omitempty"`
 	Name         string   `json:"name"`
@@ -781,8 +725,6 @@ func (d Definition) QuerySourceVersion(version string) *Definition {
 	return d.QueryVersion(version)
 }
 
-// Check bounds a reusable declaration. Field and predicate semantics remain
-// with the original record reader; this does not implement another evaluator.
 func (q NamedQuery) Check() error {
 	if q.Name == "" || q.Title == "" || (q.Object == "") == (q.Interface == "") || len(q.Name) > 80 || len(q.Title) > 1024 || len(q.Description) > 4096 || q.Limit < 0 || q.Limit > 200 || len(q.Sort) > 4 || len(q.Domain) > 16384 {
 		return fmt.Errorf("query has an invalid identity or budget")
@@ -807,8 +749,6 @@ func (q NamedQuery) Check() error {
 	return nil
 }
 
-// Dependencies names the actual object definitions a query was published
-// against. An interface is a contract in the query bytes, not an object type.
 func (q NamedQuery) Dependencies() []AssetRef {
 	types := q.Implementations
 	if q.Object != "" {
@@ -823,7 +763,6 @@ func (q NamedQuery) Dependencies() []AssetRef {
 	return refs
 }
 
-// QueryVersion resolves an explicit binding without falling back to latest.
 func (d Definition) QueryVersion(version string) *Definition {
 	if version == d.Version && d.Query != nil {
 		return &d
@@ -845,8 +784,6 @@ func (d Definition) QueryVersion(version string) *Definition {
 	return &d
 }
 
-// PropertyType owns reusable scalar meaning and presentation. Local field
-// identity, required values and access remain the consuming object's rules.
 type PropertyType struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
@@ -888,8 +825,6 @@ type SampleRecords struct {
 	Records []json.RawMessage `json:"records"`
 }
 
-// SampleSet is synthetic, versioned application input. It contains no request
-// to copy live rows and has no execution or authorization privileges.
 type SampleSet struct {
 	Name    string          `json:"name"`
 	Title   string          `json:"title"`
@@ -937,9 +872,6 @@ func invalidSampleRecord(raw json.RawMessage) bool {
 	return err != nil
 }
 
-// SchemaVersion binds a client contract to its owner's immutable definition.
-// Family is the existing K7 numeric schema version; compatible publications
-// retain it while their complete definition content has a new identity.
 type SchemaVersion struct {
 	Version string `json:"version"`
 	Family  uint32 `json:"family"`
@@ -963,8 +895,6 @@ func SchemaContentVersion(body json.RawMessage) (string, error) {
 	return "schema.sha256." + hex.EncodeToString(sum[:]), nil
 }
 
-// SystemDefinitionHost reuses the ordinary release owner inside a system
-// decision. Preparation is private; application consumes only accepted bytes.
 type SystemDefinitionHost interface {
 	FreezeSystemDefinitions(Caller, []AssetRef, time.Time) (json.RawMessage, *kernel.Error)
 	PrepareSystemDefinitions(Caller, json.RawMessage, string, time.Time) (json.RawMessage, *kernel.Error)
@@ -976,16 +906,11 @@ type AttachedSystemDefinitions interface {
 	AttachSystemDefinitions(SystemDefinitionHost)
 }
 
-// SystemDefinitionCandidate binds a source change to exact owner-produced
-// candidate bytes. Subsequent edits of its drafts cannot change this selection.
 type SystemDefinitionCandidate struct {
 	ID    string `json:"id"`
 	Bytes []byte `json:"bytes"`
 }
 
-// Earlier system records embedded a candidate as JSON. SQL value projections
-// may reorder that JSON; reconstruct it with the same historical candidate
-// owner and require its original identity. New records always keep opaque bytes.
 func (saved *SystemDefinitionCandidate) UnmarshalJSON(raw []byte) error {
 	var wire struct {
 		ID    string          `json:"id"`
@@ -1020,8 +945,6 @@ func (saved *SystemDefinitionCandidate) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// SystemSource is the immutable source of the running system, supplied by
-// deployment. Retained files are read-only and never expose arbitrary host paths.
 type SystemSource struct {
 	Version int
 	Digest  string
@@ -1037,25 +960,19 @@ type SystemSourceFile struct {
 	Editable bool   `json:"editable"`
 }
 
-// SystemBuildResult is the evidence one build leaves: what it produced, with
-// which toolchain, and why it failed when it did.
 type SystemBuildResult struct {
-	OK          bool
-	Work        string
-	Binary      string
-	Web         string
-	Toolchain   string
-	Diagnostics string
-	// Manifest is the digest of every file the change froze, so a release can
-	// be exported and checked against what was built rather than rebuilt.
+	OK           bool
+	Work         string
+	Binary       string
+	Web          string
+	Toolchain    string
+	Diagnostics  string
 	Manifest     map[string]string
 	Source       string
 	SourceDigest string
 	Duration     time.Duration
 }
 
-// TestPlanDescriptor is a portable business scenario. Roots identify owner
-// definitions, never local editor rows, application IDs or tenant members.
 type TestPlanDescriptor struct {
 	Organization *OrgSeed        `json:"organization,omitempty"`
 	Name         string          `json:"name"`
@@ -1208,8 +1125,6 @@ func (f FunctionFixture) Check() bool {
 	return len(f.Output) <= 64<<10 && len(f.ExpectOutput) <= 32<<10 && f.InputTokens >= 0 && f.InputTokens <= 1<<20 && f.OutputTokens >= 0 && f.OutputTokens <= 1<<20 && (f.ExpectState == "ready" || f.ExpectState == "rejected") && (f.ExpectOutput == "" || f.ExpectState == "ready" && json.Valid([]byte(f.ExpectOutput)))
 }
 
-// ReleasePublication changes only publication metadata beside the mutable draft.
-// The host commits these images with the release pointer in one release-result.
 type ReleasePublication struct {
 	Schema string          `json:"schema"`
 	Image  json.RawMessage `json:"image"`
@@ -1217,9 +1132,6 @@ type ReleasePublication struct {
 
 const AcceptedResultMaxBytes = 1 << 20
 
-// CanonicalDigest preserves the original accepted-result canonical JSON encoding,
-// including exact JSON number spellings and large integers in raw images.
-// Result families clear their own digest field before calling this function.
 func CanonicalDigest(value any) (string, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -1239,8 +1151,6 @@ func CanonicalDigest(value any) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
-// DecisionDefinition is the original decision's execution contract and resource
-// memberships, never a second application or decision state.
 type DecisionDefinition struct {
 	Observation       *ObservationDecisionEvidence `json:"observation,omitempty"`
 	Definition        AssetBinding                 `json:"definition"`
@@ -1252,8 +1162,6 @@ type DecisionDefinition struct {
 	Applications      []AssetBinding               `json:"applications"`
 }
 
-// ObservationDecisionEvidence retains the compact window and source identity;
-// raw points never enter the accepted result.
 type ObservationDecisionEvidence struct {
 	Key        string                     `json:"key"`
 	Definition AssetBinding               `json:"definition"`
@@ -1298,7 +1206,6 @@ func (e ObservationDecisionEvidence) Check() error {
 	return e.Window.Check()
 }
 
-// ReleaseOrigin is where a promoted candidate came from and who brought it.
 type ReleaseOrigin struct {
 	From   string    `json:"from"`
 	Member string    `json:"member"`
@@ -1317,8 +1224,6 @@ type SealedArtifact struct {
 
 const EmptyRecordHistory = "history.v1.empty"
 
-// AppendRecordHistory extends an immutable chain using canonical JSON, independent
-// of PostgreSQL's JSONB whitespace/key order. The position is zero based.
 func AppendRecordHistory(prior string, position int, change json.RawMessage) (string, error) {
 	if position < 0 || position == 0 && prior != EmptyRecordHistory {
 		return "", fmt.Errorf("invalid history chain predecessor")
@@ -1350,8 +1255,6 @@ type ReleaseInstallation struct {
 	Record string    `json:"record,omitempty"`
 }
 
-// DecodeJSON reads exactly one typed value. Result families retain their own
-// size, version, identity and predecessor checks.
 func DecodeJSON(raw []byte, target any, name string) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -1364,32 +1267,28 @@ func DecodeJSON(raw []byte, target any, name string) error {
 	return nil
 }
 
-// PackageContribution is one view or capability a package brings.
 type PackageContribution struct {
-	View    string `json:"view"`              // the view's own name, e.g. "board"
-	Surface string `json:"surface,omitempty"` // work, studio or tenant; default work
+	View    string `json:"view"`
+	Surface string `json:"surface,omitempty"`
 	Title   string `json:"title,omitempty"`
-	Kind    string `json:"kind,omitempty"` // view (default) or action
-	App     string `json:"app,omitempty"`  // the app whose records the view reads
+	Kind    string `json:"kind,omitempty"`
+	App     string `json:"app,omitempty"`
 }
 
-// PackageDescriptor is one installable package, as the index declares it.
 type PackageDescriptor struct {
 	Blueprint      *PackageBlueprint     `json:"blueprint,omitempty"`
 	ID             string                `json:"id"`
 	Version        string                `json:"version"`
 	Title          string                `json:"title,omitempty"`
 	Namespace      string                `json:"namespace"`
-	Requires       []string              `json:"requires,omitempty"`     // package IDs
-	Capabilities   []CapabilityContract  `json:"capabilities,omitempty"` // required platform contracts
+	Requires       []string              `json:"requires,omitempty"`
+	Capabilities   []CapabilityContract  `json:"capabilities,omitempty"`
 	Compatibility  string                `json:"compatibility,omitempty"`
 	Contributions  []PackageContribution `json:"contributions,omitempty"`
-	ArtifactDigest string                `json:"artifactDigest,omitempty"` // sha256 over the descriptor
+	ArtifactDigest string                `json:"artifactDigest,omitempty"`
 	Description    string                `json:"description,omitempty"`
 }
 
-// PackageBlueprint contains the original owners' portable definitions. It
-// creates drafts only; publication and environment credentials stay separate.
 type PackageBlueprint struct {
 	Roots  []AssetRef     `json:"roots"`
 	Assets []ReleaseAsset `json:"assets"`
@@ -1397,8 +1296,6 @@ type PackageBlueprint struct {
 	Setup  *PackageSetup  `json:"setup,omitempty"`
 }
 
-// PackageSetup is reviewed client input, not an installed action or worker.
-// Each request still needs the person's current authorization at its owner.
 type PackageSetup struct {
 	Roles []PackageSetupRole `json:"roles"`
 	Steps []PackageSetupStep `json:"steps"`
@@ -1438,30 +1335,26 @@ func (p PackageSetup) Check() error {
 	return nil
 }
 
-// InstalledPackage is the tenant's state for one installed package.
 type InstalledPackage struct {
 	ID            string                `json:"id"`
 	Version       string                `json:"version"`
 	Namespace     string                `json:"namespace"`
 	Title         string                `json:"title,omitempty"`
-	State         string                `json:"state"` // active, draining, retired
+	State         string                `json:"state"`
 	Contributions []PackageContribution `json:"contributions,omitempty"`
-	Digest        string                `json:"digest,omitempty"`   // the index's artifact digest, when it declares one
-	Artifact      string                `json:"artifact,omitempty"` // sha256 over the bytes sealed in this tenant's store
+	Digest        string                `json:"digest,omitempty"`
+	Artifact      string                `json:"artifact,omitempty"`
 	InstalledAt   time.Time             `json:"installedAt,omitempty"`
 	ChangedAt     time.Time             `json:"changedAt,omitempty"`
-	// Retained are inactive versions this tenant installed: their artifacts stay.
-	Retained []RetainedArtifact `json:"retained,omitempty"`
+	Retained      []RetainedArtifact    `json:"retained,omitempty"`
 }
 
-// RetainedArtifact is one replaced version whose artifact the tenant keeps.
 type RetainedArtifact struct {
 	Version string    `json:"version"`
 	Digest  string    `json:"digest,omitempty"`
 	At      time.Time `json:"at"`
 }
 
-// Precheck is the read a person sees before installing.
 type Precheck struct {
 	ID       string              `json:"id"`
 	Version  string              `json:"version"`
@@ -1471,8 +1364,6 @@ type Precheck struct {
 	Bindings []CapabilityBinding `json:"bindings,omitempty"`
 }
 
-// PackageView is one package as the console lists it: what the index offers and
-// what the tenant has.
 type PackageView struct {
 	Origin       string            `json:"origin,omitempty"`
 	SourceDigest string            `json:"sourceDigest,omitempty"`
@@ -1480,24 +1371,20 @@ type PackageView struct {
 	Descriptor   PackageDescriptor `json:"descriptor"`
 	Installed    *InstalledPackage `json:"installed,omitempty"`
 	Precheck     Precheck          `json:"precheck"`
-	Source       string            `json:"source"` // index or installed; an installed record is not an installation offer
+	Source       string            `json:"source"`
 }
 
-// Contribution is one namespaced contribution of this tenant: built-in app
-// contributions and installed packages'. The shell addresses it by Key.
 type Contribution struct {
-	Key     string `json:"key"` // "<namespace>.<view>"
+	Key     string `json:"key"`
 	View    string `json:"view"`
 	Surface string `json:"surface,omitempty"`
 	Title   string `json:"title,omitempty"`
 	Kind    string `json:"kind,omitempty"`
 	App     string `json:"app,omitempty"`
-	Source  string `json:"source"` // the app or package that brings it
-	State   string `json:"state"`  // active or draining
+	Source  string `json:"source"`
+	State   string `json:"state"`
 }
 
-// PackageIndex is the deployment's trusted directory or an in-memory index.
-// Console reads a directory afresh for each listing and installation decision.
 type PackageIndex struct {
 	Packages  []PackageDescriptor
 	Directory string
@@ -1555,7 +1442,6 @@ func (b PackageBlueprint) Check() error {
 	return nil
 }
 
-// latest picks the newest version of a package by version string order.
 func (i *PackageIndex) Latest(id string) (PackageDescriptor, bool) {
 	var out PackageDescriptor
 	found := false
@@ -1567,7 +1453,6 @@ func (i *PackageIndex) Latest(id string) (PackageDescriptor, bool) {
 	return out, found
 }
 
-// find picks one exact version.
 func (i *PackageIndex) Find(id, version string) (PackageDescriptor, bool) {
 	for _, p := range i.Packages {
 		if p.ID == id && (version == "" || p.Version == version) {
@@ -1601,7 +1486,6 @@ type Offer struct {
 	Origin     string            `json:"origin"`
 }
 
-// PackageRemoval is what a person sees before uninstalling: blockers only.
 type PackageRemoval struct {
 	ID       string   `json:"id"`
 	OK       bool     `json:"ok"`
@@ -1637,14 +1521,12 @@ type ConsolePackages interface {
 
 const PackageType = "platform.package"
 
-// CompositeEdit is one asset edit of a composite command.
 type CompositeEdit struct {
 	Schema  string          `json:"schema"`
 	Target  *pb.EntityRef   `json:"target"`
 	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
-// CompositeAnswer says what the tenant accepted.
 type CompositeAnswer struct {
 	Key     string `json:"key"`
 	Applied int    `json:"applied"`

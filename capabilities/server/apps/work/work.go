@@ -1,6 +1,3 @@
-// Package work is the platform's work app: approval requests for
-// actions that wait for approvers, and tasks for people, with one inbox. A
-// platform app on the app API and public consumer roles.
 package work
 
 import (
@@ -19,16 +16,12 @@ import (
 	"platformserver/platform"
 )
 
-// Approval requests and tasks are entity types with lifecycles, so
-// they get lists, record pages and history, and replay like any records.
 const (
-	ID           = platform.WorkApp
-	ApprovalType = platform.WorkApprovalType
-	TaskType     = platform.WorkTaskType
-	Admin        = "admin"
-	// SchemaRequest holds a submission for approval; the host submits it for the requester.
-	SchemaRequest = platform.WorkApprovalRequestSchema
-	// A member's saved views of a list: their data, not configuration.
+	ID               = platform.WorkApp
+	ApprovalType     = platform.WorkApprovalType
+	TaskType         = platform.WorkTaskType
+	Admin            = "admin"
+	SchemaRequest    = platform.WorkApprovalRequestSchema
 	DelegationType   = "work.delegation"
 	SchemaDelegate   = "work.delegation.add"
 	SchemaUndelegate = "work.delegation.end"
@@ -37,15 +30,10 @@ const (
 	SchemaViewRemove = "work.view.remove"
 )
 
-// ApprovalRequest is a held submission and its chain of approvers.
 type ApprovalRequest = platform.ApprovalRequest
 
-// ApprovalStep is one level: who may approve, and who did. Count is how many
-// distinct approvals close the level: 0 keeps the level's own
-// rule of one, or all when All is set.
 type ApprovalStep = platform.ApprovalStep
 
-// required is the number of distinct approvals this level closes at.
 func approvalRequired(s ApprovalStep) int {
 	if s.All {
 		return len(s.Approvers)
@@ -56,30 +44,23 @@ func approvalRequired(s ApprovalStep) int {
 	return 1
 }
 
-// Delegation hands a member's approvals and tasks to another for some days.
 type Delegation = platform.WorkDelegation
 
-// WorkTask is work for people: who may take it, by when, and whether it is done.
 type WorkTask = platform.WorkTask
 
-// SavedView is a member's view of an entity type's list: its search, grouping,
-// pivot or chart, kept as the kit's state. Only its owner sees it.
 type SavedView = platform.SavedView
 
 type Work struct {
 	mu     sync.Mutex
-	host   platform.WorkHost // the tenant running it, once composed
+	host   platform.WorkHost
 	ledger *platform.Ledger
 }
 
 var _ platform.ApprovalOwner = (*Work)(nil)
 var _ platform.AttachedWork = (*Work)(nil)
 
-// Attach is called by the host when a tenant is composed.
 func (w *Work) AttachWork(h platform.WorkHost) { w.host = h }
 
-// RequestApproval retains the original held-submission format and identity.
-// It is a nested decision in the host's existing staged transaction.
 func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if c.Automation || c.Tenant == "" || held.GetTenantId() != c.Tenant || held.GetPrincipalId() != c.ID || held.GetAuthority() != c.App {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
@@ -100,9 +81,6 @@ func (w *Work) RequestApproval(c platform.Caller, held *pb.Submission, now time.
 	return platform.Decide(automation, w, request, now)
 }
 
-// New is a tenant's work app. Every member uses it through two reads, the
-// inbox and their requests; the records themselves (lists, pages, history) are
-// for holders of its admin role.
 func New(tenant string) *Work {
 	w := &Work{}
 	var actions []platform.Action
@@ -183,7 +161,6 @@ func (w *Work) entities() []platform.Entity {
 	}
 }
 
-// Snapshot and Restore: its records are the host's; the ledger is its own.
 func (w *Work) SnapshotFormat() string { return "platform.ledger.v1" }
 
 func (w *Work) Snapshot() (json.RawMessage, error) { return w.ledger.Snapshot() }
@@ -228,9 +205,6 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 	})
 }
 
-// request opens an approval request for the held submission in the payload,
-// on behalf of the requester it names; the approvers of each level are
-// resolved now, on the request's day.
 func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
@@ -254,16 +228,14 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		}
 		approvers := slices.DeleteFunc(w.approvers(level, requester, app, now), func(m string) bool { return m == requester.ID })
 		if len(approvers) == 0 {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} // nobody could approve it
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		step := ApprovalStep{Title: level.Title, Approvers: approvers, All: level.All, Approved: []string{}, Delegates: w.delegates(c, approvers, now)}
-		// A tenant policy may ask several distinct members for this action;
-		// the count is fixed now, with the approvers.
 		step.Count = CountFor(step, level.All, w.PolicyCount(c, app, declared.Schema), len(approvers))
 		if level.Due > 0 {
 			step.Due = now.Add(level.Due)
 		}
-		if level.WorkingDays > 0 { // in the requester's working days
+		if level.WorkingDays > 0 {
 			cal := w.host.Calendar("member:"+requester.ID, now.UTC().Format(time.DateOnly))
 			step.Due = cal.After(now, level.WorkingDays)
 		}
@@ -280,7 +252,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	return func(r *pb.ChangeRecord) {
-		if len(steps) == 0 { // no level applies: the action runs at once
+		if len(steps) == 0 {
 			w.run(c, r, request, now)
 			return
 		}
@@ -290,7 +262,6 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 	}, nil
 }
 
-// approvers are the members a level names, on now's day.
 func (w *Work) approvers(level platform.ApprovalLevel, requester platform.Member, app string, now time.Time) []string {
 	var out []string
 	add := func(ms ...string) {
@@ -308,7 +279,7 @@ func (w *Work) approvers(level platform.ApprovalLevel, requester platform.Member
 	}
 	if level.Role != "" {
 		day := now.UTC().Format(time.DateOnly)
-		units := w.host.Units("member:"+requester.ID, "", day) // the requester's own units
+		units := w.host.Units("member:"+requester.ID, "", day)
 		for _, u := range units {
 			add(w.host.Holders(level.Structure, u, level.Role, day)...)
 		}
@@ -317,7 +288,6 @@ func (w *Work) approvers(level platform.ApprovalLevel, requester platform.Member
 	return out
 }
 
-// offer opens the task of the request's current level for its approvers.
 func (w *Work) offer(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now time.Time) {
 	step := a.Levels[a.Level]
 	task := WorkTask{Record: platform.Record{ID: fmt.Sprintf("%s#%d", a.ID, a.Level+1)}, Title: "Approve: " + a.Title + " " + a.Target,
@@ -331,7 +301,6 @@ func (w *Work) offer(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, n
 	c.Notify(platform.Notification{Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, now, to...)
 }
 
-// close ends the tasks of a request's level that are still open.
 func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, level int, state string) {
 	if t, ok := platform.Get[WorkTask](c, fmt.Sprintf("%s#%d", a.ID, level+1)); ok && t.State == "open" {
 		t.State = state
@@ -340,8 +309,6 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 	}
 }
 
-// decider refuses a caller who is not an approver of the current level, the
-// requester, or an AI agent (a person decides).
 func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	a := record.(*ApprovalRequest)
 	step := a.Levels[a.Level]
@@ -352,9 +319,6 @@ func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.
 	return nil
 }
 
-// approve records the approver's approval; the level ends when one approver
-// (or all, for an all-approvers level) approved; the last level runs the held
-// submission now, as the requester, and its rules decide (D3).
 func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
 	if err := w.decider(c, record, payload, now); err != nil {
 		return err
@@ -370,7 +334,7 @@ func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, n
 		step.DecidedBy[who] = c.ID
 	}
 	if len(step.Approved) < approvalRequired(*step) {
-		return nil // stays pending at this level until the required approvals
+		return nil
 	}
 	if a.Level+1 < len(a.Levels) {
 		a.Level++
@@ -380,7 +344,6 @@ func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, n
 	return nil
 }
 
-// opened follows an approval: the level's task closes and the next opens, or the held action runs.
 func (w *Work) opened(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
 	a := *record.(*ApprovalRequest)
 	previous := a.Level
@@ -389,20 +352,15 @@ func (w *Work) opened(c platform.Caller, r *pb.ChangeRecord, record any, now tim
 		w.run(c, r, a, now)
 		return
 	}
-	if len(a.Levels[a.Level].Approved) == 0 { // a new level opened
+	if len(a.Levels[a.Level].Approved) == 0 {
 		w.close(c, r, a, previous-1, "done")
 		w.offer(c, r, a, now)
 	}
 }
 
-// run submits the held submission as the requester, inside this input: a
-// refusal marks the request refused with the reason.
 func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now time.Time) {
 	held := &pb.Submission{}
 	protojson.Unmarshal([]byte(a.Submission), held)
-	// The revision the requester saw was checked when they asked; since then
-	// the approval itself moved the record (its pending state), so the held
-	// submission runs by the rules of now, not that revision (D3).
 	held.ExpectedRevision = nil
 	execution, err := w.host.ApprovalExecution(c, a)
 	if err == nil {
@@ -423,9 +381,6 @@ func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now
 		Key: "request:" + a.ID}, now, platform.Recipient{Member: a.Requester})
 }
 
-// ended follows a rejection or a withdrawal: the level's task closes and the
-// record leaves its pending state; a rejection is told, with its note, to the
-// requester and to whoever approved before it (F-38).
 func (w *Work) ended(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
 	a := *record.(*ApprovalRequest)
 	w.close(c, r, a, a.Level, "canceled")
@@ -444,7 +399,6 @@ func (w *Work) ended(c platform.Caller, r *pb.ChangeRecord, record any, now time
 		Key: "request:" + a.ID}, now, to...)
 }
 
-// reject records who rejected the request and why.
 func (w *Work) reject(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
 	if err := w.decider(c, record, payload, now); err != nil {
 		return err
@@ -456,9 +410,6 @@ func (w *Work) reject(c platform.Caller, record any, payload json.RawMessage, no
 	return nil
 }
 
-// move moves the requested record into or out of the pending state its
-// transition declares (platform.Approval.Pending), as its app's automation,
-// inside this input; a transition without one has no such action.
 func (w *Work) move(c platform.Caller, a ApprovalRequest, suffix string, now time.Time) {
 	held := &pb.Submission{}
 	protojson.Unmarshal([]byte(a.Submission), held)
@@ -501,7 +452,7 @@ func (w *Work) completer(c platform.Caller, record any, payload json.RawMessage,
 	}
 	t.Answer = p.Answer
 	if strings.HasPrefix(t.Ref, ApprovalType+"/") {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} // an approval's task ends with the approval
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if !slices.Contains(t.Candidates, c.ID) || t.Assignee != "" && t.Assignee != c.ID {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -510,7 +461,6 @@ func (w *Work) completer(c platform.Caller, record any, payload json.RawMessage,
 	return nil
 }
 
-// Inbox is a member's open tasks, overdue first, then by due time.
 func (w *Work) inbox(c platform.Caller, now time.Time) []WorkTask {
 	open, _ := json.Marshal([]any{[]any{"state", "=", "open"}})
 	tasks, _, _ := platform.Find[WorkTask](c, platform.Query{Domain: open, Sort: []string{"due", "id"}})
@@ -527,8 +477,6 @@ func (w *Work) inbox(c platform.Caller, now time.Time) []WorkTask {
 	return out
 }
 
-// Read "inbox": the caller's open tasks; "requests": the caller's approval requests.
-// view saves or removes a member's own view; nobody changes another's.
 func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	v, exists := platform.Get[SavedView](c, id)
@@ -567,7 +515,6 @@ func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-// Run tells the people of each overdue task, once.
 func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error {
 	if name == "redirects" {
 		return w.runRedirects(c, now)
@@ -590,7 +537,6 @@ func (w *Work) Run(c platform.Caller, name string, now time.Time) *kernel.Error 
 	return nil
 }
 
-// Assign creates an app's task (Caller.Assign), resolving its recipients now.
 func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
 	if a.Close {
 		if a.Key == "" {
@@ -606,7 +552,7 @@ func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignme
 		id = fmt.Sprintf("%s:%s", c.App, r.GetChangeId())
 	}
 	if existing, ok := platform.Get[WorkTask](work, id); ok && existing.State == "open" {
-		return nil // one open task per app and key
+		return nil
 	}
 	task := WorkTask{Record: platform.Record{ID: id}, Title: a.Title, Body: a.Body, Ref: a.Ref, App: c.App, Key: a.Key, Candidates: candidates, Due: a.Due, State: "open", Answers: a.Answers}
 	if err := work.Put(r, task); err != nil {
@@ -620,8 +566,6 @@ func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignme
 	return nil
 }
 
-// Close cancels an open task as part of the decision r: a flow's wait
-// ended another way, or its path stopped.
 func (w *Work) Close(c platform.Caller, r *pb.ChangeRecord, id string) {
 	work := w.host.Automation(c, ID)
 	if task, ok := platform.Get[WorkTask](work, id); ok && task.State == "open" {
@@ -631,12 +575,8 @@ func (w *Work) Close(c platform.Caller, r *pb.ChangeRecord, id string) {
 	}
 }
 
-// closed marks what the work app told people about a task read for every
-// recipient once it closes: done, or ended another way (F-30). It runs inside
-// the closing decision, so replay marks them again.
 func (w *Work) closed(c platform.Caller, id string) { w.host.Seen(c, "task:"+id, "overdue:"+id) }
 
-// candidates are the level's approvers and their delegates.
 func approvalCandidates(s ApprovalStep) []string {
 	out := slices.Clone(s.Approvers)
 	for d := range s.Delegates {
@@ -648,7 +588,6 @@ func approvalCandidates(s ApprovalStep) []string {
 	return out
 }
 
-// actingFor is the approver member decides as: themselves, or whom they stand in for; "" when neither.
 func approvalActingFor(s ApprovalStep, member string) string {
 	if slices.Contains(s.Approvers, member) {
 		return member
@@ -656,7 +595,6 @@ func approvalActingFor(s ApprovalStep, member string) string {
 	return s.Delegates[member]
 }
 
-// delegates are those standing in on now's day for any of approvers.
 func (w *Work) delegates(c platform.Caller, approvers []string, now time.Time) map[string]string {
 	day := now.UTC().Format(time.DateOnly)
 	all, _, _ := platform.Find[Delegation](w.host.Automation(c, ID), platform.Query{Limit: 1000})
@@ -672,7 +610,6 @@ func (w *Work) delegates(c platform.Caller, approvers []string, now time.Time) m
 	return out
 }
 
-// delegate records a member's delegation, or ends one of theirs.
 func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	existing, known := platform.Get[Delegation](c, id)
@@ -700,8 +637,6 @@ func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 	return func(r *pb.ChangeRecord) { c.Put(r, d) }, nil
 }
 
-// Work stores its authority in the ledger and staged records. Its private
-// instance receives the private host view for directory and approval reads.
 func (w *Work) ForkDecision() (platform.App, error) {
 	return &Work{host: w.host, ledger: w.ledger}, nil
 }

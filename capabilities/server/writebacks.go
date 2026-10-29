@@ -19,7 +19,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// IntegrationEffect exposes delivery metadata, without requests or answers.
 type IntegrationEffect struct {
 	ID       string    `json:"id"`
 	Endpoint string    `json:"endpoint"`
@@ -53,8 +52,6 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 			if effect.PublicMessage != "" {
 				item.Error = effect.PublicMessage
 			} else if books {
-				// Results predating public delivery text retain their original
-				// metadata through the business owner's historical adapter.
 				if owner, ok := t.app(platform.BooksApp).(platform.BooksChecks); ok {
 					if message := owner.HistoricalPostingMessage(effect.Error); message != "" {
 						item.Error = message
@@ -67,15 +64,6 @@ func (t *Tenant) integrationEffects(m platform.Member, now time.Time) ([]Integra
 	return out, nil
 }
 
-// Writebacks ride the  outbox: an accepted decision that a
-// published writeback listens for becomes an effect addressed to the
-// connection ("connection:<id>"), frozen with its request while the decision is
-// still private, so replay rebuilds the same intent. The dispatcher sends it in
-// the connection's order with the decision's change id as the idempotency key;
-// its outcome is journaled, and the build app hears the answer (Answerer).
-
-// writebackEffects plans the effects of one accepted decision. It runs inside
-// the input and inside replay, so it only reads records as they stand.
 func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.Effect, *kernel.Error) {
 	if t.app(build.ID) == nil {
 		return nil, nil
@@ -93,8 +81,6 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 	var planned []platform.Effect
 	owner := t.app(build.ID).(build.IntegrationDefinitions)
 	for _, w := range writebacks {
-		// Select the frozen event before resolving its runtime connection:
-		// an unconfigured integration must not block unrelated operations.
 		eventSchema, on := w.Schema(), w.On
 		if w.Published != "" {
 			var asset platform.ReleaseAsset
@@ -159,8 +145,6 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 	return planned, nil
 }
 
-// Credential values are resolved only when an actual external request is
-// prepared. Frozen intents retain the reference for later delivery checks.
 func (t *Tenant) checkWritebackCredential(request build.WritebackRequest) *kernel.Error {
 	if request.Secret != "" {
 		if value, ok := t.credentialValue(request.Secret, "connection/"+request.Connection, request.URL); !ok || strings.TrimSpace(string(value)) == "" {
@@ -170,9 +154,6 @@ func (t *Tenant) checkWritebackCredential(request build.WritebackRequest) *kerne
 	return nil
 }
 
-// connectionEndpoints are the connections with unsettled writebacks, as the
-// dispatcher's endpoints: one order and one breaker per connection. Called
-// under opsMu.
 func (t *Tenant) connectionEndpoints() []*Endpoint {
 	var out []*Endpoint
 	for _, x := range t.outbound {
@@ -186,8 +167,6 @@ func (t *Tenant) connectionEndpoints() []*Endpoint {
 	return out
 }
 
-// sendWriteback makes one attempt with the frozen request: the connection's
-// secret as Authorization, the effect id as Idempotency-Key.
 func (t *Tenant) sendWriteback(x platform.Effect) (out platform.Outcome) {
 	sum := sha256.Sum256([]byte(x.Body))
 	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}

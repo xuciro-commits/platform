@@ -2,7 +2,6 @@ import {Button,Panel,RecordHistory,RecordDeliveries,Tasks,t,useRecordView,type E
 import {useHost,useOpenRecord} from '../index';
 export type HistoryProps={object:string;historyLimit?:number;selected?:EntityRecord;readSource?:RecordSource;confirmedRecord?:EntityRecord;recordStatus?:'empty'|'pending'|'value'|'error'};
 export type TasksProps={object:string;selected?:EntityRecord;live:boolean;readSource?:RecordSource};
-/** The timeline (16b): the selected record's history from the journal. */
 export function HistoryRenderer({object:type,historyLimit,selected,readSource,confirmedRecord,recordStatus}:HistoryProps) {
   const { source } = useHost();
   const openRecord=useOpenRecord();
@@ -17,8 +16,6 @@ export function HistoryRenderer({object:type,historyLimit,selected,readSource,co
   return <div className="grid gap-3"><RecordDeliveries deliveries={result.view.deliveries} onOpen={(type,r)=>openRecord(type+"/"+r.id)}/><RecordHistory info={info} history={result.view.history} heading={false} limit={historyLimit||undefined} total={result.view.history.length} recordID={original.id} recordRevision={result.view.record.revision}/></div>;
 }
 
-/** The tasks (16b): what waits on the selected record for this member — approvals
- *  and flow steps from the work app — answered where they are. */
 export function TasksRenderer({object:type,selected,live,readSource}:TasksProps) {
   const { can, decide, source } = useHost(), openRecord = useOpenRecord(),reader=readSource??source;
   const result=useRecordView(reader,type,reader.scope===source.scope?selected?.id:undefined),view=result.loading?undefined:result.view;

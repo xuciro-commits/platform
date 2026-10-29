@@ -10,7 +10,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, required=True)
@@ -24,8 +23,6 @@ def main():
         parser.error("an authorized token environment variable and a run key of 1–128 characters are required")
     descriptor = json.loads(args.package.read_text())
     setup = descriptor["blueprint"]["setup"]
-    # Payloads are retained JSON strings, so neither numeric values nor their
-    # original bytes pass through Python's floating-point JSON representation.
     identity = json.dumps([descriptor["id"], descriptor["version"], setup], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(identity.encode()).hexdigest()
     headers = {"Authorization": "Bearer " + token, "Platform-Tenant": args.tenant, "Content-Type": "application/json"}
@@ -64,7 +61,6 @@ def main():
             raise RuntimeError(f'{step["name"]}: the original request has no accepted receipt')
         print(f'{step["name"]}: {step["schema"]} {step["target"]["id"]} accepted')
     print("Setup complete. Reusing this package, member and run key reuses the original requests.")
-
 
 if __name__ == "__main__":
     try:

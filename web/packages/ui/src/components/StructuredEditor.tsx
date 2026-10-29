@@ -18,8 +18,6 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
 }) {
   const [mode,setMode] = useState<'visual'|'source'>(children ? initialMode : 'source');
   const [format,setFormat] = useState<SourceFormat>('json');
-  // A complete bounded asset can exceed a scalar field's input budget once
-  // formatted. Keep its source within the original 512 KiB asset body limit.
   const input = useDraftInput('source:'+scope,formatStructuredSource(value,format),false,512*1024), buffers=useInputDrafts();
   const [issues,setIssues]=useState<Api.FieldIssue[]>([]),[message,setMessage]=useState(''),[running,setRunning]=useState(false);
   useEffect(()=>setMessage(''),[scope,expectedRevision]);

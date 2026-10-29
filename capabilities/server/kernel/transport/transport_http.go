@@ -19,12 +19,6 @@ import (
 	"time"
 )
 
-// The edge every request crosses: security headers, compression, revalidation,
-// the counters /metrics reads, and the access log. It wraps the mux, so the
-// workspace's files and the API are measured and served the same way.
-
-// gzipMinBytes is where compression starts paying for itself: below it the
-// gzip header costs more than it saves.
 const gzipMinBytes = 512
 
 var gzipPool = sync.Pool{New: func() any {
@@ -44,9 +38,6 @@ func compressible(contentType string) bool {
 	return false
 }
 
-// edgeWriter holds a response until it knows whether to compress and revalidate
-// it. JSON answers are buffered whole (they are one write), files stream, and
-// server-sent events are passed through untouched.
 type edgeWriter struct {
 	http.ResponseWriter
 	request     *http.Request
@@ -54,9 +45,9 @@ type edgeWriter struct {
 	status      int
 	started     bool
 	gz          *gzip.Writer
-	buffer      []byte // a buffered body that may become a 304 or a compressed answer
-	buffering   bool   // the response is JSON and small enough to hold
-	noCompress  bool   // the handler encoded the body itself
+	buffer      []byte
+	buffering   bool
+	noCompress  bool
 	writeFailed bool
 }
 
@@ -65,7 +56,6 @@ func (w *edgeWriter) WriteHeader(status int) {
 		return
 	}
 	w.status = status
-	// JSON answers are held so a matching If-None-Match costs no body at all.
 	if w.request.Method == http.MethodGet && status == http.StatusOK && strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
 		w.buffering = true
 	}
@@ -73,7 +63,7 @@ func (w *edgeWriter) WriteHeader(status int) {
 
 func (w *edgeWriter) Write(p []byte) (int, error) {
 	if w.buffering {
-		if len(w.buffer)+len(p) > 4<<20 { // too large to hold: send what is buffered, then stream
+		if len(w.buffer)+len(p) > 4<<20 {
 			w.buffering = false
 			if err := w.start(len(w.buffer) + len(p)); err != nil {
 				return 0, err
@@ -104,13 +94,10 @@ func (w *edgeWriter) statusCode() int {
 	return w.status
 }
 
-// gzAllowed reports whether a body of this size would be compressed. It is
-// what tells Close whether it still has to say the body's length.
 func (w *edgeWriter) gzAllowed(size int) bool {
 	return !w.noCompress && w.acceptGzip && size >= gzipMinBytes && compressible(w.Header().Get("Content-Type"))
 }
 
-// start sends the headers, choosing compression for this response.
 func (w *edgeWriter) start(size int) error {
 	if w.started {
 		return nil
@@ -138,8 +125,6 @@ func (w *edgeWriter) body(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
-// Close finishes the response: the buffered body becomes a 304 when the client
-// already holds it, or a compressed body when it is worth compressing.
 func (w *edgeWriter) Close() {
 	if w.buffering && !w.started {
 		body := w.buffer
@@ -189,18 +174,10 @@ func (w *edgeWriter) Flush() {
 	}
 }
 
-// NoCompression says the body is already encoded for this request: the edge
-// writes it as it is.
 func (w *edgeWriter) NoCompression() { w.noCompress = true }
 
-// Unwrap lets http.ResponseController reach the underlying writer.
 func (w *edgeWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-// ---------------------------------------------------------------------------
-// Counters
-
-// Stats is what /metrics reads: how many requests, how long they took, what
-// is in flight. Labels stay bounded: a route's pattern, never its parameters.
 type Stats struct {
 	inflight atomic.Int64
 	total    atomic.Int64
@@ -236,8 +213,6 @@ func NewStats() *Stats {
 	return &Stats{counts: map[string]*atomic.Int64{}, latency: map[string]*latencyHist{}}
 }
 
-// patternOf names a route without its parameters: /v1/records/x/query becomes
-// /v1/records/*/query. Cardinality stays what the router declares.
 func patternOf(path string) string {
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) < 2 {
@@ -275,8 +250,6 @@ func (s *Stats) observe(pattern string, status int, d time.Duration) {
 	hist.observe(d)
 }
 
-// WritePrometheus writes the counters in the exposition format Prometheus
-// scrapes. No tenant or member names appear: the labels are route patterns.
 func (s *Stats) WritePrometheus(w io.Writer) {
 	var b strings.Builder
 	b.WriteString("# HELP platform_requests_total Requests served, by route pattern.\n# TYPE platform_requests_total counter\n")
@@ -312,7 +285,6 @@ func (s *Stats) WritePrometheus(w io.Writer) {
 	_, _ = io.WriteString(w, b.String())
 }
 
-// Edge wraps the host handler with the shared HTTP response and request policy.
 func Edge(next http.Handler, stats *Stats, limiter *Limiter, tenantHeader, schemaVersionHeader string) http.Handler {
 	accessLog := os.Getenv("PLATFORM_ACCESS_LOG") == "1"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -370,14 +342,8 @@ func RemoteOf(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-// ---------------------------------------------------------------------------
-// Rate limiting
-
-// Limiter is a per-credential token bucket. A person never reaches it; a loop
-// or a leaked token does, and the host answers 429 instead of spending its
-// capacity on one caller.
 type Limiter struct {
-	rate  float64 // tokens per second
+	rate  float64
 	burst float64
 	mu    sync.Mutex
 	state map[string]*bucket
@@ -408,7 +374,7 @@ func (l *Limiter) allow(r *http.Request) (time.Duration, bool) {
 	defer l.mu.Unlock()
 	b := l.state[key]
 	if b == nil {
-		if len(l.state) > 10000 { // a flood of distinct credentials: start over
+		if len(l.state) > 10000 {
 			l.state = map[string]*bucket{}
 		}
 		b = &bucket{tokens: l.burst, last: now}
@@ -426,28 +392,19 @@ func (l *Limiter) allow(r *http.Request) (time.Duration, bool) {
 	return 0, true
 }
 
-// The workspace's build, held in memory: the page, its hashed assets and their
-// cache headers. A request for a file costs a map lookup and one write; a
-// repeat visit costs a 304 or nothing at all.
-
-// webAsset is one file of the build.
 type webAsset struct {
 	body      []byte
 	etag      string
 	mediaType string
-	immutable bool // a hashed name: the bytes behind it never change
+	immutable bool
 }
 
-// WebFiles is the build, loaded once at startup. A release swap starts a new
-// process, so the files here are the files this process was started with.
 type WebFiles struct {
 	files map[string]webAsset
 	index webAsset
 	total int64
 }
 
-// maxWebBytes bounds what the host holds in memory for the workspace. A build
-// larger than this is served from disk, as before.
 const maxWebBytes = 64 << 20
 
 var mediaTypes = map[string]string{
@@ -469,15 +426,12 @@ var mediaTypes = map[string]string{
 	".map":   "application/json",
 }
 
-// hashedName reports whether a build artifact's name carries its content hash,
-// which is what makes it safe to cache for a year.
 func hashedName(name string) bool {
 	base := strings.TrimSuffix(name, path.Ext(name))
 	_, hash, ok := strings.Cut(base, "-")
 	return ok && len(hash) >= 8 && !strings.Contains(hash, ".")
 }
 
-// LoadWeb reads the build once. A directory it cannot read is not served.
 func LoadWeb(dir string) *WebFiles {
 	files := &WebFiles{files: map[string]webAsset{}}
 	entries, err := os.ReadDir(dir)
@@ -533,7 +487,6 @@ func (f *WebFiles) add(key, name string, body []byte) {
 	f.total += int64(len(body))
 }
 
-// ServeHTTP answers a file, the page for any other path, with revalidation.
 func (f *WebFiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	asset, ok := f.files[path.Clean("/"+r.URL.Path)]
 	if !ok || r.URL.Path == "/" {
@@ -558,11 +511,6 @@ func (f *WebFiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(asset.body)
 }
 
-// Optional process profiling for operators: PLATFORM_PPROF=1 exposes the Go
-// runtime's own profiles at /debug/pprof/, to loopback callers only. It is off
-// unless the environment asks for it, and never reachable from another host.
-
-// ProfileRoutes registers the runtime profiles when the environment asks.
 func ProfileRoutes(mux *http.ServeMux) {
 	if os.Getenv("PLATFORM_PPROF") != "1" {
 		return

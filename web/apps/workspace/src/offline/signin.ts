@@ -2,8 +2,6 @@ import type {Api} from "@platform/kernel";
 type PublicSignIn=Pick<Api.SignIn,"issuer"|"client">;
 const key="prepared:sign-in";
 export function savePreparedSignIn(value:Api.SignIn){
- // Identity-provider coordinates are public configuration. Development token
- // lists and credentials stay in the original session storage only.
  localStorage.setItem(key,JSON.stringify({...(value.issuer?{issuer:value.issuer}:{}),...(value.client?{client:value.client}:{})}));
 }
 export function preparedSignIn():PublicSignIn|undefined{

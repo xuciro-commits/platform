@@ -5,8 +5,6 @@ type TimelineRecord = {id:string} & Record<string,unknown>;
 
 export type TimelineFields={start:string;end?:string;label:string;group?:string;kind:"date"|"datetime"};
 const day=86_400_000;
-/** Civil dates never pass through the browser's local zone. Datetimes must
- * carry their own offset; Date.parse is used only after shape/range checks. */
 export function timelineTime(value:unknown,kind:TimelineFields["kind"]):number|undefined {
  if(typeof value!=="string")return;
  const date=(text:string)=>{
@@ -32,8 +30,6 @@ function timelineRows<T extends TimelineRecord>(records:T[],fields:TimelineField
  return {rows,invalid:records.length-rows.length,min,max:max>min?max:min+(fields.kind==="date"?day:3_600_000)};
 }
 
-/** Authorized bounded records in, original selection out. This presentation
- * owns neither record reads nor scheduling/interval mutation. */
 export function RecordTimeline<T extends TimelineRecord>({records,fields,selected,onSelect,label}: {
  records:T[];fields:TimelineFields;selected?:string;onSelect:(record?:T)=>void;label:string;
 }) {

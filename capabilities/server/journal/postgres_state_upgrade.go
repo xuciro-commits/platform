@@ -25,9 +25,6 @@ func (j *Postgres) StateNeedsUpgrade(ctx context.Context, tenant string) (bool, 
 	return format < 3, nil
 }
 
-// Earlier SQL writers omitted installation images or model usage from owner
-// values. Admit only the exact original accepted preimages, and compare every
-// record, history, key and owner value before converting in one transaction.
 func (j *Postgres) upgradeStateInstallations(ctx context.Context, tx pgx.Tx, tenant string, position int64, full StateDelta) error {
 	var format int
 	if err := tx.QueryRow(ctx, `select format from runtime_tenants where tenant=$1`, tenant).Scan(&format); err != nil {
@@ -87,9 +84,6 @@ func (j *Postgres) upgradeStateInstallations(ctx context.Context, tx pgx.Tx, ten
 			return err
 		}
 	}
-	// These are disposable SQL read archives, not original accepted bytes.
-	// A same-position owner snapshot must not reuse a pre-conversion archive.
-	// Portable snapshots and the complete original journal remain untouched.
 	if _, err := tx.Exec(ctx, `delete from snapshots s using runtime_snapshot_meta m where s.tenant=$1 and m.tenant=s.tenant and m.snapshot_seq=s.seq`, tenant); err != nil {
 		return err
 	}

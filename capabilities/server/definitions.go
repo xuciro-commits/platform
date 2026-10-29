@@ -13,9 +13,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// registerDefinitions coordinates declaration owners after their pure
-// cross-reference checks. Installation, retained bindings and descriptions
-// continue through the original owners and never through the checker.
 func (t *Tenant) registerDefinitions() error {
 	classes := map[string]bool{}
 	versions := map[string]string{}
@@ -226,9 +223,6 @@ func (t *Tenant) registerDefinitions() error {
 	return nil
 }
 
-// Definitions serves the installed assets the member can discover. Entity
-// fields and actions are filtered through the existing read/catalog paths at
-// request time, so role and field changes are never cached in the registry.
 func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 	gen, key := t.definitionsFingerprint(), transport.Rights(m)
 	if out, ok := t.views.Definitions(gen, key); ok {
@@ -268,12 +262,8 @@ func (d *stagedDecision) VisibleApplications(c platform.Caller) []platform.Asset
 	return (runtime{d.tenant}).VisibleApplications(c)
 }
 
-// definitionsGeneration moves when the tenant's installed definitions do; it
-// is the cache's only invalidation key.
 func (t *Tenant) definitionsFingerprint() uint64 { return t.defGen.Load() }
 
-// setDefinitions installs a definition set and moves the generation: every
-// cached catalog, entity view and encoded answer becomes stale at once.
 func (t *Tenant) setDefinitions(definitions []platform.Definition) {
 	t.definitions = definitions
 	t.defGen.Add(1)

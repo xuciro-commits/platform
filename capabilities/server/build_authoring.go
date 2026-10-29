@@ -10,8 +10,6 @@ import (
 	"platformserver/platform"
 )
 
-// DraftActionCapabilities is a builder-only view of saved authoring metadata.
-// It does not add these actions to Definitions, Capabilities or execution.
 func (t *Tenant) DraftActionCapabilities(m platform.Member) ([]platform.CapabilityDescriptor, error) {
 	if err := t.admits(m); err != nil {
 		return nil, err

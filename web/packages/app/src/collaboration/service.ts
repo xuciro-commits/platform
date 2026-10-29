@@ -5,7 +5,6 @@ import {validImageRegions} from "@platform/ui/image-regions";
 import type {Api} from "@platform/kernel";
 export type CollaborationTarget={type:string;id:string};
 export type CollaborationHost=Pick<Host,"client"|"source"|"can"|"decide"|"resend"|"me">;
-/** Use only this captured original record. Retiring a view cannot retarget a queued decision. */
 export function createRecordCollaboration(host:CollaborationHost,target:CollaborationTarget,active:()=>boolean,id:(prefix:string)=>string) {
  const about=`${target.type}/${target.id}`;
  const requireActive=()=>{if(!active())throw new Error("The original record scope has ended.");};
@@ -50,8 +49,6 @@ export function createRecordCollaboration(host:CollaborationHost,target:Collabor
    const fileID=attempt.id;let refusal="The attachment was not confirmed.";
    const confirmed=await submit("files.file.attach","files.file",fileID,{hash:up.hash,name:up.name,contentType:up.contentType,size:up.size,target:about},reason=>refusal=reason);
    if(!confirmed)throw new Error(refusal);if(!active())return undefined;
-   // The accepted attach decision confirms this ID. Metadata is read by the
-   // refreshed view; starting a read here would race the decision's revision.
    fileAttempt=undefined;return fileID;
   },
   async attachment(fileID:string) {

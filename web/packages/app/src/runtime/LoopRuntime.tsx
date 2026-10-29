@@ -57,7 +57,6 @@ function LoopItem({ page, reference, queryKey, owner, loop, signature, session, 
 }
 
 
-/** Item-owned plans run once in the parent path, before sibling templates consume them. */
 function LoopItemQueries({page,parent,state,overlay,children}:{page:PageUI.Page;parent:LoopContext;state:Record<string,unknown>;overlay?:string;children:(context:LoopContext)=>ReactNode}) {
  const session=parent.session.childSession(parent.owner,parent.key),snapshot=useSyncExternalStore(session.subscribe,session.snapshot,session.snapshot);
  const queries=usePageQueries(page,parent.values,session,snapshot,{},overlay,parent.owner,true),source=parent.source;

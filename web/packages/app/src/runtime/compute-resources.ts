@@ -9,7 +9,6 @@ function computeScalar(output:unknown,field:string|undefined,type:string):Variab
  const decimal=Number.isSafeInteger(value)?parseDecimal(String(value)):undefined;
  return decimal?{status:'value',value:decimal}:{status:'error',code:'The calculation result could not be read.'};
 }
-/** IDs, bindings and keys remain stable across an unanswered invocation. */
 export function createComputeResourceReader(port:{describe:(binding:Api.AssetBinding)=>Promise<Api.CapabilityDescriptor>;invoke:(request:Api.CapabilityInvocation)=>Promise<Api.CapabilityResult>;read:(call:string)=>Promise<Api.OperationResult>},active:()=>boolean){
  const check=()=>{if(!active())throw Error('The calculation result could not be read.');};
  return {
@@ -25,7 +24,6 @@ export function createComputeResourceReader(port:{describe:(binding:Api.AssetBin
 
 type Plan={identity:string;ready:boolean;compute:Api.PageComputeResource;record:string};
 type Entry={plan:Plan;key:string;started:boolean;state:'pending'|'value'|'error';output?:unknown;cancelWait?:()=>void};
-/** Data re-confirmation hides fields without restarting an accepted operation. */
 export class PageComputeStore {
  private entries=new Map<string,Entry>();private listeners=new Set<()=>void>();private version=0;private disposed=false;
  private port:(active:()=>boolean,identity:string)=>ReturnType<typeof createComputeResourceReader>;private makeKey:()=>string;

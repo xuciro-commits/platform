@@ -1,5 +1,3 @@
-// Package kernel is the Go reference implementation of the kernel contract.
-// The contract itself is contract/proto, contract/spec and contract/vectors.
 package kernel
 
 import (
@@ -8,12 +6,10 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// Ref is a comparable entity reference.
 type Ref struct{ Type, ID string }
 
 func RefOf(r *pb.EntityRef) Ref { return Ref{r.GetType(), r.GetId()} }
 
-// Identity implements K1 (contract/spec/K1-identity.md).
 type Identity struct {
 	entities  map[Ref]bool
 	redirects map[Ref][]Ref
@@ -27,7 +23,6 @@ func NewIdentity(entities []*pb.EntityRef) *Identity {
 	return id
 }
 
-// Create brings a new entity into existence (I10); IDs are never reused.
 func (id *Identity) Create(r *pb.EntityRef) *Error {
 	ref := RefOf(r)
 	if ref.Type == "" || ref.ID == "" {
@@ -49,25 +44,24 @@ func (id *Identity) AddRedirect(r *pb.Redirect) *Error {
 	case r.GetKind() == pb.RedirectKind_REDIRECT_KIND_MERGE && len(to) != 1,
 		r.GetKind() == pb.RedirectKind_REDIRECT_KIND_SPLIT && len(to) < 2,
 		r.GetKind() == pb.RedirectKind_REDIRECT_KIND_UNSPECIFIED:
-		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // I3
+		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	case !id.entities[from]:
-		return errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND) // I4
+		return errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 	case slices.ContainsFunc(to, func(t Ref) bool { return !id.entities[t] }):
-		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // I5
+		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE)
 	case id.redirects[from] != nil:
-		return errorf(pb.ErrorCode_ERROR_CODE_CONFLICT) // I6
+		return errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
 	case slices.ContainsFunc(to, func(t Ref) bool { return id.reaches(from, t) }):
-		return errorf(pb.ErrorCode_ERROR_CODE_REDIRECT_CYCLE) // I7
+		return errorf(pb.ErrorCode_ERROR_CODE_REDIRECT_CYCLE)
 	}
 	id.redirects[from] = to
 	return nil
 }
 
-// Resolve returns one terminal reference, or several when a split leaves a choice (I8).
 func (id *Identity) Resolve(r *pb.EntityRef) ([]Ref, *Error) {
 	ref := RefOf(r)
 	if !id.entities[ref] {
-		return nil, errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND) // I2
+		return nil, errorf(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 	}
 	var terminals []Ref
 	var walk func(Ref)

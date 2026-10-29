@@ -49,8 +49,6 @@ type ObservationEvaluation struct {
 	Reused      bool                        `json:"reused,omitempty"`
 }
 
-// An observation plan exists only while an original read is outside the
-// tenant lock. It is never a durable input, row image or raw-data cache.
 type observationReadPlan struct {
 	info       ObservationInfo
 	entity     platform.EntityInfo
@@ -90,8 +88,6 @@ func (t *Tenant) observationDefinitions(m platform.Member) ([]platform.Definitio
 	if err != nil {
 		return nil, err
 	}
-	// Observation reads need the original permission projection, without
-	// describing every unrelated action, page and capability in the catalogue.
 	definitions = slices.DeleteFunc(definitions, func(def platform.Definition) bool { return def.Observation == nil })
 	return t.definitionsFrom(m, definitions), nil
 }
@@ -188,8 +184,6 @@ func (t *Tenant) prepareObservation(m platform.Member, ref platform.AssetRef, re
 	if plan.connection.Kind != "http" {
 		return plan, observationUnavailable(fmt.Errorf("observation uses an HTTP storage adapter"))
 	}
-	// Connection markings retain the existing integration restriction; source
-	// roles never downgrade confidential input for an ordinary business user.
 	if build.Guarded(plan.connection.Marking) {
 		marking := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "read", Type: build.ConnectionType, Record: plan.connection.ID}, at, false)
 		if refusal := authorizationRefusal(marking); refusal != nil {

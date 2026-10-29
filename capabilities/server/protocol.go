@@ -16,7 +16,6 @@ type binding struct {
 	provision platform.Provision
 }
 
-// bind resolves consumed protocols to providers enabled before the consumer.
 func (t *Tenant) bind(i int, a platform.App) error {
 	for _, c := range a.Manifest().Consumes {
 		var found []binding
@@ -32,16 +31,14 @@ func (t *Tenant) bind(i int, a platform.App) error {
 			return fmt.Errorf("tenant %s: %s consumes %s, which no app before it provides", t.ID, a.Manifest().ID, c.Protocol)
 		case len(found) > 0:
 			if b, ok := t.bindings[c.Protocol]; ok && b.provider != found[0].provider {
-				continue // bound for an earlier consumer; one provider per protocol per tenant
+				continue
 			}
-			t.bindings[c.Protocol] = found[0] // the first provider, until an administrator chooses another
+			t.bindings[c.Protocol] = found[0]
 		}
 	}
 	return nil
 }
 
-// bound is the provider the tenant binds protocol to; an administrator may
-// choose another (platform.protocol.bind), so it is read under opsMu.
 func (t *Tenant) bound(protocol string) (binding, bool) {
 	t.opsMu.Lock()
 	b, ok := t.bindings[protocol]
@@ -57,12 +54,9 @@ func (t *Tenant) bound(protocol string) (binding, bool) {
 			return binding{provider: b.provider, provision: current}, true
 		}
 	}
-	// Keep the selected provider when its declaration disappears. Resolve must
-	// refuse this call rather than silently send it to a different authority.
 	return binding{provider: b.provider}, true
 }
 
-// providers are every enabled provision of protocol, in the tenant's app order.
 func (t *Tenant) providers(protocol string) []binding {
 	var out []binding
 	for _, a := range t.liveApps() {
@@ -75,8 +69,6 @@ func (t *Tenant) providers(protocol string) []binding {
 	return out
 }
 
-// resolve is the tenant's provider of a protocol: the bound one, or the first
-// provider when no consumer has bound it yet.
 func (t *Tenant) resolve(protocol string) (binding, bool) {
 	if b, ok := t.bound(protocol); ok {
 		return b, true
@@ -91,7 +83,6 @@ func (t *Tenant) resolve(protocol string) (binding, bool) {
 	return binding{}, false
 }
 
-// provider resolves "<protocol id>#<action>" to the provider and its action schema.
 func (t *Tenant) provider(used string) (platform.App, string, bool) {
 	protocol, action, ok := strings.Cut(used, "#")
 	if !ok {
@@ -105,14 +96,11 @@ func (t *Tenant) provider(used string) (platform.App, string, bool) {
 	return b.provider, schema, mapped
 }
 
-// consumes reports whether c's app consumes protocol.
 func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
 	self := t.app(c.App)
 	return self != nil && slices.ContainsFunc(self.Manifest().Consumes, func(x platform.Consumption) bool { return x.Protocol == protocol })
 }
 
-// invoke calls a protocol action for a consumer: a flow's step, an agent, or a
-// decision's request once it is accepted.
 func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time, original ...string) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 	if !t.consumes(c, protocol) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{app} does not consume {protocol}", c.App, protocol)
@@ -153,10 +141,6 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 	return call(b, c)
 }
 
-// holder is the provider a call about an existing target goes to: the bound
-// one, unless it does not know the target and another provider does — a hold
-// made before the tenant rebound the protocol is confirmed or released where
-// it was made (F-39). Asking applies nothing.
 func (t *Tenant) holder(c platform.Caller, bound binding, protocol, action string, call func(binding, platform.Caller) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)) binding {
 	knows := func(b binding) bool {
 		err := platform.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {
@@ -176,9 +160,6 @@ func (t *Tenant) holder(c platform.Caller, bound binding, protocol, action strin
 	return bound
 }
 
-// probe runs a protocol action's policy and rules at the provider, for a
-// consumer's rules, applying nothing (Caller.Probe). A replay does not ask
-// again: the decision held; only whether a provider is bound is said again.
 func (t *Tenant) probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error {
 	if c.Replaying {
 		if _, _, bound := t.provider(platform.ProtocolAction(protocol, action)); !bound {
@@ -192,7 +173,6 @@ func (t *Tenant) probe(c platform.Caller, protocol, action, id string, payload [
 	})
 }
 
-// request is a protocol action an accepted decision asked for (Caller.Request).
 type request struct {
 	platform.Request
 	caller platform.Caller
@@ -200,7 +180,6 @@ type request struct {
 	n      int
 }
 
-// query reads a protocol read from every provider, the bound one first (Caller.Query).
 func (t *Tenant) query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *kernel.Error) {
 	if len(provider) > 1 {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -232,7 +211,6 @@ func (t *Tenant) query(c platform.Caller, protocol, read string, provider ...str
 	return out, nil
 }
 
-// entityType is the type of the entities the provider's protocol actions act on.
 func (b binding) entityType() string {
 	for _, schema := range b.provision.Actions {
 		if a, ok := b.provider.Manifest().Actions.Action(schema); ok {
@@ -242,7 +220,6 @@ func (b binding) entityType() string {
 	return ""
 }
 
-// rebind makes provider the tenant's provider of protocol (a platform decision).
 func (t *Tenant) rebind(protocol, provider string) bool {
 	for _, b := range t.providers(protocol) {
 		if b.provider.Manifest().ID == provider {
@@ -255,8 +232,6 @@ func (t *Tenant) rebind(protocol, provider string) bool {
 	return false
 }
 
-// Invoke calls a protocol action as a member (HTTP, MCP, conformance tests),
-// through the tenant's provider; it is journaled as the provider's submission.
 func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 	target, record, err, _ := t.invokeDiagnosed(m, protocol, action, id, payload, key, now)
 	return target, record, err
@@ -274,7 +249,6 @@ func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string,
 	return target, record, err, issues
 }
 
-// Query reads a protocol read as a member holding a role in the bound provider.
 func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *kernel.Error) {
 	b, bound := t.resolve(protocol)
 	if !bound {
@@ -296,8 +270,6 @@ func (t *Tenant) authorityOf(dataClass string) string {
 	return ""
 }
 
-// protocolEvents are the protocol events a provider's accepted decision is,
-// whether or not anyone consumes them.
 func (t *Tenant) protocolEvents(e platform.Event) []string {
 	var out []string
 	if a := t.app(e.App); a != nil {
@@ -313,7 +285,6 @@ func (t *Tenant) protocolEvents(e platform.Event) []string {
 	return out
 }
 
-// protocolEvent finds a protocol event's declaration by "<protocol id>#<event>".
 func (t *Tenant) protocolEvent(name string) (platform.ProtocolEvent, bool) {
 	protocol, event, _ := strings.Cut(name, "#")
 	for _, a := range t.liveApps() {
@@ -330,7 +301,6 @@ func (t *Tenant) protocolEvent(name string) (platform.ProtocolEvent, bool) {
 	return platform.ProtocolEvent{}, false
 }
 
-// ProtocolInfo describes a protocol in a tenant: who provides it, who consumes it, which provider is bound.
 type ProtocolInfo struct {
 	Contract  *platform.Protocol       `json:"contract,omitempty"`
 	ID        string                   `json:"id"`

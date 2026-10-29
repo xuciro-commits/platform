@@ -58,8 +58,6 @@ func (h *Host) routesPackageDrafts(rt *routes) {
 	})
 }
 
-// CreatePackageDrafts reuses the original release bootstrap and composite
-// accepted result. It owns only Build decisions, never the Package license.
 func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string, at time.Time) (PackageDraftResult, error) {
 	var answer PackageDraftResult
 	if err := t.admits(m); err != nil {
@@ -106,8 +104,6 @@ func (t *Tenant) CreatePackageDrafts(m platform.Member, id, version, key string,
 	if err != nil {
 		return answer, err
 	}
-	// Archived records retain their history. A new explicit creation keeps the
-	// logical asset name but uses a request-stable target ID when it is occupied.
 	context.DraftIDs = map[platform.AssetRef]string{}
 	commandKey := "package-drafts:" + m.ID + ":" + key
 	priorEdits := map[platform.AssetRef]platform.CompositeEdit{}
@@ -348,7 +344,6 @@ func (t *Tenant) PackagePreparation(m platform.Member, id, version string, at ti
 	})
 }
 
-// The preview stores inert content-addressed bytes, not an installation or grant.
 func (h *Host) routesPackageSources(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: platform.PackageInspectRequest{}, Answer: platform.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request platform.PackageInspectRequest

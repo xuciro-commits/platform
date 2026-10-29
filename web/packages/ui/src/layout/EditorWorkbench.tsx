@@ -2,9 +2,6 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { t } from "../i18n";
 import { cn } from "../lib/cn";
 
-/** Shared editor pane mechanics. Document commands and selection are owned by
- * the caller; resizing never writes presentation props into the document.
- */
 export function EditorWorkbench({ left, children, right, leftLabel, centerLabel, rightLabel, className }: {
   left?: ReactNode; children: ReactNode; right?: ReactNode;
   leftLabel: string; centerLabel: string; rightLabel: string; className?: string;

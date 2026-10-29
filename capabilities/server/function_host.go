@@ -118,8 +118,6 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	return agentowner.PlanFunction(ctx, c, r, request, pending)
 }
 
-// Recheck current grants before releasing saved input to the provider. This
-// checks permissions only; it does not replace accepted input with live data.
 func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	ctx := agentowner.FunctionAccess{Tenant: t.ID, Member: t.Member, AuthorityOf: t.authorityOf, Suspended: t.suspended,
 		Authorize: func(member platform.Member, owner string, f platform.AIFunction, sources []string, definition string, at time.Time) bool {
@@ -185,8 +183,6 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 	if i >= 0 && h.t.definitions[i].Source != "tenant" {
 		return fmt.Errorf("function %s is owned by code", ref)
 	}
-	// An installed declaration may grant an existing code action to newly
-	// declared tenant roles. Keep discovery consistent with the owner's catalog.
 	for i := range h.t.definitions {
 		d := &h.t.definitions[i]
 		if d.Ref.App == ref.App && d.Source == "code" && d.Action != nil {
@@ -199,10 +195,6 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 	return nil
 }
 
-// Only the definition owner can resolve retained versions. Code declarations
-// have their manifest version and cannot invent a native publication ordinal.
-// Function exposes the installed owner's declaration without executing a model.
-// The accepting call still checks the actual member/source/fields at runtime.
 func (h hostView) Function(app, name string, version int) (platform.AIFunction, int, bool) {
 	return agentowner.FunctionDefinition(h.t.app(app), name, version)
 }

@@ -8,7 +8,6 @@ const civil=(date:Date)=>`${String(date.getUTCFullYear()).padStart(4,"0")}-${Str
 const day=(value:string)=>new Date(`${value}T00:00:00Z`);
 const shift=(value:string,days:number)=>{const date=day(value);date.setUTCDate(date.getUTCDate()+days);return civil(date);};
 
-/** Two declared civil-date fields, one calendar. Original text stays repairable. */
 export function DateRangeInput({id,start,end,startLabel,endLabel,inclusive=false,disabled,invalid,describedBy,onChange}:{id?:string;start:string;end:string;startLabel:string;endLabel:string;inclusive?:boolean;disabled?:boolean;invalid?:boolean;describedBy?:string;onChange:(start:string,end:string)=>void}){
  const unique=useId(),root=id??unique,trigger=useRef<HTMLSpanElement>(null),calendar=useRef<HTMLDivElement>(null);
  const [open,setOpen]=useState(false),[month,setMonth]=useState(()=>validCivilDate(start)?start.slice(0,7):civil(new Date()).slice(0,7)),[anchor,setAnchor]=useState<string>(),[hover,setHover]=useState<string>();

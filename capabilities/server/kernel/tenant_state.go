@@ -13,11 +13,6 @@ import (
 	"sync"
 )
 
-// committed is the submit pipeline's memory of what it already answered, by
-// idempotency key: refusals (effect-free answers), accepted answers to
-// top-level inputs and release commands, connector inputs' answers, and the
-// composite commands applied. Guarded by the tenant's lock; rebuilt by replay
-// and carried by snapshots. Retries read here before any decision runs.
 type AcceptedValueReader interface {
 	StateValue(context.Context, string, string, string, int64) (json.RawMessage, error)
 	StateValues(context.Context, string, string, int64) (map[string]json.RawMessage, error)
@@ -41,11 +36,11 @@ type Committed struct {
 	tenant              string
 	decisionDefinitions map[string]*platform.DecisionDefinition
 	schemaVersions      map[string]platform.SchemaVersion
-	refusals            map[string]acceptedformat.Refusal // "<app>/<key>"
-	answers             map[string]json.RawMessage        // "<app>/<key>", "release:<key>"
-	inputs              map[string]json.RawMessage        // "<app>/<key>"
+	refusals            map[string]acceptedformat.Refusal
+	answers             map[string]json.RawMessage
+	inputs              map[string]json.RawMessage
 	compositeAnswers    map[string]json.RawMessage
-	composites          map[string]string // key → applied digest
+	composites          map[string]string
 }
 
 func (c *Committed) SaveAnswer(key string, raw json.RawMessage) {
@@ -85,9 +80,6 @@ func (c *Committed) SnapshotState() (s CommittedState) {
 	s.SubmissionSchemas = c.AllSchemaVersions()
 	s.CompositeAnswers = c.AllCompositeAnswers()
 	s.Refusals, s.AcceptedAnswers, s.AcceptedInputs, s.Composites = c.AllRefusals(), c.AllAnswers(), c.AllInputs(), c.AllComposites()
-	// Earlier SQL adapters put ordinary batches into the answer bucket even
-	// though their original receipts already answer retries. Keep those stored
-	// bytes readable, but project only real saved answers into host snapshots.
 	for key, raw := range s.AcceptedAnswers {
 		if c.storage == nil {
 			break
@@ -98,7 +90,7 @@ func (c *Committed) SnapshotState() (s CommittedState) {
 		result, receipt, err := acceptedformat.DecodeBatch(raw)
 		if err != nil {
 			continue
-		} // Restore retains its original rejection.
+		}
 		sub, err := acceptedformat.BatchSubmission(result, receipt)
 		if err == nil && sub != nil && result.Tenant == c.tenant && key == result.App+"/"+sub.GetIdempotencyKey() && !result.HasSavedAnswer(sub) {
 			delete(s.AcceptedAnswers, key)
@@ -142,8 +134,6 @@ func (c *Committed) SaveSchemaVersion(app, key string, binding *platform.SchemaV
 	c.schemaVersions[app+"/"+key] = *binding
 }
 
-// Historical answers are read only when requested. New committed images have
-// already been written in the accepted transaction before these save methods.
 func (c *Committed) UseStorage(s AcceptedValueReader, tenant string, position func() int64) {
 	c.storage, c.tenant = s, tenant
 	c.position = position
@@ -317,9 +307,6 @@ func (c *Committed) StorageValues(d *journal.StateDelta) {
 	}
 }
 
-// One result may be committed before it is applied to the working set. Hide
-// its historical metadata until the original application path saves it; keep
-// at most that result's metadata resident, then read it from SQL thereafter.
 func (c *Committed) ReleasePending() {
 	if c.storage == nil {
 		return
@@ -338,21 +325,15 @@ func (c *Committed) HoldPending(d journal.StateDelta) {
 	}
 }
 
-// CacheSizes reports the current working set, excluding lazy historical values.
 func (c *Committed) CacheSizes() (answers, schemas int) {
 	return len(c.answers), len(c.schemaVersions)
 }
 
-// sequences are the number counters: the host's, keyed by
-// "<app>/<sequence>/<year>", taken only in accepted decisions, rebuilt by
-// replay and kept by snapshots. Their own lock: reads run inside other apps'
-// submissions.
 type Sequences struct {
 	mu   sync.Mutex
 	last map[string]int
 }
 
-// take advances key and answers the number taken.
 func (s *Sequences) Take(key string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -363,7 +344,6 @@ func (s *Sequences) Take(key string) int {
 	return s.last[key]
 }
 
-// clone is the counters as they stand, for a staged decision to count on.
 func (s *Sequences) Clone() map[string]int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -374,8 +354,6 @@ func (s *Sequences) Clone() map[string]int {
 	return out
 }
 
-// check checks an accepted batch's counters against the bases it was
-// decided on, then applies them: a batch cannot reuse or skip numbers.
 func (s *Sequences) Check(bases, next map[string]int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

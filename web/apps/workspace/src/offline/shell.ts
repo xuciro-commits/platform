@@ -5,8 +5,6 @@ function register(){
  if(!("serviceWorker" in navigator))throw Error("Offline preparation is unavailable in this browser.");
  return registration??=navigator.serviceWorker.register("/workspace-worker.js",{scope:"/"}).then(()=>navigator.serviceWorker.ready);
 }
-/** Capture the finite resources actually loaded by the selected workspace.
- * Every business response remains outside the worker's public asset cache. */
 export async function prepareShell(){
  const entry=document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
  if(!entry||!new URL(entry).pathname.startsWith("/assets/"))throw Error("Open the built workspace online before preparing it.");

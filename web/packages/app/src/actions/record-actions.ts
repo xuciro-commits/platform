@@ -6,7 +6,6 @@ type OriginalActionHost=Pick<Host,"client"|"decide"|"resend"|"can">;
 const locks=new WeakMap<object,Set<string>>();
 const waiting=(state:string)=>["SUBMISSION_STATE_PENDING","SUBMISSION_STATE_SENDING","SUBMISSION_STATE_UNKNOWN"].includes(state);
 const signature=(value:unknown):string=>{if(Array.isArray(value))return JSON.stringify(value.map(signature));if(value&&typeof value==="object")return JSON.stringify(Object.entries(value).filter(([,v])=>v!==undefined).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,signature(v)]));return JSON.stringify(value)??"undefined";};
-/** Original row decisions remain in K5; an unanswered attempt reuses that decision rather than creating a second action. */
 export function createRecordActionSubmitter(host:OriginalActionHost,active:()=>boolean) {
  const attempts=new Map<string,{key:string;revision:number;payload:string}>(),tenant=host.client.connection.tenant,principal=host.client.connection.principal;
  const requireActive=()=>{if(!active()||host.client.connection.tenant!==tenant||host.client.connection.principal!==principal)throw Error("The original action window has ended.");};
@@ -20,8 +19,6 @@ export function createRecordActionSubmitter(host:OriginalActionHost,active:()=>b
  };
 }
 
-/** Only an explicit lifecycle and the member's original catalog can offer a
- * board command. Choice fields and payload labels do not declare transitions. */
 export function recordKanbanMoves(info:EntityInfo|undefined,catalog:ActionDeclaration[]):KanbanMove[] {
  const lifecycle=info?.lifecycle;
  if(!lifecycle||!info.fields.some(field=>field.name===lifecycle.field))return [];

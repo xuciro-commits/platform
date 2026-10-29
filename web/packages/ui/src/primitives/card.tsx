@@ -7,7 +7,6 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div data-ui="card" className={cn("rounded-md border border-border bg-surface", className)} {...props} />;
 }
 
-/** A card with a heading: the one way a page groups a part of itself under a title. */
 export function Panel({ title, description, help, actions, className, children, variant="card", ...props }:
   Omit<HTMLAttributes<HTMLElement>, "title"> & { title?: ReactNode; description?: ReactNode; help?:ReactNode; actions?: ReactNode; variant?: "card" | "plain" }) {
   return (

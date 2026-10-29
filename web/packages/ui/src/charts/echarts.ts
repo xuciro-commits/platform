@@ -1,5 +1,3 @@
-// The default renderer: compiles the platform's visualization spec
-// into Apache ECharts 6 options. Only this file knows ECharts' option format.
 import type { EChartsCoreOption } from "echarts/core";
 import { columnOf, markOf, type AggregateColumn, type ChartSpec, type Encoding } from "./spec";
 
@@ -8,7 +6,6 @@ export type Theme = { palette: string[]; foreground: string; muted: string; bord
 const label = (e: Encoding | undefined, columns: AggregateColumn[]) =>
   e?.title ?? columns.find((c) => c.name === (e && columnOf(e)))?.title ?? (e ? columnOf(e) : "");
 
-/** Formats a measure: money is in minor units of the row's currency. */
 export function formatter(e: Encoding | undefined, columns: AggregateColumn[]): (value: unknown, row?: Record<string, unknown>) => string {
   const column = columns.find((c) => c.name === (e && columnOf(e)));
   return (value, row) => {
@@ -21,7 +18,6 @@ export function formatter(e: Encoding | undefined, columns: AggregateColumn[]): 
   };
 }
 
-/** The column that splits series: the colour channel, or a money measure's currency. */
 function seriesColumn(spec: ChartSpec, columns: AggregateColumn[]): string | undefined {
   if (spec.encoding.color) return columnOf(spec.encoding.color);
   const money = columns.find((c) => c.kind === "measure" && c.money);

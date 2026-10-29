@@ -1032,7 +1032,6 @@ func (p Page) CheckSafety() error {
 	if err := safe.InputSchema.checkInterface(); err != nil {
 		return err
 	}
-	// A bare document declares no page object, selections or producers to compare.
 	if safe.Object.Name != "" {
 		if err := safe.CheckRecordPorts(); err != nil {
 			return err
@@ -1590,8 +1589,6 @@ func pageWidget(id string) *pageWidgetContract {
 	return nil
 }
 
-// checkWidgetPorts holds each variable port to its widget contract: the port
-// exists, carries the declared value type, and is writable where it writes.
 func (p Page) checkWidgetPorts(binding PageDataBinding, owner string) error {
 	widget := binding.Ports["widget"]
 	if pageWidget(widget) == nil {
@@ -1622,7 +1619,6 @@ func (p Page) checkWidgetPorts(binding PageDataBinding, owner string) error {
 			return fmt.Errorf("widget %s has an invalid %s port", widget, field)
 		}
 	}
-	// A bare document check has no page object to compare against.
 	object, known := binding.ObjectRef(p).Name, binding.ObjectRef(p).Name != ""
 	if id := binding.Ports["selectionSetVariable"]; id != "" && known {
 		if v := p.InputSchema.Variables[id]; v.Mode == "shared" && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Name != object) {
@@ -1654,8 +1650,6 @@ func (p Page) checkWidgetPorts(binding PageDataBinding, owner string) error {
 	return nil
 }
 
-// sharedRecordProfile is the profile that first let a widget consume an
-// application-scope record; widgets without one share it from the earliest.
 func sharedRecordProfile(widget string) string {
 	switch widget {
 	case "scene-3d", "observation":
@@ -1829,8 +1823,6 @@ func legacyFieldRef(name string) FieldRef {
 	return FieldRef{Name: name}
 }
 
-// defaultModelFields are the columns a widget shows when its model names none:
-// only the field-listing widgets derive them; the others keep an explicit choice.
 func defaultModelFields(widget string, info EntityInfo) []FieldRef {
 	fields := []FieldRef{}
 	if !slices.Contains([]string{"table", "detail", "form", "filter"}, widget) {
@@ -1911,8 +1903,6 @@ func (p Page) ResolveBindings(lookup func(string) (EntityInfo, bool)) Page {
 	return p
 }
 
-// Page stores the current five-element contract. The api:retained fields only
-// decode original declarations; execution never derives bindings from them.
 type Page struct {
 	Format            int                 `json:"format,omitempty"`
 	DataBindings      []PageDataBinding   `json:"dataBindings,omitempty"`
@@ -1926,7 +1916,7 @@ type Page struct {
 	Title             string              `json:"title"`
 	Description       string              `json:"description,omitempty"`
 	Object            AssetRef            `json:"object"`
-	Layout            string              `json:"layout" api:"retained"` // list-detail in 13b
+	Layout            string              `json:"layout" api:"retained"`
 	ListFields        []string            `json:"listFields" api:"retained"`
 	DetailFields      []string            `json:"detailFields" api:"retained"`
 	Actions           []AssetRef          `json:"actions" api:"retained"`
@@ -1939,9 +1929,6 @@ type SelectionVariable struct {
 	Object AssetRef `json:"object"`
 }
 
-// Section is one place on a composed page: a widget, what it is bound to, and
-// how wide it sits. A table outputs the record someone selects; a
-// detail and the actions read it.
 type PageFacet struct {
 	Field    string `json:"field"`
 	Variable string `json:"variable"`
@@ -1961,43 +1948,29 @@ type Section struct {
 	InlineEdit           *PageInlineEdit            `json:"inlineEdit,omitempty"`
 	Facets               []PageFacet                `json:"facets,omitempty"`
 	FilterSearchVariable string                     `json:"filterSearchVariable,omitempty"`
-	// ID is required when Document references this section; older pages omit it.
-	ID            string `json:"id,omitempty"`
-	ConfigVersion int    `json:"configVersion,omitempty"`
-	// Widget is table, detail, actions, chart, metric, text, filter, form,
-	// timeline, tasks or a published function.
-	Widget string `json:"widget"`
-	// Width is full or half, in the order the sections are laid out.
-	// Object is what it shows; empty: the page's own object.
-	Object AssetRef `json:"object,omitempty"`
-	// Selection is the record variable a table writes or detail/actions read.
-	Selection          string `json:"selection,omitempty"`
-	CollectionVariable string `json:"collectionVariable,omitempty"`
-	RecordVariable     string `json:"recordVariable,omitempty"`
-	SelectionVariable  string `json:"selectionVariable,omitempty"`
-	FilterVariable     string `json:"filterVariable,omitempty"`
-	// ParentSelection supplies a typed parent record to a related section;
-	// empty uses the page object's shared selection.
-	ParentSelection string `json:"parentSelection,omitempty"`
-	// Relation is the named inverse (FieldInfo.Inverse) of Object's reference to
-	// the parent selection's object: the section shows its related records
-	// through it, or a form supplies that reference when creating a related
-	// record. Empty: no declared relation binding.
-	Relation string `json:"relation,omitempty"`
-	// Query is a named query (AssetQuery) the section lists instead of all of
-	// Object: its conditions, and the selected record when it takes one (21c).
-	Query       AssetRef           `json:"query,omitempty"`
-	Fields      []string           `json:"fields,omitempty"` // table, detail, filter, form
-	Actions     []AssetRef         `json:"actions,omitzero"` // nil inherits page actions; an empty slice forbids section writes
-	Group       string             `json:"group,omitempty"`  // chart: the field it groups by, or "<field>:month"
-	ColumnGroup string             `json:"columnGroup,omitempty"`
-	TimeStart   string             `json:"timeStart,omitempty"`
-	TimeEnd     string             `json:"timeEnd,omitempty"`
-	TimeLabel   string             `json:"timeLabel,omitempty"`
-	TimeGroup   string             `json:"timeGroup,omitempty"`
-	CardLabel   string             `json:"cardLabel,omitempty"`
-	Measure     string             `json:"measure,omitempty"`   // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
-	Function    *AssetBinding      `json:"function,omitempty"`  // exact published function
-	Operation   *AssetBinding      `json:"operation,omitempty"` // exact compute owner revision
-	Inputs      map[string]Binding `json:"inputs,omitempty"`    // compute inputs or form fields supplied by constants/parent record paths
+	ID                   string                     `json:"id,omitempty"`
+	ConfigVersion        int                        `json:"configVersion,omitempty"`
+	Widget               string                     `json:"widget"`
+	Object               AssetRef                   `json:"object,omitempty"`
+	Selection            string                     `json:"selection,omitempty"`
+	CollectionVariable   string                     `json:"collectionVariable,omitempty"`
+	RecordVariable       string                     `json:"recordVariable,omitempty"`
+	SelectionVariable    string                     `json:"selectionVariable,omitempty"`
+	FilterVariable       string                     `json:"filterVariable,omitempty"`
+	ParentSelection      string                     `json:"parentSelection,omitempty"`
+	Relation             string                     `json:"relation,omitempty"`
+	Query                AssetRef                   `json:"query,omitempty"`
+	Fields               []string                   `json:"fields,omitempty"`
+	Actions              []AssetRef                 `json:"actions,omitzero"`
+	Group                string                     `json:"group,omitempty"`
+	ColumnGroup          string                     `json:"columnGroup,omitempty"`
+	TimeStart            string                     `json:"timeStart,omitempty"`
+	TimeEnd              string                     `json:"timeEnd,omitempty"`
+	TimeLabel            string                     `json:"timeLabel,omitempty"`
+	TimeGroup            string                     `json:"timeGroup,omitempty"`
+	CardLabel            string                     `json:"cardLabel,omitempty"`
+	Measure              string                     `json:"measure,omitempty"`
+	Function             *AssetBinding              `json:"function,omitempty"`
+	Operation            *AssetBinding              `json:"operation,omitempty"`
+	Inputs               map[string]Binding         `json:"inputs,omitempty"`
 }

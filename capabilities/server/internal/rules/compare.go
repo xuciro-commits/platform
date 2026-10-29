@@ -1,6 +1,5 @@
 package rules
 
-// CompareValues shares the evaluator's scalar ordering with declared sets.
 func CompareValues(a, b Value) (int, error) {
 	left, err := validateValue(a, "order")
 	if err != nil {

@@ -4,7 +4,6 @@ import {Popover} from 'radix-ui';
 import {Button} from '../primitives/button';
 import {t} from '../i18n';
 
-/** Supporting explanations share one keyboard and touch accessible entry. */
 export function ContextHelp({title,children}:{title:string;children:ReactNode}){
   const heading=useId();
   return <Popover.Root>

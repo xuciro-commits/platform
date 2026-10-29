@@ -19,24 +19,12 @@ import (
 	"platformserver/platform"
 )
 
-// Email as a notification channel (second use). An administrator
-// adds an endpoint of kind email: an SMTP server, a sender, and the apps whose
-// notifications it carries. Each notification to a member who signs in as
-// user:<email> becomes one effect per such endpoint, inside the input that
-// notified, so replay rebuilds it and never sends it. The effect's ID is the
-// message's Message-ID, which receivers deduplicate by: at least once, as for
-// webhooks. Notifications go to members only; mail to people outside the tenant
-// would be an irreversible kind held for approval when an agent causes it (D6).
-
-// letter is what an email effect carries.
 type letter struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	Text    string `json:"text"`
 }
 
-// mailNotice makes the email effects of a notice given to a member, as the
-// member wants them: address, language and when (opsMu held).
 func (t *Tenant) mailNotice(n platform.Notification, to platform.Reach) {
 	for _, planned := range t.planMailNotice(n, to) {
 		t.outbound = append(t.outbound, &effect{Effect: planned})
@@ -65,8 +53,6 @@ func (t *Tenant) planMailNotice(n platform.Notification, to platform.Reach) []pl
 	return effects
 }
 
-// sendMail makes one attempt over SMTP: STARTTLS when offered, PLAIN
-// authentication when the URL names a user (the password is the secret).
 func (t *Tenant) sendMail(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}

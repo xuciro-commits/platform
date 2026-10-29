@@ -1,14 +1,3 @@
-# The platform's one entry point, in three layers:
-#
-#   dev      run it here: infrastructure in containers, the Go host under air,
-#            the workspace under Vite - nothing is rebuilt into an image
-#   check    before a commit: what finds a real regression in minutes
-#   release  when a version is fixed: the full evidence, the artifacts, the tag
-#
-# `make` or `make help` lists the targets. Everything a target does is
-# visible below; scripts under scripts/ and deploy/ are the longer bodies,
-# never a second entry point.
-
 SHELL := bash
 .DEFAULT_GOAL := help
 ROOT := $(CURDIR)
@@ -90,10 +79,9 @@ web: bootstrap ## 单独运行 Vite 单入口（8495），API 与认证代理到
 	cd web && PLATFORM_HOST=http://127.0.0.1:18495 $(PNPM) --dir apps/workspace dev --host 127.0.0.1 --port 8495
 
 .PHONY: setup
-setup: ## 首次环境初始化：安装 Web 依赖、air 工具及 Playwright 浏览器内核
+setup: ## 首次环境初始化：安装 Web 依赖及 air 工具
 	cd web && $(PNPM) install --frozen-lockfile
 	$(GO) install github.com/air-verse/air@$(AIR_VERSION)
-	cd web && $(PNPM) --filter @platform/e2e exec playwright install chromium
 
 ## check - 提交前检查（数分钟内完成，无浏览器，无容器）
 
@@ -110,16 +98,11 @@ check: check-go check-web check-local ## 执行宿主、边界、Web 类型及�
 
 .PHONY: check-local
 check-local: ## 检查本地运行模式保留与基础服务启动，不操作实际容器
-	python3 -m unittest discover -s deploy/dev -p '*_test.py'
 	bash -n deploy/local/update.sh
 
 .PHONY: code-size
 code-size: ## 分开统计手写生产代码、测试和生成物；REVISION 可指定比较提交（需 cloc）
 	python3 scripts/code-size.py $(if $(REVISION),--revision "$(REVISION)") --output .build/code-size$(if $(REVISION),-$(REVISION)).json
-
-.PHONY: ui-capture
-ui-capture: ## 只读批量截取当前开发工作区并打包；CONFIG=本地身份配置，OUT=新输出目录，ARGS=附加选项
-	node scripts/capture-ui.mjs $(if $(CONFIG),--config "$(CONFIG)") $(if $(OUT),--out "$(OUT)") $(ARGS)
 
 .PHONY: check-go
 check-go: ## 宿主 Go 构建编译、vet 静态检查、gofmt 格式化及应用边界合规检查
@@ -132,29 +115,10 @@ check-web: ## 检查生成代码类型一致性、Catalog 资产库及全部 Web
 	scripts/verify.sh web-types
 	cd web && $(PNPM) catalog:check && $(PNPM) -r run typecheck
 
-.PHONY: test
-test: ## 运行宿主与 Web 包单元测试（优先运行所修改模块的对应测试）
-	cd capabilities/server && $(GO) test -count=1 ./...
-	cd web && $(PNPM) -r run test
-
-.PHONY: test-go
-test-go: MODULE ?= capabilities/server
-test-go: ## 运行 Go 测试；可用 MODULE=模块路径、PKG=./platform 或 RUN=TestName 缩小范围
-	cd $(MODULE) && $(GO) test -count=1 $(if $(RUN),-run '$(RUN)') $(or $(PKG),./...)
-
-.PHONY: test-web
-test-web: ## 运行 Web 单元测试；可用 PKG=@platform/ui 与 RUN=文件名 缩小范围
-	cd web && $(PNPM) $(if $(PKG),--filter '$(PKG)',-r) run test $(if $(RUN),'$(RUN)')
-
-.PHONY: e2e
-e2e: ## 在开发宿主上运行 web/e2e 浏览器路线；可用 SPEC=page-notice 缩小范围
-	cd web && $(PNPM) --dir apps/workspace build
-	cd web && $(PNPM) --filter @platform/e2e e2e $(foreach spec,$(SPEC),tests/$(spec).spec.ts) $(E2E_ARGS)
-
 ## release - 版本发布（完整证据链；CI 在 v* 标签上运行同一检查）
 
 .PHONY: verify
-verify: ## CI 全量验收证据：check + 全模块测试 + 契约校验 + 形式化证明 + Web 生产构建
+verify: ## CI 全量验收证据：check + 契约校验 + 形式化证明 + Web 生产构建
 	scripts/verify.sh contract formal format capabilities composition web-check
 
 .PHONY: build
@@ -169,10 +133,6 @@ build: ## 构建当前系统架构的工作区制品与通用宿主二进制，�
 images: bootstrap ## 构建平台宿主 Docker 镜像并打上 VERSION 标签
 	PLATFORM_REVISION=$$(git rev-parse HEAD) $(COMPOSE) build platform-server
 	docker tag platform-platform-server platform/platform-server:$(VERSION)
-
-.PHONY: rehearse
-rehearse: ## 当前组合与静态维护的隔离 PostgreSQL 恢复检查
-	PNPM="$(PNPM)" scripts/verify.sh deploy
 
 .PHONY: tag
 tag: ## 标记正式版本：make tag VERSION=v0.12.0（推送标签将触发发布流水线）

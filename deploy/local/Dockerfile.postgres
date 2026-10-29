@@ -1,5 +1,3 @@
-# Keep the existing PostgreSQL major and data directory; add the derived search
-# extension without replacing or resetting the mounted database volume.
 FROM postgres:18-alpine
 ARG PGVECTOR_VERSION=0.8.7
 RUN apk add --no-cache --virtual .vector-build build-base git \

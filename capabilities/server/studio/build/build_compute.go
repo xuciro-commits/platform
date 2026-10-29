@@ -20,8 +20,6 @@ const SchemaCodeCompile = CodeType + ".compile"
 const SchemaCodePublish = CodeType + ".publish"
 const SchemaCodeCompiled = CodeType + ".compiled"
 
-// Code is the single owner of source, build evidence and compute publications.
-// Compiling changes no installed capability. Candidate activation owns release.
 type Code struct {
 	platform.Record
 	Name          string                   `json:"name" field:"required,search" source:"record"`
@@ -92,8 +90,6 @@ func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ 
 	return nil
 }
 
-// compileCode's lifecycle decision receives its ChangeRecord in the shared
-// generated action path. The request is planned by the owner's callback below.
 func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		code, ok := platform.Get[Code](c, s.GetTarget().GetId())
@@ -358,8 +354,6 @@ func (b *Build) CodeDraftAssets(id string) (before, after []platform.ReleaseAsse
 	return
 }
 
-// PrepareCodeReleasePublications freezes the candidate's descriptor beside its
-// mutable source draft. No new publish endpoint or standalone installation.
 func (b *Build) PrepareCodeReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
 	list, err := b.codeInventory()
 	if err != nil {
@@ -429,8 +423,6 @@ func tableReleaseAsset(table Table, manifest string) (platform.ReleaseAsset, err
 	return platform.WithDependencies(platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetCompute, Name: table.Name}, ContractVersion: 1, SourceVersion: manifest + ".compute-" + strconv.Itoa(table.Version), Body: platform.Raw(table.Definition())})
 }
 
-// A table's operation carries the complete rule plan. Reconstruct the editor
-// columns from its ordered schema and its rows from that same plan.
 func tableFromAsset(asset platform.ReleaseAsset) (Table, error) {
 	var op platform.Operation
 	text, found := strings.CutPrefix(asset.SourceVersion, ValueDefinitionVersion+".compute-")

@@ -13,12 +13,6 @@ import (
 	"time"
 )
 
-// A page someone composes here (#132): which object it shows, the
-// fields its list and its detail carry, and the actions it offers. It is the
-// same descriptor a code page declares, so the workspace renders it with the
-// same component, and every read and action on it is still the member's own.
-
-// Page is a list and detail page this organisation composed.
 type Page struct {
 	platform.Record
 	Format          int                          `json:"format,omitempty"`
@@ -34,19 +28,14 @@ type Page struct {
 	List            []string                     `json:"list" title:"Fields in the list" help:"The object's field names, in the order the list shows them" api:"retained"`
 	Detail          []string                     `json:"detail" title:"Fields in the detail" help:"The object's field names, in the order one record shows them" api:"retained"`
 	Actions         []string                     `json:"actions,omitempty" title:"Actions it offers" help:"Actions of that object, by their schema" example:"build.visits.close" api:"retained"`
-	// Sections are what the page is laid out from when someone composes it in
-	// the editor; with none, the page is the list and detail above.
-	Sections   []Section                    `json:"sections,omitempty" field:"aside" title:"What is on the page" api:"retained"`
-	Document   *platform.PageDocument       `json:"document,omitempty" field:"aside" type:"json" title:"Page layout" api:"retained"`
-	Selections []platform.SelectionVariable `json:"selections,omitempty" field:"aside" title:"Record selections" api:"retained"`
-	State      string                       `json:"state" field:"readonly" choices:"draft,published"`
-	// Published is the page as it was last published: what people open, and
-	// what a restore puts back — not the draft beside it.
-	Published string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions  []string `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published page contents"`
+	Sections        []Section                    `json:"sections,omitempty" field:"aside" title:"What is on the page" api:"retained"`
+	Document        *platform.PageDocument       `json:"document,omitempty" field:"aside" type:"json" title:"Page layout" api:"retained"`
+	Selections      []platform.SelectionVariable `json:"selections,omitempty" field:"aside" title:"Record selections" api:"retained"`
+	State           string                       `json:"state" field:"readonly" choices:"draft,published"`
+	Published       string                       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions        []string                     `json:"versions,omitempty" field:"readonly" type:"lines" title:"Published page contents"`
 }
 
-// Section is one widget on a composed page, as someone lays it out.
 type InlineEdit struct {
 	Action string   `json:"action"`
 	Fields []string `json:"fields"`
@@ -71,26 +60,24 @@ type Section struct {
 	SelectionVariable    string                         `json:"selectionVariable,omitempty"`
 	FilterVariable       string                         `json:"filterVariable,omitempty"`
 	ParentSelection      string                         `json:"parentSelection,omitempty"`
-	// Relation follows the typed parent selection, or the page's shared record.
-	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
-	// Query is a named query "<app>.<name>" the section lists.
-	Query        string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like build.open-visits"`
-	Fields       []string                    `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
-	Actions      []string                    `json:"actions,omitzero" help:"For actions: the schemas it offers; omitted inherits the page, empty forbids section writes"`
-	Group        string                      `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
-	ChartVariant string                      `json:"chartVariant,omitempty"`
-	Mark         string                      `json:"mark,omitempty"`
-	ColumnGroup  string                      `json:"columnGroup,omitempty"`
-	TimeStart    string                      `json:"timeStart,omitempty" title:"Start time field"`
-	TimeEnd      string                      `json:"timeEnd,omitempty" title:"End time field"`
-	TimeLabel    string                      `json:"timeLabel,omitempty" title:"Timeline label field"`
-	TimeGroup    string                      `json:"timeGroup,omitempty" title:"Timeline resource field"`
-	CardLabel    string                      `json:"cardLabel,omitempty" title:"Card title field"`
-	Measure      string                      `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
-	Text         string                      `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
-	Function     *platform.FunctionRef       `json:"function,omitempty" title:"Published AI function"`
-	Operation    *platform.AssetBinding      `json:"operation,omitempty" title:"Published code function" type:"json"`
-	Inputs       map[string]platform.Binding `json:"inputs,omitempty" type:"json"`
+	Relation             string                         `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
+	Query                string                         `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like build.open-visits"`
+	Fields               []string                       `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
+	Actions              []string                       `json:"actions,omitzero" help:"For actions: the schemas it offers; omitted inherits the page, empty forbids section writes"`
+	Group                string                         `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
+	ChartVariant         string                         `json:"chartVariant,omitempty"`
+	Mark                 string                         `json:"mark,omitempty"`
+	ColumnGroup          string                         `json:"columnGroup,omitempty"`
+	TimeStart            string                         `json:"timeStart,omitempty" title:"Start time field"`
+	TimeEnd              string                         `json:"timeEnd,omitempty" title:"End time field"`
+	TimeLabel            string                         `json:"timeLabel,omitempty" title:"Timeline label field"`
+	TimeGroup            string                         `json:"timeGroup,omitempty" title:"Timeline resource field"`
+	CardLabel            string                         `json:"cardLabel,omitempty" title:"Card title field"`
+	Measure              string                         `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
+	Text                 string                         `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
+	Function             *platform.FunctionRef          `json:"function,omitempty" title:"Published AI function"`
+	Operation            *platform.AssetBinding         `json:"operation,omitempty" title:"Published code function" type:"json"`
+	Inputs               map[string]platform.Binding    `json:"inputs,omitempty" type:"json"`
 }
 
 func (b *Build) pageEntity() platform.Entity {
@@ -151,8 +138,6 @@ func (b *Build) pageEntity() platform.Entity {
 				}}}}}
 }
 
-// Only page create/edit use saved object drafts. Publication and candidate
-// validation still resolve their original installed or precisely selected model.
 func (b *Build) pageDraftEntity() platform.Entity {
 	entity := b.pageEntity()
 	entity.Validate = func(c platform.Caller, record any) *kernel.Error {
@@ -204,8 +189,6 @@ func (b *Build) validatePageDocument(page *Page, lookup func(string) (platform.E
 	return nil
 }
 
-// release installs the page: the host checks it against what is installed now
-// and offers it to the members who may read its object.
 func (b *Build) release(c platform.Caller, p Page) *kernel.Error {
 	if err := b.checkPage(p); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
@@ -216,8 +199,6 @@ func (b *Build) release(c platform.Caller, p Page) *kernel.Error {
 	return nil
 }
 
-// descriptor is the page as the platform's registry holds it — the same shape a
-// code page declares in its manifest.
 func descriptor(p Page) platform.Page {
 	if p.Format == 3 {
 		owner, _, _ := strings.Cut(p.Object, ".")
@@ -279,8 +260,6 @@ func descriptor(p Page) platform.Page {
 	return out
 }
 
-// checkPage refuses a page the workspace could not open, with the reason: an
-// object this tenant has not, a field it has not, an action of something else.
 func (b *Build) checkPage(p Page) error {
 	if !Named(p.Name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", p.Name)
@@ -296,8 +275,6 @@ func (b *Build) checkPage(p Page) error {
 	return nil
 }
 
-// Canonicalize the author's original page in place. Only presentation bindings
-// migrate; action identities, saved publication bytes and layout stay intact.
 func (b *Build) normalizePageModel(p *Page, lookup func(string) (platform.EntityInfo, bool)) error {
 	d := descriptor(*p)
 	if err := d.NormalizeModelBindings(lookup); err != nil {
@@ -337,8 +314,6 @@ func (b *Build) normalizePageModel(p *Page, lookup func(string) (platform.Entity
 	return nil
 }
 
-// Published page history lives on its original owner record, not a second
-// artifact repository. Snapshots themselves contain no recursive history.
 func retainPagePublication(p *Page) error {
 	snapshots := append(slices.Clone(p.Versions), p.Published, published(*p))
 	kept := []string{}
@@ -372,8 +347,6 @@ func retainPagePublication(p *Page) error {
 	return nil
 }
 
-// PageContent resolves only an actually published snapshot with an exact
-// original descriptor digest. Draft fields and saved candidates are excluded.
 func (b *Build) PageContent(name, version string) (platform.Page, bool) {
 	if platform.CheckPageContentVersion(version) != nil || b.host == nil {
 		return platform.Page{}, false

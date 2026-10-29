@@ -10,7 +10,6 @@ import {interfaceWindowSignature} from "./ontology-interface";
 
 export type RecordReference = { object: string; id: string };
 export type ReadState<T> = { status: "empty"; value?: T } | { status: "pending"; value?: T } | { status: "value"; value: T } | { status: "error"; error: string };
-/** A retained binding identity is not a confirmed record or an access grant. */
 export function recordReadReference(state:ReadState<RecordReference>|undefined):RecordReference|undefined {
   return state?.status === "value" || state?.status === "pending" ? state.value : undefined;
 }
@@ -18,9 +17,6 @@ export type QueryWindow = {
   object: string; query: RecordQuery; revision?: number; interface?:string;binding?:Api.AssetBinding;
   records: RecordReference[]; total: number; complete: boolean;
 };
-/** What a member changed on a query owner's window. Enum filters name choice
- * fields and their selected values; the original compiler folds them into the
- * window's domain under the same budget as any authored condition. */
 export type QueryView = {search?:string;sort?:string[];offset?:number;filters?:Record<string,string[]>};
 export type PageSessionSnapshot = {
   aggregates:Record<string,{signature:string;result:VariableResult}>;
@@ -34,10 +30,6 @@ export type PageSessionSnapshot = {
 };
 export type SelectionPlan = { interfaces?:ReadonlyMap<string,ReadonlySet<string>>;recordScalars?:ReadonlyMap<string,ReadonlyMap<string,ScalarValue>>;maxSelectionSetRecords?:number; filterObjects?:ReadonlyMap<string,string>;filterFields?:ReadonlyMap<string,ReadonlySet<string>>; objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
 
-/** One member/definition-scoped presentation session. References and query
- * windows are values; record fields/revisions are a separate ephemeral cache.
- * The source remains the sole authority for reads and record permissions.
- */
 export class PageSessionStore {
   private childSessions=new Map<string,{owner:string;session:PageSessionStore}>();
   childSession(owner:string,key:string) {
@@ -57,7 +49,6 @@ export class PageSessionStore {
    const source=this.source,scope=source.scope,version=this.version;
    const request={signature,promise:Promise.resolve().then(()=>{if(!source.aggregate)throw new Error("Aggregate source is unavailable");return source.aggregate(object,query)}).then(data=>{if(!this.disposed&&this.aggregates.get(key)===request&&source===this.source&&scope===source.scope&&version===this.version)this.publish({aggregates:{...this.state.aggregates,[key]:{signature,result:aggregateValue(data,query.measures?.length===5?query.measures:query.measures?.[0]??"count")}}});},()=>{if(!this.disposed&&this.aggregates.get(key)===request&&source===this.source&&scope===source.scope&&version===this.version)this.publish({aggregates:{...this.state.aggregates,[key]:{signature,result:{status:"error",code:"Resource read failed"}}}});})};
    this.aggregates.set(key,request);
-   // Install the in-flight identity before synchronous subscribers can read again.
    this.publish({aggregates:{...this.state.aggregates,[key]:{signature,result:{status:"pending"}}}});
    return request.promise;
   }
@@ -104,8 +95,6 @@ export class PageSessionStore {
   private readAdapter?: RecordSource;
   private sourceRevision?: number;
   private sourceScope?: string;
-  /** Task identity (the member the session belongs to). Definition sets and
-   * revisions are read generations, never a reason to destroy the task. */
   private identityMe?: string;
   private disposed = false;
   constructor(source: RecordSource, plan: SelectionPlan) { const identity=source.ruleIdentity;this.property.clock={me:identity?.me,now:this.ruleClock,today:new Intl.DateTimeFormat("en-CA",{timeZone:identity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(this.ruleClock))};this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.identityMe = source.ruleIdentity?.me; this.plan = plan; }
@@ -156,8 +145,6 @@ export class PageSessionStore {
     if(removed.length)this.publish({records:this.clear(removed)});
   }
 
-  /** A host-authorized model window joins the original resource and selection
-   * lifecycle. It stores no alternate record authority or predicate. */
   adoptModelWindow(key:string,signature:string,window?:{object:string;query:RecordQuery;records:EntityRecord[];total:number;partial?:boolean},error?:string) {
     this.reconcileExternalWindow(key,signature,window?.records.map(r=>r.id));
     if(window){this.queryObjects.set(key,window.object);this.queryData.set(key,{records:window.records,total:window.total});}
@@ -255,9 +242,7 @@ export class PageSessionStore {
   },{clock:{now:this.ruleClock,today:this.ruleClock.slice(0,10)}});
 
   selected(key: string): EntityRecord | undefined { return this.recordCache.get(key); }
-  /** Binding retirement changes even when the next original record has the same ID. */
   recordBindingEpoch(key:string):number {return this.recordLeases.get(key)??0;}
-  /** Capture only confirmed access. Data revision reads retain identity; binding retirement invalidates the lease. */
   captureRecordLease(key:string):(()=>boolean)|undefined {
     const record=this.confirmedSelected(key),reference=this.state.records[key];
     if(!record||reference?.status!=="value")return undefined;
@@ -356,7 +341,6 @@ export class PageSessionStore {
     if (value !== undefined && value !== "" && (descriptor.type === "boolean" ? typeof value !== "boolean"
       : typeof value !== "string" || descriptor.type === "choice" && !descriptor.choices?.includes(value))) return;
     if (Object.is(this.state.filters[filterKey]?.[field], value === "" ? undefined : value)) return;
-    // Filtering invalidates every selection over this object and its descendants.
     const keys = this.plan.filterSelections?[...(this.plan.filterSelections.get(filterKey)??[])]:[...this.plan.objects].filter(([,type])=>type===object).map(([key])=>key);
     const fields = { ...this.state.filters[filterKey] };
     if (value === undefined || value === "") delete fields[field]; else fields[field] = value;
@@ -387,10 +371,6 @@ export class PageSessionStore {
     const changedIdentity = source.ruleIdentity?.me !== this.identityMe;
     this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.version++;
     for(const child of this.childSessions.values())child.session.updateSource(this.readSource());
-    // A scope or revision change is a read generation: sensitive reads are
-    // refreshed or shadowed below. Only a change of member ends the task -
-    // an unrelated application's release must not clear this session's
-    // inputs, views or selections.
     this.aggregates.clear();
     this.queries.clear();this.queryData.clear();this.interfaceData.clear(); this.reads.clear();this.viewCache.clear();this.rulePending.clear();this.ruleFailures.clear();for(const stop of this.ruleWatches.values())stop();this.ruleWatches.clear();
     this.publish({ aggregates:{}, queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
@@ -403,8 +383,6 @@ export class PageSessionStore {
       this.publish({ aggregates:{}, views:{}, scalars: {}, items: {}, filters: {}, records: this.clear([...this.plan.objects.keys(),...this.plan.interfaces?.keys()??[]]) });
       return;
     }
-    // References selected through application/page ports may still be pending
-    // and have no cached record yet. A revision retires their old request too.
     const references=Object.entries(this.state.records).flatMap(([key,state])=>(state.status==="value"||state.status==="pending")&&state.value?[[key,state.value] as const]:[]);
     for(const [key,reference] of references)void this.read(key,reference);
     for(const [key,state] of Object.entries(this.state.recordSets))if((state.status==="value"||state.status==="pending")&&state.value)void this.readSet(key,state.value);
@@ -435,8 +413,6 @@ export class PageSessionStore {
     let active = true;
     const stop = source.watchList?.(object, query, () => {
       if (!active || this.disposed || this.source !== source || source.scope !== scope || this.querySignatures.get(key) !== shape) return;
-      // The host snapshot changed: discard this window's memoized answer,
-      // while preserving its query shape and the user's other page state.
       this.queries.delete(key); this.queryData.delete(key);this.interfaceData.delete(key);
       for (const slot of this.selectionKeys(key)) {
         const reference = recordReadReference(this.state.records[slot]);
@@ -495,7 +471,6 @@ export class PageSessionStore {
       }
       throw error;
     });
-    // Publish only after every consumer can join the same in-flight identity.
     this.publish({ ...(keys.length?{records:this.clear(keys)}:{}), queries: { ...this.invalidate(keys), [key]: { status: "pending" } } });
     return request.promise as Promise<T>;
   }

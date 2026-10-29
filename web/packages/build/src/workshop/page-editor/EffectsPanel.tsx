@@ -1,9 +1,4 @@
 import type {PageUI} from "@platform/app";
-// A page event runs an ordered chain of effects: set state,
-// open or close an overlay, take an action, open another page, return to the
-// caller. This panel edits that chain for one event of one widget (or one
-// control of a button group). Navigation and return end the chain, so they are
-// only offered as the last step.
 import { variableAccessible } from "../page-layout";
 import type { Api } from "@platform/kernel";
 import { useHost, pageUIProfile, assetKey } from "@platform/app";

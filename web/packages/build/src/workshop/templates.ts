@@ -1,9 +1,5 @@
 import type { EntityInfo } from "@platform/ui";
 
-/** Studio owns template identities and controlled draft products.
- *  The module shapes used by enterprise applications, following
- *  Fiori floorplans: list report, object page with items, worklist, wizard,
- *  board. Each produces the existing build.page payload. */
 export type TemplateId = "build/list-report" | "build/object-page" | "build/worklist" | "build/wizard" | "build/board" | "build/record-handling" | "build/metrics-overview" | "build/time-planner";
 
 export const pageTemplates: readonly { id: TemplateId; revision: string; title: string; summary: string; bindings: string[]; child?: boolean }[] = [
@@ -47,7 +43,6 @@ const dateFieldOf = (object: EntityInfo, fields: string[]) =>
 const label = (object: EntityInfo, fields: string[]) => fields.find((name) => object.fields.some((f) => f.name === name && f.type === "text")) ?? fields[0] ?? "id";
 const childFields = (child: EntityInfo) => child.fields.filter((f) => f.type !== "lines").slice(0, 5).map((f) => f.name);
 
-/** This is the existing build.page payload, not a second page or recipe language. */
 export function templateDraft(id: TemplateId, b: TemplateBindings) {
   const { object, name, title, fields, actions, description } = b;
   const base = { name, title, description, object: object.type, list: fields, detail: fields, actions };

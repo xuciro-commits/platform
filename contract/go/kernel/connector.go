@@ -9,9 +9,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-// Connectors implements K8 (contract/spec/K8-connectors.md) for one receiver.
 type Connectors struct {
-	descriptors map[[2]string]*pb.ConnectorDescriptor // (tenant, connector)
+	descriptors map[[2]string]*pb.ConnectorDescriptor
 	cursors     map[[2]string]string
 	lastSeen    map[[2]string]time.Time
 }
@@ -23,7 +22,7 @@ func NewConnectors() *Connectors {
 func (c *Connectors) Register(d *pb.ConnectorDescriptor) *Error {
 	if d.GetTenantId() == "" || d.GetConnectorId() == "" || len(d.GetDataClasses()) == 0 ||
 		d.GetDirection() == pb.ConnectorDirection_CONNECTOR_DIRECTION_UNSPECIFIED {
-		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // N1
+		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	}
 	key := [2]string{d.GetTenantId(), d.GetConnectorId()}
 	if c.descriptors[key] != nil {
@@ -33,7 +32,6 @@ func (c *Connectors) Register(d *pb.ConnectorDescriptor) *Error {
 	return nil
 }
 
-// Deliver accepts one batch about dataClass; poll pages move the cursor from→to (N2, N3).
 func (c *Connectors) Deliver(tenant, connector, dataClass, cursorFrom, cursorTo string, now time.Time) *Error {
 	key := [2]string{tenant, connector}
 	d := c.descriptors[key]
@@ -66,7 +64,6 @@ func (c *Connectors) Heartbeat(tenant, connector string, now time.Time) *Error {
 	return nil
 }
 
-// Status reports health at now (N4).
 func (c *Connectors) Status(tenant, connector string, now time.Time) (*pb.ConnectorStatus, *Error) {
 	key := [2]string{tenant, connector}
 	d := c.descriptors[key]
@@ -87,7 +84,6 @@ func (c *Connectors) Status(tenant, connector string, now time.Time) (*pb.Connec
 	return s, nil
 }
 
-// Descriptors lists a tenant's connectors.
 func (c *Connectors) Descriptors(tenant string) []*pb.ConnectorDescriptor {
 	var out []*pb.ConnectorDescriptor
 	for key, d := range c.descriptors {

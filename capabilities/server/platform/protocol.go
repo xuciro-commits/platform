@@ -13,8 +13,6 @@ import (
 const ConfirmationType = "build.confirmation"
 const ConfirmationAnswerSchema = ConfirmationType + ".answer"
 
-// ConfirmationTransport is provided by the caller's private decision, so
-// compiled owner closures never retain a live host as their writing context.
 type ConfirmationTransport interface {
 	FreezeConfirmationProtocol(ConfirmationParty) (*ConfirmationProtocol, error)
 	FreezeConfirmation(Caller, string, Confirmation, time.Time) (string, []ReleaseAsset, error)
@@ -44,8 +42,6 @@ func (c Caller) ConfirmationTransport() ConfirmationTransport {
 	return rt.ConfirmationTransport()
 }
 
-// Confirmation declares coordination after a single authority accepts its
-// transaction. Each party's request, reply and compensation stays independent.
 type Confirmation struct {
 	Parties         []ConfirmationParty `json:"parties"`
 	DeadlineSeconds int                 `json:"deadlineSeconds"`
@@ -150,7 +146,6 @@ type ConfirmationProgress struct {
 	Differences         []ConfirmationDifference `json:"differences,omitempty"`
 }
 
-// ConfirmationProtocol freezes the selected provider and its declared mapping.
 type ConfirmationProtocol struct {
 	Provider         string `json:"provider"`
 	Version          string `json:"version"`
@@ -165,8 +160,6 @@ type ConfirmationDifference struct {
 	Error    string          `json:"error,omitempty"`
 }
 
-// PendingConfirmations reads every unfinished run through the original paged
-// record reader. Historical completed runs cannot hide due work past page one.
 func PendingConfirmations(c Caller) ([]ConfirmationRun, *kernel.Error) {
 	var all []ConfirmationRun
 	for {
@@ -189,10 +182,6 @@ const DispatchAnswerSchema = DispatchType + ".answer"
 const DispatchReviewSchema = DispatchType + ".review"
 const DispatchTickSchema = DispatchType + ".tick"
 
-// DispatchCommand belongs to the object's declared command table. Its
-// writeback supplies the request format; addresses and credentials stay in
-// the selected connection. ReceiverDeduplicates is an explicit dependency
-// on the receiver, never a guarantee made by the platform.
 type DispatchCommand struct {
 	Name                 string `json:"name"`
 	Title                string `json:"title"`
@@ -224,8 +213,6 @@ type Dispatch struct {
 	ReviewerRole    string       `json:"reviewerRole"`
 }
 
-// Exactly one published source or observation supplies the status. States
-// maps the external value to accepted/running/completed/stuck/failed/unknown.
 type DispatchRead struct {
 	Name         string            `json:"name"`
 	Source       string            `json:"source,omitempty"`
@@ -367,64 +354,52 @@ func PendingDispatches(c Caller) ([]DispatchRun, *kernel.Error) {
 	}
 }
 
-// EffectKind declares an effect an app sends to whatever endpoint the tenant
-// binds to it.
 type EffectKind struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	// Irreversible marks what cannot be recalled once received (a posting, a
-	// payment, an email to people outside): caused by an agent, it is held until
-	// a person approves it (D6).
-	Irreversible bool `json:"irreversible,omitempty"`
+	Name         string `json:"name"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Irreversible bool   `json:"irreversible,omitempty"`
 }
 
-// Effect is one intent for one endpoint and what became of it.
 type Effect struct {
 	Compensates   string          `json:"compensates,omitempty" source:"record"`
 	Applications  []AssetBinding  `json:"applications,omitempty" field:"readonly" type:"json"`
-	ID            string          `json:"id" source:"record"` // the idempotency key: <tenant>:<app>:<change id or key>:<endpoint>
+	ID            string          `json:"id" source:"record"`
 	Endpoint      string          `json:"endpoint" source:"record"`
-	Event         string          `json:"event" source:"record"`         // the event or effect kind
-	App           string          `json:"app,omitempty" source:"record"` // the app that emitted it; empty for webhooks
-	Key           string          `json:"key,omitempty" source:"record"` // the app's key for it
+	Event         string          `json:"event" source:"record"`
+	App           string          `json:"app,omitempty" source:"record"`
+	Key           string          `json:"key,omitempty" source:"record"`
 	Target        string          `json:"target" source:"record"`
 	At            time.Time       `json:"at"`
-	State         string          `json:"state" source:"record"`           // held, pending, retrying, unknown, delivered, rejected, failed, discarded
-	Agent         string          `json:"agent,omitempty" source:"record"` // the AI agent that caused a held effect
-	Run           string          `json:"run,omitempty" source:"record"`   // and its run
+	State         string          `json:"state" source:"record"`
+	Agent         string          `json:"agent,omitempty" source:"record"`
+	Run           string          `json:"run,omitempty" source:"record"`
 	Attempts      int             `json:"attempts"`
 	Last          time.Time       `json:"last,omitzero"`
 	Due           time.Time       `json:"due,omitzero"`
 	Error         string          `json:"error,omitempty"`
-	PublicMessage string          `json:"publicMessage,omitempty"` // owner-approved delivery text, safe without the request or answer
+	PublicMessage string          `json:"publicMessage,omitempty"`
 	CallbackError string          `json:"callbackError,omitempty"`
-	Digest        string          `json:"digest,omitempty" source:"record"` // sha256 of the body last sent
-	Body          string          `json:"body,omitempty"`                   // kept 30 days for support (D8)
-	Generation    uint32          `json:"generation,omitempty"`             // K9 generation of an internal operation attempt
-	Output        json.RawMessage `json:"output,omitempty"`                 // accepted internal computation output
+	Digest        string          `json:"digest,omitempty" source:"record"`
+	Body          string          `json:"body,omitempty"`
+	Generation    uint32          `json:"generation,omitempty"`
+	Output        json.RawMessage `json:"output,omitempty"`
 	Millis        int64           `json:"millis,omitempty"`
 	Withheld      bool            `json:"withheld,omitempty"`
 }
 
-// Outcome is what an attempt learned; it is the journal entry of the attempt.
 type Outcome struct {
 	Effect        string          `json:"effect"`
-	Result        string          `json:"result"` // delivered, rejected, retry, unknown
+	Result        string          `json:"result"`
 	Detail        string          `json:"detail,omitempty"`
-	PublicMessage string          `json:"publicMessage,omitempty"` // safe delivery text supplied by the owner; Detail remains restricted
+	PublicMessage string          `json:"publicMessage,omitempty"`
 	Digest        string          `json:"digest,omitempty"`
-	Answer        json.RawMessage `json:"answer,omitempty"` // the receiver's body, for app effects (up to 64 KiB of JSON)
-	// Staged references the sealed per-call result channel when an operation's
-	// result exceeds its inline budget: Answer then carries
-	// the handle, and the bytes live in the host's sealed artifact.
-	Staged     *StagedResult `json:"staged,omitempty"`
-	Generation uint32        `json:"generation,omitempty"` // rejects stale internal compute completions
-	Millis     int64         `json:"millis,omitempty"`
+	Answer        json.RawMessage `json:"answer,omitempty"`
+	Staged        *StagedResult   `json:"staged,omitempty"`
+	Generation    uint32          `json:"generation,omitempty"`
+	Millis        int64           `json:"millis,omitempty"`
 }
 
-// StagedResult is one call's entry in the per-call result channel: where the
-// sealed bytes are, what schema they claim and the digest that proves them.
 type StagedResult struct {
 	Tenant string `json:"tenant"`
 	Call   string `json:"call"`
@@ -434,12 +409,6 @@ type StagedResult struct {
 	Size   int    `json:"size"`
 }
 
-// Emit sends data as an effect of kind (declared in the app's manifest) to every
-// endpoint bound to it; key names the effect within the app and kind, so the
-// same fact of the business is sent once whatever retries or replays do. It is
-// called inside an input, so replay rebuilds the intent and never sends it.
-// It returns how many endpoints will receive it. An irreversible kind emitted
-// for an agent is held until a person approves it (D6).
 func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
 	if c.rt == nil {
 		return 0, notFound()
@@ -447,25 +416,19 @@ func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *k
 	return c.rt.Emit(c, kind, key, entity, data, now)
 }
 
-// Protocol is a named, versioned interface apps provide and consume:
-// actions (payload fields and meaning), reads (result shape, by convention the
-// protocol package's types) and events. Consumers depend on a protocol, never on
-// the app that provides it.
 type Protocol struct {
 	Name    string
 	Version int
-	Actions []Action // Schema is the protocol action's short name; Roles stay the provider's
+	Actions []Action
 	Reads   []string
 	Events  []ProtocolEvent
 }
 
 type ProtocolEvent struct {
 	Name  string `json:"name"`
-	Title string `json:"title"` // how the timeline tells it, e.g. "Booking canceled"
+	Title string `json:"title"`
 }
 
-// ProtocolBinding publishes an object's existing actions and record read as a
-// versioned protocol. It never introduces an execution or authorization path.
 type ProtocolBinding struct {
 	Contract *Protocol         `json:"contract,omitempty"`
 	Name     string            `json:"name"`
@@ -475,8 +438,6 @@ type ProtocolBinding struct {
 	Events   map[string]string `json:"events,omitempty"`
 }
 
-// CheckProtocolActions checks the wire payload, not the provider's roles or
-// presentation. The contract and binding remain the original declarations.
 func CheckProtocolActions(contract Protocol, actions []Action) error {
 	for _, required := range contract.Actions {
 		index := slices.IndexFunc(actions, func(a Action) bool { return a.Schema == required.Schema })
@@ -528,40 +489,28 @@ func CheckProtocol(contract, actual Protocol) error {
 	return nil
 }
 
-// ID is "<name>/<version>", e.g. "orders.confirm/1".
 func (p Protocol) ID() string { return fmt.Sprintf("%s/%d", p.Name, p.Version) }
 
-// Provision maps a protocol onto the provider's own actions, reads and events
-// (each keyed by the protocol's name, valued by the provider's).
 type Provision struct {
 	Protocol Protocol
-	Actions  map[string]string // protocol action → provider action schema (same payload)
-	Reads    map[string]string // protocol read → provider read (returning the protocol's types)
-	Events   map[string]string // protocol event → provider action schema whose decisions are that event
+	Actions  map[string]string
+	Reads    map[string]string
+	Events   map[string]string
 }
 
-// Consumption declares a protocol an app uses; an optional one may have no provider.
 type Consumption struct {
-	Protocol string // ID
+	Protocol string
 	Optional bool
 }
 
-// ProtocolAction names a protocol action or event: "<protocol id>#<name>".
 func ProtocolAction(protocol, action string) string { return protocol + "#" + action }
 
-// ProviderResult is one provider's result of a protocol read, with the type of
-// the entities it holds, so consumers match their links exactly.
 type ProviderResult struct {
 	Provider string
-	Type     string // e.g. "build.orders"
+	Type     string
 	Result   any
 }
 
-// Probe asks the tenant's provider, in a decision's rules, whether it would
-// accept a protocol action from the member now: its policy and rules run, and
-// nothing is recorded or applied. NOT_FOUND says no provider is bound. In a
-// replay it holds, as it did, when a provider is bound. Rules never change another app:
-// what they need of one is a Request, made once the decision is accepted.
 func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *kernel.Error {
 	if c.rt == nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -569,50 +518,35 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 	return c.rt.Probe(c, protocol, action, id, Raw(payload), now)
 }
 
-// Request is a protocol action an accepted decision asks of the tenant's provider.
-// The host submits it after the decision, as the member, and
-// submits the provider's Answer to the app's Reply action on the decision's target.
-//
-// A request of a model names no protocol: Model is
-// "<provider>/<model>", or empty for the tenant's model for apps resolved when
-// the decision is accepted (later settings cannot change it); Payload is a
-// Prompt; Target is what the answer is about. The host asks the model after
-// the decision, outside its lock and as the app, within the app's limits, and
-// submits the Answer — its Text the model's — to Reply; a replay asks nothing.
 type Request struct {
 	Tag                string
-	Provider           string // optional original provider; rebinding cannot move an in-flight request
-	Key                string // optional stable intent identity across explicit retries
+	Provider           string
+	Key                string
 	Protocol, Action   string
 	Model              string
-	Target             string // the provider's record the action is about
+	Target             string
 	Payload            any
-	Reply              string      // the app's own action that receives the Answer; a member may take it too (D5)
-	Evaluation         bool        // this model answer belongs to a measured function evaluation
-	EvaluationConfig   string      // accepted digest of the provider/model configuration, for evaluation only
-	EvaluationFunction *AIFunction // pinned function contract for evaluation output and budget checks
+	Reply              string
+	Evaluation         bool
+	EvaluationConfig   string
+	EvaluationFunction *AIFunction
 }
 
-// Prompt is what an app asks a model: instructions and the question.
 type Prompt struct {
 	System    string `json:"system,omitempty"`
 	User      string `json:"user"`
 	MaxTokens int    `json:"maxTokens,omitempty"`
 }
 
-// Answer is how the provider answered a Request: the payload of the Reply action.
-// A member who records an answer themselves gives the same fields.
 type Answer struct {
-	Tag     string `json:"tag,omitempty"`
-	Call    string `json:"call"`             // the request's target at the provider
-	Action  string `json:"action,omitempty"` // the protocol action
-	Outcome string `json:"outcome"`          // accepted or refused; a protocol's events may add their own, e.g. released
-	Code    string `json:"code,omitempty"`   // the refusal's code
-	Reason  string `json:"reason,omitempty"` // why, as the provider said it (F-23): a person reads it at the consumer
-	Ref     string `json:"ref,omitempty"`    // "<type>/<id>" of the provider's record
-	Text    string `json:"text,omitempty"`   // a model's answer
-	// Model effect callbacks alone supply these measurements. A missing meter
-	// is distinct from a measured zero; providers may omit tokens or price.
+	Tag            string  `json:"tag,omitempty"`
+	Call           string  `json:"call"`
+	Action         string  `json:"action,omitempty"`
+	Outcome        string  `json:"outcome"`
+	Code           string  `json:"code,omitempty"`
+	Reason         string  `json:"reason,omitempty"`
+	Ref            string  `json:"ref,omitempty"`
+	Text           string  `json:"text,omitempty"`
 	Metered        bool    `json:"metered,omitempty"`
 	TokensReported bool    `json:"tokensReported,omitempty"`
 	InputTokens    int     `json:"inputTokens,omitempty"`
@@ -623,7 +557,6 @@ type Answer struct {
 	ServedModel    string  `json:"servedModel,omitempty"`
 }
 
-// AnswerFields are the payload fields of a Reply action.
 func AnswerFields() []Field {
 	return []Field{{Name: "call", Type: "string", Required: true, Description: "What was asked of the provider"},
 		{Name: "action", Type: "string", Description: "The protocol action"},
@@ -634,8 +567,6 @@ func AnswerFields() []Field {
 		{Name: "text", Type: "string", Description: "A model's answer"}}
 }
 
-// FunctionAnswerFields adds measured model data only to AI function replies;
-// ordinary protocol and manually recorded answers keep their smaller shape.
 func FunctionAnswerFields() []Field {
 	return append(AnswerFields(),
 		Field{Name: "metered", Type: "boolean", Description: "The provider was called"},
@@ -648,15 +579,12 @@ func FunctionAnswerFields() []Field {
 		Field{Name: "servedModel", Type: "string", Description: "Provider-reported model when different"})
 }
 
-// Request asks for a protocol action once the decision r is accepted: made in
-// the decision's apply, run by the host after it in order, and run again by a replay.
 func (c Caller) Request(r *pb.ChangeRecord, q Request) {
 	if c.rt != nil && !c.rt.Probing() {
 		c.rt.Request(c, r, q)
 	}
 }
 
-// Raw is a payload as JSON: bytes as they are, anything else marshalled.
 func Raw(v any) []byte {
 	if b, ok := v.([]byte); ok {
 		return b
@@ -668,9 +596,6 @@ func Raw(v any) []byte {
 	return out
 }
 
-// Query reads a protocol read from every provider of the tenant, the bound one
-// first: switching the binding sends new calls elsewhere, but what the other
-// providers hold stays visible (#99). Only a consumer of the protocol may query it.
 func (c Caller) Query(protocol, read string, provider ...string) ([]ProviderResult, *kernel.Error) {
 	if c.rt == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -678,7 +603,6 @@ func (c Caller) Query(protocol, read string, provider ...string) ([]ProviderResu
 	return c.rt.Query(c, protocol, read, provider...)
 }
 
-// BoundProvider identifies the selected provider without reading its records.
 func (c Caller) BoundProvider(protocol string) (string, *kernel.Error) {
 	if c.rt == nil {
 		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -686,7 +610,6 @@ func (c Caller) BoundProvider(protocol string) (string, *kernel.Error) {
 	return c.rt.BoundProvider(c, protocol)
 }
 
-// current reviewer membership. There is no independent decision or scheduler.
 type ConfirmationHost interface {
 	ConfirmationTransport
 	Holding(string, string) []string
@@ -715,7 +638,6 @@ const (
 	FollowType       = "platform.follow"
 )
 
-// Comment is a member's comment on a record; @member mentions notify them.
 type RecordComment struct {
 	Record
 	Target   string   `json:"target" field:"readonly" title:"On" source:"record"`
@@ -724,35 +646,31 @@ type RecordComment struct {
 	Mentions []string `json:"mentions,omitempty" field:"readonly"`
 }
 
-// Follow is a member following a record: they hear of its decisions and comments.
 type RecordFollow struct {
 	Record
 	Member string `json:"member" field:"readonly"`
 	Target string `json:"target" field:"readonly" title:"Follows"`
 }
 
-// FollowID is the one follow of member on target.
 func FollowID(member, target string) string {
 	return member + "@" + strings.ReplaceAll(target, "/", "~")
 }
 
 type RelationLink struct {
-	From string    `json:"from" source:"record"` // "<type>/<id>"
+	From string    `json:"from" source:"record"`
 	To   string    `json:"to" source:"record"`
 	By   string    `json:"by" source:"record"`
 	At   time.Time `json:"at"`
 }
 
-// Note is one protocol event on an entity's timeline, told by the app that decided it.
 type RelationNote struct {
 	Entity string    `json:"entity" source:"record"`
 	By     string    `json:"by" source:"record"`
 	At     time.Time `json:"at"`
-	Title  string    `json:"title,omitempty" source:"record" from:"Entity"` // a protocol event's title, said in the reader's language (F-37)
+	Title  string    `json:"title,omitempty" source:"record" from:"Entity"`
 	Text   string    `json:"text"`
 }
 
-// Links are the entities linked to entity ("<type>/<id>") that c sees.
 func (c Caller) Links(entity string) []string {
 	if c.rt == nil {
 		return nil
@@ -760,7 +678,6 @@ func (c Caller) Links(entity string) []string {
 	return c.rt.Links(c, entity)
 }
 
-// Link relates two entities for c (an app linking what it just did, for example).
 func (c Caller) Link(from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
 	if c.rt == nil {
 		return notFound()
@@ -768,10 +685,9 @@ func (c Caller) Link(from, to *pb.EntityRef, key string, now time.Time) *kernel.
 	return c.rt.Link(c, from, to, key, now)
 }
 
-// Breaker is a destination's breaker as Settings shows it.
 type Breaker struct {
-	Destination string    `json:"destination"` // endpoint:<id> or ai:<provider>
-	State       string    `json:"state"`       // closed, open or probing
+	Destination string    `json:"destination"`
+	State       string    `json:"state"`
 	Failures    int       `json:"failures"`
 	Until       time.Time `json:"until,omitzero"`
 }

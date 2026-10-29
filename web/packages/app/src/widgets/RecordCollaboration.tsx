@@ -13,7 +13,6 @@ type Props={sceneSampleObject?:string;sceneWindow?:QueryWindow;scene?:PageUI.Pag
 type MutationLease={identity:string;active:()=>boolean;service:ReturnType<typeof createRecordCollaboration>};
 const scalar=(value?:VariableResult)=>value?.status==="value"&&typeof value.value==="string"?value.value:undefined;
 const errorText=(failure:unknown)=>failure instanceof Error?failure.message:String(failure);
-/** Collaboration and spatial views share the captured original record and the owning services. */
 export function RecordCollaborationRenderer({sceneSampleObject,sceneWindow,scene,sample,part,onPart,kind,label,record,reference,status,captureRecordLease,slot,bindingEpoch,readSource,draft,fileValue,pageValue,onDraft,onFileID,onPage,enabled,live}:Props) {
  const host=useHost(),source=readSource??host.source,limits=pageUIManifest.runtime.collaboration,target=reference?{type:reference.object,id:reference.id}:undefined,identity=JSON.stringify([host.source.scope,slot,bindingEpoch,target?.type,target?.id]),ready=status==="value"&&source.scope===host.source.scope&&!!record&&record.id===target?.id;
  const current=useRef({identity,text:scalar(draft),file:scalar(fileValue),page:scalar(pageValue),mounted:true});current.current={identity,text:scalar(draft),file:scalar(fileValue),page:scalar(pageValue),mounted:current.current.mounted};

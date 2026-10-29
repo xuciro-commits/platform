@@ -16,9 +16,6 @@ import (
 	"time"
 )
 
-// sourcesOf are the records a run has read, cited or acted on so far: what
-// anything derived from it is checked against when it is read again.
-
 func visibleAgentInstructions(c platform.Caller, d *platform.CompiledAgent) string {
 	if d.App == "build" && !c.Holds(platform.AgentApp, platform.AgentAdmin) && !c.Holds("build", "builder") {
 		return ""
@@ -26,7 +23,6 @@ func visibleAgentInstructions(c platform.Caller, d *platform.CompiledAgent) stri
 	return d.Instructions
 }
 
-// look searches knowledge for a run, as whom it reads, outside the tenant's lock.
 func (a *Agents) ObserveAgentKnowledge(run platform.AgentRunRecord, args json.RawMessage, now time.Time) json.RawMessage {
 	var p struct{ Query string }
 	json.Unmarshal(args, &p)
@@ -37,14 +33,10 @@ func (a *Agents) ObserveAgentKnowledge(run platform.AgentRunRecord, args json.Ra
 	return a.host.AgentKnowledge(a.reader(run), app, p.Query, 4, now)
 }
 
-// prompt gathers observations through the run's current reader. Conversation
-// shaping never receives a reader or any host callback.
 func (a *Agents) prompt(c platform.Caller, d *platform.CompiledAgent, run platform.AgentRunRecord, model string, now time.Time) platform.ChatRequest {
 	input := agents.Prompt{Goal: run.Goal, OnBehalf: run.OnBehalf, Ref: run.Ref,
 		Instructions: d.Instructions, Meaning: a.host.AgentMeaning(d.App),
 		Glossary: a.host.AgentGlossary(d.App), Language: a.host.AgentLanguage(run.Language)}
-	// Historical Seen bytes remain immutable recovery evidence. New model calls
-	// use today's reader, including after a person's grants changed.
 	if typ, id, ok := strings.Cut(run.Ref, "/"); ok {
 		if view, err := a.host.AgentContext(a.readsAs(run), typ, id, now); err == nil {
 			input.Context = string(view.Body)
@@ -78,24 +70,17 @@ func (a *Agents) prompt(c platform.Caller, d *platform.CompiledAgent, run platfo
 	return request
 }
 
-// reader is the person a run works for, or nil for an app's automation. It
-// answers about authority: a removed person must not silently become
-// automation, and an app's automation drafts nothing.
 func (a *Agents) reader(run platform.AgentRunRecord) *platform.Member {
 	if run.OnBehalf != "" {
 		if m, ok := a.host.Member(run.OnBehalf); ok {
 			m.Scopes = slices.Clone(run.Scopes)
 			return &m
 		}
-		return &platform.Member{ID: run.OnBehalf} // no tenant or grants: derived reads refuse it
+		return &platform.Member{ID: run.OnBehalf}
 	}
 	return nil
 }
 
-// readsAs is who a run's reads happen as: the person it runs for, or its own
-// app when no person started it (a flow's agent). An app's automation reads
-// its own app's records only — never the host's view of every app, which the
-// reads used to fall back to.
 func (a *Agents) readsAs(run platform.AgentRunRecord) *platform.Member {
 	if m := a.reader(run); m != nil {
 		return m
@@ -105,7 +90,7 @@ func (a *Agents) readsAs(run platform.AgentRunRecord) *platform.Member {
 		app = d.App
 	}
 	if app == "" {
-		return &platform.Member{ID: "app:" + platform.AgentApp, Tenant: a.tenant} // no grants: nothing is readable
+		return &platform.Member{ID: "app:" + platform.AgentApp, Tenant: a.tenant}
 	}
 	return a.host.AgentAppReader(app)
 }
@@ -113,7 +98,6 @@ func (a *Agents) readsAs(run platform.AgentRunRecord) *platform.Member {
 func memoryEntity() platform.Entity {
 	people := []string{platform.AgentAdmin, platform.AnyMember}
 	return platform.Entity{Type: platform.MemoryType, Title: "Agent memory", Model: platform.Memory{}, Display: "fact",
-		// A fact was taken from what the run read.
 		Derived:  []platform.Derivation{{From: "sources", Fields: []string{"fact", "sources"}}},
 		Withheld: "withheld",
 		Scope:    platform.Scope{Participants: func(record any) []string { return []string{record.(platform.Memory).For} }},
@@ -144,7 +128,6 @@ func mayRemember(c platform.Caller, m platform.Memory) *kernel.Error {
 	return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 }
 
-// remember keeps what the agent chose to remember, about the person it runs for or for every run.
 func (a *Agents) remember(c platform.Caller, run *platform.AgentRunRecord, fact string, aboutPerson bool, now time.Time) (string, func(*pb.ChangeRecord)) {
 	fact = strings.TrimSpace(fact)
 	if fact == "" {
@@ -160,7 +143,6 @@ func (a *Agents) remember(c platform.Caller, run *platform.AgentRunRecord, fact 
 	}
 }
 
-// propose turns a correction into a memory for a person to keep (D5).
 func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run platform.AgentRunRecord, s platform.Signal, now time.Time) {
 	var fact, about string
 	switch s.Kind {
@@ -180,8 +162,6 @@ func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run platform.Age
 	a.host.Automation(c, platform.AgentApp).Put(r, m)
 }
 
-// memories are what an agent remembers for a run: active, unexpired, about
-// everyone or the person it runs for, the most relevant to the goal first.
 func (a *Agents) memories(c platform.Caller, run platform.AgentRunRecord, now time.Time) []platform.Memory {
 	domain, _ := json.Marshal([]any{[]any{"agent", "=", run.Agent}, []any{"state", "=", "active"}})
 	all, _, _ := platform.Find[platform.Memory](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 500})

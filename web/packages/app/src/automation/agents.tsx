@@ -1,8 +1,4 @@
 import { useRunControl } from "./use-run-control";
-// Agents in the workspace: a run's page — its steps with the
-// rationale the model gave, what people made of it, and the draft that waits
-// for the person it runs for — the assistant, which gives an agent a goal
-// about a record, and the global search over every type the member may read.
 import "../i18n";
 import { Button, Card, Disclosure, inputIssues, useWorkspace, Form, FlowSteps, Input, PageHeader, Panel, PropertyList, RelationCanvas, relationNodeClasses, Select, StatusTag, Tag, Textarea, defineStatuses, t, language,
   type FlowStepEdge, type FlowStepNode, type RelationEdge, type RelationNode } from "@platform/ui";
@@ -11,7 +7,6 @@ import { useState } from "react";
 import { PayloadFields,payloadSchema } from "../actions/actions";
 import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "../index";
 
-// Generated from the host's Go types.
 export type RunStep = Api.RunStep;
 export type RunDraft = Api.Draft;
 export type RunSignal = Api.Signal;
@@ -28,7 +23,6 @@ export const runStates = defineStatuses({ running: { label: t("Working"), tone: 
 const signalTones = { confirmed: "success", accepted: "success", approved: "success", changed: "warning", corrected: "warning", bypassed: "neutral",
   rejected: "danger", discarded: "danger", undone: "danger" } as const;
 
-/** The draft an agent made for the member: its fields, changeable, then confirm or reject. */
 function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
   const { decide, action } = useHost();
   const declared = action(draft.action.includes("#") ? draft.action.split("#")[1]! : draft.action);
@@ -59,7 +53,6 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
   );
 }
 
-/** A run's page: goal, state, the draft waiting for the member, each step and why, and what people made of it. */
 export function RunView({ id, compact, application, project }: { id: string; compact?: boolean; application?: string; project?: string }) {
   const { me, can , holds} = useHost();
   const control = useRunControl("agent.run", id);
@@ -158,9 +151,6 @@ export function RunView({ id, compact, application, project }: { id: string; com
   );
 }
 
-/** A run drawn as a process (#122): the goal as a start event, each
- * tool it called in turn as a service task, the sources it read as data objects, and
- * how it ended as an end event. */
 function RunGraph({ run, onStep }: { run: AgentRun; onStep: (i: number) => void }) {
   const refused = (s: RunStep) => /^(refused|error|stopped|ERROR_CODE_)/i.test(s.outcome);
   const nodes: FlowStepNode[] = [{ id: "goal", label: run.title, detail: run.agent, notation: "event-start", tone: "success" }];
@@ -185,18 +175,11 @@ const chainTone = (state?: string) => state === "done" || state === "delivered" 
   : state === "stopped" || state === "stuck" || state === "failed" || state === "rejected" || state === "discarded" ? "danger" as const
   : state === "held" || state === "waiting" ? "warning" as const : state ? "info" as const : undefined;
 
-/**
- * The chain a run or a flow instance belongs to: the record, the
- * flows, the runs their steps started and the effects those caused, as the
- * member may read them; a node opens its record.
- */
 export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: string }) {
   const openRecord = useOpenRecord();
   const chain = useReadQuery<Api.Chain>(`/v1/chain/${of.split("/").map(encodeURIComponent).join("/")}`).data;
   if (!chain || chain.nodes.length < 2) return null;
   const nodes: RelationNode[] = chain.nodes.map((n) => ({ id: n.ref, label: n.title, class: n.kind,
-    // The class word comes from the kit's table; the run's own
-    // state still rides beside it, and still decides the tone.
     caption: [t(relationNodeClasses[n.kind]?.title ?? n.kind), n.state].filter(Boolean).join(" · "),
     detail: n.ref, tone: chainTone(n.state) }));
   const edges: RelationEdge[] = chain.edges.map((e) => ({ id: `${e.from}>${e.to}`, source: e.from, target: e.to }));
@@ -210,7 +193,6 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
   );
 }
 
-/** Every model call of a run in full, for agent administrators. */
 function Transcripts({ run }: { run: string }) {
   const calls = useReadQuery<Transcript[]>(`/v1/transcripts?run=${encodeURIComponent(run)}`).data;
   if (!calls?.length) return null;
@@ -224,11 +206,6 @@ function Transcripts({ run }: { run: string }) {
 
 }
 
-/**
- * The assistant: give one of your apps' agents a goal, about a record when
- * opened from one. It works on your behalf, within what you may do, and every
- * action it wants waits for you as a draft.
- */
 export function Assistant({ about }: { about?: string }) {
   const { me, decide, can } = useHost();
   const agents = (useRead<AgentInfo[]>("/v1/agents") ?? []).filter((a) => me.apps.some((x) => x.id === a.app));
@@ -272,7 +249,6 @@ export function Assistant({ about }: { about?: string }) {
   );
 }
 
-/** What agents remember about the member: proposals from their corrections to keep, and facts to forget. */
 function Remembered() {
   const { decide } = useHost();
   const memories = useRead<Memory[]>("/v1/memories") ?? [];
@@ -294,7 +270,6 @@ function Remembered() {
   );
 }
 
-/** Global search: every record of every type the member may read, by text. */
 export function Search({ initial = "" }: { initial?: string }) {
   const { client, entities } = useHost();
   const openRecord = useOpenRecord();

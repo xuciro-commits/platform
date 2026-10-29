@@ -1,6 +1,5 @@
 import type { CanvasPosition } from "../types";
 import type { LayoutRoute } from "./types";
-/** Render ELK's own polyline, rather than asking React Flow to invent a different route. */
 export function routedPath(route: LayoutRoute): [string, number, number] {
   const points = route.points;
   const path = points.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ");
@@ -13,7 +12,6 @@ export function routedPath(route: LayoutRoute): [string, number, number] {
   }
   return [path, label.x, label.y];
 }
-/** Any manual move invalidates routes through that drawing, including lines passing an unrelated moved obstacle. */
 export function samePositions(expected: Record<string, CanvasPosition>, actual: { id: string; position: CanvasPosition }[]): boolean {
   return actual.length === Object.keys(expected).length && actual.every((node) => expected[node.id]?.x === node.position.x && expected[node.id]?.y === node.position.y);
 }

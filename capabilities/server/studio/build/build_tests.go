@@ -222,8 +222,6 @@ func (*Build) testPlanEntity() platform.Entity {
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "objects"}}
 }
 
-// Validate only the supplied fields of a create/edit; the standard action owns
-// patching, required fields, references, revision checks and durable writes.
 func checkTestPlanFields(raw []byte) *kernel.Error {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil {
@@ -259,9 +257,6 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 	return nil
 }
 
-// Root selection is checked on the patched image, so a partial edit cannot
-// accidentally retain both roots or remove the only root. Standard records
-// still own reference validation, permissions, revisions and persistence.
 func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error {
 	if !c.Holds(c.App, Builder) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -329,7 +324,6 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 
 const TestPlanType = "build.testplan"
 
-// TestPlan stores fixed inputs, not test state or a claim about the next draft.
 type TestPlan struct {
 	platform.Record
 	Organization      *platform.OrgSeed           `json:"organization,omitempty" type:"json" field:"aside" title:"Synthetic organization"`

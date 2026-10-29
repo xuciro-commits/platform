@@ -1,5 +1,3 @@
-# One Platform product entry, including OIDC at /auth.
-# Generate private local configuration with make bootstrap before starting.
 name: platform
 
 services:
@@ -18,9 +16,8 @@ services:
       interval: 2s
       retries: 30
 
-  # File bytes remain on the private Compose network.
   rustfs:
-    image: rustfs/rustfs:latest@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff # pinned; RustFS publishes often
+    image: rustfs/rustfs:latest@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
     environment:
       RUSTFS_ACCESS_KEY: ${PLATFORM_S3_ACCESS_KEY:?run make bootstrap}
       RUSTFS_SECRET_KEY: ${PLATFORM_S3_SECRET_KEY:?run make bootstrap}
@@ -33,7 +30,6 @@ services:
   rauthy:
     image: ghcr.io/sebadob/rauthy:0.36.2
     command: ["serve"]
-    # Read private host-generated bootstrap files; only this local IdP runs as root.
     user: "0:0"
     environment:
       PUB_URL: localhost:${PLATFORM_PORT:-8495}
@@ -80,8 +76,6 @@ services:
       code-builder: { condition: service_healthy }
     restart: on-failure
 
-  # Stateless compute execution and fixed-profile build drivers.
-  # Compiler images are pulled once by the owner; every tenant build is offline.
   wasm-worker:
     build: { context: ../.., dockerfile: capabilities/server/cmd/compute/Dockerfile, target: worker }
     command: ["-socket=/run/platform-compute/worker.sock", "-concurrency=4"]
@@ -122,7 +116,6 @@ services:
     pids_limit: 128
     stop_grace_period: 15s
     restart: on-failure
-
 
 volumes:
   pgdata:

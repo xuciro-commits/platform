@@ -23,8 +23,6 @@ func (t *Tenant) tenantLinkModel() (enterprisemodel.Model, *kernel.Error) {
 	return owner.Model(), nil
 }
 
-// The caller keeps its original runtime, so a staged import reads the same
-// authorized connection record as its other original owner decisions.
 func (t *Tenant) tenantConnection(c platform.Caller, id string, now time.Time) (build.Connection, *kernel.Error) {
 	c = platform.RouteCaller(c, build.ID)
 	c.Automation = false

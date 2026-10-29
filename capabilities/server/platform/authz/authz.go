@@ -1,5 +1,3 @@
-// Package authz owns the ordered authorization decision. Owners resolve facts;
-// neither a role nor an allow policy can widen row, field or provenance limits.
 package authz
 
 import (
@@ -7,10 +5,8 @@ import (
 	"strings"
 )
 
-// AnyMember as an allowed role lets every member of the tenant through.
 const AnyMember = "*"
 
-// Engine consumes owner-resolved facts, without live state or external I/O.
 type Engine interface {
 	Decide(Request, ...Policy) Verdict
 }
@@ -19,30 +15,25 @@ type Standard struct{}
 
 func (Standard) Decide(r Request, policies ...Policy) Verdict { return Decide(r, policies...) }
 
-// Subject is who asks: a member with the roles they hold in the app the
-// permission belongs to, today.
 type Subject struct {
 	ID         string
 	App        string
 	Roles      []string
 	Agent      bool
-	Automation bool // the host's own work: rules, jobs, deliveries
-	Replaying  bool // the journal replaying an accepted decision
+	Automation bool
+	Replaying  bool
 }
 
-// Request is one question: may Subject exercise Permission on Resource?
 type Request struct {
 	Kind       string
 	Subject    Subject
-	Permission string   // e.g. "core.material.release", "core.material.read", "core.material.cost.write"
-	Resource   string   // "<type>/<id>" when about a record; "" otherwise
-	Allowed    []string // the roles the permission names (AnyMember for every member)
+	Permission string
+	Resource   string
+	Allowed    []string
 	Attributes map[string]string
 	Context    *Context
 }
 
-// Context contains resolved owner facts, not caller-supplied policy overrides.
-// A nil context is the original role-only question used by static catalogues.
 type Context struct {
 	Tenant     Gate
 	Principal  Gate
@@ -68,12 +59,10 @@ type Layer struct {
 	Policy  string `json:"policy,omitempty"`
 }
 
-// Verdict is the answer, with the rule that decided it, for the UI, the
-// audit trail and the explain endpoint.
 type Verdict struct {
 	Allow      bool     `json:"allow"`
-	Rule       string   `json:"rule"`   // bypass, role, policy, none
-	Reason     string   `json:"reason"` // one sentence a person can read
+	Rule       string   `json:"rule"`
+	Reason     string   `json:"reason"`
 	Role       string   `json:"role,omitempty"`
 	Policy     string   `json:"policy,omitempty"`
 	Layers     []Layer  `json:"layers"`
@@ -81,16 +70,13 @@ type Verdict struct {
 	Definition string   `json:"definition,omitempty"`
 }
 
-// Policy is a tenant rule over requests (ABAC): the first
-// matching deny wins over any allow; an allow lets through what roles do not.
 type Policy struct {
 	ID         string
-	Effect     string // deny or allow
-	Permission string // exact permission, or prefix ending in "*"
+	Effect     string
+	Permission string
 	When       func(Request) bool
 }
 
-// Matches reports whether the policy speaks to the request.
 func (p Policy) Matches(r Request) bool {
 	if strings.HasSuffix(p.Permission, "*") {
 		if !strings.HasPrefix(r.Permission, strings.TrimSuffix(p.Permission, "*")) {
@@ -102,11 +88,8 @@ func (p Policy) Matches(r Request) bool {
 	return p.When == nil || p.When(r)
 }
 
-// Decide answers the request.
 func Decide(r Request, policies ...Policy) Verdict {
 	if r.Subject.Replaying {
-		// Only the legacy replay decoder uses this branch. Modern recovery never
-		// enters the engine; it applies the recorded authorization evidence.
 		return Verdict{Allow: true, Rule: "bypass", Reason: "replaying an accepted decision", Layers: []Layer{{Name: "recorded", Allowed: true, Reason: "replaying an accepted decision"}}}
 	}
 	if r.Kind == "" {
@@ -156,8 +139,6 @@ func Decide(r Request, policies ...Policy) Verdict {
 			role = held
 		}
 	}
-	// A matching allow may supply the verb grant. It
-	// remains pending until every narrowing layer below has passed.
 	verb := Gate{Allowed: role != "" || allow != nil || r.Subject.Automation, Reason: "No role or policy grants this operation"}
 	if role != "" {
 		verb.Reason = "An assigned role grants this operation"
@@ -195,8 +176,6 @@ func Decide(r Request, policies ...Policy) Verdict {
 	return v
 }
 
-// Widest is the widest of the scope levels several roles give (
-// §3.3: roles add up): tenant > below > unit > own > none.
 func Widest(levels []string) string {
 	order := []string{"tenant", "below", "unit", "own", "none"}
 	best := len(order)

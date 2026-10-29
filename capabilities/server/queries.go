@@ -11,7 +11,6 @@ import (
 	"platformserver/platform"
 )
 
-// namedQuery is the query an app declares, by its name.
 func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
 	for _, d := range t.definitions {
 		if d.Ref == (platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}) && d.Query != nil {
@@ -21,15 +20,10 @@ func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
 	return platform.NamedQuery{}, false
 }
 
-// RunQuery runs one declared query as m: its fixed conditions,
-// and the record it is run for through its reference. It is the member's own
-// read of the object, so a page and an agent tool see exactly what m may.
 func (t *Tenant) queryRead(m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
 	return t.runQueryFrom(t.records, m, app, name, of, now)
 }
 
-// RunQueryWindow retains the declaration's conditions/sort and published
-// version while letting a reader search and page within its bounded window.
 func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	var declared *platform.NamedQuery
 	for _, d := range t.Definitions(m) {
@@ -67,7 +61,7 @@ func (t *Tenant) runDeclaredQueryWindowFrom(store *records.Store, m platform.Mem
 	}
 	var terms []any
 	if len(q.Domain) > 0 {
-		_ = json.Unmarshal(q.Domain, &terms) // checked when the app was composed
+		_ = json.Unmarshal(q.Domain, &terms)
 	}
 	if q.By != "" {
 		terms = append(terms, []any{q.By, "=", of})

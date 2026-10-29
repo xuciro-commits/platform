@@ -16,7 +16,6 @@ import (
 	"time"
 )
 
-// find selects records of a type; visible, when set, is the caller's scope.
 func (s *Store) Find(et *Type, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, int, *kernel.Error) {
 	order, err := CompileOrder(et.info, q.Sort)
 	if err != nil {
@@ -67,15 +66,6 @@ func (s *Store) VisitMatching(et *Type, q platform.Query, visible func(reflect.V
 	return nil
 }
 
-// AggregateQuery groups and measures the records of one type,
-// like Odoo's read_group: the list's domain, search and scope, then groups and
-// measures.
-//   - Groups: a field ("stage"), or a date's bucket ("checkIn:month"; day, week,
-//     month, year), also on the stamps "created" and "changed" and on text
-//     that starts with a date.
-//   - Measures: "count", or "sum:", "avg:", "min:", "max:" with a number or
-//     money field. Money is summed per currency: its currency becomes a group
-//     ("amount.currency"), and amounts stay in minor units.
 type AggregateQuery struct {
 	BusinessTime *platform.BusinessTime  `json:"businessTime,omitempty"`
 	Collection   *platform.RecordSetRef  `json:"collection,omitempty"`
@@ -97,8 +87,6 @@ const AggregateSetMaxMeasures = 8
 
 const AggregateSetMaxRows = 4096
 
-// Aggregate is the answer: the columns it has, then one row per group, keyed
-// by column name, in the order of the groups' values.
 type Aggregate struct {
 	Partial   bool                   `json:"partial,omitempty"`
 	Window    *AggregateWindowResult `json:"window,omitempty"`
@@ -107,14 +95,11 @@ type Aggregate struct {
 	Rows      []map[string]any       `json:"rows"`
 }
 
-// Column describes a group or a measure, so a chart or pivot knows its type:
-// nominal (text, choices, references, booleans), temporal (buckets of dates),
-// quantitative (measures).
 type Column struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`
-	Kind  string `json:"kind"` // group, measure
-	Type  string `json:"type"` // nominal, temporal, quantitative
+	Kind  string `json:"kind"`
+	Type  string `json:"type"`
 	Field string `json:"field,omitempty"`
 	Money bool   `json:"money,omitempty"`
 }
@@ -176,7 +161,7 @@ func (et *Type) Grouping(name string) (grouping, bool) {
 			if f.Type == "text" && !bucketed {
 				return grouping{column: col, key: func(v reflect.Value) any { return aggregateGroupValue(v.FieldByIndex(f.Index)) }}, true
 			}
-			date = func(v reflect.Value) (time.Time, bool) { // text buckets by the date it starts with ("2026-10-01T09:00")
+			date = func(v reflect.Value) (time.Time, bool) {
 				switch x := aggregateGroupValue(v.FieldByIndex(f.Index)).(type) {
 				case time.Time:
 					return x, !x.IsZero()
@@ -227,14 +212,13 @@ func (et *Type) Measure(name string) (measure, bool) {
 	kind := platform.RuleFieldKind(f.Type)
 	if f.Type == "money" {
 		kind = "integer"
-	} // The original group retains currency; measures expose minor units.
+	}
 	if op == "avg" {
 		kind = "decimal"
 	}
 	return measure{column: col, op: op, field: f, kind: kind}, true
 }
 
-// aggregate groups and measures the matching records; the caller holds s.mu.
 func (s *Store) Aggregate(et *Type, q AggregateQuery, visible func(reflect.Value) bool, selected ...[]reflect.Value) (Aggregate, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if q.MaxRows < 0 || q.MaxRows > AggregateSetMaxRows {
@@ -265,7 +249,7 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, visible func(reflect.Value
 		groups = append(groups, g)
 	}
 	var measures []measure
-	currencies := map[string]bool{} // money fields: their currency is a group
+	currencies := map[string]bool{}
 	for _, name := range q.Measures {
 		m, ok := et.Measure(name)
 		if !ok {
@@ -298,8 +282,6 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, visible func(reflect.Value
 	}
 	byKey := map[string]*acc{}
 	var order []*acc
-	// Exact arithmetic is deterministic; sorted identities also make budget
-	// refusal independent of the record store's map iteration order.
 	slices.SortFunc(rows, func(a, b reflect.Value) int { return strings.Compare(Header(a).ID, Header(b).ID) })
 	for _, value := range rows {
 		keys := make([]any, len(groups))
@@ -580,7 +562,6 @@ func windowThreshold(text string) (*big.Rat, bool) {
 	if err != nil || math.IsInf(number, 0) || math.IsNaN(number) {
 		return nil, false
 	}
-	// Check the exponent before constructing a rational with an unbounded denominator.
 	if _, exponent, ok := strings.Cut(strings.ToLower(text), "e"); ok {
 		n, err := strconv.Atoi(exponent)
 		if err != nil || n < -324 || n > 308 {
@@ -608,7 +589,6 @@ func windowTime(value reflect.Value) (time.Time, bool, bool) {
 	return instant, true, true
 }
 
-// The original member projection/predicate compiler has already run. The caller holds s.mu.
 func (s *Store) AggregateWindow(et *Type, q AggregateQuery, visible func(reflect.Value) bool) (Aggregate, *kernel.Error) {
 	invalid := func(message string) (Aggregate, *kernel.Error) {
 		return Aggregate{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: message}

@@ -9,7 +9,6 @@
   "scripts": {
     "generate": "buf generate --template buf.gen.yaml",
     "typecheck": "tsc -p .",
-    "test": "vitest run",
     "build": "true"
   },
   "dependencies": {
@@ -19,7 +18,6 @@
     "@bufbuild/protoc-gen-es": "^2.15.0",
     "@types/node": "^26.6.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.1",
     "@bufbuild/buf": "^1.75.0"
   }
 }

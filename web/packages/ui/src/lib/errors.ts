@@ -1,8 +1,5 @@
 import { t } from "../i18n";
 
-/**
- * Humanizes kernel or authority error codes into clear, localized user-facing messages (Testing C3).
- */
 export function humanizeKernelError(codeOrMessage?: string): string {
   if (!codeOrMessage) return t("refused");
   const key = codeOrMessage.replace(/^Error:\s*/, "");

@@ -19,11 +19,6 @@ export function bindTable(c:WidgetBindingContext):TableSurfaceProps{
  const isMaster=section.model?!section.model.relation:type===parent(c)&&!section.parentSelection&&!section.relation;
  const query=section.query?.name?c.definitions?.find(d=>d.ref.app===section.query?.app&&d.ref.kind===section.query.kind&&d.ref.name===section.query.name)?.query:undefined;
  const reference=section.model?(section.model.relation?info?.fields.find(f=>f.name===section.model?.relation?.field):undefined):!isMaster?(query?.by?info?.fields.find(f=>f.name===query.by):info?.fields.find(f=>f.type==='reference'&&f.ref===parent(c)&&(!section.relation||f.inverse===section.relation))):undefined;
- // Writes follow the page's declared action set, narrowed by an explicit
- // section allow-list; an authored inlineEdit still names its original action
- // and fields, and a list without one derives the type's standard patch over
- // the displayed fields through the original profile gates. None of this
- // grants permission — the catalog and decide still answer for every submit.
  const writes=sectionWriteActions(c.page,c.section);
  const action=section.inlineEdit?c.catalog?.find(a=>a.schema===section.inlineEdit!.action.name&&writes.includes(a.schema)):defaultTableEdit(info,c.catalog,writes,section.fields);
  const fields=tableEditableFields(info,action,section.inlineEdit?.fields??section.fields??(info?.fields??[]).filter(f=>f.type!=="lines").map(f=>f.name));

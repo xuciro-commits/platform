@@ -1,7 +1,3 @@
-// The host refuses a candidate in one English sentence. The review reads the
-// sentences it knows, says them in the member's language and names the place
-// in the editors where the fix is made; unknown sentences are shown as they
-// came. The host's checks stay the authority; nothing here guesses a repair.
 import { t } from "@platform/ui";
 
 export type Diagnosis = { text: string; fix?: { label: string; view: string; params: Record<string, string> }; resources?: { kind: "agent" | "query"; name: string }[] };
@@ -10,8 +6,6 @@ type Rule = { match: RegExp; text: (m: RegExpMatchArray) => string; fix?: (m: Re
 
 const navigation = (ids: { application?: string }) => ids.application ? { label: t("Open the module's navigation"), view: "module", params: { id: ids.application, application: ids.application, focus: "navigation" } } : undefined;
 
-// CheckGroups uses Go %q, not typography quotes. Decode the quoted value so
-// titles containing quotes or escaped characters still name the right group.
 const quoted = (value: string) => {
   try { return JSON.parse(`"${value}"`) as string; } catch { return value; }
 };
@@ -39,7 +33,6 @@ const rules: Rule[] = [
   { match: /application header (.+)/, text: (m) => t("The module's header is not valid: {why}.", { why: m[1]! }), fix: (_, ids) => ids.application ? { label: t("Open the header"), view: "module", params: { id: ids.application, application: ids.application, focus: "header" } } : undefined },
 ];
 
-/** Reads a host diagnostic; `ids.application` is the module the review was opened from. */
 export function diagnose(diagnostic: string, ids: { application?: string }): Diagnosis {
   const query = diagnostic.match(/The agent (\S+) uses query (\S+), which is not published/);
   if (query) return {

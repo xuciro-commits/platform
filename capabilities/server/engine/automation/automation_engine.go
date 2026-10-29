@@ -13,17 +13,15 @@ import (
 	"time"
 )
 
-// A session is one decision of the flow app: it loads instances, moves them
-// until each waits, and applies what changed as that decision.
 type session struct {
 	f                  *Flows
-	c                  platform.Caller // the flow app, automated
+	c                  platform.Caller
 	now                time.Time
 	changed            map[string]*FlowInstance
 	order              []string
 	assigns            []flowTask
-	runs               []platform.RunStart // agent runs its steps start
-	signals            []runSignal         // what people made of their proposals
+	runs               []platform.RunStart
+	signals            []runSignal
 	close              []string
 	event              *platform.Event
 	moves              int
@@ -48,7 +46,6 @@ type runSignal struct {
 	platform.RunSignal
 }
 
-// review keeps what a person made of the proposal of the agent step an Ask reviews.
 func (ss *session) review(x *FlowInstance, step *platform.Step, kind, by, detail string) {
 	runs := ss.f.host.Runs()
 	if step == nil || step.Ask == nil || step.Ask.Reviews == "" || runs == nil {
@@ -128,9 +125,6 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 	}
 }
 
-// RunEnded goes on from an agent step when its run ends: done, with its
-// result as the answer; stopped, to the step's fault path, or a person does
-// the step instead.
 func (f *Flows) RunEnded(c platform.Caller, run platform.RunEnd, now time.Time) {
 	c = f.host.Automation(c, ID)
 	x, ok := platform.Get[FlowInstance](c, run.Flow)
@@ -139,7 +133,7 @@ func (f *Flows) RunEnded(c platform.Caller, run platform.RunEnd, now time.Time) 
 	}
 	i := slices.IndexFunc(x.Tokens, func(t Token) bool { return t.Child == run.ID && t.Waits == "agent" })
 	if i < 0 {
-		return // it timed out, or the instance moved on
+		return
 	}
 	f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 		tok := ss.token(in, run.Token)
@@ -167,8 +161,6 @@ func (f *Flows) RunEnded(c platform.Caller, run platform.RunEnd, now time.Time) 
 func (ss *session) trace(x *FlowInstance, step, what, detail, by string) {
 	x.Trace = append(x.Trace, TraceLine{At: ss.now, Step: step, What: what, Detail: detail, By: by})
 	if x.Batch != nil && len(x.Trace) > 128 {
-		// A continuous record shows recent progress; the accepted record history
-		// retains earlier trace changes without copying them into every result.
 		x.Trace = slices.Clone(x.Trace[len(x.Trace)-128:])
 	}
 }
@@ -222,7 +214,6 @@ func (ss *session) run(x *FlowInstance, token ...int) *platform.Run {
 	return r
 }
 
-// decide makes one flow decision about instance id; build fills the session.
 func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time, build func(ss *session) *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: InstanceType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}
@@ -238,7 +229,6 @@ func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time,
 	})
 }
 
-// step changes instance id as change says, then moves it on, as one decision.
 func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance)) *kernel.Error {
 	return f.update(c, id, now, func(ss *session, in *FlowInstance) *kernel.Error {
 		change(ss, in)
@@ -246,8 +236,6 @@ func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*s
 	})
 }
 
-// update keeps fallible frame changes inside the original ledger decision.
-// A refused change cannot advance tokens or publish partial instance images.
 func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(*session, *FlowInstance) *kernel.Error) *kernel.Error {
 	x, ok := platform.Get[FlowInstance](c, id)
 	if !ok {
@@ -267,7 +255,6 @@ func (f *Flows) update(c platform.Caller, id string, now time.Time, change func(
 	return err
 }
 
-// start opens an instance unless one with its key runs, and moves it on.
 func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent string, now time.Time, deferAdvance ...bool) *kernel.Error {
 	flow := d.app + "." + d.Name
 	id := flow + ":" + key
@@ -277,7 +264,7 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 			break
 		}
 		if !ended(x.State) {
-			return nil // one running instance per key
+			return nil
 		}
 		id = fmt.Sprintf("%s:%s#%d", flow, key, n)
 	}
@@ -323,7 +310,6 @@ func (ss *session) create(d *flowDef, id, key string, data any, onBehalf, parent
 	return x
 }
 
-// next moves a token on: to `to`, or where the step's Choose or Next says.
 func (ss *session) next(x *FlowInstance, token int, to string) {
 	tok := ss.token(x, token)
 	if to == "" {
@@ -340,7 +326,7 @@ func (ss *session) next(x *FlowInstance, token int, to string) {
 				}
 			}
 			to = step.Next
-			if step.Choose != nil { // it may keep what it read: the run's data is saved
+			if step.Choose != nil {
 				var reason string
 				r := ss.run(x, token)
 				to, reason = step.Choose(ss.app(x), r)
@@ -355,7 +341,6 @@ func (ss *session) next(x *FlowInstance, token int, to string) {
 	}
 }
 
-// advance takes every ready token's step until the instance only waits.
 func (ss *session) advance(x *FlowInstance) {
 	for {
 		i := slices.IndexFunc(x.Tokens, func(t Token) bool { return t.Waits == "ready" })
@@ -554,7 +539,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			tok.Due = due
 		}
 		ss.trace(x, tok.Step, "waiting", waitingFor(step), "")
-	case step.Agent != nil && ss.f.host.Runs() != nil: // the app's agent takes the step; its run ends it
+	case step.Agent != nil && ss.f.host.Runs() != nil:
 		ag := step.Agent
 		id := fmt.Sprintf("%s:%d", x.ID, x.Seq)
 		x.Seq++
@@ -578,7 +563,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			if ask.Ref != nil {
 				a.Ref = ask.Ref(app, run)
 			}
-		} else { // no agent app runs: a person does what the agent would
+		} else {
 			a.Title, a.To, a.Body = step.Agent.Goal(app, run), step.Agent.To(app, run), "An agent's step, done by a person."
 		}
 		x.Seq++
@@ -656,7 +641,6 @@ func payloadOf(build func(platform.Caller, *platform.Run) any, c platform.Caller
 	return raw
 }
 
-// act submits an action as the app: its own, or a protocol's through the host.
 func (ss *session) act(x *FlowInstance, appID, protocol, action, target string, payload json.RawMessage, key string, onBehalf ...string) (*pb.EntityRef, *kernel.Error) {
 	h := ss.f.host
 	if x != nil {
@@ -687,7 +671,6 @@ func (ss *session) act(x *FlowInstance, appID, protocol, action, target string, 
 	return r.GetSubmission().GetTarget(), nil
 }
 
-// failed retries a step's act with backoff, then takes its fault path, then compensates.
 func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string) {
 	tok := ss.token(x, token)
 	limit := stepAttempts
@@ -727,10 +710,6 @@ func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why s
 	}
 }
 
-// failedUnhandled tells the flow's owners, and whoever started the instance,
-// that a step failed with no fault path of its own: the flow undoes what it
-// did, and the business it was doing needs a person (#118). No flow ends
-// silently.
 func (ss *session) failedUnhandled(x *FlowInstance, step, why string) {
 	d := ss.def(x)
 	a := platform.Assignment{Key: fmt.Sprintf("flow:%s:%d", x.ID, x.Seq), Ref: InstanceType + "/" + x.ID,
@@ -746,12 +725,11 @@ func (ss *session) failedUnhandled(x *FlowInstance, step, why string) {
 	ss.assigns = append(ss.assigns, flowTask{app: d.app, Assignment: a})
 }
 
-// compensate stops every path and undoes the completed acts, newest first.
 func (ss *session) compensate(x *FlowInstance, why string) {
 	ss.stopPaths(x)
 	x.State = "compensating"
 	x.Tokens = []Token{{ID: ss.tokenID(x), Step: "@undo", Waits: "ready"}}
-	if runs := ss.f.host.Runs(); runs != nil { // what its agents did is undone with the rest
+	if runs := ss.f.host.Runs(); runs != nil {
 		for _, run := range runs.Finished(ss.c, x.ID, "") {
 			ss.signals = append(ss.signals, runSignal{run: run, RunSignal: platform.RunSignal{At: ss.now, Kind: "undone", By: "flow", Detail: why}})
 		}
@@ -802,7 +780,6 @@ func (ss *session) undo(x *FlowInstance, token int) {
 	ss.trace(x, u.Step, "undone", strings.TrimPrefix(u.Protocol+" ", " ")+u.Action+" "+u.Target, "")
 }
 
-// stuck stops a path and asks the flow's owners.
 func (ss *session) stuck(x *FlowInstance, token int, why string) {
 	tok := ss.token(x, token)
 	d := ss.def(x)
@@ -818,7 +795,6 @@ func (ss *session) stuck(x *FlowInstance, token int, why string) {
 	ss.trace(x, tok.Step, "stuck", why, "")
 }
 
-// endPath ends a path: a branch joins its parallel step; the last main path ends the flow.
 func (ss *session) endPath(x *FlowInstance, token int) {
 	tok := *ss.token(x, token)
 	x.Tokens = slices.DeleteFunc(x.Tokens, func(t Token) bool { return t.ID == token })
@@ -870,8 +846,6 @@ func (ss *session) endPath(x *FlowInstance, token int) {
 		parent.Results = map[string]json.RawMessage{}
 	}
 	parent.Results[tok.Branch] = platform.Raw(tok.Outputs)
-	// Every branch has a stable first-step key. Parallel completion order is
-	// not an output order or a reason to repeat an already accepted action.
 	if len(ss.def(x).steps[parent.Step].Any) > 0 {
 		var others []Token
 		for _, t := range x.Tokens {
@@ -1032,7 +1006,6 @@ func (ss *session) fillLoop(x *FlowInstance, token int) {
 	}
 }
 
-// finish ends an instance; a called one hands its end to its caller.
 func (ss *session) finish(x *FlowInstance, state string) {
 	ss.stopPaths(x)
 	x.State, x.Tokens = state, nil
@@ -1058,8 +1031,6 @@ func (ss *session) finish(x *FlowInstance, state string) {
 	ss.advance(parent)
 }
 
-// Submit takes the administrators' decisions about instances; the flow app's
-// own steps are made by the host as flows run.
 func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1096,7 +1067,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 					}
 					if d := ss.def(x); d.Continuous != nil && d.Continuous.Entry != "" && t.Step == d.Continuous.Entry && (t.Waits == "stuck" || t.Waits == "retry") {
 						t.Waits, t.Attempts, t.Due, t.Task = "retry", 0, now, ""
-						continue // the outside source lane rebuilds the exact sealed window input
+						continue
 					}
 					t.Waits, t.Attempts, t.Due, t.Task = "ready", 0, time.Time{}, ""
 				}
@@ -1199,13 +1170,10 @@ func clip(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// backoff is the wait before a failed act's next attempt: 2 s, 4 s, 8 s, 16 s.
 func backoff(attempts int) time.Duration { return time.Second << attempts }
 
 func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
 
-// timeout is when a step times out: after its Timeout, or after its working
-// days in the calendar of whom the instance runs for, else the tenant's.
 func (ss *session) timeout(x *FlowInstance, step *platform.Step) (time.Time, bool) {
 	if step.WorkingDays > 0 {
 		party := ""
@@ -1218,7 +1186,6 @@ func (ss *session) timeout(x *FlowInstance, step *platform.Step) (time.Time, boo
 	return ss.now.Add(step.Timeout), step.Timeout > 0
 }
 
-// descendants are existing scheduler tokens, including nested forks/calls.
 func (ss *session) descendant(x *FlowInstance, token, parent int) bool {
 	for token != 0 {
 		if token == parent {
@@ -1300,8 +1267,6 @@ func (ss *session) controlLoop(x *FlowInstance, token int, step *platform.Step) 
 	ss.next(x, ancestor, "")
 }
 
-// Any is a race for the first successful path. A refused candidate does not
-// win or rerun other branches; all candidates failing uses the fork's handler.
 func (ss *session) raceFailure(x *FlowInstance, token int, why string) bool {
 	current := ss.token(x, token)
 	ancestor := current.Parent
@@ -1347,10 +1312,6 @@ func (ss *session) raceFailure(x *FlowInstance, token int, why string) bool {
 	return true
 }
 
-// tick starts the current period of every scheduled flow that has not started
-// it yet (E1). The period's start time is the instance key, so a
-// restart, a replay or a slow tick never doubles a period; a period missed
-// entirely is not made up.
 func (f *Flows) tick(c platform.Caller, now time.Time) *kernel.Error {
 	continuous := map[string]*flowDef{}
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
@@ -1386,7 +1347,7 @@ func (f *Flows) tick(c platform.Caller, now time.Time) *kernel.Error {
 			}
 			key := fmt.Sprintf("continuous-v%d", d.Version)
 			if _, known := platform.Get[FlowInstance](c, id+":"+key); known {
-				continue // a completed/canceled start is an explicit stop, not a restart loop
+				continue
 			}
 			if err := f.start(f.host.Automation(c, ID), d, key, nil, d.Start.OnBehalf, nil, "", now, true); err != nil {
 				return err

@@ -39,9 +39,6 @@ func (b *Build) checkFunction(f Function) error {
 	if f.Proposal != nil && f.Proposal.HandoffRole != "" && !b.declaresRole(f.Proposal.HandoffRole) {
 		return fmt.Errorf("The proposal reviewer must hold a declared role")
 	}
-	// The complete candidate installs and checks its source object before the
-	// original host validates this function. Draft review must not require an
-	// independent live publication of that same selected object.
 	validate := f.Definition().Check
 	if !selected {
 		validate = func() error { return b.host.ValidateInstallFunction(f.Definition()) }
@@ -204,7 +201,6 @@ func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAss
 	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, sourceVersion+".function-"+strconv.Itoa(f.Version), f.Definition())
 }
 
-// FunctionReleaseAsset resolves only a retained version from this owner.
 func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
 	return retainedDefinitionAsset(b.Manifest().Version, "function", "function", platform.AssetFunction, name, sourceVersion, b.FunctionDefinition)
 }
@@ -215,9 +211,6 @@ func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
 	})
 }
 
-// InstallFunctionAsset compiles one immutable candidate version into a fresh
-// test app. It does not invent a publication history or run a publish action.
-// The candidate constructor repeats this compilation before snapshot restore.
 func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
 	version := b.definitionAssetVersion(asset, platform.AssetFunction, "function")
 	var f Function
@@ -260,8 +253,6 @@ func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsse
 
 const FunctionType = "build.function"
 
-// Function owns one bounded declaration and its retained publications. Draft
-// edits never replace what callers use until the publication result commits.
 type Function struct {
 	platform.Record
 	Proposal       *platform.ProposalPolicy `json:"proposal,omitempty" type:"json" field:"aside" title:"Business proposal review"`
@@ -285,8 +276,6 @@ type Function struct {
 	Versions       []string                 `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 
-// definition projects the stored fields into the shared runtime declaration;
-// validation and execution remain owned by platform.AIFunction.
 func (f Function) Definition() platform.AIFunction {
 	return platform.AIFunction{Proposal: f.Proposal, Conversation: f.Conversation, Name: f.Name, Title: f.Title, Description: f.Description, Object: f.Object,
 		Fields: f.Fields, Instructions: f.Instructions, Output: f.Output, Model: f.Model,
@@ -299,8 +288,6 @@ const SchemaFunctionCall = FunctionCallType + ".start"
 
 const SchemaFunctionAnswer = FunctionCallType + ".answer"
 
-// FunctionRun keeps a suggestion separately from its business source. A
-// person's ordinary business action remains the only way to adopt it.
 type FunctionRun struct {
 	platform.Record
 	TrainingAuthorization string                     `json:"trainingAuthorization,omitempty" field:"readonly"`
@@ -345,8 +332,6 @@ type FunctionRun struct {
 	Withheld              bool                       `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
 }
 
-// TrainingCandidates keeps function evidence with the function owner. Prompt,
-// question, history, credentials and protocol continuation are not projected.
 func (b *Build) TrainingCandidates(c platform.Caller, event platform.Event, images map[string]json.RawMessage) []platform.AITrainingCandidate {
 	out := []platform.AITrainingCandidate{}
 	at := event.Record.GetRecordedTime().AsTime()

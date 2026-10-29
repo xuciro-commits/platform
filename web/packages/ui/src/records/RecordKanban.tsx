@@ -14,8 +14,6 @@ function kanbanMove(record:EntityRecord,field:string,target:string,moves:KanbanM
  return matching.length===1?matching[0]:undefined;
 }
 
-/** Original records and transitions only; a move gesture emits a command and
- * waits for its owner to provide the next window. No optimistic state write. */
 export function RecordKanban({records,lanes,stateField,labelField,selected,onSelect,moves=[],onMove,properties=()=>[],label}: {
  records:EntityRecord[];lanes:KanbanLane[];stateField:string;labelField:string;selected?:string;
  onSelect:(record?:EntityRecord)=>void;moves?:KanbanMove[];onMove?:(record:EntityRecord,schema:string,destination?:string)=>void;

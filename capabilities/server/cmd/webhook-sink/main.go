@@ -1,6 +1,3 @@
-// Command webhook-sink runs the local sink stand-alone for manual debugging.
-// Deployments embed the same receiver in platform-server through
-// PLATFORM_SINK_ADDRESS (internal/sink); this binary stays for ad-hoc runs.
 package main
 
 import (

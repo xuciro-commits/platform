@@ -12,9 +12,6 @@ import (
 	"slices"
 )
 
-// SQL checkpoint images have the same lifetime as the original two retained
-// snapshots. Ordinary accepted writes update only the current runtime tables.
-// The archive is a historical read source, never a second writable authority.
 type StateSnapshotStorage interface {
 	SaveStateSnapshot(context.Context, string, int64, string, []byte, StateDigest) error
 	BeginSnapshotStateRead(context.Context, string, int64, int64) (StateReadView, error)
@@ -67,8 +64,6 @@ func (j *Postgres) SaveStateSnapshot(ctx context.Context, tenant string, positio
 	if _, err = tx.Exec(ctx, `insert into snapshots(tenant,seq,code,state) values($1,$2,$3,$4) on conflict(tenant,seq) do update set code=excluded.code,state=excluded.state where not exists(select 1 from runtime_snapshot_meta m where m.tenant=excluded.tenant and m.snapshot_seq=excluded.seq)`, tenant, position, code, packed); err != nil {
 		return err
 	}
-	// The archived SQL prefix stays immutable. A compatible owner conversion
-	// may refresh the derived owner checkpoint after this exact-state comparison.
 	var exists bool
 	if err = tx.QueryRow(ctx, `select exists(select 1 from runtime_snapshot_meta where tenant=$1 and snapshot_seq=$2)`, tenant, position).Scan(&exists); err != nil {
 		return err
@@ -160,8 +155,6 @@ func (v *postgresSnapshotRead) StateCandidates(ctx context.Context, tenant, typ 
 		if applied != v.snapshot {
 			return nil, fmt.Errorf("SQL checkpoint candidate position differs")
 		}
-		// Recovery can conservatively visit more rows. The original predicates
-		// still evaluate each candidate; no newer image can enter this source.
 		rows, err := db.Query(ctx, `select id from runtime_snapshot_records where tenant=$1 and snapshot_seq=$2 and type=$3 and id>$4 order by id limit $5`, tenant, v.snapshot, typ, after, limit)
 		if err != nil {
 			return nil, err
@@ -236,8 +229,6 @@ func (v *postgresSnapshotRead) StateValues(ctx context.Context, tenant, owner st
 	})
 }
 
-// The archive retains only the immutable history reference. Verify its shared
-// append-only prefix with the same chain encoding, using one row at a time.
 func verifyCheckpointHistory(ctx context.Context, db stateQueries, tenant string, position int64) error {
 	rows, err := db.Query(ctx, `select r.type,r.id,r.history_count,r.history_head,h.pos,h.image from runtime_snapshot_records r left join runtime_history h on h.tenant=r.tenant and h.type=r.type and h.id=r.id and h.pos<r.history_count where r.tenant=$1 and r.snapshot_seq=$2 order by r.type,r.id,h.pos`, tenant, position)
 	if err != nil {
@@ -286,8 +277,6 @@ func verifyCheckpointHistory(ctx context.Context, db stateQueries, tenant string
 	return finish()
 }
 
-// VerifyStateSnapshot compares archive+accepted tail against the current SQL
-// state. Expected rows live in transaction-local tables, never a Go mirror.
 func (j *Postgres) VerifyStateSnapshot(ctx context.Context, tenant string, snapshot, position int64, deltas []StateDelta) error {
 	tx, err := j.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {

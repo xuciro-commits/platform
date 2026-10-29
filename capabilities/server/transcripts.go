@@ -9,17 +9,8 @@ import (
 	"platformserver/platform"
 )
 
-// Transcript is one model call in full: what was sent and what came back.
-// It may hold personal data, so it stays outside
-// the journal, for as many days as the agent app's setting keeps it.
-
-// purgeAll is a moment after any transcript: forgetting every one is a purge
-// with this cutoff.
 var purgeAll = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
 
-// transcriptDays is how many days transcripts are kept, and whether any are
-// kept at all: 0 or less keeps none, so the setting is a switch, not only a
-// period.
 func (t *Tenant) transcriptDays() int {
 	days, err := strconv.Atoi(t.setting(t.automation(platform.AgentApp, false), platform.SettingTranscriptDays))
 	if err != nil {
@@ -28,9 +19,6 @@ func (t *Tenant) transcriptDays() int {
 	return days
 }
 
-// transcribe keeps a call's transcript in the Store, or in memory without one.
-// When the tenant keeps none, nothing is written — a transcript holds personal
-// data, and a setting of 0 must not quietly keep it forever.
 func (t *Tenant) transcribe(x Transcript) {
 	if t.transcriptDays() <= 0 {
 		return
@@ -39,20 +27,14 @@ func (t *Tenant) transcribe(x Transcript) {
 	t.store().SaveTranscript(x)
 }
 
-// Transcripts are a run's model calls, newest first (every call's, for no run).
 func (t *Tenant) Transcripts(run string, limit int) []Transcript {
 	return t.store().Transcripts(t.ID, run, limit)
 }
 
-// PurgeTranscripts forgets transcripts older than the setting keeps them, and
-// every one of them when it keeps none: lowering the period, or setting it to
-// zero, deletes what is over it on the next round (review AI-04).
 func (t *Tenant) PurgeTranscripts(now time.Time) {
 	if t.agents == nil {
 		return
 	}
-	// A store's purge is "everything before this moment"; keeping none means
-	// forgetting every one, so the moment is past every record.
 	if days := t.transcriptDays(); days <= 0 {
 		t.store().PurgeTranscripts(t.ID, purgeAll)
 	} else {
@@ -60,7 +42,6 @@ func (t *Tenant) PurgeTranscripts(now time.Time) {
 	}
 }
 
-// store is the derived store: the journal's, or the host's memory without one.
 func (t *Tenant) store() Store {
 	if t.Store != nil {
 		return t.Store
@@ -68,11 +49,6 @@ func (t *Tenant) store() Store {
 	return &t.memStore
 }
 
-// TranscriptsFor are the model calls of run (every run's, for no run) as m may
-// read them: an administrator of the agent or AI app reads a call only where
-// they may also read the records that run read, because a prompt carries them
-// (#130). It is how the host serves the transcripts; Transcripts itself is the
-// store's own read, for the platform.
 func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now time.Time) ([]Transcript, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return nil, err
@@ -82,9 +58,6 @@ func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now ti
 	}
 	found := t.Transcripts(run, limit)
 	if run == "" {
-		// A person's own chat calls are not a run's trace: there are no records
-		// to check them against, and the administrator gate above stands
-		// (review AI-04).
 		return found, nil
 	}
 	out := []Transcript{}
@@ -99,8 +72,6 @@ func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now ti
 	return out, nil
 }
 
-// withheld reports whether a run's trace narrows for m: something the run read,
-// cited or acted on is no longer theirs to read (#130).
 func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {
 	if t.agents == nil || run == "" {
 		return true

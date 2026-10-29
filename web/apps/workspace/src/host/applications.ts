@@ -1,8 +1,6 @@
 import type { ApplicationUIInfo, AppUI, Definition, Host } from "@platform/app";
 import type { NavSection, Route } from "@platform/ui";
 
-/** Trusted UI packages can contribute to one functional app without adding
- * another portal entry or changing the backend that owns its resources. */
 export type ComposedApplication = AppUI & { homeFor: (host: Host) => Route };
 export function composeApplications(contributions: readonly AppUI[]): ComposedApplication[] {
   const groups = new Map<string, AppUI[]>();
@@ -40,7 +38,6 @@ const applicationID = (definition: ApplicationDefinition) => `${definition.ref.a
 const refKey = (ref: Definition["ref"]) => `${ref.app}/${ref.kind}/${ref.name}`;
 const applicationDefinitions = (definitions: readonly Definition[]) => definitions.filter((definition): definition is ApplicationDefinition => definition.ref.kind === "app" && !!definition.application);
 
-/** UI entry selection is navigation metadata; it never changes the runtime owner. */
 export function applicationEntry(definition: ApplicationDefinition, entries: readonly ApplicationEntry[]): string | undefined {
   const target = definition.application.extends;
   if (!target && definition.source !== "code") return applicationID(definition);
@@ -81,7 +78,6 @@ function pageMembership(route: Route, definitions: readonly Definition[], entrie
   return selected.length === 1 ? selected[0] : holders.length === 1 ? holders[0] : undefined;
 }
 
-/** Runtime application ids stay on page routes; the shell highlights their native entry. */
 export function pageApplication(route: Route, definitions: readonly Definition[], current?: string, entries: readonly ApplicationEntry[] = []): string | undefined {
   const definition = pageMembership(route, definitions, entries, current);
   if (definition) return applicationEntry(definition, entries);
@@ -89,7 +85,6 @@ export function pageApplication(route: Route, definitions: readonly Definition[]
   return undefined;
 }
 
-/** Published replacements apply to menu links, deep links and restored tabs alike. */
 export function resolveApplicationRoute(route: Route, definitions: readonly Definition[], entries: readonly ApplicationUIInfo[], current?: string): Route {
   for (const { definition, entry } of publishedExtensions(definitions, entries)) {
     if (!replacementEntryView(entries, entry, route.view)) continue;
@@ -107,7 +102,6 @@ function replacementEntryView(entries: readonly ApplicationUIInfo[], entry: stri
   return application.home.view === view || Object.values(application.opens).includes(view) || application.sections.some(section => visible(section.items));
 }
 
-/** Append authorized published pages to the original code app, retaining its entry and views. */
 export function extendApplications(entries: readonly AppUI[], definitions: readonly Definition[], metadata: readonly ApplicationUIInfo[], context?: { application?: string; instance?: string }): AppUI[] {
   const extensions = publishedExtensions(definitions, entries);
   const replaceItems = (items: NavSection["items"]): NavSection["items"] => items.map(item => "route" in item
@@ -133,7 +127,6 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
   });
 }
 
-/** Inspect only loaded contributions and the navigation their original owner exposes. */
 export function applicationUIInfo(contributions: readonly AppUI[], host: Host): ApplicationUIInfo[] {
   return composeApplications(contributions.filter(app => !app.for || app.for(host))).map(app => ({
     id: app.id, title: app.title, serves: app.serves ?? [app.id], home: app.homeFor(host), sections: app.nav(host),

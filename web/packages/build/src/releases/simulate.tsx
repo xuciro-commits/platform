@@ -24,7 +24,6 @@ type EvaluationCase = { name: string; input: string; expected: string };
 type EvaluationPolicy = { compareFields?:string[]; minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
 type TestPlan = { id: string; revision: number; name?:string;functionVersion?:number;definitionVersion?:number; title: string; roots?:Api.AssetRef[];application?:string;candidateId?:string;actors?:string[];sample?:string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; organization?: Api.OrgSeed; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
-/** The host owns the test runtime. This editor only assembles its fixed inputs. */
 export function CandidateTest(props:Parameters<typeof CandidateTestForm>[0]) {
   return <InputDraftProvider isolated scope="candidate-test"><CandidateTestForm {...props}/></InputDraftProvider>;
 }
@@ -94,8 +93,6 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     enabled: !!id && holds("build", "builder"),
   });
   const declaredInputs = (schema: string) => {
-    // Only fixed platform test-entry actions use the installed catalog. Draft
-    // object inputs must come from this candidate, never its old live schema.
     if (schema === "build.process.run" || schema === "build.function-call.start") return action(schema)?.payload;
     return !candidateInputs.isError ? candidateInputs.data?.candidateActions?.find((item) => item.schema === schema)?.payload : undefined;
   };
@@ -131,8 +128,6 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const switchAsset = (nextKind: typeof kind, nextID: string) => {
     if (lock.current || inputDrafts?.busy) return;
     clear(); setKind(nextKind); setID(nextID); setSteps([]); setRoots([]); setIncludeInReleases(nextKind === "app");
-    // A new root gets a new plan identity; Save must never move the previous
-    // asset's plan simply because the user selected a different draft.
     setPlanID("");setCreateID(crypto.randomUUID());inputDrafts?.clear(); setRevision(0); setTitle(""); setSetName(""); setMember(""); setSamples("[]");setOrganization("null");setSampleOverride(true);setSample("");setMembers("");setCandidateID("");
     setModel(evaluationSet && nextKind === "function" ? "" : "fixture/probe"); setEvaluationEnabled(evaluationSet && nextKind === "function");
     setMinQuality(1); setMaxCostUsd(0.1); setMaxLatencyMillis(30000);

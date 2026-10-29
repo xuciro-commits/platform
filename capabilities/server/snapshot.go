@@ -30,15 +30,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// A snapshot is a tenant's state at a journal position: what the
-// host keeps (portable records/history or a fixed SQL record archive, owned
-// work, connectors, notices,
-// settings, endpoints and effects, bindings, the audit) and each app's own,
-// through platform.Snapshotter. Restored into a tenant composed as at start-up,
-// then given the entries after that position, it equals a full replay;
-// CheckReplay holds every composition to that. A snapshot is only a shortcut:
-// the journal stays the truth. Explicit host/owner formats and the native
-// composition decide compatibility; the build digest is diagnostic metadata.
 type tenantState struct {
 	Runtime             *runtimekernel.SQLCheckpoint            `json:"runtime,omitempty"`
 	Checkpoint          *snapshotCheckpoint                     `json:"checkpoint,omitempty"`
@@ -56,11 +47,11 @@ type tenantState struct {
 	ActiveRelease       string                                  `json:"activeRelease,omitempty"`
 	Deliveries          []platform.Delivery                     `json:"deliveries"`
 	Acted               int                                     `json:"acted"`
-	Bindings            map[string]string                       `json:"bindings"` // protocol → provider app
+	Bindings            map[string]string                       `json:"bindings"`
 	Works               json.RawMessage                         `json:"works"`
-	Queues              map[string][]string                     `json:"queues"` // subscriber → task IDs, head first
+	Queues              map[string][]string                     `json:"queues"`
 	Failed              []string                                `json:"failed"`
-	Tasks               []platform.ScheduledTaskState           `json:"tasks"` // every delivery task, by ID
+	Tasks               []platform.ScheduledTaskState           `json:"tasks"`
 	Jobs                []automation.Task                       `json:"jobs"`
 	Connectors          json.RawMessage                         `json:"connectors"`
 	Marks               []kernel.ConnectorMark                  `json:"marks"`
@@ -68,23 +59,21 @@ type tenantState struct {
 	Notices             []platform.Notification                 `json:"notices"`
 	NoticeSeq           int                                     `json:"noticeSeq"`
 	Settings            map[string]string                       `json:"settings"`
-	Words               map[string]map[string]string            `json:"words,omitempty"` // the tenant's translations
+	Words               map[string]map[string]string            `json:"words,omitempty"`
 	Endpoints           []*Endpoint                             `json:"endpoints"`
 	Outbound            []acceptedformat.EffectState            `json:"outbound"`
-	// The host console's lifecycle and support sessions travel
-	// with the tenant: a restart keeps a suspension and its authorized sessions.
-	HostRequests     map[string]platform.HostControlReceipt `json:"hostRequests,omitempty"`
-	HostLifecycle    string                                 `json:"hostLifecycle,omitempty"`
-	RuntimeSelection map[string]string                      `json:"runtimeSelection,omitempty"`
-	DisabledOwners   []string                               `json:"disabledOwners,omitempty"`
-	Support          []platform.SupportGrant                `json:"support,omitempty"`
-	Sealed           map[string]platform.SealedArtifact     `json:"sealed,omitempty"`
-	ReleaseOrigins   map[string]platform.ReleaseOrigin      `json:"releaseOrigins,omitempty"`
-	Migrations       []platform.MigrationManifest           `json:"migrations,omitempty"`
-	CompositeAnswers map[string]json.RawMessage             `json:"compositeAnswers,omitempty"`
-	Composites       map[string]string                      `json:"composites,omitempty"`
-	Staged           map[string]platform.StagedResult       `json:"staged,omitempty"`
-	Sequences        map[string]int                         `json:"sequences,omitempty"`
+	HostRequests        map[string]platform.HostControlReceipt  `json:"hostRequests,omitempty"`
+	HostLifecycle       string                                  `json:"hostLifecycle,omitempty"`
+	RuntimeSelection    map[string]string                       `json:"runtimeSelection,omitempty"`
+	DisabledOwners      []string                                `json:"disabledOwners,omitempty"`
+	Support             []platform.SupportGrant                 `json:"support,omitempty"`
+	Sealed              map[string]platform.SealedArtifact      `json:"sealed,omitempty"`
+	ReleaseOrigins      map[string]platform.ReleaseOrigin       `json:"releaseOrigins,omitempty"`
+	Migrations          []platform.MigrationManifest            `json:"migrations,omitempty"`
+	CompositeAnswers    map[string]json.RawMessage              `json:"compositeAnswers,omitempty"`
+	Composites          map[string]string                       `json:"composites,omitempty"`
+	Staged              map[string]platform.StagedResult        `json:"staged,omitempty"`
+	Sequences           map[string]int                          `json:"sequences,omitempty"`
 }
 
 const tenantSnapshotFormat = "platform.tenant.v1"
@@ -105,8 +94,6 @@ type snapshotCheckpoint struct {
 	Build    string `json:"build"`
 }
 
-// snapshotCompatibility describes only the startup composition. Published
-// tenant definitions belong to the saved state and are reinstalled by Restore.
 func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 	if t.startupSnapshot != nil {
 		return *t.startupSnapshot, nil
@@ -123,8 +110,6 @@ func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 		manifest := app.Manifest()
 		format, declared := app.(platform.SnapshotFormatOwner)
 		if !declared || strings.TrimSpace(format.SnapshotFormat()) == "" {
-			// Keep the startup composition for in-process tenant recovery even
-			// when this owner requires exact-build checkpoint eligibility.
 			compatibility.Host = ""
 		} else {
 			compatibility.Owners[manifest.ID] = format.SnapshotFormat()
@@ -150,9 +135,6 @@ func (t *Tenant) snapshotCompatibility() (snapshotCompatibility, error) {
 	return compatibility, err
 }
 
-// snapshotKey keeps the existing journal interface and legacy checkpoint names.
-// An undeclared owner retains exact-build eligibility; explicit formats select
-// a separate namespace and are verified again against the loaded checkpoint.
 func (t *Tenant) snapshotKey(code string) (string, error) {
 	compatibility, err := t.snapshotCompatibility()
 	if err != nil || compatibility.Host == "" {
@@ -161,8 +143,6 @@ func (t *Tenant) snapshotKey(code string) (string, error) {
 	return platform.CanonicalDigest(compatibility)
 }
 
-// runtimeSnapshotKey keeps an owner-only SQL checkpoint outside the portable
-// namespace. Undeclared owners still require the exact binary key as before.
 func (t *Tenant) runtimeSnapshotKey(code string) (string, error) {
 	compatibility, err := t.snapshotCompatibility()
 	if err != nil {
@@ -200,7 +180,7 @@ func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
 	}
 	if header.Checkpoint == nil && header.Runtime == nil {
 		return nil
-	} // legacy exact-code snapshot
+	}
 	compatibility, err := t.snapshotCompatibility()
 	if err != nil {
 		return err
@@ -221,10 +201,6 @@ func (t *Tenant) checkSnapshotCheckpoint(raw []byte, position int64) error {
 	return nil
 }
 
-// Snapshot saves the tenant's state between inputs; the caller's position
-// function runs under the same lock, so the journal position matches the state.
-// Decisions wait only while the state is captured: records never change once
-// stored (a put stores a new row), so they are encoded after the lock.
 func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error) {
 	compatibility, err := t.snapshotCompatibility()
 	if err != nil {
@@ -244,7 +220,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 				ownsRead = true
 				return t.detachSnapshotRead, nil
 			}
-			return nil, nil // the recovery caller owns this archive view
+			return nil, nil
 		}
 		views, ok := t.records.Current().Backend().(journal.StateReadViews)
 		if !ok {
@@ -285,19 +261,12 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 	return raw, seq, err
 }
 
-// A captured row can read history while it is encoded after the tenant lock
-// is released. Transfer that view to the snapshot instead of opening a second
-// connection; the lane resumes its ordinary storage readers before unlocking.
 func (t *Tenant) detachSnapshotRead() {
 	t.records.Current().Bind(nil)
 	if store, ok := t.records.Current().Backend().(runtimekernel.AcceptedStateReader); ok && t.records.Current().Position() != nil {
 		t.installRuntimeHistory(store, t.records.Current().Position())
 	}
 }
-
-// SQLCheckpoint identifies the SQL records belonging to an owner checkpoint.
-// Portable Snapshot exports retain complete rows; deployment checkpoints keep
-// the same owner state without copying the complete SQL record set.
 
 func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessage, int64, error) {
 	views, ok := j.(journal.StateReadViews)
@@ -354,7 +323,6 @@ func (t *Tenant) snapshotRuntime(ctx context.Context, j Journals) (json.RawMessa
 	return raw, seq, err
 }
 
-// capture takes everything but the records' encoding under the tenant's locks.
 func (t *Tenant) capture(position func() int64, includeRows bool, prepare func() (func(), error)) (tenantState, map[string][]*records.Row, int64, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -449,9 +417,6 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 	return s, rows, seq, nil
 }
 
-// restoreRecords restores the records of every type declared now, and hands
-// back those of types nobody has declared yet: a tenant's own objects, which
-// their definitions install.
 func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[string][]records.StoredState, error) {
 	held := map[string][]records.StoredState{}
 	t.records.Lock()
@@ -475,7 +440,7 @@ func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[str
 			if err := checkRunApplicationBindings(v.Interface()); err != nil {
 				return nil, err
 			}
-			records.EmptyLists(v) // a snapshot of older code may hold null lists
+			records.EmptyLists(v)
 			recovered := &records.Row{Value: v, Format: r.Format, History: r.History, Projection: records.CloneProjection(r.Projection), Extraction: r.Extraction}
 			head, err := recovered.HistoryDigest()
 			if err != nil {
@@ -498,8 +463,6 @@ func (t *Tenant) restoreRecords(saved map[string][]records.StoredState) (map[str
 	return held, nil
 }
 
-// Restore loads a snapshot into a tenant composed as at start-up, before any
-// entry: its apps and connectors are the same ones the snapshot was taken of.
 func (t *Tenant) Restore(raw json.RawMessage) error {
 	var s tenantState
 	if err := json.Unmarshal(raw, &s); err != nil {
@@ -532,9 +495,6 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: app %s: %v", t.ID, a.Manifest().ID, err)
 		}
 	}
-	// First the records of the types code declares, then the definitions a
-	// tenant authored — which install their own types — then the records of
-	// those.
 	held, err := t.restoreRecords(s.Records)
 	if err != nil {
 		return err
@@ -568,9 +528,6 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	return t.restoreOperations(&s)
 }
 
-// restoreDefinitions reinstalls the tenant-authored definitions when the
-// snapshot's published assets or held records need them, then restores the
-// records of the types they install.
 func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]records.StoredState) error {
 	needsDefinitions := len(held) > 0 || s.Runtime != nil
 	for typ, kind := range map[string]platform.AssetKind{build.PropertyTypeType: platform.AssetPropertyType, build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute, build.TableType: platform.AssetCompute} {
@@ -625,8 +582,6 @@ func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]records.St
 	return nil
 }
 
-// verifyCommitted checks that every committed answer in the snapshot is one
-// this tenant and its apps still recognise, before it is restored.
 func (t *Tenant) verifyCommitted(s *tenantState) error {
 	for key, binding := range s.SubmissionSchemas {
 		app, request, _ := strings.Cut(key, "/")
@@ -744,8 +699,6 @@ func (t *Tenant) verifyCommitted(s *tenantState) error {
 	return nil
 }
 
-// restoreOperations restores what the runner shares with reads: works, tasks,
-// queues, jobs, connectors, notices, settings, endpoints, sequences, outbound.
 func (t *Tenant) restoreOperations(s *tenantState) error {
 	for _, job := range s.Jobs {
 		if err := platform.CheckApplicationBindings(job.Applications); err != nil {

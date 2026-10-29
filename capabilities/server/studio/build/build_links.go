@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-// LinkType owns one bounded declaration and its retained publications. Draft
-// edits never replace what callers use until the publication result commits.
 type LinkType struct {
 	platform.Record
 	Storage      string   `json:"storage,omitempty" choices:"reference,edge"`
@@ -90,8 +88,6 @@ func (b *Build) checkLinkType(f *LinkType) error {
 	if err := f.Definition().CheckSchema(parent, info); err != nil {
 		return err
 	}
-	// A joint candidate validates its records and relationship constraints in
-	// the existing private installation, after the selected objects are present.
 	if !b.jointMode {
 		if err := b.host.ValidateInstallLinkType(f.Definition()); err != nil {
 			return err
@@ -169,8 +165,6 @@ func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at
 	})
 }
 
-// LinkPublication decodes the original accepted owner image without a
-// new publication decision or a generic release declaration union.
 func (b *Build) LinkPublication(image []byte) (platform.LinkType, error) {
 	saved, err := linkTypeImage(image)
 	if err != nil {
@@ -183,7 +177,6 @@ func linkTypeReleaseAsset(f LinkType, sourceVersion string) (platform.ReleaseAss
 	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, sourceVersion+".link-"+strconv.Itoa(f.Version), f.Definition())
 }
 
-// LinkTypeReleaseAsset resolves only a retained version from this owner.
 func (b *Build) LinkTypeReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
 	return retainedDefinitionAsset(b.Manifest().Version, "link", "link type", platform.AssetLinkType, name, sourceVersion, b.LinkTypeDefinition)
 }
@@ -194,9 +187,6 @@ func (b *Build) linkTypeAssets() ([]platform.ReleaseAsset, error) {
 	})
 }
 
-// InstallLinkTypeAsset installs one immutable candidate version into a fresh
-// test app. It does not invent a publication history or run a publish action.
-// The candidate constructor checks this declaration before snapshot restore.
 func (b *Build) InstallLinkTypeAsset(asset platform.ReleaseAsset) error {
 	version := b.definitionAssetVersion(asset, platform.AssetLinkType, "link")
 	var declaration platform.LinkType
@@ -221,8 +211,6 @@ func (b *Build) linkTypeDraftAssets(id string) (before, after []platform.Release
 	})
 }
 
-// Freeze the immutable candidate beside the mutable editor row. Existing
-// ordinals must match retained bytes; only the next ordinal can publish.
 func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
 	return prepareDefinitionPublications(b, assets, b.linkTypeInventory, platform.AssetLinkType, "link", SchemaLinkType, "link type", b.LinkTypeReleaseAsset, func(record LinkType, asset platform.ReleaseAsset, version int) (LinkType, error) {
 		prior, retained := ReadPublication[LinkType](record.Published)

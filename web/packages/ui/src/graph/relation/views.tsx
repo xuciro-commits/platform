@@ -10,11 +10,8 @@ import { relationNodeCaption, relationNodeClasses, relationNodeSize, type Relati
 
 type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean };
 export type RelationShapeNode = Node<RelationNodeData>;
-/** `quiet` keeps a hierarchy line's name until the line or one of its ends is chosen. */
 export type RelationLineEdge = Edge<RelationEdge & { route?: Route; quiet?: boolean } & Record<string, unknown>>;
 
-/** The four sides an element can be joined from; the line picks the two that face
- * each other, so the owner's source/target meaning never changes. */
 function Sides({ data }: { data: RelationNodeData }) {
   return <>
     {[Position.Top, Position.Right, Position.Bottom, Position.Left].map((side) => <Handle key={side} id={side} type="source" position={side}
@@ -26,7 +23,6 @@ function Sides({ data }: { data: RelationNodeData }) {
 function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
   const classDecl = data.class ? relationNodeClasses[data.class] : undefined;
   const color = (data.tone ?? classDecl?.tone) ? `var(--tone-${data.tone ?? classDecl?.tone})` : "var(--primary)";
-  // A disc is what a reader needs when the only question is which neighbour is which.
   if (data.badge) return <div className={cn("platform-relation-badge", selected && "platform-relation-badge-selected", data.linking && "platform-relation-node-linking")}
     style={{ width: data.badge.size, height: data.badge.size, background: color, borderColor: color } as CSSProperties}
     aria-label={data.label} title={[data.label, data.detail].filter(Boolean).join(" · ")}>

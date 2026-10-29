@@ -7,8 +7,6 @@ type QueryDraft=Api.NamedQuery&{id:string;version?:number;state:string;published
 const labelClass="grid min-w-0 gap-1 text-xs";
 const ordinal=(version:string)=>Number(version.match(/\.query-(\d+)$/)?.[1]??0);
 
-// These are bindings on the same owner draft as its expressions. Reads and
-// completeness are decided by the original query/set owners at execution.
 export function RuleCollectionsEditor({value,onChange,subject,inputs=[]}:{value?:Api.RuleReadSpec;onChange:(next:Api.RuleReadSpec|undefined)=>void;subject:EntityInfo;inputs?:Input_[]}){
  const host=useHost(),builder=host.holds("build", "builder");
  const drafts=useRecordInventory<QueryDraft>("build.query",1000,builder);

@@ -6,7 +6,6 @@ import { applicationViewOptions } from "./studio-applications";
 
 type Extension = Pick<Api.Application, "extends" | "entry" | "replacements">;
 
-/** Navigation declarations remain part of the original application draft. */
 export function ExtensionSettings({ value, pages, disabled, onChange }: { value: Extension; pages: string[]; disabled: boolean; onChange: (value: Extension) => void }) {
   const host = useHost();
   const bases = host.definitions.filter(item => item.ref.kind === "app" && item.source === "code");

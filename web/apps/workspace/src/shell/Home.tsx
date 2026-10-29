@@ -1,4 +1,3 @@
-// Task entry points use the same authorized application directory as the portal.
 import { useHost, useRead } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, routeKey, useWorkspace, t, type InboxTask, Panel} from "@platform/ui";

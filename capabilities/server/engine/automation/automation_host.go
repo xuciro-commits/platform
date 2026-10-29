@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// FlowBindingContext selects original retained definitions; accepted rows and
-// current source/SQL reads stay with their existing authority.
 type FlowBindingContext struct {
 	App            func(string) platform.App
 	Asset          func(string, string, int) (platform.ReleaseAsset, error)
@@ -24,8 +22,6 @@ type FlowBindingContext struct {
 	CodeMatches    func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
 }
 
-// BindFlow runs under the tenant input/recovery lock. The flow owner supplies
-// its retained native version; dependency owners supply their complete assets.
 func (h FlowBindingContext) BindFlow(app, name string, version int, prior platform.FlowBinding) (platform.FlowBinding, error) {
 	if prior.Existing && prior.Dependencies == "" && prior.Release == "" {
 		if _, controlled := h.App(app).(platform.FlowReleaseOwner); !controlled {
@@ -171,8 +167,6 @@ func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.T
 			return value, sources, nil
 		}
 		if field.Type != "reference" || field.Ref == "" {
-			// Opaque JSON fields retain ordinary JSON-path behavior; typed
-			// form publications cannot infer a schema inside an opaque field.
 			result, err := (platform.Binding{Source: "subject", Path: path[i+1:]}).Resolve(&platform.Run{}, value)
 			if err != nil {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())

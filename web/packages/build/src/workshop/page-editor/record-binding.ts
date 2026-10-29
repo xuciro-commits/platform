@@ -2,7 +2,6 @@ import type {PageUI} from "@platform/app";
 import type {Api} from "@platform/kernel";
 
 type Producer=Pick<PageUI.Section,"id"|"widget"|"collectionVariable"|"graphExplorer"|"observation">&{object?:string|Api.AssetRef};
-/** Resolve the original typed record declaration, without reading or casting records. */
 export function originalRecordObject(document:PageUI.PageDocument,sections:Producer[],variable:string,root?:Api.AssetRef):Api.AssetRef|undefined {
  const v=document.variables?.[variable];if(v?.type!=="record")return;
  if(v.source?.object)return v.source.object;

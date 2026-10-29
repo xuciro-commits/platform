@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-// ReadQuery projects the owner query through the caller's current member scope.
-// Unlike an app's internal Find, this is suitable for page/flow data bindings.
 func (c Caller) ReadQuery(app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	if c.rt != nil {
 		return c.rt.ReadQuery(c, app, name, inputs, now)
@@ -21,8 +19,6 @@ func (c Caller) ReadQuery(app, name string, inputs json.RawMessage, now time.Tim
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Named queries require the host read path")
 }
 
-// ReadQueryVersion selects a retained tenant query. Version zero is reserved
-// for code declarations; missing retained sources never fall back to latest.
 func (c Caller) ReadQueryVersion(app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	if c.rt != nil {
 		return c.rt.ReadQueryVersion(c, app, name, version, inputs, now)
@@ -37,8 +33,6 @@ func (c Caller) ReadRecord(typ, id string, now time.Time) (json.RawMessage, *ker
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Record bindings require the host read path")
 }
 
-// ReadRecordPath traverses declared single-record references with this caller's
-// current permissions. The host supplies field provenance for each hop.
 func (c Caller) ReadRecordPath(typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
 	if c.rt != nil {
 		return c.rt.ReadRecordPath(c, typ, id, path, now)
@@ -46,7 +40,6 @@ func (c Caller) ReadRecordPath(typ, id string, path []string, now time.Time) (js
 	return nil, nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Record paths require the host's scoped reads")
 }
 
-// RequestApproval stays in the existing Work request/accepted-result boundary.
 func (c Caller) RequestApproval(app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if c.rt != nil {
 		return c.rt.RequestApproval(c, app, s, now)
@@ -54,11 +47,6 @@ func (c Caller) RequestApproval(app string, s *pb.Submission, now time.Time) (*p
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval requests require an accepted decision")
 }
 
-// RecordImageFormat is a previous persisted shape declared by its model owner.
-// Model is the original struct embedding Record. Convert changes only business
-// fields and returns the current shape; it must not read state or emit effects.
-// The host strictly decodes Model before calling Convert and checks the current
-// model and unchanged record identity afterwards.
 type RecordImageFormat struct {
 	Format  string
 	Model   any
@@ -91,9 +79,6 @@ func decodeRecordImage(raw json.RawMessage, model reflect.Type) (Record, error) 
 	return value.Elem().Field(0).Interface().(Record), nil
 }
 
-// DecodeRecordImage validates one saved shape and converts it only through its
-// owner's explicit declaration. It leaves the supplied original bytes untouched;
-// callers retain those bytes for historical identity and predecessor checks.
 func DecodeRecordImage(info EntityInfo, format string, raw json.RawMessage) (json.RawMessage, error) {
 	if format == info.RecordFormat {
 		_, err := decodeRecordImage(raw, info.Go)
@@ -123,8 +108,6 @@ func DecodeRecordImage(info EntityInfo, format string, raw json.RawMessage) (jso
 	return nil, fmt.Errorf("entity %s: unknown record image format %q", info.Type, format)
 }
 
-// A record path crosses only declared single-record references. The same
-// lookup can validate a publication or a member-filtered discovery projection.
 func RecordPathField(typ string, path []string, entity func(string) (EntityInfo, bool)) (FieldInfo, error) {
 	if len(path) == 0 || len(path) > 16 {
 		return FieldInfo{}, fmt.Errorf("a record path needs 1–16 declared fields")
@@ -150,8 +133,6 @@ func RecordPathField(typ string, path []string, entity func(string) (EntityInfo,
 const RecordSetMaxRows = ExprMaxSet
 const RecordSetMaxDeclarations = 64
 
-// RecordSet is an object's bounded collection. From is a declared reference /
-// inverse name, or Binding's retained query/link name. It is not a query string.
 type RecordSet struct {
 	BusinessTime *BusinessTime   `json:"businessTime,omitempty"`
 	Name         string          `json:"name"`
@@ -199,8 +180,6 @@ func (c Caller) ruleRecordSet(object, id, name string, record any, at time.Time)
 	return c.ReadRecordSet(object, id, name, at)
 }
 
-// RecordSetPredicate lowers an optional reference prefix into the same Expr
-// path operation used everywhere else. Order always addresses the set element.
 func LowerRecordSetPredicate(set RecordSet, expr Expr, lookup func(string) (EntityInfo, bool), engines ...RuleEngine) (Expr, error) {
 	if len(set.Path) == 0 {
 		return expr, nil

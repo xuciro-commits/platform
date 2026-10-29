@@ -9,7 +9,6 @@ export function leaderboardRows(records:EntityRecord[],info:EntityInfo,fields:Le
  if(rows.some(row=>!row.record.id||!Number.isFinite(row.value))||new Set(rows.map(r=>r.record.id)).size!==rows.length)return;
  return {rows,fieldTitle:numeric.title,max:Math.max(1,...rows.map(r=>Math.abs(r.value)))};
 }
-/** The original host orders the bounded Top-N; this component never ranks a partial unsorted window. */
 export function RecordLeaderboard({records,info,fields,total,selected,onSelect}:{records:EntityRecord[];info:EntityInfo;fields:LeaderboardOptions;total:number;selected?:string;onSelect:(record:EntityRecord)=>void}) {
  const model=leaderboardRows(records,info,fields);
  if(!model)return <p role="alert">{t("Leaderboard fields, limit or values are unavailable or incompatible.")}</p>;

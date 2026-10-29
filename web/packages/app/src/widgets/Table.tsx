@@ -4,7 +4,6 @@ import { useState } from "react";
 import { ImportControl, SaveViewDialog } from "./list-operations";
 
 export type TablePorts = {onOpenReference?:(type:string,id:string)=>void;onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};
-  /** The member's own list operations, where the page permits them. */
   importable?: boolean; savable?: boolean;
   presentation?:PageUI.PageTablePresentation;columns?:import("@platform/ui").RecordColumnPresentation[];showSearch?:boolean;
   keepActive?:boolean;
@@ -16,7 +15,6 @@ export type TablePorts = {onOpenReference?:(type:string,id:string)=>void;onNavig
   status?: "missing-window" | "missing-parent" | "invalid-reference"; plural?: string;
 };
 
-/** Presentation consumes authorized ports, never the host or page session. */
 export function TableRenderer({source,object,fields,domain,window,selected,onSelect,status,plural,inlineEdit,selectionSet,keepActive,columns,showSearch,presentation,cards,onNavigate,importable,savable,onOpenReference}:TablePorts) {
   const [saving,setSaving]=useState<ListState>();
   if(status==="missing-window")return <Panel role="status">{t("Query window is unavailable.")}</Panel>;

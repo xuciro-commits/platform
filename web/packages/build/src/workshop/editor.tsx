@@ -18,9 +18,6 @@ import {addWidgetSlot} from "./page-editor/widget-slots";
 import {collaborationRecordSource,requiresOriginalRecord} from "./page-editor/collaboration";
 import {interfaceQueryForSection,pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "../ontology/record-paths";
-// Application Studio page design. Document history, UI selection
-// and authorized runtime data have separate owners. Preview and operation use
-// the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, SemanticObjectSelect, pageDocumentFromSections, pageVariableContract, widgetContract, widgetContracts, useHost, useProvidedCapabilities, useReadQuery, type PageVariableValue, type Definition } from "@platform/app";
 import {
   ActionMenu, Button, CanvasEditor, CanvasRegion, Checkbox, DataTable, FlowLayout, InspectorSection, ProblemList, Workbench, type WorkbenchCrumb, type WorkbenchProblem, type WorkbenchTab, Input, MarkdownEditor, Panel, Select, Textarea, Toggles, humanizeKernelError, notify, t, useUnsavedChanges,
@@ -51,7 +48,6 @@ import {previewSection,authoringSection,type AuthoringSection,type PageDraft} fr
 
 type Api = NonNullable<Definition["page"]>;
 import type {PageUI} from "@platform/app";
-/** The page as its record holds it: what the builder edits and submits. */
 type PageRecord = Partial<Omit<HostApi.Page,"object"|"sections"|"document"|"actions">>&{
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
   list?: string[]; detail?: string[]; actions?: string[];
@@ -82,10 +78,8 @@ const loadDraft = (record: PageRecord,lookup:(type:string)=>EntityInfo|undefined
   return { ...declarationValue(record, fields), sections: (record.document ? record.sections ?? [] : lifted.sections).map(s=>materializeModelSection(s,lookup,true)), document: record.document ?? lifted.document,
     selections: record.selections ?? [], title: record.title, description: record.description ?? "" };
 };
-/** The field types a filter offers: values that repeat (the host's platform.Filterable). */
 const filterable = ["choice", "boolean", "reference"];
 
-/** The page being composed, as the renderer takes it. */
 const asPage = (record: PageRecord, sections: Draft[], document?: PageUI.PageDocument): Api => ({
   name: record.name, title: record.title, description: record.description, layout: "composed",
   object: { app: record.object.split(".")[0] ?? "", kind: "object", name: record.object },
@@ -95,7 +89,6 @@ const asPage = (record: PageRecord, sections: Draft[], document?: PageUI.PageDoc
   sections: sections.map(previewSection),
 });
 
-/** The pages of this organisation: open one to compose it. */
 export function PageEditor({ id, module }: { id: string; module?: ModuleContext }) {
   const { decide, source, catalog, definitions } = useHost();
   const { open } = useApplicationWorkspace();
@@ -136,12 +129,8 @@ export function PageEditor({ id, module }: { id: string; module?: ModuleContext 
   const chosen = selection.kind === "widget" ? sections.findIndex((section) => section.id === selection.id) : selection.kind === "container" ? -2 : selection.kind === "variables" ? -3 : -1;
   const container = selection.kind === "container" ? selection.id : undefined;
   const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! });  };
-  // A native input event can already be in flight when autosave locks the UI.
-  // The draft history preserves it when the older submission is acknowledged.
   const edit: typeof session.edit = (update, key) => { if (preview) return; setSourceApplied(false); session.edit((old) => {
     const next = typeof update === "function" ? update(old) : { ...old, ...update };
-    // Profile changes are explicit reviewed commands; ordinary editing retains
-    // the original profile even when a layout helper returns the latest one.
     const document={...next.document,uiProfile:old.document.uiProfile};
     const sections=next.sections.map(section=>{
       if(section.composite)return materializeModelSection(canonicalModelSection(section),authoringEntity,true);
@@ -236,7 +225,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
     const expectedRevision = baseRevision.current;
     try {
       const encoded=encodePage(asPage({...savedPage!,...submitted},submitted.sections.map(canonicalModelSection),{...submitted.document,uiProfile:pageEditingProfile(submitted)}),definitions);
-      // The authoring record keeps its object name; the wire envelope carries a typed reference.
       const payload={...encoded,object:savedPage!.object};
       const ok = await decide("build.page.edit", { type: "build.page", id }, declarationChanges(payload, declarationValue(savedPage!, declarationFields)), { expectedRevision, onRefused: setRefused });
       if (ok) {
@@ -298,7 +286,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   const canvasRoute: Route = module ? { view: "module", params: { id: module.project.id, application: module.project.id, page: id } } : { view: "module", params: { page: id } };
   const objectRef = { app: page.object.split(".")[0]!, kind: "object", name: page.object };
   const overlayEntries = container ? Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container) : [];
-  // --- Inspector tabs follow what is in hand: the page, a layout, or a widget.
   const pageTabs: WorkbenchTab[] = [
     { id: "page", title: t("Page"), content: <Settings value={{ title, description }} object={info?.title ?? page.object} device={document.device ?? ""} onDevice={(device) => edit({ document: { ...document, device: device || undefined } }, "settings:device")}
       selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
@@ -435,7 +422,6 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
   </>;
 }
 
-/** The panel that configures the widget in hand: only what that widget binds. */
 type PropertiesProps = {
   section?: Draft; sections:Draft[]; document: PageUI.PageDocument; info?: EntityInfo; object: string; relatedObjects?: string[];
   selections: HostApi.SelectionVariable[];
@@ -445,8 +431,6 @@ type PropertiesProps = {
   onResourcesChange:(patch:Partial<Draft>,variables:Record<string,HostApi.PageVariable>)=>void;
 };
 
-/** Inspector navigation is local UI; every panel edits the same DraftSession. */
-/** The inspector tabs of the widget in hand: Properties, Data, Events, Appearance. */
 function widgetInspectorTabs(props: PropertiesProps & { section: Draft; events: ReactNode; appearance: ReactNode }): WorkbenchTab[] {
   const { section, sections, document, info, object, onChange, onResourcesChange } = props;
   const leaf = Object.entries(document.nodes).find(([, node]) => node.section === section.id)?.[0];
@@ -646,8 +630,6 @@ function Properties({ section, sections, document, info, catalog, pageActions, o
   );
 }
 
-/** The page's own settings: what people call it and what it is for. Its name
- *  and its object are its identity — pages, applications and links name them. */
 function Settings({ value, object, selections, objects, onSelections, onChange, device, onDevice }: {
   value: { title: string; description: string }; object: string; device: string; onDevice: (device: string) => void;
   selections: HostApi.SelectionVariable[]; objects: HostApi.AssetRef[];
@@ -694,7 +676,6 @@ function Settings({ value, object, selections, objects, onSelections, onChange, 
   );
 }
 
-/** Configure native form inputs without requiring an expression or TSX. */
 function FormInputBindings({ fields, parentType, entity, inputs, onChange }: {
   fields: EntityInfo["fields"]; parentType?: string; entity: (type: string) => EntityInfo | undefined;
   inputs: Record<string, HostApi.Binding>; onChange: (inputs: Record<string, HostApi.Binding>, field: string, bound: boolean) => void;

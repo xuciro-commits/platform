@@ -20,14 +20,12 @@ function CurrentChoice({value,known}:{value:string;known:boolean}) {
  return !known?<p role="status" className="break-words text-xs text-muted">{value===""?t("No current choice is selected."):t("Current choice is outside the configured options: {value}.",{value})}</p>:null;
 }
 
-/** Caller-owned ordered choice state. The circles describe position, not business workflow progress. */
 export function StepSelector({options,value,label,enabled=true,onChange}:SelectorProps) {
  if(!validOptions(options))return <p role="alert">{t("Choice configuration is unsupported.")}</p>;
  const current=options.findIndex(option=>option.value===value),writable=enabled&&!!onChange;
  return <div className="grid min-w-0 gap-2"><ol aria-label={label} className="flex min-w-0 list-none items-start overflow-x-auto" onKeyDown={moveFocus}>{options.map((option,index)=><li key={option.value} className="flex min-w-32 flex-1 items-start"><Button aria-label={option.label||t("Step {number}",{number:index+1})} aria-current={index===current?"step":undefined} aria-pressed={index===current} disabled={!writable} variant="ghost" className="h-auto w-24 max-w-24 shrink-0 flex-col whitespace-normal px-2 py-1 text-xs" onClick={()=>{if(writable)onChange!(option.value);}}><span aria-hidden="true" className={"flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold "+(current>=0&&index<=current?"bg-primary text-primary-foreground":"bg-row-hover text-muted")}>{index+1}</span><span className={"min-w-0 max-w-full break-words "+(index===current?"font-bold":"font-medium")}>{option.label}</span></Button>{index<options.length-1&&<span aria-hidden="true" className={"mt-4 h-0.5 min-w-4 flex-1 "+(current>=0&&index<current?"bg-primary":"bg-border")}/>}</li>)}</ol><CurrentChoice value={value} known={current>=0}/></div>;
 }
 
-/** Tabs select one original string identity. They do not invent panel content or navigate pages. */
 export function TabSelector({options,value,label,enabled=true,onChange}:SelectorProps) {
  const [focused,setFocused]=useState<string>();
  if(!validOptions(options))return <p role="alert">{t("Choice configuration is unsupported.")}</p>;

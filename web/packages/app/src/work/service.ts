@@ -6,8 +6,6 @@ export type WorkViewsHost=Pick<Host,"client"|"source"|"can"|"decide"|"resend"|"m
 const waiting=(state:string)=>["SUBMISSION_STATE_PENDING","SUBMISSION_STATE_SENDING","SUBMISSION_STATE_UNKNOWN"].includes(state);
 const validID=(id:unknown):id is string=>typeof id==="string"&&!!id;
 type Flight={signature:string;promise:Promise<boolean>};
-// Ephemeral promises reserve one member/client target until its send finishes;
-// durable unanswered decisions remain solely in the original K5 outbox.
 const flights=new WeakMap<object,Map<string,Flight>>();
 export function approvalDecisionReason(request:Api.ApprovalRequest,member:string):string|undefined {
  if(request.requester===member)return "The requester cannot approve their own request.";
@@ -20,7 +18,6 @@ function approvalTaskID(task:Api.InboxTask):string|undefined {
  const id=task.ref?.startsWith("work.approval/")?task.ref.slice("work.approval/".length):undefined;
  return validID(id)?id:undefined;
 }
-/** The original caller inbox owns task membership, ordering and the complete current total. */
 export function approvalTasks(items:readonly Api.InboxTask[],member:string):Api.InboxTask[] {
  if(!Array.isArray(items)||items.some(task=>!task||!validID(task.id))||new Set(items.map(task=>task.id)).size!==items.length)throw Error("The original inbox is unavailable or incompatible.");
  const tasks=items.filter(task=>approvalTaskID(task)!==undefined);
@@ -31,14 +28,12 @@ export function approvalTasks(items:readonly Api.InboxTask[],member:string):Api.
 function originalApproval(task:Api.InboxTask,value:unknown):Api.ApprovalRequest {
  const request=value as Api.ApprovalRequest;
  if(!request||request.id!==approvalTaskID(task)||request.archived||!Number.isSafeInteger(request.revision)||request.revision<1||request.state!=="pending"||!validID(request.target)||!validID(request.requester)||!validID(request.action)||typeof request.title!=="string"||!Array.isArray(request.levels)||!Number.isSafeInteger(request.level)||request.level<0||request.level>=request.levels.length||request.levels.some(level=>!level||typeof level.title!=="string"||!Array.isArray(level.approvers)||level.approved!==null&&!Array.isArray(level.approved)||level.approvers.some(id=>!validID(id))||(level.approved??[]).some(id=>!validID(id))))throw Error("The original approval request is unavailable or has changed.");
- // Original Go nil Approved slices serialize as null and mean no approvals.
  return request.levels.some(level=>level.approved===null)?{...request,levels:request.levels.map(level=>({...level,approved:level.approved??[]}))}:request;
 }
 export function originalNotifications(items:readonly Api.Notification[],member:string):Api.Notification[] {
  if(!Array.isArray(items)||new Set(items.map(item=>item?.id)).size!==items.length||items.some(item=>!item||!validID(item.id)||item.member!==member||typeof item.title!=="string"||typeof item.at!=="string"||typeof item.read!=="boolean"))throw Error("The original notifications are unavailable or incompatible.");
  return [...items];
 }
-/** Reads and decisions retain their original Work/Console owner and caller scope. */
 export function createWorkViews(host:WorkViewsHost,active:()=>boolean) {
  const requireActive=()=>{if(!active())throw Error("The original work view scope has ended.");};
  const answer=async(schema:string,type:string,id:string,revision?:number,payload:Record<string,unknown>={})=>{

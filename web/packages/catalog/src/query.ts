@@ -7,7 +7,6 @@ export const responseBytes = (value: unknown): number => encoder.encode(JSON.str
 const bounded = (value: number | undefined, fallback: number, maximum: number): number =>
   Number.isFinite(value) ? Math.max(0, Math.min(maximum, Math.floor(value!))) : fallback;
 
-/** Translation is a projection; identity, binding and source remain unchanged. */
 export function localizeEntry(index: CatalogIndex, entry: CatalogEntry, language = "en"): CatalogEntry {
   const dictionary = index.translations[language] ?? {};
   const translate = (text: string): string => dictionary[text] ?? text;
@@ -49,7 +48,6 @@ export function queryCatalog(index: CatalogIndex, query: CatalogQuery = {}) {
   };
   for (const entry of matches.slice(offset, offset + limit)) {
     const item = summary(localizeEntry(index, entry, query.language));
-    // Owner text is compact; a malformed oversized entry must not exhaust an AI's context.
     result.items.push(item);
     result.nextOffset = offset + result.items.length;
     if (responseBytes(result) > MAX_RESPONSE_BYTES) { result.items.pop(); break; }
@@ -97,7 +95,6 @@ export function getCatalogEntry(index: CatalogIndex, id: string, options: { lang
   return result;
 }
 
-/** A single bounded process can answer related questions without repeated CLI calls. */
 export function batchCatalog(index: CatalogIndex, ids: string[], options: { language?: string; fields?: string[]; offset?: number } = {}) {
   const offset = bounded(options.offset, 0, ids.length);
   const result: { revision: string; items: ReturnType<typeof getCatalogEntry>[]; total: number; nextOffset?: number } = {

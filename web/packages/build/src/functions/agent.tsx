@@ -1,10 +1,6 @@
 import { ContextHelp, StructuredEditor } from "@platform/ui";
 import type {Api} from "@platform/kernel";
 import { useDefinitionDraft } from "../session/definition-draft";
-// Agents a builder declares over the ontology: instructions, the
-// published actions and queries they may use, a budget, checkpoints and the
-// cases they must pass. Publishing installs one as build.<name>; the host runs
-// it like any agent - every step journaled, drafts confirmed by a person.
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
@@ -130,8 +126,6 @@ export function AgentEditor({ id }: { id: string }) {
   </div></Workbench>;
 }
 
-// An evaluation case's record reference is "type/id"; the editor offers the
-// type from the published objects and takes the id as text.
 const refType = (ref?: string) => ref?.includes("/") ? ref.slice(0, ref.indexOf("/")) : "";
 const refId = (ref?: string) => ref?.includes("/") ? ref.slice(ref.indexOf("/") + 1) : ref ?? "";
 const joinRef = (type: string, id: string) => (type || id ? `${type}/${id}` : undefined);

@@ -1,7 +1,3 @@
-// Which project holds a resource: inventories group by it, so a
-// builder sees object types, actions, queries and functions under the
-// applications they belong to rather than as one flat list. A resource no
-// project lists is shown under "Not in a project" — never guessed into one.
 import { useRecordInventory, type Host } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t } from "@platform/ui";
@@ -16,7 +12,6 @@ export function projectResourceChange(project: Pick<Api.Application, "pages" | "
   return project.resources?.some(member => refKey(member) === refKey(ref)) ? {} : { resources: [...project.resources ?? [], ref] };
 }
 
-/** New editor drafts join the same application membership as New / Add existing. */
 export async function joinProjectResource(host: Pick<Host, "client" | "decide">, application: string, ref: Api.AssetRef) {
   const { record } = await host.client.get<{ record?: ProjectRecord }>(`/v1/records/build.app/${encodeURIComponent(application)}`, true);
   if (!record || record.archived) throw Error(t("The resource was saved, but the application could not be read. Save again to retry adding the same resource."));
@@ -42,7 +37,6 @@ export function useProjectIndex(): ProjectIndex {
   }, [projects.data, projects.isSuccess, projects.isError]);
 }
 
-/** The group a resource falls in when grouped by project. */
 export function projectGroup(index: ProjectIndex, ref: Api.AssetRef): { id: string; label: string; order?: number } {
   if (!index.loaded) return { id: "_unknown", label: index.failed ? t("Project ownership is unavailable") : t("Reading project ownership…"), order: 8 };
   const held = index.byRef.get(refKey(ref));
@@ -55,7 +49,6 @@ export function projectGroup(index: ProjectIndex, ref: Api.AssetRef): { id: stri
   return { id: "_none", label: t("Not in a project"), order: 9 };
 }
 
-/** The group of a Build record (`build.query` …) by the project that lists it. */
 export function projectGroupOfRecord(index: ProjectIndex, type: string, name: string) {
   const kind = kindOfType(type);
   return kind ? projectGroup(index, resourceRef(kind, name)) : { id: "_none", label: t("Not in a project"), order: 9 };

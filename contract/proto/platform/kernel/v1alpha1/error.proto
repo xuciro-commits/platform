@@ -1,4 +1,3 @@
-// Kernel error model. Only `code` is contract; `message` is for humans.
 syntax = "proto3";
 
 package platform.kernel.v1alpha1;

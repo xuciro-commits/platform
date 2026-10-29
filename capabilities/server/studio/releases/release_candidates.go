@@ -12,9 +12,6 @@ import (
 	"time"
 )
 
-// A changed object or page can affect a page or application above it. Include
-// those owners in the preview roots so its ID and diff describe the actual
-// impacted closure, not just the object picked in the editor.
 func DependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []platform.AssetRef {
 	descriptors := make([]platform.Dependencies, 0, len(available))
 	for _, asset := range available {
@@ -31,33 +28,23 @@ func DependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []
 	return roots
 }
 
-// ReleasePreview is a builder-only comparison between the installed
-// development definition and one saved draft. The IDs are candidate IDs,
-// not published versions or an active release pointer.
 type ReleasePreview struct {
-	CurrentID   string              `json:"currentId,omitempty"`
-	CandidateID string              `json:"candidateId,omitempty"`
-	Included    []platform.AssetRef `json:"included"`
-	Added       []platform.AssetRef `json:"added"`
-	Removed     []platform.AssetRef `json:"removed"`
-	Changed     []platform.AssetRef `json:"changed"`
-	Diagnostic  string              `json:"diagnostic,omitempty"`
-	// Drafts is the exact saved-draft selection this review was built from, in
-	// the order it was selected: the provenance of a joint
-	// candidate. One draft keeping its installed dependency is not repeated.
-	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
-	// CandidateActions are owner-compiled draft inputs for builder test forms,
-	// not the installed member catalog or permission to execute.
-	CandidateActions []platform.Action `json:"candidateActions"`
+	CurrentID        string                `json:"currentId,omitempty"`
+	CandidateID      string                `json:"candidateId,omitempty"`
+	Included         []platform.AssetRef   `json:"included"`
+	Added            []platform.AssetRef   `json:"added"`
+	Removed          []platform.AssetRef   `json:"removed"`
+	Changed          []platform.AssetRef   `json:"changed"`
+	Diagnostic       string                `json:"diagnostic,omitempty"`
+	Drafts           []build.JointDraftRef `json:"drafts,omitempty"`
+	CandidateActions []platform.Action     `json:"candidateActions"`
 }
 
 type ReleasePreviewRequest struct {
-	ApplicationDrafts bool               `json:"applicationDrafts,omitempty"`
-	Kind              platform.AssetKind `json:"kind,omitempty"`
-	ID                string             `json:"id,omitempty"`
-	// Drafts selects several saved drafts as one joint candidate.
-	// A request carries either one kind/id or a non-empty drafts list.
-	Drafts []build.JointDraftRef `json:"drafts,omitempty"`
+	ApplicationDrafts bool                  `json:"applicationDrafts,omitempty"`
+	Kind              platform.AssetKind    `json:"kind,omitempty"`
+	ID                string                `json:"id,omitempty"`
+	Drafts            []build.JointDraftRef `json:"drafts,omitempty"`
 }
 
 type ReleaseSaveRequest struct {
@@ -68,14 +55,11 @@ type ReleaseSaveRequest struct {
 	Key         string                `json:"key"`
 }
 
-// ReleaseDraftsRequest names one saved draft to list dependencies for.
 type ReleaseDraftsRequest struct {
 	Kind platform.AssetKind `json:"kind"`
 	ID   string             `json:"id"`
 }
 
-// ReleaseDraftClosure is the saved record drafts that must be delivered with
-// the chosen draft, in dependency order breadth-first from it.
 type ReleaseDraftClosure struct {
 	Drafts []build.JointDraftRef `json:"drafts"`
 }
@@ -84,21 +68,16 @@ type ReleaseSaved struct {
 	ID string `json:"id"`
 }
 
-// ReleaseActivateRequest moves the tenant's release pointer to a saved candidate.
 type ReleaseActivateRequest struct {
 	CandidateID string `json:"candidateId"`
 	Key         string `json:"key"`
 	UpgradeID   string `json:"upgradeId,omitempty"`
 }
 
-// ReleaseActive is the tenant's active release, empty before any activation.
 type ReleaseActive struct {
 	ID string `json:"id"`
 }
 
-// Code behavior is pinned by Manifest.Version rather than serialized Go
-// callbacks. This body preserves the complete declarative
-// security and lifecycle contract that JSON discovery intentionally omits.
 func CodeObjectDescriptor(entity platform.Entity, info platform.EntityInfo) any {
 	type scope struct {
 		Levels       map[string]string `json:"levels"`
@@ -184,10 +163,6 @@ func codeApprovalDescriptor(approval *platform.Approval) any {
 	}{Pending: approval.Pending, Rejected: approval.Rejected, Levels: levels}
 }
 
-// A page or flow's explicit binding survives newer installations. Resolve each edge
-// through its original owner before the language-neutral candidate validator
-// checks the complete bytes. A single candidate cannot contain two versions
-// of one named asset, or replace an explicitly requested asset root.
 func CandidateWithBindings(roots []platform.AssetRef, available []platform.ReleaseAsset, fixed []platform.AssetRef, resolve func(platform.AssetRef, string, ...string) (platform.ReleaseAsset, error)) (platform.ReleaseCandidate, error) {
 	assets := slices.Clone(available)
 	indices := map[platform.AssetRef]int{}
@@ -197,8 +172,6 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 	visited := map[platform.AssetRef]bool{}
 	pins := map[platform.AssetRef]string{}
 	contentPins := map[platform.AssetRef]string{}
-	// Rebuild the traversal after selecting retained page bytes. This discards
-	// bindings collected from superseded descriptors, regardless of root order.
 	restart := errors.New("restart retained page closure")
 	var visit func(platform.AssetRef) error
 	visit = func(ref platform.AssetRef) error {
@@ -613,9 +586,6 @@ func (p Planner) Candidate(selected []platform.AssetRef, builderAssets []platfor
 	return p.WithBindings(roots, available, selected)
 }
 
-// The candidate returned here is exactly what the builder saw in the
-// comparison. A later save must recompute it under the tenant lock and reject
-// a stale candidate ID rather than trusting bytes supplied by the browser.
 func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (ReleasePreview, platform.ReleaseCandidate, error) {
 	owner := p.Drafts
 	if owner == nil {
@@ -630,9 +600,6 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 	}
 	if diagnostic != nil {
 		reply.Diagnostic = diagnostic.Error()
-		// A review still names what is installed now: a draft that cannot be
-		// assembled refuses the candidate, and the running closure is what the
-		// reader needs to compare against.
 		if len(assets.Priors) > 0 {
 			if available, err := p.Assets(nil, false); err == nil {
 				var installedRoots []platform.AssetRef
@@ -669,9 +636,6 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 			return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
 		}
 		reply.CurrentID = current.ID
-		// Renames must still check surviving pages/apps that pointed at the
-		// old identity. Removed generated assets are not roots of the new
-		// release, but a surviving dependent must be closed or diagnosed.
 		oldOwners = slices.DeleteFunc(oldOwners, func(ref platform.AssetRef) bool {
 			return slices.Contains(assets.Priors, ref) && !slices.Contains(assets.Nexts, ref)
 		})
@@ -681,10 +645,6 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 		reply.Diagnostic = err.Error()
 		return reply, platform.ReleaseCandidate{}, nil
 	}
-	// The same private installation path that activates a saved candidate runs
-	// here against a tenant draft: a joint selection that installs nothing is
-	// diagnosed now, before it can be saved (/D4). Preview validates
-	// the sealed definitions; storage admission belongs to migration/activation.
 	if len(drafts) > 1 {
 		if err := p.Validate(candidate, member, time.Now().UTC()); err != nil {
 			reply.Diagnostic = err.Error()
@@ -705,8 +665,6 @@ func (p Planner) Preview(drafts []build.JointDraftRef, member platform.Member) (
 	return reply, candidate, err
 }
 
-// Planner receives the captured registry and the original private installation
-// entry; it has no tenant, state mutation or second execution engine.
 type Planner struct {
 	Definitions []platform.Definition
 	Registry    func() (*platform.AssetRegistry, error)
@@ -736,9 +694,6 @@ func (p Planner) PreviewWithActions(drafts []build.JointDraftRef, member platfor
 		if err := json.Unmarshal(asset.Body, &object); err != nil {
 			return ReleasePreview{}, fmt.Errorf("candidate object %s: %w", asset.Ref, err)
 		}
-		// A function/flow candidate retains its source object, but may not
-		// retain its create/edit action assets. Ask the original owner for
-		// those test inputs using that exact object image, not the live model.
 		owner := p.Drafts
 		if owner == nil {
 			return reply, fmt.Errorf("construction owner is unavailable")

@@ -15,8 +15,6 @@ import (
 	"platformserver/studio/build"
 )
 
-// ReadDispatches uses the source loop's outside lane. Only the small status
-// evidence becomes an input; external reads never execute during recovery.
 func (t *Tenant) ReadDispatches(at time.Time) {
 	if t.businessStopped() || !t.ownerActive(build.ID) || t.app(build.ID) == nil {
 		return
@@ -79,8 +77,6 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 			if !at.Before(current.Deadline) && state != "unknown" && state != "failed" && state != "completed" {
 				state = "stuck"
 			}
-			// A new command attempt must retain its own first status, even
-			// when the controller returns the same value as the old attempt.
 			started := current.StartedAt
 			for _, attempt := range current.Attempts {
 				if attempt.Intent == current.Intent {
@@ -89,7 +85,7 @@ func (t *Tenant) ReadDispatches(at time.Time) {
 			}
 			if current.ReadDue.After(started) && !last.At.Before(started) && current.State == state && last.State == reading.State && last.Value == reading.Value && last.Reason == reading.Reason && bytes.Equal(last.Observed, reading.Observed) {
 				t.mu.Unlock()
-				continue // Polling time alone is not new business evidence.
+				continue
 			}
 		}
 		caller := t.automation(build.ID, false).Member

@@ -15,9 +15,6 @@ import (
 	"strings"
 )
 
-// prepareReleasePublications compiles frozen owner descriptors. It neither
-// installs definitions nor edits drafts. Renaming an owning draft is not yet
-// supported: the candidate has logical identities rather than editor row IDs.
 func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
@@ -69,7 +66,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 			}
 		case platform.AssetPage:
 			i := slices.IndexFunc(pages, func(p Page) bool { return !p.Archived && p.Name == asset.Ref.Name })
-			if i < 0 { // the object's generated page has no second owner record
+			if i < 0 {
 				continue
 			}
 			if pages[i].Published == "" {
@@ -78,7 +75,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 					return nil, err
 				}
 				if generated {
-					continue // An object's default page does not publish a separate saved draft.
+					continue
 				}
 			}
 			var pageDescriptor platform.Page
@@ -205,9 +202,6 @@ func pageFunctionBindings(p platform.Page) map[string]string {
 	return bindings
 }
 
-// pageDraft is the builder's page record a saved page descriptor denotes: what
-// activation writes onto the owning draft, and what an environment that never
-// authored the page creates before it can activate it.
 func pageDraft(pageDescriptor platform.Page) (Page, error) {
 	raw, err := json.Marshal(pageDescriptor)
 	if err != nil {
@@ -275,18 +269,12 @@ func pageDraft(pageDescriptor platform.Page) (Page, error) {
 	return frozen, nil
 }
 
-// Draft is one builder draft a candidate's assets rest on: the record type,
-// the asset name and the draft image.
 type Draft struct {
 	Type  string
 	Name  string
 	Image json.RawMessage
 }
 
-// releaseDraftsOf lists the builder drafts a candidate's assets are published onto:
-// objects, authored pages (an object's generated page has no draft), applications
-// and flows. Promotion into an environment that never authored them creates each
-// missing one through the builder's own create action.
 func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, error) {
 	authored := map[string]bool{}
 	if b.host != nil {
@@ -317,7 +305,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 		case platform.AssetObject:
 			var o Object
 			if err := json.Unmarshal(asset.Body, &o); err != nil || o.Name == "" {
-				continue // code-owned metadata is not a draft
+				continue
 			}
 			if err := mapDispatchIntegrations(&o, b.integrationID); err != nil {
 				return nil, err
@@ -332,7 +320,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 					return nil, err
 				}
 				if generated {
-					continue // Only the identical generated page has no second owner.
+					continue
 				}
 			}
 			var descriptor platform.Page
@@ -802,8 +790,6 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 	return platform.AssetInstallation{Ref: ref, Schema: schema, Record: typ + "/" + record.ID, Image: slices.Clone(image)}, nil
 }
 
-// Validation is performed against the private installation host, after the
-// candidate dependencies have been installed in their saved order.
 func (b *Build) ValidateAssetInstallation(plan platform.AssetInstallation) error {
 	decoded, err := b.DecodeAssetInstallation(plan.Schema, plan.Image)
 	if err != nil {
@@ -901,9 +887,6 @@ func (b *Build) ApplyAssetInstallation(plan platform.AssetInstallation, ctx plat
 		return err
 	}
 	if ctx.Private {
-		// Keep the private catalog's earlier object declarations visible to
-		// later pages/functions/flows in the same installation. The live ledger
-		// remains untouched; this owner belongs to the installation view.
 		saved := b.ledger
 		b.installationCatalog = platform.NewCatalog(b.Manifest().Actions.All()...)
 		b.ledger = platform.NewLedger("private-release", ID, b.installationCatalog)
@@ -964,8 +947,6 @@ func (b *Build) validateIntegrationUpgrade(plan platform.AssetInstallation) erro
 
 var _ platform.AssetLifecycleOwner = (*Build)(nil)
 
-// Candidate dependencies determine installation order. Object references can
-// be mutually recursive; all other execution/publication cycles are refused.
 func orderOwnerAssets(assets []platform.ReleaseAsset) ([]platform.ReleaseAsset, error) {
 	graph, err := platform.NewReleaseDependencyGraph(assets)
 	if err != nil {
@@ -1091,9 +1072,6 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	return "", nil, nil
 }
 
-// Bootstrap shapes are scoped to a private owner. They make the existing
-// authoring checks recognize self/forward object references without installing
-// a registry, extending the live ledger or validating an unfinished closure.
 func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), error) {
 	saved, savedMode := b.jointEntities, b.jointMode
 	savedAssets := b.jointAssets
@@ -1142,10 +1120,6 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 	}, nil
 }
 
-// DefinitionMetadataKind identifies ordinary accepted metadata whose discovery
-// is governed by its original metadata record. Executable Build definitions
-// keep their installed descriptors; agent and observation projection remains
-// narrower than this ordinary record visibility check.
 func (*Build) DefinitionMetadataKind(kind platform.AssetKind) bool {
 	return slices.Contains([]platform.AssetKind{platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert}, kind)
 }
@@ -1200,8 +1174,6 @@ func (*Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Defini
 	return definition, nil
 }
 
-// definitionFamily contains only the owner metadata shared by these
-// retained declaration families. Their declaration checks remain type specific.
 type definitionFamily struct {
 	platform.Record
 	Name, State string
@@ -1307,8 +1279,6 @@ func portableDefinitionInstallation[T, D any](image json.RawMessage, typ, schema
 	return platform.AssetInstallation{Ref: asset.Ref, Schema: schema, Record: typ + "/" + family.ID, Image: slices.Clone(image)}, nil
 }
 
-// Type-specific checks have already prepared the declaration. Its original
-// installer still owns runtime changes; staged decisions retain only metadata.
 func publishRetainedDefinition[T any](c platform.Caller, record *T, limitMessage string, install func(platform.Caller, T) error) *kernel.Error {
 	family := definitionFamilyOf(*record)
 	if family.Version >= 64 {
@@ -1574,7 +1544,6 @@ func restoreDefinitionPublications[T any](b *Build, inventory func() ([]T, error
 	return nil
 }
 
-// Installed snapshots come from the validated owner cache, never editable rows.
 func installedDefinitionAssets[T any](installed map[string]T, release func(T) (platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, error) {
 	var out []platform.ReleaseAsset
 	for _, name := range slices.Sorted(maps.Keys(installed)) {
@@ -1587,7 +1556,6 @@ func installedDefinitionAssets[T any](installed map[string]T, release func(T) (p
 	return out, nil
 }
 
-// ReadPublication is the definition that was published, or false when none was.
 func ReadPublication[T any](raw string) (T, bool) {
 	var out T
 	if raw == "" || json.Unmarshal([]byte(raw), &out) != nil {

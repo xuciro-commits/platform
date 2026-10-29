@@ -6,16 +6,12 @@ import (
 	"time"
 )
 
-// Memory is the derived store of a host without a journal — development,
-// tests, the lightweight profile before its first append: vectors and the
-// latest transcripts per tenant, in memory only.
 type Memory struct {
 	mu          sync.Mutex
-	vectors     map[string][]float32 // "<tenant>/<model>/<hash>"
+	vectors     map[string][]float32
 	transcripts map[string][]Transcript
 }
 
-// transcriptsKept bounds what one tenant holds in memory.
 const transcriptsKept = 500
 
 func (m *Memory) Vectors(tenant, model string, hashes []string) map[string][]float32 {
@@ -54,7 +50,6 @@ func (m *Memory) SaveTranscript(x Transcript) {
 	m.transcripts[x.Tenant] = kept
 }
 
-// Transcripts are a run's calls, newest first (every call's, for no run).
 func (m *Memory) Transcripts(tenant, run string, limit int) []Transcript {
 	m.mu.Lock()
 	defer m.mu.Unlock()

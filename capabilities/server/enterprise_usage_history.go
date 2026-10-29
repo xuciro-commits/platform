@@ -18,8 +18,6 @@ type enterpriseReferenceDeclaration struct {
 	Entity *enterpriseReferenceDeclaration  `json:"entity"`
 }
 
-// enterpriseHistoricalReferencePaths reads retained owner declarations once
-// per usage request. It indexes no new state and never replays the journal.
 func (t *Tenant) enterpriseHistoricalReferencePaths(store *records.Store) map[string][][]string {
 	paths := map[string][][]string{}
 	seen := map[string]bool{}
@@ -90,8 +88,6 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *records.Store) map[st
 		}
 	}
 	for _, body := range bodies {
-		// Ignore choice/Go storage representations; only retained name/ref and
-		// child paths determine whether historical bytes name an enterprise ID.
 		var declaration enterpriseReferenceDeclaration
 		if json.Unmarshal(body.raw, &declaration) != nil {
 			continue
@@ -120,8 +116,6 @@ func (t *Tenant) enterpriseHistoricalReferencePaths(store *records.Store) map[st
 	return paths
 }
 
-// History stores field before/after JSON in the shape of that decision, not
-// the current Go type. Descend declared paths through nested line arrays.
 func historyNamesEnterprisePaths(paths [][]string, changes []records.RecordChange, id string) bool {
 	for _, change := range changes {
 		for _, field := range change.Fields {

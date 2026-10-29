@@ -1,9 +1,7 @@
-// K1 Identity — data contract only. Meaning: contract/spec/K1-identity.md.
 syntax = "proto3";
 
 package platform.kernel.v1alpha1;
 
-// Typed, opaque reference to an entity. `id` is never parsed and never reused.
 message EntityRef {
   string type = 1;
   string id = 2;
@@ -11,11 +9,10 @@ message EntityRef {
 
 enum RedirectKind {
   REDIRECT_KIND_UNSPECIFIED = 0;
-  REDIRECT_KIND_MERGE = 1; // exactly one target
-  REDIRECT_KIND_SPLIT = 2; // two or more targets
+  REDIRECT_KIND_MERGE = 1;
+  REDIRECT_KIND_SPLIT = 2;
 }
 
-// Keeps a retired ID resolvable after a merge or split.
 message Redirect {
   EntityRef from = 1;
   repeated EntityRef to = 2;

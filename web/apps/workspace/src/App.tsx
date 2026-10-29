@@ -1,9 +1,3 @@
-// The workspace: one page and one sign-in for every app a
-// member may open on this host. The host decides who sees what — the apps the
-// tenant runs and the member holds a role in (`/v1/me`), the actions of their
-// catalog — and each app's UI package contributes its views and navigation
-// through defineApp. This file is the composition root: the session (who), the
-// host (what they may read and decide) and the shell (where it is shown).
 import "./i18n";
 import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@platform/app";
 import { EdgeClient, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
@@ -27,7 +21,6 @@ import { OfflinePreparation } from "./offline/Preparation";
 export type { Identity } from "./session/identity";
 
 export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig; session: OidcSession }; identities: Identity[] }) {
-  // --- Session: the identity, the tenant and the client that speaks for them.
   const [token, setToken] = useState(signedIn?.session.accessToken ?? remembered(IDENTITY_KEY) ?? preferred(identities));
   const [tenant, setTenant] = useState(remembered(TENANT_KEY) ?? "");
   const [signingOut, setSigningOut] = useState(false);
@@ -63,7 +56,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const meQuery = useQuery({ queryKey: [token, tenant, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
   const connectionUnavailable = meQuery.isError && (meQuery.error instanceof OfflineReadError || /live connection unavailable/.test(String(meQuery.error)));
   const me = meQuery.isError && !connectionUnavailable ? undefined : meQuery.data;
-  // A subject the host names an administrator may be a member of no tenant: the console still opens for them.
   const noMember = meQuery.isError && /HTTP 401/.test(String(meQuery.error));
   const needsHostConsole = maintenanceRequested || noMember || meQuery.isError && /HTTP 503/.test(String(meQuery.error));
   const hostAdminQuery = useQuery({ queryKey: [token, "host-only"], queryFn: () => client.get<HostAdmin>("/v1/host/me"), enabled: needsHostConsole, retry: false });
@@ -75,8 +67,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const identityScope = me ? JSON.stringify([me.tenantId, me.principalId]) : undefined;
   const selectedPackages = me ? availablePackages(me.apps.map((app) => app.id), me.profile) : [];
   const packageScope = me ? JSON.stringify([identityScope, selectedPackages.map((p) => packages.indexOf(p))]) : undefined;
-  // Bootstrap is a sequence of original reads, each with its own failure and
-  // retry: the member's declarations, the discovery metadata, the packages.
   const [declared, setDeclared] = useState<{ phase: "pending" | "ready" | "error" }>({ phase: "pending" });
   const [declareAttempt, setDeclareAttempt] = useState(0);
   useEffect(() => {
@@ -95,17 +85,12 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     return () => { live = false; };
   }, [client, identityScope, me?.preferred, declareAttempt]);
 
-  // --- Packages: the code applications this member's roles unlock.
   const [loadedPackages, setLoadedPackages] = useState<{ scope: string; groups: { source: Package; apps: (AppUI & { serves?: string[] })[] }[] }>();
-  // Keep still-authorized packages mounted while new ones load. Filtering is
-  // synchronous, so withdrawn packages or another identity never linger.
   const loadedApps = useMemo(() => loadedPackages && loadedPackages.scope === identityScope
     ? [...loadedPackages.groups.filter((group) => selectedPackages.includes(group.source)).flatMap((group) => group.apps), personalWork, explorerApplication]
     : undefined, [loadedPackages, packageScope]);
   const [packageAttempt, setPackageAttempt] = useState(0);
   const [packageFailure, setPackageFailure] = useState<string>();
-  // The session is ready to read once the member, their declarations and the
-  // application packages are all in; the host's own discovery runs after.
   const ready = !!me && declared.phase === "ready" && !packageFailure && !!loadedApps;
   useEffect(() => {
     if (!me) return;
@@ -118,23 +103,18 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     return () => { live = false; };
   }, [packageScope, packageAttempt]);
 
-  // --- Host: reads, decisions and the record source every view shares.
   const { host, discovery, release, unread, saved, hostAdmin } = usePlatformHost({ client, token, tenant, me, ready, apps: loadedApps });
   const apps = useMemo(() => loadedApps && host ? composeApplications(loadedApps.filter(app => !app.for || app.for(host))) : undefined, [loadedApps, host]);
   const releaseUnavailable = release.isError || release.fetchStatus === "paused";
   const [releaseOpen, setReleaseOpen] = useState(false);
   const definitions = host?.definitions ?? [];
 
-  // --- Shell: which application is current, and what the rail, portal and navigation show.
   const selectionScope = me ? `workspace:selection:${me.tenantId}:${me.principalId}` : undefined;
   const scope = useRef(selectionScope);
   scope.current = selectionScope;
   const [current, setCurrent] = useState<string>();
   const chosen = useRef<{ id: string; from?: string } | undefined>(undefined);
   useEffect(() => { chosen.current = undefined; setCurrent(selectionScope ? remembered(selectionScope) : undefined); }, [selectionScope]);
-  // The apps this member may open: the code packages above, and the
-  // applications this tenant handed to its people. The Host
-  // Console is a host-level application: it appears only for host administrators.
   const [activeRoute, setActiveRoute] = useState<Route>();
   const activeContributions = useMemo(() => (apps ?? []).filter(app => (!app.for || !!host && app.for(host)) && (app.id !== "host-console" || hostAdmin)), [apps, host, hostAdmin]);
   const all = useMemo(() => {
@@ -152,8 +132,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     .map((hit) => ({ id: `${hit.type}/${hit.id}`, label: hit.title || hit.id, detail: `${hit.type} · ${hit.id}`,
       open: () => { const view = recordRoutes.current?.get(hit.type); location.hash = routeToHash(view ? { view, params: { id: hit.id } } : { view: "record", params: { type: hit.type, id: hit.id } }); } })), [client, identityScope, host?.source.scope]);
   const app = all.find((a) => a.id === current);
-  // Shared record renderers may be hosted by a platform application. Their
-  // explicit business context still selects the prepared application version.
   const preparedApplication=activeRoute?.params?.application&&all.some(entry=>entry.id===activeRoute.params!.application)?activeRoute.params.application:app?.id;
   useEffect(()=>{
     if(!preparedApplication)return;
@@ -164,8 +142,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     }catch{setOfflineOpen(true);}
   },[client,preparedApplication,online]);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
-  // Navigation and the destructive-switch guard must agree on one owner,
-  // including shared pages, diagnostics and old surface-qualified links.
   const applicationOf = useCallback((route: Route, choice?: string) => {
     const sharedOwner = owner.get(route.view) ?? sharedViewApplication(route);
     if (shellViews.includes(route.view) && !sharedOwner) return undefined;
@@ -215,8 +191,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       builder: owner.get("flow") === "build", application: layout ?? selectedEntry.current,
       read: (type, id) => client.record(type, id),
     });
-    // Published replacement pages keep their runtime application while the
-    // original code entry continues to own their restored tabs and menus.
     const take = (resolved: Route) => resolveApplicationRoute(resolved, definitions, host?.applications ?? [], layout ?? selectedEntry.current);
     return resolved instanceof Promise ? resolved.then(take) : take(resolved);
   }, [client, definitions, host?.applications, owner]);
@@ -255,16 +229,12 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   if (discovery.phase === "offline") return bootstrap(t("The live connection is unavailable."), discovery.message, discovery.retry, false);
   if (!host || !apps || !ready || discovery.phase !== "ready") return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
-  // The portal: every application this member may open, by
-  // category; and the projections they may switch between. Both only group
-  // what the host already allowed.
   const portal = all.map((entry) => portalEntry(entry, host));
   const openApplication = (id: string) => {
     const target = all.find((a) => a.id === id);
     if (!target) return;
     chosen.current = { id, from: activeRoute && routeToHash(activeRoute) }; // the previous active route must not undo an explicit app choice during restoration
     select(id);
-    // Workspace restores the target's active tab, or its home when no layout exists.
   };
   const sessionOptions = [
     ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: tenant === "system" ? t("System self-hosting") : `${t("Tenant")} ${tenant}` })) : []),

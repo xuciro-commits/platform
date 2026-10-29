@@ -1,24 +1,7 @@
 #!/usr/bin/env bash
-# Capability escapes (AGENTS.md rule 4 "单一归属，先复用"; Intent.md "平台、能力与应用"):
-# business code building a second copy of a capability the platform owns.
-#   ui     an app's or a platform page's UI hand-makes a control, table, dialog,
-#          form or panel instead of composing @platform/ui (the kit is the owner;
-#          what it lacks is added there).
-# A refusal without a reason is not counted: the host gives it one (explained).
-# The known escapes below are counted per file, each with the work item that
-# removes it. A count may only fall: a new file or a higher count fails. When
-# an escape is removed, lower or delete its line here in the same change.
-#
-# There is no host-side escape category any more: it scanned the external app and
-# protocol modules (apps/*/server, protocols/*), which are retired. Business
-# applications are declarative packages in deploy/packages, so no Go business code
-# is left to reach past the app API; what replaced that guarantee is the import
-# check in scripts/boundaries.sh and cmd/check-boundaries.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# the source guard checks member-facing storage reads structurally,
-# including files excluded by the current OS/build tags.
 (cd capabilities/server && go run ./cmd/check-boundaries -root ../..)
 
 known=''

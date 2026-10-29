@@ -3,8 +3,6 @@ import {Button,ContextHelp,Panel,t,type RecordList,type RecordPageData,type Inte
 import {useRef,type ReactNode} from "react";
 export type QueryWindow=NonNullable<Parameters<typeof RecordList>[0]["window"]>&{interface?:string;interfacePage?:InterfaceRecordPageData};
 
-/** The window owner supplies data, errors and paging. Rendering adds no read.
- * A retained view stays hidden and inert while the same authorized window refreshes. */
 export function QueryWindowFrame({window,description,children,paging=true,viewIdentity}:{window?:QueryWindow;description:string;paging?:boolean;viewIdentity?:string;children:(page:RecordPageData,ready:boolean)=>ReactNode}) {
  const retained=useRef<RetainedWindowView|undefined>(undefined);
  retained.current=retainedWindowView(retained.current,viewIdentity,window);

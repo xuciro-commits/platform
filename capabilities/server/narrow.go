@@ -14,15 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// Derived content is never wider than its sources (see docs/Architecture.md).
-// A record may carry what was taken from other records: an agent run's trace,
-// the passages it cited, a payload it drafted. Authority changes after that
-// content is journaled — an owner moves, a unit closes, a field becomes
-// restricted, a grant is revoked — so the reader's authority over each source
-// is checked again at every read, here, and not by each app, page or builder.
-
-// admits refuses a member of another tenant. Every member-facing entry of the
-// host asks here, once, instead of each app repeating the check (#130, N2).
 func (t *Tenant) admits(m platform.Member) *kernel.Error {
 	if m.Tenant != t.ID {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -30,9 +21,6 @@ func (t *Tenant) admits(m platform.Member) *kernel.Error {
 	return nil
 }
 
-// mayRead reports whether m may read a source now, remembering each answer: a
-// record ("<type>/<id>"), one field of it ("<type>/<id>#<field>") or a named
-// app read ("read:<name>"). held says the record store's lock is already held.
 func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref string) bool {
 	return t.mayReadIn(t.records, m, now, held)
 }
@@ -77,16 +65,11 @@ func (t *Tenant) mayReadIn(store *records.Store, m platform.Member, now time.Tim
 	}
 }
 
-// mayCallRead reports whether m may call a named app read now, by the rule
-// Tenant.Read applies: a role in the app that declares it, or a read its
-// manifest opens to every member. A source may name a read instead of a record
-// when what a read answers with is not records.
 func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
 	a := t.owner["read:"+name]
 	return a != nil && t.authorizeEntry(m, a.Manifest().ID, name, "read", Now()).Allow
 }
 
-// narrowable are the fields a type's derivations may leave out.
 func (t *Tenant) narrowable(et *records.Type) []string {
 	var out []string
 	for _, d := range et.Info().Derived {
@@ -106,7 +89,6 @@ func (t *Tenant) narrowable(et *records.Type) []string {
 	return out
 }
 
-// fieldName is the JSON name of a field index path in a struct.
 func fieldName(t reflect.Type, path []int) string {
 	if len(path) == 0 {
 		return ""
@@ -115,11 +97,6 @@ func fieldName(t reflect.Type, path []int) string {
 	return name
 }
 
-// narrowed is v as m may read it now: every record within it keeps only the
-// fields m's role reads, and the app that derives content from other records
-// leaves out what m may not read at the source. The host applies it wherever
-// records leave for a member — a record page, a record's detail, every app
-// read — so no app, page or builder carries a second filter (AGENTS.md rule 6).
 func (t *Tenant) narrowed(m platform.Member, v any, now time.Time, held bool) any {
 	return t.narrowedSource(m, v, now, held, "")
 }
@@ -140,8 +117,6 @@ func (t *Tenant) narrowedSource(m platform.Member, v any, now time.Time, held bo
 	return out.Interface()
 }
 
-// narrower narrows what leaves for one member at one moment, remembering each
-// answer about a record and each type's restricted fields.
 func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *narrower {
 	return t.narrowerIn(t.records, m, now, held)
 }
@@ -165,7 +140,6 @@ type narrower struct {
 	pointers       map[uintptr]bool
 }
 
-// entity is the declared type of a Go struct type, or nil.
 func (w *narrower) entity(typ reflect.Type) *records.Type {
 	if !w.held {
 		w.store.Lock()
@@ -174,14 +148,10 @@ func (w *narrower) entity(typ reflect.Type) *records.Type {
 	return w.store.GoType(typ)
 }
 
-// value narrows what it finds inside v — records in slices, maps, pointers,
-// interfaces and other structs — and says whether anything changed.
 func originalSource(source string) bool {
 	return source == "record" || source == "user-input" || source == "external-input"
 }
 
-// valueFrom carries a declaration only through unregistered DTO/JSON content.
-// A registered entity always resolves its own authorization and provenance.
 func (w *narrower) valueFrom(v reflect.Value, declared bool) (reflect.Value, bool) {
 	return w.project(v, declared, 0)
 }
@@ -191,8 +161,6 @@ func (w *narrower) project(v reflect.Value, declared bool, depth int) (reflect.V
 		return reflect.Zero(v.Type()), !v.IsZero()
 	}
 	if w.derivedContext && !declared && opaqueProjection(v) {
-		// A serializer can emit content absent from its exported fields.
-		// An undeclared opaque result cannot be projected by reflection.
 		w.opaque = true
 		return reflect.Zero(v.Type()), true
 	}
@@ -269,8 +237,6 @@ func (w *narrower) project(v reflect.Value, declared bool, depth int) (reflect.V
 		out, changed := reflect.MakeMapWithSize(v.Type(), v.Len()), false
 		for _, k := range v.MapKeys() {
 			if w.derivedContext && !declared && k.Kind() == reflect.String && !w.isRecord(v.MapIndex(k)) {
-				// Arbitrary map keys can carry prose too. Only a declared
-				// original/derived JSON container may expose that namespace.
 				changed = true
 				continue
 			}
@@ -365,9 +331,6 @@ func (w *narrower) isRecord(v reflect.Value) bool {
 	return v.Kind() == reflect.Struct && w.entity(v.Type()) != nil
 }
 
-// projectionRefs uses one DTO field holding a ref or []refs. The optional
-// #field suffix rechecks the exact source field as well as its row; it does
-// not introduce another relationship traversal or authorization evaluator.
 func projectionRefs(v reflect.Value, from string) []string {
 	name, suffix, field := strings.Cut(from, "#")
 	at := v.FieldByName(name)
@@ -397,8 +360,6 @@ func projectionRefs(v reflect.Value, from string) []string {
 	return refs
 }
 
-// record narrows one record: first the fields m's role may not read, then the
-// content the type declares it took from other records.
 func (w *narrower) record(et *records.Type, v reflect.Value) (reflect.Value, bool) {
 	if !w.permitsRecord(v) {
 		return reflect.Zero(v.Type()), true
@@ -452,7 +413,7 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 	id := records.Header(copy).ID
 	if id == "" {
 		return true
-	} // an input shape carries no stored row identity
+	}
 	key := et.Info().Type + "/" + id
 	if decision, known := w.decisions[key]; known {
 		return decision.Allow
@@ -463,9 +424,6 @@ func (w *narrower) permitsRecord(value reflect.Value) bool {
 	return decision.Allow
 }
 
-// derive applies a type's derivations to a copy of the record: content whose
-// source the reader may not read now is emptied, or its element left out, and
-// the declared withheld field says so.
 func (w *narrower) derive(et *records.Type, v reflect.Value) (reflect.Value, bool) {
 	out := records.Copy(et.Info().Go, v.Interface())
 	self := et.Info().Type + "/" + records.Header(out).ID
@@ -521,7 +479,7 @@ func (w *narrower) derive(et *records.Type, v reflect.Value) (reflect.Value, boo
 		visiblePins = append(visiblePins, pin)
 	}
 	records.Header(out).VersionPins = visiblePins
-	for _, d := range et.Info().Derived { // every source the type names, for "*"
+	for _, d := range et.Info().Derived {
 		if !d.All {
 			every = append(every, w.sources(out, d)...)
 		}
@@ -532,7 +490,7 @@ func (w *narrower) derive(et *records.Type, v reflect.Value) (reflect.Value, boo
 				return d.Fields, !readable(refs)
 			}
 			if !w.derivedContext {
-				return nil, false // the authority's original record is not a copied read
+				return nil, false
 			}
 			if d.Element {
 				return nil, true
@@ -542,7 +500,7 @@ func (w *narrower) derive(et *records.Type, v reflect.Value) (reflect.Value, boo
 				if typ == et.Info().Go && slices.ContainsFunc(et.Info().Derived, func(other platform.DerivationInfo) bool {
 					return other.Element && slices.Equal(other.List, path)
 				}) {
-					continue // each child is independently kept or dropped by its declared source
+					continue
 				}
 				field := typ.FieldByIndex(path)
 				source := field.Tag.Get("source")
@@ -582,7 +540,7 @@ func (w *narrower) derive(et *records.Type, v reflect.Value) (reflect.Value, boo
 				}
 				withheld = true
 				if d.Element {
-					continue // the element is left out altogether
+					continue
 				}
 				narrowed := reflect.New(element.Type()).Elem()
 				narrowed.Set(element)
@@ -601,7 +559,6 @@ func (w *narrower) derive(et *records.Type, v reflect.Value) (reflect.Value, boo
 	return out, true
 }
 
-// sources are every record a derivation names, over a list's elements too.
 func (w *narrower) sources(v reflect.Value, d platform.DerivationInfo) []string {
 	if len(d.List) == 0 {
 		return w.refsAt(v, d.Refs)
@@ -614,8 +571,6 @@ func (w *narrower) sources(v reflect.Value, d platform.DerivationInfo) []string 
 	return out
 }
 
-// refsAt reads the records a derivation's fields name: one field holding a ref
-// or a list of them, or two fields joined as "<type>/<id>".
 func (w *narrower) refsAt(v reflect.Value, paths [][]int) []string {
 	if len(paths) == 2 {
 		typ, id := v.FieldByIndex(paths[0]).String(), v.FieldByIndex(paths[1]).String()
@@ -640,7 +595,6 @@ func (w *narrower) refsAt(v reflect.Value, paths [][]int) []string {
 	return nil
 }
 
-// empty sets the fields of a record or an element to their zero value.
 func (w *narrower) readable(refs []string) bool {
 	return !slices.ContainsFunc(refs, func(ref string) bool { return !w.may(ref) })
 }
@@ -651,9 +605,6 @@ func empty(v reflect.Value, fields [][]int) {
 	}
 }
 
-// refsIn are the records ("<type>/<id>") a value carries, at any depth: what a
-// derived read, an agent's tool or a report took its content from, so the same
-// content is checked against them when it is read again (#130).
 func (t *Tenant) refsIn(v any) []string {
 	if v == nil {
 		return nil

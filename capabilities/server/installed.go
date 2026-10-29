@@ -14,16 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// Objects a tenant defines are installed into the running host:
-// the record store keeps their records, the host routes their generated
-// actions to the app that owns them, and the asset registry offers the object,
-// its actions and its page. From then on they are ordinary entity types — the
-// same reads, forms, search, aggregates, journal and replay as an app's own.
-
-// Install declares an entity an app composed at runtime, with the actions
-// generated for it and the page people open it through. Installed again, the
-// type takes its new fields and its records come with them (D3). The app has
-// already taught its own ledger the classes and schemas.
 func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	id := app.Manifest().ID
 	if other := t.owner["action:"+actions[0].Schema]; other != nil && (other.Manifest().ID != id || other.AcceptedLedger() != app.AcceptedLedger()) {
@@ -81,10 +71,6 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 	return t.installDefinitions(id, info, actions, pages, e.Protocols...)
 }
 
-// storeDefinition updates the existing discovery registry; callers own
-// declaration validation, version retention and installation side effects.
-// Every mutation — replace, insert, or reorder — moves the definitions
-// generation so member-scoped definition caches never serve stale versions.
 func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 	if index >= 0 {
 		t.definitions[index] = def
@@ -95,8 +81,6 @@ func (t *Tenant) storeDefinition(index int, def platform.Definition) {
 	t.setDefinitions(t.definitions)
 }
 
-// installDefinitions puts the installed object, its actions and its pages in
-// the asset registry, so code and builder discover one set of assets.
 func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, actions []platform.Action, pages []platform.Page, protocols ...platform.Provision) error {
 	var describeErr error
 	put := func(def platform.Definition) {
@@ -107,10 +91,6 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 		if describeErr != nil {
 			return
 		}
-		// A definition read again replaces the one installed before it: a
-		// published object takes its new fields. The generation moves with it,
-		// so every cached catalog, entity view and encoded answer is rebuilt
-		// rather than serving the declaration this one replaced.
 		if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
 			next := slices.Clone(t.definitions)
 			next[i] = def
@@ -126,11 +106,7 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 	return describeErr
 }
 
-// reinstall asks every app that installs its own definitions to install them
-// again: after a restore, before the records of the types they define (D4).
 func (t *Tenant) reinstall() error {
-	// Restore the complete saved model before checking reciprocal references,
-	// just as an accepted release installs one complete definition set.
 	before := t.installingSet
 	t.installingSet = true
 	defer func() { t.installingSet = before }()
@@ -159,10 +135,6 @@ func (t *Tenant) reinstall() error {
 	return t.validateAssetSet()
 }
 
-// InstallPage offers a page an app composed at runtime: it must name an object
-// this tenant has, fields that object declares and actions about it, so the
-// workspace can always open what the registry offers (#132). The
-// member's own reads and catalog still decide what they see on it.
 func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	return t.installPage(app, p, true)
 }
@@ -243,9 +215,6 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool, en
 
 var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
-// checkSections holds a composed page to what this tenant has: a widget it
-// knows, an object, the fields, actions and measures that object declares.
-// What the registry offers must open.
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
 	safe, err := p.Safety()
 	if err != nil {
@@ -393,7 +362,6 @@ func (t *Tenant) checkAction(page, schema, object string) error {
 	return nil
 }
 
-// entity is an entity type's declaration, as the app that composes over it sees it.
 func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
 	t.records.Lock()
 	defer t.records.Unlock()
@@ -404,10 +372,6 @@ func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
 	return et.Info(), true
 }
 
-// InstallApplication offers an application a tenant handed to its people: a
-// name over pages that are already installed. It grants nothing —
-// the registry offers each page to whoever may read what it shows, and an
-// application to whoever may open one of its pages.
 func (t *Tenant) InstallApplication(app platform.App, a platform.Application) error {
 	id := app.Manifest().ID
 	if err := t.checkApplicationExtension(platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, a); err != nil {

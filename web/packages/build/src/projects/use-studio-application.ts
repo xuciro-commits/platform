@@ -3,7 +3,6 @@ import type { Project } from "./project";
 import { installedStudioRef } from "./studio-applications";
 import { refKey } from "./resources";
 
-/** Looking at a code application never reads or creates a Build draft. */
 export function useStudioApplication(id?: string) {
   const { definitions , holds} = useHost();
   const ref = installedStudioRef(id);

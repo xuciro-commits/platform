@@ -1,8 +1,3 @@
-// "Open in…": from any record or object type, the other places
-// the platform shows the same thing — its records in the Object Explorer, its
-// definition in the Ontology, the pages composed over it, its lineage. Only
-// routes to views this member's applications contribute are offered; the
-// workspace reports a missing view, never a forbidden one.
 import { ActionMenu, t, useWorkspace, type ContextCommand } from "@platform/ui";
 import { assetKey, useHost } from "../index";
 

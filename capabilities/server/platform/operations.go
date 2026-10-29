@@ -16,8 +16,6 @@ import (
 	"unicode/utf8"
 )
 
-// CapabilityInvocation selects an existing owner entry. It does not grant a
-// second execution authority or allow the caller to replace its identity.
 type CapabilityInvocation struct {
 	Ref              AssetRef           `json:"ref"`
 	Key              string             `json:"key"`
@@ -41,9 +39,6 @@ type CapabilityResult struct {
 const WasmCommandABI = "platform-wasip1-json/v1"
 const WasmDataABI = "platform-wasip1-data/v2"
 
-// ValueSchema is the bounded JSON Schema profile shared by ordinary compute
-// inputs, outputs and Logic Studio ports. Objects are closed; recursion, remote
-// references and tenant-defined validators are deliberately absent.
 type ValueSchema struct {
 	Type          string                 `json:"type"`
 	Nullable      bool                   `json:"nullable,omitempty"`
@@ -129,16 +124,10 @@ func (s ValueSchema) check(depth int, remaining *int) error {
 	return nil
 }
 
-// DecodeValue rejects duplicate keys before unmarshalling, retains integer
-// precision, and accepts exactly one bounded UTF-8 JSON value.
 func DecodeValue(raw []byte, limit int) (any, error) {
 	return decodeBoundedValue(raw, limit, 16)
 }
 
-// ValidateRecordJSON checks stored JSON, which also carries typed declarations.
-// Each rule level uses an object and an args array; the enclosing declaration
-// needs its own space. Rule compilation still enforces its original node/depth
-// limits, while ordinary compute values retain their smaller syntax budget.
 func ValidateRecordJSON(raw []byte) error {
 	_, err := decodeBoundedValue(raw, 64<<10, 2*ExprMaxDepth+16)
 	return err
@@ -310,16 +299,12 @@ type OperationBinding struct {
 	ABI    string `json:"abi,omitempty"`
 }
 type OperationLimits struct {
-	TimeoutMillis  int    `json:"timeoutMillis"`
-	MemoryPages    uint32 `json:"memoryPages"`
-	MaxInputBytes  int    `json:"maxInputBytes"`
-	MaxOutputBytes int    `json:"maxOutputBytes"`
-	// StagedOutputBytes, when set, allows a result above MaxOutputBytes to be
-	// sealed into the per-call result channel the host owns.
-	// 0 keeps the inline-only profile; the worker still never writes anywhere.
-	StagedOutputBytes int `json:"stagedOutputBytes,omitempty"`
-	// DataInputBytes bounds the call-owned read channel; it never raises stdin.
-	DataInputBytes int `json:"dataInputBytes,omitempty"`
+	TimeoutMillis     int    `json:"timeoutMillis"`
+	MemoryPages       uint32 `json:"memoryPages"`
+	MaxInputBytes     int    `json:"maxInputBytes"`
+	MaxOutputBytes    int    `json:"maxOutputBytes"`
+	StagedOutputBytes int    `json:"stagedOutputBytes,omitempty"`
+	DataInputBytes    int    `json:"dataInputBytes,omitempty"`
 }
 type Operation struct {
 	Rules       *RuleTablePlan   `json:"rules,omitempty"`
@@ -376,8 +361,6 @@ func (o Operation) Check() error {
 	return nil
 }
 
-// OperationExecutor is implemented only by trusted code applications. It has
-// no Caller and cannot use compute to obtain business submission privileges.
 type OperationExecutor interface {
 	Compute(context.Context, string, json.RawMessage) (json.RawMessage, error)
 }
@@ -462,32 +445,21 @@ func (c Caller) RequestCompilation(r *pb.ChangeRecord, key, target string, q Cod
 	return OperationCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Compilation requires an accepted decision")
 }
 
-// What the host operates for apps: scheduled jobs, typed settings,
-// notifications and connector deliveries (K8).
-
-// Job is work an app runs on a schedule, as "app:<id>" (manifest).
 type Job struct {
 	Name  string        `json:"name"`
 	Title string        `json:"title"`
 	Every time.Duration `json:"every"`
 }
 
-// Retry is how owned work tries again: the first wait, doubling
-// up to Max, at most Attempts attempts; then it fails, is shown, and a person
-// retries it. The host declares one per kind of work; an app may declare its
-// own for the events delivered to it (Manifest.Retry).
 type Retry struct {
 	Initial, Max time.Duration
 	Attempts     int
 }
 
-// After is the wait after the given number of failed attempts.
 func (r Retry) After(attempts int) time.Duration {
 	return min(r.Initial<<max(attempts-1, 0), r.Max)
 }
 
-// Setting is a typed per-tenant value an app declares and administrators set in
-// Settings; a value within the app's rules, never a rule.
 type Setting struct {
 	Name        string   `json:"name"`
 	Title       string   `json:"title"`
@@ -497,7 +469,6 @@ type Setting struct {
 	Choices     []string `json:"choices,omitempty"`
 }
 
-// Accepts reports whether v is a value of the setting's type.
 func (s Setting) Accepts(v string) bool {
 	switch s.Type {
 	case "boolean":
@@ -511,8 +482,6 @@ func (s Setting) Accepts(v string) bool {
 	return s.Type == "text"
 }
 
-// Setting is the current value of the calling app's setting (its default
-// until set); "platform/<name>" is the tenant's own, such as "platform/currency".
 func (c Caller) Setting(name string) string {
 	if c.rt == nil {
 		return ""
@@ -520,9 +489,6 @@ func (c Caller) Setting(name string) string {
 	return c.rt.Setting(c, name)
 }
 
-// Recipient is a member; whoever holds a membership (with Role, when given) in
-// Unit or in a unit above it in Structure; or whoever holds AppRole
-// in the notifying app.
 type Recipient struct {
 	Member                string
 	Structure, Unit, Role string
@@ -535,15 +501,13 @@ type Notification struct {
 	App      string    `json:"app" source:"record"`
 	Title    string    `json:"title" source:"generated" from:"Ref"`
 	Body     string    `json:"body,omitempty" source:"generated" from:"Ref"`
-	Ref      string    `json:"ref,omitempty" source:"record"` // context of the owned notice; content still checks Ref
-	Key      string    `json:"key,omitempty" source:"record"` // one notification per member, app and key
+	Ref      string    `json:"ref,omitempty" source:"record"`
+	Key      string    `json:"key,omitempty" source:"record"`
 	At       time.Time `json:"at"`
 	Read     bool      `json:"read"`
 	Withheld bool      `json:"withheld,omitempty"`
 }
 
-// Notify resolves recipients on now's day and gives each one n, unless it has
-// one with n's key from this app already; it returns who received it.
 func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string {
 	if c.rt == nil {
 		return nil
@@ -551,8 +515,6 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 	return c.rt.Notify(c, n, now, to)
 }
 
-// Deliver accepts one batch from the calling connector about dataClass; a poll
-// page moves the cursor from → to (K8).
 func (c Caller) Deliver(dataClass, from, to string, now time.Time) *kernel.Error {
 	if c.rt == nil {
 		return notFound()
@@ -569,7 +531,6 @@ type WasmRequest struct {
 	Limits OperationLimits `json:"limits"`
 }
 
-// WasmDataInput is one host-projected, frozen call. No paths, URLs or store capabilities enter the guest.
 type WasmDataInput struct {
 	Tenant string `json:"tenant"`
 	Call   string `json:"call"`
@@ -602,8 +563,6 @@ type ComputeSDK struct {
 	Source string `json:"source"`
 }
 
-// Only the native preparation lane can attach this reference to an accepted
-// intent. Public operation requests have no artifact/path field.
 type OperationInputArtifact struct {
 	Tenant     string `json:"tenant"`
 	Call       string `json:"call"`

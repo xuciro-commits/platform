@@ -98,8 +98,6 @@ func (b *Build) checkConfirmation(spec *platform.Confirmation, object Object) er
 	return nil
 }
 
-// Stable transport bindings belong to the initiating action. The common
-// descriptor reads them from the same frozen body used for publication.
 type confirmationPartyBindings struct {
 	Name                string             `json:"name"`
 	Writeback           *platform.AssetRef `json:"writeback,omitempty"`
@@ -567,7 +565,7 @@ func (b *Build) confirmationState(c platform.Caller, r *pb.ChangeRecord, run *pl
 		return
 	}
 	if run.Completion != "" {
-		return // A declared partial result never silently turns into full completion.
+		return
 	}
 	all := !slices.ContainsFunc(run.Parties, func(p platform.ConfirmationProgress) bool { return p.State != "confirmed" })
 	if all && (at.Before(run.Deadline) || run.State == "confirmed") {
@@ -756,7 +754,6 @@ func datasetActions() []platform.Action {
 		Payload: []platform.Field{{Name: "rows", Type: "json", Required: true, Description: "The rows, an array of objects"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}}}
 }
 
-// DatasetSchema infers columns from rows: the widest type each column shows.
 func DatasetSchema(rows []map[string]any) []DatasetField {
 	types := map[string]string{}
 	for _, row := range rows {
@@ -1165,9 +1162,6 @@ func (b *Build) bindDispatchAssets(assets []platform.ReleaseAsset) ([]platform.R
 	return assets, nil
 }
 
-// Portable objects retain logical integration names. Installation and retained
-// execution resolve those names through the same target inventory as sources
-// and writebacks, without changing the candidate's frozen bytes.
 func mapDispatchIntegrations(object *Object, resolve func(platform.AssetKind, string) (string, error)) error {
 	var failure error
 	mapTxn := func(txn *platform.BusinessTxn) {
@@ -1559,8 +1553,6 @@ func (b *Build) updateDispatch(c platform.Caller, submission *pb.Submission, at 
 					run.ReadDue = at.Add(time.Duration(run.Definition.Readback.EverySeconds) * time.Second)
 				}
 				if in.Outcome != "" && (in.Intent == "" || in.Intent == run.Intent) {
-					// Delivery acceptance proves receipt, never execution. A late
-					// HTTP answer must not erase a newer status read.
 					if in.Reading != nil || !slices.Contains([]string{"running", "stuck", "failed"}, run.State) {
 						if run.State != in.Outcome {
 							run.StateAt = at
@@ -1665,11 +1657,6 @@ func dispatchSubmission(c platform.Caller, id, schema, key string, payload any, 
 	return &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: "dispatch:" + id + ":" + key, Target: &pb.EntityRef{Type: platform.DispatchType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
 }
 
-// Matching rules (Ⅰ-G). Several systems describe the same
-// party, material or site under different ids; a matching rule says when two
-// rows are one entity, and whose value wins per field. It is applied wherever
-// rows land in an object - a source's pull, a pipeline's run - so the object
-// converges to one record per real thing without anyone writing code.
 const MatchType = "build.match"
 
 func (b *Build) matchEntity() platform.Entity {
@@ -1830,9 +1817,6 @@ func (b *Build) checkObservation(c platform.Caller, record Observation) error {
 }
 
 func (b *Build) checkObservationDefinition(c platform.Caller, record Observation, published bool) error {
-	// Authoring may reference a saved model before its joint publication.
-	// This private shape is used only for draft validation; execution still
-	// resolves the exact installed or selected candidate definition.
 	if !published && !b.jointMode {
 		if _, selected := b.jointEntities[record.Object]; !selected {
 			objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
@@ -1917,8 +1901,6 @@ func (b *Build) checkObservationDefinition(c platform.Caller, record Observation
 	return nil
 }
 
-// A joint candidate may declare the object's action in the same publication.
-// Read that original object draft rather than requiring an earlier live install.
 func (b *Build) observationAction(definition platform.ObservationDefinition) (string, platform.Action, bool) {
 	if _, joint := b.jointEntities[definition.Object.Name]; joint {
 		objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
@@ -1939,8 +1921,6 @@ func (b *Build) observationAction(definition platform.ObservationDefinition) (st
 	return b.host.Action(definition.Decision.Action.Name)
 }
 
-// ExecutionObservation returns accepted declaration bytes, never a mutable
-// editor row and never observations fetched from the external store.
 func (b *Build) ExecutionObservation(record Observation) (platform.ObservationDefinition, error) {
 	var asset platform.ReleaseAsset
 	if record.Published == "" || ValueDecodeIntegration([]byte(record.Published), &asset) != nil || asset.Ref != (platform.AssetRef{App: ID, Kind: platform.AssetObservation, Name: record.Name}) {
@@ -1958,8 +1938,6 @@ func (b *Build) ExecutionObservation(record Observation) (platform.ObservationDe
 
 var _ ObservationDefinitions = (*Build)(nil)
 
-// StepKinds are the transformations a pipeline may declare, in the order a
-// builder usually needs them.
 var StepKinds = []string{"select", "rename", "cast", "filter", "compute", "lookup", "join", "dedupe", "aggregate", "sort"}
 
 func (b *Build) pipelineEntity() platform.Entity {
@@ -2021,7 +1999,6 @@ func (b *Build) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 		return err
 	}
 	if c.Replaying {
-		// Old input journals retain their original publish-and-start meaning.
 		p.Runner, p.Requested = c.ID, true
 	}
 	if !c.Replaying {
@@ -2034,7 +2011,6 @@ func (b *Build) publishPipeline(c platform.Caller, record any, _ json.RawMessage
 	return nil
 }
 
-// CheckPipeline shares publication validation with the read-only draft trial.
 func (b *Build) CheckPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 	return b.checkPipeline(c, p)
 }
@@ -2215,7 +2191,6 @@ func (b *Build) submitPipelineRan(c platform.Caller, s *pb.Submission, now time.
 	})
 }
 
-// inputMarking is the highest marking of the datasets a pipeline reads.
 func (b *Build) inputMarking(c platform.Caller, p Pipeline) (string, error) {
 	marking := ""
 	for _, id := range append([]string{p.Input}, p.StepDatasets()...) {
@@ -2249,7 +2224,7 @@ func objectProvisions(object Object, entity platform.Entity) []platform.Provisio
 			schema := entity.Type + "." + declaration.Actions[verb]
 			action, ok := catalog.Action(schema)
 			if !ok {
-				continue // The owner validator reports missing action bindings.
+				continue
 			}
 			action.Schema, action.Roles, action.Automation = verb, nil, false
 			p.Protocol.Actions = append(p.Protocol.Actions, action)
@@ -2500,7 +2475,6 @@ func (b *Build) publishSource(c platform.Caller, record any, _ json.RawMessage, 
 		return err
 	}
 	if c.Replaying {
-		// Old input journals retain their original publish-and-start meaning.
 		s.Puller, s.Requested = c.ID, !s.Stream
 	}
 	if !c.Replaying {
@@ -2672,7 +2646,7 @@ func checkIntegrationExecution(prior, next *IntegrationExecution, member platfor
 		if prior != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The pending integration execution must finish first")
 		}
-		return nil // historical/direct-development result without a preparation
+		return nil
 	}
 	digest, err := hex.DecodeString(next.Snapshot)
 	if next.ID == "" || len(next.ID) > 64 || err != nil || len(digest) != 32 || next.Member != member.ID {
@@ -2706,8 +2680,6 @@ func tableName(s string) bool {
 	return true
 }
 
-// simpleWhere accepts "col op literal [and ...]" with quoted strings, numbers,
-// true/false and null - enough to pick a plant or a status, never a statement.
 var simpleWhereRE = regexp.MustCompile(`^\s*[A-Za-z_][A-Za-z0-9_]*\s*(=|<>|!=|<|>|<=|>=)\s*('[^';]*'|-?[0-9]+(\.[0-9]+)?|true|false|null)(\s+and\s+[A-Za-z_][A-Za-z0-9_]*\s*(=|<>|!=|<|>|<=|>=)\s*('[^';]*'|-?[0-9]+(\.[0-9]+)?|true|false|null))*\s*$`)
 
 func simpleWhere(s string) bool { return s == "" || simpleWhereRE.MatchString(strings.ToLower(s)) }
@@ -2863,9 +2835,6 @@ func (b *Build) submitWritebackAnswered(c platform.Caller, s *pb.Submission, now
 	})
 }
 
-// Answered takes a settled writeback effect (platform.Answerer): it keeps the
-// answer on the writeback and, when delivered with a Result mapping, writes
-// the answer's fields onto the record through the object's own edit.
 func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
 	var req WritebackRequest
 	if json.Unmarshal([]byte(effect.Body), &req) != nil || req.Writeback == "" {
@@ -2900,8 +2869,6 @@ func (b *Build) answered(c platform.Caller, effect platform.Effect, out platform
 	if !ok {
 		return nil
 	}
-	// New requests carry their original answer mapping, so an accepted reply
-	// never acquires a different meaning after a compatible definition upgrade.
 	if req.Version == 1 {
 		w.Object, w.Result = req.Object, slices.Clone(req.Result)
 		if w.Object == "" {
@@ -2941,52 +2908,37 @@ func clipAnswer(raw []byte) string {
 	return s
 }
 
-// Connections (I-A): how the tenant reaches one external
-// system - a kind, an address and the *name* of a secret in the host's store.
-// Sources read through a connection; the credential itself never enters a
-// record, a candidate or a release, so the same definition promotes to another
-// environment that holds its own secret under the same name.
 const (
 	ConnectionType          = "build.connection"
 	SchemaConnectionChecked = "build.connection.checked"
 )
 
-// ConnectionKinds are the systems a connection reaches.
 var ConnectionKinds = []string{"http", "odata", "postgres"}
 
 type Connection struct {
 	platform.Record
-	Name  string `json:"name" field:"required,search" source:"record"`
-	Title string `json:"title" field:"required,search" source:"record"`
-	// Kind is http (REST or files), odata (an OData v2/v4 service root, e.g. SAP Gateway) or postgres (a read-only database).
-	Kind string `json:"kind" field:"required" choices:"http,odata,postgres" source:"record"`
-	// Address is the service root URL, or for postgres a DSN without a password.
-	Address string `json:"address" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
-	// Secret names the credential in the host's secret store: the Authorization header's value for http/odata, the password for postgres.
-	Secret       string `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential" source:"record"`
-	AllowPrivate bool   `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
-	// Marking classifies everything read through it; datasets loaded from it are marked at least as high.
-	Marking   string           `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking" help:"What is read through it is at least this: internal, confidential or restricted"`
-	State     string           `json:"state" field:"readonly" source:"record"`
-	Requested bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
-	Last      *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
-	// Definition publication is independent of data/runtime versions.
-	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed" source:"record"`
-	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Name              string           `json:"name" field:"required,search" source:"record"`
+	Title             string           `json:"title" field:"required,search" source:"record"`
+	Kind              string           `json:"kind" field:"required" choices:"http,odata,postgres" source:"record"`
+	Address           string           `json:"address" help:"Service root URL, or postgres://user@host:5432/db?sslmode=require without the password" source:"record"`
+	Secret            string           `json:"secret,omitempty" title:"Secret name" help:"The credential's name in the host's secret store, never the credential" source:"record"`
+	AllowPrivate      bool             `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
+	Marking           string           `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking" help:"What is read through it is at least this: internal, confidential or restricted"`
+	State             string           `json:"state" field:"readonly" source:"record"`
+	Requested         bool             `json:"requested,omitempty" field:"readonly" title:"Check requested"`
+	Last              *ConnectionCheck `json:"last,omitempty" field:"readonly" type:"json" title:"Last check"`
+	DefinitionVersion int              `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string           `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed" source:"record"`
+	Versions          []string         `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// ConnectionCheck is what one check found.
 type ConnectionCheck struct {
-	At    time.Time `json:"at"`
-	OK    bool      `json:"ok"`
-	Error string    `json:"error,omitempty"`
-	// Detail is what answered: a status, a server version, an OData version.
-	Detail string `json:"detail,omitempty"`
+	At     time.Time `json:"at"`
+	OK     bool      `json:"ok"`
+	Error  string    `json:"error,omitempty"`
+	Detail string    `json:"detail,omitempty"`
 }
 
-// Resolve is the address a source on this connection reads: an absolute URL
-// stays, a relative one joins the service root.
 func (c Connection) Resolve(ref string) string {
 	if ref == "" {
 		return c.Address
@@ -2997,11 +2949,6 @@ func (c Connection) Resolve(ref string) string {
 	return strings.TrimRight(c.Address, "/") + "/" + strings.TrimLeft(ref, "/")
 }
 
-// Datasets (I-C): someone else's facts kept as they came -
-// a sequence of versions, each the rows one pull or one pipeline run produced,
-// with the schema inferred from them. A dataset is not a business object: no
-// business permission reads it, only the builder; a pipeline turns it into
-// records, and every record can say which version and row it came from.
 const (
 	DatasetType        = "build.dataset"
 	DatasetVersionType = "build.datasetversion"
@@ -3011,40 +2958,32 @@ const (
 
 type Dataset struct {
 	platform.Record
-	Name  string `json:"name" field:"required,search"`
-	Title string `json:"title" field:"required,search"`
-	// Keep is how many versions stay; older ones are archived.
-	Keep int `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`
-	// Marking: raised by what loads it - the connection, the pipeline's input - and by hand; lowered only by hand.
-	Marking string `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking"`
-	// Producer is what loads it: the source or pipeline that writes versions (set by them, informational).
-	Producer string         `json:"producer,omitempty" field:"readonly"`
-	Schema   []DatasetField `json:"schema,omitempty" field:"readonly" type:"json"`
-	Version  int            `json:"version,omitempty" field:"readonly" title:"Latest version"`
-	Last     *DatasetLoad   `json:"last,omitempty" field:"readonly" type:"json" title:"Latest load"`
-	// Definition publication is independent of data/runtime versions.
-	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Name              string         `json:"name" field:"required,search"`
+	Title             string         `json:"title" field:"required,search"`
+	Keep              int            `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`
+	Marking           string         `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking"`
+	Producer          string         `json:"producer,omitempty" field:"readonly"`
+	Schema            []DatasetField `json:"schema,omitempty" field:"readonly" type:"json"`
+	Version           int            `json:"version,omitempty" field:"readonly" title:"Latest version"`
+	Last              *DatasetLoad   `json:"last,omitempty" field:"readonly" type:"json" title:"Latest load"`
+	DefinitionVersion int            `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string         `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string       `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// DatasetField is one inferred column: its name and the widest type seen.
 type DatasetField struct {
 	Name string `json:"name"`
-	Type string `json:"type"` // string, number, boolean, date, json
+	Type string `json:"type"`
 }
 
-// DatasetLoad is what one version holds.
 type DatasetLoad struct {
 	At      time.Time `json:"at"`
 	Version int       `json:"version"`
 	Rows    int       `json:"rows"`
 	Bytes   int       `json:"bytes"`
-	// Drift lists columns that appeared or vanished since the previous version.
-	Drift []string `json:"drift,omitempty"`
+	Drift   []string  `json:"drift,omitempty"`
 }
 
-// DatasetVersion is one version's rows, kept until the dataset's Keep passes it.
 type DatasetVersion struct {
 	platform.Record
 	Dataset string          `json:"dataset" field:"required" ref:"build.dataset"`
@@ -3055,10 +2994,8 @@ type DatasetVersion struct {
 	Request string          `json:"requestKey,omitempty" field:"readonly" title:"Request key"`
 }
 
-// VersionID names a dataset's version record.
 func VersionID(dataset string, version int) string { return fmt.Sprintf("%s@%d", dataset, version) }
 
-// Rows are a dataset version's rows (the latest when version is 0).
 func DatasetRows(c platform.Caller, dataset string, version int) ([]map[string]any, int, error) {
 	ds, ok := platform.Get[Dataset](c, dataset)
 	if !ok {
@@ -3084,8 +3021,6 @@ func DatasetRows(c platform.Caller, dataset string, version int) ([]map[string]a
 const ObservationType = "build.observation"
 const SchemaObservation = ObservationType + ".publish"
 
-// Observation is a portable read/decision declaration over an external store.
-// It never holds samples, summaries or credentials.
 type Observation struct {
 	platform.Record
 	Name                       string                         `json:"name" field:"required,search" source:"record"`
@@ -3113,100 +3048,72 @@ type Observation struct {
 	Versions                   []string                       `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// EnterpriseTarget lands a pipeline's rows in the enterprise model
-// as elements of one stereotype owned on an external system's behalf: SAP
-// HR/OM organisational units become ActualOrganizations under the org tree,
-// AD departments posts, MES equipment ActualResources at locations. Columns
-// name what each row gives; a value written "=literal" is a constant instead.
 type EnterpriseTarget struct {
-	Source     string `json:"source"`     // the system's name, e.g. sap-hr: element ids are <source>:<id>
-	Stereotype string `json:"stereotype"` // element stereotype, e.g. ActualOrganization
-	ID         string `json:"id"`         // the column with the system's stable id
-	Name       string `json:"name"`
-	ShortName  string `json:"shortName,omitempty"`
-	Kind       string `json:"kind,omitempty"` // column or =literal, e.g. =plant
-	// Parent is the column with the parent's id in the same system; Root the element the top ones sit
-	// under (the tenant's own, e.g. the company); In the relationship kind the placement is made in.
-	Parent   string `json:"parent,omitempty"`
-	Root     string `json:"root,omitempty"`
-	In       string `json:"in,omitempty"`
-	Relation string `json:"relation,omitempty"` // e.g. part of
-	// At places a resource or post at an element given by column (ids of the same system or =literal).
+	Source     string   `json:"source"`
+	Stereotype string   `json:"stereotype"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	ShortName  string   `json:"shortName,omitempty"`
+	Kind       string   `json:"kind,omitempty"`
+	Parent     string   `json:"parent,omitempty"`
+	Root       string   `json:"root,omitempty"`
+	In         string   `json:"in,omitempty"`
+	Relation   string   `json:"relation,omitempty"`
 	At         string   `json:"at,omitempty"`
-	AtKind     string   `json:"atKind,omitempty"` // the relationship stereotype towards At; default ResponsibleFor (owner → resource)
+	AtKind     string   `json:"atKind,omitempty"`
 	From       string   `json:"from,omitempty"`
 	Until      string   `json:"until,omitempty"`
-	Properties []string `json:"properties,omitempty"` // columns copied as tagged values
+	Properties []string `json:"properties,omitempty"`
 }
 
 var ValueSourceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// Check prevents new slice jobs; retained definitions keep their original shape.
 func (e EnterpriseTarget) Check() error {
 	return fmt.Errorf("Enterprise slice targets are retired; use explicit directory actions")
 }
 
-// Writebacks. A writeback declares that an accepted action on an
-// object is sent to an external system through a Connection: an HTTP request
-// whose body is mapped from the action's payload. The sending is an
-// effect - at least once, in order per connection, with the decision's change
-// id as the idempotency key - so an outage queues it and the receiver can
-// deduplicate retries. The answer can write fields back onto the record (the document number
-// SAP assigned, say) through the object's own edit.
 const (
 	WritebackType            = "build.writeback"
 	SchemaWritebackAnswered  = "build.writeback.answered"
 	ValueWritebackAnswerKept = 20
-	// WritebackEndpoint prefixes the effect endpoint of a connection: "connection:<id>".
-	WritebackEndpoint = "connection:"
+	WritebackEndpoint        = "connection:"
 )
 
 type Writeback struct {
 	platform.Record
-	Name  string `json:"name" field:"required,search"`
-	Title string `json:"title" field:"required,search"`
-	// Connection is where it goes (http or odata); Object and On name the accepted action that sends it:
-	// On is the action's verb - create, edit, or a declared action's name.
-	Connection string `json:"connection" field:"required" ref:"build.connection"`
-	Object     string `json:"object" field:"required" title:"Object"`
-	On         string `json:"on" field:"required" title:"After action"`
-	// Method and Path form the request; Path is relative to the connection's address and may use
-	// {id} and {field} placeholders from the payload.
-	Method    string `json:"method" title:"Method"`
-	Transport string `json:"transport,omitempty" choices:"http,a2a" title:"Transport"`
-	Path      string `json:"path" title:"Path"`
-	// Mapping is payload field → body key; empty sends the payload with its id.
-	Mapping []SourceField `json:"mapping,omitempty" title:"Body mapping"`
-	// Result is answer key → record field, written onto the record when the system answers.
-	Result    []SourceField  `json:"result,omitempty" title:"Answer mapping"`
-	State     string         `json:"state" field:"readonly"`
-	Publisher string         `json:"publisher,omitempty" field:"readonly"`
-	Sent      int            `json:"sent,omitempty" field:"readonly" title:"Delivered"`
-	Rejected  int            `json:"rejected,omitempty" field:"readonly"`
-	Failed    int            `json:"failed,omitempty" field:"readonly"`
-	Unknown   int            `json:"unknown,omitempty" field:"readonly"`
-	Answers   []WritebackAns `json:"answers,omitempty" field:"readonly" type:"json" title:"Recent answers"`
-	// Definition publication is independent of data/runtime versions.
-	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Name              string         `json:"name" field:"required,search"`
+	Title             string         `json:"title" field:"required,search"`
+	Connection        string         `json:"connection" field:"required" ref:"build.connection"`
+	Object            string         `json:"object" field:"required" title:"Object"`
+	On                string         `json:"on" field:"required" title:"After action"`
+	Method            string         `json:"method" title:"Method"`
+	Transport         string         `json:"transport,omitempty" choices:"http,a2a" title:"Transport"`
+	Path              string         `json:"path" title:"Path"`
+	Mapping           []SourceField  `json:"mapping,omitempty" title:"Body mapping"`
+	Result            []SourceField  `json:"result,omitempty" title:"Answer mapping"`
+	State             string         `json:"state" field:"readonly"`
+	Publisher         string         `json:"publisher,omitempty" field:"readonly"`
+	Sent              int            `json:"sent,omitempty" field:"readonly" title:"Delivered"`
+	Rejected          int            `json:"rejected,omitempty" field:"readonly"`
+	Failed            int            `json:"failed,omitempty" field:"readonly"`
+	Unknown           int            `json:"unknown,omitempty" field:"readonly"`
+	Answers           []WritebackAns `json:"answers,omitempty" field:"readonly" type:"json" title:"Recent answers"`
+	DefinitionVersion int            `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string         `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string       `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// WritebackAns is one settled attempt as the builder sees it.
 type WritebackAns struct {
 	At     time.Time `json:"at"`
 	Effect string    `json:"effect"`
 	Target string    `json:"target"`
-	Result string    `json:"result"` // delivered, rejected, failed
+	Result string    `json:"result"`
 	Detail string    `json:"detail,omitempty"`
-	Answer string    `json:"answer,omitempty"` // first bytes of the body
+	Answer string    `json:"answer,omitempty"`
 }
 
-// Schema is the full action name a writeback listens for.
 func (w Writeback) Schema() string { return w.Object + "." + w.On }
 
-// WritebackRequest is the frozen request an effect carries: everything the
-// dispatcher needs without reading records, the secret only by name.
 type WritebackRequest struct {
 	Connection        string         `json:"connection,omitempty"`
 	Confirmation      string         `json:"confirmation,omitempty"`
@@ -3229,8 +3136,6 @@ type WritebackRequest struct {
 	Body              map[string]any `json:"body"`
 }
 
-// Request freezes the request for one accepted decision: the payload mapped to
-// the body (or sent whole with its id), the path's placeholders filled.
 func (w Writeback) Request(conn Connection, id string, payload json.RawMessage) (WritebackRequest, error) {
 	if err := CheckWritebackTransport(w.Transport, w.Method); err != nil {
 		return WritebackRequest{}, err
@@ -3301,16 +3206,11 @@ func CheckWritebackTransport(transport, method string) error {
 	return nil
 }
 
-// Fields are what the answer writes onto the record, by the Result mapping.
 func (w Writeback) Fields(answer []byte) map[string]any {
 	var in map[string]any
 	if json.Unmarshal(answer, &in) != nil {
-		// OData v2 wraps in d; a bare value is nothing to map.
 		return nil
 	}
-	// OData v2 wraps the entity in d. A mapping written against the raw
-	// answer (d.MaterialDocument) and one written against the entity
-	// (MaterialDocument) both find it (UX-14).
 	unwrapped := in
 	if d, ok := in["d"].(map[string]any); ok && len(in) == 1 {
 		unwrapped = d
@@ -3330,10 +3230,6 @@ func (w Writeback) Fields(answer []byte) map[string]any {
 	return out
 }
 
-// Pipelines (I-D): a declared, closed set of steps from
-// datasets to a dataset or to an object. No script: every step is data the
-// builder can read back, every row that fails an expectation is quarantined
-// with its reason, and a run is an ordinary journaled input like a pull.
 const (
 	PipelineType      = "build.pipeline"
 	SchemaPipelineRan = "build.pipeline.ran"
@@ -3341,54 +3237,44 @@ const (
 
 type Pipeline struct {
 	platform.Record
-	Name  string `json:"name" field:"required,search"`
-	Title string `json:"title" field:"required,search"`
-	// Input is the dataset the rows start from; Steps transform them in order.
-	Input string                   `json:"input" field:"required" ref:"build.dataset"`
-	Steps []platform.TransformStep `json:"steps" type:"json"`
-	// Expectations are checked on the final rows; failing rows are quarantined, not written.
-	Expectations []platform.TransformExpectation `json:"expectations,omitempty" type:"json"`
-	// Output is either a dataset (raw rows) or an object with the column that is the record id.
-	OutputDataset string `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
-	OutputObject  string `json:"outputObject,omitempty" title:"Output object"`
-	Key           string `json:"key,omitempty" title:"Record id column"`
-	// Marking is the highest marking an input carried when it ran; kept so lineage and the object gate see it.
-	Marking string `json:"marking,omitempty" field:"readonly" title:"Marking"`
-	// OutputEnterprise lands the rows in the enterprise model instead: one element per row.
-	OutputEnterprise *EnterpriseTarget `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
-	// Every is a period, or empty: run when an input gains a version, or on request.
-	Every        string       `json:"every,omitempty" title:"Run every"`
-	State        string       `json:"state" field:"readonly"`
-	Runner       string       `json:"runner,omitempty" field:"readonly" title:"Runs as"`
-	RunnerScopes string       `json:"runnerScopes,omitempty" field:"readonly" type:"json"`
-	Requested    bool         `json:"requested,omitempty" field:"readonly"`
-	Last         *PipelineRun `json:"last,omitempty" field:"readonly" type:"json" title:"Last run"`
-	// Definition publication is independent of data/runtime versions.
-	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Name              string                          `json:"name" field:"required,search"`
+	Title             string                          `json:"title" field:"required,search"`
+	Input             string                          `json:"input" field:"required" ref:"build.dataset"`
+	Steps             []platform.TransformStep        `json:"steps" type:"json"`
+	Expectations      []platform.TransformExpectation `json:"expectations,omitempty" type:"json"`
+	OutputDataset     string                          `json:"outputDataset,omitempty" ref:"build.dataset" title:"Output dataset"`
+	OutputObject      string                          `json:"outputObject,omitempty" title:"Output object"`
+	Key               string                          `json:"key,omitempty" title:"Record id column"`
+	Marking           string                          `json:"marking,omitempty" field:"readonly" title:"Marking"`
+	OutputEnterprise  *EnterpriseTarget               `json:"outputEnterprise,omitempty" type:"json" title:"Enterprise model"`
+	Every             string                          `json:"every,omitempty" title:"Run every"`
+	State             string                          `json:"state" field:"readonly"`
+	Runner            string                          `json:"runner,omitempty" field:"readonly" title:"Runs as"`
+	RunnerScopes      string                          `json:"runnerScopes,omitempty" field:"readonly" type:"json"`
+	Requested         bool                            `json:"requested,omitempty" field:"readonly"`
+	Last              *PipelineRun                    `json:"last,omitempty" field:"readonly" type:"json" title:"Last run"`
+	DefinitionVersion int                             `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string                          `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string                        `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// PipelineRun is what one run did.
 type PipelineRun struct {
 	Execution         *IntegrationExecution     `json:"execution,omitempty"`
 	DefinitionVersion string                    `json:"definitionVersion,omitempty"`
 	At                time.Time                 `json:"at"`
 	Input             int                       `json:"inputVersion"`
-	Rows              int                       `json:"rows"`              // rows after the steps
-	Written           int                       `json:"written"`           // rows written to the output
-	Marking           string                    `json:"marking,omitempty"` // the highest marking of the inputs
-	Merged            int                       `json:"merged,omitempty"`  // rows merged into matched records
+	Rows              int                       `json:"rows"`
+	Written           int                       `json:"written"`
+	Marking           string                    `json:"marking,omitempty"`
+	Merged            int                       `json:"merged,omitempty"`
 	Quarantined       int                       `json:"quarantined"`
-	Failed            int                       `json:"failed"` // rows the output refused
+	Failed            int                       `json:"failed"`
 	Error             string                    `json:"error,omitempty"`
 	Quarantine        []platform.QuarantinedRow `json:"quarantine,omitempty"`
 	Failures          []SourceFailure           `json:"failures,omitempty"`
 	Output            int                       `json:"outputVersion,omitempty"`
 }
 
-// Due is whether a published pipeline should run at now: asked for, its period
-// passed, or its input has a version newer than the last run's.
 func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 	if p.State != "published" {
 		return false
@@ -3416,9 +3302,6 @@ func (p Pipeline) Due(now time.Time, inputVersion int) bool {
 	return false
 }
 
-// ObjectRows turns final rows into the output object's rows: every column is
-// a payload field (the key column names the record). The host freezes operation
-// identities with the execution before any output is written.
 func (p Pipeline) ObjectRows(rows []map[string]any) []SourceRow {
 	out := make([]SourceRow, 0, len(rows))
 	for _, r := range rows {
@@ -3438,7 +3321,6 @@ func (p Pipeline) ObjectRows(rows []map[string]any) []SourceRow {
 	return out
 }
 
-// StepDatasets are the other datasets steps look up or join.
 func (p Pipeline) StepDatasets() []string {
 	var ids []string
 	for _, s := range p.Steps {
@@ -3481,24 +3363,18 @@ func (p *Pipeline) NormalizeFormulaRules() error {
 
 type Match struct {
 	platform.Record
-	Name   string `json:"name" field:"required,search"`
-	Title  string `json:"title" field:"required,search"`
-	Object string `json:"object" field:"required" title:"Object"`
-	// Keys: a row that agrees with an existing record on any key is that record.
-	Keys []MatchKey `json:"keys" type:"json" title:"Keys"`
-	// Prefer: for a field, the pipeline or source (by name) whose value wins; others fill it only while empty.
-	Prefer    []Preference `json:"prefer,omitempty" type:"json" title:"Preferred producers"`
-	State     string       `json:"state" field:"readonly"`
-	Publisher string       `json:"publisher,omitempty" field:"readonly"`
-	// Definition publication is independent of data/runtime versions.
-	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Name              string       `json:"name" field:"required,search"`
+	Title             string       `json:"title" field:"required,search"`
+	Object            string       `json:"object" field:"required" title:"Object"`
+	Keys              []MatchKey   `json:"keys" type:"json" title:"Keys"`
+	Prefer            []Preference `json:"prefer,omitempty" type:"json" title:"Preferred producers"`
+	State             string       `json:"state" field:"readonly"`
+	Publisher         string       `json:"publisher,omitempty" field:"readonly"`
+	DefinitionVersion int          `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string       `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string     `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// MatchKey is one way to say "the same": the fields compared, and how they are
-// normalised first - exact; folded (trim, case, inner spaces); digits (only
-// the digits, without leading zeros, so 000123 = 123 = M-123).
 type MatchKey struct {
 	Fields    []string `json:"fields"`
 	Normalize string   `json:"normalize,omitempty"`
@@ -3509,8 +3385,6 @@ type Preference struct {
 	Producer string `json:"producer"`
 }
 
-// KeyOf is the normalised value of key k over the fields of a row, or "" when
-// any field is missing - a half-known key never matches.
 func (k MatchKey) KeyOf(fields map[string]any) string {
 	parts := make([]string, 0, len(k.Fields))
 	for _, f := range k.Fields {
@@ -3523,15 +3397,11 @@ func (k MatchKey) KeyOf(fields map[string]any) string {
 	return strings.Join(parts, "\x1f")
 }
 
-// Resolver applies one published rule to rows landing from producer: rows
-// that match an existing record take its id (an edit instead of a second
-// record), rows that match each other converge on the first, and fields a
-// different producer owns are dropped while the record already has a value.
 type Resolver struct {
 	Rule     Match
 	Producer string
-	index    map[string]string         // key → record id
-	fields   map[string]map[string]any // record id → fields
+	index    map[string]string
+	fields   map[string]map[string]any
 	Merged   int
 }
 
@@ -3559,7 +3429,6 @@ func (r *Resolver) Learn(id string, fields map[string]any) {
 	}
 }
 
-// Resolve rewrites the row in place and tells whether it was merged into another id.
 func (r *Resolver) Resolve(row *SourceRow) bool {
 	if row.Error != "" || row.ID == "" {
 		return false
@@ -3601,79 +3470,52 @@ func (r *Resolver) Resolve(row *SourceRow) bool {
 
 func ValueItoa(i int) string { return string(rune('a' + i)) }
 
-// Data sources (block C): a builder names an external JSON
-// endpoint, the array inside its answer, the field that identifies a row and
-// how fields map onto one of the tenant's objects. The host pulls it when due
-// or asked, outside any decision - like a CSV import: every row becomes the
-// object's own generated create or edit as the publisher, under a key made of
-// a durably prepared execution and row position; retries reuse that execution.
-// The pull's summary is decided on the source (SchemaSourcePulled).
 const (
 	SourceType              = "build.source"
 	SchemaSourcePulled      = "build.source.pulled"
-	SourceBody              = 16 << 20 // the most bytes an answer may hold
+	SourceBody              = 16 << 20
 	ValueSourceRows         = 5000
 	ValueSourceFailuresKept = 20
 )
 
 type Source struct {
 	platform.Record
-	Name  string `json:"name" field:"required,search"`
-	Title string `json:"title" field:"required,search"`
-	// Connection is the system the source reads through; empty uses a bare JSON URL.
-	Connection string `json:"connection,omitempty" ref:"build.connection"`
-	// Profile is how rows are read: json (default), csv, odata (an entity set), table (a database table).
-	Profile string `json:"profile,omitempty" choices:"json,csv,odata,table"`
-	// URL answers JSON or CSV over https (http only to a private address when allowed); relative to the connection's address when one is set.
-	URL string `json:"url,omitempty" title:"URL"`
-	// Entity is the OData entity set or the schema.table a table profile reads; Filter narrows it ($filter, or a WHERE fragment).
-	Entity string `json:"entity,omitempty" title:"Entity or table"`
-	Filter string `json:"filter,omitempty" title:"Filter" help:"OData $filter, or a WHERE fragment of simple comparisons"`
-	// Since is the timestamp or sequence property an incremental pull orders by; Cursor the last value pulled.
-	Since        string `json:"since,omitempty" title:"Incremental column" help:"A timestamp or sequence property; each pull reads rows past the cursor"`
-	Cursor       string `json:"cursor,omitempty" field:"readonly"`
-	AllowPrivate bool   `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
-	// Header is one request header, "Name: value", typically Authorization.
-	Header string `json:"header,omitempty" title:"Request header" help:"One header such as Authorization: Bearer …"`
-	// Path is the dotted path to the array of rows inside the answer; empty: the answer is the array.
-	Path string `json:"path,omitempty" title:"Rows at" help:"Dotted path to the array, such as data.items; empty when the answer is the array"`
-	// Dataset keeps the rows as they came; a pipeline maps them later. Otherwise Object is the
-	// tenant's type the rows become directly, Key the row field that is the record's id.
-	Dataset string        `json:"dataset,omitempty" ref:"build.dataset" title:"Target dataset"`
-	Object  string        `json:"object,omitempty" title:"Target object"`
-	Key     string        `json:"key,omitempty" title:"Row id field"`
-	Mapping []SourceField `json:"mapping,omitempty" title:"Field mapping"`
-	// Stream sources are read by the original continuous instance. They never
-	// materialize machine-rate rows into ordinary object or dataset records.
-	Stream bool `json:"stream,omitempty" title:"Continuous Flow source"`
-	// Every is a period such as 15m or 24h; empty: pulled only when asked.
-	Every string `json:"every,omitempty" title:"Pull every" help:"A period such as 15m, 1h or 24h; empty: only when asked"`
-	State string `json:"state" field:"readonly"`
-	// The declaration publisher authorizes background status reads independently
-	// of an explicit pull request.
-	Publisher       string `json:"publisher,omitempty" field:"readonly"`
-	PublisherScopes string `json:"publisherScopes,omitempty" field:"readonly" type:"json" title:"Publisher scopes"`
-	// Puller and its token scopes belong to the explicit run request.
-	Puller       string      `json:"puller,omitempty" field:"readonly" title:"Pulls as"`
-	PullerScopes string      `json:"pullerScopes,omitempty" field:"readonly" type:"json"`
-	Requested    bool        `json:"requested,omitempty" field:"readonly" title:"Pull requested"`
-	Last         *SourcePull `json:"last,omitempty" field:"readonly" type:"json" title:"Last pull"`
-	// Definition publication is independent of data/runtime versions.
-	DefinitionVersion int      `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string   `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions          []string `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Name              string        `json:"name" field:"required,search"`
+	Title             string        `json:"title" field:"required,search"`
+	Connection        string        `json:"connection,omitempty" ref:"build.connection"`
+	Profile           string        `json:"profile,omitempty" choices:"json,csv,odata,table"`
+	URL               string        `json:"url,omitempty" title:"URL"`
+	Entity            string        `json:"entity,omitempty" title:"Entity or table"`
+	Filter            string        `json:"filter,omitempty" title:"Filter" help:"OData $filter, or a WHERE fragment of simple comparisons"`
+	Since             string        `json:"since,omitempty" title:"Incremental column" help:"A timestamp or sequence property; each pull reads rows past the cursor"`
+	Cursor            string        `json:"cursor,omitempty" field:"readonly"`
+	AllowPrivate      bool          `json:"allowPrivate,omitempty" title:"Allow private address" help:"Also accept http and private networks, for on-premise systems"`
+	Header            string        `json:"header,omitempty" title:"Request header" help:"One header such as Authorization: Bearer …"`
+	Path              string        `json:"path,omitempty" title:"Rows at" help:"Dotted path to the array, such as data.items; empty when the answer is the array"`
+	Dataset           string        `json:"dataset,omitempty" ref:"build.dataset" title:"Target dataset"`
+	Object            string        `json:"object,omitempty" title:"Target object"`
+	Key               string        `json:"key,omitempty" title:"Row id field"`
+	Mapping           []SourceField `json:"mapping,omitempty" title:"Field mapping"`
+	Stream            bool          `json:"stream,omitempty" title:"Continuous Flow source"`
+	Every             string        `json:"every,omitempty" title:"Pull every" help:"A period such as 15m, 1h or 24h; empty: only when asked"`
+	State             string        `json:"state" field:"readonly"`
+	Publisher         string        `json:"publisher,omitempty" field:"readonly"`
+	PublisherScopes   string        `json:"publisherScopes,omitempty" field:"readonly" type:"json" title:"Publisher scopes"`
+	Puller            string        `json:"puller,omitempty" field:"readonly" title:"Pulls as"`
+	PullerScopes      string        `json:"pullerScopes,omitempty" field:"readonly" type:"json"`
+	Requested         bool          `json:"requested,omitempty" field:"readonly" title:"Pull requested"`
+	Last              *SourcePull   `json:"last,omitempty" field:"readonly" type:"json" title:"Last pull"`
+	DefinitionVersion int           `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string        `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string      `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
-// SourceField maps one row field onto one object field, optionally converted.
 type SourceField struct {
 	From    string `json:"from"`
 	To      string `json:"to"`
-	Convert string `json:"convert,omitempty"` // "", string, number, boolean, date
+	Convert string `json:"convert,omitempty"`
 }
 
-// IntegrationExecution fixes one invocation independently of its input content.
-// Snapshot is the digest of its immutable preparation in the original file store.
-// Completed invocations keep the reference for historical reading.
 type IntegrationExecution struct {
 	ID       string         `json:"id"`
 	Member   string         `json:"member"`
@@ -3683,7 +3525,6 @@ type IntegrationExecution struct {
 	Inputs   map[string]int `json:"inputs,omitempty"`
 }
 
-// SourcePull is what one pull did: counted, with the first failures kept.
 type SourcePull struct {
 	Execution         *IntegrationExecution `json:"execution,omitempty"`
 	DefinitionVersion string                `json:"definitionVersion,omitempty"`
@@ -3691,11 +3532,10 @@ type SourcePull struct {
 	Rows              int                   `json:"rows"`
 	Applied           int                   `json:"applied"`
 	Failed            int                   `json:"failed"`
-	Merged            int                   `json:"merged,omitempty"` // rows that became an edit of a matched record
+	Merged            int                   `json:"merged,omitempty"`
 	Error             string                `json:"error,omitempty"`
 	Failures          []SourceFailure       `json:"failures,omitempty"`
-	// Cursor is the last incremental value the pull reached; kept on the source.
-	Cursor string `json:"cursor,omitempty"`
+	Cursor            string                `json:"cursor,omitempty"`
 }
 
 type SourceFailure struct {
@@ -3703,8 +3543,6 @@ type SourceFailure struct {
 	Outcome string `json:"outcome"`
 }
 
-// Due is whether a published source should be pulled at now: asked for, or
-// its period has passed since the last pull.
 func (s Source) Due(now time.Time) bool {
 	if s.State != "published" || s.Stream {
 		return false
@@ -3725,7 +3563,6 @@ func (s Source) Due(now time.Time) bool {
 	return s.Last == nil || !now.Before(s.Last.At.Add(every))
 }
 
-// SourceRow is one mapped row. Preparation fixes its operation and execution key.
 type SourceRow struct {
 	ID      string
 	Payload json.RawMessage
@@ -3734,7 +3571,6 @@ type SourceRow struct {
 	Error   string
 }
 
-// Decode turns an answer's body into rows for the json and csv profiles.
 func (s Source) Decode(body []byte) ([]map[string]any, error) {
 	if s.Profile == "csv" {
 		return platform.IntegrationCSVRows(body)
@@ -3742,8 +3578,6 @@ func (s Source) Decode(body []byte) ([]map[string]any, error) {
 	return platform.IntegrationRowsAt(body, s.Path)
 }
 
-// MapRows turns decoded rows into the target's rows; the host decides each as
-// the publisher, outside any decision of the builder.
 func (s Source) MapRows(rows []map[string]any) ([]SourceRow, error) {
 	if len(rows) > ValueSourceRows {
 		return nil, fmt.Errorf("the answer holds %d rows; a pull takes at most %d", len(rows), ValueSourceRows)
@@ -3771,7 +3605,6 @@ func (s Source) MapRows(rows []map[string]any) ([]SourceRow, error) {
 	return out, nil
 }
 
-// Fail counts one failed row, keeping the first few.
 func (p *SourcePull) Fail(id, outcome string) {
 	p.Failed++
 	if len(p.Failures) < ValueSourceFailuresKept {
@@ -3779,7 +3612,6 @@ func (p *SourcePull) Fail(id, outcome string) {
 	}
 }
 
-// Advance is the cursor after rows: the greatest Since value seen, as text.
 func (s Source) Advance(rows []map[string]any) string {
 	if s.Since == "" {
 		return ""

@@ -123,8 +123,6 @@ func alertFromAsset(asset platform.ReleaseAsset) (Alert, int, error) {
 	return Alert{Name: d.Name, Title: d.Title, Object: d.Object.Name, Field: d.Field, Operator: d.Operator, Value: d.Value, Message: d.Message, Role: d.Role, Every: d.Every, Active: d.Active}, version, nil
 }
 
-// Only records written before alert publication existed use their original
-// bytes. The first edit freezes that version before changing the draft.
 func legacyAlert(a Alert) bool {
 	return a.State == "" && a.Version == 0 && a.Published == ""
 }
@@ -340,10 +338,6 @@ func (b *Build) checkConstraints(o Object, engines ...platform.RuleEngine) error
 
 const AlertType = "build.alertrule"
 
-// Alert is a rule over a published object: when a record of it
-// comes to match a condition, the people holding a role are told, once per
-// record or every time. It is the operations face's "situation": no page has
-// to be open for it to be seen.
 type Alert struct {
 	platform.Record
 	Name              string   `json:"name" field:"required,search"`
@@ -367,22 +361,14 @@ func (a Alert) Definition() platform.AlertRule {
 	return platform.AlertRule{Name: a.Name, Title: a.Title, Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: a.Object}, Field: a.Field, Operator: a.Operator, Value: a.Value, Message: a.Message, Role: a.Role, Every: a.Every, Active: a.Active}
 }
 
-// Markings (Ⅰ-I): a bounded classification that travels
-// with data. A connection or dataset is marked internal, confidential or
-// restricted; what is loaded or run from it can only raise the marking of
-// where it lands, never lower it. There is no second permission engine: a
-// marking compiles to what already exists - an object field fed with
-// confidential or restricted data must name the roles that read it, and restricted datasets never leave as CSV.
 const (
-	Integrator = "integrator" // connects, maps and runs integrations; never designs objects or pages
+	Integrator = "integrator"
 )
 
-// Markings in ascending order; "" is unmarked.
 var Markings = []string{"", "internal", "confidential", "restricted"}
 
 func MarkingRank(m string) int { return max(slices.Index(Markings, m), 0) }
 
-// HigherMarking is the stricter of the two.
 func HigherMarking(a, b string) string {
 	if MarkingRank(b) > MarkingRank(a) {
 		return b
@@ -390,11 +376,8 @@ func HigherMarking(a, b string) string {
 	return a
 }
 
-// Guarded says whether data of this marking may only reach fields with named readers.
 func Guarded(marking string) bool { return MarkingRank(marking) >= MarkingRank("confidential") }
 
-// UnguardedFields are the object fields a pipeline would write that every
-// role reads - what a guarded marking refuses to pour into.
 func UnguardedFields(info platform.EntityInfo, columns []string) []string {
 	var open []string
 	for _, f := range info.Fields {

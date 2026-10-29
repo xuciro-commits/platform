@@ -5,8 +5,6 @@ import (
 	pgx "github.com/jackc/pgx/v5"
 )
 
-// Each query observes both its caller's cancellation and the operation that
-// owns the fixed view, including callers using the legacy Background helpers.
 type stateReadQueries struct {
 	tx        pgx.Tx
 	operation context.Context

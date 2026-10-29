@@ -5,7 +5,6 @@ export type StaticImageConfig={url?:string;caption?:string;height?:number};
 const forbidden=/[\p{White_Space}\p{Cc}\\]/u;
 const bytes=(value:string)=>new TextEncoder().encode(value).length;
 
-/** A configured public URL, before browser URL repair. Empty URLs belong to the explicit placeholder. */
 export function validStaticImageURL(value:unknown):value is string {
  if(typeof value!=="string"||!value||bytes(value)>renderingLimits.runtime.contextViews.maxURLBytes||forbidden.test(value))return false;
  let decoded:string;try{decoded=decodeURIComponent(value);}catch{return false;}
@@ -16,7 +15,6 @@ export function validStaticImageURL(value:unknown):value is string {
  try{const url=new URL(value);return (url.protocol==="http:"||url.protocol==="https:")&&!!url.hostname&&!url.username&&!url.password;}catch{return false;}
 }
 
-/** Shared by the presenter and source compiler; it never loads or rewrites a URL. */
 export function validStaticImage(value:unknown):value is StaticImageConfig {
  if(!value||typeof value!=="object"||Array.isArray(value))return false;
  const config=value as Record<string,unknown>,limits=renderingLimits.runtime.contextViews;

@@ -47,14 +47,9 @@ export function schemaIssue(schema: PresentationSchema, value: unknown): string 
 type Configuration = Record<string, unknown>;
 const propertyNames = new Set(pageUIManifest.widgets.flatMap(widget=>[...Object.keys(widget.propsSchema.properties),...("configurationFields" in widget?widget.configurationFields:[])]));
 const portNames = new Set(pageUIManifest.widgets.flatMap(widget=>[...widget.inputPorts,...widget.outputPorts].map(port=>port.bindingField)).filter(field=>field!=='enabledWhen'));
-// Binding-owned section keys are checked by the typed data and action owners;
-// they never take part in the visual schema.
 const bindingKeys = new Set([...pageSafetyContract.section.bindingPaths,...pageSafetyContract.section.resourcePaths].map(path=>path.split(".")[0]!));
 const atPath = (record: unknown,path: string): unknown => path.split('.').reduce<unknown>((value,key)=>value&&typeof value==='object'?(value as Configuration)[key]:undefined,record);
 
-/** All authoring modes meet the legacy flat Section here. Only properties
- * owned by the shared manifest are projected; model/action validation stays in
- * the existing page owner and never copies or reinterprets a business model. */
 export function widgetDeclarationIssues(value: Configuration): Api.FieldIssue[] {
   if (value.sections!==undefined&&!Array.isArray(value.sections))return [{path:["sections"],code:"schema",message:t("Expected an array.")}];
   if (!Array.isArray(value.sections)) return [];
@@ -75,8 +70,6 @@ export function widgetDeclarationIssues(value: Configuration): Api.FieldIssue[] 
     }
     const properties: Configuration={};
     for(const [key,item] of Object.entries(record))if(item!==undefined&&propertyNames.has(key))properties[key]=item;
-    // Typed bindings are checked by their data/action owners. The Web schema
-    // checks only the visual properties actually declared by this component.
     for(const key of Object.keys(properties))if(!Object.hasOwn(widget.propsSchema.properties,key)){
      if(("configurationFields"in widget&&(widget.configurationFields as readonly string[]).includes(key))||bindingKeys.has(key))delete properties[key];
     }
@@ -112,8 +105,6 @@ export function widgetDeclarationIssues(value: Configuration): Api.FieldIssue[] 
   });
 }
 
-/** Rendering and import use the author's contract before mounting readers or
- * effect handlers. The input is retained; validation never edits a draft. */
 export function pagePresentationIssues(page:{sections?:unknown[];document?:{formatVersion:number;uiProfile:string;nodes?:PageUI.PageDocument["nodes"];root?:string}}):Api.FieldIssue[] {
  if(page.sections!==undefined&&!Array.isArray(page.sections))return [{path:["sections"],code:"schema",message:t("Expected an array.")}];
  const sections=page.sections??[],document=page.document;
@@ -138,9 +129,6 @@ export function pagePresentationIssues(page:{sections?:unknown[];document?:{form
  return issues;
 }
 
-/** Translate only declaration text paths named by the Web presentation owner.
- * The host already resolved owner conflicts and tenant overrides; values and
- * identifiers outside those paths remain unchanged. */
 export function presentPage<T extends {presentationWords?:Record<string,string>;sections?:unknown[];document?:{nodes:Record<string,unknown>}}>(page:T):T {
  const words=page.presentationWords;
  if(!words)return page;
@@ -163,7 +151,6 @@ export function presentPage<T extends {presentationWords?:Record<string,string>;
  return copy;
 }
 
-/** Source, import and visual authoring validate the same page in one pass. */
 export function pageAuthoringIssues(value:Record<string,unknown>):Api.FieldIssue[]{
  if(value.format===3){
   const spec=value.widgetSpec as {format?:string;body?:{sections?:unknown[];document?:unknown}}|undefined;

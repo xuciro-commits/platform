@@ -12,29 +12,16 @@ import (
 	"platformserver/platform"
 )
 
-// Languages. The host translates the declarations it serves —
-// apps, entity types, fields, states, transitions, actions, settings, flows
-// and agents — into the language of the request, from the app's dictionary
-// and then the platform's. Records, history and the journal are never
-// translated: they are what people and apps wrote.
-
 //go:embed i18n
 var platformFiles embed.FS
 
-// PlatformLanguages translate the platform apps' titles and descriptions.
 var PlatformLanguages = platform.LoadLanguages(platformFiles, "i18n")
 
-// declarationReads are named reads that serve declarations, not records;
-// messageReads serve texts apps wrote for people (notifications, tasks,
-// requests), which read in the member's language through Say.
 var (
 	declarationReads = map[string]bool{"settings": true, "flows": true, "agents": true}
 	messageReads     = map[string]bool{"notifications": true, "inbox": true, "requests": true, "timeline": true}
 )
 
-// Language is the language a member reads in a request: their own choice,
-// else the first of the request's Accept-Language the tenant has a dictionary
-// for, else the tenant's default; "" is English, the source.
 func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if m.Language != "" {
 		return m.Language
@@ -48,8 +35,6 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	return ""
 }
 
-// asked is the first language of Accept-Language the tenant speaks, and
-// whether the request named one at all (English included).
 func (t *Tenant) asked(r *http.Request) (string, bool) {
 	header := r.Header.Get("Accept-Language")
 	if header == "" {
@@ -80,8 +65,6 @@ func (t *Tenant) asked(r *http.Request) (string, bool) {
 	return "", false
 }
 
-// canonical names Chinese by its script as the dictionaries do: zh, zh-Hans
-// and zh-SG are zh-CN; zh-Hant, zh-HK and zh-MO are zh-TW.
 func canonical(tag string) string {
 	lower := strings.ToLower(tag)
 	if lower != "zh" && !strings.HasPrefix(lower, "zh-") {
@@ -95,8 +78,6 @@ func canonical(tag string) string {
 	return "zh-CN"
 }
 
-// Texts are every declaration text of an app, as the host serves them: what a
-// dictionary must translate for the app to read in another language.
 func (t *Tenant) Texts(app string) []string {
 	a := t.app(app)
 	if a == nil {
@@ -113,7 +94,7 @@ func (t *Tenant) Texts(app string) []string {
 	for _, a := range m.Actions.All() {
 		if a.Approval != nil {
 			for _, l := range a.Approval.Levels {
-				parts = append(parts, map[string]any{"title": l.Title}) // a level's title reads in the approver's task
+				parts = append(parts, map[string]any{"title": l.Title})
 			}
 		}
 	}
@@ -152,9 +133,6 @@ func (t *Tenant) Texts(app string) []string {
 	return out
 }
 
-// Untranslated are the app's declaration texts a language cannot say: no
-// entry, and no pattern whose every value it can say. Apps' tests require
-// none for the languages they ship.
 func (t *Tenant) Untranslated(app, lang string) []string {
 	out := []string{}
 	for _, s := range t.Texts(app) {
@@ -165,9 +143,6 @@ func (t *Tenant) Untranslated(app, lang string) []string {
 	return out
 }
 
-// meaning describes an app's entity types as their declarations explain them
-// what each type is, its other names, and what its fields and
-// states hold. Only what is declared is said; "" when nothing is.
 func (t *Tenant) meaning(app string) string {
 	var b strings.Builder
 	for _, et := range t.records.SortedTypes() {
@@ -217,9 +192,6 @@ func (t *Tenant) meaning(app string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// names tells whether q names an entity type — by its type, title, plural or
-// synonyms, in English or any language the tenant has a dictionary for — and
-// what of q is left to search for within it.
 func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
 	lower := " " + strings.ToLower(strings.Join(strings.Fields(q), " ")) + " "
 	candidates := []string{info.Type, info.Title, info.Plural}
@@ -233,14 +205,14 @@ func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
 		}
 	}
 	candidates = append(candidates, t.termsFor(info.Type)...)
-	slices.SortFunc(candidates, func(a, b string) int { return len(b) - len(a) }) // the longest name first
+	slices.SortFunc(candidates, func(a, b string) int { return len(b) - len(a) })
 	for _, c := range candidates {
 		c = strings.ToLower(strings.TrimSpace(c))
 		if c == "" {
 			continue
 		}
-		wide := c[0] >= 0x80                        // CJK text has no spaces between words
-		for _, form := range []string{c + "s", c} { // an English plural names the type too
+		wide := c[0] >= 0x80
+		for _, form := range []string{c + "s", c} {
 			if i := strings.Index(lower, " "+form+" "); i >= 0 && !wide {
 				return strings.TrimSpace(lower[:i] + " " + lower[i+len(form)+2:]), true
 			}
@@ -252,8 +224,6 @@ func (t *Tenant) names(info platform.EntityInfo, q string) (string, bool) {
 	return q, false
 }
 
-// termsFor are the tenant's glossary terms and synonyms that refer to a
-// declaration; the glossary layers names on top, never changes it.
 func (t *Tenant) termsFor(declaration string) []string {
 	if t.knowledge == nil {
 		return nil
@@ -261,8 +231,6 @@ func (t *Tenant) termsFor(declaration string) []string {
 	return t.knowledge.TermsFor(declaration)
 }
 
-// declares tells whether a name is one of the tenant's declarations: an entity
-// type, one of its fields as <type>.<field>, or an action.
 func (t *Tenant) declares(name string) bool {
 	for _, et := range t.records.SortedTypes() {
 		if et.Info().Type == name {
@@ -282,7 +250,6 @@ func (t *Tenant) declares(name string) bool {
 	return false
 }
 
-// glossary is the tenant's terms an app's agents read, for their prompt.
 func (t *Tenant) glossary(app string) string {
 	if t.knowledge == nil {
 		return ""
@@ -301,6 +268,4 @@ func (t *Tenant) glossary(app string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// Say is the translation of s into lang for the apps' servers (apps/*/server),
-// which only know the Tenant; the dictionaries belong to the translator.
 func (t *Tenant) Say(lang, s string) string { return t.i18n.Say(lang, s) }

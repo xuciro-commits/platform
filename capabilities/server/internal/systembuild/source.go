@@ -1,5 +1,3 @@
-// Package systembuild retains immutable platform source and artifact identities
-// for static supervision, original result reconciliation and export.
 package systembuild
 
 import (
@@ -16,8 +14,6 @@ import (
 	"platformserver/platform"
 )
 
-// A source has its manifest beside a files/ tree. The containing directory is
-// named by the manifest digest and renamed into place only after it is whole.
 type Source struct {
 	Root   string                               `json:"-"`
 	Digest string                               `json:"digest"`
@@ -71,7 +67,6 @@ func sourceManifest(root string, copyTo string) (map[string]platform.SystemSourc
 }
 
 func sourceDigest(files map[string]platform.SystemSourceFile) string {
-	// Editable is a current gate projection, not part of source content.
 	manifest := map[string]string{}
 	for path, file := range files {
 		manifest[path] = fmt.Sprintf("%s %o", file.Digest, file.Mode)

@@ -23,8 +23,6 @@ import (
 	"platformserver/platform"
 )
 
-// Both compilation and execution use the original effect outbox. They are
-// internal, owned computations: no endpoint configuration or external webhook.
 type operationBinding struct {
 	Definition  platform.Operation               `json:"definition"`
 	Call        platform.OperationCall           `json:"call"`
@@ -462,8 +460,6 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 				out.Detail = err.Error()
 				return out
 			}
-			// Reading a file is outside the submission lock. Recheck the live
-			// grants and cancellation before disclosing its bytes to a guest.
 			t.mu.Lock()
 			latest, authorised := t.Member(b.Member)
 			authorised = authorised && t.operationAuthorization(latest, x.App, b, now).Allow && t.operationCurrent(x.ID, x.Generation)
@@ -530,10 +526,6 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 			}
 		}
 		if err == nil {
-			// Inline while it fits; above that, the operation's declared
-			// per-call channel seals the bytes and the result references them.
-			// A result over every budget is refused, never
-			// trimmed.
 			answer, staged, stageErr := t.staged.Output(op, x.ID, output)
 			err = stageErr
 			if stageErr == nil {

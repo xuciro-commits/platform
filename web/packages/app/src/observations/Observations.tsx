@@ -3,7 +3,6 @@ import { apiErrorMessage, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Chart, DataTable, DateTimeInput, Disclosure, Input, Notice, PageHeader, Panel, PropertyList, RecordLookup, Select, t, useUnsavedChanges, useWorkspace, formatStamp} from "@platform/ui";
 import { assetKey, useHost, useProvidedCapabilities, useReadQuery } from "../index";
 
-/** Sources remain member-scoped; the record is checked again by the read owner. */
 export function RecordObservations({ type, id }: { type: string; id: string }) {
   const query = useReadQuery<Api.ObservationInfo[]>("/v1/observations");
   const { open } = useWorkspace();

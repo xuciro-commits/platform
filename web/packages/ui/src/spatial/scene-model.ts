@@ -19,7 +19,6 @@ export function validSceneConfig(c:SceneConfig):boolean{
   drives.add(drive);return true;
  });
 }
-/** Numeric original fields only. A sample must actually reference the selected asset. */
 export function sceneMappingValue(mapping:SceneMapping,asset:SceneInput,sample?:SceneInput,sampleAssetField?:string){
  let input=asset;
  if(mapping.source==="sample"){

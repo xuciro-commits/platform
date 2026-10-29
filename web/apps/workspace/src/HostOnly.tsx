@@ -1,8 +1,3 @@
-// The workspace for a subject who administers the host but is a member of no
-// tenant (WorkQueue #141: pure host administrator). `/v1/me` answers 401 for
-// them, so nothing tenant-bound can load; `/v1/host/me` answers, and that is
-// enough for the Host Console, whose every call goes to `/v1/host/*`. The
-// shell carries only that application: no portal, no records, no decisions.
 import { HostContext, type AppUI, type Host, type Me } from "@platform/app";
 import type { EdgeClient } from "@platform/kernel";
 import { Button, Workspace, language, notify, t } from "@platform/ui";
@@ -10,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 
 export type HostAdmin = { subject: string; tenants: string[] };
 
-/** A Host that reaches the console and refuses everything a tenant member could do. */
 function hostOnly(client: EdgeClient, admin: HostAdmin): Host {
   const me: Me = { tenantId: "", principalId: admin.subject, profile: { id: admin.subject, tenant: "", roles: {} }, apps: [], tenants: admin.tenants,
     language: language(), languages: [], currency: "", account: {} as Me["account"], tenant: {} as Me["tenant"] };

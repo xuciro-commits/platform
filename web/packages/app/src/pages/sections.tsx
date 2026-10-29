@@ -13,12 +13,6 @@ import {PageEmbeddingBoundary} from "../widgets/EmbeddedPage";
 import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentContextRead} from "../widgets/context-views";
 import {searchInputObjects} from "../widgets/search-input";
 import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "../runtime/decimal";
-// A composed page: sections laid out in order, each holding one
-// widget bound to what this tenant has. A table says which record is selected;
-// a detail and the actions read it. Every widget renders through the owner that
-// already has it — the kit's record list and record page, the action catalog,
-// the aggregate chart — so a code page and a composed page look and behave the
-// same, and nothing here interprets data of its own.
 import {
   Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord} from "@platform/ui";
 import { Component, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -39,22 +33,16 @@ import { pageVariableContract, usePageVariables, usePageSession } from "../runti
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
 
-/** What a section is bound to, and what the page has selected and narrowed to. */
 type Bound = import("../widgets/bindings").WidgetBindingContext;
 
-/** Composing: the section in hand, and choosing another by clicking it. */
 type Composing = { slotViews?:Readonly<Record<string,ReactNode>>; chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
   wrapLayout?: (id: string, node: PageUI.PageLayoutNode, body: ReactNode) => ReactNode };
 
 const objectOf = (page: Page, section: Section) => (!interfaceQueryForSection(page,section)?section.model?.type:undefined) || section.object?.name || page.object.name;
 const parentTypeOf = (page: Page, section: Section) => section.parentSelection
   ? page.selections?.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : page.object.name;
-// Named and unnamed selections use one typed slot model.
 const selectionKey = recordSlot;
 
-/** The reference that ties a section's object to the page's selected record:
- *  the declared relation when the section names one, else the
- *  first reference to the page's object. */
 const relatedField = (fields: { name: string; title: string; type: string; ref?: string; inverse?: string; readOnly?: boolean }[] | undefined, page: Page, section: Section) =>
   section.model ? fields?.find(f=>f.name===section.model?.relation?.field) : fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
@@ -95,12 +83,6 @@ export function SectionView(bound: Bound & Composing) {
   );
 }
 
-/**
- * A composed page as people use it: the sections in order, sharing what is
- * selected for each typed slot. Related lists follow their declared parent;
- * detail/actions read their own object's selection. `live` false is the builder's canvas — the same widgets over the
- * same records, with nothing that writes.
- */
 type ComposedPageProps = {
   modelDraft?:boolean;page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;pageCall?:import("../runtime/PageNavigation").PageCall;
   editingRoot?: string;
@@ -266,7 +248,6 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
         window={collectionID?applicationVariable(collectionID)?application.windows[applicationVariable(collectionID)!]:queries.windows[initialVariables[collectionID]?.source?.query??""]:undefined}
         onRecordOpen={(type,record)=>{
           if(!live||enabled===false||!currentContextRead(source.scope,session.snapshotScope())||overlay&&session.overlayEpoch(overlay)!==epoch)return;
-          // Retire the modal owner before opening the workspace's original record window.
           if(overlay){const frame=page.document?.overlays?.[overlay];if(!frame)return;writeState(frame.openVariable,false);}
           openRecord({type,id:record.id});
         }}
@@ -419,5 +400,4 @@ function OverlayBody({ children, session, sectionIDs, owner }: { children: React
   return <div className="@container grid min-w-0 grid-cols-1 gap-3">{children}</div>;
 }
 
-/** Whether a page is composed of sections rather than the list-detail shorthand. */
 export const isComposed = (page: Page) => page.layout === "composed";

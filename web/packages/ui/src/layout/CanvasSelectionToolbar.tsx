@@ -6,7 +6,6 @@ import {t} from '../i18n';
 import type {CanvasRect} from './CanvasEditor';
 
 export type CanvasCommand=ContextCommand&{primary?:boolean};
-/** One attached, screen-sized strip. The caller supplies context-valid commands. */
 export function CanvasSelectionToolbar({label,icon,bounds,viewport,horizontal,canMove,canPrevious,canNext,onDrag,onMove,commands}: {
  label:string;icon?:ReactNode;bounds:CanvasRect;viewport?:CanvasRect;horizontal:boolean;canMove:boolean;canPrevious:boolean;canNext:boolean;
  onDrag:ComponentProps<typeof Button>['onPointerDown'];onMove:(delta:-1|1)=>void;commands:CanvasCommand[];

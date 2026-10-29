@@ -45,8 +45,6 @@ func (h hostView) BeginTxnCalls(c platform.Caller, at time.Time) (platform.TxnCa
 	return &txnCalls{decision: h.decision, caller: c, snapshot: h.decision.records.ForkRecords()}, nil
 }
 
-// CheckTxnCall resolves the actual synchronous owner, rather than accepting a
-// capability whose side happens to be labelled pure but only runs as a job.
 func (h hostView) CheckTxnCall(call platform.TxnCall) error {
 	if call.Ref.Check() != nil || call.Ref.Kind != platform.AssetQuery || call.Version < 0 || !slices.Contains([]string{"", "snapshot", "current"}, call.View) {
 		return fmt.Errorf("Transaction calls need a synchronous pure query with snapshot or current reads")

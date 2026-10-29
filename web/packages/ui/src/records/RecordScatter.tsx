@@ -4,7 +4,6 @@ import {Button} from "../primitives/button";
 import {t} from "../i18n";
 import type {EntityInfo,EntityRecord} from "./Records";
 
-/** Only the caller's authorized window is examined. Missing coordinates never become zero. */
 export function scatterPoints(records:EntityRecord[],info:EntityInfo,fields:Omit<RecordScatterOptions,"colorField"> & {colorField?:string},maxPoints=100) {
  const x=info.fields.find(f=>f.name===fields.xField),y=info.fields.find(f=>f.name===fields.yField),color=info.fields.find(f=>f.name===fields.colorField),label=info.fields.find(f=>f.name===fields.labelField);
  if(!x||!y||![x,y].every(f=>["integer","decimal"].includes(f.type))||!!fields.colorField&&(!color||!["text","choice"].includes(color.type))||fields.labelField!=="id"&&(!label||!["text","longtext","choice","reference"].includes(label.type))||!Number.isInteger(maxPoints)||maxPoints<1||maxPoints>100||records.length>maxPoints)return;
@@ -24,7 +23,6 @@ export function scatterPoints(records:EntityRecord[],info:EntityInfo,fields:Omit
  return {points,categories,missing,minX,maxX,minY,maxY,xTitle:x.title,yTitle:y.title};
 }
 
-/** Stable record IDs, rather than coordinates or display names, own selection. */
 export function RecordScatter({records,info,fields,selected,enabled=true,onSelect,maxPoints=100}:{records:EntityRecord[];info:EntityInfo;fields:Omit<RecordScatterOptions,"colorField"> & {colorField?:string};selected?:string;enabled?:boolean;onSelect?:(record:EntityRecord)=>void;maxPoints?:number}) {
  const [hover,setHover]=useState<string>(),model=scatterPoints(records,info,fields,maxPoints);
  if(!model)return <p role="alert">{t("Scatter fields, record identities or numeric values are unavailable or incompatible.")}</p>;

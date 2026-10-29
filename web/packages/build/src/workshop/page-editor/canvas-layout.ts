@@ -23,7 +23,6 @@ export function canvasUngroup(document:Document,id:string,sections:Section[]):Do
  const n=document.nodes[id];if(!n||n.kind==='widget'||n.kind==='loop'||n.slot||!parent(document,id))return;
  const next=ungroup(document,id);if(pageLayoutDiagnostics(next,sections).length)return;return next;
 }
-/** Remove one owned fragment; outside references remain visible draft diagnostics. */
 export function canvasRemove(document:Document,id:string):{document:Document;sections:Set<string>}|undefined {
  const n=document.nodes[id],p=parent(document,id)??document.unusedWidgets?.find(e=>e.node===id)?.parent;
  if(!n||!p||n.slot||id===document.root||Object.values(document.overlays??{}).some(o=>o.root===id))return;
@@ -45,8 +44,6 @@ function clean(d:Document){
  }}
  return repairTabs(d);
 }
-/** Source insert/into/swap/wrap semantics, applied to the original PageDocument.
- * Scoped fragments and declared slot roots never escape their existing owner. */
 export function canvasDrop(document:Document,id:string,target:CanvasDrop,sections:Section[]):Document|undefined {
  const node=document.nodes[id],from=parent(document,id);
  if(!node||!from||node.slot)return;
@@ -67,7 +64,6 @@ export function canvasDrop(document:Document,id:string,target:CanvasDrop,section
    detach();const group=layoutID('group'),horizontal=target.side==='left'||target.side==='right',before=target.side==='left'||target.side==='top';
    next.nodes[group]={kind:horizontal?'columns':'rows',size:structuredClone(other.size),children:before?[id,target.target]:[target.target,id]};
    const at=next.nodes[to]!.children!.indexOf(target.target);next.nodes[to]!.children![at]=group;
-   // The new group occupies the former target region; its children now have a new main axis.
    next.nodes[target.target]!.size=undefined;
    if(next.nodes[id]!.size?.weight!==undefined){const size={...next.nodes[id]!.size};delete size.weight;next.nodes[id]!.size=size;}
   }
@@ -82,7 +78,6 @@ export function canvasMove(document:Document,id:string,delta:-1|1,sections:Secti
  if(at<0||to<0||to>=children.length)return;
  return canvasDrop(document,id,{kind:'swap',target:children[to]!},sections);
 }
-/** Pixel resize preserves the measured adjacent pair and original size bounds. */
 export function canvasResize(document:Document,id:string,axis:'width'|'height',pixels:number,rects:Record<string,CanvasRect>):Record<string,PageUI.PageLayoutSize>|undefined {
  const n=document.nodes[id],p=parent(document,id);if(!n||!Number.isFinite(pixels))return;
  const min=axis==='width'?'minWidth':'minHeight',max=axis==='width'?'maxWidth':'maxHeight';
@@ -112,7 +107,6 @@ export function canvasResetSize(document:Document,id:string,axis:'width'|'height
  return result;
 }
 
-/** Wrap exactly the selected node; preserve its occupied region on the group. */
 export function canvasGroup(document:Document,id:string,kind:LayoutKind,sections:Section[]):{document:Document;id:string}|undefined {
  const n=document.nodes[id],p=parent(document,id);if(!n||!p||n.slot)return;
  const next=structuredClone(document),group=layoutID('group');
@@ -122,7 +116,6 @@ export function canvasGroup(document:Document,id:string,kind:LayoutKind,sections
  if(pageLayoutDiagnostics(converted,sections).length)return;
  return {document:converted,id:group};
 }
-/** Equal shares are an explicit layout command; historical sizing stays untouched. */
 export function canvasEqualize(document:Document,id:string,sections:Section[]):Document|undefined {
  const n=document.nodes[id];if(!n||!['rows','columns'].includes(n.kind)||!n.children?.length)return;
  const next=structuredClone(document);

@@ -5,14 +5,12 @@ import { t } from "../i18n";
 import { RecordList, type ListState, type RecordSource } from "./Records";
 import type { RecordEditPort } from "./EditableRecordGrid";
 
-/** Responsive list/detail task frame shared by code pages and builder preview. */
 export function RecordWorkspace({ title, description, source, type, listFields, selected, onSelect, detail, actions, notice,
   listToolbar, onListSave, listInlineEdit, listInitial, onOpenReference }: {
   onOpenReference?: (type: string, id: string) => void;
   title: string; description?: string; source: RecordSource; type: string; listFields?: string[];
   selected?: string; onSelect: (id?: string) => void; detail: (id: string) => ReactNode;
   actions?: ReactNode; notice?: ReactNode;
-  /** The list's own operations: import where the page permits, saving where the member is. */
   listToolbar?: ReactNode; onListSave?: (state: ListState) => void; listInlineEdit?: RecordEditPort; listInitial?: ListState;
 }) {
   return <>

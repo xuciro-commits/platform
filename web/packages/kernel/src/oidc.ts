@@ -1,7 +1,3 @@
-// Browser sign-in with an OpenID provider : the authorization
-// code flow with PKCE (RFC 7636) that public clients use. The provider proves who
-// the user is; the platform server verifies the access token and looks the user
-// up in the tenant's directory. Tokens live in sessionStorage (one tab, one user).
 export type OidcConfig = { issuer: string; clientId: string; redirectUri: string };
 export type OidcSession = { issuer: string; clientId: string; accessToken: string; refreshToken?: string; idToken?: string; expiresAt: number; email: string };
 
@@ -21,7 +17,6 @@ function clearSession() { sessionStorage.removeItem(SESSION); sessionStorage.rem
 const base64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const random = (n: number) => base64url(crypto.getRandomValues(new Uint8Array(n)));
 
-/** The S256 code challenge of a verifier. */
 export async function codeChallenge(verifier: string): Promise<string> {
   return base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
 }
@@ -46,7 +41,6 @@ async function token(config: OidcConfig, grant: Record<string, string>): Promise
   return response.ok ? store(config, await response.json() as TokenResponse) : null;
 }
 
-/** Leaves for the provider's sign-in page; the page comes back with a code. */
 export async function signIn(config: OidcConfig): Promise<never> {
   const { authorization_endpoint } = await discover(config.issuer);
   const verifier = random(32), state = random(16);
@@ -58,7 +52,6 @@ export async function signIn(config: OidcConfig): Promise<never> {
   return new Promise<never>(() => {});
 }
 
-/** Completes a sign-in when the page is the provider's redirect, else returns the stored, unexpired session. */
 export async function currentSession(config: OidcConfig): Promise<OidcSession | null> {
   const params = new URLSearchParams(location.search);
   const code = params.get("code");
@@ -74,7 +67,6 @@ export async function currentSession(config: OidcConfig): Promise<OidcSession | 
   clearSession(); return null;
 }
 
-/** Renews the access token shortly before it expires; signs in again when renewal is refused. */
 export function keepFresh(config: OidcConfig, session: OidcSession, renewed: (s: OidcSession) => void): () => void {
   let timer: ReturnType<typeof setTimeout>;
   const schedule = (s: OidcSession) => {
@@ -89,13 +81,10 @@ export function keepFresh(config: OidcConfig, session: OidcSession, renewed: (s:
   return () => clearTimeout(timer);
 }
 
-/** Ends the session here and at the provider. */
 export async function signOut(config: OidcConfig): Promise<void> {
   const stored = saved<OidcSession>(SESSION), session = sameProvider(config, stored) ? stored : null;
   if (!session) clearSession();
   const { end_session_endpoint } = await discover(config.issuer);
-  // Preserve the ID token if discovery fails, so a retry can still end the
-  // provider session instead of silently signing back into the rejected account.
   clearSession();
   if (!end_session_endpoint) return location.assign(config.redirectUri);
   const url = new URL(end_session_endpoint);

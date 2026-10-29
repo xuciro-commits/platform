@@ -146,8 +146,6 @@ func (d *stagedDecision) prepareBusinessRecord(c platform.Caller, entity any, at
 		}
 		record.VersionPins = append(record.VersionPins, platform.RecordVersionPin{Reference: field.Name, VersionField: binding.Version, Source: field.Ref + "/" + id, Version: raw, At: at})
 	}
-	// Removing a pinned reference is also a mutation, even though the empty
-	// value did not enter the ordinary reference-validation loop above.
 	for _, pin := range record.VersionPins {
 		field, ok := info.Field(pin.Reference)
 		if !ok || field.Ref+"/"+records.BusinessField(info, value, pin.Reference) != pin.Source {
@@ -163,8 +161,6 @@ func (d *stagedDecision) checkBusinessVersionPins() *kernel.Error {
 		return nil
 	}
 	pinned := map[string]bool{}
-	// Only versions already used before this decision freeze their contents.
-	// A new version, its children and its first consumer may be accepted together.
 	for _, et := range d.records.Parent().SortedTypes() {
 		for _, current := range et.Rows().All() {
 			for _, pin := range records.Header(current.Value).VersionPins {

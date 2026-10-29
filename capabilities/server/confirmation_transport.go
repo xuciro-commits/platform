@@ -240,7 +240,7 @@ func (h hostView) RetryConfirmationDelivery(c platform.Caller, run platform.Conf
 	}
 	p := run.Parties[index]
 	if p.Protocol != nil {
-		return nil // QueueConfirmation reuses this intent on the original provider.
+		return nil
 	}
 	id := p.Intent
 	if compensated {

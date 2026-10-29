@@ -8,7 +8,6 @@ import type {PdfDocument} from "./pdf-engine";
 
 export type PdfViewerProps=AttachmentPreviewProps&{page:string;onPage?:(page:string)=>void};
 
-/** True PDF pages from authenticated bytes, with an original caller-owned one-based page string. */
 export function PdfViewer({attachment,blob,label,scope,onDownload,page,onPage}:PdfViewerProps) {
  const identity=attachmentIdentity(attachment,scope),metadataError=attachmentBytesError(attachment,blob)??(mediaType(attachment.contentType)!=="application/pdf"||blob.type&&mediaType(blob.type)!=="application/pdf"?"PDF bytes are invalid or do not match the confirmed media type.":undefined);
  const [loaded,setLoaded]=useState<{identity:string;blob:Blob;document?:PdfDocument;error?:string}>(),canvas=useRef<HTMLCanvasElement>(null),[painted,setPainted]=useState<{document:PdfDocument;page:string;error?:string}>(),current=loaded?.identity===identity&&loaded.blob===blob?loaded:undefined,document=current?.document;
