@@ -48,6 +48,16 @@ func TestMCP(t *testing.T) {
 	if a.texts["x"] != "" {
 		t.Fatal("the MCP tool wrote business data before confirmation")
 	}
+	// The same key and content is the same proposal; the same key with other content is refused.
+	if _, body := rpc(`{"jsonrpc":"2.0","id":41,"method":"tools/call","params":{"name":"a_note","arguments":{"target":"x","idempotencyKey":"m1"}}}`); !strings.Contains(body, `"isError":false`) || !strings.Contains(body, `awaiting-confirmation`) {
+		t.Fatalf("retry: %s", body)
+	}
+	if _, body := rpc(`{"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"a_note","arguments":{"target":"x","text":"other","idempotencyKey":"m1"}}}`); !strings.Contains(body, `"isError":true`) {
+		t.Fatalf("a key reused with other content: %s", body)
+	}
+	if _, body := rpc(`{"jsonrpc":"2.0","id":43,"method":"tools/call","params":{"name":"a_note","arguments":{"target":"x","idempotencyKey":"m2","human":true,"onBehalf":"ana"}}}`); !strings.Contains(body, `"isError":false`) || a.texts["x"] != "" {
+		t.Fatalf("a forged human flag changed the outcome: %s", body)
+	}
 	id := "mcp-" + base64.RawURLEncoding.EncodeToString([]byte("bo:m1"))
 	decide(t, tn, "bo", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, id, map[string]any{}, time.Now().UTC())
 	if a.texts["x"] == "" {

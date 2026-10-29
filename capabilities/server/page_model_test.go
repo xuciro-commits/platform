@@ -1,12 +1,16 @@
 package platformserver
 
-import "platformserver/studio/build"
+import (
+	agentowner "platformserver/engine/agents"
+	"platformserver/studio/build"
+)
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,6 +85,35 @@ func TestPageSectionActionsSurviveSavedDraftAndPublishedReads(t *testing.T) {
 	decide(t, tn, "builder", build.ID, "build.page.edit", build.PageType, "PAGE", map[string]any{"title": "Reopened draft"}, at)
 	if saved := readDraft(); saved.Published != original {
 		t.Fatal("editing the draft rewrote its published bytes")
+	}
+}
+
+// Dynamic pages and model tools may read owner projections but never bind a
+// control-plane write, whatever the builder's own role could do directly.
+func TestDynamicDefinitionsCannotBindStaticControlActions(t *testing.T) {
+	at := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	tn := builderTenant(t, "static-control", agentowner.New("static-control"))
+	object := publishObject(t, tn, "builder", "OBJECT", map[string]any{"name": "staticbind", "title": "Static bind", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}}, at)
+	control := platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "build.object.publish"}
+	page := modelTestPage(object, []platform.PageDataBinding{{ID: "records", Kind: "records"}})
+	page.Name, page.Title = "controlbind", "Control bind"
+	page.ActionTriggers = []platform.PageActionTrigger{{ID: "page", Binding: "page", Actions: []platform.AssetRef{control}}}
+	decide(t, tn, "builder", build.ID, "build.page.create", build.PageType, "PAGE", modelDraftPayload(page), at)
+	if got := refuse(t, tn, "builder", build.ID, "build.page.publish", build.PageType, "PAGE", map[string]any{}, at); !strings.Contains(got, "cannot bind static control action") {
+		t.Fatalf("a published page bound a control-plane action: %s", got)
+	}
+	for _, definition := range tn.Definitions(memberOf(t, tn, "user")) {
+		if definition.Ref.Name == "controlbind" && definition.Ref.Kind == platform.AssetPage {
+			t.Fatalf("the refused page became discoverable: %+v", definition.Ref)
+		}
+	}
+	agent := map[string]any{"name": "controller", "title": "Controller", "description": "Review", "instructions": "Report Ready", "tools": []string{control.Name}, "cases": []build.AgentCase{{Name: "answer", Goal: "Give a result", Expect: "Ready"}}}
+	if got := refuse(t, tn, "builder", build.ID, "build.agent.create", build.AgentType, "AG", agent, at); !strings.Contains(got, "not an action of a published object") {
+		t.Fatalf("an agent bound a control-plane action as a tool: %s", got)
+	}
+	proposal := map[string]any{"owner": build.ID, "action": control.Name, "target": "OBJECT", "payload": map[string]any{}}
+	if got := refuse(t, tn, "builder", platform.AgentApp, platform.SchemaToolPropose, platform.RunType, "P1", proposal, at); got == "ok" || !strings.Contains(got, "cannot propose") {
+		t.Fatalf("a model tool proposed a control-plane action: %s", got)
 	}
 }
 

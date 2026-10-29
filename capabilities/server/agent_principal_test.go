@@ -43,6 +43,10 @@ func TestAgentPrincipalRevocation(t *testing.T) {
 	if !ok || stopped.State != "stopped" || !strings.Contains(stopped.Stopped, "no longer has access") || len(stopped.Citations) != 0 {
 		t.Errorf("revoked in-flight tool was applied: %+v", stopped)
 	}
+	// Nobody eligible is left to take it over: the run says so and creates no task.
+	if stopped.Handoff != "No eligible recipient is configured" || stopped.Task != "" {
+		t.Errorf("a stopped run without a recipient claimed a handoff: %+v", stopped)
+	}
 	if len(entries) != 1 || entries[0].Kind != "accepted-result" {
 		t.Fatalf("revocation did not accept exactly one result: %+v", entries)
 	}

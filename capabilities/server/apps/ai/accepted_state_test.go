@@ -243,3 +243,46 @@ func TestTrainingCandidateCapacityKeepsRecentEvidenceAndBoundsMetadata(t *testin
 		})
 	}
 }
+
+// A candidate keeps the data policy version it was derived under; withdrawing
+// any permission, changing the policy or revoking the candidate disqualifies it,
+// and only an independently reviewed candidate whose sources are still readable
+// is eligible.
+func TestTrainingQualificationRechecksPolicyAndReview(t *testing.T) {
+	at := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	policy := platform.AITrainingPolicy{ID: "p", Revision: 1, Enabled: true, TrainingAllowed: true, ProviderAllowed: true, RetainDays: 30}
+	candidate := platform.AITrainingCandidate{ID: "c", Policy: "p", PolicyVersion: 1, At: at.Add(-time.Hour), Approved: true, QualityEvidence: "reviewed",
+		Chosen: map[string]json.RawMessage{"reply": json.RawMessage(`"ok"`)}}
+	for _, test := range []struct {
+		name   string
+		policy func(*platform.AITrainingPolicy)
+		change func(*platform.AITrainingCandidate)
+		want   string
+	}{
+		{name: "qualified up to the source check", want: "Training source checks are unavailable"},
+		{name: "revoked", change: func(c *platform.AITrainingCandidate) { c.Revoked = true }, want: "Training use was revoked"},
+		{name: "policy changed", policy: func(p *platform.AITrainingPolicy) { p.Revision = 2 }, want: "The original data policy is missing or changed"},
+		{name: "policy disabled", policy: func(p *platform.AITrainingPolicy) { p.Enabled = false }, want: "The original data policy is missing or changed"},
+		{name: "no data-use permission", policy: func(p *platform.AITrainingPolicy) { p.TrainingAllowed = false }, want: "Training use is not permitted"},
+		{name: "provider terms", policy: func(p *platform.AITrainingPolicy) { p.ProviderAllowed = false }, want: "Provider terms do not permit training use"},
+		{name: "no allowed fields", change: func(c *platform.AITrainingCandidate) { c.Chosen = nil }, want: "No allowed accepted fields are available"},
+		{name: "retention elapsed", change: func(c *platform.AITrainingCandidate) { c.At = at.Add(-31 * 24 * time.Hour) }, want: "The training retention period expired"},
+		{name: "a schema-valid simulation is not quality proof", change: func(c *platform.AITrainingCandidate) { c.Approved = false }, want: "Independent quality review is required"},
+		{name: "approval without evidence", change: func(c *platform.AITrainingCandidate) { c.QualityEvidence = "" }, want: "Independent quality review is required"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			a := New("t")
+			p, c := policy, candidate
+			if test.policy != nil {
+				test.policy(&p)
+			}
+			if test.change != nil {
+				test.change(&c)
+			}
+			a.trainingPolicies = map[string]platform.AITrainingPolicy{"p": p}
+			if got := a.trainingProblem(platform.Member{ID: "ana"}, c, at, true); got != test.want {
+				t.Fatalf("got %q, want %q", got, test.want)
+			}
+		})
+	}
+}

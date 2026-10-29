@@ -45,6 +45,12 @@ func TestAITrainingDerivesFromConfirmedProposalAndRechecksQualification(t *testi
 			candidate = item
 		}
 	}
+	// Derivation is keyed by the accepted source: working the queue again adds nothing.
+	tenant.Work(at.Add(3*time.Second + time.Millisecond))
+	again, _ := tenant.Read(memberOf(t, tenant, "ana"), "ai-training")
+	if len(again.(platform.AITrainingReport).Candidates) != len(data.Candidates) {
+		t.Fatalf("a repeated event derived another candidate: %d then %d", len(data.Candidates), len(again.(platform.AITrainingReport).Candidates))
+	}
 	if candidate.ID == "" || candidate.Approved || len(candidate.Problems) == 0 {
 		t.Fatalf("a business acceptance was incorrectly considered quality proof: %+v", data)
 	}
@@ -66,6 +72,16 @@ func TestAITrainingDerivesFromConfirmedProposalAndRechecksQualification(t *testi
 	}
 	if json.Unmarshal([]byte(exported.JSONL), &row) != nil || row.Version != 1 || row.Format != "sft" || len(row.Accepted) != 1 {
 		t.Fatal("export is not the fixed SFT JSONL format", exported.JSONL)
+	}
+	// An export rechecks the reader's current access to the sources: without it
+	// nothing leaves, and the sample is eligible again once access returns.
+	rewriteMember(t, testConsoleOf(tenant), "ana", func(member *platform.Member) { delete(member.Roles, "desk") })
+	if withheld, refusal := owner.TrainingExport(caller, "sft", at.Add(6*time.Second)); refusal != nil || withheld.JSONL != "" {
+		t.Fatal("a revoked source grant still exported its sample", withheld, refusal)
+	}
+	rewriteMember(t, testConsoleOf(tenant), "ana", func(member *platform.Member) { member.Roles["desk"] = "clerk" })
+	if again, refusal := owner.TrainingExport(caller, "sft", at.Add(6*time.Second)); refusal != nil || again.JSONL == "" {
+		t.Fatal("restored access did not make the sample eligible again", again, refusal)
 	}
 	decide(t, tenant, "ana", ai.ID, "ai.training-candidate.revoke", "ai.training-candidate", candidate.ID, map[string]any{}, at.Add(6*time.Second))
 	exported, refusal = owner.TrainingExport(caller, "sft", at.Add(7*time.Second))

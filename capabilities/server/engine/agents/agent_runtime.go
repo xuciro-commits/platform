@@ -733,7 +733,9 @@ func (a *Agents) AgentDeclaration(id string) (platform.AgentCardDeclaration, boo
 // the original action with the human grants and retains only typed evidence.
 func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft platform.Draft, now time.Time) (platform.Draft, *kernel.Error) {
 	h := a.host
-	member := c.Member
+	// The proposal is bound to who it was drafted for: the person the run acts
+	// for, or the agent's own principal, never whoever later confirms it.
+	member := a.AgentPrincipal(run.Agent)
 	if run.OnBehalf != "" {
 		var ok bool
 		member, ok = h.Member(run.OnBehalf)
@@ -824,7 +826,8 @@ func (a *Agents) assignDraft(c platform.Caller, receipt *pb.ChangeRecord, run *p
 		return
 	}
 	key := fmt.Sprintf("agent:%s:%d:draft", run.ID, len(run.Steps))
-	run.Reviewers = c.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title, Ref: platform.RunType + "/" + run.ID, Key: key}, now, recipients...)
+	rc := a.reviewers(c, *run)
+	run.Reviewers = rc.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title, Ref: platform.RunType + "/" + run.ID, Key: key}, now, recipients...)
 	run.Reviewers = slices.DeleteFunc(run.Reviewers, func(id string) bool {
 		member, ok := a.host.Member(id)
 		return !ok || member.Agent || member.Status == platform.MemberLeft || member.Status == platform.MemberSuspended
@@ -834,7 +837,7 @@ func (a *Agents) assignDraft(c platform.Caller, receipt *pb.ChangeRecord, run *p
 		a.host.Automation(c, platform.AgentApp).Put(receipt, *run)
 		return
 	}
-	if err := c.Assign(receipt, platform.Assignment{Title: "Confirm the agent's draft: " + title, Body: "Review the simulated proposal before applying the business action.", Ref: platform.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
+	if err := rc.Assign(receipt, platform.Assignment{Title: "Confirm the agent's draft: " + title, Body: "Review the simulated proposal before applying the business action.", Ref: platform.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
 		run.Handoff = err.Error()
 		return
 	}
@@ -1299,6 +1302,15 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 
 }
 
+// reviewers is the caller a run's recipients resolve under: AppRole entries an
+// agent declares name roles of the app that declared it, not of the agent app.
+func (a *Agents) reviewers(c platform.Caller, run platform.AgentRunRecord) platform.Caller {
+	if d := a.def(run.Agent); d != nil && run.OnBehalf == "" && d.App != "" {
+		return platform.RouteCaller(c, d.App)
+	}
+	return c
+}
+
 func (a *Agents) recipients(c platform.Caller, d *platform.CompiledAgent, run platform.AgentRunRecord) []platform.Recipient {
 	if run.OnBehalf != "" {
 		return []platform.Recipient{{Member: run.OnBehalf}}
@@ -1328,7 +1340,8 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *platform.Agent
 		return
 	}
 	key := "agent:" + run.ID + ":stopped"
-	people := c.Notify(platform.Notification{Title: "Take over from the agent: " + run.Title, Ref: platform.RunType + "/" + run.ID, Key: key}, now, recipients...)
+	rc := a.reviewers(c, *run)
+	people := rc.Notify(platform.Notification{Title: "Take over from the agent: " + run.Title, Ref: platform.RunType + "/" + run.ID, Key: key}, now, recipients...)
 	people = slices.DeleteFunc(people, func(id string) bool {
 		member, ok := a.host.Member(id)
 		return !ok || member.Agent || member.Status == platform.MemberLeft || member.Status == platform.MemberSuspended
@@ -1337,7 +1350,7 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *platform.Agent
 		run.Handoff = "No eligible recipient is configured"
 		return
 	}
-	if err := c.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".", Ref: platform.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
+	if err := rc.Assign(r, platform.Assignment{Title: "Take over from the agent: " + run.Title, Body: "The agent " + run.Agent + " stopped: " + why + ".", Ref: platform.RunType + "/" + run.ID, To: recipients, Key: key}); err != nil {
 		run.Handoff = err.Error()
 		return
 	}

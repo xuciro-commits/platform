@@ -330,6 +330,10 @@ func scriptedModel(t *testing.T) *httptest.Server {
 
 // agents run in the host as governed principals; each step the
 // model chose is journaled and replayed without calling it.
+func TestAgents(t *testing.T) {
+	testAgents(t, true)
+}
+
 func testAgents(t *testing.T, accepted bool) {
 	model := scriptedModel(t)
 	var journal []Entry
@@ -437,7 +441,7 @@ func testAgents(t *testing.T, accepted bool) {
 	// For bo, a viewer who may not answer: the agent may not either (D2).
 	expect("a viewer starts one", start("bo", "R2", "Answer ticket T2: wifi", "desk.ticket/T2"), "ok")
 	think(4)
-	expect("R2", run("R2").Steps[1].Outcome[:25]+" "+ticket("T2").Status, "refused: bo may not do th open")
+	expect("R2", run("R2").Steps[1].Outcome[:25]+" "+ticket("T2").Status, "refused: ERROR_CODE_POLIC open")
 	// An agent of an app the member has no role in cannot be asked.
 	expect("a stranger", do("bo", platform.AgentApp, platform.SchemaRunStart, platform.RunType, "R9", map[string]string{"agent": "desk.nope", "goal": "x"}), "ERROR_CODE_POLICY_DENIED")
 
@@ -465,12 +469,35 @@ func testAgents(t *testing.T, accepted bool) {
 	expect("budget", run("R5").State+" "+run("R5").Stopped, "stopped over its budget (4 steps, 480 tokens)")
 	inbox, _ = tn.Read(member("ana"), "inbox")
 	expect("takeover", fmt.Sprint(slices.ContainsFunc(inbox.([]work.WorkTask), func(w work.WorkTask) bool { return w.Title == "Take over from the agent: loop" })), "true")
+	// Handing the goal back is one task however often the host looks at the
+	// stopped run again, and a late answer to it neither resumes the run nor
+	// executes the proposal it dropped.
+	takeovers := func() []work.WorkTask {
+		inbox, _ := tn.Read(member("ana"), "inbox")
+		return slices.DeleteFunc(slices.Clone(inbox.([]work.WorkTask)), func(w work.WorkTask) bool { return w.Title != "Take over from the agent: loop" })
+	}
+	stoppedAt := run("R5")
+	think(3)
+	if got := takeovers(); len(got) != 1 || run("R5").Revision != stoppedAt.Revision || run("R5").Task != stoppedAt.Task {
+		t.Fatalf("a stopped run handed over again: %d tasks, %+v", len(got), run("R5"))
+	}
+	expect("late answer", do("ana", work.ID, "work.task.complete", work.TaskType, takeovers()[0].ID, map[string]string{}), "ok")
+	think(3)
+	if after := run("R5"); after.State != "stopped" || after.StepsUsed != stoppedAt.StepsUsed || len(after.Steps) != len(stoppedAt.Steps) || len(after.Draft) != 0 {
+		t.Fatalf("a late answer resumed a stopped run: %+v", after)
+	}
 
 	// In a flow: the agent drafts, the flow goes on with its answer; a model
 	// that keeps failing stops the run and the flow takes its fault path.
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T5", map[string]string{"subject": "auto wifi"})
 	think(6)
 	x, _ := platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "desk.handle:T5")
+	// The flow's agent only drafts: the ticket stays open and the flow waits
+	// until a clerk confirms the proposal, then goes on with the answer.
+	expect("drafted", x.State+" "+ticket("T5").Status+" "+run("desk.handle:T5:1").State, "waiting open waiting")
+	expect("confirmed", do("ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "desk.handle:T5:1", map[string]any{}), "ok")
+	think(6)
+	x, _ = platform.Get[automation.FlowInstance](tn.automation(automation.ID, false), "desk.handle:T5")
 	expect("flow", x.State+" "+ticket("T5").Status+" "+x.Answer[:7], "done answered after 2")
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T6", map[string]string{"subject": "auto fail"})
 	think(6)
@@ -511,8 +538,8 @@ func testAgents(t *testing.T, accepted bool) {
 	for _, x := range ev.Cases {
 		verdicts = append(verdicts, x.Run+" "+x.Signal+" "+x.Verdict)
 	}
-	expect("report", ev.State+" "+strings.Join(verdicts, ", ")+fmt.Sprint(" ", ev.Score, " ", ticket("T4").Revision == before), "done R6 rejected repeats, R1 changed differs 0 true")
-	expect("reference", ev.Cases[1].Reference+" / "+ev.Cases[1].Candidate, `desk.ticket.answer T1 {"reply":"Hello, it works again"};  / desk.ticket.answer T1 {"reply":"Hello"}; `)
+	expect("report", ev.State+" "+strings.Join(verdicts, ", ")+fmt.Sprint(" ", ev.Score, " ", ticket("T4").Revision == before), "done desk.handle:T5:1 confirmed agrees, R6 rejected repeats, R1 changed differs 0.3333333333333333 true")
+	expect("reference", ev.Cases[2].Reference+" / "+ev.Cases[2].Candidate, `desk.ticket.answer T1 {"reply":"Hello, it works again"};  / desk.ticket.answer T1 {"reply":"Hello"}; `)
 
 	// The declared cases, three runs each, dry: one passes every time, one never.
 	expect("suite", do("ana", platform.AgentApp, platform.SchemaEvalStart, platform.EvaluationType, "E3", map[string]any{"agent": "desk.triage", "model": "lm/scripted", "suite": true}), "ok")
@@ -529,8 +556,11 @@ func testAgents(t *testing.T, accepted bool) {
 	// A flow that compensates undoes what its agent did: a signal on the run.
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T8", map[string]string{"subject": "auto undo"})
 	think(6)
+	expect("T8 confirmed", do("ana", platform.AgentApp, platform.SchemaRunConfirm, platform.RunType, "desk.handle:T8:1", map[string]any{}), "ok")
+	think(6)
 	runs, _, _ := platform.Find[platform.AgentRunRecord](tn.automation(platform.AgentApp, false), platform.Query{Domain: json.RawMessage(`[["flow","=","desk.handle:T8"]]`)})
-	expect("undone", runs[0].Signals[0].Kind+" "+runs[0].Signals[0].Detail, "undone the flow asked to undo")
+	last := runs[0].Signals[len(runs[0].Signals)-1]
+	expect("undone", last.Kind+" "+last.Detail, "undone the flow asked to undo")
 
 	// Usage is metered as the agent's.
 	expect("metered", fmt.Sprint(tn.ai.Spent("agent:desk.triage", now) > 0), "true")
