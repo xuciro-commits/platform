@@ -164,20 +164,34 @@ func (t *Tenant) ownedRelations(store *records.Store, c platform.Caller, entity 
 		if !ownedRelationSchema(et.Info()) {
 			continue
 		}
-		for _, row := range et.Rows().All() {
-			image := relationImage(row)
-			if image.Archived || image.Migration || entity != "" && image.Parent != entity && image.Child != entity {
-				continue
-			}
+		filter := platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("boolean", "migration"), platform.ExprLiteralValue("boolean", false)}}
+		if entity != "" {
+			filter = platform.Expr{Op: "and", Kind: "boolean", Args: []platform.Expr{filter, {Op: "or", Kind: "boolean", Args: []platform.Expr{
+				{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "parent"), platform.ExprLiteralValue("text", entity)}},
+				{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", "child"), platform.ExprLiteralValue("text", entity)}},
+			}}}}
+		}
+		set := platform.ObjectSet{Object: et.Info().Type, Filter: &filter}
+		reader := &setRead{t: t, store: store, c: c, now: at, types: map[string]*typeRead{et.Info().Type: {entity: et, view: et}}}
+		node, err := reader.prepare(set, false, nil)
+		if err != nil {
+			continue
+		}
+		compiled, err := reader.compile(node)
+		if err != nil {
+			continue
+		}
+		store.VisitPlan(et, compiled.plans[0], nil, func(value reflect.Value) {
+			image := relationImage(&records.Row{Value: value})
 			if !t.readableIn(store, c.Member, image.Parent, at) || !t.readableIn(store, c.Member, image.Child, at) {
-				continue
+				return
 			}
 			by, at := image.Created.By, image.Created.At
 			if len(image.Legacy) > 0 {
 				by, at = image.Legacy[0].By, image.Legacy[0].At
 			}
 			out = append(out, platform.RelationLink{From: image.Parent, To: image.Child, By: by, At: at})
-		}
+		})
 	}
 	slices.SortFunc(out, func(a, b platform.RelationLink) int {
 		if order := strings.Compare(a.From, b.From); order != 0 {
