@@ -4194,6 +4194,5 @@ register("zh-CN", {
   "{count} assets retired on the branch.": "已在分支上退役 {count} 项资产。",
   "The retirement was refused.": "退役被拒绝。",
   "Compile after the branch is merged.": "合并分支后再编译。",
-  "Function tests run against main. The server cannot stage an AI function from a branch.": "函数测试针对主线运行。服务器无法从分支暂存 AI 函数。",
   "This test runs against the merged definitions of the selected branch, in a staged world. Nothing is saved to main.": "此测试在暂存世界中针对所选分支合并后的定义运行，不会保存到主线。",
 });

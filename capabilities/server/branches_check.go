@@ -289,7 +289,7 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions 
 	}
 	graph.Passed, graph.Candidate = true, candidate.ID
 	graph.Added, graph.Removed, graph.Changed = preview.Added, preview.Removed, preview.Changed
-	return graph, &stagedCandidate{candidate: candidate, reader: view}
+	return graph, &stagedCandidate{candidate: candidate, reader: view, drafts: drafts}
 }
 
 type branchEvaluation struct {

@@ -258,7 +258,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     catch { setError(t("Use a valid fixed time and JSON inputs for every step.")); return; }
     lock.current = true; setBusy(true);
     try {
-      if (branchId && kind !== "function") {
+      if (branchId) {
         const staged = await client.call<Api.BranchChecks>("POST", branchPath(branchId, "/checks"), { simulation: plan } satisfies Api.BranchCheckRequest);
         if (!staged.ok) setError(apiErrorMessage(staged.body) ?? t("The candidate test could not be run."));
         else if (staged.body.simulation) setResult(staged.body.simulation);
@@ -338,7 +338,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   return <div className="grid gap-3">
     {!embedded && <PageHeader title={t("Test a candidate")} help={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
       actions={<Button disabled={!id || blocked || !!branchId} title={branchId ? branchRefusal("publish") : undefined} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}
-    {branchId && <Notice tone="info" message={kind === "function" ? t("Function tests run against main. The server cannot stage an AI function from a branch.") : t("This test runs against the merged definitions of the selected branch, in a staged world. Nothing is saved to main.")} />}
+    {branchId && <Notice tone="info" message={t("This test runs against the merged definitions of the selected branch, in a staged world. Nothing is saved to main.")} />}
     {!embedded && !planId && <SystemDefinitionReferences type={evaluationSet ? "build.evaluation-set" : "build.testplan"} />}
     {kind==="app" && <PageHeader title={t("Draft trial")} help={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
     {!!planRoots.length && <ContextHelp title={t("Test plan scope")}>{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</ContextHelp>}

@@ -27,6 +27,7 @@ import (
 type stagedCandidate struct {
 	candidate platform.ReleaseCandidate
 	reader    *Tenant
+	drafts    []build.JointDraftRef
 }
 
 func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
@@ -146,7 +147,11 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 	var candidate platform.ReleaseCandidate
 	var err error
 	diagnostic := ""
+	reader := t
 	if staged != nil {
+		reader = staged.reader
+	}
+	if staged != nil && request.FunctionID == "" {
 		candidate = staged.candidate
 	} else if request.CandidateID != "" {
 		candidate, err = t.releases.Candidate(request.CandidateID)
@@ -167,8 +172,15 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 				drafts, err = owner.ApplicationDrafts(request.ApplicationID)
 			}
 		}
+		if staged != nil {
+			if root := (build.JointDraftRef{Kind: kind, ID: id}); !slices.Contains(staged.drafts, root) {
+				drafts = append(slices.Clone(staged.drafts), root)
+			} else {
+				drafts = staged.drafts
+			}
+		}
 		if err == nil {
-			review, prepared, problem := t.previewReleaseLocked(drafts, builder)
+			review, prepared, problem := reader.previewReleaseLocked(drafts, builder)
 			candidate, err, diagnostic = prepared, problem, review.Diagnostic
 		}
 	}
@@ -196,10 +208,6 @@ func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.C
 	}
 	functionName := ""
 	if request.FunctionID != "" {
-		reader := t
-		if staged != nil {
-			reader = staged.reader
-		}
 		selected, _ := platform.Get[build.Function](reader.automation(build.ID, false), request.FunctionID)
 		functionName = selected.Name
 	}
