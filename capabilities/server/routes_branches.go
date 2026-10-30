@@ -77,15 +77,23 @@ func (h *Host) routesBranches(rt *routes) {
 		out, refusal := t.SaveBranchResource(m, r.PathValue("id"), r.PathValue("type"), r.PathValue("draft"), request, h.Now())
 		return failed(out, refusal)
 	})
-	branch(transport.Route{Pattern: "POST /v1/branches/{id}/checks", Summary: "Dry-run merge checks: three-way conflicts, then each merged resource through its own create/edit/archive action in a private decision", Body: BranchResolveRequest{}, Answer: BranchChecks{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
-		var request BranchResolveRequest
+	branch(transport.Route{Pattern: "POST /v1/branches/{id}/checks", Summary: "Dry-run staged check, recording nothing: three-way conflicts, then the merged resources applied in a staged world, the whole definition graph validated there, and optionally a candidate simulation", Body: BranchCheckRequest{}, Answer: BranchChecks{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
+		var request BranchCheckRequest
 		if failure := body(r, &request); failure != nil {
 			return nil, failure
 		}
 		out, refusal := t.BranchChecks(m, r.PathValue("id"), request, h.Now())
 		return failed(out, refusal)
 	})
-	branch(transport.Route{Pattern: "POST /v1/branches/{id}/rebase", Summary: "Move the branch's base to current main, three-way merging every changed resource; unresolved conflicts answer 409 with the conflicts", Body: BranchResolveRequest{}, Answer: BranchDetail{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
+	branch(transport.Route{Pattern: "POST /v1/branches/{id}/recheck", Summary: "Run the staged check again against current main and record it on the branch (open or proposed); the answer carries the recorded check and whether main has moved since", Body: BranchCheckRequest{}, Answer: BranchDetail{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
+		var request BranchCheckRequest
+		if failure := body(r, &request); failure != nil {
+			return nil, failure
+		}
+		out, refusal := t.RecheckBranch(m, r.PathValue("id"), request, h.Now())
+		return failed(out, refusal)
+	})
+	branch(transport.Route{Pattern: "POST /v1/branches/{id}/rebase", Summary: "Move the branch's base to current main, three-way merging every changed resource, then record a staged check of the result; unresolved conflicts answer 409 with the conflicts", Body: BranchResolveRequest{}, Answer: BranchDetail{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
 		var request BranchResolveRequest
 		if failure := body(r, &request); failure != nil {
 			return nil, failure
@@ -96,7 +104,7 @@ func (h *Host) routesBranches(rt *routes) {
 		}
 		return failed(out, refusal)
 	})
-	branch(transport.Route{Pattern: "POST /v1/branches/{id}/proposal", Summary: "Propose the branch: merge checks run first; named reviewers must be builders", Body: BranchProposeRequest{}, Answer: BranchDetail{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
+	branch(transport.Route{Pattern: "POST /v1/branches/{id}/proposal", Summary: "Propose the branch: the staged check of the merged definition graph must pass and is recorded on the proposal; named reviewers must be builders", Body: BranchProposeRequest{}, Answer: BranchDetail{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
 		var request BranchProposeRequest
 		if failure := body(r, &request); failure != nil {
 			return nil, failure
@@ -116,7 +124,7 @@ func (h *Host) routesBranches(rt *routes) {
 		out, refusal := t.WithdrawBranch(m, r.PathValue("id"), h.Now())
 		return failed(out, refusal)
 	})
-	branch(transport.Route{Pattern: "POST /v1/branches/{id}/merge", Summary: "Merge an approved proposal: one accepted change per resource, then one sealed release candidate over the merged drafts (not activated); a failing release check or simulation rolls the drafts back", Body: BranchMergeRequest{}, Answer: BranchMergeResult{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
+	branch(transport.Route{Pattern: "POST /v1/branches/{id}/merge", Summary: "Merge an approved proposal whose last staged check passed against the current main base: one accepted result applies every resource and the merge record, then a sealed release candidate over the merged drafts is saved (not activated); a stale or failed check is refused and nothing is accepted", Body: BranchMergeRequest{}, Answer: BranchMergeResult{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
 		var request BranchMergeRequest
 		if failure := body(r, &request); failure != nil {
 			return nil, failure

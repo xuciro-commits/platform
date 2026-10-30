@@ -755,6 +755,23 @@ export type BranchChangeEntry = {
   spec?: unknown;
 };
 
+export type BranchCheck = {
+  at: string;
+  by: string;
+  base: string;
+  content: string;
+  passed: boolean;
+  conflicts: number;
+  resources: BranchResourceCheck[];
+  graph: BranchGraphCheck;
+  simulation?: BranchSimulationCheck;
+};
+
+export type BranchCheckRequest = {
+  resolutions?: BranchResolution[];
+  simulation?: CandidateSimulationRequest;
+};
+
 export type BranchChecks = {
   at: string;
   conflicts: BranchResourceDiff[];
@@ -762,6 +779,8 @@ export type BranchChecks = {
   approved: boolean;
   approval?: string;
   ready: boolean;
+  check: BranchCheck;
+  simulation?: CandidateSimulation;
 };
 
 export type BranchCreateRequest = {
@@ -782,6 +801,8 @@ export type BranchDetail = {
   changes: number;
   resources: BranchResourceStatus[];
   proposal?: BranchProposal;
+  check?: BranchCheck;
+  checkStale?: boolean;
   merge?: BranchMerge;
 };
 
@@ -790,11 +811,21 @@ export type BranchDiff = {
   conflicts: number;
 };
 
+export type BranchGraphCheck = {
+  passed: boolean;
+  messages: string[];
+  candidate?: string;
+  added?: AssetRef[];
+  removed?: AssetRef[];
+  changed?: AssetRef[];
+};
+
 export type BranchMerge = {
   by: string;
   at: string;
   candidate?: string;
   applied?: unknown;
+  base?: string;
 };
 
 export type BranchMergeRequest = {
@@ -805,6 +836,7 @@ export type BranchMergeRequest = {
 export type BranchMergeResult = {
   branch: BranchDetail;
   candidate?: string;
+  candidateError?: string;
   applied: BranchResourceCheck[];
   simulation?: CandidateSimulation;
 };
@@ -822,6 +854,7 @@ export type BranchProposeRequest = {
   reviewers?: string[];
   note?: string;
   resolutions?: BranchResolution[];
+  simulation?: CandidateSimulationRequest;
 };
 
 export type BranchResolution = {
@@ -894,6 +927,13 @@ export type BranchReviewRequest = {
 export type BranchSaveRequest = {
   op?: "create" | "update" | "delete";
   spec?: unknown;
+};
+
+export type BranchSimulationCheck = {
+  candidateId?: string;
+  passed?: boolean;
+  steps: number;
+  messages: string[];
 };
 
 export type Breaker = {

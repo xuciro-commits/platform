@@ -138,6 +138,10 @@ func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submiss
 }
 
 func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *platform.ObservationDecisionEvidence, source *preparedSourceClaim, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+	return t.submitAcceptedWith(a, m, s, now, automation, binding, schemaRefusal, observation, source, nil, input...)
+}
+
+func (t *Tenant) submitAcceptedWith(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *platform.ObservationDecisionEvidence, source *preparedSourceClaim, before func(*stagedDecision) *kernel.Error, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	if t.businessStopped() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
 	}
@@ -206,7 +210,12 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 	if schemaRefusal != nil {
 		refusal = schemaRefusal
 	} else {
-		record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
+		if before != nil {
+			refusal = before(draft)
+		}
+		if refusal == nil {
+			record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
+		}
 	}
 	if draft.failure != nil {
 		refusal = draft.failure

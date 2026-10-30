@@ -37,7 +37,22 @@ type Branch struct {
 	State       string          `json:"state" field:"readonly"`
 	Changes     []BranchChange  `json:"changes" type:"json" field:"readonly" title:"Change set"`
 	Proposal    *BranchProposal `json:"proposal,omitempty" type:"json" field:"readonly"`
+	Check       json.RawMessage `json:"check,omitempty" type:"json" field:"readonly" title:"Last staged check"`
 	Merge       *BranchMerge    `json:"merge,omitempty" type:"json" field:"readonly"`
+}
+
+type BranchCheckHeader struct {
+	Base    string `json:"base"`
+	Content string `json:"content"`
+	Passed  bool   `json:"passed"`
+}
+
+func (b Branch) Checked() (BranchCheckHeader, bool) {
+	var header BranchCheckHeader
+	if len(b.Check) == 0 || json.Unmarshal(b.Check, &header) != nil {
+		return header, false
+	}
+	return header, true
 }
 
 type BranchChange struct {
@@ -74,6 +89,7 @@ type BranchMerge struct {
 	At        time.Time       `json:"at"`
 	Candidate string          `json:"candidate,omitempty"`
 	Applied   json.RawMessage `json:"applied,omitempty"`
+	Base      string          `json:"base,omitempty"`
 }
 
 func BranchDraftType(typ string) bool {
@@ -131,6 +147,12 @@ func (b *Build) branchEntity() platform.Entity {
 				{Name: "save", Title: "Save into branch", Description: "Append a resource's saved spec to the change set.", From: []string{BranchOpen}, To: []string{BranchOpen}, Roles: builder, Capability: "branches",
 					Payload: []platform.Field{{Name: "type", Type: "string", Required: true, Description: "The resource draft type"}, {Name: "id", Type: "string", Required: true, Description: "The resource draft id"}, {Name: "op", Type: "string", Required: true, Choices: []string{"create", "update", "delete"}, Description: "What the branch does to the resource"}, {Name: "base", Type: "json", Description: "The main spec this change builds on; null when the resource is new"}, {Name: "spec", Type: "json", Description: "The full saved spec"}, {Name: "rebased", Type: "boolean", Description: "The base moved forward to a newer main"}},
 					Do:      saveBranchChange},
+				{Name: "check", Title: "Record check", Description: "Record the result of checking the merged definition graph in a staged world.", From: []string{BranchOpen}, To: []string{BranchOpen}, Roles: builder, Capability: "branches",
+					Payload: []platform.Field{{Name: "check", Type: "json", Required: true, Description: "The staged check result"}},
+					Do:      recordBranchCheck},
+				{Name: "recheck", Title: "Record proposal re-check", Description: "Record a fresh staged check of a proposed branch.", From: []string{BranchProposed}, To: []string{BranchProposed}, Roles: builder, Capability: "branches",
+					Payload: []platform.Field{{Name: "check", Type: "json", Required: true, Description: "The staged check result"}},
+					Do:      recordBranchCheck},
 				{Name: "propose", Title: "Propose", Description: "Ask reviewers to approve merging the branch.", From: []string{BranchOpen}, To: []string{BranchProposed}, Roles: builder, Capability: "branches",
 					Payload: []platform.Field{{Name: "reviewers", Type: "json", Description: "Builders who review"}, {Name: "note", Type: "string", Description: "What the reviewers should know"}, {Name: "checks", Type: "json", Description: "The merge checks at proposal time"}},
 					Do:      proposeBranch},
@@ -143,7 +165,7 @@ func (b *Build) branchEntity() platform.Entity {
 						return nil
 					}},
 				{Name: "merge", Title: "Merge", Description: "Record that the reviewed branch was merged into the drafts as one release.", From: []string{BranchProposed}, To: []string{BranchMerged}, Roles: builder, Capability: "branches",
-					Payload: []platform.Field{{Name: "candidate", Type: "string", Description: "The release candidate the merge produced"}, {Name: "applied", Type: "json", Description: "The resources the merge changed"}},
+					Payload: []platform.Field{{Name: "candidate", Type: "string", Description: "The release candidate the merge produces"}, {Name: "applied", Type: "json", Description: "The resources the merge changed"}, {Name: "base", Type: "string", Description: "The main base the merged graph was checked against"}},
 					Do:      mergeBranch},
 				{Name: "close", Title: "Close", Description: "Abandon the branch.", From: []string{BranchOpen, BranchProposed}, To: []string{BranchClosed}, Roles: builder, Capability: "branches", Payload: []platform.Field{}}}}}
 }
@@ -193,6 +215,20 @@ func saveBranchChange(c platform.Caller, record any, payload json.RawMessage, at
 	}
 	change.Seq, change.At, change.By = len(branch.Changes)+1, at.UTC(), c.ID
 	branch.Changes = append(branch.Changes, change)
+	branch.Check = nil
+	return nil
+}
+
+func recordBranchCheck(_ platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+	branch := record.(*Branch)
+	var p struct {
+		Check json.RawMessage `json:"check"`
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(payload, &p) != nil || json.Unmarshal(p.Check, &object) != nil || object == nil || len(p.Check) > BranchMaxChecks || len(branch.Changes) == 0 {
+		return branchInvalid("A check is one bounded JSON object on a branch with changes")
+	}
+	branch.Check = p.Check
 	return nil
 }
 
@@ -218,6 +254,10 @@ func proposeBranch(c platform.Caller, record any, payload json.RawMessage, at ti
 		reviewers = []string{}
 	}
 	branch.Proposal = &BranchProposal{By: c.ID, At: at.UTC(), Note: p.Note, Reviewers: reviewers, Reviews: []BranchReview{}, Checks: p.Checks}
+	branch.Check = p.Checks
+	if header, ok := branch.Checked(); !ok || !header.Passed {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A proposal needs a passed staged check")
+	}
 	return nil
 }
 
@@ -271,6 +311,7 @@ func mergeBranch(c platform.Caller, record any, payload json.RawMessage, at time
 	var p struct {
 		Candidate string          `json:"candidate"`
 		Applied   json.RawMessage `json:"applied"`
+		Base      string          `json:"base"`
 	}
 	if json.Unmarshal(payload, &p) != nil || len(p.Applied) > BranchMaxChecks {
 		return branchInvalid("A merge records its candidate and the resources it changed")
@@ -278,6 +319,9 @@ func mergeBranch(c platform.Caller, record any, payload json.RawMessage, at time
 	if err := branch.Approved(); err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
 	}
-	branch.Merge = &BranchMerge{By: c.ID, At: at.UTC(), Candidate: p.Candidate, Applied: p.Applied}
+	if header, ok := branch.Checked(); !ok || !header.Passed || header.Base == "" || header.Base != p.Base {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The merge needs a passed check against the main base it applies to")
+	}
+	branch.Merge = &BranchMerge{By: c.ID, At: at.UTC(), Candidate: p.Candidate, Applied: p.Applied, Base: p.Base}
 	return nil
 }

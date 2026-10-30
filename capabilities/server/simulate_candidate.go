@@ -24,7 +24,16 @@ import (
 	"platformserver/platform"
 )
 
+type stagedCandidate struct {
+	candidate platform.ReleaseCandidate
+	reader    *Tenant
+}
+
 func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest) (trialowner.CandidateSimulation, *kernel.Error) {
+	return t.simulateCandidate(builder, request, nil)
+}
+
+func (t *Tenant) simulateCandidate(builder platform.Member, request trialowner.CandidateSimulationRequest, staged *stagedCandidate) (trialowner.CandidateSimulation, *kernel.Error) {
 	var empty trialowner.CandidateSimulation
 	if err := t.admits(builder); err != nil {
 		return empty, err
@@ -32,6 +41,12 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.C
 	caller := platform.NewCaller(runtime{t}, builder, build.ID, false, false)
 	if err := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate/candidate", "read", []string{build.Builder}, true)); err != nil {
 		return empty, err
+	}
+	if staged != nil {
+		request.ObjectID, request.ProcessID, request.ApplicationID, request.Roots, request.CandidateID = "", "", "", nil, ""
+		if request.FunctionID == "" {
+			request.CandidateID = staged.candidate.ID
+		}
 	}
 	roots := 0
 	for _, root := range []string{request.ObjectID, request.ProcessID, request.FunctionID, request.ApplicationID, request.CandidateID} {
@@ -131,7 +146,9 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.C
 	var candidate platform.ReleaseCandidate
 	var err error
 	diagnostic := ""
-	if request.CandidateID != "" {
+	if staged != nil {
+		candidate = staged.candidate
+	} else if request.CandidateID != "" {
 		candidate, err = t.releases.Candidate(request.CandidateID)
 	} else {
 		if len(request.Roots) > 0 {
@@ -179,7 +196,11 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request trialowner.C
 	}
 	functionName := ""
 	if request.FunctionID != "" {
-		selected, _ := platform.Get[build.Function](t.automation(build.ID, false), request.FunctionID)
+		reader := t
+		if staged != nil {
+			reader = staged.reader
+		}
+		selected, _ := platform.Get[build.Function](reader.automation(build.ID, false), request.FunctionID)
 		functionName = selected.Name
 	}
 	if err == nil && diagnostic != "" {
