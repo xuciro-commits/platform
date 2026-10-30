@@ -174,10 +174,7 @@ func (d domainField) reader(view string) (rules.Type, func(reflect.Value) rules.
 					}
 					b = b.Elem()
 				}
-				if b.Bool() {
-					return rules.Value{Kind: "boolean", Status: "value", Data: json.RawMessage("true")}
-				}
-				return rules.Value{Kind: "boolean", Status: "value", Data: json.RawMessage("false")}
+				return rules.BoolValue(b.Bool())
 			}, nil
 		case "money":
 			return rules.Type{Kind: "money"}, func(v reflect.Value) rules.Value {

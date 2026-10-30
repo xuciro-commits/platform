@@ -49,6 +49,9 @@ func validateValue(v Value, at string) (any, error) {
 		return *v.frozenNumber, nil
 	}
 	if v.native != nil {
+		if f, ok := v.native.(float64); ok && canonicalKind(v.Kind) == "decimal" {
+			return decimalFloat(f), nil
+		}
 		return v.native, nil
 	}
 	if v.Status == "missing" || v.Status == "null" {
