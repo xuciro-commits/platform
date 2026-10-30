@@ -1,10 +1,11 @@
 import type {PageUI} from "@platform/app";
+import { useCurrentBranch } from "../branches/current";
+import { useDraftInventory } from "../branches/records";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useStudioApplication } from "../projects/use-studio-application";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
-import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
-  type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
+import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { ContextHelp, Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, RelationCanvas, Tag,
   t, type ColumnDef, type RelationEdge, type RelationNode, ContentTabs} from "@platform/ui";
 import type { Api } from "@platform/kernel";
@@ -27,13 +28,13 @@ export function ModelWorkbench({ initialObject, initialTab }: { initialObject?: 
 
 function ModelInventory({ initialObject, initialTab }: { initialObject?: string; initialTab?: string }) {
   const host = useHost();
-  const application = useApplicationScope();
+  const application = useApplicationScope(), { id: branch } = useCurrentBranch();
   const { application: project, installed: installedApplication } = useStudioApplication(application);
   const held = project?.resources?.filter(ref => ref.kind === "object").map(ref => ref.name);
   const { open } = useApplicationWorkspace();
-  const inventory = useRecordInventory<ObjectDraft>("build.object", 1000, !installedApplication);
-  const linkInventory=useRecordInventory<{id:string;name:string}>("build.linktype");
-  const propertyInventory=useRecordInventory<{id:string;name:string}>("build.propertytype");
+  const inventory = useDraftInventory<ObjectDraft>("build.object", 1000, !installedApplication);
+  const linkInventory=useDraftInventory<{id:string;name:string}>("build.linktype");
+  const propertyInventory=useDraftInventory<{id:string;name:string}>("build.propertytype");
   const model = useMemo(() => semanticModelView(host.definitions), [host.definitions]);
   const [search, setSearch] = useState("");
   const [showSystem, setShowSystem] = useSystemDefinitionsVisibility();
@@ -88,7 +89,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const editShared=(name:string)=>{const draft=propertyInventory.data?.records.find(p=>p.name===name);if(draft)open({view:"property-type",params:{id:draft.id}});};
   return <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
     <PageHeader title={t("Objects")} help={t("Explore the business model, inspect relationships, and bind real resources to pages.")}
-      actions={<div className="flex flex-wrap gap-2">{application ? <Button onClick={() => open({ view: "project", params: { id: application, area: "model" } })}>{t("Add model resources")}</Button> : <><AssetControls type="build.object" /><NewActions type="build.object"/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button><Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button></>}</div>} />
+      actions={<div className="flex flex-wrap gap-2">{application ? <Button onClick={() => open({ view: "project", params: { id: application, area: "model" } })}>{t("Add model resources")}</Button> : <><AssetControls type="build.object" /><NewActions type="build.object" onCreated={branch ? target => open({ view: "object-type", params: { id: target.id } }) : undefined}/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button><Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button></>}</div>} />
     <Card role="toolbar" aria-label={t("Model navigation")} className="flex flex-wrap items-center gap-2 px-3 py-2">
       <Button variant={view === "catalog" ? "primary" : "ghost"} onClick={() => setView("catalog")}><Boxes />{t("Model catalog")}</Button>
       <Button variant={view === "graph" ? "primary" : "ghost"} onClick={() => setView("graph")}><GitBranch />{t("Relationship graph")}</Button>

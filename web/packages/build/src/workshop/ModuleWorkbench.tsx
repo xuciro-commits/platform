@@ -3,12 +3,15 @@ import { validApplicationHeader, sourceFieldInput } from "@platform/app";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
-import { pageUIProfile, pageVariableValues, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
+import { pageUIProfile, pageVariableValues, useHost, useNewRecord } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import {ApplicationHeader, InputDraftProvider, Button, Dialog, Checkbox, IconPicker, Input, PanelSection, ProblemList, StructureRow, Textarea, Workbench, t, useUnsavedChanges, useWorkspace, type WorkbenchProblem} from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, LayoutTemplate, Layers, PanelTop, Plus, Settings2, Trash2, Variable } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDraftSession } from "../session/DraftSession";
+import { useDraftRecord } from "../branches/draft-record";
+import { readDraftIdentity } from "../branches/identity";
+import { useDraftInventory } from "../branches/records";
 import { DraftStatus, savingState, useAutoSave, WorkbenchMessage } from "../editor/workbench";
 import type { Project } from "../projects/project";
 import { PageEditor } from "./editor";
@@ -18,7 +21,7 @@ import { VariablesPanel } from "./page-editor/VariablesPanel";
 import { StudioTemplates } from "./template-ui";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 
-type PageRecord = { id: string; name: string; title: string; state: string; object: string; archived?: boolean };
+type PageRecord = { id: string; revision: number; name: string; title: string; state: string; object: string; archived?: boolean };
 type ModuleDraft = Partial<Api.Application> & Pick<Api.Application, "title">;
 
 export type ModuleContext = {
@@ -33,8 +36,8 @@ const moduleChanges = (draft: ModuleDraft) => ({ ...draft, header: draft.header 
 
 export function ModuleWorkbench({ id, page, focus }: { id?: string; page?: string; focus?: string }) {
   const { open } = useWorkspace();
-  const pageQuery = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(page ?? "")}`, undefined, !!page && !id);
-  const projects = useRecordInventory<Project>("build.app", 1000, !!page && !id);
+  const { query: pageQuery } = useDraftRecord<PageRecord>("build.page", page ?? "", !!page && !id);
+  const projects = useDraftInventory<Project>("build.app", 1000, !!page && !id);
   const owner = !id && page && pageQuery.data?.record ? projects.data?.records.find((project) => !project.archived && project.pages?.includes(pageQuery.data!.record!.name)) : undefined;
   const projectId = id ?? owner?.id;
   if (!projectId && !page) return <ModulesList />;
@@ -48,7 +51,7 @@ export function ModuleWorkbench({ id, page, focus }: { id?: string; page?: strin
 
 function ModulesList() {
   const { open } = useWorkspace();
-  const projects = useRecordInventory<Project>("build.app");
+  const projects = useDraftInventory<Project>("build.app");
   const rows = (projects.data?.records ?? []).filter((project) => !project.archived);
   return <div className="grid min-w-0 gap-4">
     <div><h1 className="text-xl font-semibold tracking-tight">{t("Modules")}</h1><p className="text-sm text-muted">{t("Each project has one module: the pages, navigation and header people use. Open a project to edit its module.")}</p></div>
@@ -69,18 +72,22 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
   const declarationFields = source.entity("build.app")?.fields ?? [], trial = useActionTrial();
   const [sourceApplied, setSourceApplied] = useState(false);
   const { open } = useWorkspace();
-  const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
+  const { query, scope, branch, mainRevision, publishRefusal } = useDraftRecord<Project>("build.app", id);
   const project = query.data?.record;
-  const pageRecords = useRecordInventory<PageRecord>("build.page");
-  const session = useDraftSession<ModuleDraft>({ pages: [], groups: [], title: "" }, id);
+  const pageRecords = useDraftInventory<PageRecord>("build.page");
+  const session = useDraftSession<ModuleDraft>({ pages: [], groups: [], title: "" }, `${id}:${scope}`);
   const { draft, dirty } = session;
-  const loaded = useRef(""),baseRevision=useRef(0), lock = useRef(false);
+  const loaded = useRef(""),baseRevision=useRef(0), lock = useRef(false), loadedScope = useRef(scope);
   const [saving, setSaving] = useState(false), [error, setError] = useState<string>();
   const [createdPage, setCreatedPage] = useState<{ type: string; id: string }>();
   const latest = useRef(draft); latest.current = draft;
   const [focus, setFocus] = useState<ModuleFocus>(isModuleFocus(initialFocus) ? initialFocus : "navigation");
   const [templates, setTemplates] = useState(false), [templateBusy, setTemplateBusy] = useState(false);
   const templateClose = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    if (loadedScope.current === scope) return;
+    loadedScope.current = scope; loaded.current = "";
+  }, [scope]);
   useEffect(() => { if (project && !dirty && !saving && loaded.current !== `${project.id}:${project.revision}`) { session.load(hydrate(project,declarationFields));baseRevision.current=project.revision; loaded.current = `${project.id}:${project.revision}`; } }, [project, dirty, saving, session.load]);
   const canEdit = holds("build", "builder");
   const pages = useMemo(() => (draft.pages ?? []).map((name) => { const record = pageRecords.data?.records.find((item) => item.name === name && !item.archived); return { name, title: record?.title ?? name, id: record?.id, state: record?.state }; }), [draft.pages, pageRecords.data]);
@@ -97,8 +104,8 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     session.saved(submitted); markSaved();
     try {
       const refreshed = await query.refetch();
-      const next = refreshed.isSuccess && refreshed.data?.record?.revision === expected + 1 ? refreshed.data.record : undefined;
-      if (next) session.saved(submitted, hydrate(next,declarationFields));
+      const next = refreshed.isSuccess && (branch ? !!refreshed.data?.record : refreshed.data?.record?.revision === expected + 1) ? refreshed.data!.record : undefined;
+      if (next) { if (branch) { baseRevision.current = next.revision; loaded.current = `${id}:${next.revision}`; } session.saved(submitted, hydrate(next,declarationFields)); }
       else setError(t("The module was saved, but its current record could not be reloaded."));
     } catch { setError(t("The module was saved, but its current record could not be reloaded.")); }
     return true;
@@ -110,14 +117,14 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     catch { setError(t("The module could not be saved.")); return false; }
     finally { lock.current = false; setSaving(false); }
   };
-  useAutoSave({ generation: JSON.stringify(draft), invalid, enabled: !sourceApplied && canEdit && !createdPage && !templates, dirty, busy: saving || templateBusy, save });
+  useAutoSave({ generation: JSON.stringify(draft), invalid, enabled: !sourceApplied && canEdit && !createdPage && !templates && !branch, dirty, busy: saving || templateBusy, save });
   const edit = (patch: Partial<ModuleDraft>) => { if (canEdit && !lock.current && !createdPage) { setSourceApplied(false); session.edit(old => ({ ...old, ...patch })); } };
   const attachCreatedPage = async (target: { type: string; id: string }) => {
     setCreatedPage(target);
     if (!project || !canEdit || lock.current || invalid) return;
     lock.current = true; setSaving(true); setError(undefined);
     try {
-      const { record } = await client.get<{ record: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(target.id)}`);
+      const record = await readDraftIdentity(client, "build.page", target.id);
       if (!record || record.id !== target.id || record.archived) { setError(t("The created page is unavailable. Its record was not replaced or recreated.")); return; }
       const submitted = { ...structuredClone(latest.current), pages: [...new Set([...(latest.current.pages ?? []), record.name])] };
       session.edit(submitted);
@@ -198,12 +205,12 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
         {canEdit && <Button size="sm" disabled={!dirty || saving || !!createdPage || invalid} onClick={() => void save()}>{t("Save")}</Button>}
         <Button size="sm" variant="ghost" disabled={saving} onClick={reload}>{t("Reload current module")}</Button>
         {canEdit && <Button size="sm" disabled={saving || !!createdPage || invalid || !createPage.available} onClick={addPage}><Plus />{t("New page")}</Button>}
-        {canEdit && <Button size="sm" variant="primary" disabled={!pages.length || dirty || saving || !!createdPage || invalid} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id } })}>{t("Publish")}</Button>}
+        {canEdit && <Button size="sm" variant="primary" disabled={!pages.length || dirty || saving || !!createdPage || invalid || !!branch} title={branch ? publishRefusal : undefined} onClick={() => open({ view: "release-review", params: { kind: "app", id: project.id, application: project.id } })}>{t("Publish")}</Button>}
       </>}
       left={{ label: t("Module structure"), content: <ModuleTree context={context} focus={focus} onFocus={setFocus} /> }}
       right={{ label: t("Module inspector"),scope:focus, tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title, content: <fieldset disabled={!canEdit || saving || !!createdPage} className="contents">{inspector[tab.id]}</fieldset> })), value: focus, onChange: (next) => setFocus(next as ModuleFocus) }}
       dock={{ label: t("Module dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
-      <StructuredEditor expectedRevision={baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${source.scope}`} readOnly={!canEdit} disabled={saving || !!createdPage} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...next, title: next.title as string, pages: next.pages as string[] ?? [], groups: next.groups as Api.AppGroup[] ?? [] })); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, declarationValue(project, declarationFields)), baseRevision.current)}>
+      <StructuredEditor expectedRevision={branch ? mainRevision : baseRevision.current} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.app:${id}:${source.scope}`} readOnly={!canEdit} disabled={saving || !!createdPage} onChange={next => { setSourceApplied(true); session.edit(() => ({ ...next, title: next.title as string, pages: next.pages as string[] ?? [], groups: next.groups as Api.AppGroup[] ?? [] })); }} onTrial={next => trial("build.app.edit", { type: "build.app", id }, declarationChanges(next, declarationValue(project, declarationFields)), branch ? mainRevision : baseRevision.current)}>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-canvas p-4">
         <div className="mx-auto w-full max-w-5xl overflow-hidden border border-border bg-surface rounded-md shadow-sm">
           {draft.header ? <ApplicationHeader header={draft.header} pages={pages} currentPage={previewPage} onPage={() => setFocus("navigation")} onTheme={() => {}}>

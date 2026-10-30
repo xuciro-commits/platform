@@ -1,5 +1,5 @@
 import { useHost } from "@platform/app";
-import { ActionMenu, Button, Select, StatusTag, Tag, defineStatuses, t, useUnsavedChanges, useWorkspace, type ContextCommand, type Route } from "@platform/ui";
+import { ActionMenu, Button, Select, StatusTag, Tag, defineStatuses, t, useUnsavedChanges, useWorkspace, type ContextCommand } from "@platform/ui";
 import { GitBranch, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBranchDetail, useBranches } from "./api";
@@ -8,9 +8,8 @@ import { useCurrentBranch } from "./current";
 import { ReviewDialog, useOpenProposal } from "./ReviewDialog";
 
 const branchStates = defineStatuses({ open: { label: t("Open"), tone: "info" }, proposed: { label: t("Proposed"), tone: "purple" }, merged: { label: t("Merged"), tone: "success" }, closed: { label: t("Archived"), tone: "neutral" } });
-const mainOnly = new Set(["module", "flow", "automation", "runs", "code", "observation-source", "sample-set", "test-plan", "evaluation-set"]);
 
-export function BranchControls({ route }: { route?: Route }) {
+export function BranchControls() {
   const { holds } = useHost(), { confirmLeave } = useWorkspace();
   const { confirmDiscard } = useUnsavedChanges(false, () => {});
   const builder = holds("build", "builder");
@@ -41,7 +40,6 @@ export function BranchControls({ route }: { route?: Route }) {
     <ActionMenu label={t("Branch actions")} icon={<MoreHorizontal />} commands={commands} />
     {current && <StatusTag status={current.state} registry={branchStates} />}
     {current && count > 0 && <Tag label={t("Unsaved changes ({n})", { n: count })} tone="warning" />}
-    {current && route && mainOnly.has(route.view) && <Tag label={t("This editor saves to main")} tone="warning" />}
     {current?.state === "open" && <Button size="sm" variant="primary" disabled={!count} title={count ? undefined : t("This branch has no changes.")} onClick={() => setReviewing(true)}>{t("Save")}</Button>}
     {current?.state === "proposed" && <Button size="sm" variant="primary" onClick={() => openProposal(current.id)}>{t("Open proposal")}</Button>}
     {list.isError && <span role="alert" className="text-xs text-danger">{t("Branches could not be loaded.")}</span>}
@@ -51,8 +49,8 @@ export function BranchControls({ route }: { route?: Route }) {
   </div>;
 }
 
-export function BranchBar({ route }: { route?: Route }) {
+export function BranchBar() {
   const { holds } = useHost();
   if (!holds("build", "builder")) return null;
-  return <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-2 py-1"><BranchControls route={route} /></div>;
+  return <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-2 py-1"><BranchControls /></div>;
 }

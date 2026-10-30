@@ -19,6 +19,8 @@ function write(scope: string, id?: string) {
   for (const listener of listeners) listener();
 }
 
+export const selectedBranch = (client: { connection: { tenant: string; principal: string } }) => read(`${client.connection.tenant}:${client.connection.principal}`);
+
 export function useCurrentBranch() {
   const { client } = useHost();
   const scope = `${client.connection.tenant}:${client.connection.principal}`;

@@ -2,6 +2,8 @@ import { useRecordInventory, type Host } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { t } from "@platform/ui";
 import { useMemo } from "react";
+import { resourcePath } from "../branches/api";
+import { selectedBranch } from "../branches/current";
 import { kindOfType, refKey, resourceRef } from "./resources";
 
 type ProjectRecord = Api.Application & { id: string; revision: number; archived?: boolean };
@@ -13,7 +15,13 @@ export function projectResourceChange(project: Pick<Api.Application, "pages" | "
 }
 
 export async function joinProjectResource(host: Pick<Host, "client" | "decide">, application: string, ref: Api.AssetRef) {
-  const { record } = await host.client.get<{ record?: ProjectRecord }>(`/v1/records/build.app/${encodeURIComponent(application)}`, true);
+  const branch = selectedBranch(host.client);
+  let record: ProjectRecord | undefined;
+  if (branch) {
+    const answer = await host.client.call<Api.BranchResourceView>("GET", resourcePath(branch, "build.app", application));
+    const spec = answer.ok && answer.body.op !== "delete" ? answer.body.branch as Api.Application | undefined : undefined;
+    record = spec && { ...spec, id: application, revision: 0 };
+  } else record = (await host.client.get<{ record?: ProjectRecord }>(`/v1/records/build.app/${encodeURIComponent(application)}`, true)).record;
   if (!record || record.archived) throw Error(t("The resource was saved, but the application could not be read. Save again to retry adding the same resource."));
   const changes = projectResourceChange(record, ref);
   if (!Object.keys(changes).length) return;

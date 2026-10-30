@@ -6,6 +6,7 @@ import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
 import { DraftStatus, ResourceControls, WorkbenchMessage, savingState } from "../editor/workbench";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
+import { useDraftRecord } from "../branches/draft-record";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, Select, Textarea, Workbench, DraftInputs, useInputBuffers, InputDraftProvider, useInputDrafts, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
@@ -45,7 +46,8 @@ export function CodeEditor({ id }: { id: string }) {
   const testInputs=useInputBuffers();
   const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState("");
   const lock = useRef(false), loaded = useRef(""), baseRevision = useRef(0), confirmedDraft = useRef<CodeDraft>(empty());
-  const query = useReadQuery<{ record?: CodeDraft }>(`/v1/records/build.code/${encodeURIComponent(id)}`, draft.state === "compiling" ? 1000 : undefined);
+  const { query, scope, branch, mainRevision } = useDraftRecord<CodeDraft>("build.code", id);
+  const loadedScope = useRef(scope);
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
     const saved = query.data?.record;
     if (saved && saved.revision >= baseRevision.current) { baseRevision.current = saved.revision; loaded.current = `${saved.id}:${saved.revision}`; confirmedDraft.current = structuredClone(saved); setDraft(saved); }
@@ -53,6 +55,10 @@ export function CodeEditor({ id }: { id: string }) {
     setDirty(false); setError(""); setSDK("");
   }, busy);
   const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
+  useEffect(() => {
+    if (loadedScope.current === scope) return;
+    loadedScope.current = scope; loaded.current = ""; baseRevision.current = 0; confirmedDraft.current = empty(); setDraft(confirmedDraft.current); setDirty(false); setError("");
+  }, [scope]);
   useEffect(() => {
     const saved = query.data?.record;
     if (saved && !dirty && !busy && saved.revision >= baseRevision.current && loaded.current !== `${saved.id}:${saved.revision}`) {
@@ -69,7 +75,8 @@ export function CodeEditor({ id }: { id: string }) {
     const { abi, name, title, description, language, source, input, output, roles, limits } = submitted;
     if (!await decide(`build.code.${submitted.id ? "edit" : "create"}`, { type: "build.code", id: target }, { ...declarationValue(submitted, declarationFields), abi, name, title, description, language, source, input, output, roles, limits },
       { expectedRevision: submitted.id ? expected : undefined, quiet: true, onRefused: setError })) return;
-    const revision = expected + 1;
+    let revision = expected + 1;
+    if (branch) revision = (await query.refetch()).data?.record?.revision ?? revision;
     baseRevision.current = revision; loaded.current = `${target}:${revision}`;
     const accepted = { ...submitted, id: target, revision, state: "draft", module: undefined, builtSource: undefined, buildHash: undefined };
     confirmedDraft.current = structuredClone(accepted); setDraft(accepted); markSaved(); setDirty(false);
@@ -113,12 +120,12 @@ export function CodeEditor({ id }: { id: string }) {
     status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
         <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
-        <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
-        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
+        <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling" || !!branch} title={branch ? t("Compile after the branch is merged.") : undefined} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
+        <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={branch ? undefined : () => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("Code function")}><p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p></ContextHelp>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    <StructuredEditor expectedRevision={draft.id ? draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.code:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setDirty(true); setError(""); setSDK(""); }} onTrial={next => trial(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: draft.id || createID }, next, draft.id ? draft.revision : 0)}><fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <StructuredEditor expectedRevision={draft.id ? branch ? mainRevision : draft.revision : 0} fieldInput={sourceFieldInput} value={declarationValue(draft, declarationFields)} fields={declarationFields} scope={`build.code:${id}:${authoringHost.source.scope}`} disabled={busy} onChange={next => { if (lock.current) return; setDraft(current => ({ ...empty(), ...replaceDeclaration(current, next, declarationFields) })); setDirty(true); setError(""); setSDK(""); }} onTrial={next => trial(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: draft.id || createID }, next, draft.id ? branch ? mainRevision : draft.revision : 0)}><fieldset disabled={busy} className="grid min-w-0 gap-3 border-0 p-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="grid min-w-0 content-start gap-3 p-4">
         <ContentTabs label={t("Code function editor")} value={tab} onChange={(id) => setTab(id as typeof tab)} items={[
           { id: "source", title: t("Source code"), content: <>

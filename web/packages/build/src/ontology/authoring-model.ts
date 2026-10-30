@@ -1,4 +1,5 @@
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
+import { useHost, useReadQuery } from "@platform/app";
+import { useDraftInventory } from "../branches/records";
 import { t, type EntityInfo } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import type { ObjectRecord } from "./object-model";
@@ -44,7 +45,7 @@ export function authoringObject(record: AuthoringObject, installed?: EntityInfo)
 export function useAuthoringModel() {
   const host = useHost();
   const builder = host.holds("build", "builder");
-  const query = useRecordInventory<ObjectRecord & { archived?: boolean }>("build.object", 1000, builder);
+  const query = useDraftInventory<ObjectRecord & { archived?: boolean }>("build.object", 1000, builder);
   const drafts = { ...query, data: builder ? query.data : undefined, isError: builder && query.isError };
   const entities = new Map(host.entities.map(entity => [entity.type, entity]));
   const actions = new Map<string, AuthoringAction>(host.catalog.map(action => [action.schema, action]));

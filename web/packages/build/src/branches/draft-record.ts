@@ -11,14 +11,14 @@ export type DraftQuery<T> = {
   refetch: () => Promise<{ isSuccess: boolean; data?: Data<T> }>;
 };
 
-export function useDraftRecord<T extends { id: string; revision: number }>(type: string, id: string) {
+export function useDraftRecord<T extends { id: string; revision: number }>(type: string, id: string, enabled = true) {
   const host = useHost();
   const builder = host.holds("build", "builder");
   const { id: currentId } = useCurrentBranch();
   const list = useBranches(builder && !!currentId);
   const branch = list.data?.find(item => item.id === currentId && (item.state === "open" || item.state === "proposed"));
-  const main = useReadQuery<Data<T>>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, 5000);
-  const view = useBranchRead<Api.BranchResourceView>(resourcePath(branch?.id ?? "", type, id), !!branch && id !== "new");
+  const main = useReadQuery<Data<T>>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, undefined, enabled && id !== "new");
+  const view = useBranchRead<Api.BranchResourceView>(resourcePath(branch?.id ?? "", type, id), !!branch && enabled && id !== "new");
   const actions = useBranchActions();
   const base = main.data?.record;
   const spec = view.data?.branch as Record<string, unknown> | undefined;

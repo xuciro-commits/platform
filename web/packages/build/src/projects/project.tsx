@@ -1,10 +1,11 @@
 import { sourceFieldInput } from "@platform/app";
+import { useDraftInventory } from "../branches/records";
 import { ContextHelp, PageHeader, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
 import { ReleaseReview } from "../releases/release";
-import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
+import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery } from "@platform/app";
 import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
 import { ArrowDown, ArrowUp, FolderKanban, Plus, Trash2 } from "lucide-react";
@@ -16,6 +17,8 @@ import { projectResourceChange } from "./membership";
 import { BranchChangesPanel } from "../branches/BranchChangesPanel";
 import { useBranches } from "../branches/api";
 import { useCurrentBranch } from "../branches/current";
+import { useDraftRecord } from "../branches/draft-record";
+import { readDraftIdentity } from "../branches/identity";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
@@ -34,7 +37,7 @@ import { ApplicationLifecycleControls } from "./application-lifecycle";
 export function ProjectsList() {
   const { me, definitions , holds} = useHost();
   const { open } = useWorkspace();
-  const projects = useRecordInventory<Project>("build.app", 1000, holds("build", "builder"));
+  const projects = useDraftInventory<Project>("build.app", 1000, holds("build", "builder"));
   const installedApps = useReadQuery<Api.AppInfo[]>("/v1/apps");
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
@@ -97,7 +100,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const activeArea = studioArea(area, initialSelected?.split("/")[1]);
   const { client, decide, definitions, action , holds} = useHost();
   const { open, notify } = useWorkspace();
-  const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
+  const { query } = useDraftRecord<Project>("build.app", id);
   const project = query.data?.record;
   const builder = holds("build", "builder");
   const { id: currentBranch } = useCurrentBranch();
@@ -198,13 +201,13 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     if (confirmed) { baseline.current = undefined; setEdited(false); markSaved(); }
     return confirmed;
   };
-  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !sourceApplied && !pendingPatch && !createdResource, busy: saving, save: saveSettings });
+  useAutoSave({ generation:JSON.stringify(changedSettings), dirty, enabled: !sourceApplied && !pendingPatch && !createdResource && !currentBranch, busy: saving, save: saveSettings });
   const changesForResource = (current: Project, kind: ResourceKindInfo, record: ResourceRecord) => projectResourceChange(current, resourceRef(kind, record.name));
   const addCreated = async (kind: ResourceKindInfo, target: { type: string; id: string }) => {
     setCreatedResource({ kind, target });
     if (target.type !== kind.type || lock.current || pendingRef.current) return;
     try {
-      const { record } = await client.get<{ record: ResourceRecord }>(`/v1/records/${encodeURIComponent(target.type)}/${encodeURIComponent(target.id)}`);
+      const record = await readDraftIdentity(client, target.type, target.id);
       const current = latestProject.current;
       if (!record || record.id !== target.id || record.archived || !current) {
         setError(t("The resource exists, but its project membership could not be read. Retry the same resource.")); return;
@@ -234,6 +237,13 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
     rememberRetirement({ ...intent, attempted: true });
     setRetireBusy(true);
     try {
+      if (currentBranch) {
+        let refusal = "";
+        for (const edit of intent.edits) if (!await decide(edit.schema, edit.target, edit.payload, { quiet: true, onRefused: message => { refusal ||= message; } })) throw new CompositeRefusalError(refusal || t("The retirement was refused."));
+        notify(t("{count} assets retired on the branch.", { count: intent.items.length }));
+        setPicked(new Set()); rememberRetirement(undefined);
+        return;
+      }
       const answer = await intent.client.composite(intent.key, intent.edits);
       if (answer.key !== intent.key || answer.applied !== intent.items.length) throw Error(t("The retirement result did not confirm the reviewed batch. Retry its original request."));
       notify(t("{count} assets retired together.", { count: intent.items.length }));

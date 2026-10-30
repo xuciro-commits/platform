@@ -102,7 +102,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
       }
       inputs?.clear(); markSaved(); setDirty(false);
     }
-    if (joinApplication && application && id === "new" && !branch) {
+    if (joinApplication && application && id === "new") {
       setJoining(true);
       await joinProjectResource(host, application, resourceRef(kindOfType(type)!, submitted.name));
       setJoining(false);

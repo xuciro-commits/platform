@@ -1,6 +1,8 @@
 import { definitionPresentation, useDefinitions, useHost, useRecordInventory } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { useMemo } from "react";
+import { useBranchTouched, overlayRecords } from "../branches/records";
+import { useCurrentBranch } from "../branches/current";
 import { kindOfType, matchesResourceKind, publishedResourceKind, refKey, resourceKinds, resourceRef, type ResourceKindInfo, type ResourceRecord } from "./resources";
 
 export type OwnedResource = { kind: ResourceKindInfo; record?: ResourceRecord; ref: Api.AssetRef; title: string; installed: boolean; missing: boolean };
@@ -13,7 +15,12 @@ export function useProjectResources(project?: Pick<import("@platform/kernel").Ap
   const definitionQuery = useDefinitions();
   const definitions = definitionQuery.data ?? [];
   const readDrafts = !!project && owner === "build" && editable && holds("build", "builder");
-  const byType = Object.fromEntries(inventoryTypes.map(type => [type, useRecordInventory<ResourceRecord>(type, 1000, readDrafts && resourceKinds.some(kind => kind.type === type && kindEnabled(kind)))]));
+  const { id: currentBranch } = useCurrentBranch(), touched = useBranchTouched(readDrafts ? currentBranch : undefined);
+  const stored = Object.fromEntries(inventoryTypes.map(type => [type, useRecordInventory<ResourceRecord>(type, 1000, readDrafts && resourceKinds.some(kind => kind.type === type && kindEnabled(kind)))]));
+  const byType = useMemo(() => Object.fromEntries(inventoryTypes.map(type => {
+    const inventory = stored[type]!, changes = touched.get(type);
+    return [type, changes?.length && inventory.data ? { ...inventory, data: { ...inventory.data, records: overlayRecords(inventory.data.records, changes) } } : inventory];
+  })) as typeof stored, [touched, ...inventoryTypes.flatMap(type => [stored[type]?.data, stored[type]?.isSuccess, stored[type]?.isLoading, stored[type]?.isError])]);
   const inventories = Object.fromEntries(resourceKinds.map(kind => [kind.kind, byType[kind.type]!]));
   const records = useMemo(() => !readDrafts ? [] : resourceKinds.flatMap(kind => (inventories[kind.kind]?.data?.records ?? [])
     .filter(record => kindEnabled(kind) && !record.archived && record.name && matchesResourceKind(kind, record))

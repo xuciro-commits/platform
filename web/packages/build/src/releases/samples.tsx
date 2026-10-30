@@ -1,8 +1,9 @@
 import { sourceFieldInput } from "@platform/app";
+import { useDraftInventory } from "../branches/records";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { useEffect, useRef, useState } from "react";
-import { useHost, useRecordInventory } from "@platform/app";
+import { useHost } from "@platform/app";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { Button, Card, ContextHelp, Input, InputDraftProvider, InputProblems, PageHeader, Select, Textarea, t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
@@ -22,7 +23,7 @@ export function ApplicationSamples(props: SampleProps) {
 }
 
 function ApplicationSampleForm({ application, selected, samples: suppliedSamples, onChange, onInvalidChange, useSavedValues = false, document = false, onSaved }: SampleProps) {
-  const host = useHost(), inventory = useRecordInventory<SampleSetRecord>("build.sample-set"), inputs = useInputDrafts();
+  const host = useHost(), inventory = useDraftInventory<SampleSetRecord>("build.sample-set"), inputs = useInputDrafts();
   useEffect(() => {
     onInvalidChange?.(!!inputs?.invalid);
     return () => onInvalidChange?.(false);
@@ -212,7 +213,7 @@ function SyntheticRecords({ application, samples, onChange }: Pick<SampleProps, 
 
 export function ApplicationSampleAsset({ id = "new" }: { id?: string }) {
   const application = useApplicationScope(), { open } = useApplicationWorkspace();
-  const projects = useRecordInventory<Project>("build.app"), inventory = useRecordInventory<SampleSetRecord>("build.sample-set");
+  const projects = useDraftInventory<Project>("build.app"), inventory = useDraftInventory<SampleSetRecord>("build.sample-set");
   const project = projects.data?.records.find(record => record.id === application), record = inventory.data?.records.find(record => record.id === id);
   if (!application) return <div className="grid max-w-xl content-start gap-4 p-4">
     <PageHeader title={t("Sample sets")} help={t("Choose an application to prepare its sample records.")} />

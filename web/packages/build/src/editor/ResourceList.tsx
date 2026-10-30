@@ -1,4 +1,5 @@
-import { useHost, useRecordInventory } from "@platform/app";
+import { useHost } from "@platform/app";
+import { useDraftInventory } from "../branches/records";
 import { Button, GroupedList, RecordList, Tag, Panel, t, type EntityRecord, type RecordSource } from "@platform/ui";
 import { ListTree, Table2 } from "lucide-react";
 import { useState } from "react";
@@ -14,7 +15,7 @@ const stateOf = (r: Row) => r.state ?? (typeof (r as Record<string, unknown>).ac
 export function ResourceList({ source, type, fields = [], onOpen }: { source: RecordSource; type: string; fields?: string[]; onOpen?: (record: EntityRecord) => void }) {
   const host = useHost();
   const [mode, setMode] = useState<"tree" | "table">("tree");
-  const inventory = useRecordInventory<Row>(type);
+  const inventory = useDraftInventory<Row>(type);
   const projects = useProjectIndex();
   const info = source.entity(type);
   const title = (field: string) => info?.fields.find((f) => f.name === field)?.title ?? field;

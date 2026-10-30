@@ -102,11 +102,12 @@ export function AutomationEditor({ id }: { id: string }) {
   ];
   const invalid = !editable || problems.some((problem) => problem.id !== "host");
   const review = async () => {
+    if (process.branch) { if (dirty || !draft.id) await save(); return; }
     const target = await process.reviewTarget();
     if (target) open({ view: "release-review", params: { kind: "flow", id: target } });
   };
   const saveRef = useRef<() => Promise<unknown>>(async () => false); saveRef.current = () => perform(save);
-  useAutoSave({enabled: !sourceApplied && editable, generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
+  useAutoSave({enabled: !sourceApplied && editable && !process.branch, generation:JSON.stringify(draft), dirty, invalid, busy, save: () => saveRef.current() });
   if (!holds("build", "builder")) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{t("Only a builder can edit automations.")}</WorkbenchMessage></Workbench>;
   if (id !== "new" && !draft.id) return <Workbench storageKey="automation" title={t("Automation")}><WorkbenchMessage>{query.isError ? t("The automation could not be loaded.") : t("Loading…")}</WorkbenchMessage></Workbench>;
   const chosenStep = effects.find((step) => `step:${step.name}` === chosen);
