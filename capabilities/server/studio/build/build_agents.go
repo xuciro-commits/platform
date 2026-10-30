@@ -24,7 +24,7 @@ type Agent struct {
 	Instructions string                `json:"instructions" field:"required" type:"longtext" help:"Its private instructions: the job, the order of work, when to ask"`
 	Model        string                `json:"model,omitempty" field:"aside"`
 	ModelOptions platform.ModelOptions `json:"modelOptions,omitzero" field:"aside" type:"json"`
-	Tools        []string              `json:"tools" field:"aside" help:"Actions of published objects (build.<object>.<action>) and queries (query:<name>) it may use"`
+	Tools        []string              `json:"tools" field:"aside" help:"Beyond what its objects, actions and functions derive for it: extra queries (query:<name>)"`
 	Steps        int                   `json:"steps,omitempty" title:"Model turns per run" help:"Default 10"`
 	Tokens       int                   `json:"tokens,omitempty" title:"Tokens per run" help:"Default 40000"`
 	Actions      int                   `json:"actions,omitempty" title:"Actions per run" help:"Default 3"`
@@ -135,32 +135,35 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 	if strings.TrimSpace(a.Instructions) == "" || strings.TrimSpace(a.Description) == "" {
 		return fmt.Errorf("The agent %s needs a description and instructions", a.Name)
 	}
-	if len(a.Tools) == 0 {
-		return fmt.Errorf("The agent %s needs at least one action or query", a.Name)
-	}
-	for _, tool := range a.Tools {
+	known := func(tool string) error {
 		if tools[tool] {
-			continue
+			return nil
 		}
 		if query, ok := strings.CutPrefix(tool, "query:"); ok {
 			if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetQuery, Name: query}] {
-				continue
+				return nil
 			}
 			if _, found := b.queries[query]; !found {
 				return fmt.Errorf("The agent %s uses query %s, which is not published", a.Name, query)
 			}
-			continue
+			return nil
 		}
 		if b.jointAssets[platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: tool}] {
-			continue
+			return nil
 		}
 		if _, ok := b.ledger.Catalog.Action(tool); !ok || !strings.HasPrefix(tool, ID+".") || b.installedActionOf(tool) == "" {
 			return fmt.Errorf("The agent %s uses %s, which is not an action of a published object", a.Name, tool)
 		}
+		return nil
+	}
+	for _, tool := range a.Tools {
+		if err := known(tool); err != nil {
+			return err
+		}
 	}
 	for _, cp := range a.Checkpoints {
-		if !slices.Contains(a.Tools, cp) {
-			return fmt.Errorf("The checkpoint %s is not one of the agent's tools", cp)
+		if known(cp) != nil {
+			return fmt.Errorf("The checkpoint %s is not an action of a published object", cp)
 		}
 	}
 	if a.HandoffRole != "" && !slices.Contains(roles, a.HandoffRole) && !b.declaresRole(a.HandoffRole) {
@@ -171,8 +174,8 @@ func (b *Build) checkAgentWithDrafts(a Agent, tools map[string]bool, roles []str
 			return fmt.Errorf("Case %d needs a goal", i+1)
 		}
 		for _, x := range append(slices.Clone(c.Takes), c.Avoids...) {
-			if !slices.Contains(a.Tools, x) {
-				return fmt.Errorf("Case %q names %s, not one of the agent's tools", c.Name, x)
+			if known(x) != nil {
+				return fmt.Errorf("Case %q names %s, not an action of a published object", c.Name, x)
 			}
 		}
 	}

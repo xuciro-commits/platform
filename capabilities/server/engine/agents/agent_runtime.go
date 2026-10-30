@@ -768,7 +768,7 @@ func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft
 		if refusal := platform.ProbeDecision(actor, func(probe platform.Caller) *kernel.Error {
 			_, err := platform.Decide(probe, app, submission, now)
 			return err
-		}); refusal != nil {
+		}); refusal != nil && (draft.Kind != "function" || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT) {
 			return draft, refusal
 		}
 	}
@@ -1092,7 +1092,7 @@ func (a *Agents) take(c platform.Caller, run platform.AgentRunRecord, b platform
 		step.Outcome = "finished"
 		run.Result, run.State = b.Content, "done"
 	default:
-		tool, ok := d.Toolset[b.Tool]
+		tool, ok := a.tool(run, d, b.Tool)
 		if !ok {
 			step.Outcome = "no tool " + b.Tool
 			break
@@ -1181,6 +1181,13 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 		view := h.AgentSearch(a.readsAs(*run), str("query"), now)
 		step.Sources = append(step.Sources, view.Sources...)
 		return string(view.Body), nil
+	case "objects", "aggregate":
+		view, err := a.objects(*run, tool, args, now)
+		if err != nil {
+			return "refused: " + err.Error(), nil
+		}
+		step.Sources = append(step.Sources, view.Sources...)
+		return string(view.Body), nil
 	case "query":
 		reader := a.reader(*run)
 		if reader == nil {
@@ -1237,7 +1244,7 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 		payload, _ := json.Marshal(map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent})
 		draft, refusal := a.toolDraft(c, *run, platform.Draft{Kind: "effect", Owner: d.App, Action: tool.Schema, Target: run.Ref, Payload: string(payload), Rationale: str("rationale"), Step: len(run.Steps)}, now)
 		if refusal != nil {
-			return "refused: " + refusal.Error(), nil
+			return "refused: " + reason(refusal), nil
 		}
 		run.Draft, run.State = []platform.Draft{draft}, "waiting"
 		run.Proposals = append(run.Proposals, draft)
@@ -1245,14 +1252,24 @@ func (a *Agents) use(c platform.Caller, d *platform.CompiledAgent, run *platform
 	}
 	target := str("target")
 	body := agents.ActionPayload(raw, step.CallID != "")
+	if tool.Preset != nil {
+		call := maps.Clone(tool.Preset)
+		for _, key := range []string{"source", "question"} {
+			if value, ok := args[key]; ok {
+				call[key] = value
+			}
+		}
+		target, body = fmt.Sprintf("%s:f%d", run.ID, len(run.Steps)+1), nil
+		body, _ = json.Marshal(call)
+	}
 	if d.Guard != nil {
 		if err := d.Guard(h.Automation(c, d.App), a.run(*run), tool.Schema, target, body); err != nil {
 			return "refused by its guard: " + err.Error(), nil
 		}
 	}
-	draft, refusal := a.toolDraft(c, *run, platform.Draft{Kind: tool.Kind, Owner: d.App, Action: tool.Schema, Type: tool.Target, Target: target, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}, now)
+	draft, refusal := a.toolDraft(c, *run, platform.Draft{Kind: tool.Kind, Owner: cmp.Or(tool.Owner, d.App), Action: tool.Schema, Type: tool.Target, Target: target, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}, now)
 	if refusal != nil {
-		return "refused: " + refusal.Error(), nil
+		return "refused: " + reason(refusal), nil
 	}
 	run.Draft, run.State = []platform.Draft{draft}, "waiting"
 	run.Proposals = append(run.Proposals, draft)
@@ -1591,5 +1608,12 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 }
 
 func (a *Agents) AgentEvaluationRuntime() platform.AgentEvaluationRuntime {
-	return platform.AgentEvaluationRuntime{Tenant: a.tenant, Host: a.host, Definition: a.def, Compile: a.evaluationDefinition, Version: a.evaluationVersion, Prompt: a.prompt, Principal: a.AgentPrincipal, Reader: a.reader, Automation: a.automation, View: a.run, Use: a.use, ObserveKnowledge: a.ObserveAgentKnowledge}
+	return platform.AgentEvaluationRuntime{Tenant: a.tenant, Host: a.host, Definition: a.def, Compile: a.evaluationDefinition, Version: a.evaluationVersion, Prompt: a.prompt, Principal: a.AgentPrincipal, Reader: a.reader, Automation: a.automation, View: a.run, Use: a.use, ObserveKnowledge: a.ObserveAgentKnowledge, Compiled: a.Compiled}
+}
+
+func reason(err *kernel.Error) string {
+	if err.Message == "" {
+		return err.Error()
+	}
+	return err.Error() + ": " + err.Message
 }

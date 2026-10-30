@@ -50,8 +50,9 @@ func (a *Agents) prompt(c platform.Caller, d *platform.CompiledAgent, run platfo
 		input.History = append(input.History, agents.HistoryStep{Calls: step.Calls, Content: step.Content,
 			Tool: step.Tool, CallID: step.CallID, Outcome: step.Outcome, Rationale: step.Rationale, Arguments: step.Arguments})
 	}
-	input.Tools = make(map[string]platform.Tool, len(d.Toolset))
-	for name, tool := range d.Toolset {
+	toolset := a.Compiled(run, d).Toolset
+	input.Tools = make(map[string]platform.Tool, len(toolset))
+	for name, tool := range toolset {
 		input.Tools[name] = tool.Tool
 	}
 	request := input.Request(model)

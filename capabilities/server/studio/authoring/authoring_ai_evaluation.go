@@ -1,8 +1,10 @@
 package authoring
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/internal/agents"
@@ -246,6 +248,7 @@ func evaluationScore(ev *platform.Evaluation) {
 }
 
 func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run platform.AgentRunRecord, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time) platform.EvalCase {
+	d = a.context.Compiled(run, d)
 	last := run.Signals[len(run.Signals)-1]
 	x := platform.EvalCase{Run: run.ID, Signal: last.Kind}
 	changed := func(i int) string {
@@ -301,6 +304,7 @@ func (a *AgentEvaluator) rerun(evaluation string, d *platform.CompiledAgent, run
 }
 
 func (a *AgentEvaluator) suite(ev platform.Evaluation, d *platform.CompiledAgent, model platform.AIModel, pv platform.AIProvider, who platform.Member, now time.Time, checkpoint func(*platform.Evaluation) bool) platform.Evaluation {
+	d = a.context.Compiled(platform.AgentRunRecord{Agent: ev.Agent, OnBehalf: who.ID}, d)
 	ceiling, spent := evalBudget(d.Budget, len(d.Cases)*suiteRuns), platform.Budget{}
 	for _, x := range ev.Cases {
 		spent.Steps += x.Steps
@@ -457,7 +461,8 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 		out, _ := json.Marshal(m)
 		return string(out)
 	}
-	if tool.Kind == "read" || tool.Kind == "query" || tool.Kind == "context" || tool.Kind == "search" || tool.Kind == "knowledge" {
+	observes := slices.Contains([]string{"read", "query", "objects", "aggregate", "context", "search", "knowledge"}, tool.Kind)
+	if observes {
 		for _, s := range run.Steps {
 			if s.Tool == tool.Tool.Name && strip(s.Arguments) == strip(string(raw)) {
 				return s.Outcome
@@ -471,7 +476,7 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 	endRead := h.BeginAgentRead()
 	defer endRead()
 	c := a.context.Automation(platform.AgentApp, true)
-	if tool.Kind == "read" || tool.Kind == "query" || tool.Kind == "context" || tool.Kind == "search" {
+	if observes && tool.Kind != "knowledge" {
 		out, _ := a.context.Use(c, d, &dry, tool, args, raw, &platform.RunStep{}, now)
 		return out
 	}
@@ -481,13 +486,23 @@ func (a *AgentEvaluator) dryUse(d *platform.CompiledAgent, run, dry platform.Age
 	delete(payload, "target")
 	delete(payload, "rationale")
 	body, _ := json.Marshal(payload)
+	if tool.Preset != nil {
+		call := maps.Clone(tool.Preset)
+		for _, key := range []string{"source", "question"} {
+			if value, ok := args[key]; ok {
+				call[key] = value
+			}
+		}
+		target = run.ID + ":f" + fmt.Sprint(len(dry.Steps)+1)
+		body, _ = json.Marshal(call)
+	}
 	if d.Guard != nil {
 		if err := d.Guard(a.context.Automation(d.App, true), a.context.View(dry), tool.Schema, target, body); err != nil {
 			return "refused by its guard: " + err.Error()
 		}
 	}
 	if tool.Kind == "action" {
-		app := h.App(d.App)
+		app := h.App(cmp.Or(tool.Owner, d.App))
 		s := &pb.Submission{TenantId: a.context.Tenant, Authority: ownerOf(a.context.Host, tool.Target), IdempotencyKey: "eval:" + run.ID,
 			Target: &pb.EntityRef{Type: tool.Target, Id: target}, Schema: &pb.SchemaRef{Name: tool.Schema, Version: 1}, Payload: body}
 		as := []platform.Caller{platform.ActingCaller(c, a.context.Principal(run.Agent), d.App, true)}

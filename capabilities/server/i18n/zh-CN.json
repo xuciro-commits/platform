@@ -1601,7 +1601,7 @@
   "A role of this builder; empty: the builder": "本构建器的一个角色；留空为构建者",
   "Actions it must not take": "不得采取的动作",
   "Actions it must take": "必须采取的动作",
-  "Actions of published objects (build.<object>.<action>) and queries (query:<name>) it may use": "它可用的已发布对象动作（build.<对象>.<动作>）与查询（query:<名称>）",
+  "Beyond what its objects, actions and functions derive for it: extra queries (query:<name>)": "除由对象、动作与函数自动派生的工具之外，另可使用的查询（query:<名称>）",
   "Actions per run": "每次运行的动作数",
   "Actions per run: Default 3": "每次运行的动作数：默认 3",
   "Active": "启用",

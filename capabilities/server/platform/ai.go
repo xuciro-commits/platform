@@ -289,6 +289,24 @@ type AgentObservation struct {
 	Sources []string
 }
 
+type AgentAction struct {
+	Owner      string
+	Action     Action
+	Conditions []string
+}
+
+type AgentFunction struct {
+	Owner    string
+	Function AIFunction
+	Call     AgentAction
+}
+
+type AgentSurface struct {
+	Entities  []EntityInfo
+	Actions   []AgentAction
+	Functions []AgentFunction
+}
+
 type DynamicAgentDefinitions interface {
 	App
 	AgentStamp() string
@@ -314,6 +332,8 @@ type AgentHost interface {
 	AgentSearch(*Member, string, time.Time) AgentObservation
 	AgentQuery(Member, NamedQuery, string, time.Time) (AgentObservation, *kernel.Error)
 	AgentRead(Member, string, ...json.RawMessage) (AgentObservation, *kernel.Error)
+	AgentSurface(Member, string) AgentSurface
+	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *kernel.Error)
 	AgentSources(any) []string
 	AgentKnowledge(*Member, string, string, int, time.Time) json.RawMessage
 	AgentAppReader(string) *Member
@@ -620,6 +640,8 @@ func (run AgentRunRecord) SourceRefs() []string {
 }
 
 type CompiledAgentTool struct {
+	Owner  string
+	Preset map[string]any
 	Inputs []Field
 	Query  NamedQuery
 	Kind   string
@@ -646,6 +668,7 @@ type AgentEvaluationRuntime struct {
 	View             func(AgentRunRecord) AgentRun
 	Use              func(Caller, *CompiledAgent, *AgentRunRecord, CompiledAgentTool, map[string]any, json.RawMessage, *RunStep, time.Time) (string, func(*pb.ChangeRecord))
 	ObserveKnowledge func(AgentRunRecord, json.RawMessage, time.Time) json.RawMessage
+	Compiled         func(AgentRunRecord, *CompiledAgent) *CompiledAgent
 }
 type AgentEvaluator interface {
 	Evaluate(AgentEvaluationRuntime, Evaluation, time.Time, func(*Evaluation) bool) Evaluation

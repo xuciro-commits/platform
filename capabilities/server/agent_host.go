@@ -1,9 +1,11 @@
 package platformserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"platformserver/aigateway"
 	"platformserver/engine/integrations"
 	controlowner "platformserver/kernel/control"
@@ -71,6 +73,92 @@ func (h hostView) AgentRead(reader platform.Member, name string, inputs ...json.
 	raw, _ := json.Marshal(value)
 	return platform.AgentObservation{Body: raw, Sources: h.t.refsIn(value)}, nil
 }
+func (h hostView) AgentSurface(reader platform.Member, app string) platform.AgentSurface {
+	reader.AIContext = true
+	var out platform.AgentSurface
+	var call *platform.AgentAction
+	owner, action, found := h.Action(build.SchemaFunctionCall)
+	if found && slices.ContainsFunc(h.t.Catalog(reader), func(a platform.Action) bool { return a.Schema == action.Schema }) {
+		call = &platform.AgentAction{Owner: owner, Action: action}
+	}
+	for _, definition := range h.t.Definitions(reader) {
+		if definition.Ref.App != app || app == build.ID && (definition.Source == "code" || definition.Source == "system") && definition.Function == nil {
+			continue
+		}
+		switch {
+		case definition.Entity != nil:
+			out.Entities = append(out.Entities, *definition.Entity)
+		case definition.Action != nil:
+			action := platform.AgentAction{Owner: definition.Ref.App, Action: *definition.Action}
+			if criteria, ok := h.t.modelCriteria(definition.Ref); ok {
+				for _, condition := range criteria.Conditions {
+					action.Conditions = append(action.Conditions, condition.Message)
+				}
+			}
+			out.Actions = append(out.Actions, action)
+		case definition.Function != nil:
+			if call != nil {
+				out.Functions = append(out.Functions, platform.AgentFunction{Owner: definition.Ref.App, Function: *definition.Function, Call: *call})
+			}
+		}
+	}
+	return out
+}
+
+const agentObjectRows = 50
+
+func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *kernel.Error) {
+	reader.AIContext = true
+	invalid := func(message string) (platform.AgentObservation, *kernel.Error) {
+		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
+	}
+	var req ObjectSetRequest
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || req.Offset < 0 || req.Limit < 0 || req.Set.Check() != nil {
+		return invalid("The object set request is not valid")
+	}
+	aggregated := len(req.Groups) > 0 || len(req.Measures) > 0 || req.Window != nil || req.Histogram != nil || req.MaxRows != 0 || req.Collection != nil
+	out := platform.AgentObservation{}
+	switch op {
+	case "load":
+		if aggregated {
+			return invalid("A load carries no aggregate options")
+		}
+		if req.Limit == 0 || req.Limit > agentObjectRows {
+			req.Limit = agentObjectRows
+		}
+		caller := platform.NewCaller(runtime{h.t}, reader, "", false, false)
+		page, object, err := h.t.loadObjectSet(h.t.records, caller, req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, now)
+		if err != nil {
+			return out, err
+		}
+		body, _ := json.Marshal(page)
+		var rows struct {
+			Records []struct{ ID string } `json:"records"`
+		}
+		_ = json.Unmarshal(body, &rows)
+		for _, row := range rows.Records {
+			if object != "" && row.ID != "" {
+				out.Sources = append(out.Sources, object+"/"+row.ID)
+			}
+		}
+		out.Body = body
+	case "aggregate":
+		if len(req.Sort) > 0 || req.Offset != 0 || req.Limit != 0 || req.Format || req.Window != nil || req.Histogram != nil || req.Collection != nil {
+			return invalid("An aggregate carries groups and measures only")
+		}
+		result, err := h.t.aggregateObjectSet(reader, req, now)
+		if err != nil {
+			return out, err
+		}
+		out.Body, _ = json.Marshal(result)
+	default:
+		return invalid("Unknown object set operation")
+	}
+	return out, nil
+}
+
 func (h hostView) AgentSources(value any) []string { return h.t.refsIn(value) }
 func (h hostView) AgentKnowledge(reader *platform.Member, app, q string, limit int, now time.Time) json.RawMessage {
 	found := h.t.Knowledge(aiContextReader(reader), app, q, limit, now)
