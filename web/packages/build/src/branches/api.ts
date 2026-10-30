@@ -1,6 +1,6 @@
-import { useHost } from "@platform/app";
+import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { t } from "@platform/ui";
 
 export class BranchFailure extends Error {
@@ -11,31 +11,25 @@ const enc = encodeURIComponent;
 export const branchPath = (id: string, tail = "") => `/v1/branches/${enc(id)}${tail}`;
 export const resourcePath = (id: string, type: string, draft: string) => branchPath(id, `/resources/${enc(type)}/${enc(draft)}`);
 
-export function useBranchRead<T>(path: string, enabled = true, interval?: number) {
-  const { client } = useHost();
-  return useQuery({
-    queryKey: [client.connection.token, client.connection.tenant, "branch", path],
-    queryFn: async () => {
-      const answer = await client.call<T>("GET", path);
-      if (!answer.ok) throw new BranchFailure(apiErrorMessage(answer.body) ?? t("The branch request was refused."), answer.status);
-      return answer.body;
-    },
-    enabled, refetchInterval: interval, retry: false,
-  });
+export function useBranchRead<T>(path: string, enabled = true) {
+  return useReadQuery<T>(path, undefined, enabled);
 }
 
 export function useBranches(enabled = true) {
-  return useBranchRead<Api.BranchDetail[]>("/v1/branches", enabled, 20000);
+  return useBranchRead<Api.BranchDetail[]>("/v1/branches", enabled);
 }
 
 export function useBranchDetail(id?: string) {
-  return useBranchRead<Api.BranchDetail>(branchPath(id ?? ""), !!id, 20000);
+  return useBranchRead<Api.BranchDetail>(branchPath(id ?? ""), !!id);
 }
 
 export function useBranchActions() {
   const { client } = useHost();
   const queries = useQueryClient();
-  const refresh = () => queries.invalidateQueries({ queryKey: [client.connection.token, client.connection.tenant, "branch"] });
+  const refresh = async () => {
+    client.refreshLiveReads();
+    await queries.invalidateQueries({ predicate: query => typeof query.queryKey[2] === "string" && query.queryKey[2].startsWith("/v1/branches") });
+  };
   const send = async <T>(method: "POST" | "PUT", path: string, body?: unknown): Promise<T> => {
     const answer = await client.call<T & { conflicts?: Api.BranchResourceDiff[] }>(method, path, body ?? {});
     if (!answer.ok) {
