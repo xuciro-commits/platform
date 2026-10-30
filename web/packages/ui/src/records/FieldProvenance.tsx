@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { humanizeKernelError } from "../lib/errors";
 import { formatStamp } from "../lib/datetime-format";
 import { Button } from "../primitives/button";
+import { RecordChip } from "./RecordChip";
 import type { RecordSource } from "./Records";
 
 const loaded = new Map<string, Promise<Api.RecordProvenance>>();
@@ -22,6 +23,15 @@ function provenanceOf(source: RecordSource, type: string, id: string, revision: 
   request.catch(() => { if (loaded.get(key) === request) loaded.delete(key); });
   while (loaded.size > limit) loaded.delete(loaded.keys().next().value!);
   return request;
+}
+
+const slot = "\u0000";
+
+function editedLine(source: RecordSource, entry: Api.RecordFieldProvenance) {
+  const time = entry.at ? formatStamp(entry.at) : "";
+  if (!entry.by) return <p>{time ? t("Edited at {time}", { time }) : t("Edited")}</p>;
+  const [head, tail = ""] = (time ? t("Edited by {member} at {time}", { member: slot, time }) : t("Edited by {member}", { member: slot })).split(slot);
+  return <p className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">{head}<RecordChip source={source} type="platform.member" id={entry.by} person />{tail}</p>;
 }
 
 type State = { loading: true } | { loading: false; error: string } | { loading: false; fields: Api.RecordProvenance["fields"] };
@@ -48,7 +58,7 @@ export function FieldProvenance({ source, type, id, revision, field, label }: { 
       {!state || state.loading ? <p role="status" className="text-xs text-muted">{t("Loading…")}</p>
         : "error" in state ? <Notice tone="danger" message={state.error} />
         : !entry ? <p className="text-xs text-muted">{t("No source is recorded for this value.")}</p>
-        : entry.kind === "edit" ? <div className="grid gap-1 text-xs"><Tag label={t("Edited")} tone="info" /><p>{entry.at ? t("Edited at {time}", { time: formatStamp(entry.at) }) : t("Edited")}</p></div>
+        : entry.kind === "edit" ? <div className="grid gap-1 text-xs"><Tag label={t("Edited")} tone="info" />{editedLine(source, entry)}</div>
         : <div className="grid gap-1 text-xs">
           <Tag label={entry.connector?.startsWith("pipeline:") ? t("Pipeline") : t("Source")} tone="teal" />
           {entry.connector && <p className="break-all font-mono text-muted">{entry.connector}</p>}
