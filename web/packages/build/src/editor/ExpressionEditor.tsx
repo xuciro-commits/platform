@@ -129,7 +129,7 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
   const operations = ["lit", "ref", "path"];
   if (kind === "boolean") operations.push(
     ...logical, ...comparison, "empty", "not-empty", "is-null", "is-not-null",
-    "contains", "starts-with", "ends-with", "matches", "before", "after", "within-period", "in", "range",
+    "contains", "icontains", "starts-with", "ends-with", "matches", "overlaps", "before", "after", "within-period", "in", "range",
   );
   if (kind === "text" || kind === "string") operations.push("concat", "lower", "upper", "trim", "replace");
   if (numericKinds.includes(kind)) {
@@ -176,11 +176,12 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
     if (["$me", "$now", "$today"].includes(op)) { onChange({ op, kind }); return; }
     if (op === "if") { onChange({ op, kind, args: [literalExpression("boolean"), literalExpression(kind), literalExpression(kind)] }); return; }
     let operand = logical.includes(op) ? "boolean" : comparison.includes(op) ? windows ? "decimal" : "text" : kind;
-    if (["empty", "not-empty", "is-null", "is-not-null", "contains", "starts-with", "ends-with", "matches", "length", "replace", "parse-decimal", "parse-number", "in"].includes(op)) operand = "text";
+    if (["empty", "not-empty", "is-null", "is-not-null", "contains", "icontains", "starts-with", "ends-with", "matches", "length", "replace", "parse-decimal", "parse-number", "in"].includes(op)) operand = "text";
     if (["before", "after", "within-period", "diff-days", "date-part"].includes(op)) operand = "date";
     if (op === "diff-hours") operand = "datetime";
     if (op === "start-of-day") operand = "date";
     if (op === "range" || op === "round" && kind === "integer") operand = "decimal";
+    if (op === "overlaps") operand = "set";
     const args = Array.from({ length: ["replace", "within-period", "range"].includes(op) ? 3 : unary.includes(op) || op === "start-of-day" || op === "start-of-hour" ? 1 : 2 }, () => literalExpression(operand));
     if (["add-days", "add-months", "add-hours"].includes(op)) args[1] = literalExpression("integer");
     if (op === "date-part") args[1] = { op: "", kind: "text", lit: { value: "year" } };
@@ -200,7 +201,7 @@ function ExpressionNode({ value: expression, onChange, choices, lookup, windows,
     <label className="grid gap-1">{t("Expression operation")}
       <Select value={selectedOp} onChange={event => replace(event.target.value)}>
         {!operations.includes(selectedOp) && <option value={selectedOp}>{expression.op}</option>}
-        {operations.map(op => <option key={op} value={op}>{op === "coalesce" ? t("First available value (coalesce)") : op === "if" ? t("Conditional value (if)") : op === "round" ? t("Round number (round)") : op}</option>)}
+        {operations.map(op => <option key={op} value={op}>{op === "coalesce" ? t("First available value (coalesce)") : op === "if" ? t("Conditional value (if)") : op === "icontains" ? t("Contains, ignoring case (icontains)") : op === "overlaps" ? t("Sets share a value (overlaps)") : op === "round" ? t("Round number (round)") : op}</option>)}
       </Select>
     </label>
     {selectedOp === "coalesce" && <p className="text-muted">{t("Use the first value that is present and not null. All values must have the same type.")}</p>}

@@ -3985,6 +3985,8 @@ register("zh-CN", {
   "Only declared dispatches": "仅限已声明的派发",
   "Declare the connection and request mapping for external writes. Accepted actions, business confirmations and dispatches keep their own sending and retry rules.": "声明外部写入的连接与请求映射。已接受的操作、业务确认与派发各自保留发送和重试规则。",
   "Earliest": "最早",
+  "Contains, ignoring case (icontains)": "包含，忽略大小写（icontains）",
+  "Sets share a value (overlaps)": "两个集合有共同值（overlaps）",
   "Earliest and latest: checked on save": "最早与最晚：保存时检查",
   "Bounds on the value itself; both ends are allowed. They are checked on save.": "对值本身的范围限制，两端都允许；保存时检查。",
   "A published value type keeps its identity and base type.": "已发布的值类型保持其标识和基础类型不变。",
