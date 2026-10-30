@@ -1,9 +1,9 @@
 package records
 
 import (
-	"encoding/json"
 	"fmt"
 	"iter"
+	"platformserver/journal"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -127,10 +127,15 @@ func (p *SortedPage) Result() ([]reflect.Value, int) {
 	return out, p.total
 }
 
-func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (func(reflect.Value) bool, error) {
+type SetMatch struct {
+	Match    func(reflect.Value) bool
+	Pushdown []journal.StateFilter
+}
+
+func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (SetMatch, error) {
 	domain, err := CompileDomain(info, p.Domain)
 	if err != nil {
-		return nil, err
+		return SetMatch{}, err
 	}
 	search := strings.ToLower(strings.TrimSpace(p.Search))
 	var searched []platform.FieldInfo
@@ -140,30 +145,33 @@ func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (func(r
 		}
 	}
 	base := func(v reflect.Value) bool {
-		return domain(v) && (search == "" || strings.Contains(strings.ToLower(Header(v).ID), search) || slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
+		return domain.Match(v) && (search == "" || strings.Contains(strings.ToLower(Header(v).ID), search) || slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
 			return strings.Contains(strings.ToLower(Searchable(v.FieldByIndex(f.Index).Interface())), search)
 		}))
 	}
 	if p.Set == nil {
-		return base, nil
+		return SetMatch{Match: base, Pushdown: domain.Pushdown()}, nil
 	}
 	left, err := CompileSet(info, *p.Set.Inputs[0])
 	if err != nil {
-		return nil, err
+		return SetMatch{}, err
 	}
 	right, err := CompileSet(info, *p.Set.Inputs[1])
 	if err != nil {
-		return nil, err
+		return SetMatch{}, err
 	}
+	out := SetMatch{Pushdown: domain.Pushdown()}
 	switch p.Set.Op {
 	case "union":
-		return func(v reflect.Value) bool { return base(v) && (left(v) || right(v)) }, nil
+		out.Match = func(v reflect.Value) bool { return base(v) && (left.Match(v) || right.Match(v)) }
 	case "intersect":
-		return func(v reflect.Value) bool { return base(v) && left(v) && right(v) }, nil
+		out.Match = func(v reflect.Value) bool { return base(v) && left.Match(v) && right.Match(v) }
 	case "subtract":
-		return func(v reflect.Value) bool { return base(v) && left(v) && !right(v) }, nil
+		out.Match = func(v reflect.Value) bool { return base(v) && left.Match(v) && !right.Match(v) }
+	default:
+		return SetMatch{}, fmt.Errorf("unsupported record set operation")
 	}
-	return nil, fmt.Errorf("unsupported record set operation")
+	return out, nil
 }
 
 type sortKey struct {
@@ -256,155 +264,6 @@ func CompareValues(a, b any) int {
 		return x.Compare(y)
 	}
 	return strings.Compare(fmt.Sprint(a), fmt.Sprint(b))
-}
-
-func CompileDomain(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Value) bool, error) {
-	all := func(reflect.Value) bool { return true }
-	if len(raw) == 0 || string(raw) == "null" {
-		return all, nil
-	}
-	var terms []json.RawMessage
-	if err := json.Unmarshal(raw, &terms); err != nil {
-		return nil, err
-	}
-	type pred = func(reflect.Value) bool
-	var stack []pred
-	for i := len(terms) - 1; i >= 0; i-- {
-		var op string
-		if json.Unmarshal(terms[i], &op) == nil {
-			switch {
-			case op == "!" && len(stack) >= 1:
-				p := stack[len(stack)-1]
-				stack[len(stack)-1] = func(v reflect.Value) bool { return !p(v) }
-			case (op == "&" || op == "|") && len(stack) >= 2:
-				a, b := stack[len(stack)-1], stack[len(stack)-2]
-				stack = stack[:len(stack)-2]
-				if op == "&" {
-					stack = append(stack, func(v reflect.Value) bool { return a(v) && b(v) })
-				} else {
-					stack = append(stack, func(v reflect.Value) bool { return a(v) || b(v) })
-				}
-			default:
-				return nil, fmt.Errorf("operator %q without its terms", op)
-			}
-			continue
-		}
-		p, err := condition(info, terms[i])
-		if err != nil {
-			return nil, err
-		}
-		stack = append(stack, p)
-	}
-	return func(v reflect.Value) bool {
-		for _, p := range stack {
-			if !p(v) {
-				return false
-			}
-		}
-		return true
-	}, nil
-}
-
-func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Value) bool, error) {
-	var term []json.RawMessage
-	var name, op string
-	if json.Unmarshal(raw, &term) != nil || len(term) != 3 || json.Unmarshal(term[0], &name) != nil || json.Unmarshal(term[1], &op) != nil {
-		return nil, fmt.Errorf("a condition is [field, operator, value]")
-	}
-	f, ok := info.Field(name)
-	read := func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface() }
-	switch {
-	case name == "id":
-		f, read = platform.FieldInfo{Name: "id", Type: "text"}, func(v reflect.Value) any { return Header(v).ID }
-	case name == "created" || name == "changed":
-		f, read = platform.FieldInfo{Name: name, Type: "datetime"}, func(v reflect.Value) any {
-			if name == "created" {
-				return Header(v).Created.At
-			}
-			return Header(v).Changed.At
-		}
-	case !ok:
-		return nil, fmt.Errorf("unknown field %s", name)
-	}
-	if value, ok := platform.DecimalLiteral(term[2]); ok {
-		return value.Condition(f, op, read)
-	}
-	var tagged map[string]json.RawMessage
-	if json.Unmarshal(term[2], &tagged) == nil && tagged != nil {
-		return nil, fmt.Errorf("invalid typed condition value")
-	}
-	var value any
-	if json.Unmarshal(term[2], &value) != nil {
-		return nil, fmt.Errorf("bad value")
-	}
-	if b, ok := value.(bool); ok {
-		value = map[bool]float64{true: 1, false: 0}[b]
-	}
-	if f.Type == "datetime" {
-		if s, ok := value.(string); ok {
-			t, err := time.Parse(time.RFC3339, s)
-			if err != nil {
-				if t, err = time.Parse(time.DateOnly, s); err != nil {
-					return nil, err
-				}
-			}
-			value = t
-		}
-	}
-	list := f.Type == "references" || f.Type == "tags"
-	items := func(v reflect.Value) []string {
-		var out []string
-		fv := v.FieldByIndex(f.Index)
-		for i := range fv.Len() {
-			out = append(out, fv.Index(i).String())
-		}
-		return out
-	}
-	values, _ := value.([]any)
-	in := func(x any) bool {
-		return slices.ContainsFunc(values, func(y any) bool { return CompareValues(Comparable(x), y) == 0 })
-	}
-	switch op {
-	case "=", "!=":
-		eq := func(v reflect.Value) bool {
-			if list {
-				return slices.Contains(items(v), fmt.Sprint(value))
-			}
-			return CompareValues(Comparable(read(v)), value) == 0
-		}
-		if op == "!=" {
-			return func(v reflect.Value) bool { return !eq(v) }, nil
-		}
-		return eq, nil
-	case "<", "<=", ">", ">=":
-		textual := f.Type != "integer" && f.Type != "decimal" && f.Type != "money" && f.Type != "boolean"
-		return func(v reflect.Value) bool {
-			x := Comparable(read(v))
-			if x == nil || textual && reflect.ValueOf(x).IsZero() {
-				return false
-			}
-			c := CompareValues(x, value)
-			return op == "<" && c < 0 || op == "<=" && c <= 0 || op == ">" && c > 0 || op == ">=" && c >= 0
-		}, nil
-	case "in", "not in":
-		if values == nil {
-			return nil, fmt.Errorf("%s needs a list", op)
-		}
-		has := func(v reflect.Value) bool {
-			if list {
-				return slices.ContainsFunc(items(v), func(x string) bool { return in(x) })
-			}
-			return in(read(v))
-		}
-		if op == "not in" {
-			return func(v reflect.Value) bool { return !has(v) }, nil
-		}
-		return has, nil
-	case "like":
-		s := strings.ToLower(fmt.Sprint(value))
-		return func(v reflect.Value) bool { return strings.Contains(strings.ToLower(Searchable(read(v))), s) }, nil
-	}
-	return nil, fmt.Errorf("unknown operator %s", op)
 }
 
 type RowSource interface {

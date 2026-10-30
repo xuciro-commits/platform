@@ -331,14 +331,14 @@ func (s *CurrentScope) Reader() interface {
 	return s.backend
 }
 
-func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visible, effective, match func(reflect.Value) bool, writes iter.Seq[string], accept func(reflect.Value)) {
+func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visible, effective func(reflect.Value) bool, match SetMatch, writes iter.Seq[string], accept func(reflect.Value)) {
 	current := image.Current()
 	visit := func(r *Row) {
 		if r == nil {
 			return
 		}
 		v := r.Value
-		if !q.Archived && Header(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match(v) {
+		if !q.Archived && Header(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match.Match(v) {
 			return
 		}
 		accept(v)
@@ -350,10 +350,10 @@ func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visib
 	} else if current.Backend() != nil {
 		var filters []journal.StateFilter
 		if !image.RetainedProjection && len(image.Info.RecordImages) == 0 {
-			filters = sqlRecordFilters(image.Info, q.Domain)
+			filters = match.Pushdown
 		}
 		if image.RetainedProjection {
-			for _, filter := range sqlRecordFilters(image.Info, q.Domain) {
+			for _, filter := range match.Pushdown {
 				if len(filter.Path) == 2 && filter.Path[0] == "value" && filter.Path[1] == "id" {
 					filters = append(filters, filter)
 				}
@@ -391,53 +391,4 @@ func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visib
 		}
 	}
 
-}
-
-func sqlRecordFilters(info platform.EntityInfo, domain json.RawMessage) []journal.StateFilter {
-	var terms []json.RawMessage
-	if len(domain) == 0 || json.Unmarshal(domain, &terms) != nil {
-		return nil
-	}
-	for _, term := range terms {
-		if len(term) == 0 || term[0] != '[' {
-			return nil
-		}
-	}
-	var out []journal.StateFilter
-	for _, raw := range terms {
-		var term []json.RawMessage
-		var name, op string
-		if json.Unmarshal(raw, &term) != nil || len(term) != 3 || json.Unmarshal(term[0], &name) != nil || json.Unmarshal(term[1], &op) != nil {
-			continue
-		}
-		f, ok := info.Field(name)
-		if name == "id" {
-			ok = true
-			f = platform.FieldInfo{Name: "id", Type: "text", Index: []int{0}}
-		}
-		if !ok || len(f.Index) == 0 || f.AliasOf != "" || f.Property != nil {
-			continue
-		}
-		list := f.Type == "references" || f.Type == "tags"
-		if !list && f.Type != "text" && f.Type != "longtext" && f.Type != "reference" && f.Type != "choice" && f.Type != "date" {
-			continue
-		}
-		filter := journal.StateFilter{Path: []string{"value", name}, List: list}
-		switch op {
-		case "=":
-			var value string
-			if json.Unmarshal(term[2], &value) != nil {
-				continue
-			}
-			filter.Values = []string{value}
-		case "in":
-			if json.Unmarshal(term[2], &filter.Values) != nil {
-				continue
-			}
-		default:
-			continue
-		}
-		out = append(out, filter)
-	}
-	return out
 }

@@ -38,6 +38,15 @@ func (p *Program) EvalFrozenFormula(c Context) (Result, error) {
 	copy.frozenFormula = true
 	return copy.Eval(c)
 }
+
+var trueData, falseData = json.RawMessage("true"), json.RawMessage("false")
+
+func (p *Program) arg(at string, i int) string {
+	if p.row {
+		return at
+	}
+	return fmt.Sprintf("%s.args[%d]", at, i)
+}
 func (p *Program) Eval(c Context) (Result, error) {
 	raw, encodeErr := json.Marshal(c)
 	if encodeErr != nil || len(raw) > MaxContextBytes {
@@ -69,10 +78,10 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		if p.frozenFormula {
 			return frozenNumeric(PresentRaw(e.Kind, e.Lit.Value), at)
 		}
-		return PresentRaw(e.Kind, e.Lit.Value), nil
+		return Value{Kind: e.Kind, Status: "value", Data: e.Lit.Value, native: e.Lit.native}, nil
 	}
 	if e.Ref != "" {
-		v, ok := c.Refs[e.Ref]
+		v, ok := c.ref(e.Ref)
 		if !ok {
 			if p.frozenFormula {
 				n := 0.0
@@ -123,26 +132,26 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return Missing(e.Kind), nil
 	}
 	if e.Op == "if" {
-		condition, err := p.eval(e.Args[0], c, at+".args[0]", reasons)
+		condition, err := p.eval(e.Args[0], c, p.arg(at, 0), reasons)
 		if err != nil {
 			return Value{}, err
 		}
-		value, err := validateValue(condition, at+".args[0]")
+		value, err := validateValue(condition, p.arg(at, 0))
 		if err != nil {
 			return Value{}, err
 		}
 		if value == nil {
-			return Value{}, fail("missing", at+".args[0]", "conditional test is missing or null")
+			return Value{}, fail("missing", p.arg(at, 0), "conditional test is missing or null")
 		}
 		branch := 2
 		if value.(bool) {
 			branch = 1
 		}
-		return p.eval(e.Args[branch], c, fmt.Sprintf("%s.args[%d]", at, branch), reasons)
+		return p.eval(e.Args[branch], c, p.arg(at, branch), reasons)
 	}
 	if e.Op == "coalesce" {
 		for i, arg := range e.Args {
-			v, err := p.eval(arg, c, fmt.Sprintf("%s.args[%d]", at, i), reasons)
+			v, err := p.eval(arg, c, p.arg(at, i), reasons)
 			if err != nil {
 				return Value{}, err
 			}
@@ -160,7 +169,7 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 	values := make([]any, 0, len(e.Args))
 	states := make([]Value, 0, len(e.Args))
 	for i, arg := range e.Args {
-		v, err := p.eval(arg, c, fmt.Sprintf("%s.args[%d]", at, i), reasons)
+		v, err := p.eval(arg, c, p.arg(at, i), reasons)
 		if err != nil {
 			return Value{}, err
 		}
@@ -179,7 +188,7 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 					return Value{}, fail("missing", at, "emptiness operand is missing")
 				}
 			default:
-				return Value{}, fail("missing", fmt.Sprintf("%s.args[%d]", at, i), "required operand is missing or null")
+				return Value{}, fail("missing", p.arg(at, i), "required operand is missing or null")
 			}
 		}
 		values = append(values, x)
@@ -190,7 +199,17 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 			return Present("boolean", true), nil
 		}
 	}
-	out := func(v any) (Value, error) { r := Present(e.Kind, v); _, err := validateValue(r, at); return r, err }
+	out := func(v any) (Value, error) {
+		if b, ok := v.(bool); ok && e.Kind == "boolean" {
+			if b {
+				return Value{Kind: "boolean", Status: "value", Data: trueData, native: true}, nil
+			}
+			return Value{Kind: "boolean", Status: "value", Data: falseData, native: false}, nil
+		}
+		r := Present(e.Kind, v)
+		_, err := validateValue(r, at)
+		return r, err
+	}
 	switch e.Op {
 	case "and":
 		return out(true)
@@ -354,6 +373,8 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return out(strings.TrimSpace(values[0].(string)))
 	case "contains":
 		return out(strings.Contains(values[0].(string), values[1].(string)))
+	case "icontains":
+		return out(strings.Contains(strings.ToLower(values[0].(string)), strings.ToLower(values[1].(string))))
 	case "starts-with":
 		return out(strings.HasPrefix(values[0].(string), values[1].(string)))
 	case "ends-with":
@@ -419,7 +440,32 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 			return Value{}, err
 		}
 		return out(a >= 0 && b <= 0)
+	case "overlaps":
+		right := map[string]bool{}
+		for _, item := range values[1].([]any) {
+			text, ok := item.(string)
+			if !ok {
+				return Value{}, fail("type", at, "set items must be text")
+			}
+			right[text] = true
+		}
+		for _, item := range values[0].([]any) {
+			text, ok := item.(string)
+			if !ok {
+				return Value{}, fail("type", at, "set items must be text")
+			}
+			if right[text] {
+				return out(true)
+			}
+		}
+		return out(false)
 	case "in":
+		if e.Args[1].Lit != nil && e.Args[1].Lit.index != nil {
+			if key, ok := valueKey(values[0]); ok {
+				_, found := e.Args[1].Lit.index[key]
+				return out(found)
+			}
+		}
 		for _, candidate := range values[1].([]any) {
 			v := Present(states[0].Kind, candidate)
 			x, err := validateValue(v, at)

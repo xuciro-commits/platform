@@ -830,7 +830,7 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		if whenRaw, ok := raw["when"]; ok {
 			var source string
 			if json.Unmarshal(whenRaw, &source) == nil {
-				condition, err := parseWhen(source)
+				condition, err := ParseWhen(source)
 				if err != nil {
 					return EntityInfo{}, err
 				}

@@ -7,18 +7,27 @@ import (
 	"strings"
 )
 
-func Compile(e Expr, s Schema) (*Program, error) { return compile(e, s, false) }
+const (
+	modeStandard = iota
+	modeFrozen
+	modeRecord
+)
 
-func CompileFrozenFormula(e Expr, s Schema) (*Program, error) { return compile(e, s, true) }
-func compile(e Expr, s Schema, frozen bool) (*Program, error) {
+func Compile(e Expr, s Schema) (*Program, error) { return compile(e, s, modeStandard) }
+
+func CompileFrozenFormula(e Expr, s Schema) (*Program, error) { return compile(e, s, modeFrozen) }
+func compile(e Expr, s Schema, mode int) (*Program, error) {
 	nodes := 0
-	if _, err := check(e, s, "$", 0, &nodes, frozen); err != nil {
+	if _, err := check(e, s, "$", 0, &nodes, mode); err != nil {
 		return nil, err
 	}
 	raw, err := json.Marshal(e)
 	limit := MaxBytes
-	if frozen {
+	switch mode {
+	case modeFrozen:
 		limit = 1 << 20
+	case modeRecord:
+		limit = MaxContextBytes
 	}
 	if err != nil || len(raw) > limit {
 		return nil, fail("budget", "$", "expression byte budget exceeded")
@@ -29,7 +38,10 @@ func compile(e Expr, s Schema, frozen bool) (*Program, error) {
 	}
 	var schema Schema
 	json.Unmarshal(schemaRaw, &schema)
-	program := &Program{expr: cloneExpr(e), schema: schema, patterns: map[string]*regexp.Regexp{}}
+	program := &Program{expr: cloneExpr(e), schema: schema, patterns: map[string]*regexp.Regexp{}, row: mode == modeRecord}
+	if mode != modeFrozen {
+		cacheLiterals(&program.expr)
+	}
 	var patterns func(Expr)
 	patterns = func(expr Expr) {
 		if expr.Op == "matches" {
@@ -73,10 +85,11 @@ func cloneExpr(e Expr) Expr {
 	}
 	return e
 }
-func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Type, error) {
+func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, error) {
+	frozen := mode == modeFrozen
 	*nodes++
 	maxNodes, maxDepth := MaxNodes, MaxDepth
-	if frozen {
+	if mode != modeStandard {
 		maxNodes, maxDepth = 8192, 4096
 	}
 	if *nodes > maxNodes || depth > maxDepth {
@@ -138,7 +151,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		if len(e.Args) != 1 || e.Args[0].Ref == "" || len(e.Path) == 0 || len(e.Path) > 16 || e.In != nil || e.Agg != nil {
 			return Type{}, fail("path", at, "path needs one declared source and 1-16 literal segments")
 		}
-		t, err := check(e.Args[0], s, at+".args[0]", depth+1, nodes, frozen)
+		t, err := check(e.Args[0], s, at+".args[0]", depth+1, nodes, mode)
 		if err != nil {
 			return Type{}, err
 		}
@@ -188,7 +201,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		}
 		if e.In != nil {
 			var err error
-			value, err = check(*e.In, child, at+".in", depth+1, nodes, frozen)
+			value, err = check(*e.In, child, at+".in", depth+1, nodes, mode)
 			if err != nil {
 				return Type{}, err
 			}
@@ -225,7 +238,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 	args := make([]Type, len(e.Args))
 	for i, a := range e.Args {
 		var err error
-		args[i], err = check(a, s, fmt.Sprintf("%s.args[%d]", at, i), depth+1, nodes, frozen)
+		args[i], err = check(a, s, fmt.Sprintf("%s.args[%d]", at, i), depth+1, nodes, mode)
 		if err != nil {
 			return Type{}, err
 		}
@@ -332,7 +345,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		good = arity(2, 32) && all("text") && same(e.Kind, "text")
 	case "lower", "upper", "trim":
 		good = arity(1, 1) && all("text") && same(e.Kind, "text")
-	case "contains", "starts-with", "ends-with":
+	case "contains", "starts-with", "ends-with", "icontains":
 		good = arity(2, 2) && all("text") && e.Kind == "boolean"
 	case "matches":
 		good = arity(2, 2) && all("text") && e.Kind == "boolean" && e.Args[1].Lit != nil
@@ -374,6 +387,8 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 		}
 	case "in":
 		good = arity(2, 2) && args[1].Kind == "set" && args[1].Element != nil && same(args[0].Kind, args[1].Element.Kind) && e.Kind == "boolean"
+	case "overlaps":
+		good = arity(2, 2) && args[0].Kind == "set" && args[1].Kind == "set" && args[0].Element != nil && args[1].Element != nil && textual(args[0].Element.Kind) && textual(args[1].Element.Kind) && e.Kind == "boolean"
 	case "range":
 		good = arity(3, 3) && same(args[0].Kind, args[1].Kind) && same(args[0].Kind, args[2].Kind) && numeric(args[0].Kind) && e.Kind == "boolean"
 	default:
@@ -384,6 +399,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, frozen bool) (Typ
 	}
 	return Type{Kind: e.Kind, Currency: currency}, nil
 }
+func textual(kind string) bool { return kind == "text" || kind == "choice" || kind == "reference" }
 func PresentRaw(kind string, raw json.RawMessage) Value {
 	return Value{Kind: kind, Status: "value", Data: raw}
 }

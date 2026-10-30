@@ -6,11 +6,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/rules"
 	"platformserver/platform/authz"
 	"reflect"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -538,9 +540,40 @@ type FieldCondition struct {
 	In    []string `json:"in"`
 }
 
-func (c *FieldCondition) Holds(value string) bool { return c == nil || slices.Contains(c.In, value) }
+func (c FieldCondition) Expr() Expr {
+	items := make([]string, len(c.In))
+	copy(items, c.In)
+	return Expr{Op: "in", Kind: "boolean", Args: []Expr{
+		rules.RefOf("text", c.Field),
+		{Kind: "set", Lit: &rules.Literal{Value: Raw(items), Element: "text"}},
+	}}
+}
 
-func parseWhen(tag string) (*FieldCondition, error) {
+type conditionValue string
+
+func (v conditionValue) Ref(string) (rules.Value, bool) {
+	return rules.Present("text", string(v)), true
+}
+
+var conditionPrograms sync.Map
+
+func (c *FieldCondition) Holds(value string) bool {
+	if c == nil {
+		return true
+	}
+	key := c.Field + "=" + strings.Join(c.In, "\x00")
+	cached, ok := conditionPrograms.Load(key)
+	if !ok {
+		program, err := rules.CompileRow(c.Expr(), rules.Schema{Refs: map[string]rules.Type{c.Field: {Kind: "text"}}})
+		if err != nil {
+			return false
+		}
+		cached, _ = conditionPrograms.LoadOrStore(key, program)
+	}
+	return cached.(*rules.RowProgram).Match(conditionValue(value))
+}
+
+func ParseWhen(tag string) (*FieldCondition, error) {
 	if tag == "" {
 		return nil, nil
 	}
@@ -1069,7 +1102,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		if f.Inverse = sf.Tag.Get("inverse"); f.Inverse != "" && f.Type != "reference" {
 			return nil, fmt.Errorf("entity %s: field %s names an inverse but is not a reference", e.Type, name)
 		}
-		when, err := parseWhen(sf.Tag.Get("when"))
+		when, err := ParseWhen(sf.Tag.Get("when"))
 		if err != nil {
 			return nil, fmt.Errorf("entity %s: field %s: %w", e.Type, name, err)
 		}

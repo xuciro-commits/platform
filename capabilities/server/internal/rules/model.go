@@ -31,6 +31,8 @@ type Expr struct {
 type Literal struct {
 	Value   json.RawMessage `json:"value"`
 	Element string          `json:"element,omitempty"`
+	native  any
+	index   map[string]struct{}
 }
 type Aggregate struct {
 	Source string   `json:"source"`
@@ -56,6 +58,7 @@ type Schema struct {
 
 type Value struct {
 	frozenNumber *float64
+	native       any
 	Kind         string          `json:"kind"`
 	Status       string          `json:"status"`
 	Data         json.RawMessage `json:"value,omitempty"`
@@ -78,6 +81,7 @@ type Context struct {
 	Me      string                   `json:"me"`
 	Now     time.Time                `json:"now"`
 	Today   string                   `json:"today"`
+	source  RefSource
 }
 type Issue struct {
 	Code    string `json:"code"`
@@ -95,6 +99,7 @@ type Result struct {
 type Program struct {
 	patterns      map[string]*regexp.Regexp
 	frozenFormula bool
+	row           bool
 	expr          Expr
 	schema        Schema
 }

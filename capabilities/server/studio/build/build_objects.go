@@ -531,10 +531,11 @@ func CheckConditions(fields []Field) error {
 		if f.When == "" {
 			continue
 		}
-		name, values, ok := strings.Cut(f.When, "=")
-		if !ok || name == "" || values == "" {
+		condition, err := platform.ParseWhen(f.When)
+		if err != nil {
 			return fmt.Errorf("the field %q applies \"only when\" %q, which is not field=value,value", f.Name, f.When)
 		}
+		name := condition.Field
 		i := slices.IndexFunc(fields, func(x Field) bool { return x.Name == name })
 		switch {
 		case i < 0 || name == f.Name:
@@ -548,7 +549,7 @@ func CheckConditions(fields []Field) error {
 		if fields[i].Type == "choice" {
 			allowed = ValueChoices(fields[i].Choices)
 		}
-		for _, v := range strings.Split(values, ",") {
+		for _, v := range condition.In {
 			if !slices.Contains(allowed, v) {
 				return fmt.Errorf("the field %q depends on %q being %q, which it never is", f.Name, name, v)
 			}

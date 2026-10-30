@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -45,6 +46,9 @@ func rat(v any) (*big.Rat, error) {
 func validateValue(v Value, at string) (any, error) {
 	if v.frozenNumber != nil {
 		return *v.frozenNumber, nil
+	}
+	if v.native != nil {
+		return v.native, nil
 	}
 	if v.Status == "missing" || v.Status == "null" {
 		return nil, nil
@@ -272,4 +276,21 @@ func decimalPlaces(n *big.Rat) int {
 		return max(counts[0], counts[1])
 	}
 	return 18
+}
+
+func valueKey(x any) (string, bool) {
+	switch v := x.(type) {
+	case string:
+		return "s" + v, true
+	case *big.Rat:
+		return "n" + v.RatString(), true
+	case bool:
+		if v {
+			return "b1", true
+		}
+		return "b0", true
+	case time.Time:
+		return "t" + strconv.FormatInt(v.Unix(), 10) + "." + strconv.Itoa(v.Nanosecond()), true
+	}
+	return "", false
 }
