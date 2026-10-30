@@ -994,7 +994,11 @@ func (b *Build) declaresRole(role string) bool {
 			return true
 		}
 	}
-	return slices.Contains(b.Manifest().AllRoles(), role)
+	catalog := b.ledger.Catalog
+	if b.installationCatalog != nil {
+		catalog = b.installationCatalog
+	}
+	return slices.Contains((platform.Manifest{Actions: catalog, Roles: b.manifestRoles()}).AllRoles(), role)
 }
 
 func (b *Build) jointObjectEntities(objects []Object, drafts []JointDraftRef) map[string]platform.EntityInfo {
@@ -1307,7 +1311,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 		return b.alertDraftAssets(id)
 	}
 	if kind == platform.AssetFunction {
-		return b.functionDraftAssets(id)
+		return functionKind.draftAssets(b, id)
 	}
 	if kind == platform.AssetAgent {
 		return b.agentDraftAssets(id)
@@ -1459,7 +1463,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	for _, read := range []func() ([]platform.ReleaseAsset, error){
-		b.functionAssets, b.agentAssets, b.kindAssets(&queryKind), b.kindAssets(&linkKind), b.kindAssets(&propertyKind), b.kindAssets(&valueKind),
+		b.kindAssets(&functionKind), b.agentAssets, b.kindAssets(&queryKind), b.kindAssets(&linkKind), b.kindAssets(&propertyKind), b.kindAssets(&valueKind),
 		b.CodeReleaseAssets, b.alertAssets, b.integrationAssets, b.testPlanAssets, b.sampleSetAssets,
 	} {
 		owned, err := read()

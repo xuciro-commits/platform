@@ -40,6 +40,7 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	description     string
 	transition      string
 	immutable       string
+	limitMessage    string
 	joint           bool
 	records         func(*Build) map[string]T
 	validate        func(*Build, T) (T, error)
@@ -52,9 +53,11 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	admit           func(D) bool
 	install         func(platform.BuildHost, platform.Caller, D, int) error
 	validateInstall func(platform.BuildHost, D) error
+	beforeInstall   func(*Build)
+	candidate       func(platform.ReleaseAsset) error
 }
 
-var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind}
+var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind, &functionKind}
 
 func definitionKindOf(kind platform.AssetKind) definitionKind {
 	for _, k := range definitionKinds {
@@ -114,7 +117,11 @@ func (k *resourceKind[T, D]) publish(b *Build, c platform.Caller, record any) *k
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	*f = bound
-	return publishRetainedDefinition(c, f, "A "+k.label()+" may retain at most 64 published versions", func(c platform.Caller, f T) error { return k.installRecord(b, c, f) })
+	message := k.limitMessage
+	if message == "" {
+		message = "A " + k.label() + " may retain at most 64 published versions"
+	}
+	return publishRetainedDefinition(c, f, message, func(c platform.Caller, f T) error { return k.installRecord(b, c, f) })
 }
 
 func (k *resourceKind[T, D]) check(b *Build, f T) (T, error) {
@@ -154,6 +161,9 @@ func (k *resourceKind[T, D]) inventory(b *Build) ([]T, error) {
 
 func (k *resourceKind[T, D]) installRecord(b *Build, c platform.Caller, f T) error {
 	family := definitionFamilyOf(f)
+	if k.beforeInstall != nil {
+		k.beforeInstall(b)
+	}
 	if err := k.install(b.host, c, f.Definition(), family.Version); err != nil {
 		return err
 	}
@@ -236,6 +246,11 @@ func (k *resourceKind[T, D]) prepare(b *Build, assets []platform.ReleaseAsset) (
 		family := definitionFamilyOf(record)
 		prior, retained := ReadPublication[T](family.Published)
 		var d D
+		if k.candidate != nil {
+			if err := k.candidate(asset); err != nil {
+				return record, err
+			}
+		}
 		if version != family.Version+1 || json.Unmarshal(asset.Body, &d) != nil || d.Check() != nil {
 			return record, fmt.Errorf("invalid next %s version", k.label())
 		}

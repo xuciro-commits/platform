@@ -12,92 +12,61 @@ import (
 
 	"platformserver/platform"
 	"slices"
-	"strconv"
 	"time"
 )
 
 const SchemaFunction = FunctionType + ".publish"
 
-func (b *Build) functionEntity() platform.Entity {
-	return platform.Entity{Type: FunctionType, Title: "AI function", Plural: "AI functions", Model: Function{}, Display: "title",
-		Description: "A bounded typed inference over one published object; draft edits do not change installed calls.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "functions"},
-		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this typed function as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "functions", Payload: []platform.Field{}, Do: b.publishFunction}}}}
-}
-
-func (b *Build) checkFunction(f Function) error {
-	if !Named(f.Name) {
-		return fmt.Errorf("The function name %s must be lower-case letters and digits", f.Name)
-	}
-	_, installed := b.installed[f.Object]
-	shape, selected := b.jointEntities[f.Object]
-	if !installed && (!selected || shape.App != ID) {
-		return fmt.Errorf("Function %s needs a published object of this builder", f.Name)
-	}
-	if f.Proposal != nil && f.Proposal.HandoffRole != "" && !b.declaresRole(f.Proposal.HandoffRole) {
-		return fmt.Errorf("The proposal reviewer must hold a declared role")
-	}
-	validate := f.Definition().Check
-	if !selected {
-		validate = func() error { return b.host.ValidateInstallFunction(f.Definition()) }
-	}
-	if err := validate(); err != nil {
-		return err
-	}
-	list, err := b.functionInventory()
-	if err != nil {
-		return err
-	}
-	for _, other := range list {
-		installed, _ := ReadPublication[Function](other.Published)
-		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
-			return fmt.Errorf("Function %s is already declared", f.Name)
+var functionKind = resourceKind[Function, platform.AIFunction]{
+	asset: platform.AssetFunction, typ: FunctionType, prefix: "function", noun: "function", title: "AI function", plural: "AI functions", capability: "functions",
+	description:  "A bounded typed inference over one published object; draft edits do not change installed calls.",
+	transition:   "Install this typed function as its next retained version.",
+	immutable:    "A published function keeps its name and source object",
+	limitMessage: "An AI function may retain at most 64 published versions",
+	records:      func(b *Build) map[string]Function { return b.functions },
+	validate: func(b *Build, f Function) (Function, error) {
+		if !Named(f.Name) {
+			return f, fmt.Errorf("The function name %s must be lower-case letters and digits", f.Name)
 		}
-	}
-	if old, ok := ReadPublication[Function](f.Published); ok && (old.Name != f.Name || old.Object != f.Object) {
-		return fmt.Errorf("A published function keeps its name and source object")
-	}
-	return nil
-}
-
-func (b *Build) publishFunction(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	f, ok := record.(*Function)
-	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	if err := b.checkFunction(*f); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
-	}
-	return publishRetainedDefinition(c, f, "An AI function may retain at most 64 published versions", b.installFunction)
-}
-
-func functionImage(image []byte) (Function, error) {
-	return definitionImage[Function](image, "function", func(before, after Function) bool {
-		return before.Name == after.Name && before.Object == after.Object
-	})
-}
-
-func (b *Build) functionInventory() ([]Function, error) {
-	return readDefinitionInventory[Function](b.host.Automation(platform.Caller{}, ID))
-}
-
-func (b *Build) installFunction(c platform.Caller, f Function) error {
-	b.ledger.Catalog.Add(functionCallActions(b.Manifest().AllRoles())...)
-	if err := b.host.InstallFunction(c, f.Definition(), f.Version); err != nil {
-		return err
-	}
-	b.functions[f.Name] = f
-	return nil
+		_, installed := b.installed[f.Object]
+		shape, selected := b.jointEntities[f.Object]
+		if !installed && (!selected || shape.App != ID) {
+			return f, fmt.Errorf("Function %s needs a published object of this builder", f.Name)
+		}
+		if f.Proposal != nil && f.Proposal.HandoffRole != "" && !b.declaresRole(f.Proposal.HandoffRole) {
+			return f, fmt.Errorf("The proposal reviewer must hold a declared role")
+		}
+		if selected {
+			return f, f.Definition().Check()
+		}
+		return f, b.host.ValidateInstallFunction(f.Definition())
+	},
+	identity: func(a, b Function) bool { return a.Name == b.Name && a.Object == b.Object },
+	fromDeclaration: func(d platform.AIFunction) Function {
+		return Function{Proposal: d.Proposal, Conversation: d.Conversation, Name: d.Name, Title: d.Title, Description: d.Description, Object: d.Object, Fields: d.Fields, Instructions: d.Instructions, Output: d.Output, Model: d.Model, ModelOptions: d.ModelOptions, MaxInputBytes: d.MaxInputBytes, MaxOutputBytes: d.MaxOutputBytes, MaxTokens: d.MaxTokens, Roles: d.Roles}
+	},
+	beforeInstall: func(b *Build) {
+		catalog := b.ledger.Catalog
+		if b.installationCatalog != nil {
+			catalog = b.installationCatalog
+		}
+		b.ledger.Catalog.Add(functionCallActions((platform.Manifest{Actions: catalog, Roles: b.manifestRoles()}).AllRoles())...)
+	},
+	install: func(h platform.BuildHost, c platform.Caller, d platform.AIFunction, version int) error {
+		return h.InstallFunction(c, d, version)
+	},
+	validateInstall: func(h platform.BuildHost, d platform.AIFunction) error { return h.ValidateInstallFunction(d) },
+	candidate: func(asset platform.ReleaseAsset) error {
+		var d platform.AIFunction
+		if ValueDecodeIntegration(asset.Body, &d) != nil || asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
+			return fmt.Errorf("function candidate dependencies differ")
+		}
+		return nil
+	},
 }
 
 func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunction, int, bool) {
-	return retainedDefinition(b.functions, b.functionInventory, functionImage, name, version)
-}
-
-func (b *Build) functionDeclarations() []platform.AIFunction {
-	return definitionDeclarations(b.functions)
+	return functionKind.definition(b, name, version)
 }
 
 func (b *Build) functionCallEntity() platform.Entity {
@@ -197,58 +166,12 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 	})
 }
 
-func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: f.Name}, sourceVersion+".function-"+strconv.Itoa(f.Version), f.Definition())
-}
-
 func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
-	return retainedDefinitionAsset(b.Manifest().Version, "function", "function", platform.AssetFunction, name, sourceVersion, b.FunctionDefinition)
-}
-
-func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
-	return installedDefinitionAssets(b.functions, func(record Function) (platform.ReleaseAsset, error) {
-		return functionReleaseAsset(record, b.Manifest().Version)
-	})
+	return functionKind.resolve(b, name, sourceVersion)
 }
 
 func (b *Build) InstallFunctionAsset(asset platform.ReleaseAsset) error {
-	version := b.definitionAssetVersion(asset, platform.AssetFunction, "function")
-	var f Function
-	if version == 0 || asset.ContractVersion != 1 ||
-		json.Unmarshal(asset.Body, &f) != nil || f.Name != asset.Ref.Name ||
-		f.Definition().Check() != nil {
-		return fmt.Errorf("invalid builder function asset %s", asset.Ref)
-	}
-	if _, exists := b.functions[f.Name]; exists {
-		return fmt.Errorf("function asset %s is already installed", asset.Ref)
-	}
-	f.Version, f.State = version, "published"
-	return b.installFunction(platform.Caller{Replaying: true}, f)
-}
-
-func (b *Build) functionDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	return draftDefinitionAssets(b, id, platform.AssetFunction, "function", b.functionInventory, func(record Function) (Function, error) {
-		return record, b.checkFunction(record)
-	}, func(record Function) (platform.ReleaseAsset, error) {
-		record.Version++
-		return functionReleaseAsset(record, b.Manifest().Version)
-	})
-}
-
-func (b *Build) prepareFunctionReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	return prepareDefinitionPublications(b, assets, b.functionInventory, platform.AssetFunction, "function", SchemaFunction, "function", b.FunctionReleaseAsset, func(record Function, asset platform.ReleaseAsset, version int) (Function, error) {
-		var frozen Function
-		if version != record.Version+1 || ValueDecodeIntegration(asset.Body, &frozen) != nil || frozen.Definition().Check() != nil || frozen.Name != record.Name || frozen.Object != record.Object {
-			return record, fmt.Errorf("function version requires its retained predecessors and matching target definition")
-		}
-		if asset.ContractVersion != 1 || platform.CheckAssetDependencies(asset) != nil {
-			return record, fmt.Errorf("function candidate dependencies differ")
-		}
-		frozen.Record, frozen.Version, frozen.State = record.Record, version, "published"
-		record.State, record.Version, record.Published = "published", version, published(frozen)
-		record.Versions = append(slices.Clone(record.Versions), record.Published)
-		return record, nil
-	})
+	return functionKind.installAsset(b, asset)
 }
 
 const FunctionType = "build.function"

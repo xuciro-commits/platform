@@ -154,7 +154,7 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		}
 		publications = append(publications, images...)
 	}
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications, b.prepareAlertPublications} {
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications, b.prepareAlertPublications} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, err
@@ -420,9 +420,6 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	}
 	if k := definitionKindOf(ref.Kind); k != nil {
 		return k.resolve(b, ref.Name, version)
-	}
-	if ref.Kind == platform.AssetFunction {
-		return b.FunctionReleaseAsset(ref.Name, version)
 	}
 	if ref.Kind == platform.AssetEvaluation || ref.Kind == platform.AssetTestPlan {
 		return b.testPlanPinned(ref, version)
@@ -1017,12 +1014,6 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	case platform.AssetSampleSet:
 		d, _, err := decodeSampleAsset(asset)
 		return SampleSetType, SampleSetRecord{Name: d.Name, Title: d.Title, Samples: d.Samples}, err
-	case platform.AssetFunction:
-		var d Function
-		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
-			return "", nil, err
-		}
-		return FunctionType, d, nil
 	case platform.AssetEvaluation, platform.AssetTestPlan:
 		d, err := b.testPlanDraft(asset)
 		return TestPlanType, d, err

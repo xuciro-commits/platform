@@ -56,7 +56,7 @@ func New(tenant string) *Build {
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
 	actions = append(actions, platform.EntityActions(b.processEntity())...)
-	actions = append(actions, platform.EntityActions(b.functionEntity())...)
+	actions = append(actions, platform.EntityActions(functionKind.entity(b))...)
 	actions = append(actions, platform.EntityActions(linkKind.entity(b))...)
 	actions = append(actions, platform.Action{Schema: LinkTypeType + ".migrate", Target: LinkTypeType, Title: "Migrate relationships", Description: "Move historical links into the endpoint owner's accepted records", Capability: LinkTypeType, Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = append(actions, platform.EntityActions(propertyKind.entity(b))...)
@@ -96,15 +96,7 @@ func (b *Build) settings() []platform.Setting {
 		Description: "production: definitions are delivered only through a saved release candidate; development: direct install stays available for authoring, import and probes."}}
 }
 
-func (b *Build) Manifest() platform.Manifest {
-	catalog := b.ledger.Catalog
-	if b.installationCatalog != nil {
-		catalog = b.installationCatalog
-	}
-	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), linkKind.entity(b), queryKind.entity(b), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
-	for _, typ := range sortedTypes(b.installed) {
-		entities = append(entities, b.installed[typ])
-	}
+func (b *Build) manifestRoles() []string {
 	roles := []string{User, Builder, Publisher, Integrator}
 	for _, typ := range sortedTypes(b.installed) {
 		for role := range b.installed[typ].Scope.Levels {
@@ -114,8 +106,20 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
+	return roles
+}
+
+func (b *Build) Manifest() platform.Manifest {
+	catalog := b.ledger.Catalog
+	if b.installationCatalog != nil {
+		catalog = b.installationCatalog
+	}
+	entities := []platform.Entity{platform.RelationEntity(ID), b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), b.agentEntity(), b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	for _, typ := range sortedTypes(b.installed) {
+		entities = append(entities, b.installed[typ])
+	}
 	provisions, reads := b.objectProtocols()
-	return platform.Manifest{ID: ID, Title: "Builder", Version: ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: definitionDeclarations(b.queries), Functions: b.functionDeclarations(), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: ValueDefinitionVersion, Sequences: b.transactionSequences(), Actions: catalog, Entities: entities, Roles: b.manifestRoles(), Settings: b.settings(), Jobs: []platform.Job{{Name: "confirmations", Title: "Advance business confirmations", Every: time.Second}, {Name: "dispatches", Title: "Advance device dispatches", Every: time.Second}}, Provides: provisions, Consumes: b.consumedProtocols(), Reads: append([]string{ReadReleaseProfile}, reads...), ReadSources: protocolReadSources(reads), Queries: definitionDeclarations(b.queries), Functions: definitionDeclarations(b.functions), Agents: b.agentDeclarations(), Operations: b.operationDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -363,7 +367,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == AgentType+".create" || name == AgentType+".edit" {
 		agentEntity = b.agentDraftEntity()
 	}
-	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), linkKind.entity(b), queryKind.entity(b), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
+	entities := []platform.Entity{b.objectEntity(), pageEntity, b.applicationEntity(), b.testPlanEntity(), b.processEntity(), propertyKind.entity(b), valueKind.entity(b), linkKind.entity(b), queryKind.entity(b), functionKind.entity(b), b.functionCallEntity(), b.evaluationEntity(), agentEntity, b.alertEntity(), b.codeEntity(), b.sourceEntity(), b.connectionEntity(), b.datasetEntity(), b.datasetVersionEntity(), b.pipelineEntity(), b.writebackEntity(), b.matchEntity(), b.tableEntity(), b.sampleSetEntity(), b.observationEntity(), b.confirmationEntity(), b.dispatchEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}

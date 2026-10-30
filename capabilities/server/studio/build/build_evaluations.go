@@ -419,7 +419,7 @@ func (b *Build) testPlanDraft(asset platform.ReleaseAsset) (TestPlan, error) {
 	if err != nil {
 		return TestPlan{}, err
 	}
-	rows, err := b.functionInventory()
+	rows, err := functionKind.inventory(b)
 	if err != nil {
 		return TestPlan{}, err
 	}

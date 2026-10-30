@@ -288,13 +288,6 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		}
 		return b.host.ValidateInstallOperation(platform.Caller{Replaying: true}, code.Definition())
 	}
-	if schema == SchemaFunction {
-		f, err := functionImage(image)
-		if err != nil {
-			return err
-		}
-		return b.host.ValidateInstallFunction(f.Definition())
-	}
 	if schema == SchemaProcess {
 		p, err := ReadProcessImage(image)
 		if err != nil {
@@ -371,13 +364,6 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 			return err
 		}
 		return b.installCode(platform.Caller{Replaying: true}, code)
-	}
-	if schema == SchemaFunction {
-		f, err := functionImage(image)
-		if err != nil {
-			return err
-		}
-		return b.installFunction(platform.Caller{Replaying: true}, f)
 	}
 	if schema == SchemaProcess {
 		p, err := ReadProcessImage(image)
@@ -503,7 +489,7 @@ func (b *Build) Reinstall() error {
 	if err := queryKind.restore(b); err != nil {
 		return err
 	}
-	if err := restoreDefinitionPublications(b, b.functionInventory, SchemaFunction); err != nil {
+	if err := functionKind.restore(b); err != nil {
 		return err
 	}
 
@@ -890,7 +876,7 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 					if !found || plan.Archived {
 						return nil, fmt.Errorf("saved evaluation plan is unavailable")
 					}
-					_, functions, _, functionRef, _, problem := b.functionDraftAssets(string(plan.Function))
+					_, functions, _, functionRef, _, problem := functionKind.draftAssets(b, string(plan.Function))
 					if problem != nil {
 						return nil, problem
 					}
