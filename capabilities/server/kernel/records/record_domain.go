@@ -33,7 +33,7 @@ func (r *rowRefs) Ref(name string) (rules.Value, bool) {
 }
 
 func (f *RowFilter) Match(v reflect.Value) bool {
-	return f.program == nil || f.program.Match(&rowRefs{value: v, readers: f.readers})
+	return f == nil || f.program == nil || f.program.Match(&rowRefs{value: v, readers: f.readers})
 }
 
 func (f *RowFilter) Pushdown() []journal.StateFilter { return f.sql }
@@ -46,8 +46,22 @@ func CompileDomain(info platform.EntityInfo, raw json.RawMessage) (*RowFilter, e
 	return CompileRowFilter(info, expr)
 }
 
+type RowAttribute struct {
+	Ref  string
+	Type rules.Type
+	Read func(reflect.Value) rules.Value
+}
+
 func CompileRowFilter(info platform.EntityInfo, expr rules.Expr) (*RowFilter, error) {
-	filter := &RowFilter{readers: map[string]func(reflect.Value) rules.Value{}, sql: pushdown(info, expr)}
+	return compileRowFilter(info, expr, pushdown(info, expr), nil)
+}
+
+func CompilePolicy(info platform.EntityInfo, expr rules.Expr, attributes ...RowAttribute) (*RowFilter, error) {
+	return compileRowFilter(info, expr, nil, attributes)
+}
+
+func compileRowFilter(info platform.EntityInfo, expr rules.Expr, sql []journal.StateFilter, attributes []RowAttribute) (*RowFilter, error) {
+	filter := &RowFilter{readers: map[string]func(reflect.Value) rules.Value{}, sql: sql}
 	if expr.Lit != nil && string(expr.Lit.Value) == "true" {
 		return filter, nil
 	}
@@ -56,6 +70,10 @@ func CompileRowFilter(info platform.EntityInfo, expr rules.Expr) (*RowFilter, er
 	visit = func(e rules.Expr) error {
 		if e.Ref != "" {
 			if _, done := schema.Refs[e.Ref]; !done {
+				if i := slices.IndexFunc(attributes, func(a RowAttribute) bool { return a.Ref == e.Ref }); i >= 0 {
+					schema.Refs[e.Ref], filter.readers[e.Ref] = attributes[i].Type, attributes[i].Read
+					return nil
+				}
 				name, view, _ := strings.Cut(e.Ref, "#")
 				field, err := resolveDomainField(info, name)
 				if err != nil {

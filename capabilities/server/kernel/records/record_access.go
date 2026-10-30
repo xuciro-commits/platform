@@ -8,6 +8,7 @@ import (
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/rules"
 	"platformserver/journal"
 	"platformserver/platform"
 	"reflect"
@@ -71,56 +72,88 @@ func FieldView(m platform.Member, source platform.EntityInfo) (view platform.Ent
 	return info, hidden
 }
 
-func ScopeVisibility(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
+func ScopePolicy(info platform.EntityInfo, m platform.Member, directory ScopeDirectory, now time.Time, through func(reflect.Value) bool) (*RowFilter, *kernel.Error) {
 	roles, scope := m.RolesIn(info.App), info.Scope
-	participant := func(v reflect.Value) bool {
-		return scope.Participants != nil && slices.Contains(scope.Participants(v.Interface()), m.ID)
+	text := rules.Type{Kind: "text"}
+	deny := func() (*RowFilter, *kernel.Error) {
+		filter, err := CompilePolicy(info, boolLit(false))
+		if err != nil {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		return filter, nil
+	}
+	compiled := func(expr rules.Expr, attributes ...RowAttribute) (*RowFilter, *kernel.Error) {
+		filter, err := CompilePolicy(info, expr, attributes...)
+		if err != nil {
+			return deny()
+		}
+		return filter, nil
+	}
+	if scope.Through != nil {
+		return compiled(rules.RefOf("boolean", "$through"), RowAttribute{Ref: "$through", Type: rules.Type{Kind: "boolean"}, Read: func(v reflect.Value) rules.Value { return rules.BoolValue(through(v)) }})
+	}
+	var participant []RowAttribute
+	var participantExpr rules.Expr
+	if scope.Participants != nil {
+		participant = []RowAttribute{{Ref: "$participants", Type: rules.Type{Kind: "set", Element: &text}, Read: func(v reflect.Value) rules.Value {
+			return rules.SetValue(scope.Participants(v.Interface()))
+		}}}
+		participantExpr = rules.Expr{Op: "in", Kind: "boolean", Args: []rules.Expr{textLit(m.ID), setRef("$participants")}}
 	}
 	if len(roles) == 0 {
 		if scope.Participants == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
-		return participant, nil
+		return compiled(participantExpr, participant...)
 	}
-	base, err := scoped(directory, m, info, roles, now)
-	if base == nil || err != nil || scope.Participants == nil {
-		return base, err
+	base, restricted := scopeExpr(directory, m, info, roles, now)
+	if !restricted {
+		return nil, nil
 	}
-	return func(v reflect.Value) bool { return base(v) || participant(v) }, nil
+	attributes := append([]RowAttribute{createdBy}, participant...)
+	if scope.Participants != nil {
+		base = combine("or", base, participantExpr)
+	}
+	return compiled(base, attributes...)
 }
 
-func scoped(directory ScopeDirectory, m platform.Member, info platform.EntityInfo, roles []string, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
+var createdBy = RowAttribute{Ref: "$created.by", Type: rules.Type{Kind: "text"}, Read: func(v reflect.Value) rules.Value {
+	return rules.TextValue("text", Header(v).Created.By)
+}}
+
+func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.EntityInfo, roles []string, now time.Time) (rules.Expr, bool) {
 	if len(roles) > 1 {
-		var predicates []func(reflect.Value) bool
+		var parts []rules.Expr
 		for _, role := range roles {
-			predicate, err := scoped(directory, m, info, []string{role}, now)
-			if err != nil {
-				return nil, err
+			part, restricted := scopeExpr(directory, m, info, []string{role}, now)
+			if !restricted {
+				return rules.Expr{}, false
 			}
-			if predicate == nil {
-				return nil, nil
-			}
-			predicates = append(predicates, predicate)
+			parts = append(parts, part)
 		}
-		return func(v reflect.Value) bool {
-			return slices.ContainsFunc(predicates, func(p func(reflect.Value) bool) bool { return p(v) })
-		}, nil
+		return combine("or", parts...), true
 	}
 	scope := info.Scope
 	level := scope.LevelFor(roles)
-	field := func(name string) func(reflect.Value) string {
-		f, _ := info.Field(name)
-		return func(v reflect.Value) string { return v.FieldByIndex(f.Index).String() }
+	textField := func(name string) (rules.Expr, bool) {
+		f, ok := info.Field(name)
+		if !ok || !slices.Contains([]string{"text", "longtext", "choice", "reference"}, f.Type) || f.AliasOf != "" || len(f.Index) == 0 {
+			return rules.Expr{}, false
+		}
+		return rules.RefOf("text", name+"#text"), true
 	}
 	switch level {
 	case platform.ScopeNone:
-		return func(reflect.Value) bool { return false }, nil
+		return boolLit(false), true
 	case platform.ScopeOwn:
 		if scope.Owner == platform.OwnerCreated {
-			return func(v reflect.Value) bool { return Header(v).Created.By == m.ID }, nil
+			return compare("=", rules.RefOf("text", createdBy.Ref), textLit(m.ID)), true
 		}
-		owner := field(scope.Owner)
-		return func(v reflect.Value) bool { return owner(v) == m.ID }, nil
+		owner, ok := textField(scope.Owner)
+		if !ok {
+			return boolLit(false), true
+		}
+		return compare("=", owner, textLit(m.ID)), true
 	case platform.ScopeUnit, platform.ScopeBelow:
 		var units []string
 		if directory != nil {
@@ -147,10 +180,21 @@ func scoped(directory ScopeDirectory, m platform.Member, info platform.EntityInf
 				units = append(units, directory.Units("member:"+m.ID, structure, m.Today(now))...)
 			}
 		}
-		unit := field(scope.Unit)
-		return func(v reflect.Value) bool { return slices.Contains(units, unit(v)) }, nil
+		unit, ok := textField(scope.Unit)
+		if !ok || len(units) == 0 {
+			return boolLit(false), true
+		}
+		items := make([]any, len(units))
+		for i, u := range units {
+			items[i] = u
+		}
+		var options []rules.Expr
+		for chunk := range slices.Chunk(items, rules.MaxSet) {
+			options = append(options, rules.Expr{Op: "in", Kind: "boolean", Args: []rules.Expr{unit, setLit("text", chunk)}})
+		}
+		return combine("or", options...), true
 	}
-	return nil, nil
+	return rules.Expr{}, false
 }
 
 func Write(info platform.EntityInfo, receipt *pb.ChangeRecord, prev *Row, v reflect.Value) (*Row, *kernel.Error) {

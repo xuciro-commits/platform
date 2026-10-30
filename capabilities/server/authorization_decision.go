@@ -317,17 +317,15 @@ func (t *Tenant) authorizeDepth(store *records.Store, c platform.Caller, q platf
 				context.Row = authorizationPass("the declared owner service boundary")
 			} else if et.Info().Type == platform.KnowledgeDocumentType && q.Kind == "derive" {
 				context.Row = authz.Gate{Allowed: t.knowledgeSourceReadable(store, c.Member, q.Record, ""), Reason: "The document is outside the caller's source grants"}
-			} else if through := et.Info().Scope.Through; through != nil {
-				if current != nil && depth < 16 && !cycle {
-					typ, id, _ := strings.Cut(through(current.Value.Interface()), "/")
-					parent := t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk)
-					context.Row = authz.Gate{Allowed: parent.Allow, Reason: "The owning record is outside the caller's row scope"}
-				} else {
-					context.Row = authz.Gate{Reason: "The owning record is unavailable or exceeds 16 segments"}
-				}
+			} else if et.Info().Scope.Through != nil && (current == nil || depth >= 16 || cycle) {
+				context.Row = authz.Gate{Reason: "The owning record is unavailable or exceeds 16 segments"}
 			} else {
-				visible, err := records.ScopeVisibility(et.Info(), c.Member, t.directory, at)
-				context.Row = authz.Gate{Allowed: current != nil && err == nil && (visible == nil || visible(current.Value)), Reason: "The record is outside the caller's row scope"}
+				policy, err := t.scopePolicy(store, c, et.Info(), at, depth, walk)
+				reason := "The record is outside the caller's row scope"
+				if et.Info().Scope.Through != nil {
+					reason = "The owning record is outside the caller's row scope"
+				}
+				context.Row = authz.Gate{Allowed: current != nil && err == nil && policy.Match(current.Value), Reason: reason}
 			}
 		}
 		for _, name := range q.Fields {
@@ -480,21 +478,26 @@ func (t *Tenant) visibleIn(store *records.Store, m platform.Member, et *records.
 	return t.visibleForCallerIn(store, platform.NewCaller(runtime{t}, m, et.Info().App, false, false), et, at)
 }
 
+func (t *Tenant) scopePolicy(store *records.Store, c platform.Caller, info platform.EntityInfo, at time.Time, depth int, walk *authorizationWalk) (*records.RowFilter, *kernel.Error) {
+	through := func(v reflect.Value) bool {
+		typ, id, _ := strings.Cut(info.Scope.Through(v.Interface()), "/")
+		return t.authorizeDepth(store, c, platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: typ, Record: id}, at, true, depth+1, walk).Allow
+	}
+	return records.ScopePolicy(info, c.Member, t.directory, at, through)
+}
+
 func (t *Tenant) visibleForCallerIn(store *records.Store, c platform.Caller, et *records.Type, at time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	question := platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: et.Info().Type}
 	if refusal := authorizationRefusal(t.authorizeFrom(store, c, question, at, true)); refusal != nil {
 		return nil, refusal
 	}
-	cache := map[string]platform.AuthzDecision{}
-	walk := newAuthorizationWalk()
-	return func(value reflect.Value) bool {
-		id := records.Header(value).ID
-		if result, ok := cache[id]; ok {
-			return result.Allow
-		}
-		question.Record = id
-		result := t.authorizeDepth(store, c, question, at, true, 0, walk)
-		cache[id] = result
-		return result.Allow
-	}, nil
+	c.Member = t.authorizationMember(c.Member)
+	if c.Automation && c.App == et.Info().App {
+		return func(reflect.Value) bool { return true }, nil
+	}
+	policy, err := t.scopePolicy(store, c, et.Info(), at, 0, newAuthorizationWalk())
+	if err != nil {
+		return func(reflect.Value) bool { return false }, nil
+	}
+	return policy.Match, nil
 }

@@ -1142,20 +1142,19 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 	return out, nil
 }
 
-func (f FieldInfo) Reads(role string) bool {
-	return !slices.Contains(f.Read, "-") && (len(f.Read) == 0 || slices.Contains(f.Read, role))
-}
+func (f FieldInfo) Reads(role string) bool { return f.ReadsAny([]string{role}) }
 
-func (f FieldInfo) Writes(role string) bool {
-	return f.Reads(role) && (len(f.Write) == 0 || slices.Contains(f.Write, role))
-}
+func (f FieldInfo) Writes(role string) bool { return f.WritesAny([]string{role}) }
 
 func (f FieldInfo) ReadsAny(roles []string) bool {
-	return len(f.Read) == 0 || slices.ContainsFunc(roles, f.Reads)
+	return propertyPolicyOf("read", f).allows(roles)
 }
 
 func (f FieldInfo) WritesAny(roles []string) bool {
-	return slices.ContainsFunc(roles, f.Writes) || len(roles) == 0 && f.Writes("")
+	if len(roles) == 0 {
+		roles = []string{""}
+	}
+	return propertyPolicyOf("write", f).allows(roles)
 }
 
 func describeDerived(info *EntityInfo, e Entity) error {
