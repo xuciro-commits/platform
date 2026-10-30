@@ -1,4 +1,8 @@
 import { sourceFieldInput } from "@platform/app";
+import { branchPath } from "../branches/api";
+import { checkFailure } from "../branches/CheckSummary";
+import { branchRefusal } from "../branches/decisions";
+import { useCurrentBranch } from "../branches/current";
 import { useDraftInventory } from "../branches/records";
 import { StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
@@ -12,7 +16,7 @@ import { refKey, resourceKinds, resourceRef, resourceRoute } from "../projects/r
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionReferences } from "../editor/SystemDefinitions";
 import { AppSelect, ModelPicker, useHost } from "@platform/app";
-import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, Panel, PageHeader, PropertyList, Select, StatusTag, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
+import { Button, Card, Checkbox, ContextHelp, Disclosure, FlowRun, Input, InputDraftProvider, InputProblems, Notice, Panel, PageHeader, PropertyList, Select, StatusTag, Textarea, t, useInputDrafts, useUnsavedChanges, type Route } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
 import { useEffect, useRef, useState } from "react";
@@ -34,7 +38,7 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
 }) {
   const host = useHost(), { client, decide, action , holds} = host;
   const trial = useActionTrial(), declarationFields = host.source.entity("build.testplan")?.fields ?? [];
-  const constructionApplication = useApplicationScope();
+  const constructionApplication = useApplicationScope(), { id: branchId } = useCurrentBranch();
   const { open } = useApplicationWorkspace();
   const objects = useDraftInventory<ObjectDraft>("build.object");
   const plans = useDraftInventory<TestPlan>("build.testplan");
@@ -254,6 +258,13 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
     catch { setError(t("Use a valid fixed time and JSON inputs for every step.")); return; }
     lock.current = true; setBusy(true);
     try {
+      if (branchId && kind !== "function") {
+        const staged = await client.call<Api.BranchChecks>("POST", branchPath(branchId, "/checks"), { simulation: plan } satisfies Api.BranchCheckRequest);
+        if (!staged.ok) setError(apiErrorMessage(staged.body) ?? t("The candidate test could not be run."));
+        else if (staged.body.simulation) setResult(staged.body.simulation);
+        else setError(checkFailure(staged.body.check, {}) ?? t("The candidate test could not be run."));
+        return;
+      }
       const response = await client.call<Api.CandidateSimulation>("POST", "/v1/simulate/candidate", plan);
       if (response.ok) setResult(response.body);
       else setError(apiErrorMessage(response.body) ?? t("The candidate test could not be run."));
@@ -326,7 +337,8 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   if (!holds("build", "builder")) return <PageHeader title={t("Test a candidate")} description={t("Only a builder can test saved definitions.")} />;
   return <div className="grid gap-3">
     {!embedded && <PageHeader title={t("Test a candidate")} help={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")}
-      actions={<Button disabled={!id || blocked} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}
+      actions={<Button disabled={!id || blocked || !!branchId} title={branchId ? branchRefusal("publish") : undefined} onClick={() => open({ view: "release-review", params: { kind, id } })}>{t("Review release")}</Button>} />}
+    {branchId && <Notice tone="info" message={kind === "function" ? t("Function tests run against main. The server cannot stage an AI function from a branch.") : t("This test runs against the merged definitions of the selected branch, in a staged world. Nothing is saved to main.")} />}
     {!embedded && !planId && <SystemDefinitionReferences type={evaluationSet ? "build.evaluation-set" : "build.testplan"} />}
     {kind==="app" && <PageHeader title={t("Draft trial")} help={t("Run the application draft closure with synthetic samples and controlled members. Save the same scenario as a test plan.")} />}
     {!!planRoots.length && <ContextHelp title={t("Test plan scope")}>{t("This portable plan keeps named definition roots. Member comparisons and model choices apply only to this run.")}</ContextHelp>}

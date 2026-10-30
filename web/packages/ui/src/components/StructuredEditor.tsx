@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Api } from '@platform/kernel';
 import { Button } from '../primitives/button';
 import { Select, Textarea } from '../primitives/input';
@@ -7,6 +7,8 @@ import { formatStructuredSource, parseStructuredSource, structuredExample, struc
 import { t } from '../i18n';
 import {ContextHelp} from './ContextHelp';
 import {Disclosure} from '../primitives/controls';
+
+export const TrialScope = createContext<string | undefined>(undefined);
 
 export function StructuredEditor({value,onChange,children,scope,fields,fieldInput,validate,onTrial,expectedRevision,readOnly=false,disabled=false,context,initialMode='visual'}: {
   value: StructuredValue; onChange?: (value: StructuredValue) => void; children?: ReactNode; scope: string; fields?: Api.FieldInfo[];
@@ -22,7 +24,7 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
   const [issues,setIssues]=useState<Api.FieldIssue[]>([]),[message,setMessage]=useState(''),[running,setRunning]=useState(false);
   useEffect(()=>setMessage(''),[scope,expectedRevision]);
   const [trial,setTrial]=useState<{signature:string;result:Api.Simulation}>();
-  const [fieldPath,setFieldPath]=useState('');
+  const [fieldPath,setFieldPath]=useState(''),trialScope=useContext(TrialScope);
   const fieldEntries=(items:Api.FieldInfo[],prefix=''):{field:Api.FieldInfo;path:string;prefix:string}[]=>items.filter(field=>!field.readOnly).sort((a,b)=>Number(!!b.required)-Number(!!a.required)).flatMap(field=>[{field,path:prefix+field.name,prefix},...(field.fields?fieldEntries(field.fields,prefix+field.name+'.[].'):[])]);
   const entries=fieldEntries(fields??[]),selectedField=entries.find(entry=>entry.path===fieldPath)??entries[0];
   const signature=JSON.stringify([scope,typeof context==='string'?context:'',expectedRevision,value]), latest=useRef(signature); latest.current=signature;
@@ -84,6 +86,7 @@ export function StructuredEditor({value,onChange,children,scope,fields,fieldInpu
       <Button size="sm" disabled={disabled||running} onClick={()=>{setMessage('');const next=mode==='source'?parse():value;if(!next)return;const found=check(next);setIssues(found);if(!found.length)setMessage(t('Input checks passed. Business rules have not been run.'));}}>{t('Check inputs')}</Button>
       {onTrial&&<Button size="sm" disabled={disabled||running||!!input.problem} onClick={async()=>{const found=check(value);setIssues(found);if(found.length)return;const captured=signature;setRunning(true);try{const result=await onTrial(value);if(latest.current===captured)setTrial({signature:captured,result});}catch(error){if(latest.current===captured)setMessage(error instanceof Error?error.message:String(error));}finally{setRunning(false);}}}>{t(running?'Trying…':'Try operation')}</Button>}
     </div>}
+    {onTrial&&!readOnly&&trialScope&&<p role="note" className="break-words text-xs text-muted">{trialScope}</p>}
     {input.problem&&<p role="alert" className="break-words text-sm text-danger">{input.problem}</p>}
     {!!issues.length&&<ul role="alert" className="grid gap-1 text-sm text-danger">{issues.map((issue,index)=><li key={index}>{issue.path.join('.')}: {issue.message}</li>)}</ul>}
     {message&&<p role="status" className="break-words text-sm text-muted">{message}</p>}
