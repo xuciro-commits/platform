@@ -1,5 +1,6 @@
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action, Query, AggregateQuery, AssetBinding, AssetRef, CompositeAnswer, Definition, SchemaVersion, ImportRow } from "./gen/host";
+import type { Action, AssetBinding, AssetRef, CompositeAnswer, Definition, SchemaVersion, ImportRow, ObjectSetCount } from "./gen/host";
+import { aggregateRequest, countRequest, interfaceRequest, loadRequest, objectSetPath, type AggregateQueryInput, type RecordQueryInput } from "./object-set";
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
 import { PreparedWorkspace, preparedIdentity, rememberPreparedIdentity, preparedMetadataPaths, readPath, type PreparedApplication } from "./prepared";
@@ -61,24 +62,23 @@ export class EdgeClient {
     stops.set(0, this.subscribeRead(path(0), update));
     return () => { stops.forEach(stop => stop()); stops.clear(); };
   }
-  recordsPath(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}) {
-    if (q.set || q.traversal || q.businessTime) return `/v1/records/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
+  recordsPath(type: string, q: RecordQueryInput = {}) {
+    if (q.set || q.traversal || q.businessTime) return objectSetPath("load", loadRequest(type, q));
     return `/v1/records/${encodeURIComponent(type)}?${this.readParams(q)}`;
   }
-  interfaceRecordsPath(name:string,q:Omit<Query,"domain"> & {domain?:unknown[]}={}) {
-    return `/v1/interfaces/${encodeURIComponent(name)}/records?${this.readParams(q)}`;
+  interfaceRecordsPath(name:string,q:RecordQueryInput={}) {
+    return objectSetPath("load", interfaceRequest(name, q));
   }
   namedQueryPath(binding:AssetBinding,q:{search?:string;offset?:number;limit?:number}={}) {
     if(binding.ref.kind!=="query"||!binding.sourceVersion)throw Error("Invalid named query binding");
     const p=this.readParams(q);p.set("version",binding.sourceVersion);
     return `/v1/queries/${encodeURIComponent(binding.ref.app)}/${encodeURIComponent(binding.ref.name)}?${p}`;
   }
-  aggregatePath(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}) {
-    if (q.window || q.histogram || q.set || q.traversal || q.maxRows || q.collection || q.businessTime) return `/v1/aggregates/${encodeURIComponent(type)}/query\n${JSON.stringify(q)}`;
-    const p = this.readParams(q);
-    if (q.groups?.length) p.set("group", q.groups.join(","));
-    if (q.measures?.length) p.set("measure", q.measures.join(","));
-    return `/v1/aggregates/${encodeURIComponent(type)}?${p}`;
+  aggregatePath(type: string, q: AggregateQueryInput = {}) {
+    return objectSetPath("aggregate", aggregateRequest(type, q));
+  }
+  countPath(type: string, q: Omit<RecordQueryInput, "sort" | "offset" | "limit"> = {}) {
+    return objectSetPath("count", countRequest(type, q));
   }
   private readParams(q: {domain?:unknown;search?:string;sort?:string[];offset?:number;limit?:number;archived?:boolean}) {
     const p = new URLSearchParams();
@@ -264,7 +264,7 @@ export class EdgeClient {
     return answer.body;
   }
 
-  async exportCSV(type: string, query: Omit<Query, "domain"> & {domain?:unknown[]}): Promise<Blob> {
+  async exportCSV(type: string, query: RecordQueryInput): Promise<Blob> {
     const response = await fetch(`${this.connection.server}/v1/export/${encodeURIComponent(type)}`, {
       method: "POST", headers: { ...this.headers(), "Content-Type": "application/json" }, body: JSON.stringify(query),
     });
@@ -323,19 +323,16 @@ export class EdgeClient {
     return { ok: true, status: response.status };
   }
 
-  async records<T = unknown>(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
+  async records<T = unknown>(type: string, q: RecordQueryInput = {}): Promise<T> {
     return this.get<T>(this.recordsPath(type, q));
   }
 
-  async traverseLink<T=unknown>(binding:AssetBinding,direction:"forward"|"reverse",id:string,query:Omit<Query,"domain">&{domain?:unknown[]}={}):Promise<T>{
-    if(binding.ref.kind!=="link-type"||!binding.sourceVersion||!id)throw new Error("Link traversal needs an exact version and start record");
-    const path=`/v1/link-types/${[binding.ref.app,binding.ref.name,binding.sourceVersion,direction,id].map(encodeURIComponent).join("/")}`;
-    const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(query)});
-    if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;
+  async aggregate<T = unknown>(type: string, q: AggregateQueryInput = {}): Promise<T> {
+    return this.get<T>(this.aggregatePath(type, q));
   }
 
-  async aggregate<T = unknown>(type: string, q: Omit<AggregateQuery,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
-    return this.get<T>(this.aggregatePath(type, q));
+  async count(type: string, q: Omit<RecordQueryInput, "sort" | "offset" | "limit"> = {}): Promise<ObjectSetCount> {
+    return this.get<ObjectSetCount>(this.countPath(type, q));
   }
 
   record<T = unknown>(type: string, id: string): Promise<T> {

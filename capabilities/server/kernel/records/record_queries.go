@@ -36,11 +36,10 @@ func (s *Store) MatchingQuery(et *Type, q platform.Query, visible func(reflect.V
 }
 
 func (s *Store) VisitMatching(et *Type, q platform.Query, visible func(reflect.Value) bool, accept func(reflect.Value)) *kernel.Error {
-
 	if err := q.CheckSet(); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	match, err := CompileSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set})
+	plan, err := CompileSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set})
 	if err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -48,7 +47,11 @@ func (s *Store) VisitMatching(et *Type, q platform.Query, visible func(reflect.V
 	if refusal != nil {
 		return refusal
 	}
+	s.VisitPlan(et, plan.Scoped(q.Archived, effective), visible, accept)
+	return nil
+}
 
+func (s *Store) VisitPlan(et *Type, plan Plan, visible func(reflect.Value) bool, accept func(reflect.Value)) int {
 	image := et.IndexImage()
 	image.Current = func() *CurrentScope { return s.current }
 	writes := func(yield func(string) bool) {
@@ -61,24 +64,15 @@ func (s *Store) VisitMatching(et *Type, q platform.Query, visible func(reflect.V
 			}
 		}
 	}
-	VisitMatching(image, s.IndexImage, q, visible, effective, match, writes, accept)
-
-	return nil
+	return VisitPlan(image, s.IndexImage, plan, visible, writes, accept)
 }
 
 type AggregateQuery struct {
-	BusinessTime *platform.BusinessTime  `json:"businessTime,omitempty"`
-	Collection   *platform.RecordSetRef  `json:"collection,omitempty"`
-	Window       *AggregateWindowQuery   `json:"window,omitempty"`
-	Histogram    *HistogramQuery         `json:"histogram,omitempty"`
-	MaxRows      int                     `json:"maxRows,omitempty"`
-	Traversal    *platform.LinkTraversal `json:"traversal,omitempty"`
-	Set          *platform.QuerySet      `json:"set,omitempty"`
-	Domain       json.RawMessage         `json:"domain,omitempty"`
-	Search       string                  `json:"search,omitempty"`
-	Archived     bool                    `json:"archived,omitempty"`
-	Groups       []string                `json:"groups,omitempty"`
-	Measures     []string                `json:"measures,omitempty"`
+	Window    *AggregateWindowQuery `json:"window,omitempty"`
+	Histogram *HistogramQuery       `json:"histogram,omitempty"`
+	MaxRows   int                   `json:"maxRows,omitempty"`
+	Groups    []string              `json:"groups,omitempty"`
+	Measures  []string              `json:"measures,omitempty"`
 }
 
 const AggregateSetMaxGroups = 4
@@ -219,22 +213,22 @@ func (et *Type) Measure(name string) (measure, bool) {
 	return measure{column: col, op: op, field: f, kind: kind}, true
 }
 
-func (s *Store) Aggregate(et *Type, q AggregateQuery, visible func(reflect.Value) bool, selected ...[]reflect.Value) (Aggregate, *kernel.Error) {
+func (s *Store) Aggregate(et *Type, q AggregateQuery, rows []reflect.Value, composed bool) (Aggregate, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	if q.MaxRows < 0 || q.MaxRows > AggregateSetMaxRows {
 		return Aggregate{}, invalid
 	}
 	if q.Window != nil {
-		return s.AggregateWindow(et, q, visible)
+		return s.AggregateWindow(et, q, rows)
 	}
 	if q.Histogram != nil {
-		return s.Histogram(et, q, visible)
+		return s.Histogram(et, q, rows)
 	}
 	maxRows := q.MaxRows
-	if q.Set != nil && (maxRows == 0 || maxRows > AggregateSetMaxRows) {
+	if composed && (maxRows == 0 || maxRows > AggregateSetMaxRows) {
 		maxRows = AggregateSetMaxRows
 	}
-	if q.Set != nil && (len(q.Groups) > AggregateSetMaxGroups || len(q.Measures) > AggregateSetMaxMeasures) {
+	if composed && (len(q.Groups) > AggregateSetMaxGroups || len(q.Measures) > AggregateSetMaxMeasures) {
 		return Aggregate{}, invalid
 	}
 	if len(q.Measures) == 0 {
@@ -263,18 +257,8 @@ func (s *Store) Aggregate(et *Type, q AggregateQuery, visible func(reflect.Value
 				key: func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface().(platform.Money).Currency }})
 		}
 	}
-	if q.Set != nil && len(groups) > AggregateSetMaxGroups {
+	if composed && len(groups) > AggregateSetMaxGroups {
 		return Aggregate{}, invalid
-	}
-	var rows []reflect.Value
-	if len(selected) > 0 {
-		rows = selected[0]
-	} else {
-		var err *kernel.Error
-		rows, err = s.MatchingQuery(et, platform.Query{Set: q.Set, Domain: q.Domain, Search: q.Search, Archived: q.Archived, BusinessTime: q.BusinessTime}, visible)
-		if err != nil {
-			return Aggregate{}, err
-		}
 	}
 	type acc struct {
 		keys  []any
@@ -451,16 +435,12 @@ func histogramBound(value *big.Rat) string {
 	return text
 }
 
-func (s *Store) Histogram(et *Type, q AggregateQuery, visible func(reflect.Value) bool) (Aggregate, *kernel.Error) {
+func (s *Store) Histogram(et *Type, q AggregateQuery, rows []reflect.Value) (Aggregate, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	h := q.Histogram
 	field, ok := et.info.Field(h.Field)
 	if !ok || !slices.Contains([]string{"integer", "decimal"}, field.Type) || h.Bins < 1 || h.Bins > HistogramMaxBins || len(q.Groups) > 0 || len(q.Measures) > 0 && !slices.Equal(q.Measures, []string{"count"}) || q.MaxRows > 0 && q.MaxRows < h.Bins {
 		return Aggregate{}, invalid
-	}
-	rows, err := s.MatchingQuery(et, platform.Query{Domain: q.Domain, Search: q.Search, Set: q.Set, Archived: q.Archived, BusinessTime: q.BusinessTime}, visible)
-	if err != nil {
-		return Aggregate{}, err
 	}
 	result := &HistogramResult{Field: h.Field, RequestedBins: h.Bins, Buckets: []HistogramBucket{}}
 	values := make([]*big.Rat, 0, len(rows))
@@ -589,7 +569,7 @@ func windowTime(value reflect.Value) (time.Time, bool, bool) {
 	return instant, true, true
 }
 
-func (s *Store) AggregateWindow(et *Type, q AggregateQuery, visible func(reflect.Value) bool) (Aggregate, *kernel.Error) {
+func (s *Store) AggregateWindow(et *Type, q AggregateQuery, rows []reflect.Value) (Aggregate, *kernel.Error) {
 	invalid := func(message string) (Aggregate, *kernel.Error) {
 		return Aggregate{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: message}
 	}
@@ -599,10 +579,6 @@ func (s *Store) AggregateWindow(et *Type, q AggregateQuery, visible func(reflect
 	threshold, valid := windowThreshold(w.Threshold)
 	if !hasTime || when.Type != "datetime" || !hasField || !slices.Contains([]string{"integer", "decimal"}, field.Type) || w.Rows < 1 || w.Rows > AggregateWindowMaxRows || !valid || len(q.Groups) > 0 || len(q.Measures) > 0 || q.Histogram != nil || q.MaxRows != 0 {
 		return invalid("Window statistics need readable event time and numeric fields, a bounded row count and decimal threshold; other aggregate modes cannot be mixed.")
-	}
-	rows, issue := s.MatchingQuery(et, platform.Query{Domain: q.Domain, Search: q.Search, Set: q.Set, Archived: q.Archived, BusinessTime: q.BusinessTime}, visible)
-	if issue != nil {
-		return Aggregate{}, issue
 	}
 	type timedRow struct {
 		value reflect.Value

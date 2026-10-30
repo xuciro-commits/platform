@@ -38,7 +38,7 @@ export type ChartSpec = {
 
 export type AggregateColumn = { name: string; title: string; kind: "group" | "measure"; type: MeasureType; field?: string; money?: boolean };
 export type AggregateData = { window?:Api.AggregateWindowResult; histogram?:Api.HistogramResult; columns: AggregateColumn[]; rows: Record<string, unknown>[] };
-export type AggregateQuery = Omit<Api.AggregateQuery,"domain"> & {domain?:unknown[]};
+export type AggregateQuery = Pick<Api.ObjectSetRequest,"groups"|"measures"|"window"|"histogram"|"maxRows"|"collection"> & {domain?:unknown[];search?:string;archived?:boolean;set?:Api.QuerySet;traversal?:Api.LinkTraversal;businessTime?:Api.BusinessTime};
 
 export const markOf = (spec: ChartSpec) => (typeof spec.mark === "string" ? { type: spec.mark } : spec.mark);
 

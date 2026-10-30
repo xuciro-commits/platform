@@ -3,7 +3,6 @@ package records
 import (
 	"fmt"
 	"iter"
-	"platformserver/journal"
 	"platformserver/platform"
 	"reflect"
 	"slices"
@@ -127,51 +126,35 @@ func (p *SortedPage) Result() ([]reflect.Value, int) {
 	return out, p.total
 }
 
-type SetMatch struct {
-	Match    func(reflect.Value) bool
-	Pushdown []journal.StateFilter
-}
-
-func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (SetMatch, error) {
-	domain, err := CompileDomain(info, p.Domain)
+func CompileSet(info platform.EntityInfo, p platform.RecordSetPredicate) (Plan, error) {
+	expr, err := DomainToExpr(info, p.Domain)
 	if err != nil {
-		return SetMatch{}, err
+		return Plan{}, err
 	}
-	search := strings.ToLower(strings.TrimSpace(p.Search))
-	var searched []platform.FieldInfo
-	for _, f := range info.Fields {
-		if f.Search {
-			searched = append(searched, f)
-		}
-	}
-	base := func(v reflect.Value) bool {
-		return domain.Match(v) && (search == "" || strings.Contains(strings.ToLower(Header(v).ID), search) || slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
-			return strings.Contains(strings.ToLower(Searchable(v.FieldByIndex(f.Index).Interface())), search)
-		}))
+	base, err := CompilePlan(info, expr, p.Search)
+	if err != nil {
+		return Plan{}, err
 	}
 	if p.Set == nil {
-		return SetMatch{Match: base, Pushdown: domain.Pushdown()}, nil
+		return base, nil
 	}
 	left, err := CompileSet(info, *p.Set.Inputs[0])
 	if err != nil {
-		return SetMatch{}, err
+		return Plan{}, err
 	}
 	right, err := CompileSet(info, *p.Set.Inputs[1])
 	if err != nil {
-		return SetMatch{}, err
+		return Plan{}, err
 	}
-	out := SetMatch{Pushdown: domain.Pushdown()}
 	switch p.Set.Op {
 	case "union":
-		out.Match = func(v reflect.Value) bool { return base(v) && (left.Match(v) || right.Match(v)) }
+		return Intersect(base, Union(left, right)), nil
 	case "intersect":
-		out.Match = func(v reflect.Value) bool { return base(v) && left.Match(v) && right.Match(v) }
+		return Intersect(base, left, right), nil
 	case "subtract":
-		out.Match = func(v reflect.Value) bool { return base(v) && left.Match(v) && !right.Match(v) }
-	default:
-		return SetMatch{}, fmt.Errorf("unsupported record set operation")
+		return Intersect(base, Subtract(left, right)), nil
 	}
-	return out, nil
+	return Plan{}, fmt.Errorf("unsupported record set operation")
 }
 
 type sortKey struct {

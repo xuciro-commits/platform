@@ -3,7 +3,6 @@ package platformserver
 import records "platformserver/kernel/records"
 
 import (
-	"encoding/json"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -18,10 +17,6 @@ func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
 		}
 	}
 	return platform.NamedQuery{}, false
-}
-
-func (t *Tenant) queryRead(m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
-	return t.runQueryFrom(t.records, m, app, name, of, now)
 }
 
 func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
@@ -43,14 +38,6 @@ func (t *Tenant) queryWindowRead(m platform.Member, app, name, of, version strin
 	return t.runDeclaredQueryWindowFrom(t.records, m, *declared, of, window, now)
 }
 
-func (t *Tenant) runQueryFrom(store *records.Store, m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
-	q, ok := t.namedQuery(app, name)
-	if !ok {
-		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	return t.runDeclaredQueryFrom(store, m, q, of, now)
-}
-
 func (t *Tenant) runDeclaredQueryFrom(store *records.Store, m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *kernel.Error) {
 	return t.runDeclaredQueryWindowFrom(store, m, q, of, platform.Query{}, now)
 }
@@ -59,30 +46,15 @@ func (t *Tenant) runDeclaredQueryWindowFrom(store *records.Store, m platform.Mem
 	if q.By != "" && of == "" {
 		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{query} needs the record it is run for", q.Title)
 	}
-	var terms []any
-	if len(q.Domain) > 0 {
-		_ = json.Unmarshal(q.Domain, &terms)
-	}
-	if q.By != "" {
-		terms = append(terms, []any{q.By, "=", of})
-	}
-	query := platform.Query{Sort: q.Sort, Limit: q.Limit, Search: window.Search, Offset: window.Offset}
-	if query.Limit <= 0 || query.Limit > 200 {
-		query.Limit = 200
+	limit := q.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 200
 	}
 	if window.Limit > 0 {
-		query.Limit = min(window.Limit, query.Limit)
+		limit = min(window.Limit, limit)
 	}
-	if len(terms) > 0 {
-		query.Domain, _ = json.Marshal(terms)
-	}
-	if q.Interface != "" {
-		page, err := t.interfaceRecordsFrom(store, m, q, query, now)
-		out := RecordPage{Total: page.Total, Records: make([]any, len(page.Records))}
-		for i, record := range page.Records {
-			out.Records[i] = record
-		}
-		return out, err
-	}
-	return t.recordsFrom(store, m, q.Object, query, now)
+	set := q.ObjectSet(of)
+	set.Search = window.Search
+	page, _, err := t.loadObjectSet(store, platform.NewCaller(runtime{t}, m, "", false, false), set, objectWindow{Sort: q.Sort, Offset: window.Offset, Limit: limit}, now, q)
+	return page, err
 }

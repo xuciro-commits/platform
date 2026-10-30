@@ -98,19 +98,6 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, plan)
 	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/interfaces/{name}/records", Summary: "Common-field records of actual interface implementers, with original type and id", Answer: InterfaceRecordPage{}, Query: []transport.Param{{Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Common fields, comma-separated"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in this window (at most 200)"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		offset, limit := pageBounds(r, 0, 25)
-		query := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Offset: offset, Limit: limit}
-		if raw := r.URL.Query().Get("sort"); raw != "" {
-			query.Sort = strings.Split(raw, ",")
-		}
-		out, err := t.interfaceRecordsRead(m, r.PathValue("name"), query, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
-	})
 	rt.handle(transport.Route{Pattern: "POST /v1/files", Summary: "Upload a file's bytes (the body; query name; Content-Type); answers its SHA-256 to attach with files.file.attach",
 		Query: []transport.Param{{Name: "name", Description: "The file's name"}}, Body: []byte{}, Answer: Upload{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		up, status, err := t.Upload(m, r.URL.Query().Get("name"), r.Header.Get("Content-Type"), r.Body, h.Now())
@@ -176,58 +163,6 @@ func (h *Host) routesRecords(rt *routes) {
 			return
 		}
 		exportCSV(w, r, m, t, *q)
-	})
-	rt.recordRead(transport.Route{Pattern: "POST /v1/records/{type}/query", Summary: "Read a bounded complete record-set expression in the caller's scope before paging", Body: platform.Query{}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
-		decoder.DisallowUnknownFields()
-		var q *platform.Query
-		if decoder.Decode(&q) != nil || q == nil || q.Limit < 0 || q.Offset < 0 {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-			return
-		}
-		var extra any
-		if decoder.Decode(&extra) != io.EOF {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-			return
-		}
-		page, err := t.recordsRead(m, r.PathValue("type"), *q, h.Now())
-		if err == nil && r.PathValue("type") == build.ObjectType {
-			page, err = t.objectDraftPage(m, page)
-		}
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, page)
-	})
-	rt.recordRead(transport.Route{Pattern: "POST /v1/link-types/{app}/{name}/{version}/{direction}/{id}", Summary: "Read a retained relationship using a bounded original query", Body: platform.Query{}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		var q *platform.Query
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&q) != nil || q == nil || decoder.Decode(new(any)) != io.EOF {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A link query must be a bounded JSON object"))
-			return
-		}
-		result, err := t.traverseLinkRead(m, platform.AssetBinding{Ref: platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetLinkType, Name: r.PathValue("name")}, SourceVersion: r.PathValue("version")}, r.PathValue("direction"), r.PathValue("id"), *q, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, result)
-	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/link-types/{app}/{name}/{version}/{direction}/{id}", Summary: "Follow one retained link type within the member's original record scope", Answer: RecordPage{}, Query: []transport.Param{{Name: "domain", Description: "Additional record filters"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in the page"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search")}
-		if sort := r.URL.Query().Get("sort"); sort != "" {
-			q.Sort = strings.Split(sort, ",")
-		}
-		fmt.Sscan(r.URL.Query().Get("offset"), &q.Offset)
-		fmt.Sscan(r.URL.Query().Get("limit"), &q.Limit)
-		result, err := t.traverseLinkRead(m, platform.AssetBinding{Ref: platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetLinkType, Name: r.PathValue("name")}, SourceVersion: r.PathValue("version")}, r.PathValue("direction"), r.PathValue("id"), q, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, result)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []transport.Param{{Name: "domain", Description: "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {Name: "search", Description: "Words to find"}, {Name: "sort", Description: "Fields, comma-separated; -field for descending"}, {Name: "offset", Description: "Records to skip"}, {Name: "limit", Description: "Records in the page"}, {Name: "archived", Description: "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
@@ -336,42 +271,7 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	rt.recordRead(transport.Route{Pattern: "POST /v1/aggregates/{type}/query", Summary: "Aggregate authorized membership or explicitly declared recent business-time windows", Body: records.AggregateQuery{}, Answer: records.Aggregate{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
-		decoder.DisallowUnknownFields()
-		var q *records.AggregateQuery
-		if decoder.Decode(&q) != nil || q == nil {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-			return
-		}
-		var extra any
-		if decoder.Decode(&extra) != io.EOF {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
-			return
-		}
-		out, err := t.aggregateRead(m, r.PathValue("type"), *q, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
-	})
-	rt.recordRead(transport.Route{Pattern: "GET /v1/aggregates/{type}", Summary: "Groups and measures of an entity type's records within the caller's scope", Answer: records.Aggregate{}, Query: []transport.Param{{Name: "group", Description: "Fields or field:month, comma-separated"}, {Name: "measure", Description: "count, sum:field, avg:field, min:field, max:field"}, {Name: "domain", Description: "Filters, JSON"}, {Name: "search", Description: "Words to find"}, {Name: "archived", Description: "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		p := r.URL.Query()
-		q := records.AggregateQuery{Domain: json.RawMessage(p.Get("domain")), Search: p.Get("search"), Archived: p.Get("archived") == "true"}
-		if g := p.Get("group"); g != "" {
-			q.Groups = strings.Split(g, ",")
-		}
-		if m := p.Get("measure"); m != "" {
-			q.Measures = strings.Split(m, ",")
-		}
-		out, err := t.aggregateRead(m, r.PathValue("type"), q, h.Now())
-		if err != nil {
-			Reply(w, nil, err)
-			return
-		}
-		WriteJSON(w, http.StatusOK, out)
-	})
+	h.objectSetRoutes(rt)
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}", Summary: "A record with its history and related records", Answer: RecordView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.recordOf(m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {

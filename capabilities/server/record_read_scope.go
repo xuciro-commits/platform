@@ -2,8 +2,6 @@ package platformserver
 
 import runtimekernel "platformserver/kernel"
 
-import records "platformserver/kernel/records"
-
 import (
 	"context"
 	"errors"
@@ -111,24 +109,12 @@ func (t *Tenant) Held(ref string) (value any, ok bool) {
 	return value, ok
 }
 
-func (t *Tenant) Aggregate(m platform.Member, typ string, q records.AggregateQuery, now time.Time) (records.Aggregate, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (records.Aggregate, *kernel.Error) { return t.aggregateRead(m, typ, q, now) })
-}
-
 func (t *Tenant) ChainOf(m platform.Member, ref string, now time.Time) (Chain, *kernel.Error) {
 	return recordRead(t, context.Background(), func() (Chain, *kernel.Error) { return t.chainRead(m, ref, now) })
 }
 
 func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {
 	return recordRead(t, context.Background(), func() (ContextView, *kernel.Error) { return t.contextRead(reader, typ, id, now) })
-}
-
-func (t *Tenant) RunQuery(m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (RecordPage, *kernel.Error) { return t.queryRead(m, app, name, of, now) })
-}
-
-func (t *Tenant) RunQueryWindow(m platform.Member, app, name, of, version string, window platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (RecordPage, *kernel.Error) { return t.queryWindowRead(m, app, name, of, version, window, now) })
 }
 
 func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
@@ -145,10 +131,6 @@ func (t *Tenant) EnterpriseUsage(m platform.Member, id, until string, now time.T
 	return recordRead(t, context.Background(), func() (EnterpriseUsage, *kernel.Error) { return t.enterpriseUsageRead(m, id, until, now) })
 }
 
-func (t *Tenant) InterfaceRecords(m platform.Member, name string, query platform.Query, now time.Time) (InterfaceRecordPage, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (InterfaceRecordPage, *kernel.Error) { return t.interfaceRecordsRead(m, name, query, now) })
-}
-
 func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit {
 	out, _ := recordRead(t, context.Background(), func() ([]Hit, *kernel.Error) { return t.searchRead(reader, q, now), nil })
 	return out
@@ -156,8 +138,4 @@ func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit 
 func (t *Tenant) Readable(m platform.Member, ref string, now time.Time) bool {
 	out, _ := recordRead(t, context.Background(), func() (bool, *kernel.Error) { return t.readable(m, ref, now), nil })
 	return out
-}
-
-func (t *Tenant) TraverseLink(m platform.Member, binding platform.AssetBinding, direction, id string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	return recordRead(t, context.Background(), func() (RecordPage, *kernel.Error) { return t.traverseLinkRead(m, binding, direction, id, q, now) })
 }

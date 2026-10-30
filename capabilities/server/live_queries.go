@@ -31,7 +31,7 @@ func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/packages/") && strings.HasSuffix(p, "/preparation") {
 		return true
 	}
-	if strings.HasPrefix(p, "/v1/interfaces/") && strings.HasSuffix(p, "/records") || strings.HasPrefix(p, "/v1/queries/") {
+	if strings.HasPrefix(p, "/v1/queries/") || strings.HasPrefix(p, "/v1/object-sets/") {
 		return true
 	}
 	if strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) {
@@ -43,7 +43,7 @@ func liveReadAllowed(p string) bool {
 	if strings.HasPrefix(p, "/v1/capabilities/") || strings.HasPrefix(p, "/v1/releases/candidates/") {
 		return true
 	}
-	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/aggregates/") || strings.HasPrefix(p, "/v1/chain/") {
+	if strings.HasPrefix(p, "/v1/records/") || strings.HasPrefix(p, "/v1/chain/") {
 		return true
 	}
 	if rest, ok := strings.CutPrefix(p, "/v1/"); ok && rest != "" && !strings.Contains(rest, "/") {
@@ -90,7 +90,7 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 	for _, query := range queries {
 		target, body, post := strings.Cut(query, "\n")
 		u, err := url.Parse(target)
-		if err != nil || len(query) > 8<<10 || u.Host != "" || u.Scheme != "" || u.Fragment != "" || path.Clean(u.Path) != u.Path || !liveReadAllowed(u.Path) || (post && (!strings.HasSuffix(u.Path, "/query") || !json.Valid([]byte(body)))) {
+		if err != nil || len(query) > 8<<10 || u.Host != "" || u.Scheme != "" || u.Fragment != "" || path.Clean(u.Path) != u.Path || !liveReadAllowed(u.Path) || (post && (!strings.HasPrefix(u.Path, "/v1/object-sets/") || !json.Valid([]byte(body)))) {
 			http.Error(w, "unsupported live query", http.StatusBadRequest)
 			return
 		}
@@ -106,7 +106,7 @@ func followLiveQueries(w http.ResponseWriter, r *http.Request, t *Tenant, mux *h
 			request.Header.Set("Content-Type", "application/json")
 		}
 		_, pattern := mux.Handler(request)
-		if !strings.HasPrefix(pattern, request.Method+" ") || post && pattern != "POST /v1/records/{type}/query" && pattern != "POST /v1/aggregates/{type}/query" {
+		if !strings.HasPrefix(pattern, request.Method+" ") || post && !strings.HasPrefix(pattern, "POST /v1/object-sets/") {
 			http.Error(w, "unsupported live query route", http.StatusBadRequest)
 			return
 		}
@@ -203,7 +203,7 @@ func (t *Tenant) liveVersion(query string) string {
 	if strings.HasPrefix(p, "/v1/packages/") && strings.HasSuffix(p, "/preparation") {
 		return fmt.Sprintf("%d/%d/%d/%d", global, meta, owners["ai"], owners["agent"])
 	}
-	if strings.HasPrefix(p, "/v1/interfaces/") || strings.HasPrefix(p, "/v1/queries/") {
+	if strings.HasPrefix(p, "/v1/queries/") {
 		t.records.Lock()
 		generation := t.records.Generation()
 		t.records.Unlock()
@@ -243,17 +243,44 @@ func (t *Tenant) liveVersion(query string) string {
 	if liveOperationRead(p) || strings.HasPrefix(p, "/v1/chain/") || p == "/v1/business-refusals" || p == "/v1/notifications" || p == "/v1/audit" || p == "/v1/inbox" || p == "/v1/personal-reads" {
 		return fmt.Sprint(seq)
 	}
-	for _, prefix := range []string{"/v1/records/", "/v1/aggregates/"} {
-		if rest, ok := strings.CutPrefix(p, prefix); ok {
-			typ, tail, _ := strings.Cut(rest, "/")
-			t.records.Lock()
-			defer t.records.Unlock()
-			version := t.records.LiveVersion(typ)
-			if et := t.records.Type(typ); et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources() || (tail != "" && tail != "query") || strings.Contains(body, `"set"`) || strings.Contains(body, `"traversal"`)) {
-				version = t.records.Generation()
+	if strings.HasPrefix(p, "/v1/object-sets/") {
+		var request ObjectSetRequest
+		typ := ""
+		var walk func(platform.ObjectSet) bool
+		walk = func(set platform.ObjectSet) bool {
+			if set.Interface != "" || set.Around != nil || set.Object != "" && typ != "" && set.Object != typ {
+				return false
 			}
-			return fmt.Sprintf("%d/%d/%d", global, meta, version)
+			if set.Object != "" {
+				typ = set.Object
+			}
+			_, operands := set.Operation()
+			for _, operand := range operands {
+				if !walk(operand) {
+					return false
+				}
+			}
+			return true
 		}
+		t.records.Lock()
+		defer t.records.Unlock()
+		version := t.records.Generation()
+		if json.Unmarshal([]byte(body), &request) == nil && walk(request.Set) && request.Collection == nil {
+			if et := t.records.Type(typ); et != nil && et.Info().Scope.Through == nil && !et.Info().HasReadSources() {
+				version = t.records.LiveVersion(typ)
+			}
+		}
+		return fmt.Sprintf("%d/%d/%d", global, meta, version)
+	}
+	if rest, ok := strings.CutPrefix(p, "/v1/records/"); ok {
+		typ, tail, _ := strings.Cut(rest, "/")
+		t.records.Lock()
+		defer t.records.Unlock()
+		version := t.records.LiveVersion(typ)
+		if et := t.records.Type(typ); et != nil && (et.Info().Scope.Through != nil || et.Info().HasReadSources() || tail != "") {
+			version = t.records.Generation()
+		}
+		return fmt.Sprintf("%d/%d/%d", global, meta, version)
 	}
 	if p == "/v1/enterprise" || p == "/v1/enterprise-references" || p == "/v1/enterprise-usage" {
 		t.records.Lock()

@@ -816,60 +816,6 @@ func (i *DerivedIndexes) ReferenceBucket(image IndexImage, field platform.FieldI
 	return bucket
 }
 
-func IndexedCandidates(image IndexImage, lookup ImageLookup, q platform.Query) ([]string, bool) {
-	var terms []json.RawMessage
-	if len(q.Domain) == 0 || json.Unmarshal(q.Domain, &terms) != nil {
-		return nil, false
-	}
-	for _, term := range terms {
-		if len(term) == 0 || term[0] != '[' {
-			return nil, false
-		}
-	}
-	for _, term := range terms {
-		var parts []json.RawMessage
-		if json.Unmarshal(term, &parts) != nil || len(parts) != 3 {
-			continue
-		}
-		var field, op string
-		if json.Unmarshal(parts[0], &field) != nil || json.Unmarshal(parts[1], &op) != nil {
-			continue
-		}
-		if field == "id" && op == "in" {
-			var ids []string
-			if json.Unmarshal(parts[2], &ids) == nil {
-				slices.Sort(ids)
-				return slices.Compact(ids), true
-			}
-		}
-		if op != "=" {
-			continue
-		}
-		var target string
-		if json.Unmarshal(parts[2], &target) != nil {
-			continue
-		}
-		if field == "id" {
-			return []string{target}, true
-		}
-		info, ok := image.Info.Field(field)
-		if !ok || info.Type != "reference" || info.Ref == "" || info.Inverse == "" || target == "" {
-			continue
-		}
-		source, ok := lookup(image.Info.Type)
-		if !ok {
-			continue
-		}
-		bucket := source.Indexes.ReferenceBucket(source, info, target)
-		ids := make([]string, 0, bucket.IDs.Len())
-		for id := range bucket.IDs.All() {
-			ids = append(ids, id)
-		}
-		return ids, true
-	}
-	return nil, false
-}
-
 func UniqueKey(lookup ImageLookup, info platform.EntityInfo, rule platform.Constraint, value reflect.Value) (string, error) {
 	values := make([]any, 0, len(rule.Fields)+2)
 	for _, name := range rule.Fields {

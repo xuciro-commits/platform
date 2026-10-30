@@ -279,21 +279,6 @@ export type Aggregate = {
   field?: string[];
 };
 
-export type AggregateQuery = {
-  businessTime?: BusinessTime;
-  collection?: RecordSetRef;
-  window?: AggregateWindowQuery;
-  histogram?: HistogramQuery;
-  maxRows?: number;
-  traversal?: LinkTraversal;
-  set?: QuerySet;
-  domain?: unknown;
-  search?: string;
-  archived?: boolean;
-  groups?: string[];
-  measures?: string[];
-};
-
 export type AggregateWindowEdge = {
   id: string;
   revision: number;
@@ -2572,6 +2557,39 @@ export type Notification = {
   withheld?: boolean;
 };
 
+export type ObjectSet = {
+  object?: string;
+  interface?: string;
+  ids?: string[];
+  filter?: Expr;
+  domain?: unknown;
+  search?: string;
+  around?: SearchAround;
+  union?: ObjectSet[];
+  intersect?: ObjectSet[];
+  subtract?: ObjectSet[];
+  archived?: boolean;
+  asOf?: BusinessTime;
+};
+
+export type ObjectSetCount = {
+  count: number;
+  partial?: boolean;
+};
+
+export type ObjectSetRequest = {
+  set: ObjectSet;
+  sort?: string[];
+  offset?: number;
+  limit?: number;
+  groups?: string[];
+  measures?: string[];
+  window?: AggregateWindowQuery;
+  histogram?: HistogramQuery;
+  maxRows?: number;
+  collection?: RecordSetRef;
+};
+
 export type ObservationCoverage = {
   availableSince: string;
   completeUntil: string;
@@ -3971,6 +3989,12 @@ export type SavedView = {
 export type SchemaVersion = {
   version: string;
   family: number;
+};
+
+export type SearchAround = {
+  from: ObjectSet;
+  link: AssetBinding;
+  direction: string;
 };
 
 export type SelectionVariable = {

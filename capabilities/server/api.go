@@ -102,6 +102,6 @@ func (h *Host) OpenAPI(t *Tenant, m *platform.Member) map[string]any {
 		reflect.TypeFor[platform.ImageRegionsRequest](), reflect.TypeFor[build.Table](),
 		reflect.TypeFor[build.Source](), reflect.TypeFor[build.Connection](),
 		reflect.TypeFor[platform.BusinessTxn](), reflect.TypeFor[platform.ConfirmationRun](),
-		reflect.TypeFor[platform.DispatchRun](),
+		reflect.TypeFor[platform.DispatchRun](), reflect.TypeFor[InterfaceRecordPage](),
 	}, reflect.TypeFor[SubmissionAnswer](), entities, actions)
 }

@@ -331,29 +331,34 @@ func (s *CurrentScope) Reader() interface {
 	return s.backend
 }
 
-func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visible, effective func(reflect.Value) bool, match SetMatch, writes iter.Seq[string], accept func(reflect.Value)) {
+func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(reflect.Value) bool, writes iter.Seq[string], accept func(reflect.Value)) int {
 	current := image.Current()
+	matched := 0
 	visit := func(r *Row) {
 		if r == nil {
 			return
 		}
 		v := r.Value
-		if !q.Archived && Header(v).Archived || visible != nil && !visible(v) || effective != nil && !effective(v) || !match.Match(v) {
+		if !plan.Match(v) {
+			return
+		}
+		matched++
+		if visible != nil && !visible(v) {
 			return
 		}
 		accept(v)
 	}
-	if ids, indexed := IndexedCandidates(image, lookup, q); indexed {
+	if ids, indexed := plan.candidates(image, lookup); indexed {
 		for _, id := range ids {
 			visit(image.Rows.Get(id))
 		}
 	} else if current.Backend() != nil {
 		var filters []journal.StateFilter
 		if !image.RetainedProjection && len(image.Info.RecordImages) == 0 {
-			filters = match.Pushdown
+			filters = plan.Pushdown
 		}
 		if image.RetainedProjection {
-			for _, filter := range match.Pushdown {
+			for _, filter := range plan.Pushdown {
 				if len(filter.Path) == 2 && filter.Path[0] == "value" && filter.Path[1] == "id" {
 					filters = append(filters, filter)
 				}
@@ -390,5 +395,5 @@ func VisitMatching(image IndexImage, lookup ImageLookup, q platform.Query, visib
 			visit(r)
 		}
 	}
-
+	return matched
 }

@@ -229,6 +229,16 @@ func DomainToExpr(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, er
 	return combine("and", stack...), nil
 }
 
+func ConditionExpr(info platform.EntityInfo, field, op string, value any) (rules.Expr, error) {
+	raw, err := json.Marshal([]any{field, op, value})
+	if err != nil {
+		return rules.Expr{}, err
+	}
+	return lowerCondition(info, raw)
+}
+
+func AllOf(parts ...rules.Expr) rules.Expr { return combine("and", parts...) }
+
 func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, error) {
 	var term []json.RawMessage
 	var name, op string

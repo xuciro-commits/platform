@@ -96,7 +96,7 @@ export function readPath(path:string):boolean{
  if(metadata.has(path))return true;
  const [url,body,...extra]=path.split("\n");
  if(extra.length||!url?.startsWith("/v1/")||url.startsWith("/v1/sign-in")||url.includes("#")||url.includes("..")||path.length>65536)return false;
- return /^\/v1\/(?:records|interfaces|queries|pages)\//.test(url)&&(!body||/\/query$/.test(url));
+ return /^\/v1\/(?:records|queries|pages|object-sets)\//.test(url)&&(!body||url.startsWith("/v1/object-sets/"));
 }
 
 async function identityKey(connection:Connection){
