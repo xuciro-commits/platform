@@ -94,6 +94,12 @@ export function CodeEditor({ id }: { id: string }) {
     const revision = dirty ? await save() : baseRevision.current;
     if (revision === undefined) return;
     if (!await decide("build.code.compile", { type: "build.code", id: target }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) return;
+    if (branch) {
+      const fresh = await query.refetch(), record = fresh.data?.record;
+      if (!fresh.isSuccess || !record) { setError(t("Compilation was accepted. Reload the function to read its result.")); return; }
+      baseRevision.current = record.revision; loaded.current = `${record.id}:${record.revision}`; confirmedDraft.current = structuredClone(record); setDraft(record);
+      return;
+    }
     baseRevision.current = revision + 1; loaded.current = `${target}:${revision + 1}`;
     confirmedDraft.current = { ...confirmedDraft.current, revision: revision + 1, state: "compiling", module: undefined };
     setDraft(structuredClone(confirmedDraft.current));
@@ -120,7 +126,7 @@ export function CodeEditor({ id }: { id: string }) {
     status={<DraftStatus state={draft.module ? "published" : "draft"} />} saving={savingState(dirty, busy, error || undefined)}
     actions={<>
         <Button size="sm" disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
-        <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling" || !!branch} title={branch ? t("Compile after the branch is merged.") : undefined} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
+        <Button size="sm" disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
         <ResourceControls type="build.code" record={draft} dirty={dirty} busy={busy} invalid={invalid || dirty || !draft.module || draft.state === "compiling"} onReview={branch ? undefined : () => open({ view: "release-review", params: { kind: "compute", id: draft.id } })} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
     </>}><div className="grid min-h-0 min-w-0 flex-1 content-start gap-3 overflow-auto p-3">
     <ContextHelp title={t("Code function")}><p className="text-xs text-muted">{t("Define its contract, compile an artifact, then review and activate its application candidate.")}</p></ContextHelp>

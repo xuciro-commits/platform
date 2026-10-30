@@ -44,6 +44,7 @@ export function useBranchActions() {
     create: (request: Api.BranchCreateRequest) => send<Api.BranchDetail>("POST", "/v1/branches", request),
     close: (id: string) => send<Api.BranchDetail>("POST", branchPath(id, "/close")),
     save: (id: string, type: string, draft: string, request: Api.BranchSaveRequest) => send<Api.BranchDetail>("PUT", resourcePath(id, type, draft), request),
+    compile: (id: string, type: string, draft: string) => send<Api.BranchDetail>("POST", `${resourcePath(id, type, draft)}/compile`),
     checks: (id: string, request: Api.BranchCheckRequest = {}) => send<Api.BranchChecks>("POST", branchPath(id, "/checks"), request),
     recheck: (id: string, request: Api.BranchCheckRequest = {}) => send<Api.BranchDetail>("POST", branchPath(id, "/recheck"), request),
     rebase: (id: string, request: Api.BranchResolveRequest = {}) => send<Api.BranchDetail>("POST", branchPath(id, "/rebase"), request),

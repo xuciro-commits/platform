@@ -873,6 +873,7 @@ export type BranchResourceCheck = {
   id: string;
   rid?: string;
   action: "create" | "edit" | "archive" | "none";
+  artifact?: string;
   accepted: boolean;
   message?: string;
   code?: string;

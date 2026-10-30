@@ -7,7 +7,7 @@ import { BranchFailure, resourcePath, useBranchActions } from "./api";
 import { selectedBranch } from "./current";
 
 const draftTypes = new Set([...resourceKinds.map(kind => kind.type), "build.app"]);
-const onMain = new Set(["publish", "compile", "migrate"]);
+const onMain = new Set(["publish", "migrate"]);
 
 export function branchRefusal(verb: string) {
   return verb === "publish" ? t("A branch is published by merging it. Use Save in the branch bar to review, propose and merge.")
@@ -25,10 +25,11 @@ export function BranchDecisions({ children }: { children: ReactNode }) {
       const cut = schema.lastIndexOf("."), type = schema.slice(0, cut), verb = schema.slice(cut + 1);
       if (!branch || type !== target.type || !draftTypes.has(type)) return host.decide(schema, target, payload, options);
       if (onMain.has(verb)) { const reason = branchRefusal(verb); if (options?.onRefused) options.onRefused(reason); else notify.error(reason); return false; }
-      if (verb !== "create" && verb !== "edit" && verb !== "archive") return host.decide(schema, target, payload, options);
+      if (verb !== "create" && verb !== "edit" && verb !== "archive" && verb !== "compile") return host.decide(schema, target, payload, options);
       const actions = latest.current;
       try {
-        if (verb === "archive") await actions.save(branch, type, target.id, { op: "delete" });
+        if (verb === "compile") await actions.compile(branch, type, target.id);
+        else if (verb === "archive") await actions.save(branch, type, target.id, { op: "delete" });
         else if (verb === "create") await actions.save(branch, type, target.id, { op: "create", spec: Object.fromEntries(Object.entries((payload ?? {}) as Record<string, unknown>).filter(([, value]) => value !== null && value !== undefined)) });
         else {
           const answer = await host.client.call<Api.BranchResourceView>("GET", resourcePath(branch, type, target.id));

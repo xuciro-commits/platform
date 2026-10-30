@@ -110,15 +110,31 @@ func (t *Tenant) decideBranchChild(draft *stagedDecision, m platform.Member, ite
 			out = branchChild{refusal: platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")}
 		}
 	}()
-	a := t.owner["action:"+item.schema]
-	if a == nil {
-		return branchChild{refusal: platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The resource type has no {action} action", item.action)}
+	if item.schema != "" {
+		out = t.decideBranchStep(draft, m, item.schema, item.submission(t.ID, m, key), false, now)
+		if out.refusal != nil {
+			return out
+		}
 	}
-	s := t.currentSubmissionSchema(a, item.submission(t.ID, m, key))
+	if item.artifact != nil {
+		attach := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, Target: &pb.EntityRef{Type: item.plan.Type, Id: item.plan.ID},
+			Schema: &pb.SchemaRef{Name: build.SchemaCodeAttach, Version: 1}, Payload: item.artifact}
+		attach.IdempotencyKey = branchKey(key+":build", m.ID, build.SchemaCodeAttach, item.artifact, nil)
+		out = t.decideBranchStep(draft, m, build.SchemaCodeAttach, attach, true, now)
+	}
+	return out
+}
+
+func (t *Tenant) decideBranchStep(draft *stagedDecision, m platform.Member, schema string, submission *pb.Submission, automation bool, now time.Time) branchChild {
+	a := t.owner["action:"+schema]
+	if a == nil {
+		return branchChild{refusal: platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The resource type has no {action} action", schema)}
+	}
+	s := t.currentSubmissionSchema(a, submission)
 	if refusal := t.delegatedBound(m, s); refusal != nil {
 		return branchChild{refusal: explained(refusal, a, s.GetSchema().GetName(), target(s))}
 	}
-	receipt, refusal := platform.Decide(platform.NewCaller(draft, m, build.ID, false, false), a, s, now)
+	receipt, refusal := platform.Decide(platform.NewCaller(draft, m, build.ID, false, automation), a, s, now)
 	if refusal != nil {
 		issues := t.readableFieldIssues(m, draft.inputIssues[refusal], now)
 		return branchChild{issues: issues, refusal: explained(refusal, a, s.GetSchema().GetName(), target(s))}
@@ -143,7 +159,7 @@ func (t *Tenant) stageBranchLocked(m platform.Member, branchID string, actions [
 	}
 	var applied []int
 	for i, item := range actions {
-		check := BranchResourceCheck{Type: item.plan.Type, ID: item.plan.ID, RID: item.plan.RID, Action: item.action, Accepted: true}
+		check := BranchResourceCheck{Type: item.plan.Type, ID: item.plan.ID, RID: item.plan.RID, Action: item.action, Artifact: item.module(), Accepted: true}
 		stage.resources = append(stage.resources, check)
 		if item.action == "none" {
 			continue
@@ -576,7 +592,7 @@ func (t *Tenant) applyBranch(m platform.Member, id string, request BranchMergeRe
 	}
 	applied := make([]BranchResourceCheck, 0, len(actions))
 	for _, item := range actions {
-		applied = append(applied, BranchResourceCheck{Type: item.plan.Type, ID: item.plan.ID, RID: item.plan.RID, Action: item.action, Accepted: true})
+		applied = append(applied, BranchResourceCheck{Type: item.plan.Type, ID: item.plan.ID, RID: item.plan.RID, Action: item.action, Artifact: item.module(), Accepted: true})
 	}
 	revision := branch.Record.Revision
 	payload := platform.Raw(map[string]any{"candidate": check.Graph.Candidate, "applied": applied, "base": check.Base})

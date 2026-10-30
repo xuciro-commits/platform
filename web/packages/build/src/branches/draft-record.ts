@@ -5,6 +5,11 @@ import { useMemo } from "react";
 import { resourcePath, useBranchActions, useBranchRead, useBranches } from "./api";
 import { useCurrentBranch } from "./current";
 
+export function withBuild<T extends object>(spec: T): T {
+  const { build, ...rest } = spec as T & { build?: { module?: string; sourceHash?: string; buildHash?: string; toolchain?: string } };
+  return build ? { ...rest, module: build.module, sourceHash: build.sourceHash, buildHash: build.buildHash, toolchain: build.toolchain, state: "compiled" } as unknown as T : spec;
+}
+
 type Data<T> = { record?: T & EntityRecord; valueErrors?: Record<string, string> };
 export type DraftQuery<T> = {
   data?: Data<T>; isError: boolean; isFetching: boolean; isLoading: boolean; isPlaceholderData: boolean;
@@ -24,7 +29,7 @@ export function useDraftRecord<T extends { id: string; revision: number }>(type:
   const spec = view.data?.branch as Record<string, unknown> | undefined;
   const lastSeq = branch?.resources.find(item => item.type === type && item.id === id)?.lastSeq ?? 0;
   const deleted = view.data?.op === "delete";
-  const record = useMemo(() => !branch || !(spec || base) ? base : ({ ...(base ?? { id, state: "draft" }), ...(spec ?? {}), id, archived: deleted || base?.archived, revision: (base?.revision ?? 0) + lastSeq }) as T & EntityRecord,
+  const record = useMemo(() => !branch || !(spec || base) ? base : ({ ...(base ?? { id, state: "draft" }), ...(spec ? withBuild(spec) : {}), id, archived: deleted || base?.archived, revision: (base?.revision ?? 0) + lastSeq }) as T & EntityRecord,
     [branch?.id, base, spec, deleted, lastSeq, id]);
   const data = useMemo(() => branch ? ({ ...main.data, record } as Data<T>) : main.data, [branch?.id, main.data, record]);
   const query: DraftQuery<T> = {
@@ -34,7 +39,7 @@ export function useDraftRecord<T extends { id: string; revision: number }>(type:
       if (!branch) { const answer = await main.refetch(); return { isSuccess: answer.isSuccess, data: answer.data }; }
       const [first, second] = await Promise.all([main.refetch(), view.refetch(), list.refetch()]);
       const nextSpec = (second.data?.branch ?? undefined) as Record<string, unknown> | undefined, nextBase = first.data?.record;
-      return { isSuccess: (first.isSuccess || !!nextSpec) && second.isSuccess, data: { ...first.data, record: { ...(nextBase ?? { id, state: "draft" }), ...(nextSpec ?? {}), id, revision: (nextBase?.revision ?? 0) + (list.data?.find(item => item.id === branch.id)?.resources.find(item => item.type === type && item.id === id)?.lastSeq ?? lastSeq) } as T & EntityRecord } };
+      return { isSuccess: (first.isSuccess || !!nextSpec) && second.isSuccess, data: { ...first.data, record: { ...(nextBase ?? { id, state: "draft" }), ...(nextSpec ? withBuild(nextSpec) : {}), id, revision: (nextBase?.revision ?? 0) + (list.data?.find(item => item.id === branch.id)?.resources.find(item => item.type === type && item.id === id)?.lastSeq ?? lastSeq) } as T & EntityRecord } };
     },
   };
   const save = async (target: string, payload: Record<string, unknown>) => {

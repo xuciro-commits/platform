@@ -2,6 +2,7 @@ import { useRecordInventory } from "@platform/app";
 import { useMemo } from "react";
 import { useBranchChanges } from "./api";
 import { useCurrentBranch } from "./current";
+import { withBuild } from "./draft-record";
 
 export type Touched = { id: string; archived?: boolean } & Record<string, unknown>;
 const none: Touched[] = [];
@@ -11,7 +12,7 @@ export function useBranchTouched(branch?: string): ReadonlyMap<string, Touched[]
   return useMemo(() => {
     const latest = new Map<string, Touched>(), byType = new Map<string, Touched[]>();
     for (const entry of changes.data ?? []) {
-      const record: Touched = entry.op === "delete" ? { id: entry.id, archived: true } : { state: "draft", ...(entry.spec as object | undefined), id: entry.id };
+      const record: Touched = entry.op === "delete" ? { id: entry.id, archived: true } : { state: "draft", ...withBuild((entry.spec ?? {}) as object), id: entry.id };
       latest.set(`${entry.type}\n${entry.id}`, record);
       byType.set(entry.type, []);
     }

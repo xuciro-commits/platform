@@ -367,6 +367,35 @@ func (t *Tenant) readArtifact(ctx context.Context, digest string) ([]byte, error
 	return raw, nil
 }
 
+func (t *Tenant) buildCode(ctx context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, error) {
+	compiler := t.Compiler
+	if compiler == nil {
+		compiler = computeowner.EnvironmentCompiler()
+	}
+	result, module, err := compiler.Compile(ctx, q)
+	if err == nil {
+		err = computeowner.ValidateWasm(ctx, module, q.ABI)
+		if err == nil {
+			hash := sha256.Sum256(module)
+			result.Module = hex.EncodeToString(hash[:])
+			err = t.files().Put(ctx, artifactKey(t.ID, result.Module), module, "application/wasm")
+		}
+	}
+	if err != nil {
+		result.Diagnostics = err.Error()
+	}
+	return result, err
+}
+
+func (t *Tenant) artifactStored(ctx context.Context, digest string) bool {
+	r, n, err := t.files().Get(ctx, artifactKey(t.ID, digest))
+	if err != nil {
+		return false
+	}
+	r.Close()
+	return n > 0 && n <= 16<<20
+}
+
 func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Outcome {
 	out := platform.Outcome{Effect: x.ID, Result: "rejected", Generation: x.Generation}
 	var b operationBinding
@@ -409,24 +438,8 @@ func (t *Tenant) executeOperation(x platform.Effect, now time.Time) platform.Out
 	var output json.RawMessage
 	var err error
 	if b.Build != nil {
-		compiler := t.Compiler
-		if compiler == nil {
-			compiler = computeowner.EnvironmentCompiler()
-		}
 		var result platform.CodeBuildResult
-		var module []byte
-		result, module, err = compiler.Compile(ctx, *b.Build)
-		if err == nil {
-			err = computeowner.ValidateWasm(ctx, module, b.Build.ABI)
-			if err == nil {
-				hash := sha256.Sum256(module)
-				result.Module = hex.EncodeToString(hash[:])
-				err = t.files().Put(ctx, artifactKey(t.ID, result.Module), module, "application/wasm")
-			}
-		}
-		if err != nil {
-			result.Diagnostics = err.Error()
-		}
+		result, err = t.buildCode(ctx, *b.Build)
 		output, _ = json.Marshal(result)
 		out.Result = "delivered"
 	} else {

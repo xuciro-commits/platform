@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -90,6 +91,7 @@ type BranchResourceCheck struct {
 	ID       string                `json:"id"`
 	RID      string                `json:"rid,omitempty"`
 	Action   string                `json:"action" enum:"create,edit,archive,none"`
+	Artifact string                `json:"artifact,omitempty"`
 	Accepted bool                  `json:"accepted"`
 	Message  string                `json:"message,omitempty"`
 	Code     string                `json:"code,omitempty"`
@@ -221,10 +223,12 @@ func (t *Tenant) readBranchLocked(m platform.Member, id string, now time.Time) (
 }
 
 type mainDraft struct {
-	Spec     json.RawMessage
-	Revision uint32
-	Exists   bool
-	RID      string
+	Spec      json.RawMessage
+	Revision  uint32
+	Exists    bool
+	RID       string
+	Module    string
+	BuildHash string
 }
 
 func (t *Tenant) draftFields(typ string) (map[string]bool, *kernel.Error) {
@@ -275,6 +279,8 @@ func (t *Tenant) mainDraft(m platform.Member, typ, id string, now time.Time) (ma
 		}
 	}
 	out.Revision = revision
+	_ = json.Unmarshal(record["module"], &out.Module)
+	_ = json.Unmarshal(record["buildHash"], &out.BuildHash)
 	out.Exists = !archived
 	out.RID = t.branchRID(typ, id, spec)
 	if !archived {
@@ -468,17 +474,47 @@ func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, re
 			return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A saved spec is one JSON object")
 		}
 		for name := range spec {
-			if !fields[name] {
+			if !fields[name] && !(typ == build.CodeType && name == codeBuildKey) {
 				return BranchDetail{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is not an authored field of {type}", name, typ)
 			}
 		}
+		if typ == build.CodeType {
+			delete(spec, codeBuildKey)
+			if kept := keptCodeBuild(previous, touched, spec); kept != nil {
+				spec[codeBuildKey] = kept
+			}
+			request.Spec, _ = json.Marshal(spec)
+		}
 	}
-	if touched && previous.Op == op && !previous.Rebased && sameJSON(previous.Spec, request.Spec) {
+	return t.appendBranchSave(m, branch, current, typ, draft, op, request.Spec, now)
+}
+
+const codeBuildKey = "build"
+
+func keptCodeBuild(previous build.BranchChange, touched bool, spec map[string]json.RawMessage) json.RawMessage {
+	if !touched || previous.Op == "delete" {
+		return nil
+	}
+	var earlier map[string]json.RawMessage
+	if json.Unmarshal(previous.Spec, &earlier) != nil || earlier[codeBuildKey] == nil {
+		return nil
+	}
+	var artifact build.CodeArtifact
+	authored, _ := json.Marshal(spec)
+	if json.Unmarshal(earlier[codeBuildKey], &artifact) != nil || !artifact.Matches(authored) {
+		return nil
+	}
+	return earlier[codeBuildKey]
+}
+
+func (t *Tenant) appendBranchSave(m platform.Member, branch build.Branch, current mainDraft, typ, draft, op string, spec json.RawMessage, now time.Time) (BranchDetail, *kernel.Error) {
+	previous, touched := branch.Latest(typ, draft)
+	if touched && previous.Op == op && !previous.Rebased && sameJSON(previous.Spec, spec) {
 		return t.branchDetail(m, branch, now)
 	}
 	payload := map[string]any{"type": typ, "id": draft, "op": op}
 	if op != "delete" {
-		payload["spec"] = request.Spec
+		payload["spec"] = spec
 	}
 	if !touched {
 		if current.Exists {
@@ -487,10 +523,10 @@ func (t *Tenant) SaveBranchResource(m platform.Member, id, typ, draft string, re
 			payload["base"] = nil
 		}
 	}
-	if refusal := t.submitBranch(m, "branch:"+id+":save:"+strconv.Itoa(len(branch.Changes)+1), build.BranchType+".save", id, payload, now); refusal != nil {
+	if refusal := t.submitBranch(m, "branch:"+branch.ID+":save:"+strconv.Itoa(len(branch.Changes)+1), build.BranchType+".save", branch.ID, payload, now); refusal != nil {
 		return BranchDetail{}, refusal
 	}
-	return t.BranchDetail(m, id, now)
+	return t.BranchDetail(m, branch.ID, now)
 }
 
 func effectiveSpec(branch build.Branch, typ, id string) (spec json.RawMessage, deleted bool) {
@@ -608,44 +644,76 @@ func conflictsOf(plans []resourcePlan) []BranchResourceDiff {
 }
 
 type branchAction struct {
-	plan    resourcePlan
-	action  string
-	schema  string
-	payload map[string]json.RawMessage
+	plan     resourcePlan
+	action   string
+	schema   string
+	payload  map[string]json.RawMessage
+	artifact json.RawMessage
+}
+
+func (a branchAction) module() string {
+	var artifact build.CodeArtifact
+	_ = json.Unmarshal(a.artifact, &artifact)
+	return artifact.Module
+}
+
+func (t *Tenant) splitCodeBuild(plan resourcePlan) (json.RawMessage, json.RawMessage) {
+	var spec map[string]json.RawMessage
+	if json.Unmarshal(plan.Merged, &spec) != nil || spec[codeBuildKey] == nil {
+		return plan.Merged, nil
+	}
+	raw := spec[codeBuildKey]
+	delete(spec, codeBuildKey)
+	authored, _ := json.Marshal(spec)
+	var artifact build.CodeArtifact
+	if json.Unmarshal(raw, &artifact) != nil || !artifact.Matches(authored) || !t.artifactStored(context.Background(), artifact.Module) || artifact.Module == plan.Main.Module && artifact.BuildHash == plan.Main.BuildHash {
+		return authored, nil
+	}
+	return authored, raw
 }
 
 func (t *Tenant) branchActions(plans []resourcePlan) ([]branchAction, *kernel.Error) {
 	var actions []branchAction
 	for _, plan := range plans {
 		item := branchAction{plan: plan, action: "none"}
+		merged := plan.Merged
+		if plan.Type == build.CodeType && merged != nil {
+			merged, item.artifact = t.splitCodeBuild(plan)
+		}
 		switch {
-		case plan.Merged == nil && plan.Main.Exists:
+		case merged == nil && plan.Main.Exists:
 			item.action, item.schema = "archive", plan.Type+".archive"
 			item.payload = map[string]json.RawMessage{}
-		case plan.Merged != nil && !plan.Main.Exists:
+		case merged != nil && !plan.Main.Exists:
 			item.action, item.schema = "create", plan.Type+".create"
-			if json.Unmarshal(plan.Merged, &item.payload) != nil {
+			if json.Unmarshal(merged, &item.payload) != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The merged spec is unreadable")
 			}
-		case plan.Merged != nil:
-			var merged, current map[string]json.RawMessage
-			if json.Unmarshal(plan.Merged, &merged) != nil || json.Unmarshal(plan.Main.Spec, &current) != nil {
+		case merged != nil:
+			var current map[string]json.RawMessage
+			var mergedFields map[string]json.RawMessage
+			if json.Unmarshal(merged, &mergedFields) != nil || json.Unmarshal(plan.Main.Spec, &current) != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The merged spec is unreadable")
 			}
 			changed := map[string]json.RawMessage{}
-			for name, value := range merged {
+			for name, value := range mergedFields {
 				if previous, present := current[name]; !present || string(previous) != string(value) {
 					changed[name] = value
 				}
 			}
 			for name := range current {
-				if _, kept := merged[name]; !kept {
+				if _, kept := mergedFields[name]; !kept {
 					changed[name] = json.RawMessage("null")
 				}
 			}
 			if len(changed) > 0 {
 				item.action, item.schema, item.payload = "edit", plan.Type+".edit", changed
+			} else if item.artifact != nil {
+				item.action = "edit"
 			}
+		}
+		if item.action == "archive" {
+			item.artifact = nil
 		}
 		actions = append(actions, item)
 	}

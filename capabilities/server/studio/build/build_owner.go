@@ -285,6 +285,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaCodeCompiled {
 		return b.submitCodeCompiled(c, s, now)
 	}
+	if s.GetSchema().GetName() == SchemaCodeAttach {
+		return b.submitCodeAttach(c, s, now)
+	}
 	if s.GetSchema().GetName() == SchemaSourcePulled {
 		return b.submitSourcePulled(c, s, now)
 	}

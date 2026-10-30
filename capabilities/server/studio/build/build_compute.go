@@ -19,6 +19,7 @@ import (
 const SchemaCodeCompile = CodeType + ".compile"
 const SchemaCodePublish = CodeType + ".publish"
 const SchemaCodeCompiled = CodeType + ".compiled"
+const SchemaCodeAttach = CodeType + ".attach"
 
 type Code struct {
 	platform.Record
@@ -79,7 +80,14 @@ func (b *Build) codeEntity() platform.Entity {
 }
 func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	code, ok := record.(*Code)
-	if !ok || code.Language != "go" && code.Language != "tinygo" || code.Input.Check() != nil || code.Output.Check() != nil || len(code.Source) == 0 || len(code.Source) > 256<<10 {
+	if !ok {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Code requires Go/TinyGo source and bounded input/output schemas")
+	}
+	return checkCodeBuildable(code)
+}
+
+func checkCodeBuildable(code *Code) *kernel.Error {
+	if code.Language != "go" && code.Language != "tinygo" || code.Input.Check() != nil || code.Output.Check() != nil || len(code.Source) == 0 || len(code.Source) > 256<<10 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Code requires Go/TinyGo source and bounded input/output schemas")
 	}
 	declaration := code.Definition()
@@ -88,6 +96,51 @@ func (b *Build) compileCode(c platform.Caller, record any, _ json.RawMessage, _ 
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 	}
 	return nil
+}
+
+type CodeArtifact struct {
+	Module     string `json:"module"`
+	SourceHash string `json:"sourceHash"`
+	BuildHash  string `json:"buildHash"`
+	Toolchain  string `json:"toolchain"`
+}
+
+func (a CodeArtifact) Matches(spec json.RawMessage) bool {
+	_, expected, err := CodeBuildOf(spec)
+	return err == nil && a.Module != "" && a.Toolchain != "" && a.SourceHash == expected.SourceHash && a.BuildHash == expected.BuildHash
+}
+
+func CodeBuildOf(spec json.RawMessage) (platform.CodeBuildRequest, CodeArtifact, *kernel.Error) {
+	var code Code
+	if json.Unmarshal(spec, &code) != nil {
+		return platform.CodeBuildRequest{}, CodeArtifact{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The code spec is unreadable")
+	}
+	if err := checkCodeBuildable(&code); err != nil {
+		return platform.CodeBuildRequest{}, CodeArtifact{}, err
+	}
+	return platform.CodeBuildRequest{ABI: code.ABI, Language: code.Language, Source: code.Source, Input: code.Input, Output: code.Output}, CodeArtifact{SourceHash: code.sourceHash(), BuildHash: code.buildHash()}, nil
+}
+
+func (b *Build) submitCodeAttach(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		var artifact CodeArtifact
+		code, ok := platform.Get[Code](c, s.GetTarget().GetId())
+		if !ok || json.Unmarshal(s.GetPayload(), &artifact) != nil || code.State == "compiling" {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Code is missing or compiling")
+		}
+		if err := checkCodeBuildable(&code); err != nil {
+			return nil, err
+		}
+		if len(artifact.Module) != 64 || strings.Trim(artifact.Module, "0123456789abcdef") != "" || artifact.Toolchain == "" || artifact.SourceHash != code.sourceHash() || artifact.BuildHash != code.buildHash() {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The attached build differs from the current source and schemas")
+		}
+		return func(r *pb.ChangeRecord) {
+			code.Module, code.SourceHash, code.BuildHash, code.Toolchain = artifact.Module, artifact.SourceHash, artifact.BuildHash, artifact.Toolchain
+			code.BuiltABI, code.BuiltSource, code.BuiltLanguage, code.BuiltInput, code.BuiltOutput = code.ABI, code.Source, code.Language, code.Input, code.Output
+			code.State, code.Diagnostics = "compiled", ""
+			c.Put(r, code)
+		}, nil
+	})
 }
 
 func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -110,7 +163,7 @@ func (b *Build) submitCodeCompile(c platform.Caller, s *pb.Submission, now time.
 	})
 }
 func codeActions() []platform.Action {
-	return []platform.Action{{Schema: SchemaCodeCompiled, Target: CodeType, Capability: "compute", Title: "Keep code build result", Description: "Retain the accepted compiler output on its source asset.", Automation: true, Payload: []platform.Field{{Name: "call", Type: "string", Required: true, Description: "The accepted compilation call"}, {Name: "result", Type: "json", Required: true, Description: "Validated compiler result"}, {Name: "request", Type: "json", Required: true, Description: "The accepted source and SDK schema snapshot"}}}}
+	return []platform.Action{{Schema: SchemaCodeAttach, Target: CodeType, Capability: "compute", Title: "Attach code build", Description: "Retain an isolated build made on a branch on the code asset it was built from.", Automation: true, Payload: []platform.Field{{Name: "module", Type: "string", Required: true, Description: "The content digest of the built module"}, {Name: "sourceHash", Type: "string", Required: true, Description: "The digest of the built source"}, {Name: "buildHash", Type: "string", Required: true, Description: "The digest of the source and schema snapshot"}, {Name: "toolchain", Type: "string", Required: true, Description: "The pinned toolchain that built it"}}}, {Schema: SchemaCodeCompiled, Target: CodeType, Capability: "compute", Title: "Keep code build result", Description: "Retain the accepted compiler output on its source asset.", Automation: true, Payload: []platform.Field{{Name: "call", Type: "string", Required: true, Description: "The accepted compilation call"}, {Name: "result", Type: "json", Required: true, Description: "Validated compiler result"}, {Name: "request", Type: "json", Required: true, Description: "The accepted source and SDK schema snapshot"}}}}
 }
 func (b *Build) submitCodeCompiled(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {

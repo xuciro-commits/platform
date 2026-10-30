@@ -77,6 +77,10 @@ func (h *Host) routesBranches(rt *routes) {
 		out, refusal := t.SaveBranchResource(m, r.PathValue("id"), r.PathValue("type"), r.PathValue("draft"), request, h.Now())
 		return failed(out, refusal)
 	})
+	branch(transport.Route{Pattern: "POST /v1/branches/{id}/resources/{type}/{draft}/compile", Summary: "Compile a code function on the branch with the isolated controlled compiler; the content-addressed artifact reference is saved into the branch's code spec, never into main, and merges with the code resource without recompiling", Answer: BranchDetail{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
+		out, refusal := t.BranchCompile(m, r.PathValue("id"), r.PathValue("type"), r.PathValue("draft"), h.Now())
+		return failed(out, refusal)
+	})
 	branch(transport.Route{Pattern: "POST /v1/branches/{id}/checks", Summary: "Dry-run staged check, recording nothing: three-way conflicts, then the merged resources applied in a staged world, the whole definition graph validated there, and optionally a candidate simulation", Body: BranchCheckRequest{}, Answer: BranchChecks{}}, func(_ http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) (any, *branchFailure) {
 		var request BranchCheckRequest
 		if failure := body(r, &request); failure != nil {
