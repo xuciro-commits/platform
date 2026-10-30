@@ -226,6 +226,12 @@ func (t *Tenant) exportRead(m platform.Member, typ string, q platform.Query, now
 }
 
 func toCSV(v any) string {
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer {
+		if rv.IsNil() {
+			return ""
+		}
+		return toCSV(rv.Elem().Interface())
+	}
 	switch x := v.(type) {
 	case platform.Money:
 		if x.Currency == "" {
@@ -244,7 +250,7 @@ func toCSV(v any) string {
 	if rv.Kind() == reflect.Slice {
 		var parts []string
 		for i := range rv.Len() {
-			parts = append(parts, fmt.Sprint(rv.Index(i).Interface()))
+			parts = append(parts, toCSV(rv.Index(i).Interface()))
 		}
 		return strings.Join(parts, ";")
 	}
