@@ -165,6 +165,7 @@ export function usePlatformHost({ client, token, tenant, me, ready, apps }: { cl
       watchNamedInterfaceList: (binding,q,changed) => client.subscribeRead(client.namedQueryPath(binding,q),changed),
       get: (type, id) => client.record<RecordView>(type, id),
       checkAction: (schema, target, inputs) => client.actionCheck(schema, target, inputs),
+      provenance: (type, id) => client.provenance(type, id),
       aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
       watchList: (type, q, changed) => client.subscribeRead(client.recordsPath(type, q), changed),
       watchRecord: (type, id, changed) => client.subscribeRead(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`, changed),

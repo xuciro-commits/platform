@@ -1609,4 +1609,12 @@ export default {
   "More actions": "更多操作",
   "More": "更多",
   "Tasks": "任务",
+  "Where did the value of {field} come from?": "{field} 的值来自哪里？",
+  "Where did this value come from?": "这个值来自哪里？",
+  "Value origin of {field}": "{field} 的值来源",
+  "No source is recorded for this value.": "这个值没有记录来源。",
+  "Edited": "已编辑",
+  "Edited at {time}": "编辑于 {time}",
+  "Source time {time}": "来源时间 {time}",
+  "Recorded at {time}": "记录于 {time}",
 } as Record<string, string>;

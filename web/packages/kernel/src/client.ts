@@ -1,5 +1,5 @@
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action, ActionCheckResult, AssetBinding, AssetRef, CompositeAnswer, Definition, SchemaVersion, ImportRow, ObjectSet, ObjectSetCount } from "./gen/host";
+import type { Action, ActionCheckResult, AssetBinding, AssetRef, CompositeAnswer, Definition, SchemaVersion, ImportRow, ObjectSet, ObjectSetCount, RecordProvenance } from "./gen/host";
 import { aggregateRequest, countRequest, interfaceRequest, loadRequest, objectSetPath, type AggregateQueryInput, type RecordQueryInput } from "./object-set";
 import { Authorities, type Entry } from "./outbox";
 import { LiveReads } from "./live";
@@ -341,6 +341,10 @@ export class EdgeClient {
 
   actionCheck(schema: string, target: { type: string; id: string }, inputs?: unknown): Promise<ActionCheckResult> {
     return this.get<ActionCheckResult>(`/v1/actions/${encodeURIComponent(schema)}/check\n${JSON.stringify({ target: { object: target.type, id: target.id }, ...(inputs === undefined ? {} : { inputs }) })}`, true);
+  }
+
+  provenance(type: string, id: string): Promise<RecordProvenance> {
+    return this.get<RecordProvenance>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}/provenance`, true);
   }
 
   record<T = unknown>(type: string, id: string): Promise<T> {

@@ -181,6 +181,7 @@ export class PageSessionStore {
         watchNamedInterfaceList: (binding,query,changed) => session.source.watchNamedInterfaceList?.(binding,query,changed)??(()=>{}),
         get aggregate(){return session.source.aggregate;},
         get checkAction(){return session.source.checkAction;},
+        get provenance(){return session.source.provenance;},
         get exportCSV() { return session.source.exportCSV; },
         get scope() { return session.source.scope; }, get revision() { return session.version; },
       };
@@ -402,6 +403,7 @@ export class PageSessionStore {
         watchInterfaceList: (name, query, changed) => session.source.watchInterfaceList?.(name, query, changed) ?? (() => {}),
         get aggregate() { return session.source.aggregate; },
         get checkAction() { return session.source.checkAction; },
+        get provenance() { return session.source.provenance; },
         get exportCSV() { return session.source.exportCSV; },
         get revision() { return session.version; },
         get scope() { return session.source.scope; },

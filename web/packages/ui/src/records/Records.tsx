@@ -21,6 +21,7 @@ import {FormatPill,HeaderCommands,ObjectHeader,toneOf,type HeaderPill} from "./O
 import type {ContextCommand} from "../components/CommandMenu";
 
 import { PropertyList } from "../components/EntityCard";
+import { FieldProvenance } from "./FieldProvenance";
 import { Tag, type Tone } from "../components/StatusTag";
 import { columnsFor, defineEntity, valueOf, type Entity } from "../fields/entity";
 import { RecordKanban, type KanbanLane, type KanbanMove } from "./RecordKanban";
@@ -84,6 +85,7 @@ export type RecordSource = {
   exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;
   importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;
   get: (type: string, id: string) => Promise<RecordView>;
+  provenance?: (type: string, id: string) => Promise<Api.RecordProvenance>;
   checkAction?: (schema: string, target: { type: string; id: string }, inputs?: unknown) => Promise<Api.ActionCheckResult>;
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
   interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;
@@ -669,10 +671,11 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
   };
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
   const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined);return [{rel,relInfo,relEntity,row}];});
+  const sourced=new Set(source.provenance?(info.datasources??[]).flatMap(binding=>binding.columns.map(column=>column.attribute)):[]);
   const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
         {barcode&&<div className="mb-3 flex justify-center overflow-hidden"><Barcode text={barcode}/></div>}
         {detailPresentation?.print&&<div className="mb-3 flex justify-end print:hidden"><Button size="sm" onClick={()=>window.print()}><Printer/>{t("Print")}</Button></div>}
-        <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={[...[...new Set(fields??info.fields.map(f=>f.name))].flatMap(name=>{const f=info.fields.find(f=>f.name===name);return !f||detailPresentation?.hideNull&&!formats[name]&&(r[name]===undefined||r[name]===null||r[name]==="")?[]:[[f.title,shownValue(name)] as [string,ReactNode]];}),
+        <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={[...[...new Set(fields??info.fields.map(f=>f.name))].flatMap(name=>{const f=info.fields.find(f=>f.name===name);return !f||detailPresentation?.hideNull&&!formats[name]&&(r[name]===undefined||r[name]===null||r[name]==="")?[]:[[f.title,sourced.has(name)?<span className="inline-flex min-w-0 flex-wrap items-center gap-1">{shownValue(name)}<FieldProvenance source={source} type={type} id={id} revision={r.revision} field={name} label={f.title}/></span>:shownValue(name)] as [string,ReactNode]];}),
           ...(!detailOnly ? [[t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
             [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]] as [string, ReactNode][] : [])]} />
         {extensions.map(({rel,relInfo,relEntity,row})=><div key={rel.type} className="mt-3 border-t border-border pt-3">
