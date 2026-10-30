@@ -742,6 +742,160 @@ export type BlockPort = {
   type: string;
 };
 
+export type BranchChangeEntry = {
+  seq: number;
+  at: string;
+  by: string;
+  type: string;
+  id: string;
+  rid?: string;
+  op: "create" | "update" | "delete";
+  rebased?: boolean;
+  base?: unknown;
+  spec?: unknown;
+};
+
+export type BranchChecks = {
+  at: string;
+  conflicts: BranchResourceDiff[];
+  resources: BranchResourceCheck[];
+  approved: boolean;
+  approval?: string;
+  ready: boolean;
+};
+
+export type BranchCreateRequest = {
+  name: string;
+  title: string;
+  description?: string;
+};
+
+export type BranchDetail = {
+  id: string;
+  name: string;
+  title: string;
+  description?: string;
+  state: "open" | "proposed" | "merged" | "closed";
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  changes: number;
+  resources: BranchResourceStatus[];
+  proposal?: BranchProposal;
+  merge?: BranchMerge;
+};
+
+export type BranchDiff = {
+  resources: BranchResourceDiff[];
+  conflicts: number;
+};
+
+export type BranchMerge = {
+  by: string;
+  at: string;
+  candidate?: string;
+  applied?: unknown;
+};
+
+export type BranchMergeRequest = {
+  resolutions?: BranchResolution[];
+  simulation?: CandidateSimulationRequest;
+};
+
+export type BranchMergeResult = {
+  branch: BranchDetail;
+  candidate?: string;
+  applied: BranchResourceCheck[];
+  simulation?: CandidateSimulation;
+};
+
+export type BranchProposal = {
+  by: string;
+  at: string;
+  note?: string;
+  reviewers: string[];
+  reviews: BranchReview[];
+  checks?: unknown;
+};
+
+export type BranchProposeRequest = {
+  reviewers?: string[];
+  note?: string;
+  resolutions?: BranchResolution[];
+};
+
+export type BranchResolution = {
+  type: string;
+  id: string;
+  path: string;
+  take: "branch" | "main";
+};
+
+export type BranchResolveRequest = {
+  resolutions?: BranchResolution[];
+};
+
+export type BranchResourceCheck = {
+  type: string;
+  id: string;
+  rid?: string;
+  action: "create" | "edit" | "archive" | "none";
+  accepted: boolean;
+  message?: string;
+  code?: string;
+  issues?: FieldIssue[];
+};
+
+export type BranchResourceDiff = {
+  type: string;
+  id: string;
+  rid?: string;
+  op: "create" | "update" | "delete";
+  branch: PathChange[];
+  main: PathChange[];
+  conflicts: PathConflict[];
+  merged?: unknown;
+};
+
+export type BranchResourceStatus = {
+  type: string;
+  id: string;
+  rid?: string;
+  op: "create" | "update" | "delete";
+  changes: number;
+  lastSeq: number;
+  lastAt: string;
+  lastBy: string;
+  drifted?: boolean;
+};
+
+export type BranchResourceView = {
+  type: string;
+  id: string;
+  rid?: string;
+  op?: "create" | "update" | "delete";
+  base?: unknown;
+  main?: unknown;
+  branch?: unknown;
+};
+
+export type BranchReview = {
+  by: string;
+  at: string;
+  decision: "approve" | "changes";
+  note?: string;
+};
+
+export type BranchReviewRequest = {
+  decision: "approve" | "changes";
+  note?: string;
+};
+
+export type BranchSaveRequest = {
+  op?: "create" | "update" | "delete";
+  spec?: unknown;
+};
+
 export type Breaker = {
   destination: string;
   state: string;
@@ -3313,6 +3467,20 @@ export type Passage = {
   chunk: number;
   text: string;
   score: number;
+};
+
+export type PathChange = {
+  path: string;
+  op: "add" | "remove" | "replace";
+  before?: unknown;
+  after?: unknown;
+};
+
+export type PathConflict = {
+  path: string;
+  base?: unknown;
+  main?: unknown;
+  branch?: unknown;
 };
 
 export type Period = {
