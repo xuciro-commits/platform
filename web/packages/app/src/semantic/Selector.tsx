@@ -2,7 +2,7 @@ import type {Definition as WorkspaceDefinition} from "../index";
 import { Select, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useHost } from "../index";
-import { assetBindingKey, semanticModelView, semanticPropertyTypes, type PropertyRef, type SemanticPropertyType } from "./model";
+import { assetBindingKey, semanticModelView, semanticPropertyTypes, semanticValueTypes, type PropertyRef, type SemanticPropertyType, type SemanticValueType } from "./model";
 
 export function SemanticObjectSelect({ value, onChange, label, disabled, filter, drafts, enterprise = false }: {
   value?: string; onChange: (ref?: Api.AssetRef) => void; label: string; disabled?: boolean;
@@ -35,6 +35,20 @@ export function SemanticPropertyTypeSelect({value,onChange,label,filter,disabled
     <option value="">{t("Local property")}</option>
     {value && !properties.some(p => assetBindingKey(p.binding) === selected) && <option value={selected}>{t("Unavailable property: {name}", {name:selected})}</option>}
     {properties.map(p => <option key={assetBindingKey(p.binding)} value={assetBindingKey(p.binding)}>{p.property.title} · {t(p.property.type)} · {p.binding.ref.name}@{p.binding.sourceVersion}</option>)}
+  </Select>;
+}
+
+export function SemanticValueTypeSelect({value,onChange,label,filter,disabled}: {
+  value?: Api.AssetBinding; onChange: (value?: SemanticValueType) => void; label: string; disabled?: boolean;
+  filter?: (value: SemanticValueType) => boolean;
+}) {
+  const {definitions} = useHost();
+  const values = semanticValueTypes(definitions).filter(v => !filter || filter(v));
+  const selected = value ? assetBindingKey(value) : "";
+  return <Select aria-label={label} value={selected} disabled={disabled} onChange={event => onChange(values.find(v => assetBindingKey(v.binding) === event.target.value))}>
+    <option value="">{t("No value type")}</option>
+    {value && !values.some(v => assetBindingKey(v.binding) === selected) && <option value={selected}>{t("Unavailable value type: {name}", {name:selected})}</option>}
+    {values.map(v => <option key={assetBindingKey(v.binding)} value={assetBindingKey(v.binding)}>{v.value.title} · {t(v.value.base)} · {v.binding.ref.name}@{v.binding.sourceVersion}</option>)}
   </Select>;
 }
 

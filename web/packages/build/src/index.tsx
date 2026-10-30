@@ -10,6 +10,7 @@ import { AutomationEditor, Automations } from "./automate/automation";
 import { WorkflowRuns } from "./automate/workflow-runs";
 import { LinkTypeEditor, LinkTypes } from "./ontology/link-type";
 import { PropertyTypeEditor, PropertyTypes } from "./ontology/property-type";
+import { ValueTypeEditor, ValueTypes } from "./ontology/value-type";
 import { ObservationSourceEditor, ObservationSources } from "./ontology/observation";
 import { DataSourceEditor, DataSources } from "./ontology/data-source";
 import { ConnectionEditor, Connections } from "./ontology/connection";
@@ -46,6 +47,7 @@ const editorViews: View[] = [
   { id: "action-type", title: () => t("Action type"), render: p => p.id ? <ActionTypeEditor key={p.id} id={p.id} action={p.action} /> : <ActionTypes /> },
   { id: "link-type", title: () => t("Relationships"), render: p => p.id ? <LinkTypeEditor key={p.id} id={p.id} parent={p.parent} child={p.child} via={p.via} /> : <LinkTypes /> },
   { id: "property-type", title: () => t("Shared properties"), render: p => p.id ? <PropertyTypeEditor key={p.id} id={p.id} /> : <PropertyTypes /> },
+  { id: "value-type", title: () => t("Value types"), render: p => p.id ? <ValueTypeEditor key={p.id} id={p.id} /> : <ValueTypes /> },
   { id: "query", title: () => t("Queries"), render: p => p.id ? <QueryEditor key={p.id} id={p.id} /> : <Queries /> },
   { id: "module", title: p => p.page ? t("Page") : t("Application interface"), render: p => <ModuleWorkbench key={`${p.id ?? ""}:${p.page ?? ""}`} id={p.id} page={p.page} focus={p.focus} /> },
   { id: "studio-templates", title: () => t("Templates"), render: p => <StudioTemplates key={p.template ?? "templates"} initial={p.template} /> },
@@ -103,7 +105,7 @@ export default defineApp({
   for: host => builder(host) || integrator(host) || host.holds("build", "publisher"),
   home: { view: "projects" },
   views: contextualViews(editorViews),
-  opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.alertrule": "alert", "build.agent": "agent", "build.connection": "connection", "build.observation": "observation-source", "build.source": "data-source", "build.dataset": "dataset", "build.pipeline": "pipeline", "build.writeback": "writeback", "build.match": "match" },
+  opens: { "build.app": "project", "build.object": "object-type", "build.linktype": "link-type", "build.propertytype": "property-type", "build.valuetype": "value-type", "build.query": "query", "build.page": "module", "build.process": "flow", "build.function": "function", "build.code": "code", "build.alertrule": "alert", "build.agent": "agent", "build.connection": "connection", "build.observation": "observation-source", "build.source": "data-source", "build.dataset": "dataset", "build.pipeline": "pipeline", "build.writeback": "writeback", "build.match": "match" },
   navigation: route => <StudioNavigation route={route} />,
   nav: (host, route): NavSection[] => {
     if (studioApplicationID(route) && builder(host)) return [{ label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] }];

@@ -39,8 +39,8 @@ export { FlowInstanceView } from "./automation/flows";
 export { OpenIn, type OpenInPlace } from "./actions/OpenIn";
 import { OpenIn as OpenInMenu } from "./actions/OpenIn";
 export { pageDocumentFromSections } from "./pages/pageDocument";
-export { semanticModelView, semanticPropertyTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
-export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect } from "./semantic/Selector";
+export { semanticModelView, semanticPropertyTypes, semanticValueTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type SemanticValueType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
+export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, SemanticValueTypeSelect } from "./semantic/Selector";
 export { AppSelect, RoleSelect, ProtocolSelect, MemberSelect, useTenantApps } from "./semantic/References";
 export { ModelPicker, ModelOptionsEditor, modelOptionLabel, type ModelPurpose } from "./semantic/ModelPicker";
 export { DependencyGraph } from "./semantic/DependencyGraph";
@@ -167,7 +167,7 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
 
 export function definitionPresentation(definition: Definition): { title: string; description?: string } {
   const body = definition.entity ?? definition.action ?? definition.page ?? definition.application ?? definition.query ?? definition.flow
-    ?? definition.function ?? definition.operation ?? definition.agent ?? definition.propertyType ?? definition.linkType ?? definition.interface
+    ?? definition.function ?? definition.operation ?? definition.agent ?? definition.propertyType ?? definition.valueType ?? definition.linkType ?? definition.interface
     ?? definition.protocol ?? definition.observation ?? definition.alert ?? definition.evaluation ?? definition.testPlan ?? definition.sampleSet;
   return { title: body && "title" in body && typeof body.title === "string" && body.title ? body.title : definition.ref.name,
     description: body && "description" in body && typeof body.description === "string" ? body.description : undefined };
@@ -380,15 +380,17 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); }, actions: task => task.ref?.startsWith("build.dispatch/") ? <Button size="sm" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : null } : undefined}
         actions={(r) => <>
-          <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" })}>{t("Back to inbox")}</Button>
           <RecordObservations type={type} id={r.id} />
-          {(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string") && <Button size="sm" variant="ghost" onClick={() => openRecord(String(r.target ?? r.ref ?? r.subject))}>{t("Open related record")}</Button>}
           <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
           <OpenInMenu type={type} />
-          {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "beside" })}>{t("Ask the assistant")}</Button>}
           {can(`${type}.edit`) && (!allowed || allowed.includes(`${type}.edit`)) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
-          {can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived && <Button size="sm" variant="danger" onClick={() => archive.take(r)}>{t("Archive")}</Button>}
-        </>} />
+        </>}
+        menu={(r) => [
+          { id: "inbox", label: t("Back to inbox"), run: () => open({ view: "inbox" }) },
+          ...(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string" ? [{ id: "related", label: t("Open related record"), run: () => openRecord(String(r.target ?? r.ref ?? r.subject)) }] : []),
+          ...(can("agent.run.start") ? [{ id: "assistant", label: t("Ask the assistant"), run: () => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "beside" }) }] : []),
+          ...(can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived ? [{ id: "archive", label: t("Archive"), danger: true, separatorBefore: true, run: () => archive.take(r) }] : []),
+        ]} />
       {archive.dialog}
       {transition.dialog}
       {editing&&catalog.find(action=>action.schema===`${type}.edit`)&&<DeclaredActionDialog frame="drawer" declared={catalog.find(action=>action.schema===`${type}.edit`)!} type={type} record={editing} initial={editing} onClose={()=>setEditing(undefined)} onCompleted={()=>setEditing(undefined)}/>}

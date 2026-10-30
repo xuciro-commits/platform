@@ -14,6 +14,8 @@ export type SemanticModelView = {
   propertyTypes: SemanticPropertyType[];
 };
 
+export type SemanticValueType = { binding: Api.AssetBinding; value: Api.ValueType; definition: WorkspaceDefinition };
+
 export type SemanticPropertyType = { binding: Api.AssetBinding; property: Api.PropertyType; definition: WorkspaceDefinition };
 export const assetBindingKey = (binding: Api.AssetBinding) => `${key(binding.ref)}@${binding.sourceVersion}`;
 
@@ -22,6 +24,14 @@ export function semanticPropertyTypes(definitions: WorkspaceDefinition[]): Seman
     const versions = new Map(Object.entries(definition.propertyVersions ?? {}));
     versions.set(definition.version, definition.propertyType!);
     return [...versions].map(([sourceVersion, property]) => ({ binding: { ref: definition.ref, sourceVersion }, property, definition }));
+  });
+}
+
+export function semanticValueTypes(definitions: WorkspaceDefinition[]): SemanticValueType[] {
+  return definitions.filter(d => d.ref.kind === "value-type" && d.valueType).flatMap(definition => {
+    const versions = new Map(Object.entries(definition.valueVersions ?? {}));
+    versions.set(definition.version, definition.valueType!);
+    return [...versions].map(([sourceVersion, value]) => ({ binding: { ref: definition.ref, sourceVersion }, value, definition }));
   });
 }
 

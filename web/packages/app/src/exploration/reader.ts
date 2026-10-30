@@ -74,9 +74,9 @@ export function createRecordExploration(reader:RecordExplorationReader) {
 
 export function originalDirectoryItems(config:PageUI.PageAssetDirectory,definitions:readonly WorkspaceDefinition[]) {
  return config.items.flatMap(item=>{const d=definitions.find(d=>same(d.ref,item.asset.ref));if(!d)return [];
-  const retained=item.asset.ref.kind==="query"?d.queryVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="link-type"?d.linkVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="property-type"?d.propertyVersions?.[item.asset.sourceVersion]:undefined;
+  const retained=item.asset.ref.kind==="query"?d.queryVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="link-type"?d.linkVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="property-type"?d.propertyVersions?.[item.asset.sourceVersion]:item.asset.ref.kind==="value-type"?d.valueVersions?.[item.asset.sourceVersion]:undefined;
   if(d.version!==item.asset.sourceVersion&&!retained)return [];
-  const title=retained?.title??d.entity?.title??d.page?.title??d.query?.title??d.linkType?.title??d.action?.title??d.application?.title??d.function?.title??d.operation?.title??d.propertyType?.title??d.ref.name;
+  const title=retained?.title??d.entity?.title??d.page?.title??d.query?.title??d.linkType?.title??d.action?.title??d.application?.title??d.function?.title??d.operation?.title??d.propertyType?.title??d.valueType?.title??d.ref.name;
   return [{id:item.id,label:item.label,asset:item.asset,title}];
  });
 }

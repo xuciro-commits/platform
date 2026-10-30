@@ -13,8 +13,11 @@ import {RecordUploader} from "./RecordUploader";
 import {EditableRecordGrid,type RecordEditPort,type RecordSelectionPort} from "./EditableRecordGrid";
 import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresentation";
 import { DataTable } from "../components/DataTable";
+import { flexRender, type CellContext } from "@tanstack/react-table";
 import { FacetChoices } from "../fields/FacetChoices";
 import {ContentTabs} from "../layout/ContentTabs";
+import {FormatPill,HeaderCommands,ObjectHeader,toneOf,type HeaderPill} from "./ObjectView";
+import type {ContextCommand} from "../components/CommandMenu";
 
 import { PropertyList } from "../components/EntityCard";
 import { Tag, type Tone } from "../components/StatusTag";
@@ -46,7 +49,7 @@ export type Lifecycle = Api.LifecycleInfo;
 export type EntityInfo = Api.EntityInfo;
 type Stamp = Api.Stamp;
 export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
-export type RecordQuery = Omit<Api.Query,"domain"> & {domain?:unknown[]};
+export type RecordQuery = Omit<Api.Query,"domain"> & {domain?:unknown[];format?:boolean};
 export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
 export type InterfaceRecordIdentity = Pick<Api.InterfaceRecord, "type" | "id">;
 export type InterfaceRecordData = Omit<Api.InterfaceRecord, "record"> & { record: EntityRecord };
@@ -343,6 +346,7 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
   const sortField = sort.replace(/^-/, "");
   const knownSort = ["id", "created", "changed"].includes(sortField) || info?.fields.some((f) => f.name === sortField);
   const recordQuery: RecordQuery = window?.query ?? { ...baseQuery,domain, search, sort: knownSort ? localSort : ["id"], offset, limit: pageSize, archived };
+  const listQuery: RecordQuery = { ...recordQuery, format: true };
   const facetQueries=facetFields.map(field=>[field.name,window?window.facetQuery?.(field.name):{...recordQuery,domain:[...JSON.parse(baseDomainKey),...JSON.parse(fixedKey),...(drilled??[]),...facetTerms.filter(term=>term[0]!==field.name)]}] as const);
   const facetKey=JSON.stringify([type,facetQueries]);
   type FacetCounts=Record<string,{value:string;count:number}[]|"unavailable">;
@@ -399,19 +403,28 @@ export function RecordList({ source, type, onOpen, onOpenReference, toolbar, hei
     setError(undefined);
     const load = () => {
       const request=++epoch;
-      source.list(type, recordQuery)
+      source.list(type, listQuery)
         .then((p) => { if (current&&request===epoch) { setLoadedPage({ source:sourceIdentity,key: pageKey, page: p }); setError(undefined); } }, (e) => { if (current&&request===epoch) { setLoadedPage(undefined); setError({source:sourceIdentity,key:pageKey,message:String(e)}); } });
     };
-    const stop = source.watchList?.(type, recordQuery, load);
+    const stop = source.watchList?.(type, listQuery, load);
     const handle = setTimeout(load, 150);
     return () => { current = false; stop?.(); clearTimeout(handle); };
   }, [sourceIdentity, source.revision, pageKey, view, windowKey, visible,staleFilters.length]);
   if (!info || !entity) return <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted">{t("No activated object {type} here yet. Its records appear once a release that includes it is active; a draft shows its fields in the object model.", { type })}</p>;
-  const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", enableSorting: false,
+  const presented = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", enableSorting: false,
     meta: { width: 130, querySort: sortLocked?undefined:{ direction: sort === "id" ? "asc" as const : sort === "-id" ? "desc" as const : undefined,
       onChange: (next) => { const key = next === "asc" ? "id" : "-id"; if (window) window.onChange({ sort: [key], offset: 0 }); else { setSort([key]); setOffset(0); } } } },
     cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
+  const pageFormats = page?.formats;
+  const columnsOf = pageFormats ? presented.map((column) => {
+    const name = column.id ?? "";
+    if (!entity.fields[name]) return column;
+    return { ...column, cell: (context: CellContext<EntityRecord, unknown>) => {
+      const format = pageFormats[context.row.original.id]?.[name];
+      return format ? <FormatPill format={format} text={entity.fields[name]!.text(context.getValue() as never)} /> : flexRender(column.cell, context);
+    } };
+  }) : presented;
   const total = page?.total ?? 0;
   const {offset:_,limit:__,sort:___,...query}=recordQuery;
   const measureEncoding = measure === "count" ? { type: "quantitative" as const, aggregate: "count" as const }
@@ -588,11 +601,11 @@ export function useRecordView(source: RecordSource, type: string, id?: string, r
   return { view: current?.view, error: current?.key === key ? current.error : undefined, loading: !!id && (current?.key !== key || current.loading), refresh };
 }
 
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {
+export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {
   detailPresentation?:DetailPresentationOptions;recordTabs?:readonly string[];recordLinks?:readonly RecordLinkOptions[];linksOnly?:boolean;statusTracker?:StatusTrackerOptions;statusOnly?:boolean;
   work?: (view: RecordView) => ReactNode;
   tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void>; actions?: (task: Api.InboxTask) => ReactNode };
-  source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
+  source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode; menu?: (r: EntityRecord) => ContextCommand[];
   fields?: string[];
   detailOnly?: boolean;
   files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
@@ -626,33 +639,47 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
    return <div className="grid min-w-0 gap-2"><StatusBar lifecycle={{...l,states}} state={r[value.field] as string} tracker/>{!value.stages.includes(r[value.field] as string)&&<p className="text-xs text-muted">{t("Current state is outside the displayed stages.")}</p>}</div>;
   }
 
-  const header=(<header className="flex flex-wrap items-center gap-2">
-        <h1 className="min-w-0 break-words text-lg font-semibold">{displayOf(info, r)}</h1>
-        <span className="min-w-0 break-words font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
-        {r.archived && <Tag label="archived" />}
-		{view.effective===false&&<Tag label={t("Expired")} />}
-        {!!info.versionPins?.length&&(r.versionPins as Api.RecordVersionPin[]|undefined)?.map(pin=><Tag key={pin.reference} label={t("Pinned version: {version}",{version:String(pin.version)})} />)}
-        {info.versioning?.validUntil&&Boolean(r[info.versioning.validUntil])&&<Tag label={t("Valid until: {date}",{date:String(r[info.versioning.validUntil])})} />}
-        {loading&&<span role="status" className="text-xs text-muted">{t("Refreshing record…")}</span>}
-        {!detailOnly && <fieldset disabled={loading} className="ml-auto flex min-w-0 flex-wrap gap-1 border-0 p-0">{actions?.(r)}</fieldset>}
-      </header>);
+  const formats=view.formats??{};
+  const lifecycle=info.lifecycle,stateName=lifecycle?String(r[lifecycle.field]??""):"";
+  const pills:HeaderPill[]=[];
+  if(lifecycle&&stateName){const state=lifecycle.states.find(s=>s.name===stateName),format=formats[lifecycle.field];pills.push({key:"lifecycle",label:format?.label||state?.title||stateName,tone:toneOf(format?.tone??state?.tone),icon:format?.icon,title:info.fields.find(f=>f.name===lifecycle.field)?.title});}
+  for(const f of info.fields){const format=formats[f.name];if(format&&f.name!==lifecycle?.field)pills.push({key:f.name,label:format.label||entity.fields[f.name]?.text(valueOf(entity,f.name,r) as never)||"—",tone:toneOf(format.tone),icon:format.icon,title:f.title});}
+  const full=!detailOnly&&!recordTabs;
+  const transitions=full&&lifecycle&&onTransition?lifecycle.transitions.filter(x=>x.from.includes(stateName)&&!loading&&(can?.(x.schema)??false)):[];
+  const commands:ContextCommand[]=transitions.map(x=>({id:x.schema,label:x.title,run:()=>onTransition!(x.schema,r)}));
+  const header=<ObjectHeader sticky={full} icon={info.icon} color={info.color} title={displayOf(info, r)} pills={pills.slice(0,3)}
+    subtitle={<>{info.title} · {r.id} {t("· rev")} {r.revision}</>}
+    tags={<>
+      {r.archived && <Tag label="archived" />}
+      {view.effective===false&&<Tag label={t("Expired")} />}
+      {!!info.versionPins?.length&&(r.versionPins as Api.RecordVersionPin[]|undefined)?.map(pin=><Tag key={pin.reference} label={t("Pinned version: {version}",{version:String(pin.version)})} />)}
+      {info.versioning?.validUntil&&Boolean(r[info.versioning.validUntil])&&<Tag label={t("Valid until: {date}",{date:String(r[info.versioning.validUntil])})} />}
+    </>}
+    status={loading&&<span role="status" className="text-xs text-muted">{t("Refreshing record…")}</span>}
+    actions={!detailOnly?<fieldset disabled={loading} className="m-0 flex min-w-0 flex-wrap items-center gap-1 border-0 p-0"><HeaderCommands commands={commands} menu={menu?.(r)??[]} disabled={loading}>{actions?.(r)}</HeaderCommands></fieldset>:undefined} />;
+  const shownValue=(name:string,row:EntityRecord=r,target:Entity<EntityRecord>=entity)=>{
+    const format=row===r?formats[name]:undefined;
+    if(format)return <FormatPill format={format} text={target.fields[name]?.text(valueOf(target,name,row) as never)??""}/>;
+    return target.fields[name]!.display(row[name] as never,row);
+  };
   const barcode=detailPresentation?.barcode?detailPresentation.barcode==="id"?r.id:String(r[detailPresentation.barcode]??""):"";
   const extensions=(view.related??[]).flatMap(rel=>{const relInfo=source.entity(rel.type);const row=rel.records[0];if(!relInfo||!row||rel.field!=="base"||(relInfo as {extends?:string}).extends!==type)return [];const relEntity=entityFrom(relInfo,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined);return [{rel,relInfo,relEntity,row}];});
   const properties=(<section className="rounded-md border border-border bg-surface p-3" data-print-label={detailPresentation?.print||undefined}>
         {barcode&&<div className="mb-3 flex justify-center overflow-hidden"><Barcode text={barcode}/></div>}
         {detailPresentation?.print&&<div className="mb-3 flex justify-end print:hidden"><Button size="sm" onClick={()=>window.print()}><Printer/>{t("Print")}</Button></div>}
-        <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={[...[...new Set(fields??info.fields.map(f=>f.name))].flatMap(name=>{const f=info.fields.find(f=>f.name===name);return !f||detailPresentation?.hideNull&&(r[name]===undefined||r[name]===null||r[name]==="")?[]:[[f.title,entity.fields[name]!.display(r[name] as never,r)] as [string,ReactNode]];}),
+        <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={[...[...new Set(fields??info.fields.map(f=>f.name))].flatMap(name=>{const f=info.fields.find(f=>f.name===name);return !f||detailPresentation?.hideNull&&!formats[name]&&(r[name]===undefined||r[name]===null||r[name]==="")?[]:[[f.title,shownValue(name)] as [string,ReactNode]];}),
           ...(!detailOnly ? [[t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
             [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]] as [string, ReactNode][] : [])]} />
         {extensions.map(({rel,relInfo,relEntity,row})=><div key={rel.type} className="mt-3 border-t border-border pt-3">
           <h3 className="mb-1 text-xs font-semibold text-muted">{relInfo.title}</h3>
           <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={relInfo.fields.filter(f=>f.name!=="base"&&!(detailPresentation?.hideNull&&(row[f.name]===undefined||row[f.name]===null||row[f.name]==="")))
-            .map(f=>[f.title,relEntity.fields[f.name]!.display(row[f.name] as never,row)] as [string,ReactNode])}/>
+            .map(f=>[f.title,shownValue(f.name,row,relEntity)] as [string,ReactNode])}/>
         </div>)}
         {!detailOnly && <div className="mt-3 border-t border-border pt-3"><StructuredEditor key={type+":"+id} scope={type+":"+id} value={Object.fromEntries(Object.entries(r).filter(([name])=>["id","revision","created","changed","archived"].includes(name)||info.fields.some(field=>field.name===name)))} readOnly><span className="text-xs text-muted">{t("View the readable record as JSON or YAML.")}</span></StructuredEditor></div>}
       </section>);
   const groups=detailOnly&&!recordTabs&&!linksOnly?[]:recordLinks===undefined?[...view.related,...(view.linked??[])].map(rel=>({rel,title:undefined as string|undefined})):recordLinks.flatMap(group=>{const target=source.entity(group.object.name),field=target?.fields.find(f=>f.name===group.field&&f.type==="reference"&&f.ref===type&&!!f.inverse),rel=view.related.find(r=>r.type===group.object.name&&r.field===group.field);return field&&target?.app===group.object.app&&rel?[{rel,title:group.title}]:[];});
-  const related=detailOnly&&!recordTabs&&!linksOnly?[]:groups.filter(({rel})=>!extensions.some(x=>x.rel===rel)).flatMap(({rel,title}) => {
+  const shownGroups=detailOnly&&!recordTabs&&!linksOnly?[]:groups.filter(({rel})=>!extensions.some(x=>x.rel===rel));
+  const related=shownGroups.flatMap(({rel,title}) => {
     const relInfo=source.entity(rel.type),relEntity=relInfo&&entityFrom(relInfo,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined);if(!relEntity)return [];
     return [<section key={`${rel.type}.${rel.field}`}>
       <h2 className="mb-1 text-sm font-semibold">{title||relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : rel.relation ? <>{" · "}{rel.relation}</> : <>{t(", by")} {rel.field}</>})</span></h2>
@@ -667,41 +694,53 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
     const panels:Record<string,ReactNode>={overview,properties,links:related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>,history:<><RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/><RecordHistory info={info} history={view.history}/></>};
     return currentRecord(<div className="grid min-w-0 gap-3">{header}<ContentTabs key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:tabs[0]} onChange={value=>setTab({identity:tabIdentity,value})} items={tabs.map(id=>({id,title:titles[id]!,content:panels[id]}))}/></div>);
   }
-  return currentRecord(
-    <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">
-      {header}
-      {!detailOnly && info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={schema=>!loading&&(can?.(schema)??false)}
-        onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
-      {!detailOnly && (view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
-        <h2 className="text-sm font-semibold">{t("Work on this record")}</h2>
-        {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
-        {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} onOpen={onOpen} />}
-        {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
-      </section>}
-      {!detailOnly && work?.(view)}
-      {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
+  if(detailOnly)return currentRecord(<div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">{header}{properties}</div>);
+  const count=(title:string,n:number)=><>{title}{n>0&&<span className="rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{n}</span>}</>;
+  const linkCount=shownGroups.reduce((n,{rel})=>n+rel.total,0);
+  const hasFiles=view.files.length>0||!!files,hasComments=view.comments.length>0||!!comments;
+  const panes:{id:string;title:ReactNode;content:ReactNode}[]=[
+    {id:"overview",title:t("Overview"),content:<div className="grid min-w-0 gap-4">
+      {info.lifecycle&&<StatusBar lifecycle={info.lifecycle} state={stateName}/>}
+      {work?.(view)}
+      {info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       {properties}
-      {!detailOnly && (view.files.length > 0 || files) && <Files key={JSON.stringify(["files",source.scope,type,id])} attached={view.files} files={files} />}
-      {!detailOnly && (view.comments.length > 0 || comments) && <Comments key={JSON.stringify(["comments",source.scope,type,id])} list={view.comments} following={view.following} comments={comments} />}
-      {!detailOnly && related}
-      {!detailOnly && (view.activity?.length ?? 0) > 0 && (
-        <section>
-          <h2 className="mb-1 text-sm font-semibold">{t("Activity")}</h2>
-          <ol className="grid gap-1 text-sm">
-            {view.activity.map((n, i) => (
-              <li key={i} className="flex flex-wrap items-baseline gap-2">
-                <span className="text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
-                <Tag label={n.by} tone="info" />
-                {n.title && <span className="font-medium">{n.title}</span>}
-                <span className="text-xs text-muted">{n.text}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-      {!detailOnly && <RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/>}
-      {!detailOnly && <RecordHistory info={info} history={view.history} />}
+    </div>},
+    {id:"links",title:count(t("Links"),linkCount),content:related.length?<div className="grid min-w-0 gap-4">{related}</div>:<p className="text-sm text-muted">{t("No related records.")}</p>},
+    ...(view.tasks.length>0?[{id:"tasks",title:count(t("Tasks"),view.tasks.length),content:<Tasks list={view.tasks} tasks={tasks}/>}]:[]),
+    ...(view.approvals.length>0?[{id:"approvals",title:count(t("Approvals"),view.approvals.length),content:<Approvals source={source} approvals={view.approvals} onOpen={onOpen}/>}]:[]),
+    ...(view.processes.length>0?[{id:"processes",title:count(t("Processes"),view.processes.length),content:<Processes source={source} processes={view.processes} onOpen={onOpen}/>}]:[]),
+    ...(hasFiles?[{id:"files",title:count(t("Files"),view.files.length),content:<Files key={JSON.stringify(["files",source.scope,type,id])} attached={view.files} files={files} />}]:[]),
+    ...(hasComments?[{id:"comments",title:count(t("Comments"),view.comments.length),content:<Comments key={JSON.stringify(["comments",source.scope,type,id])} list={view.comments} following={view.following} comments={comments} />}]:[]),
+    {id:"history",title:t("History"),content:<div className="grid min-w-0 gap-4">
+      <RecordDeliveries deliveries={view.deliveries} onOpen={onOpen}/>
+      {(view.activity?.length ?? 0) > 0 && <ActivityNotes notes={view.activity} />}
+      <RecordHistory info={info} history={view.history} />
+    </div>},
+  ];
+  return currentRecord(
+    <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-3">
+      {header}
+      <ContentTabs compact key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:view.tasks.length>0?"tasks":undefined} onChange={value=>setTab({identity:tabIdentity,value})}
+        items={panes.map(pane=>({...pane,content:<div className="pt-3">{pane.content}</div>}))} />
     </div>
+  );
+}
+
+function ActivityNotes({ notes }: { notes: Api.Note[] }) {
+  return (
+    <section>
+      <h2 className="mb-1 text-sm font-semibold">{t("Activity")}</h2>
+      <ol className="grid gap-1 text-sm">
+        {notes.map((n, i) => (
+          <li key={i} className="flex flex-wrap items-baseline gap-2">
+            <span className="text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
+            <Tag label={n.by} tone="info" />
+            {n.title && <span className="font-medium">{n.title}</span>}
+            <span className="text-xs text-muted">{n.text}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

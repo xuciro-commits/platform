@@ -1605,4 +1605,7 @@ export default {
   "Edit lane rule": "编辑分流规则",
   "Choose the editing lane by form need: no input stays inline, a record form opens the drawer, builders keep the page.": "按表单需要选择编辑通道：无输入就地执行，记录表单以抽屉打开，构建器保持整页。",
   "The rule is a presentation decision; it never grants permissions or changes what a form submits. Adjacent operations on one resource share the lane.": "该规则只决定呈现，不授予权限，也不改变表单提交内容。同一资源的相邻操作共用同一通道。",
+  "More actions": "更多操作",
+  "More": "更多",
+  "Tasks": "任务",
 } as Record<string, string>;

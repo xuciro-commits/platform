@@ -2,7 +2,7 @@ import type {Definition as WorkspaceDefinition} from "@platform/app";
 import type { Api } from "@platform/kernel";
 import type { Route } from "@platform/ui";
 
-export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
+export type ResourceKind = "object" | "action" | "link-type" | "property-type" | "value-type" | "query" | "page" | "flow" | "automation" | "function" | "evaluation-set" | "test-plan" | "sample-set" | "agent" | "compute" | "table" | "alert" | "connection" | "source" | "dataset" | "pipeline" | "writeback" | "matching" | "observation" | "definition";
 
 export type ResourceKindInfo = {
   kind: ResourceKind; type: string; view: string;
@@ -14,6 +14,7 @@ export const resourceKinds: ResourceKindInfo[] = [
   { kind: "object", type: "build.object", view: "object-type", label: "Object type", plural: "Object types", ref: "object" },
   { kind: "link-type", type: "build.linktype", view: "link-type", label: "Link type", plural: "Link types", ref: "link-type" },
   { kind: "property-type", type: "build.propertytype", view: "property-type", label: "Shared property", plural: "Shared properties", ref: "property-type" },
+  { kind: "value-type", type: "build.valuetype", view: "value-type", label: "Value type", plural: "Value types", ref: "value-type" },
   { kind: "query", type: "build.query", view: "query", label: "Query", plural: "Queries", ref: "query" },
   { kind: "page", type: "build.page", view: "module", label: "Page", plural: "Pages", ref: "page" },
   { kind: "flow", type: "build.process", view: "flow", label: "Logic flow", plural: "Logic flows", ref: "flow" },

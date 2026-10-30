@@ -1,7 +1,7 @@
 import type { BusinessTime, LinkTraversal, ObjectSet, ObjectSetRequest, Query, QuerySet, RecordSetPredicate } from "./gen/host";
 
 export type ObjectSetOperation = "load" | "aggregate" | "count";
-export type RecordQueryInput = Omit<Query, "domain"> & { domain?: unknown[] };
+export type RecordQueryInput = Omit<Query, "domain"> & { domain?: unknown[]; format?: boolean };
 export type AggregateQueryInput = Pick<ObjectSetRequest, "groups" | "measures" | "window" | "histogram" | "maxRows" | "collection"> & {
   domain?: unknown[];
   search?: string;
@@ -41,6 +41,7 @@ export function loadRequest(object: string, q: RecordQueryInput = {}): ObjectSet
   if (q.sort?.length) request.sort = q.sort;
   if (q.offset) request.offset = q.offset;
   if (q.limit) request.limit = q.limit;
+  if (q.format) request.format = true;
   return request;
 }
 

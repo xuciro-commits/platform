@@ -37,6 +37,7 @@ export const relationNodeClasses: Record<string, { title: string; icon: string; 
   function: { title: "Function", icon: "braces", tone: "neutral" },
   linktype: { title: "Relationship", icon: "git-branch", tone: "neutral" },
   propertytype: { title: "Shared property", icon: "tag", tone: "neutral" },
+  valuetype: { title: "Value type", icon: "tag", tone: "neutral" },
   action: { title: "Action", icon: "zap", tone: "neutral" },
   operation: { title: "Operation", icon: "settings-2", tone: "neutral" },
   protocol: { title: "Protocol", icon: "plug", tone: "neutral" },

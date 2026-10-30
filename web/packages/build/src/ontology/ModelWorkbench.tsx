@@ -5,16 +5,16 @@ import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
 import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
-import { ContextHelp, Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, PropertyList, RecordList, RelationCanvas, Tag,
+import { ContextHelp, Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, RelationCanvas, Tag,
   t, type ColumnDef, type RelationEdge, type RelationNode, ContentTabs} from "@platform/ui";
 import type { Api } from "@platform/kernel";
-import { Boxes, Database, GitBranch, Layers, Link2 } from "lucide-react";
+import { Boxes, GitBranch, Layers, Link2 } from "lucide-react";
 import { useInterfaces } from "./shape";
 import { projectGroup, useProjectIndex } from "../projects/membership";
 import { useEffect, useMemo, useState } from "react";
 
 type DraftProperty = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
-type ObjectDraft = { id: string; revision: number; archived?: boolean; name: string; title: string; state: string; fields: DraftProperty[]; actions?: { name: string; title: string }[]; access?: { role: string; read: string }[]; implements?: string[]; extends?: string };
+type ObjectDraft = { id: string; revision: number; archived?: boolean; name: string; title: string; icon?: string; color?: string; state: string; fields: DraftProperty[]; actions?: { name: string; title: string }[]; access?: { role: string; read: string }[]; implements?: string[]; extends?: string };
 type Resource = { ref: Api.AssetRef; title: string; source: string; installed?: Definition; draft?: ObjectDraft; fields: (Api.FieldInfo | DraftProperty)[] };
 type Selection = { kind: "property"; ref: PropertyRef } | { kind: "relation"; relation: SemanticRelation; inbound: boolean } | { kind: "action"; definition: Definition };
 type PageSeed = { object: Api.AssetRef; field?: string; relation?: SemanticRelation };
@@ -107,7 +107,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
             { id: "owner", label: t("Owner"), of: (item) => ({ id: item.installed?.ref.app ?? item.ref.app, label: appTitle(item.installed?.ref.app ?? item.ref.app) }) },
             { id: "status", label: t("Status"), of: (item) => item.installed ? { id: "published", label: t("Published") } : { id: "draft", label: t("Draft"), order: 1 } },
           ]}
-          row={(item) => <><Database className="size-3 shrink-0 text-muted" /><span className="min-w-0 flex-1 truncate">{item.title}</span>
+          row={(item) => <><ObjectIcon icon={item.installed?.entity?.icon ?? item.draft?.icon} color={item.installed?.entity?.color ?? item.draft?.color} className="size-5 rounded-sm" /><span className="min-w-0 flex-1 truncate">{item.title}</span>
             {!item.installed && <span className="shrink-0 text-2xs text-muted">{t("Draft")}</span>}</>}
           empty={t("No matching objects.")} />
       </div>}
@@ -155,7 +155,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
           <RelationCanvas layout="right" nodes={graph.nodes} edges={graph.edges} selected={current} height="100%" label={t("Relationship graph")} storeKey="model-graph"
             onSelect={(name) => { if (name) { setCurrent(name); select(undefined); } }} onOpen={(name) => { const item = resources.find((item) => item.ref.name === name); if (item) choose(item); }} /></div>}
         {view === "detail" && resource && <div className="grid gap-3">
-          <div className="flex items-center gap-3"><Database className="size-6 text-primary" /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{resource.installed?.entity?.implements?.length ? <> · {t("implements")} {resource.installed.entity.implements.join(", ")}</> : null}{resource.draft?.extends ? <> · {t("extends")} {resource.draft.extends}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>
+          <div className="flex items-center gap-3"><ObjectIcon icon={resource.installed?.entity?.icon ?? resource.draft?.icon} color={resource.installed?.entity?.color ?? resource.draft?.color} /><div className="min-w-0 flex-1"><h2 className="text-base font-semibold">{resource.title}</h2><p className="font-mono text-xs text-muted">{resource.ref.name}{resource.installed?.entity?.implements?.length ? <> · {t("implements")} {resource.installed.entity.implements.join(", ")}</> : null}{resource.draft?.extends ? <> · {t("extends")} {resource.draft.extends}</> : null}</p></div><Tag label={t(resource.installed ? "Published" : "Draft")} /></div>
           <ContentTabs label={t("Object resource views")} value={tab}
             onChange={(id) => { setTab(id as typeof tab); select(undefined); }} items={[
           { id: "overview", title: t("Overview"), content: <><PropertyList items={[[t("Identity"), resource.ref.name], [t("Owner"), resource.ref.app], [t("Source"), t(resource.source === "code" ? "Native code" : "Tenant definition")], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), resource.installed?.entity?.display ?? "—"]]} />

@@ -1,7 +1,10 @@
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
+import { IconGlyph, iconGlyphs } from "./IconPicker";
 
 export type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "purple" | "pink" | "teal" | "orange";
+
+export const toneNames: readonly Tone[] = ["neutral", "info", "success", "warning", "danger", "purple", "pink", "teal", "orange"];
 
 export type StatusRegistry = Record<string, { label: string; tone: Tone }>;
 
@@ -18,7 +21,7 @@ export const submissionStatuses = defineStatuses({
   SUBMISSION_STATE_UNKNOWN: { label: t("Unknown"), tone: "warning" },
 });
 
-export function Tag({ label, tone = "neutral", className }: { label: string; tone?: Tone; className?: string }) {
+export function Tag({ label, tone = "neutral", icon, className }: { label: string; tone?: Tone; icon?: string; className?: string }) {
   return (
     <span
       data-tone={tone}
@@ -31,7 +34,7 @@ export function Tag({ label, tone = "neutral", className }: { label: string; ton
         background: `color-mix(in oklch, var(--tone-${tone}) 10%, transparent)`,
       }}
     >
-      <span className="size-1.5 rounded-full" style={{ background: `var(--tone-${tone})` }} aria-hidden />
+      {icon && iconGlyphs[icon] ? <IconGlyph name={icon} className="[&_svg]:size-3" /> : <span className="size-1.5 rounded-full" style={{ background: `var(--tone-${tone})` }} aria-hidden />}
       {label}
     </span>
   );

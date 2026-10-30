@@ -137,7 +137,7 @@ const capabilityTitles: Record<string, string> = {
   evaluations: "Evaluations", federation: "Federation", files: "Files", flows: "Flows", functions: "Functions", glossary: "Glossary",
   integrations: "Integrations", kinds: "Relationship kinds", limits: "AI limits", links: "Links", linktypes: "Link types",
   members: "Members", memory: "Agent memory", models: "Models", notifications: "Notifications", objects: "Objects", packages: "Packages",
-  pages: "Pages", processes: "Processes", projects: "Projects", propertytypes: "Property types", providers: "AI providers",
+  pages: "Pages", processes: "Processes", projects: "Projects", propertytypes: "Property types", providers: "AI providers", valuetypes: "Value types",
   queries: "Queries", relationships: "Relationships", runs: "Runs", seed: "Seeding", settings: "Settings", switch: "Agent switch",
   tasks: "Tasks", views: "Views", tickets: "Tickets", orders: "Orders", notes: "Notes",
 };

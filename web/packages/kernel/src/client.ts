@@ -63,7 +63,7 @@ export class EdgeClient {
     return () => { stops.forEach(stop => stop()); stops.clear(); };
   }
   recordsPath(type: string, q: RecordQueryInput = {}) {
-    if (q.set || q.traversal || q.businessTime) return objectSetPath("load", loadRequest(type, q));
+    if (q.set || q.traversal || q.businessTime || q.format) return objectSetPath("load", loadRequest(type, q));
     return `/v1/records/${encodeURIComponent(type)}?${this.readParams(q)}`;
   }
   interfaceRecordsPath(name:string,q:RecordQueryInput={}) {

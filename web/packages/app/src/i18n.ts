@@ -1308,4 +1308,6 @@ register("zh-CN", {
   "Simulation passed. Business records change only after confirmation.": "模拟已通过。确认后才会修改业务记录。",
   "A task has been assigned for human review.": "已分配人工复核任务。",
   "No eligible recipient is configured": "未配置符合资格的接收人",
+  "Unavailable value type: {name}": "值类型不可用：{name}",
+  "No value type": "无值类型",
 });

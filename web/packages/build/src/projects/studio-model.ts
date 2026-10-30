@@ -11,7 +11,7 @@ type StudioGroup = { id: string; title: string; kinds: readonly string[]; links?
 const domains = [
   { id: "model", title: "Model", description: "Objects, fields, relationships and reusable queries", groups: [
     { id: "business-model", title: "Business model", kinds: ["object"] },
-    { id: "relationships", title: "Relationships and shared properties", kinds: ["link-type", "property-type", "interface"] },
+    { id: "relationships", title: "Relationships and shared properties", kinds: ["link-type", "property-type", "value-type", "interface"] },
     { id: "queries", title: "Queries", kinds: ["query"] },
   ] },
   { id: "logic", title: "Behavior", description: "States, actions, flows, computation and intelligence", groups: [

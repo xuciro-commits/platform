@@ -22,9 +22,10 @@ import { ObjectProtocolsEditor } from "./object-protocols";
 import { BusinessVersionEditor } from "./business-version";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
 import { ExpressionEditor, literalExpression, type ExpressionChoice } from "../editor/ExpressionEditor";
+import { FieldFormatEditor, PresentationPanel, ValueTypeBinding } from "./presentation";
 
 const objectGroups = [
-  { id: "structure", title: "Object structure", sections: [{ id: "overview", title: "Overview" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "sets", title: "Record sets" }] },
+  { id: "structure", title: "Object structure", sections: [{ id: "overview", title: "Overview" }, { id: "presentation", title: "Presentation" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "sets", title: "Record sets" }] },
   { id: "behavior", title: "Behavior", sections: [{ id: "lifecycle", title: "Lifecycle" }, { id: "actions", title: "Actions" }] },
   { id: "rules", title: "Rules and access", sections: [{ id: "constraints", title: "Business constraints" }, { id: "versions", title: "Business versions" }, { id: "protocols", title: "Protocols" }, { id: "permissions", title: "Permissions" }] },
   { id: "data", title: "Data and preview", sections: [{ id: "data", title: "Data" }, { id: "preview", title: "Preview" }] },
@@ -33,7 +34,7 @@ type ObjectArea = typeof objectGroups[number]["id"];
 const objectSections = objectGroups.flatMap(group => [...group.sections]);
 type Tab = typeof objectSections[number]["id"];
 const sectionForLegacyTab: Record<Tab, ObjectArea> = {
-  overview: "structure", properties: "structure", links: "structure", sets: "structure",
+  overview: "structure", presentation: "structure", properties: "structure", links: "structure", sets: "structure",
   lifecycle: "behavior", actions: "behavior",
   constraints: "rules", versions: "rules", protocols: "rules", permissions: "rules",
   data: "data", preview: "data",
@@ -82,7 +83,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
   const references = process.fields.filter((f) => f.type === "reference");
   const incoming = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent));
   const inspector = <div className="p-2">
-    {field && chosen && <FieldProperties field={field} states={process.states} reads={process.reads} others={process.fields.filter((_, at) => at !== chosen.at)} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
+    {field && chosen && <FieldProperties field={field} refused={refused} states={process.states} reads={process.reads} others={process.fields.filter((_, at) => at !== chosen.at)} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
     {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
     {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
       onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
@@ -111,6 +112,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
       </fieldset>
       {object.state === "published" && <Button className="w-fit" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
     </div>,
+    presentation: <PresentationPanel title={object.title} process={process} onChange={change} />,
     properties: <div className="grid content-start gap-3 p-4">
       <div className="flex items-center justify-between"><h2 className="text-sm font-semibold">{t("Properties")}</h2><Button size="sm" onClick={addField}><Plus />{t("Add a property")}</Button></div>
       <DataTable data={process.fields.map((field, at) => ({ field, at }))} getRowId={({ at }) => String(at)}
@@ -260,7 +262,7 @@ function ProcessGraph({ objectId, process, chosen, onChoose, onChange, onAddStat
 }
 
 
-function FieldProperties({ field, others, reads, states, onChange, onRemove }: { states: State[]; reads?: Api.RuleReadSpec; field: Field; others: Field[]; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
+function FieldProperties({ field, others, reads, states, refused, onChange, onRemove }: { refused?: string; states: State[]; reads?: Api.RuleReadSpec; field: Field; others: Field[]; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
   const {definitions}=useHost();
   const { drafts, entities } = useAuthoringModel();
   const objects = (drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => ({ name: `build.${draft.name}`, title: draft.title }));
@@ -274,17 +276,18 @@ function FieldProperties({ field, others, reads, states, onChange, onRemove }: {
   const bound=field.property?semanticPropertyTypes(definitions).find(p=>assetBindingKey(p.binding)===assetBindingKey(field.property!)):undefined;
   return <Card className="grid content-start gap-3 p-3">
     <div className="text-xs font-semibold text-muted">{t("Field")}</div>
-    <Label text={t("Shared property version")}><SemanticPropertyTypeSelect label={t("Shared property version")} value={field.property} filter={p=>p.definition.source==="tenant"&&p.binding.ref.app==="build"} onChange={p=>onChange(p?{property:p.binding,type:p.property.type,title:p.property.title,choices:undefined,ref:undefined,inverse:undefined}:{property:undefined})}/></Label>
+    <Label text={t("Shared property version")}><SemanticPropertyTypeSelect label={t("Shared property version")} disabled={!!field.valueType} value={field.property} filter={p=>p.definition.source==="tenant"&&p.binding.ref.app==="build"} onChange={p=>onChange(p?{property:p.binding,type:p.property.type,title:p.property.title,choices:undefined,ref:undefined,inverse:undefined,valueType:undefined}:{property:undefined})}/></Label>
     {field.property&&<><p className="break-all text-xs text-muted">{field.property.ref.name}@{field.property.sourceVersion}</p><ContextHelp title={t("Shared property")}><p className="text-xs text-muted">{t("The shared source controls type and title. Local names, required values and access stay with this object.")}</p></ContextHelp>{!bound&&<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
     <Label text={t("What people call it")}><Input disabled={!!field.property} value={field.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
     <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
-    <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value, ref:undefined, inverse:undefined, stereotype:undefined, stereotypes:undefined })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value, ref:undefined, inverse:undefined, stereotype:undefined, stereotypes:undefined, valueType:undefined })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    <ValueTypeBinding field={field} onChange={onChange} />
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
     {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect enterprise label={t("Reference object")} value={field.ref} drafts={objects} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined, stereotype:undefined, stereotypes:undefined })} /></Label>}
     {field.type === "reference" && field.ref === "enterprise.element" && <EnterpriseReferenceTypes value={field} onChange={onChange} />}
     {field.type === "reference" && field.ref !== "enterprise.element" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
     {field.formula && <Label text={t("Computed by formula")}><Input className="font-mono" value={field.formula} onChange={(e) => onChange({ formula: e.target.value || undefined, formulaExpr: undefined })} /></Label>}
-    {["text", "choice", "reference", "boolean", "integer", "decimal", "money", "date", "datetime"].includes(expressionType) && !field.formula && <Checkbox disabled={!!field.aliasOf} checked={!!field.formulaExpr} onChange={enabled => onChange({ formulaExpr: enabled ? literalExpression(expressionType) : undefined, formula: undefined })}>{t("Computed by expression")}</Checkbox>}
+    {["text", "choice", "reference", "boolean", "integer", "decimal", "money", "date", "datetime"].includes(expressionType) && !field.formula && <Checkbox disabled={!!field.aliasOf||!!field.valueType} checked={!!field.formulaExpr} onChange={enabled => onChange({ formulaExpr: enabled ? literalExpression(expressionType) : undefined, formula: undefined })}>{t("Computed by expression")}</Checkbox>}
     {field.formulaExpr && <ExpressionEditor draftKey={`field:${field.name}:formula`} collections={reads?.collections} value={field.formulaExpr} kind={expressionType} choices={computedChoices} lookup={type => entities.find(entity => entity.type === type)} onChange={formulaExpr => onChange({ formulaExpr, formula: undefined })} />}
     {(field.formula||field.formulaExpr) && <ContextHelp title={t("Calculated value")}><p className="text-xs text-muted">{t("Computed by the declared expression at every change; nobody sets it by hand.")}</p></ContextHelp>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
@@ -304,6 +307,7 @@ function FieldProperties({ field, others, reads, states, onChange, onRemove }: {
       {on && picked.length === 0 && <span className="text-xs text-danger">{t("Pick at least one value.")}</span>}
       {on && <span className="text-xs text-muted">{t("The field is asked for — and required, if marked so — only while {field} is one of these; otherwise it stays empty.", { field: on.title || on.name })}</span>}
     </Label>}
+    <FieldFormatEditor field={field} fields={[...others, field]} hasState={states.length > 0} lookup={type => entities.find(entity => entity.type === type)} refused={refused} onChange={format => onChange({ format })} />
     <Button variant="danger" onClick={onRemove}>{t("Remove field")}</Button>
   </Card>;
 }

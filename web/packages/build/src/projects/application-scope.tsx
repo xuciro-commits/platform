@@ -7,7 +7,7 @@ import { refKey } from "./resources";
 import { assetRoute, studioAreaForRoute, studioAreaKinds, studioContext, studioRoute } from "./studio-model";
 
 const Scope = createContext<string | undefined>(undefined);
-const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "agent", "code", "link-type", "property-type", "decision-table", "alert", "connection", "data-source", "dataset", "pipeline", "writeback", "match", "integration-health", "observation-source", "observations", "studio-templates", "evaluation-set", "test-plan", "sample-set", "release-review", "changes", "release-history", "application-runs", "application-overview"]);
+const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "agent", "code", "link-type", "property-type", "value-type", "decision-table", "alert", "connection", "data-source", "dataset", "pipeline", "writeback", "match", "integration-health", "observation-source", "observations", "studio-templates", "evaluation-set", "test-plan", "sample-set", "release-review", "changes", "release-history", "application-runs", "application-overview"]);
 
 export function ApplicationScope({ application, route, children }: { application?: string; route?: Route; children: ReactNode }) {
   if (!application) return <>{children}</>;
