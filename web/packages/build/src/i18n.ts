@@ -4184,4 +4184,7 @@ register("zh-CN", {
   "Branches": "分支",
   "A branch is published by merging it. Use Save in the branch bar.": "分支通过合并来发布。请使用分支栏的“保存”。",
   "Save to branch": "保存到分支",
+  "Explore records of this type": "浏览此类型的记录",
+  "No records match this set.": "没有符合该集合的记录。",
+  "Showing the first {shown} of {total} records.": "显示前 {shown} 条，共 {total} 条记录。",
 });

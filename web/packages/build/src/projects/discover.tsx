@@ -6,6 +6,7 @@ import { useApplicationWorkspace } from "./application-scope";
 import { kindIcon } from "./resource-icons";
 import { matchesResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 import { studioAreas } from "./studio-model";
+import { ExploreRecords } from "./explore-records";
 
 const areaTone: Record<string, Tone> = { model: "info", logic: "purple", interface: "success", integration: "orange", release: "teal" };
 const types = [...new Set(resourceKinds.map(kind => kind.type))];
@@ -124,6 +125,7 @@ export function Discover() {
                 <div><Button size="sm" variant="primary" onClick={() => openEditor(selected!)}>{t("Open editor")}</Button></div>
               </div>
             </PanelSection>
+            {current.ref.kind === "object" && entities.some(item => item.type === current.ref.name) && <PanelSection title={t("Explore records of this type")}><ExploreRecords key={current.ref.name} object={current.ref.name} /></PanelSection>}
             {(["uses", "usedBy"] as const).map(direction => {
               const keys = neighbours(selected!, direction);
               return <PanelSection key={direction} title={direction === "uses" ? t("Uses") : t("Used by")}>
