@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { Api } from "@platform/kernel";
 import { semanticValueTypes, useHost } from "@platform/app";
-import { Button, Checkbox, EmptyState, Input, Notice, PageHeader, PanelSection, PropertyList, Select, StructuredEditor, Tag, Textarea, Workbench, inputIssues, t } from "@platform/ui";
+import { Button, Checkbox, DateInput, DateTimeInput, EmptyState, Input, Notice, PageHeader, PanelSection, PropertyList, Select, StructuredEditor, Tag, Textarea, Workbench, inputIssues, t } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
 import { ResourceList } from "../editor/ResourceList";
@@ -37,7 +37,13 @@ function Constraints({ draft, patch }: { draft: Draft; patch: (change: Partial<D
     const next = { ...c, ...change };
     patch({ constraints: Object.fromEntries(Object.entries(next).filter(([, value]) => value !== undefined && value !== false)) as Api.InputConstraints });
   };
-  if (draft.base === "date" || draft.base === "datetime") return <Notice tone="info" message={t("A date value type takes no bounds. Bounds between date fields belong to the object that owns them.")} />;
+  const bound = (key: "earliest" | "latest", label: string) => draft.base === "date"
+    ? <DateInput key={key} title={label} label={label} value={c[key] ?? ""} onChange={value => set({ [key]: value || undefined })} />
+    : <DateTimeInput key={key} title={label} label={label} offset="Z" value={c[key] ?? ""} onChange={value => set({ [key]: value || undefined })} />;
+  if (draft.base === "date" || draft.base === "datetime") return <div className="grid gap-2">
+    <div className="grid grid-cols-2 items-start gap-3">{bound("earliest", t("Earliest"))}{bound("latest", t("Latest"))}</div>
+    <p className="text-xs text-muted">{t("Bounds on the value itself; both ends are allowed. They are checked on save.")}</p>
+  </div>;
   return <div className="grid gap-3">
     {numeric(draft.base) && <div className="grid grid-cols-2 gap-3">
       <NumberInput label={t("Minimum")} value={c.min} step={draft.base === "integer" ? 1 : undefined} onChange={min => set({ min, exclusiveMin: min === undefined ? undefined : c.exclusiveMin })} />
@@ -68,7 +74,7 @@ function TryValue({ draft }: { draft: Draft }) {
   const [text, setText] = useState("");
   const raw = text.trim();
   const value: unknown = raw === "" ? undefined : numeric(draft.base) ? Number(raw) : text;
-  const field: Api.Field = { name: "value", type: inputType(draft.base), description: draft.title, required: true, constraints: { ...draft.constraints, pattern: undefined }, choices: draft.choices?.length ? draft.choices : undefined };
+  const field: Api.Field = { name: "value", type: inputType(draft.base), description: draft.title, required: true, constraints: { ...draft.constraints, earliest: undefined, latest: undefined, pattern: undefined }, choices: draft.choices?.length ? draft.choices : undefined };
   const issues = value === undefined ? [] : inputIssues([field], { value });
   return <div className="grid gap-3 p-3">
     <Labeled text={t("Try a value")}><Input value={text} placeholder={draft.base === "date" ? "2026-01-31" : draft.base === "datetime" ? "2026-01-31T09:30:00Z" : undefined} onChange={event => setText(event.target.value)} /></Labeled>
@@ -76,6 +82,7 @@ function TryValue({ draft }: { draft: Draft }) {
       : issues.length === 0 ? <div role="status" className="flex items-center gap-2 text-xs"><Tag label={t("Passes")} tone="success" /></div>
       : <div role="status" className="grid gap-1 text-xs"><Tag label={t("Fails")} tone="danger" /><ul className="grid gap-0.5">{issues.map((issue, index) => <li key={index}>{issue.message}</li>)}</ul></div>}
     {draft.pattern && <p className="text-xs text-muted">{t("Pattern: checked on save")}</p>}
+    {(draft.constraints?.earliest || draft.constraints?.latest) && <p className="text-xs text-muted">{t("Earliest and latest: checked on save")}</p>}
   </div>;
 }
 
