@@ -5,7 +5,8 @@ import { ResourceList } from "../editor/ResourceList";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery, useOpenRecord, SemanticObjectSelect, SemanticPropertySelect } from "@platform/app";
-import { Button, Card, Checkbox, Input, PageHeader, Panel, Select, Textarea, RecordLookup, InterfaceRecordLookup, t, type InterfaceRecordIdentity, type InterfaceRecordPageData, type RecordPageData, type RecordSource } from "@platform/ui";
+import { Button, Input, PageHeader, Panel, Select, Textarea, RecordLookup, InterfaceRecordLookup, t, type InterfaceRecordIdentity, type InterfaceRecordPageData, type RecordPageData, type RecordSource } from "@platform/ui";
+import { ObjectSetEditor } from "../editor/ObjectSetEditor";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { useDirectInstall } from "../releases/release-profile";
 
@@ -33,7 +34,6 @@ export function QueryEditor({id}:{id:string}) {
  const object={app:"build",kind:"object" as const,name:draft.object??""},info=definitions.find((d)=>d.ref.kind==="object"&&d.ref.name===draft.object)?.entity;
  const currentShape=interfaces.find(item=>item.name===draft.interface)??draft.interfaceShape,fields=draft.interface?currentShape?.fields:info?.fields;
  const patch=editor.patch;
- const term=(index:number,value:Term)=>patch({domain:(draft.domain ?? []).map((c,i)=>i===index?value:c)});
  const reload=()=>editor.reload(t("Reload the saved query before editing again."));
  const publish=()=>editor.transition("publish");
  const directInstall = useDirectInstall();
@@ -57,13 +57,7 @@ export function QueryEditor({id}:{id:string}) {
  <label className="grid min-w-0 gap-1 text-xs">{t("Query sort")}<Select value={draft.sort?.[0]??"id"} onChange={(e)=>patch({sort:[e.target.value]})}><option value="id">{t("ID")}</option>{fields?.filter((f)=>supported.includes(f.type)).flatMap((f)=>[f.name,`-${f.name}`].map((name)=><option key={name} value={name}>{f.title} {name.startsWith("-")?"↓":"↑"}</option>))}</Select></label>
  </Panel>
  <Panel title={t("Fixed query conditions")} className="grid min-w-0 content-start gap-3">
- {(draft.domain ?? []).map((c,i)=>{const field=fields?.find((f)=>f.name===c[0]);const selectField=(name:string)=>{const f=fields?.find(f=>f.name===name);term(i,[name,"=",f?.type==="boolean"?false:["integer","decimal"].includes(f?.type??"")?0:""]);};return <Card key={i} className="grid gap-2 p-3" role="group" aria-label={t("Condition {n}",{n:i+1})}>
- {draft.interface?<Select aria-label={t("Query condition field")} value={c[0]} onChange={event=>selectField(event.target.value)}><option value="">{t("Choose a field")}</option>{fields?.filter(f=>supported.includes(f.type)).map(f=><option key={f.name} value={f.name}>{f.title}</option>)}</Select>:<SemanticPropertySelect object={object} value={c[0]} label={t("Query condition field")} filter={(f)=>supported.includes(f.type)} onChange={ref=>{if(ref)selectField(ref.field);}}/>}
- <Select aria-label={t("Query condition operator")} value={c[1]} onChange={(e)=>term(i,[c[0],e.target.value,c[2]])}>{(field&&["boolean","reference"].includes(field.type)?["=","!="]:["=","!=","<","<=",">",">=",...(["text","choice"].includes(field?.type??"")?["like"]:[])]).map((op)=><option key={op}>{op}</option>)}</Select>
- {typeof c[2]==="boolean"?<Checkbox checked={c[2]} onChange={(checked)=>term(i,[c[0],c[1],checked])}>{t("Query literal value")}</Checkbox>:<Input aria-label={t("Query literal value")} type={typeof c[2]==="number"?"number":"text"} value={String(c[2])} onChange={(e)=>term(i,[c[0],c[1],typeof c[2]==="number"?Number(e.target.value):e.target.value])}/>}
- <Button onClick={()=>patch({domain:(draft.domain ?? []).filter((_,at)=>at!==i)})}>{t("Remove query condition")}</Button>
- </Card>})}
- <Button disabled={!fields?.length||(draft.domain ?? []).length>=16} onClick={()=>patch({domain:[...(draft.domain ?? []),["","=",""]]})}>{t("Add query condition")}</Button>
+ <ObjectSetEditor locked search={false} combine={false} around={false} filter={false} draftKey="query-conditions" interfaces={draft.interfaceShape?[draft.interfaceShape]:undefined} value={draft.interface?{interface:draft.interface,domain:draft.domain??[]}:{object:draft.object??"",domain:draft.domain??[]}} onChange={next=>patch({domain:(next.domain as Term[]|undefined)??[]})}/>
  <p className="text-xs text-muted">{t("Conditions run with the reader's object and field permissions.")}</p>
  </Panel>
  </fieldset></StructuredEditor>

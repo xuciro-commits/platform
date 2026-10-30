@@ -419,6 +419,7 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 
 export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./automation/agents";
 
+export { SetBuilder, objectSetComplete, type SetBuilderProps, type SetFilterSlot } from "./sets/SetBuilder";
 export { NewActions, PayloadFields, DeclaredActionForm, DeclaredActionDialog, InlineActionForm, RecordActions, useRecordArchive, useNewRecord } from "./actions/actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages/pages";
 export { ComposedPage, SectionView, isComposed } from "./pages/sections";
