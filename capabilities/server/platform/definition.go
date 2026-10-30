@@ -223,6 +223,7 @@ type Definition struct {
 	LinkType         *LinkType                  `json:"linkType,omitempty"`
 	LinkVersions     map[string]LinkType        `json:"linkVersions,omitempty"`
 	Ref              AssetRef                   `json:"ref"`
+	RID              string                     `json:"rid,omitempty"`
 	Source           string                     `json:"source"`
 	Version          string                     `json:"version"`
 	ContractVersion  int                        `json:"contractVersion"`

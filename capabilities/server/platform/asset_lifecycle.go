@@ -3,6 +3,7 @@ package platform
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,11 @@ import (
 	"time"
 	"unicode/utf8"
 )
+
+func ResourceID(tenant string, ref AssetRef) string {
+	sum := sha256.Sum256([]byte(tenant + "/" + ref.String()))
+	return "ri." + string(ref.Kind) + "." + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:16]))
+}
 
 type AssetEnvironmentRequirement struct {
 	Ref        AssetRef `json:"ref"`

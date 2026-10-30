@@ -147,7 +147,14 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		}
 	}
 
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){b.prepareQueryReleasePublications, b.preparePropertyTypeReleasePublications, b.prepareLinkTypeReleasePublications, b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications, b.prepareAlertPublications} {
+	for _, k := range definitionKinds {
+		images, err := k.prepare(b, assets)
+		if err != nil {
+			return nil, err
+		}
+		publications = append(publications, images...)
+	}
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){b.prepareFunctionReleasePublications, b.prepareAgentReleasePublications, b.prepareTestPlanPublications, b.PrepareCodeReleasePublications, b.prepareTablePublications, b.prepareAlertPublications} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, err
@@ -411,8 +418,8 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	if ref.Kind == platform.AssetAlert {
 		return b.alertPinned(ref, version)
 	}
-	if ref.Kind == platform.AssetQuery {
-		return b.QueryReleaseAsset(ref.Name, version)
+	if k := definitionKindOf(ref.Kind); k != nil {
+		return k.resolve(b, ref.Name, version)
 	}
 	if ref.Kind == platform.AssetFunction {
 		return b.FunctionReleaseAsset(ref.Name, version)
@@ -434,12 +441,6 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	}
 	if ref.Kind == platform.AssetCompute {
 		return b.OperationReleaseAsset(ref.Name, version)
-	}
-	if ref.Kind == platform.AssetPropertyType {
-		return b.PropertyTypeReleaseAsset(ref.Name, version)
-	}
-	if ref.Kind == platform.AssetLinkType {
-		return b.LinkTypeReleaseAsset(ref.Name, version)
 	}
 	assets, err := b.ReleaseAssets()
 	if err != nil {
@@ -1009,28 +1010,13 @@ func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 	return platform.AssetRef{App: ID, Kind: kind, Name: name}, nil
 }
 func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, any, error) {
+	if k := definitionKindOf(asset.Ref.Kind); k != nil {
+		return k.draft(asset)
+	}
 	switch asset.Ref.Kind {
 	case platform.AssetSampleSet:
 		d, _, err := decodeSampleAsset(asset)
 		return SampleSetType, SampleSetRecord{Name: d.Name, Title: d.Title, Samples: d.Samples}, err
-	case platform.AssetPropertyType:
-		var d platform.PropertyType
-		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
-			return "", nil, err
-		}
-		return PropertyTypeType, propertyTypeFromDeclaration(d), nil
-	case platform.AssetLinkType:
-		var d platform.LinkType
-		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
-			return "", nil, err
-		}
-		return LinkTypeType, linkTypeFromDeclaration(d), nil
-	case platform.AssetQuery:
-		var d Query
-		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
-			return "", nil, err
-		}
-		return QueryType, d, nil
 	case platform.AssetFunction:
 		var d Function
 		if err := ValueDecodeIntegration(asset.Body, &d); err != nil {
@@ -1201,13 +1187,13 @@ func definitionFamilyOf(record any) definitionFamily {
 func setDefinitionFamily(record any, family definitionFamily) {
 	switch r := record.(type) {
 	case *Query:
-		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	case *Function:
-		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	case *PropertyType:
-		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	case *LinkType:
-		r.State, r.Version, r.Published, r.Versions = family.State, family.Version, family.Published, family.Versions
+		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	default:
 		panic("unsupported retained definition")
 	}

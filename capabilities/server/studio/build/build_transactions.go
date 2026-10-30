@@ -216,7 +216,7 @@ func (b *Build) transactionLink(binding platform.AssetBinding) (platform.LinkTyp
 		}
 		return link, nil
 	}
-	if declaration, retained, found := b.LinkTypeDefinition(binding.Ref.Name, version); found && retained == version {
+	if declaration, retained, found := linkKind.definition(b, binding.Ref.Name, version); found && retained == version {
 		return declaration, nil
 	}
 	return platform.LinkType{}, fmt.Errorf("transaction relationship %s version %s is unavailable", binding.Ref.Name, binding.SourceVersion)

@@ -278,26 +278,8 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 		return b.checkAgent(agent)
 	}
 
-	if schema == SchemaPropertyType {
-		l, err := propertyTypeImage(image)
-		if err != nil {
-			return err
-		}
-		return b.host.ValidateInstallPropertyType(l.Definition())
-	}
-	if schema == SchemaLinkType {
-		l, err := linkTypeImage(image)
-		if err != nil {
-			return err
-		}
-		return b.host.ValidateInstallLinkType(l.Definition())
-	}
-	if schema == SchemaQuery {
-		q, err := queryImage(image)
-		if err != nil {
-			return err
-		}
-		return b.host.ValidateInstallQuery(q.Definition())
+	if k := definitionKindOfSchema(schema); k != nil {
+		return k.validateImage(b, image)
 	}
 	if schema == SchemaCodePublish {
 		code, err := codeImage(image)
@@ -380,14 +362,8 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 		return nil
 	}
 
-	if schema == SchemaPropertyType {
-		return applyDefinitionHistory(image, propertyTypeImage, b.installPropertyType)
-	}
-	if schema == SchemaLinkType {
-		return applyDefinitionHistory(image, linkTypeImage, b.installLinkType)
-	}
-	if schema == SchemaQuery {
-		return applyDefinitionHistory(image, queryImage, b.installQuery)
+	if k := definitionKindOfSchema(schema); k != nil {
+		return k.applyImage(b, image)
 	}
 	if schema == SchemaCodePublish {
 		code, err := codeImage(image)
@@ -493,7 +469,7 @@ func published[T any](definition T) string {
 }
 
 func (b *Build) Reinstall() error {
-	if err := restoreDefinitionPublications(b, b.propertyTypeInventory, SchemaPropertyType); err != nil {
+	if err := propertyKind.restore(b); err != nil {
 		return err
 	}
 
@@ -514,10 +490,10 @@ func (b *Build) Reinstall() error {
 		}
 	}
 	b.jointMode = beforeMode
-	if err := restoreDefinitionPublications(b, b.linkTypeInventory, SchemaLinkType); err != nil {
+	if err := linkKind.restore(b); err != nil {
 		return err
 	}
-	if err := restoreDefinitionPublications(b, b.queryInventory, SchemaQuery); err != nil {
+	if err := queryKind.restore(b); err != nil {
 		return err
 	}
 	if err := restoreDefinitionPublications(b, b.functionInventory, SchemaFunction); err != nil {
@@ -630,7 +606,7 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.A
 	bound.jointMode = true
 	for _, asset := range assets {
 		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetQuery {
-			query, err := bound.queryAsset(asset)
+			query, err := queryKind.fromAsset(bound, asset)
 			if err != nil {
 				return nil, err
 			}

@@ -602,7 +602,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetPropertyType {
-			if err := b.InstallPropertyTypeAsset(asset); err != nil {
+			if err := b.InstallDefinitionAsset(asset); err != nil {
 				return nil, err
 			}
 		}
@@ -688,14 +688,14 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetLinkType {
-			if err := b.InstallLinkTypeAsset(asset); err != nil {
+			if err := b.InstallDefinitionAsset(asset); err != nil {
 				return nil, err
 			}
 		}
 	}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetQuery {
-			if err := b.InstallQueryAsset(asset); err != nil {
+			if err := b.InstallDefinitionAsset(asset); err != nil {
 				return nil, err
 			}
 		}

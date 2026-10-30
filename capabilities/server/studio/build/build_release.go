@@ -1294,14 +1294,8 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	if kind == platform.AssetSampleSet {
 		return b.sampleSetDraftAssets(id)
 	}
-	if kind == platform.AssetPropertyType {
-		return b.propertyTypeDraftAssets(id)
-	}
-	if kind == platform.AssetLinkType {
-		return b.linkTypeDraftAssets(id)
-	}
-	if kind == platform.AssetQuery {
-		return b.queryDraftAssets(id)
+	if k := definitionKindOf(kind); k != nil {
+		return k.draftAssets(b, id)
 	}
 	if kind == platform.AssetCompute {
 		if _, ok := platform.Get[Table](b.host.Automation(platform.Caller{}, ID), id); ok {
@@ -1465,7 +1459,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	for _, read := range []func() ([]platform.ReleaseAsset, error){
-		b.functionAssets, b.agentAssets, b.queryAssets, b.linkTypeAssets, b.propertyTypeAssets,
+		b.functionAssets, b.agentAssets, b.kindAssets(&queryKind), b.kindAssets(&linkKind), b.kindAssets(&propertyKind),
 		b.CodeReleaseAssets, b.alertAssets, b.integrationAssets, b.testPlanAssets, b.sampleSetAssets,
 	} {
 		owned, err := read()

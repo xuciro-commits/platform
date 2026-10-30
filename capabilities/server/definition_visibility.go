@@ -310,6 +310,7 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 			out[i].Requires = []platform.AssetRef{}
 		}
 		out[i].Provides = t.visibleProvides(out[i], m, entities)
+		out[i].RID = platform.ResourceID(t.ID, out[i].Ref)
 	}
 	return out
 }

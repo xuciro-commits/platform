@@ -1389,6 +1389,7 @@ export type Definition = {
   linkType?: LinkType;
   linkVersions?: Record<string, LinkType>;
   ref: AssetRef;
+  rid?: string;
   source: string;
   version: string;
   contractVersion: number;

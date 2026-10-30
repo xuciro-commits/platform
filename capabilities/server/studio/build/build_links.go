@@ -1,7 +1,6 @@
 package build
 
 import (
-	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -53,18 +52,9 @@ func (f LinkType) Definition() platform.LinkType {
 	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: storage, Cardinality: cardinality, DeletePolicy: policy, Roles: roles}
 }
 
-func (b *Build) linkTypeEntity() platform.Entity {
-	return platform.Entity{Type: LinkTypeType, Title: "Link type", Plural: "Link types", Model: LinkType{}, Display: "title",
-		Description: "A versioned relationship over an original reference; drafts do not change installed traversal.",
-		Scope:       platform.Scope{Default: platform.ScopeNone, Levels: map[string]string{Builder: platform.ScopeTenant}},
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "linktypes"},
-		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft", States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning"}, {Name: "published", Title: "Published", Tone: "success"}},
-			Transitions: []platform.Transition{{Name: "publish", Title: "Publish", Description: "Install this reference-backed relationship as its next retained version.", From: []string{"draft", "published"}, To: []string{"published"}, Roles: []string{Builder}, Capability: "linktypes", Payload: []platform.Field{}, Do: b.publishLinkType}}}}
-}
-
-func (b *Build) checkLinkType(f *LinkType) error {
+func validateLinkType(b *Build, f LinkType) (LinkType, error) {
 	if !Named(f.Name) || !Named(f.Forward) || !Named(f.Reverse) {
-		return fmt.Errorf("Link names must use lower-case letters and digits")
+		return f, fmt.Errorf("Link names must use lower-case letters and digits")
 	}
 	parent, parentFound := b.lookupEntity(f.Parent)
 	info, childFound := b.lookupEntity(f.Child)
@@ -73,79 +63,51 @@ func (b *Build) checkLinkType(f *LinkType) error {
 	_, parentSelected := b.jointEntities[f.Parent]
 	_, childSelected := b.jointEntities[f.Child]
 	if !parentFound || parent.App != ID || !parentInstalled && !parentSelected {
-		return fmt.Errorf("Link parent needs this builder's published or jointly selected object")
+		return f, fmt.Errorf("Link parent needs this builder's published or jointly selected object")
 	}
 	if !childFound || info.App != ID || !childInstalled && !childSelected {
-		return fmt.Errorf("Link child needs this builder's published or jointly selected object")
+		return f, fmt.Errorf("Link child needs this builder's published or jointly selected object")
 	}
 	if f.Storage != "edge" {
 		field, ok := info.Field(f.Via)
 		if !ok {
-			return fmt.Errorf("Link reference is unavailable")
+			return f, fmt.Errorf("Link reference is unavailable")
 		}
 		f.Required = field.Required
 	}
 	if err := f.Definition().CheckSchema(parent, info); err != nil {
-		return err
+		return f, err
 	}
 	if !b.jointMode {
 		if err := b.host.ValidateInstallLinkType(f.Definition()); err != nil {
-			return err
+			return f, err
 		}
 	}
-	list, err := b.linkTypeInventory()
-	if err != nil {
-		return err
-	}
-	for _, other := range list {
-		installed, _ := ReadPublication[LinkType](other.Published)
-		if other.ID != f.ID && (other.Name == f.Name || installed.Name == f.Name) {
-			return fmt.Errorf("Link type %s is already declared", f.Name)
-		}
-	}
-	if old, ok := ReadPublication[LinkType](f.Published); ok && (old.Name != f.Name || old.Parent != f.Parent || old.Child != f.Child || old.Via != f.Via || old.Definition().Storage == "reference" && old.Required != f.Required || !linkKeepsGuarantees(old, *f)) {
-		return fmt.Errorf("A published link keeps its identity, objects, reference shape and retained constraints")
-	}
-	return nil
+	return f, nil
 }
 
-func (b *Build) publishLinkType(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-	f, ok := record.(*LinkType)
-	if !ok {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	}
-	if err := b.checkLinkType(f); err != nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
-	}
-	return publishRetainedDefinition(c, f, "A link type may retain at most 64 published versions", b.installLinkType)
-}
-
-func linkTypeImage(image []byte) (LinkType, error) {
-	return definitionImage[LinkType](image, "link type", func(before, after LinkType) bool {
-		return before.Name == after.Name && before.Parent == after.Parent && before.Child == after.Child && before.Via == after.Via && (after.Definition().Storage != "reference" || before.Required == after.Required) && linkKeepsGuarantees(before, after)
-	})
-}
-
-func (b *Build) linkTypeInventory() ([]LinkType, error) {
-	return readDefinitionInventory[LinkType](b.host.Automation(platform.Caller{}, ID))
-}
-
-func (b *Build) installLinkType(c platform.Caller, f LinkType) error {
-
-	if err := b.host.InstallLinkType(c, f.Definition(), f.Version); err != nil {
-		return err
-	}
-	b.linkTypes[f.Name] = f
-	return nil
-}
-
-func (b *Build) LinkTypeDefinition(name string, version int) (platform.LinkType, int, bool) {
-	return retainedDefinition(b.linkTypes, b.linkTypeInventory, linkTypeImage, name, version)
-}
-
-func linkKeepsGuarantees(old, next LinkType) bool {
-	before, after := old.Definition(), next.Definition()
-	return before.Storage == after.Storage && !(before.Required && !after.Required || before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
+var linkKind = resourceKind[LinkType, platform.LinkType]{
+	asset: platform.AssetLinkType, typ: LinkTypeType, prefix: "link", noun: "linkType", title: "Link type", plural: "Link types", capability: "linktypes",
+	description: "A versioned relationship over an original reference; drafts do not change installed traversal.",
+	transition:  "Install this reference-backed relationship as its next retained version.",
+	immutable:   "A published link keeps its identity, objects, reference shape and retained constraints",
+	records:     func(b *Build) map[string]LinkType { return b.linkTypes },
+	validate:    validateLinkType,
+	identity: func(a, b LinkType) bool {
+		return a.Name == b.Name && a.Parent == b.Parent && a.Child == b.Child && a.Via == b.Via
+	},
+	stable: func(old, next LinkType) bool {
+		return old.Definition().Storage != "reference" || old.Required == next.Required
+	},
+	guarantees:      linkKeepsGuarantees,
+	adopt:           func(record *LinkType, frozen LinkType) { record.Required = frozen.Required },
+	fromDeclaration: linkTypeFromDeclaration,
+	contract:        func(d platform.LinkType) int { return d.Contract() },
+	admit:           func(d platform.LinkType) bool { return d.Parent.App == ID && d.Child.App == ID },
+	install: func(h platform.BuildHost, c platform.Caller, d platform.LinkType, version int) error {
+		return h.InstallLinkType(c, d, version)
+	},
+	validateInstall: func(h platform.BuildHost, d platform.LinkType) error { return h.ValidateInstallLinkType(d) },
 }
 
 func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -166,67 +128,16 @@ func (b *Build) migrateLinkType(c platform.Caller, submission *pb.Submission, at
 }
 
 func (b *Build) LinkPublication(image []byte) (platform.LinkType, error) {
-	saved, err := linkTypeImage(image)
+	saved, err := linkKind.image(image)
 	if err != nil {
 		return platform.LinkType{}, err
 	}
 	return saved.Definition(), nil
 }
 
-func linkTypeReleaseAsset(f LinkType, sourceVersion string) (platform.ReleaseAsset, error) {
-	return definitionReleaseAsset(platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, sourceVersion+".link-"+strconv.Itoa(f.Version), f.Definition())
-}
-
-func (b *Build) LinkTypeReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
-	return retainedDefinitionAsset(b.Manifest().Version, "link", "link type", platform.AssetLinkType, name, sourceVersion, b.LinkTypeDefinition)
-}
-
-func (b *Build) linkTypeAssets() ([]platform.ReleaseAsset, error) {
-	return installedDefinitionAssets(b.linkTypes, func(record LinkType) (platform.ReleaseAsset, error) {
-		return linkTypeReleaseAsset(record, b.Manifest().Version)
-	})
-}
-
-func (b *Build) InstallLinkTypeAsset(asset platform.ReleaseAsset) error {
-	version := b.definitionAssetVersion(asset, platform.AssetLinkType, "link")
-	var declaration platform.LinkType
-	if version == 0 || json.Unmarshal(asset.Body, &declaration) != nil || asset.ContractVersion != declaration.Contract() || declaration.Check() != nil || declaration.Name != asset.Ref.Name || declaration.Parent.App != ID || declaration.Child.App != ID {
-		return fmt.Errorf("invalid builder link type asset %s", asset.Ref)
-	}
-	f := linkTypeFromDeclaration(declaration)
-	if _, exists := b.linkTypes[f.Name]; exists {
-		return fmt.Errorf("linkType asset %s is already installed", asset.Ref)
-	}
-	f.Version, f.State = version, "published"
-	return b.installLinkType(platform.Caller{Replaying: true}, f)
-}
-
-func (b *Build) linkTypeDraftAssets(id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
-	return draftDefinitionAssets(b, id, platform.AssetLinkType, "link type", b.linkTypeInventory, func(record LinkType) (LinkType, error) {
-		err := b.checkLinkType(&record)
-		return record, err
-	}, func(record LinkType) (platform.ReleaseAsset, error) {
-		record.Version++
-		return linkTypeReleaseAsset(record, b.Manifest().Version)
-	})
-}
-
-func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsset) ([]platform.ReleasePublication, error) {
-	return prepareDefinitionPublications(b, assets, b.linkTypeInventory, platform.AssetLinkType, "link", SchemaLinkType, "link type", b.LinkTypeReleaseAsset, func(record LinkType, asset platform.ReleaseAsset, version int) (LinkType, error) {
-		prior, retained := ReadPublication[LinkType](record.Published)
-		var q platform.LinkType
-		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Parent.Name != record.Parent || q.Child.Name != record.Child || q.Via != record.Via || retained && !linkKeepsGuarantees(prior, linkTypeFromDeclaration(q)) {
-			return record, fmt.Errorf("invalid next link type version")
-		}
-		frozen := linkTypeFromDeclaration(q)
-		frozen.Record = record.Record
-		frozen.State = "published"
-		frozen.Version = version
-		record.Required = frozen.Required
-		record.State, record.Version, record.Published = "published", version, published(frozen)
-		record.Versions = append(slices.Clone(record.Versions), record.Published)
-		return record, nil
-	})
+func linkKeepsGuarantees(old, next LinkType) bool {
+	before, after := old.Definition(), next.Definition()
+	return before.Storage == after.Storage && !(before.Required && !after.Required || before.Cardinality != "many-to-many" && after.Cardinality == "many-to-many" || before.Cardinality == "one-to-one" && after.Cardinality != "one-to-one" || before.DeletePolicy == "restrict-active" && after.DeletePolicy != "restrict-active")
 }
 
 func linkTypeFromDeclaration(l platform.LinkType) LinkType {
