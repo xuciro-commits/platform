@@ -16,6 +16,7 @@ import { apiErrorMessage, type Api } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "../automate/workflow-model";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { applicationDraftSelection, ownerDraft, type JointChoice, type ReleaseKind } from "./selection";
 
 type ObjectDraft = WorkflowObject & { revision: number };
 type FunctionDraft = { id: string; revision: number; name: string; title: string; object: string; conversation?:boolean; output?:{name:string}[] };
@@ -86,7 +87,14 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const candidateInputs = useQuery({
     queryKey: [client.connection.token, client.connection.tenant, "candidate-inputs", kind, id, rootRevision, objectRevisions],
     queryFn: async () => {
-      const response = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", { kind, id,...(kind==="app"?{applicationDrafts:true}:{}) });
+      const roots = [{ kind, id }] as JointChoice[];
+      const selection = kind === "app" ? await applicationDraftSelection(roots, async root => {
+        const closure = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", ownerDraft(root) satisfies Api.ReleaseDraftsRequest);
+        if (!closure.ok) throw new Error(apiErrorMessage(closure.body) ?? t("Draft dependencies could not be read."));
+        return closure.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
+      }) : roots;
+      const request: Api.ReleasePreviewRequest = { drafts: selection.map(ownerDraft) };
+      const response = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", request);
       if (!response.ok) throw new Error(apiErrorMessage(response.body) ?? t("Candidate input fields are unavailable. Use advanced JSON or check the saved draft."));
       return response.body;
     },

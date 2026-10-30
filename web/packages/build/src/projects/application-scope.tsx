@@ -4,14 +4,15 @@ import { useDependencies, useHost } from "@platform/app";
 import { useStudioApplication } from "./use-studio-application";
 import { useProjectResources } from "./resource-inventory";
 import { refKey } from "./resources";
+import { BranchBar, BranchControls } from "../branches/BranchBar";
 import { assetRoute, studioAreaForRoute, studioAreaKinds, studioContext, studioRoute } from "./studio-model";
 
 const Scope = createContext<string | undefined>(undefined);
 const scopedViews = new Set(["module", "object-type", "action-type", "flow", "automation", "runs", "query", "function", "agent", "code", "link-type", "property-type", "value-type", "decision-table", "alert", "connection", "data-source", "dataset", "pipeline", "writeback", "match", "integration-health", "observation-source", "observations", "studio-templates", "evaluation-set", "test-plan", "sample-set", "release-review", "changes", "release-history", "application-runs", "application-overview"]);
 
 export function ApplicationScope({ application, route, children }: { application?: string; route?: Route; children: ReactNode }) {
-  if (!application) return <>{children}</>;
-  return <Scope.Provider value={application}>{route && route.view !== "project" && <ApplicationContextBar application={application} route={route} />}{children}</Scope.Provider>;
+  if (!application) return <>{<BranchBar route={route} />}{children}</>;
+  return <Scope.Provider value={application}>{route && route.view !== "project" ? <ApplicationContextBar application={application} route={route} /> : <BranchBar route={route} />}{children}</Scope.Provider>;
 }
 
 function ApplicationContextBar({ application, route }: { application: string; route: Route }) {
@@ -26,6 +27,7 @@ function ApplicationContextBar({ application, route }: { application: string; ro
   const applicationRoute = studioRoute(application, area, selected ? refKey(selected.ref) : undefined);
   return <div role="navigation" aria-label={t("Application context")} className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border bg-surface px-2 py-1">
     {host.holds("build", "builder") ? <Button size="sm" variant="ghost" onClick={() => open(applicationRoute)}>{project?.title || t("Application")}</Button> : <span>{project?.title || t("Application")}</span>}
+    <BranchControls route={route} />
     {related.length > 0 && <Select aria-label={t("Related assets")} value="" className="ml-auto h-7 max-w-64 text-xs" onChange={event => { const ref = related.find(ref => refKey(ref) === event.target.value); if (ref) open(assetRoute(ref, owned, host.definitions, application)); }}>
       <option value="">{t("Related assets")}</option>
       {links && [["Uses", links.requires], ["Used by", links.usedBy]].map(([label, refs]) => <optgroup key={String(label)} label={t(String(label))}>{(refs as typeof related).map(ref => <option key={refKey(ref)} value={refKey(ref)}>{ref.name}</option>)}</optgroup>)}

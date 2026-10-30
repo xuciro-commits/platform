@@ -26,7 +26,8 @@ import { CodeEditor, CodeFunctions } from "./functions/code";
 import { AgentEditor, Agents } from "./functions/agent";
 import { AlertEditor, Alerts } from "./functions/alert";
 import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind } from "./releases/release";
-import { Changes } from "./releases/changes";
+import { Branches } from "./branches/Branches";
+import { ProposalScreen } from "./branches/Proposal";
 import { CandidateTest } from "./releases/simulate";
 import { ProjectHome, ProjectsList } from "./projects/project";
 import { Discover } from "./projects/discover";
@@ -63,7 +64,8 @@ const editorViews: View[] = [
   {id:"sample-set",title:()=>t("Sample set"),render:p=><ApplicationSampleAsset key={p.id ?? "new"} id={p.id}/>},
   { id: "evaluation-set", title: () => t("Evaluation set"), render: p => <CandidateTest key={p.id ?? "new"} planId={p.id === "new" ? undefined : p.id} evaluationSet /> },
   { id: "test-plan", title: () => t("Business test plan"), render: p => <CandidateTest key={p.id ?? "new"} planId={p.id} applicationId={p.application} /> },
-  { id: "changes", title: () => t("Changes"), render: p => <Changes key={`${p.kind ?? ""}:${p.id ?? ""}`} initialKind={p.kind} initialID={p.id} /> },
+  { id: "changes", title: () => t("Branches and proposals"), render: () => <Branches /> },
+  { id: "proposal", documentKey: p => p.id ?? "", title: () => t("Proposal"), render: p => <ProposalScreen key={p.id} id={p.id ?? ""} /> },
   { id: "release-review", title: () => t("Release review"), render: p => {
     const selection = releaseDraftsSelection(p.drafts, releaseKinds);
     return <ReleaseReview key={`${p.kind}:${p.id}:${p.drafts ?? ""}:${p.candidate ?? ""}`} initialKind={releaseKinds.includes(p.kind as ReleaseKind) ? p.kind as ReleaseKind : "object"} initialID={p.id} initialDrafts={selection.drafts} selectionError={selection.error} candidateID={p.candidate} applicationName={p.applicationName} />;
@@ -90,10 +92,10 @@ function StudioHome() {
   return builder(host) ? <ProjectsList /> : integrator(host) ? <Connections /> : <ReleaseReview key="history" />;
 }
 
-const releaseViews = new Set(["changes", "release-review", "release-history"]);
+const releaseViews = new Set(["changes", "proposal", "release-review", "release-history"]);
 function AuthoringView({ route, children }: { route: Route; children: ReactNode }) {
   const host = useHost();
-  const allowed = route.view === "projects" || builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || host.holds("build", "publisher") && route.view !== "changes" && releaseViews.has(route.view);
+  const allowed = route.view === "projects" || builder(host) || integrator(host) && route.view !== "project" && studioAreaForRoute(route) === "integration" || host.holds("build", "publisher") && route.view !== "changes" && route.view !== "proposal" && releaseViews.has(route.view);
   return allowed ? <>{children}</> : <PageHeader title={t("Application Studio")} description={t("This authoring view is not available with your current access.")} />;
 }
 const contextualViews = (views: View[]) => views.map(view => ({ ...view, render: (params: Record<string, string>) => {
@@ -115,7 +117,7 @@ export default defineApp({
     return [
       ...(builder(host) ? [{ label: t("Applications"), items: [{ label: t("All applications"), icon: <FolderKanban />, route: { view: "projects" } }] }] : []),
       ...allowed.map(area => ({ label: t(area.title), items: studioNavigation(area.id)
-        .filter(link => builder(host) || integrator(host) || link.view !== "changes" && releaseViews.has(link.view))
+        .filter(link => builder(host) || integrator(host) || link.view !== "changes" && link.view !== "proposal" && releaseViews.has(link.view))
         .map(link => ({ label: t(link.title), icon: kindIcon[link.kind ?? "definition"], route: { view: link.view, ...("params" in link && link.params ? { params: link.params } : {}) } })) })),
     ];
   },

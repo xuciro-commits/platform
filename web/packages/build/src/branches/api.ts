@@ -1,0 +1,75 @@
+import { useHost } from "@platform/app";
+import { apiErrorMessage, type Api } from "@platform/kernel";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { t } from "@platform/ui";
+
+export class BranchFailure extends Error {
+  constructor(message: string, readonly status: number, readonly conflicts?: Api.BranchResourceDiff[]) { super(message); }
+}
+
+const enc = encodeURIComponent;
+export const branchPath = (id: string, tail = "") => `/v1/branches/${enc(id)}${tail}`;
+export const resourcePath = (id: string, type: string, draft: string) => branchPath(id, `/resources/${enc(type)}/${enc(draft)}`);
+
+export function useBranchRead<T>(path: string, enabled = true, interval?: number) {
+  const { client } = useHost();
+  return useQuery({
+    queryKey: [client.connection.token, client.connection.tenant, "branch", path],
+    queryFn: async () => {
+      const answer = await client.call<T>("GET", path);
+      if (!answer.ok) throw new BranchFailure(apiErrorMessage(answer.body) ?? t("The branch request was refused."), answer.status);
+      return answer.body;
+    },
+    enabled, refetchInterval: interval, retry: false,
+  });
+}
+
+export function useBranches(enabled = true) {
+  return useBranchRead<Api.BranchDetail[]>("/v1/branches", enabled, 20000);
+}
+
+export function useBranchDetail(id?: string) {
+  return useBranchRead<Api.BranchDetail>(branchPath(id ?? ""), !!id, 20000);
+}
+
+export function useBranchActions() {
+  const { client } = useHost();
+  const queries = useQueryClient();
+  const refresh = () => queries.invalidateQueries({ queryKey: [client.connection.token, client.connection.tenant, "branch"] });
+  const send = async <T>(method: "POST" | "PUT", path: string, body?: unknown): Promise<T> => {
+    const answer = await client.call<T & { conflicts?: Api.BranchResourceDiff[] }>(method, path, body ?? {});
+    if (!answer.ok) {
+      await refresh();
+      throw new BranchFailure(apiErrorMessage(answer.body) ?? t("The branch request was refused."), answer.status, answer.status === 409 ? answer.body.conflicts : undefined);
+    }
+    await refresh();
+    return answer.body;
+  };
+  return {
+    refresh,
+    create: (request: Api.BranchCreateRequest) => send<Api.BranchDetail>("POST", "/v1/branches", request),
+    close: (id: string) => send<Api.BranchDetail>("POST", branchPath(id, "/close")),
+    save: (id: string, type: string, draft: string, request: Api.BranchSaveRequest) => send<Api.BranchDetail>("PUT", resourcePath(id, type, draft), request),
+    checks: (id: string, request: Api.BranchCheckRequest = {}) => send<Api.BranchChecks>("POST", branchPath(id, "/checks"), request),
+    recheck: (id: string, request: Api.BranchCheckRequest = {}) => send<Api.BranchDetail>("POST", branchPath(id, "/recheck"), request),
+    rebase: (id: string, request: Api.BranchResolveRequest = {}) => send<Api.BranchDetail>("POST", branchPath(id, "/rebase"), request),
+    propose: (id: string, request: Api.BranchProposeRequest) => send<Api.BranchDetail>("POST", branchPath(id, "/proposal"), request),
+    review: (id: string, request: Api.BranchReviewRequest) => send<Api.BranchDetail>("POST", branchPath(id, "/proposal/review"), request),
+    withdraw: (id: string) => send<Api.BranchDetail>("POST", branchPath(id, "/proposal/withdraw")),
+    merge: (id: string, request: Api.BranchMergeRequest = {}) => send<Api.BranchMergeResult>("POST", branchPath(id, "/merge"), request),
+  };
+}
+
+export function useBranchChanges(id?: string) {
+  return useBranchRead<Api.BranchChangeEntry[]>(branchPath(id ?? "", "/changes?specs=true"), !!id);
+}
+
+export function branchTitles(entries: readonly Api.BranchChangeEntry[] = []): Record<string, string> {
+  const titles: Record<string, string> = {};
+  for (const entry of entries) {
+    const title = [entry.spec, entry.base].map(spec => spec && typeof spec === "object" ? (spec as { title?: unknown; name?: unknown }) : undefined)
+      .map(spec => typeof spec?.title === "string" && spec.title ? spec.title : typeof spec?.name === "string" ? spec.name : "").find(Boolean);
+    if (title) titles[`${entry.type}/${entry.id}`] = title;
+  }
+  return titles;
+}

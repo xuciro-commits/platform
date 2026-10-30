@@ -3,8 +3,7 @@ import { ContextHelp, PageHeader, StructuredEditor } from "@platform/ui";
 import { useActionTrial } from "@platform/app";
 import { declarationValue, declarationChanges } from "../editor/declaration";
 import { CandidateTest } from "../releases/simulate";
-import { ReleaseReview, releaseDraftsValue } from "../releases/release";
-import { releaseSelectionProblem } from "../releases/selection";
+import { ReleaseReview } from "../releases/release";
 import { ApplicationRuns, ApplicationRuntimePanel, useDependencies, useHost, useNewRecord, useReadQuery, useRecordInventory } from "@platform/app";
 import { CompositeRefusalError, type Api } from "@platform/kernel";
 import { ActionMenu, Button, Checkbox, Dialog, IconPicker, Input, Notice, Panel, PanelSection, ProblemList, Select, StructureRow, Textarea, Workbench, ViewVisibilityContext, humanizeKernelError, t, useDraftInput, useUnsavedChanges, useViewVisible, useWorkspace, type ContextCommand, type WorkbenchProblem } from "@platform/ui";
@@ -14,7 +13,9 @@ import { DraftStatus, savingState, useAutoSave } from "../editor/workbench";
 import { ProjectRoles } from "./project-roles";
 import { publishedResourceKind, refKey, resourceKinds, resourceRef, resourceRoute, type ResourceKindInfo, type ResourceRecord } from "./resources";
 import { projectResourceChange } from "./membership";
-import { draftChangeKind, useSavedDraftChanges } from "../releases/changes";
+import { BranchChangesPanel } from "../branches/BranchChangesPanel";
+import { useBranches } from "../branches/api";
+import { useCurrentBranch } from "../branches/current";
 
 export type Project = Api.Application & { id: string; revision: number; state: string; archived?: boolean; changed?: Api.Stamp };
 
@@ -95,11 +96,12 @@ export function ProjectHome({ id, area, initialSelected, initialSection, initial
 function BuildProjectHome({ id, area, initialSelected, initialSection, initialPlan, initialTemplate }: { id: string; area?: string; initialSelected?: string; initialSection?: string; initialPlan?: string; initialTemplate?: string }) {
   const activeArea = studioArea(area, initialSelected?.split("/")[1]);
   const { client, decide, definitions, action , holds} = useHost();
-  const { open, transfer, notify } = useWorkspace();
+  const { open, notify } = useWorkspace();
   const query = useReadQuery<{ record?: Project }>(`/v1/records/build.app/${encodeURIComponent(id)}`);
   const project = query.data?.record;
   const builder = holds("build", "builder");
-  const savedChanges = useSavedDraftChanges(id, undefined, builder);
+  const { id: currentBranch } = useCurrentBranch();
+  const branchCount = useBranches(builder).data?.find(item => item.id === currentBranch)?.resources.length ?? 0;
 
   const [filter, setFilter] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -115,7 +117,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
   const initialTab = initialSection === "runs" ? "runs" : initialSection === "concepts" ? "concepts" : initialSection === "templates" && activeArea === "interface" ? "templates" : initialSection === "guide" || emptyProject && !area && !initialSelected ? "guide" : activeArea === "release" ? "release" : "resources";
   const [tab, selectTab] = useState<Section>(initialTab);
   const [visited, setVisited] = useState<Section[]>([initialTab]);
-  const { inventories, owned, available, shared, loading } = useProjectResources(project, "build", builder);
+  const { inventories, owned, available, shared } = useProjectResources(project, "build", builder);
   const resourcesUnavailable = owned.some(resource => !resource.installed && inventories[resource.kind.kind]?.isError);
   const visibleView = useViewVisible();
   const setTab = (tab: Section) => { selectTab(tab); setVisited(old => old.includes(tab) ? old : [...old, tab]); };
@@ -249,10 +251,6 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       : { resources: (current.resources ?? []).filter(item => refKey(item) !== refKey(ref)) };
     if (await patch(changes, current.revision)) setSelected(undefined);
   };
-  const unpublished = savedChanges.data?.changes ?? [];
-  const releaseSelection = [...new Map(unpublished.map(change => ({ kind: draftChangeKind(change), id: change.id })).map(choice => [JSON.stringify([choice.kind, choice.id]), choice])).values()];
-  const verificationSelection = useRef<typeof releaseSelection | undefined>(undefined);
-  if (!verificationSelection.current && visited.includes("release") && savedChanges.isSuccess && !savedChanges.isFetching) verificationSelection.current = releaseSelection;
   const problems: WorkbenchProblem[] = owned.filter((item) => item.missing).map((item) => ({ id: refKey(item.ref), severity: "warning", text: t("{title} is listed, but no readable draft or published definition is available. Check its owner and access, or remove the reference.", { title: item.title }), subject: t(item.kind.label), locate: () => { setSelected(refKey(item.ref)); setTab("resources"); } }));
   const addExisting = (kind: ResourceKindInfo, record: ResourceRecord) => latestProject.current
     ? patch(changesForResource(latestProject.current, kind, record), latestProject.current.revision) : Promise.resolve(false);
@@ -280,7 +278,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
       actions={<>
         {builder && <ApplicationLifecycleControls project={project} disabled={saving || !!pendingPatch || !!createdResource || !!retireIntent} before={confirmDiscard} />}
         {header && <Button size="sm" onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: header, application: `build:${project.name}` } })}>{t("Open published app")}</Button>}
-        {builder && <Button size="sm" disabled={locked} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Changes")}{unpublished.length > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{unpublished.length}</span>}</Button>}
+        {builder && <Button size="sm" disabled={locked} onClick={() => open({ view: "changes", params: { application: project.id } })}>{t("Branches")}{branchCount > 0 && <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-2xs text-primary">{branchCount}</span>}</Button>}
         {builder && (available.length > 0 || shared.length > 0) && <Select aria-label={t("Add existing resource")} value="" className="max-w-48" disabled={locked} onChange={(event) => {
           let choice: { kind?: string; id?: string; ref?: Api.AssetRef };
           try { choice = JSON.parse(event.target.value); } catch { return; }
@@ -297,12 +295,9 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
           {resourceKinds.map((kind) => { const rows = available.filter((item) => item.kind === kind); return rows.length ? <optgroup key={kind.kind} label={t(kind.plural)}>{rows.map((item) => <option key={item.record.id} value={JSON.stringify({ kind: kind.kind, id: item.record.id })}>{item.record.title || item.record.name}</option>)}</optgroup> : null; })}
         </Select>}
         {builder && <NewResourceMenu application={id} area={activeArea} disabled={locked} onCreated={(kind, target) => void addCreated(kind, target)} />}
-        {builder && <Button size="sm" variant="primary" disabled={locked || resourcesUnavailable || savedChanges.isPending || savedChanges.isError || (!project.pages?.length && !project.resources?.length)} onClick={() => {
-            const problem = releaseSelectionProblem(releaseSelection);
-            if (problem) { setError(t(problem)); return; }
+        {builder && <Button size="sm" variant="primary" disabled={locked || resourcesUnavailable || !!currentBranch || (!project.pages?.length && !project.resources?.length)} title={currentBranch ? t("A branch is published by merging it. Use Save in the branch bar.") : undefined} onClick={() => {
             const route = { view: "release-review" as const, params: { kind: "app", id: project.id, application: project.id, applicationName: project.name } };
-            if (transfer) transfer("", route, { drafts: releaseSelection }, () => {});
-            else open({ ...route, params: { ...route.params, drafts: releaseDraftsValue(releaseSelection) } });
+            open(route);
           }}>{t("Publish")}</Button>}
       </>}
       dock={{ label: t("Project dock"), tabs: [{ id: "problems", title: t("Problems"), badge: problems.length, content: <ProblemList problems={problems} /> }] }}>
@@ -362,18 +357,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
               </Panel>)}
               {!visible.length && <p className="py-6 text-sm text-muted">{t("Nothing here yet. Use New, or Add existing.")}</p>}
             </div>}
-            <div className="grid gap-2">
-              <h2 className="text-sm font-semibold">{t("Unpublished changes")} <span className="text-muted">({unpublished.length})</span></h2>
-              {savedChanges.isError && <p role="alert" className="text-xs text-danger">{t("Saved changes could not be loaded.")}</p>}
-              {!savedChanges.isError && !unpublished.length && <p className="text-xs text-muted">{loading || savedChanges.isPending ? t("Loading…") : t("No saved changes. Unsaved editor input is not included.")}</p>}
-              <ul className="divide-y divide-border rounded-md border border-border">
-                {unpublished.slice(0, 12).map((item) => <li key={`${item.type}/${item.id}`}>
-                  <Button variant="row" type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-row-hover" onClick={() => open({ view: "changes", params: { application: project.id, kind: draftChangeKind(item), id: item.id } })}>
-                    <span className="text-muted [&>svg]:size-4">{kindIcon[resourceKinds.find(kind => kind.type === item.type)?.kind ?? "definition"]}</span><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-muted">{item.fields.map(field => field.name).join(", ")}</span><DraftStatus state="draft" />
-                  </Button>
-                </li>)}
-              </ul>
-            </div>
+            <BranchChangesPanel application={id} />
           </div>
 
         </div>}
@@ -398,7 +382,7 @@ function BuildProjectHome({ id, area, initialSelected, initialSection, initialPl
         {visited.includes("release") && <div hidden={tab !== "release"}><ViewVisibilityContext.Provider value={visibleView && tab === "release"}><div className="grid gap-4 p-4" role="region" aria-label={t("Verification and delivery")}>
           <CandidateTest applicationId={id} planId={initialPlan} embedded />
  {installed && <ApplicationRuntimePanel owner="build" name={project.name} />}
-          {verificationSelection.current ? <ReleaseReview initialKind="app" initialID={id} initialDrafts={verificationSelection.current} embedded /> : <p role={savedChanges.isError ? "alert" : "status"}>{t(savedChanges.isError ? "Saved changes could not be loaded." : "Loading…")}</p>}
+          <ReleaseReview initialKind="app" initialID={id} embedded />
         </div></ViewVisibilityContext.Provider></div>}
         {visited.includes("runs") && <div hidden={tab !== "runs"}><ViewVisibilityContext.Provider value={visibleView && tab === "runs"}><ApplicationRuns owner="build" name={project.name} project={id} /></ViewVisibilityContext.Provider></div>}
         {retireIntent && <Dialog open onOpenChange={open => { if (!open && !retireLock.current && (!retireIntent.attempted || retireIntent.refusal)) rememberRetirement(undefined); }} title={t("Retire {count} selected", { count: retireIntent.items.length })}>

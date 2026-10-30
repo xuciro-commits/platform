@@ -1,6 +1,6 @@
 import { transactionIssues, transactionIssueText } from "./transaction-edit";
 import { sourceFieldInput } from "@platform/app";
-import { useActionTrial, useHost, useReadQuery } from "@platform/app";
+import { useActionTrial, useHost } from "@platform/app";
 import { notify, t, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -8,6 +8,7 @@ import { useDraftSession } from "../session/DraftSession";
 import { actionIssues, objectChanges, type ObjectRecord, type Process } from "./object-model";
 import { useAuthoringModel } from "./authoring-model";
 import { declarationValue } from "../editor/declaration";
+import { useDraftRecord } from "../branches/draft-record";
 
 export function useObjectDraft(id: string, onReset?: () => void) {
   const { decide, definitions, source } = useHost();
@@ -16,13 +17,13 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   const hydrate = (record: ObjectRecord): Process => ({ ...declarationValue(record, fields), states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [], implements: record.implements ?? [], extends: record.extends ?? "" });
   const { entities, drafts } = useAuthoringModel();
   const { open } = useApplicationWorkspace();
-  const query = useReadQuery<{ record?: ObjectRecord; valueErrors?: Record<string, string> }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
+  const { query, scope, branch, save: saveToBranch, publishRefusal, mainRevision } = useDraftRecord<ObjectRecord>("build.object", id);
   const object = query.data?.record;
   const conversionError = query.data?.valueErrors?.actions;
   const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [], implements: [], extends: "" });
   const { draft: process, dirty } = session;
   const baseline = useRef(process);
-  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
+  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false), loadedScope = useRef(scope);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string>();
   const reset = useRef(onReset); reset.current = onReset;
@@ -31,9 +32,11 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     setRefused(undefined); reset.current?.();
   }, busy);
   useEffect(() => {
-    if (!object || !loaded.current && query.isFetching || query.isPlaceholderData || dirty || busy || loaded.current === `${object.id}:${object.revision}`) return;
+    const changedScope = loadedScope.current !== scope;
+    if (!object || !loaded.current && query.isFetching || query.isPlaceholderData || dirty || busy || !changedScope && loaded.current === `${object.id}:${object.revision}`) return;
+    loadedScope.current = scope;
     baseline.current = hydrate(object); session.load(baseline.current); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;
-  }, [object, query.isFetching, query.isPlaceholderData, dirty, busy, session.load]);
+  }, [object, scope, query.isFetching, query.isPlaceholderData, dirty, busy, session.load]);
 
   const parent = object ? `build.${object.name}` : "";
   const savedObjects = new Set((drafts.data?.records ?? []).filter(draft => !draft.archived).map(draft => `build.${draft.name}`));
@@ -79,11 +82,14 @@ export function useObjectDraft(id: string, onReset?: () => void) {
     const expectedRevision = baseRevision.current;
     const changes = objectChanges(process, baseline.current);
     if (!Object.keys(changes).length) return true;
-    const ok = await decide("build.object.edit", { type: "build.object", id }, changes, { expectedRevision, onRefused: setRefused });
+    let ok = false;
+    if (branch) {
+      try { await saveToBranch(id, changes); ok = true; } catch (problem) { setRefused(problem instanceof Error ? problem.message : String(problem)); }
+    } else ok = await decide("build.object.edit", { type: "build.object", id }, changes, { expectedRevision, onRefused: setRefused });
     if (ok) {
       const result = await query.refetch();
-      const confirmed = result.isSuccess && result.data?.record?.revision === expectedRevision + 1 ? result.data.record : undefined;
-      baseRevision.current = expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
+      const confirmed = result.isSuccess && (branch ? !!result.data?.record : result.data?.record?.revision === expectedRevision + 1) ? result.data!.record : undefined;
+      baseRevision.current = branch ? confirmed?.revision ?? expectedRevision : expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
       baseline.current = confirmed ? hydrate(confirmed) : process;
       session.saved(process, confirmed ? baseline.current : undefined); markSaved();
     }
@@ -96,19 +102,21 @@ export function useObjectDraft(id: string, onReset?: () => void) {
   };
   const publish = async () => {
     setRefused(undefined);
+    if (branch) { setRefused(publishRefusal); return; }
     if (issues.length) { setRefused(issues.join(" ")); return; }
     if (dirty && !(await save())) return;
     if (await decide("build.object.publish", { type: "build.object", id }, {}, { onRefused: setRefused })) notify.success(t("The object is installed with its states and actions."));
   };
   const review = async () => {
+    if (branch) { if (!issues.length && dirty) await save(); return; }
     if (issues.length || (dirty && !await save())) return;
     open({ view: "release-review", params: { kind: "object", id } });
   };
   const roles = process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none");
   const approverRoles = ["builder", ...(process.access.length ? process.access.map((a) => a.role) : [])];
   const fromSource = (next: Record<string, unknown>): Process => ({ states: [], actions: [], access: [], fields: [], ...next } as Process);
-  const trialObject = (next: Process) => trial("build.object.edit", { type: "build.object", id }, objectChanges(next, baseline.current), baseRevision.current);
-  const structured = { expectedRevision: baseRevision.current, fieldInput: sourceFieldInput, value: { ...process }, onChange: (next: Record<string, unknown>) => change(fromSource(next)), fields, scope: `build.object:${id}:${source.scope}`, disabled: busy || !!conversionError,
+  const trialObject = (next: Process) => trial("build.object.edit", { type: "build.object", id }, objectChanges(next, baseline.current), branch ? mainRevision : baseRevision.current);
+  const structured = { expectedRevision: branch ? mainRevision : baseRevision.current, fieldInput: sourceFieldInput, value: { ...process }, onChange: (next: Record<string, unknown>) => change(fromSource(next)), fields, scope: `build.object:${id}:${source.scope}`, disabled: busy || !!conversionError,
     onTrial: (next: Record<string, unknown>) => trialObject(fromSource(next)) };
   return { object, ready: loaded.current.startsWith(`${id}:`), structured, failed: query.isError, process, dirty, busy, blocked: !!conversionError, refused: refused ?? conversionError, setRefused, change, save, publish, review, perform, issues, issuesOf, parent, targets, entities, roles, approverRoles, session, discardChanges, open };
 }

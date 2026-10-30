@@ -1,12 +1,13 @@
 import { sourceFieldInput } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { useActionTrial, useHost, useReadQuery } from "@platform/app";
-import { t, useInputDrafts, useUnsavedChanges, type EntityRecord } from "@platform/ui";
+import { useActionTrial, useHost } from "@platform/app";
+import { t, useInputDrafts, useUnsavedChanges } from "@platform/ui";
 import { useEffect, useRef, useState } from "react";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { joinProjectResource } from "../projects/membership";
 import { kindOfType, resourceRef } from "../projects/resources";
 import { declarationValue, replaceDeclaration } from "../editor/declaration";
+import { useDraftRecord } from "../branches/draft-record";
 
 type DefinitionDraft = { id: string; revision: number; name: string };
 type Saved = { id: string; revision: number; reloaded?: boolean };
@@ -18,7 +19,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
 }) {
   const host = useHost(), { open } = useApplicationWorkspace();
   const application = useApplicationScope();
-  const query = useReadQuery<{ record?: T & EntityRecord }>("/v1/records/" + type + "/" + encodeURIComponent(id), 5000);
+  const { query, scope, branch, save: saveToBranch, publishRefusal, mainRevision } = useDraftRecord<T>(type, id);
   const [draft, setDraft] = useState(empty), [edited, setDirty] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [joining, setJoining] = useState(false);
@@ -40,10 +41,15 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     for (const key of Object.keys(declaration(confirmed.current))) if (!(key in declaration(value))) result[key] = null;
     return result;
   };
-  const structured = { expectedRevision: draft.id ? draft.revision : 0, fieldInput: sourceFieldInput, value: declaration(draft), onChange: replace, fields, scope: `${type}:${id}:${host.source.scope}`, disabled: busy,
-    onTrial: (value: Record<string, unknown>) => trial(type + "." + (draft.id ? "edit" : "create"), { type, id: draft.id || createID }, ownerPayload(replaceDeclaration(draft, value, fields)), draft.id ? draft.revision : 0) };
+  const structured = { expectedRevision: draft.id ? branch ? mainRevision : draft.revision : 0, fieldInput: sourceFieldInput, value: declaration(draft), onChange: replace, fields, scope: `${type}:${id}:${host.source.scope}`, disabled: busy,
+    onTrial: (value: Record<string, unknown>) => trial(type + "." + (draft.id ? "edit" : "create"), { type, id: draft.id || createID }, ownerPayload(replaceDeclaration(draft, value, fields)), draft.id ? branch ? mainRevision : draft.revision : 0) };
   const inputs = useInputDrafts(), changed = edited || !!inputs?.dirty, dirty = changed || joining;
-  const loaded = useRef(""), confirmed = useRef(draft), lock = useRef(false);
+  const loaded = useRef(""), confirmed = useRef(draft), lock = useRef(false), loadedScope = useRef(scope);
+  useEffect(() => {
+    if (loadedScope.current === scope) return;
+    loadedScope.current = scope; loaded.current = ""; confirmed.current = empty();
+    setDraft(confirmed.current); setDirty(false); setJoining(false); setError("");
+  }, [scope]);
   const load = (record: T) => {
     if (record.revision < confirmed.current.revision) return;
     confirmed.current = { ...empty(), ...(normalize ? normalize(record) : record) };
@@ -85,12 +91,18 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     const submitted = structuredClone(draft), target = submitted.id || createID;
     let revision = confirmed.current.revision;
     if (changed || !submitted.id) {
-      if (!await host.decide(type + "." + (submitted.id ? "edit" : "create"), { type, id: target }, ownerPayload(submitted),
-        { expectedRevision: submitted.id ? revision : 0, quiet: true, onRefused: setError })) return;
-      revision += 1; load({ ...submitted, id: target, revision });
+      if (branch) {
+        await saveToBranch(target, ownerPayload(submitted));
+        const fresh = (await query.refetch()).data?.record;
+        if (fresh) { load(fresh); revision = fresh.revision; } else load({ ...submitted, id: target });
+      } else {
+        if (!await host.decide(type + "." + (submitted.id ? "edit" : "create"), { type, id: target }, ownerPayload(submitted),
+          { expectedRevision: submitted.id ? revision : 0, quiet: true, onRefused: setError })) return;
+        revision += 1; load({ ...submitted, id: target, revision });
+      }
       inputs?.clear(); markSaved(); setDirty(false);
     }
-    if (joinApplication && application && id === "new") {
+    if (joinApplication && application && id === "new" && !branch) {
       setJoining(true);
       await joinProjectResource(host, application, resourceRef(kindOfType(type)!, submitted.name));
       setJoining(false);
@@ -99,12 +111,13 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
     let reloaded: boolean | undefined;
     if (!deferNavigation) {
       if (id === "new") showSaved(target);
-      else reloaded = await reload(t("The resource was saved, but its current record could not be reloaded."), revision);
+      else reloaded = await reload(t("The resource was saved, but its current record could not be reloaded."), branch ? undefined : revision);
     }
     return { id: target, revision, reloaded };
   };
   const transition = async (name: string, accepted?: Saved) => {
     if (inputs?.invalid) return;
+    if (branch) { setError(publishRefusal!); return; }
     const saved = accepted ?? (dirty || id === "new" ? await save(true) : confirmed.current);
     if (!saved?.id || !await host.decide(type + "." + name, { type, id: saved.id }, {},
       { expectedRevision: saved.revision, quiet: true, onRefused: setError })) return;
@@ -114,6 +127,7 @@ export function useDefinitionDraft<T extends DefinitionDraft>({ id, type, kind, 
   };
   const review = async () => {
     if (inputs?.invalid) return;
+    if (branch) { if (dirty || id === "new") await save(); return; }
     const saved = dirty || id === "new" ? await save(true) : confirmed.current;
     if (saved?.id) open({ view: "release-review", params: { kind, id: saved.id } }, { ifCurrent: { view, params: { id } }, replace: id === "new" });
   };

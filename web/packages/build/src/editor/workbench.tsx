@@ -5,6 +5,7 @@ import { ChevronDown, Rocket } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { useDirectInstall } from "../releases/release-profile";
 import { useApplicationScope } from "../projects/application-scope";
+import { useCurrentBranch } from "../branches/current";
 
 const draftStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" }, archived: { label: t("Archived"), tone: "neutral" } });
 
@@ -38,10 +39,11 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
   const application = useApplicationScope();
   const directInstall = useDirectInstall();
   const archive = useRecordArchive(type);
+  const onBranch = !!useCurrentBranch().id;
   const home: Route = application ? { view: "project", params: { id: application } } : { view: "projects" };
   const tab: Route | undefined = route && application ? { view: route.view, params: { ...(route.params ?? {}), application } } : route;
   const leave = () => { onCancel?.(); open(home); if (tab) close(tab); };
-  const commands: ContextCommand[] = [
+  const commands: ContextCommand[] = onBranch ? [] : [
     ...(onReview ? [{ id: "review", label: t("Review and publish…"), icon: <Rocket />, disabled: busy || invalid || empty, run: onReview }] : []),
     ...(directInstall && onInstall ? [{ id: "install", label: t("Install directly (no release)"), disabled: dirty || busy || invalid || empty, run: onInstall }] : []),
     ...extra,
@@ -49,9 +51,10 @@ export function ResourceControls({ type, record, dirty = false, busy = false, in
     ...(record?.id && !record.archived && archive.available ? [{ id: "archive", label: t("Archive…"), danger: true, disabled: dirty || busy, run: () => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave) }] : []),
   ];
   return <>
-    {onCancel && (!onReview || !record?.id) && <Button variant="ghost" disabled={busy || (!dirty && !!record?.id)} onClick={() => record?.id ? onCancel() : leave()}>{t(record?.id ? "Cancel changes" : "Cancel")}</Button>}
-    {onSave && <Button size="sm" disabled={busy || !dirty||invalid} onClick={onSave}>{t("Save")}</Button>}
-    {onReview ? <div className="flex items-center">
+    {onCancel && (!onReview || !record?.id || onBranch) && <Button variant="ghost" disabled={busy || (!dirty && !!record?.id)} onClick={() => record?.id ? onCancel() : leave()}>{t(record?.id ? "Cancel changes" : "Cancel")}</Button>}
+    {onBranch ? (onSave ?? onReview) && <Button size="sm" disabled={busy || !dirty || invalid} onClick={onSave ?? onReview}>{t("Save to branch")}</Button>
+      : onSave && <Button size="sm" disabled={busy || !dirty||invalid} onClick={onSave}>{t("Save")}</Button>}
+    {onBranch ? null : onReview ? <div className="flex items-center">
       <Button variant="primary" size="sm" className="rounded-r-none" disabled={busy || invalid || empty} onClick={onReview} title={invalid ? t("Fix the problems first.") : empty ? t("Nothing to publish yet.") : undefined}>{t("Publish")}</Button>
       <ActionMenu label={t("Publish options")} variant="primary" icon={<ChevronDown />} commands={commands} />
     </div> : record?.id && !record.archived && archive.available && <Button variant="danger" disabled={dirty || busy} onClick={() => archive.take({ id: record.id!, revision: record.revision ?? 0 }, leave)}>{t("Archive")}</Button>}

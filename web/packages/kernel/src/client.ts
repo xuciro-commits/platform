@@ -292,7 +292,7 @@ export class EdgeClient {
     return new Blob(parts,{type:response.headers.get("Content-Type")??"application/octet-stream"});
   }
 
-  async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ ok: boolean; status: number; body: T }> {
+  async call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<{ ok: boolean; status: number; body: T }> {
     const response = await fetch(this.connection.server + path, {
       method, headers: this.headers(body !== undefined),
       body: body === undefined ? undefined : JSON.stringify(body),
