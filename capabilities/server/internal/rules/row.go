@@ -29,6 +29,12 @@ func CompileRow(e Expr, s Schema) (*RowProgram, error) {
 	return &RowProgram{p}, nil
 }
 
+func CompilePredicate(e Expr, s Schema) (*Program, error) { return compile(e, s, modeRecord) }
+
+func (p *Program) EvalSource(source RefSource) (Result, error) {
+	return p.Eval(Context{source: source})
+}
+
 func (r *RowProgram) Match(source RefSource) bool {
 	var reasons []Issue
 	v, err := r.program.eval(r.program.expr, Context{source: source}, "$", &reasons)

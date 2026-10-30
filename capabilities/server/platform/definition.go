@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
+	"platformserver/internal/rules"
 	"slices"
 	"strconv"
 	"strings"
@@ -995,7 +995,7 @@ func (b Binding) Check() error {
 		if err != nil {
 			return fmt.Errorf("literal binding: %w", err)
 		}
-		if err := boundedPredicateValue(v); err != nil {
+		if err := rules.BoundedPredicateValue(v); err != nil {
 			return err
 		}
 	}
@@ -1095,156 +1095,111 @@ func (p Predicate) check(depth int) error {
 	}
 	return nil
 }
+
+type predicateBindings struct {
+	left, right Binding
+	exists      bool
+}
+
+type predicateValues struct {
+	run      *Run
+	subject  json.RawMessage
+	groups   []predicateBindings
+	resolved map[int]bool
+	values   map[string]rules.Value
+	failure  error
+}
+
+func (v *predicateValues) Ref(name string) (rules.Value, bool) {
+	indexText, _, found := strings.Cut(name, ".")
+	index, err := strconv.Atoi(indexText)
+	if !found || err != nil || index < 0 || index >= len(v.groups) {
+		return rules.Value{}, false
+	}
+	group := v.groups[index]
+	kind := "json"
+	if group.exists {
+		kind = "boolean"
+	}
+	if !v.resolved[index] {
+		v.resolved[index] = true
+		left, err := group.left.Resolve(v.run, v.subject)
+		if group.exists {
+			v.values[indexText+".left"] = rules.Present("boolean", err == nil && !bytes.Equal(bytes.TrimSpace(left), []byte("null")))
+		} else {
+			if err == nil {
+				var right json.RawMessage
+				right, err = group.right.Resolve(v.run, v.subject)
+				if err == nil {
+					v.values[indexText+".left"] = rules.PresentRaw("json", left)
+					v.values[indexText+".right"] = rules.PresentRaw("json", right)
+				}
+			}
+			if err != nil {
+				v.failure = err
+			}
+		}
+	}
+	if value, ok := v.values[name]; ok {
+		return value, true
+	}
+	if v.failure != nil {
+		return rules.Value{Kind: kind, Status: "binding-error"}, true
+	}
+	return rules.Missing(kind), true
+}
+
+func (p Predicate) lower(groups *[]predicateBindings, schema *rules.Schema) rules.Expr {
+	if p.Op == "all" || p.Op == "any" || p.Op == "not" {
+		parts := make([]rules.Expr, len(p.Terms))
+		for i, term := range p.Terms {
+			parts[i] = term.lower(groups, schema)
+		}
+		if len(parts) == 1 && p.Op != "not" {
+			return parts[0]
+		}
+		op := map[string]string{"all": "and", "any": "or", "not": "not"}[p.Op]
+		return rules.Expr{Op: op, Kind: "boolean", Args: parts}
+	}
+	index := strconv.Itoa(len(*groups))
+	group := predicateBindings{left: *p.Left, exists: p.Op == "exists"}
+	if p.Right != nil {
+		group.right = *p.Right
+	}
+	*groups = append(*groups, group)
+	if group.exists {
+		schema.Refs[index+".left"] = rules.Type{Kind: "boolean"}
+		return rules.RefOf("boolean", index+".left")
+	}
+	schema.Refs[index+".left"] = rules.Type{Kind: "json"}
+	schema.Refs[index+".right"] = rules.Type{Kind: "json"}
+	op := map[string]string{"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=", "contains": "contains"}[p.Op]
+	return rules.Expr{Op: op, Kind: "boolean", Args: []rules.Expr{rules.RefOf("json", index+".left"), rules.RefOf("json", index+".right")}}
+}
+
 func (p Predicate) Test(r *Run, subject json.RawMessage) (bool, error) {
 	if err := p.Check(); err != nil {
 		return false, err
 	}
-	switch p.Op {
-	case "all", "any", "not":
-		result := p.Op == "all"
-		for _, term := range p.Terms {
-			v, err := term.Test(r, subject)
-			if err != nil {
-				return false, err
-			}
-			if p.Op == "not" {
-				return !v, nil
-			}
-			if p.Op == "all" && !v {
-				return false, nil
-			}
-			if p.Op == "any" && v {
-				return true, nil
-			}
-		}
-		return result, nil
-	}
-	left, err := p.Left.Resolve(r, subject)
-	if p.Op == "exists" {
-		return err == nil && !bytes.Equal(bytes.TrimSpace(left), []byte("null")), nil
-	}
+	groups := []predicateBindings{}
+	schema := rules.Schema{Refs: map[string]rules.Type{}}
+	expr := p.lower(&groups, &schema)
+	program, err := rules.CompilePredicate(expr, schema)
 	if err != nil {
 		return false, err
 	}
-	right, err := p.Right.Resolve(r, subject)
-	if err != nil {
-		return false, err
+	values := &predicateValues{run: r, subject: subject, groups: groups, resolved: map[int]bool{}, values: map[string]rules.Value{}}
+	answer, err := program.EvalSource(values)
+	if values.failure != nil {
+		return false, values.failure
 	}
-	var a, b any
-	da, db := json.NewDecoder(bytes.NewReader(left)), json.NewDecoder(bytes.NewReader(right))
-	da.UseNumber()
-	db.UseNumber()
-	if da.Decode(&a) != nil || db.Decode(&b) != nil {
-		return false, fmt.Errorf("predicate operands are invalid JSON")
-	}
-	if err := boundedPredicateValue(a); err != nil {
-		return false, err
-	}
-	if err := boundedPredicateValue(b); err != nil {
-		return false, err
-	}
-	if p.Op == "eq" || p.Op == "neq" {
-		equal := jsonEqual(a, b)
-		return equal == (p.Op == "eq"), nil
-	}
-	if p.Op == "contains" {
-		switch x := a.(type) {
-		case string:
-			y, ok := b.(string)
-			if !ok {
-				return false, fmt.Errorf("contains needs two strings or an array")
-			}
-			return strings.Contains(x, y), nil
-		case []any:
-			for _, v := range x {
-				if jsonEqual(v, b) {
-					return true, nil
-				}
-			}
-			return false, nil
+	if issue, ok := err.(*rules.Issue); ok {
+		if issue.Message == "malformed typed value" {
+			return false, fmt.Errorf("predicate operands are invalid JSON")
 		}
-		return false, fmt.Errorf("contains needs a string or array")
+		return false, fmt.Errorf("%s", issue.Message)
 	}
-	var comparison int
-	switch x := a.(type) {
-	case json.Number:
-		y, ok := b.(json.Number)
-		if !ok {
-			return false, fmt.Errorf("numeric comparison needs two numbers")
-		}
-		an, aok := new(big.Rat).SetString(string(x))
-		bn, bok := new(big.Rat).SetString(string(y))
-		if !aok || !bok {
-			return false, fmt.Errorf("invalid decimal comparison")
-		}
-		comparison = an.Cmp(bn)
-	case string:
-		y, ok := b.(string)
-		if !ok {
-			return false, fmt.Errorf("text comparison needs two strings")
-		}
-		comparison = strings.Compare(x, y)
-	default:
-		return false, fmt.Errorf("ordered comparison needs numbers or strings")
-	}
-	switch p.Op {
-	case "gt":
-		return comparison > 0, nil
-	case "gte":
-		return comparison >= 0, nil
-	case "lt":
-		return comparison < 0, nil
-	case "lte":
-		return comparison <= 0, nil
-	}
-	return false, nil
-}
-func jsonEqual(a, b any) bool {
-	if x, ok := a.(json.Number); ok {
-		y, ok := b.(json.Number)
-		if !ok {
-			return false
-		}
-		an, ao := new(big.Rat).SetString(string(x))
-		bn, bo := new(big.Rat).SetString(string(y))
-		return ao && bo && an.Cmp(bn) == 0
-	}
-	x, _ := json.Marshal(a)
-	y, _ := json.Marshal(b)
-	return bytes.Equal(x, y)
-}
-
-func boundedPredicateValue(v any) error {
-	switch value := v.(type) {
-	case json.Number:
-		text := string(value)
-		if len(text) > 128 {
-			return fmt.Errorf("predicate number exceeds 128 digits")
-		}
-		if index := strings.IndexAny(text, "eE"); index >= 0 {
-			exponent := text[index+1:]
-			if len(exponent) > 5 {
-				return fmt.Errorf("predicate exponent exceeds its arithmetic bound")
-			}
-			n, err := strconv.Atoi(exponent)
-			if err != nil || n < -308 || n > 308 {
-				return fmt.Errorf("predicate exponent exceeds its arithmetic bound")
-			}
-		}
-	case []any:
-		for _, item := range value {
-			if err := boundedPredicateValue(item); err != nil {
-				return err
-			}
-		}
-	case map[string]any:
-		for _, item := range value {
-			if err := boundedPredicateValue(item); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return err == nil && string(answer.Value.Data) == "true", err
 }
 
 type CapabilityDescriptor struct {

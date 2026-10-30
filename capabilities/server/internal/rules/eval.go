@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -179,6 +180,10 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 			return Value{}, err
 		}
 		if v.Status == "missing" || x == nil {
+			if e.Args[i].Kind == "json" && v.Status == "value" && slices.Contains([]string{"=", "!=", "<", "<=", ">", ">=", "contains"}, e.Op) {
+				values = append(values, nil)
+				continue
+			}
 			switch e.Op {
 			case "=", "!=", "<", "<=", ">", ">=", "before", "after", "within-period", "in", "range":
 				*reasons = append(*reasons, Issue{"missing", at, "comparison operand is missing or null"})
@@ -209,6 +214,63 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		r := Present(e.Kind, v)
 		_, err := validateValue(r, at)
 		return r, err
+	}
+	if len(e.Args) > 0 && e.Args[0].Kind == "json" && slices.Contains([]string{"=", "!=", "<", "<=", ">", ">=", "contains"}, e.Op) {
+		left, right := values[0], values[1]
+		if e.Op == "=" || e.Op == "!=" {
+			equal := jsonEqual(left, right)
+			return out(equal == (e.Op == "="))
+		}
+		if e.Op == "contains" {
+			switch x := left.(type) {
+			case string:
+				y, ok := right.(string)
+				if !ok {
+					return Value{}, fail("predicate", at, "contains needs two strings or an array")
+				}
+				return out(strings.Contains(x, y))
+			case []any:
+				for _, item := range x {
+					if jsonEqual(item, right) {
+						return out(true)
+					}
+				}
+				return out(false)
+			}
+			return Value{}, fail("predicate", at, "contains needs a string or array")
+		}
+		comparison := 0
+		switch x := left.(type) {
+		case json.Number:
+			y, ok := right.(json.Number)
+			if !ok {
+				return Value{}, fail("predicate", at, "numeric comparison needs two numbers")
+			}
+			a, aok := new(big.Rat).SetString(string(x))
+			b, bok := new(big.Rat).SetString(string(y))
+			if !aok || !bok {
+				return Value{}, fail("predicate", at, "invalid decimal comparison")
+			}
+			comparison = a.Cmp(b)
+		case string:
+			y, ok := right.(string)
+			if !ok {
+				return Value{}, fail("predicate", at, "text comparison needs two strings")
+			}
+			comparison = strings.Compare(x, y)
+		default:
+			return Value{}, fail("predicate", at, "ordered comparison needs numbers or strings")
+		}
+		switch e.Op {
+		case ">":
+			return out(comparison > 0)
+		case ">=":
+			return out(comparison >= 0)
+		case "<":
+			return out(comparison < 0)
+		default:
+			return out(comparison <= 0)
+		}
 	}
 	switch e.Op {
 	case "and":
@@ -483,6 +545,21 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 		return out(false)
 	}
 	return Value{}, fail("operator", at, "operator is not executable")
+}
+
+func jsonEqual(a, b any) bool {
+	if x, ok := a.(json.Number); ok {
+		y, ok := b.(json.Number)
+		if !ok {
+			return false
+		}
+		an, ao := new(big.Rat).SetString(string(x))
+		bn, bo := new(big.Rat).SetString(string(y))
+		return ao && bo && an.Cmp(bn) == 0
+	}
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return bytes.Equal(x, y)
 }
 func (p *Program) aggregate(e Expr, c Context, at string, reasons *[]Issue) (Value, error) {
 	decl := p.schema.Sets[e.Agg.Source]

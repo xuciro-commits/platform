@@ -98,7 +98,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, 
 	if frozen && e.Lit == nil && e.Ref == "" && !strings.Contains(" + - * / negate round ", " "+e.Op+" ") {
 		return Type{}, fail("operator", at, "frozen formula is limited to old arithmetic")
 	}
-	valid := map[string]bool{"text": true, "string": true, "integer": true, "number": true, "decimal": true, "money": true, "boolean": true, "date": true, "datetime": true, "choice": true, "reference": true, "set": true}
+	valid := map[string]bool{"text": true, "string": true, "integer": true, "number": true, "decimal": true, "money": true, "boolean": true, "date": true, "datetime": true, "choice": true, "reference": true, "set": true, "json": true}
 	if !valid[e.Kind] {
 		return Type{}, fail("type", at+".kind", "explicit supported result type required")
 	}
@@ -317,7 +317,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, 
 			return Type{}, fail("currency", at, "declared comparison currencies differ")
 		}
 		if good && e.Op != "=" && e.Op != "!=" {
-			good = numeric(args[0].Kind) || args[0].Kind == "date" || args[0].Kind == "datetime" || args[0].Kind == "text"
+			good = numeric(args[0].Kind) || args[0].Kind == "date" || args[0].Kind == "datetime" || args[0].Kind == "text" || args[0].Kind == "json"
 		}
 	case "+", "-", "*", "/", "min", "max", "negate", "abs", "round":
 		lo, hi := 2, 2
@@ -346,7 +346,7 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, 
 	case "lower", "upper", "trim":
 		good = arity(1, 1) && all("text") && same(e.Kind, "text")
 	case "contains", "starts-with", "ends-with", "icontains":
-		good = arity(2, 2) && all("text") && e.Kind == "boolean"
+		good = arity(2, 2) && (all("text") || e.Op == "contains" && all("json")) && e.Kind == "boolean"
 	case "matches":
 		good = arity(2, 2) && all("text") && e.Kind == "boolean" && e.Args[1].Lit != nil
 		if good {

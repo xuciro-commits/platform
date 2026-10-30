@@ -3,6 +3,7 @@ package rules
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -64,6 +65,11 @@ func validateValue(v Value, at string) (any, error) {
 		return nil, nil
 	}
 	switch canonicalKind(v.Kind) {
+	case "json":
+		if err := BoundedPredicateValue(x); err != nil {
+			return nil, fail("predicate", at, err.Error())
+		}
+		return x, nil
 	case "decimal", "integer":
 		n, err := rat(x)
 		if err != nil {
@@ -118,6 +124,39 @@ func validateValue(v Value, at string) (any, error) {
 		return items, nil
 	}
 	return nil, fail("type", at, "unsupported value type")
+}
+
+func BoundedPredicateValue(v any) error {
+	switch value := v.(type) {
+	case json.Number:
+		text := string(value)
+		if len(text) > 128 {
+			return fmt.Errorf("predicate number exceeds 128 digits")
+		}
+		if index := strings.IndexAny(text, "eE"); index >= 0 {
+			exponent := text[index+1:]
+			if len(exponent) > 5 {
+				return fmt.Errorf("predicate exponent exceeds its arithmetic bound")
+			}
+			n, err := strconv.Atoi(exponent)
+			if err != nil || n < -308 || n > 308 {
+				return fmt.Errorf("predicate exponent exceeds its arithmetic bound")
+			}
+		}
+	case []any:
+		for _, item := range value {
+			if err := BoundedPredicateValue(item); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		for _, item := range value {
+			if err := BoundedPredicateValue(item); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 func numericValue(kind string, n *big.Rat, currency, at string) (Value, error) {
 	if n.Num().BitLen() > 256 || n.Denom().BitLen() > 256 {
