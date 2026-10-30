@@ -1801,6 +1801,7 @@
   "A published query implementation is unavailable": "已发布查询的某个实现对象不可用",
   "Choose a readable listed value.": "请选择有权读取的列表值。",
   "Correct the highlighted fields.": "请修正标注的字段。",
+  "The action is unavailable while this record is {state}.": "记录处于 {state} 状态时不能执行此动作。",
   "Enter a value.": "请输入一个值。",
   "Enter a valid value.": "请输入有效的值。",
   "Choose a listed value.": "请从列表中选择。",

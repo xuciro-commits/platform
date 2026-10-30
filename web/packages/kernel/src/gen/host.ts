@@ -188,6 +188,24 @@ export type Action = {
   confirmationOnly?: boolean;
 };
 
+export type ActionCheckRequest = {
+  target: PageModelRecord;
+  inputs?: unknown;
+};
+
+export type ActionCheckResult = {
+  allowed: boolean;
+  message?: string;
+  conditions: ActionConditionCheck[];
+  issues?: FieldIssue[];
+  authorization?: Verdict;
+};
+
+export type ActionConditionCheck = {
+  allowed: boolean;
+  message: string;
+};
+
 export type AgentInfo = {
   id: string;
   app: string;

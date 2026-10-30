@@ -54,25 +54,33 @@ type PageModelResult struct {
 	SortLocked    bool                                         `json:"sortLocked,omitempty"`
 }
 
-func (t *Tenant) modelCriteria(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
+func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.Transition, bool) {
 	if ref.Kind != platform.AssetAction {
-		return nil, false
+		return platform.Transition{}, false
 	}
 	owner := t.owner["action:"+ref.Name]
 	if owner == nil || owner.Manifest().ID != ref.App {
-		return nil, false
+		return platform.Transition{}, false
 	}
 	for _, entity := range owner.Manifest().Entities {
 		if entity.Lifecycle == nil {
 			continue
 		}
 		for _, transition := range entity.Lifecycle.Transitions {
-			if entity.Type+"."+transition.Name == ref.Name && transition.Criteria != nil {
-				return transition.Criteria, true
+			if entity.Type+"."+transition.Name == ref.Name {
+				return transition, true
 			}
 		}
 	}
-	return nil, false
+	return platform.Transition{}, false
+}
+
+func (t *Tenant) modelCriteria(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
+	transition, ok := t.modelTransition(ref)
+	if !ok || transition.Criteria == nil {
+		return nil, false
+	}
+	return transition.Criteria, true
 }
 
 func (t *Tenant) modelVisibleLookup(member platform.Member) func(string) (platform.EntityInfo, bool) {
