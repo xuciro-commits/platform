@@ -1810,6 +1810,8 @@
   "Value must be greater than {value}.": "值必须大于 {value}。",
   "Value must be at most {value}.": "值必须不超过 {value}。",
   "Value must be less than {value}.": "值必须小于 {value}。",
+  "Value must be on or after {date}.": "值不能早于 {date}。",
+  "Value must be on or before {date}.": "值不能晚于 {date}。",
   "Value must be before {field}.": "值必须早于 {field}。",
   "Value must be after {field}.": "值必须晚于 {field}。",
   "Value must be before or equal to {field}.": "值必须早于或等于 {field}。",

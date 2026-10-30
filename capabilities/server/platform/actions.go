@@ -143,7 +143,7 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 		if c.Pattern != "" {
 			schema["pattern"] = c.Pattern
 		}
-		if c.Before != "" || c.After != "" || c.DateTime {
+		if c.Before != "" || c.After != "" || c.DateTime || c.Earliest != "" || c.Latest != "" {
 			schema["x-platform-constraints"] = c
 		}
 	}
@@ -226,6 +226,8 @@ type InputConstraints struct {
 	MaxLength    *int     `json:"maxLength,omitempty"`
 	Before       string   `json:"before,omitempty"`
 	After        string   `json:"after,omitempty"`
+	Earliest     string   `json:"earliest,omitempty"`
+	Latest       string   `json:"latest,omitempty"`
 	Inclusive    bool     `json:"inclusive,omitempty"`
 	DateTime     bool     `json:"dateTime,omitempty"`
 	Pattern      string   `json:"pattern,omitempty"`
@@ -625,6 +627,21 @@ func ruleTraceContext(expr Expr, context ExprContext) ExprContext {
 
 var inputInstant = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,9})?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$`)
 
+func absoluteDate(typ, text string) (time.Time, error) {
+	layout := time.DateOnly
+	if typ == "datetime" {
+		layout = time.RFC3339Nano
+		if !inputInstant.MatchString(text) || strings.HasSuffix(text, "-00:00") {
+			return time.Time{}, fmt.Errorf("invalid datetime bound")
+		}
+	}
+	value, err := time.Parse(layout, text)
+	if err != nil || value.Year() < 1 || value.Year() > 9999 {
+		return time.Time{}, fmt.Errorf("invalid %s bound", typ)
+	}
+	return value, nil
+}
+
 func CheckInputs(fields []Field) error {
 	byName := map[string]Field{}
 	for _, f := range fields {
@@ -652,6 +669,28 @@ func CheckInputs(fields []Field) error {
 			}
 			if c.ExclusiveMin && c.Min == nil || c.ExclusiveMax && c.Max == nil || c.Min != nil && c.Max != nil && (*c.Min > *c.Max || *c.Min == *c.Max && (c.ExclusiveMin || c.ExclusiveMax)) {
 				return fmt.Errorf("%s has empty bounds", f.Name)
+			}
+			if c.Earliest != "" || c.Latest != "" {
+				if !slices.Contains([]string{"date", "datetime"}, f.Type) || c.DateTime {
+					return fmt.Errorf("%s has nondate bounds", f.Name)
+				}
+				var earliest, latest time.Time
+				var err error
+				if c.Earliest != "" {
+					earliest, err = absoluteDate(f.Type, c.Earliest)
+					if err != nil {
+						return fmt.Errorf("%s: %w", f.Name, err)
+					}
+				}
+				if c.Latest != "" {
+					latest, err = absoluteDate(f.Type, c.Latest)
+					if err != nil {
+						return fmt.Errorf("%s: %w", f.Name, err)
+					}
+				}
+				if c.Earliest != "" && c.Latest != "" && earliest.After(latest) {
+					return fmt.Errorf("%s has empty date bounds", f.Name)
+				}
 			}
 			if (c.MinLength != nil || c.MaxLength != nil || c.Pattern != "") && f.Type != "string" {
 				return fmt.Errorf("%s has nontext length or pattern", f.Name)
@@ -805,6 +844,21 @@ func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 			}
 			if c.Max != nil && (n > *c.Max || c.ExclusiveMax && n == *c.Max) {
 				add(f, "max", fmt.Sprintf("Value must be %s %g.", map[bool]string{false: "at most", true: "less than"}[c.ExclusiveMax], *c.Max), "")
+			}
+		}
+		if (f.Type == "date" || f.Type == "datetime") && (c.Earliest != "" || c.Latest != "") {
+			value, _ := absoluteDate(f.Type, text)
+			if c.Earliest != "" {
+				earliest, _ := absoluteDate(f.Type, c.Earliest)
+				if value.Before(earliest) {
+					add(f, "earliest", fmt.Sprintf("Value must be on or after %s.", c.Earliest), "")
+				}
+			}
+			if c.Latest != "" {
+				latest, _ := absoluteDate(f.Type, c.Latest)
+				if value.After(latest) {
+					add(f, "latest", fmt.Sprintf("Value must be on or before %s.", c.Latest), "")
+				}
 			}
 		}
 	}

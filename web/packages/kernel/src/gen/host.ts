@@ -2155,6 +2155,8 @@ export type InputConstraints = {
   maxLength?: number;
   before?: string;
   after?: string;
+  earliest?: string;
+  latest?: string;
   inclusive?: boolean;
   dateTime?: boolean;
   pattern?: string;
