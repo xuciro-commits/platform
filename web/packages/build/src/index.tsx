@@ -29,6 +29,7 @@ import { ReleaseReview, releaseDraftsSelection, releaseKinds, type ReleaseKind }
 import { Changes } from "./releases/changes";
 import { CandidateTest } from "./releases/simulate";
 import { ProjectHome, ProjectsList } from "./projects/project";
+import { Discover } from "./projects/discover";
 import { StudioTemplates } from "./workshop/template-ui";
 import { PageHeader, t, type NavSection, type Route, type View } from "@platform/ui";
 import type { ReactNode } from "react";
@@ -50,6 +51,7 @@ const editorViews: View[] = [
   { id: "value-type", title: () => t("Value types"), render: p => p.id ? <ValueTypeEditor key={p.id} id={p.id} /> : <ValueTypes /> },
   { id: "query", title: () => t("Queries"), render: p => p.id ? <QueryEditor key={p.id} id={p.id} /> : <Queries /> },
   { id: "module", title: p => p.page ? t("Page") : t("Application interface"), render: p => <ModuleWorkbench key={`${p.id ?? ""}:${p.page ?? ""}`} id={p.id} page={p.page} focus={p.focus} /> },
+  { id: "discover", title: () => t("Discover"), render: () => <Discover /> },
   { id: "studio-templates", title: () => t("Templates"), render: p => <StudioTemplates key={p.template ?? "templates"} initial={p.template} /> },
   { id: "automation", title: () => t("Automations"), render: p => p.id ? <AutomationEditor key={p.id} id={p.id} /> : <Automations /> },
   { id: "flow", title: () => t("Flows"), render: p => p.id ? <FlowEditor key={p.id} id={p.id} /> : <Flows /> },

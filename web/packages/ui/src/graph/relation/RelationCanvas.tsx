@@ -29,6 +29,7 @@ export type RelationCanvasProps = {
   onLink?: (source: string, target: string) => void;
   onDrop?: (payload: string, at: CanvasPosition) => void;
   storeKey?: string;
+  focusOnHover?: boolean;
 };
 
 const emptyPositions: Record<string, CanvasPosition> = {};
@@ -41,13 +42,14 @@ const layoutMeta: Record<RelationLayout, { icon: ReactNode; title: string }> = {
 
 const sizeOf = (n: RelationNode) => n.badge ? { width: n.badge.size, height: n.badge.size } : n.size ?? relationNodeSize;
 
-function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "down", dropType, children, onSelect, onOpen, onPositionsChange, onLayoutReady, onViewportReady, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey, storeKey }: RelationCanvasProps) {
+function RelationCanvasContent({ nodes, edges, positions, selected, editable = false, linking = false, label, height = 480, layout: initial = "down", dropType, children, onSelect, onOpen, onPositionsChange, onLayoutReady, onViewportReady, onLink, onDrop, nodeActions, edgeActions, onReconnect, viewportKey, storeKey, focusOnHover = false }: RelationCanvasProps) {
   const { screenToFlowPosition, fitView } = useReactFlow<RelationShapeNode, RelationLineEdge>();
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<RelationShapeNode>([]);
   const [layout, setLayout] = useState<RelationLayout>(initial);
   const [menu, setMenu] = useState(false);
   const [help, setHelp] = useState(false);
   const [pickedEdge, setPickedEdge] = useState<string>();
+  const [hovered, setHovered] = useState<string>();
   const [expanded, setExpanded] = useState<string>();
   const canReconnect = editable && !!onReconnect;
   const relations = useMemo(() => edges.map((e) => ({ id: e.id, from: e.source, to: e.target, parent: e.parent })), [edges]);
@@ -79,13 +81,19 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
   const [layoutError, setLayoutError] = useState<string>();
   useEffect(() => () => { layoutVersion.current++; }, []);
 
+  const near = useMemo(() => {
+    if (!focusOnHover || !hovered) return undefined;
+    const ids = new Set([hovered]);
+    for (const e of edges) { if (e.source === hovered) ids.add(e.target); if (e.target === hovered) ids.add(e.source); }
+    return ids;
+  }, [focusOnHover, hovered, edges]);
   useEffect(() => {
     setFlowNodes((previous) => nodes.map((n) => {
       const old = previous.find((p) => p.id === n.id);
       return { id: n.id, type: "entity", position: owned[n.id] ?? old?.position ?? { x: 0, y: 0 }, selected: n.id === selected, draggable: (editable || !!storeKey) && !linking, measured: old?.measured,
-        connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect) } };
+        connectable: editable && (linking || canReconnect) && n.linkable !== false, data: { ...n, linking, acceptsConnections: editable && (linking || canReconnect), faded: !!near && !near.has(n.id) } };
     }));
-  }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey]);
+  }, [nodes, owned, selected, editable, linking, setFlowNodes, canReconnect, storeKey, near]);
 
   const flowEdges = useMemo<RelationLineEdge[]>(() => {
     const boxes: Record<string, Rect> = {};
@@ -107,11 +115,11 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
     return edges.map((e, i) => {
       const route = routes[e.id];
       const quiet = declared && hierarchy.links.has(i) && selected !== e.source && selected !== e.target;
-      return { id: e.id, source: e.source, target: e.target, sourceHandle: route?.sourceSide ?? Position.Bottom, targetHandle: route?.targetSide ?? Position.Top, type: "relation", data: { ...e, route, quiet }, deletable: false,
+      return { id: e.id, source: e.source, target: e.target, sourceHandle: route?.sourceSide ?? Position.Bottom, targetHandle: route?.targetSide ?? Position.Top, type: "relation", data: { ...e, route, quiet, faded: !!near && e.source !== hovered && e.target !== hovered }, deletable: false,
         selected: e.id === pickedEdge, reconnectable: editable && !!onReconnect && e.reconnectable !== false,
         markerEnd: e.directed === false ? undefined : { type: MarkerType.ArrowClosed, color: e.tone ? `var(--tone-${e.tone})` : "var(--muted)", width: 14, height: 14 } };
     });
-  }, [edges, relations, hierarchy, flowNodes, editable, onReconnect, pickedEdge, selected]);
+  }, [edges, relations, hierarchy, flowNodes, editable, onReconnect, pickedEdge, selected, near, hovered]);
 
   const drawing = useMemo(() => `${nodes.map((n) => n.id).join("|")}#${edges.map((e) => e.id).join("|")}`, [nodes, edges]);
   const fitKey = viewportKey ?? drawing;
@@ -149,7 +157,7 @@ function RelationCanvasContent({ nodes, edges, positions, selected, editable = f
         nodesDraggable={(editable || !!storeKey) && !linking} nodesConnectable={linking} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} connectionRadius={40}
         isValidConnection={(c) => c.source !== c.target && nodes.some((n) => n.id === c.source && n.linkable !== false) && nodes.some((n) => n.id === c.target && n.linkable !== false)}
         onConnect={(c) => { if (c.source && c.target && c.source !== c.target) onLink?.(c.source, c.target); }}
-        onNodeClick={(_, n) => { setPickedEdge(undefined); onSelect?.(n.id); }} onNodeDoubleClick={(_, n) => onOpen?.(n.id)} onPaneClick={() => { onSelect?.(undefined); setPickedEdge(undefined); setExpanded(undefined); }}
+        onNodeClick={(_, n) => { setPickedEdge(undefined); onSelect?.(n.id); }} onNodeDoubleClick={(_, n) => onOpen?.(n.id)} onNodeMouseEnter={focusOnHover ? (_, n) => setHovered(n.id) : undefined} onNodeMouseLeave={focusOnHover ? () => setHovered(undefined) : undefined} onPaneClick={() => { onSelect?.(undefined); setPickedEdge(undefined); setExpanded(undefined); }}
         onEdgeClick={(_, e) => { setPickedEdge(e.id); setExpanded(undefined); onSelect?.(undefined); }}
         edgesFocusable={editable && !!edgeActions}
         onReconnect={onReconnect ? (old, c) => { if (c.source && c.target && c.source !== c.target && (c.source !== old.source || c.target !== old.target)) onReconnect(old.id, c.source, c.target); } : undefined}

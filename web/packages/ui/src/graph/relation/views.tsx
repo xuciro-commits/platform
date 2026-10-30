@@ -8,9 +8,9 @@ import { CanvasEdgeLabel, canvasEdgeColor } from "../core/edge";
 import { routePath, type Route } from "../core/route";
 import { relationNodeCaption, relationNodeClasses, relationNodeSize, type RelationEdge, type RelationNode } from "./model";
 
-type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean };
+type RelationNodeData = RelationNode & { linking: boolean; acceptsConnections: boolean; faded?: boolean };
 export type RelationShapeNode = Node<RelationNodeData>;
-export type RelationLineEdge = Edge<RelationEdge & { route?: Route; quiet?: boolean } & Record<string, unknown>>;
+export type RelationLineEdge = Edge<RelationEdge & { route?: Route; quiet?: boolean; faded?: boolean } & Record<string, unknown>>;
 
 function Sides({ data }: { data: RelationNodeData }) {
   return <>
@@ -30,7 +30,7 @@ function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
     <Sides data={data} />
   </div>;
   const caption = relationNodeCaption(data);
-  return <div className={cn("platform-relation-node", selected && "platform-relation-node-selected", data.dim && "opacity-60", data.linking && "platform-relation-node-linking")}
+  return <div className={cn("platform-relation-node", selected && "platform-relation-node-selected", data.dim && "opacity-60", data.faded && "opacity-30", data.linking && "platform-relation-node-linking")}
     style={{ width: data.size?.width ?? relationNodeSize.width, minHeight: data.size?.height ?? relationNodeSize.height, "--block-color": color } as CSSProperties} title={data.detail ?? data.label} aria-label={data.label}>
     <span className="platform-canvas-node-icon" aria-hidden="true">{data.icon ?? (classDecl ? <IconGlyph name={classDecl.icon} /> : <Box />)}</span>
     <span className="min-w-0 flex-1">
@@ -45,7 +45,7 @@ function RelationNodeView({ data, selected }: NodeProps<RelationShapeNode>) {
 function RelationEdgeView({ id, sourceX, sourceY, targetX, targetY, data, markerEnd, selected }: EdgeProps<RelationLineEdge>) {
   const { path, label } = routePath(data?.route?.points ?? [{ x: sourceX, y: sourceY }, { x: targetX, y: targetY }]);
   const color = canvasEdgeColor(data?.tone, selected, "var(--muted)");
-  return <g className={cn("platform-canvas-edge", selected && "platform-canvas-edge-selected")}>
+  return <g className={cn("platform-canvas-edge", selected && "platform-canvas-edge-selected", data?.faded && "opacity-30")}>
     <BaseEdge id={id} path={path} markerEnd={markerEnd} interactionWidth={20} style={{ stroke: color, strokeWidth: selected ? 2 : 1.4, strokeDasharray: data?.dashed ? "5 4" : undefined }} />
     {data?.label && (!data.quiet || selected) && <CanvasEdgeLabel x={label.x} y={label.y}>{data.label}</CanvasEdgeLabel>}
   </g>;
