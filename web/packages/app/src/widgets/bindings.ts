@@ -20,6 +20,6 @@ export type WidgetBindingContext = ModelContext & {recordObject?:string;interfac
   selectionSet?:import("@platform/ui").RecordSelectionPort;
   keepActive?:boolean;
   facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;
-  inputScopes?:string[];onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
+  inputScopes?:string[];onClick?: () => void; actionGate?:{schema:string;record:{id:string;revision:number}}; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };

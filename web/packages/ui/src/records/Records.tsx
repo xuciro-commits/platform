@@ -16,6 +16,7 @@ import { DataTable } from "../components/DataTable";
 import { flexRender, type CellContext } from "@tanstack/react-table";
 import { FacetChoices } from "../fields/FacetChoices";
 import {ContentTabs} from "../layout/ContentTabs";
+import {useActionAvailability} from "./ActionAvailability";
 import {FormatPill,HeaderCommands,ObjectHeader,toneOf,type HeaderPill} from "./ObjectView";
 import type {ContextCommand} from "../components/CommandMenu";
 
@@ -83,6 +84,7 @@ export type RecordSource = {
   exportCSV?: (type: string, query: RecordQuery) => Promise<Blob>;
   importCSV?: (type: string, csv: string, preview: boolean) => Promise<Api.ImportRow[]>;
   get: (type: string, id: string) => Promise<RecordView>;
+  checkAction?: (schema: string, target: { type: string; id: string }, inputs?: unknown) => Promise<Api.ActionCheckResult>;
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
   interfaceList?: (name: string, query: RecordQuery) => Promise<InterfaceRecordPageData>;
   watchInterfaceList?: (name: string, query: RecordQuery, changed: () => void) => () => void;
@@ -618,6 +620,9 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
   const info = source.entity(type);
   const { view, error, loading, refresh: load } = useRecordView(source, type, id, reload);
   const entity = useMemo(() => (info ? entityFrom(info,{},source,onOpen ? (type,id) => onOpen(type,{id} as EntityRecord) : undefined) : undefined), [info,source,onOpen]);
+  const checkLifecycle = info?.lifecycle, checkState = view && checkLifecycle ? String(view.record[checkLifecycle.field] ?? "") : "";
+  const availability = useActionAvailability(source, view && onTransition && checkLifecycle && !detailOnly && !recordTabs ? { type, id, revision: view.record.revision } : undefined,
+    checkLifecycle ? checkLifecycle.transitions.filter(x => x.from.includes(checkState) && (can?.(x.schema) ?? false)).map(x => x.schema) : []);
   if (error) {
     return (
       <div role="alert" className="grid max-w-xl gap-2 rounded-md border border-[var(--tone-danger)] bg-surface p-4 text-sm">
@@ -646,7 +651,7 @@ export function RecordPage({ source, type, id, actions, menu, onOpen, reload = 0
   for(const f of info.fields){const format=formats[f.name];if(format&&f.name!==lifecycle?.field)pills.push({key:f.name,label:format.label||entity.fields[f.name]?.text(valueOf(entity,f.name,r) as never)||"—",tone:toneOf(format.tone),icon:format.icon,title:f.title});}
   const full=!detailOnly&&!recordTabs;
   const transitions=full&&lifecycle&&onTransition?lifecycle.transitions.filter(x=>x.from.includes(stateName)&&!loading&&(can?.(x.schema)??false)):[];
-  const commands:ContextCommand[]=transitions.map(x=>({id:x.schema,label:x.title,run:()=>onTransition!(x.schema,r)}));
+  const commands:ContextCommand[]=transitions.map(x=>{const verdict=availability[x.schema],blocked=verdict?.allowed===false;return {id:x.schema,label:x.title,disabled:blocked,reason:blocked?verdict.reason||t("This action is not available for this record."):undefined,run:()=>onTransition!(x.schema,r)};});
   const header=<ObjectHeader sticky={full} icon={info.icon} color={info.color} title={displayOf(info, r)} pills={pills.slice(0,3)}
     subtitle={<>{info.title} · {r.id} {t("· rev")} {r.revision}</>}
     tags={<>

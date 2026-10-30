@@ -8,6 +8,7 @@ import { Tag, toneNames, type Tone } from "../components/StatusTag";
 import { t } from "../i18n";
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
+import { Reasoned } from "./ActionAvailability";
 
 export type HeaderPill = { key: string; label: string; tone: Tone; icon?: string; title?: string };
 
@@ -30,7 +31,7 @@ export function HeaderCommands({ commands, menu, disabled, children }: { command
   const inline = commands.length > 3 ? commands.slice(0, 1) : commands;
   const overflow = [...(commands.length > 3 ? commands.slice(1) : []), ...menu].map(command => ({ ...command, disabled: disabled || command.disabled }));
   return <>
-    {inline.map((command, index) => <Button key={command.id} size="sm" variant={index === 0 ? "primary" : "default"} disabled={disabled || command.disabled} onClick={command.run}>{command.label}</Button>)}
+    {inline.map((command, index) => <Reasoned key={command.id} reason={command.disabled ? command.reason : undefined}><Button size="sm" variant={index === 0 ? "primary" : "default"} disabled={disabled || command.disabled} onClick={command.run}>{command.label}</Button></Reasoned>)}
     {children}
     {overflow.length > 0 && <ActionMenu label={t("More actions")} commands={overflow} icon={<MoreHorizontal />}>{t("More")}</ActionMenu>}
   </>;

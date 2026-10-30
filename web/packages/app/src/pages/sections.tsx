@@ -211,12 +211,16 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
     const sharedFilter=shared&&"value" in shared&&typeof shared.value==="object"&&shared.value.kind==="filter"?shared.value.fields:undefined;
     const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
     const binding=(name:string,control?:string)=>page.document?.events?.find(event=>event.source===section.id&&event.event===name&&(event.control??"")===(control??""));
+    const eventRecord=(variable:string)=>{ if(context&&initialVariables[variable]?.scope==="loop-item")return context.record; const slot=recordResourceSlot(page,variable)??(initialVariables[variable]?.mode==="input"||initialVariables[variable]?.mode==="shared"?inputSlot(variable):undefined); return slot?session.selected(slot):undefined; };
     const emit=(name:string,control?:string)=>{
       const event=binding(name,control);if(!event||overlay&&session.overlayEpoch(overlay)!==epoch)return;
       void effects.run(event,{values,set:(id,value)=>setContextState(id,value,context,overlay),
         isActive:()=> (!overlay||session.overlayEpoch(overlay)===epoch)&&(!context||context.session.hasLoopItem(context.owner,context.key)&&context.session.querySignature(context.queryKey)===context.signature),
-        record:(variable)=>{ if(context&&initialVariables[variable]?.scope==="loop-item")return context.record; const slot=recordResourceSlot(page,variable)??(initialVariables[variable]?.mode==="input"||initialVariables[variable]?.mode==="shared"?inputSlot(variable):undefined); return slot?session.selected(slot):undefined; }});
+        record:eventRecord});
     };
+    const clickEffect=binding("click")?.effects?.find(effect=>effect.kind==="action"&&effect.action?.recordVariable);
+    const clickRecord=clickEffect?.action?.recordVariable?eventRecord(clickEffect.action.recordVariable):undefined;
+    const actionGate=clickEffect?.action&&clickRecord?{schema:clickEffect.action.ref.name,record:{id:clickRecord.id,revision:clickRecord.revision}}:undefined;
     const avatarContext=section.widget==="avatar-stack"&&section.avatar?.contextVariable?confirmedContext(page,section,section.avatar.contextVariable,session,snapshot):undefined;
     const collectionID=section.widget==="avatar-stack"?avatarCollectionVariable(section.avatar,avatarContext?.status,section.collectionVariable):section.collectionVariable;
     const explorationSlot=section.widget==="ai-assistant"?aiRecordSlot(page,section.recordVariable):recordResourceSlot(page,section.recordVariable),explorationRoot=explorationSlot?session.confirmedSelected(explorationSlot):undefined,rootLease=explorationSlot?session.recordBindingEpoch(explorationSlot):undefined;
@@ -296,7 +300,7 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
         gaugeValue={values[section.gaugeValueVariable??""]}
         progressValue={values[section.progressValueVariable??""]} progressTotal={values[section.progressTotalVariable??""]}
         countValue={(()=>{const value=values[section.countVariable??""];return value?.status==="value"&&isDecimal(value.value)?value.value.value:undefined;})()} countError={(()=>{const value=values[section.countVariable??""];return value?.status==="error"?t(value.code):undefined;})()}
-        onControl={id=>emit("click",id)} controlBound={id=>!!binding("click",id)} onClick={binding("click")?()=>emit("click"):undefined} />
+        onControl={id=>emit("click",id)} controlBound={id=>!!binding("click",id)} onClick={binding("click")?()=>emit("click"):undefined} actionGate={actionGate} />
     );
   };
   const placed=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const n=page.document?.nodes[id];return !!n&&(n.kind==="widget"?indexed.has(n.section??""):(n.children??[]).some(child=>placed(child,seen)));};

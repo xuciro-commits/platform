@@ -3,7 +3,7 @@ import {useActionTrial} from "./trial";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
 import {OfflineReadError,type Api} from "@platform/kernel";
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, ContextHelp, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
+import { Button, ContextHelp, Reasoned, useActionAvailability, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
@@ -258,8 +258,9 @@ export function RecordActions({ type, record, allowed, steps: withSteps = false 
   const offered = catalog.filter((a) => a.target === type && !a.new && !transitions.has(a.schema) && a.schema !== `${type}.edit` && a.schema !== `${type}.archive` && (!allowed || allowed.includes(a.schema)));
   const state = lifecycle ? String(record[lifecycle.field] ?? "") : "";
   const steps = withSteps ? (lifecycle?.transitions ?? []).filter((x) => (!allowed || allowed.includes(x.schema)) && x.from.includes(state) && catalog.some((a) => a.schema === x.schema)) : [];
+  const availability = useActionAvailability(source, withSteps && steps.length ? { type, id: record.id, revision: record.revision } : undefined, steps.map((x) => x.schema));
   return <>
-    {steps.map((x) => <Button key={x.schema} size="sm" onClick={() => transition.take(x.schema, record)}>{x.title}</Button>)}
+    {steps.map((x) => { const verdict = availability[x.schema], blocked = verdict?.allowed === false; return <Reasoned key={x.schema} reason={blocked ? verdict.reason || t("This action is not available for this record.") : undefined}><Button size="sm" disabled={blocked} onClick={() => transition.take(x.schema, record)}>{x.title}</Button></Reasoned>; })}
     {offered.map((a) => <Button key={a.schema} size="sm" onClick={() => setTaking(a)}>{a.title}</Button>)}
     {taking && <ActionDialog frame="drawer" declared={taking} type={type} record={record} onClose={() => setTaking(undefined)} />}
     {transition.dialog}

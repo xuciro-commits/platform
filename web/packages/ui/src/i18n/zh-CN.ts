@@ -860,6 +860,7 @@ export default {
   "Confirmed": "已确认",
   "Conflict": "冲突",
   "Could not load record.": "无法加载记录。",
+  "This action is not available for this record.": "此记录当前不能执行该操作。",
   "Copy": "复制",
   "Count": "计数",
   "Created": "创建",
