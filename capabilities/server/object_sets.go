@@ -393,7 +393,40 @@ func (r *setRead) leaf(n *setNode, read *typeRead) (records.Plan, *kernel.Error)
 		parts = append(parts, expr)
 	}
 	if n.set.Filter != nil {
-		parts = append(parts, *n.set.Filter)
+		filter := *n.set.Filter
+		var bind func(*rules.Expr) *kernel.Error
+		bind = func(expr *rules.Expr) *kernel.Error {
+			if expr.Ref != "" {
+				if value, ok := n.set.Parameters[expr.Ref]; ok {
+					if value.Kind != expr.Kind {
+						return invalidSet("Object set parameter type differs")
+					}
+					raw := value.Data
+					if value.Status == "null" {
+						raw = json.RawMessage("null")
+					}
+					*expr = rules.Expr{Kind: value.Kind, Lit: &rules.Literal{Value: raw}}
+				} else if len(expr.Ref) >= len("root.") && expr.Ref[:len("root.")] == "root." {
+					return invalidSet("Object set root parameter is missing")
+				}
+			}
+			expr.Args = slices.Clone(expr.Args)
+			for i := range expr.Args {
+				if err := bind(&expr.Args[i]); err != nil {
+					return err
+				}
+			}
+			if expr.In != nil {
+				in := *expr.In
+				expr.In = &in
+				return bind(expr.In)
+			}
+			return nil
+		}
+		if err := bind(&filter); err != nil {
+			return records.Plan{}, err
+		}
+		parts = append(parts, filter)
 	}
 	plan, err := records.CompilePlan(info, records.AllOf(parts...), n.set.Search)
 	if err != nil {

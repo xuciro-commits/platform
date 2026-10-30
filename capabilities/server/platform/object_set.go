@@ -6,18 +6,19 @@ import (
 )
 
 type ObjectSet struct {
-	Object    string          `json:"object,omitempty"`
-	Interface string          `json:"interface,omitempty"`
-	IDs       []string        `json:"ids,omitempty"`
-	Filter    *Expr           `json:"filter,omitempty"`
-	Domain    json.RawMessage `json:"domain,omitempty"`
-	Search    string          `json:"search,omitempty"`
-	Around    *SearchAround   `json:"around,omitempty"`
-	Union     []ObjectSet     `json:"union,omitempty"`
-	Intersect []ObjectSet     `json:"intersect,omitempty"`
-	Subtract  []ObjectSet     `json:"subtract,omitempty"`
-	Archived  bool            `json:"archived,omitempty"`
-	AsOf      *BusinessTime   `json:"asOf,omitempty"`
+	Object     string               `json:"object,omitempty"`
+	Interface  string               `json:"interface,omitempty"`
+	IDs        []string             `json:"ids,omitempty"`
+	Filter     *Expr                `json:"filter,omitempty"`
+	Parameters map[string]ExprValue `json:"parameters,omitempty"`
+	Domain     json.RawMessage      `json:"domain,omitempty"`
+	Search     string               `json:"search,omitempty"`
+	Around     *SearchAround        `json:"around,omitempty"`
+	Union      []ObjectSet          `json:"union,omitempty"`
+	Intersect  []ObjectSet          `json:"intersect,omitempty"`
+	Subtract   []ObjectSet          `json:"subtract,omitempty"`
+	Archived   bool                 `json:"archived,omitempty"`
+	AsOf       *BusinessTime        `json:"asOf,omitempty"`
 }
 
 type SearchAround struct {
@@ -85,6 +86,14 @@ func (s ObjectSet) Check() error {
 		}
 		if set.Filter != nil && set.Filter.Kind != "boolean" {
 			return fmt.Errorf("object set filter must return boolean")
+		}
+		if len(set.Parameters) > 64 {
+			return fmt.Errorf("object set has too many parameters")
+		}
+		for name, value := range set.Parameters {
+			if len(name) > 256 || len(name) <= len("root.") || name[:len("root.")] != "root." || value.Kind == "" || value.Status != "value" && value.Status != "null" || value.Status == "value" && !json.Valid(value.Data) {
+				return fmt.Errorf("object set has an invalid root parameter")
+			}
 		}
 		if set.AsOf != nil && set.AsOf.All && set.AsOf.At != "" {
 			return fmt.Errorf("object set time selects either an instant or all versions")

@@ -123,7 +123,12 @@ func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, obje
 	}
 	var rootValues map[string]json.RawMessage
 	_ = json.Unmarshal(root, &rootValues)
+	selection := platform.ObjectSet{Object: set.Object, AsOf: set.BusinessTime}
 	domain := []any{}
+	bindRoot := func(field, root string, value string) {
+		selection.Filter = &platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", field), platform.ExprReference("text", "root."+root)}}
+		selection.Parameters = map[string]platform.ExprValue{"root." + root: platform.ExprPresent("text", value)}
+	}
 	if set.Binding != nil {
 		definition, ok := t.recordSetBinding(*set.Binding)
 		if !ok {
@@ -139,7 +144,7 @@ func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, obje
 				}
 			}
 			if query.By != "" {
-				domain = append(domain, []any{query.By, "=", id})
+				bindRoot(query.By, "id", id)
 			}
 		} else if link := definition.LinkType; link != nil {
 			if link.Storage == "edge" {
@@ -148,16 +153,16 @@ func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, obje
 					return result, err
 				}
 				result.Partial = partial
-				domain = append(domain, []any{"id", "in", ids})
+				selection.IDs = ids
 			} else if set.Direction == "forward" {
-				domain = append(domain, []any{link.Via, "=", id})
+				bindRoot(link.Via, "id", id)
 			} else {
 				var parent string
 				if field, ok := info.Field(link.Via); !ok || !field.ReadsAny(c.RolesIn(info.App)) {
 					return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection reference is withheld")
 				}
 				_ = json.Unmarshal(rootValues[link.Via], &parent)
-				domain = append(domain, []any{"id", "=", parent})
+				bindRoot("id", link.Via, parent)
 			}
 		}
 	} else if set.Direction == "reference" {
@@ -167,7 +172,7 @@ func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, obje
 		}
 		var target string
 		_ = json.Unmarshal(rootValues[set.From], &target)
-		domain = append(domain, []any{"id", "=", target})
+		bindRoot("id", set.From, target)
 	} else {
 		target, ok := lookup(set.Object)
 		index := slices.IndexFunc(target.Fields, func(field platform.FieldInfo) bool { return field.Ref == object && field.Inverse == set.From })
@@ -175,30 +180,42 @@ func (t *Tenant) readRecordSetFrom(store *records.Store, c platform.Caller, obje
 			return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Collection inverse is unavailable")
 		}
 		field := target.Fields[index]
-		domain = append(domain, []any{field.Name, "=", id})
+		bindRoot(field.Name, "id", id)
 	}
+	selection.Domain = platform.Raw(domain)
 	store.Lock()
 	et := store.Type(set.Object)
 	store.Unlock()
 	if et == nil {
 		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable")
 	}
-	visible, refusal := t.visibleForCallerIn(store, c, et, at)
+	reader, refusal := t.newSetRead(store, c, at)
 	if refusal != nil {
 		return result, refusal
 	}
-	view, hidden := viewOf(c.Member, et)
+	node, refusal := reader.prepare(selection, false, nil)
+	if refusal != nil {
+		return result, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection membership is unavailable")
+	}
+	read := reader.types[set.Object]
+	view, hidden := read.view, read.hidden
 	decisions := map[string]platform.AuthzDecision{}
 	var rows []any
 	if refusal := func() *kernel.Error {
 		store.Lock()
 		defer store.Unlock()
-		query := businessQuery(et.Info(), platform.Query{Domain: platform.Raw(domain), BusinessTime: set.BusinessTime}, c.Member, at)
-		raw, queryErr := store.MatchingQuery(et, query, nil)
-		values, visibleErr := store.MatchingQuery(view, query, visible)
-		if queryErr != nil || visibleErr != nil {
+		rawRead := *read
+		rawRead.view, rawRead.hidden, rawRead.visible = et, nil, nil
+		reader.types[set.Object] = &rawRead
+		rawPlan, rawErr := reader.compile(node)
+		reader.types[set.Object] = read
+		visiblePlan, visibleErr := reader.compile(node)
+		if rawErr != nil || visibleErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Collection membership is unavailable")
 		}
+		var raw, values []reflect.Value
+		store.VisitPlan(et, rawPlan.plans[0], nil, func(v reflect.Value) { raw = append(raw, v) })
+		store.VisitPlan(view, visiblePlan.plans[0], read.visible, func(v reflect.Value) { values = append(values, v) })
 		result.Partial = result.Partial || len(raw) != len(values)
 		walk := newAuthorizationWalk()
 		question.Type = set.Object

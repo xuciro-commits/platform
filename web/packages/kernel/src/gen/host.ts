@@ -2585,6 +2585,7 @@ export type ObjectSet = {
   interface?: string;
   ids?: string[];
   filter?: Expr;
+  parameters?: Record<string, Value>;
   domain?: unknown;
   search?: string;
   around?: SearchAround;
