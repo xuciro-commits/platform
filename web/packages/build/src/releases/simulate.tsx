@@ -90,15 +90,15 @@ function CandidateTestForm({ applicationId = "", processId = "", functionId = ""
   const rootRevision = kind==="app" ? application?.revision : kind === "object" ? object?.revision : kind === "flow" ? process?.revision : fn?.revision;
   const objectRevisions = objects.data?.records.map(record => [record.id, record.revision]);
   const candidateInputs = useQuery({
-    queryKey: [client.connection.token, client.connection.tenant, "candidate-inputs", kind, id, rootRevision, objectRevisions],
+    queryKey: [client.connection.token, client.connection.tenant, "candidate-inputs", kind, id, rootRevision, objectRevisions, branchId],
     queryFn: async () => {
       const roots = [{ kind, id }] as JointChoice[];
       const selection = kind === "app" ? await applicationDraftSelection(roots, async root => {
-        const closure = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", ownerDraft(root) satisfies Api.ReleaseDraftsRequest);
+        const closure = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", { ...ownerDraft(root), branch: branchId } satisfies Api.ReleaseDraftsRequest);
         if (!closure.ok) throw new Error(apiErrorMessage(closure.body) ?? t("Draft dependencies could not be read."));
         return closure.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
       }) : roots;
-      const request: Api.ReleasePreviewRequest = { drafts: selection.map(ownerDraft) };
+      const request: Api.ReleasePreviewRequest = { drafts: selection.map(ownerDraft), branch: branchId };
       const response = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", request);
       if (!response.ok) throw new Error(apiErrorMessage(response.body) ?? t("Candidate input fields are unavailable. Use advanced JSON or check the saved draft."));
       return response.body;

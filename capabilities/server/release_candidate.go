@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"fmt"
+	"platformkernel/kernel"
 	"platformserver/platform"
 	"platformserver/studio/build"
 	releaseowner "platformserver/studio/releases"
@@ -22,7 +23,18 @@ func (t *Tenant) releaseCandidateLocked(roots []platform.AssetRef) (platform.Rel
 	return t.candidateWithBindings(roots, available, roots)
 }
 
-func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id string) (releaseowner.ReleaseDraftClosure, error) {
+func (t *Tenant) draftWorldLocked(m platform.Member, branch string, now time.Time) (*Tenant, *kernel.Error) {
+	if branch == "" {
+		return t, nil
+	}
+	world, refusal := t.branchWorldLocked(m, branch, now)
+	if refusal != nil {
+		return nil, refusal
+	}
+	return world.view, nil
+}
+
+func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id, branch string, now time.Time) (releaseowner.ReleaseDraftClosure, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
@@ -32,7 +44,11 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+	world, refusal := t.draftWorldLocked(m, branch, now)
+	if refusal != nil {
+		return releaseowner.ReleaseDraftClosure{}, refusal
+	}
+	owner, ok := world.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return releaseowner.ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
@@ -46,7 +62,7 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	return releaseowner.ReleaseDraftClosure{Drafts: drafts}, nil
 }
 
-func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef) (releaseowner.ReleasePreview, error) {
+func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleasePreview{}, err
 	}
@@ -56,7 +72,11 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.releasePlannerLocked().PreviewWithActions(drafts, m)
+	world, refusal := t.draftWorldLocked(m, branch, now)
+	if refusal != nil {
+		return releaseowner.ReleasePreview{}, refusal
+	}
+	return world.releasePlannerLocked().PreviewWithActions(drafts, m)
 }
 
 func (t *Tenant) releasePlannerLocked() releaseowner.Planner {

@@ -4186,7 +4186,6 @@ register("zh-CN", {
   "Explore records of this type": "浏览此类型的记录",
   "No records match this set.": "没有符合该集合的记录。",
   "Showing the first {shown} of {total} records.": "显示前 {shown} 条，共 {total} 条记录。",
-  "Isolated tests run against main. Merge the branch first.": "隔离测试针对主线运行。请先合并分支。",
   "Saved to the branch.": "已保存到分支。",
   "This runs against main. Merge the branch first, then run it there.": "这将针对主线运行。请先合并分支，再到主线上运行。",
   "Archive on this branch…": "在此分支上归档…",

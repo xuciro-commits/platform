@@ -4055,6 +4055,7 @@ export type ReleaseDraftClosure = {
 export type ReleaseDraftsRequest = {
   kind: string;
   id: string;
+  branch?: string;
 };
 
 export type ReleaseEvaluationRequest = {
@@ -4104,6 +4105,7 @@ export type ReleasePreview = {
 
 export type ReleasePreviewRequest = {
   drafts: JointDraftRef[];
+  branch?: string;
 };
 
 export type ReleaseSaveRequest = {

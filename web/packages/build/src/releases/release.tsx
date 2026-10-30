@@ -3,6 +3,8 @@ import { Button, Card, Checkbox, ContextHelp, Disclosure, PageHeader, Panel, Pro
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { matchesResourceKind, refKey, resourceKinds, resourceRef } from "../projects/resources";
+import { branchRefusal } from "../branches/decisions";
+import { useCurrentBranch } from "../branches/current";
 import { diagnose } from "./diagnostics";
 import { useEffect, useRef, useState } from "react";
 
@@ -52,7 +54,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
   const systemScope = me.tenantId === "system";
   const builder = holds("build", "builder");
   const mayRelease = builder || holds("build", "publisher");
-  const scope = useApplicationScope();
+  const scope = useApplicationScope(), { id: branchId } = useCurrentBranch();
   const { open } = useApplicationWorkspace();
   const [kind, setKind] = useState<ReleaseKind>(initialKind);
   const [id, setId] = useState(initialID);
@@ -173,7 +175,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
     return <PageHeader title={t("Release review")} description={t("A builder or publisher role is required to review releases.")} />;
   }
   const readReferenced = async (from: JointChoice): Promise<JointChoice[]> => {
-    const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", ownerDraft(from) satisfies Api.ReleaseDraftsRequest);
+    const result = await client.call<Api.ReleaseDraftClosure>("POST", "/v1/releases/drafts/referenced", { ...ownerDraft(from), branch: branchId } satisfies Api.ReleaseDraftsRequest);
     if (!result.ok) throw new Error(apiErrorMessage(result.body) ?? t("Draft dependencies could not be read."));
     return result.body.drafts.map(draft => ({ kind: draft.kind as ReleaseKind, id: draft.id }));
   };
@@ -189,7 +191,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         const problem = releaseSelectionProblem(selection);
         if (problem) { setError(t(problem)); return; }
         setJoint(selection);
-        const request: Api.ReleasePreviewRequest = { drafts: selection.map(ownerDraft) };
+        const request: Api.ReleasePreviewRequest = { drafts: selection.map(ownerDraft), branch: branchId };
         const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", request);
         if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release review could not be loaded."));
         else { setReview(result.body); setCandidateKey(crypto.randomUUID()); }
@@ -412,7 +414,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", initialD
         </ul>
       </div>}
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
-        {!savedReview && <Button disabled={locked || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
+        {!savedReview && <Button disabled={locked || Boolean(savedID) || !!branchId} title={branchId ? branchRefusal("publish") : undefined} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>}
         {savedID && activeID !== savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
         {builder && savedID && functionNames.length > 0 && <div className="grid gap-2 rounded border border-border p-3">
           <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("Measured function evaluation")}</h3><ContextHelp title={t("Measured function evaluation")}>{t("Measured evaluations call configured models. Missing or failed reports do not prevent application delivery.")}</ContextHelp></div>

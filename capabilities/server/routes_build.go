@@ -121,7 +121,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, platform.ComputeSDK{Source: string(source)})
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Body: build.Process{}, Answer: ProcessDiagnostics{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: build.Process{}, Answer: ProcessDiagnostics{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var p build.Process
 		raw, err := io.ReadAll(io.LimitReader(r.Body, (128<<10)+1))
 		if err != nil || len(raw) > 128<<10 {
@@ -140,13 +140,18 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+		world, refusal := t.draftWorldLocked(m, r.URL.Query().Get("branch"), h.Now())
+		if refusal != nil {
+			Reply(w, nil, refusal)
+			return
+		}
+		owner, ok := world.app(build.ID).(build.ConstructionDrafts)
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
-		if refusal := owner.CheckProcess(platform.NewCaller(runtime{t}, m, build.ID, false, false), p); refusal != nil {
+		if refusal := owner.CheckProcess(platform.NewCaller(runtime{world}, m, build.ID, false, false), p); refusal != nil {
 			answer.Valid = false
 			message := refusal.Message
 			node := ""
@@ -213,7 +218,7 @@ func (h *Host) routesBuild(rt *routes) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		answer, err := t.ReferencedDrafts(m, request.Kind, request.ID)
+		answer, err := t.ReferencedDrafts(m, request.Kind, request.ID, request.Branch, h.Now())
 		if err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
@@ -238,7 +243,7 @@ func (h *Host) routesBuild(rt *routes) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		answer, err := t.PreviewReleaseDrafts(m, request.Drafts)
+		answer, err := t.PreviewReleaseDrafts(m, request.Drafts, request.Branch, h.Now())
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 			return

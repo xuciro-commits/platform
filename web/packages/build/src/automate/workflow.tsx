@@ -251,7 +251,7 @@ export function FlowEditor({ id }: { id: string }) {
     if (steps[0]) setChosen(steps[0].name);
   };
   const check = async () => {
-    const response = await client.call<{ valid: boolean; issues: { node?: string; message: string }[] }>("POST", "/v1/build/process/check", draft);
+    const response = await client.call<{ valid: boolean; issues: { node?: string; message: string }[] }>("POST", "/v1/build/process/check" + (process.branch ? `?branch=${encodeURIComponent(process.branch.id)}` : ""), draft);
     if (!response.ok) { setError(apiErrorMessage(response.body) ?? t("Workflow validation failed.")); return; }
     setValidation(response.body);
   };
@@ -336,7 +336,7 @@ export function FlowEditor({ id }: { id: string }) {
             <Button variant="ghost" onClick={() => setRunKey(crypto.randomUUID())}>{t("New run key")}</Button>{!installed?.manual && <p className="text-xs text-muted">{t("Save and publish a manual flow before running it here.")}</p>}{dirty && <p className="text-xs text-muted">{t("Save or undo draft changes before running the published version.")}</p>}
           </div></div> },
         { id: "history", title: t("Runs"), content: <div className="p-3">{run && <p className="mb-2 flex items-center gap-2 text-2xs text-muted">{run.id} · v{run.version}<Button variant="ghost" size="sm" type="button" className="text-primary" onClick={() => setRun(undefined)}>{t("Clear run overlay")}</Button></p>}{mountedDocks.history && <WorkflowRuns name={draft.name} versions={saved?.versions ?? draft.versions} onStepSelect={(name) => setChosen(name)} onRunSelect={setRun} />}</div> },
-        { id: "test", title: t("Test"), content: <div className="p-3">{mountedDocks.test && (process.branch ? <p className="text-xs text-muted">{t("Isolated tests run against main. Merge the branch first.")}</p> : draft.id && !dirty && synchronized ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => setChosen(name)} /> : <p className="text-xs text-muted">{t("Save the flow before isolated testing.")}</p>)}</div> },
+        { id: "test", title: t("Test"), content: <div className="p-3">{mountedDocks.test && (draft.id && !dirty && synchronized ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => setChosen(name)} /> : <p className="text-xs text-muted">{t("Save the flow before isolated testing.")}</p>)}</div> },
         { id: "release", title: t("Release"), content: <div className="p-3">{mountedDocks.release && (process.branch ? <p className="text-xs text-muted">{t("A branch is published by merging it. Use Save in the branch bar to review, propose and merge.")}</p> : draft.id && !dirty && synchronized ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the flow before release review.")}</p>)}</div> },
       ] }}>
       {run && !matchingRun && <Panel role="status" className="m-2 text-xs text-muted">{t("This run belongs to a different saved definition or the draft has changed. Inspect its recorded version in Executions.")}</Panel>}

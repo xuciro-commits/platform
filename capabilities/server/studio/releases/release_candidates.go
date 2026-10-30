@@ -42,6 +42,7 @@ type ReleasePreview struct {
 
 type ReleasePreviewRequest struct {
 	Drafts []build.JointDraftRef `json:"drafts"`
+	Branch string                `json:"branch,omitempty"`
 }
 
 type ReleaseSaveRequest struct {
@@ -53,8 +54,9 @@ type ReleaseSaveRequest struct {
 }
 
 type ReleaseDraftsRequest struct {
-	Kind platform.AssetKind `json:"kind"`
-	ID   string             `json:"id"`
+	Kind   platform.AssetKind `json:"kind"`
+	ID     string             `json:"id"`
+	Branch string             `json:"branch,omitempty"`
 }
 
 type ReleaseDraftClosure struct {
