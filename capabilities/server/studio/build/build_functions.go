@@ -95,7 +95,7 @@ func functionCallActions(roles []string) []platform.Action {
 func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		if !c.Staging() {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "AI functions require an accepted decision")
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, platform.FunctionNeedsDecision)
 		}
 		id := s.GetTarget().GetId()
 		run, exists := platform.Get[FunctionRun](c, id)

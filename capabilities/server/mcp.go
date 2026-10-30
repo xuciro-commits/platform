@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -28,4 +29,12 @@ func (t *Tenant) ProposeModelTool(m platform.Member, proposal platform.ModelTool
 	raw := platform.Raw(map[string]any{"owner": t.authorityOf(proposal.Action.Target), "action": proposal.Action.Schema, "target": proposal.Target, "payload": proposal.Payload, "rationale": "Proposed through MCP"})
 	_, refusal := t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: platform.AgentApp, Target: &pb.EntityRef{Type: platform.RunType, Id: proposal.ID}, Schema: &pb.SchemaRef{Name: platform.SchemaToolPropose, Version: 1}, IdempotencyKey: proposal.Key, Payload: raw}, at)
 	return refusal
+}
+
+func (t *Tenant) ModelToolSurface(m platform.Member) platform.AgentSurface {
+	return (hostView{t: t}).AgentSurface(m, "")
+}
+
+func (t *Tenant) AgentObjects(m platform.Member, op string, raw json.RawMessage, now time.Time) (platform.AgentObservation, *kernel.Error) {
+	return (hostView{t: t}).AgentObjects(m, op, raw, now)
 }

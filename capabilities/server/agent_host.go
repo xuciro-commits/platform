@@ -82,7 +82,7 @@ func (h hostView) AgentSurface(reader platform.Member, app string) platform.Agen
 		call = &platform.AgentAction{Owner: owner, Action: action}
 	}
 	for _, definition := range h.t.Definitions(reader) {
-		if definition.Ref.App != app || app == build.ID && (definition.Source == "code" || definition.Source == "system") && definition.Function == nil {
+		if app != "" && definition.Ref.App != app || definition.Ref.App == build.ID && (definition.Source == "code" || definition.Source == "system") && definition.Function == nil {
 			continue
 		}
 		switch {

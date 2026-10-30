@@ -1,10 +1,13 @@
 package aigateway
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"net/http"
+	"platformserver/engine/agents"
 	"platformserver/platform"
 	"slices"
 	"strings"
@@ -83,24 +86,25 @@ func toolName(schema string) string {
 	return strings.NewReplacer(".", "_", "/", "_", "#", "_").Replace(schema)
 }
 
+func (g Tools) derived(m platform.Member) map[string]platform.CompiledAgentTool {
+	return agents.DerivedTools(g.Host.ModelToolSurface(m), "")
+}
+
 func (g Tools) List(m platform.Member) []map[string]any {
 	tools := []map[string]any{}
-	entities := map[string]platform.EntityInfo{}
-	for _, info := range g.Host.Entities(m) {
-		entities[info.Type] = info
-	}
-	for _, a := range g.Host.Catalog(m) {
-		if platform.StaticControlAction(a) || strings.HasPrefix(a.Schema, "agent.run.") || a.Schema == platform.SchemaToolPropose {
-			continue
+	derived := g.derived(m)
+	for _, name := range slices.Sorted(maps.Keys(derived)) {
+		tool := derived[name]
+		properties := maps.Clone(tool.Tool.Properties)
+		required := slices.DeleteFunc(slices.Clone(tool.Tool.Required), func(field string) bool { return field == "rationale" })
+		if tool.Kind == "action" || tool.Kind == "function" {
+			properties["idempotencyKey"] = map[string]any{"type": "string", "description": "Reuse the same key when retrying this exact action after an unknown response"}
 		}
-		info := entities[a.Target]
-		schema := platform.ActionInputSchema(a, &info, append([]string{}, m.RolesIn(info.App)...))
-		properties := schema["properties"].(map[string]any)
-		properties["target"] = map[string]any{"type": "string", "description": "ID of the " + a.Target + " to act on (a new ID creates one)"}
-		properties["idempotencyKey"] = map[string]any{"type": "string", "description": "Reuse the same key when retrying this exact action after an unknown response"}
-		schema["required"] = append(schema["required"].([]string), "target")
-		tools = append(tools, map[string]any{"name": toolName(a.Schema), "title": a.Title, "description": a.Description,
-			"inputSchema": schema})
+		if required == nil {
+			required = []string{}
+		}
+		tools = append(tools, map[string]any{"name": name, "description": tool.Tool.Description,
+			"inputSchema": map[string]any{"type": "object", "properties": properties, "required": required}})
 	}
 	for _, read := range g.Host.ModelToolReads(m) {
 		tools = append(tools, map[string]any{"name": "read_" + toolName(read), "title": "Read " + read,
@@ -126,8 +130,24 @@ func (g Tools) Call(m platform.Member, name string, args map[string]any) map[str
 		}
 		return text(out, false)
 	}
+	tool, ok := g.derived(m)[name]
+	if !ok {
+		return text(map[string]string{"error": "not in your catalog"}, true)
+	}
+	switch tool.Kind {
+	case "objects", "aggregate":
+		op, raw := agents.ObjectRequest(tool, args)
+		out, err := g.Host.AgentObjects(m, op, raw, g.Now())
+		if err != nil {
+			return text(map[string]string{"error": err.Error()}, true)
+		}
+		return map[string]any{"content": []map[string]any{{"type": "text", "text": string(out.Body)}}, "isError": false}
+	case "action", "function":
+	default:
+		return text(map[string]string{"error": "not in your catalog"}, true)
+	}
 	catalog := g.Host.Catalog(m)
-	i := slices.IndexFunc(catalog, func(a platform.Action) bool { return toolName(a.Schema) == name })
+	i := slices.IndexFunc(catalog, func(a platform.Action) bool { return a.Schema == tool.Schema })
 	if i < 0 {
 		return text(map[string]string{"error": "not in your catalog"}, true)
 	}
@@ -135,23 +155,29 @@ func (g Tools) Call(m platform.Member, name string, args map[string]any) map[str
 	if platform.StaticControlAction(action) || strings.HasPrefix(action.Schema, "agent.run.") || action.Schema == platform.SchemaToolPropose {
 		return text(map[string]string{"error": "MCP cannot confirm proposals or control agent runs"}, true)
 	}
-	target, _ := args["target"].(string)
 	key, _ := args["idempotencyKey"].(string)
 	if key == "" {
 		b := make([]byte, 12)
 		rand.Read(b)
 		key = "mcp:" + base64.RawURLEncoding.EncodeToString(b)
 	}
-	payload := map[string]any{}
-	for k, v := range args {
-		if k != "target" && k != "idempotencyKey" {
-			payload[k] = v
-		}
-	}
 	id := "mcp-" + base64.RawURLEncoding.EncodeToString([]byte(m.ID+":"+key))
+	target, _ := args["target"].(string)
+	payload := map[string]any{}
+	if tool.Kind == "function" {
+		payload = maps.Clone(tool.Preset)
+		for _, field := range []string{"source", "question"} {
+			if value, ok := args[field]; ok {
+				payload[field] = value
+			}
+		}
+		target = id + ":f1"
+	} else if given, ok := args["payload"].(map[string]any); ok {
+		payload = given
+	}
 	err := g.Host.ProposeModelTool(m, platform.ModelToolProposal{ID: id, Key: key, Action: action, Target: target, Payload: platform.Raw(payload)}, g.Now())
 	if err != nil {
-		return text(map[string]string{"error": err.Error()}, true)
+		return text(map[string]string{"error": cmp.Or(err.Message, err.Error())}, true)
 	}
 	return text(map[string]any{"proposal": id, "state": "awaiting-confirmation", "simulation": "accepted", "confirmation": "#/agent-run?id=" + id}, false)
 }

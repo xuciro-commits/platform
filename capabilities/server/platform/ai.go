@@ -732,7 +732,13 @@ func (c Caller) RequestFunction(r *pb.ChangeRecord, request FunctionRequest) (Fu
 	if c.rt != nil {
 		return c.rt.RequestFunction(c, r, request)
 	}
-	return FunctionCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "AI functions require an accepted decision")
+	return FunctionCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, FunctionNeedsDecision)
+}
+
+const FunctionNeedsDecision = "AI functions require an accepted decision"
+
+func AwaitsDecision(err *kernel.Error) bool {
+	return err != nil && err.Code == pb.ErrorCode_ERROR_CODE_CONFLICT && err.Message == FunctionNeedsDecision
 }
 
 var functionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)

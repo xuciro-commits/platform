@@ -55,13 +55,16 @@ func (a *Agents) derived(run platform.AgentRunRecord, d *platform.CompiledAgent)
 	if reader == nil {
 		return nil
 	}
-	surface := a.host.AgentSurface(*reader, d.App)
+	focus, _, _ := strings.Cut(run.Ref, "/")
+	return DerivedTools(a.host.AgentSurface(*reader, d.App), focus)
+}
+
+func DerivedTools(surface platform.AgentSurface, focus string) map[string]platform.CompiledAgentTool {
 	out := map[string]platform.CompiledAgentTool{}
 	add := func(tool platform.CompiledAgentTool) {
 		tool.Tool.Name = toolName(tool.Tool.Name)
 		out[tool.Tool.Name] = tool
 	}
-	focus, _, _ := strings.Cut(run.Ref, "/")
 	entities := map[string]platform.EntityInfo{}
 	var objects []platform.EntityInfo
 	for _, info := range surface.Entities {
@@ -201,6 +204,11 @@ func (a *Agents) objects(run platform.AgentRunRecord, tool platform.CompiledAgen
 	if reader == nil {
 		return platform.AgentObservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A read needs a reader")
 	}
+	op, raw := ObjectRequest(tool, args)
+	return a.host.AgentObjects(*reader, op, raw, now)
+}
+
+func ObjectRequest(tool platform.CompiledAgentTool, args map[string]any) (string, json.RawMessage) {
 	set := map[string]any{"object": tool.Schema}
 	for _, key := range []string{"domain", "search"} {
 		if value, ok := args[key]; ok && value != nil {
@@ -209,20 +217,15 @@ func (a *Agents) objects(run platform.AgentRunRecord, tool platform.CompiledAgen
 	}
 	request := map[string]any{"set": set}
 	op := "load"
+	keys := []string{"sort", "limit", "offset"}
 	if tool.Kind == "aggregate" {
-		op = "aggregate"
-		for _, key := range []string{"groups", "measures"} {
-			if value, ok := args[key]; ok && value != nil {
-				request[key] = value
-			}
-		}
-	} else {
-		for _, key := range []string{"sort", "limit", "offset"} {
-			if value, ok := args[key]; ok && value != nil {
-				request[key] = value
-			}
+		op, keys = "aggregate", []string{"groups", "measures"}
+	}
+	for _, key := range keys {
+		if value, ok := args[key]; ok && value != nil {
+			request[key] = value
 		}
 	}
 	raw, _ := json.Marshal(request)
-	return a.host.AgentObjects(*reader, op, raw, now)
+	return op, raw
 }

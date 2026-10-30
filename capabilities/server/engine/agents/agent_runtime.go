@@ -768,7 +768,7 @@ func (a *Agents) toolDraft(c platform.Caller, run platform.AgentRunRecord, draft
 		if refusal := platform.ProbeDecision(actor, func(probe platform.Caller) *kernel.Error {
 			_, err := platform.Decide(probe, app, submission, now)
 			return err
-		}); refusal != nil && (draft.Kind != "function" || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT) {
+		}); refusal != nil && !(draft.Kind == "function" && platform.AwaitsDecision(refusal)) {
 			return draft, refusal
 		}
 	}

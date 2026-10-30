@@ -166,7 +166,8 @@ type ModelToolProposal struct {
 	Payload json.RawMessage
 }
 type ModelToolHost interface {
-	Entities(Member) []EntityInfo
+	ModelToolSurface(Member) AgentSurface
+	AgentObjects(Member, string, json.RawMessage, time.Time) (AgentObservation, *kernel.Error)
 	Catalog(Member) []Action
 	ModelToolReads(Member) []string
 	Read(Member, string, ...json.RawMessage) (any, *kernel.Error)
