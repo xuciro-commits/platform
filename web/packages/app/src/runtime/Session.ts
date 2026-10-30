@@ -411,7 +411,7 @@ export class PageSessionStore {
   private watchQuery(key: string, object: string, query: RecordQuery, changed: () => void) {
     const source = this.source, scope = source.scope, shape = JSON.stringify([object, query]);
     let active = true;
-    const stop = source.watchList?.(object, query, () => {
+    const stop = source.watchList?.(object, {...query, format: true}, () => {
       if (!active || this.disposed || this.source !== source || source.scope !== scope || this.querySignatures.get(key) !== shape) return;
       this.queries.delete(key); this.queryData.delete(key);this.interfaceData.delete(key);
       for (const slot of this.selectionKeys(key)) {
@@ -450,7 +450,7 @@ export class PageSessionStore {
     if (previous?.signature === signature) return previous.promise as Promise<T>;
     if (this.disposed) return Promise.reject(new Error("Page session ended"));
     const revision = source.revision;
-    const request = { signature, object, promise: Promise.resolve().then<RecordPageData|InterfaceRecordPageData>(() => interfaceSource ? source.namedInterfaceList?source.namedInterfaceList(interfaceSource.binding,query):Promise.reject(Error("Interface record read is unavailable")) : source.list(object, query)) };
+    const request = { signature, object, promise: Promise.resolve().then<RecordPageData|InterfaceRecordPageData>(() => interfaceSource ? source.namedInterfaceList?source.namedInterfaceList(interfaceSource.binding,query):Promise.reject(Error("Interface record read is unavailable")) : source.list(object, {...query, format: true})) };
     this.queries.set(key, request);
     request.promise = request.promise.then((page) => {
       if (!this.disposed && this.queries.get(key) === request && source === this.source && source.scope === scope) {
