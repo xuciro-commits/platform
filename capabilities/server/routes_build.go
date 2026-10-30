@@ -13,14 +13,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/studio/build"
 
 	"platformserver/platform"
@@ -34,8 +32,9 @@ type ActionCheckRequest struct {
 }
 
 type ActionConditionCheck struct {
-	Allowed bool   `json:"allowed"`
-	Message string `json:"message"`
+	Allowed     bool   `json:"allowed"`
+	NeedsInputs bool   `json:"needsInputs,omitempty"`
+	Message     string `json:"message"`
 }
 
 type ActionCheckResult struct {
@@ -62,96 +61,18 @@ func decodeReleaseBody(w http.ResponseWriter, r *http.Request, into any) bool {
 func (h *Host) routesBuild(rt *routes) {
 	h.routesConnectionKinds(rt)
 	h.routesPackageDrafts(rt)
-	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check an original published action's authorization and each submission condition for this member and target", Body: ActionCheckRequest{}, Answer: ActionCheckResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.handle(transport.Route{Pattern: "POST /v1/actions/{schema}/check", Summary: "Check any known action's authorization, state and each submission condition for this member and target; conditions that read unsupplied inputs are marked needsInputs and not counted", Body: ActionCheckRequest{}, Answer: ActionCheckResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request ActionCheckRequest
 		if decodeBodyLimit(r, &request, 64<<10) != nil || request.Target.Object == "" || request.Target.ID == "" {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an action target and optional inputs"))
 			return
 		}
-		schema := r.PathValue("schema")
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		owner := t.owner["action:"+schema]
-		if owner == nil || owner.Manifest().ID != build.ID {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND})
-			return
-		}
-		action, ok := owner.Manifest().Actions.Action(schema)
-		transition, found := t.modelTransition(platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: schema})
-		if !ok || !found || action.Target != request.Target.Object {
-			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND})
-			return
-		}
-		at := h.Now()
-		lang := t.Language(m, r)
-		caller := platform.NewCaller(runtime{t}, m, build.ID, false, false)
-		decision := t.authorizeFrom(t.records, caller, platform.AuthzRequest{Principal: m.ID, Tenant: t.ID, Kind: "action", Action: schema, Type: request.Target.Object, Record: request.Target.ID}, at, false)
-		result := ActionCheckResult{Allowed: decision.Allow, Conditions: []ActionConditionCheck{}, Authorization: &decision}
-		if !decision.Allow {
-			result.Message = t.i18n.SayInApp(build.ID, lang, decision.Reason)
-			WriteJSON(w, http.StatusOK, result)
-			return
-		}
-		raw, refusal := t.readRecordFrom(t.records, caller, request.Target.Object, request.Target.ID, at)
+		result, refusal := t.actionCheck(m, r.PathValue("schema"), request, h.Now(), t.Language(m, r))
 		if refusal != nil {
 			Reply(w, nil, refusal)
 			return
-		}
-		value, err := platform.DecodeValue(raw, 1<<20)
-		if err != nil {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Action target is unavailable"))
-			return
-		}
-		record := value.(map[string]any)
-		state, _ := record["state"].(string)
-		if !slices.Contains(transition.From, state) && (transition.Approval == nil || transition.Approval.Pending != state) {
-			result.Allowed = false
-			result.Message = "The action is unavailable while this record is " + state + "."
-		}
-		input := request.Inputs
-		if len(input) == 0 {
-			input = json.RawMessage("{}")
-		}
-		given, err := platform.DecodeValue(input, 64<<10)
-		inputs, valid := given.(map[string]any)
-		if err != nil || !valid {
-			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Action inputs must be one JSON object"))
-			return
-		}
-		result.Issues = platform.InputIssues(action.Payload, inputs)
-		if len(result.Issues) > 0 {
-			result.Allowed = false
-			if result.Message == "" {
-				result.Message = "Correct the highlighted fields."
-			}
-		}
-		if transition.Criteria != nil {
-			for _, condition := range transition.Criteria.Conditions {
-				check := ActionConditionCheck{Message: condition.Message}
-				outcome, refusal := platform.EvaluateRule(condition.Expr, transition.Criteria.Reads, caller, record, inputs, at, t.entity)
-				if refusal != nil {
-					check.Message = refusal.Message
-				} else {
-					check.Allowed = string(outcome.Value.Data) == "true"
-					if !check.Allowed {
-						for _, issue := range outcome.Reasons {
-							check.Message += " · " + issue.At + ": " + issue.Message
-						}
-					}
-				}
-				result.Conditions = append(result.Conditions, check)
-				if !check.Allowed {
-					result.Allowed = false
-					if result.Message == "" {
-						result.Message = check.Message
-					}
-				}
-			}
-		}
-		result.Issues = t.localizedFieldIssues(m, result.Issues, lang)
-		result.Message = t.i18n.SayInApp(build.ID, lang, result.Message)
-		for i := range result.Conditions {
-			result.Conditions[i].Message = t.i18n.SayInApp(build.ID, lang, result.Conditions[i].Message)
 		}
 		WriteJSON(w, http.StatusOK, result)
 	})

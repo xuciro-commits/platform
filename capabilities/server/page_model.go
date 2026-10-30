@@ -54,13 +54,13 @@ type PageModelResult struct {
 	SortLocked    bool                                         `json:"sortLocked,omitempty"`
 }
 
-func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.Transition, bool) {
+func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.Transition, string, bool) {
 	if ref.Kind != platform.AssetAction {
-		return platform.Transition{}, false
+		return platform.Transition{}, "", false
 	}
 	owner := t.owner["action:"+ref.Name]
 	if owner == nil || owner.Manifest().ID != ref.App {
-		return platform.Transition{}, false
+		return platform.Transition{}, "", false
 	}
 	for _, entity := range owner.Manifest().Entities {
 		if entity.Lifecycle == nil {
@@ -68,15 +68,15 @@ func (t *Tenant) modelTransition(ref platform.AssetRef) (platform.Transition, bo
 		}
 		for _, transition := range entity.Lifecycle.Transitions {
 			if entity.Type+"."+transition.Name == ref.Name {
-				return transition, true
+				return transition, entity.Lifecycle.Field, true
 			}
 		}
 	}
-	return platform.Transition{}, false
+	return platform.Transition{}, "", false
 }
 
 func (t *Tenant) modelCriteria(ref platform.AssetRef) (*platform.RuleCriteria, bool) {
-	transition, ok := t.modelTransition(ref)
+	transition, _, ok := t.modelTransition(ref)
 	if !ok || transition.Criteria == nil {
 		return nil, false
 	}

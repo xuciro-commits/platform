@@ -203,6 +203,7 @@ export type ActionCheckResult = {
 
 export type ActionConditionCheck = {
   allowed: boolean;
+  needsInputs?: boolean;
   message: string;
 };
 
