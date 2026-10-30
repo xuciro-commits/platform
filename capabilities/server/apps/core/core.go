@@ -132,7 +132,7 @@ func isValue(field, value string) platform.Expr {
 }
 
 func inactive() platform.Expr {
-	return platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("decimal", "active"), platform.ExprLiteralValue("decimal", 0)}}
+	return platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("boolean", "active"), platform.ExprLiteralValue("boolean", false)}}
 }
 
 func Entities() []platform.Entity {

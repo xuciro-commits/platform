@@ -134,12 +134,24 @@ func resolveDomainField(info platform.EntityInfo, name string) (domainField, err
 
 func (d domainField) reader(view string) (rules.Type, func(reflect.Value) rules.Value, error) {
 	text := rules.Type{Kind: "text"}
+	decimal := func(v reflect.Value) rules.Value {
+		x, ok := Comparable(d.read(v)).(float64)
+		if !ok || math.IsNaN(x) || math.IsInf(x, 0) {
+			return rules.Null("decimal")
+		}
+		return rules.FloatValue(x)
+	}
 	switch view {
 	case "search":
 		return text, func(v reflect.Value) rules.Value { return rules.TextValue("text", Searchable(d.read(v))) }, nil
 	case "text":
 		return text, func(v reflect.Value) rules.Value { return comparableText(Comparable(d.read(v))) }, nil
+	case "number":
+		return rules.Type{Kind: "decimal"}, decimal, nil
 	case "decimal":
+		if d.typ != "integer" && d.typ != "decimal" {
+			return rules.Type{Kind: "decimal"}, decimal, nil
+		}
 		return rules.Type{Kind: "decimal"}, func(v reflect.Value) rules.Value {
 			raw, err := json.Marshal(d.read(v))
 			if err != nil || string(raw) == "null" {
@@ -148,15 +160,49 @@ func (d domainField) reader(view string) (rules.Type, func(reflect.Value) rules.
 			return rules.Value{Kind: "decimal", Status: "value", Data: raw}
 		}, nil
 	case "":
+		switch d.typ {
+		case "boolean":
+			return rules.Type{Kind: "boolean"}, func(v reflect.Value) rules.Value {
+				value := d.read(v)
+				if value == nil {
+					return rules.Null("boolean")
+				}
+				b := reflect.ValueOf(value)
+				for b.Kind() == reflect.Pointer {
+					if b.IsNil() {
+						return rules.Null("boolean")
+					}
+					b = b.Elem()
+				}
+				if b.Bool() {
+					return rules.Value{Kind: "boolean", Status: "value", Data: json.RawMessage("true")}
+				}
+				return rules.Value{Kind: "boolean", Status: "value", Data: json.RawMessage("false")}
+			}, nil
+		case "money":
+			return rules.Type{Kind: "money"}, func(v reflect.Value) rules.Value {
+				value := d.read(v)
+				if value == nil {
+					return rules.Null("money")
+				}
+				raw, err := json.Marshal(value)
+				if err != nil || string(raw) == "null" {
+					return rules.Null("money")
+				}
+				return rules.Value{Kind: "money", Status: "value", Data: raw}
+			}, nil
+		case "date":
+			return rules.Type{Kind: "date"}, func(v reflect.Value) rules.Value {
+				value := d.read(v)
+				if value == nil || Comparable(value) == "" {
+					return rules.Null("date")
+				}
+				return rules.Present("date", value)
+			}, nil
+		}
 		switch d.class {
 		case classNumber:
-			return rules.Type{Kind: "decimal"}, func(v reflect.Value) rules.Value {
-				x, ok := Comparable(d.read(v)).(float64)
-				if !ok || math.IsNaN(x) || math.IsInf(x, 0) {
-					return rules.Null("decimal")
-				}
-				return rules.FloatValue(x)
-			}, nil
+			return rules.Type{Kind: "decimal"}, decimal, nil
 		case classTime:
 			return rules.Type{Kind: "datetime"}, func(v reflect.Value) rules.Value {
 				x, ok := Comparable(d.read(v)).(time.Time)
@@ -285,11 +331,11 @@ func lowerCondition(info platform.EntityInfo, raw json.RawMessage) (rules.Expr, 
 	var kind string
 	switch d.class {
 	case classNumber:
-		scalar, kind = rules.RefOf("decimal", name), "decimal"
+		scalar, kind = rules.RefOf("decimal", name+"#number"), "decimal"
 	case classTime:
 		scalar, kind = rules.RefOf("datetime", name), "datetime"
 	case classText:
-		scalar, kind = rules.RefOf("text", name), "text"
+		scalar, kind = rules.RefOf("text", name+"#text"), "text"
 	default:
 		scalar, kind = rules.RefOf("text", name+"#text"), "text"
 	}
