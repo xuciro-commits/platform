@@ -3,6 +3,7 @@ import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
 import { useAuthoringModel } from "./authoring-model";
+import { DeclaredByObject, declaringObject } from "./object-datasources";
 
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
@@ -41,7 +42,7 @@ export function DataSourceEditor({ id }: { id: string }) {
     failure: t("The data source could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       const { name, title, url, object, key, mapping, every, allowPrivate, header, path, connection, profile, entity, filter, since, dataset, stream } = draft;
-      return { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", stream: !!stream, object: dataset || stream ? "" : object, key: dataset || stream ? "" : key, mapping: dataset || stream ? [] : mapping, every: stream ? "" : every ?? "", dataset: stream ? "" : dataset ?? "",
+      return { name, title, url: url ?? "", allowPrivate: !!allowPrivate, header: header ?? "", path: path ?? "", stream: !!stream, object: dataset || stream ? "" : object, key: dataset || stream || declaringObject(entities, "source", draft.id) ? "" : key, mapping: dataset || stream || declaringObject(entities, "source", draft.id) ? [] : mapping, every: stream ? "" : every ?? "", dataset: stream ? "" : dataset ?? "",
         connection: connection ?? "", profile: profile ?? "json", entity: entity ?? "", filter: filter ?? "", since: since ?? "" };
     },
   });
@@ -50,6 +51,8 @@ export function DataSourceEditor({ id }: { id: string }) {
   const editTarget = (field?: string) => {
     if (targetDraft && host.can("build.object.edit")) transfer?.("", { view: "object-type", params: { id: targetDraft.id, ...(field ? { field } : {}), ...(application ? { application } : {}) } }, { returnLabel: t("Return to source") }, () => {});
   };
+  const owner = declaringObject(entities, "source", draft.id);
+  const ownerDraft = owner ? model.drafts.data?.records.find(record => !record.archived && `build.${record.name}` === owner.type) : undefined;
   const writable = (target?.fields ?? []).filter((field) => !field.readOnly);
   const setMapping = (mapping: Api.SourceField[]) => patch({ mapping });
   if (!holds("build", "builder", "integrator")) return <PageHeader title={t("Data sources")} description={t("Only a builder or integrator can edit data sources.")} />;
@@ -99,6 +102,7 @@ export function DataSourceEditor({ id }: { id: string }) {
         <label className={fieldClass}>{t("Target object")}<Select value={draft.object} onChange={(e) => patch({ object: e.target.value, mapping: [] })}><option value="">{t("Choose an object type")}</option>{draft.object && !target && <option value={draft.object}>{draft.object} · {t("Unavailable object type")}</option>}{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select></label>
         {target && <p className="text-xs text-muted">{targetDraft ? t("Saved model draft") : t("Published model")}</p>}
         {targetDraft && transfer && host.can("build.object.edit") && <Button size="sm" variant="ghost" className="w-fit" onClick={() => editTarget()}>{t("Edit target object")}</Button>}
+        {owner ? <DeclaredByObject object={owner} onOpen={ownerDraft && host.can("build.object.edit") && transfer ? () => transfer("", { view: "object-type", params: { id: ownerDraft.id, tab: "datasources", ...(application ? { application } : {}) } }, { returnLabel: t("Return to source") }, () => {}) : undefined} /> : <>
         <label className={fieldClass}>{t("Row id field")}<Input value={draft.key} placeholder="id" onChange={(e) => patch({ key: e.target.value })} /><span className="text-xs text-muted">{t("The row field whose value becomes the record id; the same id edits the existing record.")}</span></label>
         <div className="grid gap-2">
           <div className="grid grid-cols-[1fr_1fr_auto_auto] items-center gap-2 text-xs font-medium text-muted"><span>{t("Row field")}</span><span>{t("Object field")}</span><span>{t("Convert")}</span><span /></div>
@@ -123,7 +127,7 @@ export function DataSourceEditor({ id }: { id: string }) {
             {m.to && !field && <p role="alert" className="text-xs text-danger">{t("The mapped field is unavailable or read only. Choose a writable target field.")}</p>}
           </div>; })}
           <div><Button size="sm" disabled={!draft.object} onClick={() => setMapping([...(draft.mapping ?? []), { from: "", to: writable.find((f) => !(draft.mapping ?? []).some((m) => m.to === f.name))?.name ?? "", convert: "" }])}>{t("Add mapping")}</Button></div>
-        </div></>}
+        </div></>}</>}
       </Panel>
       {!draft.stream && <Panel title={t("Last pull")} className="grid min-w-0 content-start gap-2 lg:col-span-2">
         {!last ? <p className="text-xs text-muted">{t("Not pulled yet.")}</p> : <>

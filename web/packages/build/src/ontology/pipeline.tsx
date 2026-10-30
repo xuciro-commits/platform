@@ -12,6 +12,7 @@ import { Button, Checkbox, DataTable, FlowCanvas, Input, PageHeader, Panel, Sele
 import { PERIODS, periodLabel } from "../automate/workflow-model";
 import { cell } from "./dataset";
 import { useAuthoringModel } from "./authoring-model";
+import { DeclaredByObject, declaringObject } from "./object-datasources";
 
 type Measure = { fn: string; column?: string; to: string };
 type Step = { kind: string; columns?: string[]; from?: string; to?: string; column?: string; type?: string; op?: string; value?: string; formula?: string;formulaExpr?:import("@platform/kernel").Api.Expr; dataset?: string; match?: string; as?: string; outer?: boolean; desc?: boolean; measures?: Measure[] };
@@ -69,7 +70,7 @@ export function Pipelines() {
 }
 
 export function PipelineEditor({ id }: { id: string }) {
-  const { client , holds} = useHost(), { open } = useApplicationWorkspace();
+  const host = useHost(), { client, holds } = host, { open } = useApplicationWorkspace();
   const { entities, drafts: objects } = useAuthoringModel();
   const datasets = useReadQuery<{ records: DatasetRow[] }>("/v1/records/build.dataset?limit=200").data?.records ?? [];
   const enterprise = useReadQuery<Api.EnterpriseModel>("/v1/enterprise").data ?? { kinds: [], elements: [] };
@@ -78,7 +79,7 @@ export function PipelineEditor({ id }: { id: string }) {
     failure: t("The pipeline could not be saved or loaded. Your draft is still here."),
     payload: draft => {
       const { name, title, input, steps, expectations, outputDataset, outputObject, outputEnterprise, key, every } = draft;
-      return { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: key ?? "", every: every ?? "" };
+      return { name, title, input, steps, expectations, outputDataset: outputDataset ?? "", outputObject: outputObject ?? "", outputEnterprise: outputEnterprise ?? null, key: declaringObject(entities, "pipeline", draft.id) ? "" : key ?? "", every: every ?? "" };
     },
   });
   const [picked, setPicked] = useState<string>();
@@ -105,6 +106,8 @@ export function PipelineEditor({ id }: { id: string }) {
   const column = (label: string, field: "id" | "name" | "shortName" | "kind" | "parent" | "at" | "from" | "until", placeholder: string, help?: string) =>
     <label className={fieldClass}>{label}<Input value={ent[field] ?? ""} placeholder={placeholder} list="pipeline-columns" onChange={(e) => patchEnterprise({ [field]: e.target.value })} />{help && <span className="text-xs text-muted">{help}</span>}</label>;
   const target = entities.find((entity) => entity.type === draft.outputObject);
+  const owner = declaringObject(entities, "pipeline", draft.id);
+  const targetDraft = owner ? objects.data?.records.find(record => !record.archived && `build.${record.name}` === owner.type) : undefined;
   const others = datasets.filter((d) => d.id !== draft.input);
   const stepNodes: FlowNode[] = [
     { id: "in", kind: "dataset", label: input?.title || draft.input || t("Input dataset"), detail: t("The dataset this pipeline reads"), position: { x: 0, y: 0 } },
@@ -181,7 +184,7 @@ export function PipelineEditor({ id }: { id: string }) {
         </> : out === "dataset" ? <label className={fieldClass}>{t("Output dataset")}<Select value={draft.outputDataset ?? ""} onChange={(e) => patch({ outputDataset: e.target.value })}><option value="">{t("Choose a dataset")}</option>{datasets.filter((d) => d.id !== draft.input).map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</Select></label> : <>
           <label className={fieldClass}>{t("Output object")}<Select value={draft.outputObject ?? ""} onChange={(e) => patch({ outputObject: e.target.value })}>{entities.map((entity) => <option key={entity.type} value={entity.type}>{entity.title}</option>)}</Select>
             <span className="text-xs text-muted">{t("Columns are written to the object's fields of the same name; unknown columns are dropped.")}{target ? ` ${t("Fields")}: ${target.fields.filter((f) => !f.readOnly).map((f) => f.name).join(", ")}` : ""}</span></label>
-          <label className={fieldClass}>{t("Record id column")}<Input value={draft.key ?? ""} placeholder="matnr" onChange={(e) => patch({ key: e.target.value })} /><span className="text-xs text-muted">{t("The same id edits the existing record.")}</span></label>
+          {owner ? <DeclaredByObject object={owner} onOpen={targetDraft && host.can("build.object.edit") ? () => open({ view: "object-type", params: { id: targetDraft.id, tab: "datasources" } }) : undefined} /> : <label className={fieldClass}>{t("Record id column")}<Input value={draft.key ?? ""} placeholder="matnr" onChange={(e) => patch({ key: e.target.value })} /><span className="text-xs text-muted">{t("The same id edits the existing record.")}</span></label>}
         </>}
       </Panel>
       <Panel title={t("Steps")} className="grid min-w-0 content-start gap-2 lg:col-span-2"

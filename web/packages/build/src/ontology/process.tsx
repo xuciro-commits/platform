@@ -18,6 +18,7 @@ import { RuleCollectionsEditor } from "./RuleCollectionsEditor";
 import type { Api } from "@platform/kernel";
 import { TransactionEditor } from "./TransactionEditor";
 import { RecordSetsEditor } from "./record-sets";
+import { ObjectDataSourcesEditor } from "./object-datasources";
 import { ObjectProtocolsEditor } from "./object-protocols";
 import { BusinessVersionEditor } from "./business-version";
 import { authoringObject, useAuthoringModel } from "./authoring-model";
@@ -28,7 +29,7 @@ const objectGroups = [
   { id: "structure", title: "Object structure", sections: [{ id: "overview", title: "Overview" }, { id: "presentation", title: "Presentation" }, { id: "properties", title: "Properties" }, { id: "links", title: "Links" }, { id: "sets", title: "Record sets" }] },
   { id: "behavior", title: "Behavior", sections: [{ id: "lifecycle", title: "Lifecycle" }, { id: "actions", title: "Actions" }] },
   { id: "rules", title: "Rules and access", sections: [{ id: "constraints", title: "Business constraints" }, { id: "versions", title: "Business versions" }, { id: "protocols", title: "Protocols" }, { id: "permissions", title: "Permissions" }] },
-  { id: "data", title: "Data and preview", sections: [{ id: "data", title: "Data" }, { id: "preview", title: "Preview" }] },
+  { id: "data", title: "Data and preview", sections: [{ id: "datasources", title: "Data sources" }, { id: "data", title: "Data" }, { id: "preview", title: "Preview" }] },
 ] as const;
 type ObjectArea = typeof objectGroups[number]["id"];
 const objectSections = objectGroups.flatMap(group => [...group.sections]);
@@ -37,7 +38,7 @@ const sectionForLegacyTab: Record<Tab, ObjectArea> = {
   overview: "structure", presentation: "structure", properties: "structure", links: "structure", sets: "structure",
   lifecycle: "behavior", actions: "behavior",
   constraints: "rules", versions: "rules", protocols: "rules", permissions: "rules",
-  data: "data", preview: "data",
+  datasources: "data", data: "data", preview: "data",
 };
 export function ObjectTypeEditor({ id, initialField, initialAction, initialAccess, initialTab }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean; initialTab?: string }) {
   const call = useViewCall();
@@ -167,6 +168,7 @@ export function ObjectTypeEditor({ id, initialField, initialAction, initialAcces
         ]} />
       {process.access.length > 0 && <ScopeFields process={process} onChange={(scope) => change({ ...process, scope })} />}
     </div>,
+    datasources: <ObjectDataSourcesEditor process={process} parent={parent} refused={refused} onChange={change} />,
     data: <div className="grid max-w-4xl content-start gap-3 p-4"><ObjectLineage object={`build.${object.name}`} fields={process.fields.map((f) => ({ name: f.name, title: f.title || f.name }))} /></div>,
     preview: <div className="min-h-0 flex-1 overflow-auto p-3"><Preview object={object} process={process} action={action} /></div>,
   };

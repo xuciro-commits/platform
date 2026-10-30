@@ -5,7 +5,7 @@ import type { ObjectRecord } from "./object-model";
 import { actionDestinations, actionStateInput } from "./process-rules";
 
 type AuthoringObject = Pick<ObjectRecord, "name" | "title" | "fields"> & Partial<Pick<ObjectRecord,
-  "states" | "actions" | "implements" | "extends" | "constraints" | "sets" | "versioning" | "versionPins"
+  "states" | "actions" | "implements" | "extends" | "constraints" | "sets" | "versioning" | "versionPins" | "datasources"
 >> & { plural?: string; description?: string };
 export type AuthoringAction = { schema: string; title: string; target: string; draft?: boolean };
 
@@ -18,7 +18,7 @@ export function authoringObject(record: AuthoringObject, installed?: EntityInfo)
     display: installed?.display || fields.find(field => field.type === "text")?.name || "id",
     standard: ["create", "edit", "archive"],
     implements: record.implements, extends: record.extends,
-    constraints: record.constraints, sets: record.sets, versioning: record.versioning, versionPins: record.versionPins,
+    constraints: record.constraints, sets: record.sets, versioning: record.versioning, versionPins: record.versionPins, datasources: record.datasources,
     fields: [
       ...fields.map((field): Api.FieldInfo => ({
         name: field.name, title: field.title, type: field.type as Api.FieldInfo["type"],
