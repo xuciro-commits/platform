@@ -1,10 +1,10 @@
 import { HostContext, type Host } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { TrialScope, notify, t } from "@platform/ui";
+import { notify, t } from "@platform/ui";
 import { useContext, useMemo, useRef, type ReactNode } from "react";
 import { resourceKinds } from "../projects/resources";
 import { BranchFailure, resourcePath, useBranchActions } from "./api";
-import { selectedBranch, useCurrentBranch } from "./current";
+import { selectedBranch } from "./current";
 
 const draftTypes = new Set([...resourceKinds.map(kind => kind.type), "build.app"]);
 const onMain = new Set(["publish", "compile", "migrate"]);
@@ -16,7 +16,7 @@ export function branchRefusal(verb: string) {
 
 export function BranchDecisions({ children }: { children: ReactNode }) {
   const host = useContext(HostContext);
-  const actions = useBranchActions(), latest = useRef(actions), { id: branch } = useCurrentBranch();
+  const actions = useBranchActions(), latest = useRef(actions);
   latest.current = actions;
   const value = useMemo<Host | null>(() => {
     if (!host) return null;
@@ -45,8 +45,7 @@ export function BranchDecisions({ children }: { children: ReactNode }) {
         return false;
       }
     };
-    return { ...host, decide };
+    return { ...host, decide, simulationBranch: () => host.holds("build", "builder") ? selectedBranch(host.client) : undefined };
   }, [host]);
-  const notice = branch && host?.holds("build", "builder") ? t("Trials run against main, not this branch. A resource that exists only on the branch cannot be tried.") : undefined;
-  return <HostContext.Provider value={value}><TrialScope.Provider value={notice}>{children}</TrialScope.Provider></HostContext.Provider>;
+  return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
 }

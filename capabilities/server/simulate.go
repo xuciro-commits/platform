@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
+func (t *Tenant) Simulate(member platform.Member, as, branch string, s *pb.Submission, now time.Time) (trialowner.Simulation, *kernel.Error) {
 	if err := t.admits(member); err != nil {
 		return trialowner.Simulation{}, err
 	}
@@ -30,11 +30,13 @@ func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, n
 		return trialowner.Simulation{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	m := member
-	if as != "" && as != member.ID {
+	if as != "" && as != member.ID || branch != "" {
 		caller := platform.NewCaller(runtime{t}, member, build.ID, false, false)
 		if refusal := authorizationRefusal(t.authorizeNative(caller, "POST /v1/simulate", "action", []string{build.Builder}, true)); refusal != nil {
 			return trialowner.Simulation{}, refusal
 		}
+	}
+	if as != "" && as != member.ID {
 		other, ok := t.member(as)
 		if !ok {
 			return trialowner.Simulation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "{member} is not a member here", as)
@@ -54,7 +56,19 @@ func (t *Tenant) Simulate(member platform.Member, as string, s *pb.Submission, n
 	if s.GetIdempotencyKey() == "" {
 		s.IdempotencyKey = "simulate"
 	}
-	draft := t.newStagedDecision()
+	var draft *stagedDecision
+	if branch == "" {
+		draft = t.newStagedDecision()
+	} else {
+		world, refusal := t.branchWorldLocked(member, branch, now)
+		if refusal != nil {
+			return trialowner.Simulation{}, refusal
+		}
+		draft = t.newStagedDecisionOn(world.view.records.ForkRecords())
+		if build.BranchDraftType(s.GetTarget().GetType()) {
+			s.ExpectedRevision = nil
+		}
+	}
 	draft.simulation = true
 	_, refusal := decideAccepted(a, draft, m, s, now)
 	out := trialowner.Simulation{Changes: []trialowner.SimulatedChange{}}

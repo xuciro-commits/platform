@@ -87,6 +87,7 @@ export type Host = {
   applications?: ApplicationUIInfo[];
   source: RecordSource;
   refresh?:()=>Promise<void>;
+  simulationBranch?: () => string | undefined;
   opens: Map<string, string>;
 };
 

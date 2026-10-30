@@ -102,6 +102,10 @@ func (d *stagedDecision) FailDecision(err *kernel.Error) {
 }
 
 func (t *Tenant) newStagedDecision() *stagedDecision {
+	return t.newStagedDecisionOn(t.records.ForkRecords())
+}
+
+func (t *Tenant) newStagedDecisionOn(base *records.Store) *stagedDecision {
 	sequences := t.sequences.Clone()
 	notices, noticeSeq := t.notices.State()
 	t.opsMu.Lock()
@@ -113,7 +117,7 @@ func (t *Tenant) newStagedDecision() *stagedDecision {
 	connectors := t.services.Kernel.Connectors()
 	connectors.Restore(descriptors, marks)
 	before, _ := platform.CanonicalDigest(notices)
-	return &stagedDecision{simulation: t.simulation, tenant: t, records: t.records.ForkRecords(),
+	return &stagedDecision{simulation: t.simulation, tenant: t, records: base,
 		logs: map[*platform.Ledger]platform.ChangeLog{}, sequences: sequences,
 		allocated: map[string]int{}, sequenceBases: map[string]int{}, active: map[string]bool{},
 		notices: notices, noticeBase: noticeSeq, noticeSeq: noticeSeq, noticeBefore: before,

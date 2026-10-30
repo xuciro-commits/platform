@@ -333,14 +333,14 @@ func (h *Host) routesBuild(rt *routes) {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/simulate", Summary: "Try an authorized action as yourself in a private decision; only a builder may choose another member",
-		Query: []transport.Param{{Name: "as", Description: "the member it is tried as; empty: yourself; another member requires a builder"}}, Body: []byte{}, Answer: trialowner.Simulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		Query: []transport.Param{{Name: "as", Description: "the member it is tried as; empty: yourself; another member requires a builder"}, {Name: "branch", Description: "a branch id: the action is tried in that branch's staged world, where resources that exist only on the branch can be tried; requires a builder"}}, Body: []byte{}, Answer: trialowner.Simulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		s := &pb.Submission{}
 		if protojson.Unmarshal(body, s) != nil || s.GetSchema() == nil || s.GetTarget() == nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "a submission with a schema and a target is required"})
 			return
 		}
-		out, err := t.Simulate(m, r.URL.Query().Get("as"), s, h.Now())
+		out, err := t.Simulate(m, r.URL.Query().Get("as"), r.URL.Query().Get("branch"), s, h.Now())
 		if err != nil {
 			Reply(w, nil, err)
 			return

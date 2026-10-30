@@ -196,27 +196,22 @@ func branchDraftSet(owner build.ConstructionDrafts, actions []branchAction) []bu
 	return drafts
 }
 
-func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions []branchAction, now time.Time) (BranchGraphCheck, *stagedCandidate) {
-	graph := BranchGraphCheck{Messages: []string{}}
-	fail := func(format string, args ...any) (BranchGraphCheck, *stagedCandidate) {
-		graph.Messages = append(graph.Messages, fmt.Sprintf(format, args...))
-		return graph, nil
-	}
+func (t *Tenant) stageViewLocked(stage branchStage, now time.Time) (*Tenant, error) {
 	draft := stage.draft
 	if stage.receipt != nil {
 		if refusal := draft.answerRequests(now); refusal != nil {
-			return fail("The merged resources cannot be accepted together: %s", refusal.Message)
+			return nil, fmt.Errorf("The merged resources cannot be accepted together: %s", refusal.Message)
 		}
 		if refusal := draft.stageObservers(); refusal != nil {
-			return fail("The merged resources cannot be accepted together: %s", refusal.Message)
+			return nil, fmt.Errorf("The merged resources cannot be accepted together: %s", refusal.Message)
 		}
 		if _, err := draft.batchResult(build.ID, stage.receipt.GetSubmission(), stage.receipt, now); err != nil {
-			return fail("The merged resources do not form one valid accepted result: %s", err)
+			return nil, fmt.Errorf("The merged resources do not form one valid accepted result: %s", err)
 		}
 	}
 	view, err := t.assetInstallationView(draft.records)
 	if err != nil {
-		return fail("The staged definition graph could not be assembled: %s", err)
+		return nil, fmt.Errorf("The staged definition graph could not be assembled: %s", err)
 	}
 	t.opsMu.Lock()
 	descriptors, marks := t.connectors.kernel.State()
@@ -226,6 +221,56 @@ func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions 
 	}
 	view.connectors = newConnectorRoster(t.services.Kernel)
 	view.connectors.kernel.Restore(descriptors, marks)
+	return view, nil
+}
+
+type branchWorld struct {
+	stage   branchStage
+	actions []branchAction
+	view    *Tenant
+}
+
+func (t *Tenant) branchWorldLocked(m platform.Member, id string, now time.Time) (branchWorld, *kernel.Error) {
+	var world branchWorld
+	branch, refusal := t.readBranchLocked(m, id, now)
+	if refusal != nil {
+		return world, refusal
+	}
+	if branch.State != build.BranchOpen && branch.State != build.BranchProposed {
+		return world, branchRefuse("The branch is {state}; only an open or proposed branch has a staged world", branch.State)
+	}
+	plans, refusal := t.planBranchLocked(m, branch, nil, now)
+	if refusal != nil {
+		return world, refusal
+	}
+	if conflicts := conflictsOf(plans); len(conflicts) > 0 {
+		return world, branchRefuse("The branch conflicts with main in {count} resources; rebase it first", len(conflicts))
+	}
+	actions, refusal := t.branchActions(plans)
+	if refusal != nil {
+		return world, refusal
+	}
+	stage := t.stageBranchLocked(m, branch.ID, actions, now)
+	if i := slices.IndexFunc(stage.resources, func(c BranchResourceCheck) bool { return !c.Accepted }); i >= 0 {
+		return world, branchRefuse("{resource} would be refused in the merged world: {message}", stage.resources[i].Type+"/"+stage.resources[i].ID, stage.resources[i].Message)
+	}
+	view, err := t.stageViewLocked(stage, now)
+	if err != nil {
+		return world, branchRefuse("{reason}", err.Error())
+	}
+	return branchWorld{stage: stage, actions: actions, view: view}, nil
+}
+
+func (t *Tenant) stageGraphLocked(m platform.Member, stage branchStage, actions []branchAction, now time.Time) (BranchGraphCheck, *stagedCandidate) {
+	graph := BranchGraphCheck{Messages: []string{}}
+	fail := func(format string, args ...any) (BranchGraphCheck, *stagedCandidate) {
+		graph.Messages = append(graph.Messages, fmt.Sprintf(format, args...))
+		return graph, nil
+	}
+	view, err := t.stageViewLocked(stage, now)
+	if err != nil {
+		return fail("%s", err.Error())
+	}
 	owner, ok := view.app(build.ID).(build.ConstructionDrafts)
 	if !ok {
 		return fail("The staged definition graph has no builder")
