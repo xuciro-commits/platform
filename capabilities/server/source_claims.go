@@ -34,6 +34,7 @@ type RecordFieldProvenance struct {
 	Connector  string          `json:"connector,omitempty"`
 	SourceTime *time.Time      `json:"sourceTime,omitempty"`
 	At         *time.Time      `json:"at,omitempty"`
+	By         string          `json:"by,omitempty"`
 }
 
 type RecordProvenance struct {
@@ -97,7 +98,7 @@ func (t *Tenant) selectedSourceValue(typ, id, attribute, strategy string, histor
 		for _, field := range change.Fields {
 			if field.Field == attribute {
 				at := change.At
-				edit = RecordFieldProvenance{Value: field.After, Kind: "edit", At: &at}
+				edit = RecordFieldProvenance{Value: field.After, Kind: "edit", At: &at, By: change.By}
 				break
 			}
 		}

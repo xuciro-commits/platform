@@ -195,14 +195,6 @@ func (h *Host) routesBuild(rt *routes) {
 		answer.PromotedTo = h.promotionsOf(t.ID, answer.Preview.CandidateID)
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(transport.Route{Pattern: "GET /v1/releases/drafts/changes", Summary: "Read saved authoring changes against original retained publications without creating a candidate", Answer: releaseowner.ReleaseDraftChanges{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		answer, err := t.SavedDraftChanges(m, r.URL.Query().Get("application"), r.URL.Query().Get("type"), r.URL.Query().Get("id"))
-		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
-	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/releases/drafts/referenced", Summary: "Builder-only list of the saved record drafts a chosen draft depends on and that are not installed yet", Body: releaseowner.ReleaseDraftsRequest{}, Answer: releaseowner.ReleaseDraftClosure{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
 		if readErr != nil || len(body) > 4096 {
@@ -228,7 +220,7 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
-	rt.authorized(transport.Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition", Body: releaseowner.ReleasePreviewRequest{}, Answer: releaseowner.ReleasePreview{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	rt.authorized(transport.Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of up to 128 saved drafts with their installed development definitions", Body: releaseowner.ReleasePreviewRequest{}, Answer: releaseowner.ReleasePreview{}}, build.ID, []string{build.Builder}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, readErr := io.ReadAll(io.LimitReader(r.Body, releaseCommandBytes+1))
 		if readErr != nil || len(body) > releaseCommandBytes {
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
@@ -237,11 +229,8 @@ func (h *Host) routesBuild(rt *routes) {
 		var request releaseowner.ReleasePreviewRequest
 		decoder := json.NewDecoder(strings.NewReader(string(body)))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&request); err != nil ||
-			(request.ID == "" && len(request.Drafts) == 0) ||
-			(request.ID != "" && len(request.Drafts) > 0) ||
-			len(request.Drafts) > build.JointDraftLimit {
-			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "one draft kind and id, or up to 128 joint drafts, are required"})
+		if err := decoder.Decode(&request); err != nil || len(request.Drafts) == 0 || len(request.Drafts) > build.JointDraftLimit {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "between 1 and 128 drafts are required"})
 			return
 		}
 		var trailing any
@@ -249,19 +238,7 @@ func (h *Host) routesBuild(rt *routes) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		var answer releaseowner.ReleasePreview
-		var err error
-		if request.ApplicationDrafts {
-			if request.Kind != platform.AssetApp || request.ID == "" || len(request.Drafts) > 0 {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			answer, err = t.PreviewApplicationDrafts(m, request.ID)
-		} else if len(request.Drafts) > 0 {
-			answer, err = t.PreviewReleaseDrafts(m, request.Drafts)
-		} else {
-			answer, err = t.PreviewRelease(m, request.Kind, request.ID)
-		}
+		answer, err := t.PreviewReleaseDrafts(m, request.Drafts)
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 			return

@@ -46,10 +46,6 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	return releaseowner.ReleaseDraftClosure{Drafts: drafts}, nil
 }
 
-func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id string) (releaseowner.ReleasePreview, error) {
-	return t.PreviewReleaseDrafts(m, []build.JointDraftRef{{Kind: kind, ID: id}})
-}
-
 func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef) (releaseowner.ReleasePreview, error) {
 	if err := t.admits(m); err != nil {
 		return releaseowner.ReleasePreview{}, err
@@ -61,27 +57,6 @@ func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDra
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.releasePlannerLocked().PreviewWithActions(drafts, m)
-}
-
-func (t *Tenant) PreviewApplicationDrafts(m platform.Member, id string) (releaseowner.ReleasePreview, error) {
-	if err := t.admits(m); err != nil {
-		return releaseowner.ReleasePreview{}, err
-	}
-	if !m.Holds(build.ID, build.Builder) {
-		return releaseowner.ReleasePreview{}, fmt.Errorf("Only a builder can inspect application drafts")
-	}
-	t.mu.Lock()
-	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
-	if !ok {
-		t.mu.Unlock()
-		return releaseowner.ReleasePreview{}, fmt.Errorf("Construction owner is unavailable")
-	}
-	drafts, err := owner.ApplicationDrafts(id)
-	t.mu.Unlock()
-	if err != nil {
-		return releaseowner.ReleasePreview{}, err
-	}
-	return t.PreviewReleaseDrafts(m, drafts)
 }
 
 func (t *Tenant) releasePlannerLocked() releaseowner.Planner {

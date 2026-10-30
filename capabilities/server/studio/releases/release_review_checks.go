@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"platformserver/platform"
-	"platformserver/studio/build"
 
 	"time"
 )
@@ -49,10 +48,6 @@ type SavedReleaseReview struct {
 	From                 string                   `json:"from,omitempty"`
 	PromotedAt           time.Time                `json:"promotedAt,omitzero"`
 	PromotedTo           []PromotionTarget        `json:"promotedTo,omitempty"`
-}
-
-type ReleaseDraftChanges struct {
-	Changes []build.DraftChange `json:"changes"`
 }
 
 func (s *Store) Page(offset, limit int, application *platform.AssetRef) (ReleasePage, error) {

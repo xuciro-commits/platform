@@ -1790,24 +1790,6 @@ export type Draft = {
   step: number;
 };
 
-export type DraftChange = {
-  ref: AssetRef;
-  type: string;
-  id: string;
-  title: string;
-  variant?: string;
-  published: boolean;
-  changed: Stamp;
-  fields: DraftChangeField[];
-  diagnostic?: string;
-};
-
-export type DraftChangeField = {
-  name: string;
-  before?: unknown;
-  after?: unknown;
-};
-
 export type Edge = {
   periods?: Period[];
   structure: string;
@@ -3904,6 +3886,7 @@ export type RecordFieldProvenance = {
   connector?: string;
   sourceTime?: string;
   at?: string;
+  by?: string;
 };
 
 export type RecordPage = {
@@ -4065,10 +4048,6 @@ export type ReleaseAsset = {
   body: unknown;
 };
 
-export type ReleaseDraftChanges = {
-  changes: DraftChange[];
-};
-
 export type ReleaseDraftClosure = {
   drafts: JointDraftRef[];
 };
@@ -4124,10 +4103,7 @@ export type ReleasePreview = {
 };
 
 export type ReleasePreviewRequest = {
-  applicationDrafts?: boolean;
-  kind?: string;
-  id?: string;
-  drafts?: JointDraftRef[];
+  drafts: JointDraftRef[];
 };
 
 export type ReleaseSaveRequest = {

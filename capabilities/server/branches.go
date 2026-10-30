@@ -651,7 +651,12 @@ func (t *Tenant) branchActions(plans []resourcePlan) ([]branchAction, *kernel.Er
 	}
 	slices.SortStableFunc(actions, func(a, b branchAction) int {
 		order := func(x branchAction) int {
-			if x.action == "archive" {
+			switch {
+			case x.action == "archive":
+				return 3
+			case x.plan.Type == build.AppType:
+				return 2
+			case x.action == "edit":
 				return 1
 			}
 			return 0

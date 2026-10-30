@@ -41,10 +41,7 @@ type ReleasePreview struct {
 }
 
 type ReleasePreviewRequest struct {
-	ApplicationDrafts bool                  `json:"applicationDrafts,omitempty"`
-	Kind              platform.AssetKind    `json:"kind,omitempty"`
-	ID                string                `json:"id,omitempty"`
-	Drafts            []build.JointDraftRef `json:"drafts,omitempty"`
+	Drafts []build.JointDraftRef `json:"drafts"`
 }
 
 type ReleaseSaveRequest struct {
