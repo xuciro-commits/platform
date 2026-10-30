@@ -272,6 +272,14 @@ func (h *Host) routesRecords(rt *routes) {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	h.objectSetRoutes(rt)
+	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}/provenance", Summary: "Visible field sources for an accepted record", Answer: RecordProvenance{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		provenance, err := t.recordProvenance(m, r.PathValue("type"), r.PathValue("id"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, provenance)
+	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}", Summary: "A record with its history and related records", Answer: RecordView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.recordOf(m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {

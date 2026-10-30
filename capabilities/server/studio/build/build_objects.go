@@ -257,6 +257,9 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := CheckFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
+	if err := checkDataSources(o); err != nil {
+		return err
+	}
 	if err := CheckEnterpriseUse(o); err != nil {
 		return err
 	}
@@ -300,6 +303,38 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 		return err
 	}
 	return checkAccess(o)
+}
+
+func checkDataSources(o Object) error {
+	seen := map[string]bool{}
+	fields := map[string]bool{}
+	strategies := map[string]string{}
+	for _, field := range o.Fields {
+		fields[field.Name] = !field.ReadOnly && field.AliasOf == "" && field.Formula == "" && field.FormulaExpr == nil
+	}
+	for _, source := range o.DataSources {
+		identity := source.Kind + "/" + source.Source
+		if source.Kind != "source" && source.Kind != "pipeline" || source.Source == "" || source.Key == "" || len(source.Columns) == 0 || seen[identity] {
+			return fmt.Errorf("data source needs a unique source or pipeline, key column, and mapped columns")
+		}
+		seen[identity] = true
+		columns := map[string]bool{}
+		attributes := map[string]bool{}
+		for _, column := range source.Columns {
+			strategy := column.Strategy
+			if strategy == "" {
+				strategy = "edits-win"
+			}
+			if column.Column == "" || column.Attribute == "" || !fields[column.Attribute] || columns[column.Column] || attributes[column.Attribute] ||
+				column.Attribute == "id" || !slices.Contains([]string{"edits-win", "latest-source-time", "edit-only"}, strategy) || strategies[column.Attribute] != "" && strategies[column.Attribute] != strategy {
+				return fmt.Errorf("data source %s has an unknown, repeated or invalid column mapping", identity)
+			}
+			columns[column.Column] = true
+			attributes[column.Attribute] = true
+			strategies[column.Attribute] = strategy
+		}
+	}
+	return nil
 }
 
 func (b *Build) checkShape(o Object) error {
@@ -412,6 +447,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 		creation, creationError = compileLegacyNumbering(o)
 	}
 	entity := CompileObjectShape(o)
+	entity.DataSources = slices.Clone(o.DataSources)
 	model := entity.Model
 	std, scope, roles := access(o)
 	entity.Standard, entity.Scope = std, scope

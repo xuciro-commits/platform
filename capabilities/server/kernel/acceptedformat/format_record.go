@@ -16,7 +16,11 @@ import (
 
 const RecordVersion = 5
 
+const RecordClaimVersion = 6
+
 type Record struct {
+	Claims         []SourceClaim                `json:"claims,omitempty"`
+	Origin         string                       `json:"origin,omitempty"`
 	Unique         []journal.StateUnique        `json:"unique,omitempty"`
 	Definition     *platform.DecisionDefinition `json:"definition,omitempty"`
 	SchemaVersion  *platform.SchemaVersion      `json:"schemaVersion,omitempty"`
@@ -62,7 +66,7 @@ func DecodeRecord(raw []byte) (Record, *pb.ChangeRecord, error) {
 		return result, nil, fmt.Errorf("accepted receipt: %w", err)
 	}
 	sub := receipt.GetSubmission()
-	if result.Version < 1 || result.Version > RecordVersion || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > RecordClaimVersion || result.Tenant == "" || result.App == "" ||
 		sub == nil || sub.GetTenantId() != result.Tenant || sub.GetAuthority() != result.App ||
 		sub.GetIdempotencyKey() == "" || sub.GetPrincipalId() == "" || receipt.GetChangeId() == "" ||
 		receipt.GetRecordedTime() == nil || receipt.GetValidTime() == nil ||
@@ -89,19 +93,22 @@ func DecodeRecord(raw []byte) (Record, *pb.ChangeRecord, error) {
 			}
 		}
 	}
+	if err := ValidateSourceClaims(result.Claims, result.Origin, result.Version == RecordClaimVersion, result.Version < RecordClaimVersion); err != nil {
+		return result, nil, err
+	}
 	verb, ok := strings.CutPrefix(sub.GetSchema().GetName(), result.Row.Type+".")
 	standard := verb == "create" || verb == "edit" || verb == "archive"
 	publication := (result.Version == 3 && result.Kind == "" || result.Version == 5 && result.Kind == "publication") && verb == "publish"
 	pureTransition := (result.Version == 4 || result.Version == 5) && !standard && verb != "publish" && result.Kind == "pure-transition"
 	legacy := result.Version == 1 && (verb == "create" || verb == "edit")
 	if !ok || !(legacy && result.Kind == "" ||
-		standard && (result.Version == 2 && result.Kind == "" || result.Version == 5 && result.Kind == "record") || publication || pureTransition) {
+		standard && (result.Version == 2 && result.Kind == "" || (result.Version == RecordVersion || result.Version == RecordClaimVersion) && result.Kind == "record") || publication || pureTransition) {
 		return result, nil, fmt.Errorf("accepted result is outside the supported generated action family")
 	}
 	if result.Version < 5 && len(result.Unique) > 0 {
 		return result, nil, fmt.Errorf("legacy result has unique-key metadata")
 	}
-	if result.Version == 5 {
+	if result.Version >= 5 {
 		if err := records.ValidateHistoryRef(result.Row); err != nil {
 			return result, nil, err
 		}

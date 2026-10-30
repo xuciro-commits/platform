@@ -454,6 +454,7 @@ type Object struct {
 	Display           string                       `json:"display,omitempty" title:"Title field" help:"The text field that names one record; empty: the first searchable field" example:"name"`
 	Description       string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
 	Fields            []Field                      `json:"fields" title:"Fields"`
+	DataSources       []platform.DataSourceBinding `json:"datasources,omitempty" type:"json" field:"aside" title:"Data sources"`
 	Protocols         []platform.ProtocolBinding   `json:"protocols,omitempty" type:"json" field:"aside" title:"Protocol bindings"`
 	Reads             *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
 	Constraints       []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`

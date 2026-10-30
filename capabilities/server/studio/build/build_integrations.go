@@ -2072,8 +2072,14 @@ func (b *Build) checkPipeline(c platform.Caller, p Pipeline) *kernel.Error {
 		if !ok {
 			return refuse("The output object {object} is not installed", p.OutputObject)
 		}
-		if p.Key == "" {
+		declared := slices.ContainsFunc(info.DataSources, func(binding platform.DataSourceBinding) bool {
+			return binding.Kind == "pipeline" && binding.Source == p.ID
+		})
+		if !declared && p.Key == "" {
 			return refuse("Name the column that is the record id")
+		}
+		if declared && p.Key != "" {
+			return refuse("This pipeline is mapped by its object type; leave its legacy key empty")
 		}
 		if Guarded(marking) {
 			if open := UnguardedFields(info, nil); len(open) > 0 {
@@ -2536,6 +2542,14 @@ func (b *Build) checkSource(c platform.Caller, s Source) *kernel.Error {
 	info, ok := b.lookupEntity(s.Object)
 	if !ok {
 		return refuse("The target object {object} is not installed", s.Object)
+	}
+	if slices.ContainsFunc(info.DataSources, func(binding platform.DataSourceBinding) bool {
+		return binding.Kind == "source" && binding.Source == s.ID
+	}) {
+		if s.Key != "" || len(s.Mapping) > 0 {
+			return refuse("This source is mapped by its object type; leave its legacy key and mapping empty")
+		}
+		return checkEvery(s.Every)
 	}
 	if s.Key == "" || len(s.Mapping) == 0 {
 		return refuse("A data source names the row field that identifies a record and maps at least one field")
@@ -3569,6 +3583,8 @@ type SourceRow struct {
 	Key     string
 	Verb    string
 	Error   string
+	Origin  string     `json:",omitempty"`
+	At      *time.Time `json:",omitempty"`
 }
 
 func (s Source) Decode(body []byte) ([]map[string]any, error) {

@@ -37,6 +37,8 @@ type tenantState struct {
 	SubmissionSchemas   map[string]platform.SchemaVersion       `json:"submissionSchemas,omitempty"`
 	Apps                map[string]json.RawMessage              `json:"apps"`
 	Records             map[string][]records.StoredState        `json:"records"`
+	Facts               json.RawMessage                         `json:"facts,omitempty"`
+	Identities          *kernel.IdentityState                   `json:"identities,omitempty"`
 	Audit               []platform.AuditEntry                   `json:"audit"`
 	Refusals            map[string]acceptedformat.Refusal       `json:"refusals,omitempty"`
 	AcceptedAnswers     map[string]json.RawMessage              `json:"acceptedAnswers,omitempty"`
@@ -367,6 +369,16 @@ func (t *Tenant) capture(position func() int64, includeRows bool, prepare func()
 		}()
 	}
 	s.Audit, s.Deliveries = t.audit.SnapshotState()
+	if facts := t.claims.Records(t.ID); len(facts) > 0 {
+		var err error
+		s.Facts, err = platform.Protos(facts)
+		if err != nil {
+			return tenantState{}, nil, 0, err
+		}
+	}
+	if identities := t.entityIDs.State(); len(identities.Entities) > 0 || len(identities.Redirects) > 0 {
+		s.Identities = &identities
+	}
 	if includeRows {
 		state := t.committed.SnapshotState()
 		s.DecisionDefinitions, s.SubmissionSchemas, s.CompositeAnswers = state.DecisionDefinitions, state.SubmissionSchemas, state.CompositeAnswers
@@ -498,6 +510,16 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	held, err := t.restoreRecords(s.Records)
 	if err != nil {
 		return err
+	}
+	if len(s.Facts) > 0 {
+		facts, err := platform.Unprotos[*pb.FactRecord](s.Facts)
+		if err != nil {
+			return err
+		}
+		t.claims.Restore(t.ID, facts)
+	}
+	if s.Identities != nil {
+		t.entityIDs.Restore(*s.Identities)
 	}
 	if err := t.restoreDefinitions(&s, held); err != nil {
 		return err

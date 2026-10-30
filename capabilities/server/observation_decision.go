@@ -203,7 +203,7 @@ func (t *Tenant) EvaluateObservation(ctx context.Context, m platform.Member, ref
 	}
 	submission = t.currentSubmissionSchema(owner, submission)
 	evidence := &platform.ObservationDecisionEvidence{Key: key, Definition: platform.AssetBinding{Ref: ref, SourceVersion: plan.info.Version}, Record: plan.entity.Type + "/" + q.Record, Device: plan.device, Signal: plan.info.Definition.Signal, Window: result.Window, Intervals: result.Intervals}
-	receipt, refusal := t.submitAcceptedVersion(owner, m, submission, now, false, nil, nil, evidence)
+	receipt, refusal := t.submitAcceptedVersion(owner, m, submission, now, false, nil, nil, evidence, nil)
 	if receipt != nil {
 		answer.Receipt = &SubmissionAnswer{Record: receipt}
 	}

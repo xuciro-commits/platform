@@ -255,6 +255,14 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.Unlock()
 		return false, fmt.Errorf("accepted record image differs from receipt")
 	}
+	var source *preparedSourceClaim
+	if len(result.Claims) > 0 {
+		source = &preparedSourceClaim{origin: result.Origin, claims: result.Claims}
+		if _, err := t.sourceFacts(result.Row.Type, result.Row.ID, receipt.GetChangeId(), source); err != nil {
+			draft.Unlock()
+			return false, err
+		}
+	}
 	var publisher platform.AcceptedPublisher
 	if result.Version == 3 || result.Version == 5 && result.Kind == "publication" {
 		schema := receipt.GetSubmission().GetSchema().GetName()
@@ -277,10 +285,11 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		if err == nil {
 			t.committed.SaveDecisionDefinition(result.App, receipt.GetChangeId(), result.Definition)
 			t.committed.SaveSchemaVersion(result.App, receipt.GetSubmission().GetIdempotencyKey(), result.SchemaVersion)
+			err = t.applySourceClaims(result.Row.Type, result.Row.ID, receipt.GetChangeId(), result.At, source)
 		}
 		return changed, err
 	}
-	if result.Version == 5 {
+	if result.Version >= 5 {
 		if err := records.CheckHistoryPredecessor(result.Row, prior); err != nil {
 			draft.Unlock()
 			return false, err
@@ -303,7 +312,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		}
 	}
 	recovered := &records.Row{Value: value, Format: result.Row.Format, History: records.CopyHistory(result.Row.History)}
-	if result.Version == 5 {
+	if result.Version >= 5 {
 		if err := records.AppendRowHistory(recovered, prior, result.Row.History); err != nil {
 			draft.Unlock()
 			return false, err
@@ -317,7 +326,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.MarkDirty(result.Row.Type + "/" + rec.ID)
 	}
 	draft.Unlock()
-	if result.Version == 5 {
+	if result.Version >= 5 {
 		if err := validateUniqueReplacements(draft, result.Unique); err != nil {
 			return false, err
 		}
@@ -327,6 +336,9 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		return false, err
 	}
 	if err := s.PromoteRecords(draft); err != nil {
+		return false, err
+	}
+	if err := t.applySourceClaims(result.Row.Type, result.Row.ID, receipt.GetChangeId(), result.At, source); err != nil {
 		return false, err
 	}
 	if result.Row.Type == build.AppType {

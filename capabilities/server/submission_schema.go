@@ -138,6 +138,6 @@ func (t *Tenant) submitSchemaDiagnosed(member platform.Member, sub *pb.Submissio
 	var issues []platform.FieldIssue
 	record, refusal := t.submit(member, sub, at, func(_ *kernel.Error, found []platform.FieldIssue) {
 		issues = t.readableFieldIssues(member, found, at)
-	}, strings.TrimSpace(content))
+	}, nil, strings.TrimSpace(content))
 	return record, refusal, issues
 }

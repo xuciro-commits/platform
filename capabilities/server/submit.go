@@ -19,18 +19,22 @@ import (
 func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
 func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	return t.submit(m, s, now, nil)
+	return t.submit(m, s, now, nil, nil)
+}
+
+func (t *Tenant) submitSource(m platform.Member, s *pb.Submission, now time.Time, source *sourceSubmission) (*pb.ChangeRecord, *kernel.Error) {
+	return t.submit(m, s, now, nil, source)
 }
 
 func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error, []platform.FieldIssue) {
 	var issues []platform.FieldIssue
 	record, err := t.submit(m, s, now, func(_ *kernel.Error, found []platform.FieldIssue) {
 		issues = t.readableFieldIssues(m, found, now)
-	})
+	}, nil)
 	return record, err, issues
 }
 
-func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue), contentVersion ...string) (record *pb.ChangeRecord, err *kernel.Error) {
+func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, report func(*kernel.Error, []platform.FieldIssue), source *sourceSubmission, contentVersion ...string) (record *pb.ChangeRecord, err *kernel.Error) {
 
 	if err := t.admits(m); err != nil {
 		return nil, err
@@ -70,6 +74,19 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 		}
 	}
+	if source != nil {
+		if prior := a.AcceptedLedger().AcceptedFor(t.ID, s.GetIdempotencyKey()); prior != nil {
+			previous := prior.GetSubmission()
+			if previous.GetPrincipalId() != m.ID || !proto.Equal(previous.GetTarget(), s.GetTarget()) || !proto.Equal(previous.GetSchema(), s.GetSchema()) {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+			}
+			return prior, nil
+		}
+		if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
+			answer := prior.Error
+			return nil, &answer
+		}
+	}
 	if err = t.delegatedBound(m, s); err != nil {
 		return nil, err
 	}
@@ -82,6 +99,13 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 		}
 	} else {
 		s = t.currentSubmissionSchema(a, s)
+	}
+	var claim *preparedSourceClaim
+	if source != nil {
+		s, claim, err = t.prepareSourceSubmission(m, s, source, now)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if prior, ok := t.committed.Refusal(s.GetAuthority() + "/" + s.GetIdempotencyKey()); ok {
 		hash, _ := acceptedformat.SubmissionHash(s, binding)
@@ -97,7 +121,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
-	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal, nil)
+	record, err = t.submitAcceptedVersion(a, m, s, now, false, binding, schemaRefusal, nil, claim)
 	if report != nil && err != nil {
 		if prior, ok := t.committed.Refusal(a.Manifest().ID + "/" + s.GetIdempotencyKey()); ok {
 			hash, _ := acceptedformat.SubmissionHash(s, binding)
@@ -110,10 +134,10 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, repo
 }
 
 func (t *Tenant) submitAccepted(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
-	return t.submitAcceptedVersion(a, m, t.currentSubmissionSchema(a, s), now, automation, nil, nil, nil, input...)
+	return t.submitAcceptedVersion(a, m, t.currentSubmissionSchema(a, s), now, automation, nil, nil, nil, nil, input...)
 }
 
-func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *platform.ObservationDecisionEvidence, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.Submission, now time.Time, automation bool, binding *platform.SchemaVersion, schemaRefusal *kernel.Error, observation *platform.ObservationDecisionEvidence, source *preparedSourceClaim, input ...*preparedOperationInput) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	if t.businessStopped() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Business access is stopped for maintenance")
 	}
@@ -203,6 +227,12 @@ func (t *Tenant) submitAcceptedVersion(a platform.App, m platform.Member, s *pb.
 		raw, err = acceptedformat.EncodeBusinessRefusal(s, now, refusal, binding, businessFact, draft.inputIssues[refusal]...)
 	} else {
 		raw, err = draft.sealResult(a.Manifest().ID, s, record, now)
+		if err == nil && source != nil {
+			raw, err = acceptedformat.AttachSourceClaims(raw, source.origin, source.claims)
+			if err == nil {
+				_, err = t.sourceFacts(s.GetTarget().GetType(), s.GetTarget().GetId(), record.GetChangeId(), source)
+			}
+		}
 		if err != nil {
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
 			var preparationRefusal *kernel.Error

@@ -19,6 +19,7 @@ type KernelFactory interface {
 	Works() Works
 	Connectors() Connectors
 	Identity([]*pb.EntityRef) Identity
+	Facts(SchemaRegistry) Facts
 	Receive(ChangeLog, Authorities, kernel.Policy, kernel.Caller, *pb.Submission, time.Time, func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error)
 }
 
@@ -66,6 +67,16 @@ type Identity interface {
 	Create(*pb.EntityRef) *kernel.Error
 	AddRedirect(*pb.Redirect) *kernel.Error
 	Resolve(*pb.EntityRef) ([]kernel.Ref, *kernel.Error)
+	State() kernel.IdentityState
+	Restore(kernel.IdentityState)
+}
+
+type Facts interface {
+	Record(*pb.Fact, time.Time) (*pb.FactRecord, *kernel.Error)
+	CurrentClaims(string, *pb.EntityRef, string) []*pb.FactRecord
+	Accepted(string, string) *pb.FactRecord
+	Records(string) []*pb.FactRecord
+	Restore(string, []*pb.FactRecord)
 }
 
 type KernelRuntime interface{ Kernel() KernelFactory }
@@ -90,6 +101,9 @@ func (NativeKernel) Authorities(id string) Authorities          { return kernel.
 func (NativeKernel) Works() Works                               { return kernel.NewWorks() }
 func (NativeKernel) Connectors() Connectors                     { return kernel.NewConnectors() }
 func (NativeKernel) Identity(entities []*pb.EntityRef) Identity { return kernel.NewIdentity(entities) }
+func (NativeKernel) Facts(schema SchemaRegistry) Facts {
+	return kernel.NewFactLog(schema)
+}
 func (NativeKernel) Receive(log ChangeLog, authorities Authorities, policy kernel.Policy, caller kernel.Caller, s *pb.Submission, at time.Time, domain func() *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
 	r := kernel.Receiver{Changes: log, Authorities: authorities, Policy: policy}
 	return r.Receive(caller, s, at, domain)

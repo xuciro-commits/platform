@@ -18,7 +18,7 @@ type FactArchive interface {
 }
 
 type FactLog struct {
-	schemas  *SchemaRegistry
+	schemas  interface{ Accepts(*pb.SchemaRef) bool }
 	logs     map[string][]*pb.FactRecord
 	byKey    map[string]map[string]*pb.FactRecord
 	next     int
@@ -27,7 +27,7 @@ type FactLog struct {
 	last     map[string]time.Time
 }
 
-func NewFactLog(schemas *SchemaRegistry) *FactLog {
+func NewFactLog(schemas interface{ Accepts(*pb.SchemaRef) bool }) *FactLog {
 	return &FactLog{schemas: schemas, logs: map[string][]*pb.FactRecord{},
 		byKey: map[string]map[string]*pb.FactRecord{}}
 }
@@ -37,6 +37,16 @@ func (l *FactLog) Records(tenant string) []*pb.FactRecord {
 		return l.logs[tenant]
 	}
 	return append(l.archive.Records(tenant, l.archived[tenant]), l.logs[tenant]...)
+}
+
+func (l *FactLog) Accepted(tenant, key string) *pb.FactRecord {
+	if record := l.byKey[tenant][key]; record != nil {
+		return record
+	}
+	if l.archive != nil {
+		return l.archive.Accepted(tenant, key, l.archived[tenant])
+	}
+	return nil
 }
 
 func (l *FactLog) Compact(archive FactArchive) {

@@ -57,15 +57,16 @@ func (t *Tenant) PullSources(now time.Time) {
 }
 
 type integrationPreparation struct {
-	Type       string                  `json:"type"`
-	ID         string                  `json:"id"`
-	Rows       []build.SourceRow       `json:"rows,omitempty"`
-	Data       []map[string]any        `json:"data"`
-	Object     string                  `json:"object,omitempty"`
-	Dataset    string                  `json:"dataset,omitempty"`
-	Enterprise *build.EnterpriseTarget `json:"enterprise,omitempty"`
-	Producer   string                  `json:"producer"`
-	Marking    string                  `json:"marking,omitempty"`
+	Type       string                      `json:"type"`
+	ID         string                      `json:"id"`
+	Rows       []build.SourceRow           `json:"rows,omitempty"`
+	Data       []map[string]any            `json:"data"`
+	Object     string                      `json:"object,omitempty"`
+	Binding    *platform.DataSourceBinding `json:"binding,omitempty"`
+	Dataset    string                      `json:"dataset,omitempty"`
+	Enterprise *build.EnterpriseTarget     `json:"enterprise,omitempty"`
+	Producer   string                      `json:"producer"`
+	Marking    string                      `json:"marking,omitempty"`
 }
 
 func (t *Tenant) prepareIntegration(member platform.Member, revision uint32, now time.Time, plan integrationPreparation) (*build.IntegrationExecution, error) {
@@ -184,15 +185,24 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 			}
 		} else if build.Guarded(plan.Marking) {
 			pull.Error = "A confidential or restricted connection feeds a dataset; use a pipeline to apply field access rules"
-		} else if rows, err := s.MapRows(raw); err != nil {
+		} else if rows, binding, err := t.declaredRows(s.Object, "source", s.ID, raw, now); err != nil {
 			pull.Error = err.Error()
 		} else {
-			plan.Rows = rows
-			var refusal *kernel.Error
-			pull.Merged, refusal = t.prepareRows(member, s.Object, s.Name, plan.Rows, now)
-			if refusal != nil {
-				log.Printf("source row preparation unavailable: %v", refusal)
-				return
+			plan.Binding = binding
+			if binding == nil {
+				rows, err = s.MapRows(raw)
+				if err != nil {
+					pull.Error = err.Error()
+				}
+			}
+			if pull.Error == "" {
+				plan.Rows = rows
+				var refusal *kernel.Error
+				pull.Merged, refusal = t.prepareRows(member, s.Object, s.Name, plan.Rows, now)
+				if refusal != nil {
+					log.Printf("source row preparation unavailable: %v", refusal)
+					return
+				}
 			}
 		}
 		if pull.Error == "" {
@@ -236,6 +246,68 @@ func (t *Tenant) pullSource(s build.Source, now time.Time) {
 		pull.Execution = &execution
 	}
 	_ = t.sourceResult(member, s, pull, "finished", nil, now)
+}
+
+func (t *Tenant) declaredRows(object, kind, source string, input []map[string]any, now time.Time) ([]build.SourceRow, *platform.DataSourceBinding, error) {
+	t.records.Lock()
+	et := t.records.Type(object)
+	var binding *platform.DataSourceBinding
+	if et != nil {
+		for _, candidate := range et.Info().DataSources {
+			if candidate.Kind == kind && candidate.Source == source {
+				copy := candidate
+				binding = &copy
+				break
+			}
+		}
+	}
+	t.records.Unlock()
+	if binding == nil {
+		return nil, nil, nil
+	}
+	if len(input) > build.ValueSourceRows {
+		return nil, binding, fmt.Errorf("the answer holds %d rows; a pull takes at most %d", len(input), build.ValueSourceRows)
+	}
+	rows := make([]build.SourceRow, 0, len(input))
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, values := range input {
+		id := platform.IntegrationScalar(values[binding.Key])
+		at := now.UTC()
+		row := build.SourceRow{ID: id, Origin: id, At: &at}
+		if id != "" {
+			if resolved, failure := t.entityIDs.Resolve(&pb.EntityRef{Type: object, Id: id}); failure == nil && len(resolved) == 1 && resolved[0].Type == object {
+				row.ID = resolved[0].ID
+			}
+		}
+		if id == "" {
+			row.Error = "row has no id"
+		}
+		if raw := platform.IntegrationScalar(values[binding.SourceTime]); binding.SourceTime != "" && raw != "" {
+			at, err := time.Parse(time.RFC3339Nano, raw)
+			if err != nil {
+				at, err = time.Parse(time.DateOnly, raw)
+			}
+			if err != nil {
+				row.Error = "row has an invalid source time"
+			} else {
+				parsed := at.UTC()
+				row.At = &parsed
+			}
+		}
+		payload := map[string]any{}
+		for _, column := range binding.Columns {
+			if value, exists := values[column.Column]; exists {
+				payload[column.Attribute] = value
+			}
+		}
+		if len(payload) == 0 {
+			row.Error = "row has no mapped attributes"
+		}
+		row.Payload, _ = json.Marshal(payload)
+		rows = append(rows, row)
+	}
+	return rows, binding, nil
 }
 
 func (t *Tenant) prepareRows(member platform.Member, object, producer string, rows []build.SourceRow, now time.Time) (int, *kernel.Error) {
@@ -290,8 +362,14 @@ func (t *Tenant) applyRows(member platform.Member, plan integrationPreparation, 
 			continue
 		}
 		key := "integration:" + execution.ID + ":" + row.Key
-		_, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.Info().App, IdempotencyKey: key,
-			Target: &pb.EntityRef{Type: plan.Object, Id: row.ID}, Schema: &pb.SchemaRef{Name: plan.Object + row.Verb, Version: 1}, Payload: row.Payload}, now)
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: et.Info().App, IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: plan.Object, Id: row.ID}, Schema: &pb.SchemaRef{Name: plan.Object + row.Verb, Version: 1}, Payload: row.Payload}
+		var err *kernel.Error
+		if plan.Binding != nil {
+			_, err = t.submitSource(member, sub, now, &sourceSubmission{binding: plan.Binding, row: row})
+		} else {
+			_, err = t.Submit(member, sub, now)
+		}
 		if err != nil {
 			if !t.integrationRefused(et.Info().App, key) {
 				return false

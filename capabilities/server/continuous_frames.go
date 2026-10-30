@@ -248,7 +248,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		}
 		_, refused := t.committed.Refusal(owner.Manifest().ID + "/" + sub.GetIdempotencyKey())
 		if schemaRefusal != nil || refused || owner.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
-			record, err := t.submitAcceptedVersion(owner, m, sub, now, false, binding, schemaRefusal, nil)
+			record, err := t.submitAcceptedVersion(owner, m, sub, now, false, binding, schemaRefusal, nil, nil)
 			t.mu.Unlock()
 			return record, err, true
 		}
@@ -334,7 +334,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			return nil, refusal, true
 		}
 	}
-	record, err := t.submitAcceptedVersion(prepared.Decision(), current, sub, now, false, binding, nil, nil, preparedInput)
+	record, err := t.submitAcceptedVersion(prepared.Decision(), current, sub, now, false, binding, nil, nil, nil, preparedInput)
 	_, refused := t.committed.Refusal(platform.FlowApp + "/" + sub.GetIdempotencyKey())
 	retained = err == nil || !refused
 	inputRetained = preparedInput != nil && retained

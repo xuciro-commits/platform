@@ -305,6 +305,7 @@ type Money struct {
 }
 
 type Entity struct {
+	DataSources       []DataSourceBinding
 	LocalRules        map[string]Expr
 	EnterpriseUse     *Expr
 	Protocols         []Provision
@@ -343,6 +344,20 @@ type Entity struct {
 	Seed            []any
 	Derived         []Derivation
 	Withheld        string
+}
+
+type DataSourceBinding struct {
+	Kind       string             `json:"kind"`
+	Source     string             `json:"source"`
+	Key        string             `json:"key"`
+	SourceTime string             `json:"sourceTime,omitempty"`
+	Columns    []DataSourceColumn `json:"columns"`
+}
+
+type DataSourceColumn struct {
+	Column    string `json:"column"`
+	Attribute string `json:"attribute"`
+	Strategy  string `json:"strategy,omitempty"`
 }
 
 type Derivation struct {
@@ -623,6 +638,7 @@ func (f FieldInfo) Active(valueOf func(field string) string) bool {
 }
 
 type EntityInfo struct {
+	DataSources     []DataSourceBinding `json:"datasources,omitempty"`
 	LocalRules      map[string]Expr     `json:"localRules,omitempty"`
 	EnterpriseUse   *Expr               `json:"enterpriseUse,omitempty"`
 	Versioning      *Versioning         `json:"versioning,omitempty"`
@@ -672,7 +688,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{LocalRules: e.LocalRules, EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{DataSources: slices.Clone(e.DataSources), LocalRules: e.LocalRules, EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	info.RecordFormat, info.RecordImages = e.RecordFormat, slices.Clone(e.RecordImages)
 	if err := checkRecordImageFormats(info); err != nil {
 		return EntityInfo{}, err

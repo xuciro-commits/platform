@@ -1348,6 +1348,20 @@ export type CustomRole = {
   actions: string[];
 };
 
+export type DataSourceBinding = {
+  kind: string;
+  source: string;
+  key: string;
+  sourceTime?: string;
+  columns: DataSourceColumn[];
+};
+
+export type DataSourceColumn = {
+  column: string;
+  attribute: string;
+  strategy?: string;
+};
+
 export type DateRange = {
   end: string;
   inclusive?: boolean;
@@ -1761,6 +1775,7 @@ export type EnterpriseUsageItem = {
 };
 
 export type EntityInfo = {
+  datasources?: DataSourceBinding[];
   localRules?: Record<string, Expr>;
   enterpriseUse?: Expr;
   versioning?: Versioning;
@@ -3675,11 +3690,22 @@ export type RecordDelivery = {
   receipt?: string;
 };
 
+export type RecordFieldProvenance = {
+  kind: string;
+  connector?: string;
+  sourceTime?: string;
+  at?: string;
+};
+
 export type RecordPage = {
   records: unknown[];
   total: number;
   partial?: boolean;
   formats?: Record<string, Record<string, FieldFormat>>;
+};
+
+export type RecordProvenance = {
+  fields: Record<string, RecordFieldProvenance>;
 };
 
 export type RecordSet = {

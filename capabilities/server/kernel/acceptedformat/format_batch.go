@@ -15,6 +15,8 @@ import (
 )
 
 type Batch struct {
+	Claims         []SourceClaim                  `json:"claims,omitempty"`
+	Origin         string                         `json:"origin,omitempty"`
 	Unique         []journal.StateUnique          `json:"unique,omitempty"`
 	Business       []platform.BusinessRefusalFact `json:"business,omitempty"`
 	SchemaVersion  *platform.SchemaVersion        `json:"schemaVersion,omitempty"`
@@ -77,13 +79,16 @@ func DecodeBatch(raw []byte) (Batch, *pb.ChangeRecord, error) {
 	if err != nil {
 		return result, nil, err
 	}
-	if result.Version < 1 || result.Version > 10 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > 11 || result.Kind != "record-batch" || result.Tenant == "" || result.App == "" ||
 		result.At.IsZero() || sub == nil || sub.GetTenantId() != result.Tenant ||
 		sub.GetAuthority() != result.App || sub.GetPrincipalId() == "" || sub.GetIdempotencyKey() == "" ||
 		sub.GetSchema() == nil || sub.GetTarget() == nil || receipt.GetChangeId() == "" ||
 		receipt.GetRecordedTime() == nil || receipt.GetValidTime() == nil ||
 		len(result.Decisions) == 0 {
 		return result, nil, fmt.Errorf("record batch has inconsistent identity or effects")
+	}
+	if err := ValidateSourceClaims(result.Claims, result.Origin, result.Version == 11, result.Version < 11); err != nil {
+		return result, nil, err
 	}
 	if result.Version < 8 && (result.Version < 4 && (result.Version == 3) != (result.Control != nil) || result.Version < 5 && (result.Version == 4) != (len(result.DirectRows) > 0) || result.Version < 6 && (result.Version == 5) != (len(result.Iterations) > 0) || result.Version < 7 && (result.Version == 6) != (len(result.Definitions) > 0) || result.Version < 8 && (result.Version == 7) != (len(result.Business) > 0)) {
 		return result, nil, fmt.Errorf("record batch control format differs")

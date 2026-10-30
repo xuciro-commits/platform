@@ -242,6 +242,11 @@ func (t *Tenant) prepareAcceptedBatch(l *platform.Ledger, raw []byte) (*prepared
 		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
 	}
 	sub, _ := acceptedformat.BatchSubmission(result, receipt)
+	if len(result.Claims) > 0 {
+		if _, err := t.sourceFacts(sub.GetTarget().GetType(), sub.GetTarget().GetId(), receipt.GetChangeId(), &preparedSourceClaim{origin: result.Origin, claims: result.Claims}); err != nil {
+			return nil, err
+		}
+	}
 	key := result.App + "/" + sub.GetIdempotencyKey()
 	if saved := t.committed.Answer(key); len(saved) > 0 {
 		prior, answer, err := acceptedformat.DecodeBatch(saved)
@@ -381,6 +386,16 @@ func (t *Tenant) promoteAcceptedBatch(prepared *preparedAcceptedBatch) (bool, er
 	}
 	if err := t.records.PromoteRecords(draft); err != nil {
 		return false, err
+	}
+	if len(result.Claims) > 0 {
+		answer := new(pb.ChangeRecord)
+		if err := protojson.Unmarshal(result.Receipt, answer); err != nil {
+			return false, err
+		}
+		sub := answer.GetSubmission()
+		if err := t.applySourceClaims(sub.GetTarget().GetType(), sub.GetTarget().GetId(), answer.GetChangeId(), result.At, &preparedSourceClaim{origin: result.Origin, claims: result.Claims}); err != nil {
+			return false, err
+		}
 	}
 	if slices.ContainsFunc(result.Rows, func(row acceptedformat.BatchRow) bool { return row.Type == build.AppType }) {
 		t.defGen.Add(1)

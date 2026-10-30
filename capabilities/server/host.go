@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	computeowner "platformserver/engine/compute"
 	"platformserver/engine/integrations"
@@ -46,6 +47,9 @@ type Tenant struct {
 	dispatchReads         statusReadSchedule
 	controlAnswer         func(platform.Effect, platform.Outcome, time.Time) *kernel.Error
 	identity              platform.IdentityDirectory
+	claims                platform.Facts
+	claimSchemas          platform.SchemaRegistry
+	entityIDs             platform.Identity
 	ID                    string
 	Record                func(Entry)
 	AcceptResult          func(Entry, string, string) ([]byte, error)
@@ -132,6 +136,9 @@ func NewTenantWithCapabilities(id string, services platform.RuntimeCapabilities,
 		t.appIndex[id] = i
 	}
 	t.services = services
+	t.claimSchemas = services.Kernel.Schemas([]*pb.SchemaRef{{Name: "integration.claim", Version: 1}})
+	t.claims = services.Kernel.Facts(t.claimSchemas)
+	t.entityIDs = services.Kernel.Identity(nil)
 	if services.NewAgentEvaluator != nil {
 		t.agentEvaluator = services.NewAgentEvaluator()
 	}

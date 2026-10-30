@@ -53,6 +53,13 @@ type State struct {
 	Image  json.RawMessage `json:"image"`
 }
 
+type SourceClaim struct {
+	Attribute  string          `json:"attribute"`
+	Connector  string          `json:"connector"`
+	SourceTime time.Time       `json:"sourceTime"`
+	Payload    json.RawMessage `json:"payload"`
+}
+
 type Notices struct {
 	Base    int                     `json:"base"`
 	Seq     int                     `json:"seq"`
