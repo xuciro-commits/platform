@@ -247,6 +247,9 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			if field.Property != nil {
 				add(field.Property.Ref)
 			}
+			if field.ValueType != nil {
+				add(field.ValueType.Ref)
+			}
 			if !historical && field.Ref != "" && field.Ref != "enterprise.element" {
 				add(object(field.Ref))
 			}
@@ -534,6 +537,14 @@ func describeAsset(asset ReleaseAsset, historical bool) (Dependencies, error) {
 			return out, err
 		}
 		if err := property.Check(); err != nil {
+			return out, err
+		}
+	case AssetValueType:
+		var value ValueType
+		if err := json.Unmarshal(asset.Body, &value); err != nil {
+			return out, err
+		}
+		if err := value.Check(); err != nil {
 			return out, err
 		}
 	case AssetFunction:

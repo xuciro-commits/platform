@@ -174,7 +174,7 @@ func (b *Build) draftComparison(record any, published string, info platform.Enti
 }
 
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaValueType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish, SchemaAgentPublish, SchemaTablePublish, SchemaAlertPublish, SchemaEvaluationSetPublish}
 }
 
 func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
@@ -443,6 +443,10 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
+	case ValueType:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
 	case LinkType:
 		value.Published = ""
 		value.Versions = nil
@@ -470,6 +474,9 @@ func published[T any](definition T) string {
 
 func (b *Build) Reinstall() error {
 	if err := propertyKind.restore(b); err != nil {
+		return err
+	}
+	if err := valueKind.restore(b); err != nil {
 		return err
 	}
 

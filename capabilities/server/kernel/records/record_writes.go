@@ -37,7 +37,11 @@ func (s *Store) Declare(a platform.App) error {
 		if s.types[e.Type] != nil || s.byGo[info.Go] != nil {
 			return fmt.Errorf("entity %s is declared twice", e.Type)
 		}
-		et := &Type{store: s, info: info, rows: Rows{}, knowledge: KnowledgeBearing(info)}
+		formats, err := CompileFormats(info)
+		if err != nil {
+			return fmt.Errorf("entity %s: %w", e.Type, err)
+		}
+		et := &Type{store: s, info: info, rows: Rows{}, knowledge: KnowledgeBearing(info), formats: formats}
 		s.types[e.Type], s.byGo[info.Go] = et, et
 		s.generation++
 	}
@@ -138,7 +142,7 @@ func (s *Store) Check(c platform.Caller, entity any, now time.Time) *kernel.Erro
 	if err := CheckEnterpriseReferences(c.Enterprise(), c.Replaying, et.info.Fields, v, previous, now); err != nil {
 		return err
 	}
-	issues, refusal := CheckFields(et.info, entity, v, c.Replaying, s)
+	issues, refusal := CheckFields(et.info, entity, v, c.Replaying, s, c.ResolveValueType)
 	if len(issues) > 0 {
 		return c.RefuseFields(issues)
 	}

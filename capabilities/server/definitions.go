@@ -97,6 +97,12 @@ func (t *Tenant) registerDefinitions() error {
 				return err
 			}
 		}
+		for _, v := range manifest.ValueTypes {
+			v := v
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetValueType, Name: v.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, ValueType: &v}); err != nil {
+				return err
+			}
+		}
 		for _, l := range manifest.LinkTypes {
 			if err := t.records.InstallLinkConstraint(l); err != nil {
 				return err

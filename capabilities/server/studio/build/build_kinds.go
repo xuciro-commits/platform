@@ -54,7 +54,7 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	validateInstall func(platform.BuildHost, D) error
 }
 
-var definitionKinds = []definitionKind{&queryKind, &propertyKind, &linkKind}
+var definitionKinds = []definitionKind{&queryKind, &propertyKind, &valueKind, &linkKind}
 
 func definitionKindOf(kind platform.AssetKind) definitionKind {
 	for _, k := range definitionKinds {

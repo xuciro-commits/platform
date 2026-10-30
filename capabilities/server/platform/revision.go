@@ -209,6 +209,16 @@ func candidate(roots []AssetRef, available []ReleaseAsset, historical bool) (Rel
 					return empty, fmt.Errorf("frozen object field has an unavailable or incompatible property")
 				}
 			}
+			for _, f := range info.Fields {
+				if f.ValueType == nil {
+					continue
+				}
+				source, ok := lookup[f.ValueType.Ref]
+				var v ValueType
+				if !ok || source.SourceVersion != f.ValueType.SourceVersion || json.Unmarshal(source.Body, &v) != nil || v.CheckField(f) != nil {
+					return empty, fmt.Errorf("frozen object field has an unavailable or incompatible value type")
+				}
+			}
 		}
 		if ref.Kind == AssetEvaluation {
 			evaluation, err := ReadEvaluationSet(body)

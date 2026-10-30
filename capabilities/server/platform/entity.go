@@ -305,20 +305,22 @@ type Money struct {
 }
 
 type Entity struct {
-	LocalRules       map[string]Expr
-	EnterpriseUse    *Expr
-	Protocols        []Provision
-	CreateTxn        *BusinessTxn
-	ApplyCreateTxn   func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
-	Versioning       *Versioning
-	VersionPins      []VersionPinBinding
-	Sets             []RecordSet
-	Constraints      []Constraint
-	PropertyBindings map[string]AssetBinding
-	Compute          func(record any)
-	ComputeAt        func(c Caller, record any, now time.Time) *kernel.Error
-	Validate         func(c Caller, record any) *kernel.Error
-	ValidateAt       func(c Caller, record any, now time.Time) *kernel.Error
+	LocalRules        map[string]Expr
+	EnterpriseUse     *Expr
+	Protocols         []Provision
+	CreateTxn         *BusinessTxn
+	ApplyCreateTxn    func(Caller, *pb.ChangeRecord, time.Time) *kernel.Error
+	Versioning        *Versioning
+	VersionPins       []VersionPinBinding
+	Sets              []RecordSet
+	Constraints       []Constraint
+	PropertyBindings  map[string]AssetBinding
+	ValueTypeBindings map[string]AssetBinding
+	Format            map[string][]FormatRule
+	Compute           func(record any)
+	ComputeAt         func(c Caller, record any, now time.Time) *kernel.Error
+	Validate          func(c Caller, record any) *kernel.Error
+	ValidateAt        func(c Caller, record any, now time.Time) *kernel.Error
 
 	Type            string
 	Title           string
@@ -329,6 +331,8 @@ type Entity struct {
 	RecordFormat    string
 	RecordImages    []RecordImageFormat
 	Display         string
+	Icon            string
+	Color           string
 	Scope           Scope
 	KnowledgeFiles  bool
 	Standard        Standard
@@ -509,6 +513,8 @@ type FieldInfo struct {
 	Range        *DateRange        `json:"range,omitempty"`
 	Group        string            `json:"group,omitempty"`
 	Property     *AssetBinding     `json:"property,omitempty"`
+	ValueType    *AssetBinding     `json:"valueType,omitempty"`
+	Format       []FormatRule      `json:"format,omitempty"`
 	Name         string            `json:"name"`
 	Title        string            `json:"title"`
 	Type         string            `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines,json"`
@@ -631,6 +637,8 @@ type EntityInfo struct {
 	KnowledgeFiles  bool                `json:"knowledgeFiles,omitempty"`
 	App             string              `json:"app"`
 	Display         string              `json:"display"`
+	Icon            string              `json:"icon,omitempty"`
+	Color           string              `json:"color,omitempty"`
 	Fields          []FieldInfo         `json:"fields"`
 	Standard        []string            `json:"standard"`
 	Implements      []string            `json:"implements,omitempty"`
@@ -694,6 +702,9 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 		selected := binding
 		info.Fields[i].Property = &selected
+	}
+	if err := describePresentation(&info, e); err != nil {
+		return EntityInfo{}, err
 	}
 	if info.Display == "" {
 		info.Display = "id"
@@ -857,7 +868,7 @@ func EntityActions(e Entity) []Action {
 		if f.Example != "" {
 			description += ", e.g. " + f.Example
 		}
-		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, Range: f.Range, Group: f.Group,
+		field := Field{Name: f.Name, Type: typ, Required: f.Required && f.When == nil, Description: description, Choices: f.Choices, Constraints: f.Constraints, ValueType: f.ValueType, Range: f.Range, Group: f.Group,
 			Fields: payloadColumns(f.Fields)}
 		if f.Ref == "enterprise.element" {
 			field.Ref, field.Stereotype, field.Stereotypes = f.Ref, f.Stereotype, slices.Clone(f.Stereotypes)
@@ -1266,7 +1277,7 @@ func CheckExtension(extension, base EntityInfo) error {
 		}
 		for _, field := range source.Fields {
 			next, exists := base.Field(field.Name)
-			if !exists || field.Type != next.Type || field.Ref != next.Ref || field.Required != next.Required || field.ReadOnly != next.ReadOnly || field.AliasOf != next.AliasOf || !slices.Equal(field.Choices, next.Choices) || !reflect.DeepEqual(field.Property, next.Property) {
+			if !exists || field.Type != next.Type || field.Ref != next.Ref || field.Required != next.Required || field.ReadOnly != next.ReadOnly || field.AliasOf != next.AliasOf || !slices.Equal(field.Choices, next.Choices) || !reflect.DeepEqual(field.Property, next.Property) || !reflect.DeepEqual(field.ValueType, next.ValueType) {
 				return fmt.Errorf("extension %s source %s@%s has an incompatible base field %s; review and republish the extension against the new package", extension.Type, base.Type, source.Base.SourceVersion, field.Name)
 			}
 		}

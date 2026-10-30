@@ -40,7 +40,7 @@ func ActionInputSchema(action Action, entity *EntityInfo, roles []string) map[st
 				continue
 			}
 			input := Field{Name: field.Name, Type: field.Type, Description: field.Help, Required: create && field.Required && field.When == nil,
-				Choices: field.Choices, Ref: field.Ref, Stereotype: field.Stereotype, Stereotypes: field.Stereotypes, Constraints: field.Constraints}
+				Choices: field.Choices, Ref: field.Ref, Stereotype: field.Stereotype, Stereotypes: field.Stereotypes, Constraints: field.Constraints, ValueType: field.ValueType}
 			if i := slices.IndexFunc(action.Payload, func(p Field) bool { return p.Name == field.Name }); i >= 0 {
 				original := action.Payload[i]
 				input.Required, input.Description, input.Default = original.Required, original.Description, original.Default
@@ -140,9 +140,15 @@ func inputFieldSchema(field Field, columns []FieldInfo, roles []string) map[stri
 		if c.MaxLength != nil {
 			schema["maxLength"] = *c.MaxLength
 		}
+		if c.Pattern != "" {
+			schema["pattern"] = c.Pattern
+		}
 		if c.Before != "" || c.After != "" || c.DateTime {
 			schema["x-platform-constraints"] = c
 		}
+	}
+	if field.ValueType != nil {
+		schema["x-platform-value-type"] = field.ValueType
 	}
 	return schema
 }
@@ -205,6 +211,7 @@ type Field struct {
 	Key         string            `json:"key,omitempty"`
 	Label       string            `json:"label,omitempty"`
 	Constraints *InputConstraints `json:"constraints,omitempty"`
+	ValueType   *AssetBinding     `json:"valueType,omitempty"`
 	Range       *DateRange        `json:"range,omitempty"`
 	Group       string            `json:"group,omitempty"`
 	Manual      bool              `json:"manual,omitempty"`
@@ -221,6 +228,7 @@ type InputConstraints struct {
 	After        string   `json:"after,omitempty"`
 	Inclusive    bool     `json:"inclusive,omitempty"`
 	DateTime     bool     `json:"dateTime,omitempty"`
+	Pattern      string   `json:"pattern,omitempty"`
 }
 
 type DateRange struct {
@@ -645,8 +653,13 @@ func CheckInputs(fields []Field) error {
 			if c.ExclusiveMin && c.Min == nil || c.ExclusiveMax && c.Max == nil || c.Min != nil && c.Max != nil && (*c.Min > *c.Max || *c.Min == *c.Max && (c.ExclusiveMin || c.ExclusiveMax)) {
 				return fmt.Errorf("%s has empty bounds", f.Name)
 			}
-			if (c.MinLength != nil || c.MaxLength != nil) && f.Type != "string" {
-				return fmt.Errorf("%s has nontext length", f.Name)
+			if (c.MinLength != nil || c.MaxLength != nil || c.Pattern != "") && f.Type != "string" {
+				return fmt.Errorf("%s has nontext length or pattern", f.Name)
+			}
+			if c.Pattern != "" {
+				if err := checkPattern(c.Pattern); err != nil {
+					return fmt.Errorf("%s: %w", f.Name, err)
+				}
 			}
 			for _, n := range []*int{c.MinLength, c.MaxLength} {
 				if n != nil && (*n < 0 || *n > 4096) {
@@ -779,6 +792,11 @@ func InputIssues(fields []Field, values map[string]any) []FieldIssue {
 			}
 			if c.MaxLength != nil && n > *c.MaxLength {
 				add(f, "maxLength", fmt.Sprintf("Use at most %d characters.", *c.MaxLength), "")
+			}
+			if c.Pattern != "" {
+				if program, err := patternProgram(c.Pattern); err != nil || !program.MatchString(text) {
+					add(f, "pattern", "Use the expected format.", "")
+				}
 			}
 		}
 		if n, yes := v.(float64); yes {

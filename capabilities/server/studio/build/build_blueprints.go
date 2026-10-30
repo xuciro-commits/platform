@@ -548,6 +548,11 @@ func (c CodeDeclarations) Check() error {
 				return err
 			}
 		}
+		for _, v := range m.ValueTypes {
+			if err := v.Check(); err != nil {
+				return err
+			}
+		}
 		for _, l := range m.LinkTypes {
 			parent, ok := infos[l.Parent.Name]
 			if !ok {

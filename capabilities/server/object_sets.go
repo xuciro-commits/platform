@@ -29,6 +29,7 @@ type ObjectSetRequest struct {
 	Histogram  *records.HistogramQuery       `json:"histogram,omitempty"`
 	MaxRows    int                           `json:"maxRows,omitempty"`
 	Collection *platform.RecordSetRef        `json:"collection,omitempty"`
+	Format     bool                          `json:"format,omitempty"`
 }
 
 type ObjectSetCount struct {
@@ -40,6 +41,7 @@ type objectWindow struct {
 	Sort          []string
 	Offset, Limit int
 	Bounded       bool
+	Format        bool
 }
 
 const (
@@ -507,6 +509,14 @@ func (r *setRead) loadObjects(node *setNode, w objectWindow) (RecordPage, *kerne
 	for i, v := range page {
 		out.Records[i] = r.narrowRecord(read, narrower, v)
 		ids = append(ids, records.Header(v).ID)
+		if w.Format {
+			if formats := read.entity.Formats().Evaluate(out.Records[i], read.hidden); len(formats) > 0 {
+				if out.Formats == nil {
+					out.Formats = map[string]map[string]platform.FieldFormat{}
+				}
+				out.Formats[ids[i]] = formats
+			}
+		}
 	}
 	t.readPersonal(m, read.view, ids, r.now)
 	return out, nil
@@ -684,7 +694,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 		}
 		paged := len(req.Sort) > 0 || req.Offset != 0 || req.Limit != 0
 		aggregated := len(req.Groups) > 0 || len(req.Measures) > 0 || req.Window != nil || req.Histogram != nil || req.MaxRows != 0 || req.Collection != nil
-		if op == "load" && aggregated || op == "aggregate" && paged || op == "count" && (paged || aggregated) {
+		if op == "load" && aggregated || op == "aggregate" && (paged || req.Format) || op == "count" && (paged || aggregated || req.Format) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The request carries options of another object set operation"))
 			return ObjectSetRequest{}, false
 		}
@@ -695,7 +705,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 		if !ok {
 			return
 		}
-		page, object, err := t.loadObjectSet(t.records, platform.NewCaller(runtime{t}, m, "", false, false), req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true}, h.Now())
+		page, object, err := t.loadObjectSet(t.records, platform.NewCaller(runtime{t}, m, "", false, false), req.Set, objectWindow{Sort: req.Sort, Offset: req.Offset, Limit: req.Limit, Bounded: true, Format: req.Format}, h.Now())
 		if err == nil && object == build.ObjectType {
 			page, err = t.objectDraftPage(m, page)
 		}

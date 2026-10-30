@@ -165,6 +165,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 	normalize := func(object Object) Object {
 		object.Record = platform.Record{}
 		object.Title, object.Plural, object.Description = "", "", ""
+		object.Icon, object.Color, object.Display = "", "", ""
 		object.State, object.Installed, object.Published = "", "", ""
 		object.ExtensionSource, object.SchemaVersions = nil, nil
 		object.Fields = nil
@@ -189,6 +190,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 		field.Title, field.SourceType = "", ""
 		field.AIInput = nil
 		field.Search = false
+		field.Format = nil
 		return field
 	}
 	for _, old := range previous.Fields {
@@ -201,7 +203,7 @@ func compatibleObjectSchema(previous, next Object) bool {
 		if slices.ContainsFunc(previous.Fields, func(old Field) bool { return old.Name == field.Name }) {
 			continue
 		}
-		if field.Required || field.Ref != "" || field.Property != nil || field.Formula != "" || field.FormulaExpr != nil || field.ReadOnly || field.AliasOf != "" || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
+		if field.Required || field.Ref != "" || field.Property != nil || field.ValueType != nil || field.Formula != "" || field.FormulaExpr != nil || field.ReadOnly || field.AliasOf != "" || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
 			return false
 		}
 	}

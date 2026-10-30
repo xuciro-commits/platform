@@ -601,7 +601,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		}
 	}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetPropertyType {
+		if asset.Ref.App == build.ID && (asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetValueType) {
 			if err := b.InstallDefinitionAsset(asset); err != nil {
 				return nil, err
 			}
@@ -629,7 +629,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			definitions[build.AlertType] = append(definitions[build.AlertType], records.StoredState{Value: platform.Raw(alert)})
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || b.DefinitionMetadataKind(asset.Ref.Kind) {
+		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetValueType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute || asset.Ref.Kind == platform.AssetAgent || b.DefinitionMetadataKind(asset.Ref.Kind) {
 			continue
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {

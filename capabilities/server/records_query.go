@@ -11,9 +11,10 @@ import (
 )
 
 type RecordPage struct {
-	Records []any `json:"records"`
-	Total   int   `json:"total"`
-	Partial bool  `json:"partial,omitempty"`
+	Records []any                                      `json:"records"`
+	Total   int                                        `json:"total"`
+	Partial bool                                       `json:"partial,omitempty"`
+	Formats map[string]map[string]platform.FieldFormat `json:"formats,omitempty"`
 }
 
 func (t *Tenant) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {

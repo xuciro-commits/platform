@@ -188,7 +188,8 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 		if ref.Kind == platform.AssetObject {
 			var object struct {
 				Fields []struct {
-					Property *platform.AssetBinding `json:"property,omitempty"`
+					Property  *platform.AssetBinding `json:"property,omitempty"`
+					ValueType *platform.AssetBinding `json:"valueType,omitempty"`
 				} `json:"fields"`
 				Sets    []platform.RecordSet `json:"sets,omitempty"`
 				Actions []struct {
@@ -222,6 +223,9 @@ func CandidateWithBindings(roots []platform.AssetRef, available []platform.Relea
 			for _, f := range object.Fields {
 				if f.Property != nil {
 					bindings = append(bindings, *f.Property)
+				}
+				if f.ValueType != nil {
+					bindings = append(bindings, *f.ValueType)
 				}
 			}
 		} else if ref.Kind == platform.AssetEvaluation {
@@ -420,6 +424,15 @@ func CodeReleaseAssets(manifest platform.Manifest, definitions []platform.Defini
 				return nil, fmt.Errorf("property has no descriptor")
 			}
 			body, err := json.Marshal(def.PropertyType)
+			if err != nil {
+				return nil, err
+			}
+			available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Body: body})
+		case platform.AssetValueType:
+			if def.ValueType == nil {
+				return nil, fmt.Errorf("value type has no descriptor")
+			}
+			body, err := json.Marshal(def.ValueType)
 			if err != nil {
 				return nil, err
 			}

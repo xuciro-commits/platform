@@ -211,7 +211,7 @@ func requiredEmpty(value reflect.Value) bool {
 	}
 }
 
-func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup) ([]platform.FieldIssue, *kernel.Error) {
+func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool)) ([]platform.FieldIssue, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	stringOf := func(name string) string {
 		i := slices.IndexFunc(info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
@@ -230,7 +230,7 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 		}
 		return cv.String()
 	}
-	if !replaying && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Constraints != nil }) {
+	if !replaying && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Constraints != nil || f.ValueType != nil }) {
 		raw, marshalErr := json.Marshal(entity)
 		if marshalErr != nil {
 			return nil, invalid
@@ -259,7 +259,11 @@ func CheckFields(info platform.EntityInfo, entity any, v reflect.Value, replayin
 			if typ == "" {
 				typ = "string"
 			}
-			fields = append(fields, platform.Field{Name: f.Name, Type: typ, Required: f.Required, Description: f.Title, Constraints: f.Constraints, Choices: f.Choices})
+			fields = append(fields, platform.Field{Name: f.Name, Type: typ, Required: f.Required, Description: f.Title, Constraints: f.Constraints, Choices: f.Choices, ValueType: f.ValueType})
+		}
+		fields, resolved := platform.ResolveValueTypes(fields, resolve)
+		if !resolved {
+			return nil, invalid
 		}
 		if issues := platform.InputIssues(fields, values); len(issues) > 0 {
 			return issues, nil

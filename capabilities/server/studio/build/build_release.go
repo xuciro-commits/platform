@@ -1459,7 +1459,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	for _, read := range []func() ([]platform.ReleaseAsset, error){
-		b.functionAssets, b.agentAssets, b.kindAssets(&queryKind), b.kindAssets(&linkKind), b.kindAssets(&propertyKind),
+		b.functionAssets, b.agentAssets, b.kindAssets(&queryKind), b.kindAssets(&linkKind), b.kindAssets(&propertyKind), b.kindAssets(&valueKind),
 		b.CodeReleaseAssets, b.alertAssets, b.integrationAssets, b.testPlanAssets, b.sampleSetAssets,
 	} {
 		owned, err := read()
@@ -2248,7 +2248,7 @@ func CompatibleObjectExpansion(previous, next Object) bool {
 		if slices.ContainsFunc(previous.Fields, func(old Field) bool { return old.Name == field.Name }) {
 			continue
 		}
-		if field.Required || field.Ref != "" || field.Property != nil || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
+		if field.Required || field.Ref != "" || field.Property != nil || field.ValueType != nil || field.Choices != "" || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
 			return false
 		}
 	}

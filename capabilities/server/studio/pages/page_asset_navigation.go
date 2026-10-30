@@ -131,6 +131,9 @@ func ExplorationAssetAvailable(definitions []platform.Definition, binding platfo
 		case platform.AssetPropertyType:
 			selected := d.PropertyVersion(binding.SourceVersion)
 			return selected != nil && selected.PropertyType != nil
+		case platform.AssetValueType:
+			selected := d.ValueVersion(binding.SourceVersion)
+			return selected != nil && selected.ValueType != nil
 		default:
 			return d.Version == binding.SourceVersion
 		}

@@ -530,7 +530,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 
 func (t *Tenant) restoreDefinitions(s *tenantState, held map[string][]records.StoredState) error {
 	needsDefinitions := len(held) > 0 || s.Runtime != nil
-	for typ, kind := range map[string]platform.AssetKind{build.PropertyTypeType: platform.AssetPropertyType, build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute, build.TableType: platform.AssetCompute} {
+	for typ, kind := range map[string]platform.AssetKind{build.PropertyTypeType: platform.AssetPropertyType, build.ValueTypeType: platform.AssetValueType, build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute, build.TableType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
 			var meta struct {
 				Published string `json:"published"`

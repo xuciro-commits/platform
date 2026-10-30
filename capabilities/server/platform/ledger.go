@@ -336,7 +336,11 @@ func (l *Ledger) checked(c Caller, s *pb.Submission, now time.Time, catalog *Cat
 		if !c.Replaying {
 			var payload map[string]any
 			json.Unmarshal(s.GetPayload(), &payload)
-			issues := InputIssues(declared.Payload, payload)
+			fields, resolved := ResolveValueTypes(declared.Payload, c.ResolveValueType)
+			if !resolved {
+				return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A bound value type is unavailable")
+			}
+			issues := InputIssues(fields, payload)
 			if declared.DeferRequired {
 				issues = slices.DeleteFunc(issues, func(issue FieldIssue) bool { return issue.Code == "required" })
 			}

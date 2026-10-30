@@ -29,6 +29,7 @@ export default {
   "Enter a value.": "请输入一个值。",
   "Enter a valid value.": "请输入有效的值。",
   "Choose a listed value.": "请从列表中选择。",
+  "Use the expected format.": "请按要求的格式输入。",
   "Use at least {count} characters.": "请至少输入 {count} 个字符。",
   "Use at most {count} characters.": "请最多输入 {count} 个字符。",
   "Value must be greater than {value}.": "值必须大于 {value}。",

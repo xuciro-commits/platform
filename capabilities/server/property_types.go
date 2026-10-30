@@ -69,5 +69,5 @@ func (t *Tenant) checkObjectProperties(info platform.EntityInfo) error {
 			return err
 		}
 	}
-	return nil
+	return t.checkObjectValueTypes(info)
 }

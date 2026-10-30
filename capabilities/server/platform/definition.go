@@ -19,6 +19,7 @@ const (
 	AssetObject       AssetKind = "object"
 	AssetLinkType     AssetKind = "link-type"
 	AssetPropertyType AssetKind = "property-type"
+	AssetValueType    AssetKind = "value-type"
 	AssetAction       AssetKind = "action"
 	AssetPage         AssetKind = "page"
 	AssetApp          AssetKind = "app"
@@ -65,7 +66,7 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || !slices.Contains([]AssetKind{AssetPropertyType, AssetValueType, AssetLinkType, AssetObject, AssetAction, AssetPage, AssetApp, AssetQuery, AssetFlow, AssetFunction, AssetCompute,
 		AssetConnection, AssetSource, AssetDataset, AssetPipeline, AssetWriteback, AssetMatching, AssetAgent, AssetEvaluation, AssetTestPlan, AssetSampleSet, AssetProtocol, AssetInterface, AssetObservation, AssetAlert}, r.Kind) {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
@@ -220,6 +221,8 @@ type Definition struct {
 	ContentVersion   string                     `json:"contentVersion,omitempty"`
 	PropertyType     *PropertyType              `json:"propertyType,omitempty"`
 	PropertyVersions map[string]PropertyType    `json:"propertyVersions,omitempty"`
+	ValueType        *ValueType                 `json:"valueType,omitempty"`
+	ValueVersions    map[string]ValueType       `json:"valueVersions,omitempty"`
 	LinkType         *LinkType                  `json:"linkType,omitempty"`
 	LinkVersions     map[string]LinkType        `json:"linkVersions,omitempty"`
 	Ref              AssetRef                   `json:"ref"`
@@ -270,6 +273,7 @@ type BuildHost interface {
 	InstallOperation(c Caller, o Operation, version int) error
 	InstallPage(c Caller, p Page) error
 	InstallPropertyType(c Caller, p PropertyType, version int) error
+	InstallValueType(c Caller, v ValueType, version int) error
 	InstallQuery(c Caller, q NamedQuery, version int) error
 	Interfaces() []Interface
 	Member(id string) (Member, bool)
@@ -279,6 +283,7 @@ type BuildHost interface {
 	BuildProcessConsumptions() []Consumption
 	Record(ref string) (any, bool)
 	ResolvePropertyType(binding AssetBinding) (PropertyType, bool)
+	ResolveValueType(binding AssetBinding) (ValueType, bool)
 	ValidateInstallApplication(a Application) error
 	ValidateInstallDependents(c Caller, e Entity, actions []Action, generatedPage string, pages ...Page) error
 	ValidateInstallFunction(f AIFunction) error
@@ -286,6 +291,8 @@ type BuildHost interface {
 	ValidateInstallOperation(c Caller, o Operation) error
 	ValidateInstallPage(p Page) error
 	ValidateInstallPropertyType(p PropertyType) error
+	ValidateInstallValueType(v ValueType) error
+	ValidateObjectPresentation(info EntityInfo) error
 	ValidateInstallQuery(q NamedQuery) error
 	ValidateCodeAsset(ReleaseAsset) error
 }
@@ -605,7 +612,7 @@ func ArtifactOfApplication(root AssetRef, available []ReleaseAsset) (Application
 		}
 		artifact.Roles = append(artifact.Roles, roles...)
 		switch asset.Ref.Kind {
-		case AssetObject, AssetLinkType, AssetPropertyType, AssetQuery:
+		case AssetObject, AssetLinkType, AssetPropertyType, AssetValueType, AssetQuery:
 			artifact.Model = append(artifact.Model, binding)
 		case AssetAction:
 			artifact.Rules = append(artifact.Rules, binding)

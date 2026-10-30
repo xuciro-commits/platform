@@ -251,6 +251,9 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 	if err := b.checkPropertyFields(o.Fields); err != nil {
 		return err
 	}
+	if err := b.checkValueTypeFields(o.Fields); err != nil {
+		return err
+	}
 	if err := CheckFields(o.Fields, b.fieldKnown); err != nil {
 		return err
 	}
@@ -291,6 +294,9 @@ func (b *Build) Check(o Object, id string, engines ...platform.RuleEngine) error
 		return err
 	}
 	if err := b.checkShape(o); err != nil {
+		return err
+	}
+	if err := b.checkPresentation(o); err != nil {
 		return err
 	}
 	return checkAccess(o)
@@ -706,7 +712,7 @@ func CompileObjectShape(o Object) platform.Entity {
 			Tag: reflect.StructTag(fmt.Sprintf(`json:"state,omitempty" title:"State" field:"readonly" choices:"%s"`, strings.Join(names, ",")))})
 	}
 	model := reflect.New(reflect.StructOf(fields)).Elem().Interface()
-	display := ""
+	display := o.Display
 	for _, f := range o.Fields {
 		if display == "" && f.Search {
 			display = f.Name
@@ -718,7 +724,7 @@ func CompileObjectShape(o Object) platform.Entity {
 			localRules[field.Name] = *field.FormulaExpr
 		}
 	}
-	return platform.Entity{LocalRules: localRules, Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display, Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
+	return platform.Entity{LocalRules: localRules, Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: fieldFormats(o.Fields), ValueTypeBindings: valueTypeBindings(o.Fields), Model: model, Display: display, Constraints: o.Constraints, Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
 }
 
 func goType(kind string) reflect.Type {

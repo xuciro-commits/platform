@@ -66,7 +66,7 @@ func OptionalStoredAddition(old, next platform.EntityInfo) *platform.FieldInfo {
 	}
 	for _, field := range old.Fields {
 		other, ok := next.Field(field.Name)
-		if !ok || field.Type != other.Type || field.Ref != other.Ref || field.Required != other.Required || !slices.Equal(field.Choices, other.Choices) || !reflect.DeepEqual(field.Property, other.Property) {
+		if !ok || field.Type != other.Type || field.Ref != other.Ref || field.Required != other.Required || !slices.Equal(field.Choices, other.Choices) || !reflect.DeepEqual(field.Property, other.Property) || !reflect.DeepEqual(field.ValueType, other.ValueType) {
 			return nil
 		}
 	}
@@ -74,7 +74,7 @@ func OptionalStoredAddition(old, next platform.EntityInfo) *platform.FieldInfo {
 		if _, exists := old.Field(field.Name); exists {
 			continue
 		}
-		if field.Required || field.Ref != "" || field.Property != nil || len(field.Choices) != 0 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
+		if field.Required || field.Ref != "" || field.Property != nil || field.ValueType != nil || len(field.Choices) != 0 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
 			return nil
 		}
 		return &field

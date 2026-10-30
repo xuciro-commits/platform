@@ -14,21 +14,22 @@ import (
 )
 
 type RecordView struct {
-	Effective   *bool                  `json:"effective,omitempty"`
-	Values      map[string]any         `json:"values,omitempty"`
-	ValueErrors map[string]string      `json:"valueErrors,omitempty"`
-	Record      any                    `json:"record"`
-	History     []records.RecordChange `json:"history"`
-	Related     []Related              `json:"related"`
-	Processes   []any                  `json:"processes"`
-	Approvals   []any                  `json:"approvals"`
-	Tasks       []any                  `json:"tasks"`
-	Files       []any                  `json:"files"`
-	Comments    []any                  `json:"comments"`
-	Following   bool                   `json:"following"`
-	Linked      []Related              `json:"linked"`
-	Activity    []any                  `json:"activity"`
-	Deliveries  []RecordDelivery       `json:"deliveries,omitempty"`
+	Effective   *bool                           `json:"effective,omitempty"`
+	Values      map[string]any                  `json:"values,omitempty"`
+	Formats     map[string]platform.FieldFormat `json:"formats,omitempty"`
+	ValueErrors map[string]string               `json:"valueErrors,omitempty"`
+	Record      any                             `json:"record"`
+	History     []records.RecordChange          `json:"history"`
+	Related     []Related                       `json:"related"`
+	Processes   []any                           `json:"processes"`
+	Approvals   []any                           `json:"approvals"`
+	Tasks       []any                           `json:"tasks"`
+	Files       []any                           `json:"files"`
+	Comments    []any                           `json:"comments"`
+	Following   bool                            `json:"following"`
+	Linked      []Related                       `json:"linked"`
+	Activity    []any                           `json:"activity"`
+	Deliveries  []RecordDelivery                `json:"deliveries,omitempty"`
 }
 
 type RecordDelivery struct {
@@ -84,7 +85,7 @@ func (t *Tenant) recordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		record = narrowed.Interface()
 	}
 	values, valueErrors := propertyValues(seen.Info(), record)
-	view := RecordView{Values: values, ValueErrors: valueErrors, Record: record, History: []records.RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
+	view := RecordView{Values: values, ValueErrors: valueErrors, Formats: et.Formats().Evaluate(record, hidden), Record: record, History: []records.RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
 	view.Deliveries = t.recordDeliveries(m, typ+"/"+id, now)
 	if versioning := et.Info().Versioning; versioning != nil {
 		field, _ := et.Info().Field(versioning.ValidFrom)

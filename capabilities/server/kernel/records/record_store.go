@@ -45,6 +45,7 @@ type Type struct {
 	fullImage          bool
 	knowledge          bool
 	retainedProjection bool
+	formats            *FormatSet
 }
 
 func NewStore() *Store {
@@ -66,7 +67,7 @@ func (s *Store) ForkRecordsLocked() *Store {
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
 	draft.current = s.current.Fork(func(typ string) platform.EntityInfo { return draft.types[typ].info })
 	for typ, et := range s.types {
-		copied := &Type{store: draft, indexes: et.indexes.Fork(), info: et.info, knowledge: et.knowledge, rows: et.rows, fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection}
+		copied := &Type{store: draft, indexes: et.indexes.Fork(), info: et.info, knowledge: et.knowledge, rows: et.rows, fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection, formats: et.formats}
 		if copied.rows.Sourced() {
 			copied.rows = copied.rows.Rebind(draft.current.Source(typ, nil))
 		}
@@ -311,7 +312,11 @@ func (s *Store) Install(info platform.EntityInfo) error {
 	if other := s.byGo[info.Go]; other != nil && other.info.Type != info.Type {
 		return fmt.Errorf("%s: another type is already this Go type", info.Type)
 	}
-	et := &Type{store: s, info: info, rows: Rows{}, knowledge: KnowledgeBearing(info)}
+	formats, err := CompileFormats(info)
+	if err != nil {
+		return fmt.Errorf("%s: %w", info.Type, err)
+	}
+	et := &Type{store: s, info: info, rows: Rows{}, knowledge: KnowledgeBearing(info), formats: formats}
 	if before := s.types[info.Type]; before != nil {
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
@@ -400,7 +405,8 @@ func (s *Store) ReplaceReadType(info platform.EntityInfo, rows Rows, retained bo
 		knowledge = old.knowledge
 		delete(s.byGo, old.info.Go)
 	}
-	et := &Type{store: s, info: info, rows: rows, knowledge: knowledge, retainedProjection: retained}
+	formats, _ := CompileFormats(info)
+	et := &Type{store: s, info: info, rows: rows, knowledge: knowledge, retainedProjection: retained, formats: formats}
 	s.types[info.Type], s.byGo[info.Go] = et, et
 	return et
 }

@@ -127,18 +127,36 @@ func standard() platform.Standard {
 	return platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Steward}}
 }
 
+func isValue(field, value string) platform.Expr {
+	return platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", field), platform.ExprLiteralValue("text", value)}}
+}
+
+func inactive() platform.Expr {
+	return platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("decimal", "active"), platform.ExprLiteralValue("decimal", 0)}}
+}
+
 func Entities() []platform.Entity {
 	active := platform.ExprReference("boolean", "active")
 	out := []platform.Entity{
-		{Type: PersonType, Title: "Person", Model: Person{}, Display: "name", Synonyms: "employee,staff,contact,worker",
+		{Type: PersonType, Title: "Person", Model: Person{}, Display: "name", Icon: "user-round", Color: "info", Synonyms: "employee,staff,contact,worker",
+			Format: map[string][]platform.FormatRule{
+				"kind":   {{When: isValue("kind", "employee"), Tone: "info"}, {When: isValue("kind", "contractor"), Tone: "warning"}, {When: isValue("kind", "contact"), Tone: "teal"}},
+				"active": {{When: inactive(), Tone: "neutral"}},
+			},
 			Description: "A human the organisation works with: an employee, a contractor, a contact at a partner.", Standard: standard()},
-		{Type: PartnerType, Title: "Business partner", Model: Partner{}, Display: "name", Synonyms: "customer,supplier,vendor,carrier",
+		{Type: PartnerType, Title: "Business partner", Model: Partner{}, Display: "name", Icon: "handshake", Color: "teal", Synonyms: "customer,supplier,vendor,carrier",
+			Format:      map[string][]platform.FormatRule{"active": {{When: inactive(), Tone: "neutral"}}},
 			Description: "An organisation or person we trade with, in one or more roles: customer, supplier, carrier.", Standard: standard(), Implements: []string{Coded}},
-		{Type: SiteType, Title: "Site", Model: Site{}, Display: "name", Synonyms: "plant,warehouse,factory,office",
+		{Type: SiteType, Title: "Site", Model: Site{}, Display: "name", Icon: "building-2", Color: "orange", Synonyms: "plant,warehouse,factory,office",
+			Format:      map[string][]platform.FormatRule{"active": {{When: inactive(), Tone: "neutral"}}},
 			Description: "A physical place the organisation operates: a plant, a warehouse, an office.", Standard: standard(), Implements: []string{Coded}},
 		{Type: LocationType, Title: "Location", Model: Location{}, Display: "code", Synonyms: "bin,storage bin,work centre,line,dock",
 			Description: "A place inside a site: a zone, an aisle, a bin, a line, a work centre, a dock.", Standard: standard(), Implements: []string{Coded}},
-		{Type: MaterialType, Title: "Material", Model: Material{}, Display: "name", Synonyms: "item,SKU,part,product,article",
+		{Type: MaterialType, Title: "Material", Model: Material{}, Display: "name", Icon: "package", Color: "purple", Synonyms: "item,SKU,part,product,article",
+			Format: map[string][]platform.FormatRule{
+				"kind":   {{When: isValue("kind", "finished"), Tone: "success"}, {When: isValue("kind", "raw"), Tone: "info"}, {When: isValue("kind", "service"), Tone: "teal"}},
+				"active": {{When: inactive(), Tone: "neutral"}},
+			},
 			Description: "Anything counted, stored, bought, made or sold.", Standard: standard(), Implements: []string{Coded}},
 		{Type: UoMType, Title: "Unit of measure", Model: UoM{}, Display: "code", Synonyms: "unit,UoM",
 			Description: "A unit quantities are measured in.", Standard: standard(), Implements: []string{Coded}, Seed: DefaultUnits()},

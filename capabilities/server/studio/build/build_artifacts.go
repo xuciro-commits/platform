@@ -364,7 +364,7 @@ func (b *Build) releaseDraftsOf(candidate platform.ReleaseCandidate) ([]Draft, e
 
 func (*Build) AssetKinds() []platform.AssetKind {
 	return []platform.AssetKind{
-		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
+		platform.AssetObject, platform.AssetAction, platform.AssetPage, platform.AssetApp, platform.AssetFlow, platform.AssetPropertyType, platform.AssetValueType, platform.AssetLinkType, platform.AssetQuery, platform.AssetFunction, platform.AssetCompute,
 		platform.AssetConnection, platform.AssetSource, platform.AssetDataset, platform.AssetPipeline, platform.AssetWriteback, platform.AssetMatching, platform.AssetAgent, platform.AssetEvaluation, platform.AssetTestPlan, platform.AssetSampleSet, platform.AssetObservation, platform.AssetAlert,
 	}
 }
@@ -995,7 +995,7 @@ func orderOwnerInstallations(assets []platform.ReleaseAsset, plans []platform.As
 
 func draftAssetRef(typ, name string) (platform.AssetRef, error) {
 	kinds := map[string]platform.AssetKind{ObjectType: platform.AssetObject, PageType: platform.AssetPage, AppType: platform.AssetApp, ProcessType: platform.AssetFlow, SampleSetType: platform.AssetSampleSet,
-		PropertyTypeType: platform.AssetPropertyType, LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent,
+		PropertyTypeType: platform.AssetPropertyType, ValueTypeType: platform.AssetValueType, LinkTypeType: platform.AssetLinkType, QueryType: platform.AssetQuery, FunctionType: platform.AssetFunction, AgentType: platform.AssetAgent,
 		CodeType: platform.AssetCompute, TableType: platform.AssetCompute, AlertType: platform.AssetAlert, TestPlanType: platform.AssetTestPlan}
 	kind := kinds[typ]
 	if kind == "" {
@@ -1176,6 +1176,8 @@ func definitionFamilyOf(record any) definitionFamily {
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case PropertyType:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
+	case ValueType:
+		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case LinkType:
 		return definitionFamily{r.Record, r.Name, r.State, r.Version, r.Published, r.Versions}
 	case SampleSetRecord:
@@ -1191,6 +1193,8 @@ func setDefinitionFamily(record any, family definitionFamily) {
 	case *Function:
 		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	case *PropertyType:
+		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
+	case *ValueType:
 		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions
 	case *LinkType:
 		r.Record, r.State, r.Version, r.Published, r.Versions = family.Record, family.State, family.Version, family.Published, family.Versions

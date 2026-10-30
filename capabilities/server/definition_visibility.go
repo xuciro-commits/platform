@@ -74,6 +74,35 @@ func (t *Tenant) definitionsFrom(m platform.Member, registeredDefinitions []plat
 					continue
 				}
 			}
+		case platform.AssetValueType:
+			if def.ValueType == nil {
+				continue
+			}
+			def.ValueVersions = maps.Clone(def.ValueVersions)
+			visible := func(version string) bool {
+				if m.Holds(def.Ref.App, "builder") {
+					return true
+				}
+				for _, e := range entities {
+					for _, f := range e.Fields {
+						if f.ValueType != nil && f.ValueType.Ref == def.Ref && f.ValueType.SourceVersion == version {
+							return true
+						}
+					}
+				}
+				return false
+			}
+			for version := range def.ValueVersions {
+				if !visible(version) {
+					delete(def.ValueVersions, version)
+				}
+			}
+			if !visible(def.Version) {
+				def.ValueType = nil
+				if len(def.ValueVersions) == 0 {
+					continue
+				}
+			}
 		case platform.AssetLinkType:
 			if def.LinkType == nil {
 				continue

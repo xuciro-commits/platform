@@ -1371,6 +1371,8 @@ export type Definition = {
   contentVersion?: string;
   propertyType?: PropertyType;
   propertyVersions?: Record<string, PropertyType>;
+  valueType?: ValueType;
+  valueVersions?: Record<string, ValueType>;
   linkType?: LinkType;
   linkVersions?: Record<string, LinkType>;
   ref: AssetRef;
@@ -1755,6 +1757,8 @@ export type EntityInfo = {
   knowledgeFiles?: boolean;
   app: string;
   display: string;
+  icon?: string;
+  color?: string;
   fields: FieldInfo[];
   standard: string[];
   implements?: string[];
@@ -1830,6 +1834,7 @@ export type Field = {
   key?: string;
   label?: string;
   constraints?: InputConstraints;
+  valueType?: AssetBinding;
   range?: DateRange;
   group?: string;
   manual?: boolean;
@@ -1846,6 +1851,12 @@ export type FieldCondition = {
   in: string[];
 };
 
+export type FieldFormat = {
+  tone: "neutral" | "info" | "success" | "warning" | "danger" | "purple" | "pink" | "teal" | "orange";
+  icon?: string;
+  label?: string;
+};
+
 export type FieldInfo = {
   aiInput?: boolean;
   sourceType?: "record" | "user-input" | "external-input" | "generated";
@@ -1853,6 +1864,8 @@ export type FieldInfo = {
   range?: DateRange;
   group?: string;
   property?: AssetBinding;
+  valueType?: AssetBinding;
+  format?: FormatRule[];
   name: string;
   title: string;
   type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines" | "json";
@@ -1920,6 +1933,13 @@ export type FlowSummary = {
   flow: string;
   state: string;
   trace: TraceLine[];
+};
+
+export type FormatRule = {
+  when: Expr;
+  tone: "neutral" | "info" | "success" | "warning" | "danger" | "purple" | "pink" | "teal" | "orange";
+  icon?: string;
+  label?: string;
 };
 
 export type Frame = {
@@ -2137,6 +2157,7 @@ export type InputConstraints = {
   after?: string;
   inclusive?: boolean;
   dateTime?: boolean;
+  pattern?: string;
 };
 
 export type InputOption = {
@@ -2588,6 +2609,7 @@ export type ObjectSetRequest = {
   histogram?: HistogramQuery;
   maxRows?: number;
   collection?: RecordSetRef;
+  format?: boolean;
 };
 
 export type ObservationCoverage = {
@@ -3636,6 +3658,7 @@ export type RecordPage = {
   records: unknown[];
   total: number;
   partial?: boolean;
+  formats?: Record<string, Record<string, FieldFormat>>;
 };
 
 export type RecordSet = {
@@ -3688,6 +3711,7 @@ export type RecordVersionPin = {
 export type RecordView = {
   effective?: boolean;
   values?: Record<string, unknown>;
+  formats?: Record<string, FieldFormat>;
   valueErrors?: Record<string, string>;
   record: unknown;
   history: RecordChange[];
@@ -4717,6 +4741,16 @@ export type ValueSchema = {
   description?: string;
   maxLength?: number;
   maxItems?: number;
+};
+
+export type ValueType = {
+  name: string;
+  title: string;
+  description: string;
+  base: "text" | "longtext" | "integer" | "decimal" | "date" | "datetime";
+  constraints?: InputConstraints;
+  pattern?: string;
+  choices?: string[];
 };
 
 export type Vendor = {

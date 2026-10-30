@@ -366,6 +366,7 @@ type Manifest struct {
 	Pages         []Page
 	LinkTypes     []LinkType
 	PropertyTypes []PropertyType
+	ValueTypes    []ValueType
 	Interfaces    []Interface
 	Queries       []NamedQuery
 	Functions     []AIFunction
