@@ -36,7 +36,7 @@ export function BindingEditor({ label, value, onChange, steps, schema, optional 
       const raw = event.dataTransfer.getData(bindingMime); if (!raw) return;
       event.preventDefault(); event.stopPropagation(); try { const binding = JSON.parse(raw) as Binding; if (choices.includes(binding.source)) onChange(binding); } catch {   }
     }}>
-    <div className="flex items-center justify-between gap-2 text-xs font-medium"><span>{label}</span>{schema && <code className="text-[9px] font-normal text-muted">{schema.type}</code>}
+    <div className="flex items-center justify-between gap-2 text-xs font-medium"><span>{label}</span>{schema && <code className="text-2xs font-normal text-muted">{schema.type}</code>}
       {optional && value && <Button variant="ghost" type="button" onClick={() => { input.clear(); onChange(undefined); }} aria-label={t("Remove binding")} className="ml-auto rounded p-0.5 text-muted hover:text-danger"><Trash2 className="size-3" /></Button>}</div>
     {!value ? <Button variant="ghost" onClick={() => onChange(binding)}>{t("Add binding")}</Button> : <>
       <Select aria-label={t("Binding source")} value={binding.source} onChange={(event) => {
@@ -131,7 +131,7 @@ export function DataField({ title, schema, binding, path = [] }: { title: string
     <Tooltip content={t("Drag this value into a binding")}><div className="flex items-center gap-1 rounded px-1 py-1 hover:bg-row-hover" draggable
       onDragStart={(event) => { event.dataTransfer.setData(bindingMime, JSON.stringify({ ...binding, path })); event.dataTransfer.effectAllowed = "copy"; }}>
       {entries.length > 0 ? <Button variant="ghost" type="button" onClick={() => setExpanded(!expanded)} aria-label={t(expanded ? "Collapse fields" : "Expand fields")}>{expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}</Button> : <Braces className="size-3 text-muted" />}
-      <span className="min-w-0 flex-1 truncate text-xs">{title}</span><code className="text-[9px] text-muted">{schema?.type ?? "value"}{schema?.nullable ? "?" : ""}</code><GripVertical className="size-3 text-muted" />
+      <span className="min-w-0 flex-1 truncate text-xs">{title}</span><code className="text-2xs text-muted">{schema?.type ?? "value"}{schema?.nullable ? "?" : ""}</code><GripVertical className="size-3 text-muted" />
     </div></Tooltip>
     {expanded && entries.length > 0 && <div className="ml-2 border-l border-border pl-2">{entries.map(([name, field]) => <DataField key={name} title={name} schema={field} binding={binding} path={[...path, name]} />)}</div>}
   </div>;

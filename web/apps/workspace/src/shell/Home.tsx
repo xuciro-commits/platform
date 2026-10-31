@@ -20,7 +20,7 @@ export function Home() {
   return <div className="mx-auto grid w-full max-w-6xl gap-8 py-3 sm:py-6">
     <header className="grid gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{greeting.replace("{name}", me.principalId)}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{greeting.replace("{name}", me.principalId)}</h1>
         <p className="mt-2 text-sm text-muted">{t("Open an application or continue your work.")}</p>
       </div>
       <nav aria-label={t("Workspace tasks")} className="flex flex-wrap gap-2">

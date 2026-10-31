@@ -146,10 +146,10 @@ export function CanvasEditor({
    <span className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded bg-primary" style={{width:axis==='width'?3:40,height:axis==='width'?40:3}}/>
   </div></Tooltip>)}</div>
   {resizeGuide&&<div style={{...box(resizeGuide),zIndex:71,pointerEvents:'none',background:'var(--color-primary)'}}/>}
-  {resizeLabel&&<span role="status" style={{position:'fixed',left:selectionBox.x+12,top:selectionBox.y+12,zIndex:62}} className="rounded bg-surface p-1 text-xs shadow">{resizeLabel}</span>}
+  {resizeLabel&&<span role="status" style={{position:'fixed',left:selectionBox.x+12,top:selectionBox.y+12,zIndex:62}} className="rounded bg-surface p-1 text-xs shadow-sm">{resizeLabel}</span>}
  </>:null;
  return <Context.Provider value={{start,select:onSelect,selected,disabled}}><div ref={root} className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>{typeof document!=='undefined'&&createPortal(<>{selection}{drag&&<>
   {drag.target&&<div style={{...box(drag.target.rect),zIndex:62,pointerEvents:'none',background:'color-mix(in srgb, var(--color-primary) 18%, transparent)',outline:'2px solid var(--color-primary)'}}/>}
-  <div role="status" style={{position:'fixed',left:drag.x+14,top:drag.y+14,zIndex:63,pointerEvents:'none'}} className="rounded bg-surface p-2 text-xs shadow">{drag.payload.label} · {drag.target?.label??t('Choose a drop location')}</div>
+  <div role="status" style={{position:'fixed',left:drag.x+14,top:drag.y+14,zIndex:63,pointerEvents:'none'}} className="rounded bg-surface p-2 text-xs shadow-sm">{drag.payload.label} · {drag.target?.label??t('Choose a drop location')}</div>
  </>}</>,document.body)}</Context.Provider>;
 }

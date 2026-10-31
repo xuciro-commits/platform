@@ -120,7 +120,7 @@ export function Catalog({ initialID, initialLayer, initialExpand = false }: { in
     } : undefined}
     dock={{ label: t("Library dock"), value: dock, onChange: setDock, tabs: [
       { id: "health", title: t("Health"), badge: health.deprecated.length || undefined, content: <div className="grid gap-3 p-3 text-xs sm:grid-cols-3">
-        <div><p className="text-muted">{t("Assets")}</p><p className="text-2xl font-semibold">{index.entries.length}</p>
+        <div><p className="text-muted">{t("Assets")}</p><p className="text-xl font-semibold">{index.entries.length}</p>
           <ul className="mt-1 text-muted">{health.owners.map(([owner, n]) => <li key={owner}>{owner} · {n}</li>)}</ul></div>
         <div><p className="text-muted">{t("Without a live example")} · {health.noExample.length}</p><div className="flex flex-wrap gap-1">{health.noExample.map((e) => pick(e.id))}</div></div>
         <div><p className="text-muted">{t("Deprecated")} · {health.deprecated.length}</p><div className="flex flex-wrap gap-1">{health.deprecated.map((e) => pick(e.id))}</div>

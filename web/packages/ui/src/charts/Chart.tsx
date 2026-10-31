@@ -80,7 +80,7 @@ function Kpi({ spec, data }: { spec: ChartSpec; data: AggregateData }) {
   return (
     <div className="flex flex-wrap items-baseline gap-4">
       {(data.rows.length ? data.rows : [{}]).map((r, i) => (
-        <span key={i} className={"font-semibold tabular-nums "+color+" "+(display?.variant==="tag"?"rounded-md border border-border px-2 py-1 text-sm":"text-2xl")}>{format(data.rows.length ? r[column] : display&&e.aggregate!=="count"?undefined:0, r)}</span>
+        <span key={i} className={"font-semibold tabular-nums "+color+" "+(display?.variant==="tag"?"rounded-md border border-border px-2 py-1 text-sm":"text-xl")}>{format(data.rows.length ? r[column] : display&&e.aggregate!=="count"?undefined:0, r)}</span>
       ))}
       {display?.annotation?.text&&<span className="text-xs text-muted"><span>{t("Static note")}: </span><span aria-label={t({up:"Upward annotation",down:"Downward annotation",flat:"Unchanged annotation"}[display.annotation.direction]??"Unchanged annotation")}>{({up:"↑",down:"↓",flat:"→"} as Record<string,string>)[display.annotation.direction]}</span> {display.annotation.text}</span>}
     </div>
