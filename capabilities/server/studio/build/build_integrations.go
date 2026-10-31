@@ -751,7 +751,30 @@ func (b *Build) datasetVersionEntity() platform.Entity {
 
 func datasetActions() []platform.Action {
 	return []platform.Action{{Schema: SchemaDatasetLoad, Target: DatasetType, Capability: "integrations", Title: "Load a version", Description: "Append the rows one pull or run produced as the dataset's next version.", Roles: []string{Builder, Integrator},
-		Payload: []platform.Field{{Name: "rows", Type: "json", Description: "The rows, an array of objects"}, {Name: "csv", Type: "longtext", Description: "Or the rows as CSV under a header line"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}}}
+		Payload: []platform.Field{{Name: "rows", Type: "json", Description: "The rows, an array of objects"}, {Name: "csv", Type: "longtext", Description: "Or the rows as CSV under a header line"}, {Name: "producer", Type: "string", Description: "The source or pipeline that produced them"}, {Name: "marking", Type: "string", Description: "The marking the rows carry; raises the dataset's"}}},
+		{Schema: SchemaDatasetProjected, Target: DatasetType, Capability: "integrations", Title: "Keep projection result", Description: "Retain what projecting one version into an object type did.", Roles: []string{Builder},
+			Payload: []platform.Field{{Name: "projection", Type: "json", Required: true, Description: "The object type, version, counts and why the projection paused"}}}}
+}
+
+func (b *Build) submitDatasetProjected(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return b.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		var payload struct {
+			Projection DatasetProjection `json:"projection"`
+		}
+		ds, ok := platform.Get[Dataset](c, s.GetTarget().GetId())
+		if !ok || json.Unmarshal(s.GetPayload(), &payload) != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Projection result has no dataset")
+		}
+		p := payload.Projection
+		if p.Object == "" || p.Version < 1 || p.Version > ds.Version || p.At.IsZero() || len(p.Problems) > 5 || p.Written+p.Refused > p.Rows {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A projection result names an object type, a loaded version and counts that add up")
+		}
+		return func(r *pb.ChangeRecord) {
+			ds.Projections = append(slices.DeleteFunc(slices.Clone(ds.Projections), func(x DatasetProjection) bool { return x.Object == p.Object }), p)
+			slices.SortFunc(ds.Projections, func(a, b DatasetProjection) int { return strings.Compare(a.Object, b.Object) })
+			c.Put(r, ds)
+		}, nil
+	})
 }
 
 func DatasetSchema(rows []map[string]any, order []string) []DatasetField {
@@ -2992,30 +3015,52 @@ func (c Connection) Resolve(ref string) string {
 }
 
 const (
-	DatasetType        = "build.dataset"
-	DatasetVersionType = "build.datasetversion"
-	SchemaDatasetLoad  = "build.dataset.load"
-	DatasetKeepDefault = 3
+	DatasetType            = "build.dataset"
+	DatasetVersionType     = "build.datasetversion"
+	SchemaDatasetLoad      = "build.dataset.load"
+	SchemaDatasetProjected = "build.dataset.projected"
+	DatasetKeepDefault     = 3
 )
 
 type Dataset struct {
 	platform.Record
-	Name              string         `json:"name" field:"required,search"`
-	Title             string         `json:"title" field:"required,search"`
-	Keep              int            `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`
-	Marking           string         `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking"`
-	Producer          string         `json:"producer,omitempty" field:"readonly"`
-	Schema            []DatasetField `json:"schema,omitempty" field:"readonly" type:"json"`
-	Version           int            `json:"version,omitempty" field:"readonly" title:"Latest version"`
-	Last              *DatasetLoad   `json:"last,omitempty" field:"readonly" type:"json" title:"Latest load"`
-	DefinitionVersion int            `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
-	Published         string         `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
-	Versions          []string       `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
+	Name              string              `json:"name" field:"required,search"`
+	Title             string              `json:"title" field:"required,search"`
+	Keep              int                 `json:"keep,omitempty" title:"Versions kept" help:"How many versions stay readable; default 3"`
+	Marking           string              `json:"marking,omitempty" choices:"internal,confidential,restricted" title:"Marking"`
+	Producer          string              `json:"producer,omitempty" field:"readonly"`
+	Schema            []DatasetField      `json:"schema,omitempty" field:"readonly" type:"json"`
+	Version           int                 `json:"version,omitempty" field:"readonly" title:"Latest version"`
+	Last              *DatasetLoad        `json:"last,omitempty" field:"readonly" type:"json" title:"Latest load"`
+	Projections       []DatasetProjection `json:"projections,omitempty" field:"readonly" type:"json" title:"Projections"`
+	DefinitionVersion int                 `json:"definitionVersion,omitempty" field:"readonly" title:"Version"`
+	Published         string              `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+	Versions          []string            `json:"definitionVersions,omitempty" field:"readonly" type:"json" title:"Published versions"`
 }
 
 type DatasetField struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
+}
+
+type DatasetProjection struct {
+	Object   string    `json:"object"`
+	Version  int       `json:"version"`
+	At       time.Time `json:"at"`
+	Rows     int       `json:"rows"`
+	Written  int       `json:"written"`
+	Refused  int       `json:"refused"`
+	Paused   string    `json:"paused,omitempty"`
+	Problems []string  `json:"problems,omitempty"`
+}
+
+func (d Dataset) Projection(object string) (DatasetProjection, bool) {
+	for _, p := range d.Projections {
+		if p.Object == object {
+			return p, true
+		}
+	}
+	return DatasetProjection{}, false
 }
 
 type DatasetLoad struct {

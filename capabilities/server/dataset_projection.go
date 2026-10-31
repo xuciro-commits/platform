@@ -1,10 +1,14 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log"
+	"slices"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/studio/build"
 )
@@ -32,7 +36,8 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	t.mu.Lock()
 	c := t.automation(build.ID, false)
 	ds, ok := platform.Get[build.Dataset](c, dataset)
-	if !ok || ds.Version == 0 || t.projectedVersion(object, dataset) == ds.Version {
+	previous, known := ds.Projection(object)
+	if !ok || ds.Version == 0 || known && previous.Version == ds.Version && previous.Paused == "" {
 		t.mu.Unlock()
 		return
 	}
@@ -44,12 +49,18 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	member := c.Member
 	member.Roles = map[string]string{build.ID: build.Builder}
 	t.mu.Unlock()
+	result := build.DatasetProjection{Object: object, Version: ds.Version, At: now, Rows: len(data)}
+	pause := func(reason string) {
+		result.Paused = reason
+		t.recordProjection(member, dataset, previous, known, result, now)
+	}
 	if err != nil {
-		log.Printf("dataset projection of %s unavailable: %v", object, err)
+		pause(err.Error())
 		return
 	}
+	result.Version = version
 	if open := t.unguarded(object, marking); len(open) > 0 {
-		log.Printf("dataset projection of %s held: %s is %s and fields %v name no readers", object, ds.Name, marking, open)
+		pause(fmt.Sprintf("The dataset is %s and the fields %v name no readers", marking, open))
 		return
 	}
 	at := now
@@ -58,46 +69,56 @@ func (t *Tenant) projectDataset(object, app, dataset string, now time.Time) {
 	}
 	rows, binding, err := t.declaredRows(object, "dataset", dataset, data, at)
 	if err != nil || binding == nil {
-		log.Printf("dataset projection of %s refused: %v", object, err)
+		pause(fmt.Sprintf("The data source binding is unavailable: %v", err))
 		return
 	}
 	if _, refusal := t.prepareRows(member, object, "dataset:"+ds.Name, rows, now); refusal != nil {
-		log.Printf("dataset projection rows unavailable: %v", refusal)
+		pause(refusal.Message)
 		return
 	}
-	refused := 0
+	problem := func(row build.SourceRow, message string) {
+		result.Refused++
+		if len(result.Problems) < 5 {
+			result.Problems = append(result.Problems, row.ID+": "+message)
+		}
+	}
 	for _, row := range rows {
 		if row.Error != "" {
-			refused++
+			problem(row, row.Error)
 			continue
 		}
 		key := fmt.Sprintf("dataset:%s:%s@%d:%s", object, dataset, version, row.Key)
-		if t.integrationAnswered(app, key) {
+		if t.integrationRefused(app, key) {
+			problem(row, "refused")
 			continue
 		}
-		if err := t.submitIntegrationRow(member, app, object, binding, row, key, now); err != nil {
-			if !t.integrationRefused(app, key) {
-				log.Printf("dataset projection of %s paused at %s: %s", object, row.ID, err.Message)
-				return
+		if !t.integrationAnswered(app, key) {
+			if err := t.submitIntegrationRow(member, app, object, binding, row, key, now); err != nil {
+				if !t.integrationRefused(app, key) {
+					pause(fmt.Sprintf("Paused at %s: %s", row.ID, err.Message))
+					return
+				}
+				problem(row, err.Message)
+				continue
 			}
-			refused++
 		}
+		result.Written++
 	}
-	if refused > 0 {
-		log.Printf("dataset projection of %s from %s v%d refused %d of %d rows", object, ds.Name, version, refused, len(rows))
-	}
-	t.projectionMu.Lock()
-	if t.projected == nil {
-		t.projected = map[string]int{}
-	}
-	t.projected[object+"\n"+dataset] = version
-	t.projectionMu.Unlock()
+	t.recordProjection(member, dataset, previous, known, result, now)
 }
 
-func (t *Tenant) projectedVersion(object, dataset string) int {
-	t.projectionMu.Lock()
-	defer t.projectionMu.Unlock()
-	return t.projected[object+"\n"+dataset]
+func (t *Tenant) recordProjection(member platform.Member, dataset string, previous build.DatasetProjection, known bool, result build.DatasetProjection, now time.Time) {
+	if known && previous.Version == result.Version && previous.Paused == result.Paused && previous.Written == result.Written && previous.Refused == result.Refused && slices.Equal(previous.Problems, result.Problems) {
+		return
+	}
+	payload, _ := json.Marshal(map[string]any{"projection": result})
+	digest := fnv.New64a()
+	_, _ = digest.Write(payload)
+	key := fmt.Sprintf("projection:%s:%s@%d:%x", result.Object, dataset, result.Version, digest.Sum64())
+	if _, err := t.Submit(member, &pb.Submission{TenantId: t.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: key,
+		Target: &pb.EntityRef{Type: build.DatasetType, Id: dataset}, Schema: &pb.SchemaRef{Name: build.SchemaDatasetProjected, Version: 1}, Payload: payload}, now); err != nil {
+		log.Printf("dataset projection result of %s not kept: %s", result.Object, err.Message)
+	}
 }
 
 func (t *Tenant) integrationAnswered(app, key string) bool {

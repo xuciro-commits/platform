@@ -82,6 +82,11 @@ test("F1 builder goes from an empty project to an application a business user ac
     await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
     await page.getByRole("button", { name: "Activate release", exact: true }).click();
     await expect(page.getByText("Release active for operators.")).toBeVisible({ timeout: 60_000 });
+    await expect.poll(() => page.evaluate(async (dataset) => {
+      const answer = await fetch(`/v1/records/build.dataset?limit=500`, { headers: { authorization: "Bearer builder" } });
+      const record = (await answer.json()).records.find((entry: { name: string }) => entry.name === dataset);
+      return record?.projections?.[0]?.written ?? 0;
+    }, `${name}rows`), { timeout: 30_000 }).toBe(2);
   });
 
   await test.step("7 a business user sees the dataset rows as orders and creates one", async () => {

@@ -4,7 +4,17 @@ import { Button, ContextHelp, EmptyState, Input, InputDraftProvider, Notice, Pan
 import { Plus, Trash2 } from "lucide-react";
 import type { Process } from "./object-model";
 
-type Published = { id: string; name: string; title: string; state: string; object?: string; outputObject?: string };
+type Projection = { object: string; version: number; rows: number; written: number; refused: number; paused?: string; problems?: string[] };
+type Published = { id: string; name: string; title: string; state: string; object?: string; outputObject?: string; projections?: Projection[] };
+
+function ProjectionStatus({ projection }: { projection?: Projection }) {
+  if (!projection) return <p role="status" className="mt-3 text-xs text-muted">{t("Not projected yet. Rows become objects once this object type is saved and the dataset has a version.")}</p>;
+  return <div role="status" aria-label={t("Projection")} className="mt-3 grid gap-1">
+    {projection.paused ? <Notice tone="warning" message={t("Projection of version {version} is paused: {reason} It retries automatically.", { version: projection.version, reason: t(projection.paused) })} />
+      : <p className="text-xs text-muted">{t("Version {version} projected: {written} of {rows} rows written, {refused} refused.", { version: projection.version, written: projection.written, rows: projection.rows, refused: projection.refused })}</p>}
+    {projection.problems?.map(problem => <p key={problem} className="break-words font-mono text-2xs text-danger">{problem}</p>)}
+  </div>;
+}
 const strategies = [
   ["edits-win", "Edits win (default)"],
   ["latest-source-time", "Latest source time wins"],
@@ -51,6 +61,7 @@ export function ObjectDataSourcesEditor({ process, parent, refused, onChange }: 
           <label className={fieldClass}>{t("Source time column")}<Input value={binding.sourceTime ?? ""} placeholder="changed_at" onChange={event => patch(at, { sourceTime: event.target.value || undefined })} />
             <span className="text-muted">{t("Optional. Needed to compare against edits under “Latest source time wins”.")}</span></label>
         </div>
+        {binding.kind === "dataset" && <ProjectionStatus projection={known.find(record => record.id === binding.source)?.projections?.find(entry => entry.object === parent)} />}
         {target && target !== parent && <div className="mt-3"><Notice tone="warning" message={(binding.kind === "pipeline" ? t("This pipeline writes to {object}, not to this object.", { object: target }) : t("This source writes to {object}, not to this object.", { object: target }))} /></div>}
         <div className="mt-3 grid gap-2">
           <div className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2 text-xs font-medium text-muted"><span>{t("Column")}</span><span>{t("Attribute")}</span><span>{t("When both have a value")}</span><span className="w-7" /></div>

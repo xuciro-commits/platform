@@ -300,6 +300,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if s.GetSchema().GetName() == SchemaPipelineRan {
 		return b.submitPipelineRan(c, s, now)
 	}
+	if s.GetSchema().GetName() == SchemaDatasetProjected {
+		return b.submitDatasetProjected(c, s, now)
+	}
 	if s.GetSchema().GetName() == SchemaWritebackAnswered {
 		return b.submitWritebackAnswered(c, s, now)
 	}

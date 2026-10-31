@@ -52,7 +52,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
   - Properties：属性表（显示名、API 名、类型、必填、标题、主键）+ Inspector（类型细节、值类型、描述、可见性、字段权限）；“添加属性”在表尾行内添加。
   - Links：关系类型小表；“新建关系类型”在 Sheet 中选目标类型与基数。
   - Actions：本类型的动作类型列表 + “New action type”（预置模板：创建、修改、删除、改状态）。
-  - Datasources：数据源绑定（数据集或管道输出）+ 列到属性的映射表；未映射的必填属性标红。
+  - Datasources：数据源绑定（数据集或管道输出）+ 列到属性的映射表；未映射的必填属性标红；数据集绑定显示最近一次投影的版本、写入与拒绝的行数、前几条问题与暂停原因。
   - Security：行策略（M10）、字段权限、生效标记（来自数据源，只读，链接到 Data Lineage）。
   - Display：图标、颜色、标题属性、关键属性、对象视图（默认生成或选择 Workshop 对象视图模块）。
 - 动作类型页面：
@@ -157,7 +157,7 @@ read-when: 改动某个工具应用的侧栏、首页、资源页或画布编辑
 ## 现存差距
 
 - Logic 拥有逻辑流与查询两类旧资源，查询应并入函数或对象集（路线图 P3.11）。
-- Monitoring 侧栏仍有 Workflow runs、Work queue；Data Connection 有 Observation sources 与管理员项 Connectors、Endpoints、Outbound effects（P3.4）。
+- Monitoring 没有统一的 Runs 表（同步、构建、投影、自动化、函数、投递），侧栏仍有 Workflow runs、Work queue；Data Connection 有 Observation sources 与管理员项 Connectors、Endpoints、Outbound effects（P3.4）。
 - Control Panel 侧栏约 18 项，无独立 Markings 分区（P3.4）。
 - Knowledge、Master data、Organisation directory 是独立业务应用（P2.10）。
 - Marketplace 无安装审阅与升级审阅（P5.3、P5.4）。
