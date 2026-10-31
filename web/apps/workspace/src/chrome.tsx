@@ -22,8 +22,8 @@ function StudioReference({ route, context, children }: { route: Route; context?:
   return <>{route.params?.surface === "studio" && context ? context(route, children) : children}</>;
 }
 
-const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "warning" }, approved: { label: t("Approved"), tone: "success" },
-  rejected: { label: t("Rejected"), tone: "danger" }, refused: { label: t("Refused when run"), tone: "danger" }, withdrawn: { label: t("Withdrawn"), tone: "neutral" } });
+const requestStates = defineStatuses({ pending: { label: "Pending", tone: "warning" }, approved: { label: "Approved", tone: "success" },
+  rejected: { label: "Rejected", tone: "danger" }, refused: { label: "Refused when run", tone: "danger" }, withdrawn: { label: "Withdrawn", tone: "neutral" } });
 
 function RecordInspection({ type, id }: { type: string; id: string }) {
   const { source } = useHost();
@@ -245,8 +245,8 @@ function Saved({ id }: { id: string }) {
 }
 
 export const personalWork = defineApp({
-  id: "my-work", serves: [], category: "govern", title: t("Notifications"), icon: <Bell />,
-  description: t("Your notifications, tasks, requests and pending decisions across applications."),
+  id: "my-work", serves: [], category: "govern", title: "Notifications", icon: <Bell />,
+  description: "Your notifications, tasks, requests and pending decisions across applications.",
   home: { view: "notifications" },
   views: [
     { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
@@ -263,8 +263,8 @@ export const personalWork = defineApp({
 });
 
 export const explorerApplication = defineApp({
-  id: "object-explorer", serves: [], category: "analyze", title: t("Object Explorer"), icon: <Compass />,
-  description: t("Search, filter and open objects of every type you may read."),
+  id: "object-explorer", serves: [], category: "analyze", title: "Object Explorer", icon: <Compass />,
+  description: "Search, filter and open objects of every type you may read.",
   for: host => host.entities.length > 0,
   home: { view: "explorer" },
   views: [{ id: "explorer", title: () => t("Object Explorer"), render: (p) => <ObjectExplorer type={p.type} /> }],
@@ -272,8 +272,8 @@ export const explorerApplication = defineApp({
 });
 
 export const lineageApplication = defineApp({
-  id: "data-lineage", serves: [], category: "analyze", title: t("Data Lineage"), icon: <Network />,
-  description: t("How resources depend on each other, and what a change reaches."),
+  id: "data-lineage", serves: [], category: "analyze", title: "Data Lineage", icon: <Network />,
+  description: "How resources depend on each other, and what a change reaches.",
   for: host => host.holds("build", "builder", "integrator"),
   home: { view: "lineage" },
   views: [{ id: "lineage", title: () => t("Data Lineage"), render: (p) => <Lineage ref={p.ref} node={p.node} /> }],

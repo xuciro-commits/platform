@@ -82,7 +82,7 @@ export function Evaluations() {
   );
 }
 
-const switches = defineStatuses({ working: { label: t("Working"), tone: "success" }, suspended: { label: t("Suspended"), tone: "danger" } });
+const switches = defineStatuses({ working: { label: "Working", tone: "success" }, suspended: { label: "Suspended", tone: "danger" } });
 
 function AgentsOverview() {
   const { decide, can } = useHost();

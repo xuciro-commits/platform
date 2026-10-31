@@ -1,7 +1,7 @@
 import "./i18n";
-import { ApplicationSessionsProvider, HostContext, type AppUI, type Me } from "@platform/app";
+import { ApplicationSessionsProvider, HostContext, withApp, type AppUI, type Me } from "@platform/app";
 import { EdgeClient, OfflineReadError, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
+import { Button, Workspace, notify, routeToHash, useTheme, type Route, t, language, setLanguage, setCurrency, useLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +21,7 @@ import { OfflinePreparation } from "./offline/Preparation";
 export type { Identity } from "./session/identity";
 
 export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig; session: OidcSession }; identities: Identity[] }) {
+  const spoken = useLanguage();
   const [token, setToken] = useState(signedIn?.session.accessToken ?? remembered(IDENTITY_KEY) ?? preferred(identities));
   const [tenant, setTenant] = useState(remembered(TENANT_KEY) ?? "");
   const [signingOut, setSigningOut] = useState(false);
@@ -97,7 +98,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     let live = true;
     setPackageFailure(undefined);
     void Promise.all(selectedPackages.map((p) => p.load().then((m) => ({ source: p,
-      apps: [m.default, ...(m.contributions ?? [])].map((app) => ({ ...app, serves: app.serves ?? p.serves })) }))))
+      apps: [m.default, ...(m.contributions ?? [])].map((app) => withApp(app, { serves: app.serves ?? p.serves })) }))))
       .then((groups) => { if (live) setLoadedPackages({ scope: identityScope!, groups }); })
       .catch(() => { if (live) setPackageFailure(t("The workspace's applications could not load. Retry, or sign in again.")); });
     return () => { live = false; };
@@ -120,7 +121,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const all = useMemo(() => {
     const context = { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance };
     const native = activeContributions
-      .map(app => ({ ...app, home: host ? app.homeFor(host) : app.home }));
+      .map(app => withApp(app, { home: host ? app.homeFor(host) : app.home }));
     return [...extendApplications(native, definitions, host?.applications ?? [], context), ...tenantApps(definitions, context)];
   }, [activeContributions, definitions, host, activeRoute?.params?.application, activeRoute?.params?.instance]);
   const entries = useRef(all);
@@ -259,7 +260,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   return (
     <HostContext.Provider value={host}>
-      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={t("Platform")}
+      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}:${spoken}`} product={t("Platform")}
         storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         layoutScope={app?.id} scopeOf={applicationOf}
         views={views} resolveRoute={resolveRoute} home={{ view: "home" }}

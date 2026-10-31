@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import zhCN from "./zh-CN";
 
 export type Dictionary = Record<string, string>;
@@ -25,14 +26,23 @@ export function language(): string {
   return current;
 }
 
+const listeners = new Set<() => void>();
+
 export function setLanguage(id: string): void {
+  if (id === current) return;
   current = id;
   if (typeof document !== "undefined") document.documentElement.lang = current;
   try { localStorage.setItem(key, id); } catch {   }
-  const inTest = typeof globalThis !== "undefined" && Boolean((globalThis as unknown as { process?: { env?: { VITEST?: string } } }).process?.env?.VITEST);
-  if (typeof location !== "undefined" && !inTest) {
-    try { location.reload(); } catch {   }
-  }
+  listeners.forEach((listener) => listener());
+}
+
+export function subscribeLanguage(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+export function useLanguage(): string {
+  return useSyncExternalStore(subscribeLanguage, language, language);
 }
 
 export function register(lang: string, dictionary: Dictionary): void {

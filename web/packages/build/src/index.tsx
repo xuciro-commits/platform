@@ -129,8 +129,8 @@ const section = (label: string, route: Route | undefined, items: Link[]): NavSec
 const navigation = (route?: Route) => <ToolContext route={route} />;
 
 export default defineApp({
-  id: "build", category: "build", title: t("Files"), icon: <FolderTree />,
-  description: t("Projects and the resources they own: object types, logic, pages and releases."),
+  id: "build", category: "build", title: "Files", icon: <FolderTree />,
+  description: "Projects and the resources they own: object types, logic, pages and releases.",
   for: builder,
   home: { view: "projects" },
   views: contextualViews(projectViews),
@@ -140,8 +140,8 @@ export default defineApp({
 });
 
 const ontology = defineApp({
-  id: "ontology", surface: "studio", category: "build", title: t("Ontology Manager"), icon: <Boxes />, referenceContext,
-  description: t("Object types, links, interfaces, shared properties, value types and action types of the tenant ontology."),
+  id: "ontology", surface: "studio", category: "build", title: "Ontology Manager", icon: <Boxes />, referenceContext,
+  description: "Object types, links, interfaces, shared properties, value types and action types of the tenant ontology.",
   for: builder,
   home: { view: "object-type" },
   views: contextualViews(ontologyViews),
@@ -162,8 +162,8 @@ const ontology = defineApp({
 });
 
 const connection = defineApp({
-  id: "data-connection", category: "build", title: t("Data Connection"), icon: <Database />,
-  description: t("Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out."),
+  id: "data-connection", category: "build", title: "Data Connection", icon: <Database />,
+  description: "Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out.",
   for: host => builder(host) || integrator(host),
   home: { view: "connection" },
   views: contextualViews(connectionViews),
@@ -180,8 +180,8 @@ const connection = defineApp({
 });
 
 const pipelineBuilder = defineApp({
-  id: "pipeline-builder", category: "build", title: t("Pipeline Builder"), icon: <Workflow />,
-  description: t("Pipelines that transform datasets, and matching rules that resolve records into objects."),
+  id: "pipeline-builder", category: "build", title: "Pipeline Builder", icon: <Workflow />,
+  description: "Pipelines that transform datasets, and matching rules that resolve records into objects.",
   for: builder,
   home: { view: "pipeline" },
   views: contextualViews(pipelineViews),
@@ -194,8 +194,8 @@ const pipelineBuilder = defineApp({
 });
 
 const datasetPreview = defineApp({
-  id: "dataset-preview", category: "build", title: t("Dataset Preview"), icon: <TableProperties />,
-  description: t("Datasets: schema, rows and the object types they back."),
+  id: "dataset-preview", category: "build", title: "Dataset Preview", icon: <TableProperties />,
+  description: "Datasets: schema, rows and the object types they back.",
   for: builder,
   home: { view: "dataset" },
   views: contextualViews(datasetViews),
@@ -205,8 +205,8 @@ const datasetPreview = defineApp({
 });
 
 const monitoring = defineApp({
-  id: "monitoring", category: "govern", title: t("Monitoring"), icon: <Activity />,
-  description: t("Health, runs, queued and failed work, and every delivery the host attempted."),
+  id: "monitoring", category: "govern", title: "Monitoring", icon: <Activity />,
+  description: "Health, runs, queued and failed work, and every delivery the host attempted.",
   for: host => builder(host) || integrator(host),
   home: { view: "integration-health" },
   views: contextualViews(monitoringViews),
@@ -214,8 +214,8 @@ const monitoring = defineApp({
 });
 
 const logic = defineApp({
-  id: "logic", category: "build", title: t("Logic"), icon: <Braces />,
-  description: t("Functions that compute — code, decision tables, AI and flows — and the queries they read."),
+  id: "logic", category: "build", title: "Logic", icon: <Braces />,
+  description: "Functions that compute — code, decision tables, AI and flows — and the queries they read.",
   for: builder,
   home: { view: "functions" },
   views: contextualViews(logicViews),
@@ -228,8 +228,8 @@ const logic = defineApp({
 });
 
 const automate = defineApp({
-  id: "automate", category: "build", title: t("Automate"), icon: <Zap />,
-  description: t("Triggers that run actions and functions on events, schedules and conditions."),
+  id: "automate", category: "build", title: "Automate", icon: <Zap />,
+  description: "Triggers that run actions and functions on events, schedules and conditions.",
   for: builder,
   home: { view: "automation" },
   views: contextualViews(automateViews),
@@ -242,8 +242,8 @@ const automate = defineApp({
 });
 
 const workshop = defineApp({
-  id: "workshop", category: "build", title: t("Workshop"), icon: <PanelsTopLeft />,
-  description: t("Pages, navigation and headers of applications, built from the ontology."),
+  id: "workshop", category: "build", title: "Workshop", icon: <PanelsTopLeft />,
+  description: "Pages, navigation and headers of applications, built from the ontology.",
   for: builder,
   home: { view: "module" },
   views: contextualViews(workshopViews),
@@ -256,8 +256,8 @@ const workshop = defineApp({
 });
 
 const devops = defineApp({
-  id: "devops", category: "govern", title: t("DevOps"), icon: <Rocket />,
-  description: t("Package project resources into product versions: test, review and activate releases."),
+  id: "devops", category: "govern", title: "DevOps", icon: <Rocket />,
+  description: "Package project resources into product versions: test, review and activate releases.",
   for: host => builder(host) || publisher(host),
   home: { view: "release-review" },
   views: contextualViews(releaseViews),
@@ -271,8 +271,8 @@ const devops = defineApp({
 });
 
 const agentDefinitions = defineApp({
-  id: "agents", category: "build", title: t("Agent Studio"), icon: <Bot />,
-  description: t("AI agents, what they are allowed to do, their runs and evaluations."),
+  id: "agents", category: "build", title: "Agent Studio", icon: <Bot />,
+  description: "AI agents, what they are allowed to do, their runs and evaluations.",
   for: builder,
   home: { view: "agent" },
   views: contextualViews(agentViews),

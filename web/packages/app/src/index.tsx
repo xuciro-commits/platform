@@ -226,7 +226,13 @@ function AppInputBody({children}:{children:ReactNode}) {
   const inputs=useInputDrafts();
   return <><InputProblems/><DraftInputs.Provider value={inputs&&{...inputs,problemsShown:true}}><fieldset disabled={inputs?.busy} className="contents">{children}</fieldset></DraftInputs.Provider></>;
 }
-export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(view=>({...view,render:params=><AppInputView scope={`${app.id}/${view.id}/${params.id??""}/${params.page??""}`}>{view.render(params)}</AppInputView>}))});
+export const withApp = <T extends AppUI>(app: T, patch: Partial<T> & object): T =>
+  Object.defineProperties({} as T, { ...Object.getOwnPropertyDescriptors(app), ...Object.getOwnPropertyDescriptors(patch) });
+export const defineApp = (app: AppUI): AppUI => {
+  const { title, description } = app;
+  return { ...app, get title() { return t(title); }, get description() { return description === undefined ? undefined : t(description); },
+    views: app.views.map(view => ({ ...view, render: params => <AppInputView scope={`${app.id}/${view.id}/${params.id ?? ""}/${params.page ?? ""}`}>{view.render(params)}</AppInputView> })) };
+};
 
 export function GeneratedForm({ type, record, initial, fields, essential = false, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema }: {
   initial?: Record<string, unknown>; essential?: boolean;

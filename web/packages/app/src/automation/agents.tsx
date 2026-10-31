@@ -18,8 +18,8 @@ type Transcript = Api.Transcript;
 export type AgentInfo = Api.AgentInfo;
 type Hit = Api.Hit;
 
-export const runStates = defineStatuses({ running: { label: t("Working"), tone: "info" }, waiting: { label: t("Waiting for you"), tone: "warning" },
-  done: { label: t("Done"), tone: "success" }, stopped: { label: t("Stopped"), tone: "danger" } });
+export const runStates = defineStatuses({ running: { label: "Working", tone: "info" }, waiting: { label: "Waiting for you", tone: "warning" },
+  done: { label: "Done", tone: "success" }, stopped: { label: "Stopped", tone: "danger" } });
 const signalTones = { confirmed: "success", accepted: "success", approved: "success", changed: "warning", corrected: "warning", bypassed: "neutral",
   rejected: "danger", discarded: "danger", undone: "danger" } as const;
 

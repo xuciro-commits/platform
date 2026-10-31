@@ -8,8 +8,8 @@ import { resourceKindLabel } from "./labels";
 import { CheckSummary, checkFailure } from "./CheckSummary";
 import { BranchDiffList, RebaseBar, ReviewDialog, useResolutions } from "./ReviewDialog";
 
-export const branchStatuses = defineStatuses({ open: { label: t("Open"), tone: "info" }, proposed: { label: t("Proposed"), tone: "purple" }, merged: { label: t("Merged"), tone: "success" }, closed: { label: t("Archived"), tone: "neutral" } });
-const decisions = defineStatuses({ approve: { label: t("Approved"), tone: "success" }, changes: { label: t("Changes requested"), tone: "warning" }, pending: { label: t("Waiting"), tone: "neutral" } });
+export const branchStatuses = defineStatuses({ open: { label: "Open", tone: "info" }, proposed: { label: "Proposed", tone: "purple" }, merged: { label: "Merged", tone: "success" }, closed: { label: "Archived", tone: "neutral" } });
+const decisions = defineStatuses({ approve: { label: "Approved", tone: "success" }, changes: { label: "Changes requested", tone: "warning" }, pending: { label: "Waiting", tone: "neutral" } });
 
 export function approvalBlock(proposal?: Api.BranchProposal): string | undefined {
   if (!proposal || !proposal.reviewers.length) return undefined;

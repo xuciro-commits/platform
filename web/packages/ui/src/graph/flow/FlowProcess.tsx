@@ -15,9 +15,9 @@ export type FlowInstanceData = {
 };
 
 export const flowStates = defineStatuses({
-  running: { label: t("Running"), tone: "info" }, waiting: { label: t("Waiting"), tone: "info" }, done: { label: t("Done"), tone: "success" },
-  compensating: { label: t("Undoing"), tone: "warning" }, compensated: { label: t("Undone"), tone: "neutral" }, canceled: { label: t("Canceled"), tone: "neutral" },
-  stuck: { label: t("Stuck"), tone: "danger" },
+  running: { label: "Running", tone: "info" }, waiting: { label: "Waiting", tone: "info" }, done: { label: "Done", tone: "success" },
+  compensating: { label: "Undoing", tone: "warning" }, compensated: { label: "Undone", tone: "neutral" }, canceled: { label: "Canceled", tone: "neutral" },
+  stuck: { label: "Stuck", tone: "danger" },
 });
 
 export function FlowReleaseBinding({ dependencies, release }: Pick<FlowInstanceData, "dependencies" | "release">) {
@@ -32,7 +32,7 @@ export function FlowReleaseBinding({ dependencies, release }: Pick<FlowInstanceD
   </details>;
 }
 
-const kinds: Record<string, string> = { act: t("Act"), wait: t("Wait"), ask: t("Ask"), call: t("Sub-flow"), all: t("All of"), any: t("Any of"), agent: t("Agent") };
+const kinds: Record<string, string> = { act: "Act", wait: "Wait", ask: "Ask", call: "Sub-flow", all: "All of", any: "Any of", agent: "Agent" };
 const waits: Record<string, string> = { ready: "ready", retry: "retrying", wait: "waiting", ask: "asking people", call: "in a sub-flow", join: "waiting for its branches", undo: "retrying an undo", stuck: "stuck" };
 
 export function FlowGraph({ definition, instance, height = 260 }: { definition: FlowDefinition; instance?: FlowInstanceData; height?: number }) {
@@ -46,7 +46,7 @@ export function FlowGraph({ definition, instance, height = 260 }: { definition: 
     const here = tokens.filter((k) => k.step === s.name);
     nodes.push({
       id: s.name, label: s.title, current: here.length > 0, notation: notationOf(s.kind), loop: loops.has(s.kind),
-      detail: here.length ? here.map((k) => waits[k.waits ?? ""] ?? k.waits).join(", ") : undone.has(s.name) ? t("undone") : kinds[s.kind] ?? s.kind,
+      detail: here.length ? here.map((k) => waits[k.waits ?? ""] ?? k.waits).join(", ") : undone.has(s.name) ? t("undone") : t(kinds[s.kind] ?? s.kind),
       tone: here.some((k) => k.waits === "stuck") ? "danger" : here.length ? "info" : undone.has(s.name) ? "neutral" : visited.has(s.name) ? "success" : undefined,
     });
     for (const next of s.next) edges.push({ from: s.name, to: next, dashed: s.chooses, label: s.chooses ? t("as it decides") : undefined });

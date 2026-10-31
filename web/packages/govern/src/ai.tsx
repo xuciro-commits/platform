@@ -12,8 +12,8 @@ import { modelReferenceTitle, when, type AIModel, type CatalogModel, type Provid
 
 
 const locals = [
-  { label: t("LM Studio"), url: "http://host.docker.internal:1234/v1" }, { label: t("Ollama"), url: "http://host.docker.internal:11434/v1" },
-  { label: t("llama.cpp server"), url: "http://host.docker.internal:8080/v1" },
+  { label: "LM Studio", url: "http://host.docker.internal:1234/v1" }, { label: "Ollama", url: "http://host.docker.internal:11434/v1" },
+  { label: "llama.cpp server", url: "http://host.docker.internal:8080/v1" },
 ];
 
 export function AIProviders() {

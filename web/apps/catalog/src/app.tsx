@@ -16,8 +16,8 @@ export default defineApp({
   surface: "developer",
   category: "developer",
   for: (host) => host.role("build") === "builder" || host.role("platform") === "admin",
-  description: t("Reusable UI, App API and patterns, with live examples and a sandbox."),
-  get title() { return t("Asset Library"); },
+  description: "Reusable UI, App API and patterns, with live examples and a sandbox.",
+  title: "Asset Library",
   icon: <BookOpen />,
   home: { view: "catalog" },
   nav: () => [

@@ -9,16 +9,16 @@ export const toneNames: readonly Tone[] = ["neutral", "info", "success", "warnin
 export type StatusRegistry = Record<string, { label: string; tone: Tone }>;
 
 export function defineStatuses<const R extends StatusRegistry>(registry: R): R {
-  return registry;
+  return Object.fromEntries(Object.entries(registry).map(([status, entry]) => [status, { ...entry, get label() { return t(entry.label); } }])) as R;
 }
 
 export const submissionStatuses = defineStatuses({
-  SUBMISSION_STATE_PENDING: { label: t("Pending"), tone: "warning" },
-  SUBMISSION_STATE_SENDING: { label: t("Sending"), tone: "info" },
-  SUBMISSION_STATE_CONFIRMED: { label: t("Confirmed"), tone: "success" },
-  SUBMISSION_STATE_CONFLICT: { label: t("Conflict"), tone: "danger" },
-  SUBMISSION_STATE_REJECTED: { label: t("Rejected"), tone: "danger" },
-  SUBMISSION_STATE_UNKNOWN: { label: t("Unknown"), tone: "warning" },
+  SUBMISSION_STATE_PENDING: { label: "Pending", tone: "warning" },
+  SUBMISSION_STATE_SENDING: { label: "Sending", tone: "info" },
+  SUBMISSION_STATE_CONFIRMED: { label: "Confirmed", tone: "success" },
+  SUBMISSION_STATE_CONFLICT: { label: "Conflict", tone: "danger" },
+  SUBMISSION_STATE_REJECTED: { label: "Rejected", tone: "danger" },
+  SUBMISSION_STATE_UNKNOWN: { label: "Unknown", tone: "warning" },
 });
 
 export function Tag({ label, tone = "neutral", icon, className }: { label: string; tone?: Tone; icon?: string; className?: string }) {

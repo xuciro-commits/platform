@@ -82,13 +82,13 @@ export function PreviewWorkspace({ children, onOpen }: { children: ReactNode; on
 
 const stamp = { by: "demo", at: "2026-09-30T12:00:00Z" };
 const lifecycle: LifecycleInfo = { field: "state", initial: "open",
-  states: [{ name: "open", title: t("Pending"), tone: "info" }, { name: "done", title: t("Done"), tone: "success" }],
-  transitions: [{ name: "finish", from: ["open"], to: ["done"], schema: "demo.finish", title: t("Done") }],
+  states: [{ name: "open", get title() { return t("Pending"); }, tone: "info" }, { name: "done", get title() { return t("Done"); }, tone: "success" }],
+  transitions: [{ name: "finish", from: ["open"], to: ["done"], schema: "demo.finish", get title() { return t("Done"); } }],
 };
-export const demoInfo: EntityInfo = { type: "demo.record", app: "demo", title: t("Record"), plural: t("Records"), display: "name", standard: [], lifecycle,
-  fields: [{ name: "name", title: t("Name"), type: "text", required: true, search: true },
-    { name: "quantity", title: t("Quantity"), type: "integer" },
-    { name: "state", title: t("Status"), type: "choice", choices: ["open", "done"], choiceTitles: [t("Pending"), t("Done")] }],
+export const demoInfo: EntityInfo = { type: "demo.record", app: "demo", get title() { return t("Record"); }, get plural() { return t("Records"); }, display: "name", standard: [], lifecycle,
+  fields: [{ name: "name", get title() { return t("Name"); }, type: "text", required: true, search: true },
+    { name: "quantity", get title() { return t("Quantity"); }, type: "integer" },
+    { name: "state", get title() { return t("Status"); }, type: "choice", choices: ["open", "done"], get choiceTitles() { return [t("Pending"), t("Done")]; } }],
 };
 const demoRows: EntityRecord[] = [
   { id: "DEMO-001", revision: 1, name: "Sample Alpha", quantity: 12, state: "open", created: stamp, changed: stamp },
@@ -109,7 +109,7 @@ export const demoSource: RecordSource = {
     return { record, history, related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false };
   },
 };
-const demoEntity = defineEntity<{ id: string; name: string; quantity: number }>({ name: "demo", primary: "name", fields: {
+const demoEntity = () => defineEntity<{ id: string; name: string; quantity: number }>({ name: "demo", primary: "name", fields: {
   name: field.text({ label: t("Name"), required: true }), quantity: field.number({ label: t("Quantity"), min: 0 }),
 } });
 const tableRows = [{ id: "DEMO-001", name: "Sample Alpha", quantity: 12 }, { id: "DEMO-002", name: "Sample Beta", quantity: 24 }];
@@ -232,11 +232,11 @@ export function JsonValueEditorExample() {
 }
 export function RecordForms() {
   const [saved, setSaved] = useState(false);
-  return <div className="grid max-w-lg gap-3"><RecordForm entity={demoEntity} defaultValues={tableRows[0]} onSubmit={() => setSaved(true)} />{saved && <Tag label={t("Submitted locally")} tone="success" />}</div>;
+  return <div className="grid max-w-lg gap-3"><RecordForm entity={demoEntity()} defaultValues={tableRows[0]} onSubmit={() => setSaved(true)} />{saved && <Tag label={t("Submitted locally")} tone="success" />}</div>;
 }
 export function Filters() {
   const [filters, setFilters] = useState<Filter[]>([{ field: "name", operator: "contains", arg: "Alpha" }]);
-  return <div className="grid gap-3"><FilterBar entity={demoEntity} filters={filters} onChange={setFilters} /><DataTable data={applyFilters(demoEntity, tableRows, filters)} columns={columnsFor(demoEntity)} getRowId={(row) => row.id} height={180} /></div>;
+  return <div className="grid gap-3"><FilterBar entity={demoEntity()} filters={filters} onChange={setFilters} /><DataTable data={applyFilters(demoEntity(), tableRows, filters)} columns={columnsFor(demoEntity())} getRowId={(row) => row.id} height={180} /></div>;
 }
 export function RecordSummaries() { return <EntityCard title="Sample Alpha" subtitle="DEMO-001" status={<Tag label={t("Pending")} tone="info" />} properties={[[t("Quantity"), 12], [t("Name"), "Sample Alpha"]]} />; }
 export function Notifications() {
@@ -261,7 +261,7 @@ export function RecordLookups() {
   }}),[]);
   return <div className="grid max-w-lg gap-3"><div><label className="mb-1 block text-sm" htmlFor="catalog-record-lookup">{t("Record")}</label><RecordLookup id="catalog-record-lookup" source={demoSource} type={demoInfo.type} value={value} onChange={setValue} /></div><div><label className="mb-1 block text-sm" htmlFor="catalog-interface-lookup">{t("Interface record")}</label><InterfaceRecordLookup id="catalog-interface-lookup" source={source} name="demo.named" value={reference} onChange={setReference}/></div></div>;
 }
-const task: InboxTask = { id: "demo-task", revision: 1, created: stamp, changed: stamp, title: "Review Sample Alpha", body: "Synthetic task for preview only", app: "demo", candidates: ["demo"], state: "open", answers: ["approve", "reject"], answerTitles: [t("Approved"), t("Rejected")] };
+const task: InboxTask = { id: "demo-task", revision: 1, created: stamp, changed: stamp, title: "Review Sample Alpha", body: "Synthetic task for preview only", app: "demo", candidates: ["demo"], state: "open", answers: ["approve", "reject"], get answerTitles() { return [t("Approved"), t("Rejected")]; } };
 export function TaskInbox() {
   const [tasks, setTasks] = useState([task]);
   return <div className="grid gap-4"><Inbox tasks={tasks} /><Tasks list={tasks} tasks={{ answer: async (answered) => setTasks(tasks.filter((item) => item.id !== answered.id)) }} />{tasks.length === 0 && <Inbox tasks={[]} />}</div>;
@@ -270,7 +270,7 @@ export function Lifecycle() {
   const [state, setState] = useState("open");
   return <div className="grid gap-3"><StatusBar lifecycle={lifecycle} state={state} can={(schema) => schema === "demo.finish"} onTransition={() => setState("done")} /><RecordStatus source={demoSource} type={demoInfo.type} id="DEMO-001" config={{field:"state",stages:["open","done"]}}/></div>;
 }
-const chart: ChartSpec = { title: t("Quantity by group"), data: { values: [{ group: "Alpha", quantity: 12 }, { group: "Beta", quantity: 24 }] }, mark: "bar", encoding: { x: { field: "group", type: "nominal" }, y: { field: "quantity", type: "quantitative", aggregate: "sum" } } };
+const chart: ChartSpec = { get title() { return t("Quantity by group"); }, data: { values: [{ group: "Alpha", quantity: 12 }, { group: "Beta", quantity: 24 }] }, mark: "bar", encoding: { x: { field: "group", type: "nominal" }, y: { field: "quantity", type: "quantitative", aggregate: "sum" } } };
 export function Charts() { return <Chart spec={chart} height={240} />; }
 const aggregateSource = { aggregate: async () => ({ columns: [{ name: "group", title: t("Group"), kind: "group" as const, type: "nominal" as const }, { name: "count", title: t("Count"), kind: "measure" as const, type: "quantitative" as const }], rows: [{ group: "Alpha", count: 12 }, { group: "Beta", count: 24 }] }) };
 export function Pivots() { return <Pivot source={aggregateSource} type="demo.record" query={{}} rows="group" measure="count" />; }
@@ -290,7 +290,7 @@ export function Relations() {
     edges={[{ id: "b-a", source: "b", target: "a", parent: "target" }]} positions={positions} height={300} editable selected={selected} onSelect={setSelected}
     onPositionsChange={(next) => setPositions((current) => ({ ...current, ...next }))} />;
 }
-const flowCatalog: FlowCatalog = [{ id: "value", title: t("Value"), class: "trigger", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), class: "transform", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
+const flowCatalog: FlowCatalog = [{ id: "value", get title() { return t("Value"); }, class: "trigger", inputs: [], outputs: [{ id: "out", get label() { return t("Quantity"); }, type: "number" }] }, { id: "transform", get title() { return t("Transform"); }, class: "transform", inputs: [{ id: "in", get label() { return t("Quantity"); }, type: "number" }], outputs: [{ id: "out", get label() { return t("Quantity"); }, type: "number" }] }];
 export function Flows() {
   const counter = useRef(3);
   const [nodes, setNodes] = useState<FlowNode[]>([{ id: "n1", kind: "value", label: t("Value"), position: { x: 30, y: 60 } },
@@ -305,7 +305,7 @@ export function Flows() {
     onLayout={(positions) => setNodes(nodes.map((node) => ({ ...node, position: positions[node.id] ?? node.position })))}
     onDelete={(deleted, disconnected) => { setNodes(nodes.filter((node) => !deleted.some((item) => item.id === node.id))); setEdges(edges.filter((edge) => !disconnected.some((item) => item.id === edge.id))); }} />;
 }
-const definition: FlowDefinition = { id: "demo.review", app: "demo", title: "Sample review", version: 1, start: ["demo.created"], steps: [{ name: "prepare", title: t("Prepare"), kind: "action", next: ["review"] }, { name: "review", title: t("Review"), kind: "ask", next: [] }] };
+const definition: FlowDefinition = { id: "demo.review", app: "demo", title: "Sample review", version: 1, start: ["demo.created"], steps: [{ name: "prepare", get title() { return t("Prepare"); }, kind: "action", next: ["review"] }, { name: "review", get title() { return t("Review"); }, kind: "ask", next: [] }] };
 const instance: FlowInstanceData = { id: "demo-flow", flow: "demo.review", title: "Sample Alpha review", version: 1, key: "preview", state: "waiting", tokens: [{ id: 1, step: "review", waits: "ask" }], undo: [], trace: [{ at: stamp.at, step: "prepare", what: "done", by: "demo" }] };
 export function FlowObservation() { return <div className="grid gap-4"><FlowGraph definition={definition} height={200} /><FlowRun definition={definition} instance={instance} /></div>; }
 export function MasterDetail() {

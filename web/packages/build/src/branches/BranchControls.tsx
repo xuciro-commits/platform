@@ -9,7 +9,7 @@ import { ReviewDialog, useOpenProposal } from "./ReviewDialog";
 import { useWorkingDrafts } from "./working-state";
 import { releaseDraftsValue } from "../releases/selection";
 
-const branchStates = defineStatuses({ open: { label: t("Open"), tone: "info" }, proposed: { label: t("Proposed"), tone: "purple" }, merged: { label: t("Merged"), tone: "success" }, closed: { label: t("Archived"), tone: "neutral" } });
+const branchStates = defineStatuses({ open: { label: "Open", tone: "info" }, proposed: { label: "Proposed", tone: "purple" }, merged: { label: "Merged", tone: "success" }, closed: { label: "Archived", tone: "neutral" } });
 
 export function BranchControls() {
   const { holds } = useHost(), { confirmLeave } = useWorkspace();

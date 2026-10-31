@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApplicationScope } from "../projects/application-scope";
 import { useCurrentBranch } from "../branches/current";
 
-const draftStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" }, archived: { label: t("Archived"), tone: "neutral" } });
+const draftStates = defineStatuses({ draft: { label: "Draft", tone: "warning" }, published: { label: "Published", tone: "success" }, archived: { label: "Archived", tone: "neutral" } });
 
 export function useAutoSave({ enabled = true, dirty, invalid = false, busy = false, save, delay = 900, generation }: {
   enabled?: boolean; dirty: boolean; invalid?: boolean; busy?: boolean; save: () => Promise<unknown>; delay?: number; generation?:unknown;

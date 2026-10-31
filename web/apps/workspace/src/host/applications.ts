@@ -1,4 +1,4 @@
-import type { ApplicationUIInfo, AppUI, Definition, Host } from "@platform/app";
+import { withApp, type ApplicationUIInfo, type AppUI, type Definition, type Host } from "@platform/app";
 import type { NavSection, Route } from "@platform/ui";
 
 export type ComposedApplication = AppUI & { homeFor: (host: Host) => Route };
@@ -7,8 +7,7 @@ export function composeApplications(contributions: readonly AppUI[]): ComposedAp
   for (const app of contributions) groups.set(app.id, [...groups.get(app.id) ?? [], app]);
   return [...groups.values()].map<ComposedApplication>(sources => {
     const primary = sources[0]!;
-    return {
-      ...primary,
+    return withApp(primary as ComposedApplication, {
       navigation: sources.find(app => app.navigation)?.navigation,
       referenceContext: sources.find(app => app.referenceContext)?.referenceContext,
       serves: [...new Set(sources.flatMap(app => app.serves ?? [app.id]))],
@@ -30,7 +29,7 @@ export function composeApplications(contributions: readonly AppUI[]): ComposedAp
         }
         return [...sections.values()].filter(section => section.items.length > 0);
       },
-    };
+    });
   });
 }
 
@@ -112,7 +111,7 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
   return entries.map(entry => {
     const attached = extensions.filter(extension => extension.entry === entry.id);
     if (!attached.length) return entry;
-    return { ...entry, home: host => resolveApplicationRoute(typeof entry.home === "function" ? entry.home(host) : entry.home, definitions, metadata), nav: (host, route) => [
+    return withApp(entry, { home: host => resolveApplicationRoute(typeof entry.home === "function" ? entry.home(host) : entry.home, definitions, metadata), nav: (host, route) => [
       ...entry.nav(host, route).map(section => ({ ...section, items: replaceItems(section.items) })),
       ...attached.flatMap(({ definition }) => {
         const application = definition.application;
@@ -125,7 +124,7 @@ export function extendApplications(entries: readonly AppUI[], definitions: reado
           route: pageRoute(definition, name, context?.application === applicationID(definition) && context.instance ? { instance: context.instance } : undefined) });
         return [{ label: application.title, items: [...pages.filter(name => !grouped.has(name)).map(item), ...groups.map(group => ({ label: group.title, items: group.pages.map(item) }))] }];
       }),
-    ] };
+    ] });
   });
 }
 

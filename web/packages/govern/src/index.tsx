@@ -93,9 +93,9 @@ export const controlPanel = defineApp({
   serves: ["platform", "ai"],
   surface: "tenant",
   category: "govern",
-  description: t("Members, roles, AI models, settings and the audit trail."),
+  description: "Members, roles, AI models, settings and the audit trail.",
   for: () => true,
-  title: t("Control Panel"),
+  title: "Control Panel",
   icon: <SlidersHorizontal />,
   home: { view: "control-panel" },
   views: controlPanelViews,
@@ -103,8 +103,8 @@ export const controlPanel = defineApp({
 });
 
 export const marketplace = defineApp({
-  id: "marketplace", serves: ["platform"], category: "govern", title: t("Marketplace"), icon: <Store />,
-  description: t("Packaged products available to this tenant: install, upgrade and prepare their applications."),
+  id: "marketplace", serves: ["platform"], category: "govern", title: "Marketplace", icon: <Store />,
+  description: "Packaged products available to this tenant: install, upgrade and prepare their applications.",
   for: (host) => admin(host) || auditor(host) || host.can("build.app.create"),
   home: { view: "apps" },
   views: [
@@ -124,8 +124,8 @@ function RunsHome() {
 }
 
 export const monitoring = defineApp({
-  id: "monitoring", serves: ["platform", "flow"], category: "govern", title: t("Monitoring"), icon: <Activity />,
-  description: t("Health, runs, queued and failed work, and every delivery the host attempted."),
+  id: "monitoring", serves: ["platform", "flow"], category: "govern", title: "Monitoring", icon: <Activity />,
+  description: "Health, runs, queued and failed work, and every delivery the host attempted.",
   for: (host) => admin(host) || !!host.role("flow"),
   home: { view: "runs-home" },
   views: [
@@ -146,8 +146,8 @@ export const monitoring = defineApp({
 });
 
 export const dataConnection = defineApp({
-  id: "data-connection", serves: ["platform"], category: "build", title: t("Data Connection"), icon: <Database />,
-  description: t("Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out."),
+  id: "data-connection", serves: ["platform"], category: "build", title: "Data Connection", icon: <Database />,
+  description: "Connections, syncs and streams that bring data in, and exports, endpoints and webhooks that carry it out.",
   for: (host) => admin(host) || host.holds("build", "builder", "integrator"),
   home: (host) => host.holds("build", "builder", "integrator") ? { view: "connection" } : { view: "integrations" },
   views: [
@@ -168,8 +168,8 @@ export const dataConnection = defineApp({
 });
 
 export const agents = defineApp({
-  id: "agents", serves: ["agent"], category: "build", title: t("Agent Studio"), icon: <BrainCircuit />,
-  description: t("AI agents, what they are allowed to do, their runs and evaluations."),
+  id: "agents", serves: ["agent"], category: "build", title: "Agent Studio", icon: <BrainCircuit />,
+  description: "AI agents, what they are allowed to do, their runs and evaluations.",
   for: (host) => !!host.role("agent"),
   home: { view: "agents" },
   views: [
@@ -187,8 +187,8 @@ export const agents = defineApp({
 });
 
 export const knowledge = defineApp({
-  id: "knowledge", serves: ["knowledge"], surface: "work", category: "business", title: t("Knowledge"), icon: <BookOpen />,
-  description: t("Documents and the glossary of your organisation."),
+  id: "knowledge", serves: ["knowledge"], surface: "work", category: "business", title: "Knowledge", icon: <BookOpen />,
+  description: "Documents and the glossary of your organisation.",
   for: (host) => !!host.role("knowledge"),
   home: { view: "knowledge" },
   views: [
@@ -202,8 +202,8 @@ export const knowledge = defineApp({
 });
 
 export const hostConsole = defineApp({
-  id: "host-console", serves: [], category: "govern", title: t("Host Console"), icon: <Server />,
-  description: t("Every tenant on this host: health, lifecycle, support sessions, promotions and migrations."),
+  id: "host-console", serves: [], category: "govern", title: "Host Console", icon: <Server />,
+  description: "Every tenant on this host: health, lifecycle, support sessions, promotions and migrations.",
   home: { view: "host-overview" },
   views: [
  { id: "host-package-help", title: () => t("Package guide"), render: p => <PackageHelp maintenance topic={p.topic ?? "foundations"} /> },
@@ -226,8 +226,8 @@ function MasterDataView({ type }: { type?: string }) {
 }
 
 const masterData = defineApp({
-  id: "core", serves: ["core"], category: "business", title: t("Master data"), icon: <BookOpen />,
-  description: t("Shared master data and accounting records."),
+  id: "core", serves: ["core"], category: "business", title: "Master data", icon: <BookOpen />,
+  description: "Shared master data and accounting records.",
   for: (host) => !!host.role("core"), home: { view: "master-data" },
   views: [{ id: "master-data", title: () => t("Master data"), render: (p) => <MasterDataView type={p.type} /> }],
   nav: (host) => [{ label: t("Master data"), items: [
@@ -243,8 +243,8 @@ const masterData = defineApp({
 });
 
 export const enterprise = defineApp({
-  id: "enterprise", serves: ["enterprise"], category: "business", title: t("Organisation directory"), icon: <Network />,
-  description: t("Units, posts, people and assignments. Historical enterprise content is read-only."),
+  id: "enterprise", serves: ["enterprise"], category: "business", title: "Organisation directory", icon: <Network />,
+  description: "Units, posts, people and assignments. Historical enterprise content is read-only.",
   for: (host) => admin(host) || host.holds("enterprise", "admin", "viewer"),
   home: { view: "enterprise" },
   views: [{ id: "enterprise", title: () => t("Organisation directory"), render: params => <Enterprise element={params.element} section={params.section} /> }],

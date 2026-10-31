@@ -44,18 +44,18 @@ const empty = (v: unknown) => v === undefined || v === null || v === "" || (Arra
 const muted = <span className="text-muted">—</span>;
 const byString = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
 const byNumber = (a: number, b: number) => a - b;
-const isEmpty: Operator<any> = { id: "empty", label: t("is empty"), needsArg: false, test: (v) => empty(v) };
-const notEmpty: Operator<any> = { id: "notEmpty", label: t("is not empty"), needsArg: false, test: (v) => !empty(v) };
-const equals: Operator<any> = { id: "is", label: t("is"), needsArg: true, test: (v, a) => v === a };
+const isEmpty: Operator<any> = { id: "empty", get label() { return t("is empty"); }, needsArg: false, test: (v) => empty(v) };
+const notEmpty: Operator<any> = { id: "notEmpty", get label() { return t("is not empty"); }, needsArg: false, test: (v) => !empty(v) };
+const equals: Operator<any> = { id: "is", get label() { return t("is"); }, needsArg: true, test: (v, a) => v === a };
 const numberOps: Operator<number>[] = [equals,
   { id: "gt", label: ">", needsArg: true, test: (v, a) => v !== undefined && a !== undefined && v > a },
   { id: "lt", label: "<", needsArg: true, test: (v, a) => v !== undefined && a !== undefined && v < a }, isEmpty, notEmpty];
 const textOps: Operator<string>[] = [
-  { id: "contains", label: t("contains"), needsArg: true, test: (v, a) => !a || (v ?? "").toLowerCase().includes(a.toLowerCase()) },
+  { id: "contains", get label() { return t("contains"); }, needsArg: true, test: (v, a) => !a || (v ?? "").toLowerCase().includes(a.toLowerCase()) },
   equals, isEmpty, notEmpty];
 const timeOps: Operator<string>[] = [equals,
-  { id: "before", label: t("is before"), needsArg: true, test: (v, a) => !!v && !!a && v < a },
-  { id: "after", label: t("is after"), needsArg: true, test: (v, a) => !!v && !!a && v > a }, isEmpty, notEmpty];
+  { id: "before", get label() { return t("is before"); }, needsArg: true, test: (v, a) => !!v && !!a && v < a },
+  { id: "after", get label() { return t("is after"); }, needsArg: true, test: (v, a) => !!v && !!a && v > a }, isEmpty, notEmpty];
 
 function input<V>(type: string, parse: (raw: string) => V | undefined, show: (v: V) => string = String, extra: object = {}) {
   return ({ id, value, onChange, invalid, autoFocus, describedBy }: EditorProps<V>) => (
@@ -128,7 +128,7 @@ export const percent = (o: Common): FieldType<number> => ({
 
 export const checkbox = (o: Common): FieldType<boolean> => ({
   type: "checkbox", align: "left", width: 90, ...o, schema: z.boolean(), compare: (a, b) => Number(a) - Number(b), text: (v) => v === undefined ? "" : v ? "yes" : "no",
-  operators: [{ id: "checked", label: t("is checked"), needsArg: false, test: (v) => v === true }, { id: "unchecked", label: t("is not checked"), needsArg: false, test: (v) => v === false }, isEmpty, notEmpty],
+  operators: [{ id: "checked", get label() { return t("is checked"); }, needsArg: false, test: (v) => v === true }, { id: "unchecked", get label() { return t("is not checked"); }, needsArg: false, test: (v) => v === false }, isEmpty, notEmpty],
   display: (v) => v === undefined || v === null ? muted : v ? <Check className="size-3.5 text-[var(--tone-success)]" aria-label="yes" /> : <span className="text-muted">{t("No")}</span>,
   editor: ({ id, value, onChange }) => <span className="inline-flex items-center gap-2">
     <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--primary)]" />
@@ -159,7 +159,7 @@ export const singleSelect = (o: Common & { options: Option[] }): FieldType<strin
   return {
     type: "singleSelect", width: 130, ...o, schema: z.enum(o.options.map((x) => x.value) as [string, ...string[]]),
     compare: (a, b) => o.options.findIndex((x) => x.value === a) - o.options.findIndex((x) => x.value === b),
-    operators: [equals, { id: "isNot", label: t("is not"), needsArg: true, test: (v, a) => v !== a }, isEmpty, notEmpty],
+    operators: [equals, { id: "isNot", get label() { return t("is not"); }, needsArg: true, test: (v, a) => v !== a }, isEmpty, notEmpty],
     text: (v) => find(v)?.label ?? v ?? "",
     display: (v) => (v ? <Tag label={find(v)?.label ?? v} tone={find(v)?.tone} /> : muted),
     editor: ({ id, value, onChange, invalid, autoFocus, describedBy }) => (
