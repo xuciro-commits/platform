@@ -1,4 +1,4 @@
-import {useInputDrafts} from "@platform/ui";
+import {useInputDrafts, PanelGroup , Notice } from "@platform/ui";
 import {apiErrorMessage,type Api} from "@platform/kernel";
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Checkbox, ContextHelp, DataTable, Dialog, Disclosure, Form, Input, PageHeader, Panel, PropertyList, Select, Tag, Textarea, notify, useUnsavedChanges, useWorkspace, type ColumnDef, t } from "@platform/ui";
@@ -129,18 +129,17 @@ export function HostTenant({ tenant }: { tenant: string }) {
     <div className="grid gap-4">
       <PackageSources items={[]} reviewOnly inspectPath={`/v1/host/tenants/${encodeURIComponent(tenant)}/packages/inspect`} />
       <RuntimeComposition tenant={tenant} changed={() => view.refetch()} />
-      <Panel className="grid gap-2 p-3">
-        <h2 className="text-sm font-semibold">{t("Trusted artifacts")}</h2>
-        <DataTable data={artifacts.data ?? []} columns={artifactColumns} getRowId={(a) => a.candidate} height={220} empty={t("No releases or candidates saved for this tenant.")} />
-      </Panel>
-      <Panel className="grid gap-2 p-3">
-        <h2 className="text-sm font-semibold">{t("Support sessions")}</h2>
-        <DataTable data={grants.data ?? []} columns={grantColumns} getRowId={(g) => g.id} height={200} empty={t("No support session has been opened.")} />
-      </Panel>
-      <Panel className="grid gap-2 p-3">
-        <h2 className="text-sm font-semibold">{t("Migrations")}</h2>
-        <DataTable data={migrations.data ?? []} columns={migrationColumns} getRowId={(m) => `${m.at}:${m.key}`} height={200} empty={t("Nothing has been moved in or out of this tenant.")} />
-      </Panel>
+      <PanelGroup>
+        <Panel title={t("Trusted artifacts")} className="grid gap-2">
+          <DataTable data={artifacts.data ?? []} columns={artifactColumns} getRowId={(a) => a.candidate} height={220} empty={t("No releases or candidates saved for this tenant.")} />
+        </Panel>
+        <Panel title={t("Support sessions")} className="grid gap-2">
+          <DataTable data={grants.data ?? []} columns={grantColumns} getRowId={(g) => g.id} height={200} empty={t("No support session has been opened.")} />
+        </Panel>
+        <Panel title={t("Migrations")} className="grid gap-2">
+          <DataTable data={migrations.data ?? []} columns={migrationColumns} getRowId={(m) => `${m.at}:${m.key}`} height={200} empty={t("Nothing has been moved in or out of this tenant.")} />
+        </Panel>
+      </PanelGroup>
     </div>
     <Dialog open={!!lifecycle} onOpenChange={(o) => !o && setLifecycle(undefined)} title={lifecycle === "suspend" ? t("Suspend {tenant}", { tenant }) : lifecycle === "resume" ? t("Resume {tenant}", { tenant }) : t("Decommission {tenant}", { tenant })}>
       <Form className="grid gap-3" onSubmit={() => submitLifecycle()}>
@@ -315,7 +314,7 @@ export function HostPromotions({ tenant, from: initialFrom, candidate: initialCa
       </fieldset>
       <div><Button type="submit" variant="primary" disabled={locked || overview.isError || artifacts.isError || grants.isError || !chosenArtifact?.verified || !source || !target || source === target || !chosenCandidate || !chosenGrant}>{busy ? t("Promoting…") : t("Promote")}</Button></div>
     </Form>
-    {(overview.isError || artifacts.isError || grants.isError) && <Panel role="alert" className="mt-3 p-3">{t("Environment, artifact or support-session reads are unavailable. Promotion is not enabled from cached data.")}</Panel>}
+    {(overview.isError || artifacts.isError || grants.isError) && <div className="mt-3"><Notice tone="danger" message={t("Environment, artifact or support-session reads are unavailable. Promotion is not enabled from cached data.")} /></div>}
     {pending && <Panel role="alert" className="mt-3 grid gap-2 p-3">
       <p>{t("Promotion is unconfirmed. Retry the captured candidate and support session with the same key. Leaving does not undo a promotion already accepted by the target.")}</p>
       <PropertyList columns={2} items={[[t("From tenant"), pending.source], [t("Into tenant"), pending.target], [t("Candidate"), pending.candidate], [t("Idempotency key"), pending.key]]} />

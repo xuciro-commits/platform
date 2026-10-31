@@ -1,5 +1,5 @@
 import { useHost, ModelPicker, ModelOptionsEditor, MemberSelect, useReadQuery as useRead } from "@platform/app";
-import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Panel, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t } from "@platform/ui";
+import { Chart, PropertyList, Disclosure, ContextHelp, Button, Card, Panel, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, useWorkspace, t , SegmentedChoice } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -54,7 +54,7 @@ export function AIProviders() {
     { id: "access", header: t("Enabled for"), meta: { width: 260 }, cell: ({ row: { original: m } }) => {
       const on = enabled.find((x) => x.provider === open && x.model === m.id);
       return <span className="flex gap-1">
-        {["everyone", "users"].map((a) => <Button key={a} size="sm" variant={on?.access === a ? "primary" : undefined} onClick={() => void enable(open!, m.id, a)}>{t(a === "users" ? "AI members only" : "Everyone in this tenant")}</Button>)}
+        <SegmentedChoice compact label={t("Enabled for")} value={on?.access ?? ""} onChange={(a) => void enable(open!, m.id, a)} options={["everyone", "users"].map((a) => ({ value: a, label: t(a === "users" ? "AI members only" : "Everyone in this tenant") }))} />
         {on && <Button size="sm" variant="danger" onClick={() => go({view:"ai-configuration",params:{section:"models"}})}>{t("Review model")}</Button>}
       </span>;
     } },

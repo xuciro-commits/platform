@@ -1,6 +1,6 @@
 import type { Api } from "@platform/kernel";
 import { useHost, useReadQuery as useRead } from "@platform/app";
-import {useUnsavedChanges, Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t, formatStamp} from "@platform/ui";
+import {useUnsavedChanges, Button, Form, Checkbox, Input, PageHeader, Panel, Select, Tag, notify, setLanguage, useTheme, t, formatStamp, PanelGroup } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 import type { Member } from "./shared";
 
@@ -84,6 +84,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
   const zone = value("timezone") || account.effective.timezone || "UTC";
   return (
     <div className="grid max-w-3xl gap-4">
+      <PanelGroup>
       <Panel title={t("Name and contact")}>
         <div className="grid gap-3 md:grid-cols-2">
           {text("displayName", t("Display name"), t("How you appear in lists, approvals and the audit trail."))}
@@ -135,6 +136,7 @@ export function ProfileForm({ member, account, languages, tenant, self }: { memb
           {choice("density", t("Density"), DENSITIES, (o) => t(o))}
         </div>
       </Panel>
+      </PanelGroup>
       <div className="flex items-center gap-3">
         <Button variant="primary" disabled={!dirty} onClick={() => void save()}>{t("Save")}</Button>
         {dirty && <Button onClick={() => setDraft({})}>{t("Discard")}</Button>}
@@ -153,12 +155,14 @@ export function MyAccount() {
       <PageHeader title={t("My account")} help={t("How the platform addresses you and behaves for you. What you leave empty follows {tenant}.", { tenant: tenant.data?.name ?? me.tenantId })}
         actions={<span className="flex gap-1"><Tag label={me.principalId} /><Tag label={me.tenantId} tone="info" /></span>} />
       {account.data && <ProfileForm member={me.principalId} account={account.data} languages={me.languages} tenant={tenant.data} self />}
-      {account.data && <Panel title={t("Identities")} help={t("What signs in as you: a verified address from the identity provider, or a client id. An administrator binds them when adding or inviting you; a personal token is not an identity.")} className="mt-4 max-w-3xl">
+      <PanelGroup className="mt-4 max-w-3xl">
+      {account.data && <Panel title={t("Identities")} help={t("What signs in as you: a verified address from the identity provider, or a client id. An administrator binds them when adding or inviting you; a personal token is not an identity.")} className="max-w-3xl">
         <ul className="grid gap-1 text-sm">{(account.data.subjects ?? []).map((s) => <li key={s} className="font-mono text-xs">{s}</li>)}</ul>
       </Panel>}
       <Delegate />
       <Tokens />
       <Sessions />
+      </PanelGroup>
     </>
   );
 }
@@ -175,7 +179,7 @@ function Delegate() {
   if (!can("platform.member.delegate") || apps.length === 0) return null;
   const chosenApp = apps.includes(app) ? app : apps[0];
   return (
-    <Panel title={t("Delegate my roles")} help={t("For an absence or a handover: another member holds what you hold in an app, until the day you set. You keep your own roles; an administrator can revoke the delegation.")} className="mt-4 max-w-3xl">
+    <Panel title={t("Delegate my roles")} help={t("For an absence or a handover: another member holds what you hold in an app, until the day you set. You keep your own roles; an administrator can revoke the delegation.")} className="max-w-3xl">
       <Form className="flex flex-wrap items-end gap-2 text-sm" onSubmit={async () => { if (await decide("platform.member.delegate", { type: "platform.member", id: to }, { app: chosenApp, until, reason })) setDone(t("Delegated {app} to {who} until {day}.", { app: chosenApp ?? "", who: to, day: until })); }}>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("App")}</span><Select value={chosenApp} onChange={(e) => setApp(e.target.value)}>{apps.map((a) => <option key={a} value={a}>{a}</option>)}</Select></label>
         <label className="grid gap-1"><span className="text-xs text-muted">{t("To")}</span>
@@ -211,7 +215,7 @@ function Tokens() {
     void tokens.refetch();
   };
   return (
-    <Panel title={t("Personal tokens")} help={t("A credential for scripts and integrations that acts as you, within the permissions you name, until a day. The secret is shown once.")} className="mt-4 max-w-3xl">
+    <Panel title={t("Personal tokens")} help={t("A credential for scripts and integrations that acts as you, within the permissions you name, until a day. The secret is shown once.")} className="max-w-3xl">
       {secret && <div className="mb-3 rounded border border-[var(--tone-warning)] p-2 text-sm">
         <p className="text-xs text-muted">{t("Copy the secret now; it is not shown again.")}</p>
         <code className="block select-all break-all font-mono text-xs">{secret.secret}</code>
@@ -246,7 +250,7 @@ function Sessions() {
   const [ended, setEnded] = useState<number | null>(null);
   const list = sessions.data ?? [];
   return (
-    <Panel title={t("Sessions")} help={t("Where you are signed in, as this host has seen it since it started. Ending the other sessions makes the host refuse their credentials; a personal token stays until revoked.")} className="mt-4 max-w-3xl"
+    <Panel title={t("Sessions")} help={t("Where you are signed in, as this host has seen it since it started. Ending the other sessions makes the host refuse their credentials; a personal token stays until revoked.")} className="max-w-3xl"
       actions={list.length > 1 && <Button size="sm" onClick={async () => { const r = await client.get<{ ended: number }>("/v1/sessions/end-others\n{}", true); setEnded(r.ended); void sessions.refetch(); }}>{t("Sign out other sessions")}</Button>}>
       <div className="grid gap-1 text-sm">
         {list.length === 0 && <p className="text-xs text-muted">{t("No sessions seen yet.")}</p>}

@@ -1,4 +1,4 @@
-import { PropertyList, StructuredEditor } from "@platform/ui";
+import { PropertyList, StructuredEditor , PanelGroup , Notice } from "@platform/ui";
 import {formulaText} from "../editor/rule-text";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -129,8 +129,8 @@ export function PipelineEditor({ id }: { id: string }) {
         {draft.state === "published" && <Button disabled={busy || dirty || !!draft.requested} onClick={() => void perform(() => transition("run"))}>{draft.requested ? t("Run requested…") : t("Run now")}</Button>}
         {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
       </div>} />
-    {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    {objects.isError && holds("build", "builder") && <Panel role="alert" className="text-danger">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
+    {error && <Notice tone="danger" message={error} />}
+    {objects.isError && holds("build", "builder") && <Notice tone="danger" message={t("Object drafts could not be loaded. Installed definitions are still available.")} />}
     {previewResult && <Panel title={t("Draft trial")} role="region" aria-label={t("Pipeline trial results")} className="grid min-w-0 gap-3">
       <p className="text-xs text-muted">{t("Transforms the current draft over readable dataset versions. No pipeline is published, and no dataset versions or business records are written.")}</p>
       <p className="flex flex-wrap items-center gap-2 text-xs"><MarkingTag marking={previewResult.marking} /><span>{t("Input v{version}: {sampled} of {total} rows · {rows} output rows · {quarantined} quarantined", { version: previewResult.inputVersion, sampled: previewResult.sampledRows, total: previewResult.inputRows, rows: previewResult.rows.length, quarantined: previewResult.quarantine.length })}</span></p>
@@ -144,7 +144,7 @@ export function PipelineEditor({ id }: { id: string }) {
         ]} />
       </div>}
     </Panel>}
-    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="min-w-0 border-0 p-0"><PanelGroup className="grid-cols-1 lg:grid-cols-2">
       <Panel title={t("Input")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Pipeline name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="cleanmaterials" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Pipeline title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -226,7 +226,7 @@ export function PipelineEditor({ id }: { id: string }) {
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}
         </>}
       </Panel>
-    </fieldset></StructuredEditor>
+    </PanelGroup></fieldset></StructuredEditor>
   </div>;
 }
 

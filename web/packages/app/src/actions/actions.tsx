@@ -230,7 +230,7 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
   const create = useNewRecord(type, onCreated);
   const offered = create.offered.filter((a) => !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
   return <>
-    {offered.map((a) => <Button key={a.schema} variant="primary" disabled={disabled} onClick={() => create.take(a.schema)}><span aria-hidden="true">+</span> {a.title}</Button>)}
+    {offered.map((a, index) => <Button key={a.schema} variant={index === 0 ? "primary" : "default"} disabled={disabled} onClick={() => create.take(a.schema)}><span aria-hidden="true">+</span> {a.title}</Button>)}
     {create.dialog}
   </>;
 }

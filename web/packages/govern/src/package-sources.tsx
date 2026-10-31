@@ -1,6 +1,6 @@
 import { useHost } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Disclosure, Input, Panel, PropertyList, Select, t, useWorkspace } from "@platform/ui";
+import { Button, Disclosure, Input, Panel, PropertyList, Select, t, useWorkspace , SegmentedChoice } from "@platform/ui";
 import { BookOpen, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -34,7 +34,7 @@ export function PackageSources({ items, reviewOnly = false, inspectPath = "/v1/p
   };
   return <div className="mb-4 grid gap-3">
     <div className="flex flex-wrap gap-2">
-      {(reviewOnly || can("platform.package.import")) && <Button variant="primary" aria-expanded={expanded} disabled={busy || !!pending.current} onClick={() => setExpanded(!expanded)}><Plus size={16} />{t(reviewOnly ? "Review a package" : "Add package")}</Button>}
+      {(reviewOnly || can("platform.package.import")) && <Button variant={expanded ? "default" : "primary"} aria-expanded={expanded} disabled={busy || !!pending.current} onClick={() => setExpanded(!expanded)}><Plus size={16} />{t(reviewOnly ? "Review a package" : "Add package")}</Button>}
       <Button onClick={() => open({ view: reviewOnly ? "host-package-help" : "package-help", params: { topic: "source" } })}><BookOpen size={16} />{t("Package guide")}</Button>
     </div>
     {expanded && <Panel title={t("Add package")} className="grid min-w-0 max-w-3xl gap-3">
@@ -78,7 +78,7 @@ export function PackageHelp({ topic = "start", maintenance = false }: { topic?: 
   return <div className="grid max-w-3xl gap-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><h1 className="text-xl font-semibold">{t("Package guide")}</h1>{!maintenance && <Button onClick={() => open({ view: "apps" })}>{t("Open Packages")}</Button>}</div>
     <p className="text-sm text-muted">{t("Add, use and remove packages without losing your application data.")}</p>
-    <nav aria-label={t("Guide topics")} className="flex flex-wrap gap-2">{topics.map(([title], index) => <Button key={title} size="sm" variant={index === selected ? "primary" : "default"} aria-current={index === selected ? "page" : undefined} onClick={() => open({ view: maintenance ? "host-package-help" : "package-help", params: { topic: ids[index]! } })}>{t(title!)}</Button>)}</nav>
+    <SegmentedChoice label={t("Guide topics")} value={ids[selected]!} onChange={(topic) => open({ view: maintenance ? "host-package-help" : "package-help", params: { topic } })} options={topics.map(([title], index) => ({ value: ids[index]!, label: t(title!) }))} />
     <Panel title={t(topics[selected]![0]!)}><p className="text-sm leading-relaxed">{t(topics[selected]![1]!)}</p></Panel>
     <div className="flex flex-wrap gap-2">{!maintenance && <><Button onClick={() => open({ view: "credentials" })}>{t("Credentials")}</Button><Button onClick={() => open({ view: "matrix" })}>{t("Capability matrix")}</Button></>}<Button onClick={() => open({ view: "host-overview" })}>{t("Host Console")}</Button></div>
   </div>;

@@ -107,7 +107,7 @@ export function Integrations() {
     { id: "error", header: t("Last refused input"), accessorFn: (c) => c.lastError ? `${c.lastError.input}: ${c.lastError.error}` : "",
       cell: ({ row: { original: c } }) => c.lastError ? <span className="text-xs"><Tag label={c.lastError.error} tone="danger" /> {c.lastError.input} · {when(c.lastError.at)}</span> : "" },
     { id: "switch", header: "", meta: { width: 90 }, cell: ({ row: { original: c } }) =>
-      <Button size="sm" variant={c.disabled ? "primary" : "default"} onClick={() => void decide(c.disabled ? "platform.connector.enable" : "platform.connector.disable", { type: "platform.connector", id: c.id }, {})}>
+      <Button size="sm" onClick={() => void decide(c.disabled ? "platform.connector.enable" : "platform.connector.disable", { type: "platform.connector", id: c.id }, {})}>
         {c.disabled ? t("Enable") : t("Disable")}</Button> },
   ];
   return (
@@ -225,7 +225,7 @@ export function OutboundEffects() {
     { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
       {x.state==="unknown"&&<Button size="sm" onClick={()=>setResolving(x.id)}>{t("Resolve unknown delivery")}</Button>}
       {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decide("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>{t("Retry")}</Button>}
-      {x.state === "held" && <Button size="sm" variant="primary" onClick={() => void decide("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
+      {x.state === "held" && <Button size="sm" onClick={() => void decide("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>{t("Approve")}</Button>}
       {(x.state === "held" || x.state === "pending" || x.state === "retrying") &&
         <Button size="sm" variant="danger" onClick={() => void decide("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>{t("Discard")}</Button>}
     </span> },

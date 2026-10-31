@@ -48,7 +48,7 @@ function MyInbox() {
         </> : task.ref?.startsWith("build.dispatch/") ? <Button size="sm" variant="primary" onClick={() => openRecord(task.ref!, { window: "tab" })}>{t("Review dispatch")}</Button> : <>
           {!task.assignee && <Button size="sm" onClick={() => void decide("work.task.claim", { type: "work.task", id: task.id }, {})}>{t("Take")}</Button>}
           {task.answers?.length
-            ? task.answers.map((a, i) => <Button key={a} size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: task.id }, { answer: a })}>{task.answerTitles?.[i] ?? a}</Button>)
+            ? task.answers.map((a, i) => <Button key={a} size="sm" variant={task.answers!.length === 1 ? "primary" : "default"} onClick={() => void decide("work.task.complete", { type: "work.task", id: task.id }, { answer: a })}>{task.answerTitles?.[i] ?? a}</Button>)
             : <Button size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: task.id }, {})}>{t("Done")}</Button>}
         </>} />
     </>

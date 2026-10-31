@@ -7,6 +7,7 @@ import { Button } from "../primitives/button";
 import { useViewTitle } from "../shell/Workspace";
 import { ViewVisibilityContext, useViewVisible } from "../shell/ViewVisibility";
 import { ContentTabs } from "./ContentTabs";
+import { PlainPanels } from "../primitives/card";
 
 export type WorkbenchCrumb = { label: ReactNode; onClick?: () => void };
 export type WorkbenchTab = { id: string; title: ReactNode; badge?: number | string; content: ReactNode };
@@ -239,9 +240,9 @@ function tabItems(tabs: WorkbenchTab[]) {
 function PanelBody({ panel }: { panel: WorkbenchPanel }) {
   const [own, setOwn] = useState(panel.tabs?.[0]?.id);
   const choose = (id: string) => { setOwn(id); panel.onChange?.(id); };
-  if (!panel.tabs?.length) return <div className="min-h-0 flex-1 overflow-auto">{panel.content}</div>;
-  return <ContentTabs key={panel.scope} compact label={panel.label} value={panel.value ?? own} onChange={choose}
-    items={tabItems(panel.tabs.map(tab => ({ ...tab, content: <InputDraftProvider scope={tab.id} reveal={path => { choose(tab.id); panel.locate?.(path); }}>{tab.content}</InputDraftProvider> })))} />;
+  if (!panel.tabs?.length) return <PlainPanels><div className="min-h-0 flex-1 overflow-auto">{panel.content}</div></PlainPanels>;
+  return <PlainPanels><ContentTabs key={panel.scope} compact label={panel.label} value={panel.value ?? own} onChange={choose}
+    items={tabItems(panel.tabs.map(tab => ({ ...tab, content: <InputDraftProvider scope={tab.id} reveal={path => { choose(tab.id); panel.locate?.(path); }}>{tab.content}</InputDraftProvider> })))} /></PlainPanels>;
 }
 
 export type WorkbenchProblem = { id: string; severity?: "error" | "warning" | "info"; text: ReactNode; subject?: string; locate?: () => void };

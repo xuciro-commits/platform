@@ -11,7 +11,7 @@ export function SegmentedChoice({label,value,options,compact=false,disabled,onCh
   const to=event.key==='ArrowRight'||event.key==='ArrowDown'?(at+1)%buttons.length:event.key==='ArrowLeft'||event.key==='ArrowUp'?(at+buttons.length-1)%buttons.length:event.key==='Home'?0:event.key==='End'?buttons.length-1:undefined;
   if(to===undefined||!buttons.length)return;event.preventDefault();event.stopPropagation();buttons[to]!.focus();buttons[to]!.click();
  }}>
-  {options.map(option=><Button key={option.value} aria-pressed={value===option.value} aria-label={option.label} title={option.label} tabIndex={active===option?0:-1} disabled={disabled||option.disabled||!onChange} size="sm" variant={compact?'ghost':value===option.value?'primary':'default'} className={cn(compact?'h-6 min-w-0 flex-1 rounded-sm px-1 text-xs':'h-auto min-w-0 whitespace-normal break-words text-left',compact&&value===option.value&&'bg-surface text-primary shadow-sm')} onClick={()=>onChange?.(option.value)}>
+  {options.map(option=><Button key={option.value} aria-pressed={value===option.value} aria-label={option.label} title={option.label} tabIndex={active===option?0:-1} disabled={disabled||option.disabled||!onChange} size="sm" variant={compact?'ghost':'default'} className={cn(compact?'h-6 min-w-0 flex-1 rounded-sm px-1 text-xs':'h-auto min-w-0 whitespace-normal break-words text-left',compact&&value===option.value&&'bg-surface text-primary shadow-sm',!compact&&value===option.value&&'border-primary bg-row-selected text-primary')} onClick={()=>onChange?.(option.value)}>
    {option.icon?<span aria-hidden className="flex [&_svg]:size-3.5">{option.icon}</span>:option.label}
   </Button>)}
  </div>;

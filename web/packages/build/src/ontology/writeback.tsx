@@ -1,4 +1,4 @@
-import { StructuredEditor } from "@platform/ui";
+import { StructuredEditor , PanelGroup , Notice } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationWorkspace } from "../projects/application-scope";
@@ -68,11 +68,11 @@ export function WritebackEditor({ id }: { id: string }) {
         <Button variant="primary" disabled={busy || !!inputs?.invalid} onClick={() => void perform(() => transition("publish"))}>{t("Publish")}</Button>
         {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
       </div>} />
-    {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    {connectionQuery.isError && <Panel role="alert" className="text-danger">{t("The connections could not be loaded.")}</Panel>}
-    {holds("build", "builder") && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
+    {error && <Notice tone="danger" message={error} />}
+    {connectionQuery.isError && <Notice tone="danger" message={t("The connections could not be loaded.")} />}
+    {holds("build", "builder") && model.drafts.isError && <Notice tone="danger" message={t("The saved object definitions could not be loaded.")} />}
     {connection && connection.state !== "ready" && <Panel role="status" className="flex flex-wrap items-center gap-2 text-xs text-warning"><p>{t("This logical connection is not configured for use. You can publish the declaration; configure and check it before running the integration.")}</p><Button size="sm" variant="ghost" onClick={() => open({ view: "connection", params: { id: connection.id } })}>{t("Open connection")}</Button></Panel>}
-    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="min-w-0 border-0 p-0"><PanelGroup className="grid-cols-1 lg:grid-cols-2">
       <Panel title={t("Trigger")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Writeback name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="grtosap" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Writeback title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -108,6 +108,6 @@ export function WritebackEditor({ id }: { id: string }) {
           <Tag label={a.result} tone={a.result === "delivered" ? "success" : "danger"} /><span>{new Date(a.at).toLocaleString()}</span><span>{a.target}</span>{a.detail && <span className="text-danger">{a.detail}</span>}{a.answer && <span className="text-muted">{a.answer.slice(0, 160)}</span>}
         </li>)}</ul> : <p className="text-xs text-muted">{t("Nothing sent yet.")}</p>}
       </Panel>
-    </fieldset></StructuredEditor>
+    </PanelGroup></fieldset></StructuredEditor>
   </div>;
 }

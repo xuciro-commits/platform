@@ -1,4 +1,4 @@
-import { PropertyList, StructuredEditor } from "@platform/ui";
+import { PropertyList, StructuredEditor , PanelGroup , Notice } from "@platform/ui";
 import { useDefinitionDraft } from "../session/definition-draft";
 import { ResourceList } from "../editor/ResourceList";
 import { useApplicationScope, useApplicationWorkspace } from "../projects/application-scope";
@@ -71,12 +71,12 @@ export function DataSourceEditor({ id }: { id: string }) {
         {draft.state === "published" && !draft.stream && !!draft.since && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("reset"))}>{t("Reset cursor")}</Button>}
         {draft.state === "published" && <Button disabled={busy || dirty} onClick={() => void perform(() => transition("pause"))}>{t("Pause")}</Button>}
       </div>} />
-    {error && <Panel role="alert" className="text-danger">{error}</Panel>}
-    {connectionQuery.isError && <Panel role="alert" className="text-danger">{t("The connections could not be loaded.")}</Panel>}
-    {datasetQuery.isError && <Panel role="alert" className="text-danger">{t("The datasets could not be loaded.")}</Panel>}
-    {holds("build", "builder") && model.drafts.isError && <Panel role="alert" className="text-danger">{t("The saved object definitions could not be loaded.")}</Panel>}
+    {error && <Notice tone="danger" message={error} />}
+    {connectionQuery.isError && <Notice tone="danger" message={t("The connections could not be loaded.")} />}
+    {datasetQuery.isError && <Notice tone="danger" message={t("The datasets could not be loaded.")} />}
+    {holds("build", "builder") && model.drafts.isError && <Notice tone="danger" message={t("The saved object definitions could not be loaded.")} />}
     {conn && conn.state !== "ready" && <Panel role="status" className="flex flex-wrap items-center gap-2 text-xs text-warning"><p>{t("This logical connection is not configured for use. You can publish the declaration; configure and check it before running the integration.")}</p><Button size="sm" variant="ghost" onClick={() => open({ view: "connection", params: { id: conn.id } })}>{t("Open connection")}</Button></Panel>}
-    <StructuredEditor {...structured}><fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+    <StructuredEditor {...structured}><fieldset disabled={busy} className="min-w-0 border-0 p-0"><PanelGroup className="grid-cols-1 lg:grid-cols-2">
       <Panel title={t("Endpoint")} className="grid min-w-0 content-start gap-3">
         <label className={fieldClass}>{t("Source name")}<Input disabled={draft.state === "published"} value={draft.name} placeholder="erpitems" onChange={(e) => patch({ name: e.target.value })} /></label>
         <label className={fieldClass}>{t("Source title")}<Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} /></label>
@@ -137,6 +137,6 @@ export function DataSourceEditor({ id }: { id: string }) {
           {last.failures?.length ? <ul className="grid gap-1 text-xs">{last.failures.map((f, i) => <li key={i} className="font-mono break-all">{f.id || "—"} · {f.outcome}</li>)}</ul> : null}
         </>}
       </Panel>}
-    </fieldset></StructuredEditor>
+    </PanelGroup></fieldset></StructuredEditor>
   </div>;
 }

@@ -6,10 +6,10 @@ import { useStudioApplication } from "../projects/use-studio-application";
 import { ResourceControls as AssetControls } from "../editor/workbench";
 import { SystemDefinitionsToggle, useSystemDefinitionsVisibility } from "../editor/SystemDefinitions";
 import { NewActions, assetKey, useDependencies, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
-import { ContextHelp, Button, Card, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, RelationCanvas, Tag,
-  t, type ColumnDef, type RelationEdge, type RelationNode, ContentTabs} from "@platform/ui";
+import { ContextHelp, Button, Checkbox, DataTable, EditorWorkbench, Form, GroupedList, Input, PageHeader, Panel, ObjectIcon, PropertyList, RecordList, RelationCanvas, Tag,
+  t, type ColumnDef, type RelationEdge, type RelationNode, ContentTabs, SegmentedChoice } from "@platform/ui";
 import type { Api } from "@platform/kernel";
-import { Boxes, GitBranch, Layers, Link2 } from "lucide-react";
+import { Layers, Link2 } from "lucide-react";
 import { useInterfaces } from "./shape";
 import { projectGroup, useProjectIndex } from "../projects/membership";
 import { useEffect, useMemo, useState } from "react";
@@ -90,14 +90,13 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   return <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
     <PageHeader title={t("Objects")} help={t("Explore the business model, inspect relationships, and bind real resources to pages.")}
       actions={<div className="flex flex-wrap gap-2">{application ? <Button onClick={() => open({ view: "project", params: { id: application, area: "model" } })}>{t("Add model resources")}</Button> : <><AssetControls type="build.object" /><NewActions type="build.object" onCreated={branch ? target => open({ view: "object-type", params: { id: target.id } }) : undefined}/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button><Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button></>}</div>} />
-    <Card role="toolbar" aria-label={t("Model navigation")} className="flex flex-wrap items-center gap-2 px-3 py-2">
-      <Button variant={view === "catalog" ? "primary" : "ghost"} onClick={() => setView("catalog")}><Boxes />{t("Model catalog")}</Button>
-      <Button variant={view === "graph" ? "primary" : "ghost"} onClick={() => setView("graph")}><GitBranch />{t("Relationship graph")}</Button>
-      <Button variant={view === "shared" ? "primary" : "ghost"} onClick={() => setView("shared")}><Boxes />{t("Shared property catalog")}</Button>
-      <Button variant={view === "interfaces" ? "primary" : "ghost"} onClick={() => setView("interfaces")}><Layers />{t("Interfaces")}</Button>
+    <div role="toolbar" aria-label={t("Model navigation")} className="flex flex-wrap items-center gap-2">
+      <SegmentedChoice label={t("Model navigation")} value={view} onChange={next => setView(next as typeof view)} options={[
+        { value: "catalog", label: t("Model catalog") }, { value: "graph", label: t("Relationship graph") },
+        { value: "shared", label: t("Shared property catalog") }, { value: "interfaces", label: t("Interfaces") }]} />
       <Input aria-label={t("Search model resources")} placeholder={t("Search model resources")} value={search} onChange={(event) => setSearch(event.target.value)} className="ml-auto h-8 w-56 text-xs" />
       {!application && <SystemDefinitionsToggle checked={showSystem} onChange={setShowSystem} />}
-    </Card>
+    </div>
     {inventory.isError && <Panel role="alert">{t("Object drafts could not be loaded. Installed definitions are still available.")}</Panel>}
     <EditorWorkbench leftLabel={t("Model resources")} centerLabel={t("Model workspace")} rightLabel={t("Semantic inspector")}
       left={<div className="grid content-start gap-3 p-3">

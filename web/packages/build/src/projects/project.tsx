@@ -86,7 +86,7 @@ function NewResourceMenu({ application, onCreated, children, disabled, area }: {
       return { id: kind.kind, label: t(kind.label), icon: kindIcon[kind.kind], separatorBefore: index > 0 && at === 0, disabled, run: () => editorCreatedKinds.has(kind.kind) ? open(resourceRoute(kind, "new", application)) : creators[kind.kind]!.take(undefined, kind.kind === "automation" ? { kind: "automation" } : undefined) };
     }));
   return <>
-    <ActionMenu label={t("New resource")} variant="primary" icon={<Plus />} commands={commands}>{children ?? t("New")}</ActionMenu>
+    <ActionMenu label={t("New resource")} icon={<Plus />} commands={commands}>{children ?? t("New")}</ActionMenu>
     {Object.values(creators).map((creator, index) => <span key={index}>{creator.dialog}</span>)}
   </>;
 }

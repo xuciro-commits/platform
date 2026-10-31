@@ -1,6 +1,6 @@
 import { useRunControl } from "./use-run-control";
 import type { Api } from "@platform/kernel";
-import { Button, ContextHelp, DataTable, Disclosure, PageHeader, Panel, PropertyList, Input, Select, Tag, t, useWorkspace, type ColumnDef, formatStamp} from "@platform/ui";
+import { Button, ContextHelp, DataTable, Disclosure, PageHeader, Panel, PropertyList, Input, Select, Tag, t, useWorkspace, type ColumnDef, formatStamp, Notice } from "@platform/ui";
 import { useState, type ReactNode } from "react";
 import { ChainGraph, useHost, useOpenRecord, useReadQuery, useRecordInventory } from "../index";
 import {refusalCategoryName} from "../actions/refusal";
@@ -85,7 +85,7 @@ export function ApplicationRuns({ owner, name, project }: { owner: string; name:
 
 export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string}) {
  const query=useReadQuery<Api.ApplicationRuntime>("/v1/applications/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name)+"/runtime"),runtime=query.isError?undefined:query.data;
- if(query.isError)return <Panel role="alert">{t("Application runtime is unavailable. Refresh after publishing the application.")}</Panel>;
+ if(query.isError)return <Notice tone="danger" message={t("Application runtime is unavailable. Refresh after publishing the application.")} />;
  if(!runtime)return <p role="status">{t("Loading…")}</p>;
  const monitoring=runtime.monitoring,runs=monitoring.runs;
  const refusalColumns:ColumnDef<Api.RefusalCodeCount,any>[]=[
@@ -173,7 +173,7 @@ export function ApplicationRuntimePanel({owner,name}:{owner:string;name:string})
     ]} getRowId={item=>item.ref.app+":"+item.ref.name} height={200} searchable={false}/></div>
    </Disclosure>
    {!!runtime.ai?.length&&<Disclosure summary={t("AI placement and evaluations")}>
-    <div className="grid gap-4 py-3">{runtime.ai.map(item=><Panel variant="plain" key={item.resource.ref.name} className="grid min-w-0 gap-3 border-b border-border pb-4 last:border-b-0 last:pb-0">
+    <div className="grid gap-4 py-3">{runtime.ai.map(item=><Panel key={item.resource.ref.name} className="grid min-w-0 gap-3 border-b border-border pb-4 last:border-b-0 last:pb-0">
      <h3 className="break-all text-sm font-medium">{item.resource.ref.name}</h3>
      <PropertyList columns={3} items={[
       [t("Placement"),placementName(item.placement)],
@@ -281,19 +281,19 @@ export function OperationRunView({id,application,project,subject}:{id:string;app
  const {can}=useHost(),{open}=useWorkspace();
  const control=useRunControl("platform.effect",id);
  const query=useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(id)}`),answer=query.data;
- if(query.isError)return <Panel role="alert">{t("This calculation run is unavailable to you.")}</Panel>;
+ if(query.isError)return <Notice tone="danger" message={t("This calculation run is unavailable to you.")} />;
  if(!answer)return <p role="status">{t("Loading…")}</p>;
  return <div className="grid min-w-0 gap-3">
   {project?<Button variant="ghost" onClick={()=>open({view:"project",params:{id:project,section:"runs"}})}>{t("Back to project")}</Button>:application&&<Button variant="ghost" onClick={()=>open({view:"application-runs",params:{app:(application.split(":")[0]??""),name:application.split(":").slice(1).join(":"),application}})}>{t("Back to application runs")}</Button>}
   {subject?.startsWith("flow.instance/")&&<Button variant="ghost" onClick={()=>open({view:"flow-instance",params:{id:subject.slice("flow.instance/".length),...(application?{application}:{}),...(project?{project}:{})}},{window:"beside"})}>{t("Open related workflow run")}</Button>}
-  {control.error&&<Panel role="alert" className="text-sm text-danger">{control.error}</Panel>}
+  {control.error&&<Notice tone="danger" message={control.error} />}
   {control.pending&&<Panel role="status" className="grid gap-2 text-sm"><p>{t("A runtime decision is unconfirmed. Retry the original operation; leaving does not cancel accepted work.")}</p><Button disabled={control.busy} onClick={()=>void control.retry()}>{t("Retry original operation")}</Button></Panel>}
   <Tag label={stateName(answer.state)} tone={answer.state==="failed"?"danger":"neutral"}/>
   <Disclosure summary={t("Run details")}><div className="grid gap-3 py-3">
    <RunBinding run={{version:answer.version?String(answer.version):answer.ownerVersion?"code:"+answer.ownerVersion:undefined,release:answer.release,dependencies:answer.dependencies,module:answer.module}}/>
    {answer.definition&&<PropertyList items={[[t("Startup definition"),<code className="select-all break-all">{answer.definition}</code>]]}/>}
   </div></Disclosure>
-  {answer.error&&<Panel role="alert">{answer.error}</Panel>}
+  {answer.error&&<Notice tone="danger" message={answer.error} />}
   {answer.state==="failed"&&can("platform.effect.retry")&&<Button disabled={control.busy||!!control.pending} onClick={()=>void control.control("platform.effect.retry")}>{t("Retry")}</Button>}
   {answer.output!==undefined&&<pre className="max-h-80 overflow-auto text-xs">{JSON.stringify(answer.output,null,2)}</pre>}
   <ChainGraph of={`platform.effect/${id}`}/>

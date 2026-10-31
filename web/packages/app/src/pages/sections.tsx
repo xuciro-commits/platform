@@ -14,7 +14,7 @@ import {avatarCollectionVariable,confirmedContext,originalContextSlot,currentCon
 import {searchInputObjects} from "../widgets/search-input";
 import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "../runtime/decimal";
 import {
-  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord} from "@platform/ui";
+  Button, Card, RegionPresentation, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Panel, cn, t, useViewVisible, type EntityRecord, Notice , EmptyState } from "@platform/ui";
 import { Component, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HostContext, useHost,useOpenRecord, findDefinition, type Definition } from "../index";
 import { supportsPageUIProfile } from "../widgets/registry";
@@ -51,7 +51,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
 class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? <Panel role="alert">{t("This widget could not be displayed.")}</Panel> : this.props.children; }
+  render() { return this.state.failed ? <Notice tone="danger" message={t("This widget could not be displayed.")} /> : this.props.children; }
 }
 
 export function SectionView(bound: Bound & Composing) {
@@ -62,8 +62,8 @@ export function SectionView(bound: Bound & Composing) {
   const aggregateSource=source?.aggregate?{aggregate:source.aggregate,scope:bound.aggregateScope??source.scope,revision:source.revision,watchAggregate:source.watchAggregate}:undefined;
   const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const Renderer=implementation?.Renderer;
-  const modelStatus=model.active&&(model.error||!model.ready||!model.data)?<Panel role={model.error?"alert":"status"}>{t(model.error??(!model.ready?"Select the model binding context.":"Loading model fields and relationships…"))}</Panel>:undefined;
-  const compositeStatus=composite.active&&(composite.error||!composite.ready||!composite.data)?<Panel role={composite.error?"alert":"status"}>{t(composite.error??(!composite.ready?"Select the model binding context.":"Loading model fields and relationships…"))}</Panel>:undefined;
+  const modelStatus=model.active&&(model.error||!model.ready||!model.data)?<Notice tone={model.error?"danger":"info"} message={t(model.error??(!model.ready?"Select the model binding context.":"Loading model fields and relationships…"))} />:undefined;
+  const compositeStatus=composite.active&&(composite.error||!composite.ready||!composite.data)?<Notice tone={composite.error?"danger":"info"} message={t(composite.error??(!composite.ready?"Select the model binding context.":"Loading model fields and relationships…"))} />:undefined;
   const body = compositeStatus??modelStatus??(Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound} info={source?.entity(bound.recordObject??objectOf(bound.page,bound.section))} sourceScope={source?.scope} aggregateSource={aggregateSource} recordSource={source} definitions={host?.definitions} catalog={host?.catalog} decide={host?.decide} can={host?.can}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>);
   const slots=(placement:"before"|"after")=>implementation&&"slots" in implementation.contract?implementation.contract.slots.filter(slot=>slot.placement===placement).map(slot=>bound.slotViews?.[slot.id]?<div key={slot.id} data-widget-slot={slot.id} onClick={event=>event.stopPropagation()}>{bound.slotViews[slot.id]}</div>:null):null;
   const template=section.tablePresentation?.titleTemplate,total=bound.window?.error||!["value","empty"].includes(bound.collection?.status??"")?undefined:bound.window?.page?.total;
@@ -91,7 +91,7 @@ type ComposedPageProps = {
 export function ComposedPage(props: ComposedPageProps) {
   const { me,source } = useHost();const application=useApplicationContext();const previewRoute=useContext(AuthoringPreview);
   const issues=pagePresentationIssues(props.page);
-  if(issues.length)return <Panel role="alert"><ul>{issues.map((issue,index)=><li key={index}><code>{issue.path.join(".")}</code>: {issue.message}</li>)}</ul></Panel>;
+  if(issues.length)return <Notice tone="danger" message={issues.map(issue=>`${issue.path.join(".")}: ${issue.message}`).join("\n")} />;
   const presented=presentPage(props.page);
   const effective={...presented,sections:presented.sections?.map(section=>{const value=materializeModelSection(section,source.entity);return interfaceQueryForSection(props.page,section)?{...value,object:undefined}:value;})};
   return <PageEmbeddingBoundary page={props.page}><PageSession key={JSON.stringify([me?.tenantId, me?.principalId, props.definitionKey, props.page, application?.identity])} {...props} live={resolvePageLiveMode(props.live,application?.preview===true,previewRoute)} page={effective} /></PageEmbeddingBoundary>;
@@ -207,7 +207,7 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
   const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext, overlay?: string, valueVariable?: string,slotViews?:Readonly<Record<string,ReactNode>>) => {
     const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {}, value = values[valueVariable ?? ""];
     const shared=section.filterVariable?application.resources[section.filterVariable]:undefined;
-    if(section.filterVariable&&(!shared||shared.status==="error"||shared.status==="pending"||!("value" in shared)||typeof shared.value!=="object"||shared.value.kind!=="filter"))return <Panel role="alert">{t("Shared filter is unavailable.")}</Panel>;
+    if(section.filterVariable&&(!shared||shared.status==="error"||shared.status==="pending"||!("value" in shared)||typeof shared.value!=="object"||shared.value.kind!=="filter"))return <Notice tone="danger" message={t("Shared filter is unavailable.")} />;
     const sharedFilter=shared&&"value" in shared&&typeof shared.value==="object"&&shared.value.kind==="filter"?shared.value.fields:undefined;
     const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
     const binding=(name:string,control?:string)=>page.document?.events?.find(event=>event.source===section.id&&event.event===name&&(event.control??"")===(control??""));
@@ -305,16 +305,16 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
   };
   const placed=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const n=page.document?.nodes[id];return !!n&&(n.kind==="widget"?indexed.has(n.section??""):(n.children??[]).some(child=>placed(child,seen)));};
   const renderNode = (id: string, ancestors: Set<string>, context?: LoopContext, overlay?: string, parentKind?:string, parentHeight=false): ReactNode => {
-    if (!page.document || ancestors.has(id)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    if (!page.document || ancestors.has(id)) return <Notice tone="danger" message={t("This page layout is unavailable.")} />;
     const node = page.document.nodes[id];
-    if (!node) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    if (!node) return <Notice tone="danger" message={t("This page layout is unavailable.")} />;
     if(!wrapLayout&&!placed(id))return null;
     const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {};
     if (node.visibleWhen) {
       const visible = values[node.visibleWhen];
-      if (!visible || visible.status === "error") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.visibleWhen}</Panel>;
-      if (visible.status === "pending") return <Panel role="status">{t("Loading page variable…")}</Panel>;
-      if (visible.value !== true) return wrapLayout ? wrapLayout(id, node, <Panel>{t("Hidden by page variable")}: {node.visibleWhen}</Panel>) : null;
+      if (!visible || visible.status === "error") return <Notice tone="danger" message={`${t("This page variable could not be evaluated.")} ${node.visibleWhen}`} />;
+      if (visible.status === "pending") return <Notice tone="info" message={t("Loading page variable…")} />;
+      if (visible.value !== true) return wrapLayout ? wrapLayout(id, node, <Notice tone="info" role="note" message={`${t("Hidden by page variable")}: ${node.visibleWhen}`} />) : null;
     }
     const bounded=node.size?.height!==undefined||parentHeight&&(parentKind==="columns"||parentKind==="rows"&&node.size?.weight!==undefined);
     const frame=(body:ReactNode)=><LayoutRegion key={id} size={node.size} parent={parentKind} fillHeight={parentKind==="columns"&&parentHeight} fillWidth={(parentKind==="flow"||parentKind==="toolbar")&&node.kind!=="widget"}>{wrapLayout?wrapLayout(id,node,present(body)):present(body)}</LayoutRegion>;
@@ -322,17 +322,17 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
     if (node.kind === "widget") {
       const item = indexed.get(node.section);
       if (!item) return null;
-      if (context && !([...pageVariableContract.loop.recordWidgets, ...pageVariableContract.loop.presentationWidgets] as readonly string[]).includes(item.section.widget)) return <Panel role="alert">{t("This widget is not supported in a loop.")}</Panel>;
+      if (context && !([...pageVariableContract.loop.recordWidgets, ...pageVariableContract.loop.presentationWidgets] as readonly string[]).includes(item.section.widget)) return <Notice tone="danger" message={t("This widget is not supported in a loop.")} />;
       const next=new Set(ancestors);next.add(id);
       const slotViews=Object.fromEntries((node.children??[]).map(child=>[page.document!.nodes[child]?.slot??"",renderNode(child,next,context,overlay,"widget",bounded)]));
       const body = renderSection(item.section, item.i, true, !node.enabledWhen || (() => { const result = values[node.enabledWhen]; return result?.status === "value" && result.value === true; })(), context, overlay, node.valueVariable,slotViews);
       return frame(body);
     }
-    if (!["rows", "columns", "tabs", "flow", "toolbar", "loop"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    if (!["rows", "columns", "tabs", "flow", "toolbar", "loop"].includes(node.kind)) return <Notice tone="danger" message={t("This page layout is unavailable.")} />;
     const next = new Set(ancestors); next.add(id);
     if (node.kind === "loop") {
       if(context)return frame(<NestedLoopRuntime page={page} node={node} owner={id} parent={context} overlay={overlay}>{item=><>{node.children?.map(child=><div key={child} className="min-w-0">{renderNode(child,next,item,overlay)}</div>)}</>}</NestedLoopRuntime>);
-      if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
+      if (!node.loop) return <Notice tone="danger" message={t("Choose a loop query window.")} />;
       const collection = initialVariables[node.loop.collection]?.source, queryID=variablePlan(page,node.loop.collection);
       const shared=applicationVariable(node.loop.collection);const queryKey = shared?`application/${shared}`:queryID!==undefined?planKey(queryID):collection?.section??"";
       const body = <LoopRuntime page={page} queryKey={queryKey} expectedSignature={shared?application.signatures[shared]??"":queryID!==undefined ? queries.signatures[queryID]??"" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
@@ -342,7 +342,7 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
     }
     if (node.kind === "tabs") {
       const active = values[node.activeVariable ?? ""];
-      if (!active || active.status !== "value" || typeof active.value !== "string") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.activeVariable}</Panel>;
+      if (!active || active.status !== "value" || typeof active.value !== "string") return <Notice tone="danger" message={`${t("This page variable could not be evaluated.")} ${node.activeVariable}`} />;
       const body = <ContentTabs label={node.title || t("Page tabs")} value={active.value} onChange={(value) => setContextState(node.activeVariable!, value, context, overlay)}
         items={(node.children ?? []).map((child, index) => ({ id: child,
           title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next, context, overlay) }))} />;
@@ -366,12 +366,12 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
       {notice}
       {queryErrors(editingRoot ? overlayForRoot(editingRoot) : undefined)}
       {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&["object-set","decimal"].includes(initialVariables[id]?.type??"")&&!application.error).map(([id,result])=><Panel key={id} role="alert" className="flex gap-2">{result.status==="error"?t(result.code):""}<Button onClick={()=>application.retry(id)}>{t("Retry query")}</Button></Panel>)}
-      {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="record"&&!application.error).map(([id,result])=><Panel key={id} role="alert">{result.status==="error"?t(result.code):""}</Panel>)}
-      {application.error && <Panel role="alert">{t(application.error)}</Panel>}
-      {(incoming.error || effects.error) && <Panel role="alert">{t(incoming.error ?? effects.error!)}</Panel>}
+      {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="record"&&!application.error).map(([id,result])=><Notice key={id} tone="danger" message={result.status==="error"?t(result.code):""} />)}
+      {application.error && <Notice tone="danger" message={t(application.error)} />}
+      {(incoming.error || effects.error) && <Notice tone="danger" message={t(incoming.error ?? effects.error!)} />}
       {effects.dialog}
       {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
-        ? <Panel role="alert">{t("This page needs a newer workspace version. Refresh after updating the workspace.")}</Panel>
+        ? <Notice tone="warning" message={t("This page needs a newer workspace version. Refresh after updating the workspace.")} />
         : renderNode(editingRoot ?? page.document.root, new Set(), undefined, editingRoot ? overlayForRoot(editingRoot) : undefined) : <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (
           renderSection(section, i, false)
@@ -393,7 +393,7 @@ function PageSession({ page, modelDraft,live = true, notice, chosen, onChoose, w
           {open && <OverlayBody session={session} sectionIDs={sections} owner={id}>{queryErrors(id)}{renderNode(overlay.root, new Set(), undefined, id)}</OverlayBody>}
         </Frame>;
       })}
-      {(page.sections ?? []).length === 0 && <Panel role="status" className="text-sm text-muted">{t("Nothing is on this page yet.")}</Panel>}
+      {(page.sections ?? []).length === 0 && <EmptyState title={t("Nothing is on this page yet.")} />}
     </div>
   );
 }
