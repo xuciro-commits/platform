@@ -200,7 +200,7 @@ func branchDraftSet(owner build.ConstructionDrafts, actions []branchAction) []bu
 			continue
 		}
 		selected := []build.JointDraftRef{{Kind: ref.Kind, ID: item.plan.ID}}
-		if closure, err := owner.ReferencedDrafts(ref.Kind, item.plan.ID); err == nil {
+		if closure, err := owner.ReferencedDrafts(ref.Kind, item.plan.ID, ""); err == nil {
 			selected = append(selected, closure...)
 		}
 		for _, draft := range selected {

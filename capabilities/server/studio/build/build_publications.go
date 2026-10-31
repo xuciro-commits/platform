@@ -77,7 +77,7 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 					continue
 				}
 			}
-			change := DraftChange{Ref: ref, Type: entity.Type, ID: meta.ID, Title: meta.Title, Variant: meta.Kind, Published: meta.Published != "", Changed: meta.Changed, Fields: []DraftChangeField{}}
+			change := DraftChange{Ref: ref, Type: entity.Type, ID: meta.ID, Title: meta.Title, Variant: meta.Kind, Published: meta.Published != "", Changed: meta.Changed, Owner: draftOwner(meta.Record), Fields: []DraftChangeField{}}
 			before, after, portable, err := b.draftComparison(record, meta.Published, info)
 			if err != nil {
 				change.Diagnostic = err.Error()
@@ -118,6 +118,21 @@ func (b *Build) SavedDraftChanges(c platform.Caller, application, typ, id string
 	}
 	slices.SortFunc(out, func(a, b DraftChange) int { return strings.Compare(a.Type+"/"+a.ID, b.Type+"/"+b.ID) })
 	return out, nil
+}
+
+func (b *Build) WorkingDrafts(owner string) ([]DraftChange, error) {
+	changes, err := b.SavedDraftChanges(b.host.Automation(platform.Caller{}, ID), "", "", "")
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(changes, func(change DraftChange) bool { return change.Owner != owner }), nil
+}
+
+func draftOwner(r platform.Record) string {
+	if r.Changed.By == "" || strings.HasPrefix(r.Changed.By, "app:") {
+		return r.Created.By
+	}
+	return r.Changed.By
 }
 
 func (b *Build) draftComparison(record any, published string, info platform.EntityInfo) (before, after map[string]json.RawMessage, portable bool, err error) {

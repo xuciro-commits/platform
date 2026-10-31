@@ -20,7 +20,7 @@ read-when: 每批开始（选下一批）与结束（删除已完成条目、记
 
 ## 下一批
 
-P3.22 审阅范围：main 上的 Review and save 只含本人的工作状态，他人的无效草稿不再阻塞本人保存；项目发布包含该项目的工作状态。
+P3.24 Files 只列项目：Files 的项目表不再把原生应用（Agents、AI、Builder 等）列为项目。
 
 ## P2 内核收敛
 
@@ -63,10 +63,10 @@ P3.22 审阅范围：main 上的 Review and save 只含本人的工作状态，�
 | P3.18 | 条件构建器与对象集构建器各一个实现 | 4-interaction/patterns M10、M11 |
 | P3.19 | 对象合并规则统一实现 | 6-domain §6.5 |
 | P3.20 | 切换语言不整页刷新 | 7-system/web R6 |
-| P3.22 | 审阅范围：main 上只含本人的工作状态；项目发布包含工作状态 | 6-domain/change §6.19 |
 | P3.24 | Files 只列项目，不列原生应用 | 3-information §3.7 |
 | P3.26 | 数据源投影可见：投影有运行记录与重试，拒绝的行与暂停原因显示在对象类型 Datasources 与 Monitoring | 7-system §7.5 |
 | P3.27 | CSV 上传推断列类型（数字、布尔、日期） | 6-domain §6.6 |
+| P3.28 | 每位构建者独立的工作状态：草稿在保存前对他人不可见，分支上按人分开 | 6-domain/change §6.19 |
 
 ## P4 行业应用
 

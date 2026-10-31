@@ -1332,7 +1332,7 @@ func (b *Build) singleDraftAssets(kind platform.AssetKind, id string) (before, a
 	return assets.Before, assets.After, prior, next, hadPrior, nil
 }
 
-func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDraftRef, error) {
+func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]JointDraftRef, error) {
 	if id == "" {
 		return nil, fmt.Errorf("a saved draft is required")
 	}
@@ -1343,7 +1343,9 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id string) ([]JointDra
 		}
 		selected := map[JointDraftRef]bool{{Kind: kind, ID: id}: true}
 		for _, change := range changes {
-			selected[JointDraftRef{Kind: change.Ref.Kind, ID: change.ID}] = true
+			if owner == "" || change.Owner == owner || !change.Published {
+				selected[JointDraftRef{Kind: change.Ref.Kind, ID: change.ID}] = true
+			}
 		}
 		drafts, err := b.applicationDrafts(id, selected)
 		return slices.DeleteFunc(drafts, func(draft JointDraftRef) bool { return draft.Kind == kind && draft.ID == id }), err
@@ -2204,6 +2206,7 @@ type DraftChange struct {
 	Variant    string             `json:"variant,omitempty"`
 	Published  bool               `json:"published"`
 	Changed    platform.Stamp     `json:"changed"`
+	Owner      string             `json:"owner"`
 	Fields     []DraftChangeField `json:"fields"`
 	Diagnostic string             `json:"diagnostic,omitempty"`
 }

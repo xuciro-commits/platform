@@ -4157,6 +4157,17 @@ export type ReleaseUpgradePlan = {
   additions: ReleaseFieldAddition[];
 };
 
+export type ReleaseWorkingDraft = {
+  kind: string;
+  id: string;
+  type: string;
+  title: string;
+};
+
+export type ReleaseWorkingState = {
+  drafts: ReleaseWorkingDraft[];
+};
+
 export type Result = {
   sources?: string[];
   value: Value;

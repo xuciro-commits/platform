@@ -50,7 +50,7 @@ func liveReadAllowed(p string) bool {
 	if rest, ok := strings.CutPrefix(p, "/v1/"); ok && rest != "" && !strings.Contains(rest, "/") {
 		return !slices.Contains([]string{"changes", "sign-in", "openapi.json"}, rest)
 	}
-	return slices.Contains([]string{"/v1/authz/explain", "/v1/ai/model-selection", "/v1/ai/knowledge-index", "/v1/ai/vendors", "/v1/releases/active", "/v1/releases/candidates", "/v1/build/drafts/actions", "/v1/page-model/rules"}, p)
+	return slices.Contains([]string{"/v1/authz/explain", "/v1/ai/model-selection", "/v1/ai/knowledge-index", "/v1/ai/vendors", "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/working", "/v1/build/drafts/actions", "/v1/page-model/rules"}, p)
 }
 func liveOperationRead(p string) bool {
 	return strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) || strings.HasPrefix(p, "/v1/dispatches/") && strings.HasSuffix(p, "/targets") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage", "/v1/ai/knowledge-index"}, p)
@@ -306,7 +306,7 @@ func (t *Tenant) liveVersion(query string) string {
 		t.mu.Unlock()
 	}
 	switch p {
-	case "/v1/releases/active", "/v1/releases/candidates", "/v1/build/drafts/actions", "/v1/release-profile", "/v1/capabilities", "/v1/page-model/rules":
+	case "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/working", "/v1/build/drafts/actions", "/v1/release-profile", "/v1/capabilities", "/v1/page-model/rules":
 		owner = "build"
 	case "/v1/ai-limits", "/v1/ai-models", "/v1/ai-providers", "/v1/ai/vendors":
 		owner = "ai"

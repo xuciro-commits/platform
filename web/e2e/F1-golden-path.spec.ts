@@ -64,9 +64,20 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(page.getByRole("region", { name: "Page settings" })).toBeVisible();
   });
 
-  await test.step("6 review and save once", async () => {
+  await test.step("6 review and save once, leaving another builder's drafts out", async () => {
+    const other = await (await browser.newContext()).newPage();
+    await signIn(other, "admin", "/projects");
+    await other.getByRole("button", { name: "New project", exact: true }).click();
+    const sheet = other.getByRole("dialog", { name: "Create project" });
+    await sheet.getByRole("textbox", { name: "Name *" }).fill(`${name}other`);
+    await sheet.getByRole("textbox", { name: "What people call it *" }).fill(`Other ${name.slice(6)}`);
+    await sheet.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(other.getByRole("heading", { name: "Next steps" })).toBeVisible();
+    await other.context().close();
     await page.getByRole("button", { name: "Review and save", exact: true }).click();
-    for (const kind of ["Applications", "Pages", "Object types", "Datasets"]) await expect(page.getByText(`${kind} ·`).first()).toBeVisible();
+    const provenance = page.getByRole("list", { name: "Draft provenance" });
+    for (const kind of ["Applications", "Pages", "Object types", "Datasets"]) await expect(provenance.getByText(`${kind} ·`).first()).toBeVisible();
+    await expect(provenance.getByText("Applications ·")).toHaveCount(1);
     await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
     await page.getByRole("button", { name: "Activate release", exact: true }).click();
     await expect(page.getByText("Release active for operators.")).toBeVisible({ timeout: 60_000 });

@@ -90,7 +90,7 @@ func (b *Build) RootDrafts(roots []platform.AssetRef) ([]JointDraftRef, error) {
 			return nil, fmt.Errorf("test root %s has no saved draft", root)
 		}
 		selected := []JointDraftRef{{Kind: root.Kind, ID: id}}
-		dependencies, err := b.ReferencedDrafts(root.Kind, id)
+		dependencies, err := b.ReferencedDrafts(root.Kind, id, "")
 		if err != nil {
 			return nil, err
 		}

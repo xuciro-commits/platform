@@ -52,7 +52,11 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 	if !ok {
 		return releaseowner.ReleaseDraftClosure{}, fmt.Errorf("tenant has no builder")
 	}
-	drafts, err := owner.ReferencedDrafts(kind, id)
+	mine := ""
+	if branch == "" {
+		mine = m.ID
+	}
+	drafts, err := owner.ReferencedDrafts(kind, id, mine)
 	if err != nil {
 		return releaseowner.ReleaseDraftClosure{}, err
 	}
@@ -60,6 +64,31 @@ func (t *Tenant) ReferencedDrafts(m platform.Member, kind platform.AssetKind, id
 		drafts = []build.JointDraftRef{}
 	}
 	return releaseowner.ReleaseDraftClosure{Drafts: drafts}, nil
+}
+
+func (t *Tenant) WorkingDrafts(m platform.Member) (releaseowner.ReleaseWorkingState, error) {
+	if err := t.admits(m); err != nil {
+		return releaseowner.ReleaseWorkingState{}, err
+	}
+	c := platform.NewCaller(runtime{t}, m, build.ID, false, false)
+	if err := authorizationRefusal(t.authorizeNative(c, "GET /v1/releases/drafts/working", "read", []string{build.Builder}, true)); err != nil {
+		return releaseowner.ReleaseWorkingState{}, err
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	owner, ok := t.app(build.ID).(build.ConstructionDrafts)
+	if !ok {
+		return releaseowner.ReleaseWorkingState{}, fmt.Errorf("tenant has no builder")
+	}
+	changes, err := owner.WorkingDrafts(m.ID)
+	if err != nil {
+		return releaseowner.ReleaseWorkingState{}, err
+	}
+	state := releaseowner.ReleaseWorkingState{Drafts: []releaseowner.ReleaseWorkingDraft{}}
+	for _, change := range changes {
+		state.Drafts = append(state.Drafts, releaseowner.ReleaseWorkingDraft{Kind: change.Ref.Kind, ID: change.ID, Type: change.Type, Title: change.Title})
+	}
+	return state, nil
 }
 
 func (t *Tenant) PreviewReleaseDrafts(m platform.Member, drafts []build.JointDraftRef, branch string, now time.Time) (releaseowner.ReleasePreview, error) {

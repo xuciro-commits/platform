@@ -63,6 +63,17 @@ type ReleaseDraftClosure struct {
 	Drafts []build.JointDraftRef `json:"drafts"`
 }
 
+type ReleaseWorkingState struct {
+	Drafts []ReleaseWorkingDraft `json:"drafts"`
+}
+
+type ReleaseWorkingDraft struct {
+	Kind  platform.AssetKind `json:"kind"`
+	ID    string             `json:"id"`
+	Type  string             `json:"type"`
+	Title string             `json:"title"`
+}
+
 type ReleaseSaved struct {
 	ID string `json:"id"`
 }
