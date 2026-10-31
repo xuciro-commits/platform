@@ -187,7 +187,7 @@ func (b *Build) checkExtensionDependents(object Object) error {
 }
 
 func (b *Build) objectEntity() platform.Entity {
-	return platform.Entity{Type: ObjectType, Title: "Object", Plural: "Objects", Model: Object{}, Display: "title",
+	return platform.Entity{Type: ObjectType, Title: "Object type", Plural: "Object types", Model: Object{}, Display: "title",
 		Description: "An object this organisation defines itself: its name, what people call it and its fields. Publishing it installs it, and records of it are kept like any other app's.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {

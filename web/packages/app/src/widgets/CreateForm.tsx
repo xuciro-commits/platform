@@ -3,12 +3,10 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {PropertyList,t,type EntityRecord} from '@platform/ui';
 import {GeneratedForm,newId,useHost,useInvokeCapability} from '../index';
 import {prefixOf} from '../actions/actions';
-import {useActionTrial} from '../actions/trial';
 export type FormProps={object:string;parentObject:string;config:Pick<PageUI.Section,'fields'|'inputs'|'relation'>;live:boolean;master?:EntityRecord};
 export function CreateFormRenderer({object:type,parentObject:parentType,config:section,live,master}:FormProps) {
   const { decide, source } = useHost();
   const invoke = useInvokeCapability();
-  const trial = useActionTrial();
   const refField = section.relation ? source.entity(type)?.fields.find(f=>f.type==='reference'&&f.ref===parentType&&f.inverse===section.relation) : undefined;
   const [round, setRound] = useState(0), [error, setError] = useState("");
   const bindings = section.inputs ?? {};
@@ -56,7 +54,6 @@ export function CreateFormRenderer({object:type,parentObject:parentType,config:s
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     <fieldset disabled={!live || !ready}>
       <GeneratedForm key={round} type={type} fields={fields} submitLabel={t("Create")} onCancel={() => { setError(""); setRound((r) => r + 1); }}
-        context={type+' · '+id+' · 0'} onTrial={live&&ready?values=>trial(type+'.create',{type,id},{...values,...bound.values,...refField&&master?{[refField.name]:master.id}:{}},0):undefined}
         onSubmit={async (values) => {
           if (!opened.live || !opened.mounted || current.current !== opened) return;
           setError("");

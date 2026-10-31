@@ -132,7 +132,7 @@ function ProjectModule({ id, page, openPage, initialFocus }: { id: string; page?
     } catch { setError(t("The page was created but could not be added to this module. Retry adding the same page.")); }
     finally { lock.current = false; setSaving(false); }
   };
-  const createPage = useNewRecord("build.page", target => { void attachCreatedPage(target); });
+  const createPage = useNewRecord("build.page", target => { void attachCreatedPage(target); }, { essential: true });
   const addPage = () => { if (!lock.current && !createdPage && !invalid) createPage.take(); };
   const reload = () => confirmDiscard(() => {
     if (project) { session.load(hydrate(project,declarationFields)); baseRevision.current = project.revision; loaded.current = `${project.id}:${project.revision}`; }

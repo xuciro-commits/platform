@@ -1,6 +1,5 @@
 import {decodeDefinitions} from "./pageui/wire";
 export {decodeDefinitions} from "./pageui/wire";
-import {FormRulePreview} from "./runtime/FormRulePreview";
 import {pageUIManifest} from "./pageui/manifest";
 import {ConfirmationProgress} from "./widgets/ConfirmationProgress";
 import { DispatchProgress } from "./widgets/DispatchProgress";
@@ -31,7 +30,7 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 export {boundQueryDefinition} from "./runtime/query-plans";
 export {interfaceQueryForSection} from "./runtime/ontology-interface";
 import { readPlaceholder } from "./runtime/read-placeholder";
-import { DeclaredActionDialog, NewActions, RecordActions, SourceFieldInput, useTransition, useRecordArchive } from "./actions/actions";
+import { DeclaredActionDialog, NewActions, RecordActions, useTransition, useRecordArchive } from "./actions/actions";
 import {recordKanbanMoves} from "./actions/record-actions";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./automation/capability";
@@ -229,27 +228,20 @@ function AppInputBody({children}:{children:ReactNode}) {
 }
 export const defineApp = (app: AppUI): AppUI => ({...app,views:app.views.map(view=>({...view,render:params=><AppInputView scope={`${app.id}/${view.id}/${params.id??""}/${params.page??""}`}>{view.render(params)}</AppInputView>}))});
 
-export function GeneratedForm({ type, record, initial, fields, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema, onTrial, context }: {
-  initial?: Record<string, unknown>;
-  onTrial?: (values:Record<string,unknown>)=>Promise<Api.Simulation>; context?:ReactNode;
+export function GeneratedForm({ type, record, initial, fields, essential = false, onSubmit, onCancel, submitLabel, onBusy, issues, locked, onValuesChange, submitDisabled, actionSchema }: {
+  initial?: Record<string, unknown>; essential?: boolean;
   issues?:Api.FieldIssue[]; type: string; record?: EntityRecord; onSubmit: (values: object) => void | boolean | Promise<void | boolean>; onCancel: () => void; submitLabel: string; onBusy?: (busy: boolean) => void; locked?: boolean;
   onValuesChange?: (values: Record<string, unknown>) => void;
   submitDisabled?: boolean;
   actionSchema?: string;
   fields?: string[];
 }) {
-  const { source, catalog,me } = useHost();
-  const [draft,setDraft]=useState<Record<string,unknown>>({});
-  const [instant]=useState(()=>new Date());
-  const clock=useMemo(()=>{
-   const parts=new Intl.DateTimeFormat("en-CA",{timeZone:source.ruleIdentity?.timezone??"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(instant),part=(kind:string)=>parts.find(value=>value.type===kind)?.value??"";
-   return {me:me.principalId,tenant:me.tenantId,now:instant.toISOString(),today:`${part("year")}-${part("month")}-${part("day")}`};
-  },[source.ruleIdentity?.timezone,me.principalId,me.tenantId,instant]);
+  const { source, catalog } = useHost();
   const info = source.entity(type);
   const action = catalog.find((action) => action.schema === (actionSchema??`${type}.${record ? "edit" : "create"}`));
   if (!info || !action) return null;
   const inputs = new Set(action.payload.map((field) => field.name));
-  const writable = info.fields.filter(f=>!f.readOnly&&(inputs.has(f.name)||f.aside)&&(!fields||fields.includes(f.name))).map(f=>{
+  const writable = info.fields.filter(f=>!f.readOnly&&(inputs.has(f.name)||f.aside&&!essential)&&(!fields||fields.includes(f.name))&&(!essential||action.payload.some(i=>i.name===f.name&&i.required))).map(f=>{
     const input=action.payload.find(i=>i.name===f.name);
     return {...f,required:input?.required??false,constraints:input?.constraints??f.constraints,range:input?.range??f.range,group:input?.group??f.group,choices:input?.choices??f.choices,ref:input?.ref??f.ref,stereotype:input?.stereotype??f.stereotype,stereotypes:input?.stereotypes??f.stereotypes};
   });
@@ -257,8 +249,8 @@ export function GeneratedForm({ type, record, initial, fields, onSubmit, onCance
   const editable=fields?fields.filter(name=>writableNames.has(name)):writable.map(field=>field.name);
   const editableValues=(values:Record<string,unknown>)=>Object.fromEntries(Object.entries(values).filter(([key])=>writableNames.has(key)));
   const defaults=record??{...Object.fromEntries(action.payload.filter(field=>field.default!==undefined).map(field=>[field.name,structuredClone(field.default)])),...initial};
-  return <RecordForm sourceFields={writable} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={action.payload.find(input=>input.name===field.name)} app={action.schema.split(".")[0]}/>} onTrial={onTrial} context={<>{context}<FormRulePreview info={info} values={{...defaults,...draft}} clock={clock}/></>} entity={entityFrom({...info,fields:writable}, {}, source)} keys={editable} defaultValues={defaults} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
-    onValuesChange={values => {const editable=editableValues(values);setDraft(editable);onValuesChange?.(editable);}}
+  return <RecordForm sourceFields={writable} entity={entityFrom({...info,fields:writable}, {}, source)} keys={editable} defaultValues={defaults} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked}
+    onValuesChange={onValuesChange ? values => onValuesChange(editableValues(values)) : undefined}
     onSubmit={values => onSubmit(editableValues(values))} />;
 }
 

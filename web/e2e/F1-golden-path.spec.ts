@@ -8,7 +8,7 @@ test("F1 builder goes from an empty project to an application a business user ac
   await test.step("1 create a project", async () => {
     await signIn(page, "builder", "/projects");
     await page.getByRole("button", { name: "New project", exact: true }).click();
-    const sheet = page.getByRole("dialog", { name: "Create application" });
+    const sheet = page.getByRole("dialog", { name: "Create project" });
     await sheet.getByRole("textbox", { name: "Name *" }).fill(name);
     await sheet.getByRole("textbox", { name: "What people call it *" }).fill(label);
     await sheet.getByRole("button", { name: "Create", exact: true }).click();
@@ -17,7 +17,7 @@ test("F1 builder goes from an empty project to an application a business user ac
 
   await test.step("3 define an object type from the next step", async () => {
     await page.getByRole("button", { name: "New object type", exact: true }).click();
-    const sheet = page.getByRole("dialog", { name: "Create object" });
+    const sheet = page.getByRole("dialog", { name: "Create object type" });
     await sheet.getByRole("textbox", { name: "Name *" }).fill(objectName);
     await sheet.getByRole("textbox", { name: "What people call it *" }).fill("Order");
     await sheet.getByRole("button", { name: "Create", exact: true }).click();
@@ -76,7 +76,9 @@ test("F1 builder goes from an empty project to an application a business user ac
     await expect(app.getByRole("heading", { name: "Orders", level: 1 })).toBeVisible();
     await expect(app.getByText("No orders")).toBeVisible();
     await app.getByRole("button", { name: "Create order", exact: true }).click();
-    const form = user.getByRole("dialog");
+    const form = user.getByRole("dialog", { name: "Create order" });
+    await expect(form.getByRole("textbox")).toHaveCount(1);
+    await expect(form.getByRole("button", { name: "Source editor" })).toHaveCount(0);
     await form.getByRole("textbox", { name: /^Field/ }).fill("First order");
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(app.getByRole("cell", { name: "First order" })).toBeVisible({ timeout: 30_000 });

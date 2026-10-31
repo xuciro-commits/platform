@@ -36,7 +36,7 @@ type Application struct {
 }
 
 func (b *Build) applicationEntity() platform.Entity {
-	return platform.Entity{Type: AppType, Title: "Application", Plural: "Applications", Model: Application{}, Display: "title",
+	return platform.Entity{Type: AppType, Title: "Project", Plural: "Projects", Model: Application{}, Display: "title",
 		Description: "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.",
 		Validate: func(c platform.Caller, record any) *kernel.Error {
 			if c.Replaying {

@@ -4,7 +4,6 @@ import type {Api} from "@platform/kernel";
 import type { z } from "zod";
 import { useEffect, useId, useRef, useState } from "react";
 import {InputDraftProvider,useInputDrafts,InputProblems} from "../fields/draft";
-import {StructuredEditor} from "./StructuredEditor";
 import {ContextHelp} from './ContextHelp';
 import {structuredIssues} from "../fields/structured-source";
 import {DateRangeInput} from "./DateRangeInput";
@@ -47,8 +46,6 @@ type Props<S extends z.ZodType<FieldValues, FieldValues>> = {
   onSubmit: (values: z.infer<S>) => void | boolean | Promise<void | boolean>;
   onBusy?: (busy: boolean) => void;
   locked?: boolean;
-  onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>;
-  context?: React.ReactNode;
   submitLabel?: string;
   onCancel?: () => void;
 };
@@ -57,9 +54,8 @@ export function EntityForm<S extends z.ZodType<FieldValues, FieldValues>>({ sche
   return <InputDraftProvider isolated scope="entity-form"><FieldForm schema={schema} fields={fields.map((f) => ({ name: f.name as string, type: typeOf(f) }))} {...rest} /></InputDraftProvider>;
 }
 
-export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, onTrial, context, sourceFields, fieldInput }: {
-  fieldInput?: (field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode;
-  issues?:Api.FieldIssue[]; onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>; context?: React.ReactNode; sourceFields?:Api.FieldInfo[]; entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
+export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLabel, onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, sourceFields }: {
+  issues?:Api.FieldIssue[]; sourceFields?:Api.FieldInfo[]; entity: Entity<R>; keys?: string[]; defaultValues?: Partial<R>; onSubmit: (values: Partial<R>) => void | boolean | Promise<void | boolean>;
   onBusy?: (busy: boolean) => void;
   onValuesChange?: (values: Partial<R>) => void;
   submitDisabled?: boolean;
@@ -68,12 +64,11 @@ export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLab
 }) {
   const shown = (keys ?? Object.keys(entity.fields)).filter((k) => !entity.fields[k]!.readOnly && entity.fields[k]!.editor);
   return <InputDraftProvider isolated scope="record-form"><FieldForm schema={recordSchema(entity, shown)} fields={shown.map((k) => ({ name: k, type: entity.fields[k]! }))}
-    sourceFields={sourceFields} fieldInput={fieldInput} onTrial={onTrial} context={context} defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} onValuesChange={onValuesChange ? v => onValuesChange(activeValues(entity, v) as Partial<R>) : undefined} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
+    sourceFields={sourceFields} defaultValues={defaultValues} onSubmit={(v) => onSubmit(activeValues(entity, v as Record<string, unknown>) as Partial<R>)} onValuesChange={onValuesChange ? v => onValuesChange(activeValues(entity, v) as Partial<R>) : undefined} submitLabel={submitLabel} submitDisabled={submitDisabled} onCancel={onCancel} onBusy={onBusy} issues={issues} locked={locked} /></InputDraftProvider>;
 }
 
-function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, onTrial, context, sourceFields, fieldInput }: {
-  fieldInput?: (field:Api.FieldInfo,value:unknown,onChange:(value:unknown)=>void)=>React.ReactNode;
-  onTrial?: (values: Record<string, unknown>) => Promise<Api.Simulation>; context?: React.ReactNode; sourceFields?:Api.FieldInfo[];
+function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel, onBusy, issues, locked, onValuesChange, submitDisabled, sourceFields }: {
+  sourceFields?:Api.FieldInfo[];
   issues?:Api.FieldIssue[]; schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
   onSubmit: (values: any, event?: unknown) => void | boolean | Promise<void | boolean>; submitLabel?: string; onCancel?: () => void; onBusy?: (busy: boolean) => void; locked?: boolean;
   onValuesChange?: (values: Record<string, unknown>) => void;
@@ -82,7 +77,6 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
   const inputs=useInputDrafts();
   const prefix = useId(), lock = useRef(false), [failure, setFailure] = useState("");
   const visualCleared=useRef(new Set<string>());
-  const declarations:Api.FieldInfo[]=sourceFields??fields.filter(field=>!field.type.readOnly).map(({name,type})=>({name,title:type.label,type:({number:'decimal',currency:'money',checkbox:'boolean',select:'choice',longText:'longtext'} as Record<string,Api.FieldInfo['type']>)[type.type]??type.type as Api.FieldInfo['type'],required:type.required,help:type.help,choices:type.input?.choices,constraints:type.input?.constraints,when:type.when}));
   const resolve = zodResolver(schema as z.ZodType<Record<string, unknown>, Record<string, unknown>>, { error: issue => {
     switch (issue.code) {
       case "invalid_type": return t(issue.input === undefined ? "Enter a value." : "Enter a valid value.");
@@ -172,7 +166,6 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
       finally { lock.current = false;inputs?.pending(-1); onBusy?.(false); }
     })} className="grid gap-3" noValidate>
       <InputProblems/>{failure && <p role="alert" className="text-sm text-danger">{failure}</p>}
-      <StructuredEditor scope="form" value={Object.fromEntries(Object.entries(semanticValues(current)).filter(([name])=>declarations.some(field=>field.name===name)))} fields={declarations} fieldInput={fieldInput??((field,value,onChange)=>fields.find(item=>item.name===field.name)?.type.editor?.({value,onChange}))} validate={sourceValidate} onChange={next=>{visualCleared.current.clear();for(const key of new Set([...declarations.map(field=>field.name),...Object.keys(next)]))setValue(key,next[key],{shouldDirty:true});void trigger();}} onTrial={onTrial} context={context} disabled={isSubmitting||locked}>
       <fieldset disabled={isSubmitting || locked} className="grid gap-3">
       {fields.filter(field=>!advanced.has(field.name)).map(renderField)}
       {!!advanced.size&&<details className="min-w-0 rounded-md border border-border p-3" open={fields.some(field=>advanced.has(field.name)&&(field.type.required||current[field.name]!==undefined))||undefined}>
@@ -180,7 +173,6 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
         <div className="mt-3 grid min-w-0 gap-3">{fields.filter(field=>advanced.has(field.name)).map(renderField)}</div>
       </details>}
       </fieldset>
-      </StructuredEditor>
       <div className="mt-1 flex justify-end gap-2">
         {onCancel && <Button onClick={() => confirmOwnDiscard(onCancel)} disabled={isSubmitting}>{t("Cancel")}</Button>}
         <Button type="submit" variant="primary" loading={isSubmitting} disabled={submitDisabled||inputs?.invalid}>{submitLabel}</Button>

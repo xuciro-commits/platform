@@ -49,8 +49,8 @@ export function InstalledApplicationHome({ id, area, selected }: { id: string; a
     } catch (cause) { setError(cause instanceof Error ? cause.message : t("The page could not be added to the extension.")); }
     finally { setJoining(false); }
   };
-  const createExtension = useNewRecord("build.app", target => open({ view: "project", params: { id: target.id } }));
-  const createPage = useNewRecord("build.page", target => { if (pageApplication.current) void joinPage({ id: target.id, application: pageApplication.current }); });
+  const createExtension = useNewRecord("build.app", target => open({ view: "project", params: { id: target.id } }), { essential: true });
+  const createPage = useNewRecord("build.page", target => { if (pageApplication.current) void joinPage({ id: target.id, application: pageApplication.current }); }, { essential: true });
   let importedPage: ReturnType<typeof pageDraftFromDefinition> | undefined;
   if (currentDefinition?.page) {
     try { importedPage = pageDraftFromDefinition(currentDefinition.page); } catch {   }

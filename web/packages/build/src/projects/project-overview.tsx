@@ -15,7 +15,7 @@ export function ProjectOverview({ project, owned, released, builder, disabled, o
   const { open } = useWorkspace();
   const objectKind = resourceKinds.find(kind => kind.kind === "object")!;
   const connectionKind = resourceKinds.find(kind => kind.kind === "connection")!;
-  const createObject = useNewRecord(objectKind.type, target => onCreated(objectKind, target));
+  const createObject = useNewRecord(objectKind.type, target => onCreated(objectKind, target), { essential: true });
   const objects = owned.filter(item => item.ref.kind === "object" && item.record);
   const first = objects[0]?.record;
   const steps: Step[] = [

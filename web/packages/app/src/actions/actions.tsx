@@ -1,9 +1,8 @@
 import type * as PageUI from "../pageui/types";
-import {useActionTrial} from "./trial";
 import {originalActionDefaults,validActionDefaults} from "../widgets/action-defaults";
 import {OfflineReadError,type Api} from "@platform/kernel";
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, ContextHelp, Reasoned, useActionAvailability, StructuredEditor, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
+import { Button, ContextHelp, Reasoned, useActionAvailability, InputDraftProvider, useInputDrafts, Checkbox, DateRangeInput, DateTimeInput, OverlayFrame, Form, Input, inputIssues, RecordLookup, Select, Textarea, Panel, field, humanizeKernelError, notify, recordSchema, t, type EntityInfo, type EntityRecord, type FieldType, validCivilDate, formatStamp} from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "../index";
@@ -108,8 +107,8 @@ export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(
 export function DeclaredActionForm(props:Parameters<typeof DeclaredActionFormBody>[0]) {
  return <InputDraftProvider isolated scope={props.declared.schema+":"+props.target.id}><DeclaredActionFormBody {...props}/></InputDraftProvider>;
 }
-function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean}) {
- const host=useHost(),{decide,catalog,source}=host,lock=useRef(false),inputsDraft=useInputDrafts(),trial=useActionTrial();
+function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCancel,onCompleted,preview=false,onBusy,initial={},enabled=true,fixed={},submitLabel,originalOutcome,generated=false,essential=false}:{declared:ActionDeclaration;target:{type:string;id:string};revision?:number;onCancel:()=>void;onCompleted:(target:{type:string;id:string})=>void;preview?:boolean;onBusy?:(busy:boolean)=>void;initial?:Record<string,unknown>;enabled?:boolean;fixed?:Record<string,unknown>;submitLabel?:string;originalOutcome?:Entry;generated?:boolean;essential?:boolean}) {
+ const host=useHost(),{decide,catalog,source}=host,lock=useRef(false),inputsDraft=useInputDrafts();
  const execution=useRef({enabled,preview,mounted:true});if(execution.current.enabled!==enabled||execution.current.preview!==preview)execution.current={enabled,preview,mounted:true};const opened=execution.current;
  useEffect(()=>{execution.current.mounted=true;return()=>{execution.current.mounted=false;};},[]);
  const [local]=useState<{context?:ReturnType<typeof actionDraftContext>;saved?:LocalFormDraft;problem?:string}>(()=>{
@@ -148,6 +147,7 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
   const allowed=new Set([...declared.payload.map(field=>field.name),...model.filter(field=>!field.readOnly&&(field.aside||Object.hasOwn(startingValues,field.name))).map(field=>field.name)]);
   return Object.fromEntries(Object.entries(inputs).filter(([name])=>allowed.has(name)&&!model.some(field=>field.name===name&&field.readOnly)));
  };
+ const kept=essential?startingValues:{};
  const sameTarget=entry?.submission.target?.type===target.type&&entry.submission.target.id===target.id;
  const changed=!!attempt&&(!sameTarget||schemaChanged||actionInputSignature(values)!==actionInputSignature(attempt.values));
  const submit=async(inputs=values,original=false)=>{
@@ -172,26 +172,24 @@ function DeclaredActionFormBody({declared:openedDeclaration,target,revision,onCa
  const retry=attempt&&refused&&<Button disabled={submitting||!enabled||preview} onClick={()=>void submit(attempt.values,true)}>{t("Retry original inputs")}</Button>;
  const label=schemaChanged?t("Submit with refreshed definition"):sameTarget?t("Submit corrected inputs"):submitLabel??declared.title;
  const localControls=<>{savedDraft&&<p role="status" className="text-xs text-muted">{t("Restored local draft from {time}.",{time:formatStamp(savedDraft.at)})}</p>}{local.problem&&<p role="alert" className="text-sm text-danger">{t(local.problem)}</p>}<LocalDraftControls context={local.context} saved={savedDraft} action={declared} target={target} expectedRevision={!attempt?savedDraft?.expectedRevision??revision:revision} values={values} fixed={fixed} disabled={pending||submitting||preview||!enabled||inputsDraft?.invalid}/></>;
- if(generated)return <div className="grid gap-3">{declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}{localControls}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!changed} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} onTrial={preview?undefined:next=>trial(declared.schema,target,generatedInputs(next),revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`} onValuesChange={next=>change(generatedInputs(next))} onSubmit={async inputs=>await submit(generatedInputs(inputs as Record<string,unknown>))||undefined}/>{retry}</div>;
+ if(generated)return <div className="grid gap-3">{declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}{localControls}{refusalView}<GeneratedForm type={target.type} actionSchema={declared.schema} initial={startingValues} submitLabel={label} submitDisabled={!enabled||preview||!target.id||!!attempt&&!changed} onCancel={onCancel} onBusy={onBusy} issues={ownerIssues} essential={essential} onValuesChange={next=>change(generatedInputs({...kept,...next}))} onSubmit={async inputs=>await submit(generatedInputs({...kept,...inputs as Record<string,unknown>}))||undefined}/>{retry}</div>;
  return <Form className="grid gap-3" noValidate onSubmit={()=>submit()}>
  {declared.description&&<ContextHelp title={declared.title}>{declared.description}</ContextHelp>}
  {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
  {refusalView}
  {localControls}
  {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
- <StructuredEditor scope={declared.schema} value={Object.fromEntries(Object.entries(values).filter(([key])=>!Object.hasOwn(fixed,key)))} disabled={submitting||!enabled} fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name)).map(field=>({name:field.name,title:field.description,type:({string:field.ref?"reference":"text",number:"decimal","string[]":field.ref?"references":"tags"} as Record<string,string>)[field.type]??field.type,required:field.required,choices:field.choices,constraints:field.constraints,ref:field.ref,stereotype:field.stereotype,stereotypes:field.stereotypes} as Api.FieldInfo))} fieldInput={(field,value,onChange)=><SourceFieldInput field={field} value={value} onChange={onChange} input={declared.payload.find(input=>input.name===field.name)} app={declared.schema.split(".")[0]} preview={preview}/>} onChange={change} onTrial={preview?undefined:next=>trial(declared.schema,target,{...next,...fixed},revision)} context={`${target.type} · ${target.id} · ${declared.schema} · ${revision??0}`}>
  <fieldset disabled={submitting||!enabled} className="grid gap-3"><PayloadFields fields={declared.payload.filter(field=>!Object.hasOwn(fixed,field.name))} app={declared.schema.split(".")[0]} values={values} onChange={change} preview={preview} submitted={submitted} issues={ownerIssues}/></fieldset>
- </StructuredEditor>
  <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting||!enabled}>{t("Cancel")}</Button>{retry}<Button type="submit" variant="primary" loading={submitting} disabled={!enabled||preview||!target.id||inputsDraft?.invalid||!!attempt&&!changed}>{label}</Button></div>
  </Form>;
 }
 
-function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, prefix, frame }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; prefix?:string;
+function ActionDialog({ declared, type, record, onClose, onCompleted, initial={},originalOutcome, essential, frame }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: (target: { type: string; id: string }) => void; initial?:Record<string,unknown>;originalOutcome?:Entry; essential?:boolean;
  frame?: "modal"|"drawer" }) {
  const host=useHost(),{source}=host,info=source.entity(type);
  const [baseline]=useState(record);
  const [local]=useState(()=>{try{return {drafts:actionDrafts(host,declared,type,record?.id)};}catch(problem){return {drafts:[],error:problem instanceof Error?problem.message:String(problem)};}});
- const [id,setId]=useState(()=>originalOutcome?.submission.target?.id??(local.drafts.length===1?local.drafts[0]!.target.id:prefix===""?"":newId(prefix??declared.idPrefix??prefixOf(type)))),[round,setRound]=useState(0),[submitting,setSubmitting]=useState(false);
+ const [id,setId]=useState(()=>originalOutcome?.submission.target?.id??(local.drafts.length===1?local.drafts[0]!.target.id:newId(declared.idPrefix??prefixOf(type)))),[round,setRound]=useState(0),[submitting,setSubmitting]=useState(false);
  const target={type,id:baseline?.id??id},generated=[`${type}.create`,`${type}.edit`].includes(declared.schema)&&!declared.payload.some(f=>f.from||f.constraints?.dateTime);
  const saved=local.drafts.find(draft=>draft.target.id===target.id),entries=[...host.client.authorities.outbox].reverse().filter(entry=>entry.submission.schema?.name===declared.schema&&entry.submission.target?.type===type&&entry.submission.target.id===target.id);
  const recovered=(originalOutcome?entries.find(entry=>entry.submission.idempotencyKey===originalOutcome.submission.idempotencyKey)??originalOutcome:undefined)??entries.find(entry=>["SUBMISSION_STATE_PENDING","SUBMISSION_STATE_SENDING","SUBMISSION_STATE_UNKNOWN"].includes(entry.state))??(saved?entries.find(entry=>(entry.state==="SUBMISSION_STATE_REJECTED"||entry.state==="SUBMISSION_STATE_CONFLICT")&&(entry.submission.expectedRevision??0)===(saved.expectedRevision??0)):undefined);
@@ -201,8 +199,7 @@ function ActionDialog({ declared, type, record, onClose, onCompleted, initial={}
  <div className="grid gap-3">
  {local.error&&<p role="alert" className="text-sm text-danger">{t(local.error)}</p>}
  {!record&&local.drafts.length>1&&<div className="grid gap-2"><p className="text-xs text-muted">{t("Choose a local draft to continue its original record.")}</p>{local.drafts.map(draft=><Button key={draft.key} size="sm" disabled={submitting||pending} onClick={()=>{setId(draft.target.id);setRound(value=>value+1);}}>{t("Resume draft {id}",{id:draft.target.id})}</Button>)}</div>}
- {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting||pending}/></label>}
- <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onCompleted?.(confirmed);onClose();}} onBusy={setSubmitting} initial={initial} originalOutcome={recovered} generated={generated} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
+ <DeclaredActionForm key={round} declared={declared} target={target} revision={baseline?.revision??0} onCancel={onClose} onCompleted={confirmed=>{onCompleted?.(confirmed);onClose();}} onBusy={setSubmitting} initial={initial} originalOutcome={recovered} generated={generated} essential={essential} submitLabel={generated?(record?t("Save"):t("Create")):undefined}/>
  </div></OverlayFrame>;
 }
 export {ActionDialog as DeclaredActionDialog};
@@ -235,11 +232,11 @@ export function NewActions({ type, covers = [], allowed, disabled = false, onCre
   </>;
 }
 
-export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void, prefix?: string) {
+export function useNewRecord(type: string, onCreated?: (target: { type: string; id: string }) => void, { essential = false }: { essential?: boolean } = {}) {
   const { catalog } = useHost();
   const [taking, setTaking] = useState<{ declared: ActionDeclaration; initial?: Record<string, unknown> }>();
   const offered = catalog.filter((a) => a.target === type && a.new);
-  const dialog = taking ? <ActionDialog frame="drawer" declared={taking.declared} initial={taking.initial} type={type} prefix={prefix} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
+  const dialog = taking ? <ActionDialog frame="drawer" declared={taking.declared} initial={taking.initial} type={type} essential={essential} onClose={() => setTaking(undefined)} onCompleted={onCreated} /> : null;
   return { offered, available: offered.length > 0, take: (schema?: string, initial?: Record<string, unknown>) => {
     const declared = schema ? offered.find(action => action.schema === schema) : offered[0];
     setTaking(declared ? { declared, initial: initial && structuredClone(initial) } : undefined);

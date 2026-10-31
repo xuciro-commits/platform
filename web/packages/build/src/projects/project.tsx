@@ -43,7 +43,7 @@ export function ProjectsList() {
   const buildGrants = (me.profile.grants ?? []).filter((g) => g.app === "build" && g.role === "builder");
   const delegated = buildGrants.length > 0 && buildGrants.every((g) => g.by?.startsWith("project:")) ? buildGrants.map((g) => g.reason || g.by!.slice(8)) : [];
   const [search, setSearch] = useState("");
-  const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }));
+  const create = useNewRecord("build.app", (target) => open({ view: "project", params: { id: target.id } }), { essential: true });
   const builder = holds("build", "builder");
   type Row = ReturnType<typeof studioApplications>[number];
   const rows = studioApplications(installedApps.data ?? [], definitions, projects.data?.records ?? [])
@@ -81,7 +81,7 @@ const editorCreatedKinds = new Set(["table", "alert", "function", "agent", "eval
 function NewResourceMenu({ application, onCreated, children, disabled, area }: { application: string; area?: string; onCreated?: (kind: ResourceKindInfo, target: { type: string; id: string }) => void; children?: ReactNode; disabled?: boolean }) {
   const { catalog , holds} = useHost();
   const { open } = useWorkspace();
-  const creators = Object.fromEntries(resourceKinds.filter(kind => !editorCreatedKinds.has(kind.kind)).map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target))])) as Record<string, ReturnType<typeof useNewRecord>>;
+  const creators = Object.fromEntries(resourceKinds.filter(kind => !editorCreatedKinds.has(kind.kind)).map((kind) => [kind.kind, useNewRecord(kind.type, (target) => onCreated?.(kind, target), { essential: true })])) as Record<string, ReturnType<typeof useNewRecord>>;
   if (!holds("build", "builder")) return null;
   const sections = [...studioAreas.filter(section => section.id === area), ...studioAreas.filter(section => section.id !== area)];
   const offered = new Set<string>();
